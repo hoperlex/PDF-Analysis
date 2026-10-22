@@ -44,6 +44,7 @@ from auditmanager.executors.model import (
 )
 from auditmanager.executors.repository import ExecutorRepository
 from auditmanager.executors.sealing import PublicRing
+from auditmanager.executors.usability import ensure_routable
 from auditmanager.ingest.public import (
     CommandReplay,
     CommandRepository,
@@ -401,7 +402,8 @@ def set_route(
                 ErrorCode.VALIDATION_FAILED, message="this connection kind cannot serve the work",
                 field=name, constraint="kind_not_routable",
             )
-        _current(session, store, connection_id)
+        # `EXEC-HTTP-01`: served by this release, and probed ok on its current key.
+        ensure_routable(session, store, connection, _current(session, store, connection_id))
     route = store.append_route(
         session, work_kind=work_kind, primary_connection_id=primary_connection_id,
         standby_connection_id=standby_connection_id, actor_uid=actor_uid,

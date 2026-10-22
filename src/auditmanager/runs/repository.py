@@ -63,7 +63,8 @@ _RUN_COLUMNS = (
     "run_id, project_uid, version_uid, state, analysis_profile_id, prompt_bundle_id, "
     "norms_snapshot_id, provider_mode, frozen_input_digest, command_id, terminal_reason, "
     "terminal_detail, "
-    "interrupted_reason, degradation_set, terminal_at, created_at, reaudit_of_run_id"
+    "interrupted_reason, degradation_set, terminal_at, created_at, reaudit_of_run_id, "
+    "connection_revision_id"
 )
 
 _INSERT_RUN = text(
@@ -71,11 +72,11 @@ _INSERT_RUN = text(
     INSERT INTO audit_run (
         run_id, project_uid, version_uid, state, analysis_profile_id, prompt_bundle_id,
         norms_snapshot_id, provider_mode, frozen_input_digest, command_id,
-        reaudit_of_run_id
+        reaudit_of_run_id, connection_revision_id
     ) VALUES (
         :run_id, :project_uid, :version_uid, :state, :analysis_profile_id,
         :prompt_bundle_id, :norms_snapshot_id, :provider_mode, :frozen_input_digest, :command_id,
-        :reaudit_of_run_id
+        :reaudit_of_run_id, :connection_revision_id
     )
     """
 )
@@ -155,11 +156,20 @@ _LIST_RUNS_FOR_VERSION = text(
 #: * `unmeasured` -- how many contributing rows are **not** a measured cost, counting a
 #:   NULL `cost_micros` as unmeasured too. A NULL contributes nothing to `sum`, so a run
 #:   with one NULL row would otherwise publish a short total wearing the word `measured`.
+#:
+#: **The run-level cost rule** (`EXEC-HTTP-01`, `R-143`). A call through an unmetered connection
+#: has cost basis ``unmetered`` and no figure of its own, but the run did call a provider, so the
+#: three fields still move together: when *every* call is unmetered the run reports cost ``0``,
+#: basis ``unmetered`` and the call count; when unmetered and metered calls mix it reports the
+#: *metered* sum with basis ``estimated`` (a total that leaves calls out is not a measurement of
+#: the run). ``unmetered`` counts the first, ``unmeasured`` only the metered rows that are not
+#: measured, so the mix is told from a clean measured run.
 _COST_SUMMARY = text(
     "SELECT count(*) AS calls, "
-    "       coalesce(sum(cost_micros), 0) AS cost_micros, "
-    "       count(*) FILTER (WHERE cost_micros IS NULL OR cost_basis <> 'measured') "
-    "         AS unmeasured "
+    "       coalesce(sum(cost_micros) FILTER (WHERE cost_basis <> 'unmetered'), 0) AS cost_micros, "
+    "       count(*) FILTER (WHERE cost_basis = 'unmetered') AS unmetered, "
+    "       count(*) FILTER (WHERE cost_basis <> 'unmetered' "
+    "         AND (cost_micros IS NULL OR cost_basis <> 'measured')) AS unmeasured "
     "FROM model_call WHERE run_id = :run_id"
 )
 
@@ -247,6 +257,9 @@ class RunRow:
     #: W53 lineage: the terminal run this one re-audits, or ``None`` for a run started
     #: from a document version. Written once by ``create`` and frozen by the database.
     reaudit_of_run_id: str | None = None
+    #: `EXEC-HTTP-01`: the executor connection revision the run froze at start, or ``None`` for
+    #: a run of the ``environment`` source. Written once by ``create`` and frozen by the database.
+    connection_revision_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -306,6 +319,7 @@ def _run_row(row: Any) -> RunRow:
         terminal_at,
         created_at,
         reaudit_of_run_id,
+        connection_revision_id,
     ) = tuple(row)
     return RunRow(
         run_id=run_id,
@@ -325,6 +339,7 @@ def _run_row(row: Any) -> RunRow:
         terminal_at=terminal_at,
         created_at=created_at,
         reaudit_of_run_id=reaudit_of_run_id,
+        connection_revision_id=connection_revision_id,
     )
 
 
@@ -358,6 +373,7 @@ class RunRepository:
         command_id: str | None,
         reaudit_of_run_id: str | None = None,
         norms_snapshot_id: str | None = None,
+        connection_revision_id: str | None = None,
     ) -> RunRow:
         """Insert the run in ``created``. The frozen set is written once, here.
 
@@ -383,6 +399,7 @@ class RunRepository:
                     "command_id": command_id,
                     "reaudit_of_run_id": reaudit_of_run_id,
                     "norms_snapshot_id": norms_snapshot_id,
+                    "connection_revision_id": connection_revision_id,
                 },
             )
         except DBAPIError as exc:
@@ -435,10 +452,13 @@ class RunRepository:
         calls = int(row["calls"])
         if calls == 0:
             return None
+        unmetered = int(row["unmetered"])
+        if unmetered == calls:
+            return RunCost(model_call_count=calls, cost_micros=0, basis="unmetered")
         return RunCost(
             model_call_count=calls,
             cost_micros=int(row["cost_micros"]),
-            basis="estimated" if int(row["unmeasured"]) else "measured",
+            basis="estimated" if unmetered or int(row["unmeasured"]) else "measured",
         )
 
     def stage_results(self, session: Session, run_id: str) -> tuple[StageResultRow, ...]:

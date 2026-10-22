@@ -140,10 +140,12 @@ _INSERT_PROVIDER_EFFECT = text(
     """
     INSERT INTO provider_call_effect (
         model_call_id, run_id, job_id, attempt_id, stage_id, provider,
-        model_identity, provider_mode, parameters, request_sha256
+        model_identity, provider_mode, parameters, request_sha256,
+        connection_revision_id, identity_basis
     ) VALUES (
         :model_call_id, :run_id, :job_id, :attempt_id, 'text_analysis', :provider,
-        :model_identity, :provider_mode, CAST(:parameters AS jsonb), :request_sha256
+        :model_identity, :provider_mode, CAST(:parameters AS jsonb), :request_sha256,
+        :connection_revision_id, :identity_basis
     )
     """
 )
@@ -186,7 +188,7 @@ _COMPLETE_PROVIDER = text(
 )
 _PROVIDER_FOR_COMPLETION = text(
     """
-    SELECT 1 FROM provider_call_effect
+    SELECT connection_revision_id, identity_basis FROM provider_call_effect
      WHERE model_call_id = :model_call_id AND run_id = :run_id
        AND job_id = :job_id AND attempt_id = :attempt_id
        AND state = 'response_received'
@@ -218,12 +220,13 @@ _INSERT_MODEL_CALL = text(
     INSERT INTO model_call (
         model_call_id, run_id, stage_id, provider, model_identity, provider_mode,
         parameters, request_sha256, response_sha256, input_tokens, output_tokens,
-        latency_ms, cost_micros, cost_basis, status, error_code
+        latency_ms, cost_micros, cost_basis, status, error_code,
+        connection_revision_id, identity_basis
     ) VALUES (
         :model_call_id, :run_id, 'text_analysis', :provider, :model_identity,
         :provider_mode, CAST(:parameters AS jsonb), :request_sha256, :response_sha256,
         :input_tokens, :output_tokens, :latency_ms, :cost_micros, :cost_basis,
-        :status, :error_code
+        :status, :error_code, :connection_revision_id, :identity_basis
     )
     """
 )
@@ -821,7 +824,13 @@ class JobRepository:
         provider_mode: str,
         parameters: Mapping[str, Any],
         request_sha256: str,
+        connection_revision_id: str | None = None,
+        identity_basis: str | None = None,
     ) -> ModelCallId:
+        """Commit the intent of one provider call. With the provider source ``database`` the
+        call names the connection revision that serves it and how its model identity is known
+        (`EXEC-HTTP-01`); both or neither, as the schema requires. The ``model_call`` row written
+        when the call completes carries the same two values."""
         self.require_current(session, authority)
         model_call_id = ModelCallId.new()
         session.execute(
@@ -836,6 +845,8 @@ class JobRepository:
                 "provider_mode": provider_mode,
                 "parameters": json.dumps(dict(parameters), sort_keys=True),
                 "request_sha256": request_sha256,
+                "connection_revision_id": connection_revision_id,
+                "identity_basis": identity_basis,
             },
         )
         append_execution_event(
@@ -1010,7 +1021,7 @@ class JobRepository:
         }
         owned_effect = session.execute(
             _PROVIDER_FOR_COMPLETION, ownership
-        ).scalar_one_or_none()
+        ).mappings().first()
         if owned_effect is None:
             raise self._transition_error(
                 "provider_call_effect", "response_received", "completed"
@@ -1043,6 +1054,8 @@ class JobRepository:
                     if call["status"] == "failed"
                     else None
                 ),
+                "connection_revision_id": owned_effect["connection_revision_id"],
+                "identity_basis": owned_effect["identity_basis"],
             },
         )
         changed = session.execute(

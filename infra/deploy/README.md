@@ -253,7 +253,8 @@ then nothing would ever claim a run.
 | claims queued runs | no | yes, one at a time (`slots` 1) |
 | fences expired leases | yes, every 30 s | yes, every 30 s |
 | `AUDITMANAGER_API_TOKEN` | required | **absent** — the worker refuses to start if it is set |
-| `provider.env` | read | read |
+| `provider.env` | **not read** (`EXEC-HTTP-01`: the api makes no model call and holds neither the credential nor the private key ring) | read |
+| `AUDITMANAGER_SECRETS_PUBLIC_KEYS` / `_ACTIVE_KID` (alpha.env) | seals a connection's key to them | receives them, opens with the private ring |
 | ports, session volume | `8000`/`8001` behind the proxy; no session volume | none; none |
 
 What the worker does: it registers a new `wrk_…` identity in the `worker` table on every

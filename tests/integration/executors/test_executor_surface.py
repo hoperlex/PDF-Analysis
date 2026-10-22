@@ -49,6 +49,22 @@ def walk(node: Any):
             yield from walk(value)
 
 
+def serve(surface, session, connection_id: str) -> None:
+    """A key and a finished ``ok`` probe through the API and the worker's act: what `EXEC-HTTP-01`
+    requires before a connection can be routed."""
+    from auditmanager.executors.public import record_probe_result, record_probe_started
+
+    keyed = call(surface, "POST", f"/executor-connections/{connection_id}/secrets",
+                 {"purpose": "api_key", "value": f"sk-served-{uuid4().hex}"})
+    assert keyed.status == 201, keyed.body
+    probe = call(surface, "POST", f"/executor-connections/{connection_id}/probes")
+    assert probe.status == 202, probe.body
+    assert record_probe_started(session, probe.json()["probe_id"])
+    assert record_probe_result(session, probe.json()["probe_id"], outcome="ok",
+                               reported_model="anthropic/claude-opus-5",
+                               identity_basis="reported", rate_check="not_reported")
+
+
 def made(surface, kind: str = "http_api", settings: dict[str, Any] | None = None) -> str:
     created = call(surface, "POST", "/executor-connections", {"kind": kind, "display_name": "n"})
     assert created.status == 201, created.body
@@ -59,7 +75,7 @@ def made(surface, kind: str = "http_api", settings: dict[str, Any] | None = None
     return connection_id
 
 
-def test_the_journey_has_the_ruled_statuses_and_no_null_and_no_secret(surface) -> None:
+def test_the_journey_has_the_ruled_statuses_and_no_null_and_no_secret(surface, session) -> None:
     bodies = []
     created = call(surface, "POST", "/executor-connections", {"kind": "http_api", "display_name": "Прокси"})
     assert created.status == 201
@@ -90,6 +106,13 @@ def test_the_journey_has_the_ruled_statuses_and_no_null_and_no_secret(surface) -
     assert probe.status == 202
     assert probe.json()["state"] == "requested" and probe.json()["secret_id"] == metadata["secret_id"]
     bodies.append(probe.json())
+    from auditmanager.executors.public import record_probe_result, record_probe_started
+
+    # The worker takes the probe and it passes (`EXEC-HTTP-01`): only then can it be routed.
+    assert record_probe_started(session, probe.json()["probe_id"])
+    assert record_probe_result(session, probe.json()["probe_id"], outcome="ok",
+                               reported_model="anthropic/claude-opus-5",
+                               identity_basis="reported", rate_check="not_reported")
 
     route = call(surface, "PUT", "/executor-routes",
                  {"work_kind": "text_analysis", "primary_connection_id": cid})
@@ -184,7 +207,7 @@ def test_a_refused_revision_is_a_422_with_a_field_and_a_constraint(surface, sett
     assert answer.json()["details"] == details
 
 
-def test_conflicts_and_unknown_identities_use_the_catalogue(surface) -> None:
+def test_conflicts_and_unknown_identities_use_the_catalogue(surface, session) -> None:
     bare = call(surface, "POST", "/executor-connections",
                 {"kind": "http_api", "display_name": "n"}).json()["connection_id"]
     answer = call(surface, "POST", f"/executor-connections/{bare}/secrets",
@@ -193,6 +216,11 @@ def test_conflicts_and_unknown_identities_use_the_catalogue(surface) -> None:
     assert call(surface, "GET", f"/executor-connections/exc_{'0' * 26}", keyed=False).status == 404
     assert call(surface, "GET", "/executor-connections/not-an-id", keyed=False).status in (404, 422)
     routed = made(surface)
+    refused = call(surface, "PUT", "/executor-routes",
+                   {"work_kind": "text_analysis", "primary_connection_id": routed})
+    assert (refused.status, refused.json()["details"]) == (
+        409, {"conflict_reason": "connection_not_probed"}), "`EXEC-HTTP-01`: not probed, not routed"
+    serve(surface, session, routed)
     assert call(surface, "PUT", "/executor-routes",
                 {"work_kind": "text_analysis", "primary_connection_id": routed}).status == 200
     archived = call(surface, "POST", f"/executor-connections/{routed}/archive")

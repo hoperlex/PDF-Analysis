@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from dataclasses import dataclass, field
 from time import monotonic
 
 from sqlalchemy.engine import Connection, Engine
@@ -23,11 +24,42 @@ _log = logging.getLogger(__name__)
 _current = threading.local()
 
 
+@dataclass(slots=True)
+class AttemptContext:
+    """What a provider adapter factory may know about the Attempt it serves (`EXEC-HTTP-01`).
+
+    Built where the lease heartbeat starts, so ``started_monotonic`` is the instant the
+    watchdog counts from (:data:`ATTEMPT_WATCHDOG_SECONDS`), and handed to the factory that
+    builds the adapter. ``EXEC-PULL-01`` reads the deadline and the task's references from it;
+    nothing in the run path changes for a new kind. ``call_id`` is the call journal's current
+    model call, set when its intent is committed, so an adapter can name the call it is
+    serving; it is ``None`` before the first call.
+    """
+
+    run_id: str
+    attempt_id: str
+    started_monotonic: float
+    watchdog_seconds: float = float(ATTEMPT_WATCHDOG_SECONDS)
+    call_id: str | None = field(default=None)
+
+    def remaining_seconds(self, now: float | None = None) -> float:
+        """Seconds the watchdog leaves this Attempt, never negative."""
+        elapsed = (monotonic() if now is None else now) - self.started_monotonic
+        return max(0.0, self.watchdog_seconds - elapsed)
+
+    def bind_call(self, call_id: str) -> None:
+        self.call_id = call_id
+
+
 class LeaseHeartbeat:
     def __init__(self, bind: Engine | Connection, authority: AttemptAuthority) -> None:
         engine = bind.engine if isinstance(bind, Connection) else bind
         self._sessions = sessionmaker(bind=engine)
         self._authority = authority
+        self.context = AttemptContext(
+            run_id=authority.run_id, attempt_id=authority.attempt_id,
+            started_monotonic=monotonic(),
+        )
         self._stop = threading.Event()
         self._thread = threading.Thread(
             target=self._run, name="auditmanager-lease-heartbeat", daemon=True,
@@ -41,7 +73,7 @@ class LeaseHeartbeat:
         self._thread.join(timeout=5)
 
     def _run(self) -> None:
-        started = monotonic()
+        started = self.context.started_monotonic
         while not self._stop.wait(HEARTBEAT_SECONDS):
             try:
                 with self._sessions() as session:
@@ -61,12 +93,13 @@ class LeaseHeartbeat:
                 _log.exception("lease heartbeat failed for run %s", self._authority.run_id)
 
 
-def start_for_current_thread(session: Session, authority: AttemptAuthority) -> None:
+def start_for_current_thread(session: Session, authority: AttemptAuthority) -> AttemptContext:
     if getattr(_current, "heartbeat", None) is not None:
         raise RuntimeError("one execution thread cannot own two live lease heartbeats")
     heartbeat = LeaseHeartbeat(session.get_bind(), authority)
     _current.heartbeat = heartbeat
     heartbeat.start()
+    return heartbeat.context
 
 
 def stop_for_current_thread() -> None:

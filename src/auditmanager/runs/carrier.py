@@ -392,8 +392,12 @@ def run_to_terminal(
     runs: RunRepository | None = None,
     worker_id: str | None = None,
     text_profiles: Any = None,
+    providers: Any = None,
 ) -> None:
     """Execute one **queued** run to a terminal, in its own sessions.
+
+    ``providers`` (`EXEC-HTTP-01`) is the composition root's provider resolver, handed to
+    ``execute_run`` unchanged; ``None`` keeps ``adapter`` and ``provider_config`` for every run.
 
     ``text_profiles`` is handed to ``execute_run`` unchanged (`W59-SECTION-SEAL-01`): the
     served application and the worker service pass the section-keyed registry's resolver.
@@ -432,6 +436,7 @@ def run_to_terminal(
                 runs=run_repo,
                 jobs=JobRepository(worker_id=worker_id),
                 text_profiles=text_profiles,
+                providers=providers,
             )
             session.commit()
     except ExecutionNotClaimed as refusal:

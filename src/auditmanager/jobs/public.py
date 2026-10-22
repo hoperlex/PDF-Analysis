@@ -14,13 +14,23 @@ from auditmanager.jobs.repository import (
     SettledProviderEffect,
     UnresolvedProviderEffect,
 )
-from auditmanager.jobs.lease import start_for_current_thread, stop_for_current_thread
+from auditmanager.jobs.lease import (
+    ATTEMPT_WATCHDOG_SECONDS,
+    AttemptContext,
+    start_for_current_thread,
+    stop_for_current_thread,
+)
 from auditmanager.jobs.temporaries import SweepReport, sweep_stale_temporaries
 
 
-def start_attempt_lease_heartbeat(session: Session, authority: AttemptAuthority) -> None:
-    """Keep this execution thread's current Attempt lease alive independently."""
-    start_for_current_thread(session, authority)
+def start_attempt_lease_heartbeat(
+    session: Session, authority: AttemptAuthority
+) -> AttemptContext:
+    """Keep this execution thread's current Attempt lease alive independently.
+
+    Returns the Attempt's context (`EXEC-HTTP-01`): the run, the Attempt, the instant the
+    watchdog counts from and how long it allows, for the provider adapter factory."""
+    return start_for_current_thread(session, authority)
 
 
 def stop_attempt_lease_heartbeat() -> None:
@@ -28,8 +38,10 @@ def stop_attempt_lease_heartbeat() -> None:
     stop_for_current_thread()
 
 __all__ = [
+    "ATTEMPT_WATCHDOG_SECONDS",
     "JOB_WAKEUP_CHANNEL",
     "AttemptAuthority",
+    "AttemptContext",
     "ExecutionNotClaimed",
     "JobRepository",
     "SettledProviderEffect",

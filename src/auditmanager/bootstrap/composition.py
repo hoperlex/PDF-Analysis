@@ -22,6 +22,12 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.api.routers import Router, build_router
 from auditmanager.api.security import TokenSigner, derive_signing_key
+from auditmanager.bootstrap.providers import (
+    DatabaseProviders,
+    EnvironmentProviders,
+    ProviderSource,
+    UnboundAdapter,
+)
 from auditmanager.bootstrap.adapters import (
     AccountAdapter,
     AnalysisProfileAdapter,
@@ -98,6 +104,9 @@ class WorkerRuntime:
     version: str
     slots: int
     state_dir: Path | None
+    #: `EXEC-HTTP-01`: ``probe_runner()`` takes the ``requested`` connection probes and runs them
+    #: on this process's network path; ``None`` when the process holds no private ring.
+    probe_runner: Callable[[], int] | None = None
 
 
 def build_worker_runtime(
@@ -136,7 +145,9 @@ def build_worker_runtime(
             bucket=resolved.s3_bucket,
         )
     )
-    model_adapter, provider_config, _profile_id, _bundle_id = _build_provider(resolved, env)
+    model_adapter, provider_config, _profile_id, _bundle_id, providers = _build_provider(
+        resolved, env
+    )
     # `W59-SECTION-SEAL-01`. The worker runs each claimed run with the profile it pinned,
     # resolved through the same registry the application routes with.
     text_profiles = load_text_profiles()
@@ -150,7 +161,17 @@ def build_worker_runtime(
             provider_config=provider_config,
             worker_id=worker_id,
             text_profiles=text_profiles.resolve,
+            providers=providers.resolve,
         )
+
+    # `EXEC-HTTP-01`: «Проверить» runs here, over the path real calls take. Only a process
+    # that holds the private ring can open a key, so only that one takes probes.
+    from auditmanager.executors.runtime import runner_for
+
+    probe_runner = (
+        None if resolved.secrets_private_ring is None
+        else runner_for(sessions, ring=resolved.secrets_private_ring, environ=env)
+    )
 
     return WorkerRuntime(
         settings=resolved,
@@ -161,6 +182,7 @@ def build_worker_runtime(
         # `RUN_CONCURRENCY`: one run at a time, per `PROTOTYPE_PROFILE.md` section 2.
         slots=1,
         state_dir=None if resolved.worker_state_dir is None else Path(resolved.worker_state_dir),
+        probe_runner=probe_runner,
     )
 
 
@@ -213,7 +235,9 @@ def build_application(
         )
     )
 
-    model_adapter, provider_config, profile_id, bundle_id = _build_provider(resolved, env)
+    model_adapter, provider_config, profile_id, bundle_id, providers = _build_provider(
+        resolved, env
+    )
     # `W59-SECTION-SEAL-01`. The section-keyed text-profile registry: AR from the v1
     # constants plus every `text-profile/1` package. Loaded once; a bad package refuses the
     # start rather than serving a partial table. Run start routes through its table, the
@@ -278,6 +302,10 @@ def build_application(
         # run executes its pinned profile. ``test_the_served_application_routes_by_section``.
         section_profiles=text_profiles.section_profiles(),
         text_profiles=text_profiles.resolve,
+        # `EXEC-HTTP-01`. Which source serves a run: ``providers.freeze`` is set for the
+        # ``database`` source only, and then runs freeze their connection revision at start.
+        providers=providers.resolve,
+        route_freezer=providers.freeze,
     )
     if isinstance(carrier, DurableCarrier):
         carrier.configure_runner(run_adapter._job)
@@ -395,8 +423,8 @@ def _provenance_mode(transport: str) -> str:
 
 def _build_provider(
     settings: AppSettings, environ: Mapping[str, str]
-) -> tuple[Any, Any, str, str]:
-    """Construct the model adapter the configured mode names.
+) -> tuple[Any, Any, str, str, ProviderSource]:
+    """Construct the model adapter the configured mode and source name.
 
     Constructing it here rather than at first run is what makes a broken provider a startup
     failure: a recorded adapter whose recordings are missing, or a live one with no
@@ -404,8 +432,12 @@ def _build_provider(
 
     ``analysis.text`` publishes no single factory, so the root assembles from the pieces it
     does publish - which is the composition root's job, and is why the pieces are public.
+
+    The last element is the **provider source** (`EXEC-HTTP-01`): ``environment`` hands every run
+    the adapter built here; ``database`` binds each run to the connection revision it froze.
     """
     from auditmanager.analysis.text import (
+        CallBinding,
         LiveAdapter,
         ProxyAdapter,
         ProxySettings,
@@ -413,24 +445,7 @@ def _build_provider(
         load_provider_config,
         resolve_profile,
     )
-
-    if settings.provider_mode == "proxy":
-        # A proxied call is `live` in the run's provenance, because a model really answered
-        # it. The proxy is the transport, and the transport is not the question the
-        # live-or-recorded vocabulary asks.
-        adapter: Any = ProxyAdapter(
-            ProxySettings(
-                base_url=settings.proxy_base_url or "",
-                token=settings.proxy_token or "",
-                model=settings.proxy_model,
-            )
-        )
-    elif settings.provider_mode == "live":
-        if settings.api_key is None:  # pragma: no cover - settings.load refuses first
-            raise ConfigurationError("live mode requires a credential")
-        adapter = LiveAdapter(api_key=settings.api_key)
-    else:
-        adapter = RecordedAdapter()
+    from auditmanager.executors.runtime import DestinationPolicy
 
     # `analysis.text` parses the provider mode from the environment itself and its
     # vocabulary is live-or-recorded, by design: it is asking about provenance, and a
@@ -441,4 +456,48 @@ def _build_provider(
         dict(environ) | {"AUDITMANAGER_PROVIDER_MODE": _provenance_mode(settings.provider_mode)}
     )
     profile = resolve_profile()
-    return adapter, config, str(profile.analysis_profile_id), str(profile.prompt_bundle.prompt_bundle_id)
+    identity = (str(profile.analysis_profile_id), str(profile.prompt_bundle.prompt_bundle_id))
+
+    if settings.provider_source == "database":
+        # Every connection is a live transport. This process holds no adapter of its own: a run
+        # is bound to the revision it froze, with that connection's key (`settings.load` has
+        # already refused the old variables and demanded the private ring).
+        source: ProviderSource = DatabaseProviders(
+            ring=settings.secrets_private_ring,
+            policy=DestinationPolicy.from_environment(dict(environ)),
+            base_config=config, ceiling_usd=settings.run_cost_ceiling_usd,
+        )
+        return UnboundAdapter(), config, identity[0], identity[1], source
+
+    call: CallBinding | None
+    if settings.execution_role == "api":
+        # The `api` makes no model call when a separate worker runs, and no longer receives the
+        # provider credential (plan section 6): its adapter only declares the mode.
+        adapter: Any = UnboundAdapter()
+        call = None
+    elif settings.provider_mode == "proxy":
+        # A proxied call is `live` in the run's provenance, because a model really answered
+        # it. The proxy is the transport, and the transport is not the question the
+        # live-or-recorded vocabulary asks.
+        adapter = ProxyAdapter(
+            ProxySettings(
+                base_url=settings.proxy_base_url or "",
+                token=settings.proxy_token or "",
+                model=settings.proxy_model,
+            )
+        )
+        # `R-133`: the stage holds the reply to the configured name; the stub says nothing was
+        # selected and fails closed.
+        call = CallBinding(expected_model=settings.proxy_model, check_identity=True)
+    elif settings.provider_mode == "live":
+        if settings.api_key is None:  # pragma: no cover - settings.load refuses first
+            raise ConfigurationError("live mode requires a credential")
+        adapter = LiveAdapter(api_key=settings.api_key)
+        call = CallBinding(expected_model=config.model_id, check_identity=True)
+    else:
+        adapter = RecordedAdapter()
+        call = None
+    return (
+        adapter, config, identity[0], identity[1],
+        EnvironmentProviders(adapter, config, call),
+    )

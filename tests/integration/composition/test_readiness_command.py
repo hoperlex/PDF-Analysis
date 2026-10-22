@@ -523,6 +523,105 @@ class TestTheSummaryAndExitStatus:
         assert "OK      cost-ceiling" not in completed.stdout
 
 
+def _keypair() -> tuple[str, str]:
+    """A fresh X25519 pair as ``(private, public)`` base64, for the key-ring checks."""
+    import base64
+
+    from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
+    from cryptography.hazmat.primitives.serialization import (
+        Encoding,
+        NoEncryption,
+        PrivateFormat,
+        PublicFormat,
+    )
+
+    key = X25519PrivateKey.generate()
+    return (
+        base64.b64encode(key.private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption())).decode(),
+        base64.b64encode(key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)).decode(),
+    )
+
+
+def _with_lines(path: Path, *lines: str) -> Path:
+    path.write_text(path.read_text(encoding="utf-8") + "\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+class TestExecutorSource:
+    """`EXEC-HTTP-01`: the provider source and the key ring, each driven to both answers."""
+
+    def _result(self, tmp_path: Path, alpha: Path, provider: Path | None = None) -> str:
+        completed, _ = _run(
+            ("--env-file", str(alpha), "--provider-env-file", str(provider or tmp_path / "np.env")),
+            tmp_path=tmp_path,
+        )
+        return completed.stdout
+
+    def test_the_environment_source_with_a_recorded_process_is_ok(self, tmp_path: Path) -> None:
+        out = self._result(tmp_path, _alpha_env(tmp_path))
+        assert "readiness OK      executor-source " in out, out
+
+    def test_a_proxy_stub_model_is_a_finding_because_every_run_fails_closed(
+        self, tmp_path: Path
+    ) -> None:
+        alpha = _alpha_env(tmp_path, provider_mode="proxy")
+        stub = _provider_env(tmp_path, PROXY_LLM_BASE_URL="https://p.example/agent/v1",
+                             PROXY_LLM_TOKEN="t")
+        out = self._result(tmp_path, alpha, stub)
+        assert "readiness FINDING executor-source " in out, out
+        assert "fails closed" in out and "R-133" in out, out
+        explicit = _provider_env(
+            tmp_path, name="explicit.env", PROXY_LLM_BASE_URL="https://p.example/agent/v1",
+            PROXY_LLM_TOKEN="t", PROXY_LLM_MODEL="anthropic/claude-opus-5")
+        assert "readiness OK      executor-source " in self._result(tmp_path, alpha, explicit)
+
+    def test_the_database_source_needs_the_private_ring_and_a_public_key_that_matches_it(
+        self, tmp_path: Path
+    ) -> None:
+        private, public = _keypair()
+        _other_private, other_public = _keypair()
+        base = ("AUDITMANAGER_PROVIDER_SOURCE=database", "AUDITMANAGER_PROVIDER_MODE=live")
+
+        def alpha(name: str, *lines: str) -> Path:
+            path = _alpha_env(tmp_path, name=name, provider_mode="live")
+            return _with_lines(path, *base, *lines)
+
+        no_ring = self._result(tmp_path, alpha("a1.env", f"AUDITMANAGER_SECRETS_PUBLIC_KEYS=k1:{public}",
+                                               "AUDITMANAGER_SECRETS_ACTIVE_KID=k1"))
+        assert "readiness FINDING executor-source " in no_ring and "private ring" in no_ring, no_ring
+        ring = _provider_env(tmp_path, name="ring.env", AUDITMANAGER_SECRETS_KEYS=f"k1:{private}")
+        no_public = self._result(tmp_path, alpha("a2.env"), ring)
+        assert "readiness FINDING executor-source " in no_public, no_public
+        mismatched = self._result(
+            tmp_path, alpha("a3.env", f"AUDITMANAGER_SECRETS_PUBLIC_KEYS=k1:{other_public}",
+                            "AUDITMANAGER_SECRETS_ACTIVE_KID=k1"), ring)
+        assert "readiness FINDING executor-source " in mismatched, mismatched
+        assert "no matching private key" in mismatched, mismatched
+        whole = self._result(
+            tmp_path, alpha("a4.env", f"AUDITMANAGER_SECRETS_PUBLIC_KEYS=k1:{public}",
+                            "AUDITMANAGER_SECRETS_ACTIVE_KID=k1"), ring)
+        assert "readiness OK      executor-source " in whole, whole
+        assert private not in whole and public not in whole, "the ring is never printed"
+
+    def test_the_database_source_beside_the_old_variables_is_a_finding(self, tmp_path: Path) -> None:
+        private, public = _keypair()
+        alpha = _with_lines(
+            _alpha_env(tmp_path, provider_mode="live"), "AUDITMANAGER_PROVIDER_SOURCE=database",
+            f"AUDITMANAGER_SECRETS_PUBLIC_KEYS=k1:{public}", "AUDITMANAGER_SECRETS_ACTIVE_KID=k1")
+        provider = _provider_env(tmp_path, AUDITMANAGER_SECRETS_KEYS=f"k1:{private}",
+                                 PROXY_LLM_BASE_URL="https://p.example")
+        out = self._result(tmp_path, alpha, provider)
+        assert "readiness FINDING executor-source " in out and "still set" in out, out
+
+    def test_the_check_is_shown_able_to_fail(self, tmp_path: Path) -> None:
+        mutant = _write_mutant(tmp_path, "executor-source")
+        completed, _ = _run(
+            ("--env-file", str(_alpha_env(tmp_path)), "--provider-env-file", str(tmp_path / "np.env")),
+            tmp_path=tmp_path, script=mutant,
+        )
+        assert "executor-source" not in completed.stdout
+
+
 def test_every_check_in_the_script_has_a_case_here() -> None:
     """The same claim `test_deploy_script_refusals.py` makes about `deploy.sh`'s guards, for
     this script's checks: a check added without a test is caught here, not in a deployment."""
@@ -530,13 +629,14 @@ def test_every_check_in_the_script_has_a_case_here() -> None:
         r"^# >>> check: ([a-z-]+)$", READINESS.read_text(encoding="utf-8"), re.M
     )
     assert len(markers) == len(set(markers)), markers
-    assert len(markers) == 6, markers
+    assert len(markers) == 7, markers
     assert set(markers) == {
         "default-credential",
         "tls",
         "plain-http",
         "provider-mode",
         "cost-ceiling",
+        "executor-source",
         "off-host-backup",
     }, markers
 

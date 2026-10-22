@@ -44,6 +44,7 @@ from auditmanager.analysis.text.anchors import (
     resolve_anchor,
 )
 from auditmanager.analysis.text.artifact import Observation, build_text_observations
+from auditmanager.analysis.text.binding import CallBinding
 from auditmanager.analysis.text.config import ProviderConfig, ProviderMode, load_provider_config
 from auditmanager.analysis.text.cost import CostMeter
 from auditmanager.analysis.text.lock import STAGE_ID, ProviderLock, provider_lock
@@ -261,8 +262,14 @@ def run_text_analysis(
     lock: ProviderLock | None = None,
     meter: CostMeter | None = None,
     call_journal: ModelCallJournal | None = None,
+    call: CallBinding | None = None,
 ) -> TextAnalysisOutcome:
     """Run the stage over one document version.
+
+    ``call`` (`EXEC-HTTP-01`) says what the connection serving this run requires of the call
+    and how it is recorded (:class:`~auditmanager.analysis.text.binding.CallBinding`). ``None``
+    is today's behaviour: the ``anthropic`` provider label, the pinned rate table, no identity
+    comparison here.
 
     ``document_graph`` is accepted because the stage registry declares it a required
     input and ``B2`` publishes it. PC-01 sends one narrow prompt over the whole text
@@ -347,13 +354,19 @@ def run_text_analysis(
     if call_journal is not None:
         call_journal.response_received(model_call_id, response)
     call_status = CALL_TRUNCATED if response.truncated else CALL_SUCCEEDED
+    provider_label = PROVIDER if call is None else call.provider_label
+    unmetered = call is not None and call.unmetered
 
     try:
-        cost = cost_meter.charge(
-            pin,
-            input_tokens=response.input_tokens,
-            output_tokens=response.output_tokens,
-            reported_cost_usd=response.reported_cost_usd,
+        # An unmetered connection has no per-call cost: the call is counted and recorded as
+        # unmetered and the meter is charged nothing (plan section 5), never a pin estimate.
+        cost = (
+            cost_meter.record_unmetered() if unmetered else cost_meter.charge(
+                pin,
+                input_tokens=response.input_tokens,
+                output_tokens=response.output_tokens,
+                reported_cost_usd=response.reported_cost_usd,
+            )
         )
     except DomainError as error:
         # The spend that broke the budget is still recorded: the run report should
@@ -361,7 +374,7 @@ def run_text_analysis(
         overrun = pin.cost_usd(
             input_tokens=response.input_tokens, output_tokens=response.output_tokens
         )
-        call = _record(
+        overrun_call = _record(
             model_call_id,
             request,
             response,
@@ -369,13 +382,14 @@ def run_text_analysis(
             status=call_status,
             cost_usd=overrun,
             cost_basis="estimated",
+            provider=provider_label,
         )
         if call_journal is not None:
-            call_journal.complete(call)
+            call_journal.complete(overrun_call)
         return TextAnalysisOutcome(
             status=STATUS_FAILED,
             artifact=None,
-            model_calls=(call,),
+            model_calls=(overrun_call,),
             error=error,
             metrics={
                 "stage_id": STAGE_ID,
@@ -396,22 +410,26 @@ def run_text_analysis(
             },
         )
 
-    call = _record(
+    record = _record(
         model_call_id,
         request,
         response,
         mode=mode,
         status=call_status,
         cost_usd=cost,
+        provider=provider_label,
         # The response is in scope here and nowhere below, so this is where the basis is
         # known. My first attempt set it only on the error path's own metrics dict, so
         # the provenance reached the `model_call` row on both paths but reached the
         # stage metrics on the overrun path alone. `W11-FIX` finished that: the success
         # metrics dict below now carries the same expression.
-        cost_basis="measured" if response.reported_cost_usd is not None else "estimated",
+        cost_basis=(
+            "unmetered" if unmetered
+            else "measured" if response.reported_cost_usd is not None else "estimated"
+        ),
     )
     if call_journal is not None:
-        call_journal.complete(call)
+        call_journal.complete(record)
     parsed = parse_response(response.output_text, truncated=response.truncated)
     grounding = _ground(
         text_layer, parsed.observations, model_call_id=model_call_id, block_index=block_index
@@ -477,7 +495,7 @@ def run_text_analysis(
         return TextAnalysisOutcome(
             status=STATUS_FAILED,
             artifact=None,
-            model_calls=(call,),
+            model_calls=(record,),
             error=DomainError(
                 ErrorCode.ANALYSIS_FAILED,
                 message="the provider reply was cut short and yielded no usable observation",
@@ -487,7 +505,7 @@ def run_text_analysis(
         )
 
     try:
-        assert_consistent_mode(mode, (call,))
+        assert_consistent_mode(mode, (record,))
         artifact = build_text_observations(
             run_id=run_id,
             profile=profile,
@@ -500,7 +518,7 @@ def run_text_analysis(
         return TextAnalysisOutcome(
             status=STATUS_FAILED,
             artifact=None,
-            model_calls=(call,),
+            model_calls=(record,),
             error=error,
             metrics=metrics,
         )
@@ -509,14 +527,14 @@ def run_text_analysis(
         return TextAnalysisOutcome(
             status=STATUS_PARTIAL,
             artifact=artifact,
-            model_calls=(call,),
+            model_calls=(record,),
             error=_partial_error(run_id),
             metrics=metrics,
         )
     return TextAnalysisOutcome(
         status=STATUS_SUCCEEDED,
         artifact=artifact,
-        model_calls=(call,),
+        model_calls=(record,),
         error=None,
         metrics=metrics,
     )
@@ -531,6 +549,7 @@ def _record(
     status: str,
     cost_usd: float,
     cost_basis: str,
+    provider: str = PROVIDER,
 ) -> ModelCallRecord:
     """`cost_basis` has no default, and that is `D-3`.
 
@@ -548,7 +567,7 @@ def _record(
     """
     return ModelCallRecord(
         model_call_id=model_call_id,
-        provider=PROVIDER,
+        provider=provider,
         model_id=request.model_id,
         provider_mode=mode,
         parameters=request.parameters,
