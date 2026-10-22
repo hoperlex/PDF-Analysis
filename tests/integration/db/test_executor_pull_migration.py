@@ -335,3 +335,35 @@ def test_a_task_must_carry_a_payload_until_it_is_cleared(migrated_engine: Engine
                 _task(connection, connection_id, revision_id, probe_id=probe_id,
                       deadline="now() - interval '1 minute'")
         assert _sqlstate(past) == "23514", "a deadline before the task existed"
+
+
+@pytest.mark.parametrize("column", [
+    "connection_id", "revision_id", "run_id", "attempt_id", "model_call_id", "probe_id",
+])
+def test_every_identity_column_of_a_task_refuses_a_malformed_value(
+    migrated_engine: Engine, column: str,
+) -> None:
+    with migrated_engine.begin() as connection:
+        connection_id, revision_id = _connection(connection)
+        run_id, attempt_id = _attempt(connection)
+        good = {"connection_id": connection_id, "revision_id": revision_id, "run_id": run_id,
+                "attempt_id": attempt_id, "model_call_id": None, "probe_id": None}
+        bad = {**good, column: "not-an-identity"}
+        with pytest.raises(DBAPIError) as raised:
+            with connection.begin_nested():
+                connection.execute(text(
+                    "INSERT INTO executor_task (task_id, connection_id, revision_id, origin, "
+                    "run_id, attempt_id, model_call_id, probe_id, expected_model, payload, "
+                    "deadline_at) VALUES (:id, :connection_id, :revision_id, 'run_call', :run_id, "
+                    ":attempt_id, :model_call_id, :probe_id, 'm', "
+                    "CAST('{}' AS jsonb), now() + interval '1 minute')"
+                ), {"id": str(ExecutorTaskId.new()), **bad})
+        assert _sqlstate(raised) == "23514", "the format CHECK, not a foreign key, refuses it"
+
+
+def test_a_token_refuses_a_malformed_connection_identity(migrated_engine: Engine) -> None:
+    with migrated_engine.begin() as connection:
+        with pytest.raises(DBAPIError) as raised:
+            with connection.begin_nested():
+                _token(connection, "exc_" + "0" * 25)
+        assert _sqlstate(raised) == "23514"
