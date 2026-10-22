@@ -75,7 +75,7 @@ export function review(overrides: Partial<SectionReview> = {}): SectionReview {
     options: PROJECT_SECTION_VALUES.map((code) => ({
       section_code: code,
       name: code,
-      executable: code !== 'PB',
+      executable: true,
       suggestion:
         code === 'KJ'
           ? { score: 9, filename_patterns: ['КЖ', '-KJ'], text_keywords: ['армирование'], name_in_text: false }

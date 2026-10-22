@@ -20,6 +20,13 @@ Two constraints from the proxy that shape this file:
 * ``model``, ``models``, ``provider``, ``route``, ``transforms``, ``plugins``,
   ``stream_options`` and ``debug`` are stripped from the body by the proxy. Sending them is
   not an error, it is a silent no-op - which is worse, so they are not sent.
+
+**Model identity** (`MODEL-IDENTITY-CHECK-01`, `R-133`). Which model answers is the gateway's
+decision, so the only evidence of what produced an answer is the reply's own ``model`` string.
+For a *pinned* configured model that string must equal the configured name or a listed alias;
+any other name, or none, is the typed refusal ``model_identity_mismatch`` and nothing is
+published. A placeholder configuration (:data:`_UNPINNED_MODEL_NAMES`) cannot be held to a name,
+so the check is not applied and :attr:`ProxyAdapter.identity_pinned` reports that it was not.
 """
 
 from __future__ import annotations
@@ -51,6 +58,22 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 #: choice that changes routing and billing, and under the proxy's variant A it is ignored
 #: entirely - so a wrong slug here is silent rather than refused.
 MODEL_STUBS: Final[frozenset[str]] = frozenset({"proxy", "default", "auto"})
+
+#: The two configured names that are placeholders rather than a pinned model, so a reply cannot
+#: be held to them (`MODEL-IDENTITY-CHECK-01`, `R-133`). The identity check is not applied for
+#: either, and :attr:`ProxyAdapter.identity_pinned` says so out loud.
+#:
+#: * ``proxy`` - the stub that `bootstrap/settings.py` falls back to when `PROXY_LLM_MODEL` is
+#:   unset and that `infra/deploy/env/provider.env.example` ships. It says "I am not choosing a
+#:   model"; the gateway picks, and a reply from whatever it picked is the expected answer.
+#: * ``replay`` - what `norms/__main__.py:read_proxy_answer` configures to parse a checkpointed
+#:   body offline. Nothing is dispatched there, so there is no identity left to verify.
+#:
+#: `W56A-MODEL-PIN-01` is the day a placeholder stops being tolerated: refusing `proxy` at
+#: start-up belongs to the owner of the bootstrap settings, not to this module, and when it
+#: lands this set shrinks to ``replay`` or goes away. Exact names only: any other string,
+#: ``default`` and ``auto`` included, is treated as a pinned name and held to it.
+_UNPINNED_MODEL_NAMES: Final[frozenset[str]] = frozenset({"proxy", "replay"})
 
 #: Appended to an origin-only base URL: the proxy's portal endpoint, which is the path every
 #: installation called before `W48-PROXY-01` and still calls when it names no path.
@@ -110,6 +133,10 @@ class ProxySettings:
     base_url: str
     token: str
     model: str = "proxy"
+    #: Further names the gateway may report for ``model``, such as a dated variant it echoes
+    #: (`MODEL-IDENTITY-CHECK-01`). Empty by default, matched exactly like ``model`` (no prefix,
+    #: no case folding) and consulted only when ``model`` is pinned.
+    model_aliases: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.base_url.startswith(("http://", "https://")):
@@ -164,6 +191,20 @@ class ProxySettings:
                     "blank token is refused before the body is read"
                 ),
             )
+        # `MODEL-IDENTITY-CHECK-01`. An alias is an allow-list entry, so a blank one would
+        # accept a reply that names an empty model, and a list or a bare string would be
+        # iterated into characters. The model name itself is not validated here: refusing a
+        # placeholder at start-up is `W56A-MODEL-PIN-01`'s, and the bootstrap owner's, to do.
+        if not isinstance(self.model_aliases, tuple) or any(
+            not isinstance(alias, str) or not alias.strip() for alias in self.model_aliases
+        ):
+            raise DomainError(
+                ErrorCode.INTERNAL_ERROR,
+                message=(
+                    "the proxy model aliases must be a tuple of non-empty model names; a "
+                    "blank alias would accept a reply that names no model"
+                ),
+            )
 
 
 class ProxyAdapter(ModelAdapter):
@@ -179,6 +220,17 @@ class ProxyAdapter(ModelAdapter):
     @property
     def provider_mode(self) -> ProviderMode:
         return ProviderMode.LIVE
+
+    @property
+    def identity_pinned(self) -> bool:
+        """Whether replies are held to the configured model (`R-133`).
+
+        ``False`` only for a placeholder name in :data:`_UNPINNED_MODEL_NAMES`: the check is then
+        not applied, and this property is how a caller can see that it was not, rather than
+        having it pass silently. Read-only, and derived from the settings, so it cannot be set
+        to claim a pin the configuration does not hold.
+        """
+        return self._settings.model not in _UNPINNED_MODEL_NAMES
 
     def complete(self, request: ModelRequest) -> ModelResponse:
         body = _to_openai_body(request, self._settings.model)
@@ -253,7 +305,7 @@ class ProxyAdapter(ModelAdapter):
                 raw, latency_ms, None, "the model proxy returned an invalid answer",
             ) from None
         try:
-            return _from_openai_response(document, latency_ms)
+            response = _from_openai_response(document, latency_ms)
         except _UnusableAnswer as unusable:
             raise _unusable_answer(raw, latency_ms, document, str(unusable)) from None
         except (ValueError, TypeError, AttributeError, KeyError, IndexError,
@@ -261,6 +313,12 @@ class ProxyAdapter(ModelAdapter):
             raise _unusable_answer(
                 raw, latency_ms, document, "the model proxy returned an invalid answer",
             ) from None
+        # `MODEL-IDENTITY-CHECK-01` (`R-133`). Outside the `try` above, so the typed refusal
+        # is not itself caught and re-labelled as an unusable answer. Applied only to a pinned
+        # model; `identity_pinned` is the visible record of when it is not.
+        if self.identity_pinned and not _is_configured_model(response.model, self._settings):
+            raise _identity_mismatch(raw, latency_ms, document, response.model)
+        return response
 
 
 def _completions_url(base_url: str) -> str:
@@ -370,18 +428,60 @@ def _unusable_answer(
     block holds two readable token counts; otherwise the journal can only say the
     outcome is unknown.
     """
-    received = None
-    tokens = _usage_tokens(document)
-    if tokens is not None:
-        received = ReceivedResponse(
-            response_sha256=hashlib.sha256(raw).hexdigest(),
-            input_tokens=tokens[0],
-            output_tokens=tokens[1],
-            latency_ms=latency_ms,
-        )
     return ProxyDispatchError(
         ErrorCode.ANALYSIS_FAILED, dispatch_class="outcome_unknown", retry_safe=False,
-        message=message, received=received,
+        message=message, received=_received_evidence(raw, latency_ms, document),
+    )
+
+
+def _received_evidence(
+    raw: bytes, latency_ms: int, document: Any
+) -> ReceivedResponse | None:
+    """The usage evidence of a complete answer, or ``None`` when its counts are unreadable."""
+    tokens = _usage_tokens(document)
+    if tokens is None:
+        return None
+    return ReceivedResponse(
+        response_sha256=hashlib.sha256(raw).hexdigest(),
+        input_tokens=tokens[0],
+        output_tokens=tokens[1],
+        latency_ms=latency_ms,
+    )
+
+
+def _is_configured_model(reported: str | None, settings: ProxySettings) -> bool:
+    """Exact match of the reply's model against the configured name or a listed alias.
+
+    A reply that names no model is not a match: the check fails closed, and a gateway's name
+    for a model is never guessed from what it did not say (``R-133``).
+    """
+    return reported is not None and (
+        reported == settings.model or reported in settings.model_aliases
+    )
+
+
+def _identity_mismatch(
+    raw: bytes, latency_ms: int, document: Any, reported: str | None
+) -> ProxyDispatchError:
+    """The typed refusal for an answer from another model than the configured one.
+
+    The answer arrived, so the call may have been paid for: it is ``outcome_unknown``, never
+    retry-safe, and it carries the usage evidence exactly as an unusable answer does. The
+    message names no model, no endpoint and no credential, as the catalog entry requires; the
+    reported name goes to the server-side log only, bounded and escaped, so an operator can
+    tell a foreign model from a dated variant that belongs in ``model_aliases``.
+    """
+    _LOGGER.warning(
+        "model proxy identity mismatch: reported=%.80r", reported,
+    )
+    return ProxyDispatchError(
+        ErrorCode.MODEL_IDENTITY_MISMATCH, dispatch_class="outcome_unknown",
+        retry_safe=False,
+        message=(
+            "the model proxy answered with a model other than the configured one, or "
+            "named none; the answer is not published"
+        ),
+        received=_received_evidence(raw, latency_ms, document),
     )
 
 
@@ -455,7 +555,14 @@ def _from_openai_response(document: Any, latency_ms: int) -> ModelResponse:
         # The proxy returns the real spend for the call, including whatever the upstream
         # actually charged. It is the only number here that is measured rather than derived.
         reported_cost_usd=_reported_cost(usage),
+        model=_reported_model(document),
     )
+
+
+def _reported_model(document: Mapping[str, Any]) -> str | None:
+    """The reply's own ``model`` string. Absent, null or not text all read as none named."""
+    value = document.get("model")
+    return value if isinstance(value, str) else None
 
 
 def _reported_cost(usage: Mapping[str, Any]) -> float | None:

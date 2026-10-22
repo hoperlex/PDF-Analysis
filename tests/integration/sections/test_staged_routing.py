@@ -16,6 +16,7 @@ OTHER_VERSION = "ver_01M25P3TH08VVTTGJRXYBZZ7RQ"
 EXPERT = "usr_01M25P3TH08VVTTGJRXYBZZ7RP"
 PS_PROFILE = "ap_01M25P3TH08VVTTGJRXYBZZ7RP"
 AR_PROFILE = "ap_01M25P3TH08VVTTGJRXYBZZ7RQ"
+PB_PROFILE = "ap_01M25P3TH08VVTTGJRXYBZZ7RR"
 
 
 def _route(
@@ -105,8 +106,28 @@ def test_unknown_section_and_invalid_profile_registry_refuse() -> None:
 
 
 def test_a_different_section_cannot_inherit_ps_profile() -> None:
+    """On a table built without PB (`PB-PROFILE-01`): PB is a section with no entry, here."""
     confirmation = ExpertSectionConfirmation(VERSION, "PB", "P", EXPERT)
     with pytest.raises(SectionRouteUnavailable, match="section_profile_unavailable"):
         _route(confirmation=confirmation)
     with pytest.raises(SectionRouteUnavailable, match="section_profile_unavailable"):
         _route(confirmation=replace(confirmation, code="AI"))
+
+
+@pytest.mark.parametrize("stage", ["P", "R"])
+def test_pb_routes_to_its_own_profile_at_either_stage(stage: str) -> None:
+    confirmation = ExpertSectionConfirmation(VERSION, "PB", stage, EXPERT)
+    profiles = {"AR": AR_PROFILE, "PS": PS_PROFILE, "PB": PB_PROFILE}
+    assert _route(stage=stage, confirmation=confirmation, profiles=profiles) == StagedSectionRoute(
+        VERSION, stage, "PB", PB_PROFILE
+    )
+
+
+def test_ps_and_ar_do_not_inherit_the_pb_profile() -> None:
+    profiles = {"PB": PB_PROFILE}
+    with pytest.raises(SectionRouteUnavailable, match="section_profile_unavailable"):
+        _route(profiles=profiles)  # the default confirmation is PS
+    with pytest.raises(SectionRouteUnavailable, match="section_profile_unavailable"):
+        _route(
+            confirmation=ExpertSectionConfirmation(VERSION, "AR", "P", EXPERT), profiles=profiles
+        )
