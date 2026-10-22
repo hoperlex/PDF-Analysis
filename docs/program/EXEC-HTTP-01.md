@@ -1,4 +1,4 @@
-STATUS: item 0 survey done, building destinations/identity/http adapters (12:25 +05)
+STATUS: item 1 destinations, identity, http adapters, probe logic, AttemptContext committed (12:35 +05)
 
 # EXEC-HTTP-01 report, backend half (in progress)
 
