@@ -1,4 +1,4 @@
-STATUS: backend half done except R-133 stage-level (ready on agent/exec-http-01-r133, waits for a4a11938 in origin/dev); lane stack stopped by the dispatcher, tests paused (13:34 +05)
+STATUS: backend half done except R-133 stage-level (ready on agent/exec-http-01-r133, waits for a4a11938 in origin/dev); stack down, paused (stopped by the dispatcher; free memory 2.2 GiB, not restarted) (13:35 +05)
 
 # EXEC-HTTP-01 report, backend half
 
