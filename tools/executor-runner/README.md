@@ -26,8 +26,8 @@ The session is your own interactive session under your own login (`R-143f`). It 
 ### 1. On the stand
 
 In «Исполнители → Подключения» create a `pull` connection with client `claude_code_session`
-and the pinned model, issue a runner token with «Выпустить токен» (it is shown once, with a copy button) and route «Анализ текста» to the
-connection.
+and the pinned model, then issue a runner token with «Выпустить токен» (it is shown once, with
+a copy button). Route «Анализ текста» to the connection after the successful probe in step 6.
 
 ### 2. Make the workspace a folder of its own
 
