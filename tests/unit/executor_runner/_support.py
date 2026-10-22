@@ -355,6 +355,7 @@ def agent_config(
     extra_runner: str = "",
     extra_endpoint: str = "",
     command_timeout: float = 30.0,
+    drain_seconds: int = 5,
 ) -> Path:
     lines = [
         "[runner]",
@@ -363,7 +364,7 @@ def agent_config(
         "backoff_min_seconds = 0.2",
         "backoff_max_seconds = 1.0",
         "extend_floor_seconds = 0.5",
-        "drain_seconds = 5",
+        f"drain_seconds = {drain_seconds}",
         extra_runner,
         "[model]",
         f'declared = "{declared}"',

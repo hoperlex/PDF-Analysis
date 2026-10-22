@@ -1,4 +1,4 @@
-STATUS: 3/7 workspace (settings + skill) done, 7 workspace tests green (11:48 +05)
+STATUS: 4/7 agent.py + example config + systemd unit done, 25 agent tests green (11:52 +05)
 
 # EXEC-TOOLS-01 - executor runner client tools (progress file, becomes the final report)
 
