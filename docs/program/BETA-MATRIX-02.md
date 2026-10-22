@@ -29,7 +29,7 @@ checks exist and the missing evidence is a run, an expert, real documents, a pol
 | B3 | full AR pipeline, grounded, quality | DEFERRED-BY-OWNER | same | — |
 | B4 | durable execution, retry, resume, journal | READY-TO-ACCEPT-ON-STAND | same | no stand observation; a provider failure cannot be induced live |
 | B5 | real AR documents end to end | DEFERRED-BY-OWNER | same | — |
-| B6 | backup and restore drill (local) | READY-TO-ACCEPT-ON-STAND | same | the real drill now ran at head `0028` with 23 Blobs; not repeated at `0029`; owner judges whether synthetic data is a B6 drill |
+| B6 | backup and restore drill (local) | READY-TO-ACCEPT-ON-STAND | same | the real drill ran at head `0028` with 23 Blobs and again at head `0029` (`RECOVERY-DRILL-0029-01`: 23 of 23 objects and Blobs, 55 tables, 4 views, 72 triggers equal, independent compare no differences; recovery suite 308 passed); owner judges whether synthetic data is a B6 drill |
 | B7 | deploy bound to gate, version, release history | READY-TO-ACCEPT-ON-STAND | same | main carries `0.7.0` at `44962e8d` but the ledger row names `48c8e34c`; host verifier pending; no `v0.7.0` tag; no literal `GATE OK`; `0.5.1` row unruled |
 | B8 | exposure review | READY-TO-ACCEPT-ON-STAND | same | E-1, E-2, E-6 are owner decisions; E-3 needs an operator setting; E-4, E-5, E-8 are fixed in code and not re-probed on a stand |
 | B9 | contract `1.0.0` and error catalogue frozen | READY-TO-ACCEPT-ON-STAND | NEEDS-CODE | sealed on dev and main; missing: `contract_version` read from a deployed stand and one complete gate (`R-135`) |
@@ -192,9 +192,12 @@ Each stale claim, with the old and the new value, and the command that shows the
   independent compare with no differences. Its limits (§8 there): one server with two databases, not two stacks; the `norm*` tables
   are empty; roles are not restored; not an attested stand copy; not W54-scale (28,920 objects). The older run
   (`W58-INT-RELATIONS-PLACEHOLDER-FIX-01.md`, head `0023`, one Blob) is superseded as the latest evidence.
-- **Missing:** the drill at `0029`. Migration `0029` widened four `CHECK`s only; the commit message reports 55 tables, 4 views, 72
-  triggers and 153 indexes equal to the declaration at `0029`, but no drill was driven there. And the owner's judgement whether 23
-  synthetic objects are a B6 drill or a larger source is wanted. `D-123` (stand MinIO never inventoried) stays outside a local drill.
+- **Drill at `0029` (2026-10-22, `RECOVERY-DRILL-0029-01.md`, tree `c8a11c60`, lane stack, recorded provider):** exit 0 at every step, 23 of 23
+  objects and 23 of 23 Blobs (271,413 bytes), 55 of 55 tables and 4 of 4 views equal (227 rows), 72 of 72 triggers equal, an independent compare with
+  `differences: []`, 40 of 40 update/delete attempts refused on the 20 populated guarded tables, the four `CHECK`s that `0029` widened present on both
+  sides; `tests/integration/recovery` 308 passed in 133 s; two negatives (an added and a dropped table) refused by the schema audit. Not claimed: a real stand
+  backup, the stand's Blob store, `U-04`, a second compose stack, `norm*` data, roles, W54 scale.
+- **Missing:** the owner's judgement whether 23 synthetic objects are a B6 drill or a larger source is wanted. `D-123` (stand MinIO never inventoried) stays outside a local drill.
 - **Command:** `RECOVERY-REBASE-01.md` §9 (`make up check-services migrate check-db`, `synthetic_drill_seed`, `pg_dump`,
   `synthetic_drill_fixture --source-env`, `offline_restore_preflight`, `synthetic_drill_runner --pg17-bin /usr/lib/postgresql/17/bin`,
   `synthetic_drill_compare --probe-target-guards`); pick free ports with `ss -ltn`.
