@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.0.0-draft.1 (OpenAPI 3.1.0)
- *   sha256 7cd290dbf7ab14113b68a7537606b124a448ab71b2130d6364c02a3ae53d264c
+ *   AuditManager PC-01 API 1.0.0 (OpenAPI 3.1.0)
+ *   sha256 741f29f9b0c9341cdf0631f0f65e462c7788945dd21002aa33afc54af7076eb8
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.0.0-draft.1';
+export const CONTRACT_VERSION = '1.0.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '7cd290dbf7ab14113b68a7537606b124a448ab71b2130d6364c02a3ae53d264c';
+export const CONTRACT_DIGEST = '741f29f9b0c9341cdf0631f0f65e462c7788945dd21002aa33afc54af7076eb8';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -763,6 +763,8 @@ export const ERROR_CODE_VALUES = [
   'dependency_credential_refused',
   'staged_upload_lost',
   'required_norm_unavailable',
+  'version_classification_required',
+  'section_profile_unavailable',
   'analysis_input_invalid',
   'analysis_failed',
   'partial_result_not_publishable',
@@ -780,7 +782,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The single externally visible failure shape, mirroring urn:auditmanager:domain:error-envelope:v1. `retryable` is pinned to the catalog value for the reported code; a caller never infers it from the HTTP status or the message. */
 export type ErrorEnvelope = {
-  contract_version: "1.0.0-draft.1";
+  contract_version: "1.0.0";
   correlation_id: CorrelationId;
   /** Safe scalar classifiers only, restricted to the safe_detail_keys the catalog declares for the reported code. The catalog's forbidden key set is rejected. */
   details?: {

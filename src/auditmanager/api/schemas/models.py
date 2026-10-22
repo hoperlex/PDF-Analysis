@@ -445,7 +445,9 @@ Cursor = TypeAliasType("Cursor", Annotated[str, Field(min_length=1, max_length=5
 class ErrorCode(str, enum.Enum):
     """Exactly the key set of ``contracts/domain/v1/error-codes.json``.
 
-    Twenty-five codes since `W56A-SEAL-01` added ``model_identity_mismatch``; the
+    Twenty-seven codes since `BETA-CONTRACT-SEAL-01` added ``version_classification_required``
+    and ``section_profile_unavailable`` (`D-179`); the twenty-fifth came with `W56A-SEAL-01`, which
+    added ``model_identity_mismatch``; the
     twenty-third, ``rate_limited``, came with `W49-SEAL-01` and only the edge in
     front of ``/api/v1`` answers it; the twenty-second was ``staged_upload_lost``, added by
     `W20-CODE` under owner ruling `R-8`, settling `D-18`, and the twenty-first
@@ -469,6 +471,8 @@ class ErrorCode(str, enum.Enum):
     DEPENDENCY_CREDENTIAL_REFUSED = "dependency_credential_refused"
     STAGED_UPLOAD_LOST = "staged_upload_lost"
     REQUIRED_NORM_UNAVAILABLE = "required_norm_unavailable"
+    VERSION_CLASSIFICATION_REQUIRED = "version_classification_required"
+    SECTION_PROFILE_UNAVAILABLE = "section_profile_unavailable"
     ANALYSIS_INPUT_INVALID = "analysis_input_invalid"
     ANALYSIS_FAILED = "analysis_failed"
     PARTIAL_RESULT_NOT_PUBLISHABLE = "partial_result_not_publishable"
@@ -635,7 +639,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.0.0-draft.1"]
+    contract_version: Literal["1.0.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId

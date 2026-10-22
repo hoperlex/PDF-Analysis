@@ -57,9 +57,14 @@ _TOOLS_FIXTURES = str(REPOSITORY_ROOT / "tools" / "fixtures")
 if _TOOLS_FIXTURES not in sys.path:
     sys.path.insert(0, _TOOLS_FIXTURES)
 
-#: The QA lane's API ports (`W55B-QA-01` brief). Overridable so the integrator can rerun the
-#: probes on another free pair without editing this file.
-API_PORT = int(os.environ.get("W55B_QA_API_PORT", "57500"))
+#: The QA lane's default API port pair (`D-189`). It sits **below** the kernel's ephemeral range
+#: (`/proc/sys/net/ipv4/ip_local_port_range`, 32768-60999 here): inside it the kernel hands the
+#: same numbers out as client source ports, and on a busy host a connect to an unused port in the
+#: range can connect to *itself* (TCP simultaneous open, ``127.0.0.1:57500 -> 127.0.0.1:57500``),
+#: after which the child cannot bind ("address already in use"). Overridable so the integrator can
+#: rerun the probes on another free pair without editing this file.
+DEFAULT_API_PORT = 28500
+API_PORT = int(os.environ.get("W55B_QA_API_PORT", str(DEFAULT_API_PORT)))
 HEALTH_PORT = int(os.environ.get("W55B_QA_HEALTH_PORT", str(API_PORT + 1)))
 HOST = "127.0.0.1"
 
@@ -127,9 +132,44 @@ def lane_environment() -> dict[str, str]:
 
 
 def _port_is_free(port: int) -> bool:
+    """True when this process can bind ``port`` the way the served application does (`D-189`).
+
+    The probe **binds**; it does not connect. A connect only learns that nothing *listens* on
+    the port, which is also true of a socket that holds the port without listening and of a
+    connection that connected to itself, and ``serve.py`` cannot bind in either case.
+    ``SO_REUSEADDR`` is set because ``uvicorn`` sets it: a port whose only occupant is a
+    ``TIME_WAIT`` leftover of the previous child (the harness restarts the child at each
+    ceiling) is free to the server, and a probe stricter than the server would refuse a start
+    the server can make.
+    """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
-        probe.settimeout(0.5)
-        return probe.connect_ex((HOST, port)) != 0
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            probe.bind((HOST, port))
+        except OSError:
+            return False
+        return True
+
+
+def _api_answers() -> bool:
+    """True when the API port answers an HTTP request, with any status.
+
+    ``serve.py`` starts the health plane on a thread and then the API in the main thread, so
+    ``/readyz`` answers about 25 ms before the API port is bound (12 of 12 starts measured in
+    `GATE-REPAIR-01`; the harness polls every 0.5 s, so about one start in twenty read "ready"
+    in that window and the first call got ``ConnectionRefusedError``). Readiness is therefore
+    both planes. An HTTP answer, not a bare connect: a connection that connected to itself
+    "accepts" and then answers with the request line it sent, which is not a status line.
+    """
+    connection = http.client.HTTPConnection(HOST, API_PORT, timeout=2)
+    try:
+        connection.request("GET", "/")
+        connection.getresponse().read()
+        return True
+    except (OSError, http.client.HTTPException):
+        return False
+    finally:
+        connection.close()
 
 
 def _child_environment(ceiling: str | None) -> dict[str, str]:
@@ -188,6 +228,8 @@ class ApiControl:
         self.current: ServedApi | None = None
         self.log_directory = Path(tempfile.mkdtemp(prefix="w55b-qa-api-"))
         self.peaks: list[tuple[str | None, int]] = []
+        self._parked: list[tuple[str, Any]] | None = None
+        self._engine: Engine | None = None
 
     def ensure(self, ceiling: str | None = None) -> ServedApi:
         """A served application at ``ceiling`` (``None``: the default, unset), started if needed."""
@@ -220,7 +262,7 @@ class ApiControl:
                 connection.request("GET", "/readyz")
                 ready = connection.getresponse().status == 200
                 connection.close()
-                if ready:
+                if ready and _api_answers():
                     self.current = served
                     return served
             except OSError:
@@ -270,6 +312,46 @@ class ApiControl:
         if self.current is not None:
             self._terminate(self.current)
             self.current = None
+
+    def park_foreign_queue(self, engine: Engine) -> None:
+        """Keep every Job another suite left ``queued`` out of the served child's reach (`GATE-REPAIR-02`).
+
+        The child is the in-process claimant of ``EXECUTION_ROLE=all``: it claims **any** queued
+        run in the shared lane database, not only the runs these probes start. A run another
+        directory left queued is then executed (or, when its pinned profile is not one this
+        deployment registers, failed as ``analysis_failed``) while a probe is counting rows, and
+        the probes' global counts (``blob``, ``document_version``) move under it. The Jobs are
+        given an ``available_at`` in 2099 and get their own back in :meth:`close`; only the Jobs
+        that exist when this is called are touched, so the probes' own runs are not. The same
+        step ``tests/integration/jobs/conftest.py``'s ``quiet_queue`` takes for its workers.
+        """
+        if self._parked is not None:
+            return
+        with Session(engine) as session:
+            rows = session.execute(text(
+                "SELECT job_id, available_at FROM job WHERE state = 'queued' FOR UPDATE"
+            )).all()
+            session.execute(text(
+                "UPDATE job SET available_at = timestamptz '2099-01-01' WHERE state = 'queued'"
+            ))
+            session.commit()
+        self._parked = [(str(job_id), available_at) for job_id, available_at in rows]
+        self._engine = engine
+
+    def close(self) -> None:
+        """Stop the child and give the parked Jobs back. Safe to call twice."""
+        self.stop()
+        parked, self._parked = self._parked, None
+        if not parked:
+            return
+        assert self._engine is not None
+        with Session(self._engine) as session:
+            for job_id, available_at in parked:
+                session.execute(text(
+                    "UPDATE job SET available_at = :available_at "
+                    "WHERE job_id = :job_id AND state = 'queued'"
+                ), {"job_id": job_id, "available_at": available_at})
+            session.commit()
 
 
 # ---------------------------------------------------------------------------------------
@@ -377,8 +459,9 @@ def create_project(token: str, name: str = "W55B QA project") -> str:
 
 
 #: `W59-SECTION-SEAL-01`: ``startRun`` and ``reauditRun`` refuse a version no expert has
-#: classified (``422 required_norm_unavailable``, ``details.reference_kind:
-#: version_classification``) and there is no AR fallback. Every probe here runs the AR
+#: classified (``422 version_classification_required`` since `BETA-CONTRACT-SEAL-01`; a draft
+#: said ``required_norm_unavailable`` with ``details.reference_kind: version_classification``)
+#: and there is no AR fallback. Every probe here runs the AR
 #: corpus, so each version it runs is classified first as a design-stage AR version
 #: (`W59-SEAL-FOLLOWUP-01`), by the expert that uploaded it. Written out, not imported.
 CLASSIFICATION = {"project_stage": "P", "section_code": "AR"}

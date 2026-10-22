@@ -4,14 +4,14 @@
  *
  * Since the seal a run's analysis profile is routed from the version's expert-confirmed
  * classification — never from a file name, a suggestion or the document's legacy section,
- * and never by falling back to the АР profile. Both refusals are the catalog's
- * `required_norm_unavailable`, told apart by `details.reference_kind`:
+ * and never by falling back to the АР профиль. Each refusal has its own catalog code since
+ * `BETA-CONTRACT-SEAL-01` (`D-179`; a draft reported both as `required_norm_unavailable`,
+ * told apart by `details.reference_kind`):
  *
- *   `version_classification`  the version has no confirmed stage and section;
- *   `analysis_profile`        the confirmed section has no registered text profile.
+ *   `version_classification_required`  the version has no confirmed stage and section;
+ *   `section_profile_unavailable`     the confirmed section has no registered text profile.
  *
- * The catalog's own sentence («авторитетный источник … не удаётся разрешить») is true and
- * tells a reader nothing to do, so each gets its own. Neither offers another section, a
+ * The catalog's own sentence is true and tells a reader nothing to do, so each gets its own. Neither offers another section, a
  * default profile or a retry: the same request is refused again until the reader confirms a
  * section, or until a profile is registered. Worded once here for the start-run control and
  * the queue's re-audit alike, the way the input-budget figures are (`./input-budget.ts`).
@@ -43,12 +43,9 @@ export const SECTION_PROFILE_UNAVAILABLE_REFUSAL: RoutingRefusal = {
     'возможен, когда профиль раздела появится.',
 };
 
-/** The refusal `details` name, or `null` for any other `reference_kind` or none. */
-export function routingRefusal(
-  details: Readonly<Record<string, string | number | boolean | null>>,
-): RoutingRefusal | null {
-  const reference = details['reference_kind'];
-  if (reference === 'version_classification') return VERSION_UNCLASSIFIED_REFUSAL;
-  if (reference === 'analysis_profile') return SECTION_PROFILE_UNAVAILABLE_REFUSAL;
+/** The refusal a catalog code names, or `null` for any other code. */
+export function routingRefusal(errorCode: string): RoutingRefusal | null {
+  if (errorCode === 'version_classification_required') return VERSION_UNCLASSIFIED_REFUSAL;
+  if (errorCode === 'section_profile_unavailable') return SECTION_PROFILE_UNAVAILABLE_REFUSAL;
   return null;
 }

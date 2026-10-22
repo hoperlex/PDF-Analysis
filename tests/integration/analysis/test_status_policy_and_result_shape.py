@@ -37,7 +37,7 @@ CONTRACT = REPO_ROOT / "contracts" / "analysis" / "v1" / "stage-registry.json"
 #: Pinned literals. The authority is `contracts/analysis/v1/stage-registry.json`, read and
 #: compared below, so a contract edit that is not mirrored here reddens.
 EXPECTED_CONTRACT = "auditmanager.analysis.stage_registry"
-CONTRACT_VERSION = "1.0.0-draft.1"
+CONTRACT_VERSION = "1.0.0"
 PREPARATION_STAGES = ("source_preparation", "page_geometry_extraction", "document_context_build")
 BLOB_ID = "blob_01M2545JSD15ETSNNV904X991J"
 SHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"

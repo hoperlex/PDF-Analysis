@@ -8,6 +8,26 @@ four-times-certified surface. This directory is what that rewrite has to be *wro
 
 **After the rewrite, the FastAPI implementation must reproduce these bytes exactly.**
 
+## Amended 2026-10-21 by `BETA-CONTRACT-SEAL-01`, the `1.0.0` seal
+
+**Sixteen records: one value.** Every error body carries `contract_version`, and the seal moved
+it from `1.0.0-draft.1` to `1.0.0`. The sixteen error records (05b, 17-31, every refusal and
+the storage-credential answer) carry it once each, in the body text, and a declared body
+`length` eight shorter (thirteen characters became five). Nothing else about them moved: the
+status, the headers, the tokens, the error codes, the messages and the details are the previous
+capture's. The success records carry no `contract_version` and did not move. `capture.py` was
+not run (it rewrites every record); the sixteen files were edited by that one substitution and
+that one length.
+
+`test_the_sixteen_error_records_moved_by_the_contract_version_and_nothing_else` pins the move by
+digest: put `1.0.0-draft.1` back and each body is the capture at `c7d5f483` again, digest for
+digest, and the set is asserted whole, so a seventeenth record that names a contract version
+cannot carry the literal unexamined. No record gains an `exception` block and
+`PERMITTED_EXCEPTIONS` is unchanged: the rule that names a debt per moved record is for a change
+of one operation's body, and this is the one literal every error body shares (`W18-SEAL`'s
+reading: what is counted is the exception, and this is not a record's debt). Record 31 keeps the
+one block it had.
+
 ## Amended 2026-10-21 by `CLASSIFICATION-CORRECTION-01`, after `W59-SEAL-FOLLOWUP-01`
 
 **37 records, none added: four moved by one property.** Migration `0028` lets an

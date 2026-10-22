@@ -59,6 +59,20 @@ envelope accepted: the same pages, read by pdfplumber and rendered by PDFium.
 renderer takes it per page (``analysis/geometry/render.py``), and with the envelope out of the
 process no upload can hold a render up.
 
+The run's own readers are asked too (`RUN-ROBUSTNESS-01`, D-160)
+----------------------------------------------------------------
+PDFium repairs documents that ``pypdf`` and ``pdfminer`` refuse, and the run stages read the
+stored bytes with those two (``analysis.stages.extraction``), so a PDF the rules above accepted
+could fail every run that was ever started on it. When PDFium has accepted the document,
+:mod:`auditmanager.ingest.stage_reader` -- a second program under the same ceilings, wall clock
+and bare environment -- asks the stages' questions of it: ``pypdf`` opens it and counts its
+pages, ``pdfplumber`` opens it, builds its pages and decodes their content streams, and the
+three counts agree. A document that fails is refused with the refusals this module already had
+for an unreadable document (``parseable_pdf``): a failure of ``pypdf`` keeps the message of
+"could not be parsed", a failure of ``pdfplumber`` or a disagreement that of "could not be read
+for its text layer" -- the words the previous implementation, which used those same libraries,
+answered with. Interpreting a page is still the run's own work (the stage reader's docstring).
+
 Order of the rules
 ------------------
 Cheapest first, and each fixture in ``fixtures/synthetic/ar/negative`` trips exactly one,
@@ -78,7 +92,10 @@ so a rejection is attributable to a rule rather than to a coincidence of two:
    (`W55B-FIX`, X-1); reading the document within the reader's limits
    (``pdf_reader_limits``);
 8. every page yields extractable text (``require_text``), or the pages are counted for the bundle
-   envelope, which decides the text rule with the portal's blocks in hand.
+   envelope, which decides the text rule with the portal's blocks in hand;
+9. the run's own readers read the document: ``pypdf`` opens it, ``pdfplumber`` opens it and its
+   content streams decode, and the page counts agree with PDFium's (``parseable_pdf``;
+   `RUN-ROBUSTNESS-01`, D-160).
 
 A file extension is deliberately **not** a rule. It is a presentation value and a caller
 controls it; the magic bytes and the parser decide what the content is, which is the
@@ -193,6 +210,8 @@ READER_SECONDS: Final[int] = 60
 
 #: The program :func:`inspect_pdf` starts, beside this module.
 _READER: Final[Path] = Path(__file__).with_name("pdf_reader.py")
+#: The second program, started for a document the first accepted (`RUN-ROBUSTNESS-01`, D-160).
+_STAGE_READER: Final[Path] = Path(__file__).with_name("stage_reader.py")
 #: The reader's environment: nothing of the API's, which holds the deployment's secrets.
 _READER_ENVIRONMENT: Final[dict[str, str]] = {"PATH": os.defpath}
 #: How much of a handle without a file descriptor is copied at a time.
@@ -257,6 +276,10 @@ class PdfFacts:
     page_count: int
     page_characters: tuple[int, ...]
     page_has_layer: tuple[bool, ...]
+    #: ``(width_pt, height_pt, rotation)`` of each page as displayed: the CropBox clipped to
+    #: the MediaBox, its sides exchanged for a quarter-turn ``/Rotate``
+    #: (`RUN-ROBUSTNESS-01`, D-159; :mod:`auditmanager.ingest.crop_geometry`).
+    page_geometry: tuple[tuple[float, float, int], ...] = ()
 
 
 def inspect_pdf(content: bytes | bytearray | BinaryIO, *, require_text: bool) -> PdfFacts:
@@ -291,13 +314,16 @@ def inspect_pdf(content: bytes | bytearray | BinaryIO, *, require_text: bool) ->
         )
 
     handle.seek(0)
-    page_characters, page_has_layer = _inspect_pages(handle, require_text=require_text)
+    page_characters, page_has_layer, page_geometry = _inspect_pages(
+        handle, require_text=require_text
+    )
     handle.seek(0)
     return PdfFacts(
         byte_size=size,
         page_count=len(page_characters),
         page_characters=page_characters,
         page_has_layer=page_has_layer,
+        page_geometry=page_geometry,
     )
 
 
@@ -324,21 +350,32 @@ def as_handle(content: Any) -> BinaryIO:
 
 def _inspect_pages(
     handle: BinaryIO, *, require_text: bool
-) -> tuple[tuple[int, ...], tuple[bool, ...]]:
-    """Encryption, page count and per-page text, in that order, read by the reader process.
+) -> tuple[tuple[int, ...], tuple[bool, ...], tuple[tuple[float, float, int], ...]]:
+    """Encryption, page count, per-page text and size, then the run's own reads.
 
     The encryption flag is read as soon as the document opens: a document PDFium cannot
     open without a password is encrypted by that very refusal, and one it opens with an
     empty password still names a security handler. The page count is bounded before any
-    page is loaded, so a document over the bound costs one open and no page.
+    page is loaded, so a document over the bound costs one open and no page. Only a document
+    PDFium accepted is handed to the stages' readers (:mod:`auditmanager.ingest.stage_reader`).
     """
     size = handle.seek(0, os.SEEK_END)
     with _descriptor_of(handle) as descriptor:
         answer = _read_in_a_child(descriptor, size, require_text=require_text)
+        if "pages" in answer:
+            stage_answer = _read_in_a_stage_child(descriptor, len(answer["pages"]))
+        else:
+            stage_answer = None
     handle.seek(0)
     if "pages" in answer:
+        if stage_answer is not None and "readable" not in stage_answer:
+            raise _refusal_for(str(stage_answer.get("refused")))
         pages = answer["pages"]
-        return tuple(int(c) for c, _ in pages), tuple(bool(layer) for _, layer in pages)
+        return (
+            tuple(int(page[0]) for page in pages),
+            tuple(bool(page[1]) for page in pages),
+            tuple((float(page[2]), float(page[3]), int(page[4])) for page in pages),
+        )
     if answer.get("unreadable_handle"):
         # The handle itself failed -- the server's fault and not the caller's document.
         raise OSError("the upload handle could not be read")
@@ -388,27 +425,50 @@ def _regular_file_descriptor(handle: BinaryIO) -> int | None:
 
 
 def _read_in_a_child(descriptor: int, size: int, *, require_text: bool) -> dict[str, Any]:
-    """Run :mod:`auditmanager.ingest.pdf_reader` over ``descriptor`` and return its answer.
+    """Run :mod:`auditmanager.ingest.pdf_reader` over ``descriptor`` and return its answer."""
+    return _run_reader(
+        _READER,
+        descriptor,
+        {
+            "descriptor": descriptor,
+            "size": size,
+            "require_text": require_text,
+            "min_pages": MIN_PAGES,
+            "max_pages": MAX_PAGES,
+            "page_elements": PAGE_ELEMENTS_MAX,
+            "page_characters": PAGE_CHARACTERS_MAX,
+            "document_elements": DOCUMENT_ELEMENTS_MAX,
+            "document_characters": DOCUMENT_CHARACTERS_MAX,
+            "address_space": READER_ADDRESS_SPACE,
+            "cpu_seconds": READER_SECONDS,
+        },
+    )
+
+
+def _read_in_a_stage_child(descriptor: int, page_count: int) -> dict[str, Any]:
+    """Run :mod:`auditmanager.ingest.stage_reader` over ``descriptor`` (PDFium counted
+    ``page_count`` pages) and return its answer: the stages' own reads of the document."""
+    return _run_reader(
+        _STAGE_READER,
+        descriptor,
+        {
+            "descriptor": descriptor,
+            "page_count": page_count,
+            "address_space": READER_ADDRESS_SPACE,
+            "cpu_seconds": READER_SECONDS,
+        },
+    )
+
+
+def _run_reader(program: Path, descriptor: int, settings: dict[str, Any]) -> dict[str, Any]:
+    """Run ``program`` with ``settings`` over ``descriptor`` and return its one answer.
 
     A reader that does not say ``ready`` is a server fault (:class:`RuntimeError`): it never
     reached the document. One that said it and then ran out of time, ran out of memory or
     was killed by a signal was stopped by the document: ``pdf_reader_limits``.
     """
-    settings = {
-        "descriptor": descriptor,
-        "size": size,
-        "require_text": require_text,
-        "min_pages": MIN_PAGES,
-        "max_pages": MAX_PAGES,
-        "page_elements": PAGE_ELEMENTS_MAX,
-        "page_characters": PAGE_CHARACTERS_MAX,
-        "document_elements": DOCUMENT_ELEMENTS_MAX,
-        "document_characters": DOCUMENT_CHARACTERS_MAX,
-        "address_space": READER_ADDRESS_SPACE,
-        "cpu_seconds": READER_SECONDS,
-    }
     reader = subprocess.Popen(
-        [sys.executable, "-I", "-B", str(_READER), json.dumps(settings)],
+        [sys.executable, "-I", "-B", str(program), json.dumps(settings)],
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,

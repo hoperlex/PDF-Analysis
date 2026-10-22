@@ -14,7 +14,7 @@
   ],
   "properties": {
     "contract_version": {
-      "const": "1.0.0-draft.1"
+      "const": "1.0.0"
     },
     "error_code": {
       "type": "string",
@@ -35,6 +35,8 @@
         "dependency_credential_refused",
         "staged_upload_lost",
         "required_norm_unavailable",
+        "version_classification_required",
+        "section_profile_unavailable",
         "analysis_input_invalid",
         "analysis_failed",
         "partial_result_not_publishable",
@@ -393,6 +395,44 @@
         "properties": {
           "error_code": {
             "const": "required_norm_unavailable"
+          }
+        },
+        "required": [
+          "error_code"
+        ]
+      },
+      "then": {
+        "properties": {
+          "retryable": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "error_code": {
+            "const": "version_classification_required"
+          }
+        },
+        "required": [
+          "error_code"
+        ]
+      },
+      "then": {
+        "properties": {
+          "retryable": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "error_code": {
+            "const": "section_profile_unavailable"
           }
         },
         "required": [

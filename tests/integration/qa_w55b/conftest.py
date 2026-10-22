@@ -30,13 +30,43 @@ if _NAME not in sys.modules:
 support: ModuleType = sys.modules[_NAME]
 
 
+_DIRECTORY = Path(__file__).resolve().parent
+_CONTROLS: list[object] = []
+
+
+def _close_controls() -> None:
+    for control in _CONTROLS:
+        control.close()  # type: ignore[attr-defined]
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_runtest_teardown(item: pytest.Item, nextitem: pytest.Item | None) -> None:
+    """Stop the served child when the last test of **this directory** ends (`GATE-REPAIR-02`).
+
+    ``api_control`` is session scoped so the child, which is expensive to start, is shared by
+    every module here. A session scope also means it lived to the end of the pytest *session*:
+    in the complete battery that is through ``recovery``, ``runs``, ``shared_kernel`` and
+    ``workers``, and the child is the in-process claimant of ``EXECUTION_ROLE=all``, so it
+    claimed the queued runs of those suites and failed them (``analysis_failed``, "the run's
+    pinned analysis profile is not registered in this deployment"; three
+    ``workers/test_worker_service.py`` tests in the complete gate on `7cb317b0`). This hook sees
+    only the items of this directory; the next one tells where the run goes after it.
+    """
+    if nextitem is not None and _DIRECTORY in Path(str(nextitem.path)).resolve().parents:
+        return
+    _close_controls()
+
+
 @pytest.fixture(scope="session")
-def api_control() -> Iterator[object]:
+def api_control(engine: Engine) -> Iterator[object]:
     control = support.ApiControl()
+    _CONTROLS.append(control)
+    control.park_foreign_queue(engine)
     try:
         yield control
     finally:
-        control.stop()
+        control.close()
+        _CONTROLS.remove(control)
         for ceiling, peak in control.peaks:
             sys.stderr.write(
                 f"\nw55b-qa: API child (ceiling {ceiling or 'default'}) VmHWM {peak} KiB\n"

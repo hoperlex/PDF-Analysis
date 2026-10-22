@@ -1,14 +1,19 @@
-# Domain contract v1 — candidate `1.0.0-draft.1`, revision 13
+# Domain contract v1 — `1.0.0`, frozen (sealed revision 19)
 
 Owner lane: [W0-DOM-01](../../../docs/program/tasks/W0-DOM-01.md) (domain contract
 owner); the additive norm-identity amendment is owned by
-[NORM-ID-01](../../../docs/program/tasks/NORM-ID-01.md). Status: **candidate draft —
-working-tree amendment, not frozen, not ratified.** Every
-catalog in this directory declares `contract_version` `1.0.0-draft.1`,
-`candidate_revision` `13`, `status` `draft_candidate` and `frozen` `false`, and the three
-family schemas pin `candidate_revision` `const: 13` to match. Revision 13 adds the
-fail-closed `model_identity_mismatch` code for the recorded-only W56a seal;
-identity and state-machine members do not change.
+[NORM-ID-01](../../../docs/program/tasks/NORM-ID-01.md). Status: **frozen for the closed
+beta** by `BETA-CONTRACT-SEAL-01` ([the report](../../../docs/program/BETA-CONTRACT-SEAL-01.md)).
+Every catalog in this directory declares `contract_version` `1.0.0`, `supersedes`
+`1.0.0-draft.1`, `candidate_revision` `19`, `status` `frozen` and `frozen` `true`, and the
+three family schemas pin `candidate_revision` `const: 19`, `status` `const: frozen` and
+`frozen` `const: true` to match, so a catalog that fell back to a draft would fail its own
+schema. Revision 13 added the fail-closed `model_identity_mismatch` code for the recorded-only
+W56a seal; revisions 14 to 17 moved the identity register with the later waves; revision 18
+(`BETA-CONTRACT-SEAL-01` phase A, `D-179`) added the two codes
+`version_classification_required` and `section_profile_unavailable`; revision 19 is the seal
+itself and changes no code, identity or machine, see
+[What changed in revision 19](#what-changed-in-revision-19-and-what-breaks-for-a-reader-of-revision-18).
 
 This family defines three primitives that every other bounded context depends on:
 opaque identity, durable lifecycle and the externally visible failure shape. It is a
@@ -95,7 +100,7 @@ beside the identities and not among them. No machine, state or product identity 
 | [identifiers.schema.json](identifiers.schema.json) | Shape of the identity catalog |
 | [state-machines.json](state-machines.json) | Eight closed lifecycles, guards, terminal semantics, run-creation rule, optional-branch policy, projections |
 | [state-machines.schema.json](state-machines.schema.json) | Shape of the lifecycle catalog |
-| [error-codes.json](error-codes.json) | 23 typed codes, categories, envelope declaration, detail-safety and internal-mapping rules |
+| [error-codes.json](error-codes.json) | 27 typed codes, categories, envelope declaration, detail-safety and internal-mapping rules |
 | [error-codes.schema.json](error-codes.schema.json) | Shape of the error catalog |
 | [error-envelope.schema.json](error-envelope.schema.json) | The externally visible failure envelope |
 | [examples/error-envelope.example.json](examples/error-envelope.example.json) | Valid envelope (`stale_attempt`) |
@@ -109,21 +114,23 @@ schema identity; neither is a contract version. The bare `version` key that revi
 used as the contract-envelope version is gone.
 
 The `1.0.0-draft.1` base was integrated at
-`cf7740474b1786163f54d93b013a0d526ef989e0`. Revisions 8, 9, 10 and 11 are later working-tree amendments:
-it is neither committed here, frozen nor ratified. Every catalog still declares
-`contract_version` `1.0.0-draft.1`, `status` `draft_candidate` and `frozen` `false`;
-`1.0.0-draft.0` is the version it supersedes. Until an integrator records a freeze, an
-owner-authorized round edits this unreleased candidate in place and advances
-`candidate_revision`; after freeze, the same edit requires the formal freeze-break and
-version procedure.
+`cf7740474b1786163f54d93b013a0d526ef989e0`; revisions 2 to 18 amended that unreleased candidate in
+place, each advancing `candidate_revision`. `BETA-CONTRACT-SEAL-01` phase B froze it: every
+catalog now declares `contract_version` `1.0.0`, and `1.0.0-draft.1` is the version it
+supersedes. The version line is `1.0.0-draft.0` → `1.0.0-draft.1` → `1.0.0`.
 
-So the version line stays `1.0.0-draft.0` → `1.0.0-draft.1`, and each review round is
-recorded by `candidate_revision`, which the owning schemas pin with `const`. Revision 12 is
-additive and changes the unreleased candidate error catalog and identifier register, so consumers
-must pin and review candidate revision 12. The draft version string does not move because this is still the same
-unfrozen `1.0.0-draft.1` candidate; `candidate_revision` is the machine-readable
-discriminator that prevents meaning from changing under the same revision. A freeze or release
-would move this change onto the formal version procedure.
+**After the seal** a change to this family is no longer an in-place round. It follows
+[`VERSIONING_AND_FREEZE_POLICY.md`](../../../docs/program/VERSIONING_AND_FREEZE_POLICY.md): an
+optional, backward-compatible addition (a new code, an optional detail key, a new identity) is a
+minor version; a clarification with no machine or semantic incompatibility is a patch; a
+removal, a rename, a change of meaning or of a state transition is a major version or an explicit
+compatibility bridge, and the freeze-break procedure applies. `candidate_revision` stays as the
+machine-readable discriminator that prevents meaning from changing under the same number: it is
+pinned by `const` in the three schemas and is the sealed round, 19.
+
+`OPEN-RETENTION` (`U-04`) is not decided at the seal and the contract does not invent a value:
+no retention window, time to live or legal-hold rule is declared, and `idempotency_key_stale`
+names the fail-closed outcome without saying after how long it happens.
 
 ### `ID-01` is complete for this family: no catalog carries `version`
 
@@ -451,14 +458,14 @@ appended a new decision event.
 
 ## Errors
 
-24 codes across 10 categories. Each code declares `http`, `retryable`, `category`, a
+27 codes across 10 categories. Each code declares `http`, `retryable`, `category`, a
 `summary`, its `safe_detail_keys` and its inventory evidence.
 
 The envelope is:
 
 ```json
 {
-  "contract_version": "1.0.0-draft.1",
+  "contract_version": "1.0.0",
   "error_code": "stale_attempt",
   "message": "…caller-safe sentence…",
   "correlation_id": "corr_…",
@@ -760,6 +767,42 @@ assumption.
   - `attempt` gains the `lost` terminal, distinct from `superseded`;
   - the error envelope gains required `contract_version` and required `retryable`;
   - two identifiers are added: `lease_id` (`lse`) and `command_id` (`cmd`).
+
+### What changed in revision 19, and what breaks for a reader of revision 18
+
+Revision 19 is written by `BETA-CONTRACT-SEAL-01` phase B (the closed-beta seal, integrator
+decision under `R-141`). It is the freeze and nothing else.
+
+| Change | Consumer impact |
+|---|---|
+| `contract_version` `1.0.0-draft.1` → `1.0.0` in the three catalogs, the three schema pins, `error-envelope.schema.json`, both examples, and in the analysis and events families, the OpenAPI document and every error body | **Changed value.** Every error body now says `contract_version: "1.0.0"`; a client pinned to the draft string reads the sealed one. The envelope schema's `const` and the served `ErrorEnvelope` agree. |
+| `supersedes` `1.0.0-draft.0` → `1.0.0-draft.1` | The version this contract replaces. |
+| `status` `draft_candidate` → `frozen` and `frozen` `false` → `true`, pinned by `const` in the three schemas | The catalogs can no longer fall back to a draft without failing their schema. |
+| `candidate_revision` `18` → `19` in the three catalogs and the three `const` pins | Readers pinning the revision must move. |
+| `rate_limited` note names the credential exchange `POST /auth/token` beside the two registration calls | **Clarification.** The edge has throttled it per client address since `HARDEN-AUTH-EDGE-01`; the code, status and rule are unchanged. |
+| `OPEN-RETENTION` states that the freeze declares no retention window | **Clarification.** The decision stays `not_decided`. |
+
+No code, identifier, machine, state, transition or guard is added, removed or renamed; the
+catalog stays at twenty-seven codes and the identity count is unchanged. The deliberately
+unchanged history below (revisions 2 to 18) keeps saying `1.0.0-draft.1` and `false` where it
+was true then.
+
+### What changed in revision 18, and what breaks for a reader of revision 17
+
+Revision 18 is written by `BETA-CONTRACT-SEAL-01` phase A, under `D-179` and the integrator's
+closed-beta seal decision, with migration `0029_routing_refusal_codes`.
+
+| Change | Consumer impact |
+|---|---|
+| New code `version_classification_required` (`422`, not retryable, category `policy`, no detail keys) | **Changed behaviour of a draft.** `startRun` and `reauditRun` answered a version with no expert-confirmed stage and section with `required_norm_unavailable` and `details.reference_kind: version_classification`; they now answer this code and carry no details. |
+| New code `section_profile_unavailable` (`422`, not retryable, category `dependency`, no detail keys) | **Changed behaviour of a draft.** The same operations answered a confirmed section with no registered text profile with `required_norm_unavailable` and `reference_kind: analysis_profile`; they now answer this code. |
+| `required_norm_unavailable` keeps `reference_kind: analysis_profile` for the executor's refusal of a run's pinned profile pair that the deployment does not register (both identities in the details) | **Unchanged.** It names a pair a run already pinned, not a routing decision. |
+| The stored-error vocabulary (the four `CHECK`s of `command_record`, `audit_run`, `model_call` and `provider_call_effect`) gains both codes | **Additive.** Both refusals precede the idempotency key's claim and write nothing today; the vocabulary admits them so that no later path has to widen it again. |
+| `candidate_revision` `17` → `18` in all three catalogs and the three schema `const` pins | Readers pinning the candidate revision must move. |
+
+The error catalog goes from twenty-five to twenty-seven codes; no identity, machine, state,
+transition or guard changes. `contract_version` remains `1.0.0-draft.1` and `frozen` remains
+`false` in this revision.
 
 ### What changed in revision 12, and what breaks for a reader of revision 11
 

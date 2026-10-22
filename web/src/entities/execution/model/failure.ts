@@ -31,8 +31,7 @@ export function executionFailure(error: unknown, write: boolean): ExecutionFailu
         ? 'conflict' : 'refusal';
     // `W59-SECTION-UI-01`: a re-audit is routed from the version's confirmed section exactly as
     // a start is, so its two routing refusals carry the run entity's own sentences.
-    const routing =
-      error.errorCode === 'required_norm_unavailable' ? routingRefusal(error.details) : null;
+    const routing = routingRefusal(error.errorCode);
     return {
       kind,
       detail: kind === 'unknown_outcome'

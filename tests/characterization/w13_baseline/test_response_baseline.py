@@ -1250,3 +1250,84 @@ def test_the_document_order_rank_refuses_a_tie() -> None:
         journey.publication_order(
             [{"finding_uid": "fnd_x", "observation": {"evidence": []}}]
         )
+
+
+#: `BETA-CONTRACT-SEAL-01`. The SHA-256 of the body text of the sixteen error records that carry
+#: ``contract_version``, as committed at ``c7d5f483`` (the tree the seal started from), when the
+#: version was ``1.0.0-draft.1``. Read from the record files at that commit
+#: (``git show c7d5f483:<record>``), never from the files now: an expectation computed from the
+#: files it checks could not report that something besides the version moved. The digests repeat
+#: where bodies are the same bytes (records 23-25 are one error, 28 and 29 another).
+_PRE_SEAL_CONTRACT_VERSION_BODIES = {
+    "05b-createProject.idempotency_key_reuse": "fae9a4f5d7b4cd7c5105407760570538afdba33b5b631a3a9678e8d71fabfa27",
+    "17-uploadDocument.refusal.pdf_magic_bytes": "ebdff1b5d02bfb29f571e1c2057d54a92f2aa28183edfdf4391ef4539d8ce492",
+    "18-uploadDocument.refusal.byte_size": "410fc87aa23228360505644a7e0d1138ad969576fa8d014d3391af201aaf5aae",
+    "19-uploadDocument.refusal.not_encrypted": "cd3eb516133fdd81688f01473cd695d28aa7e9ff619ad667723a882bf845d912",
+    "20-uploadDocument.refusal.page_count": "d6cd88acf6df179cb8271a731607f0dff1bb2345b3063587660e56d21a8a4c60",
+    "21-uploadDocument.refusal.every_page_has_extractable_text": "7e56da146d00d631f3a798bfc3b218b2257cc5dc8e85aa7f77a955ee04deef08",
+    "22-uploadDocument.refusal.max_bytes": "a88fcbdd024d8677c8f98dec64096caf2f3c4fca4f64e58fa003c1a053ebc848",
+    "23-createProject.refusal.additionalProperties": "4409a35e63cfb593fc8298cd5f1c8d7471f21c4beb3680639a4d2a97b87dc263",
+    "24-startRun.refusal.additionalProperties": "4409a35e63cfb593fc8298cd5f1c8d7471f21c4beb3680639a4d2a97b87dc263",
+    "25-appendDecision.refusal.additionalProperties": "4409a35e63cfb593fc8298cd5f1c8d7471f21c4beb3680639a4d2a97b87dc263",
+    "26-uploadDocument.refusal.additionalProperties": "4b3ba78113b802ca03ec93170fa1799442d5acddecaaa5409b741370f71ff18f",
+    "27-createProject.refusal.idempotency_key_required": "db9f1a80fc2f41734a37e8b963d682d75dd82014fe2121f892efa7adeb7f8bbe",
+    "28-dispatch.no_route": "869206a64c628aef85e4a5ec76475e05925e488e4870a276e1c50b8b682b4c3f",
+    "29-dispatch.method_not_allowed": "869206a64c628aef85e4a5ec76475e05925e488e4870a276e1c50b8b682b4c3f",
+    "30-getRunStatus.not_found": "eb853fb3b18a9b196f68ff75fa5548450bb796902bd91cac4df6d23216f719e0",
+    "31-streamDocumentVersionContent.storage_credential_refused": "bd96ee08e56661527df7418fe47878d4b265e81e1774b547b16b77217a76fdd3",
+}
+
+_DRAFT_VERSION_KEY = '"contract_version": "1.0.0-draft.1"'
+_SEALED_VERSION_KEY = '"contract_version": "1.0.0"'
+
+
+def test_the_sixteen_error_records_moved_by_the_contract_version_and_nothing_else() -> None:
+    """The re-capture asserted, not merely made: put the draft version back and each body is
+    the previous capture's again, digest for digest, and its declared length is eight shorter.
+
+    `MEMORY: characterization can freeze a defect` is why a re-capture is not evidence by
+    itself. What this pins is the *difference*: one property value, ``contract_version``,
+    ``1.0.0-draft.1`` -> ``1.0.0``, which is thirteen characters becoming five. The set is also
+    asserted whole: every record whose body names a contract version is in the table, so a
+    seventeenth cannot carry the literal unexamined. No record gains an exception block: this
+    is not a debt of one operation but the one literal every error body shares.
+    """
+    carrying = {
+        path.stem
+        for path in RECORD_FILES
+        if "contract_version" in json.loads(path.read_text(encoding="utf-8"))["response"]["body"].get("text", "")
+    }
+    assert carrying == set(_PRE_SEAL_CONTRACT_VERSION_BODIES), sorted(
+        carrying ^ set(_PRE_SEAL_CONTRACT_VERSION_BODIES)
+    )
+    for case, digest in _PRE_SEAL_CONTRACT_VERSION_BODIES.items():
+        record = json.loads((journey.RECORDS / f"{case}.json").read_text(encoding="utf-8"))
+        body = record["response"]["body"]
+        text = body["text"]
+        assert text.count(_SEALED_VERSION_KEY) == 1, case
+        assert "draft" not in text, case
+        restored = text.replace(_SEALED_VERSION_KEY, _DRAFT_VERSION_KEY)
+        assert hashlib.sha256(restored.encode("utf-8")).hexdigest() == digest, (
+            f"{case} moved by more than its contract version"
+        )
+        # `length` describes the body before token substitution, so it exceeds the tokenised
+        # text by what its one `{{correlation_id}}` token hides (a 36-character id behind an
+        # 18-character token). That slack was 18 before the seal and is 18 after it: the length
+        # moved by exactly the eight characters the version string lost, and by nothing else.
+        assert body["length"] - len(text.encode("utf-8")) == 18, case
+        assert body["length"] + 8 - len(restored.encode("utf-8")) == 18, case
+
+
+def test_the_contract_version_move_test_can_fail() -> None:
+    """The digest test above, shown rejecting a change of anything but the version."""
+    case = "30-getRunStatus.not_found"
+    record = json.loads((journey.RECORDS / f"{case}.json").read_text(encoding="utf-8"))
+    text = record["response"]["body"]["text"]
+    restored = text.replace(_SEALED_VERSION_KEY, _DRAFT_VERSION_KEY)
+    assert hashlib.sha256(restored.encode("utf-8")).hexdigest() == _PRE_SEAL_CONTRACT_VERSION_BODIES[case]
+    for mutated in (
+        restored.replace("not_found", "conflict", 1),
+        restored.replace("1.0.0-draft.1", "1.0.0-draft.2", 1),
+        text,
+    ):
+        assert hashlib.sha256(mutated.encode("utf-8")).hexdigest() != _PRE_SEAL_CONTRACT_VERSION_BODIES[case]

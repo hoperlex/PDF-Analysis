@@ -104,7 +104,7 @@ from what the previous step's *screen* produced.
 
 `classify-version` exists because `W59-SECTION-SEAL-01` routes a run from the version's
 expert-confirmed stage and section: an unclassified version is refused with
-`422 required_norm_unavailable` (`reference_kind: version_classification`) before any run
+`422 version_classification_required` before any run
 exists, so a journey that went straight from the upload to **Start run** would stop at
 `start-run` with a refusal (`W59-SECTION-UI-01`). The read walk's `version` route declares the
 panel's `getVersionSectionReview` read for the same reason.
@@ -390,7 +390,7 @@ On Chrome 154 the first cookie-store access of a fresh profile (`Storage.getCook
 desktop keyring for the key it encrypts cookies with and waited for a keyring that is not there.
 `--password-store=basic` (in `cdp.mjs`) makes it 3 ms and a browser launch 0.3 s. Every browser
 is still a new process with its own throwaway profile, so the property is untouched; the walk of
-29 routes and the 86 write steps below now take **about five minutes** on this host.
+29 routes and the 95 write steps below now take **about five minutes** on this host.
 
 `E2E_PC01_SETTLE_TIMEOUT_MS` (default 10000) bounds the wait for a screen to go quiet. The
 run screen polls and never goes quiet; the bound is what ends that wait, and whatever the
@@ -483,10 +483,10 @@ night screen has both, or says why it has no refusal (`no_negative_case`).
 | comparison, П→Р, carried decision | compare, carry a verdict (confirmation pressed twice: one `POST`) | admin-only gets the read-only sentence; П against Р is refused without the switch; a carried row offers nothing again |
 | «Настройки анализа» | the fifteen sections and their profiles | no form, no field, no select |
 | «Диспетчер», «Мои задачи» | assign (twice), take, complete | admin-only cannot take the work; an expert sees no creation form; a return needs a reason |
-| price lists | upload a CSV (twice), read the parse report | admin-only sees no upload; an empty file; a table with no columns (422) |
+| price lists | upload the committed CSV (twice, ten positions); a second revision with formula-named vendors, a priceless row and an analog | admin-only sees no upload; an empty file; a table with no columns (422) |
 | vendor lists | the global list (administrator), the project list | an expert is offered no global button; a row with no vendor |
-| «Спецификация и цены» | three rows read, matched, priced | `price_list_missing` before any list |
-| «Предложения» | a pass (twice), accept, revise, history, CSV | admin-only starts nothing and decides nothing; «На доработку» needs a comment |
+| «Спецификация и цены» | the committed set's seven rows read, five matched, four counted (RUB 464278), three left out with their reasons | `price_list_missing` before any list |
+| «Предложения» | a pass (twice) with the oracle's four proposals; accept; accept then reject; revise with a `=`-comment; history; the decision filter; two CSVs (BOM, 42 columns, 4 and 5 data rows, no formula cell) | a pass with no price list is refused `409 conflict`; admin-only starts nothing and decides nothing; «На доработку» needs a comment; a pass over the set with no table holds no proposal and its CSV is the header alone |
 | «Оптимизация разделов», dashboard | the АР section across projects; the section panel | a section with no members |
 | «Нормы» | designate a snapshot, search, catalogue + filter | an unqualified snapshot has no button; an expert has no designation; an empty query |
 | exports | a run's CSV and Excel (the saved file is read) | admin-only is refused `permission_denied` |
@@ -504,14 +504,17 @@ night screen has both, or says why it has no refusal (`no_negative_case`).
   tests/e2e/pc01/journey/seed_norms.py` writes, by SQL, one qualified and one unqualified synthetic
   snapshot into the lane's database (it refuses a database whose name lacks `journey` or `lane`).
   Run it before each journey: each run designates one.
-* **A recording for the specification bundle.** The recorded provider replays a reply by the
-  checksum of the request, and a different document is a different checksum. `PYTHONPATH=src
-  .venv/bin/python tests/e2e/pc01/journey/build_specification_bundle.py --install-recording` files
-  the baseline's own reply under the specification bundle's checksum in
-  `fixtures/recorded/text_analysis/`. **That is an untracked file in a tracked directory**; without
-  it `start-specification-run` reports a run that did not publish. The committed bundle
-  (`fixtures/optimisation/ar_specification.zip`) is the baseline's eight pages plus one with a
-  three-row specification, and `--check` rebuilds it and compares it.
+* **Nothing to install for the specification set.** The journey uploads the committed synthetic set of
+  `SPEC-TABLE-RECORDING-01` itself: `fixtures/synthetic/ar_specification/ar_specification.zip` and
+  `ar_specification_prices.csv`, and the recorded provider replays the committed answer
+  `fixtures/recorded/sections/ar_specification/<request key>.json`. No file is written into the checkout
+  (an untracked recording used to make `tests/contract/test_alpha_acceptance_command.py` refuse the tree).
+  The figures the steps declare are the oracle's (`expected_specification.json`);
+  `test_the_journey_declares_the_figures_the_committed_oracle_computes` keeps the two together, and
+  `test_the_journey_uploads_the_committed_specification_set_and_installs_nothing` keeps the uploads on the
+  committed digests. The second price-list revision, `fixtures/optimisation/prices_hostile.csv`, is the
+  committed CSV byte for byte plus five rows (a formula-named vendor selling a cheaper membrane, a row with
+  no price, vendors that begin with `+`, `@`, `-`).
 * **A real browser** (`E2E_PC01_CHROME`) and the administrator's credential, as before.
 
 ### What it makes, and what it never records
@@ -529,7 +532,7 @@ An export is a download, and the protocol does not give a download's body to
 `Network.getResponseBody` (the first live run read `''` for three exports whose headers said 200,
 `text/csv`, 4404 bytes). `expects_download` therefore points the browser's downloads at a
 throwaway directory (`Browser.setDownloadBehavior`) and reads the saved file: its first bytes (the
-BOM, `PK`), its CSV header width, and that no cell begins with `=`, `+`, `-` or `@`.
+BOM, `PK`), its CSV header width, its number of data rows (`csv_data_rows`), and that no cell begins with `=`, `+`, `-` or `@`.
 
 ### Where it will not run
 
@@ -554,8 +557,8 @@ produce; a step that was not reached is a finding, never a pass.
 * The norms document view with a PDF page (`/norms/document?id=…&page=N`): the seeded snapshot's PDFs
   are bound by rows and have no object in the store, so the page would show a store error that is the
   seed's, not the screen's.
-* The recorded model answers the baseline's text only (and the specification bundle's, by the
-  installed recording). Other sections' profiles are proven by their own recordings elsewhere.
+* The recorded model answers the baseline's text and the committed specification set's. Other sections'
+  profiles are proven by their own recordings elsewhere.
 * A norms catalogue «Excel» is the run export above; the catalogue itself has no workbook.
 * The vendor-list `vendor_list_missing` refusal of a pass is global state (a list, once set for the
   section, stays), so it cannot be asserted repeatably on a lane; `tests/integration/optimisation`

@@ -132,7 +132,10 @@ the `document.section` CHECK by `PS` (`0011` keeps legacy's fourteen as history)
 `document_version_classification_correction` (revision 2, 3, ... with the correcting expert and a
 reason; revision 1 is the unchanged original) and the views `version_classification_revision`
 (the history) and `version_classification_current` (the latest revision, which every classification
-read uses).
+read uses). `BETA-CONTRACT-SEAL-01` adds `0029_routing_refusal_codes`: the four stored-error
+`CHECK`s (`command_record`, `audit_run`, `model_call`, `provider_call_effect`) admit the two
+run-routing codes `version_classification_required` and `section_profile_unavailable` (`D-179`);
+no table, column or row changes, and the downgrade refuses while a row carries either code.
 
 ### 3.1 Tables
 
@@ -1102,8 +1105,10 @@ Rules that hold across the whole surface:
   `changePassword` raises that generation, which is how a credential already issued is taken
   back: see the same module. Who may take back whom is no longer an open vocabulary:
   `R-55` gives every account a role set drawn from `expert` and `admin`, and `R-60` decides
-  what each set reaches — product data is read by any active account with a complete
-  profile, product changes require `expert`, and account and registration-request
+  what each set reaches — product data is read by an active account with a complete
+  profile and at least one role (`R-80`; an account whose role set is empty is suspended and
+  reads only its own account, the product version and the release notes), product changes
+  require `expert`, and account and registration-request
   management require `admin` — per `operationId` in `OPERATION_ROLES` of the same module.
   So an administrator takes back another account's credentials through `archiveUser`,
   `resetUserPassword` or a change of its role set in `updateUser`, each of which raises the
@@ -1196,9 +1201,16 @@ guard. Neither error contains the supplied or stored token.
 `authentication_required` and `permission_denied` — PC-01 has no authentication and no
 role model. They stay in the closed enum; no route emits them.
 
-`required_norm_unavailable` — no norms snapshot is pinned.
+`required_norm_unavailable` — no norms snapshot is pinned, or a run's pinned analysis profile pair
+is not registered in the deployment (`reference_kind: analysis_profile`, raised by the executor).
 
-`unsupported_contract_version` — the surface carries one contract version.
+`version_classification_required` and `section_profile_unavailable` (`BETA-CONTRACT-SEAL-01`,
+`D-179`) — `startRun` and `reauditRun` refuse a version with no expert-confirmed stage and section,
+and a confirmed section with no registered text profile, each with its own code and no details,
+before the idempotency key is claimed; a draft reported both as `required_norm_unavailable` with
+`reference_kind` `version_classification` / `analysis_profile`.
+
+`unsupported_contract_version` — the surface carries one contract version, `1.0.0` since `BETA-CONTRACT-SEAL-01` (the domain, analysis and events families moved with it).
 
 ### 9.5 Deferred widenings, recorded so they are not rediscovered as bugs
 

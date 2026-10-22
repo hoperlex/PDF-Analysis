@@ -1383,7 +1383,7 @@ from typing import Annotated, Literal, Optional  # noqa: E402
 #: thing it measures, and here the thing measured is FastAPI's generator.
 MINIATURE_CONTRACT: dict[str, Any] = {
     "openapi": "3.1.0",
-    "info": {"title": "Miniature", "version": "1.0.0-draft.1"},
+    "info": {"title": "Miniature", "version": "1.0.0"},
     "servers": [{"url": "/api/v1", "description": "Version-prefixed base path."}],
     "tags": [{"name": "documents", "description": "Upload one PDF."}],
     "paths": {
@@ -1490,7 +1490,7 @@ MINIATURE_CONTRACT: dict[str, Any] = {
                 "additionalProperties": False,
                 "required": ["contract_version", "message"],
                 "properties": {
-                    "contract_version": {"const": "1.0.0-draft.1"},
+                    "contract_version": {"const": "1.0.0"},
                     "message": {"type": "string", "minLength": 1, "maxLength": 512},
                 },
             },
@@ -1513,7 +1513,7 @@ class DocumentVersion(BaseModel):
 class ErrorEnvelope(BaseModel):
     model_config = {"extra": "forbid"}
 
-    contract_version: Literal["1.0.0-draft.1"]
+    contract_version: Literal["1.0.0"]
     message: str = Field(min_length=1, max_length=512)
 
 

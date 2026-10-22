@@ -36,27 +36,24 @@
       "const": "auditmanager.domain.identifiers"
     },
     "contract_version": {
-      "const": "1.0.0-draft.1"
+      "const": "1.0.0"
     },
     "supersedes": {
-      "const": "1.0.0-draft.0"
+      "const": "1.0.0-draft.1"
     },
     "candidate_revision": {
-      "const": 17,
-      "description": "Review round of this unreleased candidate. It is pinned here so the candidate cannot change meaning without a deliberate edit of both the catalog and this schema, exactly as contract_version is pinned for a released version."
+      "const": 19,
+      "description": "Review round of this contract. At the 1.0.0 seal it is the sealed round: it is pinned here so the contract cannot change meaning without a deliberate edit of both the catalog and this schema, exactly as contract_version is pinned, and after the seal such an edit follows the freeze-break and version procedure of VERSIONING_AND_FREEZE_POLICY.md."
     },
     "revision_note": {
       "type": "string",
       "minLength": 1
     },
     "status": {
-      "enum": [
-        "draft_candidate",
-        "frozen"
-      ]
+      "const": "frozen"
     },
     "frozen": {
-      "const": false
+      "const": true
     },
     "format": {
       "const": "<prefix>_<ULID>"

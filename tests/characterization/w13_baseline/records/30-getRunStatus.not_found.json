@@ -36,8 +36,8 @@
     ],
     "body": {
       "kind": "text",
-      "length": 351,
-      "text": "{\"contract_version\": \"1.0.0-draft.1\", \"error_code\": \"not_found\", \"message\": \"The addressed aggregate does not exist or is not visible to this caller. The response never reveals the existence of a resource the caller may not see.\", \"correlation_id\": \"{{correlation_id}}\", \"retryable\": false, \"details\": {\"aggregate_type\": \"AuditRun\"}}",
+      "length": 343,
+      "text": "{\"contract_version\": \"1.0.0\", \"error_code\": \"not_found\", \"message\": \"The addressed aggregate does not exist or is not visible to this caller. The response never reveals the existence of a resource the caller may not see.\", \"correlation_id\": \"{{correlation_id}}\", \"retryable\": false, \"details\": {\"aggregate_type\": \"AuditRun\"}}",
       "note": ""
     }
   },

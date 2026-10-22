@@ -12,7 +12,7 @@
 | `D-146` | **Closed in code already** (`W54-CUSTODY-01`, `20c8f911`: per-blob advisory lock plus `ON CONFLICT (blob_id) DO NOTHING`, then a re-read). The register row is stale. This lane adds the proof that was missing for the lock. | `storage/blob_repository.py` (unchanged), `tests/integration/ingest/test_blob_concurrent_transitions.py` |
 | `D-147` | **Closed.** One queue lock, taken first by submit, approval, profile completion and restore; the last two also refuse a login a pending request holds. | `access/queue_lock.py`, `registrations.py`, `accounts.py` |
 | `D-158` | **Closed in code.** A fail-fast bulkhead of 4 concurrent searches per process, refusing the rest at the search entry as the typed `dependency_unavailable` (`dependency: norms_search_capacity`). | `norms/search/capacity.py`, `norms/search/service.py` |
-| `D-176` | **Header half closed. Revocation half built but not wired**: the wiring is three lines in `api/app.py`, which this lane may not edit. | `api/routers/multipart.py`, `api/security.py` |
+| `D-176` | **Header half closed. Revocation half built here and wired afterwards** by `API-FOLLOWUPS-01` (section 4): the three lines in `api/app.py` this lane could not edit. | `api/routers/multipart.py`, `api/security.py`, `api/app.py` |
 
 ## 2. What was found
 
@@ -53,20 +53,26 @@
   (a restored database, not a revocation). It is a negative cache only: the seam still reads the row
   for every request the door admits.
 
-## 4. Integrator instruction: wiring the revocation memory (not done here)
+## 4. The revocation memory is wired (`API-FOLLOWUPS-01`, `D-176`)
 
-In `src/auditmanager/api/app.py`, `_assemble` (the two builders already sit in one function):
+This lane built `RevocationNotices` and could not wire it: the wiring is in `api/app.py`, which it
+did not own. `API-FOLLOWUPS-01` made the change this section used to ask the integrator for. In
+`_assemble`, one `notices = RevocationNotices()` is created per assembled application and passed to
+both builders:
 
 ```python
-from auditmanager.api.security import RevocationNotices
 notices = RevocationNotices()
 ... build_authorization_dependency(environ, standings=getattr(router, "credentials", None), notices=notices)
 ... verify_credential=build_credential_precheck(environ, notices=notices),
 ```
 
-Until then both parameters default to `None` and behaviour is unchanged. After wiring, the first upload
-under a revoked credential still has its body read (the door cannot know); every later one under the
-same credential is refused before its slot and body, with no database read.
+The first upload under a revoked credential still has its body read (the door cannot know); every
+later one under the same credential is refused before its slot and body, with no database read. The
+proof is `tests/integration/api/test_upload_door_revocation_is_wired.py`, which drives the assembled
+application over real accounts (archived, credential epoch raised, row deleted) and asserts the body
+is never asked for, the account port is not called and no SQL statement runs on the later attempts;
+that an unrevoked account is unaffected; that a later generation of the same account is not caught
+by the old entry; and that two applications in one process do not share the memory.
 
 Options if the owner wants the first attempt closed as well, with cost:
 

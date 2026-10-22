@@ -25,8 +25,11 @@ The protocol
 * stdout, line 1: ``ready`` -- written once the limits are set and ``pypdfium2`` is imported,
   so a process that dies before it is a server fault and one that dies after it was killed by
   the document;
-* stdout, line 2: the answer, one JSON object: ``{"pages": [[characters, has_layer], ...]}``,
-  ``{"refused": "<rule>"}`` or ``{"unreadable_handle": true}``.
+* stdout, line 2: the answer, one JSON object:
+  ``{"pages": [[characters, has_layer, width_pt, height_pt, rotation], ...]}``,
+  ``{"refused": "<rule>"}`` or ``{"unreadable_handle": true}``. The last three numbers are the page
+  as it is displayed (:func:`_displayed`): what ``page_geometry_extraction`` compares with the
+  portal's raster and cuts a crop from (`RUN-ROBUSTNESS-01`, D-159).
 
 The rules are the envelope's, in its order (:mod:`auditmanager.ingest.envelope`): the
 document loads, it is not encrypted, its page count is within bounds, and then per page --
@@ -135,6 +138,31 @@ def _elements(raw: Any, page: Any, ceiling: int) -> int:
     return total
 
 
+def _displayed(page: Any) -> list[Any]:
+    """``[width_pt, height_pt, rotation]``: the page as a viewer shows it.
+
+    The same reading ``analysis.geometry.render.PdfiumDocument.page_geometry`` makes for the
+    run (`RUN-ROBUSTNESS-01`, D-159): the CropBox clipped to the MediaBox, its width and
+    height exchanged for a quarter-turn ``/Rotate``. It is restated here because this program
+    imports nothing of the product; ``tests/integration/ingest/test_uncuttable_image_block.py``
+    compares the two.
+    """
+    crop = page.get_cropbox()
+    media = page.get_mediabox()
+    rotation = int(page.get_rotation())
+    if rotation % 90 != 0:
+        raise ValueError("a page rotation is a multiple of 90 degrees")
+    rotation %= 360
+    left = max(min(crop[0], crop[2]), min(media[0], media[2]))
+    bottom = max(min(crop[1], crop[3]), min(media[1], media[3]))
+    right = max(left, min(max(crop[0], crop[2]), max(media[0], media[2])))
+    top = max(bottom, min(max(crop[1], crop[3]), max(media[1], media[3])))
+    width, height = right - left, top - bottom
+    if rotation in (90, 270):
+        width, height = height, width
+    return [width, height, rotation]
+
+
 def _pages(document: Any, raw: Any, page_count: int, settings: dict[str, Any]) -> dict[str, Any]:
     """Every page's characters and layer, or the first rule a page breaks."""
     require_text = bool(settings["require_text"])
@@ -162,6 +190,7 @@ def _pages(document: Any, raw: Any, page_count: int, settings: dict[str, Any]) -
                     text = text_page.get_text_range()
                 finally:
                     text_page.close()
+                displayed = _displayed(page)
             finally:
                 page.close()
             characters_in_all += len(text)
@@ -170,7 +199,7 @@ def _pages(document: Any, raw: Any, page_count: int, settings: dict[str, Any]) -
             has_layer = bool(text.strip())
             if require_text and not has_layer:
                 return {"refused": "page_text"}
-            pages.append([len(text), has_layer])
+            pages.append([len(text), has_layer, *displayed])
     except MemoryError:
         raise
     except Exception:  # noqa: BLE001 - a page PDFium cannot read is the document's fault

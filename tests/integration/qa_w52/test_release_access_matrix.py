@@ -21,7 +21,7 @@ class RecordingReleases:
         self.version_reads += 1
         return ProductVersion(
             product_version="0.3.0", build_id="b0123456789abcdef",
-            contract_version="1.0.0-draft.1",
+            contract_version="1.0.0",
         )
 
     def list_releases(self, *, user_uid: str) -> ReleaseList:

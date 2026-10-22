@@ -52,8 +52,9 @@
  *                          before a byte is sent is exactly the absence of a request.
  *   `expects_present`      markers the screen must draw (with the words that must be in them).
  *   `captures`             several captures per step, including from a response body.
- *   `expects_download`     what a download answered: type, disposition, first bytes, and
- *                          that no CSV cell starts with a character a spreadsheet would run.
+ *   `expects_download`     what a download answered: type, disposition, first bytes, the CSV's
+ *                          width and its number of data rows, and that no CSV cell starts with a
+ *                          character a spreadsheet would run.
  *
  * ## Which red step stops the walk
  *
@@ -202,6 +203,20 @@ export function csvCells(text) {
   }
   if (started || cell !== '') cells.push(cell);
   return cells;
+}
+
+/**
+ * The shape of a CSV document: the header's cell count and how many data rows follow it.
+ * `rows` is `null` when the cells do not divide into whole rows of the header's width (a
+ * ragged file), which is a finding in itself and never a count.
+ */
+export function csvShape(text) {
+  const source = text.startsWith('\ufeff') ? text.slice(1) : text;
+  const headerEnd = source.search(/\r?\n/);
+  const header = headerEnd < 0 ? source : source.slice(0, headerEnd);
+  const columns = csvCells(`${header}\n`).length;
+  const cells = csvCells(source).length;
+  return { columns, rows: columns > 0 && cells >= columns && cells % columns === 0 ? cells / columns - 1 : null };
 }
 
 /** A cell a spreadsheet would read as a formula: first non-space character `= + - @`, tab or CR. */
@@ -1133,6 +1148,16 @@ export async function runWritePhase({
         summary.csvColumns = columns;
         if (columns !== check.csv_columns) {
           problems.push(`the CSV header has ${columns} column(s), declared ${check.csv_columns}`);
+        }
+      }
+      if (bytes !== undefined && check.csv_data_rows !== undefined) {
+        const shape = csvShape(body);
+        summary.csvDataRows = shape.rows;
+        if (shape.rows !== check.csv_data_rows) {
+          problems.push(
+            `the CSV holds ${shape.rows === null ? 'a ragged set of cells (not whole rows)' : `${shape.rows} data row(s)`}, ` +
+              `declared ${check.csv_data_rows}`,
+          );
         }
       }
       if (bytes !== undefined && check.csv_no_formula_cells === true) {

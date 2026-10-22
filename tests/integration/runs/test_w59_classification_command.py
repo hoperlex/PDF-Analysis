@@ -186,14 +186,15 @@ class TestRouting:
             unclassified = documents.get_version(session, VersionUid.parse(world.version_uid))
             with pytest.raises(DomainError) as missing:
                 route_classified_version(unclassified, profiles)
-            assert missing.value.code is ErrorCode.REQUIRED_NORM_UNAVAILABLE
-            assert missing.value.detail_fields == {"reference_kind": "version_classification"}
+            assert missing.value.code is ErrorCode.VERSION_CLASSIFICATION_REQUIRED
+            assert missing.value.detail_fields == {}
             _classify(session, world, world.version_uid, user, "KJ")
             classified = documents.get_version(session, VersionUid.parse(world.version_uid))
             without_kj = {code: pair for code, pair in profiles.items() if code != "KJ"}
             with pytest.raises(DomainError) as unavailable:
                 route_classified_version(classified, without_kj)
-            assert unavailable.value.detail_fields == {"reference_kind": "analysis_profile"}
+            assert unavailable.value.code is ErrorCode.SECTION_PROFILE_UNAVAILABLE
+            assert unavailable.value.detail_fields == {}
             assert "AR" in without_kj, "the refusal must hold while AR stays registered"
             route = route_classified_version(classified, profiles)
             assert (route.analysis_profile_id, route.prompt_bundle_id) == profiles["KJ"]

@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "7cd290dbf7ab14113b68a7537606b124a448ab71b2130d6364c02a3ae53d264c",
-    "content_commit": "c9469558",
-    "content_commit_subject": "NORM-REFS-RUN-01 API reseal on integration base c9469558",
-    "dispatch_named_commit": "c9469558",
-    "commit_note": "NORM-REFS-RUN-01 adds the norms a run's saved text cites, checked against the norms snapshot the run pinned: getRunNormReferences (GET /runs/{run_id}/norm-references, any one role) and five schemas (RunNormReferences, NormReferenceCounts, NormReferenceItem, NormReferenceAnchor, NormReferenceUnrecognised): each distinct cited designation is one of in_corpus, newer_edition, older_edition_only, not_in_corpus or not_recognised, with the pages it occurs on and the corpus document it points at; a precondition that does not hold is one state (snapshot_not_pinned, text_unavailable, too_many_citations), never an empty list; the corpus documents whose designation the parser cannot read are listed; no finding, no severity, no error code is added.",
+    "sha256": "741f29f9b0c9341cdf0631f0f65e462c7788945dd21002aa33afc54af7076eb8",
+    "content_commit": "c7d5f483",
+    "content_commit_subject": "BETA-CONTRACT-SEAL-01 phase B on agent/beta-contract-seal-01 c7d5f483",
+    "dispatch_named_commit": "c7d5f483",
+    "commit_note": "BETA-CONTRACT-SEAL-01 phase B seals the contract at 1.0.0: info.version and the ErrorEnvelope const move from 1.0.0-draft.1 to 1.0.0 together with the domain, analysis and events families, the domain error catalog is frozen at 27 codes, and the prose of D-151 and D-161 is corrected. No path, operation, schema or error code is added (73/83/242).",
     "openapi_version": "3.1.0",
-    "info_version": "1.0.0-draft.1",
+    "info_version": "1.0.0",
     "paths": 73,
     "operations": 83,
     "component_schemas": 242,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "7cd290dbf7ab14113b68a7537606b124a448ab71b2130d6364c02a3ae53d264c",
+    "snapshot_sha256": "741f29f9b0c9341cdf0631f0f65e462c7788945dd21002aa33afc54af7076eb8",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "3e3fa5db7a4e64b871152e2c410d63b2272356dbceec2a1277385948b30f05f2",
-      "index.ts": "a875b898fc39a0b5991011d3c4e2543a330c7b21d15a3335728098a03e24b156",
-      "operations.gen.ts": "c105dc4296af83c3e7fbe31e557424b0f6aba8ac59f7bd68599056210802f638",
-      "types.gen.ts": "17a390d7c274c484e757efeb95e27665a3760a10ba12f47052213272714fcafd"
+      "client.gen.ts": "71a67466a71e828cd13a19791e5fcabe7701a2a974fe8e9e91a23c21ec2ca47d",
+      "index.ts": "46d8e2db4692ed7bef829f853be386dc75161cbd4ad33a150e65f2c3269cad6c",
+      "operations.gen.ts": "d940d76bb1003691bf9913e39b92b2e8daac2873b4d78f6d9809f10cee0927f4",
+      "types.gen.ts": "14672b7dc8926d1564a2b44efb93c6c6b6b6c73adf77e070d40b5a7a56c21eaf"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

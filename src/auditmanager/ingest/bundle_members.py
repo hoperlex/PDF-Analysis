@@ -75,13 +75,25 @@ STORED_MEMBERS: Final[tuple[StoredMember, ...]] = (
 #: C1 controls and DEL, and ``Cf``, the format characters -- the bidirectional overrides,
 #: embeddings and isolates (U+202A-U+202E, U+2066-U+2069) among them, which reorder what a
 #: screen shows: ``U+202E`` before ``fdp.exe`` displays it as ``exe.pdf``.
-_UNSHOWABLE: Final[frozenset[str]] = frozenset({"Cc", "Cf"})
+_UNSHOWABLE: Final[frozenset[str]] = frozenset({"Cc", "Cf", "Zl", "Zp"})
+#: The code points the categories above miss and a name still may not carry
+#: (`RUN-ROBUSTNESS-01`, D-177; the cosmetic residual `W55B-JUDGE-X` left after X-10).
+#: ``Zl`` and ``Zp`` -- U+2028 LINE SEPARATOR and U+2029 PARAGRAPH SEPARATOR -- break a line in a
+#: browser and in a log, though they are not controls. The four Hangul fillers are letters
+#: (``Lo``) that draw nothing: a name made of them looks empty, and one padded with them can
+#: hide the end of an extension. U+115F and U+1160 are the conjoining choseong and jungseong
+#: fillers, U+3164 the Hangul filler and U+FFA0 its halfwidth form.
+_INVISIBLE_LETTERS: Final[frozenset[str]] = frozenset({"\u115f", "\u1160", "\u3164", "\uffa0"})
 _MAX_NAME: Final[int] = 255
 
 
 def _showable(text: str) -> str:
-    """``text`` with every ``Cc`` and ``Cf`` code point replaced by ``_``."""
-    return "".join("_" if unicodedata.category(ch) in _UNSHOWABLE else ch for ch in text)
+    """``text`` with every ``Cc``, ``Cf``, ``Zl`` and ``Zp`` code point and every Hangul filler
+    replaced by ``_``."""
+    return "".join(
+        "_" if unicodedata.category(ch) in _UNSHOWABLE or ch in _INVISIBLE_LETTERS else ch
+        for ch in text
+    )
 
 
 def source_filename_of(bundle: ExtractedBundle) -> str:
@@ -91,7 +103,8 @@ def source_filename_of(bundle: ExtractedBundle) -> str:
     rules), control or format characters or more than 255 characters; the version's
     ``source_filename`` is a plain base name of at most 255 characters
     (``validate_source_filename``), so the last path component is taken, every control and
-    format character becomes ``_`` (:data:`_UNSHOWABLE`) and the length is cut. The name may
+    format character, line or paragraph separator and Hangul filler becomes ``_``
+    (:data:`_UNSHOWABLE`, :data:`_INVISIBLE_LETTERS`) and the length is cut. The name may
     come from the Info-ZIP Unicode Path field, which an archive can set to anything, so the
     scrub is applied to whatever was decoded. It is a display value: nothing resolves,
     compares or opens it.

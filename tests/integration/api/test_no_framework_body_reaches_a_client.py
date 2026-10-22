@@ -36,7 +36,7 @@ from w13_api_driver import Answer, Request, Surface, dispatch, probe_surface
 ENVELOPE_REQUIRED = ("contract_version", "error_code", "message", "correlation_id", "retryable")
 
 #: ``info.version`` of the frozen document, and the ``contract_version`` const.
-CONTRACT_VERSION = "1.0.0-draft.1"
+CONTRACT_VERSION = "1.0.0"
 
 #: The keys FastAPI's own error bodies carry, and Starlette's. If any of these is the
 #: *top level* of a response body, a framework body reached a client.

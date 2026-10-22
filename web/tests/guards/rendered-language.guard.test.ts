@@ -55,7 +55,7 @@ import { createElement } from 'react';
 import type { ReactElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
-import { ApiError, queryKeys } from '@/shared/api';
+import { ApiError, TransportError, queryKeys } from '@/shared/api';
 import type {
   DashboardSummary,
   DecisionEvent,
@@ -93,7 +93,6 @@ import {
   DOCUMENT_PAGE_LIMIT, UPLOAD_CONSTRAINTS_STATED, UPLOAD_ENVELOPE_RULES, VERSION_PAGE_LIMIT, classifyUploadFailure,
   precheckProblemMessage,
 } from '@/entities/document-version';
-import { UPLOAD_CONSTRAINTS_ADDED } from '@/entities/document-version/model/upload-failure';
 import { PROJECT_PAGE_LIMIT, PROJECT_SECTIONS, PROJECT_STRUCTURE_ORDER, projectSectionOf } from '@/entities/project';
 import type { AnalysisProfileListItem, CarryoverCandidate, VersionClassificationRevision } from '@/shared/api';
 import { ClassifyVersionFormView } from '@/features/classify-version';
@@ -910,7 +909,7 @@ const record = (over: Partial<DecisionRecord> = {}): DecisionRecord => ({
 
 function apiError(status: number, code: ErrorCode): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.0.0-draft.1',
+    contract_version: '1.0.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -922,7 +921,7 @@ function apiError(status: number, code: ErrorCode): ApiError {
 /** A norms refusal with the one classifier the seal registered for it (`W55A-WEB-NORMS`). */
 function normsRefusal(code: ErrorCode, details: Readonly<Record<string, string>>): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.0.0-draft.1',
+    contract_version: '1.0.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -2669,6 +2668,14 @@ export const CACHE_STATES: readonly {
   { state: 'cold', run: null },
   { state: 'loaded', run: {} },
   { state: 'failed-run', run: { state: 'failed', terminal_reason: 'analysis_failed', published_finding_count: 0 } },
+  /*
+   * `BETA-CONTRACT-SEAL-01` (`D-179`). The two run-routing codes can name a stopped run's reason
+   * only if a later path stores one (the stored vocabulary admits them), and `terminal-reason.ts`
+   * has a sentence for each. A screen that renders that sentence is judged here like any other,
+   * so an English word in either one reddens the guard instead of waiting for a stored row.
+   */
+  { state: 'failed-run-unclassified', run: { state: 'failed', terminal_reason: 'version_classification_required', published_finding_count: 0 } },
+  { state: 'failed-run-no-profile', run: { state: 'failed', terminal_reason: 'section_profile_unavailable', published_finding_count: 0 } },
   { state: 'partial-run', run: { state: 'partial', degradation_set: ['text_analysis'] } },
   { state: 'running', run: { state: 'running', terminal_at: null, published_finding_count: 0 } },
   { state: 'refused', run: null },
@@ -3048,10 +3055,9 @@ describe('the guard can tell an English label from a legitimate Latin string', (
     for (const problem of ['not_zip', 'too_large', 'empty_file'] as const) {
       rendered.push(precheckProblemMessage(problem));
     }
-    // `W55B-FIX`: the constraints the classifier states beyond the envelope's table.
+    // `D-173`: the envelope's one table, which since `WEB-FOLLOWUPS-01` holds `W55B-FIX`'s six too.
     for (const constraint of [
       ...UPLOAD_CONSTRAINTS_STATED,
-      ...UPLOAD_CONSTRAINTS_ADDED,
       '1 <= page_count <= 500',
       'byte_size <= 262144000',
     ]) {
@@ -3059,7 +3065,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           422,
           {
-            contract_version: '1.0.0-draft.1',
+            contract_version: '1.0.0',
             error_code: 'validation_failed',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -3081,7 +3087,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           503,
           {
-            contract_version: '1.0.0-draft.1',
+            contract_version: '1.0.0',
             error_code: 'dependency_unavailable',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -3093,6 +3099,13 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         ),
       );
       rendered.push(busy.title, busy.detail);
+    }
+    // `WEB-FOLLOWUPS-01`: what the web server in front of the API said, in a user's words.
+    for (const status of [413, 502, 503, 504]) {
+      const edge = classifyUploadFailure(
+        new TransportError(`HTTP ${status}: тело ответа не является конвертом ошибки по контракту.`, { status }),
+      );
+      rendered.push(edge.title, edge.detail);
     }
     const offences = rendered
       .map((text) => ({ text, words: unexplainedLatin(text, VOCABULARY) }))

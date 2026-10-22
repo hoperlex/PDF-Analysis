@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   csvCells,
+  csvShape,
   formulaLikeCells,
   namesNeededBy,
   nightWindowMayRun,
@@ -25,6 +26,13 @@ test('a CSV cell that a spreadsheet would run is found, whatever quoting it wear
   assert.deepEqual(formulaLikeCells(csvCells(csv)), ['=SUM(1)', '-1', '  @x', '+1']);
   assert.ok(csvCells(csv).includes('say "hi"'));
   assert.deepEqual(formulaLikeCells(csvCells('﻿h\r\n\'=escaped\r\n')), []);
+});
+
+test('a CSV is counted in whole rows of the header\'s width, quoted line breaks and an empty file included', () => {
+  assert.deepEqual(csvShape('\ufeffa,b,c\r\n'), { columns: 3, rows: 0 });
+  assert.deepEqual(csvShape('\ufeffa,b,c\r\n1,,3\r\n"x\r\ny",\'=z,\r\n'), { columns: 3, rows: 2 });
+  assert.deepEqual(csvShape('a,b,c\n1,2\n'), { columns: 3, rows: null });
+  assert.equal(csvShape('').rows, null);
 });
 
 test('a password never survives in a request body the envelope keeps', () => {

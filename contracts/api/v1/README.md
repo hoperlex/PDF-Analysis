@@ -11,6 +11,16 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
+## Version `1.0.0`
+
+`info.version` and the `ErrorEnvelope.contract_version` const read `1.0.0` since
+`BETA-CONTRACT-SEAL-01`; they were `1.0.0-draft.1`. The domain, analysis and events families
+moved with them, and `getProductVersion` reports the same string. The surface the seal froze is
+73 paths, 83 operations and 242 component schemas, with a 27-code error catalog. A change after
+the seal follows `docs/program/VERSIONING_AND_FREEZE_POLICY.md`: an optional addition is a minor
+version, a removal, a rename or a change of meaning a major one. Every consumer of the literal is
+listed by `python3 tools/plan/pin_sweep.py contract-version`.
+
 ## The frozen PC-01 surface
 
 `openapi.json` is the frozen document for the PC-01 slice, created by session `A1`

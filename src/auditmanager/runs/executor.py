@@ -128,6 +128,7 @@ from auditmanager.jobs.public import (
     start_attempt_lease_heartbeat,
     stop_attempt_lease_heartbeat,
 )
+from auditmanager.runs.crop_budget import CropByteBudget
 from auditmanager.runs.repository import (
     INITIAL_STATE,
     PC01_STAGES,
@@ -976,14 +977,18 @@ def _execute_run_body(
     for stage_id, roles in deterministic:
         run_repo.stage_started(session, run_id=run_id, stage_id=stage_id)
         session.commit()
-        stage_store = _publication_store(
-            session,
-            store=blob_store,
-            jobs=job_repo,
-            blobs=blob_repo,
-            authority=authority,
+        # `RUN-ROBUSTNESS-01` (D-177): a stage may publish at most `MAX_CROP_BYTES` of crops.
+        stage_store = CropByteBudget(
+            _publication_store(
+                session,
+                store=blob_store,
+                jobs=job_repo,
+                blobs=blob_repo,
+                authority=authority,
+                stage_id=stage_id,
+                checkpoint=effect_checkpoint,
+            ),
             stage_id=stage_id,
-            checkpoint=effect_checkpoint,
         )
         result = run_stage(
             stage_id,

@@ -1,6 +1,6 @@
 {
   "contract": "auditmanager.analysis.legacy_stage_name_map",
-  "contract_version": "1.0.0-draft.1",
+  "contract_version": "1.0.0",
   "status": "candidate",
   "source_inventory_commit": "667fb00fe3e45d1ce0bce7860725c1654b4cdeba",
   "legacy_source_commit": "32b9d903792b30506048a1d42b0e6b2d07aee403",

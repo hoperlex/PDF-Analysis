@@ -86,6 +86,8 @@ step.
 
 from __future__ import annotations
 
+import copy
+import hashlib
 import json
 import os
 import re
@@ -2869,7 +2871,7 @@ def test_the_journey_driver_reads_the_vocabulary_the_manifest_uses() -> None:
     for word in (
         "expects_present", "expects_absent", "expects_not_called", "expects_download",
         "same_response_at", "max_count", "refusal", "bind", "constants", "before_actions",
-        "'wait_for'", "'select'", "'goto'", "csv_no_formula_cells", "continue_if_captured",
+        "'wait_for'", "'select'", "'goto'", "csv_no_formula_cells", "csv_data_rows", "continue_if_captured",
     ):
         assert word in source, f"write.mjs no longer reads '{word}', which the manifest uses"
     accounts = _require(JOURNEY_DIR / "accounts.mjs").read_text(encoding="utf-8")
@@ -3107,61 +3109,213 @@ def _run_tool(*argv: str, env: dict[str, str] | None = None) -> subprocess.Compl
     )
 
 
-def test_the_specification_bundle_is_what_its_builder_builds() -> None:
-    """The committed bundle holds the table the price steps price, and the builder reproduces it.
+COMMITTED_SET = REPOSITORY_ROOT / "fixtures" / "synthetic" / "ar_specification"
+COMMITTED_RECORDINGS = REPOSITORY_ROOT / "fixtures" / "recorded" / "sections" / "ar_specification"
+HOSTILE_PRICES = JOURNEY_DIR / "fixtures" / "optimisation" / "prices_hostile.csv"
 
-    `--check` builds the bundle again, compares it byte for byte with the committed one, and
-    computes the request checksum its recording is filed under -- after reproducing the
-    baseline's own checksum as a control, so a moved prompt is a red here and not a run that
-    quietly cannot replay.
+
+def _expect(step: dict, operation: str, json_path: str):
+    """What the step declares its `operation`'s response must hold at `json_path` (`equals`)."""
+    for check in step.get("expects_response") or ():
+        if check.get("of") == operation and check.get("json_path") == json_path and "equals" in check:
+            return check["equals"]
+    raise AssertionError(f"{step['name']}: declares nothing about {operation} {json_path}")
+
+
+def oracle_findings(manifest: dict, oracle: dict) -> list[str]:
+    """Every figure the journey declares about the specification set, against the oracle's.
+
+    `expected_specification.json` is computed by `tools/fixtures/build_ar_specification.py` from
+    the authored numbers, never read from the product. The journey's steps carry the same
+    figures as literals (the driver cannot read the oracle); this is what keeps the two from
+    drifting: a moved oracle is red here and a moved literal is red here.
     """
-    tool = JOURNEY_DIR / "build_specification_bundle.py"
-    answer = _run_tool(str(_require(tool)), "--check")
-    assert answer.returncode == 0, answer.stdout + answer.stderr
-    assert "specification bundle OK" in answer.stdout
+    steps = {step["name"]: step for step in manifest["write"]["steps"]}
+    findings: list[str] = []
+
+    def agree(step: str, operation: str, json_path: str, wanted) -> None:
+        try:
+            declared = _expect(steps[step], operation, json_path)
+        except (AssertionError, KeyError) as error:
+            findings.append(f"{step}: {error}")
+            return
+        if declared != wanted:
+            findings.append(f"{step}: {operation} {json_path} is declared {declared!r}, the oracle says {wanted!r}")
+
+    spec, matching, proposals = oracle["specification"], oracle["matching"], oracle["proposals"]
+    agree("price-list-upload", "uploadPriceList", "accepted_row_count", oracle["price_list_positions"])
+    prices = "getSpecificationPrices"
+    agree("specification-and-prices", prices, "rows.total", spec["row_count"])
+    agree("specification-and-prices", prices, "matching.counts.matched", matching["counts"]["matched"])
+    agree("specification-and-prices", prices, "matching.counts.unmatched", matching["counts"]["unmatched"])
+    total = matching["totals"][0]
+    agree("specification-and-prices", prices, "matching.totals.0.currency", total["currency"])
+    agree("specification-and-prices", prices, "matching.totals.0.amount", total["amount"])
+    agree("specification-and-prices", prices, "matching.totals.0.row_count", total["row_count"])
+    start = "startOptimisationPass"
+    agree("optimisation-pass", start, "specification_row_count", spec["row_count"])
+    agree("optimisation-pass", start, "matched_row_count", matching["counts"]["matched"])
+    agree("optimisation-pass", start, "proposal_count", proposals["count"])
+    agree("optimisation-pass", start, "decision_counts.pending", proposals["count"])
+    rows_with_proposal = len({item["row_position"] for item in proposals["items"]})
+    agree("optimisation-pass", start, "proposed_row_count", rows_with_proposal)
+    listing = "listOptimisationProposals"
+    agree("proposal-revise-needs-a-comment", listing, "total", proposals["count"])
+    for index, item in enumerate(proposals["items"]):
+        agree("proposal-revise-needs-a-comment", listing, f"items.{index}.saving", item["saving"])
+    agree("proposal-revise-needs-a-comment", listing, "items.0.proposed_vendor", proposals["items"][0]["proposed_vendor"])
+    # The CSV step counts the same four rows.
+    csv_step = steps["proposals-csv"]
+    rows = [c.get("csv_data_rows") for c in csv_step.get("expects_download") or ()]
+    if rows != [proposals["count"]]:
+        findings.append(f"proposals-csv: declares {rows} data rows, the oracle says {proposals['count']}")
+    return findings
 
 
-def test_the_specification_bundle_check_can_fail(tmp_path: Path) -> None:
-    """A bundle that is not what the builder builds is refused, so `--check` is not a smile."""
-    tool = _require(JOURNEY_DIR / "build_specification_bundle.py")
-    bundle = JOURNEY_DIR / "fixtures" / "optimisation" / "ar_specification.zip"
-    original = bundle.read_bytes()
-    try:
-        bundle.write_bytes(original[:-1] + bytes([original[-1] ^ 1]))
-        answer = _run_tool(str(tool), "--check")
-    finally:
-        bundle.write_bytes(original)
-    assert answer.returncode == 1 and "differs" in answer.stderr
-    assert bundle.read_bytes() == original
+def test_the_journey_declares_the_figures_the_committed_oracle_computes(manifest: dict) -> None:
+    oracle = json.loads((COMMITTED_SET / "expected_specification.json").read_text(encoding="utf-8"))
+    assert oracle_findings(manifest, oracle) == []
 
 
-def test_the_specification_text_is_a_table_the_matcher_prices_and_the_prices_hold_an_analog() -> None:
-    """The three rows the bundle declares are read, and МЩ-1 has a cheaper analog in the list."""
-    sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
-    from auditmanager.optimisation.specification import extract_specification
+def test_control_a_figure_the_oracle_does_not_hold_is_found(manifest: dict) -> None:
+    oracle = json.loads((COMMITTED_SET / "expected_specification.json").read_text(encoding="utf-8"))
+    moved = copy.deepcopy(oracle)
+    moved["proposals"]["count"] = 5
+    assert any("proposal_count" in f for f in oracle_findings(manifest, moved))
+    moved = copy.deepcopy(oracle)
+    moved["matching"]["totals"][0]["amount"] = "1"
+    assert any("matching.totals.0.amount" in f for f in oracle_findings(manifest, moved))
+    drifted = copy.deepcopy(manifest)
+    for step in drifted["write"]["steps"]:
+        if step["name"] == "specification-and-prices":
+            for check in step["expects_response"]:
+                if check["json_path"] == "rows.total":
+                    check["equals"] = 8
+    assert any("rows.total" in f for f in oracle_findings(drifted, oracle))
+    forgotten = copy.deepcopy(manifest)
+    for step in forgotten["write"]["steps"]:
+        if step["name"] == "optimisation-pass":
+            step["expects_response"] = []
+    assert any("declares nothing" in f for f in oracle_findings(forgotten, oracle))
 
-    sys.path.insert(0, str(JOURNEY_DIR))
-    import build_specification_bundle as builder
 
-    page = "\n".join(text for text, _ in builder.SPEC_LINES)
-    rows = extract_specification(
-        version_uid="ver_01M2545JSD15ETSNNV904XA001", pages={9: page}
-    ).rows
-    assert [(r.position, r.name, r.unit, r.quantity_text) for r in rows] == [
-        ("1", "Металлический щит МЩ-1", "шт", "2"),
-        ("2", "Дверь стальная ДС-1", "шт", "1"),
-        ("3", "Утеплитель минераловатный", "м3", "12,5"),
-    ]
-    prices = (JOURNEY_DIR / "fixtures" / "optimisation" / "prices.csv").read_text(encoding="utf-8")
-    cells = [line.split(";") for line in prices.splitlines()[1:]]
-    by_name = {c[0]: float(c[2].replace(",", ".")) for c in cells if c[2]}
-    assert by_name["Металлический щит МЩ-2"] < by_name["Металлический щит МЩ-1"]
-    # The analog's vendor is the one the project's vendor list is given, and it is ONE cell:
-    # a `;` inside it would split the row, which is how the first version of this fixture
-    # silently lost its analog.
-    vendor_row = next(c for c in cells if c[0] == "Металлический щит МЩ-2")
-    assert len(vendor_row) == len(prices.splitlines()[0].split(";"))
-    assert vendor_row[4].startswith("=")
+def committed_set_findings(manifest: dict, root: Path, recordings: Path) -> list[str]:
+    """The journey uploads the committed set itself: by name, by digest, with its recording.
+
+    No copy of the bundle lives in the journey's own directory and no recording is installed by
+    the journey: a copy would drift from the committed set, and an untracked recording makes the
+    checkout dirty (`tests/contract/test_alpha_acceptance_command.py` refuses such a tree).
+    """
+    findings: list[str] = []
+    oracle = json.loads((root / "expected_specification.json").read_text(encoding="utf-8"))
+    fixtures = {
+        action.get("fixture")
+        for step in manifest["write"]["steps"]
+        for action in step.get("actions") or ()
+        if action.get("do") == "attach_file"
+    }
+    bundle = oracle["files"]["bundle"]
+    prices = oracle["files"]["price_list"]
+    for label, entry in (("bundle", bundle), ("price list", prices)):
+        if entry["path"] not in fixtures:
+            findings.append(f"the journey never attaches the committed {label} {entry['path']}")
+            continue
+        digest = hashlib.sha256((REPOSITORY_ROOT / entry["path"]).read_bytes()).hexdigest()
+        if digest != entry["sha256"]:
+            findings.append(f"{entry['path']} is {digest}, the oracle says {entry['sha256']}")
+    recorded = sorted(recordings.glob("*.json"))
+    if len(recorded) != 1:
+        findings.append(f"{recordings} holds {len(recorded)} recording(s), expected the one committed answer")
+    tracked = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", *[str(r) for r in recorded]],
+        cwd=REPOSITORY_ROOT, capture_output=True, text=True,
+    )
+    if recorded and tracked.returncode != 0:
+        findings.append("the recording the specification run needs is not a tracked file")
+    for stale in ("build_specification_bundle.py", "fixtures/optimisation/ar_specification.zip",
+                  "fixtures/optimisation/prices.csv"):
+        if (JOURNEY_DIR / stale).exists():
+            findings.append(f"{stale}: the interim bundle the committed set replaced is still in the journey")
+    return findings
+
+
+def test_the_journey_uploads_the_committed_specification_set_and_installs_nothing(manifest: dict) -> None:
+    assert committed_set_findings(manifest, COMMITTED_SET, COMMITTED_RECORDINGS) == []
+
+
+def test_control_a_journey_with_its_own_copy_or_an_untracked_recording_is_found(
+    manifest: dict, tmp_path: Path
+) -> None:
+    other = copy.deepcopy(manifest)
+    for step in other["write"]["steps"]:
+        for action in step.get("actions") or ():
+            if action.get("fixture") == "fixtures/synthetic/ar_specification/ar_specification.zip":
+                action["fixture"] = "tests/e2e/pc01/journey/fixtures/optimisation/empty.csv"
+    assert any("never attaches the committed bundle" in f
+               for f in committed_set_findings(other, COMMITTED_SET, COMMITTED_RECORDINGS))
+    empty = tmp_path / "recordings"
+    empty.mkdir()
+    assert any("expected the one committed answer" in f
+               for f in committed_set_findings(manifest, COMMITTED_SET, empty))
+    loose = tmp_path / "loose"
+    loose.mkdir()
+    (loose / ("0" * 64 + ".json")).write_text("{}", encoding="utf-8")
+    assert any("not a tracked file" in f for f in committed_set_findings(manifest, COMMITTED_SET, loose))
+
+
+def hostile_price_list_findings(committed: bytes, hostile: bytes) -> list[str]:
+    """The second price-list revision extends the committed one by exactly the hostile rows."""
+    findings: list[str] = []
+    if not hostile.startswith(committed):
+        return ["the hostile price list does not begin with the committed one, byte for byte"]
+    lines = hostile[len(committed):].decode("utf-8").splitlines()
+    width = len(committed.decode("utf-8").splitlines()[0].split(";"))
+    cells = [line.split(";") for line in lines]
+    for line, row in zip(lines, cells):
+        if len(row) != width:
+            findings.append(f"{line!r}: {len(row)} cell(s) for a header of {width}; a `;` inside a cell splits the row")
+    if findings:
+        return findings
+    vendors = [row[6] for row in cells]
+    for lead in ("=", "+", "@", "-"):
+        if not any(v.startswith(lead) for v in vendors):
+            findings.append(f"no hostile vendor begins with {lead!r}")
+    if not any(row[4] == "" for row in cells):
+        findings.append("no row without a price, so the skipped-row report is not exercised")
+    analog = next((row for row in cells if row[6].startswith("=")), None)
+    membrane = next(
+        (r for r in (line.split(";") for line in committed.decode("utf-8").splitlines()) if "Техноэласт" in r[1]), None
+    )
+    if analog is None or membrane is None:
+        findings.append("the formula-named vendor sells no analog of the committed membrane")
+    else:
+        if not analog[1].startswith(membrane[1]) or analog[1] == membrane[1]:
+            findings.append("the formula-named vendor's product is not a named variant of the committed membrane")
+        if analog[3] != membrane[3] or analog[5] != membrane[5]:
+            findings.append("the analog is not in the membrane's unit and currency")
+        if float(analog[4].replace(",", ".")) >= float(membrane[4].replace(",", ".")):
+            findings.append("the analog is not cheaper than the membrane")
+    return findings
+
+
+def test_the_hostile_price_list_extends_the_committed_one_by_formula_rows() -> None:
+    committed = (COMMITTED_SET / "ar_specification_prices.csv").read_bytes()
+    assert hostile_price_list_findings(committed, HOSTILE_PRICES.read_bytes()) == []
+
+
+def test_control_a_hostile_price_list_that_is_not_what_the_journey_needs_is_found() -> None:
+    committed = (COMMITTED_SET / "ar_specification_prices.csv").read_bytes()
+    good = HOSTILE_PRICES.read_bytes()
+    assert hostile_price_list_findings(committed, b"x" + good)
+    split = good + ";Лишняя;;шт;1;RUB;a;b\n".encode()
+    assert any("splits the row" in f for f in hostile_price_list_findings(committed, split))
+    lines = good.decode("utf-8").splitlines(keepends=True)
+    no_formula = "".join(line for line in lines if "=HYPERLINK" not in line).encode()
+    assert any("begins with '='" in f for f in hostile_price_list_findings(committed, no_formula))
+    no_gap = "".join(line for line in lines if "керамогранитная" not in line).encode()
+    assert any("without a price" in f for f in hostile_price_list_findings(committed, no_gap))
+    dearer = good.decode("utf-8").replace(";350;RUB;=", ";450;RUB;=").encode()
+    assert any("not cheaper" in f for f in hostile_price_list_findings(committed, dearer))
 
 
 def test_the_norms_seed_refuses_a_database_that_is_not_a_lanes() -> None:

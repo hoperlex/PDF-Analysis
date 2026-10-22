@@ -49,23 +49,48 @@ def test_error_code_domain_equals_the_frozen_catalog(
     the migration stores, so a code cannot be both edge-only and stored.
     """
     catalog = set(error_codes_contract["codes"])
-    # 0002 is immutable history. The forward 0022 migration owns the current
-    # CHECKs; comparing the old module to the new catalog would demand an edit
-    # to historical migration source instead of proving the current schema.
-    path = (
-        Path(__file__).resolve().parents[3]
-        / "db/migrations/versions/20261015_0022_findings_v2.py"
-    )
-    spec = importlib.util.spec_from_file_location("findings_v2_head", path)
-    assert spec is not None and spec.loader is not None
-    head = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(head)
+    # 0002 is immutable history. The forward migration that last widened the CHECKs
+    # (0029 since BETA-CONTRACT-SEAL-01, 0022 before it) owns the current ones; comparing
+    # the old module to the new catalog would demand an edit to historical migration
+    # source instead of proving the current schema.
+    head = _load_migration("20261021_0029_routing_refusal_codes.py", "routing_refusal_codes_head")
     stored = set(head._NEW_ERROR_CODES)
     assert EDGE_ONLY_CODES <= catalog, sorted(EDGE_ONLY_CODES - catalog)
     assert EDGE_ONLY_CODES.isdisjoint(stored), sorted(EDGE_ONLY_CODES & stored)
     assert stored == catalog - EDGE_ONLY_CODES
     assert len(head._NEW_ERROR_CODES) == FACTS.stored_error_codes
-    assert set(migration_module.ERROR_CODES) == stored - {"model_identity_mismatch"}
+    assert set(migration_module.ERROR_CODES) == stored - {
+        "model_identity_mismatch",
+        "version_classification_required",
+        "section_profile_unavailable",
+    }
+
+
+def _load_migration(file_name: str, module_name: str) -> ModuleType:
+    path = Path(__file__).resolve().parents[3] / "db/migrations/versions" / file_name
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_0029_widens_the_0022_vocabulary_by_exactly_the_two_routing_codes() -> None:
+    """`BETA-CONTRACT-SEAL-01` (`D-179`): the downgrade target is 0022's set, the rest is two codes.
+
+    The migration restates its vocabulary, so nothing else ties the tuple a downgrade
+    restores to the one 0022 left. Without this a typo in ``_OLD_ERROR_CODES`` would narrow
+    the CHECKs on downgrade below what 0022 stored, or widen them past it.
+    """
+    previous = _load_migration("20261015_0022_findings_v2.py", "findings_v2_previous")
+    head = _load_migration("20261021_0029_routing_refusal_codes.py", "routing_refusal_codes")
+    assert head._OLD_ERROR_CODES == previous._NEW_ERROR_CODES
+    assert head._ADDED_ERROR_CODES == ("version_classification_required", "section_profile_unavailable")
+    assert head._NEW_ERROR_CODES == (*head._OLD_ERROR_CODES, *head._ADDED_ERROR_CODES)
+    assert len(set(head._NEW_ERROR_CODES)) == len(head._NEW_ERROR_CODES)
+    assert {table for table, _column, _name in head._CHECKS} == {
+        "command_record", "audit_run", "model_call", "provider_call_effect",
+    }
 
 
 def test_stage_ids_equal_the_analysis_registry(

@@ -44,9 +44,17 @@ def _shown(stem: str) -> str:
         ("a\u0085b\u009fc", "a_b_c.pdf"),                       # C1 controls (Cc)
         ("ba\x01d", "ba_d.pdf"),                                # C0, as before
         ("Проект_АР", "Проект_АР.pdf"),                         # nothing to scrub
+        # `RUN-ROBUSTNESS-01` (D-177): the residuals X-10 left.
+        ("a\u2028b", "a_b.pdf"),                                # LINE SEPARATOR (Zl)
+        ("a\u2029b", "a_b.pdf"),                                # PARAGRAPH SEPARATOR (Zp)
+        ("a\u115fb\u1160c", "a_b_c.pdf"),                       # Hangul choseong/jungseong fillers
+        ("a\u3164b\uffa0c", "a_b_c.pdf"),                       # Hangul filler, halfwidth filler
+        ("\u3164\u3164", "__.pdf"),                           # a name that was all filler
+        ("한글 파일", "한글 파일.pdf"),                           # real Hangul and a plain space stay
     ],
 )
 def test_no_control_or_format_character_reaches_the_display_name(stem: str, expected: str) -> None:
     shown = _shown(stem)
     assert shown == expected
-    assert not [ch for ch in shown if unicodedata.category(ch) in ("Cc", "Cf")]
+    assert not [ch for ch in shown if unicodedata.category(ch) in ("Cc", "Cf", "Zl", "Zp")]
+    assert not set(shown) & {"\u115f", "\u1160", "\u3164", "\uffa0"}

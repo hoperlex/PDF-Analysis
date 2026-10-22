@@ -44,8 +44,8 @@
     ],
     "body": {
       "kind": "text",
-      "length": 301,
-      "text": "{\"contract_version\": \"1.0.0-draft.1\", \"error_code\": \"validation_failed\", \"message\": \"The document is encrypted. This prototype accepts unencrypted PDFs only.\", \"correlation_id\": \"{{correlation_id}}\", \"retryable\": false, \"details\": {\"field\": \"content\", \"constraint\": \"not_encrypted\"}}",
+      "length": 293,
+      "text": "{\"contract_version\": \"1.0.0\", \"error_code\": \"validation_failed\", \"message\": \"The document is encrypted. This prototype accepts unencrypted PDFs only.\", \"correlation_id\": \"{{correlation_id}}\", \"retryable\": false, \"details\": {\"field\": \"content\", \"constraint\": \"not_encrypted\"}}",
       "note": ""
     }
   },

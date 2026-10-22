@@ -30,10 +30,12 @@ down`. This is the deployed stack.
 | `proxy/nginx.conf` | `T-2` — the web app at `/`, the API at `/api/v1`, one origin |
 | `proxy/tls-server.conf` | the TLS server block. **nginx never loads it unless a certificate is there** |
 | `proxy/enable-tls.sh` | the switch: the image runs it before nginx starts, and it asks one question |
+| `proxy/trusted-proxies.sh` | `REAL-IP-EDGE-01` — the other start-up hook: turns `ALPHA_TRUSTED_PROXY_CIDRS` into the proxy's `set_real_ip_from` lines, or into none |
 | `proxy/compose.tls.yml` | the overlay that mounts those two and publishes the TLS port |
 | `proxy/tls/` | where the certificate and its private key go **on the host**. Contents ignored whole |
 | `deploy.sh` | `PA-01` criterion 1 — bring this clone up, and refuse to call it deployed until the stack has answered |
 | `reset.sh` | `T-5` — the guarded wipe, and the restore of its own dump |
+| `purge-product-data.sh` | `STAND-PURGE-TOOL-01` — delete the stand's product data (projects, documents, runs, findings, decisions, price lists, their objects) and **keep the accounts and the norm corpus**; dumps and verifies first. `docs/program/STAND-PURGE-TOOL-01.md` |
 | `verify-deployed.sh` | `D-27` — is the stack in front of you this tree? |
 | `reload-proxy.sh` | `D-27` — the step after a rebuild that everyone forgets |
 | `object_attrs.py` | the third part of a dump: each object's S3 attributes |
@@ -436,6 +438,109 @@ nothing else. There is deliberately **no redirect** from the plain port: `deploy
 401, so it would turn a successful deploy into a refusal. The conclusion is unchanged and
 the number was wrong (`Y3`).
 
+## The client address — `REAL-IP-EDGE-01`, and what a host nginx in front must send
+
+**The problem, measured.** On the deployed stand the traffic is browser → a **host** nginx (TLS,
+outside this repository, `proxy_pass http://127.0.0.1:<ALPHA_HTTP_PORT>`) → this stack's proxy
+container. The container accepts every connection from one peer: the compose network's **bridge
+gateway**. Driven on the development host with the pinned `nginx:1.27-alpine` on a user-defined
+bridge, a request to the loopback-published port was logged by nginx as `peer=172.29.0.1` — the
+network's gateway — whatever `X-Forwarded-For` it carried (`W49-EDGE-01` measured `172.17.0.1` on
+the default bridge the same way). So `limit_req`'s `$binary_remote_addr` — the registration zone
+and, since `HARDEN-AUTH-EDGE-01`, the `POST /api/v1/auth/token` zone — was **one bucket for every
+visitor**, and so was the web tier's guest bucket, which keys the `X-Real-IP` this proxy sets
+from `$remote_addr` (`D-144`, `D-191` `E-3`): one script could spend everyone's sign-ups and token
+exchanges.
+
+**The repair is a trust list, and it is empty until the operator fills it.**
+`proxy/nginx.conf` declares, once and at http level, `real_ip_header X-Forwarded-For;
+real_ip_recursive on;` and **no** `set_real_ip_from`. The trusted peers come from one value in
+`alpha.env`:
+
+```
+ALPHA_TRUSTED_PROXY_CIDRS=<the gateway of this instance's network>/32
+```
+
+`compose.server.yml` hands it to the `proxy` container, `proxy/trusted-proxies.sh` (mounted at
+`/docker-entrypoint.d/26-trusted-proxies.sh`, beside `enable-tls.sh`'s hook) validates it and
+writes `conf.d/trusted-proxies.conf`, which the image's own `include /etc/nginx/conf.d/*.conf;`
+loads beside `default.conf` and `tls.conf`. **Empty or absent — the default — writes nothing and
+removes anything an earlier start left: nobody is trusted, `X-Forwarded-For` is never read, and
+the proxy behaves exactly as before.** A value the script does not accept (`0.0.0.0/0`, a host
+name, anything but IPv4/IPv6 addresses or CIDRs) **stops the container** with the entry named
+rather than being read as empty, and `deploy.sh`'s `trusted-proxies-well-formed` guard runs the
+same script with `--check` first, so a typo is a refusal before anything is built.
+
+**The rule once a peer is trusted** (driven, `test_real_client_address_at_the_edge.py`): the client
+is the **rightmost** address in `X-Forwarded-For` that is not itself trusted; everything to its
+left is never read. A request from any peer **not** in the list has its header ignored. Because
+nginx then replaces `$remote_addr` for the whole request, the registration and token zones, the
+`X-Real-IP` the web tier keys, and the access log all see the client. `tls-server.conf` inherits
+the rule (it is http-level) and repeats nothing.
+
+### The value for this stand
+
+* **Which address the host terminator appears from.** A nginx on the host connecting to the
+  loopback-published port reaches the container through Docker, and the container sees the
+  **gateway of the compose network** `<ALPHA_INSTANCE>-net` (`172.29.0.1` in the measurement
+  above — it is allocated from Docker's address pool, **so it differs between hosts and can change
+  if the network is deleted and created again**). Read it from the stack that is running:
+
+  ```
+  docker network inspect <ALPHA_INSTANCE>-net --format '{{(index .IPAM.Config 0).Gateway}}'
+  docker logs <ALPHA_INSTANCE>-proxy-1 --tail 5      # the first field of an access line is the same address
+  ```
+
+  The value is that address with `/32`. Check the log line **before** setting the value: once a
+  peer is trusted the log shows the client instead.
+* **Whom `/32` trusts.** Every process on this host that can open `127.0.0.1:<ALPHA_HTTP_PORT>` —
+  the host nginx, and also an SSH-tunnelled operator. They may name a client address for the
+  per-address throttles and for nothing else; no authorization decision reads it.
+* **If the gateway moves** (network recreated with another subnet) the value no longer matches:
+  the proxy falls back to counting the TCP peer, which is the old shared bucket — never to
+  believing a client. Re-read the gateway after a `down`/`up` that recreates the network.
+* **UNVERIFIED, because the stand is not reachable from the development lane:** the stand's actual
+  network name and gateway; the exact lines of its host nginx site file (nginx 1.24.0, Ubuntu —
+  the development host has the same package and no site configured); whether its Docker runs with
+  the userland proxy off (then the container still sees an address of that bridge, not `127.0.0.1`,
+  but this was not measured); and that nothing else (a CDN, a load balancer) sits in front of the
+  host nginx. If something does, the host nginx's `$remote_addr` is that device's address, and the
+  host needs its own real-IP handling before any of this is true.
+
+### What the host nginx must send
+
+The inner proxy believes only what the trusted peer puts at the **right** of `X-Forwarded-For`,
+so the host nginx must **write that header itself**:
+
+```
+proxy_set_header X-Forwarded-For $remote_addr;
+```
+
+This is the strictest form and the one to use: no byte a client wrote ever reaches this tier.
+`proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;` is **also safe** with
+`real_ip_recursive on`: it appends the real peer on the right, the client's own text stays to its
+left and is never read (driven: a forged head in front of a real client buys no bucket).
+**Unsafe, and not detected by anything here:** a host nginx with **no** `X-Forwarded-For`
+`proxy_set_header` at all (nginx then passes the client's header as sent, so the client chooses the
+rightmost address and therefore its bucket — or charges a victim's: "attacker, victim" is the
+victim's bucket), or one that forwards `$http_x_forwarded_for`. Keep `Host`, `X-Real-IP` and
+`X-Forwarded-Proto` as they are; the inner proxy ignores the first and rewrites the second.
+
+### Checking it took
+
+```
+docker logs <ALPHA_INSTANCE>-proxy-1 2>&1 | grep trusted-proxies   # "1 peer(s) trusted ..." or "is empty"
+# from the host (its loopback is the trusted peer): twelve exchanges, twelve different clients
+for i in $(seq 1 12); do curl -s -o /dev/null -w '%{http_code} ' -X POST \
+  -H "X-Forwarded-For: 198.51.100.$i" -H 'Content-Type: application/json' -d '{}' \
+  http://127.0.0.1:<ALPHA_HTTP_PORT>/api/v1/auth/token; done; echo
+```
+
+With the list set, no `429` appears; with it empty the twelfth is `429` — one bucket. The check
+spends those documentation addresses' budgets and nobody else's. `compose.server.yml` carries the
+value as an `environment:` entry, so changing it recreates the `proxy` container on the next
+`up`; `reload-proxy.sh` alone does not re-run the hook.
+
 ## The session register — `R-51`, and what it costs
 
 **A named volume, `<instance>-web-sessions`, mounted by the `web` container and by nothing
@@ -548,6 +653,16 @@ hand: a restore that refuses blocks the legitimate one at the moment it is neede
 which is after a failure. Neither command's status can turn a completed restore into a
 non-zero exit; what a failure of either buys is a named block on the screen and the exact
 command to type.
+
+**The wipe that keeps the accounts and the corpus — `STAND-PURGE-TOOL-01`.** `reset.sh` drops the schema, so it also drops the
+imported normative corpus and the accounts. To remove only the generated test data, `purge-product-data.sh --database <db> --bucket
+<bucket> --dry-run` prints, with exact counts, which tables are truncated (the 29 product tables), which are never written (accounts,
+registration requests, release notes, lookup data, every `norm*` table), which rows of `audit_event`, `command_record` and `blob` go, and
+which objects would be deleted by exact key; `--yes-purge-product-data` then stops the worker, writes and verifies a dump in
+`reset.sh`'s layout (so `reset.sh --restore` applies), purges in one transaction that rolls back if any kept row's count or digest
+differs, deletes the product objects only after the commit, and starts the worker again. It refuses, naming it, a table nobody classified
+(`product_purge.py` classifies from `schema_coverage.py`), and a run or job that is executing (`--allow-running`); exit `3` is a refusal
+and `4` a failure, and after a commit `--finish-objects <dump directory>` completes a half-done object deletion. Read the document before the first run.
 
 ## Is the deployed stack this repository? — `D-27`
 

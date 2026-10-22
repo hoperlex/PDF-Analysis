@@ -110,13 +110,19 @@ export function precheckProblemMessage(problem: UploadPrecheckProblem): string {
  * rule that was broken and nothing about why the file broke it.
  *
  * The keys are the `details.constraint` values of `validation_failed` on `uploadDocument`:
- * the portal-bundle values registered in `contracts/domain/v1/error-codes.json` and the
- * PDF member's own, which a bundle keeps. A sentence restates the contract's wording for
- * its value and does not add a cause the contract does not name: «зашифрован» is said
- * where the contract says an entry is encrypted, never «зашифрован вами». The server's
- * own message is English for all but one of them, and the envelope does not say whether
- * a message is the catalog's or a call site's (`catalog-message.ts`), so the client
- * states the rule itself.
+ * the portal-bundle values registered in `contracts/domain/v1/error-codes.json`, the
+ * PDF member's own, which a bundle keeps, and the six `W55B-FIX` registered after them (the
+ * empty value and the upload's name, the block ceiling, the PDF reader's three bounds). A
+ * sentence restates the contract's wording for its value and does not add a cause the
+ * contract does not name: «зашифрован» is said where the contract says an entry is
+ * encrypted, never «зашифрован вами». The server's own message is English for all but one
+ * of them, and the envelope does not say whether a message is the catalog's or a call
+ * site's (`catalog-message.ts`), so the client states the rule itself.
+ *
+ * **This is the only table of these sentences** (`D-173`, `WEB-FOLLOWUPS-01`). The upload
+ * classifier (`upload-failure.ts`) reads it through `uploadConstraintSentence` and keeps
+ * none of its own; `tests/unit/projects/upload-envelope.test.ts` reads the source and
+ * reddens when a registered constraint is keyed, or a sentence typed, anywhere else.
  */
 const UPLOAD_CONSTRAINT_SENTENCES: Readonly<Record<string, string>> = {
   portal_bundle_required:
@@ -162,6 +168,19 @@ const UPLOAD_CONSTRAINT_SENTENCES: Readonly<Record<string, string>> = {
   every_page_has_extractable_text:
     'Хотя бы одна страница не несёт ни извлекаемого встроенного текста, ни блока портала. Текст не восстанавливается оптическим распознаванием.',
   max_bytes: 'Загрузка больше допустимого размера.',
+  // `W55B-FIX`: the two the envelope always raised and the note did not name (`W55B-JUDGE-Y`
+  // Y-4), the block ceiling (X-4) and the PDF reader's three bounds (X-1), each registered in
+  // the catalogue note of `validation_failed`.
+  non_empty: 'Пустое значение там, где оно обязательно: PDF в комплекте пуст или у загружаемого файла нет имени.',
+  plain_base_name:
+    'Имя загружаемого файла должно быть простым именем файла — без каталогов, без «..» и без управляющих символов.',
+  blocks_count:
+    'В файле блоков портала больше блоков, чем принимается: не больше 100 на странице, 3000 во всём комплекте и 1000 блоков изображений.',
+  pdf_page_content:
+    'На одной из страниц PDF больше графических элементов или символов текста, чем принимается при загрузке.',
+  pdf_document_content:
+    'В PDF в целом больше графических элементов или символов текста, чем принимается при загрузке.',
+  pdf_reader_limits: 'Чтение PDF потребовало больше памяти или времени, чем допускается при загрузке.',
 };
 
 /**

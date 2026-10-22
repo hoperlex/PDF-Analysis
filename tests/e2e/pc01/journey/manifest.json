@@ -299,6 +299,12 @@
           "method": "GET",
           "path": "/runs/{run_id}",
           "operationId": "getRunStatus"
+        },
+        {
+          "method": "GET",
+          "path": "/runs/{run_id}/norm-references",
+          "operationId": "getRunNormReferences",
+          "$why": "NORM-REFS-RUN-01: a terminal run's page reads the normative documents its saved text cites; the walked run is published"
         }
       ],
       "optional_api": [
@@ -481,7 +487,8 @@
         "nothing, so those calls are declared OPTIONAL below with the choice that makes each,",
         "which also puts every one of them through the contract check. The tab's sentence",
         "before a bundle's first run is «Блоки портала появятся после первого запуска анализа",
-        "этой версии.». It is written here for a reader and checked by nothing in this file:",
+        "этой версии, который дойдёт до разметки страниц.» (and «У этой версии нет комплекта портала.»",
+        "for a version with no bundle). It is written here for a reader and checked by nothing in this file:",
         "a route entry carries no sentence key and the cold walk never chooses a version. It is",
         "pinned by `web/tests/unit/blocks/portal-states.test.ts` and rendered by the language",
         "guard's `BLOCKS_SHAPES`."
@@ -2469,15 +2476,15 @@
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/features/upload-document/ui/upload-document-form.tsx",
         "$comment": [
-          "A second АР set in the project, whose text carries a specification table (`build_specification_bundle.py`):",
-          "the baseline's eight pages plus a ninth with three Form-7 rows. The first set has no table, so a pass over it",
-          "honestly holds no proposal; this one can."
+          "A second АР set in the project: the committed synthetic bundle `fixtures/synthetic/ar_specification/",
+          "ar_specification.zip` (`SPEC-TABLE-RECORDING-01`), whose PDF carries a seven-row Form-7 specification over",
+          "two sheets. The first set has no table, so a pass over it honestly holds no proposal; this one can."
         ],
         "actions": [
           {
             "do": "attach_file",
             "selector": "#upload-file",
-            "fixture": "tests/e2e/pc01/journey/fixtures/optimisation/ar_specification.zip"
+            "fixture": "fixtures/synthetic/ar_specification/ar_specification.zip"
           },
           {
             "do": "fill",
@@ -2498,11 +2505,21 @@
             "expect_status": 201
           }
         ],
+        "expects_request": [
+          {
+            "of": "uploadDocument",
+            "content_type_starts_with": "multipart/form-data",
+            "body_contains": [
+              "name=\"file\"",
+              "ar_specification.zip"
+            ]
+          }
+        ],
         "expects_response": [
           {
             "of": "uploadDocument",
             "json_path": "page_count",
-            "equals": 9
+            "equals": 4
           }
         ],
         "capture": {
@@ -2589,9 +2606,10 @@
           "document_uid": "spec_document_uid"
         },
         "$comment": [
-          "A run over the specification set. It publishes only if the recording for this document is installed",
-          "(`build_specification_bundle.py --install-recording`): otherwise the recorded adapter refuses it as",
-          "`recording_missing` and this step says the run did not publish."
+          "A run over the specification set. The recorded adapter replays the committed synthetic answer",
+          "`fixtures/recorded/sections/ar_specification/<request key>.json`, found by the key of the request over the",
+          "PDF's text layer; the run publishes. No recording is installed by the journey: if the key moved, the",
+          "adapter refuses the run as `recording_missing` and this step says the run did not publish."
         ],
         "actions": [
           {
@@ -2773,6 +2791,9 @@
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/widgets/specification-prices/ui/specification-prices-section.tsx",
+        "bind": {
+          "document_uid": "spec_document_uid"
+        },
         "$comment": [
           "W60-OPT-MATCH-01, before any price list exists in this project: the answer is a STATE, not an error and",
           "not a guess -- `price_list_missing` -- and the screen says that no price can be shown without one."
@@ -2792,7 +2813,7 @@
           {
             "do": "select",
             "selector": "select[data-spec-chooser]",
-            "option_value": "{document_uid}"
+            "option_value": "{spec_document_uid}"
           }
         ],
         "expects_api": [
@@ -2824,14 +2845,74 @@
         "case": "refused"
       },
       {
+        "name": "optimisation-pass-needs-a-price-list",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/features/start-optimisation-pass/ui/start-optimisation-pass.tsx",
+        "$comment": [
+          "W60-OPT-PROPOSALS-01, a refusal the SERVER makes: the expert presses «Запустить проход» in a project that",
+          "has no price list. The API names the unmet precondition (`409 conflict`, `conflict_reason`",
+          "`price_list_missing`) and the control says what to do about it; no pass is stored, no proposal is drawn."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "nav[data-project-tabs] button",
+            "text": "Оптимизация",
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "select[data-proposal-set-chooser]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "select",
+            "selector": "select[data-proposal-set-chooser]",
+            "option_value": "{spec_document_uid}"
+          },
+          {
+            "do": "click",
+            "selector": "[data-start-pass] button",
+            "text": "Запустить проход"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/documents/{document_uid}/optimisation-passes",
+            "operationId": "startOptimisationPass",
+            "expect_status": 409,
+            "expect_error_code": "conflict",
+            "refusal": true,
+            "count": 1,
+            "bind": {
+              "document_uid": "spec_document_uid"
+            }
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-start-pass] .am-state",
+            "text_contains": "В проекте нет прайс-листа."
+          }
+        ],
+        "forbids_rendered": [
+          "[data-proposal]",
+          "[data-pass-count]"
+        ],
+        "screen": "optimisation-passes",
+        "case": "refused"
+      },
+      {
         "name": "price-list-upload",
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/features/upload-price-list/ui/upload-price-list-form.tsx",
         "$comment": [
-          "The expert uploads the project's price list (CSV, RUB by default) and presses twice. One revision",
-          "is stored -- both answers name the same one -- with the parse report: positions accepted, the row",
-          "without a price skipped and listed. Cells that begin with `=`, `+`, `-` or `@` are stored as text."
+          "The expert uploads the project's price list -- the committed synthetic `ar_specification_prices.csv`, ten",
+          "positions, RUB -- and presses twice. One revision is stored (both answers name the same one) with the",
+          "parse report: ten positions accepted, none skipped."
         ],
         "actions": [
           {
@@ -2843,7 +2924,7 @@
           {
             "do": "attach_file",
             "selector": "#price-list-file",
-            "fixture": "tests/e2e/pc01/journey/fixtures/optimisation/prices.csv"
+            "fixture": "fixtures/synthetic/ar_specification/ar_specification_prices.csv"
           },
           {
             "do": "select",
@@ -2876,7 +2957,7 @@
             "content_type_starts_with": "multipart/form-data",
             "body_contains": [
               "name=\"file\"",
-              "prices.csv"
+              "ar_specification_prices.csv"
             ]
           }
         ],
@@ -2888,8 +2969,18 @@
           },
           {
             "of": "uploadPriceList",
+            "json_path": "revision_number",
+            "equals": 1
+          },
+          {
+            "of": "uploadPriceList",
             "json_path": "accepted_row_count",
-            "at_least": 4
+            "equals": 10
+          },
+          {
+            "of": "uploadPriceList",
+            "json_path": "skipped_row_count",
+            "equals": 0
           }
         ],
         "captures": [
@@ -2906,7 +2997,9 @@
         ],
         "expects_present": [
           {
-            "selector": "[data-price-list-stored]"
+            "selector": "[data-price-list-stored]",
+            "text_contains": "принято позиций",
+            "text_matches": "принято позиций — 10,"
           },
           {
             "selector": "[data-price-list-revisions] tbody tr",
@@ -2914,14 +3007,11 @@
           },
           {
             "selector": "[data-price-list-positions]"
-          },
-          {
-            "selector": "[data-skipped-row]",
-            "min_count": 1
           }
         ],
         "forbids_rendered": [
-          ".am-state--error"
+          ".am-state--error",
+          "[data-skipped-row]"
         ],
         "screen": "price-lists",
         "case": "action"
@@ -2931,10 +3021,14 @@
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/widgets/specification-prices/ui/specification-prices-section.tsx",
+        "bind": {
+          "document_uid": "spec_document_uid"
+        },
         "$comment": [
-          "W60-OPT-MATCH-01. «Спецификация и цены» for the specification set: its three rows read from the run's saved",
-          "text and matched to the price list. Both priced rows are counted in RUB; the metre-cubed row is a row too,",
-          "matched and counted. (The baseline set, with no table, answers `ready` with no row and no total.)"
+          "W60-OPT-MATCH-01. «Спецификация и цены» for the specification set, against the oracle",
+          "`expected_specification.json`: seven rows read from the run's saved text (one table, continued onto the",
+          "second sheet), five matched, two unmatched (`unit_mismatch`, `no_position`), four counted -- RUB 464278 --",
+          "and three left out of the total with their reasons. The monetary figure is an exact decimal."
         ],
         "actions": [
           {
@@ -2959,10 +3053,7 @@
             "method": "GET",
             "path": "/projects/{project_uid}/documents/{document_uid}/specification-prices",
             "operationId": "getSpecificationPrices",
-            "expect_status": 200,
-            "bind": {
-              "document_uid": "spec_document_uid"
-            }
+            "expect_status": 200
           }
         ],
         "expects_response": [
@@ -2974,7 +3065,32 @@
           {
             "of": "getSpecificationPrices",
             "json_path": "rows.total",
-            "equals": 3
+            "equals": 7
+          },
+          {
+            "of": "getSpecificationPrices",
+            "json_path": "matching.counts.matched",
+            "equals": 5
+          },
+          {
+            "of": "getSpecificationPrices",
+            "json_path": "matching.counts.unmatched",
+            "equals": 2
+          },
+          {
+            "of": "getSpecificationPrices",
+            "json_path": "matching.totals.0.currency",
+            "equals": "RUB"
+          },
+          {
+            "of": "getSpecificationPrices",
+            "json_path": "matching.totals.0.amount",
+            "equals": "464278"
+          },
+          {
+            "of": "getSpecificationPrices",
+            "json_path": "matching.totals.0.row_count",
+            "equals": 4
           }
         ],
         "expects_present": [
@@ -2986,18 +3102,27 @@
           },
           {
             "selector": "[data-spec-row]",
-            "min_count": 3
+            "min_count": 7
           },
           {
             "selector": "[data-spec-status=\"matched\"]",
-            "min_count": 3
+            "min_count": 5
+          },
+          {
+            "selector": "[data-spec-status=\"unmatched\"]",
+            "min_count": 2
           },
           {
             "selector": "[data-spec-counted=\"yes\"]",
-            "min_count": 3
+            "min_count": 4
           },
           {
-            "selector": "[data-spec-total=\"RUB\"]"
+            "selector": "[data-spec-total=\"RUB\"]",
+            "text_contains": "строк",
+            "text_matches": "строк: 4$"
+          },
+          {
+            "selector": "[data-spec-excluded=\"3\"]"
           }
         ],
         "screen": "specification-prices",
@@ -3183,8 +3308,9 @@
           "section_code": "AR"
         },
         "$comment": [
-          "The expert (here the journey's account) sets the PROJECT's list for АР, which then wins over the global",
-          "one for this project."
+          "The expert (here the journey's account) sets the PROJECT's list for АР -- «Завод Север», the vendor the",
+          "price list's cheaper analogs come from (`expected_specification.json`) -- which then wins over the",
+          "global one for this project."
         ],
         "actions": [
           {
@@ -3207,19 +3333,7 @@
           {
             "do": "fill",
             "selector": "[data-vendor-list-editor]",
-            "value": "ИП Лютиков",
-            "label": "Поставщик",
-            "index": -1
-          },
-          {
-            "do": "click",
-            "selector": "[data-vendor-list-editor] button",
-            "text": "Добавить запись"
-          },
-          {
-            "do": "fill",
-            "selector": "[data-vendor-list-editor]",
-            "value": "=HYPERLINK(\"http://example.invalid/x\",\"щит\")",
+            "value": "Завод Север",
             "label": "Поставщик",
             "index": -1
           },
@@ -3241,7 +3355,7 @@
         "expects_present": [
           {
             "selector": "tr[data-vendor-section=\"AR\"][data-vendor-source=\"project\"]",
-            "text_contains": "ИП Лютиков",
+            "text_contains": "Завод Север",
             "text_is_data": true
           }
         ],
@@ -3287,8 +3401,8 @@
         "control_module": "web/src/features/start-optimisation-pass/ui/start-optimisation-pass.tsx",
         "$comment": [
           "W60-OPT-PROPOSALS-01. The expert starts a pass for the specification set, pressing twice: one pass is stored.",
-          "The first row has a cheaper analog in the price list (МЩ-2) from a vendor on the project's list, so the pass",
-          "holds a proposal; the vendor's name begins with `=`, which is data and not a formula."
+          "It holds the oracle's four `cheaper_analog` proposals out of seven rows, five of them matched: the door, the",
+          "window, the anchor and the foam, none decided yet. The step captures each proposal's identity by its card."
         ],
         "actions": [
           {
@@ -3337,8 +3451,28 @@
           },
           {
             "of": "startOptimisationPass",
+            "json_path": "specification_row_count",
+            "equals": 7
+          },
+          {
+            "of": "startOptimisationPass",
+            "json_path": "matched_row_count",
+            "equals": 5
+          },
+          {
+            "of": "startOptimisationPass",
+            "json_path": "proposed_row_count",
+            "equals": 4
+          },
+          {
+            "of": "startOptimisationPass",
             "json_path": "proposal_count",
-            "at_least": 1
+            "equals": 4
+          },
+          {
+            "of": "startOptimisationPass",
+            "json_path": "decision_counts.pending",
+            "equals": 4
           }
         ],
         "captures": [
@@ -3351,18 +3485,63 @@
             ],
             "matches": "^(opp_%ID%)$",
             "bound_ms": 30000
+          },
+          {
+            "kind": "attribute",
+            "selector": "[data-proposal-list] article:nth-of-type(1)",
+            "attribute": "data-proposal",
+            "as": [
+              "proposal_door_id"
+            ],
+            "matches": "^(opr_%ID%)$",
+            "bound_ms": 30000
+          },
+          {
+            "kind": "attribute",
+            "selector": "[data-proposal-list] article:nth-of-type(2)",
+            "attribute": "data-proposal",
+            "as": [
+              "proposal_window_id"
+            ],
+            "matches": "^(opr_%ID%)$",
+            "bound_ms": 30000
+          },
+          {
+            "kind": "attribute",
+            "selector": "[data-proposal-list] article:nth-of-type(3)",
+            "attribute": "data-proposal",
+            "as": [
+              "proposal_anchor_id"
+            ],
+            "matches": "^(opr_%ID%)$",
+            "bound_ms": 30000
+          },
+          {
+            "kind": "attribute",
+            "selector": "[data-proposal-list] article:nth-of-type(4)",
+            "attribute": "data-proposal",
+            "as": [
+              "proposal_foam_id"
+            ],
+            "matches": "^(opr_%ID%)$",
+            "bound_ms": 30000
           }
         ],
         "expects_present": [
           {
-            "selector": "[data-pass-count]"
+            "selector": "[data-pass-count=\"1\"]"
           },
           {
             "selector": "[data-proposals-export]"
           },
           {
             "selector": "[data-proposal]",
-            "min_count": 1
+            "min_count": 4
+          },
+          {
+            "selector": "[data-decision-count=\"pending\"]",
+            "text_contains": "не решено",
+            "text_matches": "^не решено:\\s*4$"
           }
         ],
         "forbids_rendered": [
@@ -3372,25 +3551,152 @@
         "case": "action"
       },
       {
+        "name": "optimisation-pass-over-a-set-without-a-table",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/features/start-optimisation-pass/ui/start-optimisation-pass.tsx",
+        "$comment": [
+          "The honest empty answer: a pass over the first set, whose text has no specification table, reads zero rows",
+          "and stores a pass with no proposal. The screen says so and draws no card."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "nav[data-project-tabs] button",
+            "text": "Оптимизация",
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "select[data-proposal-set-chooser]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "select",
+            "selector": "select[data-proposal-set-chooser]",
+            "option_value": "{document_uid}"
+          },
+          {
+            "do": "click",
+            "selector": "[data-start-pass] button",
+            "text": "Запустить проход"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/documents/{document_uid}/optimisation-passes",
+            "operationId": "startOptimisationPass",
+            "expect_status": 201,
+            "count": 1
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "startOptimisationPass",
+            "json_path": "specification_row_count",
+            "equals": 0
+          },
+          {
+            "of": "startOptimisationPass",
+            "json_path": "proposal_count",
+            "equals": 0
+          }
+        ],
+        "captures": [
+          {
+            "kind": "response",
+            "of": "startOptimisationPass",
+            "json_path": "optimisation_pass_id",
+            "as": [
+              "empty_pass_id"
+            ],
+            "matches": "^(opp_%ID%)$",
+            "bound_ms": 30000
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-proposal-list]",
+            "text_contains": "В этом проходе нет предложений"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-proposal]"
+        ],
+        "screen": "optimisation-passes",
+        "case": "refused"
+      },
+      {
+        "name": "proposals-csv-of-an-empty-pass",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/widgets/optimisation-proposals/ui/optimisation-proposals.tsx",
+        "$comment": [
+          "The export of a pass with no proposal is the header and nothing else: BOM, 42 columns, no data row."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "nav[data-project-tabs] button",
+            "text": "Оптимизация",
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "select[data-proposal-set-chooser]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "select",
+            "selector": "select[data-proposal-set-chooser]",
+            "option_value": "{document_uid}"
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-proposals-export]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "click",
+            "selector": "[data-proposals-export] button",
+            "text": "Выгрузить CSV предложений"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/optimisation-passes/{optimisation_pass_id}/export.csv",
+            "operationId": "exportOptimisationProposalsCsv",
+            "expect_status": 200,
+            "bind": {
+              "optimisation_pass_id": "empty_pass_id"
+            }
+          }
+        ],
+        "expects_download": [
+          {
+            "of": "exportOptimisationProposalsCsv",
+            "content_type_starts_with": "text/csv",
+            "content_disposition_contains": ".csv",
+            "body_starts_with": "\ufeff",
+            "csv_columns": 42,
+            "csv_data_rows": 0,
+            "csv_no_formula_cells": true
+          }
+        ],
+        "screen": "optimisation-proposals",
+        "case": "action"
+      },
+      {
         "name": "proposal-revise-needs-a-comment",
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/features/decide-optimisation-proposal/ui/proposal-decision-form.tsx",
         "$comment": [
-          "An input the form refuses: «На доработку» without a comment. The button is disabled and the hint says why;",
-          "nothing is sent."
-        ],
-        "captures": [
-          {
-            "kind": "attribute",
-            "selector": "[data-proposal]",
-            "attribute": "data-proposal",
-            "as": [
-              "optimisation_proposal_id"
-            ],
-            "matches": "^(opr_%ID%)$",
-            "bound_ms": 30000
-          }
+          "The proposals as the API gives them (the oracle's figures: the saving is exact, and ABSENT -- never 0 --",
+          "for the foam, whose quantity is a dash) and an input the form refuses: «На доработку» without a comment.",
+          "The button is disabled and the hint says why; nothing is sent."
         ],
         "actions": [
           {
@@ -3415,20 +3721,72 @@
             "bound_ms": 15000
           }
         ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/optimisation-passes/{optimisation_pass_id}/proposals",
+            "operationId": "listOptimisationProposals",
+            "expect_status": 200
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "listOptimisationProposals",
+            "json_path": "total",
+            "equals": 4
+          },
+          {
+            "of": "listOptimisationProposals",
+            "json_path": "items.0.proposal_type",
+            "equals": "cheaper_analog"
+          },
+          {
+            "of": "listOptimisationProposals",
+            "json_path": "items.0.proposed_vendor",
+            "equals": "Завод Север"
+          },
+          {
+            "of": "listOptimisationProposals",
+            "json_path": "items.0.saving",
+            "equals": "16000"
+          },
+          {
+            "of": "listOptimisationProposals",
+            "json_path": "items.1.saving",
+            "equals": "15600"
+          },
+          {
+            "of": "listOptimisationProposals",
+            "json_path": "items.2.saving",
+            "equals": "650"
+          },
+          {
+            "of": "listOptimisationProposals",
+            "json_path": "items.3.saving",
+            "equals": null
+          }
+        ],
         "expects_present": [
           {
-            "selector": "[data-proposal-decision] button[disabled]",
+            "selector": "[data-proposal-decision=\"{proposal_anchor_id}\"] button[disabled]",
             "text_contains": "На доработку"
           },
           {
-            "selector": "[data-revise-hint]"
+            "selector": "[data-proposal-decision=\"{proposal_anchor_id}\"] [data-revise-hint]"
+          },
+          {
+            "selector": "[data-proposal=\"{proposal_foam_id}\"]",
+            "text_contains": "Экономия не рассчитана"
           }
         ],
         "expects_not_called": [
           {
             "method": "POST",
             "path": "/optimisation-proposals/{optimisation_proposal_id}/decisions",
-            "why": "a revise without a comment"
+            "why": "a revise without a comment",
+            "bind": {
+              "optimisation_proposal_id": "proposal_anchor_id"
+            }
           }
         ],
         "screen": "optimisation-proposals",
@@ -3440,9 +3798,9 @@
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/features/decide-optimisation-proposal/ui/proposal-decision-form.tsx",
         "$comment": [
-          "The expert accepts the proposal, pressing twice: one decision is stored (the second press finds the button",
-          "already disabled, or replays the same answer). The card then shows the accepted verdict and the same",
-          "button is disabled -- a second identical decision cannot be made."
+          "The expert accepts the door's proposal, pressing twice: one decision is stored (the second press finds the",
+          "button already disabled, or replays the same answer). The card then shows the accepted verdict and the same",
+          "button is disabled -- a second identical decision cannot be made. The count line moves: принято 1, не решено 3."
         ],
         "actions": [
           {
@@ -3468,7 +3826,7 @@
           },
           {
             "do": "click",
-            "selector": "[data-proposal-decision] button",
+            "selector": "[data-proposal-decision=\"{proposal_door_id}\"] button",
             "text": "Принять",
             "times": 2
           }
@@ -3479,6 +3837,9 @@
             "path": "/optimisation-proposals/{optimisation_proposal_id}/decisions",
             "operationId": "decideOptimisationProposal",
             "expect_status": 201,
+            "bind": {
+              "optimisation_proposal_id": "proposal_door_id"
+            },
             "max_count": 2,
             "same_response_at": [
               "decision.proposal_decision_id"
@@ -3494,15 +3855,120 @@
         ],
         "expects_present": [
           {
-            "selector": "[data-proposal][data-decision=\"accept\"]"
+            "selector": "[data-proposal=\"{proposal_door_id}\"][data-decision=\"accept\"]"
           },
           {
-            "selector": "[data-proposal-decision] button[disabled]",
+            "selector": "[data-proposal-decision=\"{proposal_door_id}\"] button[disabled]",
             "text_contains": "Принять"
+          },
+          {
+            "selector": "[data-decision-count=\"accept\"]",
+            "text_contains": "принято",
+            "text_matches": "^принято:\\s*1$"
+          },
+          {
+            "selector": "[data-decision-count=\"pending\"]",
+            "text_contains": "не решено",
+            "text_matches": "^не решено:\\s*3$"
           }
         ],
         "forbids_rendered": [
           "[data-proposal-decision] .am-state--error"
+        ],
+        "screen": "optimisation-proposals",
+        "case": "action"
+      },
+      {
+        "name": "proposal-change-of-mind",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/features/decide-optimisation-proposal/ui/proposal-decision-form.tsx",
+        "$comment": [
+          "The expert accepts the window's proposal and then rejects it. Decisions are appended, never edited: the",
+          "history holds both, the newest current, and the counts follow the current verdict (принято 1, отклонено 1)."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "nav[data-project-tabs] button",
+            "text": "Оптимизация",
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "select[data-proposal-set-chooser]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "select",
+            "selector": "select[data-proposal-set-chooser]",
+            "option_value": "{spec_document_uid}"
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-proposal]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "click",
+            "selector": "[data-proposal-decision=\"{proposal_window_id}\"] button",
+            "text": "Принять"
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-proposal=\"{proposal_window_id}\"][data-decision=\"accept\"]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "click",
+            "selector": "[data-proposal-decision=\"{proposal_window_id}\"] button",
+            "text": "Отклонить"
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-proposal=\"{proposal_window_id}\"][data-decision=\"reject\"]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "click",
+            "selector": "[data-proposal=\"{proposal_window_id}\"] button",
+            "text": "История решений",
+            "settle": true
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/optimisation-proposals/{optimisation_proposal_id}/decisions",
+            "operationId": "decideOptimisationProposal",
+            "expect_status": 201,
+            "bind": {
+              "optimisation_proposal_id": "proposal_window_id"
+            },
+            "count": 2
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "decideOptimisationProposal",
+            "json_path": "decision.verdict",
+            "equals": "accept"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-proposal=\"{proposal_window_id}\"] [data-proposal-history=\"2\"]"
+          },
+          {
+            "selector": "[data-decision-count=\"reject\"]",
+            "text_contains": "отклонено",
+            "text_matches": "^отклонено:\\s*1$"
+          },
+          {
+            "selector": "[data-decision-count=\"accept\"]",
+            "text_contains": "принято",
+            "text_matches": "^принято:\\s*1$"
+          }
         ],
         "screen": "optimisation-proposals",
         "case": "action"
@@ -3513,8 +3979,8 @@
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/features/decide-optimisation-proposal/ui/proposal-decision-form.tsx",
         "$comment": [
-          "The expert changes their mind: «На доработку» with a comment. Decisions are appended, never edited: the",
-          "history holds both, newest current."
+          "The expert sends the anchor's proposal back: «На доработку» with a comment that begins with `=`. The comment",
+          "is data -- the card and the history show it as text -- and it is what the CSV must not let run as a formula."
         ],
         "actions": [
           {
@@ -3540,22 +4006,22 @@
           },
           {
             "do": "fill",
-            "selector": "textarea[id^=\"decision-comment-\"]",
-            "value": "Проверить по другому поставщику"
+            "selector": "textarea[id=\"decision-comment-{proposal_anchor_id}\"]",
+            "value": "=СУММ(A1:A9)"
           },
           {
             "do": "click",
-            "selector": "[data-proposal-decision] button",
+            "selector": "[data-proposal-decision=\"{proposal_anchor_id}\"] button",
             "text": "На доработку"
           },
           {
             "do": "wait_for",
-            "selector": "[data-proposal][data-decision=\"revise\"]",
+            "selector": "[data-proposal=\"{proposal_anchor_id}\"][data-decision=\"revise\"]",
             "bound_ms": 15000
           },
           {
             "do": "click",
-            "selector": "[data-proposal] button",
+            "selector": "[data-proposal=\"{proposal_anchor_id}\"] button",
             "text": "История решений",
             "settle": true
           }
@@ -3566,6 +4032,9 @@
             "path": "/optimisation-proposals/{optimisation_proposal_id}/decisions",
             "operationId": "decideOptimisationProposal",
             "expect_status": 201,
+            "bind": {
+              "optimisation_proposal_id": "proposal_anchor_id"
+            },
             "count": 1
           }
         ],
@@ -3578,8 +4047,86 @@
         ],
         "expects_present": [
           {
-            "selector": "[data-proposal-history=\"2\"]"
+            "selector": "[data-proposal=\"{proposal_anchor_id}\"] [data-proposal-history=\"1\"]",
+            "text_contains": "=СУММ(A1:A9)",
+            "text_is_data": true
+          },
+          {
+            "selector": "[data-decision-count=\"revise\"]",
+            "text_contains": "на доработку",
+            "text_matches": "^на доработку:\\s*1$"
+          },
+          {
+            "selector": "[data-decision-count=\"pending\"]",
+            "text_contains": "не решено",
+            "text_matches": "^не решено:\\s*1$"
           }
+        ],
+        "screen": "optimisation-proposals",
+        "case": "action"
+      },
+      {
+        "name": "proposal-filter-by-decision",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/widgets/optimisation-proposals/ui/optimisation-proposals.tsx",
+        "$comment": [
+          "The decision filter narrows the page: «не решено» shows only the foam, whose proposal nobody has decided.",
+          "The pass's counts still count every proposal."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "nav[data-project-tabs] button",
+            "text": "Оптимизация",
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "select[data-proposal-set-chooser]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "select",
+            "selector": "select[data-proposal-set-chooser]",
+            "option_value": "{spec_document_uid}"
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-proposal]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "click",
+            "selector": "[data-decision-filter] button:nth-of-type(2)",
+            "settle": true
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/optimisation-passes/{optimisation_pass_id}/proposals",
+            "operationId": "listOptimisationProposals",
+            "expect_status": 200
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-decision-filter=\"pending\"]"
+          },
+          {
+            "selector": "[data-proposal=\"{proposal_foam_id}\"]"
+          },
+          {
+            "selector": "[data-decision-count=\"accept\"]",
+            "text_contains": "принято",
+            "text_matches": "^принято:\\s*1$"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-proposal=\"{proposal_door_id}\"]",
+          "[data-proposal=\"{proposal_window_id}\"]",
+          "[data-proposal=\"{proposal_anchor_id}\"]"
         ],
         "screen": "optimisation-proposals",
         "case": "action"
@@ -3618,7 +4165,13 @@
         ],
         "expects_present": [
           {
-            "selector": "[data-proposal][data-decision=\"revise\"]"
+            "selector": "[data-proposal=\"{proposal_door_id}\"][data-decision=\"accept\"]"
+          },
+          {
+            "selector": "[data-proposal=\"{proposal_window_id}\"][data-decision=\"reject\"]"
+          },
+          {
+            "selector": "[data-proposal=\"{proposal_anchor_id}\"][data-decision=\"revise\"]"
           }
         ],
         "forbids_rendered": [
@@ -3633,8 +4186,9 @@
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/widgets/optimisation-proposals/ui/optimisation-proposals.tsx",
         "$comment": [
-          "The pass's proposals as CSV: BOM, 42 columns, and no cell that begins with a character a spreadsheet would",
-          "run as a formula. The vendor whose name begins with `=` is IN the file, with an apostrophe in front of it."
+          "The pass's proposals as CSV, with the decisions: BOM, 42 columns, one row per proposal (four), and no",
+          "cell that begins with a character a spreadsheet would run as a formula. The expert's comment that begins",
+          "with `=` is IN the file, with an apostrophe in front of it."
         ],
         "actions": [
           {
@@ -3679,9 +4233,336 @@
             "content_disposition_contains": ".csv",
             "body_starts_with": "\ufeff",
             "csv_columns": 42,
+            "csv_data_rows": 4,
             "csv_no_formula_cells": true,
             "body_contains": [
-              "'=HYPERLINK"
+              "'=СУММ(A1:A9)",
+              ",accept,",
+              ",reject,",
+              ",revise,",
+              ",pending,",
+              "Завод Север"
+            ]
+          }
+        ],
+        "screen": "optimisation-proposals",
+        "case": "action"
+      },
+      {
+        "name": "price-list-hostile-revision",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/features/upload-price-list/ui/upload-price-list-form.tsx",
+        "$comment": [
+          "A second revision of the project's price list: the committed ten positions plus a cheaper analog of the",
+          "membrane whose VENDOR is a formula (`=HYPERLINK(...)`), a row with no price (skipped and listed), and",
+          "vendors that begin with `+`, `@` and `-`. Every such cell is stored and shown as text."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "nav[data-project-tabs] button",
+            "text": "Оптимизация",
+            "settle": true
+          },
+          {
+            "do": "attach_file",
+            "selector": "#price-list-file",
+            "fixture": "tests/e2e/pc01/journey/fixtures/optimisation/prices_hostile.csv"
+          },
+          {
+            "do": "select",
+            "selector": "#price-list-currency",
+            "option_text": "рубль"
+          },
+          {
+            "do": "click",
+            "selector": "[data-price-list-upload] button[type=\"submit\"]",
+            "text": "Загрузить прайс-лист"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/price-lists",
+            "operationId": "uploadPriceList",
+            "expect_status": 201,
+            "count": 1
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "uploadPriceList",
+            "json_path": "revision_number",
+            "equals": 2
+          },
+          {
+            "of": "uploadPriceList",
+            "json_path": "accepted_row_count",
+            "equals": 14
+          },
+          {
+            "of": "uploadPriceList",
+            "json_path": "skipped_row_count",
+            "equals": 1
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-price-list-stored]",
+            "text_contains": "Сохранена редакция",
+            "text_matches": "Сохранена редакция 2:"
+          },
+          {
+            "selector": "[data-price-list-revisions] tbody tr",
+            "min_count": 2
+          },
+          {
+            "selector": "[data-skipped-row]",
+            "min_count": 1
+          },
+          {
+            "selector": "[data-price-list-positions]",
+            "text_contains": "+Поставщик плюс",
+            "text_is_data": true
+          },
+          {
+            "selector": "[data-price-list-positions]",
+            "text_contains": "@Поставщик собака",
+            "text_is_data": true
+          },
+          {
+            "selector": "[data-price-list-positions]",
+            "text_contains": "-Поставщик минус",
+            "text_is_data": true
+          },
+          {
+            "selector": "[data-price-list-positions]",
+            "text_contains": "=HYPERLINK(\"http://example.invalid/x\",\"мембрана\")",
+            "text_is_data": true
+          }
+        ],
+        "forbids_rendered": [
+          ".am-state--error"
+        ],
+        "screen": "price-lists",
+        "case": "action"
+      },
+      {
+        "name": "vendor-list-project-adds-the-formula-vendor",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/features/set-vendor-list/ui/vendor-list-editor.tsx",
+        "constants": {
+          "section_code": "AR"
+        },
+        "$comment": [
+          "The expert adds the formula-named vendor to the project's list, so that the analog it sells is admitted.",
+          "The list is a new revision; the editor shows the name as text."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "nav[data-project-tabs] button",
+            "text": "Оптимизация",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "tr[data-vendor-section=\"AR\"] button",
+            "text": "Изменить список проекта",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "[data-vendor-list-editor] button",
+            "text": "Добавить запись"
+          },
+          {
+            "do": "fill",
+            "selector": "[data-vendor-list-editor]",
+            "value": "=HYPERLINK(\"http://example.invalid/x\",\"мембрана\")",
+            "label": "Поставщик",
+            "index": -1
+          },
+          {
+            "do": "click",
+            "selector": "[data-vendor-list-editor] button[type=\"submit\"]",
+            "text": "Сохранить список"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "PUT",
+            "path": "/projects/{project_uid}/vendor-lists/{section_code}",
+            "operationId": "setProjectVendorList",
+            "expect_status": 200,
+            "count": 1
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "tr[data-vendor-section=\"AR\"][data-vendor-source=\"project\"]",
+            "text_contains": "=HYPERLINK(\"http://example.invalid/x\",\"мембрана\")",
+            "text_is_data": true
+          },
+          {
+            "selector": "tr[data-vendor-section=\"AR\"][data-vendor-source=\"project\"]",
+            "text_contains": "Завод Север",
+            "text_is_data": true
+          }
+        ],
+        "screen": "vendor-lists",
+        "case": "action"
+      },
+      {
+        "name": "optimisation-second-pass",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/features/start-optimisation-pass/ui/start-optimisation-pass.tsx",
+        "$comment": [
+          "New inputs (a newer price list revision, a newer vendor list), so a new pass -- the first stays in the list.",
+          "The membrane now has a cheaper analog (RUB 350 against 410) from the formula-named vendor: five proposals."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "nav[data-project-tabs] button",
+            "text": "Оптимизация",
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "select[data-proposal-set-chooser]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "select",
+            "selector": "select[data-proposal-set-chooser]",
+            "option_value": "{spec_document_uid}"
+          },
+          {
+            "do": "click",
+            "selector": "[data-start-pass] button",
+            "text": "Запустить проход"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/documents/{document_uid}/optimisation-passes",
+            "operationId": "startOptimisationPass",
+            "expect_status": 201,
+            "count": 1,
+            "bind": {
+              "document_uid": "spec_document_uid"
+            }
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "startOptimisationPass",
+            "json_path": "proposal_count",
+            "equals": 5
+          },
+          {
+            "of": "startOptimisationPass",
+            "json_path": "proposed_row_count",
+            "equals": 5
+          }
+        ],
+        "captures": [
+          {
+            "kind": "response",
+            "of": "startOptimisationPass",
+            "json_path": "optimisation_pass_id",
+            "as": [
+              "second_pass_id"
+            ],
+            "matches": "^(opp_%ID%)$",
+            "bound_ms": 30000
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-pass-count=\"2\"]"
+          },
+          {
+            "selector": "[data-proposal]",
+            "min_count": 5
+          },
+          {
+            "selector": "[data-decision-count=\"pending\"]",
+            "text_contains": "не решено",
+            "text_matches": "^не решено:\\s*5$"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-start-pass] .am-state--error"
+        ],
+        "screen": "optimisation-passes",
+        "case": "action"
+      },
+      {
+        "name": "proposals-csv-with-a-formula-vendor",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/widgets/optimisation-proposals/ui/optimisation-proposals.tsx",
+        "$comment": [
+          "The second pass's CSV: five rows, and the formula-named vendor is IN the file with an apostrophe in front of",
+          "it -- no cell of the file starts with `=`, `+`, `-` or `@`."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "nav[data-project-tabs] button",
+            "text": "Оптимизация",
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "select[data-proposal-set-chooser]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "select",
+            "selector": "select[data-proposal-set-chooser]",
+            "option_value": "{spec_document_uid}"
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-proposals-export]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "click",
+            "selector": "[data-proposals-export] button",
+            "text": "Выгрузить CSV предложений"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/optimisation-passes/{optimisation_pass_id}/export.csv",
+            "operationId": "exportOptimisationProposalsCsv",
+            "expect_status": 200,
+            "bind": {
+              "optimisation_pass_id": "second_pass_id"
+            }
+          }
+        ],
+        "expects_download": [
+          {
+            "of": "exportOptimisationProposalsCsv",
+            "content_type_starts_with": "text/csv",
+            "content_disposition_contains": ".csv",
+            "body_starts_with": "\ufeff",
+            "csv_columns": 42,
+            "csv_data_rows": 5,
+            "csv_no_formula_cells": true,
+            "body_contains": [
+              "'=HYPERLINK",
+              "Техноэласт ЭПП усиленная"
             ]
           }
         ],
