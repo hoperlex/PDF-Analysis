@@ -1,0 +1,247 @@
+"""Routing, `import-env` and `rewrap` (`EXEC-HTTP-01`), against real PostgreSQL and a local gateway."""
+
+from __future__ import annotations
+
+import importlib.util
+import sys
+from contextlib import nullcontext
+from pathlib import Path
+from typing import Any
+
+import pytest
+from sqlalchemy import text
+
+from auditmanager.analysis.public import ModelRequest
+from auditmanager.executors.operations import (
+    IMPORT_DISPLAY_NAME,
+    OperationRefused,
+    import_env,
+    reach,
+    rewrap,
+)
+from auditmanager.executors.public import (
+    ExecutorRepository,
+    RevisionSettings,
+    create_connection,
+    load_private_ring,
+    pinned_models,
+    resolve_route,
+    revise_connection,
+    set_route,
+)
+from auditmanager.executors.runtime import DestinationPolicy, bind_connection, freeze_connection, is_probed_ok
+from auditmanager.shared.errors import DomainError
+
+_HARNESS_NAME = "b5_run_harness"
+_HARNESS_PATH = Path(__file__).resolve().parents[1] / "runs" / "harness.py"
+if _HARNESS_NAME in sys.modules:
+    harness = sys.modules[_HARNESS_NAME]
+else:
+    _spec = importlib.util.spec_from_file_location(_HARNESS_NAME, _HARNESS_PATH)
+    assert _spec is not None and _spec.loader is not None
+    harness = importlib.util.module_from_spec(_spec)
+    sys.modules[_HARNESS_NAME] = harness
+    _spec.loader.exec_module(harness)
+engine = harness.engine
+session = harness.session
+
+_SUPPORT_NAME = "am_exec_http_support"
+_SUPPORT_PATH = Path(__file__).resolve().parent / "http_support.py"
+if _SUPPORT_NAME in sys.modules:
+    support = sys.modules[_SUPPORT_NAME]
+else:
+    _s = importlib.util.spec_from_file_location(_SUPPORT_NAME, _SUPPORT_PATH)
+    assert _s is not None and _s.loader is not None
+    support = importlib.util.module_from_spec(_s)
+    sys.modules[_SUPPORT_NAME] = support
+    _s.loader.exec_module(support)
+
+FakeGateway = support.fake_gateway.FakeGateway
+
+
+@pytest.fixture
+def fake():  # type: ignore[no-untyped-def]
+    gateway = FakeGateway().start()
+    yield gateway
+    gateway.stop()
+
+
+def _factory(session: Any) -> Any:
+    return lambda: nullcontext(session)
+
+
+def _refusal(call: Any) -> DomainError:
+    with pytest.raises(DomainError) as caught:
+        call()
+    return caught.value
+
+
+# -- routing -----------------------------------------------------------------------------------
+
+
+def test_only_a_revision_probed_ok_on_its_current_key_can_be_routed(session, fake) -> None:  # type: ignore[no-untyped-def]
+    rings = support.make_rings()
+    connection = support.seed_connection(session, rings, fake.base_url(), probe=None, routed=False)
+    refused = _refusal(lambda: support.route(session, connection.connection_id))
+    assert refused.code.value == "conflict"
+    assert refused.detail_fields == {"conflict_reason": "connection_not_probed"}
+    # A probe that did not pass is no pass.
+    support.mark_probe(session, connection.connection_id, "credential_refused")
+    assert _refusal(lambda: support.route(session, connection.connection_id)).code.value == "conflict"
+    support.mark_probe(session, connection.connection_id, "ok")
+    support.route(session, connection.connection_id)
+    assert resolve_route(session, "text_analysis").primary.revision_id == connection.revision_id
+    # A new key, or a new revision, needs a new probe before it can be routed or started on.
+    support.set_key(session, rings, connection.connection_id, "sk-second-0123456789abcdef")
+    store = ExecutorRepository()
+    record = store.get_connection(session, connection.connection_id)
+    revision = store.current_revisions(session, [connection.connection_id])[connection.connection_id]
+    assert not is_probed_ok(session, store, record, revision)
+    support.mark_probe(session, connection.connection_id)
+    assert is_probed_ok(session, store, record, revision)
+    new_revision = support.revise(session, connection.connection_id, fake.base_url("/v2"))
+    assert new_revision != connection.revision_id
+    assert freeze_connection_error(session) == "executor_route_missing"
+
+
+def freeze_connection_error(session: Any) -> str:
+    return str(_refusal(lambda: freeze_connection(session, "text_analysis")).detail_fields["dependency"])
+
+
+def test_kinds_and_transports_this_release_does_not_serve_are_refused_at_route_time(
+    session, fake  # type: ignore[no-untyped-def]
+) -> None:
+    pull = create_connection(
+        session, kind="pull", display_name="session", roles=support.ADMIN_ROLES,
+        idempotency_key=support.unique(), actor_uid=support.ACTOR)
+    revise_connection(
+        session, connection_id=pull.connection_id,
+        settings=RevisionSettings(
+            pin_id=support.PIN.model_id, gateway_model=support.PIN.model_id, billing="not_metered",
+            allow_client_documents=False, timeout_seconds=60, pull_client="agent",
+            answer_deadline_seconds=300, max_claimed_tasks=1),
+        pinned_model_ids={pin.model_id for pin in pinned_models()}, roles=support.ADMIN_ROLES,
+        idempotency_key=support.unique(), actor_uid=support.ACTOR)
+    refused = _refusal(lambda: support.route(session, pull.connection_id))
+    assert (refused.code.value, refused.detail_fields) == (
+        "validation_failed", {"field": "kind", "constraint": "kind_not_served"})
+    rings = support.make_rings()
+    tunnel = support.seed_connection(session, rings, "http://localhost:11434/v1", probe="ok",
+                                     routed=False, transport="ssh_tunnel", ssh_host="gpu.example.test",
+                                     ssh_port=22, ssh_user="am")
+    assert _refusal(lambda: support.route(session, tunnel.connection_id)).detail_fields[
+        "constraint"] == "kind_not_served"
+
+
+# -- import-env ----------------------------------------------------------------------------------
+
+
+def _environ(fake: Any, **changes: str) -> dict[str, str]:
+    values = {"PROXY_LLM_BASE_URL": fake.base_url(), "PROXY_LLM_TOKEN": support.KEY,
+              "PROXY_LLM_MODEL": support.GATEWAY_MODEL}
+    values.update(changes)
+    return values
+
+
+def test_import_env_makes_the_first_connection_probes_routes_and_is_idempotent(
+    session, fake  # type: ignore[no-untyped-def]
+) -> None:
+    rings = support.make_rings()
+    first = import_env(_factory(session), _environ(fake), ring=rings.private, policy=fake.policy())
+    assert first.created and first.probe_outcome == "ok" and first.routed
+    store = ExecutorRepository()
+    connection = store.get_connection(session, first.connection_id)
+    assert connection.display_name == IMPORT_DISPLAY_NAME and connection.kind == "http_api"
+    route = resolve_route(session, "text_analysis")
+    assert route.route.primary_connection_id == first.connection_id
+    assert route.primary.settings.gateway_model == support.GATEWAY_MODEL
+    assert route.primary.settings.base_url == fake.base_url()
+    # The key is sealed, and the worker opens it for the revision's address.
+    bound = bind_connection(session, route.primary.revision_id, ring=rings.private,
+                            policy=fake.policy(), context=None)
+    bound.adapter.complete(ModelRequest(model_id=support.PIN.model_id, body={
+        "max_tokens": 4, "messages": [{"role": "user", "content": "x"}]}))
+    assert fake.requests[-1]["authorization"] == f"Bearer {support.KEY}"
+    # A second run is a no-op that names the existing connection.
+    count = session.execute(text("SELECT count(*) FROM executor_connection")).scalar_one()
+    second = import_env(_factory(session), _environ(fake), ring=rings.private, policy=fake.policy())
+    assert (second.created, second.connection_id) == (False, first.connection_id)
+    assert session.execute(text("SELECT count(*) FROM executor_connection")).scalar_one() == count
+
+
+def test_import_env_refuses_a_stub_model_and_does_not_route_a_refused_probe(session) -> None:  # type: ignore[no-untyped-def]
+    rings = support.make_rings()
+    html = FakeGateway(behaviour="html403").start()
+    try:
+        assert "gateway stub" in str(_refusal_op(lambda: import_env(
+            _factory(session), _environ(html, PROXY_LLM_MODEL="proxy"), ring=rings.private,
+            policy=html.policy())))
+        assert "AUDITMANAGER_SECRETS_KEYS" in str(_refusal_op(lambda: import_env(
+            _factory(session), _environ(html), ring=None, policy=html.policy())))
+        report = import_env(_factory(session), _environ(html), ring=rings.private, policy=html.policy())
+    finally:
+        html.stop()
+    assert (report.created, report.probe_outcome, report.routed) == (True, "ip_refused", False)
+    assert resolve_route(session, "text_analysis") is None
+
+
+def _refusal_op(call: Any) -> OperationRefused:
+    with pytest.raises(OperationRefused) as caught:
+        call()
+    return caught.value
+
+
+# -- rewrap -------------------------------------------------------------------------------------
+
+
+def test_rewrap_reseals_to_the_active_key_keeps_the_destination_and_the_call_still_opens(
+    session, fake  # type: ignore[no-untyped-def]
+) -> None:
+    old, new = support.make_rings("k1"), support.make_rings("k2")
+    connection = support.seed_connection(session, old, fake.base_url())
+    both = load_private_ring(f"k1:{old.private_text},k2:{new.private_text}", "k2")
+    store = ExecutorRepository()
+    before = store.current_secrets(session, [connection.connection_id])[connection.connection_id][0]
+    assert before.kid == "k1"
+    report = rewrap(_factory(session), ring=both)
+    assert (report.rewrapped, report.unreadable) == (1, ())
+    after = store.current_secrets(session, [connection.connection_id])[connection.connection_id][0]
+    assert after.kid == "k2" and after.secret_id != before.secret_id
+    assert after.destination == before.destination and after.last4 == before.last4
+    assert store.get_secret(session, before.secret_id).replaced_at is not None
+    # The master key rotates: the old pair is removed, and the call still opens.
+    only_new = load_private_ring(f"k2:{new.private_text}", "k2")
+    bound = bind_connection(session, connection.revision_id, ring=only_new, policy=fake.policy(),
+                            context=None)
+    bound.adapter.complete(ModelRequest(model_id=support.PIN.model_id, body={
+        "max_tokens": 4, "messages": [{"role": "user", "content": "x"}]}))
+    assert fake.requests[-1]["authorization"] == f"Bearer {support.KEY}"
+    # A connection that was probed ok stays usable: the same key under a new envelope.
+    record = store.get_connection(session, connection.connection_id)
+    revision = store.current_revisions(session, [connection.connection_id])[connection.connection_id]
+    assert is_probed_ok(session, store, record, revision)
+    # A second run has nothing left to do.
+    assert rewrap(_factory(session), ring=both).rewrapped == 0
+
+
+def test_rewrap_names_a_secret_whose_key_id_is_not_in_the_ring_and_never_skips_it_silently(
+    session, fake  # type: ignore[no-untyped-def]
+) -> None:
+    lost, active = support.make_rings("k0"), support.make_rings("k2")
+    connection = support.seed_connection(session, lost, fake.base_url())
+    report = rewrap(_factory(session), ring=load_private_ring(f"k2:{active.private_text}", "k2"))
+    assert report.rewrapped == 0 and len(report.unreadable) == 1
+    secret = ExecutorRepository().current_secrets(
+        session, [connection.connection_id])[connection.connection_id][0]
+    assert report.unreadable == (secret.secret_id,) and secret.kid == "k0"
+
+
+# -- reach ---------------------------------------------------------------------------------------
+
+
+def test_reach_says_refused_unresolvable_unreachable_or_reachable(fake) -> None:  # type: ignore[no-untyped-def]
+    assert reach(f"http://127.0.0.1:{fake.port}", transport="direct",
+                 policy=DestinationPolicy(networks=lambda: ())).category == "loopback"
+    assert reach(fake.base_url(), transport="direct", policy=fake.policy()).outcome == "reachable"
+    closed = fake.policy(dial=lambda address, port: ("127.0.0.1", 1))
+    assert reach(fake.base_url(), transport="direct", policy=closed).outcome == "unreachable"
