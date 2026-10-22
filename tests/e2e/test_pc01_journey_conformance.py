@@ -261,6 +261,9 @@ def handles_named_by_write_step(step: dict) -> set[str]:
         # a `wait_for` by the words it waits for. Both are the application's own words.
         if action.get("label") is not None:
             texts.append(action["label"])
+        # `PC01-JOURNEY-GAPS-01`: the row a click is made in is named by a selector (its words are data).
+        if isinstance(action.get("within"), dict) and action["within"].get("selector") is not None:
+            selectors.append(action["within"]["selector"])
         if (
             action.get("do") == "wait_for"
             and action.get("text_contains") is not None
@@ -2474,6 +2477,8 @@ NIGHT_SCREENS = (
     "user-management",
     "release-history",
     "sign-out",
+    # `PC01-JOURNEY-GAPS-01`
+    "blocks",
 )
 
 #: Operations the write half must perform at least once, because each is a thing the matrix
@@ -2511,6 +2516,10 @@ NIGHT_OPERATIONS = (
     "archiveUser",
     "restoreUser",
     "listReleases",
+    # `PC01-JOURNEY-GAPS-01`
+    "listVersionPortalBlocks",
+    "streamVersionPortalBlockCrop",
+    "getVersionBlocks",
 )
 
 _TEMPLATE = re.compile(r"\{([a-z_]+)\}")
@@ -2541,6 +2550,9 @@ def _step_templates(step: dict) -> list[tuple[str, dict | None]]:
     for action in step.get("actions") or ():
         for key in ("selector", "value", "text", "to", "option_text", "option_value", "label"):
             for name in _templates(action.get(key)):
+                found.append((name, None))
+        if isinstance(action.get("within"), dict):
+            for name in _templates(action["within"].get("text_contains")):
                 found.append((name, None))
     for present in step.get("expects_present") or ():
         for name in (
@@ -2623,6 +2635,21 @@ def night_window_findings(manifest: dict, openapi: dict) -> list[str]:
                 findings.append(f"{label}: a {kind} with no selector")
             if kind == "click" and action.get("times", 1) not in (1, 2, 3):
                 findings.append(f"{label}: click.times must be 1, 2 or 3")
+            if "within" in action:
+                row = action["within"]
+                if kind != "click":
+                    findings.append(f"{label}: only a click is made within a row, not a {kind}")
+                if not (
+                    isinstance(row, dict)
+                    and set(row) == {"selector", "text_contains"}
+                    and isinstance(row["selector"], str)
+                    and row["selector"]
+                    and isinstance(row["text_contains"], str)
+                    and row["text_contains"]
+                ):
+                    findings.append(
+                        f"{label}: `within` is {{selector, text_contains}}, both non-empty text; got {row!r}"
+                    )
             if kind == "select" and ("option_text" in action) == ("option_value" in action):
                 findings.append(f"{label}: a select names exactly one of option_text and option_value")
             if kind == "attach_file":

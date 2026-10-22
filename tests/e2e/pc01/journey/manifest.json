@@ -491,7 +491,11 @@
         "for a version with no bundle). It is written here for a reader and checked by nothing in this file:",
         "a route entry carries no sentence key and the cold walk never chooses a version. It is",
         "pinned by `web/tests/unit/blocks/portal-states.test.ts` and rendered by the language",
-        "guard's `BLOCKS_SHAPES`."
+        "guard's `BLOCKS_SHAPES`.",
+        "",
+        "`PC01-JOURNEY-GAPS-01`: the cold walk still chooses nothing, but the WRITE half does -- the steps",
+        "`blocks-*` choose a project and a version through the chooser, read the portal blocks, one crop and the",
+        "text lines of a version a run has read, and the sentence of a version no run has reached."
       ],
       "expects_api": [
         {
@@ -5076,6 +5080,227 @@
         "no_negative_case": "a read-only panel: it takes no input and offers no control, and every role that can open the dashboard reads the same counts; its refusal (an incomplete breakdown) is `data-panel-fault`, forbidden above"
       },
       {
+        "name": "blocks-portal-blocks-of-a-version-with-a-run",
+        "at": "/blocks",
+        "page_module": "web/src/app/blocks/page.tsx",
+        "control_module": "web/src/_pages/blocks/ui/blocks-page.tsx",
+        "bind": {
+          "version_uid": "third_version_uid"
+        },
+        "$comment": [
+          "PC01-JOURNEY-GAPS-01. «Блоки»: choose the project, then the document, whose current version is the third",
+          "version of the baseline set (its run has published, so a run reached the page geometry). The rows of the",
+          "chooser carry no handle, so each choice is the button of the row whose words name the project (the name the",
+          "journey gave it) and then the version (its identity is printed in the row).",
+          "",
+          "«Блоки портала» is the tab it opens on: the committed bundle holds twelve blocks (eight text, two stamp, two",
+          "image), the API lists them, and each image block carries a crop the application cut from the PDF. The crop is",
+          "loaded lazily by the browser, so the step scrolls the first image into view by pressing it (a press on a",
+          "picture does nothing) and reads the crop's address from the picture itself."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "li button",
+            "within": {
+              "selector": "li",
+              "text_contains": "W22-E2E write half %STAMP%"
+            },
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "li button",
+            "within": {
+              "selector": "li",
+              "text_contains": "{version_uid}"
+            },
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-portal-blocks-loaded]",
+            "bound_ms": 30000
+          },
+          {
+            "do": "click",
+            "selector": "[data-portal-block-type=\"image\"] img",
+            "settle": true
+          }
+        ],
+        "captures": [
+          {
+            "kind": "attribute",
+            "selector": "[data-portal-block-type=\"image\"] img",
+            "attribute": "src",
+            "as": [
+              "portal_block_id"
+            ],
+            "matches": "portal-blocks/(blk_[0-9a-f]{32})/crop$",
+            "bound_ms": 30000,
+            "$why": "the crop's address names the block; the crop call is declared with it"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/projects",
+            "operationId": "listProjects",
+            "expect_status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/projects/{project_uid}/documents",
+            "operationId": "listDocuments",
+            "expect_status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/versions/{version_uid}/portal-blocks",
+            "operationId": "listVersionPortalBlocks",
+            "expect_status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/versions/{version_uid}/portal-blocks/{portal_block_id}/crop",
+            "operationId": "streamVersionPortalBlockCrop",
+            "expect_status": 200
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "listVersionPortalBlocks",
+            "json_path": "status",
+            "equals": "produced"
+          },
+          {
+            "of": "listVersionPortalBlocks",
+            "json_path": "block_count",
+            "at_least": 1
+          },
+          {
+            "of": "listVersionPortalBlocks",
+            "json_path": "items",
+            "nonempty_array": true
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-block-panel=\"portal\"] [data-portal-blocks-loaded]",
+            "text_contains": "Блоков в комплекте:"
+          },
+          {
+            "selector": "[data-portal-block-type=\"text\"]"
+          },
+          {
+            "selector": "[data-portal-block-type=\"image\"] [data-portal-crop=\"shown\"]"
+          }
+        ],
+        "forbids_rendered": [
+          "[role=\"alert\"]",
+          "[data-portal-crop=\"failed\"]"
+        ],
+        "screen": "blocks",
+        "case": "action"
+      },
+      {
+        "name": "blocks-text-lines-of-the-same-version",
+        "at": "/blocks",
+        "page_module": "web/src/app/blocks/page.tsx",
+        "control_module": "web/src/_pages/blocks/ui/blocks-page.tsx",
+        "bind": {
+          "version_uid": "third_version_uid"
+        },
+        "$comment": [
+          "The second tab, «Строки текста»: the text-line index of the same version (`getVersionBlocks`). Each line is",
+          "listed with its page, its bounds in points and its character span; nothing is computed by the screen."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "li button",
+            "within": {
+              "selector": "li",
+              "text_contains": "W22-E2E write half %STAMP%"
+            },
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "li button",
+            "within": {
+              "selector": "li",
+              "text_contains": "{version_uid}"
+            },
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-portal-blocks-loaded]",
+            "bound_ms": 30000
+          },
+          {
+            "do": "click",
+            "selector": "[data-block-tab=\"lines\"]",
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-block-panel=\"lines\"] [data-bbox-unit]",
+            "bound_ms": 30000
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/projects",
+            "operationId": "listProjects",
+            "expect_status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/projects/{project_uid}/documents",
+            "operationId": "listDocuments",
+            "expect_status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/versions/{version_uid}/blocks",
+            "operationId": "getVersionBlocks",
+            "expect_status": 200
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "getVersionBlocks",
+            "json_path": "status",
+            "equals": "produced"
+          },
+          {
+            "of": "getVersionBlocks",
+            "json_path": "block_count",
+            "at_least": 1
+          },
+          {
+            "of": "getVersionBlocks",
+            "json_path": "blocks",
+            "nonempty_array": true
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-block-panel=\"lines\"] [data-bbox-unit]",
+            "text_contains": "левый край"
+          }
+        ],
+        "forbids_rendered": [
+          "[role=\"alert\"]",
+          "[data-block-panel=\"portal\"] [data-portal-blocks-loaded]"
+        ],
+        "screen": "blocks",
+        "case": "action"
+      },
+      {
         "name": "queue-pause-dispatch",
         "at": "/queue",
         "page_module": "web/src/app/queue/page.tsx",
@@ -6094,6 +6319,148 @@
         "screen": "release-history",
         "case": "action",
         "no_negative_case": "the history is read by every complete account whose password is not the shipped one; an account that is not complete cannot be made without leaving it for good, and the API answers the read for any role"
+      },
+      {
+        "name": "blocks-upload-a-document-no-run-has-read",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/features/upload-document/ui/upload-document-form.tsx",
+        "$comment": [
+          "PC01-JOURNEY-GAPS-01. A third document in the project, which no run will read: the precondition of the",
+          "«Блоки» refusal below. It is a new DOCUMENT and not a fourth version of the baseline, on purpose: the chooser",
+          "lists the current version of each document, and the read walk follows the first version the document page",
+          "lists (the newest) to find a run -- a newest version without a run would end the walk at the version screen.",
+          "Documents list oldest first, so the baseline stays the one the walk follows. It comes last in the half, after",
+          "every step that counts the project's confirmed sets."
+        ],
+        "actions": [
+          {
+            "do": "attach_file",
+            "selector": "#upload-file",
+            "fixture": true
+          },
+          {
+            "do": "fill",
+            "selector": "#upload-title",
+            "value": "Блоки: версия без прогона %STAMP%"
+          },
+          {
+            "do": "click",
+            "selector": "form button[type=\"submit\"]",
+            "text": "Загрузить"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/documents",
+            "operationId": "uploadDocument",
+            "expect_status": 201
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "uploadDocument",
+            "json_path": "version_uid",
+            "matches": "^ver_%ID%$"
+          }
+        ],
+        "capture": {
+          "kind": "location",
+          "pattern": "^/projects/(prj_%ID%)/versions/(ver_%ID%)$",
+          "as": [
+            "project_uid",
+            "unrun_version_uid"
+          ],
+          "bound_ms": 30000
+        },
+        "forbids_rendered": [
+          "[data-upload-failure]",
+          "[data-precheck-problem]"
+        ],
+        "screen": "version-upload",
+        "case": "action"
+      },
+      {
+        "name": "blocks-a-version-no-run-has-read-says-so",
+        "at": "/blocks",
+        "page_module": "web/src/app/blocks/page.tsx",
+        "control_module": "web/src/_pages/blocks/ui/blocks-page.tsx",
+        "bind": {
+          "version_uid": "unrun_version_uid"
+        },
+        "$comment": [
+          "The case the screen must refuse to turn into an answer. A version no run has reached has no blocks YET, which",
+          "is not the same as having none: the API says `not_produced`, and the tab says that blocks appear after the",
+          "first run that reaches the page layout. It draws no list, no count and no picture, and asks for no crop."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "li button",
+            "within": {
+              "selector": "li",
+              "text_contains": "W22-E2E write half %STAMP%"
+            },
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "li button",
+            "within": {
+              "selector": "li",
+              "text_contains": "{version_uid}"
+            },
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-block-panel=\"portal\"]",
+            "text_contains": "Блоки портала появятся после первого запуска анализа этой версии",
+            "bound_ms": 30000
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/projects",
+            "operationId": "listProjects",
+            "expect_status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/projects/{project_uid}/documents",
+            "operationId": "listDocuments",
+            "expect_status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/versions/{version_uid}/portal-blocks",
+            "operationId": "listVersionPortalBlocks",
+            "expect_status": 200
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "listVersionPortalBlocks",
+            "json_path": "status",
+            "equals": "not_produced"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-block-panel=\"portal\"]",
+            "text_contains": "Блоки портала появятся после первого запуска анализа этой версии, который дойдёт до разметки страниц."
+          }
+        ],
+        "forbids_rendered": [
+          "[data-portal-blocks-loaded]",
+          "[data-portal-block-type]",
+          "[data-portal-crop]",
+          "[role=\"alert\"]"
+        ],
+        "screen": "blocks",
+        "case": "refused"
       },
       {
         "name": "sign-out",

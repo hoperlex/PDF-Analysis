@@ -25,12 +25,14 @@ guard, and never writes the tree at all -- the two files it would have to mutate
 """
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[4]
 M = ROOT / 'tests' / 'e2e' / 'pc01' / 'journey' / 'manifest.json'
-PYTHON = ROOT / '.venv' / 'bin' / 'python'
+# A lane worktree has no interpreter of its own: `JOURNEY_PROOF_PYTHON` names the shared one.
+PYTHON = Path(os.environ.get('JOURNEY_PROOF_PYTHON') or ROOT / '.venv' / 'bin' / 'python')
 orig = M.read_text()
 
 
@@ -311,6 +313,40 @@ mutations = [
   ("make a read-walk route's constant an identifier the contract has no enumeration for",
    lambda m: [r.__setitem__('constants', {'section_code': 'ZZ'}) for r in m['routes'] if r['name'] == 'section-optimisation'],
    "test_the_read_walk_s_constants_are_members_of_a_contract_enumeration"),
+  # --- `PC01-JOURNEY-GAPS-01`. «Блоки» (the chooser's rows have no handle, so a click names its row).
+  ("remove every step that refuses something on «Блоки»",
+   lambda m: without_steps(m, lambda x: x.get('screen') == 'blocks' and x.get('case') == 'refused'),
+   "test_the_night_window_steps_agree_with_the_contract_and_with_each_other"),
+  ("remove every step that acts on «Блоки»",
+   lambda m: without_steps(m, lambda x: x.get('screen') == 'blocks' and x.get('case') == 'action'),
+   "test_the_night_window_steps_agree_with_the_contract_and_with_each_other"),
+  ("never read the text lines of a version",
+   lambda m: without_steps(m, lambda x: x['name'] == 'blocks-text-lines-of-the-same-version'),
+   "test_the_night_window_steps_agree_with_the_contract_and_with_each_other"),
+  ("rename the tab marker «Строки текста» is pressed by",
+   lambda m: step(m, 'blocks-text-lines-of-the-same-version')['actions'][3].__setitem__('selector', '[data-block-tabs="lines"]'),
+   "test_every_control_the_write_half_presses_still_exists_in_the_application"),
+  ("rename the marker the picture's block is found by",
+   lambda m: step(m, 'blocks-portal-blocks-of-a-version-with-a-run')['actions'][3].__setitem__('selector', '[data-portal-block-kind="image"] img'),
+   "test_every_control_the_write_half_presses_still_exists_in_the_application"),
+  ("name the row of a click by a marker the application does not draw",
+   lambda m: step(m, 'blocks-portal-blocks-of-a-version-with-a-run')['actions'][0]['within'].__setitem__('selector', 'li[data-project-row]'),
+   "test_every_control_the_write_half_presses_still_exists_in_the_application"),
+  ("name the row of a click with no words",
+   lambda m: step(m, 'blocks-portal-blocks-of-a-version-with-a-run')['actions'][0]['within'].pop('text_contains'),
+   "test_the_night_window_steps_agree_with_the_contract_and_with_each_other"),
+  ("name the row of a click by a version no step captured",
+   lambda m: step(m, 'blocks-text-lines-of-the-same-version')['actions'][1]['within'].__setitem__('text_contains', '{fourth_version_uid}'),
+   "test_the_night_window_steps_agree_with_the_contract_and_with_each_other"),
+  ("make a row-scoped wait out of a type for it",
+   lambda m: step(m, 'blocks-text-lines-of-the-same-version')['actions'][2].__setitem__('within', {'selector': 'li', 'text_contains': 'x'}),
+   "test_the_night_window_steps_agree_with_the_contract_and_with_each_other"),
+  ("read the crop of a block no step captured",
+   lambda m: step(m, 'blocks-portal-blocks-of-a-version-with-a-run')['captures'][0].__setitem__('as', ['crop_block']),
+   "test_the_night_window_steps_agree_with_the_contract_and_with_each_other"),
+  ("declare a status the portal-blocks list does not publish",
+   lambda m: step(m, 'blocks-portal-blocks-of-a-version-with-a-run')['expects_api'][2].__setitem__('expect_status', 201),
+   "test_every_status_the_write_half_declares_is_one_the_contract_publishes"),
 ]
 
 
@@ -322,8 +358,11 @@ for label, mutate, test in mutations:
     m = json.loads(orig)
     mutate(m)
     M.write_text(json.dumps(m, indent=2) + "\n")
-    code, out = run(test)
-    M.write_text(orig)
+    try:
+        code, out = run(test)
+    finally:
+        # Whatever the run did -- even if it could not start -- the manifest goes back.
+        M.write_text(orig)
     verdict = "RED (control works)" if code != 0 else "GREEN -- THE CHECK IS VACUOUS"
     if code == 0: ok = False
     print(f"{verdict:34} {label}  [{test}]")

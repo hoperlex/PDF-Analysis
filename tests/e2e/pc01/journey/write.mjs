@@ -42,6 +42,9 @@
  *   `wait_for`             address, wait for a marker the screen draws.
  *   `click.times`          press the same control again before the page has answered -- a
  *                          second identical submit.
+ *   `click.within`         press the control of the ROW whose words contain a text (`{selector,
+ *                          text_contains}`): a list that draws one identical button per row and
+ *                          gives the row no handle (`PC01-JOURNEY-GAPS-01`, «Блоки»).
  *   `expects_api[].refusal`  a declared refusal: the call is EXPECTED to answer `expect_status`
  *                          (and `expect_error_code`) and is exempt from the rule that any
  *                          `>= 400` on the seam is a finding. Nothing else is: an undeclared
@@ -119,6 +122,7 @@ export function namesNeededBy(step) {
     for (const key of ['selector', 'value', 'text', 'to', 'option_text', 'option_value', 'label']) {
       take(action[key]);
     }
+    take(action.within?.text_contains);
   }
   for (const present of step.expects_present ?? []) {
     take(present.selector);
@@ -566,7 +570,16 @@ export async function runWritePhase({
             }
             if (action.secret !== undefined) entry.result = '(secret)';
           } else if (action.do === 'click') {
-            entry.result = await page.click(selector, { text, times: action.times ?? 1 });
+            // `within` names the ROW the control sits in by the words in it (a project's name, a
+            // version's identity) for lists whose rows carry no handle of their own.
+            const within =
+              action.within === undefined
+                ? null
+                : {
+                    selector: action.within.selector,
+                    text_contains: fill(action.within.text_contains.replaceAll('%STAMP%', stamp), scope()),
+                  };
+            entry.result = await page.click(selector, { text, times: action.times ?? 1, within });
           } else if (action.do === 'select') {
             const optionText =
               action.option_text === undefined

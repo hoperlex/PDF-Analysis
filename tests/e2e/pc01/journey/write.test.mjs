@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { runInNewContext } from 'node:vm';
 
 import {
   csvCells,
@@ -10,6 +11,7 @@ import {
   redactedExchange,
   templateNames,
 } from './write.mjs';
+import { locatorExpression } from './cdp.mjs';
 
 test('the night window runs on a recorded origin and on nothing else unless it is told', () => {
   assert.equal(nightWindowMayRun({ providerMode: 'recorded', allowSpend: false }), true);
@@ -59,4 +61,39 @@ test('what a step needs is what its templates mention, minus what it binds, make
   };
   assert.deepEqual(namesNeededBy(step).sort(), ['other_one', 'project_uid', 'second_version_uid', 'version_uid']);
   assert.deepEqual(templateNames('{a} and {b_c} but not {D}'), ['a', 'b_c']);
+});
+
+/** A page of rows, each with one button: just enough DOM for the locator's script to run on. */
+function rowsOf(...rows) {
+  const owners = rows.map(({ words, button }) => ({ innerText: words, button }));
+  const buttons = owners.map((owner) => ({
+    innerText: owner.button,
+    closest: (selector) => (selector === 'li' ? owner : null),
+  }));
+  return { querySelectorAll: (selector) => (selector === 'li button' ? buttons : []) };
+}
+
+test('a control is found in the row whose words name it, and never in the first row instead', () => {
+  const document = rowsOf(
+    { words: 'Другой проект\nВыбрать проект', button: 'Выбрать проект' },
+    { words: 'W22-E2E write half 2026-10-22\nВыбрать проект', button: 'Выбрать проект' },
+  );
+  const find = (within) => runInNewContext(locatorExpression('li button', null, within), { document });
+  const second = find({ selector: 'li', text_contains: 'write half 2026-10-22' });
+  assert.equal(second.closest('li').innerText.startsWith('W22-E2E'), true, 'the row that names the project');
+  assert.equal(find({ selector: 'li', text_contains: 'a project nobody made' }), null, 'no such row matches nothing');
+  assert.equal(find({ selector: 'ul', text_contains: 'write half' }), null, 'no such kind of row matches nothing');
+  assert.equal(find(null).closest('li').innerText.startsWith('Другой'), true, 'without a row, the first control');
+  const labelled = runInNewContext(locatorExpression('li button', 'Выбрать проект', { selector: 'li', text_contains: 'write half' }), { document });
+  assert.equal(labelled.closest('li').innerText.startsWith('W22-E2E'), true, 'text and row together');
+});
+
+test('the words that name a row count among what a step needs', () => {
+  const step = {
+    at: '/blocks',
+    actions: [{ do: 'click', selector: 'li button', within: { selector: 'li', text_contains: '{third_version_uid}' } }],
+  };
+  assert.deepEqual(namesNeededBy(step), ['third_version_uid']);
+  const stamped = { at: '/blocks', actions: [{ do: 'click', selector: 'li button', within: { selector: 'li', text_contains: 'name %STAMP%' } }] };
+  assert.deepEqual(namesNeededBy(stamped), []);
 });
