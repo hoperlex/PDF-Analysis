@@ -21,13 +21,15 @@ import dataclasses
 from collections.abc import Callable
 from typing import Any, Final
 
-from sqlalchemy.orm import Session
+from sqlalchemy import Connection
+from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.analysis.public import input_budget_characters
 from auditmanager.analysis.text import CallBinding, ModelRequest, ModelResponse, ProviderMode
 from auditmanager.executors.public import SecretUnreadableError
 from auditmanager.executors.runtime import (
     DestinationPolicy,
+    KindRuntime,
     bind_connection,
     freeze_connection,
     route_missing,
@@ -95,12 +97,27 @@ class EnvironmentProviders(ProviderSource):
 class DatabaseProviders(ProviderSource):
     def __init__(
         self, *, ring: Any, policy: DestinationPolicy, base_config: Any, ceiling_usd: float,
+        runtime: KindRuntime | None = None,
     ) -> None:
         self._ring = ring
         self._policy = policy
         self._base = base_config
         self._ceiling = ceiling_usd
+        #: What a ``pull`` connection's adapter needs (`EXEC-PULL-01`): short transactions to write
+        #: and read its task. Handed by the composition root; when absent it is taken from the
+        #: engine the Attempt's own session is bound to.
+        self._runtime = runtime
         self.freeze = self._freeze
+
+    def _runtime_for(self, session: Session) -> KindRuntime:
+        if self._runtime is not None:
+            return self._runtime
+        # The Attempt's own session is bound to the engine in service. A session bound to one
+        # connection (a test's transaction) shares it; it has no engine to LISTEN on and polls.
+        bind = session.get_bind()
+        return KindRuntime(
+            session_factory=sessionmaker(bind=bind), engine=None if isinstance(bind, Connection) else bind,
+        )
 
     def _freeze(self, session: Session) -> FrozenRoute:
         frozen = freeze_connection(session, WORK_KIND)
@@ -122,6 +139,7 @@ class DatabaseProviders(ProviderSource):
         try:
             bound = bind_connection(
                 session, revision_id, ring=self._ring, policy=self._policy, context=context,
+                runtime=self._runtime_for(session),
             )
         except SecretUnreadableError:
             raise DomainError(

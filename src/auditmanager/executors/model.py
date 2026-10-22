@@ -32,6 +32,7 @@ __all__ = [
     "IDENTITY_BASIS_BY_KIND",
     "KINDS",
     "PROBE_RUNNING_MARGIN_SECONDS",
+    "PULL_PROBE_WINDOW_SECONDS",
     "PROBE_UNTAKEN_SECONDS",
     "SERVES",
     "PROBE_OUTCOMES",
@@ -83,6 +84,10 @@ IDENTITY_BASIS_BY_KIND: Final[Mapping[str, str]] = {
 PROBE_UNTAKEN_SECONDS: Final[int] = 120
 #: A ``running`` probe ends by its own timeout plus this margin, if its worker died.
 PROBE_RUNNING_MARGIN_SECONDS: Final[int] = 30
+#: A ``pull`` probe waits for a runner to take a task (120 s) and answer it (120 s); the sweep
+#: never ends a running one before that, whatever the revision's own timeout says. Held equal to
+#: ``pull.PROBE_CLAIM_SECONDS + pull.PROBE_ANSWER_SECONDS`` by a unit test.
+PULL_PROBE_WINDOW_SECONDS: Final[int] = 240
 
 #: Which secrets a kind can hold. ``pull`` keeps no sealed secret: its runner tokens (a later
 #: slice) are stored as one-way hashes and shown once.

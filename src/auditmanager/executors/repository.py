@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from auditmanager.executors.model import (
     PROBE_RUNNING_MARGIN_SECONDS,
     PROBE_UNTAKEN_SECONDS,
+    PULL_PROBE_WINDOW_SECONDS,
     ConnectionRecord,
     ProbeRecord,
     RevisionRecord,
@@ -339,10 +340,13 @@ class ExecutorRepository:
         vanished = session.execute(text(
             "UPDATE executor_probe p SET state = 'finished', outcome = 'timeout', "
             "detail = 'the worker did not finish the probe', finished_at = clock_timestamp() "
-            "FROM executor_connection_revision r WHERE p.revision_id = r.revision_id "
+            "FROM executor_connection_revision r JOIN executor_connection c "
+            "ON c.connection_id = r.connection_id WHERE p.revision_id = r.revision_id "
             "AND p.state = 'running' AND p.started_at < clock_timestamp() "
-            "- make_interval(secs => r.timeout_seconds + :margin)"
-        ), {"margin": PROBE_RUNNING_MARGIN_SECONDS}).rowcount or 0
+            "- make_interval(secs => GREATEST(r.timeout_seconds, "
+            "CASE WHEN c.kind = 'pull' THEN CAST(:pull_window AS integer) ELSE 0 END) + :margin)"
+        ), {"margin": PROBE_RUNNING_MARGIN_SECONDS,
+            "pull_window": PULL_PROBE_WINDOW_SECONDS}).rowcount or 0
         return int(untaken) + int(vanished)
 
     def start_probe(self, session: Session, probe_id: str) -> bool:

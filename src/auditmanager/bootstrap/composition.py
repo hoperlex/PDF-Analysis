@@ -146,8 +146,10 @@ def build_worker_runtime(
             bucket=resolved.s3_bucket,
         )
     )
+    from auditmanager.executors.runtime import KindRuntime
+
     model_adapter, provider_config, _profile_id, _bundle_id, providers = _build_provider(
-        resolved, env
+        resolved, env, runtime=KindRuntime(session_factory=sessions, engine=engine),
     )
     # `W59-SECTION-SEAL-01`. The worker runs each claimed run with the profile it pinned,
     # resolved through the same registry the application routes with.
@@ -171,7 +173,7 @@ def build_worker_runtime(
 
     probe_runner = (
         None if resolved.secrets_private_ring is None
-        else runner_for(sessions, ring=resolved.secrets_private_ring, environ=env)
+        else runner_for(sessions, ring=resolved.secrets_private_ring, environ=env, engine=engine)
     )
 
     return WorkerRuntime(
@@ -236,8 +238,10 @@ def build_application(
         )
     )
 
+    from auditmanager.executors.runtime import KindRuntime
+
     model_adapter, provider_config, profile_id, bundle_id, providers = _build_provider(
-        resolved, env
+        resolved, env, runtime=KindRuntime(session_factory=sessions, engine=engine),
     )
     # `W59-SECTION-SEAL-01`. The section-keyed text-profile registry: AR from the v1
     # constants plus every `text-profile/1` package. Loaded once; a bad package refuses the
@@ -426,7 +430,7 @@ def _provenance_mode(transport: str) -> str:
 
 
 def _build_provider(
-    settings: AppSettings, environ: Mapping[str, str]
+    settings: AppSettings, environ: Mapping[str, str], *, runtime: Any = None,
 ) -> tuple[Any, Any, str, str, ProviderSource]:
     """Construct the model adapter the configured mode and source name.
 
@@ -436,6 +440,9 @@ def _build_provider(
 
     ``analysis.text`` publishes no single factory, so the root assembles from the pieces it
     does publish - which is the composition root's job, and is why the pieces are public.
+
+    ``runtime`` (`EXEC-PULL-01`) is the database access a ``pull`` connection's adapter is built
+    from (the worker's session factory and engine); only the ``database`` source uses it.
 
     The last element is the **provider source** (`EXEC-HTTP-01`): ``environment`` hands every run
     the adapter built here; ``database`` binds each run to the connection revision it froze.
@@ -469,7 +476,7 @@ def _build_provider(
         source: ProviderSource = DatabaseProviders(
             ring=settings.secrets_private_ring,
             policy=DestinationPolicy.from_environment(dict(environ)),
-            base_config=config, ceiling_usd=settings.run_cost_ceiling_usd,
+            base_config=config, ceiling_usd=settings.run_cost_ceiling_usd, runtime=runtime,
         )
         return UnboundAdapter(), config, identity[0], identity[1], source
 

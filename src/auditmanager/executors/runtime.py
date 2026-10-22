@@ -15,12 +15,15 @@ from auditmanager.executors.destinations import (
     DestinationUnresolvable,
 )
 from auditmanager.executors.kinds import (
+    KindRuntime,
     adapter_for,
     register_adapter_factory,
+    register_channel_kind,
     unregister_adapter_factory,
 )
 from auditmanager.executors.probe_runner import ProbeRunner, runner_for
 from auditmanager.executors.probes import ProbeResult, probe_http_api
+from auditmanager.executors.pull import probe_pull
 from auditmanager.executors.resolver import (
     BoundConnection,
     FrozenConnection,
@@ -37,6 +40,7 @@ __all__ = [
     "DestinationRefused",
     "DestinationUnresolvable",
     "FrozenConnection",
+    "KindRuntime",
     "ProbeResult",
     "ProbeRunner",
     "adapter_for",
@@ -45,7 +49,9 @@ __all__ = [
     "is_probed_ok",
     "is_served",
     "probe_http_api",
+    "probe_pull",
     "register_adapter_factory",
+    "register_channel_kind",
     "route_missing",
     "runner_for",
     "unregister_adapter_factory",

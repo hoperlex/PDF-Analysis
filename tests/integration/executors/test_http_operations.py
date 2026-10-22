@@ -111,18 +111,19 @@ def freeze_connection_error(session: Any) -> str:
 def test_kinds_and_transports_this_release_does_not_serve_are_refused_at_route_time(
     session, fake  # type: ignore[no-untyped-def]
 ) -> None:
-    pull = create_connection(
-        session, kind="pull", display_name="session", roles=support.ADMIN_ROLES,
+    # `EXEC-CANDIDATE-2` serves `pull`; the command over SSH is the kind this release still lacks.
+    ssh = create_connection(
+        session, kind="ssh_command", display_name="machine", roles=support.ADMIN_ROLES,
         idempotency_key=support.unique(), actor_uid=support.ACTOR)
     revise_connection(
-        session, connection_id=pull.connection_id,
+        session, connection_id=ssh.connection_id,
         settings=RevisionSettings(
-            pin_id=support.PIN.model_id, gateway_model=support.PIN.model_id, billing="not_metered",
-            allow_client_documents=False, timeout_seconds=60, pull_client="agent",
-            answer_deadline_seconds=300, max_claimed_tasks=1),
+            pin_id=support.PIN.model_id, gateway_model=support.PIN.model_id, billing="metered",
+            allow_client_documents=False, timeout_seconds=60, ssh_host="gpu.example.test",
+            ssh_port=22, ssh_user="am", ssh_profile="claude_code_headless"),
         pinned_model_ids={pin.model_id for pin in pinned_models()}, roles=support.ADMIN_ROLES,
         idempotency_key=support.unique(), actor_uid=support.ACTOR)
-    refused = _refusal(lambda: support.route(session, pull.connection_id))
+    refused = _refusal(lambda: support.route(session, ssh.connection_id))
     assert (refused.code.value, refused.detail_fields) == (
         "validation_failed", {"field": "kind", "constraint": "kind_not_served"})
     rings = support.make_rings()
