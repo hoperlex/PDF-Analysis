@@ -1,4 +1,4 @@
-STATUS: 1/5 ssh_transport.py written, probed against real ssh client (12:04 +05)
+STATUS: 2/5 claude_output.py written (12:05 +05)
 
 # EXEC-SSH-TRANSPORT - progress and report
 
