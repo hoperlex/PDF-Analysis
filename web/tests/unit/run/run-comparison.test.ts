@@ -18,6 +18,7 @@ import {
   compareReadings,
   comparedCount,
   comparedFacts,
+  comparableCostMicros,
   comparedStages,
   defaultPair,
   differenceCount,
@@ -134,6 +135,17 @@ describe('a cost is comparable only when the reading carries its call count', ()
     );
     expect(verdictOf(facts, 'cost_micros')).toBe('same');
     expect(verdictOf(facts, 'cost_basis')).toBe('differs');
+  });
+});
+
+describe('an unmetered run is never compared as a real zero (EXEC-SEAL-01)', () => {
+  it('has no comparable cost, whatever figure it carries', () => {
+    const unmetered = reading({ cost_micros: 0, model_call_count: 2, cost_basis: 'unmetered' as never });
+    expect(comparableCostMicros(unmetered)).toBeNull();
+    const zero = reading({ run_id: RUN_B, cost_micros: 0, model_call_count: 2, cost_basis: 'measured' });
+    expect(comparableCostMicros(zero)).toBe(0);
+    expect(verdictOf(comparedFacts(unmetered, zero), 'cost_micros')).toBe('one_sided');
+    expect(verdictOf(comparedFacts(unmetered, zero), 'cost_micros')).not.toBe('same');
   });
 });
 

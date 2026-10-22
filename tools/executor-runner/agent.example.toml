@@ -1,0 +1,49 @@
+# Configuration of agent.py (the unattended pull agent). Copy to /etc/pdf-analysis-agent/agent.toml.
+#
+# Secrets never go in this file. The runner token comes from the environment variable named in
+# token_env (the systemd unit loads it from an EnvironmentFile with mode 0600); an endpoint key,
+# if any, from the variable named in api_key_env. A key called token, secret, password or
+# api_key in this file is refused at start.
+
+[runner]
+# The stand's public HTTPS origin: scheme://host[:port], no path.
+origin = "https://stand.example.org"
+token_env = "PDF_ANALYSIS_RUNNER_TOKEN"
+# Long-poll length of one claim, 0..25 seconds.
+wait_seconds = 25
+# Tasks worked on at the same time (1..8). The connection's "max claimed tasks" bounds it too.
+concurrency = 1
+# On SIGTERM: how long tasks in flight may keep working before they are failed as agent_shutdown.
+# Keep systemd's TimeoutStopSec above drain_seconds + wait_seconds.
+drain_seconds = 60
+# ca_file = "/etc/ssl/private-ca.pem"      # only for a private CA
+# allow_insecure_http = false              # http:// for a non-loopback host; closed test networks only
+
+[model]
+# The exact pinned model id this agent answers as. It must equal the model the connection pins
+# (claude-opus-5 or claude-sonnet-5 today, R-143g). The stand compares it with the revision
+# and refuses any other (R-133). A task that pins another model is failed as model_mismatch
+# before any work starts. This is an assertion by the operator: declare only what is true.
+declared = "claude-sonnet-5"
+
+[executor]
+# "command": the task JSON goes to the command's stdin, the command's stdout is the answer.
+# "endpoint": a local OpenAI-compatible /v1/chat/completions server (Ollama, vLLM, llama.cpp).
+mode = "command"
+
+[command]
+# The task document on stdin: {"task_id", "model", "system", "user_text", "output_schema",
+# "claim_expires_at", "deadline_at"}. Print ONE JSON document on stdout that validates against
+# output_schema (no code fence, no prose) and exit 0. Anything else fails the task.
+argv = ["/usr/bin/python3", "/opt/pdf-analysis-agent/answer.py"]
+timeout_seconds = 540
+# cwd = "/opt/pdf-analysis-agent"
+
+# [endpoint]    # used when mode = "endpoint"
+# url = "http://127.0.0.1:11434/v1/chat/completions"
+# model = "qwen2.5:72b-instruct"        # the local model name sent to the endpoint
+# api_key_env = ""                      # optional: environment variable holding the endpoint's key
+# timeout_seconds = 540
+# response_format = "none"              # "none", "json_object" or "json_schema" (constrained decoding)
+# temperature = 0
+# max_tokens = 0                        # 0 = leave to the server

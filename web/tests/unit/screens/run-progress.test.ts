@@ -533,6 +533,33 @@ describe('an estimated basis is the normal case, not a warning (M-7)', () => {
   });
 });
 
+/**
+ * `EXEC-SEAL-01` (`R-143f`), beside the `data-run-cost-zero` cases above. An unmetered run shows
+ * the caption and nothing else of the cost block: no figure, no basis row, no «сообщённый ноль».
+ */
+describe('an unmetered run shows only the caption (EXEC-SEAL-01)', () => {
+  const unmetered = () => screen(priced({ cost_basis: 'unmetered' as never, cost_micros: 0 }));
+
+  it('prints the caption under its own marker', () => {
+    const markup = unmetered();
+    expect(markup).toContain('data-run-cost="unmetered"');
+    expect(markup).toContain('data-cost-basis="unmetered"');
+    expect(markup).toContain('не тарифицируется');
+  });
+
+  it('skips the figure and the reported-zero paragraph, even for a stored zero', () => {
+    const markup = unmetered();
+    expect(markup).not.toContain('data-cost-micros');
+    expect(markup).not.toContain('data-run-cost-zero');
+    expect(markup).not.toContain('data-run-cost="reported"');
+    expect(markup).not.toContain('сообщённый ноль');
+  });
+
+  it('is not the screen of a reported zero', () => {
+    expect(screen(priced({ cost_basis: 'measured', cost_micros: 0 }))).toContain('data-run-cost-zero="reported"');
+  });
+});
+
 /** M-9. The section exists at all, on every terminal state. */
 describe('the cost section is on the screen (M-9)', () => {
   it.each(['published', 'partial', 'failed', 'cancelled'] as const)(

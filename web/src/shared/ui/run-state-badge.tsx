@@ -125,7 +125,9 @@ export function RunStateBadge({ state, providerMode }: RunStateBadgeProps) {
 export const PROVIDER_MODE_UNKNOWN_LABEL = 'не сообщён';
 
 /** The Russian label for a cost basis, for the same reason and found the same way. */
-export const COST_BASIS_LABELS: Readonly<Record<'measured' | 'estimated', string>> = {
+export const COST_BASIS_LABELS: Readonly<Record<'measured' | 'estimated' | 'unmetered', string>> = {
   measured: 'измерено',
   estimated: 'оценено',
+  // `EXEC-SEAL-01` (`R-143f`): a call on a connection that has no per-call cost. Never a zero.
+  unmetered: 'не тарифицируется',
 };

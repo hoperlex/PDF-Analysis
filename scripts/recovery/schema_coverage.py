@@ -192,7 +192,7 @@ SEQUENCES = {
 
 #: ``pg_constraint.contype -> count`` in schema ``public`` at ``HEAD``: p primary key, u unique,
 #: f foreign key, c check, t constraint trigger. A restore that lost one is not the schema.
-CONSTRAINT_COUNTS = {"c": 527, "f": 127, "p": 61, "t": 8, "u": 45}
+CONSTRAINT_COUNTS = {"c": 534, "f": 127, "p": 61, "t": 8, "u": 45}
 
 #: Indexes in schema ``public`` at ``HEAD`` (primary-key and unique indexes included).
 INDEX_COUNT = 179

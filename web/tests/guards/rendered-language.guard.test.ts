@@ -2736,6 +2736,11 @@ export const CACHE_STATES: readonly {
     run: { provider_mode: 'live', cost_basis: 'estimated' },
   },
   /*
+   * `EXEC-SEAL-01` (`R-143f`): the third cost basis. A run on a connection that has no per-call
+   * cost is `unmetered`; the run screen prints the caption «не тарифицируется» and no figure.
+   */
+  { state: 'unmetered-run', run: { cost_basis: 'unmetered' } },
+  /*
    * A version with TWO runs of it, added 2026-09-24 by `W43-COMPARE`. See `twoRunClient`
    * for why one run is not enough and for which verdict each fact of the pair reaches.
    *

@@ -1,0 +1,46 @@
+# systemd unit for agent.py. Install as /etc/systemd/system/pdf-analysis-agent.service, then:
+#   sudo useradd --system --home-dir /opt/pdf-analysis-agent --shell /usr/sbin/nologin pdf-agent
+#   sudo install -d -o root -g root -m 0755 /opt/pdf-analysis-agent /etc/pdf-analysis-agent
+#   sudo install -m 0644 agent.py runner_client.py /opt/pdf-analysis-agent/
+#   sudo install -m 0644 agent.toml /etc/pdf-analysis-agent/agent.toml
+#   sudo install -m 0600 -o root -g root /dev/null /etc/pdf-analysis-agent/agent.env
+#   echo 'PDF_ANALYSIS_RUNNER_TOKEN=<token from the stand>' | sudo tee -a /etc/pdf-analysis-agent/agent.env >/dev/null
+#   sudo systemctl daemon-reload && sudo systemctl enable --now pdf-analysis-agent
+# agent.env is read by systemd as root before the service drops privileges, so the service user
+# never needs to read it and the token never appears on a command line.
+
+[Unit]
+Description=PDF Analysis pull agent (executor channel)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pdf-agent
+Group=pdf-agent
+EnvironmentFile=/etc/pdf-analysis-agent/agent.env
+ExecStart=/usr/bin/python3 /opt/pdf-analysis-agent/agent.py --config /etc/pdf-analysis-agent/agent.toml
+Restart=on-failure
+RestartSec=10
+# Exit 2 is a configuration error and exit 3 is a rejected (revoked or expired) token:
+# restarting cannot fix either, so systemd must not loop on them.
+RestartPreventExitStatus=2 3
+# Must exceed drain_seconds + wait_seconds of agent.toml.
+TimeoutStopSec=95
+KillSignal=SIGTERM
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+# Task payloads are customer document text: keep the service's view of the machine small.
+# If the configured command needs a model directory or a GPU device, add ReadOnlyPaths= /
+# DeviceAllow= here rather than loosening the lines above.
+
+[Install]
+WantedBy=multi-user.target

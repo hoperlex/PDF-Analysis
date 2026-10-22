@@ -54,6 +54,13 @@ EXPECTED_TABLES = {
     # `0028_classification_corrections`: an expert's append-only corrections of a version's
     # stage and section (revision 2 and later; revision 1 is `document_version_classification`).
     "document_version_classification_correction",
+    # `0030_executor_connections`: where a process sends model work, its immutable revisions,
+    # sealed secrets (ciphertext only), probes and append-only route events.
+    "executor_connection",
+    "executor_connection_revision",
+    "executor_secret",
+    "executor_probe",
+    "executor_route_event",
     # `0019_execution_workers`: the worker registry.
     "worker",
     # `0020_norms_search`: the one current norms snapshot and its append-only history.
@@ -96,6 +103,8 @@ EXPECTED_TABLES = {
 EXPECTED_VIEWS = {
     "finding_current_verdict",
     "work_assignment_current",
+    # `0030_executor_connections`: the latest route event of each kind of model work.
+    "executor_route_current",
     "version_classification_revision",
     "version_classification_current",
 }

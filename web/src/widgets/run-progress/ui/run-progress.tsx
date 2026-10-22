@@ -233,6 +233,11 @@ function Recorded({ status }: { readonly status: RunStatus }) {
           нулевая стоимость: здесь ничего не потрачено, потому что ничего не вызывалось,
           а это разные утверждения.
         </p>
+      ) : cost.kind === 'unmetered' ? (
+        // `EXEC-SEAL-01`: only the caption. No figure, no basis row and no «сообщённый ноль».
+        <p data-run-cost="unmetered" data-cost-basis="unmetered">
+          {costBasisCaption('unmetered')}
+        </p>
       ) : cost.kind === 'unreadable' ? (
         <p data-run-cost="unreadable">
           Стоимость этого показания прочитать нельзя: {cost.why}. Цифра не показана, потому

@@ -55,7 +55,9 @@ ALL_TABLES = sorted(TABLES)
 
 def test_the_declaration_partitions_exactly_the_tables_schema_coverage_declares() -> None:
     assert tool.classification_problems() == []
-    assert len(tool.PRODUCT_TABLES) == 29 and len(tool.KEEP_TABLES) == 23 and len(tool.MIXED_TABLES) == 3
+    # `EXEC-SEAL-01`: the five executor tables (connection, revision, secret, probe, route event)
+    # are configuration, like accounts, and join the kept tables: 23 -> 28.
+    assert len(tool.PRODUCT_TABLES) == 29 and len(tool.KEEP_TABLES) == 28 and len(tool.MIXED_TABLES) == 3
     assert tool.PRODUCT_TABLES | tool.KEEP_TABLES | tool.MIXED_TABLES == TABLES
     # the corpus half of KEEP is schema_coverage's own list, not a copy of it
     assert tool.KEEP_NORM_TABLES is EXEMPT_FROM_FINGERPRINT
@@ -569,3 +571,20 @@ def test_the_corpus_is_only_safe_because_two_independent_guards_agree(stand: Sta
         mutant("norm-owned-key", "row-gone"), rewrite=lambda b: b + norm_row(stand), purged=False)
     assert code == 0, (out, err)
     assert not set(stand.summary["norm_keys"]) <= _object_names(stand)
+
+
+def test_the_executor_configuration_is_kept_by_a_product_purge() -> None:
+    """`EXEC-SEAL-01`: connections, revisions, secrets, probes and route events are configuration.
+
+    Each of the five tables, the seven command types and the ``executor.`` event family is KEEP,
+    and none is PRODUCT: a purge of product data must never delete a sealed secret or a route.
+    """
+    tables = {"executor_connection", "executor_connection_revision", "executor_probe",
+              "executor_route_event", "executor_secret"}
+    assert tables <= tool.KEEP_TABLES and not tables & tool.PRODUCT_TABLES
+    commands = {"create_executor_connection", "revise_executor_connection",
+                "archive_executor_connection", "set_executor_secret",
+                "generate_executor_ssh_key", "request_executor_probe", "set_executor_route"}
+    assert commands <= tool.KEEP_COMMAND_TYPES and not commands & tool.PRODUCT_COMMAND_TYPES
+    assert "executor." in tool.KEEP_EVENT_PREFIXES
+    assert not any("executor." .startswith(prefix) for prefix in tool.PRODUCT_EVENT_PREFIXES)

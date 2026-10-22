@@ -120,6 +120,10 @@ export function runElapsedMs(run: RunStatus): number | null {
  * and a reading that carries a cost without its call count is **unreadable** rather than
  * zero (`D-15`). Both come back `null` here, and the row then reads `one_sided` or
  * `absent` — never `same` against a real figure.
+ *
+ * An `unmetered` run (`EXEC-SEAL-01`, `R-143f`) routes to its own reading kind and comes back
+ * `null` too: it is never compared as a real zero. The run-level aggregate rule belongs to
+ * `EXEC-HTTP-01`.
  */
 export function comparableCostMicros(run: RunStatus): number | null {
   const reading = runCost(run);

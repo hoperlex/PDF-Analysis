@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0 (OpenAPI 3.1.0)
- *   sha256 741f29f9b0c9341cdf0631f0f65e462c7788945dd21002aa33afc54af7076eb8
+ *   sha256 0c1d1af2e441ff58e1dde3c3fff5605d332b9ce6bac77d3f012e3db1a262ef6a
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -33,6 +33,7 @@ import type {
   CorrectVersionClassificationRequest,
   CorrelationId,
   CreateAssignmentRequest,
+  CreateExecutorConnectionRequest,
   CreateProjectRequest,
   Cursor,
   DashboardSummary,
@@ -49,6 +50,16 @@ import type {
   ExecutionQueuePage,
   ExecutionWorker,
   ExecutionWorkerPage,
+  ExecutorConnection,
+  ExecutorConnectionDetail,
+  ExecutorConnectionId,
+  ExecutorConnectionList,
+  ExecutorProbe,
+  ExecutorRevision,
+  ExecutorRoute,
+  ExecutorRouteList,
+  ExecutorSecretMetadata,
+  ExecutorSshKey,
   FindingCategory,
   FindingDetail,
   FindingPage,
@@ -95,6 +106,7 @@ import type {
   RejectRegistrationRequest,
   ReleaseList,
   ResetUserPasswordRequest,
+  ReviseExecutorConnectionRequest,
   RunId,
   RunNormReferences,
   RunStatus,
@@ -104,6 +116,8 @@ import type {
   SectionVendorList,
   SetCurrentNormSnapshotRequest,
   SetExecutionPausedRequest,
+  SetExecutorRouteRequest,
+  SetExecutorSecretRequest,
   SetGlobalVendorListRequest,
   SetJobPriorityRequest,
   SetProjectVendorListRequest,
@@ -131,6 +145,7 @@ import type {
 export const OPERATION_IDS = [
   'appendDecision',
   'approveRegistration',
+  'archiveExecutorConnection',
   'archiveUser',
   'cancelRun',
   'carryOverDecision',
@@ -139,15 +154,18 @@ export const OPERATION_IDS = [
   'compareDocumentVersions',
   'correctVersionClassification',
   'createAssignment',
+  'createExecutorConnection',
   'createProject',
   'decideOptimisationProposal',
   'exportOptimisationProposalsCsv',
   'exportRunCsv',
   'exportRunXlsx',
+  'generateExecutorSshKey',
   'getAssignment',
   'getDashboardSummary',
   'getDocumentVersion',
   'getEffectiveVendorLists',
+  'getExecutorConnection',
   'getFinding',
   'getMe',
   'getNormDocument',
@@ -168,6 +186,8 @@ export const OPERATION_IDS = [
   'listDocuments',
   'listExecutionJournal',
   'listExecutionQueue',
+  'listExecutorConnections',
+  'listExecutorRoutes',
   'listNormDocuments',
   'listNormParagraphs',
   'listNormSnapshotEvents',
@@ -191,11 +211,15 @@ export const OPERATION_IDS = [
   'readRegistrationStatus',
   'reauditRun',
   'rejectRegistration',
+  'requestExecutorProbe',
   'resetUserPassword',
   'restoreUser',
+  'reviseExecutorConnection',
   'searchNorms',
   'setCurrentNormSnapshot',
   'setExecutionPaused',
+  'setExecutorRoute',
+  'setExecutorSecret',
   'setGlobalVendorList',
   'setJobPriority',
   'setProjectVendorList',
@@ -278,6 +302,30 @@ export type ApproveRegistrationInput = {
 
 /** Success body of `approveRegistration` (`application/json`, HTTP 200). */
 export type ApproveRegistrationResult = RegistrationRequest;
+
+// ------------------------------------------------------------------------------------
+// archiveExecutorConnection - POST /executor-connections/{connection_id}/archive
+// ------------------------------------------------------------------------------------
+
+/** Archive Executor Connection */
+export type ArchiveExecutorConnectionInput = {
+  /** Path parameters, substituted into `/executor-connections/{connection_id}/archive`. */
+  path: {
+    connection_id: ExecutorConnectionId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `archiveExecutorConnection` (`application/json`, HTTP 200). */
+export type ArchiveExecutorConnectionResult = ExecutorConnection;
 
 // ------------------------------------------------------------------------------------
 // archiveUser - POST /users/{user_uid}/archive
@@ -503,6 +551,28 @@ export type CreateAssignmentInput = {
 export type CreateAssignmentResult = Assignment;
 
 // ------------------------------------------------------------------------------------
+// createExecutorConnection - POST /executor-connections
+// ------------------------------------------------------------------------------------
+
+/** Create Executor Connection */
+export type CreateExecutorConnectionInput = {
+  /** Request body, sent as `application/json`. */
+  body: CreateExecutorConnectionRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `createExecutorConnection` (`application/json`, HTTP 201). */
+export type CreateExecutorConnectionResult = ExecutorConnection;
+
+// ------------------------------------------------------------------------------------
 // createProject - POST /projects
 // ------------------------------------------------------------------------------------
 
@@ -632,6 +702,30 @@ export type ExportRunXlsxInput = {
 export type ExportRunXlsxResult = Blob;
 
 // ------------------------------------------------------------------------------------
+// generateExecutorSshKey - POST /executor-connections/{connection_id}/ssh-key
+// ------------------------------------------------------------------------------------
+
+/** Generate Executor Ssh Key */
+export type GenerateExecutorSshKeyInput = {
+  /** Path parameters, substituted into `/executor-connections/{connection_id}/ssh-key`. */
+  path: {
+    connection_id: ExecutorConnectionId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `generateExecutorSshKey` (`application/json`, HTTP 201). */
+export type GenerateExecutorSshKeyResult = ExecutorSshKey;
+
+// ------------------------------------------------------------------------------------
 // getAssignment - GET /assignments/{assignment_uid}
 // ------------------------------------------------------------------------------------
 
@@ -714,6 +808,25 @@ export type GetEffectiveVendorListsInput = {
 
 /** Success body of `getEffectiveVendorLists` (`application/json`, HTTP 200). */
 export type GetEffectiveVendorListsResult = EffectiveVendorLists;
+
+// ------------------------------------------------------------------------------------
+// getExecutorConnection - GET /executor-connections/{connection_id}
+// ------------------------------------------------------------------------------------
+
+/** Get Executor Connection */
+export type GetExecutorConnectionInput = {
+  /** Path parameters, substituted into `/executor-connections/{connection_id}`. */
+  path: {
+    connection_id: ExecutorConnectionId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getExecutorConnection` (`application/json`, HTTP 200). */
+export type GetExecutorConnectionResult = ExecutorConnectionDetail;
 
 // ------------------------------------------------------------------------------------
 // getFinding - GET /findings/{finding_uid}
@@ -1220,6 +1333,36 @@ export type ListExecutionQueueInput = {
 
 /** Success body of `listExecutionQueue` (`application/json`, HTTP 200). */
 export type ListExecutionQueueResult = ExecutionQueuePage;
+
+// ------------------------------------------------------------------------------------
+// listExecutorConnections - GET /executor-connections
+// ------------------------------------------------------------------------------------
+
+/** List Executor Connections */
+export type ListExecutorConnectionsInput = {
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listExecutorConnections` (`application/json`, HTTP 200). */
+export type ListExecutorConnectionsResult = ExecutorConnectionList;
+
+// ------------------------------------------------------------------------------------
+// listExecutorRoutes - GET /executor-routes
+// ------------------------------------------------------------------------------------
+
+/** List Executor Routes */
+export type ListExecutorRoutesInput = {
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listExecutorRoutes` (`application/json`, HTTP 200). */
+export type ListExecutorRoutesResult = ExecutorRouteList;
 
 // ------------------------------------------------------------------------------------
 // listNormDocuments - GET /norm-documents
@@ -1841,6 +1984,30 @@ export type RejectRegistrationInput = {
 export type RejectRegistrationResult = RegistrationRequest;
 
 // ------------------------------------------------------------------------------------
+// requestExecutorProbe - POST /executor-connections/{connection_id}/probes
+// ------------------------------------------------------------------------------------
+
+/** Request Executor Probe */
+export type RequestExecutorProbeInput = {
+  /** Path parameters, substituted into `/executor-connections/{connection_id}/probes`. */
+  path: {
+    connection_id: ExecutorConnectionId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `requestExecutorProbe` (`application/json`, HTTP 202). */
+export type RequestExecutorProbeResult = ExecutorProbe;
+
+// ------------------------------------------------------------------------------------
 // resetUserPassword - POST /users/{user_uid}/password
 // ------------------------------------------------------------------------------------
 
@@ -1887,6 +2054,32 @@ export type RestoreUserInput = {
 
 /** Success body of `restoreUser` (`application/json`, HTTP 200). */
 export type RestoreUserResult = Account;
+
+// ------------------------------------------------------------------------------------
+// reviseExecutorConnection - POST /executor-connections/{connection_id}/revisions
+// ------------------------------------------------------------------------------------
+
+/** Revise Executor Connection */
+export type ReviseExecutorConnectionInput = {
+  /** Path parameters, substituted into `/executor-connections/{connection_id}/revisions`. */
+  path: {
+    connection_id: ExecutorConnectionId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: ReviseExecutorConnectionRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `reviseExecutorConnection` (`application/json`, HTTP 201). */
+export type ReviseExecutorConnectionResult = ExecutorRevision;
 
 // ------------------------------------------------------------------------------------
 // searchNorms - GET /norms/search
@@ -1959,6 +2152,54 @@ export type SetExecutionPausedInput = {
 
 /** Success body of `setExecutionPaused` (`application/json`, HTTP 200). */
 export type SetExecutionPausedResult = ExecutionDispatchStatus;
+
+// ------------------------------------------------------------------------------------
+// setExecutorRoute - PUT /executor-routes
+// ------------------------------------------------------------------------------------
+
+/** Set Executor Route */
+export type SetExecutorRouteInput = {
+  /** Request body, sent as `application/json`. */
+  body: SetExecutorRouteRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `setExecutorRoute` (`application/json`, HTTP 200). */
+export type SetExecutorRouteResult = ExecutorRoute;
+
+// ------------------------------------------------------------------------------------
+// setExecutorSecret - POST /executor-connections/{connection_id}/secrets
+// ------------------------------------------------------------------------------------
+
+/** Set Executor Secret */
+export type SetExecutorSecretInput = {
+  /** Path parameters, substituted into `/executor-connections/{connection_id}/secrets`. */
+  path: {
+    connection_id: ExecutorConnectionId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: SetExecutorSecretRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `setExecutorSecret` (`application/json`, HTTP 201). */
+export type SetExecutorSecretResult = ExecutorSecretMetadata;
 
 // ------------------------------------------------------------------------------------
 // setGlobalVendorList - PUT /vendor-lists/{section_code}
@@ -2434,6 +2675,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['registrations'],
   },
+  archiveExecutorConnection: {
+    operationId: 'archiveExecutorConnection',
+    method: 'POST',
+    path: '/executor-connections/{connection_id}/archive',
+    pathParams: ['connection_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['execution'],
+  },
   archiveUser: {
     operationId: 'archiveUser',
     method: 'POST',
@@ -2546,6 +2801,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['dispatch'],
   },
+  createExecutorConnection: {
+    operationId: 'createExecutorConnection',
+    method: 'POST',
+    path: '/executor-connections',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 409, 422, 500, 503],
+    tags: ['execution'],
+  },
   createProject: {
     operationId: 'createProject',
     method: 'POST',
@@ -2616,6 +2885,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['export'],
   },
+  generateExecutorSshKey: {
+    operationId: 'generateExecutorSshKey',
+    method: 'POST',
+    path: '/executor-connections/{connection_id}/ssh-key',
+    pathParams: ['connection_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['execution'],
+  },
   getAssignment: {
     operationId: 'getAssignment',
     method: 'GET',
@@ -2671,6 +2954,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['optimisation'],
+  },
+  getExecutorConnection: {
+    operationId: 'getExecutorConnection',
+    method: 'GET',
+    path: '/executor-connections/{connection_id}',
+    pathParams: ['connection_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['execution'],
   },
   getFinding: {
     operationId: 'getFinding',
@@ -2950,6 +3247,34 @@ export const OPERATIONS = {
     responseMediaType: 'application/json',
     successStatuses: [200],
     errorStatuses: [401, 403, 422, 500, 503],
+    tags: ['execution'],
+  },
+  listExecutorConnections: {
+    operationId: 'listExecutorConnections',
+    method: 'GET',
+    path: '/executor-connections',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 500, 503],
+    tags: ['execution'],
+  },
+  listExecutorRoutes: {
+    operationId: 'listExecutorRoutes',
+    method: 'GET',
+    path: '/executor-routes',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 500, 503],
     tags: ['execution'],
   },
   listNormDocuments: {
@@ -3274,6 +3599,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['registrations'],
   },
+  requestExecutorProbe: {
+    operationId: 'requestExecutorProbe',
+    method: 'POST',
+    path: '/executor-connections/{connection_id}/probes',
+    pathParams: ['connection_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [202],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['execution'],
+  },
   resetUserPassword: {
     operationId: 'resetUserPassword',
     method: 'POST',
@@ -3301,6 +3640,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 500, 503],
     tags: ['users'],
+  },
+  reviseExecutorConnection: {
+    operationId: 'reviseExecutorConnection',
+    method: 'POST',
+    path: '/executor-connections/{connection_id}/revisions',
+    pathParams: ['connection_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['execution'],
   },
   searchNorms: {
     operationId: 'searchNorms',
@@ -3342,6 +3695,34 @@ export const OPERATIONS = {
     responseMediaType: 'application/json',
     successStatuses: [200],
     errorStatuses: [401, 403, 409, 422, 500, 503],
+    tags: ['execution'],
+  },
+  setExecutorRoute: {
+    operationId: 'setExecutorRoute',
+    method: 'PUT',
+    path: '/executor-routes',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['execution'],
+  },
+  setExecutorSecret: {
+    operationId: 'setExecutorSecret',
+    method: 'POST',
+    path: '/executor-connections/{connection_id}/secrets',
+    pathParams: ['connection_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['execution'],
   },
   setGlobalVendorList: {
