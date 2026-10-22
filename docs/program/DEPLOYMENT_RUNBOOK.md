@@ -1188,3 +1188,116 @@ any heavy step here:
 infra/deploy/capacity-probe.sh --path root=/ --need root=$(( (<increment GiB> + 3) * 1073741824 )) \
     --need-ram $(( 6 * 1073741824 ))
 ```
+
+---
+
+## 14. «Подключения» — executor connections (`EXEC-HTTP-01`, `R-143`)
+
+Under «Исполнители» (tabs «Подключения», «Процессы», «Назначения») an administrator creates a
+connection (an `http_api` address, the pinned model, the transport), pastes its key, presses
+«Проверить» and assigns it to «Анализ текста». Nothing of this is run by the deploy; this section is
+the operator's order for the host. `infra/deploy/README.md` and
+`src/auditmanager/executors/README.md` carry the mechanism.
+
+### What changed on the host, and what it needs first
+
+Merging `EXEC-HTTP-01` changes the stand in **two** ways even if nobody ever opens the new screen:
+
+* **`R-133` is enforced on the run path.** The text stage holds every live reply to the model it
+  asked for. With `AUDITMANAGER_PROVIDER_SOURCE=environment` that model is `PROXY_LLM_MODEL`, so the
+  stub `proxy` no longer works: every run fails closed (`model_identity_mismatch`; the stage's
+  stored message names `model_not_selected`). **Before the deploy, set `PROXY_LLM_MODEL` in
+  `provider.env` to the explicit name the gateway reports** (for example `anthropic/claude-opus-5`),
+  then deploy, then verify one run.
+* **The `api` service no longer loads `provider.env`.** It makes no model call, so it holds
+  neither the provider credential nor the private ring. A deployment that relied on the api
+  reading it needs nothing: the worker still does.
+
+### The key ring (once per stand)
+
+The key of a connection is sealed to a public key by the `api` and opened by the worker with the
+private ring. Generate a pair on the host (the command is in `provider.env.example`); then
+
+* `alpha.env`: `AUDITMANAGER_SECRETS_PUBLIC_KEYS=<kid>:<public>` and
+  `AUDITMANAGER_SECRETS_ACTIVE_KID=<kid>` (public values; both services receive them);
+* `provider.env` (`chmod 600`, the worker alone): `AUDITMANAGER_SECRETS_KEYS=<kid>:<private>`.
+
+The ring is not in PostgreSQL, S3 or any backup. A restore onto another host therefore brings the
+connections back as `secret_unreadable` until the ring is installed there or an administrator
+pastes each key again; a restore drill can never make a paid call.
+
+### Importing today's variables, and the switch
+
+Run on the worker, from its image and environment:
+
+```
+docker compose --env-file infra/deploy/env/alpha.env -f infra/deploy/compose.server.yml \
+    exec worker python -m auditmanager.executors import-env
+```
+
+`import-env` creates one `http_api` connection from `PROXY_LLM_BASE_URL`, `PROXY_LLM_TOKEN` and
+`PROXY_LLM_MODEL` (it refuses the stub), seals the key, runs the probe itself over the worker's own
+network path and, only when the probe is `ok`, assigns the connection to `text_analysis`. A second
+run changes nothing and names the existing connection. Exit `3` means the connection exists but the
+probe did not pass: read the outcome in «Подключения», fix it there and assign by hand.
+
+Then, in this order:
+
+1. verify one run through the connection while the source is still `environment`;
+2. remove `PROXY_LLM_*` (and `ANTHROPIC_API_KEY`) from `provider.env`; the loader **refuses to start**
+   with both a source `database` and the old variables set;
+3. set `AUDITMANAGER_PROVIDER_SOURCE=database` and `AUDITMANAGER_PROVIDER_MODE=live` in `alpha.env`
+   and redeploy. From then on a run freezes the route's revision at start and its calls, call rows
+   and `connection_revision_id` go through it;
+4. `infra/deploy/readiness.sh` — the `executor-source` check reports a missing ring, a public key
+   without its private half, or leftover variables.
+
+**Rollback** is `AUDITMANAGER_PROVIDER_SOURCE=environment` and the variables back in `provider.env`.
+A run that froze a connection under `database` and is served after the switch back is refused, not
+quietly served by the wrong source.
+
+### Rotation
+
+* **A key of a connection** is replaced in the UI. It writes a new secret and does not touch the
+  revision, so runs in flight keep going and the next Attempt uses the new key. The connection must
+  pass a probe on the new key before a new run can start on it.
+* **A changed address** is a new revision. The stored key was entered for the old address and
+  does not open for the new one: paste it again, probe again. A new revision is unusable until a
+  probe passes.
+* **The master key**: add a pair to the ring and change `AUDITMANAGER_SECRETS_ACTIVE_KID`, run
+  `docker compose ... exec worker python -m auditmanager.executors rewrap` (it re-seals every
+  current secret to the active key id and keeps each one's destination), then remove the old pair.
+  A secret whose key id is no longer in the ring is `secret_unreadable`, shown in the UI and refused
+  at use, never skipped.
+
+### Where the worker may send a key
+
+The worker refuses by default a name that cannot leave the host (`localhost`, a compose service
+name such as `postgres`), loopback, link-local (cloud metadata) and the compose network, in the
+probe **and** in every call, by the resolved address. A private range is accepted only for a
+connection whose transport is `vpn`. `AUDITMANAGER_EXECUTOR_ALLOWED_HOSTS` in `provider.env` narrows
+further. `python -m auditmanager.executors reach <url> [--transport vpn]` says whether this container
+may send a key to an address and can open a connection to it.
+
+### Reading a probe
+
+| Outcome | Meaning |
+|---|---|
+| «готово» | the key, the model and the route work; the reported model and latency are shown |
+| «IP стенда не допущен» | the gateway's front door refused this host (HTTP 403 with an HTML body): ask its operator to allow the stand |
+| «ключ отклонён» | HTTP 401/403 with a JSON body |
+| «отвечает другая модель» | the answer named no model, a stub or another model than the revision's gateway name (`R-133`), or a reported cost off the pin's rates (`rate_mismatch`) |
+| «нет ответа» | no answer within the revision's timeout, or no worker took the probe within 120 s (`no_worker`) |
+| «адрес недоступен» | the name does not resolve or the connection is refused |
+| `destination_refused` | the address is one the worker may not send a key to |
+| `kind_not_served` | `pull`, `ssh_command` and the SSH-tunnel transport can be created but are not served yet |
+
+A probe never keeps a body, a header or an address; its detail is a fixed phrase.
+
+### Long waits and cost
+
+One Job is one run and an Attempt runs the whole run, so a slow connection occupies the single
+worker slot (and the queue behind it) for the length of its call, bounded by the revision's
+timeout and the 900 s watchdog. A revision with billing `not_metered` is recorded «не тарифицируется»:
+a run of only unmetered calls reports cost `0` with basis `unmetered`; a mix of unmetered and
+metered calls reports the metered sum, `estimated`.
