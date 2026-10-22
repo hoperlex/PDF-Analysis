@@ -122,8 +122,10 @@ The following stay closed:
 
 - No parking of an Attempt while a session thinks; a debt row is recorded instead.
 - No image payloads, because no run stage sends one today.
-- No change to the P02 lock. If the owner's session model is not pinned, the manual check
-  uses a pinned model, or stops and reports (plan §8).
+- No change to the P02 lock (`R-143g`). The manual check runs the session on
+  `claude-opus-5` or `claude-sonnet-5`, selected with `/model`. The `claude_code_session`
+  profile has no data-class restriction in code (`R-143f`); `allow_client_documents` stays
+  an administrator's flag.
 - No paid call.
 
 ## Work

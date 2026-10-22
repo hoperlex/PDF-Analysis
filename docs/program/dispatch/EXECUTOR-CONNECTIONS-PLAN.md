@@ -285,7 +285,7 @@ Surveyed on `7cb317b0`; every line reference below is from that tree.
 | T-5 | A compromised `worker` process | Full secret access. This is inherent: the worker makes the calls. It has no `ports:` (`ADR-0002` addendum). |
 | T-6 | A stolen stand SSH key opens the remote machine | The key is generated per connection. The runbook installs it with `restrict,command="…"` in `authorized_keys` under a dedicated low-privilege user. The host key is pinned (no TOFU in the call path). |
 | T-7 | Prompt injection: an untrusted document instructs a Claude Code session that has shell and file tools on the owner's machine | Both Claude Code profiles run with **no built-in tool**. The headless profile runs `claude -p --tools "" --disallowedTools "mcp__*" --output-format json --model <pinned>`: `--tools ""` disables every built-in tool, and `--tools` does not cover MCP tools, so they are removed separately (Claude Code CLI reference). The session profile runs in a dedicated, empty workspace shipped in `tools/executor-runner/`. Its `.claude/settings.json` denies every built-in tool, so only the bridge's MCP tools remain; that is a permission rule, not a request made in the skill's prose. Two conditions make it effective. VSCode does not write the project-trust flag, so the README makes the operator trust the workspace once from the CLI. The manual check then tries Bash and Read and must see both denied. Closed beta on test data limits the exposure today; the restriction is built now, not at 1.0. |
-| T-8 | A subscription used as a product backend | Anthropic's Claude Code legal page ("Authentication and credential use") says: "Developers building products or services that interact with Claude's capabilities, including those using the Agent SDK, should use API key authentication … Anthropic does not permit third-party developers … to route requests through Free, Pro, or Max plan credentials on behalf of their users." **So the headless profile authenticates with an API key** (`ANTHROPIC_API_KEY` on the remote machine, or `--bare`, which reads no OAuth credential). It is `metered` at the pin's rates. The VSCode session profile is the owner's own interactive session under his own login. Whether it may serve run tasks for other users of the stand is the owner's call (plan §8). Unmetered runs show «не тарифицируется», never $0. |
+| T-8 | A subscription used as a product backend | Anthropic's Claude Code legal page ("Authentication and credential use") says: "Developers building products or services that interact with Claude's capabilities, including those using the Agent SDK, should use API key authentication … Anthropic does not permit third-party developers … to route requests through Free, Pro, or Max plan credentials on behalf of their users." **So the headless profile authenticates with an API key** (`ANTHROPIC_API_KEY` on the remote machine, or `--bare`, which reads no OAuth credential). It is `metered` at the pin's rates. The VSCode session profile is the owner's own interactive session under his own login. The owner allowed it to serve run tasks of the stand without restriction, stating that no commercial use is foreseen (`R-143f`). Unmetered runs show «не тарифицируется», never $0. |
 
 ## 5. Rulings that stay in force
 
@@ -408,12 +408,10 @@ after the other** (`AGENTS.md` §3). Only `EXEC-ADR-01` runs beside another slic
   «ответственный» in the same slice, unless the owner objects.
 - **T-1.** Closing `D-191` E-2 before the stand gets UI-managed keys is recommended, not
   ruled.
-- **T-8.** The headless profile uses an API key (T-8 quotes the terms). Whether the
-  owner's own VSCode session, signed in with his subscription, may answer run tasks for
-  other users of the stand is his decision. The code is the same either way.
-- **Pins for session models.** A Claude Code session or `claude -p` reports the model it
-  ran on. If that model is not pinned in `P02_LOCK.json` (only `claude-opus-5` and
-  `claude-sonnet-5` today), `R-133` refuses the answer. Before `EXEC-PULL-01`'s manual
-  check, either the session is set to a pinned model, or the integrator hands the lock
-  slot to a pin change. That pin is an owner decision while `W56A-MODEL-PIN-01` is
-  stopped.
+- **T-8 — decided, `R-143f`.** The owner's VSCode session under his subscription may
+  answer run tasks without restriction; no commercial use is foreseen. The headless SSH
+  profile keeps the API key. The code places no limit on the `claude_code_session`
+  profile.
+- **Session-model pins — decided, `R-143g`.** A session or agent runs on `claude-opus-5`
+  or `claude-sonnet-5`, which are already pinned, chosen with `/model`. No new pin is
+  added. `R-133` refuses any other reported model.
