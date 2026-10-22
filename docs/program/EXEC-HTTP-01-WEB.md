@@ -1,4 +1,4 @@
-STATUS: all pieces committed, R-144b checks green, report written (13:07 +05)
+STATUS: finished, report final; gate-night passed 96 percent so no further run was started (13:21 +05)
 
 # EXEC-HTTP-01, web half: report (AGENTS.md section 5)
 
@@ -84,7 +84,23 @@ None changed. The generated client and `FRONTEND_LOCK.json` are as the contract 
 
 ## Checks run (all on the final tree)
 
-See the end of this file for the commands and results.
+Commands are run from the worktree root, each prefixed `nice -n 19 ionice -c3`, one process at a time, with the
+gate-night progress read before each (it stood at 91 to 95 percent until the last run).
+
+| command | result |
+| --- | --- |
+| `npm --prefix web run lint -- --quiet` | exit 0 |
+| `npm --prefix web run typecheck` | exit 0 |
+| `git diff --check` | exit 0 |
+| `npm --prefix web test -- --run tests/unit/workers tests/unit/session tests/unit/dispatcher` | 20 files, 384 tests passed |
+| `npm --prefix web test -- --run tests/guards` | 21 files, 288 tests passed |
+| `npm --prefix web test -- --run tests/unit/styles` (screens.ts and two module CSS files changed) | passed (4 files, 57 tests) on the tree before the last re-indentation of `workers-page.tsx`; the two later reruns were cut short by host load (load average 21, then gate-night past 96 percent): a worker RPC timeout, and one 120 s test timeout, no assertion failed. Not rerun after the pause. |
+
+The new door test (`executor-secret-door.test.ts`, 32 tests) and the other new workers tests (92) are inside the
+`tests/unit/workers` row.
+
+Not run: `next build`, the full frontend suite, the live journey (`e2e:pc01`), the Python contract and journey
+conformance tests (`tests/e2e/**`, outside `web/**`), any screenshot through the static preview.
 
 ## Guards shown failing under a mutation
 
