@@ -116,11 +116,12 @@ def _worker(sessions: Serialised, connection_id: str, attempt: dict, outcome: di
 
 def test_a_session_through_the_bridge_answers_a_runs_model_call(stand, session) -> None:
     surface, sessions, origin = stand
-    with sessions():
-        connection_id = make_connection(surface)
-        issued = admin_call(surface, "POST", f"/executor-connections/{connection_id}/runner-tokens", {})
-        token = issued.json()["token"]
-        attempt = live_attempt(session)
+    # Setup runs before any other thread touches the session; the requests it makes are served
+    # on the test client's own thread, so the lock must not be held across them.
+    connection_id = make_connection(surface)
+    issued = admin_call(surface, "POST", f"/executor-connections/{connection_id}/runner-tokens", {})
+    token = issued.json()["token"]
+    attempt = live_attempt(session)
     outcome: dict = {}
     worker = _worker(sessions, connection_id, attempt, outcome)
 
@@ -154,11 +155,10 @@ def test_a_session_through_the_bridge_answers_a_runs_model_call(stand, session) 
 
 def test_a_session_that_declares_another_model_is_refused_and_can_fail_the_task(stand, session) -> None:
     surface, sessions, origin = stand
-    with sessions():
-        connection_id = make_connection(surface)
-        token = admin_call(surface, "POST",
-                           f"/executor-connections/{connection_id}/runner-tokens", {}).json()["token"]
-        attempt = live_attempt(session)
+    connection_id = make_connection(surface)
+    token = admin_call(surface, "POST",
+                       f"/executor-connections/{connection_id}/runner-tokens", {}).json()["token"]
+    attempt = live_attempt(session)
     outcome: dict = {}
     worker = _worker(sessions, connection_id, attempt, outcome)
     with support.McpSession(origin, token=token) as mcp:
