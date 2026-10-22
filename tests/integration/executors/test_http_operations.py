@@ -61,7 +61,7 @@ FakeGateway = support.fake_gateway.FakeGateway
 
 @pytest.fixture
 def fake():  # type: ignore[no-untyped-def]
-    gateway = FakeGateway().start()
+    gateway = FakeGateway(cost=None).start()  # reports no cost: the rate check is not_reported
     yield gateway
     gateway.stop()
 

@@ -147,21 +147,21 @@ def import_env(
         with session_factory() as session:
             connection = create_connection(
                 session, kind="http_api", display_name=IMPORT_DISPLAY_NAME, roles=_ADMIN,
-                idempotency_key="import-env/connection", actor_uid=actor_uid,
+                idempotency_key="import-env:connection", actor_uid=actor_uid,
             )
             revise_connection(
                 session, connection_id=connection.connection_id, settings=settings,
-                pinned_model_ids=pins, roles=_ADMIN, idempotency_key="import-env/revision",
+                pinned_model_ids=pins, roles=_ADMIN, idempotency_key="import-env:revision",
                 actor_uid=actor_uid,
             )
             set_secret(
                 session, connection_id=connection.connection_id, purpose="api_key", value=token,
-                ring=sealing, roles=_ADMIN, idempotency_key="import-env/secret",
+                ring=sealing, roles=_ADMIN, idempotency_key="import-env:secret",
                 actor_uid=actor_uid,
             )
             probe = request_probe(
                 session, connection_id=connection.connection_id, roles=_ADMIN,
-                idempotency_key="import-env/probe", actor_uid=actor_uid,
+                idempotency_key="import-env:probe", actor_uid=actor_uid,
             )
             session.commit()
     except DomainError as refusal:
@@ -176,7 +176,7 @@ def import_env(
             set_route(
                 session, work_kind="text_analysis",
                 primary_connection_id=connection.connection_id, standby_connection_id=None,
-                roles=_ADMIN, idempotency_key="import-env/route", actor_uid=actor_uid,
+                roles=_ADMIN, idempotency_key="import-env:route", actor_uid=actor_uid,
             )
             session.commit()
             routed = True

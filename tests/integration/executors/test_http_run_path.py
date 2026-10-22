@@ -21,7 +21,8 @@ from auditmanager.analysis.text import ProviderConfig, ProviderMode
 from auditmanager.bootstrap.providers import DatabaseProviders, EnvironmentProviders, UnboundAdapter
 from auditmanager.executors.public import ExecutorRepository, archive_connection
 from auditmanager.executors.runtime import DestinationPolicy, bind_connection, freeze_connection
-from auditmanager.runs import RunRepository, execute_run, reaudit_run, start_audit_run
+from auditmanager.runs import RunRepository, execute_run, start_audit_run
+from auditmanager.runs.commands import reaudit_run
 from auditmanager.shared.errors import DomainError
 from auditmanager.shared.identity import ModelCallId
 
@@ -175,7 +176,7 @@ def test_the_run_level_cost_rule_in_sql_covers_unmetered_mixed_and_measured(
             "INSERT INTO model_call (model_call_id, run_id, stage_id, provider, model_identity, "
             "provider_mode, parameters, request_sha256, response_sha256, input_tokens, "
             "output_tokens, latency_ms, cost_micros, cost_basis, status) VALUES (:id, :r, "
-            "'text_analysis', 'openai_chat', 'm', 'live', '{}'::jsonb, 'a', 'b', 1, 1, 1, :c, :b, "
+            "'text_analysis', 'openai_chat', 'm', 'live', '{}'::jsonb, repeat('a', 64), repeat('b', 64), 1, 1, 1, :c, :b, "
             "'succeeded')"), {"id": f"mc_{support.unique()[2:28].upper().replace('-', '0')[:26]}",
                               "r": run_id, "c": micros, "b": basis})
 

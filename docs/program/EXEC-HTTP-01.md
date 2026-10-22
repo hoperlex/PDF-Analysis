@@ -1,4 +1,4 @@
-STATUS: merged agent/exec-line-01 (SEAL final + ssh + tools); starting lane stack for DB tests (12:44 +05)
+STATUS: lane stack UP (57660/61460), running DB tests of the http slice (12:45 +05)
 
 # EXEC-HTTP-01 report, backend half (in progress)
 

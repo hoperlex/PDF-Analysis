@@ -128,7 +128,9 @@ def test_a_connection_without_a_key_or_with_a_key_for_another_address_is_secret_
     assert _run_probe(session, rings, bare.connection_id, fake.policy())["outcome"] == "secret_unreadable"
     # A key entered for one address does not open for the next revision's.
     moved = _seed(session, rings, fake, name="moved")
-    support.revise(session, moved.connection_id, fake.base_url("/elsewhere"))
+    # (A new path on the same origin keeps the key readable; another host unbinds it.)
+    support.revise(session, moved.connection_id,
+                   fake.base_url().replace("gateway.example.test", "other.example.test"))
     row = _run_probe(session, rings, moved.connection_id, fake.policy())
     assert row["outcome"] == "secret_unreadable" and fake.requests == []
     # ... and a worker without the ring opens nothing.
