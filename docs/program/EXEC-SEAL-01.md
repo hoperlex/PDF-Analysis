@@ -195,3 +195,8 @@ beyond three, `tests/integration/workers`.
   `src/auditmanager/workers/**` or `src/auditmanager/analysis/**` other than `analysis/public.py` and
   `analysis/text/lock.py` (the export-only `pinned_models()`), no `infra/**` outside the two env examples and three prose
   files, no `web/package*.json`, no `CURRENT_STATE.md`, `DEBT_REGISTER.md`, ref or tag.
+
+## 9. Final state
+
+Branch `agent/exec-line-01`; the last code commit is `9cae7589`, and the head after this report is recorded in the
+hand-back. The report itself lives at `docs/program/EXEC-SEAL-01.md`.
