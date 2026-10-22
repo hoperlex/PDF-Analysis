@@ -169,7 +169,7 @@ class _Session:
         if "version_classification_current" in sql:  # the breakdown reads the current revision
             return _Result(self.sections)
         if "FROM model_call" in sql:
-            return _Result([(0, 0, 0)])
+            return _Result([(0, 0, 0, 0)])  # calls, cost, unmetered, unmeasured (EXEC-HTTP-01)
         if "FROM project p" in sql:
             return _Result([])
         return _Result([])
