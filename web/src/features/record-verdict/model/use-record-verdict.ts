@@ -20,6 +20,11 @@
  * when they have not chosen one. The refusal is state, not a ref, so the screen re-renders
  * with it. It is filed under the finding it was raised for, so it cannot follow the reviewer
  * to the next finding.
+ *
+ * The hook is bound to one finding but lives at page level, so it outlives a change of
+ * selection, and everything it reports about the LAST press is kept with the finding the press
+ * was about: `result` is returned only to the finding whose event it carries (the server's own
+ * `event.finding_uid`), and `pendingIntent` is read from the request in flight.
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -38,7 +43,7 @@ import type {
 import { appendDecision, newIdempotencyKey } from '@/shared/api';
 
 import type { VerdictIntent, VerdictRefusal } from './verdict-request';
-import { buildVerdictRequest } from './verdict-request';
+import { buildVerdictRequest, verdictIntentOf } from './verdict-request';
 
 export type { VerdictIntent } from './verdict-request';
 
@@ -64,8 +69,17 @@ export interface RecordVerdictApi {
   ) => void;
   readonly isPending: boolean;
   readonly error: unknown;
+  /** Which verdict is in flight, read from the pending request; nothing when none is. */
+  readonly pendingIntent: VerdictIntent | null;
   /** Set when the browser refused to send, rather than when the server refused. */
   readonly refusal: VerdictRefusal | null;
+  /**
+   * Forget the browser's refusal and nothing else: the mutation, its error and its key are
+   * untouched. The refusal answers the previous press, and goes when the expert makes the
+   * choice it asked for.
+   */
+  readonly clearRefusal: () => void;
+  /** The server's answer to the last press, only while the finding it answers is the bound one. */
   readonly result: AppendDecisionResponse | null;
   readonly reset: () => void;
 }
@@ -114,9 +128,16 @@ export function useRecordVerdict({ findingUid, runId }: RecordVerdictArgs): Reco
       mutation.mutate(checked.request);
     },
     isPending: mutation.isPending,
+    pendingIntent: mutation.isPending ? verdictIntentOf(mutation.variables) : null,
     error: mutation.error,
     refusal: refused !== null && refused.findingUid === findingUid ? refused.refusal : null,
-    result: mutation.data ?? null,
+    clearRefusal: () => {
+      setRefused(null);
+    },
+    result:
+      mutation.data !== undefined && mutation.data.event.finding_uid === findingUid
+        ? mutation.data
+        : null,
     reset: () => {
       // Only the mutation result is cleared. `intentRef` deliberately survives: the user
       // dismissing an error has not changed what they asked for, and the retry after it

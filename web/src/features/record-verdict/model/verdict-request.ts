@@ -28,6 +28,18 @@ import { SEVERITY_VALUES } from '@/shared/api';
 export type VerdictIntent = 'accept' | 'reject';
 
 /**
+ * Which verdict a request is, or nothing for a request that is not one. Read off the request
+ * itself, so a screen that says «Принимаю…» or «Отклоняю…» says what is actually in flight and
+ * not what it supposes.
+ */
+export function verdictIntentOf(request: AppendDecisionRequest | undefined): VerdictIntent | null {
+  if (request === undefined) return null;
+  return request.event_type === 'accept' || request.event_type === 'reject'
+    ? request.event_type
+    : null;
+}
+
+/**
  * Every reason this tier refuses to send a verdict, as a value.
  *
  * An array so a test can render the screen for EVERY member (`D-84`'s repair, as for

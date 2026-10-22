@@ -18,7 +18,7 @@
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 
 import type { IntentRecord } from '@/entities/expert-decision';
 import { decisionCacheKeys, resolveIntentKey } from '@/entities/expert-decision';
@@ -52,7 +52,14 @@ export interface AppendCommentApi {
 export function useAppendComment({ findingUid, runId }: AppendCommentArgs): AppendCommentApi {
   const queryClient = useQueryClient();
   const intentRef = useRef<IntentRecord | null>(null);
-  const refusalRef = useRef<CommentRefusal | null>(null);
+  // STATE, not a ref: an empty comment sends nothing, so nothing else in this hook would
+  // render the page, and a write to a ref schedules no render -- the refusal sentence would
+  // wait for some unrelated render to appear. Filed under the finding it was raised for, as
+  // `useRecordVerdict` does, because the hook outlives a change of selected finding.
+  const [refused, setRefused] = useState<{
+    readonly findingUid: FindingUid;
+    readonly refusal: CommentRefusal;
+  } | null>(null);
 
   const mutation = useMutation({
     mutationFn: async (request: AppendDecisionRequest) => {
@@ -77,10 +84,10 @@ export function useAppendComment({ findingUid, runId }: AppendCommentArgs): Appe
     append: (raw, observationId) => {
       const checked = checkComment(raw);
       if (checked.kind === 'refused') {
-        refusalRef.current = checked.refusal;
+        setRefused({ findingUid, refusal: checked.refusal });
         return;
       }
-      refusalRef.current = null;
+      setRefused(null);
       mutation.mutate({
         event_type: 'comment',
         finding_observation_id: observationId,
@@ -89,10 +96,10 @@ export function useAppendComment({ findingUid, runId }: AppendCommentArgs): Appe
     },
     isPending: mutation.isPending,
     error: mutation.error,
-    refusal: refusalRef.current,
+    refusal: refused !== null && refused.findingUid === findingUid ? refused.refusal : null,
     result: mutation.data ?? null,
     reset: () => {
-      refusalRef.current = null;
+      setRefused(null);
       mutation.reset();
     },
   };
