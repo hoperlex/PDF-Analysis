@@ -592,9 +592,23 @@ identity `{version_uid}`). A row that is not there matches nothing; the first ro
 `text`: the web tier's language guard requires every click `text` to occur in a rendered screen, and the
 chooser's rows are not among the screens it renders.
 
+### Taking the seeded administrator off the shipped password, on a lane (found by `PC01-JOURNEY-GAPS-01`)
+
+Against the API directly (the proxy that strips `/api/v1` is not there): `POST /auth/token` with the seeded
+login and password, `POST /auth/password` with that token, then `PATCH /me` with the new token. The seeded login
+`admin` is not an e-mail, so the profile **must carry an `email`** (else `422`), and **the account's login then
+becomes that e-mail**: `E2E_PC01_LOGIN` is the e-mail from then on. A password lost with the process that
+generated it cannot be recovered; the lane's database row can be returned to the shipped state with the
+application's own `hash_password` (a lane database only) and the three calls repeated.
+
 ### Running the identity continuation on a lane stack
 
 It needs the envelope of a completed `--phase all` run and read access to the web tier's session register.
+Measured 2026-10-22 on a lane stack of the full beta tree: `identity: PASS`, 12 operations, 18 checks. Five of
+its stages had gone stale since it was written (`D-137`: it had never run on a built stand) and were repaired
+against the screens they meet: the profile prints the display label; a role removal closes the session inside
+one navigation; a role-less account is turned away at `/403` (its decision is then asked of the API directly and
+refused `403`); archiving and rejecting ask for a confirmation first.
 Start the web tier with `AUDITMANAGER_SESSION_STORE=<a path in the lane>/register.json` and pass the same
 path:
 
