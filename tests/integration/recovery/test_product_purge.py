@@ -57,7 +57,9 @@ def test_the_declaration_partitions_exactly_the_tables_schema_coverage_declares(
     assert tool.classification_problems() == []
     # `EXEC-SEAL-01`: the five executor tables (connection, revision, secret, probe, route event)
     # are configuration, like accounts, and join the kept tables: 23 -> 28.
-    assert len(tool.PRODUCT_TABLES) == 29 and len(tool.KEEP_TABLES) == 28 and len(tool.MIXED_TABLES) == 3
+    # `EXEC-PULL-01`: the runner tokens are configuration too (KEEP 28 -> 29) and the tasks carry
+    # the stand's documents and answers (PRODUCT 29 -> 30).
+    assert len(tool.PRODUCT_TABLES) == 30 and len(tool.KEEP_TABLES) == 29 and len(tool.MIXED_TABLES) == 3
     assert tool.PRODUCT_TABLES | tool.KEEP_TABLES | tool.MIXED_TABLES == TABLES
     # the corpus half of KEEP is schema_coverage's own list, not a copy of it
     assert tool.KEEP_NORM_TABLES is EXEMPT_FROM_FINGERPRINT
