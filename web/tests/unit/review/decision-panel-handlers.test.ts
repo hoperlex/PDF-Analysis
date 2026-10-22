@@ -14,7 +14,9 @@
  *     survives a change of selected finding);
  *   - the select's «not chosen» option clears a pick;
  *   - Reject hands up no severity;
- *   - a finding with no proposal has no select to pick from.
+ *   - a finding with no proposal has no select to pick from;
+ *   - picking a severity tells the screen (`onSeverityChosen`), so the refusal of the previous
+ *     press can go (`WEB-REVIEW-FOLLOWUPS-01`, item 4).
  */
 
 import type { ReactElement, ReactNode } from 'react';
@@ -173,5 +175,55 @@ describe('Reject and a finding without a proposal', () => {
     expect(findAll(tree(p), (t) => t === 'select')).toEqual([]);
     pressAccept(p);
     expect(spies.onAccept).toHaveBeenCalledExactlyOnceWith(OBSERVATION_ID, undefined);
+  });
+});
+
+// ---------------------------------------------------------------------------------------
+// `WEB-REVIEW-FOLLOWUPS-01`, item 4: the refusal sentence goes when a severity is picked
+// ---------------------------------------------------------------------------------------
+
+describe('picking a severity tells the screen, so the refusal of the previous press can go', () => {
+  for (const value of SEVERITY_VALUES) {
+    it(`calls onSeverityChosen once when «${value}» is picked`, () => {
+      const onSeverityChosen = vi.fn();
+      pick(props(spies, { proposedSeverity: 'critical', onSeverityChosen }), value);
+      expect(onSeverityChosen).toHaveBeenCalledTimes(1);
+    });
+  }
+
+  it('does not call it for the «not chosen» option: the refusal is still true then', () => {
+    const onSeverityChosen = vi.fn();
+    pick(props(spies, { proposedSeverity: 'critical', onSeverityChosen }), '');
+    expect(onSeverityChosen).not.toHaveBeenCalled();
+  });
+
+  it('does not call it for a value outside the contract’s set', () => {
+    const onSeverityChosen = vi.fn();
+    pick(props(spies, { proposedSeverity: 'critical', onSeverityChosen }), 'urgent');
+    expect(onSeverityChosen).not.toHaveBeenCalled();
+  });
+
+  it('does not call it for a press of Accept or Reject', () => {
+    const onSeverityChosen = vi.fn();
+    const p = props(spies, { proposedSeverity: 'critical', onSeverityChosen });
+    pressAccept(p);
+    pressReject(p);
+    expect(onSeverityChosen).not.toHaveBeenCalled();
+  });
+
+  it('still records the pick when the screen gave no callback', () => {
+    const p = props(spies, { proposedSeverity: 'critical' });
+    pick(p, 'economic');
+    pressAccept(p);
+    expect(spies.onAccept).toHaveBeenCalledExactlyOnceWith(OBSERVATION_ID, 'economic');
+  });
+
+  it('records the pick as well as telling the screen', () => {
+    const onSeverityChosen = vi.fn();
+    const p = props(spies, { proposedSeverity: 'critical', onSeverityChosen });
+    pick(p, 'recommendation');
+    pressAccept(p);
+    expect(onSeverityChosen).toHaveBeenCalledTimes(1);
+    expect(spies.onAccept).toHaveBeenCalledExactlyOnceWith(OBSERVATION_ID, 'recommendation');
   });
 });

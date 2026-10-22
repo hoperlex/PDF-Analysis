@@ -76,6 +76,13 @@ export interface DecisionPanelProps {
   readonly decidedSeverity?: Severity | undefined;
   /** Set when the browser refused to send an accept; rendered on presence. */
   readonly severityRefusal?: VerdictRefusal | null | undefined;
+  /**
+   * Called when the expert picks one of the severities (not for the «not chosen» option, and
+   * not for a value outside the contract's set). The refusal above answers the PREVIOUS press
+   * and stops being true once the choice it asked for is made, so the screen drops it here;
+   * the panel itself holds no refusal and sends nothing.
+   */
+  readonly onSeverityChosen?: (() => void) | undefined;
 }
 
 export function DecisionPanel({
@@ -90,6 +97,7 @@ export function DecisionPanel({
   proposedSeverity,
   decidedSeverity,
   severityRefusal,
+  onSeverityChosen,
 }: DecisionPanelProps) {
   const [draft, setDraft] = useState('');
   const [severityDraft, setSeverityDraft] = useState<SeverityDraft | null>(null);
@@ -128,7 +136,9 @@ export function DecisionPanel({
             value={chosen ?? ''}
             disabled={busy}
             onChange={(event) => {
-              setSeverityDraft(draftFromControl(event.target.value, observationId));
+              const next = draftFromControl(event.target.value, observationId);
+              setSeverityDraft(next);
+              if (next !== null) onSeverityChosen?.();
             }}
           >
             <option value="">Выберите важность</option>

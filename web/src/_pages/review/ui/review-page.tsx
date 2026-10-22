@@ -125,11 +125,10 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
 
   const run = runQuery.data ?? null;
 
-  const pendingIntent: DecisionIntent | null = verdict.isPending
-    ? 'accept'
-    : comment.isPending
-      ? 'comment'
-      : null;
+  // The wording follows the request in flight: the verdict feature reads the intent off the
+  // pending request, so a pending reject says «Отклоняю…» and not «Принимаю…».
+  const pendingIntent: DecisionIntent | null =
+    verdict.pendingIntent ?? (comment.isPending ? 'comment' : null);
 
   const activePage =
     resolved?.page ?? (detail === null ? null : firstDeclaredPage(detail.observation));
@@ -237,6 +236,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
                 proposedSeverity={detail.observation.proposed_severity}
                 decidedSeverity={detail.decided_severity}
                 severityRefusal={verdict.refusal}
+                onSeverityChosen={verdict.clearRefusal}
                 onAccept={(observationId, decided) => {
                   verdict.record('accept', observationId, {
                     proposed: detail.observation.proposed_severity,
