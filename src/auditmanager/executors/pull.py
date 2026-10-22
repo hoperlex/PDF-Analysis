@@ -66,6 +66,7 @@ __all__ = [
     "PullAdapter",
     "TaskWaiter",
     "answer_window",
+    "build_pull_adapter",
     "probe_pull",
 ]
 
@@ -337,6 +338,17 @@ class PullAdapter:
             reported_cost_usd=None,
         )
         return _with_reported_model(response, declared)
+
+
+def build_pull_adapter(
+    *, session_factory: Callable[[], Session], revision: RevisionRecord, context: Any | None,
+    engine: Engine | None = None,
+) -> PullAdapter:
+    """The adapter of one ``pull`` revision for one Attempt: what the resolver's kind table
+    calls, as ``build_http_adapter`` is for ``http_api``. ``engine`` is the source of the
+    ``LISTEN`` connection; without it the wait is a poll."""
+    return PullAdapter(
+        session_factory=session_factory, revision=revision, context=context, engine=engine)
 
 
 def probe_pull(

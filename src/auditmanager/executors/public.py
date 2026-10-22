@@ -41,7 +41,13 @@ from auditmanager.executors.model import (
     destination_for,
     host_key_fingerprint,
 )
-from auditmanager.executors.pull import PullAdapter, TaskWaiter, answer_window, probe_pull
+from auditmanager.executors.pull import (
+    PullAdapter,
+    TaskWaiter,
+    answer_window,
+    build_pull_adapter,
+    probe_pull,
+)
 from auditmanager.executors.queries import (
     ConnectionDetail,
     connection_detail,
@@ -107,6 +113,7 @@ __all__ = [
     "answer_window",
     "archive_connection",
     "authenticate_runner",
+    "build_pull_adapter",
     "claim_task",
     "connection_detail",
     "create_connection",

@@ -341,13 +341,17 @@ def claim_task(
     revisions = executors or ExecutorRepository()
     wait = max(0, min(int(wait_seconds), MAX_WAIT_SECONDS))
     stop = monotonic() + wait
+    first = True
     while True:
         with session_factory() as session:
             current = revisions.current_revisions(session, [principal.connection_id]).get(
                 principal.connection_id)
             limit = 1 if current is None else (current.settings.max_claimed_tasks or 1)
             store.sweep(session, principal.connection_id)
-            store.clear_terminal_payloads(session, older_than_days=PAYLOAD_RETENTION_DAYS, limit=20)
+            if first:  # retention is housekeeping, once per call and not once per poll
+                store.clear_terminal_payloads(
+                    session, older_than_days=PAYLOAD_RETENTION_DAYS, limit=20)
+                first = False
             row: ClaimedRow | None = None
             if limit == 1:
                 row = store.redeliver(
