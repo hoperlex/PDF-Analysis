@@ -8,6 +8,8 @@
 > `origin/main` publication are outside this code-first stage. Existing wave
 > tables below remain the scope source; their earlier validation and release
 > cadence is superseded for development work. B1–B12 remain the beta criteria.
+>
+> **Executor connections, 2026-10-22 (`R-143d`):** remote/distributed workers for executors that answer model calls move from "after 1.0" into the beta scope ([`EXECUTOR-CONNECTIONS-PLAN.md`](EXECUTOR-CONNECTIONS-PLAN.md), `ADR-0002` R-143 addendum).
 
 **Status:** revision 3, 2026-10-06 (§10.10–§10.13 added; §6.2 restated after costing W53–W55). Revision 1 (2026-10-05, `83fb7e6`) was a proposal; the owner
 then answered an eight-round poll (§10), and this revision is rebuilt on those answers.
