@@ -432,8 +432,8 @@ def test_a_token_of_another_connection_claims_nothing_and_touches_nothing(sessio
 def test_a_task_nobody_takes_before_the_deadline_is_no_executor_online(session, surface) -> None:
     connection_id = make_connection(surface)
     attempt = live_attempt(session)
-    # 61.2 s of the 900 s watchdog left: the window is 1.2 s after the 60 s margin.
-    adapter = adapter_for(session, connection_id, attempt, used=900 - 61.2)
+    # 62.5 s of the 900 s watchdog left: the window is 2.5 s after the 60 s margin.
+    adapter = adapter_for(session, connection_id, attempt, used=900 - 62.5)
     with pytest.raises(ProxyDispatchError) as raised:
         adapter.complete(REQUEST)
     assert (raised.value.dispatch_class, raised.value.retry_safe) == ("not_sent", False)
@@ -446,7 +446,7 @@ def test_a_late_answer_to_an_expired_task_is_refused(session, surface) -> None:
     token, _ = issue(surface, connection_id)
     attempt = live_attempt(session)
     with pytest.raises(ProxyDispatchError):
-        adapter_for(session, connection_id, attempt, used=900 - 61.2).complete(REQUEST)
+        adapter_for(session, connection_id, attempt, used=900 - 62.5).complete(REQUEST)
     expired = task_row(session)
     late = runner_call(surface, token, f"/runner/tasks/{expired['task_id']}/answer",
                        {"output_text": GOOD, "model": MODEL})
@@ -465,7 +465,7 @@ def test_a_claimed_task_that_is_never_answered_is_outcome_unknown(
     def take() -> None:
         seen.append(claim(surface, token).json()["task_id"])
 
-    adapter = adapter_for(session, connection_id, attempt, used=900 - 61.2)
+    adapter = adapter_for(session, connection_id, attempt, used=900 - 62.5)
     play(monkeypatch, take)
     with pytest.raises(ProxyDispatchError) as raised:
         adapter.complete(REQUEST)
