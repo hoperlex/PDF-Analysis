@@ -328,7 +328,7 @@ def test_the_route_is_append_only_and_the_view_is_its_latest_event(migrated_engi
             with pytest.raises(DBAPIError) as refused:
                 with connection.begin_nested():
                     connection.execute(text(statement + " WHERE route_event_id = :id"), {"id": first})
-            assert _sqlstate(refused) == "AM003", statement
+            assert _sqlstate(refused) == "AM002", statement  # am_append_only
         with pytest.raises(DBAPIError) as same:
             with connection.begin_nested():
                 route(3, primary, primary)
