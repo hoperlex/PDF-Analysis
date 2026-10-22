@@ -38,6 +38,7 @@ from auditmanager.api.schemas.blocks import (
     VersionBlockIndexView,
 )
 from auditmanager.api.schemas.content import ByteRange, StreamedContent
+from auditmanager.api.security import RunnerIdentity
 from auditmanager.api.schemas.dashboard import DashboardSummaryView
 from auditmanager.api.schemas.decisions import DecisionEventView, DecisionRecordView
 from auditmanager.api.schemas.documents import DocumentVersionView
@@ -68,6 +69,7 @@ __all__ = [
     "RunPort",
     "ExecutionPort",
     "ExecutorPort",
+    "RunnerPort",
     "SectionPort",
     "ComparisonPort",
     "AnalysisProfilePort",
@@ -143,6 +145,39 @@ class ExecutorPort(Protocol):
         self, *, work_kind: str, primary_connection_id: str,
         standby_connection_id: str | None, user_uid: str, idempotency_key: str,
     ) -> models.ExecutorRoute: ...
+
+
+class RunnerPort(Protocol):
+    """The pull channel (`EXEC-PULL-01`, `R-143`): the administrator's two token operations and
+    the runner's four. The ``api`` writes the rows; the remote party only calls HTTP.
+
+    ``authenticate_runner`` is the seam's (it satisfies ``api.security.RunnerTokens``). The
+    administrator's methods re-read the actor's role in their own transaction. The runner's take
+    the identity the seam published. No method returns a token's value except
+    ``issue_token``, once; none returns a payload except ``claim_task``, to the claimant."""
+
+    def authenticate_runner(
+        self, presented: str, *, address: str | None
+    ) -> RunnerIdentity | None: ...
+    def issue_token(
+        self, *, connection_id: str, expires_in_days: int | None, user_uid: str,
+        idempotency_key: str,
+    ) -> models.IssuedRunnerToken: ...
+    def revoke_token(
+        self, *, connection_id: str, token_id: str, user_uid: str, idempotency_key: str
+    ) -> models.RunnerTokenMetadata: ...
+    def claim_task(
+        self, *, runner: RunnerIdentity, wait_seconds: int
+    ) -> models.ClaimedExecutorTask | None: ...
+    def extend_claim(
+        self, *, runner: RunnerIdentity, task_id: str
+    ) -> models.ExtendedExecutorTaskClaim: ...
+    def submit_answer(
+        self, *, runner: RunnerIdentity, task_id: str, body: models.SubmitExecutorTaskAnswerRequest
+    ) -> models.ExecutorTaskAck: ...
+    def fail_task(
+        self, *, runner: RunnerIdentity, task_id: str, reason: str
+    ) -> models.ExecutorTaskAck: ...
 
 
 class UploadedDocument(Protocol):

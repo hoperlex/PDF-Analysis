@@ -88,9 +88,12 @@ KEEP_NORM_TABLES = EXEMPT_FROM_FINGERPRINT
 #: `EXEC-SEAL-01` (R-143). Executor connections, revisions, sealed secrets, probes and route
 #: events are configuration, like accounts: a purge of product data never touches them. They are
 #: referenced by PRODUCT rows (a run, a call, an effect), never the other way round.
+#: `EXEC-PULL-01`: the runner tokens are configuration too (the stand's credentials for its
+#: runners, not product data); the tasks are the opposite -- they carry the stand's documents and
+#: the model's answers, and reference runs, Attempts and calls -- so ``executor_task`` is PRODUCT.
 KEEP_EXECUTOR_TABLES = frozenset((
     "executor_connection", "executor_connection_revision", "executor_probe",
-    "executor_route_event", "executor_secret",
+    "executor_route_event", "executor_runner_token", "executor_secret",
 ))
 KEEP_TABLES = (
     KEEP_ACCOUNT_TABLES | KEEP_RELEASE_TABLES | KEEP_LOOKUP_TABLES | KEEP_NORM_TABLES
@@ -103,7 +106,7 @@ MIXED_TABLES = frozenset(("audit_event", "blob", "command_record"))
 PRODUCT_TABLES = frozenset((
     "analysis_artifact_publication", "attempt", "audit_run", "document", "document_version",
     "document_version_classification", "document_version_classification_correction",
-    "expert_decision_event", "finding", "finding_evidence", "finding_observation",
+    "executor_task", "expert_decision_event", "finding", "finding_evidence", "finding_observation",
     "finding_observation_norm_citation", "input_manifest_entry", "job", "lease", "model_call",
     "optimisation_pass", "optimisation_proposal", "optimisation_proposal_decision",
     "price_list_position", "price_list_revision", "project", "provider_call_effect",
@@ -123,6 +126,8 @@ KEEP_COMMAND_TYPES = frozenset((
     "archive_executor_connection", "create_executor_connection", "generate_executor_ssh_key",
     "request_executor_probe", "revise_executor_connection", "set_executor_route",
     "set_executor_secret",
+    # `EXEC-PULL-01`: a runner token is issued and revoked as configuration.
+    "issue_runner_token", "revoke_runner_token",
 ))
 PRODUCT_COMMAND_TYPES = frozenset((
     "append_decision", "cancel_audit_run", "carry_over_decision", "create_project",

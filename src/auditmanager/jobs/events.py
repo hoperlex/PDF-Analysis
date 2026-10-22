@@ -27,6 +27,9 @@ _SAFE_KEYS = frozenset({
     # ``primary_not_probed``, ``primary_kind_not_served``): a controlled classifier.
     "reason",
 })
+# `EXEC-PULL-01`: a runner token is addressed by its identity, never by its value, its prefix
+# or its hash.
+_SAFE_KEYS = _SAFE_KEYS | frozenset({"token_id", "task_id"})
 _INSERT = text(
     "INSERT INTO audit_event (audit_event_id, event_type, aggregate_type, "
     "aggregate_id, payload) VALUES (:event_id, :event_type, :aggregate_type, "

@@ -238,3 +238,35 @@ opaque string of `[A-Za-z0-9_-]{1,64}` and percent-encode it into the path.
    `MAX_MCP_OUTPUT_TOKENS`; text results over 50 000 characters are saved to a file
    instead). The stand SHOULD keep a `text_analysis` payload below that, or the README's
    `MAX_MCP_OUTPUT_TOKENS` advice applies. The agent has no such limit.
+
+## 7. How `EXEC-PULL-01` resolved the open points of section 6
+
+Nothing above this section changed; the clients and their tests are untouched. The server
+(`src/auditmanager/executors/runner.py`, `api/routers/runner.py`) implements sections 1 to 5 as
+written, and decided the open points so:
+
+1. **Task states** are `open`, `claimed`, `answered`, `failed`, `expired`, `cancelled`. `fail`
+   ends a claimed task as `failed`; `ack.state` is therefore `answered` or `failed`, and a runner
+   still need not branch on it. A `fail` on a task that is not this token's claimed task is `409`.
+2. **The probe task** is an ordinary task: `user_text` is a short random hex string and
+   `output_schema` is `{"type": "object", "properties": {"echo": {"const": "<that text>"}},
+   "required": ["echo"], "additionalProperties": false}`, so a runner answers `{"echo": "<text>"}`
+   declaring the pinned model. It has no `run`; the stand's «Проверить» waits 120 s for a claim.
+3. **Re-delivery** is implemented when the connection allows one claim at a time
+   (`max_claimed_tasks` 1): a repeat `claim` by the token that holds its claim returns that same
+   task with the lease refreshed. With a higher limit every claim takes a new task, because
+   parallel claim loops on one token would otherwise all receive the same one.
+4. **Token format** is `amr_` + 8 lower-case characters + `_` + 43 url-safe characters (56 in
+   all). The first 12 characters are shown to an administrator and key the proxy throttle; the
+   rest is secret. Clients still do not parse it.
+5. **Payload size** is not limited by the server below the 1 MiB request cap. A
+   `text_analysis` task above Claude Code's MCP output limit is served by the agent, not the
+   bridge; the stand does not split it.
+6. **`422 model_identity_mismatch`** is the only place the stand uses that code with a 422 status
+   (the catalog's own status for it is 502): the caller declared the model, so the request is
+   refused, and the claim is kept.
+7. **Time.** Every response carries the server's `Date` header (uvicorn). Timestamps are RFC 3339
+   with a `Z` suffix and may carry a fractional second.
+8. **Throttle.** The proxy counts 60 requests a minute (burst 30) per token on `/api/v1/runner/tasks/`
+   and 300 a minute per address. A refused call is `429` with the `rate_limited` envelope and no
+   `Retry-After` header; the client's 30 s default applies.

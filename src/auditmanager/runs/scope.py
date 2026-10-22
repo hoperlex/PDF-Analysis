@@ -62,7 +62,11 @@ ABSENT_CAPABILITIES: Final[tuple[str, ...]] = (
     (
         "remote execution: the worker service (R-105) runs on the API's host from the "
         "API's image against the one database; no remote worker, remote queue or "
-        "JobPackage/ResultPackage transport exists"
+        "JobPackage/ResultPackage transport exists. The runner channel (R-143c, "
+        "EXEC-PULL-01) is not one: a runner carries model calls only -- it takes a task over "
+        "HTTPS and submits an answer, never reaches PostgreSQL or S3 and holds no Job, "
+        "Attempt or lease -- and the local worker still waits for the answer inside its own "
+        "Attempt"
     ),
     (
         "cancellation after validating: cancel_audit_run fences created, queued and "

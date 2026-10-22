@@ -834,7 +834,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-Ninety-three operations, sealed. `A5` generates the typed client from this document; `B6`
+Ninety-nine operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -942,6 +942,17 @@ over migration `0030_executor_connections`. A connection is `http_api`, `ssh_com
 by the `api` to the stand's public key, bound to the destination it was entered for, and opened
 only by the worker. Every list and read is for any one role and carries no secret by schema;
 every write is an administrator's. `CostBasis` gains `unmetered`. No error code is added.
+
+`EXEC-PULL-01` added the pull channel on 2026-10-22 under `R-143` and `R-144`, over migration
+`0031_executor_pull_channel`: an administrator issues a runner token for a `pull` connection
+(`issueRunnerToken`: shown once, stored only as a one-way hash) and revokes it
+(`revokeRunnerToken`), and a runner (a Claude Code session behind the stdio bridge, or an
+unattended agent) calls `claimExecutorTask` (a long poll of at most 25 seconds), then
+`extendExecutorTaskClaim`, `submitExecutorTaskAnswer` and `failExecutorTask`. A runner token is a
+principal of its own: it reaches those four operations and no other, and every other operation
+refuses it as `authentication_required`. The wire is `tools/executor-runner/RUNNER_API.md`.
+`getExecutorConnection` carries a `pull` connection's token metadata and open task count. No error
+code is added.
 
 *This paragraph read "Fifteen operations, sealed" while the table below listed seventeen.*
 *And then it read "Eighteen" while the table listed nineteen — the identical defect, in the
@@ -1052,6 +1063,12 @@ could.
 | `requestExecutorProbe` | `POST /executor-connections/{connection_id}/probes` |
 | `listExecutorRoutes` | `GET /executor-routes` |
 | `setExecutorRoute` | `PUT /executor-routes` |
+| `issueRunnerToken` | `POST /executor-connections/{connection_id}/runner-tokens` |
+| `revokeRunnerToken` | `POST /executor-connections/{connection_id}/runner-tokens/{token_id}/revoke` |
+| `claimExecutorTask` | `POST /runner/tasks/claim` |
+| `extendExecutorTaskClaim` | `POST /runner/tasks/{task_id}/extend` |
+| `submitExecutorTaskAnswer` | `POST /runner/tasks/{task_id}/answer` |
+| `failExecutorTask` | `POST /runner/tasks/{task_id}/fail` |
 
 Rules that hold across the whole surface:
 
@@ -1061,8 +1078,8 @@ Rules that hold across the whole surface:
   `setExecutionPaused`, `setWorkerIntake`, `carryOverDecision`,
   `uploadPriceList`, `startOptimisationPass`, `decideOptimisationProposal`,
   `createExecutorConnection`, `reviseExecutorConnection`, `archiveExecutorConnection`,
-  `setExecutorSecret`, `generateExecutorSshKey`, `requestExecutorProbe` and
-  `setExecutorRoute`, and no others. A repeat of the decision carryover under another key
+  `setExecutorSecret`, `generateExecutorSshKey`, `requestExecutorProbe`,
+  `setExecutorRoute`, `issueRunnerToken` and `revokeRunnerToken`, and no others. A repeat of the decision carryover under another key
   that names the same pair and decision answers the event already carried (`replayed: true`)
   and appends nothing.
   `setGlobalVendorList` and `setProjectVendorList` take no key: a repeat of the latest
@@ -1113,6 +1130,17 @@ Rules that hold across the whole surface:
     kind, reason and new assignee) answers the assignment unchanged and appends nothing; any
     other move the `work_assignment` machine does not declare from the current state is
     `state_transition_not_allowed`;
+  * `claimExecutorTask` (`EXEC-PULL-01`): a runner token whose connection allows one claim
+    at a time and that still holds it is given the same task again with its lease
+    refreshed; any other repeat takes the next open task, or waits and answers `204`;
+  * `extendExecutorTaskClaim`: a repeat pushes the lease forward again, never beyond the task's
+    deadline; a claim that is no longer the token's is `conflict` with `conflict_reason:
+    claim_lost`;
+  * `submitExecutorTaskAnswer`: the same answer again is accepted and answered as the first
+    was; a different answer to an answered task is `conflict` with `conflict_reason:
+    answer_differs`, and an answer to an expired, failed or cancelled task is `conflict`;
+  * `failExecutorTask`: a repeat on a failed task answers it unchanged; a task already
+    answered or expired is `conflict`;
 * every response carries `X-Correlation-Id`;
 * every non-2xx body is the `ErrorEnvelope`, with `retryable` pinned to the catalog
   value for the reported code;
@@ -1121,7 +1149,9 @@ Rules that hold across the whole surface:
   response, and it would outlive the request that authorized it;
 * growing lists — projects, findings, decision history — are cursor-paginated;
 * every operation requires a bearer credential **and** a credential generation the account
-  still accepts, except those the sealed contract declares with `security: []` —
+  still accepts, except the four a runner calls with a runner token (`EXEC-PULL-01`,
+  `RUNNER_OPERATIONS` in `src/auditmanager/api/security.py`: a principal of its own, no account and
+  no role) and those the sealed contract declares with `security: []` —
   `issueToken`, `submitRegistration` and `readRegistrationStatus`, listed by
   `python3 -c "import json; d = json.load(open('contracts/api/v1/openapi.json')); print(sorted(o['operationId'] for p in d['paths'].values() for o in p.values() if isinstance(o, dict) and o.get('security') == []))"`
   and held in code as `UNAUTHENTICATED_OPERATIONS` in `src/auditmanager/api/security.py`.

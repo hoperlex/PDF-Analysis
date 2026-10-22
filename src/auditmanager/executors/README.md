@@ -22,6 +22,10 @@ change**: the provider source stays `environment` until `EXEC-HTTP-01`.
 | `usability.py` | served by this release, and probed `ok` on its current key: the two conditions for a route and for a run start |
 | `resolver.py` | `freeze_connection` at run start, `bind_connection` per Attempt |
 | `operations.py` / `__main__.py` | `python -m auditmanager.executors import-env | rewrap | reach` |
+| `runner_repository.py` | the only reader and writer of `executor_runner_token` and `executor_task` (migration `0031`, `EXEC-PULL-01`) |
+| `runner.py` | the pull channel's `api` side: issue and revoke a runner token, authenticate it, claim (long poll), extend, answer and fail a task |
+| `answers.py` | a runner's answer held to the task's output schema (a small validator for the keywords the stage's schemas use; anything else is refused) |
+| `pull.py` | the `pull` kind as a model adapter (writes a task and waits inside the Attempt) and its «Проверить» |
 
 ## Rules that hold here
 
@@ -35,6 +39,17 @@ change**: the provider source stays `environment` until `EXEC-HTTP-01`.
   leaves the old secret `secret_unreadable` for it.
 - **A revision is immutable**; a changed setting is a new revision. A rotated secret is a new
   row, not a new revision.
+- **A runner token is a credential, not an account.** Only its SHA-256 is stored; the value is
+  returned once, by `issue_runner_token`, and never again (an identical repeat is
+  `conflict`/`token_shown_once`). It opens the tasks of its own connection and nobody else's, it
+  reaches only the four runner operations, and a revoked, expired or archived-connection token is
+  the same `None` as a wrong one. It is in no event, no log line and no error detail.
+- **The worker waits inside its Attempt.** `PullAdapter.complete` writes a task and waits until
+  `min(revision deadline, watchdog remaining - 60 s)`. A task nobody claimed is `not_sent`
+  (`dependency: no_executor_online`); a claimed task that was not answered, or that a runner
+  failed, is `outcome_unknown`. Neither is `retry_safe`. A claim joins the live, current Attempt:
+  a dead Attempt's task is never served. The declared model is an assertion
+  (`identity_basis: declared`), and the api already held it equal to the revision's gateway model.
 - **No silent fallback.** `resolve_route` returns the route with each side's current revision
   and hides nothing; the standby is used only when a caller journals it.
 - **Refusals reuse the catalogue**: `validation_failed` (`field`, `constraint`), `conflict`

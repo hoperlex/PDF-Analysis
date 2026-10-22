@@ -185,6 +185,14 @@ REQUIRED_OPERATIONS = {
     "requestExecutorProbe",
     "listExecutorRoutes",
     "setExecutorRoute",
+    # `EXEC-PULL-01` (R-143). The pull channel: an administrator issues and revokes a runner
+    # token (shown once), and a runner calls four operations with one.
+    "issueRunnerToken",
+    "revokeRunnerToken",
+    "claimExecutorTask",
+    "extendExecutorTaskClaim",
+    "submitExecutorTaskAnswer",
+    "failExecutorTask",
 }
 
 #: The operations a caller reaches while holding no credential. `UNAUTHENTICATED_OPERATIONS`
@@ -200,6 +208,15 @@ UNAUTHENTICATED_OPERATIONS = {"issueToken", "submitRegistration", "readRegistrat
 #: operations answer a refused pair with `401` -- the exchange's and the status read's one
 #: refusal -- and have no subject a `403` could deny.
 OPERATIONS_WITH_NO_CREDENTIAL_TO_REFUSE = {"submitRegistration"}
+
+#: `EXEC-PULL-01`. The four operations a runner calls with a runner token. The token is a
+#: principal of its own with no role to lack, so there is no subject a `403` could deny: each
+#: declares the `401` (a wrong, revoked or expired token) and no `403`. The same single
+#: `bearerAuth` scheme is declared for them; what differs is who issued the credential.
+RUNNER_OPERATIONS_WITHOUT_A_403 = {
+    "claimExecutorTask", "extendExecutorTaskClaim", "submitExecutorTaskAnswer",
+    "failExecutorTask",
+}
 
 #: The keyed writes: every one requires `Idempotency-Key` and declares the `409` a key
 #: conflict answers. `approveRegistration` (`W49-SEAL-01`) creates an account, so it is one.
@@ -234,6 +251,11 @@ WRITE_OPERATIONS = {
     "generateExecutorSshKey",
     "requestExecutorProbe",
     "setExecutorRoute",
+    # `EXEC-PULL-01`. The two administrator operations on runner tokens are keyed. The four a
+    # runner calls are not: each is idempotent on the task's identity (a repeat of an accepted
+    # answer is accepted, a different one is a conflict).
+    "issueRunnerToken",
+    "revokeRunnerToken",
 }
 
 PAGINATED_OPERATIONS = {
@@ -994,7 +1016,11 @@ def test_every_operation_can_report_401_and_403(openapi_document: dict) -> None:
             )
             continue
         assert responses["401"]["$ref"] == "#/components/responses/AuthenticationRequired", name
-        if name in UNAUTHENTICATED_OPERATIONS:
+        if name in RUNNER_OPERATIONS_WITHOUT_A_403:
+            assert "403" not in responses, (
+                f"{name} is called with a runner token, which holds no role a 403 could deny"
+            )
+        elif name in UNAUTHENTICATED_OPERATIONS:
             assert "403" not in responses, (
                 f"{name} presents no credential, so it has no subject a 403 could deny"
             )
@@ -1142,6 +1168,10 @@ ADMITTED_SECRET_PROPERTIES = frozenset(
         # hashed until the decision removes it; the schema could not describe the
         # operation without the name.
         "SubmitRegistrationRequest.properties.password",
+        # `EXEC-PULL-01`. A runner token's value is returned exactly once, by `issueRunnerToken`,
+        # and is stored only as a one-way hash: the response could not describe the operation
+        # without the name. No other schema may carry it (`RunnerTokenMetadata` has the prefix).
+        "IssuedRunnerToken.properties.token",
     }
 )
 
