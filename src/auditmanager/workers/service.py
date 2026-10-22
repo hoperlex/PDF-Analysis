@@ -22,6 +22,9 @@ What it does, in four threads
   fallback, never a silent one.
 * **reclaim** -- inside the dispatch loop, every :data:`RECLAIM_SECONDS`.
 * **slots** -- a pool of ``slots`` threads, each running one claimed run to a terminal.
+* **probes** -- when a probe runner is given (`EXEC-HTTP-01`), a thread that takes the
+  ``requested`` connection probes and runs them on this worker's network path. A draining worker
+  takes no new probe.
 
 Drain
 -----
@@ -56,6 +59,9 @@ POLL_SECONDS: Final[float] = 5.0
 RECLAIM_SECONDS: Final[float] = 30.0
 #: The longest the dispatch loop blocks before it looks at its stop and drain flags.
 _TICK_SECONDS: Final[float] = 1.0
+#: How often the probe loop looks for a ``requested`` probe when the last look found none
+#: (`EXEC-HTTP-01`). A poll rather than a ``LISTEN``: a probe is a person pressing a button.
+PROBE_POLL_SECONDS: Final[float] = 2.0
 
 #: Files in the state directory. The identity is written once; the heartbeat file's
 #: modification time is what ``python -m auditmanager.workers health`` reads.
@@ -162,6 +168,8 @@ class WorkerService:
         heartbeat_seconds: float = HEARTBEAT_SECONDS,
         reclaim_seconds: float = RECLAIM_SECONDS,
         registry: WorkerRegistry | None = None,
+        probe_runner: Callable[[], int] | None = None,
+        probe_poll_seconds: float = PROBE_POLL_SECONDS,
     ) -> None:
         if slots < 1:
             raise ValueError("a worker needs at least one slot")
@@ -175,6 +183,8 @@ class WorkerService:
         self._heartbeat_seconds = heartbeat_seconds
         self._reclaim_seconds = reclaim_seconds
         self._registry = registry or WorkerRegistry()
+        self._probe_runner = probe_runner
+        self._probe_poll_seconds = probe_poll_seconds
         self._worker_id: str | None = None
         self._stopped = threading.Event()
         self._draining = threading.Event()
@@ -216,10 +226,13 @@ class WorkerService:
             "worker %s registered (version %s, %d slot(s))",
             self._worker_id, self._version, self._slots,
         )
-        for target, name in (
+        loops = [
             (self._heartbeat_loop, "auditmanager-worker-heartbeat"),
             (self._dispatch_loop, "auditmanager-worker-dispatch"),
-        ):
+        ]
+        if self._probe_runner is not None:
+            loops.append((self._probe_loop, "auditmanager-worker-probes"))
+        for target, name in loops:
             thread = threading.Thread(target=target, name=name, daemon=True)
             thread.start()
             self._threads.append(thread)
@@ -299,6 +312,18 @@ class WorkerService:
         finally:
             self.wakeup.close()
 
+    def _probe_loop(self) -> None:
+        """Take ``requested`` connection probes while this worker is not draining."""
+        assert self._probe_runner is not None
+        while not self._stopped.is_set():
+            handled = 0
+            if not self._draining.is_set():
+                try:
+                    handled = self._probe_runner()
+                except Exception:
+                    _log.exception("worker %s probe pass failed; retried", self._worker_id)
+            self._stopped.wait(0.1 if handled else self._probe_poll_seconds)
+
     def _reclaim(self) -> None:
         try:
             with self._sessions() as session:
@@ -371,6 +396,7 @@ __all__ = [
     "HEARTBEAT_FILE",
     "IDENTITY_FILE",
     "POLL_SECONDS",
+    "PROBE_POLL_SECONDS",
     "RECLAIM_SECONDS",
     "JobWakeup",
     "WorkerService",

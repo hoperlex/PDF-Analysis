@@ -834,7 +834,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-Eighty-three operations, sealed. `A5` generates the typed client from this document; `B6`
+Ninety-three operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -932,6 +932,16 @@ per request by the W57b resolver; no finding, no severity, no model. A run that 
 snapshot, has no saved text layer or cites more than one answer carries is a `200` with a
 `state`, never an empty list; the corpus documents whose designation the parser cannot read
 are listed; an unknown run is `404`. Read-only, any one role.
+
+`EXEC-SEAL-01` added the executor connections on 2026-10-22 under `R-143` and `R-144`, namely
+the operations `listExecutorConnections`, `createExecutorConnection`, `getExecutorConnection`,
+`reviseExecutorConnection`, `archiveExecutorConnection`, `setExecutorSecret`,
+`generateExecutorSshKey`, `requestExecutorProbe`, `listExecutorRoutes` and `setExecutorRoute`
+over migration `0030_executor_connections`. A connection is `http_api`, `ssh_command` or
+`pull`; a revision is its immutable non-secret settings; a secret is write-only and is sealed
+by the `api` to the stand's public key, bound to the destination it was entered for, and opened
+only by the worker. Every list and read is for any one role and carries no secret by schema;
+every write is an administrator's. `CostBasis` gains `unmetered`. No error code is added.
 
 *This paragraph read "Fifteen operations, sealed" while the table below listed seventeen.*
 *And then it read "Eighteen" while the table listed nineteen — the identical defect, in the
@@ -1032,6 +1042,16 @@ could.
 | `exportOptimisationProposalsCsv` | `GET /optimisation-passes/{optimisation_pass_id}/export.csv` |
 | `getSectionSpecification` | `GET /sections/{section_code}/specification` |
 | `getRunNormReferences` | `GET /runs/{run_id}/norm-references` |
+| `listExecutorConnections` | `GET /executor-connections` |
+| `createExecutorConnection` | `POST /executor-connections` |
+| `getExecutorConnection` | `GET /executor-connections/{connection_id}` |
+| `reviseExecutorConnection` | `POST /executor-connections/{connection_id}/revisions` |
+| `archiveExecutorConnection` | `POST /executor-connections/{connection_id}/archive` |
+| `setExecutorSecret` | `POST /executor-connections/{connection_id}/secrets` |
+| `generateExecutorSshKey` | `POST /executor-connections/{connection_id}/ssh-key` |
+| `requestExecutorProbe` | `POST /executor-connections/{connection_id}/probes` |
+| `listExecutorRoutes` | `GET /executor-routes` |
+| `setExecutorRoute` | `PUT /executor-routes` |
 
 Rules that hold across the whole surface:
 
@@ -1039,7 +1059,10 @@ Rules that hold across the whole surface:
   `uploadDocument`, `uploadDocumentVersion`, `startRun`, `appendDecision`,
   `approveRegistration`, `cancelRun`, `reauditRun`, `setJobPriority`,
   `setExecutionPaused`, `setWorkerIntake`, `carryOverDecision`,
-  `uploadPriceList`, `startOptimisationPass` and `decideOptimisationProposal`, and no others. A repeat of the decision carryover under another key
+  `uploadPriceList`, `startOptimisationPass`, `decideOptimisationProposal`,
+  `createExecutorConnection`, `reviseExecutorConnection`, `archiveExecutorConnection`,
+  `setExecutorSecret`, `generateExecutorSshKey`, `requestExecutorProbe` and
+  `setExecutorRoute`, and no others. A repeat of the decision carryover under another key
   that names the same pair and decision answers the event already carried (`replayed: true`)
   and appends nothing.
   `setGlobalVendorList` and `setProjectVendorList` take no key: a repeat of the latest

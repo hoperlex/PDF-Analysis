@@ -85,7 +85,17 @@ KEEP_RELEASE_TABLES = frozenset(("release", "release_revision"))
 KEEP_LOOKUP_TABLES = frozenset(("alembic_version", "contract_state_transition", "execution_control"))
 #: The whole normative corpus -- the exemption list of ``stand-fingerprint-v1``, reused.
 KEEP_NORM_TABLES = EXEMPT_FROM_FINGERPRINT
-KEEP_TABLES = KEEP_ACCOUNT_TABLES | KEEP_RELEASE_TABLES | KEEP_LOOKUP_TABLES | KEEP_NORM_TABLES
+#: `EXEC-SEAL-01` (R-143). Executor connections, revisions, sealed secrets, probes and route
+#: events are configuration, like accounts: a purge of product data never touches them. They are
+#: referenced by PRODUCT rows (a run, a call, an effect), never the other way round.
+KEEP_EXECUTOR_TABLES = frozenset((
+    "executor_connection", "executor_connection_revision", "executor_probe",
+    "executor_route_event", "executor_secret",
+))
+KEEP_TABLES = (
+    KEEP_ACCOUNT_TABLES | KEEP_RELEASE_TABLES | KEEP_LOOKUP_TABLES | KEEP_NORM_TABLES
+    | KEEP_EXECUTOR_TABLES
+)
 
 MIXED_TABLES = frozenset(("audit_event", "blob", "command_record"))
 
@@ -102,12 +112,18 @@ PRODUCT_TABLES = frozenset((
 ))
 
 #: ``audit_event.event_type`` families. ``norm_custody.`` is the custody ledger's.
-KEEP_EVENT_PREFIXES = ("norm_custody.",)
+KEEP_EVENT_PREFIXES = ("norm_custody.", "executor.")
 PRODUCT_EVENT_PREFIXES = (
     "artifact.", "attempt.", "audit_run.", "execution.", "findings.", "job.", "provider.", "stage.",
 )
 #: ``command_record.command_type``. A registration approval is account-side.
-KEEP_COMMAND_TYPES = frozenset(("approve_registration",))
+KEEP_COMMAND_TYPES = frozenset((
+    "approve_registration",
+    # `EXEC-SEAL-01`: the executor configuration commands, kept with the configuration.
+    "archive_executor_connection", "create_executor_connection", "generate_executor_ssh_key",
+    "request_executor_probe", "revise_executor_connection", "set_executor_route",
+    "set_executor_secret",
+))
 PRODUCT_COMMAND_TYPES = frozenset((
     "append_decision", "cancel_audit_run", "carry_over_decision", "create_project",
     "decide_optimisation_proposal", "reaudit_run", "set_execution_paused", "set_job_priority",

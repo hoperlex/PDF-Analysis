@@ -184,6 +184,16 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "decideOptimisationProposal",
             # `W63-SECTION-FORM7-01`: a path code, filters and paging.
             "getSectionSpecification",
+            # `EXEC-SEAL-01`: the executor operations that take a path identity, a body or both.
+            # The two lists take no input and declare no 422.
+            "createExecutorConnection",
+            "getExecutorConnection",
+            "reviseExecutorConnection",
+            "archiveExecutorConnection",
+            "setExecutorSecret",
+            "generateExecutorSshKey",
+            "requestExecutorProbe",
+            "setExecutorRoute",
         }, declared_422
 
     def test_no_schema_property_declares_a_default(self) -> None:

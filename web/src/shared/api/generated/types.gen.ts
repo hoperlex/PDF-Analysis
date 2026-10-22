@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0 (OpenAPI 3.1.0)
- *   sha256 741f29f9b0c9341cdf0631f0f65e462c7788945dd21002aa33afc54af7076eb8
+ *   sha256 0c1d1af2e441ff58e1dde3c3fff5605d332b9ce6bac77d3f012e3db1a262ef6a
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.0.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '741f29f9b0c9341cdf0631f0f65e462c7788945dd21002aa33afc54af7076eb8';
+export const CONTRACT_DIGEST = '0c1d1af2e441ff58e1dde3c3fff5605d332b9ce6bac77d3f012e3db1a262ef6a';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -54,6 +54,7 @@ export const SCHEMA_NAMES = [
   'CorrelationId',
   'CostBasis',
   'CreateAssignmentRequest',
+  'CreateExecutorConnectionRequest',
   'CreateProjectRequest',
   'Cursor',
   'DashboardSummary',
@@ -79,6 +80,32 @@ export const SCHEMA_NAMES = [
   'ExecutionQueuePage',
   'ExecutionWorker',
   'ExecutionWorkerPage',
+  'ExecutorApiFlavour',
+  'ExecutorBilling',
+  'ExecutorConnection',
+  'ExecutorConnectionDetail',
+  'ExecutorConnectionId',
+  'ExecutorConnectionList',
+  'ExecutorIdentityBasis',
+  'ExecutorKind',
+  'ExecutorPinnedModel',
+  'ExecutorProbe',
+  'ExecutorProbeId',
+  'ExecutorProbeOutcome',
+  'ExecutorProbeState',
+  'ExecutorPullClient',
+  'ExecutorRateCheck',
+  'ExecutorRevision',
+  'ExecutorRevisionId',
+  'ExecutorRoute',
+  'ExecutorRouteList',
+  'ExecutorSecretId',
+  'ExecutorSecretMetadata',
+  'ExecutorSecretPurpose',
+  'ExecutorSshKey',
+  'ExecutorSshProfile',
+  'ExecutorTransport',
+  'ExecutorWorkKind',
   'Finding',
   'FindingCategory',
   'FindingComparison',
@@ -191,6 +218,7 @@ export const SCHEMA_NAMES = [
   'ReleaseNoteItem',
   'ReleaseNoteKind',
   'ResetUserPasswordRequest',
+  'ReviseExecutorConnectionRequest',
   'Role',
   'RunActivity',
   'RunActivitySpend',
@@ -213,6 +241,8 @@ export const SCHEMA_NAMES = [
   'SectionVendorList',
   'SetCurrentNormSnapshotRequest',
   'SetExecutionPausedRequest',
+  'SetExecutorRouteRequest',
+  'SetExecutorSecretRequest',
   'SetGlobalVendorListRequest',
   'SetJobPriorityRequest',
   'SetProjectVendorListRequest',
@@ -588,10 +618,11 @@ export type CorrelationId = string;
 /** The contract pattern for `CorrelationId`. Anchored; use with `new RegExp()`. */
 export const CORRELATION_ID_PATTERN = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$";
 
-/** How well a published cost figure is known. `measured` means every provider call the figure sums reported its own cost; `estimated` means at least one did not, so the total is derived. The value is an aggregate over **every** call the figure spans and is never the last call's basis: a run whose first attempt replayed and whose second reported a cost is `estimated`. */
+/** How well a published cost figure is known. `measured` means every provider call the figure sums reported its own cost; `estimated` means at least one did not, so the total is derived; `unmetered` (`EXEC-SEAL-01`, `R-143f`) means a call ran on a connection that has no per-call cost, so the figure is absent and never a zero. The value is an aggregate over **every** call the figure spans and is never the last call's basis: a run whose first attempt replayed and whose second reported a cost is `estimated`. */
 export const COST_BASIS_VALUES = [
   'measured',
   'estimated',
+  'unmetered',
 ] as const;
 
 /** CostBasis - the closed value set above. */
@@ -603,6 +634,11 @@ export type CreateAssignmentRequest = {
   document_uid?: DocumentUid;
   note?: string;
   project_uid: ProjectUid;
+};
+
+export type CreateExecutorConnectionRequest = {
+  display_name: string;
+  kind: ExecutorKind;
 };
 
 export type CreateProjectRequest = {
@@ -858,6 +894,285 @@ export type ExecutionWorkerPage = {
   items: Array<ExecutionWorker>;
   page: PageInfo;
 };
+
+/** ExecutorApiFlavour. */
+export const EXECUTOR_API_FLAVOUR_VALUES = [
+  'openai_chat',
+  'anthropic_messages',
+] as const;
+
+/** ExecutorApiFlavour - the closed value set above. */
+export type ExecutorApiFlavour = (typeof EXECUTOR_API_FLAVOUR_VALUES)[number];
+
+/** ExecutorBilling. */
+export const EXECUTOR_BILLING_VALUES = [
+  'metered',
+  'not_metered',
+] as const;
+
+/** ExecutorBilling - the closed value set above. */
+export type ExecutorBilling = (typeof EXECUTOR_BILLING_VALUES)[number];
+
+/** A connection: where a process sends model work. Its secrets are metadata only. */
+export type ExecutorConnection = {
+  archived_at?: string;
+  connection_id: ExecutorConnectionId;
+  created_at: string;
+  created_by: UserUid;
+  current_revision_id?: ExecutorRevisionId;
+  current_revision_no?: number;
+  display_name: string;
+  kind: ExecutorKind;
+  routed_work_kinds: Array<ExecutorWorkKind>;
+  secrets: Array<ExecutorSecretMetadata>;
+};
+
+/** One connection with every revision (each with its latest probe) and its last 10 probes. */
+export type ExecutorConnectionDetail = {
+  connection: ExecutorConnection;
+  probes: Array<ExecutorProbe>;
+  revisions: Array<ExecutorRevision>;
+};
+
+export type ExecutorConnectionId = string;
+
+/** The contract pattern for `ExecutorConnectionId`. Anchored; use with `new RegExp()`. */
+export const EXECUTOR_CONNECTION_ID_PATTERN = "^exc_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type ExecutorConnectionList = {
+  items: Array<ExecutorConnection>;
+  pinned_models: Array<ExecutorPinnedModel>;
+};
+
+/** ``reported``: the response named the model. ``declared``: the executor asserted it. */
+export const EXECUTOR_IDENTITY_BASIS_VALUES = [
+  'reported',
+  'declared',
+] as const;
+
+/** ExecutorIdentityBasis - the closed value set above. */
+export type ExecutorIdentityBasis = (typeof EXECUTOR_IDENTITY_BASIS_VALUES)[number];
+
+/**
+ * How a connection reaches the model: the stand calls an HTTP API, the stand runs a
+ * command over SSH, or a remote runner pulls the stand's tasks.
+ */
+export const EXECUTOR_KIND_VALUES = [
+  'http_api',
+  'ssh_command',
+  'pull',
+] as const;
+
+/** ExecutorKind - the closed value set above. */
+export type ExecutorKind = (typeof EXECUTOR_KIND_VALUES)[number];
+
+/**
+ * One model of the provider lock a revision may name, with its pinned rates (USD per
+ * million tokens). The same list validates a revision, so the choice and the refusal agree.
+ */
+export type ExecutorPinnedModel = {
+  input_per_mtok_usd: number;
+  output_per_mtok_usd: number;
+  pin_id: string;
+};
+
+/**
+ * One probe of a connection revision. ``requested`` until the worker takes it; a probe
+ * nobody takes within 120 seconds ends as ``no_worker``. ``detail`` is scrubbed and never a
+ * response body.
+ */
+export type ExecutorProbe = {
+  connection_id: ExecutorConnectionId;
+  detail?: string;
+  finished_at?: string;
+  http_status?: number;
+  identity_basis?: ExecutorIdentityBasis;
+  latency_ms?: number;
+  observed_host_key?: string;
+  outcome?: ExecutorProbeOutcome;
+  probe_id: ExecutorProbeId;
+  rate_check?: ExecutorRateCheck;
+  reported_model?: string;
+  requested_at: string;
+  requested_by: UserUid;
+  revision_id: ExecutorRevisionId;
+  secret_id?: ExecutorSecretId;
+  started_at?: string;
+  state: ExecutorProbeState;
+};
+
+export type ExecutorProbeId = string;
+
+/** The contract pattern for `ExecutorProbeId`. Anchored; use with `new RegExp()`. */
+export const EXECUTOR_PROBE_ID_PATTERN = "^epb_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** ExecutorProbeOutcome. */
+export const EXECUTOR_PROBE_OUTCOME_VALUES = [
+  'ok',
+  'ip_refused',
+  'credential_refused',
+  'model_mismatch',
+  'rate_mismatch',
+  'timeout',
+  'unreachable',
+  'protocol_error',
+  'secret_unreadable',
+  'host_key_unpinned',
+  'host_key_changed',
+  'no_runner_online',
+  'destination_refused',
+  'kind_not_served',
+  'no_worker',
+] as const;
+
+/** ExecutorProbeOutcome - the closed value set above. */
+export type ExecutorProbeOutcome = (typeof EXECUTOR_PROBE_OUTCOME_VALUES)[number];
+
+/** ExecutorProbeState. */
+export const EXECUTOR_PROBE_STATE_VALUES = [
+  'requested',
+  'running',
+  'finished',
+] as const;
+
+/** ExecutorProbeState - the closed value set above. */
+export type ExecutorProbeState = (typeof EXECUTOR_PROBE_STATE_VALUES)[number];
+
+/** ExecutorPullClient. */
+export const EXECUTOR_PULL_CLIENT_VALUES = [
+  'claude_code_session',
+  'agent',
+] as const;
+
+/** ExecutorPullClient - the closed value set above. */
+export type ExecutorPullClient = (typeof EXECUTOR_PULL_CLIENT_VALUES)[number];
+
+/** ExecutorRateCheck. */
+export const EXECUTOR_RATE_CHECK_VALUES = [
+  'checked',
+  'not_reported',
+  'mismatch',
+  'not_metered',
+] as const;
+
+/** ExecutorRateCheck - the closed value set above. */
+export type ExecutorRateCheck = (typeof EXECUTOR_RATE_CHECK_VALUES)[number];
+
+/** One immutable revision of a connection, with its latest probe. */
+export type ExecutorRevision = {
+  allow_client_documents: boolean;
+  answer_deadline_seconds?: number;
+  api_flavour?: ExecutorApiFlavour;
+  base_url?: string;
+  billing: ExecutorBilling;
+  connection_id: ExecutorConnectionId;
+  created_at: string;
+  created_by: UserUid;
+  gateway_model: string;
+  host_key?: string;
+  host_key_fingerprint?: string;
+  latest_probe?: ExecutorProbe;
+  max_claimed_tasks?: number;
+  max_parallel_calls?: number;
+  pin_id: string;
+  pull_client?: ExecutorPullClient;
+  revision_id: ExecutorRevisionId;
+  revision_no: number;
+  ssh_host?: string;
+  ssh_port?: number;
+  ssh_profile?: ExecutorSshProfile;
+  ssh_user?: string;
+  timeout_seconds: number;
+  transport?: ExecutorTransport;
+};
+
+export type ExecutorRevisionId = string;
+
+/** The contract pattern for `ExecutorRevisionId`. Anchored; use with `new RegExp()`. */
+export const EXECUTOR_REVISION_ID_PATTERN = "^excr_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/**
+ * Which connection serves one kind of model work, with an optional standby that only an
+ * administrator configures. The standby is never used implicitly.
+ */
+export type ExecutorRoute = {
+  primary_connection_id: ExecutorConnectionId;
+  set_at: string;
+  set_by: UserUid;
+  standby_connection_id?: ExecutorConnectionId;
+  work_kind: ExecutorWorkKind;
+};
+
+export type ExecutorRouteList = {
+  items: Array<ExecutorRoute>;
+};
+
+export type ExecutorSecretId = string;
+
+/** The contract pattern for `ExecutorSecretId`. Anchored; use with `new RegExp()`. */
+export const EXECUTOR_SECRET_ID_PATTERN = "^exs_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/**
+ * What the API ever says about a secret: that it exists, for what, when and by whom, and
+ * its last four characters. The value is write-only; no operation returns it.
+ */
+export type ExecutorSecretMetadata = {
+  bound_to_current_revision: boolean;
+  connection_id: ExecutorConnectionId;
+  kid: string;
+  last4: string;
+  public_key?: string;
+  purpose: ExecutorSecretPurpose;
+  secret_id: ExecutorSecretId;
+  set_at: string;
+  set_by: UserUid;
+};
+
+/** ExecutorSecretPurpose. */
+export const EXECUTOR_SECRET_PURPOSE_VALUES = [
+  'api_key',
+  'ssh_private_key',
+] as const;
+
+/** ExecutorSecretPurpose - the closed value set above. */
+export type ExecutorSecretPurpose = (typeof EXECUTOR_SECRET_PURPOSE_VALUES)[number];
+
+/**
+ * A generated ed25519 pair: the private half is sealed to the connection's SSH endpoint
+ * and never returned; the public half and its ``authorized_keys`` line are.
+ */
+export type ExecutorSshKey = {
+  authorized_keys_line: string;
+  public_key: string;
+  sealed_private_key: ExecutorSecretMetadata;
+};
+
+/** ExecutorSshProfile. */
+export const EXECUTOR_SSH_PROFILE_VALUES = [
+  'claude_code_headless',
+  'custom_command',
+] as const;
+
+/** ExecutorSshProfile - the closed value set above. */
+export type ExecutorSshProfile = (typeof EXECUTOR_SSH_PROFILE_VALUES)[number];
+
+/** ExecutorTransport. */
+export const EXECUTOR_TRANSPORT_VALUES = [
+  'direct',
+  'vpn',
+  'ssh_tunnel',
+] as const;
+
+/** ExecutorTransport - the closed value set above. */
+export type ExecutorTransport = (typeof EXECUTOR_TRANSPORT_VALUES)[number];
+
+/** The kind of model work a route serves. Today exactly one stage calls a model. */
+export const EXECUTOR_WORK_KIND_VALUES = [
+  'text_analysis',
+] as const;
+
+/** ExecutorWorkKind - the closed value set above. */
+export type ExecutorWorkKind = (typeof EXECUTOR_WORK_KIND_VALUES)[number];
 
 /** A published finding. Every listed finding is grounded: its quotations were verified present at their declared anchors. */
 export type Finding = {
@@ -1990,6 +2305,27 @@ export type ResetUserPasswordRequest = {
   temporary_password: string;
 };
 
+/** A new immutable revision of a connection: the full settings, never a patch. */
+export type ReviseExecutorConnectionRequest = {
+  allow_client_documents: boolean;
+  answer_deadline_seconds?: number;
+  api_flavour?: ExecutorApiFlavour;
+  base_url?: string;
+  billing: ExecutorBilling;
+  gateway_model: string;
+  host_key?: string;
+  max_claimed_tasks?: number;
+  max_parallel_calls?: number;
+  pin_id: string;
+  pull_client?: ExecutorPullClient;
+  ssh_host?: string;
+  ssh_port?: number;
+  ssh_profile?: ExecutorSshProfile;
+  ssh_user?: string;
+  timeout_seconds: number;
+  transport?: ExecutorTransport;
+};
+
 /** One role an account may hold; an account holds a set of them (R-55, R-60). `expert` makes product changes -- projects, uploads, runs, verdicts, comments and the export. `admin` manages accounts and registration requests. Reading product data needs one of them (R-80): an active account whose role set is empty is suspended and reads only its own account, the product version and the release notes. */
 export const ROLE_VALUES = [
   'expert',
@@ -2275,6 +2611,18 @@ export type SetCurrentNormSnapshotRequest = {
 
 export type SetExecutionPausedRequest = {
   paused: boolean;
+};
+
+export type SetExecutorRouteRequest = {
+  primary_connection_id: ExecutorConnectionId;
+  standby_connection_id?: ExecutorConnectionId;
+  work_kind: ExecutorWorkKind;
+};
+
+/** Write-only. The API seals ``value`` to the stand's public key and never returns it. */
+export type SetExecutorSecretRequest = {
+  purpose: ExecutorSecretPurpose;
+  value: string;
 };
 
 /**

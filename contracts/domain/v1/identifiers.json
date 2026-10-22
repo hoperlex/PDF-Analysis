@@ -68,7 +68,12 @@
     "vendor_list_id": "vnl",
     "optimisation_pass_id": "opp",
     "optimisation_proposal_id": "opr",
-    "proposal_decision_id": "opd"
+    "proposal_decision_id": "opd",
+    "executor_connection_id": "exc",
+    "executor_connection_revision_id": "excr",
+    "executor_secret_id": "exs",
+    "executor_probe_id": "epb",
+    "executor_route_event_id": "ert"
   },
   "external_identifiers": {
     "portal_block_id": {
@@ -124,7 +129,12 @@
     "VendorList": "vendor_list_id",
     "OptimisationPass": "optimisation_pass_id",
     "OptimisationProposal": "optimisation_proposal_id",
-    "ProposalDecision": "proposal_decision_id"
+    "ProposalDecision": "proposal_decision_id",
+    "ExecutorConnection": "executor_connection_id",
+    "ExecutorConnectionRevision": "executor_connection_revision_id",
+    "ExecutorSecret": "executor_secret_id",
+    "ExecutorProbe": "executor_probe_id",
+    "ExecutorRouteEvent": "executor_route_event_id"
   },
   "distinct_identities": [
     {
@@ -263,6 +273,22 @@
       "evidence": [
         "W60-OPT-PROPOSALS-01",
         "0027_optimisation_proposals"
+      ]
+    },
+    {
+      "name": "executor_connection_identity",
+      "identifiers": [
+        "executor_connection_id",
+        "executor_connection_revision_id",
+        "executor_secret_id",
+        "executor_probe_id",
+        "executor_route_event_id"
+      ],
+      "rule": "ExecutorConnection identifies where a process sends model work, for its whole life; ExecutorConnectionRevision one immutable set of its non-secret settings, so a changed address is a new revision and never an edit; ExecutorSecret one sealed secret of exactly one connection and purpose, replaced by a new row and never rewritten; ExecutorProbe one probe of a revision; ExecutorRouteEvent one appended change of the route for a kind of model work. Each is allocated independently. A host name, an address, a model name, a display name or a secret's last four characters is an attribute and never an identity, and a secret's identity is part of the associated data its ciphertext is sealed under.",
+      "authority": "EXEC-SEAL-01; R-143",
+      "evidence": [
+        "EXEC-SEAL-01",
+        "0030_executor_connections"
       ]
     }
   ],

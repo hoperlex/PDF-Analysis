@@ -70,6 +70,25 @@ SAMPLES: dict[str, tuple[str, str]] = {
     # `W54-SEAL-01`. The worker registry (R-80 any-role read, administrator intake).
     "listWorkers": ("GET", "/execution/workers"),
     "setWorkerIntake": ("PUT", "/execution/workers/wrk_01M2545JSD15ETSNNV904X991T/intake"),
+    # `EXEC-SEAL-01`. The executor connections (R-80 any-role reads; administrator writes).
+    "listExecutorConnections": ("GET", "/executor-connections"),
+    "createExecutorConnection": ("POST", "/executor-connections"),
+    "getExecutorConnection": ("GET", "/executor-connections/exc_01M2545JSD15ETSNNV904X991T"),
+    "reviseExecutorConnection": (
+        "POST", "/executor-connections/exc_01M2545JSD15ETSNNV904X991T/revisions"
+    ),
+    "archiveExecutorConnection": (
+        "POST", "/executor-connections/exc_01M2545JSD15ETSNNV904X991T/archive"
+    ),
+    "setExecutorSecret": ("POST", "/executor-connections/exc_01M2545JSD15ETSNNV904X991T/secrets"),
+    "generateExecutorSshKey": (
+        "POST", "/executor-connections/exc_01M2545JSD15ETSNNV904X991T/ssh-key"
+    ),
+    "requestExecutorProbe": (
+        "POST", "/executor-connections/exc_01M2545JSD15ETSNNV904X991T/probes"
+    ),
+    "listExecutorRoutes": ("GET", "/executor-routes"),
+    "setExecutorRoute": ("PUT", "/executor-routes"),
     # `W55A-SEAL-01`. The norms operations (R-80 any-role reads; R-113 administrator history
     # and designation). `q` is supplied so the role refusal is the only one in play.
     "searchNorms": ("GET", "/norms/search?q=gost"),
@@ -223,6 +242,10 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "listExecutionQueue": _ANY_ROLE,
     "listExecutionJournal": _ANY_ROLE,
     "listWorkers": _ANY_ROLE,
+    # `EXEC-SEAL-01`: connections, probes and routes are product reads.
+    "listExecutorConnections": _ANY_ROLE,
+    "getExecutorConnection": _ANY_ROLE,
+    "listExecutorRoutes": _ANY_ROLE,
     "searchNorms": _ANY_ROLE,
     "getNormDocument": _ANY_ROLE,
     "listNormParagraphs": _ANY_ROLE,
@@ -306,6 +329,14 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "setJobPriority": _ADMIN,
     "setExecutionPaused": _ADMIN,
     "setWorkerIntake": _ADMIN,
+    # `EXEC-SEAL-01` (R-143): where model work goes is an administrator's act.
+    "createExecutorConnection": _ADMIN,
+    "reviseExecutorConnection": _ADMIN,
+    "archiveExecutorConnection": _ADMIN,
+    "setExecutorSecret": _ADMIN,
+    "generateExecutorSshKey": _ADMIN,
+    "requestExecutorProbe": _ADMIN,
+    "setExecutorRoute": _ADMIN,
     # `W55A-SEAL-01` (R-113): who designated which snapshot, and the designation itself.
     "listNormSnapshotEvents": _ADMIN,
     "setCurrentNormSnapshot": _ADMIN,

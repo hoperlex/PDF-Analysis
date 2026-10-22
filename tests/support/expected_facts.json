@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 73,
+    "path_count": 81,
     "operations": [
       [
         "POST",
@@ -417,6 +417,56 @@
         "GET",
         "/runs/{run_id}/norm-references",
         "getRunNormReferences"
+      ],
+      [
+        "GET",
+        "/executor-connections",
+        "listExecutorConnections"
+      ],
+      [
+        "POST",
+        "/executor-connections",
+        "createExecutorConnection"
+      ],
+      [
+        "GET",
+        "/executor-connections/{connection_id}",
+        "getExecutorConnection"
+      ],
+      [
+        "POST",
+        "/executor-connections/{connection_id}/revisions",
+        "reviseExecutorConnection"
+      ],
+      [
+        "POST",
+        "/executor-connections/{connection_id}/archive",
+        "archiveExecutorConnection"
+      ],
+      [
+        "POST",
+        "/executor-connections/{connection_id}/secrets",
+        "setExecutorSecret"
+      ],
+      [
+        "POST",
+        "/executor-connections/{connection_id}/ssh-key",
+        "generateExecutorSshKey"
+      ],
+      [
+        "POST",
+        "/executor-connections/{connection_id}/probes",
+        "requestExecutorProbe"
+      ],
+      [
+        "GET",
+        "/executor-routes",
+        "listExecutorRoutes"
+      ],
+      [
+        "PUT",
+        "/executor-routes",
+        "setExecutorRoute"
       ]
     ],
     "schema_names": [
@@ -661,13 +711,43 @@
       "NormReferenceAnchor",
       "NormReferenceItem",
       "NormReferenceUnrecognised",
-      "RunNormReferences"
+      "RunNormReferences",
+      "CreateExecutorConnectionRequest",
+      "ExecutorApiFlavour",
+      "ExecutorBilling",
+      "ExecutorConnection",
+      "ExecutorConnectionDetail",
+      "ExecutorConnectionId",
+      "ExecutorConnectionList",
+      "ExecutorIdentityBasis",
+      "ExecutorKind",
+      "ExecutorPinnedModel",
+      "ExecutorProbe",
+      "ExecutorProbeId",
+      "ExecutorProbeOutcome",
+      "ExecutorProbeState",
+      "ExecutorPullClient",
+      "ExecutorRateCheck",
+      "ExecutorRevision",
+      "ExecutorRevisionId",
+      "ExecutorRoute",
+      "ExecutorRouteList",
+      "ExecutorSecretId",
+      "ExecutorSecretMetadata",
+      "ExecutorSecretPurpose",
+      "ExecutorSshKey",
+      "ExecutorSshProfile",
+      "ExecutorTransport",
+      "ExecutorWorkKind",
+      "ReviseExecutorConnectionRequest",
+      "SetExecutorRouteRequest",
+      "SetExecutorSecretRequest"
     ]
   },
   "error_catalog": {
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0029_routing_refusal_codes",
+  "migration_head": "0030_executor_connections",
   "contract_version": "1.0.0"
 }

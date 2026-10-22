@@ -19,9 +19,14 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import Final
+from typing import Any, Final
 
 from auditmanager.analysis.public import REFERENCE_DOCUMENT_CHARACTERS, input_budget_characters
+from auditmanager.executors.public import (
+    SealingConfigurationError,
+    load_private_ring,
+    load_public_ring,
+)
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 #: The application-layer names, distinct from the fifteen FF-01 freezes for the services.
@@ -85,6 +90,23 @@ DEFAULT_NORMS_SEARCH_TIMEOUT_MS: Final[int] = 3000
 #: Ten minutes: anything longer is not a search a person waits for.
 MAX_NORMS_SEARCH_TIMEOUT_MS: Final[int] = 600_000
 
+#: `EXEC-SEAL-01` (`R-143b`). The key ring that seals executor secrets. The ``api`` and the
+#: worker read the public keys (``kid:base64``, comma-separated) and the key id new secrets are
+#: sealed to; **only the worker reads the private ring**, and the ``api`` refuses to start with
+#: it. All three live in the host-owned ``provider.env``, never in PostgreSQL or S3, so a
+#: database dump carries ciphertext and nothing that opens it.
+SECRETS_PUBLIC_KEYS_ENV: Final[str] = "AUDITMANAGER_SECRETS_PUBLIC_KEYS"
+SECRETS_ACTIVE_KID_ENV: Final[str] = "AUDITMANAGER_SECRETS_ACTIVE_KID"
+SECRETS_KEYS_ENV: Final[str] = "AUDITMANAGER_SECRETS_KEYS"
+
+#: `EXEC-HTTP-01` (`R-143`, plan section 6). Where a run's model adapter comes from. The default
+#: stays ``environment`` -- today's path, from ``PROXY_LLM_*`` or ``ANTHROPIC_API_KEY`` -- until an
+#: operator imports the connection (``python -m auditmanager.executors import-env``) and switches.
+#: With ``database`` a run freezes the revision of the ``text_analysis`` route at start and its
+#: calls go through that connection; the switch back to ``environment`` is the rollback.
+PROVIDER_SOURCE_ENV: Final[str] = "AUDITMANAGER_PROVIDER_SOURCE"
+PROVIDER_SOURCES: Final[tuple[str, ...]] = ("environment", "database")
+
 PROXY_BASE_URL_ENV: Final[str] = "PROXY_LLM_BASE_URL"
 PROXY_TOKEN_ENV: Final[str] = "PROXY_LLM_TOKEN"
 PROXY_MODEL_ENV: Final[str] = "PROXY_LLM_MODEL"
@@ -133,10 +155,23 @@ class AppSettings:
     worker_state_dir: str | None = None
     #: :data:`NORMS_SEARCH_TIMEOUT_ENV`, validated; milliseconds.
     norms_search_timeout_ms: int = DEFAULT_NORMS_SEARCH_TIMEOUT_MS
+    #: `EXEC-SEAL-01`. The ring the ``api`` seals executor secrets to (public keys only), or
+    #: ``None`` when none is configured. Both rings print only their key ids.
+    secrets_public_ring: Any = None
+    #: The worker's private ring (:data:`SECRETS_KEYS_ENV`); ``None`` unless set, and refused
+    #: for ``EXECUTION_ROLE=api``.
+    secrets_private_ring: Any = None
+    #: `EXEC-HTTP-01`: :data:`PROVIDER_SOURCE_ENV`, validated.
+    provider_source: str = "environment"
 
     @property
     def requires_credential(self) -> bool:
-        return self.provider_mode == "live"
+        """An environment-sourced ``live`` process needs a key of its own; a process that makes
+        no model call (``EXECUTION_ROLE=api``) or takes its key from a connection does not."""
+        return (
+            self.provider_mode == "live" and self.provider_source == "environment"
+            and self.execution_role != "api"
+        )
 
 
 def _require(name: str, environ: dict[str, str]) -> str:
@@ -221,6 +256,28 @@ def _norms_search_timeout_ms(environ: dict[str, str]) -> int:
     return value
 
 
+def _secret_rings(role: str, env: dict[str, str]) -> tuple[Any, Any]:
+    """The public ring and the private ring, parsed at start so a malformed variable refuses
+    the start instead of the first secret. The ``api`` holds public keys only: the private ring
+    present on that role is refused, not ignored. A refusal names the variable, never a key."""
+    private = env.get(SECRETS_KEYS_ENV, "").strip() or None
+    if role == "api" and private is not None:
+        raise ConfigurationError(
+            f"{SECRETS_KEYS_ENV} is set but {EXECUTION_ROLE_ENV} is api; the api seals to "
+            f"public keys ({SECRETS_PUBLIC_KEYS_ENV}) and holds no private key"
+        )
+    active = env.get(SECRETS_ACTIVE_KID_ENV, "").strip() or None
+    try:
+        public_ring = load_public_ring(
+            env.get(SECRETS_PUBLIC_KEYS_ENV, "").strip() or None, active,
+            public_variable=SECRETS_PUBLIC_KEYS_ENV, active_variable=SECRETS_ACTIVE_KID_ENV,
+        )
+        private_ring = load_private_ring(private, active, variable=SECRETS_KEYS_ENV)
+    except SealingConfigurationError as exc:
+        raise ConfigurationError(str(exc)) from None
+    return public_ring, private_ring
+
+
 def load(environ: dict[str, str] | None = None) -> AppSettings:
     """Read and validate. Raises :class:`ConfigurationError` on anything missing."""
     env = dict(os.environ if environ is None else environ)
@@ -251,36 +308,75 @@ def load(environ: dict[str, str] | None = None) -> AppSettings:
     if ceiling <= 0:
         raise ConfigurationError(f"{COST_CEILING_ENV} must be positive, got {ceiling}")
 
+    source = env.get(PROVIDER_SOURCE_ENV, "environment").strip() or "environment"
+    if source not in PROVIDER_SOURCES:
+        raise ConfigurationError(
+            f"{PROVIDER_SOURCE_ENV} is {source!r}; the declared sources are "
+            f"{list(PROVIDER_SOURCES)}. A run's adapter comes from one place and never a guess"
+        )
+
     proxy_base_url = env.get(PROXY_BASE_URL_ENV, "").strip() or None
     proxy_token = env.get(PROXY_TOKEN_ENV, "").strip() or None
-    if mode == "proxy":
-        # Refused at startup for the same reason a missing credential is: a process that
-        # starts must be able to serve. The token is the one value the proxy cannot be
-        # reached without, and the base URL is the one it cannot be found without.
-        if proxy_base_url is None:
-            raise ConfigurationError(
-                f"{PROVIDER_MODE_ENV} is proxy but {PROXY_BASE_URL_ENV} is unset"
-            )
-        if proxy_token is None:
-            raise ConfigurationError(
-                f"{PROVIDER_MODE_ENV} is proxy but {PROXY_TOKEN_ENV} is unset; the proxy "
-                "authenticates every call and refuses a blank token before reading the body"
-            )
-
     api_key = env.get(API_KEY_ENV, "").strip() or None
-    if mode == "live" and api_key is None:
-        # Refusing here is the point. A live-mode process with no credential would start,
-        # pass a health check, and fail on the first run - after a document had been
-        # uploaded and a run row written.
-        raise ConfigurationError(
-            f"{PROVIDER_MODE_ENV} is live but {API_KEY_ENV} is unset; a live run cannot "
-            "be served and the process refuses to start rather than discover it later"
-        )
+    if source == "database":
+        # One source of truth, never two. Every connection is a live transport, so the mode is
+        # `live` without the key that mode demands from the environment, and a variable of the
+        # old path that is still set is refused rather than silently ignored.
+        if mode != "live":
+            raise ConfigurationError(
+                f"{PROVIDER_SOURCE_ENV} is database but {PROVIDER_MODE_ENV} is {mode!r}; "
+                "connections are live transports, so the mode must be live"
+            )
+        leftovers = [name for name, value in (
+            (PROXY_BASE_URL_ENV, proxy_base_url), (PROXY_TOKEN_ENV, proxy_token),
+            (PROXY_MODEL_ENV, env.get(PROXY_MODEL_ENV, "").strip() or None),
+            (API_KEY_ENV, api_key),
+        ) if value is not None]
+        if leftovers:
+            raise ConfigurationError(
+                f"{PROVIDER_SOURCE_ENV} is database but {', '.join(leftovers)} "
+                "is still set; the connections are the one source of truth. Remove the "
+                "variable(s) (import them first with `python -m auditmanager.executors "
+                "import-env`) or switch the source back to environment"
+            )
+        if role in ("worker", "all") and not env.get(SECRETS_KEYS_ENV, "").strip():
+            raise ConfigurationError(
+                f"{PROVIDER_SOURCE_ENV} is database but {SECRETS_KEYS_ENV} is unset; the "
+                "process that calls a model must hold the private ring that opens the keys"
+            )
+    # The `api` makes no model call when a separate worker runs, so it demands no provider
+    # credential (and `provider.env` is no longer loaded into it). Every other role does.
+    if source == "environment" and role != "api":
+        if mode == "proxy":
+            # Refused at startup for the same reason a missing credential is: a process that
+            # starts must be able to serve. The token is the one value the proxy cannot be
+            # reached without, and the base URL is the one it cannot be found without.
+            if proxy_base_url is None:
+                raise ConfigurationError(
+                    f"{PROVIDER_MODE_ENV} is proxy but {PROXY_BASE_URL_ENV} is unset"
+                )
+            if proxy_token is None:
+                raise ConfigurationError(
+                    f"{PROVIDER_MODE_ENV} is proxy but {PROXY_TOKEN_ENV} is unset; the proxy "
+                    "authenticates every call and refuses a blank token before reading the body"
+                )
+        if mode == "live" and api_key is None:
+            # Refusing here is the point. A live-mode process with no credential would start,
+            # pass a health check, and fail on the first run - after a document had been
+            # uploaded and a run row written.
+            raise ConfigurationError(
+                f"{PROVIDER_MODE_ENV} is live but {API_KEY_ENV} is unset; a live run cannot "
+                "be served and the process refuses to start rather than discover it later"
+            )
 
     model_id = env.get(MODEL_ID_ENV, "").strip() or "claude-opus-5"
     budget = _input_budget(model_id, ceiling)
 
+    public_ring, private_ring = _secret_rings(role, env)
     return AppSettings(
+        provider_source=source,
+        secrets_public_ring=public_ring,
+        secrets_private_ring=private_ring,
         database_url=_require("DATABASE_URL", env),
         s3_endpoint_url=_require("S3_ENDPOINT_URL", env),
         s3_region=_require("S3_REGION", env),

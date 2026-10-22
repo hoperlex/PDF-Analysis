@@ -62,6 +62,7 @@ from auditmanager.runs.reconciliation import (
     reconcile_at_startup,
     reconcile_interrupted_runs,
 )
+from auditmanager.runs.provider import FrozenRoute, ProviderBinding, ProviderResolver, RouteFreezer
 from auditmanager.runs.repository import (
     INITIAL_STATE,
     PC01_STAGES,
@@ -92,11 +93,14 @@ __all__ = [
     "DurableCarrier",
     "EffectCheckpoint",
     "ExecutionResult",
+    "FrozenRoute",
     "INITIAL_STATE",
     "INTERRUPTED_REASON",
     "INTERRUPTED_TERMINAL_REASON",
     "InlineCarrier",
     "PC01_STAGES",
+    "ProviderBinding",
+    "ProviderResolver",
     "RECONCILIATION_TERMINAL",
     "RETRYABLE_STAGE_ERRORS",
     "RUN_CONCURRENCY",
@@ -104,6 +108,7 @@ __all__ = [
     "ReconciledRun",
     "ReconciliationReport",
     "RetryPolicy",
+    "RouteFreezer",
     "RunCarrier",
     "RunCost",
     "RunRepository",

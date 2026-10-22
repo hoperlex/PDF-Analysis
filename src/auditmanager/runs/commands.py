@@ -110,13 +110,14 @@ from sqlalchemy import text
 
 from auditmanager.documents.public import DocumentRepository
 from auditmanager.norms.public import current_snapshot
-from auditmanager.jobs.public import JobRepository
+from auditmanager.jobs.public import JobRepository, append_execution_event
 from auditmanager.ingest.public import (
     CommandReplay,
     CommandRepository,
     CommandStarted,
     payload_fingerprint,
 )
+from auditmanager.runs.provider import FrozenRoute, RouteFreezer
 from auditmanager.runs.repository import RunRepository, RunRow
 from auditmanager.sections.public import route_classified_version
 from auditmanager.shared.errors import DomainError, ErrorCode
@@ -406,6 +407,7 @@ def start_audit_run(
     norms_snapshot: NormsSnapshotReader = current_norms_snapshot,
     input_budget_characters: int | None = None,
     section_profiles: SectionProfiles | None = None,
+    connection_route: RouteFreezer | None = None,
 ) -> StartedRun:
     """Create one durable ``AuditRun``, or answer what already happened under this key.
 
@@ -432,6 +434,14 @@ def start_audit_run(
     ``section_profiles`` (`W59-SECTION-SEAL-01`): when given, the profile and bundle are
     routed from the version's persisted classification and ``analysis_profile_id`` /
     ``prompt_bundle_id`` must be omitted; see the module docstring.
+
+    ``connection_route`` (`EXEC-HTTP-01`): with the provider source ``database`` the freezer
+    resolves the ``text_analysis`` route to a connection revision in this transaction, **for a
+    new key only**; the revision is written to the run, which freezes it, and the input budget
+    is the one that follows that revision's pinned model, replacing ``input_budget_characters``.
+    A route with nothing usable is refused here as ``dependency_unavailable``
+    (``executor_route_missing``) before the key is claimed, so nothing is written. A standby chosen
+    in place of the primary is journaled once the run exists.
     """
     _explicit_or_routed(analysis_profile_id, prompt_bundle_id, section_profiles)
     command_repo = commands or CommandRepository()
@@ -454,7 +464,7 @@ def start_audit_run(
     # budget alone read it before this seal.
     known = (
         command_repo.find(session, command_type=COMMAND_TYPE_START_RUN, idempotency_key=key)
-        if budget is not None or section_profiles is not None
+        if budget is not None or section_profiles is not None or connection_route is not None
         else None
     )
     if section_profiles is not None:
@@ -482,6 +492,10 @@ def start_audit_run(
     # refusal writes no command record and a retry after the operator raises the ceiling is a
     # fresh start. A key the ledger already knows is not refused here -- it is answered below,
     # as a replay, whatever today's budget is.
+    frozen: FrozenRoute | None = None
+    if connection_route is not None and known is None:
+        frozen = connection_route(session)
+        budget = frozen.input_budget_characters
     if budget is not None and known is None:
         _refuse_over_budget(_version.text_character_count, budget)
 
@@ -544,10 +558,29 @@ def start_audit_run(
         ),
         command_id=str(claimed.command_id),
         norms_snapshot_id=snapshot,
+        connection_revision_id=None if frozen is None else frozen.revision_id,
     )
+    _journal_standby(session, run_id, frozen)
     command_repo.succeed(session, claimed.command_id, {"run_id": run_id})
     return StartedRun(
         run_id=run_id, command_id=str(claimed.command_id), replayed=False
+    )
+
+
+def _journal_standby(session: Session, run_id: str, frozen: FrozenRoute | None) -> None:
+    """A standby used instead of the primary is an event of the run (plan section 2): there is
+    no implicit fallback, so every use leaves a record beside the run's frozen revision."""
+    if frozen is None or frozen.standby_reason is None:
+        return
+    append_execution_event(
+        session, event_type="audit_run.standby_used", aggregate_type="AuditRun",
+        aggregate_id=run_id, run_id=run_id,
+        payload={
+            "revision_id": frozen.revision_id,
+            "primary_connection_id": frozen.primary_connection_id,
+            "standby_connection_id": frozen.standby_connection_id,
+            "reason": frozen.standby_reason,
+        },
     )
 
 
@@ -630,8 +663,12 @@ def reaudit_run(
     norms_snapshot: NormsSnapshotReader = current_norms_snapshot,
     input_budget_characters: int | None = None,
     section_profiles: SectionProfiles | None = None,
+    connection_route: RouteFreezer | None = None,
 ) -> StartedRun:
     """Create one new run of a terminal source's document version, on today's configuration.
+
+    ``connection_route`` (`EXEC-HTTP-01`) freezes the connection revision of the new run exactly
+    as ``start_audit_run`` does, on today's route, for a new key only.
 
     `R-82`: a re-audit is the same document version analysed on the **current** analysis
     profile, prompt bundle and provider mode. The caller passes the configuration the
@@ -669,7 +706,8 @@ def reaudit_run(
     ), {"run_id": source_run_id}).scalar_one_or_none()
     source = repository.get(session, source_run_id)
     source_version = None
-    if (section_profiles is not None or budget is not None) and ledger.find(
+    frozen: FrozenRoute | None = None
+    if (section_profiles is not None or budget is not None or connection_route is not None) and ledger.find(
         session, command_type="reaudit_run", idempotency_key=IdempotencyKey(idempotency_key)
     ) is None:
         source_version = document_repo.get_version(session, VersionUid.parse(source.version_uid))
@@ -677,6 +715,9 @@ def reaudit_run(
             routed = route_classified_version(source_version, section_profiles)
             analysis_profile_id = routed.analysis_profile_id
             prompt_bundle_id = routed.prompt_bundle_id
+        if connection_route is not None:
+            frozen = connection_route(session)
+            budget = frozen.input_budget_characters
         if budget is not None:
             _refuse_over_budget(source_version.text_character_count, budget)
     claimed = ledger.begin(
@@ -741,7 +782,9 @@ def reaudit_run(
         frozen_input_digest=digest,
         command_id=str(claimed.command_id), reaudit_of_run_id=source_run_id,
         norms_snapshot_id=snapshot,
+        connection_revision_id=None if frozen is None else frozen.revision_id,
     )
+    _journal_standby(session, new_id, frozen)
     repository.advance(session, run_id=new_id, from_state="created", to_state="queued")
     (jobs or JobRepository()).enqueue(session, run_id=new_id)
     ledger.succeed(session, claimed.command_id, {"run_id": new_id})

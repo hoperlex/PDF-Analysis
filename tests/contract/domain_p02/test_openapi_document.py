@@ -173,6 +173,18 @@ REQUIRED_OPERATIONS = {
     # `NORM-REFS-RUN-01`. The norms a run's saved text cites, checked against its pinned
     # snapshot, read-only, for «Нормативные ссылки» on the run page.
     "getRunNormReferences",
+    # `EXEC-SEAL-01` (R-143). The executor connections, their write-only secrets, probes and
+    # routes; no secret is ever returned.
+    "listExecutorConnections",
+    "createExecutorConnection",
+    "getExecutorConnection",
+    "reviseExecutorConnection",
+    "archiveExecutorConnection",
+    "setExecutorSecret",
+    "generateExecutorSshKey",
+    "requestExecutorProbe",
+    "listExecutorRoutes",
+    "setExecutorRoute",
 }
 
 #: The operations a caller reaches while holding no credential. `UNAUTHENTICATED_OPERATIONS`
@@ -214,6 +226,14 @@ WRITE_OPERATIONS = {
     # by its inputs under a new key, and every decision under a new key is a new event.
     "startOptimisationPass",
     "decideOptimisationProposal",
+    # `EXEC-SEAL-01`. Every executor write is keyed; a replay returns the recorded metadata.
+    "createExecutorConnection",
+    "reviseExecutorConnection",
+    "archiveExecutorConnection",
+    "setExecutorSecret",
+    "generateExecutorSshKey",
+    "requestExecutorProbe",
+    "setExecutorRoute",
 }
 
 PAGINATED_OPERATIONS = {
@@ -554,7 +574,9 @@ def _takes_caller_input(document: dict, operation: dict) -> bool:
 #: parameter, header and body an operation takes.
 INPUT_LESS_OPERATIONS: frozenset[str] = frozenset(
     # `W59-ANALYSIS-SETTINGS-01` adds ``listAnalysisProfiles``: the registry takes no input.
-    {"getDashboardSummary", "getMe", "getProductVersion", "listReleases", "listAnalysisProfiles"}
+    # `EXEC-SEAL-01` adds the two executor lists: a connection list and a route list take no input.
+    {"getDashboardSummary", "getMe", "getProductVersion", "listReleases", "listAnalysisProfiles",
+     "listExecutorConnections", "listExecutorRoutes"}
 )
 
 

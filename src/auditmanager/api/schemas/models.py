@@ -260,6 +260,37 @@ __all__ = [
     "ProposalVerdict",
     "DecideOptimisationProposalRequest",
     "optional_property",
+    "ExecutorConnectionId",
+    "ExecutorRevisionId",
+    "ExecutorSecretId",
+    "ExecutorProbeId",
+    "ExecutorKind",
+    "ExecutorWorkKind",
+    "ExecutorApiFlavour",
+    "ExecutorTransport",
+    "ExecutorSshProfile",
+    "ExecutorPullClient",
+    "ExecutorBilling",
+    "ExecutorSecretPurpose",
+    "ExecutorProbeState",
+    "ExecutorProbeOutcome",
+    "ExecutorIdentityBasis",
+    "ExecutorRateCheck",
+    "ExecutorPinnedModel",
+    "ExecutorRevisionSettings",
+    "ReviseExecutorConnectionRequest",
+    "ExecutorRevision",
+    "ExecutorProbe",
+    "ExecutorSecretMetadata",
+    "ExecutorConnection",
+    "ExecutorConnectionList",
+    "ExecutorConnectionDetail",
+    "CreateExecutorConnectionRequest",
+    "SetExecutorSecretRequest",
+    "ExecutorSshKey",
+    "ExecutorRoute",
+    "ExecutorRouteList",
+    "SetExecutorRouteRequest",
     "Assignment",
     "AssignmentDetail",
     "AssignmentEvent",
@@ -375,6 +406,19 @@ RunId = TypeAliasType("RunId", Annotated[str, Field(pattern=rf"^run_{_ULID}$")])
 JobId = TypeAliasType("JobId", Annotated[str, Field(pattern=rf"^job_{_ULID}$")])
 #: `W54-SEAL-01`. One registered worker process (``worker_id``, ``wrk``), migration ``0019``.
 WorkerId = TypeAliasType("WorkerId", Annotated[str, Field(pattern=rf"^wrk_{_ULID}$")])
+#: `EXEC-SEAL-01`. The executor connections' public identities (migration ``0030``).
+ExecutorConnectionId = TypeAliasType(
+    "ExecutorConnectionId", Annotated[str, Field(pattern=rf"^exc_{_ULID}$")]
+)
+ExecutorRevisionId = TypeAliasType(
+    "ExecutorRevisionId", Annotated[str, Field(pattern=rf"^excr_{_ULID}$")]
+)
+ExecutorSecretId = TypeAliasType(
+    "ExecutorSecretId", Annotated[str, Field(pattern=rf"^exs_{_ULID}$")]
+)
+ExecutorProbeId = TypeAliasType(
+    "ExecutorProbeId", Annotated[str, Field(pattern=rf"^epb_{_ULID}$")]
+)
 #: `W55A-SEAL-01`. The normative corpus's three public identities (`NORM-Q07`), declared in
 #: ``contracts/domain/v1/identifiers.json`` since `0012_norms_corpus`, cross the wire.
 NormsSnapshotId = TypeAliasType(
@@ -526,13 +570,16 @@ class CostBasis(str, enum.Enum):
     """How well a published cost figure is known. `D-21`.
 
     ``measured`` means every provider call the figure sums reported its own cost.
-    ``estimated`` means at least one did not, so the total is derived. The value is an
+    ``estimated`` means at least one did not, so the total is derived. ``unmetered``
+    (`EXEC-SEAL-01`, `R-143f`) means a call ran on a connection that has no per-call cost
+    (a subscription session): the figure is absent, never a zero. The value is an
     aggregate over every contributing call and never the last one's basis -- see
     ``auditmanager.runs.repository.RunCost`` and `DEBT_REGISTER.md` `D-15`.
     """
 
     MEASURED = "measured"
     ESTIMATED = "estimated"
+    UNMETERED = "unmetered"
 
 
 class FindingCategory(str, enum.Enum):
@@ -3167,3 +3214,285 @@ class SectionSpecification(_Object):
     source_count: _SpecificationCount
     row_count: Annotated[int, Field(ge=0, le=20000)]
     rows: SectionSpecificationRowPage | None
+
+
+# --- executor connections (`EXEC-SEAL-01`, `R-143`) -------------------------------------
+
+
+class ExecutorKind(str, enum.Enum):
+    """How a connection reaches the model: the stand calls an HTTP API, the stand runs a
+    command over SSH, or a remote runner pulls the stand's tasks."""
+
+    HTTP_API = "http_api"
+    SSH_COMMAND = "ssh_command"
+    PULL = "pull"
+
+
+class ExecutorWorkKind(str, enum.Enum):
+    """The kind of model work a route serves. Today exactly one stage calls a model."""
+
+    TEXT_ANALYSIS = "text_analysis"
+
+
+class ExecutorApiFlavour(str, enum.Enum):
+    OPENAI_CHAT = "openai_chat"
+    ANTHROPIC_MESSAGES = "anthropic_messages"
+
+
+class ExecutorTransport(str, enum.Enum):
+    DIRECT = "direct"
+    VPN = "vpn"
+    SSH_TUNNEL = "ssh_tunnel"
+
+
+class ExecutorSshProfile(str, enum.Enum):
+    CLAUDE_CODE_HEADLESS = "claude_code_headless"
+    CUSTOM_COMMAND = "custom_command"
+
+
+class ExecutorPullClient(str, enum.Enum):
+    CLAUDE_CODE_SESSION = "claude_code_session"
+    AGENT = "agent"
+
+
+class ExecutorBilling(str, enum.Enum):
+    METERED = "metered"
+    NOT_METERED = "not_metered"
+
+
+class ExecutorSecretPurpose(str, enum.Enum):
+    API_KEY = "api_key"
+    SSH_PRIVATE_KEY = "ssh_private_key"
+
+
+class ExecutorProbeState(str, enum.Enum):
+    REQUESTED = "requested"
+    RUNNING = "running"
+    FINISHED = "finished"
+
+
+class ExecutorProbeOutcome(str, enum.Enum):
+    OK = "ok"
+    IP_REFUSED = "ip_refused"
+    CREDENTIAL_REFUSED = "credential_refused"
+    MODEL_MISMATCH = "model_mismatch"
+    RATE_MISMATCH = "rate_mismatch"
+    TIMEOUT = "timeout"
+    UNREACHABLE = "unreachable"
+    PROTOCOL_ERROR = "protocol_error"
+    SECRET_UNREADABLE = "secret_unreadable"
+    HOST_KEY_UNPINNED = "host_key_unpinned"
+    HOST_KEY_CHANGED = "host_key_changed"
+    NO_RUNNER_ONLINE = "no_runner_online"
+    DESTINATION_REFUSED = "destination_refused"
+    KIND_NOT_SERVED = "kind_not_served"
+    NO_WORKER = "no_worker"
+
+
+class ExecutorIdentityBasis(str, enum.Enum):
+    """``reported``: the response named the model. ``declared``: the executor asserted it."""
+
+    REPORTED = "reported"
+    DECLARED = "declared"
+
+
+class ExecutorRateCheck(str, enum.Enum):
+    CHECKED = "checked"
+    NOT_REPORTED = "not_reported"
+    MISMATCH = "mismatch"
+    NOT_METERED = "not_metered"
+
+
+class ExecutorPinnedModel(_Object):
+    """One model of the provider lock a revision may name, with its pinned rates (USD per
+    million tokens). The same list validates a revision, so the choice and the refusal agree."""
+
+    pin_id: Annotated[str, Field(min_length=1, max_length=128)]
+    input_per_mtok_usd: Annotated[float, Field(ge=0)]
+    output_per_mtok_usd: Annotated[float, Field(ge=0)]
+
+
+class ExecutorRevisionSettings(_Object):
+    """The non-secret settings of one revision. Which fields a kind takes is validated by the
+    executors context: a field its kind does not use is refused, a missing one is refused."""
+
+    pin_id: Annotated[str, Field(min_length=1, max_length=128)]
+    gateway_model: Annotated[str, Field(min_length=1, max_length=200)]
+    billing: ExecutorBilling
+    allow_client_documents: bool
+    timeout_seconds: Annotated[int, Field(ge=1, le=3600)]
+    api_flavour: ExecutorApiFlavour = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    base_url: Annotated[str, Field(min_length=1, max_length=2048)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    transport: ExecutorTransport = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    max_parallel_calls: Annotated[int, Field(ge=1, le=16)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    ssh_host: Annotated[str, Field(min_length=1, max_length=253)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    ssh_port: Annotated[int, Field(ge=1, le=65535)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    ssh_user: Annotated[str, Field(min_length=1, max_length=64)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    host_key: Annotated[str, Field(min_length=1, max_length=2048)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    ssh_profile: ExecutorSshProfile = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    pull_client: ExecutorPullClient = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    answer_deadline_seconds: Annotated[int, Field(ge=10, le=3600)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    max_claimed_tasks: Annotated[int, Field(ge=1, le=16)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ReviseExecutorConnectionRequest(ExecutorRevisionSettings):
+    """A new immutable revision of a connection: the full settings, never a patch."""
+
+
+class ExecutorProbe(_Object):
+    """One probe of a connection revision. ``requested`` until the worker takes it; a probe
+    nobody takes within 120 seconds ends as ``no_worker``. ``detail`` is scrubbed and never a
+    response body."""
+
+    probe_id: ExecutorProbeId
+    connection_id: ExecutorConnectionId
+    revision_id: ExecutorRevisionId
+    state: ExecutorProbeState
+    requested_at: datetime
+    requested_by: UserUid
+    secret_id: ExecutorSecretId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    outcome: ExecutorProbeOutcome = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    reported_model: Annotated[str, Field(min_length=1, max_length=200)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    identity_basis: ExecutorIdentityBasis = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    latency_ms: Annotated[int, Field(ge=0)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    http_status: Annotated[int, Field(ge=100, le=599)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    rate_check: ExecutorRateCheck = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    observed_host_key: Annotated[str, Field(min_length=1, max_length=2048)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    detail: Annotated[str, Field(max_length=500)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    started_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    finished_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class ExecutorRevision(ExecutorRevisionSettings):
+    """One immutable revision of a connection, with its latest probe."""
+
+    revision_id: ExecutorRevisionId
+    connection_id: ExecutorConnectionId
+    revision_no: Annotated[int, Field(ge=1)]
+    created_at: datetime
+    created_by: UserUid
+    host_key_fingerprint: Annotated[str, Field(min_length=1, max_length=128)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    latest_probe: ExecutorProbe = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class ExecutorSecretMetadata(_Object):
+    """What the API ever says about a secret: that it exists, for what, when and by whom, and
+    its last four characters. The value is write-only; no operation returns it."""
+
+    secret_id: ExecutorSecretId
+    connection_id: ExecutorConnectionId
+    purpose: ExecutorSecretPurpose
+    last4: Annotated[str, Field(max_length=4)]
+    kid: Annotated[str, Field(min_length=1, max_length=64)]
+    bound_to_current_revision: bool
+    set_at: datetime
+    set_by: UserUid
+    public_key: Annotated[str, Field(min_length=1, max_length=2048)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ExecutorConnection(_Object):
+    """A connection: where a process sends model work. Its secrets are metadata only."""
+
+    connection_id: ExecutorConnectionId
+    kind: ExecutorKind
+    display_name: Annotated[str, Field(min_length=1, max_length=120)]
+    created_at: datetime
+    created_by: UserUid
+    secrets: list[ExecutorSecretMetadata]
+    routed_work_kinds: list[ExecutorWorkKind]
+    archived_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    current_revision_id: ExecutorRevisionId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    current_revision_no: Annotated[int, Field(ge=1)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ExecutorConnectionList(_Object):
+    items: list[ExecutorConnection]
+    pinned_models: list[ExecutorPinnedModel]
+
+
+class ExecutorConnectionDetail(_Object):
+    """One connection with every revision (each with its latest probe) and its last 10 probes."""
+
+    connection: ExecutorConnection
+    revisions: list[ExecutorRevision]
+    probes: Annotated[list[ExecutorProbe], Field(max_length=10)]
+
+
+class CreateExecutorConnectionRequest(_Object):
+    kind: ExecutorKind
+    display_name: Annotated[str, Field(min_length=1, max_length=120)]
+
+
+class SetExecutorSecretRequest(_Object):
+    """Write-only. The API seals ``value`` to the stand's public key and never returns it."""
+
+    purpose: ExecutorSecretPurpose
+    value: Annotated[str, Field(min_length=8, max_length=8192)] = Field(
+        json_schema_extra={"writeOnly": True}
+    )
+
+
+class ExecutorSshKey(_Object):
+    """A generated ed25519 pair: the private half is sealed to the connection's SSH endpoint
+    and never returned; the public half and its ``authorized_keys`` line are."""
+
+    sealed_private_key: ExecutorSecretMetadata
+    public_key: Annotated[str, Field(min_length=1, max_length=2048)]
+    authorized_keys_line: Annotated[str, Field(min_length=1, max_length=2200)]
+
+
+class ExecutorRoute(_Object):
+    """Which connection serves one kind of model work, with an optional standby that only an
+    administrator configures. The standby is never used implicitly."""
+
+    work_kind: ExecutorWorkKind
+    primary_connection_id: ExecutorConnectionId
+    set_at: datetime
+    set_by: UserUid
+    standby_connection_id: ExecutorConnectionId = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ExecutorRouteList(_Object):
+    items: list[ExecutorRoute]
+
+
+class SetExecutorRouteRequest(_Object):
+    work_kind: ExecutorWorkKind
+    primary_connection_id: ExecutorConnectionId
+    standby_connection_id: ExecutorConnectionId = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )

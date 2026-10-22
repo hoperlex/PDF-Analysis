@@ -15,7 +15,7 @@
  */
 
 import { createElement } from 'react';
-import type { ReactElement } from 'react';
+import type { ComponentType, ReactElement } from 'react';
 
 import { ProjectsPage } from '@/_pages/projects';
 import { ReviewPage } from '@/_pages/review';
@@ -40,6 +40,11 @@ import { EvidenceViewer } from '@/widgets/evidence-viewer';
 import { ExecutionJournal } from '@/widgets/execution-journal';
 import { ExecutionQueue } from '@/widgets/execution-queue';
 import { WorkerList } from '@/widgets/worker-list';
+import { ExecutorConnections } from '@/widgets/executor-connections';
+import { ExecutorRoutes } from '@/widgets/executor-routes';
+import { WorkersPage } from '@/_pages/workers';
+import { ReviseConnectionForm } from '@/features/manage-executor-connection';
+import { SetExecutorSecretForm } from '@/features/set-executor-secret';
 import { AnalysisProfileTable } from '@/widgets/analysis-profile-table';
 import { SpecificationPricesAnswer } from '@/widgets/specification-prices';
 import { NormReferencesAnswer } from '@/widgets/norm-references';
@@ -114,6 +119,9 @@ import {
 import { BLOCKS_VERSION_UID, blocksVersion, everyKindOfBlock, portalPage } from '../blocks/fixtures';
 
 import { optimisationShapes, seedLoadedOptimisation } from '../optimisation/fixtures';
+import {
+  ALL_CASES as EXECUTOR_CASES, PINNED as EXECUTOR_PINNED, READY as EXECUTOR_READY, seedExecutors,
+} from '../workers/executor-fixtures';
 import { proposalShapes, seedLoadedProposals } from '../optimisation-proposals/fixtures';
 import { SECTION_NO_ROWS, sectionAnswer } from '../section-specification/fixtures';
 
@@ -715,6 +723,36 @@ export function screens(): Screen[] {
     ],
     roles: ['admin'], busy: false, onIntake: noop, onNext: null, onPrevious: null,
   })));
+
+  /*
+   * `EXEC-HTTP-01`: «Подключения» and «Назначения». The cards carry the badges of every probe
+   * outcome, the notes of a key that must be entered again and of the recent changes, and the
+   * revision form and the key form; the routes carry the blocked list and the standby.
+   */
+  for (const [name, roles] of [['administrator', ['admin']], ['expert', ['expert']]] as const) {
+    const client = newClient();
+    seedExecutors(client, EXECUTOR_CASES);
+    client.setQueryData(queryKeys.account.me(), { roles: [...roles] });
+    add(`ExecutorConnections ${name}`, renderScreen(client, createElement(ExecutorConnections, { roles: [...roles] })));
+    add(`ExecutorRoutes ${name}`, renderScreen(client, createElement(ExecutorRoutes, { roles: [...roles] })));
+  }
+  {
+    const client = newClient();
+    seedExecutors(client, EXECUTOR_CASES);
+    client.setQueryData(queryKeys.account.me(), { roles: ['admin'] });
+    add('WorkersPage connections tab', renderScreen(client, createElement(WorkersPage as ComponentType<{ initialTab: 'connections' | 'routes' }>, { initialTab: 'connections' })));
+    add('WorkersPage routes tab', renderScreen(client, createElement(WorkersPage as ComponentType<{ initialTab: 'connections' | 'routes' }>, { initialTab: 'routes' })));
+    add('Executor key form', withRouter(createElement(SetExecutorSecretForm, {
+      connectionId: EXECUTOR_READY.connection.connection_id, outcome: 'saved',
+    })));
+    add('Executor key form refused', withRouter(createElement(SetExecutorSecretForm, {
+      connectionId: EXECUTOR_READY.connection.connection_id, outcome: 'validation',
+    })));
+    add('Executor revision form', withRouter(createElement(ReviseConnectionForm, {
+      connection: EXECUTOR_READY.connection, revision: EXECUTOR_READY.detail.revisions[0],
+      pinnedModels: EXECUTOR_PINNED, holdsKey: true, onClose: noop,
+    })));
+  }
 
   /*
    * `W55B-WEB-BLOCKS`: «Блоки» once a version is chosen, which the derived `/blocks` screen

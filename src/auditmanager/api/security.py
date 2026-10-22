@@ -326,6 +326,11 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "listExecutionQueue": _ANY_ROLE,
         "listExecutionJournal": _ANY_ROLE,
         "listWorkers": _ANY_ROLE,
+        # `EXEC-SEAL-01` (R-143). Any role reads connections, probes and routes; a secret is
+        # absent from every response by schema.
+        "listExecutorConnections": _ANY_ROLE,
+        "getExecutorConnection": _ANY_ROLE,
+        "listExecutorRoutes": _ANY_ROLE,
         "getRunStatus": _ANY_ROLE,
         "getRunNormVerification": _ANY_ROLE,
         "listRunFindings": _ANY_ROLE,
@@ -431,6 +436,15 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "setJobPriority": _ADMIN,
         "setExecutionPaused": _ADMIN,
         "setWorkerIntake": _ADMIN,
+        # `EXEC-SEAL-01` (R-143). Configuring where model work goes is an administrator's act;
+        # the commands re-read the role set in their own transaction.
+        "createExecutorConnection": _ADMIN,
+        "reviseExecutorConnection": _ADMIN,
+        "archiveExecutorConnection": _ADMIN,
+        "setExecutorSecret": _ADMIN,
+        "generateExecutorSshKey": _ADMIN,
+        "requestExecutorProbe": _ADMIN,
+        "setExecutorRoute": _ADMIN,
         # `W55A-SEAL-01` (R-113). Who designated which snapshot, and the designation itself.
         "listNormSnapshotEvents": _ADMIN,
         "setCurrentNormSnapshot": _ADMIN,
