@@ -95,7 +95,7 @@ describe('«на связи» is a call in the last minute', () => {
     expect(poll(READY.detail)).toBe(false);
     expect(poll(PULL_BARE.detail)).toBe(false);
     expect(poll(undefined)).toBe(false);
-    const revokedOnly = { ...PULL_ONLINE.detail, runner_tokens: PULL_ONLINE.detail.runner_tokens?.filter((token) => token.revoked_at !== undefined) };
+    const revokedOnly = { ...PULL_ONLINE.detail, runner_tokens: (PULL_ONLINE.detail.runner_tokens ?? []).filter((token) => token.revoked_at !== undefined) };
     expect(hasLiveRunnerToken(revokedOnly, Date.now())).toBe(false);
     expect(poll(revokedOnly)).toBe(false);
     const probing = { ...PULL_ONLINE.detail, probes: [{ ...PULL_ONLINE.detail.probes[0]!, state: 'running' as const }] };
