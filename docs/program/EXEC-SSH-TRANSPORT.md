@@ -1,4 +1,4 @@
-STATUS: 3/5 Dockerfile.api gets openssh-client (12:05 +05)
+STATUS: 4/5 tests/fixtures/sshd written, not yet built (12:06 +05)
 
 # EXEC-SSH-TRANSPORT - progress and report
 
