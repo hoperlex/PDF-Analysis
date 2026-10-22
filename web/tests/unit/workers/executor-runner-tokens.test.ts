@@ -13,14 +13,11 @@ import { join } from 'node:path';
 import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
-import type { ExecutorConnectionDetail, IssuedRunnerToken, Role } from '@/shared/api';
+import type { IssuedRunnerToken, Role } from '@/shared/api';
 import { queryKeys } from '@/shared/api';
 import {
-  PROBE_POLL_MS,
   RUNNER_ONLINE_WINDOW_MS,
-  RUNNER_POLL_MS,
   RUNNER_TOKEN_STATE_LABELS,
-  connectionDetailQueryOptions,
   connectionRunnerIsOnline,
   hasLiveRunnerToken,
   routeBlocker,
@@ -88,18 +85,13 @@ describe('«на связи» is a call in the last minute', () => {
     expect(Object.values(RUNNER_TOKEN_STATE_LABELS)).toEqual(['действует', 'отозван', 'срок истёк']);
   });
 
-  it('reads a connection with a live token again every ten seconds, and a probe in flight sooner', () => {
-    const options = connectionDetailQueryOptions(CID);
-    const poll = (data: ExecutorConnectionDetail | undefined) => options.refetchInterval({ state: { data } });
-    expect(poll(PULL_ONLINE.detail)).toBe(RUNNER_POLL_MS);
-    expect(poll(READY.detail)).toBe(false);
-    expect(poll(PULL_BARE.detail)).toBe(false);
-    expect(poll(undefined)).toBe(false);
+  it('knows a connection that holds a live token, which is what a re-read of the card is for', () => {
+    expect(hasLiveRunnerToken(PULL_ONLINE.detail, Date.now())).toBe(true);
+    expect(hasLiveRunnerToken(READY.detail, Date.now())).toBe(false);
+    expect(hasLiveRunnerToken(PULL_BARE.detail, Date.now())).toBe(false);
+    expect(hasLiveRunnerToken(undefined, Date.now())).toBe(false);
     const revokedOnly = { ...PULL_ONLINE.detail, runner_tokens: (PULL_ONLINE.detail.runner_tokens ?? []).filter((token) => token.revoked_at !== undefined) };
     expect(hasLiveRunnerToken(revokedOnly, Date.now())).toBe(false);
-    expect(poll(revokedOnly)).toBe(false);
-    const probing = { ...PULL_ONLINE.detail, probes: [{ ...PULL_ONLINE.detail.probes[0]!, state: 'running' as const }] };
-    expect(poll(probing)).toBe(PROBE_POLL_MS);
   });
 });
 

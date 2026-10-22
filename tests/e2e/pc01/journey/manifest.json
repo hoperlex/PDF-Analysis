@@ -570,8 +570,7 @@
         "`setExecutorRoute` -- and, since EXEC-CANDIDATE-2, `issueRunnerToken` and `revokeRunnerToken`",
         "of a `pull` connection -- require explicit intent and are not emitted by this read journey,",
         "like the intake switch. A `pull` connection's card adds no read of its own: the runner",
-        "tokens and the open-task count ride in `getExecutorConnection`, which is read again every",
-        "10 s while a connection holds a live runner token. A runner's four calls",
+        "tokens and the open-task count ride in `getExecutorConnection`. A runner's four calls",
         "(`claimExecutorTask` and the rest) are never made by the browser. The API key is not an API call of the browser at all: the key form",
         "is a server-rendered native `<form method=\"post\">` that posts to the web tier's own",
         "reserved door `POST /bff/v1/executor-secret/<connection_id>` (answer: 303 to",
@@ -589,7 +588,7 @@
       "optional_api": [
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
         {"method": "GET", "path": "/executor-connections", "operationId": "listExecutorConnections", "$why_optional": "read only on the «Подключения» and «Назначения» tabs (EXEC-HTTP-01); the cold route opens «Процессы» and a closed tab mounts nothing"},
-        {"method": "GET", "path": "/executor-connections/{connection_id}", "operationId": "getExecutorConnection", "$why_optional": "read once per listed connection on the «Подключения» and «Назначения» tabs, and polled every 3 s while a probe is open (EXEC-HTTP-01) or every 10 s while a pull connection holds a live runner token (EXEC-PULL-01)"},
+        {"method": "GET", "path": "/executor-connections/{connection_id}", "operationId": "getExecutorConnection", "$why_optional": "read once per listed connection on the «Подключения» and «Назначения» tabs, and polled every 3 s while a probe is open (EXEC-HTTP-01)"},
         {"method": "GET", "path": "/executor-routes", "operationId": "listExecutorRoutes", "$why_optional": "read only on the «Подключения» and «Назначения» tabs (EXEC-HTTP-01)"}
       ],
       "follow": null

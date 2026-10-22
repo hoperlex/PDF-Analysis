@@ -10,8 +10,6 @@ import type {
 } from '@/shared/api';
 import { getExecutorConnection, listExecutorConnections, listExecutorRoutes, queryKeys } from '@/shared/api';
 
-import { RUNNER_POLL_MS, hasLiveRunnerToken } from '../model/runner-tokens';
-
 /*
  * The same freshness rule as the worker registry (`C-26`): a connection's probe is the thing
  * an administrator opens this tab to see now, so every read is stale the moment it settles,
@@ -52,12 +50,8 @@ export function connectionDetailQueryOptions(connectionId: ExecutorConnectionId,
     queryKey: queryKeys.execution.connection(connectionId),
     queryFn: async () => (await getExecutorConnection({ path: { connection_id: connectionId } })).data,
     refetchOnWindowFocus: 'always',
-    // A probe in flight is read every few seconds; a `pull` connection with a live runner token
-    // every ten, so «на связи» and the open tasks follow the runner without a page reload.
     refetchInterval: (query: { state: { data: ExecutorConnectionDetail | undefined } }) =>
-      hasOpenProbe(query.state.data)
-        ? PROBE_POLL_MS
-        : hasLiveRunnerToken(query.state.data, Date.now()) ? RUNNER_POLL_MS : false,
+      hasOpenProbe(query.state.data) ? PROBE_POLL_MS : false,
     staleTime: 0,
     enabled,
   } as const;
