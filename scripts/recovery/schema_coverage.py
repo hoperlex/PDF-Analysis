@@ -38,7 +38,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-HEAD = "0030_executor_connections"
+HEAD = "0031_executor_pull_channel"
 
 #: Every base table of the schema at ``HEAD`` (``relkind`` ``r``, schema ``public``).
 TABLES = frozenset((
@@ -46,7 +46,7 @@ TABLES = frozenset((
     "attempt", "audit_event", "audit_run", "blob", "command_record", "contract_state_transition", "document",
     "document_version", "document_version_classification", "document_version_classification_correction",
     "execution_control", "executor_connection", "executor_connection_revision", "executor_probe",
-    "executor_route_event", "executor_secret", "expert_decision_event", "finding", "finding_evidence", "finding_observation",
+    "executor_route_event", "executor_runner_token", "executor_secret", "executor_task", "expert_decision_event", "finding", "finding_evidence", "finding_observation",
     "finding_observation_norm_citation", "input_manifest_entry", "job", "lease", "model_call", "norm_chunk",
     "norm_chunk_build", "norm_current_snapshot", "norm_current_snapshot_event", "norm_custody_admission",
     "norm_custody_binding", "norm_document", "norm_embedding", "norm_embedding_build",
@@ -104,8 +104,12 @@ TRIGGERS = (
     ("executor_connection_revision", "trg_executor_connection_revision_immutable", "am_immutable_row", 27),
     ("executor_probe", "trg_executor_probe_frozen_guard", "am_guard_frozen_columns", 19),
     ("executor_route_event", "trg_executor_route_event_append_only", "am_append_only", 27),
+    ("executor_runner_token", "trg_executor_runner_token_frozen_guard", "am_guard_frozen_columns", 19),
+    ("executor_runner_token", "trg_executor_runner_token_write_once", "am_guard_write_once_columns", 19),
     ("executor_secret", "trg_executor_secret_frozen_guard", "am_guard_frozen_columns", 19),
     ("executor_secret", "trg_executor_secret_write_once", "am_guard_write_once_columns", 19),
+    ("executor_task", "trg_executor_task_frozen_guard", "am_guard_frozen_columns", 19),
+    ("executor_task", "trg_executor_task_write_once", "am_guard_write_once_columns", 19),
     ("expert_decision_event", "trg_expert_decision_event_append_only", "am_append_only", 27),
     ("finding_evidence", "trg_finding_evidence_immutable", "am_immutable_row", 27),
     ("finding_observation", "trg_finding_observation_immutable", "am_immutable_row", 27),
@@ -188,10 +192,10 @@ SEQUENCES = {
 
 #: ``pg_constraint.contype -> count`` in schema ``public`` at ``HEAD``: p primary key, u unique,
 #: f foreign key, c check, t constraint trigger. A restore that lost one is not the schema.
-CONSTRAINT_COUNTS = {"c": 503, "f": 120, "p": 59, "t": 8, "u": 42}
+CONSTRAINT_COUNTS = {"c": 527, "f": 127, "p": 61, "t": 8, "u": 45}
 
 #: Indexes in schema ``public`` at ``HEAD`` (primary-key and unique indexes included).
-INDEX_COUNT = 168
+INDEX_COUNT = 179
 
 #: Trigger functions that make a table immutable or append-only (the claim a restore must keep).
 GUARD_FUNCTIONS = frozenset((

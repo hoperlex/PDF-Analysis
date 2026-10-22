@@ -558,7 +558,9 @@ class TestN1ComponentReferenceResolution:
         # `NORM-REFS-RUN-01` adds one: an unknown run has no norm references.
         # `EXEC-SEAL-01` adds seven: six operations address a connection by identity and
         # `setExecutorRoute` names connections that may not exist.
-        assert len(report) == 65, report
+        # `EXEC-PULL-01` adds five: issueRunnerToken and revokeRunnerToken address a connection
+        # (and a token), and the three runner operations that address a task by identity.
+        assert len(report) == 70, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

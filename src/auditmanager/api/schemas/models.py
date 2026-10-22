@@ -264,6 +264,8 @@ __all__ = [
     "ExecutorRevisionId",
     "ExecutorSecretId",
     "ExecutorProbeId",
+    "ExecutorRunnerTokenId",
+    "ExecutorTaskId",
     "ExecutorKind",
     "ExecutorWorkKind",
     "ExecutorApiFlavour",
@@ -291,6 +293,16 @@ __all__ = [
     "ExecutorRoute",
     "ExecutorRouteList",
     "SetExecutorRouteRequest",
+    "ExecutorTaskState",
+    "RunnerTokenMetadata",
+    "IssueRunnerTokenRequest",
+    "IssuedRunnerToken",
+    "ClaimExecutorTaskRequest",
+    "ClaimedExecutorTask",
+    "ExtendedExecutorTaskClaim",
+    "SubmitExecutorTaskAnswerRequest",
+    "FailExecutorTaskRequest",
+    "ExecutorTaskAck",
     "Assignment",
     "AssignmentDetail",
     "AssignmentEvent",
@@ -418,6 +430,14 @@ ExecutorSecretId = TypeAliasType(
 )
 ExecutorProbeId = TypeAliasType(
     "ExecutorProbeId", Annotated[str, Field(pattern=rf"^epb_{_ULID}$")]
+)
+#: `EXEC-PULL-01`. A runner token of a ``pull`` connection and a task a runner takes
+#: (migration ``0031``).
+ExecutorRunnerTokenId = TypeAliasType(
+    "ExecutorRunnerTokenId", Annotated[str, Field(pattern=rf"^ern_{_ULID}$")]
+)
+ExecutorTaskId = TypeAliasType(
+    "ExecutorTaskId", Annotated[str, Field(pattern=rf"^ext_{_ULID}$")]
 )
 #: `W55A-SEAL-01`. The normative corpus's three public identities (`NORM-Q07`), declared in
 #: ``contracts/domain/v1/identifiers.json`` since `0012_norms_corpus`, cross the wire.
@@ -3443,11 +3463,21 @@ class ExecutorConnectionList(_Object):
 
 
 class ExecutorConnectionDetail(_Object):
-    """One connection with every revision (each with its latest probe) and its last 10 probes."""
+    """One connection with every revision (each with its latest probe) and its last 10 probes.
+
+    For a ``pull`` connection (`EXEC-PULL-01`) it also carries the runner tokens' metadata and
+    the number of tasks waiting for, or held by, a runner right now. Both are absent for the
+    other kinds. A token's value is never here: it was shown once, when it was issued."""
 
     connection: ExecutorConnection
     revisions: list[ExecutorRevision]
     probes: Annotated[list[ExecutorProbe], Field(max_length=10)]
+    runner_tokens: Annotated[list["RunnerTokenMetadata"], Field(max_length=50)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    open_task_count: Annotated[int, Field(ge=0)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
 
 
 class CreateExecutorConnectionRequest(_Object):
@@ -3496,3 +3526,111 @@ class SetExecutorRouteRequest(_Object):
     standby_connection_id: ExecutorConnectionId = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
+
+
+# --- the pull channel (`EXEC-PULL-01`, `R-143`) ------------------------------------------
+#
+# Four operations are the runner's, authenticated by a runner token (its own principal, never a
+# user session; the document's one `bearerAuth` scheme carries it), and two are the
+# administrator's. The wire is `tools/executor-runner/RUNNER_API.md`.
+
+
+class ExecutorTaskState(str, enum.Enum):
+    """``open -> claimed -> answered | failed``; ``expired`` and ``cancelled`` end an ``open`` or
+    ``claimed`` task. A claim whose lease lapses returns the task to ``open``."""
+
+    OPEN = "open"
+    CLAIMED = "claimed"
+    ANSWERED = "answered"
+    FAILED = "failed"
+    EXPIRED = "expired"
+    CANCELLED = "cancelled"
+
+
+class RunnerTokenMetadata(_Object):
+    """What the API ever says about a runner token after it was issued: that it exists, its
+    non-secret prefix, when it expires or was revoked, and when and from where it was last seen.
+    The value and its hash are never returned."""
+
+    token_id: ExecutorRunnerTokenId
+    connection_id: ExecutorConnectionId
+    token_prefix: Annotated[str, Field(pattern=r"^amr_[0-9a-z]{8}$")]
+    created_at: datetime
+    created_by: UserUid
+    expires_at: datetime
+    revoked_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    revoked_by: UserUid = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    last_seen_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    last_seen_address: Annotated[str, Field(min_length=1, max_length=64)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class IssueRunnerTokenRequest(_Object):
+    """``expires_in_days`` defaults to 30 when absent."""
+
+    expires_in_days: Annotated[int, Field(ge=1, le=365)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class IssuedRunnerToken(_Object):
+    """The token's value, **shown once**: it is stored only as a one-way hash, so no operation
+    can return it again. Copy it now; a lost value is revoked and replaced."""
+
+    token: Annotated[str, Field(min_length=56, max_length=56)] = Field(
+        json_schema_extra={"readOnly": True}
+    )
+    runner_token: RunnerTokenMetadata
+
+
+class ClaimExecutorTaskRequest(_Object):
+    """The long poll holds the request open for up to ``wait_seconds`` (0 to 25, default 25)."""
+
+    wait_seconds: Annotated[int, Field(ge=0, le=25)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ClaimedExecutorTask(_Object):
+    """A task, now claimed by the calling token. ``system`` and ``user_text`` are untrusted,
+    document-derived text. ``model`` is the pinned gateway model the answer must declare."""
+
+    task_id: ExecutorTaskId
+    claim_expires_at: datetime
+    deadline_at: datetime
+    model: Annotated[str, Field(min_length=1, max_length=200)]
+    system: str
+    user_text: str
+    output_schema: Annotated[dict[str, Any], WithJsonSchema({"type": "object"})]
+
+
+class ExtendedExecutorTaskClaim(_Object):
+    claim_expires_at: datetime
+
+
+class SubmitExecutorTaskAnswerRequest(_Object):
+    """``output_text`` is the bare JSON document (no code fence, no commentary) the task's
+    ``output_schema`` describes. ``model`` is the model that produced it, as the runner declares
+    it: an assertion the stand records as such, and holds equal to the connection's pinned model.
+    The token counts are the runner's own; the call is recorded as unmetered."""
+
+    output_text: Annotated[str, Field(min_length=1, max_length=1000000)]
+    model: Annotated[str, Field(min_length=1, max_length=200)]
+    input_tokens: Annotated[int, Field(ge=0)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    output_tokens: Annotated[int, Field(ge=0)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class FailExecutorTaskRequest(_Object):
+    """A lower-case code, optionally followed by ``: `` and a short, payload-free detail."""
+
+    reason: Annotated[str, Field(min_length=1, max_length=512)]
+
+
+class ExecutorTaskAck(_Object):
+    task_id: ExecutorTaskId
+    state: ExecutorTaskState

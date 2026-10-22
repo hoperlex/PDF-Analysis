@@ -194,6 +194,13 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "generateExecutorSshKey",
             "requestExecutorProbe",
             "setExecutorRoute",
+            # `EXEC-PULL-01`: the pull channel's six operations take a path identity, a body or both.
+            "issueRunnerToken",
+            "revokeRunnerToken",
+            "claimExecutorTask",
+            "extendExecutorTaskClaim",
+            "submitExecutorTaskAnswer",
+            "failExecutorTask",
         }, declared_422
 
     def test_no_schema_property_declares_a_default(self) -> None:

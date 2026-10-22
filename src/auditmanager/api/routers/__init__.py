@@ -1,4 +1,4 @@
-"""The ninety-three operations of ``contracts/api/v1/openapi.json``, and nothing else.
+"""The ninety-nine operations of ``contracts/api/v1/openapi.json``, and nothing else.
 
 :func:`build_router` assembles one ``APIRouter`` from the twenty-two router modules. It takes
 its dependencies as arguments and constructs none of them: choosing what sits behind each
@@ -46,6 +46,7 @@ from auditmanager.api.routers.errors import (
 from auditmanager.api.routers.export import build_export_routes
 from auditmanager.api.routers.execution import build_execution_routes
 from auditmanager.api.routers.executors import build_executor_routes
+from auditmanager.api.routers.runner import build_runner_routes
 from auditmanager.api.routers.findings import build_finding_routes
 from auditmanager.api.routers.handlers import (
     FailureEnvelopeMiddleware,
@@ -86,6 +87,7 @@ from auditmanager.api.routers.ports import (
     DocumentPort,
     ExecutionPort,
     ExecutorPort,
+    RunnerPort,
     FindingPort,
     NormContentPort,
     NormsSearchPort,
@@ -125,11 +127,17 @@ class Router(APIRouter):
     :func:`auditmanager.api.security.build_authorization_dependency`.
     """
 
-    __slots__ = ("credentials",)
+    __slots__ = ("credentials", "runner_tokens")
 
-    def __init__(self, *, credentials: CredentialPort | None = None) -> None:
+    def __init__(
+        self, *, credentials: CredentialPort | None = None,
+        runner_tokens: RunnerPort | None = None,
+    ) -> None:
         super().__init__()
         self.credentials = credentials
+        #: `EXEC-PULL-01`. The pull channel's port, which is also what authenticates a runner
+        #: token: the seam reads it from here for the same reason it reads ``credentials``.
+        self.runner_tokens = runner_tokens
 
 __all__ = [
     "BASE_PATH",
@@ -151,6 +159,7 @@ __all__ = [
     "DocumentPort",
     "ExecutionPort",
     "ExecutorPort",
+    "RunnerPort",
     "FailureEnvelopeMiddleware",
     "FindingPort",
     "NormContentPort",
@@ -224,8 +233,9 @@ def build_router(
     optimisation_proposals: OptimisationProposalPort | None = None,
     section_specifications: SectionSpecificationPort | None = None,
     executors: ExecutorPort | None = None,
+    runner: RunnerPort | None = None,
 ) -> Router:
-    """Assemble the ninety-three operations, from the twenty-three router modules -- ``me``,
+    """Assemble the ninety-nine operations, from the twenty-three router modules -- ``me``,
     ``registrations`` and ``users`` are `W49-SEAL-01`'s three, ``sections``
     `W59-SECTION-SEAL-01`'s, ``comparison`` `W59-VERSION-COMPARE-01`'s,
     ``analysis_profiles`` `W59-ANALYSIS-SETTINGS-01`'s, ``dispatch`` `W61-DISPATCHER-01`'s and
@@ -262,7 +272,7 @@ def build_router(
     nothing else. See :class:`Router`. Nothing about the six changes, and an application
     built with no credential port refuses every guarded request rather than serving one.
     """
-    router = Router(credentials=credentials)
+    router = Router(credentials=credentials, runner_tokens=runner)
     # One router, registered onto directly, rather than six included into a seventh.
     # ``include_router`` wraps each sub-router instead of copying its routes, so
     # ``router.routes`` would carry seven opaque wrappers and the whole-surface
@@ -321,6 +331,9 @@ def build_router(
     # `EXEC-SEAL-01`. The executor connections, secrets, probes and routes (`R-143`). Optional
     # with a default, for the reason `blocks` gives above.
     build_executor_routes(router, executors)  # type: ignore[arg-type]
+    # `EXEC-PULL-01`. The pull channel: two administrator operations on runner tokens and the
+    # four a runner calls with one. Optional with a default, for the reason `blocks` gives.
+    build_runner_routes(router, runner)  # type: ignore[arg-type]
     _refuse_a_duplicate_operation_id(router)
     return router
 

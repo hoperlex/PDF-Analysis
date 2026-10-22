@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.api.routers import Router, build_router
 from auditmanager.api.security import TokenSigner, derive_signing_key
+from auditmanager.bootstrap.runner import RunnerAdapter
 from auditmanager.bootstrap.adapters import (
     AccountAdapter,
     AnalysisProfileAdapter,
@@ -352,6 +353,9 @@ def build_application(
         # `EXEC-SEAL-01`. The executor connections: the api seals to the public ring and holds
         # no private key, so nothing it serves can open a secret.
         executors=ExecutorAdapter(sessions, ring=resolved.secrets_public_ring),
+        # `EXEC-PULL-01`. The pull channel: runner tokens, and the four operations a runner
+        # calls with one. It also authenticates the token (the seam asks this port).
+        runner=RunnerAdapter(sessions),
     )
     return Application(
         router=router,

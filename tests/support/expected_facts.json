@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 81,
+    "path_count": 87,
     "operations": [
       [
         "POST",
@@ -467,6 +467,36 @@
         "PUT",
         "/executor-routes",
         "setExecutorRoute"
+      ],
+      [
+        "POST",
+        "/executor-connections/{connection_id}/runner-tokens",
+        "issueRunnerToken"
+      ],
+      [
+        "POST",
+        "/executor-connections/{connection_id}/runner-tokens/{token_id}/revoke",
+        "revokeRunnerToken"
+      ],
+      [
+        "POST",
+        "/runner/tasks/claim",
+        "claimExecutorTask"
+      ],
+      [
+        "POST",
+        "/runner/tasks/{task_id}/extend",
+        "extendExecutorTaskClaim"
+      ],
+      [
+        "POST",
+        "/runner/tasks/{task_id}/answer",
+        "submitExecutorTaskAnswer"
+      ],
+      [
+        "POST",
+        "/runner/tasks/{task_id}/fail",
+        "failExecutorTask"
       ]
     ],
     "schema_names": [
@@ -741,13 +771,25 @@
       "ExecutorWorkKind",
       "ReviseExecutorConnectionRequest",
       "SetExecutorRouteRequest",
-      "SetExecutorSecretRequest"
+      "SetExecutorSecretRequest",
+      "ClaimExecutorTaskRequest",
+      "ClaimedExecutorTask",
+      "ExecutorRunnerTokenId",
+      "ExecutorTaskAck",
+      "ExecutorTaskId",
+      "ExecutorTaskState",
+      "ExtendedExecutorTaskClaim",
+      "FailExecutorTaskRequest",
+      "IssueRunnerTokenRequest",
+      "IssuedRunnerToken",
+      "RunnerTokenMetadata",
+      "SubmitExecutorTaskAnswerRequest"
     ]
   },
   "error_catalog": {
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0030_executor_connections",
+  "migration_head": "0031_executor_pull_channel",
   "contract_version": "1.0.0"
 }

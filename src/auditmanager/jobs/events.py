@@ -24,6 +24,9 @@ _SAFE_KEYS = frozenset({
     "connection_id", "connection_kind", "revision_id", "revision_no", "secret_id", "purpose",
     "probe_id", "work_kind", "primary_connection_id", "standby_connection_id",
 })
+# `EXEC-PULL-01`: a runner token is addressed by its identity, never by its value, its prefix
+# or its hash.
+_SAFE_KEYS = _SAFE_KEYS | frozenset({"token_id", "task_id"})
 _INSERT = text(
     "INSERT INTO audit_event (audit_event_id, event_type, aggregate_type, "
     "aggregate_id, payload) VALUES (:event_id, :event_type, :aggregate_type, "

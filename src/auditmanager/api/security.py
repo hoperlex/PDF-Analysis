@@ -196,14 +196,19 @@ __all__ = [
     "AuthorizationDependency",
     "AccountStanding",
     "AccountStandings",
+    "CurrentRunner",
     "CurrentSubject",
     "IssuedCredential",
+    "RUNNER_OPERATIONS",
     "RevocationNotices",
+    "RunnerIdentity",
+    "RunnerTokens",
     "Subject",
     "TokenSigner",
     "bearer_scheme",
     "build_authorization_dependency",
     "build_signer",
+    "current_runner",
     "current_subject",
     "derive_signing_key",
     "is_authorization_seam",
@@ -238,6 +243,25 @@ API_TOKEN_VARIABLE: Final[str] = "AUDITMANAGER_API_TOKEN"
 UNAUTHENTICATED_OPERATIONS: Final[frozenset[str]] = frozenset(
     {"issueToken", "submitRegistration", "readRegistrationStatus"}
 )
+
+#: `EXEC-PULL-01` (`R-143`). The operations a **runner** calls with a runner token: a Claude Code
+#: session behind the stdio bridge, or an unattended agent. A register by ``operationId``, for
+#: :data:`UNAUTHENTICATED_OPERATIONS`'s reason.
+#:
+#: A runner token is its **own principal type**, never a user session. These four operations are
+#: authenticated by it and by nothing else -- no account is read, no role is checked, and a user's
+#: credential presented to one is ``authentication_required`` like any wrong token. In the other
+#: direction a runner token is not a credential this seam's signer produced, so every other
+#: operation refuses it as ``authentication_required``, with the same answer a forged one gets.
+#: What a token may reach beyond that is the connection it belongs to: one token opens the
+#: tasks of one connection and nobody else's (``auditmanager.executors.runner``).
+#:
+#: The document declares the same single ``bearerAuth`` scheme for them: a bearer credential on
+#: the wire, whose issuer is the only difference, and the seam is what the document never names.
+RUNNER_OPERATIONS: Final[frozenset[str]] = frozenset({
+    "claimExecutorTask", "extendExecutorTaskClaim", "submitExecutorTaskAnswer",
+    "failExecutorTask",
+})
 
 #: `R-50`. The operations a credential minted for an account **still on its seeded
 #: password** may reach, by ``operationId``. Everything else answers ``permission_denied``.
@@ -445,6 +469,10 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "generateExecutorSshKey": _ADMIN,
         "requestExecutorProbe": _ADMIN,
         "setExecutorRoute": _ADMIN,
+        # `EXEC-PULL-01`. A runner token is issued and revoked by an administrator; the token's
+        # value is shown once and no operation returns it again.
+        "issueRunnerToken": _ADMIN,
+        "revokeRunnerToken": _ADMIN,
         # `W55A-SEAL-01` (R-113). Who designated which snapshot, and the designation itself.
         "listNormSnapshotEvents": _ADMIN,
         "setCurrentNormSnapshot": _ADMIN,
@@ -660,6 +688,29 @@ class AccountStandings(Protocol):
         exists must not keep authorising requests until its last credential expires, and a
         deployment whose lookup cannot answer must fail closed.
         """
+
+
+@dataclass(frozen=True, slots=True)
+class RunnerIdentity:
+    """Who a runner request is: one token of one connection (`EXEC-PULL-01`).
+
+    Not a :class:`Subject`: it names no account, carries no role and no epoch. It is the seam's
+    own vocabulary, like :class:`AccountStanding`; the ``executors`` boundary's principal is
+    translated into it by the adapter."""
+
+    token_id: str
+    connection_id: str
+
+
+@runtime_checkable
+class RunnerTokens(Protocol):
+    """The one thing the seam needs to authenticate a runner, and nothing more.
+
+    ``None`` is the single answer for a token that is unknown, wrong, revoked, expired or on an
+    archived connection: a refusal, never a permissive default, and not an oracle for which."""
+
+    def authenticate_runner(self, presented: str, *, address: str | None) -> RunnerIdentity | None:
+        """The identity of this presented token, or ``None``."""
 
 
 def derive_signing_key(secret: str) -> bytes:
@@ -1014,6 +1065,7 @@ def build_authorization_dependency(
     *,
     standings: AccountStandings | None = None,
     notices: RevocationNotices | None = None,
+    runner_tokens: RunnerTokens | None = None,
 ) -> object:
     """The dependency that guards the surface, closed over this environment's signer.
 
@@ -1036,6 +1088,10 @@ def build_authorization_dependency(
     precheck built with the same object (:func:`build_credential_precheck`). It only ever
     receives; the seam's own decision never reads it. ``None`` -- the default -- reports
     nothing.
+
+    ``runner_tokens`` (`EXEC-PULL-01`) is how the four :data:`RUNNER_OPERATIONS` authenticate.
+    ``None`` -- the default, and ``create_documentation_app`` -- refuses them, like a missing
+    account port refuses everything else.
     """
     signer = build_signer(environ)
 
@@ -1075,6 +1131,17 @@ def build_authorization_dependency(
         """
         operation = _operation_of(request)
         if operation in UNAUTHENTICATED_OPERATIONS:
+            return
+        if operation in RUNNER_OPERATIONS:
+            # `EXEC-PULL-01`. A runner token, a principal of its own: no account, no role.
+            if runner_tokens is None or credentials is None:
+                raise DomainError(ErrorCode.AUTHENTICATION_REQUIRED)
+            identity = runner_tokens.authenticate_runner(
+                credentials.credentials, address=_peer_address(request)
+            )
+            if identity is None:
+                raise DomainError(ErrorCode.AUTHENTICATION_REQUIRED)
+            request.state.runner = identity
             return
         if signer is None or credentials is None or standings is None:
             raise DomainError(ErrorCode.AUTHENTICATION_REQUIRED)
@@ -1199,3 +1266,31 @@ def current_subject(request: Request) -> Subject:
 
 #: What an operation writes to receive the verified caller. The seam is the only producer.
 CurrentSubject = Annotated[Subject, Depends(current_subject)]
+
+
+def _peer_address(request: Request) -> str | None:
+    """The address the proxy saw, for a token's "last seen from".
+
+    ``X-Real-IP`` is set by the edge proxy from ``$remote_addr`` (``infra/deploy/proxy``), which
+    is the one header a caller cannot supply through it; without one the socket's peer. It is
+    recorded and shown to an administrator and decides nothing."""
+    forwarded = request.headers.get("x-real-ip", "").strip()
+    if forwarded:
+        return forwarded[:64]
+    return request.client.host[:64] if request.client else None
+
+
+def current_runner(request: Request) -> RunnerIdentity:
+    """The runner the seam authenticated for this request (`EXEC-PULL-01`).
+
+    Only a runner operation may depend on this, and the seam either published an identity or
+    refused the request before any handler ran; the refusal below is the unreachable branch's
+    typed answer, as :func:`current_subject`'s is."""
+    identity = getattr(request.state, "runner", None)
+    if not isinstance(identity, RunnerIdentity):
+        raise DomainError(ErrorCode.AUTHENTICATION_REQUIRED)
+    return identity
+
+
+#: What a runner operation writes to receive the authenticated runner.
+CurrentRunner = Annotated[RunnerIdentity, Depends(current_runner)]
