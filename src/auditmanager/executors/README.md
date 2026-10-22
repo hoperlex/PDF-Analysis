@@ -2,8 +2,11 @@
 
 Where a process sends model work, configured by an administrator (owner rulings `R-143` and
 `R-144`; `docs/program/dispatch/EXECUTOR-CONNECTIONS-PLAN.md`). `EXEC-SEAL-01` is the enabling
-slice: the tables, the contract, the sealing and the commands. **A run's behaviour does not
-change**: the provider source stays `environment` until `EXEC-HTTP-01`.
+slice: the tables, the contract, the sealing and the commands. `EXEC-HTTP-01` made the `http_api`
+kind serve a run (the provider source `database`; the default stays `environment`) and
+`EXEC-PULL-01`, wired by `EXEC-CANDIDATE-2`, the `pull` kind: a **channel kind** (no key, no
+address; the remote party calls the stand), registered in `kinds.py` with `register_channel_kind`
+and built from the worker's `KindRuntime`.
 
 | Module | What it owns |
 |---|---|
@@ -18,7 +21,7 @@ change**: the provider source stays `environment` until `EXEC-HTTP-01`.
 | `http_adapter.py` | the `http_api` kind as a model adapter: `openai_chat` through `ProxyAdapter`, `anthropic_messages` through the SDK, both pinned |
 | `identity.py` | the identity and rate check of a probe (ported from `tools/provider/identity_probe.py`) |
 | `probes.py` / `probe_runner.py` | «Проверить»: the smallest completion read into an outcome; the worker thread that takes `requested` probes |
-| `kinds.py` | one adapter factory per kind: **the seam a new kind plugs into** (`register_adapter_factory`) |
+| `kinds.py` | one adapter factory per kind: **the seam a new kind plugs into** (`register_adapter_factory`; `register_channel_kind` for a kind whose remote party calls the stand, as `pull`) |
 | `usability.py` | served by this release, and probed `ok` on its current key: the two conditions for a route and for a run start |
 | `resolver.py` | `freeze_connection` at run start, `bind_connection` per Attempt |
 | `operations.py` / `__main__.py` | `python -m auditmanager.executors import-env | rewrap | reach` |

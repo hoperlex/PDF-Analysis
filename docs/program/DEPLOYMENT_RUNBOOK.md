@@ -1316,14 +1316,21 @@ token, and nothing else: no database, no object store, no shell on the stand. It
 
 1. Create the connection with kind `pull`, set a revision (the pinned model, the answer deadline,
    `max_claimed_tasks`; `not_metered` for a subscription session) and route «Анализ текста» to it
-   once a probe passes.
-2. The issue-token action on the connection shows the token **once** (`amr_` and 52 more characters). The stand keeps
+   once a probe passes. «Проверить» posts a synthetic task that a runner must claim within 120 s and
+   answer within 120 s; a connection with no runner online ends the probe as «ни один клиент не на
+   связи» and cannot be routed. The worker takes the probe, so a worker must be up.
+2. «Выпустить токен» on the connection's card (`Исполнители → Подключения`) shows the token **once**
+   in a box with a copy button and a warning that it will not be shown again (`amr_` and 52 more characters). The stand keeps
    only its SHA-256, so a lost value cannot be shown again: revoke it and issue another. The
    default life is 30 days; the screen shows the prefix, the expiry, when and from where it was
    last seen.
 3. The owner puts the value into the runner's environment (`PDF_ANALYSIS_RUNNER_TOKEN`), never
    into a file or a URL. `tools/executor-runner/README.md` has the `claude mcp add …` command and
    says where Claude Code keeps it in clear.
+
+**The card.** A `pull` connection's card lists each token (prefix, issued, expires, revoked, last seen
+and from which address), says «на связи» when a runner of the connection called the stand less than
+60 s ago, and shows the number of tasks open now. «Отозвать» asks first.
 
 **Revoking.** The revoke action (`POST /executor-connections/{id}/runner-tokens/{token_id}/revoke`)
 takes effect on the runner's next call, which is `401 authentication_required`; a claim it holds
