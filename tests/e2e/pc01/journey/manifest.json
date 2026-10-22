@@ -2475,6 +2475,278 @@
         "case": "action"
       },
       {
+        "name": "assign-work-to-be-given-back",
+        "at": "/dispatcher",
+        "page_module": "web/src/app/dispatcher/page.tsx",
+        "control_module": "web/src/features/create-assignment/ui/create-assignment-form.tsx",
+        "$comment": [
+          "PC01-JOURNEY-GAPS-01. A second assignment of the same document to the same expert (the first is done, so",
+          "nothing is open): the work the expert will take and then give back. Pressed once."
+        ],
+        "actions": [
+          {
+            "do": "select",
+            "selector": "form[data-create-assignment]",
+            "label": "Проект",
+            "option_value": "{project_uid}"
+          },
+          {
+            "do": "wait_for",
+            "selector": "form[data-create-assignment] option[value=\"{document_uid}\"]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "select",
+            "selector": "form[data-create-assignment]",
+            "label": "Документ (необязательно)",
+            "option_value": "{document_uid}"
+          },
+          {
+            "do": "wait_for",
+            "selector": "form[data-create-assignment] option[value=\"{expert_only_user_uid}\"]",
+            "bound_ms": 15000
+          },
+          {
+            "do": "select",
+            "selector": "form[data-create-assignment]",
+            "label": "Эксперт",
+            "option_value": "{expert_only_user_uid}"
+          },
+          {
+            "do": "fill",
+            "selector": "form[data-create-assignment]",
+            "value": "Раздел АР: работа, которую вернут %STAMP%",
+            "label": "Комментарий (необязательно)",
+            "tag": "textarea"
+          },
+          {
+            "do": "click",
+            "selector": "[data-create-assignment-submit]",
+            "text": "Назначить"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/assignments",
+            "operationId": "createAssignment",
+            "expect_status": 200,
+            "count": 1
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "createAssignment",
+            "json_path": "assignment_uid",
+            "matches": "^asg_%ID%$"
+          },
+          {
+            "of": "createAssignment",
+            "json_path": "status",
+            "equals": "assigned"
+          }
+        ],
+        "captures": [
+          {
+            "kind": "response",
+            "of": "createAssignment",
+            "json_path": "assignment_uid",
+            "as": [
+              "given_back_assignment_uid"
+            ],
+            "matches": "^(asg_%ID%)$",
+            "bound_ms": 30000
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-create-assignment-done]",
+            "text_contains": "Назначение создано."
+          }
+        ],
+        "forbids_rendered": [
+          "[data-create-assignment-failure]"
+        ],
+        "screen": "dispatcher",
+        "case": "action"
+      },
+      {
+        "name": "my-tasks-take-the-work-to-give-it-back",
+        "as": "expert_only",
+        "at": "/",
+        "page_module": "web/src/app/page.tsx",
+        "control_module": "web/src/widgets/my-tasks/ui/my-tasks.tsx",
+        "$comment": [
+          "The assignee takes the second piece of work from «Мои задачи» (the take-the-work step of a return): it is in",
+          "progress, and offers both to be completed and to be given back."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "[data-my-task=\"{assignment_uid}\"] [data-assignment-move=\"started\"]"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/assignments/{assignment_uid}/transitions",
+            "operationId": "transitionAssignment",
+            "expect_status": 200,
+            "count": 1
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "transitionAssignment",
+            "json_path": "status",
+            "equals": "in_progress"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-my-task=\"{assignment_uid}\"]",
+            "text_contains": "В работе"
+          },
+          {
+            "selector": "[data-my-task=\"{assignment_uid}\"] [data-assignment-move=\"completed\"]"
+          },
+          {
+            "selector": "[data-my-task=\"{assignment_uid}\"] [data-assignment-move=\"returned\"]",
+            "text_contains": "Вернуть"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-assignment-move-failure]"
+        ],
+        "screen": "my-tasks",
+        "case": "action",
+        "bind": {
+          "assignment_uid": "given_back_assignment_uid"
+        }
+      },
+      {
+        "name": "my-tasks-give-the-work-back",
+        "as": "expert_only",
+        "at": "/",
+        "page_module": "web/src/app/page.tsx",
+        "control_module": "web/src/widgets/my-tasks/ui/my-tasks.tsx",
+        "bind": {
+          "assignment_uid": "given_back_assignment_uid"
+        },
+        "$comment": [
+          "A successful «Вернуть». The assignee opens the return form, gives the reason it requires and presses «Вернуть»:",
+          "one transition `returned`, carrying the reason. The work stays in «Мои задачи» as a line that waits for an",
+          "administrator, with no move left on it for this account (an expert alone cannot reassign or cancel)."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "[data-my-task=\"{assignment_uid}\"] [data-assignment-move=\"returned\"]",
+            "settle": true
+          },
+          {
+            "do": "fill",
+            "selector": "[data-assignment-draft=\"returned\"]",
+            "label": "Причина возврата",
+            "tag": "textarea",
+            "value": "Раздел не относится к моей специальности %STAMP%"
+          },
+          {
+            "do": "click",
+            "selector": "[data-assignment-draft=\"returned\"] button[type=\"submit\"]",
+            "text": "Вернуть"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/assignments/{assignment_uid}/transitions",
+            "operationId": "transitionAssignment",
+            "expect_status": 200,
+            "count": 1
+          }
+        ],
+        "expects_request": [
+          {
+            "of": "transitionAssignment",
+            "content_type_starts_with": "application/json",
+            "body_contains": [
+              "\"kind\":\"returned\"",
+              "Раздел не относится к моей специальности"
+            ]
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "transitionAssignment",
+            "json_path": "status",
+            "equals": "returned"
+          },
+          {
+            "of": "transitionAssignment",
+            "json_path": "status_reason",
+            "matches": "^Раздел не относится к моей специальности "
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-my-task=\"{assignment_uid}\"]",
+            "text_contains": "Возвращено вами; ждёт решения администратора."
+          }
+        ],
+        "forbids_rendered": [
+          "[data-assignment-move-failure]",
+          "[data-assignment-draft]",
+          "[data-my-task=\"{assignment_uid}\"] [data-assignment-move]"
+        ],
+        "screen": "my-tasks",
+        "case": "action"
+      },
+      {
+        "name": "dispatcher-shows-the-work-given-back",
+        "at": "/dispatcher",
+        "page_module": "web/src/app/dispatcher/page.tsx",
+        "control_module": "web/src/widgets/assignment-board/ui/assignment-board.tsx",
+        "bind": {
+          "assignment_uid": "given_back_assignment_uid"
+        },
+        "$comment": [
+          "The administrator sees the work given back with the reason the expert wrote, and is offered what only an",
+          "administrator may do with it: give it to someone again or cancel it. The expert's own moves are not offered."
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/assignments",
+            "operationId": "listAssignments",
+            "expect_status": 200
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-assignment=\"{assignment_uid}\"]",
+            "text_contains": "Возвращено"
+          },
+          {
+            "selector": "[data-assignment=\"{assignment_uid}\"]",
+            "text_contains": "Причина:"
+          },
+          {
+            "selector": "[data-assignment=\"{assignment_uid}\"] [data-assignment-move=\"reassigned\"]"
+          },
+          {
+            "selector": "[data-assignment=\"{assignment_uid}\"] [data-assignment-move=\"cancelled\"]"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-assignment=\"{assignment_uid}\"] [data-assignment-move=\"started\"]",
+          "[data-assignment=\"{assignment_uid}\"] [data-assignment-move=\"returned\"]",
+          "[data-assignment-board-failure]"
+        ],
+        "screen": "dispatcher",
+        "case": "action"
+      },
+      {
         "name": "upload-specification-set",
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",

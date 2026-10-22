@@ -3392,3 +3392,153 @@ def test_control_a_step_that_claims_to_only_read_but_presses_a_control_is_detect
     writing = _night_step(reads_only=True, expects_api=[
         {"method": "PUT", "path": "/assignments", "operationId": "createAssignment", "expect_status": 200}])
     assert any("only reads" in f for f in _only_step_findings(writing))
+
+
+# --------------------------------------------------------------------------------------
+# `PC01-JOURNEY-GAPS-01`. The steps that close what `BETA-MATRIX-02` section B12 named as
+# unwalked, each pinned by NAME, so that a step which disappears -- or which quietly becomes
+# another kind of step -- is a red test and not a shrinking journey that still reports OK.
+# --------------------------------------------------------------------------------------
+
+#: step name -> (screen, case, the operations the step must declare).
+GAP_STEPS: dict[str, tuple[str, str, frozenset[str]]] = {
+    # «Блоки»: choose a version, read its portal blocks, one crop and its text lines; a version
+    # no run has reached is told it has nothing YET.
+    "blocks-portal-blocks-of-a-version-with-a-run": (
+        "blocks", "action", frozenset({"listVersionPortalBlocks", "streamVersionPortalBlockCrop"})),
+    "blocks-text-lines-of-the-same-version": ("blocks", "action", frozenset({"getVersionBlocks"})),
+    "blocks-upload-a-document-no-run-has-read": ("version-upload", "action", frozenset({"uploadDocument"})),
+    "blocks-a-version-no-run-has-read-says-so": ("blocks", "refused", frozenset({"listVersionPortalBlocks"})),
+    # A successful «Вернуть»: the work is assigned, taken, then given back with its reason.
+    "assign-work-to-be-given-back": ("dispatcher", "action", frozenset({"createAssignment"})),
+    "my-tasks-take-the-work-to-give-it-back": ("my-tasks", "action", frozenset({"transitionAssignment"})),
+    "my-tasks-give-the-work-back": ("my-tasks", "action", frozenset({"transitionAssignment"})),
+    "dispatcher-shows-the-work-given-back": ("dispatcher", "action", frozenset({"listAssignments"})),
+}
+
+
+def _declared_operations(step: dict) -> set[str]:
+    return {call["operationId"] for call in step.get("expects_api") or ()}
+
+
+def gap_step_findings(manifest: dict) -> list[str]:
+    """Every pinned gap step is there, on its screen, in its case, declaring its operations."""
+    by_name = {step["name"]: step for step in write_steps(manifest)}
+    findings: list[str] = []
+    for name, (screen, case, operations) in GAP_STEPS.items():
+        step = by_name.get(name)
+        if step is None:
+            findings.append(f"the gap step '{name}' is gone from the manifest")
+            continue
+        if step.get("screen") != screen:
+            findings.append(f"{name}: belongs to screen {step.get('screen')!r}, not {screen!r}")
+        if step.get("case") != case:
+            findings.append(f"{name}: is a {step.get('case')!r} case, not {case!r}")
+        missing = sorted(operations - _declared_operations(step))
+        if missing:
+            findings.append(f"{name}: no longer declares {missing}")
+    return findings
+
+
+def gap_content_findings(manifest: dict) -> list[str]:
+    """What the pinned steps must SAY, which a step's name and operations cannot show."""
+    findings: list[str] = []
+    steps = {step["name"]: step for step in write_steps(manifest)}
+
+    # A successful «Вернуть» is a transition `returned` that carries its reason and ends in `returned`.
+    give_back = steps.get("my-tasks-give-the-work-back") or {}
+    sent = [
+        needle
+        for check in give_back.get("expects_request") or ()
+        if check.get("of") == "transitionAssignment"
+        for needle in check.get("body_contains") or ()
+    ]
+    if '"kind":"returned"' not in sent:
+        findings.append("my-tasks-give-the-work-back: does not require the request to be the transition `returned`")
+    answered = [
+        (check.get("json_path"), check.get("equals"))
+        for check in give_back.get("expects_response") or ()
+        if check.get("of") == "transitionAssignment"
+    ]
+    if ("status", "returned") not in answered:
+        findings.append("my-tasks-give-the-work-back: does not require the answer to say the status is `returned`")
+    if not any(
+        a.get("do") == "click" and a.get("text") == "Вернуть" for a in give_back.get("actions") or ()
+    ):
+        findings.append("my-tasks-give-the-work-back: never presses «Вернуть»")
+
+    # The work is taken before it is given back: the take step precedes the return step.
+    order = [step["name"] for step in write_steps(manifest)]
+    taken, returned = "my-tasks-take-the-work-to-give-it-back", "my-tasks-give-the-work-back"
+    if taken in order and returned in order and order.index(taken) > order.index(returned):
+        findings.append(f"{returned}: comes before {taken}, the step that takes the work it gives back")
+
+    # «Блоки»: the refusal is the API's `not_produced`, and the happy path is `produced`.
+    def _answers(step_name: str, path: str) -> list[object]:
+        return [
+            check.get("equals")
+            for check in (steps.get(step_name) or {}).get("expects_response") or ()
+            if check.get("json_path") == path
+        ]
+
+    if "produced" not in _answers("blocks-portal-blocks-of-a-version-with-a-run", "status"):
+        findings.append("blocks-portal-blocks-of-a-version-with-a-run: does not require status `produced`")
+    if "not_produced" not in _answers("blocks-a-version-no-run-has-read-says-so", "status"):
+        findings.append("blocks-a-version-no-run-has-read-says-so: does not require status `not_produced`")
+    return findings
+
+
+def test_the_gaps_beta_matrix_02_named_are_walked_by_steps_that_stay(manifest: dict) -> None:
+    findings = gap_step_findings(manifest) + gap_content_findings(manifest)
+    assert not findings, "a step PC01-JOURNEY-GAPS-01 added has gone or changed:\n  " + "\n  ".join(findings)
+
+
+def _without_step(manifest: dict, name: str) -> dict:
+    copy = json.loads(json.dumps(manifest))
+    copy["write"]["steps"] = [s for s in copy["write"]["steps"] if s["name"] != name]
+    return copy
+
+
+def _step_of(manifest: dict, name: str) -> dict:
+    return next(s for s in manifest["write"]["steps"] if s["name"] == name)
+
+
+def test_control_a_removed_gap_step_is_detected(manifest: dict) -> None:
+    assert gap_step_findings(manifest) == [] and gap_content_findings(manifest) == []
+    for name in GAP_STEPS:
+        gone = _without_step(manifest, name)
+        assert any(f"'{name}' is gone" in f for f in gap_step_findings(gone)), name
+
+
+def test_control_a_gap_step_that_changes_its_case_screen_or_operation_is_detected(manifest: dict) -> None:
+    renamed = json.loads(json.dumps(manifest))
+    _step_of(renamed, "blocks-a-version-no-run-has-read-says-so")["case"] = "action"
+    assert any("is a 'action' case" in f for f in gap_step_findings(renamed))
+    moved = json.loads(json.dumps(manifest))
+    _step_of(moved, "blocks-text-lines-of-the-same-version")["screen"] = "norms-search"
+    assert any("belongs to screen 'norms-search'" in f for f in gap_step_findings(moved))
+    stripped = json.loads(json.dumps(manifest))
+    _step_of(stripped, "blocks-text-lines-of-the-same-version")["expects_api"] = []
+    assert any("no longer declares ['getVersionBlocks']" in f for f in gap_step_findings(stripped))
+
+
+def test_control_a_return_that_is_not_a_return_is_detected(manifest: dict) -> None:
+    for mutate, expected in (
+        (lambda s: s.pop("expects_request"), "transition `returned`"),
+        (lambda s: s["expects_response"].pop(0), "status is `returned`"),
+        (lambda s: s["actions"].pop(), "never presses «Вернуть»"),
+    ):
+        copy = json.loads(json.dumps(manifest))
+        mutate(_step_of(copy, "my-tasks-give-the-work-back"))
+        assert any(expected in f for f in gap_content_findings(copy)), expected
+    # the take comes first
+    swapped = json.loads(json.dumps(manifest))
+    steps = swapped["write"]["steps"]
+    names = [s["name"] for s in steps]
+    i, j = names.index("my-tasks-take-the-work-to-give-it-back"), names.index("my-tasks-give-the-work-back")
+    steps[i], steps[j] = steps[j], steps[i]
+    assert any("comes before" in f for f in gap_content_findings(swapped))
+    # «Блоки»: the refusal that stops being a refusal of a list
+    blocks = json.loads(json.dumps(manifest))
+    _step_of(blocks, "blocks-a-version-no-run-has-read-says-so")["expects_response"][0]["equals"] = "produced"
+    assert any("not_produced" in f for f in gap_content_findings(blocks))
