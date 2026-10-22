@@ -37,3 +37,31 @@ processes/workers are allowed" and adds no service of a different kind.
 Migration `0019_execution_workers` and the two sealed operations carry the schema and the
 surface; `W54-WORKER-01` supplies the behaviour. This addendum itself changes no runtime
 behaviour.
+
+## R-143 addendum — remote executors for model work, 2026-10-22
+
+Recorded by `EXEC-ADR-01` under owner ruling R-143 (`OWNER_RULINGS_2026-09-17.md` §3.43,
+`R-143c`; priority and publication bar `R-144`) and `docs/program/dispatch/EXECUTOR-CONNECTIONS-PLAN.md`
+§2, §4, §7. For model work only, it supersedes the W54 addendum's last bullet ("Remote workers on
+other hosts remain out of scope (W54 non-goal); a second host would need its own ADR under this
+one's rule"); this is that ADR. The W54 text above stays as written.
+
+- A remote party (a Claude Code session, an agent, an SSH host or an HTTP model) receives a task
+  payload and returns an answer. It never connects to PostgreSQL or S3 and never writes metadata.
+- The local `worker` of the W54 addendum stays the only Job, Attempt and Lease authority and the
+  only writer of metadata rows (`R-105`). A remote answer is data the worker records.
+- The stand gains exactly one new inbound surface: the runner API of `EXEC-PULL-01`, executor to
+  stand over the stand's public HTTPS origin, with hashed runner tokens. `http_api` and `ssh_command`
+  connections are opened by the worker and add none. A WireGuard VPN is the operator's host
+  configuration (`R-143a`), not an application surface.
+- `R-133` stays fail closed for every kind: a reported model other than the pinned one is a typed
+  failure and nothing from it is published. `AGENTS.md` §4 stays: no silent fallback between
+  connections; a standby is used only when an administrator configured it, and every switch is journaled.
+- Remote execution of anything but model calls (documents, S3 objects, metadata) stays out of scope.
+
+Nothing above exists in the tree yet; the slices add it, in the plan's order. `EXEC-SEAL-01` adds
+the connection schema and secret sealing. `EXEC-HTTP-01` adds database-sourced `http_api`
+connections and `R-133` on the run path. `EXEC-PULL-01` adds the runner API and amends the wording
+of `runs/scope.py`. `EXEC-AGENT-01`, `EXEC-SSH-01` and `EXEC-VPN-01` add the unattended agent, the
+SSH kinds and the WireGuard runbook. Until a slice merges, W54 behaviour stands. This addendum
+itself changes no runtime behaviour.
