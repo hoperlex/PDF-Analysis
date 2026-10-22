@@ -858,6 +858,10 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         # do is the role register's and the dispatch context's own re-read of the role set.
         "dispatch.py",
         "execution.py",
+        # `EXEC-SEAL-01`: an executor command records WHO configured it (the actor of its
+        # journal event and of its rows); that only an administrator may is the role register's
+        # and the command's own re-read of the role set.
+        "executors.py",
         # `W57B-NORMS-CATALOGUE-XLSX-01`: the workbook's export authorization records WHO
         # downloaded it; whether they may is the role register's (expert, as the CSV).
         "export.py",

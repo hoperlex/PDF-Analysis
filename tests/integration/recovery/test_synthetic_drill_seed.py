@@ -120,7 +120,7 @@ def test_the_seeded_lane_holds_the_realistic_dataset_and_both_audits_accept_it(
                                    "expert_decision_event")}
     finally:
         engine.dispose()
-    assert schema.tables == 55 and schema.guarded_tables >= 29
+    assert schema.tables == 60 and schema.guarded_tables >= 29  # `EXEC-SEAL-01`: +5 executor tables
     assert len(references.available_blobs) >= 5
     assert dict(references.source_counts)["price_list_revision"] == 2
     assert {"geometry_crop_image", "prepared_text_layer"} <= roles

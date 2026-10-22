@@ -159,6 +159,8 @@ def upgrade() -> None:
             CONSTRAINT uq_executor_revision_connection UNIQUE (revision_id, connection_id),
             CONSTRAINT ck_executor_revision_id_format
                 CHECK (revision_id ~ '^excr_{ULID}$'),
+            CONSTRAINT ck_executor_revision_connection_id_format
+                CHECK (connection_id ~ '^exc_{ULID}$'),
             CONSTRAINT ck_executor_revision_number CHECK (revision_no >= 1),
             CONSTRAINT ck_executor_revision_created_by_format
                 CHECK (created_by ~ '^usr_{ULID}$'),
@@ -221,6 +223,8 @@ def upgrade() -> None:
             set_by          text NOT NULL,
             replaced_at     timestamptz NULL,
             CONSTRAINT ck_executor_secret_id_format CHECK (secret_id ~ '^exs_{ULID}$'),
+            CONSTRAINT ck_executor_secret_connection_id_format
+                CHECK (connection_id ~ '^exc_{ULID}$'),
             CONSTRAINT ck_executor_secret_purpose
                 CHECK (purpose IN ('api_key', 'ssh_private_key')),
             CONSTRAINT ck_executor_secret_kid CHECK (kid ~ '^[A-Za-z0-9._-]{{1,64}}$'),
@@ -277,6 +281,12 @@ def upgrade() -> None:
             CONSTRAINT fk_executor_probe_revision FOREIGN KEY (revision_id, connection_id)
                 REFERENCES executor_connection_revision (revision_id, connection_id),
             CONSTRAINT ck_executor_probe_id_format CHECK (probe_id ~ '^epb_{ULID}$'),
+            CONSTRAINT ck_executor_probe_connection_id_format
+                CHECK (connection_id ~ '^exc_{ULID}$'),
+            CONSTRAINT ck_executor_probe_revision_id_format
+                CHECK (revision_id ~ '^excr_{ULID}$'),
+            CONSTRAINT ck_executor_probe_secret_id_format
+                CHECK (secret_id IS NULL OR secret_id ~ '^exs_{ULID}$'),
             CONSTRAINT ck_executor_probe_state
                 CHECK (state IN ('requested', 'running', 'finished')),
             CONSTRAINT ck_executor_probe_outcome
@@ -343,6 +353,10 @@ def upgrade() -> None:
             CONSTRAINT uq_executor_route_number UNIQUE (work_kind, route_no),
             CONSTRAINT ck_executor_route_event_id_format
                 CHECK (route_event_id ~ '^ert_{ULID}$'),
+            CONSTRAINT ck_executor_route_primary_format
+                CHECK (primary_connection_id ~ '^exc_{ULID}$'),
+            CONSTRAINT ck_executor_route_standby_format
+                CHECK (standby_connection_id IS NULL OR standby_connection_id ~ '^exc_{ULID}$'),
             CONSTRAINT ck_executor_route_work_kind CHECK (work_kind IN ('text_analysis')),
             CONSTRAINT ck_executor_route_number CHECK (route_no >= 1),
             CONSTRAINT ck_executor_route_standby_differs

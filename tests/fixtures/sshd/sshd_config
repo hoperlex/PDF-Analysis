@@ -1,0 +1,16 @@
+Port 22
+HostKey /etc/ssh/ssh_host_ed25519_key
+PidFile /run/sshd.pid
+LogLevel INFO
+UsePAM no
+PermitRootLogin no
+AllowUsers runner
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PubkeyAuthentication yes
+AuthenticationMethods publickey
+AuthorizedKeysFile /etc/ssh/authorized_keys/%u
+AllowAgentForwarding no
+X11Forwarding no
+PermitTTY no
+PermitUserEnvironment no

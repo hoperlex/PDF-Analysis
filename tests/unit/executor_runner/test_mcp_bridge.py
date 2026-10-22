@@ -1,0 +1,295 @@
+"""The stdio MCP bridge, driven over its stdio against a fake runner API."""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+_NAME = "executor_runner_support"
+if _NAME not in sys.modules:
+    _spec = importlib.util.spec_from_file_location(_NAME, Path(__file__).with_name("_support.py"))
+    _module = importlib.util.module_from_spec(_spec)
+    sys.modules[_NAME] = _module
+    _spec.loader.exec_module(_module)
+S = sys.modules[_NAME]
+
+
+def _claim(session, wait=3):
+    return session.call("claim_task", {"wait_seconds": wait})
+
+
+def test_initialize_handshake_matches_the_spec_fields():
+    with S.FakeRunner() as runner, S.McpSession(runner.origin) as mcp:
+        reply = mcp.request(
+            "initialize",
+            {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "claude-code", "version": "9"}},
+        )
+        result = reply["result"]
+        assert reply["jsonrpc"] == "2.0" and reply["id"] == 1
+        assert result["protocolVersion"] == "2025-06-18"  # a supported version is echoed
+        assert "tools" in result["capabilities"]
+        assert result["serverInfo"]["name"] == "pdf-analysis-runner"
+        assert "resultType" not in result  # legacy era
+        mcp.notify("notifications/initialized")
+        assert mcp.request("ping")["result"] == {}  # the notification produced no reply of its own
+        # an unknown version is answered with the latest the server supports (spec: version negotiation)
+        other = mcp.request("initialize", {"protocolVersion": "1999-01-01", "capabilities": {}, "clientInfo": {}})
+        assert other["result"]["protocolVersion"] == "2025-11-25"
+
+
+def test_modern_discover_and_unsupported_version():
+    with S.FakeRunner() as runner, S.McpSession(runner.origin) as mcp:
+        meta = {"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientInfo": {"name": "c", "version": "1"}, "io.modelcontextprotocol/clientCapabilities": {}}
+        discover = mcp.request("server/discover", {"_meta": meta})["result"]
+        assert discover["resultType"] == "complete"
+        assert discover["supportedVersions"] == ["2026-07-28"]
+        assert "tools" in discover["capabilities"]
+        assert discover["_meta"]["io.modelcontextprotocol/serverInfo"]["name"] == "pdf-analysis-runner"
+        listed = mcp.request("tools/list", {"_meta": meta})["result"]
+        assert listed["resultType"] == "complete" and len(listed["tools"]) == 3
+        bad = mcp.request("tools/list", {"_meta": {"io.modelcontextprotocol/protocolVersion": "1900-01-01"}})
+        assert bad["error"]["code"] == -32022
+        assert bad["error"]["data"] == {"supported": ["2026-07-28"], "requested": "1900-01-01"}
+
+
+def test_tools_list_names_and_input_schemas():
+    with S.FakeRunner() as runner, S.McpSession(runner.origin) as mcp:
+        mcp.initialize()
+        tools = mcp.request("tools/list")["result"]["tools"]
+        assert [t["name"] for t in tools] == ["claim_task", "submit_answer", "report_failure"]
+        by_name = {t["name"]: t for t in tools}
+        for tool in tools:
+            assert tool["inputSchema"]["type"] == "object" and tool["description"]
+        assert by_name["submit_answer"]["inputSchema"]["required"] == ["task_id", "output_text", "model"]
+        assert by_name["report_failure"]["inputSchema"]["required"] == ["task_id", "reason"]
+        assert mcp.request("nope/method")["error"]["code"] == -32601
+        assert mcp.request("tools/call", {"name": "bash", "arguments": {}})["error"]["code"] == -32602
+
+
+def test_claim_then_answer_round_trip():
+    with S.FakeRunner() as runner, S.McpSession(runner.origin) as mcp:
+        mcp.initialize()
+        runner.add_task(S.make_task())
+        result = _claim(mcp)
+        assert result["isError"] is False
+        task = mcp.payload(result)
+        assert task["status"] == "task" and task["task_id"] == "ext_TASK1" and task["model"] == "claude-opus-5"
+        assert task["user_text"].startswith("Document text") and task["output_schema"]["required"] == ["findings"]
+        assert task["notice"]
+        claim_request = runner.of_kind("claim")[0]
+        assert claim_request["authorization"] == "Bearer " + S.TOKEN
+        assert claim_request["body"]["wait_seconds"] == 3 and claim_request["path"] == "/api/v1/runner/tasks/claim"
+
+        answer = mcp.call(
+            "submit_answer",
+            {"task_id": "ext_TASK1", "output_text": '{"findings": []}', "model": "claude-opus-5", "input_tokens": 10, "output_tokens": 4},
+        )
+        assert answer["isError"] is False and mcp.payload(answer)["status"] == "accepted"
+        sent = runner.of_kind("answer")[0]
+        assert sent["path"] == "/api/v1/runner/tasks/ext_TASK1/answer"
+        assert sent["body"] == {"output_text": '{"findings": []}', "model": "claude-opus-5", "input_tokens": 10, "output_tokens": 4}
+        assert sent["content_type"].startswith("application/json")
+
+
+def test_idle_204_returns_idle_after_the_wait():
+    with S.FakeRunner() as runner, S.McpSession(runner.origin) as mcp:
+        mcp.initialize()
+        started = time.monotonic()
+        result = _claim(mcp, wait=2)
+        elapsed = time.monotonic() - started
+        assert result["isError"] is False and mcp.payload(result)["status"] == "idle"
+        assert 1.5 <= elapsed < 6
+        zero = mcp.call("claim_task", {"wait_seconds": 0})
+        assert mcp.payload(zero)["status"] == "idle"
+        assert mcp.call("claim_task", {"wait_seconds": 601})["isError"] is True
+
+
+def test_401_is_surfaced_as_a_tool_error_and_the_bridge_survives():
+    with S.FakeRunner() as runner, S.McpSession(runner.origin) as mcp:
+        mcp.initialize()
+        runner.revoked = True
+        result = _claim(mcp, wait=0)
+        assert result["isError"] is True
+        text = mcp.text(result)
+        assert "401" in text and "token" in text and "Do not retry" in text
+        assert mcp.request("ping")["result"] == {}
+        assert len(runner.of_kind("claim")) == 1  # never retried
+
+
+def test_409_on_answer_is_surfaced_and_drops_the_task():
+    with S.FakeRunner() as runner, S.McpSession(runner.origin) as mcp:
+        mcp.initialize()
+        runner.add_task(S.make_task())
+        _claim(mcp)
+        runner.override("answer", S.Reply(409, S.envelope("conflict", "Another answer was already accepted.")))
+        result = mcp.call("submit_answer", {"task_id": "ext_TASK1", "output_text": "{}", "model": "claude-opus-5"})
+        assert result["isError"] is True
+        assert "409" in mcp.text(result) and "no longer yours" in mcp.text(result) and "Another answer" in mcp.text(result)
+        assert len(runner.of_kind("answer")) == 1
+
+
+def test_422_schema_refusal_is_surfaced_and_the_claim_is_kept():
+    with S.FakeRunner() as runner, S.McpSession(runner.origin) as mcp:
+        mcp.initialize()
+        runner.add_task(S.make_task())
+        _claim(mcp)
+        runner.override("answer", S.Reply(422, S.envelope("validation_failed", "output_text: 'findings' is a required property.")))
+        refused = mcp.call("submit_answer", {"task_id": "ext_TASK1", "output_text": "{}", "model": "claude-opus-5"})
+        assert refused["isError"] is True
+        text = mcp.text(refused)
+        assert "422" in text and "validation_failed" in text and "'findings' is a required property" in text and "claim is kept" in text
+        fixed = mcp.call("submit_answer", {"task_id": "ext_TASK1", "output_text": '{"findings": []}', "model": "claude-opus-5"})
+        assert fixed["isError"] is False and mcp.payload(fixed)["status"] == "accepted"
+        assert len(runner.of_kind("answer")) == 2
+
+
+def test_model_declaration_that_differs_from_the_task_is_refused_locally():
+    with S.FakeRunner() as runner, S.McpSession(runner.origin) as mcp:
+        mcp.initialize()
+        runner.add_task(S.make_task(model="claude-opus-5"))
+        _claim(mcp)
+        result = mcp.call("submit_answer", {"task_id": "ext_TASK1", "output_text": "{}", "model": "claude-sonnet-5"})
+        assert result["isError"] is True and "claude-opus-5" in mcp.text(result) and "model_mismatch" in mcp.text(result)
+        assert runner.of_kind("answer") == []
+
+
+def test_claim_is_extended_while_held_and_a_lost_claim_blocks_the_submit():
+    with S.FakeRunner(lease=3) as runner, S.McpSession(runner.origin) as mcp:
+        mcp.initialize()
+        runner.add_task(S.make_task(lease=3))
+        _claim(mcp)
+        runner.wait_for("extend", 2, timeout=6)  # kept alive in the background without the session doing anything
+        assert all(r["task_id"] == "ext_TASK1" and r["path"].endswith("/ext_TASK1/extend") for r in runner.of_kind("extend"))
+        runner.override("extend", S.Reply(409, S.envelope("state_transition_not_allowed", "The claim is lost.")))
+        runner.wait_for("extend", 3, timeout=6)  # the third extension is the one that is refused
+        time.sleep(0.5)
+        result = mcp.call("submit_answer", {"task_id": "ext_TASK1", "output_text": "{}", "model": "claude-opus-5"})
+        text = mcp.text(result)
+        assert result["isError"] is True and "claim on ext_TASK1 is lost" in text
+        assert runner.of_kind("answer") == []  # nothing was sent for a lost claim
+
+
+def test_429_is_honoured_before_the_next_claim():
+    with S.FakeRunner() as runner, S.McpSession(runner.origin) as mcp:
+        mcp.initialize()
+        runner.override("claim", S.Reply(429, S.envelope("rate_limited", "Slow down.", True), {"Retry-After": "1"}))
+        runner.add_task(S.make_task())
+        result = _claim(mcp, wait=6)
+        assert mcp.payload(result)["status"] == "task"
+        first, second = runner.of_kind("claim")[:2]
+        assert second["t"] - first["t"] >= 1.0
+
+
+def test_unreachable_stand_is_reported_not_swallowed():
+    with S.FakeRunner() as runner:
+        origin = runner.origin
+    with S.McpSession(origin) as mcp:  # the server is gone: connection refused
+        mcp.initialize()
+        result = _claim(mcp, wait=0)
+        assert result["isError"] is True and mcp.payload(result)["status"] == "stand_unavailable"
+
+
+def test_the_token_never_appears_in_results_stdout_or_stderr():
+    token = "amr_SENTINEL_s3cr3t_value_0042"
+    with S.FakeRunner(token=token) as runner, S.McpSession(runner.origin, token=token) as mcp:
+        mcp.initialize()
+        runner.add_task(S.make_task())
+        _claim(mcp)
+        # a hostile or buggy server that echoes the credential back in its error message
+        runner.override("answer", S.Reply(422, S.envelope("validation_failed", f"bad header Authorization: Bearer {token}")))
+        refused = mcp.call("submit_answer", {"task_id": "ext_TASK1", "output_text": "{}", "model": "claude-opus-5"})
+        assert token not in mcp.text(refused) and "***" in mcp.text(refused)
+        runner.override("fail", S.Reply(500, S.envelope("internal_error", f"token={token}")))
+        failed = mcp.call("report_failure", {"task_id": "ext_TASK1", "reason": "cannot_answer"}, timeout=5)
+        assert failed["isError"] is True and token not in mcp.text(failed) and "***" in mcp.text(failed)
+        runner.revoked = True
+        mcp.call("claim_task", {"wait_seconds": 0})
+        code = mcp.close()
+        assert code == 0
+        assert token not in b"".join(mcp.raw_stdout).decode("utf-8")
+        assert token not in mcp.stderr
+        assert "claimed ext_TASK1" in mcp.stderr  # the bridge does log, and logs without the token
+
+
+def test_redirects_are_not_followed_so_the_token_stays_put():
+    with S.FakeRunner() as elsewhere, S.FakeRunner() as runner, S.McpSession(runner.origin) as mcp:
+        mcp.initialize()
+        runner.override("claim", S.Reply(302, None, {"Location": elsewhere.origin + "/api/v1/runner/tasks/claim"}))
+        result = _claim(mcp, wait=0)
+        assert result["isError"] is True and "redirect refused" in mcp.text(result)
+        assert elsewhere.requests == []
+
+
+def test_a_cancelled_claim_gets_no_reply():
+    with S.FakeRunner() as runner, S.McpSession(runner.origin) as mcp:
+        mcp.initialize()
+        mcp.send({"jsonrpc": "2.0", "id": 77, "method": "tools/call", "params": {"name": "claim_task", "arguments": {"wait_seconds": 1}}})
+        runner.wait_for("claim", 1)
+        mcp.notify("notifications/cancelled", {"requestId": 77, "reason": "user"})
+        assert mcp.request("ping")["result"] == {}
+        time.sleep(2.0)  # past the end of the 1 s poll
+        while not mcp.lines.empty():
+            assert mcp.read().get("id") != 77
+
+
+def test_report_failure_posts_the_reason_and_tolerates_a_terminal_task():
+    with S.FakeRunner() as runner, S.McpSession(runner.origin) as mcp:
+        mcp.initialize()
+        runner.add_task(S.make_task())
+        _claim(mcp)
+        ok = mcp.call("report_failure", {"task_id": "ext_TASK1", "reason": "model_mismatch: running claude-sonnet-5"})
+        assert ok["isError"] is False and mcp.payload(ok)["status"] == "failed"
+        assert runner.of_kind("fail")[0]["body"] == {"reason": "model_mismatch: running claude-sonnet-5"}
+        runner.override("fail", S.Reply(409, S.envelope("state_transition_not_allowed", "Already terminal.")))
+        again = mcp.call("report_failure", {"task_id": "ext_TASK1", "reason": "again"})
+        assert again["isError"] is False and mcp.payload(again)["status"] == "not_failed"
+        assert mcp.call("report_failure", {"task_id": "ext_TASK1"})["isError"] is True  # reason missing
+
+
+def test_a_hostile_task_id_cannot_steer_the_request_path():
+    with S.FakeRunner() as runner, S.McpSession(runner.origin) as mcp:
+        mcp.initialize()
+        result = mcp.call("submit_answer", {"task_id": "../../claim?x=1", "output_text": "{}", "model": "claude-opus-5"})
+        assert result["isError"] is True
+        assert runner.requests == []
+
+
+def _run_bridge(*args, token="tok"):
+    env = S.clean_env()
+    if token is not None:
+        env["PDF_ANALYSIS_RUNNER_TOKEN"] = token
+    return subprocess.run([sys.executable, str(S.BRIDGE), *args], capture_output=True, text=True, env=env, input="", timeout=20)
+
+
+def test_startup_refuses_a_missing_token_a_bad_origin_and_clear_text_http():
+    missing = _run_bridge("--origin", "https://stand.example.org", token=None)
+    assert missing.returncode == 2 and "PDF_ANALYSIS_RUNNER_TOKEN is not set" in missing.stderr
+    insecure = _run_bridge("--origin", "http://stand.example.org")
+    assert insecure.returncode == 2 and "refusing http://" in insecure.stderr
+    with_path = _run_bridge("--origin", "https://stand.example.org/api")
+    assert with_path.returncode == 2 and "no path" in with_path.stderr
+    allowed = _run_bridge("--origin", "http://stand.example.org", "--allow-insecure-http")
+    assert allowed.returncode == 0  # explicit opt-in; stdin is empty so it exits at once
+    loopback = _run_bridge("--origin", "http://127.0.0.1:9", token="amr_SENTINEL_77")
+    assert loopback.returncode == 0
+    assert "amr_SENTINEL_77" not in loopback.stderr + loopback.stdout
+
+
+def test_stdout_carries_only_json_rpc_lines():
+    with S.FakeRunner() as runner, S.McpSession(runner.origin) as mcp:
+        mcp.initialize()
+        mcp.request("tools/list")
+        mcp.send({"jsonrpc": "2.0", "id": 5, "method": "ping"})
+        mcp.read()
+        mcp.proc.stdin.write(b"this is not json\n")
+        mcp.proc.stdin.flush()
+        error = mcp.read()
+        assert error["error"]["code"] == -32700 and error["id"] is None
+        mcp.close()
+        for line in mcp.raw_stdout:
+            assert json.loads(line)["jsonrpc"] == "2.0"
+            assert line.endswith(b"\n") and line.count(b"\n") == 1

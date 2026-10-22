@@ -24,9 +24,9 @@ from auditmanager.shared.identity import (
     ProjectUid,
     PromptBundleId,
     RunId,
-    UserUid,
     VersionUid,
 )
+from auditmanager.access.public import UserUid
 from tests.support.expected_facts import FACTS
 
 ACTOR = f"usr_{'0' * 26}"
@@ -328,7 +328,7 @@ def test_the_route_is_append_only_and_the_view_is_its_latest_event(migrated_engi
             with pytest.raises(DBAPIError) as refused:
                 with connection.begin_nested():
                     connection.execute(text(statement + " WHERE route_event_id = :id"), {"id": first})
-            assert _sqlstate(refused) == "AM003", statement
+            assert _sqlstate(refused) == "AM002", statement  # am_append_only
         with pytest.raises(DBAPIError) as same:
             with connection.begin_nested():
                 route(3, primary, primary)
@@ -364,3 +364,36 @@ def test_an_unmetered_call_and_a_revision_travel_together_or_not_at_all(migrated
             with connection.begin_nested():
                 call(basis="free", revision=None, identity=None)
         assert _sqlstate(bad_cost) == "23514"
+
+
+@pytest.mark.parametrize(("statement", "constraint"), [
+    ("INSERT INTO executor_connection_revision (revision_id, connection_id, revision_no, created_by, "
+     "pin_id, gateway_model, billing, allow_client_documents, timeout_seconds) VALUES "
+     "('excr_{u}', 'not-an-id', 1, '{a}', 'p', 'm', 'metered', false, 60)",
+     "ck_executor_revision_connection_id_format"),
+    ("INSERT INTO executor_secret (secret_id, connection_id, purpose, kid, destination, ciphertext, "
+     "last4, set_by) VALUES ('exs_{u}', 'not-an-id', 'api_key', 'k1', 'd', '\\x01'::bytea, '', '{a}')",
+     "ck_executor_secret_connection_id_format"),
+    ("INSERT INTO executor_probe (probe_id, connection_id, revision_id, state, requested_by) VALUES "
+     "('epb_{u}', 'not-an-id', 'excr_{u}', 'requested', '{a}')",
+     "ck_executor_probe_connection_id_format"),
+    ("INSERT INTO executor_probe (probe_id, connection_id, revision_id, state, requested_by) VALUES "
+     "('epb_{u}', 'exc_{u}', 'not-an-id', 'requested', '{a}')",
+     "ck_executor_probe_revision_id_format"),
+    ("INSERT INTO executor_route_event (route_event_id, work_kind, route_no, primary_connection_id, "
+     "set_by) VALUES ('ert_{u}', 'text_analysis', 1, 'not-an-id', '{a}')",
+     "ck_executor_route_primary_format"),
+    ("INSERT INTO executor_route_event (route_event_id, work_kind, route_no, primary_connection_id, "
+     "standby_connection_id, set_by) VALUES ('ert_{u}', 'text_analysis', 1, 'exc_{u}', 'not-an-id', '{a}')",
+     "ck_executor_route_standby_format"),
+])
+def test_every_identity_column_carries_its_format_check(
+    migrated_engine: Engine, statement: str, constraint: str,
+) -> None:
+    """The foreign-key columns refuse a malformed identity before any foreign key is looked at."""
+    with migrated_engine.begin() as connection:
+        with pytest.raises(DBAPIError) as refused:
+            with connection.begin_nested():
+                connection.execute(text(statement.format(u="0" * 26, a=ACTOR)))
+        assert _sqlstate(refused) == "23514"
+        assert constraint in str(refused.value)
