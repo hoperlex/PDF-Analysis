@@ -1,4 +1,4 @@
-STATUS: step 0/7 probe started (11:36 +05)
+STATUS: step 2/7 contract committed, web client and lock regeneration waits for END (11:49 +05)
 
 # EXEC-SEAL-01 report (in progress)
 

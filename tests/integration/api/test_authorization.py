@@ -274,6 +274,32 @@ GUARDED = (
     ("getSectionSpecification", "GET", "/sections/AR/specification"),
     # `NORM-REFS-RUN-01`. The norms a run's saved text cites, read-only.
     ("getRunNormReferences", "GET", "/runs/run_01M2545JSD15ETSNNV904X991K/norm-references"),
+    # `EXEC-SEAL-01`. The executor connections: behind the seam before any port answers.
+    ("listExecutorConnections", "GET", "/executor-connections"),
+    ("createExecutorConnection", "POST", "/executor-connections"),
+    ("getExecutorConnection", "GET", "/executor-connections/exc_01M2545JSD15ETSNNV904X991K"),
+    (
+        "reviseExecutorConnection", "POST",
+        "/executor-connections/exc_01M2545JSD15ETSNNV904X991K/revisions",
+    ),
+    (
+        "archiveExecutorConnection", "POST",
+        "/executor-connections/exc_01M2545JSD15ETSNNV904X991K/archive",
+    ),
+    (
+        "setExecutorSecret", "POST",
+        "/executor-connections/exc_01M2545JSD15ETSNNV904X991K/secrets",
+    ),
+    (
+        "generateExecutorSshKey", "POST",
+        "/executor-connections/exc_01M2545JSD15ETSNNV904X991K/ssh-key",
+    ),
+    (
+        "requestExecutorProbe", "POST",
+        "/executor-connections/exc_01M2545JSD15ETSNNV904X991K/probes",
+    ),
+    ("listExecutorRoutes", "GET", "/executor-routes"),
+    ("setExecutorRoute", "PUT", "/executor-routes"),
 )
 
 #: `W49-SEAL-01`. The operations a caller reaches with no credential, written out: the
