@@ -283,7 +283,12 @@
           "audit_event_id",
           "erasure_request_id",
           "user_uid",
-          "request_id"
+          "request_id",
+          "executor_connection_id",
+          "executor_connection_revision_id",
+          "executor_secret_id",
+          "executor_probe_id",
+          "executor_route_event_id"
         ]
       }
     },
@@ -351,7 +356,12 @@
                 "audit_event_id",
                 "erasure_request_id",
                 "user_uid",
-                "request_id"
+                "request_id",
+                "executor_connection_id",
+                "executor_connection_revision_id",
+                "executor_secret_id",
+                "executor_probe_id",
+                "executor_route_event_id"
               ]
             }
           },
