@@ -904,6 +904,11 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         "optimisation_proposals.py",
         "registrations.py",
         "releases.py",
+        # `EXEC-PULL-01`: issuing and revoking a runner token records WHO did it (the actor of its
+        # journal event and of its row); that only an administrator may is the role register's and
+        # the command's own re-read of the role set. The runner's own four operations read the
+        # runner principal (`CurrentRunner`), never the subject.
+        "runner.py",
         # `W63-SECTION-FORM7-01`: a section's combined specification passes WHO reads it for the
         # same reason as the priced specification below: the read re-reads the role set in its
         # own transaction; whether they may is the role register's (any one role).
