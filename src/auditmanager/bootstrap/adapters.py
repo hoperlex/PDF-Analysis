@@ -235,6 +235,7 @@ class ExecutionAdapter(_SessionHolder):
                                  roles=self._roles(session, user_uid),
                                  idempotency_key=idempotency_key,
                                  provider_mode=mode, input_budget_characters=budget,
+                                 connection_route=self._runs.route_freezer,
                                  **explicit)
             return result.run_id, result.replayed, _run_status_view(session, result.run_id)
         new_id, replayed, view = self._write(write)
@@ -834,8 +835,15 @@ class RunAdapter(_SessionHolder):
         input_budget_characters: int | None = None,
         section_profiles: Mapping[str, tuple[str, str]] | None = None,
         text_profiles: Any = None,
+        providers: Any = None,
+        route_freezer: Any = None,
     ) -> None:
         super().__init__(session_factory)
+        # `EXEC-HTTP-01`. The provider resolver the executor binds each Attempt with, and, for
+        # the ``database`` source only, the freezer that picks a run's connection revision at
+        # start. Both ``None`` keeps the many tests that build a bare adapter as they are.
+        self._providers = providers
+        self._route_freezer = route_freezer
         # `W59-SECTION-SEAL-01`. The sealed section -> (profile, bundle) table run start and
         # re-audit route through, and the registry resolver the executor runs a run's pinned
         # profile with. The composition root always passes both
@@ -908,6 +916,9 @@ class RunAdapter(_SessionHolder):
                 provider_mode=self._provider_mode,
                 idempotency_key=idempotency_key,
                 input_budget_characters=self._input_budget_characters,
+                # `EXEC-HTTP-01`: with the `database` source the run freezes the route's
+                # revision here, and its budget follows that revision's pinned model.
+                connection_route=self._route_freezer,
             )
             if not started.replayed:
                 # `D-20`. `created -> queued` happens here, in the transaction that
@@ -983,6 +994,7 @@ class RunAdapter(_SessionHolder):
                 adapter=self._model_adapter,
                 provider_config=self._provider_config,
                 text_profiles=self._text_profiles,
+                providers=self._providers,
             )
 
         return job
@@ -995,6 +1007,12 @@ class RunAdapter(_SessionHolder):
         re-audit faces exactly the budget a start does -- today's, not the source run's.
         """
         return self._input_budget_characters
+
+    @property
+    def route_freezer(self) -> Any:
+        """`EXEC-HTTP-01`: the run-start freezer of the ``database`` source, or ``None``.
+        ``ExecutionAdapter.reaudit_run`` passes it so a re-audit freezes today's route."""
+        return self._route_freezer
 
     @property
     def section_profiles(self) -> Mapping[str, tuple[str, str]] | None:

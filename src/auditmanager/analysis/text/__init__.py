@@ -54,6 +54,7 @@ from auditmanager.analysis.text.config import (
     ProviderMode,
     load_provider_config,
 )
+from auditmanager.analysis.text.binding import CallBinding
 from auditmanager.analysis.text.cost import CostMeter
 from auditmanager.analysis.text.live import LiveAdapter
 from auditmanager.analysis.text.lock import STAGE_ID, ModelPin, ProviderLock, provider_lock
@@ -73,6 +74,7 @@ from auditmanager.analysis.text.stage import (
 from auditmanager.analysis.text.textlayer import TextLayer, load_text_layer
 
 __all__ = [
+    "CallBinding",
     "ARTIFACT_ROLE",
     "ARTIFACT_VERSION",
     "AR_TEXT_PROFILE",

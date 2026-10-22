@@ -34,6 +34,7 @@ import os
 import socket
 import ssl
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
@@ -47,6 +48,7 @@ __all__ = [
     "DestinationUnresolvable",
     "build_opener",
     "connected_networks",
+    "normalise_target",
     "parse_allowed_hosts",
     "system_resolver",
 ]
@@ -130,6 +132,15 @@ def connected_networks(route_table: str = "/proc/net/route") -> tuple[Network, .
         prefix = int.from_bytes(mask.to_bytes(4, "little"), "big").bit_count()
         networks.append(ipaddress.IPv4Network((base, prefix), strict=False))
     return tuple(networks)
+
+
+def normalise_target(url: str) -> tuple[str, int]:
+    """``(host, port)`` of a URL or a bare ``host[:port]``; the scheme's default port otherwise."""
+    parts = urllib.parse.urlsplit(url if "//" in url else "//" + url)
+    host = parts.hostname
+    if not host:
+        raise ValueError("no host")
+    return host, parts.port or (443 if parts.scheme == "https" else 80)
 
 
 def parse_allowed_hosts(raw: str | None) -> tuple[str, ...]:

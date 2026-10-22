@@ -45,6 +45,9 @@ def cost_budget_exceeded() -> DomainError:
 #: same pair (migration ``0004``) and ``RunStatus.cost_basis`` publishes it.
 BASIS_MEASURED: str = "measured"
 BASIS_ESTIMATED: str = "estimated"
+#: `EXEC-HTTP-01` (`R-143`, plan section 5): the call went through a connection that has no
+#: per-call cost. It is recorded as such and is never a zero.
+BASIS_UNMETERED: str = "unmetered"
 
 
 @dataclass(slots=True)
@@ -58,6 +61,8 @@ class CostMeter:
     #: argument: a caller cannot declare the provenance of spend it is handing over, and
     #: :meth:`__post_init__` decides what an opening balance means.
     unpriced_contributions: int = field(default=0, init=False)
+    #: Calls that went through an unmetered connection: counted, never charged.
+    unmetered_calls: int = field(default=0, init=False)
 
     def __post_init__(self) -> None:
         # An opening balance is spend this meter did not charge and cannot vouch for.
@@ -88,10 +93,25 @@ class CostMeter:
         there is no measurement to claim. The stage emits this only after a charge, so
         that state does not reach the metrics, but the rule is stated rather than left
         to that coincidence.
+
+        **The run-level cost rule** (`EXEC-HTTP-01`), which keeps the three fields of a run's
+        cost moving together because the run did call a provider: when *every* call was
+        unmetered the basis is ``unmetered`` (the figure is zero and the count is the calls);
+        when unmetered and metered calls mix, the figure is the metered sum and the basis is
+        ``estimated`` -- a sum that leaves calls out is not a measurement of the run.
         """
-        if self.unpriced_contributions or self.call_count == 0:
+        if self.call_count and self.unmetered_calls == self.call_count:
+            return BASIS_UNMETERED
+        if self.unmetered_calls or self.unpriced_contributions or self.call_count == 0:
             return BASIS_ESTIMATED
         return BASIS_MEASURED
+
+    def record_unmetered(self) -> float:
+        """Count one call through an unmetered connection. Charges nothing, so the ceiling is
+        neither approached nor crossed by it; returns the call's cost, which is ``0.0``."""
+        self.call_count += 1
+        self.unmetered_calls += 1
+        return 0.0
 
     def check_before_call(self) -> None:
         """Halt before spending anything more once the ceiling is reached."""

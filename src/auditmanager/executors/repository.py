@@ -299,6 +299,28 @@ class ExecutorRepository:
         ), {"id": connection_id}).mappings().all()
         return {row["revision_id"]: _probe(row) for row in rows}
 
+    def claim_requested_probe(self, session: Session) -> ProbeRecord | None:
+        """Take the oldest ``requested`` probe for this worker: ``requested -> running`` in one
+        statement, skipping rows another worker has locked, so two workers never run one probe."""
+        row = session.execute(text(
+            "UPDATE executor_probe SET state = 'running', started_at = clock_timestamp() "
+            "WHERE probe_id = (SELECT probe_id FROM executor_probe WHERE state = 'requested' "
+            "ORDER BY requested_at, probe_id FOR UPDATE SKIP LOCKED LIMIT 1) "
+            f"RETURNING {_PROBE_COLUMNS}"
+        )).mappings().first()
+        return None if row is None else _probe(row)
+
+    def latest_finished_probe(
+        self, session: Session, revision_id: str, secret_id: str | None
+    ) -> ProbeRecord | None:
+        """The most recent *finished* probe of this revision on this secret (or on no secret)."""
+        row = session.execute(text(
+            f"SELECT {_PROBE_COLUMNS} FROM executor_probe WHERE revision_id = :r "
+            "AND state = 'finished' AND secret_id IS NOT DISTINCT FROM CAST(:s AS text) "
+            "ORDER BY finished_at DESC, probe_id DESC LIMIT 1"
+        ), {"r": revision_id, "s": secret_id}).mappings().first()
+        return None if row is None else _probe(row)
+
     def sweep_probes(self, session: Session) -> int:
         """End the probes nobody can still be running.
 

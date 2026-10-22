@@ -1,4 +1,4 @@
-STATUS: item 1 destinations, identity, http adapters, probe logic, AttemptContext committed (12:35 +05)
+STATUS: items 2-3 probe runner, resolver seam, source switch, cost rule, import-env committed; infra and DB tests next (13:05 +05)
 
 # EXEC-HTTP-01 report, backend half (in progress)
 

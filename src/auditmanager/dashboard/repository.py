@@ -97,11 +97,17 @@ _RUNS_BY_STATE = text("SELECT state, count(*) FROM audit_run GROUP BY state")
 #: values ``runs.repository._COST_SUMMARY`` computes for one run, computed here with no
 #: ``WHERE run_id = ...`` at all. See ``RunActivitySpendRecord`` for the conservative
 #: basis rule.
+#:
+#: **The run-level cost rule** (`EXEC-HTTP-01`), the same as ``runs.repository._COST_SUMMARY``
+#: states for one run: a call through an unmetered connection has no figure of its own but still
+#: counts as a call. When every call in the deployment is unmetered the aggregate is ``0`` with
+#: basis ``unmetered``; when unmetered and metered calls mix it is the metered sum, ``estimated``.
 _SPEND = text(
     "SELECT count(*) AS calls, "
-    "       coalesce(sum(cost_micros), 0) AS cost_micros, "
-    "       count(*) FILTER (WHERE cost_micros IS NULL OR cost_basis <> 'measured') "
-    "         AS unmeasured "
+    "       coalesce(sum(cost_micros) FILTER (WHERE cost_basis <> 'unmetered'), 0) AS cost_micros, "
+    "       count(*) FILTER (WHERE cost_basis = 'unmetered') AS unmetered, "
+    "       count(*) FILTER (WHERE cost_basis <> 'unmetered' "
+    "         AND (cost_micros IS NULL OR cost_basis <> 'measured')) AS unmeasured "
     "FROM model_call"
 )
 
@@ -181,8 +187,8 @@ class DashboardRepository:
         )
 
         spend_row: Any = session.execute(_SPEND).one()
-        calls, cost_micros, unmeasured = tuple(spend_row)
-        calls = int(calls)
+        calls, cost_micros, unmetered, unmeasured = tuple(spend_row)
+        calls, unmetered = int(calls), int(unmetered)
         # `F-1` (`docs/program/reviews/W46-JUDGE-A.md` section 3): the branch the lift
         # from `runs.repository.RunCost` dropped. `RunCost.calls == 0` answers `None`,
         # never `RunCost(0, 0, "measured")` -- those are different facts, and reporting
@@ -195,8 +201,12 @@ class DashboardRepository:
             if calls == 0
             else RunActivitySpendRecord(
                 model_call_count=calls,
-                cost_micros=int(cost_micros),
-                basis="measured" if int(unmeasured) == 0 else "estimated",
+                cost_micros=0 if unmetered == calls else int(cost_micros),
+                basis=(
+                    "unmetered" if unmetered == calls
+                    else "measured" if unmetered == 0 and int(unmeasured) == 0
+                    else "estimated"
+                ),
             )
         )
 
