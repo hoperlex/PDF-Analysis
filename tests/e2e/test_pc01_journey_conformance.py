@@ -3750,6 +3750,8 @@ def identity_runner_handles(source: str) -> set[str]:
         handles.update(_DATA_ATTRIBUTE.findall(literal))
         for match in re.findall(r'\[id\^="([^"]+)"\]', literal):
             handles.add(match)
+        # A group named by its accessible label (the confirmation an archive asks for).
+        handles.update(re.findall(r'aria-label="([^"]+)"', literal))
     for pattern in _RUNNER_TEXT_ARGUMENTS:
         handles.update(pattern.findall(code))
     return handles
@@ -3774,6 +3776,15 @@ def test_every_control_the_identity_continuation_presses_still_exists_in_the_app
         f"the identity continuation names {len(missing)} handle(s) that no longer appear anywhere in "
         f"web/src: {missing}. It would still sign in and reach the screens, and could press nothing."
     )
+
+
+def test_control_a_renamed_identity_confirmation_is_detected() -> None:
+    real = _require(IDENTITY_RUNNER).read_text(encoding="utf-8")
+    source = application_source(WEB_SRC)
+    handles = identity_runner_handles(real)
+    assert "Подтверждение архивирования" in handles and "Подтвердить отклонение" in handles
+    mutated = identity_runner_handles(real.replace("Подтверждение архивирования", "Подтверждение удаления записи"))
+    assert "Подтверждение удаления записи" in mutated and "Подтверждение удаления записи" not in source
 
 
 def test_control_a_renamed_identity_control_is_detected() -> None:
@@ -3893,3 +3904,24 @@ def test_control_a_step_or_a_route_that_disappears_is_detected(manifest: dict) -
     swapped = json.loads(json.dumps(manifest))
     _step_of(swapped, "sign-out")["name"] = "sign-out-again"
     assert any("'sign-out' is gone or renamed" in f for f in pinned_journey_findings(swapped))
+
+
+def seed_paragraph_count_findings(source: str) -> list[str]:
+    """The seeded documents state how many paragraphs they hold: `getNormDocument` serves the column."""
+    findings = []
+    if ":slug, :title, :doc_type, 'consultant_plus', 12, 1, 0, 10, :paragraphs)" not in source:
+        findings.append("the seed no longer writes the document's paragraph_count from the paragraphs it inserts")
+    if "document(qualified, slug, paragraphs=len(entries))" not in source:
+        findings.append("the seed does not hand each document the number of paragraphs it writes for it")
+    return findings
+
+
+def test_the_norms_seed_states_how_many_paragraphs_each_document_holds() -> None:
+    """The first live run read `paragraph_count = 0` from `getNormDocument` over documents that had paragraphs."""
+    assert seed_paragraph_count_findings(_require(SEED_NORMS).read_text(encoding="utf-8")) == []
+
+
+def test_control_a_seed_that_states_no_paragraph_count_is_detected() -> None:
+    source = _require(SEED_NORMS).read_text(encoding="utf-8")
+    assert seed_paragraph_count_findings(source.replace(":paragraphs)", "0)", 1))
+    assert seed_paragraph_count_findings(source.replace("paragraphs=len(entries)", "paragraphs=0", 1))

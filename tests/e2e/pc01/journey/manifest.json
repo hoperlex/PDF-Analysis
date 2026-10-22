@@ -2056,8 +2056,11 @@
             "min_count": 1
           },
           {
-            "selector": "tr[data-profile=\"none\"]",
-            "min_count": 1
+            "selector": "tr[data-section=\"AR\"][data-profile=\"builtin\"]"
+          },
+          {
+            "selector": "tr[data-profile=\"draft\"]",
+            "text_contains": "черновик, требует экспертной проверки"
           }
         ],
         "forbids_rendered": [

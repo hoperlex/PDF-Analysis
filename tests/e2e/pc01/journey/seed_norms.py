@@ -199,14 +199,14 @@ def main(argv: list[str] | None = None) -> int:
         )
         return identity
 
-    def document(snapshot_id: str, slug: str) -> str:
+    def document(snapshot_id: str, slug: str, paragraphs: int = 0) -> str:
         identity = str(NormDocumentId.new())
         run(
             "INSERT INTO norm_document (norm_document_id, norms_snapshot_id, source_document_ref, "
             "slug, title, doc_type, source_attribution, pdf_page_count, block_count, "
             "page_heading_count, recognised_characters, paragraph_count) VALUES (:d, :s, :ref, "
-            ":slug, :title, :doc_type, 'consultant_plus', 12, 1, 0, 10, 0)",
-            d=identity, s=snapshot_id, ref=f"ref-{identity[-8:]}", slug=slug,
+            ":slug, :title, :doc_type, 'consultant_plus', 12, 1, 0, 10, :paragraphs)",
+            d=identity, s=snapshot_id, ref=f"ref-{identity[-8:]}", slug=slug, paragraphs=paragraphs,
             title=slug.split("__", 1)[-1].replace("_", " ") or slug,
             doc_type=slug.split("_", 1)[0],
         )
@@ -294,7 +294,7 @@ def main(argv: list[str] | None = None) -> int:
 
     qualified = snapshot(len(PARAGRAPHS))
     for slug, entries in PARAGRAPHS.items():
-        identity = document(qualified, slug)
+        identity = document(qualified, slug, paragraphs=len(entries))
         for ordinal, (clause, body) in enumerate(entries, start=1):
             paragraph(identity, body, ordinal, clause)
         bind_pdf(identity)
