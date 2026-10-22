@@ -748,6 +748,6 @@
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0029_routing_refusal_codes",
+  "migration_head": "0030_executor_connections",
   "contract_version": "1.0.0"
 }

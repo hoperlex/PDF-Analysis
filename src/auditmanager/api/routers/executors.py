@@ -1,6 +1,6 @@
 """The executor connections (`EXEC-SEAL-01`, `R-143`): where a process sends model work.
 
-Eleven operations on one port. Reads are open to any role; writes are an administrator's act
+The executor operations share one port. Reads are open to any role; writes are an administrator's act
 (`api/security.py`). **No operation returns a secret and none has a GET counterpart for one**:
 ``setExecutorSecret`` takes a write-only value and answers metadata only, and
 ``generateExecutorSshKey`` returns the public half of a key whose private half is sealed. A
