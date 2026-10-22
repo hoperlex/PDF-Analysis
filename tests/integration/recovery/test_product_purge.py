@@ -588,3 +588,15 @@ def test_the_executor_configuration_is_kept_by_a_product_purge() -> None:
     assert commands <= tool.KEEP_COMMAND_TYPES and not commands & tool.PRODUCT_COMMAND_TYPES
     assert "executor." in tool.KEEP_EVENT_PREFIXES
     assert not any("executor." .startswith(prefix) for prefix in tool.PRODUCT_EVENT_PREFIXES)
+
+
+def test_the_runner_tokens_are_kept_and_the_tasks_are_purged_with_the_product() -> None:
+    """`EXEC-PULL-01`: a runner token is configuration, like an account; a task carries the
+    stand's documents and the model's answers and references runs, Attempts and calls, so it is
+    PRODUCT and is truncated in the same statement as the tables it references."""
+    assert "executor_runner_token" in tool.KEEP_TABLES
+    assert "executor_runner_token" not in tool.PRODUCT_TABLES
+    assert "executor_task" in tool.PRODUCT_TABLES and "executor_task" not in tool.KEEP_TABLES
+    commands = {"issue_runner_token", "revoke_runner_token"}
+    assert commands <= tool.KEEP_COMMAND_TYPES and not commands & tool.PRODUCT_COMMAND_TYPES
+    assert tool.classification_problems() == []

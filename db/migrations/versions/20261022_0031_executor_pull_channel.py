@@ -73,6 +73,8 @@ def upgrade() -> None:
             CONSTRAINT uq_executor_runner_token_connection UNIQUE (token_id, connection_id),
             CONSTRAINT ck_executor_runner_token_id_format
                 CHECK (token_id ~ '^ern_{ULID}$'),
+            CONSTRAINT ck_executor_runner_token_connection_id_format
+                CHECK (connection_id ~ '^exc_{ULID}$'),
             CONSTRAINT ck_executor_runner_token_prefix_format
                 CHECK (token_prefix ~ '^amr_[0-9a-z]{{8}}$'),
             CONSTRAINT ck_executor_runner_token_hash_length
@@ -144,6 +146,20 @@ def upgrade() -> None:
             CONSTRAINT fk_executor_task_token FOREIGN KEY (claimed_by_token_id, connection_id)
                 REFERENCES executor_runner_token (token_id, connection_id),
             CONSTRAINT ck_executor_task_id_format CHECK (task_id ~ '^ext_{ULID}$'),
+            CONSTRAINT ck_executor_task_connection_id_format
+                CHECK (connection_id ~ '^exc_{ULID}$'),
+            CONSTRAINT ck_executor_task_revision_id_format
+                CHECK (revision_id ~ '^excr_{ULID}$'),
+            CONSTRAINT ck_executor_task_run_id_format
+                CHECK (run_id IS NULL OR run_id ~ '^run_{ULID}$'),
+            CONSTRAINT ck_executor_task_attempt_id_format
+                CHECK (attempt_id IS NULL OR attempt_id ~ '^att_{ULID}$'),
+            CONSTRAINT ck_executor_task_model_call_id_format
+                CHECK (model_call_id IS NULL OR model_call_id ~ '^mc_{ULID}$'),
+            CONSTRAINT ck_executor_task_probe_id_format
+                CHECK (probe_id IS NULL OR probe_id ~ '^epb_{ULID}$'),
+            CONSTRAINT ck_executor_task_claimed_by_token_id_format
+                CHECK (claimed_by_token_id IS NULL OR claimed_by_token_id ~ '^ern_{ULID}$'),
             CONSTRAINT ck_executor_task_origin CHECK (origin IN ('run_call', 'probe')),
             CONSTRAINT ck_executor_task_origin_shape CHECK (
                 (origin = 'run_call' AND run_id IS NOT NULL AND attempt_id IS NOT NULL

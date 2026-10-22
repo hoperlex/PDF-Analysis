@@ -332,6 +332,11 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "secret_id": "exs",
         "probe_id": "epb",
         "route_event_id": "ert",
+        # `EXEC-PULL-01`, migration 0031: a runner token, a task, and the column that names the
+        # token holding a task's claim.
+        "token_id": "ern",
+        "claimed_by_token_id": "ern",
+        "task_id": "ext",
     }
     assert set(prefix_by_column.values()) <= {
         identity.prefix for identity in IDENTITY_TYPES_BY_ENTITY.values()
