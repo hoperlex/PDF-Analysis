@@ -1,4 +1,4 @@
-STATUS: 4/5 tests/fixtures/sshd written, not yet built (12:06 +05)
+STATUS: 5/5 unit tests green (148), sshd integration written, container run pending END (12:11 +05)
 
 # EXEC-SSH-TRANSPORT - progress and report
 
