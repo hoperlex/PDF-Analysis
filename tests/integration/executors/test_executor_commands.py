@@ -84,6 +84,23 @@ def secret(session, connection_id: str, ring, value: str = SENTINEL, purpose: st
     )
 
 
+def pass_probe(session, connection_id: str) -> None:
+    """The worker's act, which `EXEC-HTTP-01` requires before a route: a finished ``ok`` probe
+    of the connection's current revision on its current key."""
+    probe = request_probe(session, connection_id=connection_id, roles=ADMIN_ROLES,
+                          idempotency_key=key(), actor_uid=ADMIN)
+    assert record_probe_started(session, probe.probe_id)
+    assert record_probe_result(
+        session, probe.probe_id, outcome="ok", reported_model="anthropic/claude-opus-5",
+        identity_basis="reported", rate_check="not_reported")
+
+
+def make_routable(session, rings, connection_id: str) -> None:
+    """A key on the current revision and an ``ok`` probe of it: what a route to it requires."""
+    secret(session, connection_id, rings.public)
+    pass_probe(session, connection_id)
+
+
 def count(session, table: str) -> int:
     return session.execute(text(f"SELECT count(*) FROM {table}")).scalar_one()
 
@@ -419,11 +436,17 @@ def route(session, primary, standby=None, **kwargs):
                      actor_uid=ADMIN, **kwargs)
 
 
-def test_a_route_resolves_to_the_current_revision_of_each_side_and_is_journaled(session) -> None:
-    primary, standby = connection(session, name="p"), connection(session, "ssh_command", name="s")
+def test_a_route_resolves_to_the_current_revision_of_each_side_and_is_journaled(
+    session, rings
+) -> None:
+    # `EXEC-HTTP-01`: both sides are served kinds with a key and an ok probe of their current
+    # revision (an `ssh_command` side is refused at route time until `EXEC-SSH-01` serves it).
+    primary, standby = connection(session, name="p"), connection(session, name="s")
     revise(session, primary)
     revision = revise(session, primary, replace(HTTP, base_url="https://proxy3.test"))
-    standby_revision = revise(session, standby, SSH)
+    standby_revision = revise(session, standby, HTTP)
+    make_routable(session, rings, primary)
+    make_routable(session, rings, standby)
     first = route(session, primary)
     assert first.route_no >= 1
     second = route(session, primary, standby)
@@ -439,9 +462,10 @@ def test_a_route_resolves_to_the_current_revision_of_each_side_and_is_journaled(
                        "standby_connection_id": standby, "actor_uid": ADMIN}]
 
 
-def test_a_route_refuses_what_cannot_serve_and_never_falls_back(session) -> None:
+def test_a_route_refuses_what_cannot_serve_and_never_falls_back(session, rings) -> None:
     ready, bare, archived = (connection(session, name=n) for n in ("ready", "bare", "gone"))
     revise(session, ready)
+    make_routable(session, rings, ready)
     revise(session, archived)
     archive_connection(session, connection_id=archived, roles=ADMIN_ROLES, idempotency_key=key(),
                        actor_uid=ADMIN)
@@ -454,10 +478,14 @@ def test_a_route_refuses_what_cannot_serve_and_never_falls_back(session) -> None
     assert refusal(lambda: route(session, f"exc_{'0' * 26}")).code is ErrorCode.NOT_FOUND
 
 
-def test_archiving_a_routed_connection_is_a_conflict_and_archiving_is_one_way(session) -> None:
+def test_archiving_a_routed_connection_is_a_conflict_and_archiving_is_one_way(
+    session, rings
+) -> None:
     primary, spare = connection(session, name="p"), connection(session, name="q")
     revise(session, primary)
     revise(session, spare)
+    make_routable(session, rings, primary)
+    make_routable(session, rings, spare)
     route(session, primary, spare)
     for routed in (primary, spare):
         assert refusal(lambda: archive_connection(
