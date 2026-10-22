@@ -1,4 +1,4 @@
-STATUS: 7/7 checks green on 5098ba15; origin/dev merge and the 1.1.0 label commit NOT done (permission denied) (13:54 +05)
+STATUS: candidate 67b18d4d handed to the EXEC integrator; one container-free recheck owed after the gate completion (14:15 +05)
 
 # EXEC-CANDIDATE-1 - R-144b basic acceptance of the merged EXEC candidate
 
@@ -325,3 +325,31 @@ A web/tests/unit/workers/executor-secret-door.test.ts
 A web/tests/unit/workers/executor-settings.test.ts
 A web/tests/unit/workers/workers-tabs.test.ts
 ```
+
+
+## Dispatcher addendum (pdf-analysis-33, 2026-10-22 14:15 +05)
+
+The two steps the lane could not take were taken by the dispatcher with the owner's direct
+permission (poll ~14:00 +05, «Сделай сам»):
+
+1. `git merge origin/dev` (ddcef5b2, docs and task freezes only) -> `adacbd1a`, no conflict;
+   `git diff --check origin/dev...HEAD` exit 0.
+2. **Label 1.1.0: attempted and parked, not in the candidate.** Mirroring the 149
+   version lines of the 1.0.0 seal commit `c957e7d9` across 107 files, regenerating the
+   client and recomputing FRONTEND_LOCK left 20 contract tests red: the seal's own guards
+   (`test_contract_seal.py`: domain catalogs frozen at the sealed round, schemas refusing an
+   unfrozen catalog, the envelope pinning the sealed version) and
+   `test_alpha_acceptance_command.py` encode 1.0.0 as the frozen family version. Moving the
+   label is therefore a reseal of those guards, not a pin sweep. The attempt is preserved on
+   branch `agent/exec-label-110` (`404d8935`) for a separate slice; the candidate keeps
+   `1.0.0`.
+
+On `adacbd1a` (dispatcher, `nice -n 19 ionice -c3`, before the gate owner's STOP):
+`pytest tests/contract` with the gate's three ignores plus
+`tests/e2e/test_pc01_journey_conformance.py` -> **1098 passed, 3 failed** (5 min 53 s):
+- `test_doc_prose_facts.py` x2: CURRENT_STATE.md still says head 0029 and 73/83/242 — the
+  integrator's;
+- `test_domain_identifiers_schema.py::test_each_identifier_name_enum_admits_every_catalog_name`:
+  a real EXEC-SEAL-01 defect (the five executor identifiers were in identifiers.json but not
+  in the schema's two name enums). Fixed in `67b18d4d`; its rerun waits for the gate
+  completion's quiet window to end.
