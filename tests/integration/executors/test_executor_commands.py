@@ -88,6 +88,13 @@ def count(session, table: str) -> int:
     return session.execute(text(f"SELECT count(*) FROM {table}")).scalar_one()
 
 
+def stored(session, table: str, connection_id: str) -> int:
+    """Rows of one connection. Counts are per connection, never per table: the sentinel suite
+    commits rows on purpose (``pg_dump`` reads its own snapshot) and they are append-only."""
+    return session.execute(text(f"SELECT count(*) FROM {table} WHERE connection_id = :c"),
+                           {"c": connection_id}).scalar_one()
+
+
 def refusal(call) -> DomainError:
     with pytest.raises(DomainError) as refused:
         call()
@@ -121,7 +128,7 @@ def test_only_an_administrator_writes_and_nothing_is_written_otherwise(session, 
                           actor_uid=ADMIN),
     ):
         assert refusal(call).code is ErrorCode.PERMISSION_DENIED
-    assert count(session, "executor_secret") == 0 and count(session, "executor_probe") == 0
+    assert stored(session, "executor_secret", cid) == 0 == stored(session, "executor_probe", cid)
 
 
 # --- connections and revisions ----------------------------------------------------------------
@@ -179,7 +186,7 @@ def test_without_a_public_key_a_secret_is_a_typed_refusal_and_nothing_is_stored(
     refused = refusal(lambda: secret(session, cid, None))
     assert refused.code is ErrorCode.DEPENDENCY_UNAVAILABLE
     assert refused.detail_fields == {"dependency": "secrets_public_key_missing"}
-    assert count(session, "executor_secret") == 0
+    assert stored(session, "executor_secret", cid) == 0
     assert SENTINEL not in str(refused) + repr(refused.detail_fields)
 
 
@@ -194,7 +201,7 @@ def test_a_secret_needs_a_revision_and_a_purpose_its_kind_holds(session, rings) 
     revise(session, pull, PULL)
     assert refusal(lambda: secret(session, pull, rings.public)).detail_fields == {
         "field": "purpose", "constraint": "purpose_not_for_kind"}
-    assert count(session, "executor_secret") == 0
+    assert stored(session, "executor_secret", cid) == 0 == stored(session, "executor_secret", pull)
 
 
 def test_a_secret_is_stored_as_ciphertext_with_its_last_four_and_opens_with_the_private_ring(
@@ -241,7 +248,7 @@ def test_a_replay_of_a_secret_answers_the_first_and_stores_one_row(session, ring
     first = set_secret(session, value=SENTINEL, **kwargs)
     again = set_secret(session, value=SENTINEL, **kwargs)
     assert again.secret_id == first.secret_id
-    assert count(session, "executor_secret") == 1
+    assert stored(session, "executor_secret", cid) == 1
 
 
 # --- the destination binding ------------------------------------------------------------------

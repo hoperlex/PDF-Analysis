@@ -75,7 +75,7 @@ UPGRADE_SURFACE_DIGESTS = {
     # `BETA-CONTRACT-SEAL-01`: likewise, taken from the revision's own bytes once it was final.
     "20261021_0029_routing_refusal_codes.py": "ca052ff08363788f7dc4ac639d176d6e1c7b9833e331b7d588433e2acad3507b",
     # `EXEC-SEAL-01`: likewise, taken from the revision's own bytes once it was final.
-    "20261022_0030_executor_connections.py": "b2449da939cad04841344f2d9d03033c54cd3357c5718acc10523098eeac9cfa",
+    "20261022_0030_executor_connections.py": "1704100d708bed0f8605e401b69fc899e2efd19843e54f81709a29f952ec654b",
 }
 
 

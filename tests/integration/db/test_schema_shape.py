@@ -38,7 +38,8 @@ BANNED_COLUMN_NAMES = {
     "response_body",
 }
 
-APPEND_ONLY_TABLES = {"expert_decision_event", "audit_event"}
+# `0030_executor_connections`: the route of each kind of model work is appended, never edited.
+APPEND_ONLY_TABLES = {"expert_decision_event", "audit_event", "executor_route_event"}
 
 IMMUTABLE_TABLES = {
     "document_version",
@@ -80,6 +81,9 @@ IMMUTABLE_TABLES = {
     # `0028_classification_corrections`: a correction is appended once and never changed; the
     # original confirmation above is revision 1 and the current classification is a view.
     "document_version_classification_correction",
+    # `0030_executor_connections`: a revision of a connection's settings is written once; a changed
+    # address is a new revision.
+    "executor_connection_revision",
 }
 
 
@@ -233,6 +237,9 @@ NON_CONTRACT_IDENTITY_COLUMNS = {
     "sequence_no",
     "stage_id",
     "user_uid",
+    # `0030_executor_connections`: ``pin_id`` names a model of the provider lock
+    # (``claude-opus-5``), not an entity this product mints.
+    "pin_id",
     # `0018_norm_custody`: a custody target holds the prefix of whichever entity its
     # ``target_kind`` names, like ``aggregate_id``; ``ck_norm_custody_role_shape`` checks it
     # per kind.
@@ -314,6 +321,17 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "proposal_decision_id": "opd",
         "matched_position_id": "prp",
         "proposed_position_id": "prp",
+        # `EXEC-SEAL-01`, migration 0030: the executor connections' five identities, and the
+        # columns that hold them (a route names two connections, a run, call and effect freeze
+        # the revision they used).
+        "connection_id": "exc",
+        "primary_connection_id": "exc",
+        "standby_connection_id": "exc",
+        "revision_id": "excr",
+        "connection_revision_id": "excr",
+        "secret_id": "exs",
+        "probe_id": "epb",
+        "route_event_id": "ert",
     }
     assert set(prefix_by_column.values()) <= {
         identity.prefix for identity in IDENTITY_TYPES_BY_ENTITY.values()
