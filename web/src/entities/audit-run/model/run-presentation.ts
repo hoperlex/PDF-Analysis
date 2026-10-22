@@ -367,10 +367,16 @@ export function formatCostMicros(micros: number): string {
 export type RunCostReading =
   | { readonly kind: 'absent' }
   | { readonly kind: 'unreadable'; readonly why: string }
+  /**
+   * `EXEC-SEAL-01` (`R-143f`): the run ran on a connection that has no per-call cost, such as
+   * a subscription session. Its own kind, deliberately not `reported`, `unrecognized` or
+   * `absent`: there is no figure to print and no zero to claim, so nothing carries one.
+   */
+  | { readonly kind: 'unmetered'; readonly callCount: number | null }
   | {
       readonly kind: 'reported';
       readonly micros: number;
-      readonly basis: CostBasis | null | 'unrecognized';
+      readonly basis: Exclude<CostBasis, 'unmetered'> | null | 'unrecognized';
       readonly callCount: number;
     };
 
@@ -394,6 +400,18 @@ export function runCost(status: {
 }): RunCostReading {
   const micros = status.cost_micros;
   const callCount = status.model_call_count;
+
+  // Decided before the figure is looked at: an unmetered run carries no figure to look at, and
+  // a figure it did carry would be a number the basis says nobody charged.
+  if (status.cost_basis === 'unmetered') {
+    return {
+      kind: 'unmetered',
+      callCount:
+        typeof callCount === 'number' && Number.isInteger(callCount) && callCount >= 1
+          ? callCount
+          : null,
+    };
+  }
 
   if (micros === undefined || micros === null) return { kind: 'absent' };
 
@@ -437,6 +455,11 @@ export function costBasisCaption(basis: CostBasis | null | 'unrecognized'): stri
         'Как минимум один вызов, вошедший в эту сумму, не сообщил собственной стоимости, ' +
         'поэтому величина оценочная. Воспроизведённый прогон повторяет вызовы, не несущие ' +
         'стоимости: для этого прототипа это обычный случай, а не неисправность.'
+      );
+    case 'unmetered':
+      return (
+        'Прогон не тарифицируется: у подключения, на котором он выполнен, нет стоимости ' +
+        'отдельного вызова, поэтому величина не показана. Это не нулевая стоимость.'
       );
     case null:
       return 'Это показание не несёт основания стоимости, поэтому точность величины не указана.';

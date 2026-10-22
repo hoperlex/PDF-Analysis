@@ -1,4 +1,4 @@
-STATUS: step 5/7 adapter, composition, settings and env examples committed (12:02 +05)
+STATUS: step 6/7 web CostBasis consumers committed, integration tests being written; client regeneration waits for END (12:06 +05)
 
 # EXEC-SEAL-01 report (in progress)
 

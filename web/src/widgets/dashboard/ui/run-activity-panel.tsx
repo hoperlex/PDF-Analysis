@@ -113,8 +113,13 @@ export function RunActivityPanel({ activity, hasProjects }: RunActivityPanelProp
       <p>
         {spend !== undefined ? (
           <>
-            Расход по всем прогонам: <strong>{formatCostMicros(spend.cost_micros)}</strong> ·
-            вызовов модели: {spend.model_call_count} ·{' '}
+            Расход по всем прогонам:{' '}
+            {spend.cost_basis === 'unmetered' ? (
+              <strong>{COST_BASIS_LABELS.unmetered}</strong>
+            ) : (
+              <strong>{formatCostMicros(spend.cost_micros)}</strong>
+            )}{' '}
+            · вызовов модели: {spend.model_call_count} ·{' '}
             <span data-cost-basis={spend.cost_basis}>{COST_BASIS_LABELS[spend.cost_basis]}</span>.
           </>
         ) : (
