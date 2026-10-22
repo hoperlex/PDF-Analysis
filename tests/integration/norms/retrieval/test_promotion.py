@@ -220,6 +220,23 @@ def test_stale_preparation_refuses_before_any_admission_or_blob_access(
     assert _row_count(session) == 0
 
 
+def test_duplicate_verified_identity_refuses_before_new_custody_effect(
+    session: Session, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first = _prepared()
+    assert promotion.insert_set(session, promotion._row_values(first, "verified"))
+    second = _prepared()
+    assert second.request.set_id != first.request.set_id
+    monkeypatch.setattr(promotion, "prepare_promotion", lambda _session, _request: second)
+    monkeypatch.setattr(promotion, "admit", lambda *_a, **_k: pytest.fail("admission reached"))
+    with pytest.raises(promotion.PromotionRefused, match="already belongs"):
+        promotion.admit_matched(session, second, manifest=SimpleNamespace())
+    store = SimpleNamespace(open_stream=lambda *_a, **_k: pytest.fail("Blob read reached"))
+    with pytest.raises(promotion.PromotionRefused, match="already belongs"):
+        promotion.finalize_matched(session, second, blob_store=store)
+    assert _row_count(session) == 1
+
+
 def test_unsupported_builder_refuses_before_verified_set_query(
     session: Session, monkeypatch: pytest.MonkeyPatch,
 ) -> None:

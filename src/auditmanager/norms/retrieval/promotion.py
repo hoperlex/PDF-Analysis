@@ -33,6 +33,7 @@ from auditmanager.norms.retrieval.candidate import (
 from auditmanager.norms.retrieval.evidence_bridge import ReviewedDesignation
 from auditmanager.norms.retrieval.promotion_repository import (
     VerifiedSetReference, get_set, insert_set, verified_for_identity,
+    verified_identity_holder,
 )
 from auditmanager.norms.retrieval.qualification_decision import (
     DigestComparison, compare_retrieval_candidate,
@@ -295,8 +296,12 @@ def admit_matched(
     if prepared.comparison.status != "matched":
         raise PromotionRefused("mismatched digests cannot be admitted")
     _require_fresh(session, prepared)
+    values = _row_values(prepared, "verified")
+    holder = verified_identity_holder(session, values)
+    if holder is not None and holder != prepared.request.set_id:
+        raise PromotionRefused("verified identity already belongs to another set")
     existing = get_set(session, prepared.request.set_id)
-    if existing is not None and not _same_row(existing, _row_values(prepared, "verified")):
+    if existing is not None and not _same_row(existing, values):
         raise PromotionRefused("retrieval set identity was reused with different evidence")
     requests: list[AdmissionRequest] = []
     for role, anchor, data, sha256 in _slots(prepared):
@@ -351,6 +356,9 @@ def finalize_matched(
     _require_fresh(session, prepared)
     slots = _confirmed(prepared)
     values = _row_values(prepared, "verified")
+    holder = verified_identity_holder(session, values)
+    if holder is not None and holder != prepared.request.set_id:
+        raise PromotionRefused("verified identity already belongs to another set")
     existing = get_set(session, prepared.request.set_id)
     if existing is not None and not _same_row(existing, values):
         raise PromotionRefused("retrieval set identity was reused with different evidence")

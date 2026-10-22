@@ -30,6 +30,14 @@ _INSERT = text(f"""
         :catalogue_blob_id, :catalogue_size_bytes, :prompt_part_characters
     ) ON CONFLICT DO NOTHING
 """)
+_IDENTITY_HOLDER = text("""
+    SELECT norm_retrieval_set_id FROM norm_retrieval_set
+     WHERE state = 'verified' AND map_sha256 = :map_sha256
+       AND norms_snapshot_id = :snapshot_id
+       AND chunking_profile = :chunking_profile
+       AND embedding_profile = :embedding_profile
+       AND builder_version = :builder_version
+""")
 _VERIFIED = text("""
     SELECT s.norm_retrieval_set_id, s.norms_snapshot_id, s.map_sha256,
            s.reviewed_content_key, s.chunking_profile, s.embedding_profile,
@@ -105,6 +113,12 @@ def insert_set(session: Session, values: Mapping[str, Any]) -> bool:
     return session.execute(_INSERT, dict(values)).rowcount == 1
 
 
+def verified_identity_holder(session: Session, values: Mapping[str, Any]) -> str | None:
+    """Preflight 0023's partial UNIQUE key before admitting or reading Blobs."""
+    value = session.execute(_IDENTITY_HOLDER, dict(values)).scalar_one_or_none()
+    return None if value is None else str(value)
+
+
 def verified_for_identity(
     session: Session, *, map_sha256: str, snapshot_id: str,
     chunking_profile: str, embedding_profile: str, builder_version: str,
@@ -136,4 +150,7 @@ def verified_for_identity(
     )
 
 
-__all__ = ["VerifiedSetReference", "get_set", "insert_set", "verified_for_identity"]
+__all__ = [
+    "VerifiedSetReference", "get_set", "insert_set", "verified_for_identity",
+    "verified_identity_holder",
+]

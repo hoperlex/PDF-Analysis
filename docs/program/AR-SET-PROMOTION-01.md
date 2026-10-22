@@ -2,7 +2,7 @@
 
 ## Result
 
-The unserved promotion service now assembles a retrieval candidate for one caller-pinned snapshot/build and reviewed map, compares independent proof digests and expected canonical artifact hashes, and persists a mismatch as an immutable rejected row. Each write/admission/finalization re-runs read-only preparation against the pinned DB facts and requires the exact candidate, so a hand-constructed or stale `PreparedPromotion` is not authority. Matching bytes are admitted through the existing two-role custody outbox; after dispatch, finalization re-reads both saved objects and inserts the verified set plus both bindings in one database transaction. Exact retries preserve `set_id`; a changed map, digest, admission or Blob refuses. The public read port returns only an exact verified row with confirmed available custody. Run INSERT has an additive nullable set pin, and the optional frozen-input digest includes the set SHA only when passed explicitly.
+The unserved promotion service now assembles a retrieval candidate for one caller-pinned snapshot/build and reviewed map, compares independent proof digests and expected canonical artifact hashes, and persists a mismatch as an immutable rejected row. Each write/admission/finalization re-runs read-only preparation against the pinned DB facts and requires the exact candidate, so a hand-constructed or stale `PreparedPromotion` is not authority. Matching bytes are admitted through the existing two-role custody outbox; after dispatch, finalization re-reads both saved objects and inserts the verified set plus both bindings in one database transaction. A preflight of 0023's verified identity key refuses a different `set_id` before new admission or Blob read. Exact retries preserve `set_id`; a changed map, digest, admission or Blob refuses. The public read port returns only an exact verified row with confirmed available custody. Run INSERT has an additive nullable set pin, and the optional frozen-input digest includes the set SHA only when passed explicitly.
 
 This is persistence groundwork, not a v3 runtime activation. It accepts a caller-supplied scope map and never assumes one global 22-document set. The budget evidence `efe765ba` showed the all-22 prompt refused at 76–88k characters against the 22k cap; scope-bound Run selection and contract remain separate. The existing 0023 UNIQUE verified identity is `(map_sha256, norms_snapshot_id, chunking_profile, embedding_profile, builder_version)`. Six scope groups therefore need six distinct scope-specific map digests, or a separately owned schema seal; one global map digest cannot yield six verified sets under this schema.
 
@@ -21,7 +21,7 @@ This is persistence groundwork, not a v3 runtime activation. It accepts a caller
 
 ## Checks
 
-- `pytest -c pyproject.toml --rootdir=. -q tests/contract/api_v1/test_w57a_citation_contract.py tests/integration/norms/retrieval tests/integration/runs/test_retrieval_set_persistence.py tests/contract/program`: **135 passed** (offline).
+- `pytest -c pyproject.toml --rootdir=. -q tests/contract/api_v1/test_w57a_citation_contract.py tests/integration/norms/retrieval tests/integration/runs/test_retrieval_set_persistence.py tests/contract/program`: **136 passed** (offline).
 - `pytest -c pyproject.toml --rootdir=. --collect-only -q tests/integration/norms/custody/test_retrieval_set_promotion.py`: **1 collected**; actual DB/Blob execution pending assigned lane.
 - `python -m compileall -q` for changed Python: passed.
 - `git diff --check`: passed.
