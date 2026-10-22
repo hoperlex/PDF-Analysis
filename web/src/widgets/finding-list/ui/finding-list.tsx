@@ -14,15 +14,21 @@
  * of `groups` on this side too — so this component has no branch for one, and adding a
  * row that bypassed admission would mean writing a new code path rather than relaxing a
  * condition.
+ *
+ * A row whose finding carries a decided severity (`REVIEW-V2-UI-01`) shows it beside the
+ * verdict, from the server's projection and never from the model's proposal. A row without
+ * one is the row it always was.
  */
 
 import type { Finding, FindingCategory } from '@/shared/api';
 import type { ErrorStateProps } from '@/shared/ui';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import type { FindingGroup } from '@/entities/finding';
-import { countGrouped } from '@/entities/finding';
+import { SeverityBadge, countGrouped } from '@/entities/finding';
 import { CATEGORY_LABELS, VerdictBadge } from '@/entities/expert-decision';
 import { declaredPages } from '@/entities/finding-observation';
+
+import styles from './finding-list.module.css';
 
 /** A finding that was admitted and then found structurally impossible. */
 export interface FindingIntegrityFault {
@@ -118,7 +124,17 @@ export function FindingList({
                     <span className="am-finding-row__text">
                       {finding.observation.finding_text}
                     </span>
-                    <VerdictBadge verdict={finding.current_verdict} />
+                    {finding.decided_severity === undefined ? (
+                      <VerdictBadge verdict={finding.current_verdict} />
+                    ) : (
+                      <span className={styles.badges} data-decided-severity={finding.decided_severity}>
+                        <VerdictBadge verdict={finding.current_verdict} />
+                        <SeverityBadge
+                          severity={finding.decided_severity}
+                          title="Важность, решённая экспертом"
+                        />
+                      </span>
+                    )}
                     <span className="am-finding-row__pages" data-pages={pages.join(',')}>
                       {pages.length === 1 ? `стр. ${pages[0]}` : `стр. ${pages.join(', ')}`}
                     </span>

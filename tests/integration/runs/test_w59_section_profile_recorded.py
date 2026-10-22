@@ -12,8 +12,11 @@ directory -- each case below runs on the lane's own PostgreSQL and MinIO:
   ``published``; the text stage's persisted metrics carry X's prompt-bundle and profile
   hashes and the request key of X's recording, and the published findings are exactly the
   observations of X's recording, under X's pair, in ``recorded`` mode;
-* ``PB`` is refused at run start (``section_profile_unavailable``) and
-  an unclassified version is refused with ``version_classification_required``; neither writes a run;
+* a section with no registered profile is refused at run start (``section_profile_unavailable``)
+  and an unclassified version is refused with ``version_classification_required``; neither
+  writes a run. ``PB`` used to be that section; with its authored profile (`PB-PROFILE-01`)
+  the refusal is shown on a registry built without it, and a ``PB`` version is routed to
+  its own profile instead (its recorded run is `SECTION-RECORDINGS-01`);
 * the АИ recording does not answer a ПЗ run: over the АИ directory alone the run ends
   ``failed`` with ``recording_missing``, and the АИ file filed under the ПЗ key ends it
   with ``recording_key_mismatch``; no finding is published either way.
@@ -34,13 +37,20 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from auditmanager.analysis.text import RecordedAdapter
-from auditmanager.analysis.text.profile_registry import load_text_profile_registry
+from auditmanager.analysis.text.profile_registry import (
+    TextProfileRegistry,
+    load_text_profile_registry,
+)
 from auditmanager.findings import published_findings
 from auditmanager.runs import PC01_STAGES, execute_run, start_audit_run
 from auditmanager.sections.public import classify_document_version
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 REGISTRY = load_text_profile_registry()
+#: The registry as it stood while PB had no profile: the seam for "a section with no profile".
+WITHOUT_PB = TextProfileRegistry(
+    entry for code, entry in REGISTRY.entries.items() if code != "PB"
+)
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 SECTION_RECORDINGS = REPOSITORY_ROOT / "fixtures" / "recorded" / "sections"
 RECORDED_SECTIONS = ("AI", "PS", "POS", "TX")
@@ -61,13 +71,15 @@ def _classify(session: Session, seeded: Any, code: str) -> None:
     )
 
 
-def _start(session: Session, seeded: Any, key: str) -> str:
+def _start(
+    session: Session, seeded: Any, key: str, registry: TextProfileRegistry = REGISTRY
+) -> str:
     return start_audit_run(
         session,
         version_uid=seeded.version_uid,
         provider_mode="recorded",
         idempotency_key=key,
-        section_profiles=REGISTRY.section_profiles(),
+        section_profiles=registry.section_profiles(),
     ).run_id
 
 
@@ -138,16 +150,52 @@ def test_a_classified_section_runs_to_published_with_its_own_profile_and_recordi
         assert finding.finding_text.startswith("Синтетический ответ (")
 
 
-def test_a_pb_version_is_refused_at_run_start_without_a_substitute(
+def test_a_section_without_a_registered_profile_is_refused_at_run_start_without_a_substitute(
     session: Session, seeded, new_key
 ) -> None:
-    assert "PB" not in REGISTRY.entries
+    """The refusal is unchanged; its seam is a registry built without PB (`PB-PROFILE-01`)."""
+    assert "PB" in REGISTRY.entries and "PB" not in WITHOUT_PB.entries
     _classify(session, seeded, "PB")
     with pytest.raises(DomainError) as refused:
-        _start(session, seeded, new_key("w59-section-recorded-PB"))
+        _start(session, seeded, new_key("w59-section-recorded-PB-refused"), WITHOUT_PB)
     assert refused.value.code is ErrorCode.SECTION_PROFILE_UNAVAILABLE
     assert refused.value.detail_fields == {}
     assert _runs_of(session, seeded.version_uid) == 0
+
+
+def test_a_pb_version_starts_a_run_pinned_to_the_pb_profile(
+    session: Session, seeded, new_key
+) -> None:
+    entry = REGISTRY.entries["PB"]
+    _classify(session, seeded, "PB")
+    run_id = _start(session, seeded, new_key("w59-section-recorded-PB-routed"))
+
+    pinned = session.execute(
+        text("SELECT analysis_profile_id, prompt_bundle_id FROM audit_run WHERE run_id = :r"),
+        {"r": run_id},
+    ).one()
+    assert tuple(pinned) == (entry.analysis_profile_id, entry.prompt_bundle_id)
+    for other in REGISTRY.entries.values():
+        if other.section_code != "PB":
+            assert tuple(pinned) != (other.analysis_profile_id, other.prompt_bundle_id)
+    assert _runs_of(session, seeded.version_uid) == 1
+
+
+def test_another_section_never_starts_a_run_under_the_pb_profile(
+    session: Session, seeded, new_key
+) -> None:
+    pb = REGISTRY.entries["PB"]
+    _classify(session, seeded, "KJ")
+    run_id = _start(session, seeded, new_key("w59-section-recorded-KJ-not-PB"))
+
+    pinned = tuple(session.execute(
+        text("SELECT analysis_profile_id, prompt_bundle_id FROM audit_run WHERE run_id = :r"),
+        {"r": run_id},
+    ).one())
+    assert pinned == (
+        REGISTRY.entries["KJ"].analysis_profile_id, REGISTRY.entries["KJ"].prompt_bundle_id,
+    )
+    assert pinned != (pb.analysis_profile_id, pb.prompt_bundle_id)
 
 
 def test_an_unclassified_version_is_refused_at_run_start(

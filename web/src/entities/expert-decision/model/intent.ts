@@ -14,7 +14,10 @@
  *
  * What makes two intents "the same": the event type, the observation being judged and the
  * comment text. Pressing Accept, having it fail, and pressing Accept again is one intent.
- * Pressing Accept and then Reject is two. Typing a different comment is two.
+ * Pressing Accept and then Reject is two. Typing a different comment is two. So is deciding
+ * a different severity: an accept that failed with «critical» and is sent again with
+ * «economic» is a different command, and reusing the key would put two different bodies
+ * under one key, which the server refuses as `idempotency_key_reuse` instead of recording.
  */
 
 import type { AppendDecisionRequest } from '@/shared/api';
@@ -38,13 +41,15 @@ export type { IntentRecord };
  */
 export function intentSignature(request: AppendDecisionRequest): string {
   const comment = request.comment ?? '';
-  return [
+  const parts = [
     request.event_type,
     request.finding_observation_id,
     `${[...comment].length}:${comment}`,
-  ]
-    .map((part) => `${part.length}|${part}`)
-    .join('');
+    // Present only when the request carries one, so a request without a severity keeps the
+    // signature it always had.
+    ...(request.severity === undefined ? [] : [`severity:${request.severity}`]),
+  ];
+  return parts.map((part) => `${part.length}|${part}`).join('');
 }
 
 /**

@@ -7,8 +7,9 @@ MinIO, driven with a real expert credential. What is held:
   the project-structure order (``PROJECT_STRUCTURE_ORDER``), named from the reviewed section
   catalogue; every registered section carries exactly its registry entry's identities,
   version, status and content hashes; AR is ``builtin`` with no source; every package is
-  ``draft`` with the source its ``profile.json`` declares; ``PB`` -- the one section run start
-  refuses for want of a profile -- carries ``profile: null``;
+  ``draft`` with the source its ``profile.json`` declares; ``PB`` (`PB-PROFILE-01`) is the
+  fifteenth profile, an authored one that declares ``source: null``, so no row carries
+  ``profile: null`` any more;
 * every object carries exactly its frozen schema's properties;
 * no credential is ``401``; the role decision (any one role) is the role register's, held by
   ``tests/integration/api/test_role_register.py``.
@@ -78,8 +79,9 @@ def test_every_row_is_the_registry_entry_the_application_routes_by(
 ) -> None:
     registry = load_text_profile_registry()
     by_code = {item["section_code"]: item["profile"] for item in listing["items"]}
-    assert {code for code, profile in by_code.items() if profile is None} == {"PB"}
+    assert {code for code, profile in by_code.items() if profile is None} == set()
     assert set(registry.entries) == {code for code, profile in by_code.items() if profile}
+    assert len(registry.entries) == len(by_code) == 15
 
     for code, entry in registry.entries.items():
         profile = by_code[code]
@@ -98,6 +100,11 @@ def test_every_row_is_the_registry_entry_the_application_routes_by(
             (PACKAGES_ROOT / code.lower() / "profile.json").read_text(encoding="utf-8")
         )
         assert profile["source"] == declared["source"]
+
+    pb = by_code["PB"]
+    assert pb["status"] == "draft", "no expert review exists for the authored profile"
+    assert pb["source"] is None, "PB has no legacy source and says so"
+    assert pb["analysis_profile_id"] == registry.entries["PB"].analysis_profile_id
 
 
 def test_every_object_carries_exactly_the_frozen_schemas_properties(

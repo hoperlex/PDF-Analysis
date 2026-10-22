@@ -34,6 +34,7 @@ import type { ErrorStateProps } from '@/shared/ui';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import { formatInstant } from '@/shared/lib';
 import { CATEGORY_LABELS, VERDICT_LABELS } from '@/entities/expert-decision';
+import { SeverityBadge } from '@/entities/finding';
 
 export interface KnowledgeBaseProps {
   readonly records: readonly DecisionRecord[];
@@ -116,6 +117,17 @@ export function KnowledgeBase({ records, isLoading, error }: KnowledgeBaseProps)
               <span className="am-kb__verdict" data-verdict={record.current_verdict}>
                 {VERDICT_LABELS[record.current_verdict]}
               </span>
+              {/*
+               * `WEB-REVIEW-FOLLOWUPS-01`: the severity the expert decided with THIS event
+               * (the row is an event), beside the verdict. A row that carries none -- a
+               * comment, a reject, a legacy accept -- renders nothing here.
+               */}
+              {record.severity === undefined ? null : (
+                <span data-decided-severity={record.severity}>
+                  {'важность '}
+                  <SeverityBadge severity={record.severity} title="Важность, решённая экспертом" />
+                </span>
+              )}
               <span className="am-kb__event">{EVENT_TYPE_LABELS[record.event_type]}</span>
             </p>
             <p className="am-kb__text">{record.finding_text}</p>

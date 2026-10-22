@@ -38,6 +38,7 @@ import type { ErrorStateProps } from '@/shared/ui';
 import { ErrorState, LoadingState, NotApplicableState } from '@/shared/ui';
 import { formatInstant } from '@/shared/lib';
 import { VERDICT_LABELS, orderEvents } from '@/entities/expert-decision';
+import { SeverityBadge } from '@/entities/finding';
 
 export interface DecisionHistoryProps {
   readonly events: readonly DecisionEvent[];
@@ -128,6 +129,18 @@ export function DecisionHistory({ events, isLoading, error }: DecisionHistoryPro
                   {VERDICT_LABELS[event.verdict]}
                 </span>
               ) : null}
+              {/*
+                * `WEB-REVIEW-FOLLOWUPS-01`: the severity the expert decided with this event,
+                * as the server served it, beside the verdict. An event that carries none
+                * renders nothing here, so its line is what it always was. A value outside
+                * the closed set is the badge's own fault, not a blank.
+                */}
+              {event.severity === undefined ? null : (
+                <span data-decided-severity={event.severity}>
+                  {' важность '}
+                  <SeverityBadge severity={event.severity} title="Важность, решённая экспертом" />
+                </span>
+              )}
               <span className="am-history__at"> {formatInstant(event.recorded_at)}</span>
               <span className="am-history__author"> {event.author_label}</span>
             </p>
