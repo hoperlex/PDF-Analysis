@@ -19,7 +19,7 @@ export function AssignmentHistoryView({ history }: { readonly history: readonly 
         <li key={event.event_id} data-assignment-event={event.kind}>
           <strong>{ASSIGNMENT_EVENT_LABELS[event.kind]}</strong> — {event.actor_label},{' '}
           {formatInstant(event.occurred_at)}
-          {event.new_assignee_label === null ? null : <>; новый исполнитель: {event.new_assignee_label}</>}
+          {event.new_assignee_label === null ? null : <>; новый ответственный: {event.new_assignee_label}</>}
           {event.reason === null ? null : <>; причина: {event.reason}</>}
         </li>
       ))}
