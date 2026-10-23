@@ -14,7 +14,7 @@ The unserved v3 Run bridge can produce a beta review plan from an exact Run-pinn
 
 ## Frozen inputs / contract versions
 
-- Base `b8fc2744`; contract `1.0.0`, migration head `0031_executor_pull_channel`.
+- Authored on `b8fc2744` (historical SHA before the clean rebase); integrated on `origin/dev=994404a9`, contract `1.1.0`, migration head `0031_executor_pull_channel`.
 - Snapshot `ns_01M59N8QNBVN91ACA2HCE6VE74`; six-group composition `79396188486c430729213279fb7c1c8fca7c13ede3f3f13388d06d9f93bbb781`.
 - Beta scenario: new multi-apartment residential building Ф1.3; every numeric conclusion requires expert review.
 
@@ -37,6 +37,17 @@ The unserved v3 Run bridge can produce a beta review plan from an exact Run-pinn
   128:def plan_v3_corpus_citations(
   ```
 - interpretation: the bridge produces publication candidates, but beta source dispositions have no replay gate yet.
+
+### P-02 — development branch integration
+
+- captured_at: 2026-10-23
+- command: `git ls-remote https://github.com/hoperlex/PDF-Analysis.git refs/heads/dev; git show refs/remotes/https/dev:docs/program/CURRENT_STATE.md | wc -l`
+- captured_output:
+  ```text
+  994404a9131da3c8c6e573f2b158fcff7c3bdd98 refs/heads/dev
+  126
+  ```
+- interpretation: the clean rebase brought executor image-input changes; the pre-existing program guard expects at most 120 live-state lines, so its failure is not from this task.
 
 ## Historical evidence
 
