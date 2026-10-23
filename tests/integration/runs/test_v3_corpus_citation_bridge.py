@@ -21,7 +21,7 @@ from auditmanager.runs.repository import RunRow
 DOCUMENT = "ndoc_01K7F4N2A9R8T6V5W3X2Y1Z0QJ"
 SELECTED = "npar_01K7F4N2A9R8T6V5W3X2Y1Z0QK"
 HIDDEN = "npar_01K7F4N2A9R8T6V5W3X2Y1Z0QM"
-SNAPSHOT = "ns_01K7F4N2A9R8T6V5W3X2Y1Z0QH"
+SNAPSHOT = "ns_01M59N8QNBVN91ACA2HCE6VE74"
 MAP_SHA = "a" * 64
 PDF_QUOTE = "Ширина прохода 1,2 м"
 NORM_QUOTE = "Минимальная ширина прохода составляет 1,4 м"
@@ -35,7 +35,7 @@ def _json(value: object) -> bytes:
                       separators=(",", ":")).encode("utf-8")
 
 
-def _set() -> bytes:
+def _set(item_ids: tuple[str, ...] = ("C01", "C02", "C03")) -> bytes:
     rows = [dict(
         norm_document_id=DOCUMENT, norm_paragraph_id=paragraph,
         designation="СП 54", title="Жилые здания", ordinal=ordinal,
@@ -48,7 +48,7 @@ def _set() -> bytes:
         "builder_version": "norm-ranking-prep-v1",
         "paragraphs": [
             dict(rows[0], item_id=item_id, label=f"N{index}")
-            for index, item_id in enumerate(("C01", "C02", "C03"), 1)
+            for index, item_id in enumerate(item_ids, 1)
         ],
     }).decode("utf-8")
     return _json({
@@ -85,8 +85,9 @@ def _layer() -> TextLayer:
 
 
 def _prepare(monkeypatch: pytest.MonkeyPatch, *, run: RunRow | None = None,
-             saved: VerifiedRetrievalSetInput | None = None):
-    raw = _set()
+             saved: VerifiedRetrievalSetInput | None = None,
+             scope_id: str = "F1"):
+    raw = _set(scope_membership(scope_id).item_ids)
     verified = saved or VerifiedRetrievalSetInput(
         AUTHORITY.run_id, SNAPSHOT, "nrs_test", MAP_SHA,
         "blob_test", hashlib.sha256(raw).hexdigest(), raw,
@@ -96,8 +97,8 @@ def _prepare(monkeypatch: pytest.MonkeyPatch, *, run: RunRow | None = None,
     return v3_citations.prepare_v3_corpus_request(
         object(), run=run or _run(), authority=AUTHORITY, blob_store=object(),
         text_layer=_layer(), profile_id=PROFILE, bundle_id=BUNDLE,
-        map_sha256=MAP_SHA, scope_id="F1",
-        composition_sha256=scope_membership("F1").composition_sha256,
+        map_sha256=MAP_SHA, scope_id=scope_id,
+        composition_sha256=scope_membership(scope_id).composition_sha256,
     )
 
 
@@ -201,3 +202,41 @@ def test_wrong_scope_refuses_saved_set_before_prompt(monkeypatch):
             map_sha256=MAP_SHA, scope_id="F2",
             composition_sha256=scope_membership("F2").composition_sha256,
         )
+
+
+def _response_labels(digest: str, labels: tuple[str, ...]) -> SuppliedV3Response:
+    document = json.loads(_response(digest).output_text)
+    document["observations"][0]["norm_citations"] = [
+        {"label": label, "quote": NORM_QUOTE} for label in labels
+    ]
+    return SuppliedV3Response(digest, _json(document).decode("utf-8"), False)
+
+
+def test_beta_plan_exposes_review_only_provisional_topics(monkeypatch):
+    request = _prepare(monkeypatch)
+    review = v3_citations.plan_v3_beta_citation_review(
+        request, _response(request.candidate.request_sha256), _layer(),
+    )
+    assert review.scenario == "new_multi_apartment_residential_F1.3"
+    assert review.numeric_output_policy == "expert_review_required"
+    assert tuple(topic.item_id for topic in review.topics) == ("C01", "C02", "C03")
+    assert review.provisional_proposal_ordinals == (0,)
+    assert review.withheld_proposal_ordinals == ()
+    assert not hasattr(review, "normative_candidates")
+
+
+@pytest.mark.parametrize(("scope_id", "labels"), [
+    ("F2", ("N2",)),       # C05 context only
+    ("F2", ("N1", "N2")), # C04 plus C05 cannot launder context
+    ("S1", ("N1",)),       # C21 table row unresolved
+    ("S2", ("N1",)),       # C22 table direction unresolved
+])
+def test_beta_plan_withholds_context_and_mixed_labels(monkeypatch, scope_id, labels):
+    request = _prepare(monkeypatch, scope_id=scope_id)
+    review = v3_citations.plan_v3_beta_citation_review(
+        request, _response_labels(request.candidate.request_sha256, labels),
+        _layer(),
+    )
+    assert review.provisional_proposal_ordinals == ()
+    assert review.withheld_proposal_ordinals == (0,)
+    assert tuple(topic.item_id for topic in review.topics) == scope_membership(scope_id).item_ids

@@ -1,0 +1,17 @@
+# AR beta v3 citation review gate
+
+**Task:** [AR-BETA-CITATION-REVIEW-GATE-01](tasks/AR-BETA-CITATION-REVIEW-GATE-01.md). **Base:** `b8fc2744`. **Policy:** `9d3b7e53b512fbde1ea478a77a63c3c48042e85ddc50d57c96241c79bcb91d58`.
+
+The unserved [v3 Run bridge](../../src/auditmanager/runs/v3_citations.py) now exposes `plan_v3_beta_citation_review`. It replays a supplied response against the exact Run-pinned retrieval-set bytes, requires the frozen Ф1.3 scenario policy, the repaired snapshot and the six-group composition, and reports every C item in the selected scope with its source IDs and unresolved reason. Grounded proposals citing only the 14 provisional topics are returned as **review-only proposal ordinals**. Proposals citing C05/C06/C08/C09/C10/C15/C21/C22, including a mix with a provisional label, are withheld. The returned beta type has no normative publication-candidate field; neither an LLM answer nor this gate creates an expert decision or numeric conclusion.
+
+This is a concrete input to a later runtime integration, not a served beta feature. The source policy does not certify the applicable legal edition, project facts or an approved map. There is still no qualified `nrs_` set, provider dispatch, CITE StageResult or six-Run product aggregation. The current AR section remains on its existing served profile. A later runtime must persist all six Run IDs and statuses, use the beta review plan rather than the legacy publication-candidate plan, recheck Attempt/set authority after the model call, and require expert review before any normative numeric finding.
+
+## Verification and capacity
+
+`tests/integration/runs/test_v3_corpus_citation_bridge.py`, `tests/contract/norm_map` and `tests/contract/program`: **49 passed**. These cover provisional, context-only, mixed labels and S1/S2 table topics, plus the prior binding and replay cases. `git diff --check` passed. The changed paths are this report/task, `analysis/public.py`, `runs/v3_citations.py` and the focused integration test. No contract, migration, root lock/dependency, composition root, global style, router/UI, provider, corpus byte, `origin/main`, tag or deployment host changed. `ruff` is not installed in this environment, so that optional check was unavailable; Python compilation remains a required final check.
+
+The local promotion database still has no PDF Blob/custody bindings, so a verified set cannot be promoted. The full bundle import needs approximately 7.57 GB plus a 3 GB safety margin, while the current filesystem has about 3.3 GB free. The owner was asked whether Docker build cache may be reclaimed to enable the local import; no cache or corpus data was deleted in this task. The BGE-M3 query-vector image is also absent locally. These are prerequisites for a real six-Run beta, not test skips or reasons to fabricate a set.
+
+## Rollback and integrator handoff
+
+Revert the additive beta plan and its public exports/test; no data migration is involved. The integrator should first qualify the **full** repaired bundle, then approve exact scenario-specific map bytes/source editions, reproduce vectors, promote six verified sets and pin one per Run. Only then connect the registered v3 profile and the review-only plan to a provider and UI. If any scope has no applicable numeric rule, display its topic statuses as requiring expert review, with no numeric conclusion. Preserve historical policy/map/set/Run identities if a later version supersedes this beta.

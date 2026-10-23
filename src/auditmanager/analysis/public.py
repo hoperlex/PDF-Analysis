@@ -99,6 +99,14 @@ from auditmanager.analysis.profiles.ar_v3.request_candidate import (
     prepare_v3_request_candidate,
     prepare_v3_scoped_request_candidate,
 )
+from auditmanager.analysis.profiles.ar_v3.norm_map.beta_sources import (
+    BetaSourcePolicyRefused,
+    load_beta_source_policy,
+)
+from auditmanager.analysis.profiles.ar_v3.set_input import (
+    V3SetInputRefused,
+    parse_v3_set_input,
+)
 from auditmanager.analysis.stages.finding_merge import (
     ARTIFACT_ROLE as MERGE_ARTIFACT_ROLE,
     ARTIFACT_VERSION as MERGE_ARTIFACT_VERSION,
@@ -251,19 +259,23 @@ __all__ = [
     "StageStatus",
     "TextAnalysisOutcome",
     "LocalV3Evaluation",
+    "BetaSourcePolicyRefused",
     "SuppliedV3Response",
     "V3LocalEvaluationRefused",
     "V3RequestCandidate",
     "V3RequestRefused",
+    "V3SetInputRefused",
     "default_registry",
     "document_text",
     "finish_response",
     "input_budget_characters",
     "load_provider_config",
+    "load_beta_source_policy",
     "publish_artifact",
     "prepare_merge",
     "prepare_v3_request_candidate",
     "prepare_v3_scoped_request_candidate",
+    "parse_v3_set_input",
     "evaluate_v3_supplied_response",
     "build_recorded_call_facts",
     "build_recorded_observation_artifact",
