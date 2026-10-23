@@ -18,3 +18,5 @@ The existing [C01–C22 decision sheet](../AR-NORM-MAP-APPROVAL-PREP-01.md) and 
 `AR-V3-BETA-REQUEST-DELIVERY-01` supplies the pure sealed-v3-to-`ModelRequest` bridge with six pinned provider-body digests. The executor must use it after proving Run/Attempt/set custody and journal both the local candidate SHA and provider-body SHA; this bridge makes no provider call.
 
 `AR-V3-BETA-EXECUTE-PREFLIGHT-01` resolves one persisted group member to its reviewed pack and exact Run/scope/map/set pins under a current Attempt. It passed real-PostgreSQL positive and refusal cases; verified set Blob loading, dispatch, response journal and CITE remain for the full executor and subsequent citation task.
+
+`AR-V3-BETA-REQUEST-CUSTODY-01` joins that preflight to a custody-verified set Blob and sealed transport request under the same current Attempt. It rechecks group pins after construction and passed 48 focused tests. The active executor still refuses v3; the saved source-stage text reader, durable provider journal, response handling and CITE activation remain open.
