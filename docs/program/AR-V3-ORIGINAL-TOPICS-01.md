@@ -1,7 +1,10 @@
 # AR-V3-ORIGINAL-TOPICS-01 — source-bound AR v3 topic guide
 
 **Task:** [AR-V3-ORIGINAL-TOPICS-01](tasks/AR-V3-ORIGINAL-TOPICS-01.md).
-**Base:** published `origin/dev=9b4d682ac412deda4fd8b7b2b6881e891e1b7942`.
+**Initial base:** published `origin/dev=9b4d682ac412deda4fd8b7b2b6881e891e1b7942`.
+Before publication the remote moved to `24aa9bbc1c71298eea8993654a17ac2ab13328b2`
+(`EXEC-PULL-PROBE-INT-01`). This packet was rebased on that exact head; its
+four-path executor diff is disjoint from the five paths here.
 
 The original AR role and checklist at `/root/projects/PDF-proverka`
 (`16ba8e5d`) were rechecked against the six-file manifest. The new
@@ -21,7 +24,8 @@ and response schemas are unchanged.
 
 ## Checks
 
-- Focused prompt/request and program governance: **43 passed**.
+- Focused prompt/request and program governance on the rebased tree:
+  **43 passed**.
 - Python compilation and `git diff --check`: passed.
 - Changed paths: exactly the new topic file, v3 renderer/test and this
   task/report. No forbidden hotspot changed.
