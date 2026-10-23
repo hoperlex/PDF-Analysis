@@ -253,6 +253,10 @@ def read(path, wanted):
 env = {}
 env.update(read(sys.argv[1], NAMES))
 env.update(read(sys.argv[2], PROVIDER_NAMES))
+# This check models the worker, the only process that reads provider.env. The API token is
+# checked separately and never reaches that process.
+env.pop("AUDITMANAGER_API_TOKEN", None)
+env["EXECUTION_ROLE"] = "worker"
 try:
     settings = load(env)
 except ConfigurationError as exc:
@@ -266,6 +270,8 @@ print("SOURCE=%s" % settings.provider_source)
 private = settings.secrets_private_ring
 public = settings.secrets_public_ring
 if settings.provider_source == "database":
+    if env.get("PROXY_LLM_BASE_URL", "").strip() and env.get("PROXY_LLM_MODEL", "").strip().lower() in STUBS:
+        print("EXECUTOR-FINDING: the baseline PROXY_LLM_MODEL is a gateway stub; set the explicit model the gateway reports before worker startup")
     if private is None:
         print("EXECUTOR-FINDING: the source is database but the worker holds no private ring (AUDITMANAGER_SECRETS_KEYS in provider.env); no key can be opened")
     if public is None:

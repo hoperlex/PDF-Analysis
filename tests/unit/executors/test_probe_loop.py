@@ -77,6 +77,7 @@ def test_serve_hands_the_runtimes_probe_runner_to_the_worker_service(monkeypatch
 
     marker = lambda: 0  # noqa: E731
     runtime = SimpleNamespace(engine=None, session_factory=None, execute=None, version="v",
+                              settings=SimpleNamespace(provider_source="environment"),
                               slots=1, state_dir=None, probe_runner=marker)
     captured: dict[str, object] = {}
 
@@ -101,3 +102,49 @@ def test_serve_hands_the_runtimes_probe_runner_to_the_worker_service(monkeypatch
     monkeypatch.setattr(entry.signal, "signal", lambda *args: None)
     assert entry.serve({}) == 1  # the fake reports itself failed, which is how serve ends here
     assert captured["probe_runner"] is marker
+
+
+def test_worker_registers_the_env_baseline_before_accepting_work(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from types import SimpleNamespace
+
+    import auditmanager.bootstrap.public as bootstrap_public
+    import auditmanager.executors.operations as operations
+    import auditmanager.jobs.public as jobs_public
+    import auditmanager.workers.__main__ as entry
+    import auditmanager.workers.service as service_module
+
+    events: list[str] = []
+    runtime = SimpleNamespace(
+        engine=None, session_factory=object(), execute=None, version="v", slots=1,
+        state_dir=None, probe_runner=None,
+        settings=SimpleNamespace(provider_source="database", secrets_private_ring=object()),
+    )
+
+    def register(*args, **kwargs):  # type: ignore[no-untyped-def]
+        events.append("baseline registered")
+        assert kwargs["queue_only"] is True
+        return SimpleNamespace(connection_id="exc_test", created=True)
+
+    class FakeService:
+        failed = True
+        worker_id = "wrk_test"
+        busy = 0
+
+        def __init__(self, **kwargs):  # type: ignore[no-untyped-def]
+            events.append("service built")
+
+        def start(self) -> None:
+            events.append("service started")
+
+        def drain(self, timeout: float | None = None) -> bool:
+            return True
+
+        def stop(self) -> None: ...
+
+    monkeypatch.setattr(bootstrap_public, "build_worker_runtime", lambda environ: runtime)
+    monkeypatch.setattr(operations, "import_env", register)
+    monkeypatch.setattr(jobs_public, "sweep_stale_temporaries", lambda: None)
+    monkeypatch.setattr(service_module, "WorkerService", FakeService)
+    monkeypatch.setattr(entry.signal, "signal", lambda *args: None)
+    assert entry.serve({"PROXY_LLM_BASE_URL": "https://openrouter.ai/api/v1"}) == 1
+    assert events == ["baseline registered", "service built", "service started"]

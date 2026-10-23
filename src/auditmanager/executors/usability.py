@@ -4,13 +4,12 @@
 cached:
 
 * **served** -- this release has an adapter factory for the kind (:mod:`.kinds`). Today that is
-  ``http_api`` over ``direct`` or ``vpn`` and ``pull`` (`EXEC-PULL-01`); ``ssh_command`` and the
-  ``ssh_tunnel`` transport can be created but are refused at route time with
-  ``validation_failed`` (``constraint: kind_not_served``);
-* **probed** -- the *latest finished probe of the current revision on the current secret* is
-  ``ok``. A new revision (a changed address), a new key and a failed re-probe each make the
-  connection unusable until a probe passes again; that is what stops a stolen session from
-  quietly re-aiming a trusted connection (T-1).
+  ``http_api`` over ``direct`` or ``vpn``, ``pull`` and ``ssh_command``; the
+  ``ssh_tunnel`` transport with both secrets and a current probe;
+* **probed** -- the *latest finished probe of the current revision on the current primary
+  secret* is ``ok``. For a tunnel, that probe must have been requested after both current
+  secrets were issued. A new revision, a changed key and a failed re-probe each make the
+  connection unusable until a probe passes again (T-1).
 
 A run that already froze a revision is not asked again: it uses that revision with whatever key is
 current (a rotation is picked up at the next Attempt). These checks guard *routing* and *run start*.
@@ -73,7 +72,19 @@ def is_probed_ok(
             return False
         secret_id = secret.secret_id
     probe = store.latest_finished_probe(session, revision.revision_id, secret_id)
-    return probe is not None and probe.outcome == "ok"
+    if probe is None or probe.outcome != "ok":
+        return False
+    if connection.kind == "http_api" and revision.settings.transport == "ssh_tunnel":
+        # The probe row names the API key. Its request time binds the successful
+        # check to the SSH key too: after either rotation, an earlier `ok` is stale.
+        current = {item.purpose: item for item in
+                   store.current_secrets(session, [connection.connection_id])
+                   .get(connection.connection_id, ())}
+        ssh = current.get("ssh_private_key")
+        api = current.get("api_key")
+        if ssh is None or api is None or probe.requested_at < max(ssh.set_at, api.set_at):
+            return False
+    return True
 
 
 def ensure_routable(

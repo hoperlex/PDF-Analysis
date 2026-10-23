@@ -14,13 +14,32 @@ The owner waived five credentialed live W55b product checks for that release;
 those journeys remain unverified. See `W55B-INT-TAG-01.md`,
 `W55B-INT-MAIN-VERIFY-ADDENDUM-01.md` and `CFB-INT-DEV-PUBLISH-43.md`.
 
-The development API surface is **87 paths / 99 operations / 284 schemas**, the error
+The development API surface is **88 paths / 100 operations / 286 schemas**, the error
 catalogue has **27** codes, the migration head is **`0031_executor_pull_channel`**,
-`VERSION` is `0.7.0`, the contract is sealed at `1.0.0` with the `R-143` executor connections and
-pull channel added under `R-144` (`EXEC-CANDIDATE-1.md`, `EXEC-CANDIDATE-2.md`; the `1.1.0` label is a separate reseal). `origin/main` carries `0.7.0` since the owner's merge of pull request
+`VERSION` is `0.7.0`, and the contract is `1.1.0` after the additive image-delivery reseal
+(`EXEC-IMAGE-DELIVERY-01`). The runner can fetch one verified PNG for an active claim;
+no run stage sends one until W56b activates its image policy.
+`EXEC-IMAGE-CHANNELS-01` carries a selected PNG through served direct/VPN HTTP
+flavours, pull command, local endpoint and MCP session; the latter two require
+explicit image opt-in. The image stage still does not create a task. SSH
+command/tunnel connections are now served in `EXEC-SSH-CROPS-01` and
+`EXEC-SSH-TUNNEL-CROPS-01`: the command carries a verified PNG, while the
+tunnel carries it through the existing HTTP adapter after checking both
+current secrets and a pinned SSH host key. The `R-143` executor connections and
+pull channel were added under `R-144` (`EXEC-CANDIDATE-1.md`, `EXEC-CANDIDATE-2.md`). `origin/main` carries `0.7.0` since the owner's merge of pull request
 #3 (`48c8e34c`, no gate; `RELEASES.md` has the row and the record); host verification and the
 `v0.7.0` tag are owed, the last tag is `v0.6.0`. Run `infra/deploy/verify-deployed.sh` for the
 current deployment; this document is no substitute for that probe.
+
+`EXEC-ENV-OPENROUTER-01` fixes the absent baseline option in «Назначения»:
+under source `database`, a worker with the complete `PROXY_LLM_*` triplet
+registers one OpenRouter-compatible HTTP connection and queues its probe.
+After an `ok` probe it is selectable as a normal connection. Registration
+does not replace the Codex route. The `/api/v1` OpenAI Chat variant carries
+the same verified PNG as the other served HTTP variants. A graphical-analysis
+stage still needs the W56b prompt and evidence policy before it can issue
+crop tasks; SSH command/tunnel transports now carry a verified PNG once a
+future stage issues it.
 
 ## Normative corpus (W54)
 

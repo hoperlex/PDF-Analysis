@@ -169,6 +169,9 @@ class RunnerPort(Protocol):
     def claim_task(
         self, *, runner: RunnerIdentity, wait_seconds: int
     ) -> models.ClaimedExecutorTask | None: ...
+    def read_image(
+        self, *, runner: RunnerIdentity, task_id: str, blob_id: str
+    ) -> bytes: ...
     def extend_claim(
         self, *, runner: RunnerIdentity, task_id: str
     ) -> models.ExtendedExecutorTaskClaim: ...

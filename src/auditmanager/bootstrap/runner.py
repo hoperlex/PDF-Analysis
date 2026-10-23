@@ -12,6 +12,7 @@ built here carries a hash, a payload or an answer.
 
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 
 from sqlalchemy.orm import Session, sessionmaker
@@ -20,6 +21,8 @@ from auditmanager.api.routers.runner import ModelNotTheTasks
 from auditmanager.api.schemas import models
 from auditmanager.api.security import RunnerIdentity
 from auditmanager.bootstrap.adapters import _SessionHolder
+from auditmanager.shared.errors import DomainError, ErrorCode
+from auditmanager.storage.public import BlobStore, StorageError, parse_blob_id
 
 __all__ = ["RunnerAdapter", "runner_token_view"]
 
@@ -37,8 +40,11 @@ def runner_token_view(record: Any) -> dict[str, Any]:
 
 
 class RunnerAdapter(_SessionHolder):
-    def __init__(self, session_factory: sessionmaker[Session]) -> None:
+    def __init__(
+        self, session_factory: sessionmaker[Session], *, blob_store: BlobStore | None = None,
+    ) -> None:
         super().__init__(session_factory)
+        self._blob_store = blob_store
 
     @staticmethod
     def _roles(session: Session, user_uid: str) -> Any:
@@ -114,7 +120,54 @@ class RunnerAdapter(_SessionHolder):
             "task_id": task.task_id, "claim_expires_at": task.claim_expires_at,
             "deadline_at": task.deadline_at, "model": task.model, "system": task.system,
             "user_text": task.user_text, "output_schema": dict(task.output_schema),
+            **({"images": list(task.images)} if task.images else {}),
         })
+
+    def read_image(self, *, runner: RunnerIdentity, task_id: str, blob_id: str) -> bytes:
+        """Serve only a current claim's bounded PNG, never a direct Blob lookup by URL."""
+        from auditmanager.executors.public import claimed_image
+
+        if self._blob_store is None:
+            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="blob_storage")
+
+        def authorized(session: Session) -> dict[str, Any]:
+            return dict(claimed_image(session, self._principal(runner), task_id, blob_id))
+
+        image = self._read(authorized)
+        try:
+            identity = parse_blob_id(blob_id)
+            metadata = self._blob_store.inspect(identity)
+            if (metadata.size != image["size_bytes"]
+                    or metadata.sha256 != image["sha256"]
+                    or metadata.media_type != "image/png"):
+                raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID,
+                                  message="runner image metadata changed")
+            chunks = self._blob_store.open_stream(
+                identity, expected_sha256=image["sha256"],
+                expected_size=image["size_bytes"],
+            )
+            parts: list[bytes] = []
+            total = 0
+            try:
+                for chunk in chunks:
+                    total += len(chunk)
+                    if total > image["size_bytes"]:
+                        raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID,
+                                          message="runner image exceeds its byte ceiling")
+                    parts.append(chunk)
+            finally:
+                chunks.close()
+            content = b"".join(parts)
+        except StorageError:
+            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE,
+                              dependency="blob_storage") from None
+        if (len(content) != image["size_bytes"]
+                or hashlib.sha256(content).hexdigest() != image["sha256"]
+                or not content.startswith(b"\x89PNG\r\n\x1a\n")):
+            raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID,
+                              message="runner image bytes are invalid")
+        self._read(authorized)
+        return content
 
     def extend_claim(
         self, *, runner: RunnerIdentity, task_id: str

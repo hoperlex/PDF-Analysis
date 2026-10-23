@@ -26,9 +26,12 @@ from auditmanager.executors.destinations import DestinationPolicy
 from auditmanager.executors.http_adapter import build_http_adapter
 from auditmanager.executors.model import RevisionRecord
 from auditmanager.executors.pull import build_pull_adapter
+from auditmanager.executors.ssh_adapter import build_ssh_command_adapter
+from auditmanager.executors.ssh_tunnel_adapter import build_ssh_tunnel_adapter
 
 __all__ = [
     "KindAdapter",
+    "AdapterSecrets",
     "KindRuntime",
     "adapter_for",
     "register_adapter_factory",
@@ -37,7 +40,15 @@ __all__ = [
 ]
 
 #: ``factory(revision, secret_value, policy, attempt_context) -> adapter``
-AdapterFactory = Callable[[RevisionRecord, str, DestinationPolicy, Any], Any]
+@dataclass(frozen=True, slots=True, repr=False)
+class AdapterSecrets:
+    """The opened primary secret and any additional secrets of one revision."""
+
+    primary: str
+    additional: dict[str, str]
+
+
+AdapterFactory = Callable[[RevisionRecord, Any, DestinationPolicy, Any], Any]
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,6 +77,7 @@ class KindAdapter:
     provider_label: Callable[[RevisionRecord], str]
     #: Set for a channel kind: the factory used instead of ``factory``.
     channel: ChannelFactory | None = None
+    additional_purposes: Callable[[RevisionRecord], tuple[str, ...]] = lambda revision: ()
 
 
 _REGISTRY: dict[str, KindAdapter] = {}
@@ -75,8 +87,10 @@ def register_adapter_factory(
     kind: str, factory: AdapterFactory, *, purpose: str = "api_key",
     serves: Callable[[RevisionRecord], bool] = lambda revision: True,
     provider_label: Callable[[RevisionRecord], str] = lambda revision: revision.settings.api_flavour or "unknown",
+    additional_purposes: Callable[[RevisionRecord], tuple[str, ...]] = lambda revision: (),
 ) -> None:
-    _REGISTRY[kind] = KindAdapter(kind, factory, purpose, serves, provider_label)
+    _REGISTRY[kind] = KindAdapter(kind, factory, purpose, serves, provider_label,
+                                  additional_purposes=additional_purposes)
 
 
 def _no_secret_factory(revision: RevisionRecord, secret: str, policy: DestinationPolicy, context: Any) -> Any:
@@ -101,9 +115,15 @@ def adapter_for(kind: str) -> KindAdapter | None:
     return _REGISTRY.get(kind)
 
 
-def _http_api(revision: RevisionRecord, api_key: str, policy: DestinationPolicy, context: Any) -> Any:
+def _http_api(revision: RevisionRecord, api_key: str | AdapterSecrets,
+              policy: DestinationPolicy, context: Any) -> Any:
     settings = revision.settings
     assert settings.api_flavour and settings.base_url and settings.transport
+    if settings.transport == "ssh_tunnel":
+        assert isinstance(api_key, AdapterSecrets)
+        return build_ssh_tunnel_adapter(
+            revision, api_key.primary, api_key.additional["ssh_private_key"], policy, context)
+    assert isinstance(api_key, str)
     return build_http_adapter(
         api_flavour=settings.api_flavour, base_url=settings.base_url, api_key=api_key,
         gateway_model=settings.gateway_model, timeout_seconds=settings.timeout_seconds,
@@ -113,7 +133,16 @@ def _http_api(revision: RevisionRecord, api_key: str, policy: DestinationPolicy,
 
 register_adapter_factory(
     "http_api", _http_api, purpose="api_key",
-    serves=lambda revision: revision.settings.transport in ("direct", "vpn"),
+    serves=lambda revision: revision.settings.transport in ("direct", "vpn", "ssh_tunnel"),
+    additional_purposes=lambda revision: ("ssh_private_key",)
+    if revision.settings.transport == "ssh_tunnel" else (),
+)
+
+
+register_adapter_factory(
+    "ssh_command", build_ssh_command_adapter, purpose="ssh_private_key",
+    serves=lambda revision: revision.settings.ssh_profile in ("claude_code_headless", "custom_command"),
+    provider_label=lambda revision: revision.settings.ssh_profile or "ssh_command",
 )
 
 

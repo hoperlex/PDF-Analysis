@@ -121,6 +121,27 @@ def build_runner_routes(router: APIRouter, runner: RunnerPort) -> None:
             return WireResponse(204, ())
         return json_response(200, encode_json(task.model_dump(mode="json", exclude_unset=True)))
 
+    @router.get(
+        "/runner/tasks/{task_id}/images/{blob_id}",
+        operation_id="getExecutorTaskImage", tags=_TAGS,
+        status_code=200,
+        response_class=WireResponse,
+        responses={
+            **success(200, "Verified PNG of this runner's current claim.",
+                      content={"image/png": {"schema": {"type": "string", "format": "binary"}}}),
+            **envelope_responses(401, 404, 409, 422, 500, 503,
+                                 descriptions={409: _RUNNER_STATE_CONFLICT}),
+        },
+    )
+    def get_executor_task_image(
+        identity: CurrentRunner, task_id: Annotated[models.ExecutorTaskId, Path()],
+        blob_id: Annotated[models.RunnerImageBlobId, Path()],
+    ) -> WireResponse:
+        content = runner.read_image(runner=identity, task_id=task_id, blob_id=blob_id)
+        return WireResponse(200, (("Content-Type", "image/png"),
+                                  ("Content-Length", str(len(content))),
+                                  ("Cache-Control", "no-store")), content)
+
     @router.post(
         "/runner/tasks/{task_id}/extend", operation_id="extendExecutorTaskClaim", tags=_TAGS,
         response_model=models.ExtendedExecutorTaskClaim,

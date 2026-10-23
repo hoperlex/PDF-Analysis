@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
 
 import pytest
 
@@ -101,6 +102,18 @@ def test_v3_reuses_common_ar_sections_without_v2_only_policy():
     assert len(CATEGORIES) == 12
     for category in CATEGORIES:
         assert category in system
+    for topic in (
+        "Планировки квартир", "Эвакуацию и пожарную безопасность",
+        "Фасады и входные группы", "Доступность МГН", "Кровлю:",
+        "Теплозащиту и звукоизоляцию", "Документацию:",
+        "Инсоляцию и естественное освещение",
+    ):
+        assert topic in system
+    assert "role_sha256:" not in system
+    assert "checklist_sha256:" not in system
+    assert "СанПиН 1.2.3685-21" not in system
+    assert "Rw ≥ 52" not in system
+    assert "≥ 1.4 м" not in system
     assert "при недостающем\nпроектном факте воздержись" in system
     assert "без склейки" in system
     assert "не превращай условие в безусловный минимум" in system
@@ -108,6 +121,18 @@ def test_v3_reuses_common_ar_sections_without_v2_only_policy():
         "01bee01f8c7f1c59227ff6c17398f1034f5094c9c3b8e26fc66ab5130a4ca610"
     )
     assert prepare_v3_prompt(_layer(), _input()) == prepare_v3_prompt(_layer(), _input())
+
+
+def test_changed_original_topic_resource_refuses_before_prompt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+):
+    from auditmanager.analysis.profiles.ar_v3 import prompt_material
+
+    changed = tmp_path / "original_topics.md"
+    changed.write_bytes(prompt_material._TOPICS_PATH.read_bytes() + b"changed")
+    monkeypatch.setattr(prompt_material, "_TOPICS_PATH", changed)
+    with pytest.raises(V3PromptRefused, match="original_topics_digest_mismatch"):
+        render_v3_system_prompt()
 
 
 @pytest.mark.parametrize("case", ["missing_set", "empty_pages", "foreign_ocr", "oversize"])

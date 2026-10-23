@@ -8,6 +8,8 @@ destination rules to bite uses the default policy instead, and the gateway then 
 from __future__ import annotations
 
 import time
+import base64
+import hashlib
 from typing import Any
 
 import pytest
@@ -21,6 +23,7 @@ from auditmanager.executors.http_adapter import (
     effective_timeout,
 )
 from auditmanager.jobs.lease import AttemptContext
+from auditmanager.storage.public import derive_blob_id
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 KEY = "sk-sentinel-0123456789abcdef"
@@ -29,6 +32,14 @@ REQUEST = ModelRequest(
     model_id="claude-opus-5",
     body={"model": "claude-opus-5", "max_tokens": 16, "system": "s",
           "messages": [{"role": "user", "content": "hello"}]},
+)
+PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL7WQAAAABJRU5ErkJggg==")
+DIGEST = hashlib.sha256(PNG).hexdigest()
+IMAGE = {"blob_id": str(derive_blob_id(sha256=DIGEST, size=len(PNG))),
+         "portal_block_id": "blk_" + "a" * 32, "sha256": DIGEST,
+         "size_bytes": len(PNG), "media_type": "image/png"}
+IMAGE_REQUEST = ModelRequest(
+    model_id=REQUEST.model_id, body={**REQUEST.body, "images": [IMAGE]}, image_bytes=PNG,
 )
 
 
@@ -45,6 +56,7 @@ def _adapter(gateway: Any, flavour: str = "openai_chat", *, base_path: str = "/a
 @pytest.mark.parametrize("base", [
     "https://proxy.example", "https://proxy.example/", "https://proxy.example/agent/v1",
     "https://proxy.example/agent/v1/", "http://h:8000/v1",
+    "https://openrouter.ai/api/v1",
 ])
 def test_the_completions_url_is_the_proxys_own_rule(base: str) -> None:
     assert completions_url(base) == proxy_completions_url(base)
@@ -60,6 +72,36 @@ def test_openai_chat_sends_the_gateway_name_and_the_key_to_the_chat_path(gateway
     assert response.input_tokens == 1200 and response.output_tokens == 340
     assert response.reported_cost_usd == 0.0402
     assert seen["host"] == f"gateway.example.test:{gateway.port}"
+
+
+@pytest.mark.parametrize("flavour", ["openai_chat", "anthropic_messages"])
+@pytest.mark.parametrize("transport", ["direct", "vpn"])
+def test_http_sends_verified_png_as_real_image_content(gateway_factory: Any, flavour: str,
+                                                       transport: str) -> None:
+    gateway = gateway_factory()
+    _adapter(gateway, flavour, transport=transport,
+             base_path="" if flavour == "anthropic_messages" else "/api/v1").complete(IMAGE_REQUEST)
+    (seen,) = gateway.requests
+    if flavour == "openai_chat":
+        assert seen["path"] == "/api/v1/chat/completions"
+    content = seen["body"]["messages"][-1]["content"]
+    assert content[0] == {"type": "text", "text": "hello"}
+    if flavour == "openai_chat":
+        encoded = content[1]["image_url"]["url"].split(",", 1)[1]
+    else:
+        assert content[1]["source"]["media_type"] == "image/png"
+        encoded = content[1]["source"]["data"]
+    assert base64.b64decode(encoded) == PNG
+    assert "images" not in seen["body"]
+
+
+@pytest.mark.parametrize("flavour", ["openai_chat", "anthropic_messages"])
+def test_direct_http_refuses_bad_png_before_network(gateway_factory: Any, flavour: str) -> None:
+    gateway = gateway_factory()
+    bad = ModelRequest(IMAGE_REQUEST.model_id, IMAGE_REQUEST.body, image_bytes=PNG + b"x")
+    with pytest.raises(ProxyDispatchError) as refused:
+        _adapter(gateway, flavour).complete(bad)
+    assert refused.value.dispatch_class == "not_sent" and gateway.requests == []
 
 
 def test_an_origin_only_base_url_uses_the_portal_path(gateway_factory: Any) -> None:

@@ -7,17 +7,17 @@ recorded run must never be presentable as a live one: the mode written into a mo
 call record comes from the object that actually produced the response, so relabelling
 the configuration, the recording file or the artifact cannot change it.
 
-Requests are built once and hashed once. The checksum covers the exact JSON body that
-would go to the provider, so a prompt edit, a schema edit, a parameter change or a
-different document all produce a different key - and the recorded adapter, which is
-keyed by that checksum, then correctly reports that it has no recording rather than
-replaying a response to a different question.
+Requests are built once and hashed once. The checksum covers the JSON body,
+including any selected image descriptor with its byte digest. A prompt edit,
+schema edit, parameter change, document or selected crop therefore changes the
+key; recorded responses cannot replay against another question. Direct
+transports turn the descriptor's separately verified PNG into an API image block.
 """
 
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Mapping, Protocol, runtime_checkable
 
 from auditmanager.analysis.text.config import ProviderMode
@@ -37,6 +37,10 @@ class ModelRequest:
     # Transport-only scope. It never changes the deterministic request checksum or
     # recorded-response lookup; the proxy may use it to deduplicate one logical run.
     idempotency_scope: str | None = None
+    # Selected saved crop bytes for direct model transports. The body holds their
+    # digest/size descriptor, so the request checksum binds the bytes without
+    # copying a PNG into the call journal. Pull transports fetch by descriptor.
+    image_bytes: bytes | None = field(default=None, repr=False, compare=False)
 
     @property
     def request_sha256(self) -> str:

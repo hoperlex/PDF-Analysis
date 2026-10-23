@@ -27,6 +27,7 @@ class VerifiedRetrievalSetInput:
     run_id: str
     norms_snapshot_id: str
     norm_retrieval_set_id: str
+    map_sha256: str
     set_blob_id: str
     set_sha256: str
     data: bytes
@@ -128,7 +129,11 @@ def load_verified_retrieval_set(
     if (row["run_state"] not in {"running", "validating"}
             or type(size) is not int or not 1 <= size <= max_set_bytes
             or not isinstance(row["set_sha256"], str)
-            or len(row["set_sha256"]) != 64):
+            or len(row["set_sha256"]) != 64
+            or not isinstance(row["map_sha256"], str)
+            or len(row["map_sha256"]) != 64
+            or any(character not in "0123456789abcdef"
+                   for character in row["map_sha256"])):
         raise RetrievalSetInputRefused("verified_set_pin_invalid")
     payload = _read_exact(
         blob_store, blob_id=row["set_blob_id"],
@@ -142,6 +147,7 @@ def load_verified_retrieval_set(
         run_id=authority.run_id,
         norms_snapshot_id=row["norms_snapshot_id"],
         norm_retrieval_set_id=row["norm_retrieval_set_id"],
+        map_sha256=row["map_sha256"],
         set_blob_id=row["set_blob_id"],
         set_sha256=row["set_sha256"],
         data=payload,

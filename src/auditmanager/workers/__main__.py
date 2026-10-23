@@ -49,6 +49,24 @@ def serve(environ: Mapping[str, str]) -> int:
     # watchdog; never raises.
     sweep_stale_temporaries()
 
+    if (runtime.settings.provider_source == "database"
+            and environ.get("PROXY_LLM_BASE_URL", "").strip()):
+        from auditmanager.executors.operations import OperationRefused, import_env
+        from auditmanager.executors.runtime import DestinationPolicy
+
+        try:
+            baseline = import_env(
+                runtime.session_factory, environ, ring=runtime.settings.secrets_private_ring,
+                policy=DestinationPolicy.from_environment(dict(environ)), queue_only=True,
+            )
+        except OperationRefused as failure:
+            # No runner starts with an incomplete baseline. The exception exposes only
+            # variable names and controlled outcomes, never the key or URL.
+            print(f"auditmanager-worker: baseline connection refused: {failure}", file=sys.stderr)
+            return 2
+        _log.info("baseline connection %s: %s", baseline.connection_id,
+                  "probe queued" if baseline.created else "already present")
+
     service = WorkerService(
         engine=runtime.engine,
         session_factory=runtime.session_factory,

@@ -57,6 +57,7 @@ const RUNNER_OPERATIONS = [
   'claimExecutorTask',
   'extendExecutorTaskClaim',
   'failExecutorTask',
+  'getExecutorTaskImage',
   'submitExecutorTaskAnswer',
 ] as const;
 

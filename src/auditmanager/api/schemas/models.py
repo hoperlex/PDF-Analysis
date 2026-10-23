@@ -706,7 +706,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.0.0"]
+    contract_version: Literal["1.1.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -3592,6 +3592,21 @@ class ClaimExecutorTaskRequest(_Object):
     )
 
 
+RunnerImageBlobId = TypeAliasType(
+    "RunnerImageBlobId", Annotated[str, Field(pattern=r"^blob_[0-9A-HJKMNP-TV-Z]{26}$")],
+)
+
+
+class RunnerImage(_Object):
+    """One checked saved PNG, retrievable only by the current runner claim."""
+
+    blob_id: RunnerImageBlobId
+    portal_block_id: PortalBlockId
+    sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    size_bytes: Annotated[int, Field(ge=1, le=16 * 1024 * 1024)]
+    media_type: Literal["image/png"]
+
+
 class ClaimedExecutorTask(_Object):
     """A task, now claimed by the calling token. ``system`` and ``user_text`` are untrusted,
     document-derived text. ``model`` is the pinned gateway model the answer must declare."""
@@ -3603,6 +3618,9 @@ class ClaimedExecutorTask(_Object):
     system: str
     user_text: str
     output_schema: Annotated[dict[str, Any], WithJsonSchema({"type": "object"})]
+    images: Annotated[list[RunnerImage], Field(max_length=1)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
 
 
 class ExtendedExecutorTaskClaim(_Object):

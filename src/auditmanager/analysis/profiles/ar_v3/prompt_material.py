@@ -8,7 +8,9 @@ bytes are not a registered prompt bundle until a later profile seal.
 from __future__ import annotations
 
 import json
+import hashlib
 from dataclasses import dataclass
+from pathlib import Path
 
 from auditmanager.analysis.profiles.ar_v2.content import reviewed_sections
 from auditmanager.analysis.profiles.ar_v2.recognised_context import (
@@ -88,6 +90,31 @@ _NORM_INTRO = """\
 Для norm_citations используй только указанные метки N1…Nk.
 """
 
+_TOPICS_PATH = Path(__file__).with_name("original_topics.md")
+_TOPICS_SHA256 = "df2ee31f57d52a3c597cc8b56713da1a4f6af08c3bf420cf6e3129a8b678a477"
+_TOPICS_START = "<!-- prompt:start -->"
+_TOPICS_END = "<!-- prompt:end -->"
+
+
+def _original_topics() -> str:
+    """Read the bounded, provenance-marked topic guide, excluding its notes."""
+    try:
+        raw = _TOPICS_PATH.read_bytes()
+        source = raw.decode("utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise V3PromptRefused("original_topics_unavailable") from exc
+    if hashlib.sha256(raw).hexdigest() != _TOPICS_SHA256:
+        raise V3PromptRefused("original_topics_digest_mismatch")
+    if (source.count(_TOPICS_START) != 1 or source.count(_TOPICS_END) != 1
+            or "role_sha256: fda944f74c4a0bd7cd77339f2c2f8519f55d59e899be03da212f93d2ad432203" not in source
+            or "checklist_sha256: eccb7879023a126427fd61a0ed36237eb42bbebd4bec63c4009004247d7f3179" not in source):
+        raise V3PromptRefused("original_topics_provenance_invalid")
+    _, rest = source.split(_TOPICS_START, 1)
+    prompt, _ = rest.split(_TOPICS_END, 1)
+    if not prompt.strip():
+        raise V3PromptRefused("original_topics_empty")
+    return prompt.strip()
+
 
 def render_v3_system_prompt() -> str:
     """Reuse the four common AR sections without contradictory v2-only rules."""
@@ -96,6 +123,7 @@ def render_v3_system_prompt() -> str:
         if section.source.filename in {"role.md", "finding_categories.md"}:
             continue
         parts.append(f"### {section.source.filename}\n{section.prompt_text}")
+    parts.append(_original_topics())
     return "\n\n".join(parts)
 
 

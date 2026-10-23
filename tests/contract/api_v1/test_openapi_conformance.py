@@ -560,7 +560,8 @@ class TestN1ComponentReferenceResolution:
         # `setExecutorRoute` names connections that may not exist.
         # `EXEC-PULL-01` adds five: issueRunnerToken and revokeRunnerToken address a connection
         # (and a token), and the three runner operations that address a task by identity.
-        assert len(report) == 70, report
+        # EXEC-IMAGE-DELIVERY-01 adds the task-scoped PNG read with a 404.
+        assert len(report) == 71, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

@@ -347,6 +347,16 @@ class RunnerRepository:
         ), {"id": task_id}).first()
         return None if row is None or row[0] is None else _payload(row[0])
 
+    def live_claim_and_attempt(self, session: Session, task_id: str, token_id: str) -> bool:
+        """Check the lease and current Attempt by the database clock before image egress."""
+        return bool(session.execute(text(
+            "SELECT EXISTS (SELECT 1 FROM executor_task t WHERE t.task_id = :id "
+            "AND t.claimed_by_token_id = :token AND t.state = 'claimed' "
+            "AND t.claim_expires_at > clock_timestamp() "
+            "AND t.deadline_at > clock_timestamp() "
+            f"AND (t.attempt_id IS NULL OR {_ATTEMPT_LIVE}))"
+        ), {"id": task_id, "token": token_id}).scalar_one())
+
     def extend_claim(
         self, session: Session, *, task_id: str, token_id: str, lease_seconds: int
     ) -> datetime | None:

@@ -260,7 +260,7 @@ UNAUTHENTICATED_OPERATIONS: Final[frozenset[str]] = frozenset(
 #: the wire, whose issuer is the only difference, and the seam is what the document never names.
 RUNNER_OPERATIONS: Final[frozenset[str]] = frozenset({
     "claimExecutorTask", "extendExecutorTaskClaim", "submitExecutorTaskAnswer",
-    "failExecutorTask",
+    "failExecutorTask", "getExecutorTaskImage",
 })
 
 #: `R-50`. The operations a credential minted for an account **still on its seeded

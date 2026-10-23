@@ -1,7 +1,7 @@
 {
   "contract": "auditmanager.domain.state-machines",
-  "contract_version": "1.0.0",
-  "supersedes": "1.0.0-draft.1",
+  "contract_version": "1.1.0",
+  "supersedes": "1.0.0",
   "candidate_revision": 19,
   "revision_note": "Candidate revision 19 by BETA-CONTRACT-SEAL-01 phase B: the 1.0.0 seal of the closed-beta contract. The lifecycles are frozen as revision 18 left them; no machine or transition changes.",
   "status": "frozen",

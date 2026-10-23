@@ -1,14 +1,15 @@
-# Domain contract v1 — `1.0.0`, frozen (sealed revision 19)
+# Domain contract v1 — `1.1.0`, frozen (sealed revision 19)
 
 Owner lane: [W0-DOM-01](../../../docs/program/tasks/W0-DOM-01.md) (domain contract
 owner); the additive norm-identity amendment is owned by
 [NORM-ID-01](../../../docs/program/tasks/NORM-ID-01.md). Status: **frozen for the closed
 beta** by `BETA-CONTRACT-SEAL-01` ([the report](../../../docs/program/BETA-CONTRACT-SEAL-01.md)).
-Every catalog in this directory declares `contract_version` `1.0.0`, `supersedes`
-`1.0.0-draft.1`, `candidate_revision` `19`, `status` `frozen` and `frozen` `true`, and the
+Every catalog in this directory declares `contract_version` `1.1.0`, `supersedes`
+`1.0.0`, `candidate_revision` `19`, `status` `frozen` and `frozen` `true`, and the
 three family schemas pin `candidate_revision` `const: 19`, `status` `const: frozen` and
 `frozen` `const: true` to match, so a catalog that fell back to a draft would fail its own
-schema. Revision 13 added the fail-closed `model_identity_mismatch` code for the recorded-only
+schema. `EXEC-IMAGE-DELIVERY-01` moves the family version to `1.1.0` and points `supersedes` at `1.0.0`;
+the domain vocabulary remains sealed at revision 19. Revision 13 added the fail-closed `model_identity_mismatch` code for the recorded-only
 W56a seal; revisions 14 to 17 moved the identity register with the later waves; revision 18
 (`BETA-CONTRACT-SEAL-01` phase A, `D-179`) added the two codes
 `version_classification_required` and `section_profile_unavailable`; revision 19 is the seal

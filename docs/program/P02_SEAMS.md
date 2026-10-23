@@ -834,7 +834,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-Ninety-nine operations, sealed. `A5` generates the typed client from this document; `B6`
+100 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -949,8 +949,10 @@ every write is an administrator's. `CostBasis` gains `unmetered`. No error code 
 (`revokeRunnerToken`), and a runner (a Claude Code session behind the stdio bridge, or an
 unattended agent) calls `claimExecutorTask` (a long poll of at most 25 seconds), then
 `extendExecutorTaskClaim`, `submitExecutorTaskAnswer` and `failExecutorTask`. A runner token is a
-principal of its own: it reaches those four operations and no other, and every other operation
-refuses it as `authentication_required`. The wire is `tools/executor-runner/RUNNER_API.md`.
+principal of its own: it reaches the runner operations and no others, and every other operation
+refuses it as `authentication_required`. `EXEC-IMAGE-DELIVERY-01` adds
+`getExecutorTaskImage`, a PNG read bound to the token's current claim. The wire is
+`tools/executor-runner/RUNNER_API.md`.
 `getExecutorConnection` carries a `pull` connection's token metadata and open task count. No error
 code is added.
 
@@ -1066,6 +1068,7 @@ could.
 | `issueRunnerToken` | `POST /executor-connections/{connection_id}/runner-tokens` |
 | `revokeRunnerToken` | `POST /executor-connections/{connection_id}/runner-tokens/{token_id}/revoke` |
 | `claimExecutorTask` | `POST /runner/tasks/claim` |
+| `getExecutorTaskImage` | `GET /runner/tasks/{task_id}/images/{blob_id}` |
 | `extendExecutorTaskClaim` | `POST /runner/tasks/{task_id}/extend` |
 | `submitExecutorTaskAnswer` | `POST /runner/tasks/{task_id}/answer` |
 | `failExecutorTask` | `POST /runner/tasks/{task_id}/fail` |

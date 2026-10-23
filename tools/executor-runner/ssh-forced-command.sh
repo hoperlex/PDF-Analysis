@@ -43,7 +43,7 @@ umask 077
 # Whatever the client typed is not ours to run.
 unset SSH_ORIGINAL_COMMAND
 
-MAX_TASK_BYTES="${PDF_ANALYSIS_MAX_TASK_BYTES:-8388608}"
+MAX_TASK_BYTES="${PDF_ANALYSIS_MAX_TASK_BYTES:-25165824}"
 ENV_FILE="${PDF_ANALYSIS_CLAUDE_ENV_FILE:-${HOME:?HOME is not set}/.config/pdf-analysis/claude.env}"
 # Keep below the stand's 900 s Attempt watchdog; the stand also enforces its own timeout.
 CLAUDE_TIMEOUT_SECONDS=840
@@ -95,6 +95,40 @@ with open(work + "/system.txt", "w", encoding="utf-8") as out:
     out.write(task["system"])
 with open(work + "/user.txt", "w", encoding="utf-8") as out:
     out.write(task["user_text"])
+schema = task.get("output_schema")
+if schema is not None:
+    if not isinstance(schema, dict) or schema.get("type") != "object":
+        sys.stderr.write("pdf-analysis-forced-command: invalid output schema\n")
+        raise SystemExit(1)
+    encoded = json.dumps(schema, ensure_ascii=False, separators=(",", ":"))
+    if len(encoded.encode("utf-8")) > 65536:
+        sys.stderr.write("pdf-analysis-forced-command: output schema is too large\n")
+        raise SystemExit(1)
+    with open(work + "/schema.json", "w", encoding="utf-8") as out:
+        out.write(encoded)
+image = task.get("image")
+if image is not None:
+    import base64
+    import binascii
+    if not isinstance(image, dict) or set(image) != {"media_type", "data"} or image["media_type"] != "image/png":
+        sys.stderr.write("pdf-analysis-forced-command: invalid image envelope\n")
+        raise SystemExit(1)
+    try:
+        raw = base64.b64decode(image["data"], validate=True)
+    except (binascii.Error, ValueError, TypeError):
+        sys.stderr.write("pdf-analysis-forced-command: invalid image bytes\n")
+        raise SystemExit(1)
+    if not raw.startswith(b"\x89PNG\r\n\x1a\n") or not 1 <= len(raw) <= (16 << 20):
+        sys.stderr.write("pdf-analysis-forced-command: invalid PNG\n")
+        raise SystemExit(1)
+    # Stream JSON carries a real image block; a textual base64 or file path is not vision input.
+    event = {"type": "user", "message": {"role": "user", "content": [
+        {"type": "text", "text": task["user_text"]},
+        {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": image["data"]}},
+    ]}}
+    with open(work + "/input.jsonl", "w", encoding="utf-8") as out:
+        json.dump(event, out, ensure_ascii=False, separators=(",", ":"))
+        out.write("\n")
 PY
 model="$(cat "$work/model")"
 
@@ -120,17 +154,73 @@ timeout_bin="$(command -v timeout || command -v gtimeout || true)"
 [ -z "$timeout_bin" ] || runner=("$timeout_bin" -k 10 "$CLAUDE_TIMEOUT_SECONDS")
 
 cd "$work"
+input_file="$work/user.txt"
+input_args=()
+if [ -f "$work/input.jsonl" ]; then
+  input_file="$work/input.jsonl"
+  input_args=(--input-format stream-json)
+fi
+schema_args=()
+if [ -f "$work/schema.json" ]; then
+  schema_args=(--json-schema "$(cat "$work/schema.json")")
+fi
 set +e
 env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_AUTH_TOKEN ANTHROPIC_API_KEY="$api_key" \
   ${runner[@]+"${runner[@]}"} claude -p --bare \
   --tools "" \
   --disallowedTools "mcp__*" \
   --output-format json \
+  ${input_args[@]+"${input_args[@]}"} \
+  ${schema_args[@]+"${schema_args[@]}"} \
   --max-turns 1 \
   --model "$model" \
   --system-prompt-file "$work/system.txt" \
   --no-session-persistence \
-  <"$work/user.txt"
+  <"$input_file" >"$work/result.json"
 status=$?
 set -e
-exit "$status"
+[ "$status" -eq 0 ] || fail "claude exited without a successful answer" "$status"
+
+# The model identity is reported by Claude Code's per-model usage object. Require exactly
+# one entry and the exact requested gateway model; never infer identity from --model alone.
+python3 - "$work" <<'PY' || fail "claude returned an incomplete answer" 65
+import json
+import math
+import sys
+
+work = sys.argv[1]
+try:
+    with open(work + "/result.json", encoding="utf-8") as handle:
+        result = json.load(handle)
+except (OSError, ValueError, UnicodeError):
+    raise SystemExit(1)
+models = result.get("modelUsage") if isinstance(result, dict) else None
+if (not isinstance(models, dict) or len(models) != 1
+        or result.get("is_error") is True or result.get("subtype") not in (None, "success")):
+    raise SystemExit(1)
+reported = next(iter(models))
+if not isinstance(reported, str) or not reported:
+    raise SystemExit(1)
+if "structured_output" in result:
+    if not isinstance(result["structured_output"], dict):
+        raise SystemExit(1)
+    answer = json.dumps(result["structured_output"], ensure_ascii=False, separators=(",", ":"))
+else:
+    answer = result.get("result")
+if not isinstance(answer, str) or not answer:
+    raise SystemExit(1)
+usage = models[reported]
+if not isinstance(usage, dict):
+    raise SystemExit(1)
+tokens_in = sum(usage.get(name, 0) for name in
+                ("inputTokens", "cacheReadInputTokens", "cacheCreationInputTokens"))
+tokens_out = usage.get("outputTokens")
+cost = result.get("total_cost_usd")
+if (type(tokens_in) is not int or tokens_in < 0 or type(tokens_out) is not int or tokens_out < 0
+        or (cost is not None and (type(cost) not in (int, float) or not math.isfinite(cost) or cost < 0))):
+    raise SystemExit(1)
+print(json.dumps({
+    "model": reported, "output_text": answer, "stop_reason": "end_turn",
+    "input_tokens": tokens_in, "output_tokens": tokens_out, "reported_cost_usd": cost,
+}, ensure_ascii=False, separators=(",", ":")))
+PY

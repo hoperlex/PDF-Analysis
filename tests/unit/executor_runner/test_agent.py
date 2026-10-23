@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import importlib.util
+import base64
+import hashlib
 import json
 import os
 import shutil
@@ -22,12 +24,16 @@ if _NAME not in sys.modules:
 S = sys.modules[_NAME]
 
 STUB = r'''
-import json, os, sys, time
+import hashlib, json, os, sys, time
 record_dir = sys.argv[1]
 task = json.load(sys.stdin)
 tid = task["task_id"]
 open(os.path.join(record_dir, tid + ".in.json"), "w").write(json.dumps(task))
 open(os.path.join(record_dir, tid + ".pid"), "w").write(str(os.getpid()))
+if task.get("local_images"):
+    image = task["local_images"][0]
+    raw = open(image["path"], "rb").read()
+    open(os.path.join(record_dir, tid + ".image.sha256"), "w").write(hashlib.sha256(raw).hexdigest())
 if tid.startswith("ext_SLOW"):
     time.sleep(2.5)
 elif tid.startswith("ext_LONG"):
@@ -47,13 +53,14 @@ print(json.dumps({"findings": [{"id": 1}]}))
 '''
 
 
-def _run(tmp_path, runner, tasks, *, max_tasks=None, declared="claude-opus-5", command_timeout=30.0, extra_runner="", timeout=40.0):
+def _run(tmp_path, runner, tasks, *, max_tasks=None, declared="claude-opus-5", command_timeout=30.0, extra_runner="", timeout=40.0, accept_images=False):
     records = tmp_path / "records"
     records.mkdir(exist_ok=True)
     stub = S.write_stub(tmp_path / "stub.py", STUB)
     cfg = S.agent_config(
         tmp_path / "agent.toml", runner.origin, argv=[sys.executable, str(stub), str(records)],
         declared=declared, command_timeout=command_timeout, extra_runner=extra_runner,
+        accept_images=accept_images,
     )
     for task in tasks:
         runner.add_task(task)
@@ -88,6 +95,52 @@ def test_command_mode_answers_a_task_and_exits_at_max_tasks(tmp_path):
         assert runner.of_kind("fail") == []
 
 
+def test_image_is_fetched_verified_and_visible_to_the_command_only_while_it_runs(tmp_path):
+    raw = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL7WQAAAABJRU5ErkJggg=="
+    )
+    digest = hashlib.sha256(raw).hexdigest()
+    image = {"blob_id": "blob_01M2545JSD15ETSNNV904X991F",
+             "portal_block_id": "blk_" + "a" * 32,
+             "sha256": digest, "size_bytes": len(raw), "media_type": "image/png"}
+    with S.FakeRunner() as runner:
+        runner.add_image(image["blob_id"], raw)
+        proc, code, records = _run(tmp_path, runner, [S.make_task("ext_IMG1", images=[image])],
+                                   accept_images=True)
+        assert code == 0, proc.stderr
+        assert len(runner.of_kind("image")) == 1
+        assert runner.of_kind("answer")
+        assert (records / "ext_IMG1.image.sha256").read_text() == digest
+        seen = json.loads((records / "ext_IMG1.in.json").read_text())
+        assert not Path(seen["local_images"][0]["path"]).exists()
+
+
+def test_image_task_without_explicit_command_support_fails_before_fetch(tmp_path):
+    image = {"blob_id": "blob_01M2545JSD15ETSNNV904X991F",
+             "portal_block_id": "blk_" + "a" * 32,
+             "sha256": "a" * 64, "size_bytes": 12, "media_type": "image/png"}
+    with S.FakeRunner() as runner:
+        proc, code, records = _run(tmp_path, runner, [S.make_task("ext_IMG2", images=[image])])
+        assert code == 0, proc.stderr
+        assert runner.of_kind("fail")[0]["body"]["reason"] == "image_input_unsupported"
+        assert runner.of_kind("image") == []
+        assert not list(records.glob("*.in.json"))
+
+
+def test_changed_image_bytes_fail_before_command_and_are_not_logged(tmp_path):
+    image = {"blob_id": "blob_01M2545JSD15ETSNNV904X991F",
+             "portal_block_id": "blk_" + "a" * 32,
+             "sha256": "a" * 64, "size_bytes": 8, "media_type": "image/png"}
+    with S.FakeRunner() as runner:
+        runner.add_image(image["blob_id"], b"not a PNG")
+        proc, code, records = _run(tmp_path, runner, [S.make_task("ext_IMG3", images=[image])],
+                                   accept_images=True)
+        assert code == 0, proc.stderr
+        assert runner.of_kind("fail")[0]["body"]["reason"] == "image_delivery_failed"
+        assert not list(records.glob("*.in.json"))
+        assert image["sha256"] not in proc.stderr and S.TOKEN not in proc.stderr
+
+
 def test_endpoint_mode_asks_a_local_openai_server_and_reports_its_usage(tmp_path):
     with S.FakeRunner() as runner, S.FakeOpenAI(content='{"findings": []}') as endpoint:
         cfg = S.agent_config(tmp_path / "agent.toml", runner.origin, mode="endpoint", endpoint_url=endpoint.url)
@@ -110,6 +163,41 @@ def test_endpoint_json_schema_mode_passes_the_task_schema(tmp_path):
         assert proc.wait() == 0, proc.stderr
         rf = endpoint.requests[0]["body"]["response_format"]
         assert rf["type"] == "json_schema" and rf["json_schema"]["schema"]["required"] == ["findings"]
+
+
+def test_endpoint_image_is_verified_and_sent_as_openai_image_content(tmp_path):
+    raw = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL7WQAAAABJRU5ErkJggg=="
+    )
+    image = {"blob_id": "blob_01M2545JSD15ETSNNV904X991F",
+             "portal_block_id": "blk_" + "a" * 32,
+             "sha256": hashlib.sha256(raw).hexdigest(), "size_bytes": len(raw),
+             "media_type": "image/png"}
+    with S.FakeRunner() as runner, S.FakeOpenAI() as endpoint:
+        cfg = S.agent_config(tmp_path / "agent.toml", runner.origin, mode="endpoint",
+                             endpoint_url=endpoint.url, extra_endpoint="accept_images = true")
+        runner.add_image(image["blob_id"], raw)
+        runner.add_task(S.make_task("ext_EPI", images=[image]))
+        proc = S.AgentProcess(cfg, "--max-tasks", "1")
+        assert proc.wait() == 0, proc.stderr
+        content = endpoint.requests[0]["body"]["messages"][-1]["content"]
+        assert content[0]["type"] == "text"
+        assert base64.b64decode(content[1]["image_url"]["url"].split(",", 1)[1]) == raw
+        assert len(runner.of_kind("image")) == 1 and runner.of_kind("answer")
+
+
+def test_endpoint_image_is_refused_without_opt_in(tmp_path):
+    image = {"blob_id": "blob_01M2545JSD15ETSNNV904X991F",
+             "portal_block_id": "blk_" + "a" * 32, "sha256": "a" * 64,
+             "size_bytes": 8, "media_type": "image/png"}
+    with S.FakeRunner() as runner, S.FakeOpenAI() as endpoint:
+        cfg = S.agent_config(tmp_path / "agent.toml", runner.origin, mode="endpoint",
+                             endpoint_url=endpoint.url)
+        runner.add_task(S.make_task("ext_EPN", images=[image]))
+        proc = S.AgentProcess(cfg, "--max-tasks", "1")
+        assert proc.wait() == 0, proc.stderr
+        assert runner.of_kind("fail")[0]["body"]["reason"] == "image_input_unsupported"
+        assert runner.of_kind("image") == [] and endpoint.requests == []
 
 
 def test_endpoint_failure_and_truncation_become_typed_failures_without_leaking_the_prompt(tmp_path):

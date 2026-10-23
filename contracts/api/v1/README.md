@@ -11,7 +11,17 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Version `1.0.0`
+## Version `1.1.0`
+
+`EXEC-IMAGE-DELIVERY-01` adds `getExecutorTaskImage` and an optional image descriptor
+on a claimed runner task. The binary read is restricted to the token holding the
+current claim; the image bytes are checked against the saved Blob reference and
+never stored a second time in the task table. The surface is 88 paths, 100 operations
+and 286 component schemas; the 27 error codes and migration head are unchanged.
+The domain, analysis and events `contract_version` literals move with the API.
+The active text stage does not emit images.
+
+## Version `1.0.0` (historical)
 
 `info.version` and the `ErrorEnvelope.contract_version` const read `1.0.0` since
 `BETA-CONTRACT-SEAL-01`; they were `1.0.0-draft.1`. The domain, analysis and events families

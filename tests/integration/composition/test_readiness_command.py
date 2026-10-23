@@ -603,7 +603,7 @@ class TestExecutorSource:
         assert "readiness OK      executor-source " in whole, whole
         assert private not in whole and public not in whole, "the ring is never printed"
 
-    def test_the_database_source_beside_the_old_variables_is_a_finding(self, tmp_path: Path) -> None:
+    def test_the_database_source_accepts_a_complete_baseline_and_rejects_an_incomplete_one(self, tmp_path: Path) -> None:
         private, public = _keypair()
         alpha = _with_lines(
             _alpha_env(tmp_path, provider_mode="live"), "AUDITMANAGER_PROVIDER_SOURCE=database",
@@ -611,7 +611,21 @@ class TestExecutorSource:
         provider = _provider_env(tmp_path, AUDITMANAGER_SECRETS_KEYS=f"k1:{private}",
                                  PROXY_LLM_BASE_URL="https://p.example")
         out = self._result(tmp_path, alpha, provider)
-        assert "readiness FINDING executor-source " in out and "still set" in out, out
+        assert "readiness FINDING executor-source " in out and "triplet" in out, out
+        complete = _provider_env(
+            tmp_path, name="complete.env", AUDITMANAGER_SECRETS_KEYS=f"k1:{private}",
+            PROXY_LLM_BASE_URL="https://openrouter.ai/api/v1", PROXY_LLM_TOKEN="test-token",
+            PROXY_LLM_MODEL="anthropic/claude-opus-5",
+        )
+        accepted = self._result(tmp_path, alpha, complete)
+        assert "readiness OK      executor-source " in accepted, accepted
+        stub = _provider_env(
+            tmp_path, name="stub.env", AUDITMANAGER_SECRETS_KEYS=f"k1:{private}",
+            PROXY_LLM_BASE_URL="https://openrouter.ai/api/v1", PROXY_LLM_TOKEN="test-token",
+            PROXY_LLM_MODEL="proxy",
+        )
+        refused = self._result(tmp_path, alpha, stub)
+        assert "readiness FINDING executor-source " in refused and "gateway stub" in refused, refused
 
     def test_the_check_is_shown_able_to_fail(self, tmp_path: Path) -> None:
         mutant = _write_mutant(tmp_path, "executor-source")

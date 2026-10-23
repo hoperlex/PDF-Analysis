@@ -1241,16 +1241,62 @@ network path and, only when the probe is `ok`, assigns the connection to `text_a
 run changes nothing and names the existing connection. Exit `3` means the connection exists but the
 probe did not pass: read the outcome in «Подключения», fix it there and assign by hand.
 
+**Baseline OpenRouter after the source switch.** With `AUDITMANAGER_PROVIDER_SOURCE=database`,
+the worker now accepts a complete `PROXY_LLM_BASE_URL`, `PROXY_LLM_TOKEN`,
+`PROXY_LLM_MODEL` triplet in its private `provider.env`. On first start it creates
+«OpenRouter (из окружения)» as a normal `http_api` / `openai_chat` connection, seals the
+key and queues its probe. It does not alter «Анализ текста»: an existing Codex route stays
+in place. Once the probe reads «готово», choose OpenRouter under
+«Исполнители → Назначения». The connection then owns its saved settings and key;
+subsequent worker restarts never overwrite an edit made in the UI. This route uses the
+same verified PNG image block as other `openai_chat` HTTP connections, once the separate
+image stage creates a crop task. A model that cannot receive images will refuse that call.
+
+**SSH command and PNG crops.** `ssh_command` is served after a successful probe
+on its current SSH key and revision. In «Исполнители → Подключения» create
+«Команда по SSH», install the generated public key for a dedicated remote
+account, press «Проверить», confirm the observed host-key fingerprint in a new
+revision, then probe again. The worker checks the destination on every call,
+dials the checked IP and requires the saved host key. It sends one JSON task on
+stdin with `model`, `system`, `user_text`, optional `output_schema`, and optional
+`image: {media_type: "image/png", data: "<base64>"}`. The PNG bytes must match
+the selected saved crop. A `custom_command` remote script must answer on stdout
+with `model`, `output_text`, `stop_reason`, `input_tokens`, `output_tokens` and
+optional `reported_cost_usd`; the reported model must match the gateway model.
+The supplied `tools/executor-runner/ssh-forced-command.sh` implements the
+`claude_code_headless` profile, including an image content block through
+Claude Code's stream JSON input. It needs an API key in its protected remote
+environment file and the remote `claude` binary. Check the installed CLI's
+version and one real JSON result before routing a production connection; the
+local automated test uses a stub CLI. No image task is created until the
+separate W56b prompt and evidence policy are approved.
+
+**HTTP-модель через SSH-туннель.** `http_api` with «SSH-туннель» uses the
+existing `openai_chat` or `anthropic_messages` adapter over a short-lived
+forward. Configure its HTTP API key and generated SSH key, then install the
+public SSH key on a dedicated remote account with forwarding restricted to
+the target host and port. An `authorized_keys` option such as
+`restrict,port-forwarding,permitopen="127.0.0.1:11434"` allows exactly that
+target (adjust it to the saved base URL). The worker dials the validated SSH
+IP, pins the SSH host key, and keeps the original HTTP Host and TLS server
+name while connecting through the local forward. It carries the same checked
+PNG image block as direct HTTP. Press «Проверить» after setting both secrets;
+confirm an unpinned host key in a new revision and probe again. Replacing
+either secret makes the old successful probe unusable, so probe after every
+rotation. The forward closes after each model call; the remote HTTP endpoint
+is resolved by the SSH server, and `permitopen` should restrict it.
+
 Then, in this order:
 
 1. verify one run through the connection while the source is still `environment`;
-2. remove `PROXY_LLM_*` (and `ANTHROPIC_API_KEY`) from `provider.env`; the loader **refuses to start**
-   with both a source `database` and the old variables set;
+2. either remove `PROXY_LLM_*` after the explicit import, or keep a complete triplet for
+   automatic baseline registration; remove `ANTHROPIC_API_KEY` in both cases. The loader
+   refuses an incomplete triplet or an API credential under `database`;
 3. set `AUDITMANAGER_PROVIDER_SOURCE=database` and `AUDITMANAGER_PROVIDER_MODE=live` in `alpha.env`
    and redeploy. From then on a run freezes the route's revision at start and its calls, call rows
    and `connection_revision_id` go through it;
 4. `infra/deploy/readiness.sh` — the `executor-source` check reports a missing ring, a public key
-   without its private half, or leftover variables.
+   without its private half, an incomplete baseline triplet or a stub model.
 
 **Rollback** is `AUDITMANAGER_PROVIDER_SOURCE=environment` and the variables back in `provider.env`.
 A run that froze a connection under `database` and is served after the switch back is refused, not
@@ -1290,7 +1336,7 @@ may send a key to an address and can open a connection to it.
 | «нет ответа» | no answer within the revision's timeout, or no worker took the probe within 120 s (`no_worker`) |
 | «адрес недоступен» | the name does not resolve or the connection is refused |
 | `destination_refused` | the address is one the worker may not send a key to |
-| `kind_not_served` | `pull`, `ssh_command` and the SSH-tunnel transport can be created but are not served yet |
+| `kind_not_served` | a connection variant without an adapter in this worker version |
 
 A probe never keeps a body, a header or an address; its detail is a fixed phrase.
 

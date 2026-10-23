@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+import re
 import time
 from collections.abc import Callable, Mapping
 from typing import Any, Final
@@ -58,6 +59,7 @@ from auditmanager.executors.runner_repository import (
     TaskRecord,
 )
 from auditmanager.shared.errors import ErrorCode
+from auditmanager.storage.public import derive_blob_id
 
 __all__ = [
     "DEADLINE_MARGIN_SECONDS",
@@ -86,6 +88,9 @@ _ECHO_SYSTEM: Final[str] = (
     "You are answering a connection check for an audit application. Reply with one JSON "
     "document that has the single field \"echo\" set to the exact text you were given."
 )
+MAX_RUNNER_IMAGE_BYTES: Final[int] = 16 * 1024 * 1024
+_SHA256: Final = re.compile(r"[0-9a-f]{64}\Z")
+_BLOCK_ID: Final = re.compile(r"blk_[0-9a-f]{32}\Z")
 
 
 def answer_window(revision_deadline_seconds: int, context: Any | None) -> float | None:
@@ -185,10 +190,36 @@ def _task_payload(request: ModelRequest) -> dict[str, Any]:
     if not isinstance(system, str) or not parts:
         raise _error("not_sent", "executor_request", "the request has no prompt to hand over",
                      code=ErrorCode.ANALYSIS_INPUT_INVALID)
-    return {
+    images = body.get("images", ())
+    if not isinstance(images, (list, tuple)) or len(images) > 1:
+        raise _error("not_sent", "executor_request", "one image is allowed per runner task",
+                     code=ErrorCode.ANALYSIS_INPUT_INVALID)
+    checked_images: list[dict[str, Any]] = []
+    for raw in images:
+        if not isinstance(raw, Mapping) or set(raw) != {
+            "blob_id", "portal_block_id", "sha256", "size_bytes", "media_type",
+        }:
+            raise _error("not_sent", "executor_request", "invalid runner image reference",
+                         code=ErrorCode.ANALYSIS_INPUT_INVALID)
+        blob_id, block_id, digest, size = (
+            raw["blob_id"], raw["portal_block_id"], raw["sha256"], raw["size_bytes"],
+        )
+        if (not isinstance(blob_id, str) or not isinstance(block_id, str)
+                or _BLOCK_ID.fullmatch(block_id) is None
+                or not isinstance(digest, str) or _SHA256.fullmatch(digest) is None
+                or type(size) is not int or not 1 <= size <= MAX_RUNNER_IMAGE_BYTES
+                or raw["media_type"] != "image/png"
+                or blob_id != str(derive_blob_id(sha256=digest, size=size))):
+            raise _error("not_sent", "executor_request", "invalid runner image reference",
+                         code=ErrorCode.ANALYSIS_INPUT_INVALID)
+        checked_images.append(dict(raw))
+    payload = {
         "system": system, "user_text": "\n\n".join(parts),
         "output_schema": schema if isinstance(schema, Mapping) else {"type": "object"},
     }
+    if checked_images:
+        payload["images"] = checked_images
+    return payload
 
 
 class PullAdapter:

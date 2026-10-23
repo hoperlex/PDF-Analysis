@@ -173,6 +173,7 @@ const RUNNER_OPERATIONS: readonly string[] = [
   'claimExecutorTask',
   'extendExecutorTaskClaim',
   'failExecutorTask',
+  'getExecutorTaskImage',
   'submitExecutorTaskAnswer',
 ];
 

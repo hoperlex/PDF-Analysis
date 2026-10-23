@@ -61,6 +61,9 @@ unset RUNNER_TOKEN
 
 The general form is
 `claude mcp add --env PDF_ANALYSIS_RUNNER_TOKEN=… --transport stdio pdf-analysis-runner -- python3 <path>/mcp_bridge.py --origin <stand>`.
+For an image-capable session add `--accept-images` after `<stand>`; the bridge then
+fetches and verifies each claimed PNG and returns it as MCP image content alongside
+the task text. Check one image task in the session before using this mode for runs.
 Another option (`--transport`) must sit between `--env` and the name, or the CLI reads the name
 as one more `KEY=value` pair. `--` separates Claude's options from the server command.
 
@@ -149,7 +152,9 @@ The token lives only in that file; the config refuses a key named `token`, `secr
   (`command_failed`, `command_bad_output`, `answer_not_json`, `timeout`).
 - `mode = "endpoint"`: a local OpenAI-compatible `/v1/chat/completions` server (Ollama
   `http://127.0.0.1:11434/v1/chat/completions`, vLLM, llama.cpp). `response_format =
-  "json_schema"` passes the task schema to servers that constrain decoding.
+  "json_schema"` passes the task schema to servers that constrain decoding. Set
+  `[endpoint].accept_images = true` only for a model that accepts an OpenAI Chat
+  `image_url` data URL. The agent verifies the PNG and sends it in the user message.
 - `[model] declared` is the exact pinned id this agent answers as; a task that pins another
   model is failed as `model_mismatch` before any work. It is an assertion: declare only what
   is true (`R-133` records it as `declared`, not `reported`).
@@ -218,6 +223,18 @@ as `identity_basis: declared`. Keep the account and its Codex authentication
 private. The connection is `not_metered`; the app does not convert subscription
 usage into an invented dollar amount. A subscription's availability and limits
 are the account's, so a real probe is required before routing.
+
+For a separate saved-crop image task, set `[command].accept_images = true` only
+when the command accepts `local_images` in the task JSON. The agent downloads the
+claim's PNG over the same authenticated channel, checks its size and SHA-256,
+passes a private temporary file to `codex_answer.py`, and removes it when the
+command ends. `codex_answer.py` attaches it with `codex exec --image`. Text-only
+commands, endpoints and MCP sessions without their image opt-in refuse image tasks.
+Direct and VPN HTTP connections carry a selected PNG as an OpenAI Chat or Anthropic
+Messages image block. SSH command and SSH tunnel connections are still unserved.
+The W56b image
+stage will produce these tasks after its prompt and evidence policy is approved;
+the current «Анализ текста» route does not send images.
 
 ## Known limits of the Claude profiles
 

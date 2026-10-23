@@ -87,7 +87,7 @@ EXCHANGE_OPERATIONS = frozenset({"issueToken"})
 #: runner-channel maps are held against their full served paths.
 RUNNER_OPERATIONS = frozenset({
     "claimExecutorTask", "extendExecutorTaskClaim", "submitExecutorTaskAnswer",
-    "failExecutorTask",
+    "failExecutorTask", "getExecutorTaskImage",
 })
 #: The runner channel's two zones and the exact lines that declare them: the rates are the
 #: decision (`docs/program/EXEC-PULL-01.md` replays a scripted runner against them), so they are
