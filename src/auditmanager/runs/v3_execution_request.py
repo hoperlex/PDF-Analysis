@@ -20,10 +20,12 @@ from auditmanager.analysis.public import (
     prepare_beta_v3_request,
 )
 from auditmanager.documents.public import DocumentRepository
+from auditmanager.findings.public import recheck_verified_retrieval_set_facts
 from auditmanager.jobs.public import AttemptAuthority, JobRepository
 from auditmanager.runs.reference_text_input import (
     SavedReferenceTextInput,
     load_saved_reference_text,
+    recheck_saved_reference_text_facts,
 )
 from auditmanager.runs.repository import RunRepository
 from auditmanager.runs.v3_citations import PinnedV3CorpusRequest, prepare_v3_corpus_request
@@ -87,6 +89,7 @@ def prepare_v3_execution_request(
     run_repo = runs or RunRepository()
     binding = resolve_v3_execution_binding(
         session, authority=authority, registry=registry, jobs=job_repo,
+        lock_authority=False,
     )
     if (expected_provider_mode not in {"live", "recorded"}
             or binding.provider_mode != expected_provider_mode):
@@ -95,6 +98,7 @@ def prepare_v3_execution_request(
         session, authority=authority, blob_store=blob_store,
         max_input_bytes=max_text_bytes, runs=run_repo, jobs=job_repo,
         documents=documents,
+        lock_authority=False,
     )
     text_layer = saved_text.text_layer
     run = run_repo.get(session, binding.run_id)
@@ -112,6 +116,7 @@ def prepare_v3_execution_request(
         scope_id=binding.scope_id,
         composition_sha256=binding.composition_sha256,
         recognised_context=recognised_context,
+        lock_authority=False,
     )
     verified = pinned.verified_set
     if (verified.run_id != binding.run_id
@@ -142,6 +147,13 @@ def prepare_v3_execution_request(
         session, authority=authority, registry=registry, jobs=job_repo,
     ) != binding:
         raise _refuse("group_binding_changed_during_read")
+    recheck_saved_reference_text_facts(
+        session, authority=authority, saved=saved_text,
+        runs=run_repo, documents=documents,
+    )
+    recheck_verified_retrieval_set_facts(
+        session, authority=authority, saved=verified,
+    )
     return V3PreparedExecutionRequest(binding, saved_text, pinned, sealed, request)
 
 

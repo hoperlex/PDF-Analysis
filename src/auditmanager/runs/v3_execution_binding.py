@@ -77,16 +77,23 @@ def resolve_v3_execution_binding(
     authority: AttemptAuthority,
     registry: TrustedPackRegistry,
     jobs: JobRepository | None = None,
+    lock_authority: bool = True,
 ) -> V3ExecutionBinding:
     """Resolve immutable group and pack pins while this Attempt is current.
 
-    The DB read and both authority checks belong to the caller's transaction.
+    The default locks authority for an effect boundary. Explicit nonlocking
+    preflight must be followed by a final locked resolver before any effect.
     Do not cache the return across Attempts or treat it as set Blob custody.
     """
     if not isinstance(authority, AttemptAuthority):
         raise _unavailable("analysis_profile")
+    if type(lock_authority) is not bool:
+        raise _unavailable("analysis_profile")
     job_repo = jobs or JobRepository()
-    job_repo.require_current(session, authority)
+    if lock_authority:
+        job_repo.require_current(session, authority)
+    else:
+        job_repo.check_current_unlocked(session, authority)
     if not isinstance(registry, TrustedPackRegistry):
         raise _unavailable("analysis_profile")
     pack = registry.select_beta()
@@ -127,7 +134,10 @@ def resolve_v3_execution_binding(
         or row["run_command_id"] != row["group_command_id"]
     ):
         raise _unavailable()
-    job_repo.require_current(session, authority)
+    if lock_authority:
+        job_repo.require_current(session, authority)
+    else:
+        job_repo.check_current_unlocked(session, authority)
     return V3ExecutionBinding(
         group_id=row["group_id"], run_id=authority.run_id,
         scope_id=row["scope_id"], project_uid=row["project_uid"],

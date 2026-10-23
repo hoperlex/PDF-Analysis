@@ -116,6 +116,10 @@ def _arrange(monkeypatch: pytest.MonkeyPatch, scope_id: str = "F1"):
                         lambda *args, **kwargs: SavedReferenceTextInput(_layer(), "ver_test", 1))
     monkeypatch.setattr(v3_citations, "load_verified_retrieval_set",
                         lambda *args, **kwargs: saved)
+    monkeypatch.setattr(v3_execution_request, "recheck_saved_reference_text_facts",
+                        lambda *args, **kwargs: None)
+    monkeypatch.setattr(v3_execution_request, "recheck_verified_retrieval_set_facts",
+                        lambda *args, **kwargs: None)
     return binding, saved
 
 
@@ -147,6 +151,74 @@ def test_six_scopes_bind_saved_bytes_to_one_transport_body(monkeypatch, scope_id
     assert HIDDEN not in str(prepared.model_request.body)
     _, _, replay = _prepare(monkeypatch, scope_id, idempotency_scope="attempt-2")
     assert replay.provider_body_sha256 == prepared.provider_body_sha256
+
+
+def test_nonlocking_blob_reads_precede_one_final_locked_fence(monkeypatch):
+    binding, saved = _arrange(monkeypatch)
+    order = []
+
+    def resolve(*args, **kwargs):
+        order.append("lock" if kwargs.get("lock_authority", True) else "peek")
+        return binding
+
+    def source(*args, **kwargs):
+        assert kwargs["lock_authority"] is False
+        assert "lock" not in order
+        order.append("text_blob")
+        return SavedReferenceTextInput(_layer(), "ver_test", 1)
+
+    def norm_set(*args, **kwargs):
+        assert kwargs["lock_authority"] is False
+        assert "lock" not in order
+        order.append("set_blob")
+        return saved
+
+    monkeypatch.setattr(v3_execution_request, "resolve_v3_execution_binding", resolve)
+    monkeypatch.setattr(v3_execution_request, "load_saved_reference_text", source)
+    monkeypatch.setattr(v3_citations, "load_verified_retrieval_set", norm_set)
+    monkeypatch.setattr(v3_execution_request, "recheck_saved_reference_text_facts",
+                        lambda *args, **kwargs: order.append("text_witness"))
+    monkeypatch.setattr(v3_execution_request, "recheck_verified_retrieval_set_facts",
+                        lambda *args, **kwargs: order.append("set_witness"))
+    v3_execution_request.prepare_v3_execution_request(
+        object(), authority=AUTHORITY, registry=object(), blob_store=object(),
+        max_text_bytes=100_000, expected_provider_mode="recorded",
+        model_identity="fixture/model", settings=SETTINGS,
+        runs=SimpleNamespace(get=lambda *args: _run()), jobs=object(),
+    )
+    assert order == ["peek", "text_blob", "set_blob", "lock",
+                     "text_witness", "set_witness"]
+
+
+@pytest.mark.parametrize("changed", ["text", "set"])
+def test_changed_db_witness_refuses_after_final_locked_fence(monkeypatch, changed):
+    binding, _ = _arrange(monkeypatch)
+    order = []
+
+    def resolve(*args, **kwargs):
+        order.append("lock" if kwargs.get("lock_authority", True) else "peek")
+        return binding
+
+    def changed_witness(*args, **kwargs):
+        assert order[-1] == "lock" or order[-1] == "text_witness"
+        raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, reason="witness_changed")
+
+    monkeypatch.setattr(v3_execution_request, "resolve_v3_execution_binding", resolve)
+    monkeypatch.setattr(v3_execution_request, "recheck_saved_reference_text_facts",
+                        changed_witness if changed == "text"
+                        else lambda *args, **kwargs: order.append("text_witness"))
+    monkeypatch.setattr(v3_execution_request, "recheck_verified_retrieval_set_facts",
+                        changed_witness if changed == "set"
+                        else lambda *args, **kwargs: order.append("set_witness"))
+    with pytest.raises(DomainError) as caught:
+        v3_execution_request.prepare_v3_execution_request(
+            object(), authority=AUTHORITY, registry=object(), blob_store=object(),
+            max_text_bytes=100_000, expected_provider_mode="recorded",
+            model_identity="fixture/model", settings=SETTINGS,
+            runs=SimpleNamespace(get=lambda *args: _run()), jobs=object(),
+        )
+    assert caught.value.detail_fields["reason"] == "witness_changed"
+    assert order[:2] == ["peek", "lock"]
 
 
 def test_wrong_provider_mode_or_source_version_refuses_before_set_read(monkeypatch):

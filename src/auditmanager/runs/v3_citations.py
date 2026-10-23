@@ -109,6 +109,7 @@ def prepare_v3_corpus_request(
     bundle_id: str, map_sha256: str, scope_id: str,
     composition_sha256: str,
     recognised_context: tuple[RecognisedContext, ...] = (),
+    lock_authority: bool = True,
 ) -> PinnedV3CorpusRequest:
     """Read confirmed DB/Blob custody and send only its selected norm rows.
 
@@ -122,6 +123,7 @@ def prepare_v3_corpus_request(
         raise V3CorpusCitationRefused("attempt_run_mismatch")
     verified = load_verified_retrieval_set(
         session, authority=authority, blob_store=blob_store,
+        lock_authority=lock_authority,
     )
     _require_binding(
         run, verified, text_layer, profile_id=profile_id,
