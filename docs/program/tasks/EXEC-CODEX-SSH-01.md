@@ -14,11 +14,12 @@ stand and the stand opens no connection to the owner's machine.
 
 - `EXEC-PULL-01` — completed pull channel on this base.
 - `EXEC-AGENT-01` — completed agent client on this base.
-- `EXEC-CANDIDATE-2-FINISH` — completed candidate validation on this base.
+- `EXEC-INT-DEV-01` — completed publication of the pull channel to `origin/dev`.
 
 ## Frozen inputs
 
-- base commit: `f7d30053` (`integration/beta-main` at task start);
+- source base commit: `f7d30053` (`integration/beta-main` at task start);
+- development integration base: `17d1aea3` (`origin/dev` after `EXEC-INT-DEV-01`);
 - contract `1.0.0`, API 87 paths / 99 operations / 284 schemas;
 - migration head `0031_executor_pull_channel`;
 - analysis, comparison and event contracts unchanged;
@@ -59,7 +60,8 @@ stand and the stand opens no connection to the owner's machine.
 - development_target: origin/dev
 - origin_main_authority: none
 
-The development publication follows integration of the base's candidate changes.
+The development base already contains the pull channel. Publish only the clean,
+tested fast-forward of this task on `origin/dev`.
 
 ## Allowed paths
 
@@ -99,6 +101,8 @@ The development publication follows integration of the base's candidate changes.
 
 - command: `../int-beta/.venv/bin/python -m pytest -q tests/unit/executor_runner/test_codex_answer.py tests/unit/executors/test_model.py`; expected: pass.
 - command: `../int-beta/.venv/bin/python -m pytest -q tests/unit/executor_runner tests/unit/executors/test_model.py` with local loopback sockets permitted; expected: pass.
+- command: `../int-beta/.venv/bin/python -m pytest -q -p no:cacheprovider tests/unit/executors tests/unit/executor_runner` on the dev integration tree with local loopback sockets permitted; expected: pass.
+- command: `../int-beta/.venv/bin/python -m pytest -q -p no:cacheprovider tests/contract/program/test_wave_governance.py tests/contract/test_w55b_direct_pins.py`; expected: pass.
 - command: `git diff --check`; expected: exit 0.
 - command: `codex --version` and `codex login status`, without printing credentials;
   expected: installed CLI and ChatGPT sign-in. A real synthetic model call is reported
@@ -132,5 +136,6 @@ files to remove the runner profile and model pin; no data migration is involved.
 - changed files: the exact allowed paths above that appear in the task report;
 - commands/results: `docs/program/EXEC-CODEX-SSH-01.md`;
 - known limits: the real stand/SSH/probe/run journey requires the owner's host and token;
-- integration notes: merge this candidate after its parent beta candidate and use the
-  README's outbound tunnel steps. Publish only a tested fast-forward to `origin/dev`.
+- integration notes: this candidate is cherry-picked from the beta source onto
+  `17d1aea3`; use the README's outbound tunnel steps and publish only a tested
+  fast-forward to `origin/dev`.

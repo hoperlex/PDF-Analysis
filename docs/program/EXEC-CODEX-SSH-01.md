@@ -1,6 +1,7 @@
 # EXEC-CODEX-SSH-01 — Codex subscription over an outbound SSH forward
 
-**Base:** `f7d30053` (`integration/beta-main`). **Contract:** `1.0.0`, API
+**Source base:** `f7d30053` (`integration/beta-main`). **Dev integration base:**
+`17d1aea3` (`EXEC-INT-DEV-01`). **Contract:** `1.0.0`, API
 87/99/284, migration head `0031_executor_pull_channel`; no contract or migration change.
 
 ## Result
@@ -43,6 +44,8 @@ records the exact model ID and reference rates.
 | `codex --version`; `codex login status` | `codex-cli 0.162.0-alpha.17.2`; `Logged in using ChatGPT` on this machine |
 | new adapter and model tests | 31 passed |
 | full `tests/unit/executor_runner` and `tests/unit/executors/test_model.py` with loopback sockets permitted | 141 passed |
+| dev candidate: all `tests/unit/executors` and `tests/unit/executor_runner` with loopback sockets permitted | 506 passed |
+| dev candidate: program governance and direct-pin contract checks | 19 passed |
 | real Codex CLI, synthetic `{ok: true}` schema and prompt | exit 0, output exactly `{"ok":true}` |
 | `python3 -m py_compile` of adapter and test | exit 0 |
 | `agent.load_config` on the Codex SSH example | accepted; loopback origin, `command` mode, exact model and 540-second timeout |
@@ -56,6 +59,11 @@ applied to Codex's own state files. The adapter now bounds its JSONL output by
 monitoring the temporary file, and the repeated real synthetic call passed.
 
 ## Integration and limits
+
+The Codex commit was cherry-picked onto `origin/dev` after its pull-channel
+integration. This dev candidate does not carry the unrelated beta branch changes.
+The source candidate remains available at `1515221a`. The dev host had 4497
+MiB free before publication checks; the gate preflight requires 6144 MiB.
 
 The app server cannot call this machine. On the owner machine, open the
 forward with a dedicated key limited to the stand's loopback proxy, then run
