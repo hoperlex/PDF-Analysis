@@ -59,6 +59,7 @@ An authenticated expert can start one Ф1.3 AR v3 beta group for a confirmed AR 
 - `src/auditmanager/shared/identity/**`
 - `src/auditmanager/analysis/engine/result.py`
 - `src/auditmanager/analysis/text/stage.py`
+- `src/auditmanager/norms/public.py`
 - `src/auditmanager/runs/**`
 - `src/auditmanager/api/**`
 - `src/auditmanager/bootstrap/**`
