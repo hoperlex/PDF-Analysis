@@ -17,7 +17,7 @@
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
     "sha256": "6d4402a62e93dd255a40e30869d42d543cbd7cb64bba75e56b0b4c087ff18c1b",
-    "content_commit": "f6156dfc74b0ec706d914c176185bc3e9dc54278",
+    "content_commit": "a20f9211a558600352c865504f895d642acf82a9",
     "content_commit_subject": "feat: persist explicit AR v3 beta six-run groups",
     "dispatch_named_commit": "6e9f887e8d7de268ab327390e73a658c1123f9aa",
     "commit_note": "AR-V3-BETA-SIX-RUN-02 adds the explicit six-Run group; contract 1.2.0 (90/102/290), migration 0032, no new error code. New starts refuse without a reviewed pack.",
