@@ -319,25 +319,31 @@ def load(environ: dict[str, str] | None = None) -> AppSettings:
     proxy_token = env.get(PROXY_TOKEN_ENV, "").strip() or None
     api_key = env.get(API_KEY_ENV, "").strip() or None
     if source == "database":
-        # One source of truth, never two. Every connection is a live transport, so the mode is
-        # `live` without the key that mode demands from the environment, and a variable of the
-        # old path that is still set is refused rather than silently ignored.
+        # Every run still resolves one database connection. On the worker only, a complete
+        # PROXY_LLM_* triplet may bootstrap the baseline HTTP connection on startup. It is
+        # never a second adapter used by a run, and the API must never receive its secret.
         if mode != "live":
             raise ConfigurationError(
                 f"{PROVIDER_SOURCE_ENV} is database but {PROVIDER_MODE_ENV} is {mode!r}; "
                 "connections are live transports, so the mode must be live"
             )
-        leftovers = [name for name, value in (
-            (PROXY_BASE_URL_ENV, proxy_base_url), (PROXY_TOKEN_ENV, proxy_token),
-            (PROXY_MODEL_ENV, env.get(PROXY_MODEL_ENV, "").strip() or None),
-            (API_KEY_ENV, api_key),
-        ) if value is not None]
-        if leftovers:
+        gateway_model = env.get(PROXY_MODEL_ENV, "").strip()
+        has_baseline = proxy_base_url is not None or proxy_token is not None
+        if api_key is not None:
             raise ConfigurationError(
-                f"{PROVIDER_SOURCE_ENV} is database but {', '.join(leftovers)} "
-                "is still set; the connections are the one source of truth. Remove the "
-                "variable(s) (import them first with `python -m auditmanager.executors "
-                "import-env`) or switch the source back to environment"
+                f"{PROVIDER_SOURCE_ENV} is database but {API_KEY_ENV} is still set; "
+                "only a worker-only PROXY_LLM_* baseline may be bootstrapped"
+            )
+        if has_baseline:
+            if role != "worker" or not proxy_base_url or not proxy_token or not gateway_model:
+                raise ConfigurationError(
+                    f"{PROVIDER_SOURCE_ENV} needs a complete worker-only PROXY_LLM_BASE_URL, "
+                    "PROXY_LLM_TOKEN and PROXY_LLM_MODEL triplet to register the baseline"
+                )
+        elif gateway_model and gateway_model.casefold() != "proxy":
+            raise ConfigurationError(
+                f"{PROVIDER_SOURCE_ENV} has {PROXY_MODEL_ENV} without its baseline address "
+                "and token"
             )
         if role in ("worker", "all") and not env.get(SECRETS_KEYS_ENV, "").strip():
             raise ConfigurationError(

@@ -66,7 +66,8 @@ __all__ = [
 
 #: The display name that marks the connection ``import-env`` made; its presence is what makes a
 #: second run a no-op.
-IMPORT_DISPLAY_NAME: Final[str] = "Шлюз моделей (импорт из окружения)"
+IMPORT_DISPLAY_NAME: Final[str] = "OpenRouter (из окружения)"
+_LEGACY_IMPORT_DISPLAY_NAME: Final[str] = "Шлюз моделей (импорт из окружения)"
 #: The actor of an operator command run from a shell: a well-formed ``usr`` identity that names no
 #: account. ``--actor`` names a real administrator instead.
 SYSTEM_ACTOR_UID: Final[str] = "usr_0000000000000000000000EXEC"
@@ -112,17 +113,25 @@ def _required(environ: Mapping[str, str], name: str) -> str:
 def import_env(
     session_factory: sessionmaker[Session], environ: Mapping[str, str], *,
     ring: PrivateRing | None, policy: DestinationPolicy, actor_uid: str = SYSTEM_ACTOR_UID,
-    repository: ExecutorRepository | None = None,
+    repository: ExecutorRepository | None = None, queue_only: bool = False,
 ) -> ImportReport:
     store = repository or ExecutorRepository()
     with session_factory() as session:
         existing = next((item for item in store.list_connections(session)
-                         if item.display_name == IMPORT_DISPLAY_NAME
+                         if item.display_name in (IMPORT_DISPLAY_NAME, _LEGACY_IMPORT_DISPLAY_NAME)
                          and item.archived_at is None), None)
         if existing is not None:
             routed = any(route.primary_connection_id == existing.connection_id
                          for route in store.current_routes(session))
             return ImportReport(existing.connection_id, False, None, routed)
+        if queue_only:
+            archived = next((item for item in store.list_connections(session)
+                             if item.display_name in (IMPORT_DISPLAY_NAME,
+                                                      _LEGACY_IMPORT_DISPLAY_NAME)), None)
+            if archived is not None:
+                # Archiving is an administrator's explicit decision. A worker restart may
+                # not resurrect it through the old create command's idempotency key.
+                return ImportReport(archived.connection_id, False, None, False)
     if ring is None:
         raise OperationRefused(
             "AUDITMANAGER_SECRETS_KEYS is unset; the worker's private ring seals and opens the key")
@@ -166,6 +175,10 @@ def import_env(
             session.commit()
     except DomainError as refusal:
         raise OperationRefused(f"the connection could not be created ({refusal.code.value})") from None
+    if queue_only:
+        # Worker startup only registers the option. Its normal probe loop will verify the
+        # current revision and key; an administrator alone changes the route.
+        return ImportReport(connection.connection_id, True, None, False)
     # The probe runs here, on this worker's own network path, exactly as the worker's loop would.
     ProbeRunner(session_factory, ring=ring, policy=policy, repository=store).run_pending()
     with session_factory() as session:

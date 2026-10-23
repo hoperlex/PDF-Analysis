@@ -53,10 +53,22 @@ def test_the_database_source_needs_live_mode() -> None:
     {"PROXY_LLM_BASE_URL": "https://p"}, {"PROXY_LLM_TOKEN": "t"}, {"PROXY_LLM_MODEL": "m"},
     {"ANTHROPIC_API_KEY": "sk"},
 ])
-def test_the_database_source_refuses_to_start_beside_the_old_variables(leftover: dict[str, str]) -> None:
-    with pytest.raises(ConfigurationError, match="still set"):
+def test_the_database_source_refuses_incomplete_or_unowned_environment_keys(leftover: dict[str, str]) -> None:
+    with pytest.raises(ConfigurationError, match="triplet|without its baseline|still set"):
         _load(AUDITMANAGER_PROVIDER_SOURCE="database", AUDITMANAGER_PROVIDER_MODE="live",
-              AUDITMANAGER_SECRETS_KEYS=RING, **ACTIVE, **leftover)
+              EXECUTION_ROLE="worker", AUDITMANAGER_SECRETS_KEYS=RING, **ACTIVE, **leftover)
+
+
+def test_a_complete_worker_only_baseline_is_accepted_without_becoming_a_second_provider() -> None:
+    baseline = {key: value for key, value in PROXY.items() if key != "AUDITMANAGER_PROVIDER_MODE"}
+    worker = _load(AUDITMANAGER_PROVIDER_SOURCE="database", AUDITMANAGER_PROVIDER_MODE="live",
+                   EXECUTION_ROLE="worker", AUDITMANAGER_SECRETS_KEYS=RING, **ACTIVE, **baseline)
+    assert worker.provider_source == "database" and worker.proxy_token == "tok"
+    for role in ("api", "all"):
+        with pytest.raises(ConfigurationError, match="worker-only"):
+            _load(AUDITMANAGER_PROVIDER_SOURCE="database", AUDITMANAGER_PROVIDER_MODE="live",
+                  EXECUTION_ROLE=role, AUDITMANAGER_SECRETS_KEYS=RING, **ACTIVE,
+                  **baseline)
 
 
 def test_the_database_source_needs_no_environment_key_but_a_worker_needs_the_ring() -> None:

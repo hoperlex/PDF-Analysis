@@ -28,6 +28,15 @@ pull channel were added under `R-144` (`EXEC-CANDIDATE-1.md`, `EXEC-CANDIDATE-2.
 `v0.7.0` tag are owed, the last tag is `v0.6.0`. Run `infra/deploy/verify-deployed.sh` for the
 current deployment; this document is no substitute for that probe.
 
+`EXEC-ENV-OPENROUTER-01` fixes the absent baseline option in «Назначения»:
+under source `database`, a worker with the complete `PROXY_LLM_*` triplet
+registers one OpenRouter-compatible HTTP connection and queues its probe.
+After an `ok` probe it is selectable as a normal connection. Registration
+does not replace the Codex route. The `/api/v1` OpenAI Chat variant carries
+the same verified PNG as the other served HTTP variants. A graphical-analysis
+stage still needs the W56b prompt and evidence policy before it can issue
+crop tasks; SSH command/tunnel remain unserved.
+
 ## Normative corpus (W54)
 
 The 674-document, 31,619-file source drop has complete file checksums and a

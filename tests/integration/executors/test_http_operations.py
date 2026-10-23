@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import importlib.util
+import base64
+import hashlib
 import sys
 from contextlib import nullcontext
 from pathlib import Path
@@ -28,9 +30,12 @@ from auditmanager.executors.public import (
     resolve_route,
     revise_connection,
     set_route,
+    record_probe_started,
+    record_probe_result,
 )
 from auditmanager.executors.runtime import DestinationPolicy, bind_connection, freeze_connection, is_probed_ok
 from auditmanager.shared.errors import DomainError
+from auditmanager.storage.public import derive_blob_id
 
 _HARNESS_NAME = "b5_run_harness"
 _HARNESS_PATH = Path(__file__).resolve().parents[1] / "runs" / "harness.py"
@@ -186,6 +191,54 @@ def test_import_env_makes_the_first_connection_probes_routes_and_is_idempotent(
     second = import_env(_factory(session), _environ(fake), ring=rings.private, policy=fake.policy())
     assert (second.created, second.connection_id) == (False, first.connection_id)
     assert session.execute(text("SELECT count(*) FROM executor_connection")).scalar_one() == count
+
+
+def test_worker_bootstrap_lists_openrouter_and_preserves_codex_route_with_image_input(
+    session, fake  # type: ignore[no-untyped-def]
+) -> None:
+    rings = support.make_rings()
+    codex = support.seed_connection(session, rings, fake.base_url(), name="Codex")
+    first = import_env(
+        _factory(session), _environ(fake), ring=rings.private, policy=fake.policy(),
+        queue_only=True,
+    )
+    assert first.created and first.probe_outcome is None and not first.routed
+    assert resolve_route(session, "text_analysis").route.primary_connection_id == codex.connection_id
+    store = ExecutorRepository()
+    connection = store.get_connection(session, first.connection_id)
+    revision = store.current_revisions(session, [first.connection_id])[first.connection_id]
+    assert connection.display_name == IMPORT_DISPLAY_NAME and revision.settings.api_flavour == "openai_chat"
+    assert not is_probed_ok(session, store, connection, revision)
+    probe = store.list_probes(session, first.connection_id)[0]
+    assert probe.state == "requested" and record_probe_started(session, probe.probe_id)
+    assert record_probe_result(session, probe.probe_id, outcome="ok",
+                               reported_model=support.GATEWAY_MODEL, identity_basis="reported",
+                               rate_check="not_reported")
+    assert is_probed_ok(session, store, connection, revision)
+    second = import_env(
+        _factory(session), _environ(fake), ring=rings.private, policy=fake.policy(),
+        queue_only=True,
+    )
+    assert not second.created and second.connection_id == first.connection_id
+    assert len(store.list_connections(session)) == 2
+
+    png = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL7WQAAAABJRU5ErkJggg=="
+    )
+    digest = hashlib.sha256(png).hexdigest()
+    descriptor = {"blob_id": str(derive_blob_id(sha256=digest, size=len(png))),
+                  "portal_block_id": "blk_" + "a" * 32, "sha256": digest,
+                  "size_bytes": len(png), "media_type": "image/png"}
+    bound = bind_connection(session, revision.revision_id, ring=rings.private,
+                            policy=fake.policy(), context=None)
+    bound.adapter.complete(ModelRequest(model_id=support.PIN.model_id, body={
+        "max_tokens": 4, "messages": [{"role": "user", "content": "view"}],
+        "images": [descriptor],
+    }, image_bytes=png))
+    content = fake.requests[-1]["body"]["messages"][-1]["content"]
+    assert content[0] == {"type": "text", "text": "view"}
+    assert base64.b64decode(content[1]["image_url"]["url"].split(",", 1)[1]) == png
+    assert resolve_route(session, "text_analysis").route.primary_connection_id == codex.connection_id
 
 
 def test_import_env_refuses_a_stub_model_and_does_not_route_a_refused_probe(session) -> None:  # type: ignore[no-untyped-def]

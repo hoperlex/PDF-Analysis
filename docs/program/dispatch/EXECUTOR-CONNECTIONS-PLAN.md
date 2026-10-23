@@ -339,10 +339,11 @@ Surveyed on `7cb317b0`; every line reference below is from that tree.
     the live branch. Both demands are skipped for role `api` and for source `database`.
   - **Source `database`** requires `AUDITMANAGER_PROVIDER_MODE=live`, without the
     environment key that mode demands today (see above). Every connection is a
-    live transport, and `proxy` remains a name of the environment source only. It refuses
-    to start if `PROXY_LLM_*` or `ANTHROPIC_API_KEY` is still set: one source of truth,
-    never two. Each run's adapter is resolved from the route and the connection tables
-    and frozen at run start (§3).
+    live transport. Each run's adapter is resolved from the route and the connection tables
+    and frozen at run start (§3). `EXEC-ENV-OPENROUTER-01` permits a complete
+    `PROXY_LLM_*` triplet on the worker as a one-time bootstrap input for a saved
+    OpenRouter-compatible connection; it is never a second run source. The API still
+    receives no provider credential, and `ANTHROPIC_API_KEY` remains refused.
   - **`recorded`** ignores the source and is unchanged for tests and CI.
 
   The switch back to `environment` is the rollback.
@@ -350,6 +351,10 @@ Surveyed on `7cb317b0`; every line reference below is from that tree.
   one `http_api` connection from today's `PROXY_LLM_*`, together with its sealed key and a
   `text_analysis` assignment. The operator then removes the variables and switches the
   source.
+- **Automatic baseline.** When the complete triplet remains under source `database`,
+  worker startup registers the same HTTP connection and queues its probe without changing
+  an existing `text_analysis` assignment. After `ok`, the administrator can choose it in
+  «Назначения». Subsequent env changes do not overwrite the saved connection.
 - **The norms paid-repair CLI** keeps reading `PROXY_LLM_*`. It is an offline tool; moving
   it is a later, separate row.
 

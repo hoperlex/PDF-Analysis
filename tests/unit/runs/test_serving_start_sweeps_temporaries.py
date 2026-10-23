@@ -58,7 +58,8 @@ def test_the_worker_sweeps_after_its_configuration_is_accepted_and_before_it_reg
     events: list[str] = []
 
     class Runtime:
-        engine = session_factory = execute = version = slots = state_dir = None
+        engine = session_factory = execute = version = slots = state_dir = probe_runner = None
+        settings = type("Settings", (), {"provider_source": "environment"})()
 
     class FakeService:
         failed = True  # the loop in `serve` ends at once

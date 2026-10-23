@@ -56,6 +56,7 @@ def _adapter(gateway: Any, flavour: str = "openai_chat", *, base_path: str = "/a
 @pytest.mark.parametrize("base", [
     "https://proxy.example", "https://proxy.example/", "https://proxy.example/agent/v1",
     "https://proxy.example/agent/v1/", "http://h:8000/v1",
+    "https://openrouter.ai/api/v1",
 ])
 def test_the_completions_url_is_the_proxys_own_rule(base: str) -> None:
     assert completions_url(base) == proxy_completions_url(base)
@@ -79,8 +80,10 @@ def test_http_sends_verified_png_as_real_image_content(gateway_factory: Any, fla
                                                        transport: str) -> None:
     gateway = gateway_factory()
     _adapter(gateway, flavour, transport=transport,
-             base_path="" if flavour == "anthropic_messages" else "/agent/v1").complete(IMAGE_REQUEST)
+             base_path="" if flavour == "anthropic_messages" else "/api/v1").complete(IMAGE_REQUEST)
     (seen,) = gateway.requests
+    if flavour == "openai_chat":
+        assert seen["path"] == "/api/v1/chat/completions"
     content = seen["body"]["messages"][-1]["content"]
     assert content[0] == {"type": "text", "text": "hello"}
     if flavour == "openai_chat":
