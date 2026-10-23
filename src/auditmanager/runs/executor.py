@@ -1106,6 +1106,7 @@ def _execute_run_body(
                 provider_for_dispatch=lambda: _bind_provider(
                     session, run, attempt_context, providers, adapter, config,
                 ),
+                cost_ceiling_usd=config.run_cost_ceiling_usd,
                 jobs=job_repo, runs=run_repo, documents=document_repo,
                 blobs=blob_repo,
             )

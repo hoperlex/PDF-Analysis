@@ -63,8 +63,9 @@ envelope and the caller learned about it. Off the request thread there is no cal
 tell, so the *only* reader is the run row -- and a run whose execution raised must reach a
 terminal by itself rather than wait an unbounded time for the next process start.
 :func:`run_to_terminal` therefore catches everything that escapes, in its own fresh
-transaction (the failed one has been rolled back), and terminates the run ``failed`` with
-``analysis_failed`` and a reason naming the exception type. ``run_stage`` only catches
+transaction (the failed one has been rolled back), and terminates the run ``failed``.
+The exact AR v3 beta pair preserves a typed DomainError as its terminal reason;
+other profiles retain ``analysis_failed``. ``run_stage`` only catches
 ``DomainError``, so this path is reachable by anything else a handler, a store or a driver
 can raise.
 
@@ -94,6 +95,7 @@ from typing import Any, Final, Protocol
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy import text
 
+from auditmanager.analysis.public import AR_V3_BETA_BUNDLE_ID, AR_V3_BETA_PROFILE_ID
 from auditmanager.runs.executor import execute_run
 from auditmanager.jobs.public import ExecutionNotClaimed, JobRepository
 from auditmanager.runs.repository import RunRepository
@@ -497,6 +499,11 @@ def _record_crash(
             row = runs.find(session, run_id)
             if row is None or row.state in _TERMINAL_STATES:
                 return
+            v3_domain = (
+                isinstance(failure, DomainError)
+                and row.analysis_profile_id == str(AR_V3_BETA_PROFILE_ID)
+                and row.prompt_bundle_id == str(AR_V3_BETA_BUNDLE_ID)
+            )
             JobRepository().fail_for_run(session, run_id=run_id)
             runs.terminate(
                 session,
@@ -504,7 +511,9 @@ def _record_crash(
                 from_state=row.state,
                 to_state=RECONCILIATION_TERMINAL,
                 degradation_set=(),
-                terminal_reason=ErrorCode.ANALYSIS_FAILED.value,
+                terminal_reason=(failure.code.value if v3_domain
+                                 else ErrorCode.ANALYSIS_FAILED.value),
+                terminal_detail=failure.detail_fields if v3_domain else None,
                 interrupted_reason=CRASHED_REASON,
             )
             session.commit()

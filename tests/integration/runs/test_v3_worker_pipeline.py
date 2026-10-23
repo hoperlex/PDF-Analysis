@@ -25,9 +25,11 @@ AUTHORITY = AttemptAuthority("run_test", "job_test", "att_test", "lease_test", "
 
 
 class Jobs:
-    def __init__(self, *, completed):
+    def __init__(self, *, completed, cost_micros=4200, cost_basis="measured"):
         self.completed = completed
         self.reads = 0
+        self.cost_micros = cost_micros
+        self.cost_basis = cost_basis
 
     def completed_v3_call(self, session, authority, *, lock_authority):
         assert authority is AUTHORITY and lock_authority is False
@@ -37,12 +39,20 @@ class Jobs:
                 ErrorCode.ANALYSIS_INPUT_INVALID,
                 stage_id="text_analysis", reason="v3_call_missing_or_duplicate",
             )
-        return SimpleNamespace(model_call_id="saved_call")
+        return SimpleNamespace(
+            model_call_id="saved_call", cost_micros=self.cost_micros,
+            cost_basis=self.cost_basis,
+        )
 
 
 class Runs:
-    def __init__(self, *, citation=False):
+    def __init__(self, *, citation=False, prior_cost=None):
         self.citation = citation
+        self.prior_cost = prior_cost
+
+    def cost(self, session, run_id):
+        assert run_id == AUTHORITY.run_id
+        return self.prior_cost
 
     def stage_results(self, session, run_id):
         assert run_id == AUTHORITY.run_id
@@ -50,15 +60,18 @@ class Runs:
                 if self.citation else ())
 
 
-def _arrange(monkeypatch, *, completed=False, citation=False):
+def _arrange(monkeypatch, *, completed=False, citation=False,
+             prior_cost=None, cost_micros=4200, cost_basis="measured"):
     order = []
-    jobs = Jobs(completed=completed)
-    runs = Runs(citation=citation)
+    jobs = Jobs(completed=completed, cost_micros=cost_micros,
+                cost_basis=cost_basis)
+    runs = Runs(citation=citation, prior_cost=prior_cost)
 
     def dispatch(*args, **kwargs):
         assert kwargs["settings"] == v3_worker.V3_BETA_SETTINGS
         assert kwargs["max_text_bytes"] == v3_worker.MAX_V3_SAVED_TEXT_BYTES
         order.append("dispatch")
+        jobs.completed = True
 
     def cite(*args, **kwargs):
         assert "settings" not in kwargs
@@ -74,10 +87,12 @@ def _arrange(monkeypatch, *, completed=False, citation=False):
     return jobs, runs, order
 
 
-def _run(jobs, runs, *, provider_for_dispatch=lambda: object()):
+def _run(jobs, runs, *, provider_for_dispatch=lambda: object(),
+         cost_ceiling_usd=1.0):
     return v3_worker.run_v3_worker_chain(
         object(), authority=AUTHORITY, registry=object(), blob_store=object(),
-        provider_for_dispatch=provider_for_dispatch, jobs=jobs, runs=runs,
+        provider_for_dispatch=provider_for_dispatch,
+        cost_ceiling_usd=cost_ceiling_usd, jobs=jobs, runs=runs,
     )
 
 
@@ -86,7 +101,7 @@ def test_first_attempt_dispatches_then_cites_then_terminates(monkeypatch):
     result = _run(jobs, runs)
     assert result.dispatched is True
     assert result.terminal.selection.state == "published"
-    assert jobs.reads == 1
+    assert jobs.reads == 2
     assert order == ["dispatch", "cite", "terminal"]
 
 
@@ -108,7 +123,7 @@ def test_existing_citation_only_runs_terminal(monkeypatch):
         provider_for_dispatch=lambda: pytest.fail("saved citation resolved provider"),
     )
     assert result.dispatched is False
-    assert jobs.reads == 0
+    assert jobs.reads == 1
     assert order == ["terminal"]
 
 
@@ -126,6 +141,50 @@ def test_invalid_prior_effect_refuses_without_dispatch(monkeypatch):
         _run(jobs, runs)
     assert caught.value.detail_fields["reason"] == "v3_call_pair_invalid"
     assert order == []
+
+
+def test_exhausted_opening_balance_refuses_before_dispatch(monkeypatch):
+    jobs, runs, order = _arrange(
+        monkeypatch, prior_cost=SimpleNamespace(cost_micros=1_000_000),
+    )
+    with pytest.raises(DomainError) as caught:
+        _run(jobs, runs, cost_ceiling_usd=1.0)
+    assert caught.value.code is ErrorCode.COST_BUDGET_EXCEEDED
+    assert order == []
+
+
+@pytest.mark.parametrize("completed,citation", (
+    (False, False), (True, False), (True, True),
+))
+def test_over_ceiling_completed_call_never_reaches_review_or_terminal(
+    monkeypatch, completed, citation,
+):
+    jobs, runs, order = _arrange(
+        monkeypatch, completed=completed, citation=citation,
+        cost_micros=1_000_001,
+    )
+    with pytest.raises(DomainError) as caught:
+        _run(jobs, runs)
+    assert caught.value.code is ErrorCode.COST_BUDGET_EXCEEDED
+    assert order == (["dispatch"] if not completed else [])
+
+
+def test_unknown_metered_cost_cannot_publish(monkeypatch):
+    jobs, runs, order = _arrange(
+        monkeypatch, completed=True, cost_micros=None, cost_basis="estimated",
+    )
+    with pytest.raises(DomainError) as caught:
+        _run(jobs, runs)
+    assert caught.value.detail_fields["reason"] == "v3_metered_cost_unknown"
+    assert order == []
+
+
+def test_explicit_unmetered_call_may_publish(monkeypatch):
+    jobs, runs, order = _arrange(
+        monkeypatch, completed=True, cost_micros=0, cost_basis="unmetered",
+    )
+    assert _run(jobs, runs).terminal.selection.state == "published"
+    assert order == ["cite", "terminal"]
 
 
 def test_executor_routes_exact_v3_pair_to_review_only_chain(monkeypatch):

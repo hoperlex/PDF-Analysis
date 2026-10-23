@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Callable
 
@@ -37,6 +38,39 @@ def _no_completed_call(error: DomainError) -> bool:
     )
 
 
+def _budget_exceeded() -> DomainError:
+    return DomainError(
+        ErrorCode.COST_BUDGET_EXCEEDED,
+        message="the AR v3 Run cost ceiling is exhausted",
+        budget_scope="run",
+    )
+
+
+def _check_ceiling(value: float) -> None:
+    if (type(value) not in {int, float} or not math.isfinite(value)
+            or value <= 0):
+        raise DomainError(
+            ErrorCode.ANALYSIS_INPUT_INVALID,
+            message="the AR v3 Run cost ceiling is invalid",
+            stage_id="text_analysis", reason="cost_ceiling_invalid",
+        )
+
+
+def _check_completed_cost(call: object, ceiling_usd: float) -> None:
+    basis = getattr(call, "cost_basis", None)
+    micros = getattr(call, "cost_micros", None)
+    if basis == "unmetered" and micros == 0:
+        return
+    if basis not in {"measured", "estimated"} or type(micros) is not int or micros < 0:
+        raise DomainError(
+            ErrorCode.ANALYSIS_INPUT_INVALID,
+            message="a metered AR v3 call has no verifiable cost amount",
+            stage_id="text_analysis", reason="v3_metered_cost_unknown",
+        )
+    if micros > ceiling_usd * 1_000_000:
+        raise _budget_exceeded()
+
+
 def run_v3_worker_chain(
     session: Session,
     *,
@@ -44,6 +78,7 @@ def run_v3_worker_chain(
     registry: TrustedPackRegistry,
     blob_store: BlobStore,
     provider_for_dispatch: Callable[[], ProviderBinding],
+    cost_ceiling_usd: float,
     jobs: JobRepository | None = None,
     runs: RunRepository | None = None,
     documents: DocumentRepository | None = None,
@@ -58,6 +93,7 @@ def run_v3_worker_chain(
     """
     job_repo = jobs or JobRepository()
     run_repo = runs or RunRepository()
+    _check_ceiling(cost_ceiling_usd)
     before = run_repo.stage_results(session, authority.run_id)
     citation_rows = tuple(row for row in before if row.stage_id == "ar_v3_citation_review")
     if len(citation_rows) > 1:
@@ -69,12 +105,15 @@ def run_v3_worker_chain(
     dispatched = False
     if not citation_rows:
         try:
-            job_repo.completed_v3_call(
+            call = job_repo.completed_v3_call(
                 session, authority, lock_authority=False,
             )
         except DomainError as error:
             if not _no_completed_call(error):
                 raise
+            prior = run_repo.cost(session, authority.run_id)
+            if prior is not None and prior.cost_micros >= cost_ceiling_usd * 1_000_000:
+                raise _budget_exceeded()
             dispatch_v3_provider_call(
                 session, authority=authority, registry=registry,
                 blob_store=blob_store, max_text_bytes=MAX_V3_SAVED_TEXT_BYTES,
@@ -82,11 +121,20 @@ def run_v3_worker_chain(
                 jobs=job_repo, runs=run_repo, documents=documents, blobs=blobs,
             )
             dispatched = True
+            call = job_repo.completed_v3_call(
+                session, authority, lock_authority=False,
+            )
+        _check_completed_cost(call, cost_ceiling_usd)
         run_v3_cite_stage(
             session, authority=authority, registry=registry, blob_store=blob_store,
             max_text_bytes=MAX_V3_SAVED_TEXT_BYTES,
             jobs=job_repo, runs=run_repo, documents=documents, blobs=blobs,
         )
+    else:
+        call = job_repo.completed_v3_call(
+            session, authority, lock_authority=False,
+        )
+        _check_completed_cost(call, cost_ceiling_usd)
     return V3WorkerOutcome(
         finish_v3_review_run(
             session, authority=authority, registry=registry,
