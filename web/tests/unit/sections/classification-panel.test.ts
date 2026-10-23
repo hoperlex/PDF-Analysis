@@ -77,8 +77,7 @@ function form(props: Partial<Parameters<typeof ClassifyVersionFormView>[0]> = {}
  * `PB-PROFILE-01`. ПБ has a draft profile now, so the API marks all fifteen options executable.
  * "A section without a profile" is what a server whose registry lacks one would answer; that
  * state is built for any section a test names (ГП here) instead of being ПБ, as it used to be,
- * and `null` is the API's present answer: every option executable. (The shared `review()`
- * fixture still defaults ПБ to non-executable; it is not changed by this slice.)
+ * and `null` is the API's present answer: every option executable.
  */
 function reviewWithoutProfile(
   code: SectionReview['options'][number]['section_code'] | null,

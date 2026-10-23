@@ -4,7 +4,7 @@
  *
  * Rendered, not read from source (`D-53`): every assertion is on markup a reviewer would see.
  * The fixture is the shape `listAnalysisProfiles` answers — AR builtin with no source, a draft,
- * a reviewed profile, and ПБ with none.
+ * a reviewed profile, and ПБ as an authored draft. A missing profile is tested separately.
  */
 
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -33,7 +33,6 @@ const ROLE_FILE_SHA = '9999c2e3398db818d1b85941473db785b8b132558c95661c016ad845a
 
 function item(code: (typeof PROJECT_STRUCTURE_ORDER)[number], index: number): AnalysisProfileListItem {
   const section = projectSectionOf(code);
-  if (code === 'PB') return { section_code: code, section_name: section.name, profile: null };
   const digit = (index % 10).toString();
   return {
     section_code: code,
@@ -45,7 +44,7 @@ function item(code: (typeof PROJECT_STRUCTURE_ORDER)[number], index: number): An
       status: code === 'AR' ? 'builtin' : code === 'POS' ? 'reviewed' : 'draft',
       prompt_bundle_sha256: digit.repeat(64),
       content_sha256: 'e'.repeat(63) + digit,
-      source: code === 'AR' ? null : {
+      source: code === 'AR' || code === 'PB' ? null : {
         repository: 'PDF-proverka',
         commit: LEGACY_COMMIT,
         files: [
@@ -97,13 +96,23 @@ describe('what each row says', () => {
     expect(ps).toContain('версия 1.0.0');
   });
 
-  it('says ПБ has no profile, and what follows from it, without inventing one', () => {
+  it('shows the authored ПБ draft and its required expert review', () => {
     const pb = row(table(), 'PB');
-    expect(pb).toContain(NO_PROFILE_LABEL);
-    expect(pb).toContain('Прогон версии этого раздела будет отклонён.');
-    expect(pb).toContain('data-profile="none"');
-    expect(pb).not.toContain('версия');
-    expect(pb).not.toContain('<details');
+    expect(pb).toContain('data-profile="draft"');
+    expect(pb).toContain('черновик, требует экспертной проверки');
+    expect(pb).toContain('data-profile-source="builtin"');
+    expect(pb).toContain('версия 1.0.0');
+    expect(pb).not.toContain(NO_PROFILE_LABEL);
+  });
+
+  it('explains a profile-less section only when the server returns one', () => {
+    const items = ITEMS.map((entry) => entry.section_code === 'GP' ? { ...entry, profile: null } : entry);
+    const gp = row(table(items), 'GP');
+    expect(gp).toContain(NO_PROFILE_LABEL);
+    expect(gp).toContain('Прогон версии этого раздела будет отклонён.');
+    expect(gp).toContain('data-profile="none"');
+    expect(gp).not.toContain('версия');
+    expect(gp).not.toContain('<details');
   });
 
   it('shows the builtin AR profile as written here, with no legacy source', () => {

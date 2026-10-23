@@ -126,7 +126,7 @@ function panel(props: Partial<Parameters<typeof VersionClassificationView>[0]> =
  * `PB-PROFILE-01`. ПБ has a draft profile now, so the API marks all fifteen options executable.
  * "A section without a profile" is what a server whose registry lacks one would answer; the state
  * is built for any section a test names (ГП here) instead of being ПБ, and `null` is the API's
- * present answer. (The shared `review()` fixture still defaults ПБ to non-executable.)
+ * present answer.
  */
 function reviewWithoutProfile(
   code: SectionReview['options'][number]['section_code'] | null,

@@ -770,8 +770,8 @@ const sectionReview = (over: Partial<SectionReview> = {}): SectionReview => ({
   options: PROJECT_SECTIONS.map((section) => ({
     section_code: section.code,
     name: section.name,
-    // One section without a registered profile, so the mark renders.
-    executable: section.code !== 'PB',
+    // All fifteen sections have a registered profile, including the draft ПБ profile.
+    executable: true,
     suggestion:
       section.code === 'AR'
         ? { score: 7, filename_patterns: ['АР'], text_keywords: ['поэтажный план'], name_in_text: true }
@@ -1069,13 +1069,12 @@ function dashboardSummary(over: Partial<DashboardSummary> = {}): DashboardSummar
 
 /**
  * `W59-ANALYSIS-SETTINGS-01`: the registry «Настройки анализа» lists. AR builtin with no
- * source, ПБ with no profile, every other section a draft ported from a Cyrillic-named
- * repository — server data, seeded Cyrillic so that anything Latin left is chrome.
+ * source, ПБ as an authored draft, and the other profiles with their status and legacy
+ * sources — server data, seeded Cyrillic so that anything Latin left is chrome.
  */
 const ANALYSIS_PROFILES: readonly AnalysisProfileListItem[] = PROJECT_STRUCTURE_ORDER.map((code, index) => {
   const digit = (index % 10).toString();
   const section = projectSectionOf(code);
-  if (code === 'PB') return { section_code: code, section_name: section.name, profile: null };
   return {
     section_code: code,
     section_name: section.name,
@@ -1086,7 +1085,7 @@ const ANALYSIS_PROFILES: readonly AnalysisProfileListItem[] = PROJECT_STRUCTURE_
       status: code === 'AR' ? 'builtin' : code === 'PS' ? 'reviewed' : 'draft',
       prompt_bundle_sha256: digit.repeat(64),
       content_sha256: 'a'.repeat(63) + digit,
-      source: code === 'AR' ? null : {
+      source: code === 'AR' || code === 'PB' ? null : {
         repository: 'прежняя-система',
         commit: 'b'.repeat(40),
         files: [{ path: `prompts/disciplines/${code}/role.md`, sha256: 'c'.repeat(64) }],
@@ -2447,7 +2446,7 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
   ...BLOCKS_SHAPES,
   /*
    * `W59-SECTION-UI-01`. The stage-and-section panel's shapes an address does not select:
-   * the confirmed classification (with a section that has no profile, and after the
+   * the confirmed classification (with a synthetic section lacking a profile, and after the
    * reader's own confirmation was refused with `409`), the expert's form in flight and
    * refused (`409`, `403`), a review that could not be read, and the project structure with
    * documents confirmed under both stages. Each is a branch chosen by a settled mutation or
@@ -2458,7 +2457,12 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     make: () =>
       createElement(VersionClassificationView, {
         address: { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID, versionUid: VERSION_UID },
-        review: sectionReview({ classification: classification({ project_stage: 'R', section_code: 'PB' }) }),
+        review: sectionReview({
+          classification: classification({ project_stage: 'R', section_code: 'GP' }),
+          options: sectionReview().options.map((option) => ({
+            ...option, executable: option.section_code !== 'GP',
+          })),
+        }),
         roles: ['expert'],
         conflict: true,
         onConflict: () => undefined,

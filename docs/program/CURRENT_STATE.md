@@ -57,11 +57,11 @@ for the `R-139` night window of 2026-10-20, `NIGHT-1020-INT-01.md`.
 - **W59 sections (served).** An expert confirms a version's stage (П/Р) and
   one of 15 sections (`classifyDocumentVersion`, `getVersionSectionReview`,
   migration 0024); run start and re-audit route by the confirmed section
-  through a text-profile registry — AR plus 13 draft legacy-ported
-  profiles, none for ПБ — and refuse an unclassified version or a section
+  through a text-profile registry — AR, 13 draft legacy-ported profiles and
+  an authored draft for ПБ — and refuse an unclassified version or a section
   without a profile; the project screen groups documents by section.
-  «Настройки анализа» lists the profiles (`listAnalysisProfiles`); АИ, ПЗ,
-  ПОС and ТХ are proven in recorded mode with synthetic recordings only.
+  «Настройки анализа» lists the profiles (`listAnalysisProfiles`); all 14
+  non-AR profiles have synthetic recorded replay cases, not expert acceptance.
 - **Run references.** A stopped run's page ends with «Нормативные ссылки»
   (`getRunNormReferences`): the standards cited in the run's saved text, each
   resolved against the snapshot the run pinned into five outcomes; no finding,
