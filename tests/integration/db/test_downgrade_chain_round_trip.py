@@ -78,6 +78,7 @@ UPGRADE_SURFACE_DIGESTS = {
     "20261022_0030_executor_connections.py": "1704100d708bed0f8605e401b69fc899e2efd19843e54f81709a29f952ec654b",
     # `EXEC-PULL-01`: likewise, taken from the revision's own bytes once it was final.
     "20261022_0031_executor_pull_channel.py": "e0bf052c6a2f255bf87ebc703231ed8c1caa2eb5b2cc0c1c4bc4be6fe56c120f",
+    "20261023_0032_ar_v3_run_group.py": "a6fa2d4e1a42a86e4a0320691ac083b29d78b4e029dd359f89ee3e56deaef7f9",
 }
 
 

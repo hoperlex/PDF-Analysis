@@ -109,6 +109,10 @@ __all__ = [
     "ReleaseList",
     "MarkReleaseNotesReadRequest",
     "RunId",
+    "ArV3RunGroupId",
+    "StartArV3BetaGroupRequest",
+    "ArV3BetaGroupMember",
+    "ArV3BetaGroup",
     "JobId",
     "RunState",
     "RunStatus",
@@ -415,6 +419,9 @@ VersionUid = TypeAliasType(
     "VersionUid", Annotated[str, Field(pattern=rf"^ver_{_ULID}$")]
 )
 RunId = TypeAliasType("RunId", Annotated[str, Field(pattern=rf"^run_{_ULID}$")])
+ArV3RunGroupId = TypeAliasType(
+    "ArV3RunGroupId", Annotated[str, Field(pattern=rf"^arg_{_ULID}$")]
+)
 JobId = TypeAliasType("JobId", Annotated[str, Field(pattern=rf"^job_{_ULID}$")])
 #: `W54-SEAL-01`. One registered worker process (``worker_id``, ``wrk``), migration ``0019``.
 WorkerId = TypeAliasType("WorkerId", Annotated[str, Field(pattern=rf"^wrk_{_ULID}$")])
@@ -706,7 +713,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.1.0"]
+    contract_version: Literal["1.2.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1009,6 +1016,30 @@ class PortalBlockPage(_Object):
 class StartRunRequest(_Object):
     version_uid: VersionUid
     provider_mode: ProviderMode = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class StartArV3BetaGroupRequest(_Object):
+    version_uid: VersionUid
+
+
+class ArV3BetaGroupMember(_Object):
+    scope_id: Literal["F1", "F2", "A1", "A2", "S1", "S2"]
+    run_id: RunId
+    state: RunState
+    map_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    norm_retrieval_set_id: NormRetrievalSetId
+
+
+class ArV3BetaGroup(_Object):
+    group_id: ArV3RunGroupId
+    project_uid: ProjectUid
+    version_uid: VersionUid
+    norms_snapshot_id: NormsSnapshotId
+    analysis_profile_id: AnalysisProfileId
+    prompt_bundle_id: PromptBundleId
+    pack_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    provider_mode: ProviderMode
+    members: Annotated[list[ArV3BetaGroupMember], Field(min_length=6, max_length=6)]
 
 
 class StageState(_Object):

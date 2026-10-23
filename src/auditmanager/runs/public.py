@@ -33,6 +33,7 @@ from auditmanager.runs.geometry_crop_item_input import (
     load_saved_image_crop_item,
 )
 from auditmanager.runs.repository import RunRepository
+from auditmanager.runs.v3_group import TrustedPackRegistry, get_ar_v3_group, start_ar_v3_group
 from auditmanager.shared.errors import ErrorCode
 
 
@@ -81,6 +82,9 @@ def fail_reclaimed_run(
 
 
 __all__ = [
+    "TrustedPackRegistry",
+    "get_ar_v3_group",
+    "start_ar_v3_group",
     "DurableCarrier",
     "NORM_REFERENCES_READY",
     "NORM_REFERENCES_SNAPSHOT_NOT_PINNED",

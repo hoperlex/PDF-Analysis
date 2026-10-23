@@ -31,6 +31,11 @@ from collections.abc import Iterable
 from sqlalchemy import Engine, text
 
 
+#: Resealed by `AR-V3-BETA-SIX-RUN-02` for ``0032_ar_v3_run_group`` on a fresh
+#: PostgreSQL clone: columns +19, relations +2, constraints +31, indexes +5,
+#: triggers +3 and functions +1. Views, extensions, sequences, policies and
+#: state topology retain the 0031 digests. The two tables freeze group and member
+#: pins; the deferred trigger requires six exact members at commit.
 #: Resealed by `EXEC-PULL-01` for ``0031_executor_pull_channel``, measured against a fresh upgrade
 #: of the lane's PostgreSQL 17 + pgvector stack, and equal to the migration's DDL in every family
 #: it moved: columns +35 -> 717 (``executor_runner_token`` 11, ``executor_task`` 24); relations +2
@@ -219,12 +224,12 @@ from sqlalchemy import Engine, text
 #: ``contract_state_transition`` (the seal adds ``app_user`` and ``registration_request``
 #: to ``state-machines.json``; the registration lifecycle is guarded by its own trigger).
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (717, "23ea2c1c13a44c5d8426fb1cffac36128696368425c559f8538ec43d98fa6478"),
-    "relations": (74, "2311b6515e881502317c515899b883c8979b4891228c9e1fa9e06c0adce1f31b"),
-    "constraints": (783, "81a6ace45154c87c18c3717b2db89cdaa0fa43e8cd009f8b6f4284c2ae6c5df4"),
-    "indexes": (179, "f1d40d2c5466f62fd8e578ee6b5e53845bca4441debdcf9970373c2a7368eaac"),
-    "triggers": (83, "0212da57a0f9d692ffc9bdec7c19e29f0bd69fc2fa309c82eb1a95ae1955fc62"),
-    "functions": (31, "62391d05e0e1c209227d158d95097c68ce2356ae5f096931dff6b2f69c72f4bd"),
+    "columns": (736, "c7bc9e13f3bca0a0507cd81ccaba7b15901a2cf0c91e1e60c903b2ce49905c67"),
+    "relations": (76, "2725a7c6c6417f1862a831ba76678909e14b9a050e8cfaf978785f5f5a25a539"),
+    "constraints": (814, "25ea815f8371c94b9b7f48bd1aaad131ae85ef773c47464a2af9d5ad08e7cda1"),
+    "indexes": (184, "f446c62baa74bcdae4304197c77546c7db769767727ba3d0601c48464cc5c47a"),
+    "triggers": (86, "691154ca1227ef801cf6c85adcbc3a56d7f195a5f58fb8bc17ddc30147aff40e"),
+    "functions": (32, "38aa2359517b7c52db5a3565cbfaf57f42ac18ef40b9e4322d514b5c47e767ab"),
     "views": (5, "c41ad974669882ee5d818591ee1d485b70455ddd4e51d236cc83892d18d11b93"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),
     "sequences": (7, "6d533fe16349a92b16b5ca89d51fcb083f1ecdf4f252bc276667a92361bf1656"),

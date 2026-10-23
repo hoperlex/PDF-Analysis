@@ -130,6 +130,7 @@ describe('the seam operations', () => {
       'setJobPriority',
       // `W54-SEAL-01`: the worker intake switch is keyed like the other execution controls.
       'setWorkerIntake',
+      'startArV3BetaGroup',
       // `W60-OPT-PROPOSALS-01`: a pass stores a pass and its proposals, keyed like a run start.
       'startOptimisationPass',
       'startRun',

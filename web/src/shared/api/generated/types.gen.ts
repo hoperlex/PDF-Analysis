@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.1.0 (OpenAPI 3.1.0)
- *   sha256 889ac164ad356674471da8de734597d118b6799f352808b80da74d2b6f295a87
+ *   AuditManager PC-01 API 1.2.0 (OpenAPI 3.1.0)
+ *   sha256 6d4402a62e93dd255a40e30869d42d543cbd7cb64bba75e56b0b4c087ff18c1b
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.1.0';
+export const CONTRACT_VERSION = '1.2.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '889ac164ad356674471da8de734597d118b6799f352808b80da74d2b6f295a87';
+export const CONTRACT_DIGEST = '6d4402a62e93dd255a40e30869d42d543cbd7cb64bba75e56b0b4c087ff18c1b';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -33,6 +33,9 @@ export const SCHEMA_NAMES = [
   'AppendDecisionRequest',
   'AppendDecisionResponse',
   'ApproveRegistrationRequest',
+  'ArV3BetaGroup',
+  'ArV3BetaGroupMember',
+  'ArV3RunGroupId',
   'Assignment',
   'AssignmentDetail',
   'AssignmentEvent',
@@ -281,6 +284,7 @@ export const SCHEMA_NAMES = [
   'StageId',
   'StageState',
   'StageStatus',
+  'StartArV3BetaGroupRequest',
   'StartRunRequest',
   'SubmitExecutorTaskAnswerRequest',
   'SubmitRegistrationRequest',
@@ -412,6 +416,31 @@ export type ApproveRegistrationRequest = {
   /** The roles the new account receives: at least one. */
   roles: Array<Role>;
 };
+
+export type ArV3BetaGroup = {
+  analysis_profile_id: AnalysisProfileId;
+  group_id: ArV3RunGroupId;
+  members: Array<ArV3BetaGroupMember>;
+  norms_snapshot_id: NormsSnapshotId;
+  pack_sha256: string;
+  project_uid: ProjectUid;
+  prompt_bundle_id: PromptBundleId;
+  provider_mode: ProviderMode;
+  version_uid: VersionUid;
+};
+
+export type ArV3BetaGroupMember = {
+  map_sha256: string;
+  norm_retrieval_set_id: NormRetrievalSetId;
+  run_id: RunId;
+  scope_id: "F1" | "F2" | "A1" | "A2" | "S1" | "S2";
+  state: RunState;
+};
+
+export type ArV3RunGroupId = string;
+
+/** The contract pattern for `ArV3RunGroupId`. Anchored; use with `new RegExp()`. */
+export const AR_V3_RUN_GROUP_ID_PATTERN = "^arg_[0-9A-HJKMNP-TV-Z]{26}$";
 
 /** `W61-DISPATCHER-01`. One assignment as it now stands. */
 export type Assignment = {
@@ -852,7 +881,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The single externally visible failure shape, mirroring urn:auditmanager:domain:error-envelope:v1. `retryable` is pinned to the catalog value for the reported code; a caller never infers it from the HTTP status or the message. */
 export type ErrorEnvelope = {
-  contract_version: "1.1.0";
+  contract_version: "1.2.0";
   correlation_id: CorrelationId;
   /** Safe scalar classifiers only, restricted to the safe_detail_keys the catalog declares for the reported code. The catalog's forbidden key set is rejected. */
   details?: {
@@ -3030,6 +3059,10 @@ export const STAGE_STATUS_VALUES = [
 
 /** StageStatus - the closed value set above. */
 export type StageStatus = (typeof STAGE_STATUS_VALUES)[number];
+
+export type StartArV3BetaGroupRequest = {
+  version_uid: VersionUid;
+};
 
 export type StartRunRequest = {
   /** Defaults to the server's configured mode. A client asking for `live` is asking to spend money against the OD-03 ceiling. */

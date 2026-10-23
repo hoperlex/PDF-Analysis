@@ -44,6 +44,8 @@ REQUIRED_OPERATIONS = {
     "getDocumentVersion",
     "streamDocumentVersionContent",
     "startRun",
+    "startArV3BetaGroup",
+    "getArV3BetaGroup",
     "getRunStatus",
     "listRunFindings",
     "getFinding",
@@ -228,6 +230,7 @@ WRITE_OPERATIONS = {
     # `W59-VERSION-UPLOAD-01`: publishes a version, keyed exactly as `uploadDocument`.
     "uploadDocumentVersion",
     "startRun",
+    "startArV3BetaGroup",
     "appendDecision",
     "approveRegistration",
     "cancelRun",

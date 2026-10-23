@@ -227,6 +227,10 @@ def frozen_input_digest(
     prompt_bundle_id: str,
     norms_snapshot_id: str | None,
     norm_retrieval_set_sha256: str | None = None,
+    ar_v3_group_id: str | None = None,
+    ar_v3_scope_id: str | None = None,
+    ar_v3_map_sha256: str | None = None,
+    ar_v3_set_id: str | None = None,
 ) -> str:
     """The stored ``frozen_input_digest``: the input basis plus the pinned snapshot.
 
@@ -254,6 +258,22 @@ def frozen_input_digest(
         ):
             raise ValueError("retrieval set digest must be lowercase SHA-256")
         document["norm_retrieval_set_sha256"] = norm_retrieval_set_sha256
+    group_fields = (ar_v3_group_id, ar_v3_scope_id, ar_v3_map_sha256, ar_v3_set_id)
+    if any(value is not None for value in group_fields):
+        if any(value is None for value in group_fields) or norm_retrieval_set_sha256 is None:
+            raise ValueError("an AR v3 group digest requires all four group pins and set digest")
+        from auditmanager.shared.identity import ArV3RunGroupId, NormRetrievalSetId
+
+        ArV3RunGroupId.parse(ar_v3_group_id)
+        NormRetrievalSetId.parse(ar_v3_set_id)
+        if ar_v3_scope_id not in ("F1", "F2", "A1", "A2", "S1", "S2"):
+            raise ValueError("invalid AR v3 scope")
+        if len(ar_v3_map_sha256) != 64 or any(c not in "0123456789abcdef" for c in ar_v3_map_sha256):
+            raise ValueError("invalid AR v3 map digest")
+        document["ar_v3_group_id"] = ar_v3_group_id
+        document["ar_v3_scope_id"] = ar_v3_scope_id
+        document["ar_v3_map_sha256"] = ar_v3_map_sha256
+        document["ar_v3_set_id"] = ar_v3_set_id
     return _sha256_of(document)
 
 

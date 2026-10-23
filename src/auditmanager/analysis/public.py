@@ -93,6 +93,13 @@ from auditmanager.analysis.profiles.ar_v3.local_evaluation import (
     V3LocalEvaluationRefused,
     evaluate_v3_supplied_response,
 )
+from auditmanager.analysis.profiles.ar_v3.v3_profile import (
+    PROFILE_ID as AR_V3_BETA_PROFILE_ID,
+    PROMPT_BUNDLE_ID as AR_V3_BETA_BUNDLE_ID,
+    BetaV3Profile,
+    BetaV3ProfileRefused,
+    resolve_beta_v3_profile,
+)
 from auditmanager.analysis.profiles.ar_v3.request_candidate import (
     V3RequestCandidate,
     V3RequestRefused,
@@ -173,6 +180,9 @@ from auditmanager.analysis.text.anchors import BlockIndex, ResolvedAnchor
 from auditmanager.analysis.text.textlayer import TextLayer
 
 __all__ = [
+    "BetaV3Profile",
+    "BetaV3ProfileRefused",
+    "resolve_beta_v3_profile",
     "ARTIFACT_MEDIA_TYPE",
     "ARTIFACT_VERSION",
     "ARTIFACT_ROLE",
@@ -180,6 +190,8 @@ __all__ = [
     "AR_V2_CATEGORIES",
     "AR_V2_RECORDED_BUNDLE_ID",
     "AR_V2_RECORDED_PROFILE_ID",
+    "AR_V3_BETA_BUNDLE_ID",
+    "AR_V3_BETA_PROFILE_ID",
     "AR_V2_SEVERITIES",
     "BlockIndex",
     "BuiltRecordedArtifact",

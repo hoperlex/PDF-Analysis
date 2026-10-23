@@ -1,7 +1,7 @@
 {
   "lock_version": 1,
   "purpose": "Everything a later regeneration needs to prove the committed API client matches its input: the toolchain pins, the exact generator invocation, and the exact OpenAPI bytes the client was generated from. Verified by web/tests/guards/frontend-lock.guard.test.ts, which recomputes every digest here and fails if one has moved.",
-  "owner": "Gate A session A5 (P3-WEB-00 + P3-API-01)",
+  "owner": "AR-V3-BETA-SIX-RUN-02 integration reseal",
   "toolchain": {
     "node": "22.23.1",
     "npm": "10.9.8",
@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "889ac164ad356674471da8de734597d118b6799f352808b80da74d2b6f295a87",
-    "content_commit": "b5e089b5",
-    "content_commit_subject": "exact dev base for EXEC-IMAGE-DELIVERY-01; contract and lock are published together",
-    "dispatch_named_commit": "b5e089b5",
-    "commit_note": "EXEC-IMAGE-DELIVERY-01 adds one token-scoped PNG read and one optional claim image descriptor; API contract 1.1.0 (88/100/286), no new error code or migration.",
+    "sha256": "6d4402a62e93dd255a40e30869d42d543cbd7cb64bba75e56b0b4c087ff18c1b",
+    "content_commit": "a20f9211a558600352c865504f895d642acf82a9",
+    "content_commit_subject": "feat: persist explicit AR v3 beta six-run groups",
+    "dispatch_named_commit": "6e9f887e8d7de268ab327390e73a658c1123f9aa",
+    "commit_note": "AR-V3-BETA-SIX-RUN-02 adds the explicit six-Run group; contract 1.2.0 (90/102/290), migration 0032, no new error code. New starts refuse without a reviewed pack.",
     "openapi_version": "3.1.0",
-    "info_version": "1.1.0",
-    "paths": 88,
-    "operations": 100,
-    "component_schemas": 286,
+    "info_version": "1.2.0",
+    "paths": 90,
+    "operations": 102,
+    "component_schemas": 290,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "889ac164ad356674471da8de734597d118b6799f352808b80da74d2b6f295a87",
+    "snapshot_sha256": "6d4402a62e93dd255a40e30869d42d543cbd7cb64bba75e56b0b4c087ff18c1b",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "ab647d60d0ffa89eb6ec473542d512a38d9e0f545172b1e641cfe25561b24f04",
-      "index.ts": "7b876f89e8f23b9b0cdb51a803ecfa0760923a248448f8863d24ef905c04e267",
-      "operations.gen.ts": "3caf9c194e3aee38baf1bcd166c4ce89323780c5bfc3afbac2d2cc8b4aba4522",
-      "types.gen.ts": "0f628148f905dcc95343e36a078b2512007827ce22f7e05525d13f1aabe94a4b"
+      "client.gen.ts": "a3de674a28c115c873d346c88ea58ede33ca47c87ea97f2dfef4df073d20c86b",
+      "index.ts": "7dd909b0552b3f74dc8900735574f53f2897ec060c4c1cfc86be76d1f22abe6b",
+      "operations.gen.ts": "bbe209e6d83c0ff2c2903513b3bc3a89683bfa33b97b5ed31a160070fa09742c",
+      "types.gen.ts": "ccccca0ef0276c6f123847770300bf5cf403655d6210de3d8b521b9303dd5c3c"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

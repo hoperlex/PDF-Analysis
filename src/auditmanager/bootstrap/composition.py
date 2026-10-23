@@ -58,7 +58,7 @@ from auditmanager.bootstrap.adapters import (
 )
 from auditmanager.bootstrap.settings import AppSettings, ConfigurationError
 from auditmanager.bootstrap.settings import load as load_settings
-from auditmanager.runs.public import DurableCarrier, ReclaimingCarrier, run_to_terminal
+from auditmanager.runs.public import DurableCarrier, ReclaimingCarrier, TrustedPackRegistry, run_to_terminal
 from auditmanager.sections.public import SECTION_CODES, section_names
 from auditmanager.releases.public import (
     ReleaseRepository, compute_build_id, read_product_version,
@@ -310,6 +310,9 @@ def build_application(
         # ``database`` source only, and then runs freeze their connection revision at start.
         providers=providers.resolve,
         route_freezer=providers.freeze,
+        # No expert-approved six-set pack is installed in the beta candidate.
+        # This keeps group start closed while allowing historical group reads.
+        ar_v3_pack_registry=TrustedPackRegistry.empty(),
     )
     if isinstance(carrier, DurableCarrier):
         carrier.configure_runner(run_adapter._job)
@@ -318,6 +321,7 @@ def build_application(
         projects=ProjectAdapter(ingest),
         documents=DocumentAdapter(ingest),
         runs=run_adapter,
+        ar_v3_groups=run_adapter,
         findings=FindingAdapter(sessions),
         decisions=DecisionAdapter(sessions),
         exports=CsvExportAdapter(sessions),

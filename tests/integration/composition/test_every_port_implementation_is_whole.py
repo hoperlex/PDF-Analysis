@@ -124,6 +124,7 @@ PORT_FOR_ARGUMENT = {
     "projects": "ProjectPort",
     "documents": "DocumentPort",
     "runs": "RunPort",
+    "ar_v3_groups": "ArV3GroupPort",
     "findings": "FindingPort",
     "decisions": "DecisionPort",
     "exports": "CsvExportPort",

@@ -834,7 +834,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-100 operations, sealed. `A5` generates the typed client from this document; `B6`
+102 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -979,6 +979,8 @@ could.
 | `getDocumentVersion` | `GET /versions/{version_uid}` |
 | `streamDocumentVersionContent` | `GET /versions/{version_uid}/content` |
 | `startRun` | `POST /runs` |
+| `startArV3BetaGroup` | `POST /ar-v3-beta/groups` |
+| `getArV3BetaGroup` | `GET /ar-v3-beta/groups/{group_id}` |
 | `getRunStatus` | `GET /runs/{run_id}` |
 | `listRunFindings` | `GET /runs/{run_id}/findings` |
 | `getFinding` | `GET /findings/{finding_uid}` |
@@ -1076,7 +1078,7 @@ could.
 Rules that hold across the whole surface:
 
 * the writes that take a required `Idempotency-Key` header are `createProject`,
-  `uploadDocument`, `uploadDocumentVersion`, `startRun`, `appendDecision`,
+  `uploadDocument`, `uploadDocumentVersion`, `startRun`, `startArV3BetaGroup`, `appendDecision`,
   `approveRegistration`, `cancelRun`, `reauditRun`, `setJobPriority`,
   `setExecutionPaused`, `setWorkerIntake`, `carryOverDecision`,
   `uploadPriceList`, `startOptimisationPass`, `decideOptimisationProposal`,

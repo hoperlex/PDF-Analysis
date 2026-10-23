@@ -132,7 +132,7 @@ function list(seed?: (client: ReturnType<typeof newClient>) => void): string {
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.1.0',
+    contract_version: '1.2.0',
     error_code: code,
     message: 'A caller-safe sentence.',
     correlation_id: 'corr-list-1',

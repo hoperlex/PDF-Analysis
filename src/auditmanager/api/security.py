@@ -356,6 +356,7 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "getExecutorConnection": _ANY_ROLE,
         "listExecutorRoutes": _ANY_ROLE,
         "getRunStatus": _ANY_ROLE,
+        "getArV3BetaGroup": _ANY_ROLE,
         "getRunNormVerification": _ANY_ROLE,
         "listRunFindings": _ANY_ROLE,
         "getFinding": _ANY_ROLE,
@@ -417,6 +418,7 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         # `W59-VERSION-UPLOAD-01`. The next version of a document: the same roles as the first.
         "uploadDocumentVersion": _EXPERT,
         "startRun": _EXPERT,
+        "startArV3BetaGroup": _EXPERT,
         # `W59-SECTION-SEAL-01`. Only an expert confirms a section; admin alone does not
         # imply expert (the decision's authorization rule). The command re-reads the role
         # set in its own transaction.

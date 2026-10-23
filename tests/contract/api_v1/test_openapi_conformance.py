@@ -561,7 +561,8 @@ class TestN1ComponentReferenceResolution:
         # `EXEC-PULL-01` adds five: issueRunnerToken and revokeRunnerToken address a connection
         # (and a token), and the three runner operations that address a task by identity.
         # EXEC-IMAGE-DELIVERY-01 adds the task-scoped PNG read with a 404.
-        assert len(report) == 71, report
+        # AR-V3-BETA-SIX-RUN-02 adds 404s for the named version and group.
+        assert len(report) == 73, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

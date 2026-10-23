@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 88,
+    "path_count": 90,
     "operations": [
       [
         "POST",
@@ -502,6 +502,16 @@
         "POST",
         "/runner/tasks/{task_id}/fail",
         "failExecutorTask"
+      ],
+      [
+        "POST",
+        "/ar-v3-beta/groups",
+        "startArV3BetaGroup"
+      ],
+      [
+        "GET",
+        "/ar-v3-beta/groups/{group_id}",
+        "getArV3BetaGroup"
       ]
     ],
     "schema_names": [
@@ -790,13 +800,17 @@
       "IssueRunnerTokenRequest",
       "IssuedRunnerToken",
       "RunnerTokenMetadata",
-      "SubmitExecutorTaskAnswerRequest"
+      "SubmitExecutorTaskAnswerRequest",
+      "ArV3BetaGroup",
+      "ArV3BetaGroupMember",
+      "ArV3RunGroupId",
+      "StartArV3BetaGroupRequest"
     ]
   },
   "error_catalog": {
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0031_executor_pull_channel",
-  "contract_version": "1.1.0"
+  "migration_head": "0032_ar_v3_run_group",
+  "contract_version": "1.2.0"
 }
