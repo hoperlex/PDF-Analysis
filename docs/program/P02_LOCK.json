@@ -69,6 +69,12 @@
       "input_per_mtok_usd": 2.0,
       "output_per_mtok_usd": 10.0
     },
+    "codex_subscription": {
+      "$comment": "Pinned for the owner's local ChatGPT-authenticated Codex CLI through the pull agent. Configure billing=not_metered; these 2026-10-23 Standard API rates are a reference only and are not charged to subscription calls. Source: https://developers.openai.com/api/docs/models/gpt-6-sol",
+      "model_id": "gpt-6-sol",
+      "input_per_mtok_usd": 2.0,
+      "output_per_mtok_usd": 10.0
+    },
     "run_cost_ceiling_usd": 1.0
   },
   "provider_configuration": {

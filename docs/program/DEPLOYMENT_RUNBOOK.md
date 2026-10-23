@@ -1306,6 +1306,14 @@ metered calls reports the metered sum, `estimated`.
 
 ## 15. The runner channel — tokens, the proxy reload, revocation (`EXEC-PULL-01`, `R-143`)
 
+For the owner's **Codex subscription on a machine the stand cannot SSH into**,
+use the outbound SSH local-forward setup in
+`tools/executor-runner/README.md` §D. The stand sees the existing `pull`/`agent`
+connection; its runner reaches the loopback proxy through SSH and answers with
+the local Codex CLI. Configure billing `not_metered`, pin `gpt-6-sol`, and require
+an `ok` probe before routing. No inbound port on the owner's machine, new
+stand-side SSH profile, API key or deployment setting is required.
+
 A `pull` connection (client `claude_code_session` or `agent`) is served by a *runner* that calls
 the stand; the stand never calls it. The runner needs the stand's public HTTPS origin and a runner
 token, and nothing else: no database, no object store, no shell on the stand. Its four calls are
