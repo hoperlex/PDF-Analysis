@@ -38,9 +38,11 @@ RESPONSE = ModelResponse(
 class Session:
     def __init__(self, events: list[object]):
         self.events = events
+        self.locked = False
 
     def commit(self):
         self.events.append("commit")
+        self.locked = False
 
 
 class Jobs:
@@ -52,6 +54,7 @@ class Jobs:
     def require_current(self, session, authority):
         assert authority == AUTHORITY
         self.events.append("current")
+        session.locked = True
 
     def require_recorded_stage_call_available(self, session, authority):
         self.events.append("available")
@@ -77,13 +80,15 @@ class Jobs:
 
 
 class Adapter:
-    def __init__(self, mode, events, answer=RESPONSE):
+    def __init__(self, mode, events, session, answer=RESPONSE):
         self.provider_mode = mode
         self.events = events
+        self.session = session
         self.answer = answer
 
     def complete(self, request):
-        assert self.events[-1] == "current"
+        assert self.events[-1] == "peek"
+        assert self.session.locked is False
         assert "prepared" in self.events
         assert self.events.index("prepared") < self.events.index("commit")
         self.events.append(("dispatch", request))
@@ -110,7 +115,12 @@ def _arrange(monkeypatch, *, mode=ProviderMode.LIVE, answer=RESPONSE,
     monkeypatch.setattr(v3_provider_call, "prepare_v3_execution_request", prepare)
     values = iter(binding_changes)
     def resolve(*args, **kwargs):
-        events.append("current")
+        locked = kwargs.get("lock_authority", True)
+        if locked:
+            session.locked = True
+        else:
+            assert session.locked is False
+        events.append("current" if locked else "peek")
         candidate = next(values, None)
         return binding if candidate is None else candidate
     monkeypatch.setattr(v3_provider_call, "resolve_v3_execution_binding", resolve)
@@ -147,7 +157,7 @@ def _arrange(monkeypatch, *, mode=ProviderMode.LIVE, answer=RESPONSE,
             connection_revision_id="rev_test",
         )
     config = ProviderConfig(mode, "model-pin", 1.0, None, True)
-    provider = ProviderBinding(Adapter(mode, events, answer), config, call)
+    provider = ProviderBinding(Adapter(mode, events, session, answer), config, call)
     kwargs = dict(
         authority=AUTHORITY, registry=object(), blob_store=object(),
         max_text_bytes=100_000, provider=provider, settings=SETTINGS,

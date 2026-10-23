@@ -223,6 +223,7 @@ def dispatch_v3_provider_call(
     try:
         if resolve_v3_execution_binding(
             session, authority=authority, registry=registry, jobs=job_repo,
+            lock_authority=False,
         ) != prepared.binding:
             raise _refuse("group_binding_changed_before_dispatch")
     except Exception as error:
