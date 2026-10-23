@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.2.0 (OpenAPI 3.1.0)
- *   sha256 6d4402a62e93dd255a40e30869d42d543cbd7cb64bba75e56b0b4c087ff18c1b
+ *   AuditManager PC-01 API 1.3.0 (OpenAPI 3.1.0)
+ *   sha256 debfa5546295ac72bacdae82ccae6d8efead276d3deb33be71eb39d1635df152
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.2.0';
+export const CONTRACT_VERSION = '1.3.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '6d4402a62e93dd255a40e30869d42d543cbd7cb64bba75e56b0b4c087ff18c1b';
+export const CONTRACT_DIGEST = 'debfa5546295ac72bacdae82ccae6d8efead276d3deb33be71eb39d1635df152';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -35,6 +35,7 @@ export const SCHEMA_NAMES = [
   'ApproveRegistrationRequest',
   'ArV3BetaGroup',
   'ArV3BetaGroupMember',
+  'ArV3BetaStageId',
   'ArV3RunGroupId',
   'Assignment',
   'AssignmentDetail',
@@ -436,6 +437,14 @@ export type ArV3BetaGroupMember = {
   scope_id: "F1" | "F2" | "A1" | "A2" | "S1" | "S2";
   state: RunState;
 };
+
+/** Profile-specific AR v3 beta review stage; the legacy nine-stage registry is unchanged. */
+export const AR_V3_BETA_STAGE_ID_VALUES = [
+  'ar_v3_citation_review',
+] as const;
+
+/** ArV3BetaStageId - the closed value set above. */
+export type ArV3BetaStageId = (typeof AR_V3_BETA_STAGE_ID_VALUES)[number];
 
 export type ArV3RunGroupId = string;
 
@@ -881,7 +890,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The single externally visible failure shape, mirroring urn:auditmanager:domain:error-envelope:v1. `retryable` is pinned to the catalog value for the reported code; a caller never infers it from the HTTP status or the message. */
 export type ErrorEnvelope = {
-  contract_version: "1.2.0";
+  contract_version: "1.3.0";
   correlation_id: CorrelationId;
   /** Safe scalar classifiers only, restricted to the safe_detail_keys the catalog declares for the reported code. The catalog's forbidden key set is rejected. */
   details?: {
@@ -2522,7 +2531,7 @@ export type RunStatus = {
   cost_micros?: number;
   created_at: string;
   /** The explicitly recorded missing or degraded stage set. Non-empty exactly when the run is `partial`; a `published` run carries none. */
-  degradation_set?: Array<StageId>;
+  degradation_set?: Array<(StageId | ArV3BetaStageId)>;
   /** Ungrounded model items rejected by the grounding gate. They are not findings and appear in no finding list. */
   diagnostic_observation_count?: number;
   /** OD-10: a run left `running` by a crash is reconciled to `failed` with an explicit interrupted reason. There is no `interrupted` state. */
@@ -3043,7 +3052,7 @@ export type StageState = {
   /** The typed reason a non-succeeded stage carries. Null exactly when the status is `succeeded`. */
   error_code?: string | null;
   finished_at?: string | null;
-  stage_id: StageId;
+  stage_id: StageId | ArV3BetaStageId;
   stage_version?: string;
   started_at?: string | null;
   status: StageStatus;

@@ -176,6 +176,7 @@ __all__ = [
     "SectionReviewOption",
     "SectionSuggestion",
     "Sha256",
+    "ArV3BetaStageId",
     "StageId",
     "StageState",
     "StageStatus",
@@ -588,6 +589,10 @@ class StageId(str, enum.Enum):
     NORM_VERIFICATION = "norm_verification"
 
 
+class ArV3BetaStageId(str, enum.Enum):
+    CITATION_REVIEW = "ar_v3_citation_review"
+
+
 class ProviderMode(str, enum.Enum):
     LIVE = "live"
     RECORDED = "recorded"
@@ -713,7 +718,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.2.0"]
+    contract_version: Literal["1.3.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1043,7 +1048,7 @@ class ArV3BetaGroup(_Object):
 
 
 class StageState(_Object):
-    stage_id: StageId
+    stage_id: StageId | ArV3BetaStageId
     stage_version: Annotated[str, Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")] = Field(
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
@@ -1075,7 +1080,7 @@ class RunStatus(_Object):
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
     stages: list[StageState]
-    degradation_set: list[StageId] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    degradation_set: list[StageId | ArV3BetaStageId] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     terminal_reason: ErrorCode | None = Field(default=None, json_schema_extra=optional_property)
     #: `D-46`. **The same shape as ``ErrorEnvelope.details``, and the same constant**: it
     #: is the same rule -- safe scalar classifiers, restricted to the ``safe_detail_keys``

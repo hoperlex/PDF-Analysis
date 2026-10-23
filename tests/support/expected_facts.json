@@ -519,6 +519,7 @@
       "AccountPage",
       "AnalysisProfileId",
       "AppendDecisionRequest",
+      "ArV3BetaStageId",
       "AppendDecisionResponse",
       "ApproveRegistrationRequest",
       "BlockGeometry",
@@ -812,5 +813,5 @@
     "stored_vocabulary": 25
   },
   "migration_head": "0032_ar_v3_run_group",
-  "contract_version": "1.2.0"
+  "contract_version": "1.3.0"
 }

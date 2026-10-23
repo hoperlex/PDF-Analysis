@@ -474,7 +474,7 @@ def _assemble(
             ),
         ],
         # A model with a default would otherwise be emitted twice, as `X-Input` and
-        # `X-Output`. The 290 schema names are pinned by the contract and by the frontend's
+        # `X-Output`. The 291 schema names are pinned by the contract and by the frontend's
         # generated client, so the split is a conformance failure -- and the fix belongs
         # here, in the application, never in the gate's normalization. `W13-CONF` measured
         # it: `test_the_gate_catches_a_split_input_and_output_schema`.

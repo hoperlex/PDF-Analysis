@@ -78,7 +78,7 @@ def envelope_responses(
     own ``422`` *replaces* it, and ``HTTPValidationError`` and ``ValidationError`` then
     never enter ``components.schemas``. An operation that omits it gets FastAPI's, and the
     gate reports it in three places
-    (``test_the_gate_catches_fastapis_own_validation_error``). The 290 schema names are
+    (``test_the_gate_catches_fastapis_own_validation_error``). The 291 schema names are
     pinned, so two extra ones are a failure.
     """
     overrides = descriptions or {}
