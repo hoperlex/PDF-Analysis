@@ -1,45 +1,19 @@
 # Current state
 
-**Updated 2026-10-20 for the night window under `R-139` (functional slices:
-sections, norms, storage structure), after development candidate 67 added
-the `R-137` W54 session repair to published candidate 66
-(`ec41bb5881b2e677af7f22af62266818f37b2a61`).** W55b is published on
-`origin/main` and tagged `v0.6.0`. Its exact-tree gate counts as `GATE OK`
-under R-125; the deploy workflow selected that tree and the owner then ran
-`infra/deploy/verify-deployed.sh` on the host with a passing image/tree
-comparison. The workflow's own verify step was skipped because a child
-consumed its stdin; the tested repair is on `origin/dev`, and moving it to
-main needs a fresh complete gate and a direct exact-SHA owner instruction.
-The owner waived five credentialed live W55b product checks for that release;
-those journeys remain unverified. See `W55B-INT-TAG-01.md`,
-`W55B-INT-MAIN-VERIFY-ADDENDUM-01.md` and `CFB-INT-DEV-PUBLISH-43.md`.
+**Updated 2026-10-20 for the night window under `R-139` (sections, norms, storage structure), after candidate 67 added the `R-137` W54 repair to candidate 66 (`ec41bb5881b2e677af7f22af62266818f37b2a61`).**
+W55b is published on `origin/main` and tagged `v0.6.0`. Its exact-tree gate counts as `GATE OK` under R-125; the deploy workflow selected that tree, and the owner ran `infra/deploy/verify-deployed.sh` on the host with a passing image/tree comparison.
+The workflow's own verify step was skipped because a child consumed its stdin; the tested repair is on `origin/dev`. Moving it to main needs a fresh complete gate and a direct exact-SHA owner instruction.
+The owner waived five credentialed live W55b product checks; those journeys remain unverified. See `W55B-INT-TAG-01.md`, `W55B-INT-MAIN-VERIFY-ADDENDUM-01.md` and `CFB-INT-DEV-PUBLISH-43.md`.
 
-The development API surface is **88 paths / 100 operations / 286 schemas**, the error
-catalogue has **27** codes, the migration head is **`0031_executor_pull_channel`**,
-`VERSION` is `0.7.0`, and the contract is `1.1.0` after the additive image-delivery reseal
-(`EXEC-IMAGE-DELIVERY-01`). The runner can fetch one verified PNG for an active claim;
-no run stage sends one until W56b activates its image policy.
-`EXEC-IMAGE-CHANNELS-01` carries a selected PNG through served direct/VPN HTTP
-flavours, pull command, local endpoint and MCP session; the latter two require
-explicit image opt-in. The image stage still does not create a task. SSH
-command/tunnel connections are now served in `EXEC-SSH-CROPS-01` and
-`EXEC-SSH-TUNNEL-CROPS-01`: the command carries a verified PNG, while the
-tunnel carries it through the existing HTTP adapter after checking both
-current secrets and a pinned SSH host key. The `R-143` executor connections and
-pull channel were added under `R-144` (`EXEC-CANDIDATE-1.md`, `EXEC-CANDIDATE-2.md`). `origin/main` carries `0.7.0` since the owner's merge of pull request
-#3 (`48c8e34c`, no gate; `RELEASES.md` has the row and the record); host verification and the
-`v0.7.0` tag are owed, the last tag is `v0.6.0`. Run `infra/deploy/verify-deployed.sh` for the
-current deployment; this document is no substitute for that probe.
+The development API surface is **88 paths / 100 operations / 286 schemas**, the error catalogue has **27** codes, the migration head is **`0031_executor_pull_channel`**, `VERSION` is `0.8.0`, and the contract is `1.1.0` after `EXEC-IMAGE-DELIVERY-01`.
+The runner can fetch one verified PNG for an active claim; no run stage sends one until W56b activates its image policy. `EXEC-IMAGE-CHANNELS-01` carries a selected PNG through direct/VPN HTTP, pull command, local endpoint and MCP session; the latter two require image opt-in.
+SSH command/tunnel connections are served in `EXEC-SSH-CROPS-01` and `EXEC-SSH-TUNNEL-CROPS-01`: the command carries a verified PNG; the tunnel uses the HTTP adapter after checking current secrets and a pinned SSH host key. The image stage still does not create a task.
+The `R-143` connections and pull channel were added under `R-144` (`EXEC-CANDIDATE-1.md`, `EXEC-CANDIDATE-2.md`). `origin/main` carries `0.7.0` since the owner's merge of pull request #3 (`48c8e34c`, no gate; see `RELEASES.md`); host verification and the `v0.7.0` tag are owed. The last tag is `v0.6.0`.
+Run `infra/deploy/verify-deployed.sh` for the current deployment; this document is no substitute for that probe.
 
-`EXEC-ENV-OPENROUTER-01` fixes the absent baseline option in «Назначения»:
-under source `database`, a worker with the complete `PROXY_LLM_*` triplet
-registers one OpenRouter-compatible HTTP connection and queues its probe.
-After an `ok` probe it is selectable as a normal connection. Registration
-does not replace the Codex route. The `/api/v1` OpenAI Chat variant carries
-the same verified PNG as the other served HTTP variants. A graphical-analysis
-stage still needs the W56b prompt and evidence policy before it can issue
-crop tasks; SSH command/tunnel transports now carry a verified PNG once a
-future stage issues it.
+`EXEC-ENV-OPENROUTER-01` adds the baseline option in «Назначения»: with source `database`, a worker holding the complete `PROXY_LLM_*` triplet registers one OpenRouter-compatible HTTP connection and queues its probe.
+After an `ok` probe it is selectable; registration does not replace the Codex route. The `/api/v1` OpenAI Chat variant carries the same verified PNG as other HTTP variants.
+A graphical-analysis stage still needs W56b prompt and evidence policy before issuing crop tasks; SSH command/tunnel transports can carry a verified PNG when a future stage issues one.
 
 ## Normative corpus (W54)
 
@@ -47,15 +21,8 @@ The 674-document, 31,619-file source drop has complete file checksums and a
 restore-verified base dump with 348,777 paragraphs and 55,702 chunks
 (`W54-CORPUS-OPERATE-01`, `W54-CORPUS-PROMOTION-01`).
 
-Under `R-137` the 121 blocks whose text was the recognition model's own
-reasoning were re-read by Sonnet subagents of a Claude Code session, not by
-the paid proxy run. The answers passed the unchanged two-read rule. The
-ignored ledger holds 121 applied repairs, 0 unreliable blocks and no charge,
-and the real drop's ledger validation accepted it. The repaired key is
-`2026-07-23..2026-08-20+17d+121r.0a1bafe103ff`. A 16-page spot check found
-two single-word deviations from print (a map label and a silently corrected
-printed typo) and two table-layout notes; under `R-138` the owner accepted
-the ledger as it is. See `W54-SESSION-REPAIR-01.md`.
+Under `R-137`, 121 blocks containing the recognition model's own reasoning were re-read by Sonnet subagents of a Claude Code session. Their answers passed the unchanged two-read rule; the ignored ledger has 121 applied repairs, 0 unreliable blocks and no charge, and the real drop's ledger validation accepted it.
+The repaired key is `2026-07-23..2026-08-20+17d+121r.0a1bafe103ff`. A 16-page spot check found two single-word deviations from print (a map label and a silently corrected printed typo) and two table-layout notes; under `R-138` the owner accepted the ledger. See `W54-SESSION-REPAIR-01.md`.
 
 The repaired snapshot `ns_01M59N8QNBVN91ACA2HCE6VE74` (674 documents,
 350,194 paragraphs, 55,855 chunks) is loaded in the local promotion database
@@ -86,6 +53,7 @@ for the `R-139` night window of 2026-10-20, `NIGHT-1020-INT-01.md`.
   W56b (Attempt-fenced readers for text windows, crops, regions; vision
   policy open) and W58 (source mirror, isolated DB-plus-Blob restore drill,
   synthetic restore passed, real drill not run).
+- **АР v3 beta status preview.** «Настройки анализа» now shows the 22 F1.3 topic/source dispositions in six groups, mirrored from the frozen beta policy. It explicitly says that v3 Runs and numerical conclusions are unavailable. A full repaired snapshot passed import and custody qualification in an isolated local lane (`AR-BETA-LOCAL-CUSTODY-01`); the stand still lacks that import and no reviewed six-map/six-set pack exists.
 - **W59 sections (served).** An expert confirms a version's stage (П/Р) and
   one of 15 sections (`classifyDocumentVersion`, `getVersionSectionReview`,
   migration 0024); run start and re-audit route by the confirmed section

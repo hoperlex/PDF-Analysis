@@ -271,6 +271,8 @@ predecessors and truthful renumbering. A development close does not satisfy a `W
 | `v0.6.1` | portal bundles, recognised text, Блоки | W55b |
 | `v0.7.0` | АР v2 on text: categories, severity, merge, quality gate | W56a |
 | `v0.8.0` | norms in the analysis: the reviewed checklist map and verified citations | W57a |
+
+**2026-10-23 development-candidate exception.** At the owner's request, `VERSION=0.8.0` is prepared on `dev` with only the visible AR v3 source-status preview described in `AR-V3-BETA-CODE-QUEUE.md` and `release-notes/0.8.0.json`. This does not close the planned W57a outcome in the row above: reviewed maps, six verified sets, six Runs and saved citations remain open. No `main` release or tag is asserted by the development version.
 | `v0.8.1` | the project's own references and Excel | W57b |
 | `v0.9.0` | drawings, region evidence, long documents, the critic, Настройки анализа | W56b (after W57b, I-12) |
 | `v1.0.0-beta.1` | complete visible menu, full АР, all planned sections, comparison, both optimisations and Диспетчер pass the same-tree beta gate | earliest W63; W58–W62 are development-only on the current route (*unadopted 2026-10-08 layer, K-4*) |

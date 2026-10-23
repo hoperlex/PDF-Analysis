@@ -23,6 +23,7 @@ import {
 } from '@/entities/analysis-profile';
 import { PROJECT_STRUCTURE_ORDER, projectSectionOf } from '@/entities/project';
 import { AnalysisProfileTable } from '@/widgets/analysis-profile-table';
+import { ArV3BetaStatus } from '@/widgets/ar-v3-beta-status';
 import { AnalysisSettingsPage } from '@/_pages/analysis-settings';
 
 import { newClient, renderScreen, seedError } from '../screens/harness';
@@ -186,5 +187,25 @@ describe('the page', () => {
     expect(markup).toContain('data-analysis-profiles-failure="permission_denied"');
     expect(markup).toContain('cid-analysis-settings-1');
     expect(rowCodes(markup)).toEqual([]);
+  });
+});
+
+describe('the AR v3 beta source preview', () => {
+  it('shows all six scopes and every topic exactly once, with no runnable control', () => {
+    const markup = renderToStaticMarkup(createElement(ArV3BetaStatus));
+    expect([...markup.matchAll(/data-ar-v3-scope="([A-Z][0-9])"/g)].map((match) => match[1]))
+      .toEqual(['F1', 'F2', 'A1', 'A2', 'S1', 'S2']);
+    const ids = [...markup.matchAll(/data-ar-v3-item="(C\d\d)"/g)].map((match) => match[1]);
+    expect(ids).toEqual(Array.from({ length: 22 }, (_, index) => `C${String(index + 1).padStart(2, '0')}`));
+    expect(markup).toContain('предварительные ссылки: 14; только контекст: 8');
+    expect(markup).toContain('Она не запускает прогон v3');
+    expect(markup).not.toMatch(/<(form|input|select|textarea|button)\b/);
+  });
+
+  it('does not present a context-only topic as a numeric check', () => {
+    const markup = renderToStaticMarkup(createElement(ArV3BetaStatus));
+    expect(markup).toContain('data-ar-v3-item="C15" data-ar-v3-mode="context_only"');
+    expect(markup).toContain('Только контекст — требуется проверка эксперта');
+    expect(markup).toContain('не выдаёт числовые выводы');
   });
 });
