@@ -84,6 +84,7 @@ An authenticated expert can start one Ф1.3 AR v3 beta group for a confirmed AR 
 - `docs/program/CURRENT_STATE.md`
 - `docs/program/P02_SEAMS.md`
 - `docs/program/ALPHA_ROADMAP.md`
+- `docs/program/dispatch/AR-V3-BETA-CODE-QUEUE.md`
 - `docs/manual-tests/PC-01_prototype.md`
 - `docs/program/tasks/AR-V3-BETA-SIX-RUN-02.md`
 - `docs/program/AR-V3-BETA-SIX-RUN-01-ADDENDUM.md`

@@ -23,3 +23,5 @@ The same gate scans the current API surface claim in `ALPHA_ROADMAP.md`; the int
 The API prose-count gate also scans four deployment/BFF/authorization files for literal surface totals. The replacement task owns only the 90/102/290 prose corrections in those files; their behavior is unchanged.
 
 Generated-client `1.2.0` types require updating the web test fixtures' ErrorEnvelope literals and the keyed-operation inventory. The replacement task owns `web/tests/**` for those exact contract/typecheck repairs.
+
+The roadmap queue still names the superseded `-01` six-Run slot. The replacement integration task owns its single queue-row correction and immediate successor references, so the published roadmap points to the actually implemented task.
