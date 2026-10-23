@@ -1,7 +1,7 @@
 # Task AR-V3-BETA-SIX-RUN-02 — seal and persist the six-Run AR beta group
 
 task_id: AR-V3-BETA-SIX-RUN-02
-status: replacement integration task ready; code not started
+status: completed in development candidate
 
 ## Outcome
 
