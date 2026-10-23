@@ -11,7 +11,14 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Version `1.1.0`
+## Version `1.2.0`
+
+`AR-V3-BETA-SIX-RUN-02` adds explicit start and read operations for one AR v3
+beta group with six durable Run IDs. Start requires an installed reviewed pack;
+without one it refuses before writing. The surface is 90 paths, 102 operations
+and 290 schemas. Domain, analysis and events version pins move together.
+
+## Version `1.1.0` (historical)
 
 `EXEC-IMAGE-DELIVERY-01` adds `getExecutorTaskImage` and an optional image descriptor
 on a claimed runner task. The binary read is restricted to the token holding the

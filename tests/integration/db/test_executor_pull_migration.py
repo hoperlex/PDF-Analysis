@@ -122,7 +122,7 @@ def _refused(connection, statement: str, params: dict, sqlstate: str, why: str) 
 
 def test_a_fresh_upgrade_creates_the_two_tables(migrated_engine: Engine) -> None:
     with migrated_engine.connect() as connection:
-        assert _head(connection) == FACTS.migration_head == THIS
+        assert _head(connection) == FACTS.migration_head
         for table in ("executor_runner_token", "executor_task"):
             assert connection.execute(text("SELECT to_regclass(:n)"),
                                       {"n": f"public.{table}"}).scalar_one(), table

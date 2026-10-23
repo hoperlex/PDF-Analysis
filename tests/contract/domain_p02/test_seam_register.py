@@ -365,7 +365,7 @@ def test_the_idempotency_rule_names_exactly_the_keyed_writes(
     first, rest = _key_rule(seam_register_text)
 
     def named(prose: str) -> set[str]:
-        return set(re.findall(r"`([A-Za-z]+)`", prose)) & operation_ids
+            return set(re.findall(r"`([A-Za-z0-9]+)`", prose)) & operation_ids
 
     assert named(first) == keyed, (
         "§7's rule must name exactly the writes that require Idempotency-Key: "

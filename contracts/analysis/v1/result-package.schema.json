@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:auditmanager:analysis:result-package:v1",
   "title": "ResultPackage v1",
-  "contract_version": "1.1.0",
+  "contract_version": "1.2.0",
   "description": "Result of exactly one Attempt. It repeats the full attempt-authority tuple, pins the stage-registry version and references the standalone StageResult resource urn:auditmanager:analysis:stage-result:v1 instead of defining its own copy of those rules. The engine never writes canonical metadata; publication happens in the control plane after schema, checksum, manifest and current-attempt validation.",
   "type": "object",
   "additionalProperties": false,
@@ -16,7 +16,7 @@
   ],
   "properties": {
     "contract_version": {
-      "const": "1.1.0"
+      "const": "1.2.0"
     },
     "attempt_authority": {
       "$ref": "#/$defs/attempt_authority",
@@ -112,7 +112,7 @@
           "const": "auditmanager.analysis.stage_registry"
         },
         "contract_version": {
-          "const": "1.1.0"
+          "const": "1.2.0"
         }
       }
     },
@@ -120,7 +120,7 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "$id": "urn:auditmanager:analysis:stage-result:v1",
       "title": "StageResult v1",
-      "contract_version": "1.1.0",
+      "contract_version": "1.2.0",
       "description": "Fail-closed result of exactly one canonical registry stage inside one Attempt. failed, partial and skipped require a typed error; succeeded forbids any error state.",
       "type": "object",
       "additionalProperties": false,
@@ -134,7 +134,7 @@
       ],
       "properties": {
         "contract_version": {
-          "const": "1.1.0"
+          "const": "1.2.0"
         },
         "stage_id": {
           "$ref": "#/$defs/stage_id"

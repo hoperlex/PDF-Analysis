@@ -67,6 +67,7 @@ __all__ = [
     "RegistrationPort",
     "ReleasesPort",
     "RunPort",
+    "ArV3GroupPort",
     "ExecutionPort",
     "ExecutorPort",
     "RunnerPort",
@@ -484,6 +485,17 @@ class SectionPort(Protocol):
 
         Display only: no suggestion confirms a section or authorizes a run.
         """
+
+
+@runtime_checkable
+class ArV3GroupPort(Protocol):
+    """The explicitly gated AR beta group, independent of legacy Run start."""
+
+    def start_ar_v3_group(self, *, version_uid: str, idempotency_key: str) -> models.ArV3BetaGroup:
+        """Create six pinned runs, or replay the same group."""
+
+    def get_ar_v3_group(self, *, group_id: str) -> models.ArV3BetaGroup:
+        """Read the six current child states without reselecting normative inputs."""
 
 
 @runtime_checkable

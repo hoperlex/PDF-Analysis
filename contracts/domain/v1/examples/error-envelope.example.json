@@ -1,5 +1,5 @@
 {
-  "contract_version": "1.1.0",
+  "contract_version": "1.2.0",
   "error_code": "stale_attempt",
   "message": "This attempt is no longer the current execution authority for its job; the delivered result was stored as evidence and not published.",
   "correlation_id": "corr_01ARZ3NDEKTSV4RRFFQ69G5FAV",

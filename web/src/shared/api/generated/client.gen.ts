@@ -8,8 +8,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.1.0 (OpenAPI 3.1.0)
- *   sha256 889ac164ad356674471da8de734597d118b6799f352808b80da74d2b6f295a87
+ *   AuditManager PC-01 API 1.2.0 (OpenAPI 3.1.0)
+ *   sha256 6d4402a62e93dd255a40e30869d42d543cbd7cb64bba75e56b0b4c087ff18c1b
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -60,6 +60,8 @@ import type {
   FailExecutorTaskResult,
   GenerateExecutorSshKeyInput,
   GenerateExecutorSshKeyResult,
+  GetArV3BetaGroupInput,
+  GetArV3BetaGroupResult,
   GetAssignmentInput,
   GetAssignmentResult,
   GetDashboardSummaryInput,
@@ -192,6 +194,8 @@ import type {
   SetProjectVendorListResult,
   SetWorkerIntakeInput,
   SetWorkerIntakeResult,
+  StartArV3BetaGroupInput,
+  StartArV3BetaGroupResult,
   StartOptimisationPassInput,
   StartOptimisationPassResult,
   StartRunInput,
@@ -471,6 +475,18 @@ export function generateExecutorSshKey(
   options?: RequestOptions,
 ): Promise<ApiResponse<GenerateExecutorSshKeyResult>> {
   return request<GenerateExecutorSshKeyResult>(OPERATIONS.generateExecutorSshKey, input, options);
+}
+
+/**
+ * Get Ar V3 Beta Group
+ *
+ * `GET /ar-v3-beta/groups/{group_id}`.
+ */
+export function getArV3BetaGroup(
+  input: GetArV3BetaGroupInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetArV3BetaGroupResult>> {
+  return request<GetArV3BetaGroupResult>(OPERATIONS.getArV3BetaGroup, input, options);
 }
 
 /**
@@ -1266,6 +1282,18 @@ export function setWorkerIntake(
 }
 
 /**
+ * Start Ar V3 Beta Group
+ *
+ * `POST /ar-v3-beta/groups` - a write; carries a required Idempotency-Key.
+ */
+export function startArV3BetaGroup(
+  input: StartArV3BetaGroupInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StartArV3BetaGroupResult>> {
+  return request<StartArV3BetaGroupResult>(OPERATIONS.startArV3BetaGroup, input, options);
+}
+
+/**
  * Start Optimisation Pass
  *
  * `POST /projects/{project_uid}/documents/{document_uid}/optimisation-passes` - a write; carries a required Idempotency-Key.
@@ -1447,6 +1475,7 @@ export const apiClient = {
   extendExecutorTaskClaim,
   failExecutorTask,
   generateExecutorSshKey,
+  getArV3BetaGroup,
   getAssignment,
   getDashboardSummary,
   getDocumentVersion,
@@ -1513,6 +1542,7 @@ export const apiClient = {
   setJobPriority,
   setProjectVendorList,
   setWorkerIntake,
+  startArV3BetaGroup,
   startOptimisationPass,
   startRun,
   streamDocumentVersionContent,

@@ -193,6 +193,10 @@ class RunId(OpaqueId, prefix="run", entity="AuditRun"):
     """Identity of one audit execution request and its result history."""
 
 
+class ArV3RunGroupId(OpaqueId, prefix="arg", entity="ArV3RunGroup"):
+    """Identity of one immutable six-scope AR beta request."""
+
+
 class JobId(OpaqueId, prefix="job", entity="Job"):
     """Identity of the durable schedulable work item for one local run."""
 

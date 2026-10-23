@@ -60,6 +60,8 @@ IMMUTABLE_TABLES = {
     # current row itself moves, so its own guard refuses DELETE and an unrecorded change.
     "norm_current_snapshot_event",
     "norm_retrieval_set",
+    "ar_v3_run_group",
+    "ar_v3_run_group_member",
     "finding_observation_norm_citation",
     # `0024_version_classification`: the first expert classification stands (``AM003``).
     "document_version_classification",
@@ -234,6 +236,8 @@ NON_CONTRACT_IDENTITY_COLUMNS = {
     "created_user_uid",
     "request_id",
     "section_id",
+    # One of the six fixed scope codes, not an opaque entity identity.
+    "scope_id",
     "sequence_no",
     "stage_id",
     "user_uid",
@@ -262,6 +266,7 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "version_uid": "ver",
         "blob_id": "blob",
         "run_id": "run",
+        "group_id": "arg",
         "allocated_by_run_id": "run",
         "reaudit_of_run_id": "run",
         "command_id": "cmd",

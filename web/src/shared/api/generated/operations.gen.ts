@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.1.0 (OpenAPI 3.1.0)
- *   sha256 889ac164ad356674471da8de734597d118b6799f352808b80da74d2b6f295a87
+ *   AuditManager PC-01 API 1.2.0 (OpenAPI 3.1.0)
+ *   sha256 6d4402a62e93dd255a40e30869d42d543cbd7cb64bba75e56b0b4c087ff18c1b
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -21,6 +21,8 @@ import type {
   AppendDecisionRequest,
   AppendDecisionResponse,
   ApproveRegistrationRequest,
+  ArV3BetaGroup,
+  ArV3RunGroupId,
   Assignment,
   AssignmentDetail,
   AssignmentPage,
@@ -134,6 +136,7 @@ import type {
   SetProjectVendorListRequest,
   SetWorkerIntakeRequest,
   SpecificationPrices,
+  StartArV3BetaGroupRequest,
   StartRunRequest,
   SubmitExecutorTaskAnswerRequest,
   SubmitRegistrationRequest,
@@ -176,6 +179,7 @@ export const OPERATION_IDS = [
   'extendExecutorTaskClaim',
   'failExecutorTask',
   'generateExecutorSshKey',
+  'getArV3BetaGroup',
   'getAssignment',
   'getDashboardSummary',
   'getDocumentVersion',
@@ -242,6 +246,7 @@ export const OPERATION_IDS = [
   'setJobPriority',
   'setProjectVendorList',
   'setWorkerIntake',
+  'startArV3BetaGroup',
   'startOptimisationPass',
   'startRun',
   'streamDocumentVersionContent',
@@ -800,6 +805,25 @@ export type GenerateExecutorSshKeyInput = {
 
 /** Success body of `generateExecutorSshKey` (`application/json`, HTTP 201). */
 export type GenerateExecutorSshKeyResult = ExecutorSshKey;
+
+// ------------------------------------------------------------------------------------
+// getArV3BetaGroup - GET /ar-v3-beta/groups/{group_id}
+// ------------------------------------------------------------------------------------
+
+/** Get Ar V3 Beta Group */
+export type GetArV3BetaGroupInput = {
+  /** Path parameters, substituted into `/ar-v3-beta/groups/{group_id}`. */
+  path: {
+    group_id: ArV3RunGroupId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getArV3BetaGroup` (`application/json`, HTTP 200). */
+export type GetArV3BetaGroupResult = ArV3BetaGroup;
 
 // ------------------------------------------------------------------------------------
 // getAssignment - GET /assignments/{assignment_uid}
@@ -2452,6 +2476,28 @@ export type SetWorkerIntakeInput = {
 export type SetWorkerIntakeResult = ExecutionWorker;
 
 // ------------------------------------------------------------------------------------
+// startArV3BetaGroup - POST /ar-v3-beta/groups
+// ------------------------------------------------------------------------------------
+
+/** Start Ar V3 Beta Group */
+export type StartArV3BetaGroupInput = {
+  /** Request body, sent as `application/json`. */
+  body: StartArV3BetaGroupRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `startArV3BetaGroup` (`application/json`, HTTP 202). */
+export type StartArV3BetaGroupResult = ArV3BetaGroup;
+
+// ------------------------------------------------------------------------------------
 // startOptimisationPass - POST /projects/{project_uid}/documents/{document_uid}/optimisation-passes
 // ------------------------------------------------------------------------------------
 
@@ -3108,6 +3154,20 @@ export const OPERATIONS = {
     successStatuses: [201],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['execution'],
+  },
+  getArV3BetaGroup: {
+    operationId: 'getArV3BetaGroup',
+    method: 'GET',
+    path: '/ar-v3-beta/groups/{group_id}',
+    pathParams: ['group_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['runs'],
   },
   getAssignment: {
     operationId: 'getAssignment',
@@ -4032,6 +4092,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['execution'],
+  },
+  startArV3BetaGroup: {
+    operationId: 'startArV3BetaGroup',
+    method: 'POST',
+    path: '/ar-v3-beta/groups',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [202],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['runs'],
   },
   startOptimisationPass: {
     operationId: 'startOptimisationPass',

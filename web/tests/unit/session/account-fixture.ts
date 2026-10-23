@@ -37,7 +37,7 @@ export function accountAnswer(overrides: Record<string, unknown> = {}): Response
 export function authenticationRequired(correlationId = 'api-correlation-401'): Response {
   return new Response(
     JSON.stringify({
-      contract_version: '1.1.0',
+      contract_version: '1.2.0',
       correlation_id: correlationId,
       error_code: 'authentication_required',
       message: 'The credential is not accepted.',
@@ -54,7 +54,7 @@ export function authenticationRequired(correlationId = 'api-correlation-401'): R
 export function conflict(reason: unknown): Response {
   return new Response(
     JSON.stringify({
-      contract_version: '1.1.0',
+      contract_version: '1.2.0',
       correlation_id: 'api-correlation-409',
       error_code: 'conflict',
       message: 'Conflict.',

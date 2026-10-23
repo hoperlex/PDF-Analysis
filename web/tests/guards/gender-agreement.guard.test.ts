@@ -267,7 +267,7 @@ function contractErrorCodes(): readonly string[] {
 
 function envelope(code: ErrorCode): ApiError {
   const body: ErrorEnvelope = {
-    contract_version: '1.1.0',
+    contract_version: '1.2.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',

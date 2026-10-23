@@ -16,6 +16,7 @@ shares one engine and the composition root remains the only thing that reads con
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import asdict
 from datetime import datetime, timezone
 from typing import Any, BinaryIO
 
@@ -837,6 +838,7 @@ class RunAdapter(_SessionHolder):
         text_profiles: Any = None,
         providers: Any = None,
         route_freezer: Any = None,
+        ar_v3_pack_registry: Any = None,
     ) -> None:
         super().__init__(session_factory)
         # `EXEC-HTTP-01`. The provider resolver the executor binds each Attempt with, and, for
@@ -844,6 +846,7 @@ class RunAdapter(_SessionHolder):
         # start. Both ``None`` keeps the many tests that build a bare adapter as they are.
         self._providers = providers
         self._route_freezer = route_freezer
+        self._ar_v3_pack_registry = ar_v3_pack_registry
         # `W59-SECTION-SEAL-01`. The sealed section -> (profile, bundle) table run start and
         # re-audit route through, and the registry resolver the executor runs a run's pinned
         # profile with. The composition root always passes both
@@ -866,6 +869,27 @@ class RunAdapter(_SessionHolder):
         # ``test_the_served_application_always_passes_a_budget`` is red for any path that
         # does not.
         self._input_budget_characters = input_budget_characters
+
+    def start_ar_v3_group(self, *, version_uid: str, idempotency_key: str) -> models.ArV3BetaGroup:
+        from auditmanager.runs.public import start_ar_v3_group
+
+        started = self._write(lambda session: start_ar_v3_group(
+            session,
+            version_uid=version_uid,
+            idempotency_key=idempotency_key,
+            provider_mode=self._provider_mode,
+            pack=(None if self._ar_v3_pack_registry is None
+                  else self._ar_v3_pack_registry.select_beta()),
+            input_budget_characters=self._input_budget_characters,
+            connection_route=self._route_freezer,
+        ))
+        return models.ArV3BetaGroup.model_validate(asdict(started.group))
+
+    def get_ar_v3_group(self, *, group_id: str) -> models.ArV3BetaGroup:
+        from auditmanager.runs.public import get_ar_v3_group
+
+        view = self._read(lambda session: get_ar_v3_group(session, group_id))
+        return models.ArV3BetaGroup.model_validate(asdict(view))
 
     def start_run(
         self,
