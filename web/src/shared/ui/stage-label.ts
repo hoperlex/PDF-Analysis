@@ -47,7 +47,7 @@
  * both directions and refuses a label that is not Cyrillic.
  */
 
-import type { StageId } from '@/shared/api';
+import type { ArV3BetaStageId, StageId } from '@/shared/api';
 
 export const STAGE_LABELS: Readonly<Record<StageId, string>> = {
   source_preparation: 'Подготовка источника',
@@ -60,3 +60,14 @@ export const STAGE_LABELS: Readonly<Record<StageId, string>> = {
   finding_correction: 'Исправление находок',
   norm_verification: 'Нормативная проверка',
 };
+
+/** The profile-specific v3 stage is outside the frozen nine-stage legacy graph. */
+export const AR_V3_BETA_STAGE_LABELS: Readonly<Record<ArV3BetaStageId, string>> = {
+  ar_v3_citation_review: 'Предварительная проверка нормативных ссылок АР v3',
+};
+
+/** Russian label for either legal RunStatus stage family. */
+export function runStageLabel(stageId: StageId | ArV3BetaStageId): string {
+  if (stageId === 'ar_v3_citation_review') return AR_V3_BETA_STAGE_LABELS[stageId];
+  return STAGE_LABELS[stageId];
+}

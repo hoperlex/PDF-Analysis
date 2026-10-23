@@ -130,6 +130,7 @@ import { MY_TASKS_LIMIT } from '@/widgets/my-tasks';
 import NotFound from '@/app/not-found';
 import ErrorBoundary from '@/app/error';
 import { DecisionHistory } from '@/widgets/decision-history';
+import { ArV3BetaReview } from '@/widgets/ar-v3-beta-review';
 import { ExecutionJournal } from '@/widgets/execution-journal';
 import { ExecutionQueue } from '@/widgets/execution-queue';
 import { WorkerList } from '@/widgets/worker-list';
@@ -1915,6 +1916,32 @@ const BLOCKS_SHAPES: readonly ScreenCase[] = [
 ];
 
 const EXTRA_SHAPES: readonly ScreenCase[] = [
+  // `AR-V3-BETA-SCREEN-GATE-REPAIR-01`: these four branches are conditional on the
+  // group ID and its separate read, so the default settings route cannot reach them.
+  {
+    name: 'ar-v3-group-pending',
+    make: () => createElement(ArV3BetaReview, { groupId: 'arg_01M2545JSD15ETSNNV904X991K' }),
+  },
+  {
+    name: 'ar-v3-group-invalid-id',
+    make: () => createElement(ArV3BetaReview, { groupId: 'arg_bad' }),
+  },
+  {
+    name: 'ar-v3-group-read-refused',
+    make: () => createElement(ArV3BetaReview, { groupId: 'arg_01M2545JSD15ETSNNV904X991K' }),
+    seedClient: (client) => seedError(
+      client, queryKeys.runs.arV3GroupReview('arg_01M2545JSD15ETSNNV904X991K'),
+      apiError(503, 'dependency_unavailable'),
+    ),
+  },
+  {
+    name: 'ar-v3-group-inconsistent-answer',
+    make: () => createElement(ArV3BetaReview, { groupId: 'arg_01M2545JSD15ETSNNV904X991K' }),
+    seedClient: (client) => client.setQueryData(
+      queryKeys.runs.arV3GroupReview('arg_01M2545JSD15ETSNNV904X991K'),
+      { group_id: 'arg_01M2545JSD15ETSNNV904X991K', version_uid: VERSION_UID, members: [] },
+    ),
+  },
   // `W60-PRICE-LIST-01`: the project's «Оптимизация» tab in every branch its widgets have.
   ...optimisationShapes(),
   // `W60-OPT-PROPOSALS-01`: «Предложения» in every branch its widget, features and entity have.

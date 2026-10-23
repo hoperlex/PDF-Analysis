@@ -62,7 +62,7 @@ import {
   LoadingState,
   NotApplicableState,
   RunStateBadge,
-  STAGE_LABELS,
+  runStageLabel,
   STATE_LABELS,
   COST_BASIS_LABELS,
   PROVIDER_MODE_LABELS,
@@ -156,7 +156,7 @@ function Outcome({ status }: { readonly status: RunStatus }) {
                  */}
                 {outcome.degradation.map((stageId) => (
                   <li key={stageId} data-degraded-stage={stageId}>
-                    {STAGE_LABELS[stageId]}
+                    {runStageLabel(stageId)}
                   </li>
                 ))}
               </ul>

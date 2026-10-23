@@ -52,6 +52,8 @@ describe('AR v3 beta group review panel', () => {
     expect(empty).not.toContain('Загрузка: разбора группы');
     const invalid = renderScreen(newClient(), createElement(ArV3BetaReview, { groupId: 'arg_bad' }));
     expect(invalid).toContain('Неверный идентификатор группы');
+    expect(invalid).toContain('Укажите идентификатор группы из ответа запуска.');
+    expect(invalid).not.toContain('Укажите идентификатор arg_');
   });
 
   it('shows all six states and escaped provisional evidence without claiming a verdict', () => {

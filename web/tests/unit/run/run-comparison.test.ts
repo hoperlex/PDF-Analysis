@@ -201,6 +201,16 @@ describe('the terminal detail is compared as a bag of classifiers, not as an obj
 });
 
 describe('a stage only one run reported is one-sided, not different', () => {
+  it('compares two v3 citation stages without legacy placeholders or invented dependencies', () => {
+    const first = reading({ stages: [stage({ stage_id: 'ar_v3_citation_review', status: 'succeeded' })] });
+    const second = reading({ run_id: RUN_B, stages: [stage({ stage_id: 'ar_v3_citation_review', status: 'failed' })] });
+    const rows = comparedStages(first, second);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      stageId: 'ar_v3_citation_review', comparison: 'differs', dependsOn: [], expected: true,
+    });
+  });
+
   it('says `one_sided` and leaves the other side empty', () => {
     const rows = comparedStages(
       reading({ stages: [stage({ stage_id: 'block_analysis', status: 'succeeded' })] }),

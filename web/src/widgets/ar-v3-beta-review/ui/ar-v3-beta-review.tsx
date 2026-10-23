@@ -17,7 +17,9 @@ function reviewQuery(groupId: ArV3RunGroupId) {
   return {
     queryKey: queryKeys.runs.arV3GroupReview(groupId),
     queryFn: async ({ signal }: { signal?: AbortSignal }): Promise<ArV3BetaGroupReview> =>
-      (await getArV3BetaGroupReview({ path: { group_id: groupId } }, { signal })).data,
+      (await getArV3BetaGroupReview(
+        { path: { group_id: groupId } }, signal === undefined ? {} : { signal },
+      )).data,
   } as const;
 }
 
@@ -115,7 +117,7 @@ export function ArV3BetaReview({ groupId }: { readonly groupId: string | null })
         <button className="am-button" type="submit">Показать разбор</button>
       </form>
       {groupId !== null && validGroupId === null ? (
-        <ErrorState title="Неверный идентификатор группы" detail="Укажите идентификатор arg_ из ответа запуска." />
+        <ErrorState title="Неверный идентификатор группы" detail="Укажите идентификатор группы из ответа запуска." />
       ) : null}
       {validGroupId !== null && query.isPending ? <LoadingState what="разбора группы АР v3" /> : null}
       {validGroupId !== null && failure !== null ? (

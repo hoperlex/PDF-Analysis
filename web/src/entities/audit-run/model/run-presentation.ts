@@ -18,8 +18,9 @@
  *    contract says it has stopped.
  */
 
-import type { CostBasis, ProviderMode, RunState, RunStatus, StageId, StageStatus } from '@/shared/api';
+import type { ArV3BetaStageId, CostBasis, ProviderMode, RunState, RunStatus, StageId, StageStatus } from '@/shared/api';
 import {
+  AR_V3_BETA_STAGE_ID_VALUES,
   PROVIDER_MODE_VALUES,
   RUN_STATE_VALUES,
   STAGE_ID_VALUES,
@@ -70,7 +71,7 @@ export function hasKnownRunVocabulary(status: RunStatus): boolean {
     readonly stages: unknown;
   };
   const runStates: readonly unknown[] = RUN_STATE_VALUES;
-  const stageIds: readonly unknown[] = STAGE_ID_VALUES;
+  const stageIds: readonly unknown[] = [...STAGE_ID_VALUES, ...AR_V3_BETA_STAGE_ID_VALUES];
   const stageStatuses: readonly unknown[] = STAGE_STATUS_VALUES;
 
   if (!runStates.includes(candidate.state) || !Array.isArray(candidate.stages)) return false;
@@ -162,7 +163,7 @@ export function runHasPublishedResult(state: RunState): boolean {
 export type RunOutcome =
   | { readonly kind: 'in_flight'; readonly state: RunState }
   | { readonly kind: 'published'; readonly findingCount: number | null }
-  | { readonly kind: 'partial'; readonly degradation: readonly StageId[] }
+  | { readonly kind: 'partial'; readonly degradation: readonly (StageId | ArV3BetaStageId)[] }
   | {
       readonly kind: 'failed';
       readonly terminalReason: string | null;
@@ -256,13 +257,13 @@ export const STAGE_DEPENDS_ON: Readonly<Record<StageId, readonly StageId[]>> = {
 };
 
 export interface StageRow {
-  readonly stageId: StageId;
+  readonly stageId: StageId | ArV3BetaStageId;
   /** `null` when the run has not reported this stage yet, or never scheduled it. */
   readonly status: StageStatus | null;
   readonly errorCode: string | null;
   readonly startedAt: string | null;
   readonly finishedAt: string | null;
-  /** True when the stage is one PC-01 schedules; false for a stage the run added. */
+  /** True when the stage belongs to the known PC-01 chain or the v3 beta profile. */
   readonly expected: boolean;
   /**
    * Position in the sequence PC-01 schedules, from 1 — and `null` for a stage it does not
@@ -290,7 +291,10 @@ export function stageRows(status: Pick<RunStatus, 'stages'>): readonly StageRow[
   const reported = new Map(status.stages.map((stage) => [stage.stage_id, stage]));
   const rows: StageRow[] = [];
 
-  PC01_STAGE_IDS.forEach((stageId, index) => {
+  // A reported profile-specific v3 stage is evidence that this is not the legacy PC-01
+  // schedule. Do not invent four missing legacy stages beside that report.
+  const reportsV3 = status.stages.some((stage) => stage.stage_id === 'ar_v3_citation_review');
+  if (!reportsV3) PC01_STAGE_IDS.forEach((stageId, index) => {
     const stage = reported.get(stageId);
     rows.push({
       stageId,
@@ -313,9 +317,10 @@ export function stageRows(status: Pick<RunStatus, 'stages'>): readonly StageRow[
       errorCode: stage.error_code ?? null,
       startedAt: stage.started_at ?? null,
       finishedAt: stage.finished_at ?? null,
-      expected: false,
+      expected: stage.stage_id === 'ar_v3_citation_review',
       ordinal: null,
-      dependsOn: STAGE_DEPENDS_ON[stage.stage_id],
+      // This stage belongs to the separate v3 profile, not the nine-stage legacy graph.
+      dependsOn: stage.stage_id === 'ar_v3_citation_review' ? [] : STAGE_DEPENDS_ON[stage.stage_id],
     });
   }
 

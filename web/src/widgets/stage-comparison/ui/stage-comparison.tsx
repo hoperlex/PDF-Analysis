@@ -55,7 +55,7 @@ import {
   PROVIDER_MODE_LABELS,
   PROVIDER_MODE_UNKNOWN_LABEL,
   RunStateBadge,
-  STAGE_LABELS,
+  runStageLabel,
   StageStatusBadge,
 } from '@/shared/ui';
 import { classifyListingFailure, formatInstant } from '@/shared/lib';
@@ -405,7 +405,7 @@ export function StageComparison({ versionUid }: StageComparisonProps) {
                   {row.ordinal ?? '—'}
                 </td>
                 <td>
-                  <span className={styles.stageName}>{STAGE_LABELS[row.stageId]}</span>
+                  <span className={styles.stageName}>{runStageLabel(row.stageId)}</span>
                   {row.expected ? null : (
                     <span className={styles.absent}> (на этом этапе не планируется)</span>
                   )}
