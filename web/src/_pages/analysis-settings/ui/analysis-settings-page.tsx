@@ -13,6 +13,7 @@
 import { useAnalysisProfiles } from '@/entities/analysis-profile';
 import { failureMessage } from '@/shared/api/failure-message';
 import { AnalysisProfileTable } from '@/widgets/analysis-profile-table';
+import { ArV3BetaStatus } from '@/widgets/ar-v3-beta-status';
 import { ErrorState, LoadingState, PageShell } from '@/shared/ui';
 
 export function AnalysisSettingsPage() {
@@ -24,6 +25,7 @@ export function AnalysisSettingsPage() {
       subtitle="Профиль анализа каждого раздела: с ним сервер выполняет прогон версии, раздел которой подтвердил эксперт. Экран только показывает профили — изменить их здесь нельзя."
       actions={<button className="am-button am-button--quiet" type="button" onClick={() => void profiles.refetch()}>Обновить</button>}
     >
+      <ArV3BetaStatus />
       {profiles.isPending ? <LoadingState what="профилей анализа" /> : null}
       {failure !== null ? (
         <div data-analysis-profiles-failure={failure.kind}>

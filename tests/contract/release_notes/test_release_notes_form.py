@@ -145,12 +145,16 @@ def test_authored_shape_and_form() -> None:
     # polish of 2026-10-13 (version history, sign-in, user filters); 0.6.0 by W55B-RELNOTES-01
     # (W55b released as 0.6.0 under R-123), revised once for W55B-NOTES-JUDGE's edits E2, E4-E6;
     # 0.7.0 by RELEASE-0-7-0-RECORD-01 (the owner's own merge of dev into main, R-141e), revised once
-    # for the independent judge's edits.
+    # for the independent judge's edits. 0.8.0 is an honestly limited AR v3 beta-status
+    # development candidate; no six-Run or verified citation claim is authored.
     assert {entry["version"]: entry["revision"] for _, entry in entries} == {
-        "0.7.0": 2, "0.6.0": 2, "0.5.1": 1, "0.5.0": 1, "0.4.0": 1, "0.3.0": 2, "0.2.0": 2,
+        "0.8.0": 1, "0.7.0": 2, "0.6.0": 2, "0.5.1": 1, "0.5.0": 1,
+        "0.4.0": 1, "0.3.0": 2, "0.2.0": 2,
     }
     assert form_failures(entries, version=(ROOT / "VERSION").read_text().strip(), terms=_dictionary()) == set()
-    assert [entry["version"] for _, entry in entries] == ["0.7.0", "0.6.0", "0.5.1", "0.5.0", "0.4.0", "0.3.0", "0.2.0"]
+    assert [entry["version"] for _, entry in entries] == [
+        "0.8.0", "0.7.0", "0.6.0", "0.5.1", "0.5.0", "0.4.0", "0.3.0", "0.2.0",
+    ]
     archive = entries[-1][1]
     assert archive["is_archive"] is True
     assert archive["range_label"] == "0.1–0.2"
@@ -194,7 +198,10 @@ def test_bad_fixture_fails_named_rule(rule: str) -> None:
     elif rule == "item_count_above":
         current["items"] = [copy.deepcopy(item) for _ in range(8)]
     elif rule == "kind_order":
-        current["items"][0]["kind"] = "fixed"
+        current["items"] = [
+            {**copy.deepcopy(item), "kind": "fixed"},
+            {**copy.deepcopy(item), "kind": "new"},
+        ]
     elif rule == "text_length":
         item["text"] = "а" * 401
     elif rule == "straight_quotes":
