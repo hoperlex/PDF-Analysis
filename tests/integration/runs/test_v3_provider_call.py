@@ -18,6 +18,7 @@ from auditmanager.analysis.text.proxy import ReceivedResponse
 from auditmanager.jobs.public import AttemptAuthority
 from auditmanager.runs import executor, v3_provider_call
 from auditmanager.runs.provider import ProviderBinding
+from auditmanager.runs.v3_reply_custody import V3ReplyExpectation, read_v3_reply
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.storage.public import derive_blob_id
 
@@ -193,6 +194,18 @@ def test_exact_request_and_answer_are_journaled_around_transport(monkeypatch, mo
     assert hashlib.sha256(session.publication.data).hexdigest() == receipt.reply_ref.sha256
     assert completed["parameters"]["ar_v3_reply_blob_id"] == receipt.reply_ref.blob_id
     assert completed["parameters"]["ar_v3_reply_blob_sha256"] == receipt.reply_ref.sha256
+    recovered = read_v3_reply(
+        session.publication, reference=receipt.reply_ref,
+        expected=V3ReplyExpectation(
+            run_id=AUTHORITY.run_id, model_call_id=receipt.model_call_id,
+            provider=receipt.provider, candidate_sha256="b" * 64,
+            request_sha256=REQUEST.request_sha256,
+            response_sha256=RESPONSE.response_sha256,
+        ),
+    )
+    assert recovered.model_response == RESPONSE
+    assert recovered.supplied_response.output_text == RESPONSE.output_text
+    assert recovered.supplied_response.request_sha256 == "b" * 64
     names = [event if isinstance(event, str) else event[0] for event in events]
     assert (names.index("prepared") < names.index("dispatch")
             < names.index("response") < names.index("blob_intent")
