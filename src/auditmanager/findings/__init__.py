@@ -42,6 +42,7 @@ from auditmanager.findings.queries import (
     DiagnosticRow,
     EvidenceRow,
     FindingRow,
+    FindingGroupRow,
     diagnostics,
     evidence_resolves,
     finding_exists,
@@ -49,6 +50,7 @@ from auditmanager.findings.queries import (
     published_finding_count,
     published_finding_evidence,
     finding_by_uid,
+    group_published_findings,
     published_findings,
 )
 from auditmanager.findings.terminal import (
@@ -73,6 +75,7 @@ __all__ = [
     "EvidenceRow",
     "EvidenceVerdict",
     "FindingRow",
+    "FindingGroupRow",
     "GateResult",
     "Observation",
     "ObservationSet",
@@ -93,6 +96,7 @@ __all__ = [
     "published_finding_count",
     "published_finding_evidence",
     "finding_by_uid",
+    "group_published_findings",
     "published_findings",
     "run_grounding_gate",
     "select_terminal",
