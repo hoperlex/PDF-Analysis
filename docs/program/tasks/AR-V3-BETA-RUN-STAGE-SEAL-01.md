@@ -64,6 +64,41 @@ The served `RunStatus` contract can represent the profile-specific `ar_v3_citati
 - `docs/program/tasks/AR-V3-BETA-RUN-STAGE-SEAL-01.md`
 - `docs/program/dispatch/AR-V3-BETA-CODE-QUEUE.md`
 
+- `docs/program/P02_SEAMS.md`
+- `infra/deploy/README.md`
+- `infra/deploy/serve.py`
+- `src/auditmanager/api/README.md`
+- `src/auditmanager/api/health.py`
+- `src/auditmanager/api/routers/blocks.py`
+- `src/auditmanager/ingest/pdf_reader.py`
+- `src/auditmanager/norms/bundle/manifest.py`
+- `tests/e2e/pc01/journey/manifest.json`
+- `tests/e2e/pc01/test_acceptance.py`
+- `tests/integration/api/driver.py`
+- `tests/integration/api/test_authorization.py`
+- `tests/integration/api/test_envelope_screen_rules.py`
+- `tests/integration/api/test_operation_surface.py`
+- `tests/integration/api/test_role_register.py`
+- `tests/integration/api/test_router_and_body_rules.py`
+- `tests/integration/api/test_served_document_and_health_plane.py`
+- `tests/integration/composition/test_api_token_channel.py`
+- `tests/integration/composition/test_composition_root.py`
+- `tests/integration/composition/test_norms_worker_image_contract.py`
+- `tests/integration/db/test_routing_refusal_codes_migration.py`
+- `tests/integration/norms/bundle/test_contents.py`
+- `tests/integration/p02_journey/test_extractor_divergence.py`
+- `tests/support/expected_facts.py`
+- `tests/unit/analysis/text_profiles/test_text_profile_packages.py`
+- `web/src/_app/navigation.ts`
+- `web/src/_pages/knowledge-base/ui/knowledge-base-page.tsx`
+- `web/src/app/bff/v1/[...path]/route.ts`
+- `web/src/entities/audit-run/model/terminal-reason.ts`
+- `web/src/entities/execution/model/presentation.ts`
+- `web/src/shared/config/index.ts`
+- `web/src/shared/config/screen-registry.ts`
+- `web/src/shared/lib/routes.ts`
+- `web/src/widgets/home-tiles/model/registrations-screen.ts`
+
 ## Forbidden hotspots
 - migration head, root dependencies/lockfiles, product VERSION, composition root, global styles
 - provider transports, normative maps/source/set data, existing nine-stage registry membership

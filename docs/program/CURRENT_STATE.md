@@ -1,6 +1,6 @@
 # Current state
 
-**Updated 2026-10-20 for the night window under `R-139` (sections, norms, storage structure), after candidate 67 added the `R-137` W54 repair to candidate 66 (`ec41bb5881b2e677af7f22af62266818f37b2a61`).**
+**Updated 2026-10-23 for the AR v3 beta RunStatus contract seal.** The earlier night-window state and its `R-137` W54 repair remain recorded below.
 W55b is published on `origin/main` and tagged `v0.6.0`. Its exact-tree gate counts as `GATE OK` under R-125; the deploy workflow selected that tree, and the owner ran `infra/deploy/verify-deployed.sh` on the host with a passing image/tree comparison.
 The workflow's own verify step was skipped because a child consumed its stdin; the tested repair is on `origin/dev`. Moving it to main needs a fresh complete gate and a direct exact-SHA owner instruction.
 The owner waived five credentialed live W55b product checks; those journeys remain unverified. See `W55B-INT-TAG-01.md`, `W55B-INT-MAIN-VERIFY-ADDENDUM-01.md` and `CFB-INT-DEV-PUBLISH-43.md`.
