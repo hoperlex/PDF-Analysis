@@ -1,8 +1,10 @@
 # AR beta: available-source policy
 
-**Task:** [AR-BETA-AVAILABLE-SOURCE-GATE-01](tasks/AR-BETA-AVAILABLE-SOURCE-GATE-01.md). **Base:** `54585633bbae7ff4b12f296afdb1c96be0e5f485`. **Policy digest:** `ca6a41327a8c6af7679b413434651475b6615786a1b1724e571e0420b6b3a51d`.
+**Task:** [AR-BETA-AVAILABLE-SOURCE-GATE-01](tasks/AR-BETA-AVAILABLE-SOURCE-GATE-01.md). **Base:** `54585633bbae7ff4b12f296afdb1c96be0e5f485`. **Policy digest:** `9d3b7e53b512fbde1ea478a77a63c3c48042e85ddc50d57c96241c79bcb91d58`.
 
 The owner asked to proceed toward beta with obtainable public material. The new [source policy](../../src/auditmanager/analysis/profiles/ar_v3/norm_map/beta_sources.json) accounts for all C01–C22 once in the frozen F1/F2/A1/A2/S1/S2 composition. It separates **14 provisional citation candidates** from **8 context-only topics**. Provisional means the local corpus text and at least one open text source are named; it is *not* a claim of the effective legal edition, exact page match, project applicability, a reviewed map or a publishable citation. The validator pins exact canonical policy bytes and refuses a missing/changed policy, duplicate or omitted item, unknown source, card-only citation, and attempted promotion of known gaps C05/C06/C08/C09/C10/C15/C21/C22.
+
+The owner subsequently selected the beta scenario **new multi-apartment residential building, Ф1.3** and required topics without a confirmed edition or table row to read **"requires expert review"**, with no numeric conclusion. The exact policy now pins `scenario=new_multi_apartment_residential_F1.3` and `numeric_output_policy=expert_review_required`; neither value grants source applicability by itself. All 14 provisional candidates still need project facts and edition review before a numeric finding.
 
 | Scope | Provisional candidates | Context-only topics and reason |
 | --- | --- | --- |
@@ -24,4 +26,4 @@ The local bundle PDF SHA-256 values are copied from the checked `AR-NORM-MAP-REV
 
 ## Checks and handoff
 
-`tests/contract/norm_map` plus `tests/contract/program`: **33 passed**. The tests include known-gap refusal, card-only refusal, item totality and digest tamper. Python imports succeeded. `git diff --cached --check` passed after staging the six allowed files; `git diff --cached --name-only` listed only the task/report, the three `norm_map` files and the contract test. Contracts, migrations, composition root, root locks, provider, UI, corpus bytes, `origin/main` and deployment host are untouched. Revert this task's six files to remove the unserved policy.
+`tests/contract/norm_map` plus `tests/contract/program`: **34 passed** after the scenario decision. The tests include known-gap refusal, card-only refusal, item totality, scenario/numeric-policy refusal and digest tamper. Python imports succeeded. `git diff --check` passed; changed paths were the task/report, the policy JSON/validator and its contract test. Contracts, migrations, composition root, root locks, provider, UI, corpus bytes, `origin/main` and deployment host are untouched. Revert this task's six files to remove the unserved policy.

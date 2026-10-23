@@ -23,7 +23,9 @@ POLICY_PATH: Final[Path] = Path(__file__).with_name("beta_sources.json")
 POLICY_VERSION: Final[str] = "ar-beta-source-policy-v1"
 SNAPSHOT_ID: Final[str] = "ns_01M59N8QNBVN91ACA2HCE6VE74"
 COMPOSITION_SHA256: Final[str] = "79396188486c430729213279fb7c1c8fca7c13ede3f3f13388d06d9f93bbb781"
-POLICY_SHA256: Final[str] = "ca6a41327a8c6af7679b413434651475b6615786a1b1724e571e0420b6b3a51d"
+POLICY_SHA256: Final[str] = "9d3b7e53b512fbde1ea478a77a63c3c48042e85ddc50d57c96241c79bcb91d58"
+SCENARIO: Final[str] = "new_multi_apartment_residential_F1.3"
+NUMERIC_OUTPUT_POLICY: Final[str] = "expert_review_required"
 _IDS: Final[tuple[str, ...]] = tuple(f"C{index:02d}" for index in range(1, 23))
 _SCOPES: Final[tuple[str, ...]] = ("F1", "F2", "A1", "A2", "S1", "S2")
 _MODES: Final[frozenset[str]] = frozenset({"provisional_citation", "context_only"})
@@ -64,6 +66,8 @@ class BetaSourcePolicy:
     sha256: str
     snapshot_id: str
     composition_sha256: str
+    scenario: str
+    numeric_output_policy: str
     sources: Mapping[str, BetaSource]
     items: tuple[BetaItem, ...]
 
@@ -127,11 +131,13 @@ def load_beta_source_policy(path: Path | None = None) -> BetaSourcePolicy:
     digest = hashlib.sha256(canonical).hexdigest()
     if data != canonical + b"\n" or digest != POLICY_SHA256:
         _refuse("policy_digest_invalid")
-    if set(document) != {"policy_version", "snapshot_id", "composition_sha256", "sources", "items"}:
+    if set(document) != {"policy_version", "snapshot_id", "composition_sha256", "scenario", "numeric_output_policy", "sources", "items"}:
         _refuse("policy_shape_invalid")
     if (document["policy_version"] != POLICY_VERSION
             or document["snapshot_id"] != SNAPSHOT_ID
-            or document["composition_sha256"] != COMPOSITION_SHA256):
+            or document["composition_sha256"] != COMPOSITION_SHA256
+            or document["scenario"] != SCENARIO
+            or document["numeric_output_policy"] != NUMERIC_OUTPUT_POLICY):
         _refuse("policy_identity_invalid")
     source_rows = document["sources"]
     if not isinstance(source_rows, dict) or not source_rows:
@@ -173,6 +179,7 @@ def load_beta_source_policy(path: Path | None = None) -> BetaSourcePolicy:
     if set(sources) != {source_id for item in items for source_id in item.source_ids}:
         _refuse("unused_source_invalid")
     return BetaSourcePolicy(digest, SNAPSHOT_ID, COMPOSITION_SHA256,
+                            SCENARIO, NUMERIC_OUTPUT_POLICY,
                             MappingProxyType(sources), tuple(items))
 
 

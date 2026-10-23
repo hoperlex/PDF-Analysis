@@ -1,7 +1,7 @@
 # Task AR-BETA-AVAILABLE-SOURCE-GATE-01 — bounded AR beta source policy
 
 task_id: AR-BETA-AVAILABLE-SOURCE-GATE-01
-status: active
+status: completed (unserved source-policy prerequisite)
 
 ## Outcome
 
@@ -18,6 +18,7 @@ The six AR scope groups expose an explicit, machine-checked beta source disposit
 - Contract `1.0.0`; migration head `0031_executor_pull_channel`.
 - Repaired snapshot `ns_01M59N8QNBVN91ACA2HCE6VE74`; six-group composition `79396188486c430729213279fb7c1c8fca7c13ede3f3f13388d06d9f93bbb781`.
 - Owner direction: use obtainable sources for a beta; preserve six separate Run provenance and the 22,000-character per-set cap. No unverified original-checklist number is approved by that direction.
+- Subsequent owner choice: new multi-apartment residential building, Ф1.3; an unconfirmed edition or table row requires expert review without a numeric conclusion. Frozen as `scenario` and `numeric_output_policy` in the policy bytes.
 
 ## Enumerator ownership
 
