@@ -152,6 +152,7 @@ def test_foreign_call_or_saved_request_refuses_before_reply(monkeypatch, field, 
     with pytest.raises(DomainError) as caught:
         _execute(jobs, store)
     assert caught.value.code is ErrorCode.ANALYSIS_INPUT_INVALID
+    assert caught.value.detail_fields["stage_id"] == "text_analysis"
     assert store.reads == 0
 
 

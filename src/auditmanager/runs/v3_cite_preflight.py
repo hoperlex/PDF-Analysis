@@ -44,7 +44,7 @@ def _refuse(reason: str) -> DomainError:
     return DomainError(
         ErrorCode.ANALYSIS_INPUT_INVALID,
         message="saved AR v3 request and provider evidence do not agree",
-        stage_id="citation_validation", reason=reason,
+        stage_id="text_analysis", reason=reason,
     )
 
 
