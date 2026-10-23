@@ -167,13 +167,12 @@ def build_worker_runtime(
             providers=providers.resolve,
         )
 
-    # `EXEC-HTTP-01`: «Проверить» runs here, over the path real calls take. Only a process
-    # that holds the private ring can open a key, so only that one takes probes.
+    # `EXEC-PULL-PROBE-INT-01`: pull probes need no secret. Start the probe loop even
+    # without a private ring; keyed probes report `secret_unreadable` in that case.
     from auditmanager.executors.runtime import runner_for
 
-    probe_runner = (
-        None if resolved.secrets_private_ring is None
-        else runner_for(sessions, ring=resolved.secrets_private_ring, environ=env, engine=engine)
+    probe_runner = runner_for(
+        sessions, ring=resolved.secrets_private_ring, environ=env, engine=engine,
     )
 
     return WorkerRuntime(

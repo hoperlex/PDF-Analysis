@@ -51,7 +51,7 @@ def test_the_loop_is_only_started_when_a_runner_is_given() -> None:
     assert _service(None)._probe_runner is None
 
 
-def test_a_worker_that_holds_the_private_ring_is_wired_with_a_probe_runner_and_one_without_is_not() -> None:
+def test_the_worker_runs_probes_with_or_without_a_private_ring() -> None:
     from auditmanager.bootstrap.composition import build_worker_runtime
 
     base = {
@@ -62,7 +62,7 @@ def test_a_worker_that_holds_the_private_ring_is_wired_with_a_probe_runner_and_o
     ring = "k1:AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
     assert build_worker_runtime(environ={**base, "AUDITMANAGER_SECRETS_KEYS": ring,
                                          "AUDITMANAGER_SECRETS_ACTIVE_KID": "k1"}).probe_runner is not None
-    assert build_worker_runtime(environ=base).probe_runner is None
+    assert build_worker_runtime(environ=base).probe_runner is not None
 
 
 def test_serve_hands_the_runtimes_probe_runner_to_the_worker_service(monkeypatch) -> None:  # type: ignore[no-untyped-def]
