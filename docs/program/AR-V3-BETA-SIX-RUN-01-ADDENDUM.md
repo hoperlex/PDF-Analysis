@@ -25,3 +25,5 @@ The API prose-count gate also scans four deployment/BFF/authorization files for 
 Generated-client `1.2.0` types require updating the web test fixtures' ErrorEnvelope literals and the keyed-operation inventory. The replacement task owns `web/tests/**` for those exact contract/typecheck repairs.
 
 The roadmap queue still names the superseded `-01` six-Run slot. The replacement integration task owns its single queue-row correction and immediate successor references, so the published roadmap points to the actually implemented task.
+
+The replacement task's broad check named non-existent `analysis_v1` and `events_v1` test directories. Its command now names the actual `analysis_packages` suite; the API contract seal tests also verify the events family. This corrects the command only, with no change to the acceptance boundary.

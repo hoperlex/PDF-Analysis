@@ -108,7 +108,7 @@ No legal-edition or map approval, set promotion, model dispatch, CITE StageResul
 
 ## Checks
 
-- `PYTHONPATH=src /root/projects/PDF-Analysis/.venv/bin/python -m pytest -q tests/contract/domain_p02 tests/contract/api_v1 tests/contract/analysis_v1 tests/contract/events_v1 tests/integration/runs tests/integration/api tests/integration/db tests/integration/composition` with focused new cases; isolated migration upgrade from 0031.
+- `PYTHONPATH=src /root/projects/PDF-Analysis/.venv/bin/python -m pytest -q tests/contract/domain_p02 tests/contract/api_v1 tests/contract/analysis_packages tests/integration/runs tests/integration/api tests/integration/db tests/integration/composition` with focused new cases; isolated migration upgrade from 0031. The API seal suite checks the events family too.
 - Generated web client/typecheck and contract version-totality validation; `git diff --check` and exact allowed-path inventory. The final beta candidate owns the complete `make gate` under R-135.
 
 ## Integration contract
