@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session
 
 from auditmanager.executors.destinations import DestinationPolicy
-from auditmanager.executors.kinds import KindRuntime, adapter_for
+from auditmanager.executors.kinds import AdapterSecrets, KindRuntime, adapter_for
 from auditmanager.executors.model import (
     IDENTITY_BASIS_BY_KIND,
     ConnectionRecord,
@@ -162,8 +162,26 @@ def bind_connection(
         destination=destination_for(connection.kind, revision.settings, entry.purpose),
         repository=store,
     )
+    additional_purposes = entry.additional_purposes(revision)
+    if additional_purposes:
+        current = {item.purpose: item for item in
+                   store.current_secrets(session, [connection.connection_id])
+                   .get(connection.connection_id, ())}
+        additional: dict[str, str] = {}
+        for purpose in additional_purposes:
+            record = current.get(purpose)
+            if record is None:
+                raise SecretUnreadableError()
+            additional[purpose] = open_secret(
+                session, ring, secret_id=record.secret_id,
+                destination=destination_for(connection.kind, revision.settings, purpose),
+                repository=store,
+            )
+        secret_value: str | AdapterSecrets = AdapterSecrets(value, additional)
+    else:
+        secret_value = value
     return BoundConnection(
-        adapter=entry.factory(revision, value, policy, context), revision=revision,
+        adapter=entry.factory(revision, secret_value, policy, context), revision=revision,
         connection=connection, identity_basis=IDENTITY_BASIS_BY_KIND[connection.kind],
         provider_label=entry.provider_label(revision),
     )

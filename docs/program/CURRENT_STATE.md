@@ -22,7 +22,10 @@ no run stage sends one until W56b activates its image policy.
 `EXEC-IMAGE-CHANNELS-01` carries a selected PNG through served direct/VPN HTTP
 flavours, pull command, local endpoint and MCP session; the latter two require
 explicit image opt-in. The image stage still does not create a task. SSH
-command/tunnel connections remain unserved. The `R-143` executor connections and
+command/tunnel connections are now served in `EXEC-SSH-CROPS-01` and
+`EXEC-SSH-TUNNEL-CROPS-01`: the command carries a verified PNG, while the
+tunnel carries it through the existing HTTP adapter after checking both
+current secrets and a pinned SSH host key. The `R-143` executor connections and
 pull channel were added under `R-144` (`EXEC-CANDIDATE-1.md`, `EXEC-CANDIDATE-2.md`). `origin/main` carries `0.7.0` since the owner's merge of pull request
 #3 (`48c8e34c`, no gate; `RELEASES.md` has the row and the record); host verification and the
 `v0.7.0` tag are owed, the last tag is `v0.6.0`. Run `infra/deploy/verify-deployed.sh` for the
@@ -35,7 +38,8 @@ After an `ok` probe it is selectable as a normal connection. Registration
 does not replace the Codex route. The `/api/v1` OpenAI Chat variant carries
 the same verified PNG as the other served HTTP variants. A graphical-analysis
 stage still needs the W56b prompt and evidence policy before it can issue
-crop tasks; SSH command/tunnel remain unserved.
+crop tasks; SSH command/tunnel transports now carry a verified PNG once a
+future stage issues it.
 
 ## Normative corpus (W54)
 

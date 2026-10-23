@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import time
+from dataclasses import replace
 
 from auditmanager.analysis.public import ModelRequest
 from auditmanager.executors.destinations import DestinationPolicy, DestinationRefused, DestinationUnresolvable
 from auditmanager.executors.identity import PROMPT, assess_identity, rate_check
 from auditmanager.executors.model import RevisionSettings
-from auditmanager.executors.probes import ProbeResult
+from auditmanager.executors.probes import ProbeResult, probe_http_api
 from auditmanager.executors.ssh_adapter import MAX_ANSWER_BYTES, _reply, _task
 from auditmanager.executors.ssh_transport import (
     HostKeyFormatError,
@@ -17,7 +18,9 @@ from auditmanager.executors.ssh_transport import (
     normalise_host_key_line,
     run_command,
     scan_host_key,
+    open_tunnel,
 )
+from auditmanager.executors.ssh_tunnel_adapter import TunnelPolicy, remote_target
 
 
 def probe_ssh_command(
@@ -87,3 +90,48 @@ def probe_ssh_command(
         reported_model=model, identity_basis="reported", latency_ms=answer.latency_ms,
         rate_check=rate,
     )
+
+
+def probe_ssh_tunnel(
+    settings: RevisionSettings, api_key: str, ssh_key: str, *, policy: DestinationPolicy,
+    input_per_mtok_usd: float | None = None, output_per_mtok_usd: float | None = None,
+) -> ProbeResult:
+    """Probe both current secrets on one pinned SSH path and the actual HTTP model."""
+    assert settings.ssh_host and settings.ssh_port and settings.ssh_user and settings.base_url
+    started = time.monotonic()
+    try:
+        addresses = policy.check(settings.ssh_host, settings.ssh_port, transport="ssh_tunnel")
+    except DestinationRefused as failure:
+        return ProbeResult("destination_refused", f"the SSH address is not permitted ({failure.category})")
+    except DestinationUnresolvable:
+        return ProbeResult("unreachable", "the SSH address does not resolve")
+    endpoint = SshEndpoint(addresses[0], settings.ssh_port, settings.ssh_user)
+    try:
+        observed = scan_host_key(endpoint, timeout=min(10.0, float(settings.timeout_seconds)))
+    except SshFailure as failure:
+        return ProbeResult(failure.outcome, "the SSH host key could not be read")
+    if settings.host_key is None:
+        return ProbeResult("host_key_unpinned", "confirm the observed SSH host key",
+                           observed_host_key=observed)
+    try:
+        pinned = normalise_host_key_line(settings.host_key)
+    except HostKeyFormatError:
+        return ProbeResult("host_key_unpinned", "the saved SSH host key is invalid",
+                           observed_host_key=observed)
+    if pinned != observed:
+        return ProbeResult("host_key_changed", "the SSH host key differs from the saved pin",
+                           observed_host_key=observed)
+    host, port = remote_target(settings.base_url)
+    try:
+        with open_tunnel(endpoint, ssh_key, pinned, host, port,
+                         timeout_s=min(15.0, float(settings.timeout_seconds))) as local_port:
+            result = probe_http_api(
+                replace(settings, transport="direct"), api_key,
+                policy=TunnelPolicy(settings.base_url, local_port),
+                input_per_mtok_usd=input_per_mtok_usd,
+                output_per_mtok_usd=output_per_mtok_usd,
+            )
+    except SshFailure as failure:
+        return ProbeResult(failure.outcome, "the SSH tunnel did not open",
+                           latency_ms=int((time.monotonic() - started) * 1000))
+    return replace(result, latency_ms=int((time.monotonic() - started) * 1000))

@@ -1271,9 +1271,20 @@ version and one real JSON result before routing a production connection; the
 local automated test uses a stub CLI. No image task is created until the
 separate W56b prompt and evidence policy are approved.
 
-`http_api` with «SSH-туннель» remains unserved in this slice. It needs both a
-sealed HTTP key and an SSH key; keep this shape out of assignments until its
-dual-secret probe is implemented.
+**HTTP-модель через SSH-туннель.** `http_api` with «SSH-туннель» uses the
+existing `openai_chat` or `anthropic_messages` adapter over a short-lived
+forward. Configure its HTTP API key and generated SSH key, then install the
+public SSH key on a dedicated remote account with forwarding restricted to
+the target host and port. An `authorized_keys` option such as
+`restrict,port-forwarding,permitopen="127.0.0.1:11434"` allows exactly that
+target (adjust it to the saved base URL). The worker dials the validated SSH
+IP, pins the SSH host key, and keeps the original HTTP Host and TLS server
+name while connecting through the local forward. It carries the same checked
+PNG image block as direct HTTP. Press «Проверить» after setting both secrets;
+confirm an unpinned host key in a new revision and probe again. Replacing
+either secret makes the old successful probe unusable, so probe after every
+rotation. The forward closes after each model call; the remote HTTP endpoint
+is resolved by the SSH server, and `permitopen` should restrict it.
 
 Then, in this order:
 
@@ -1325,7 +1336,7 @@ may send a key to an address and can open a connection to it.
 | «нет ответа» | no answer within the revision's timeout, or no worker took the probe within 120 s (`no_worker`) |
 | «адрес недоступен» | the name does not resolve or the connection is refused |
 | `destination_refused` | the address is one the worker may not send a key to |
-| `kind_not_served` | the SSH-tunnel transport can be created but is not served yet |
+| `kind_not_served` | a connection variant without an adapter in this worker version |
 
 A probe never keeps a body, a header or an address; its detail is a fixed phrase.
 

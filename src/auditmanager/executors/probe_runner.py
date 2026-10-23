@@ -42,7 +42,7 @@ from auditmanager.executors.public import (
 )
 from auditmanager.executors.repository import ExecutorRepository
 from auditmanager.executors.sealing import PrivateRing
-from auditmanager.executors.ssh_probe import probe_ssh_command
+from auditmanager.executors.ssh_probe import probe_ssh_command, probe_ssh_tunnel
 from auditmanager.executors.usability import is_served
 
 __all__ = ["PULL_PROBE_THREADS", "ProbeRunner"]
@@ -167,6 +167,23 @@ class ProbeRunner:
                         "secret_unreadable",
                         "the key cannot be opened here for this address; enter it again",
                     )
+                ssh_key = ""
+                if connection.kind == "http_api" and revision.settings.transport == "ssh_tunnel":
+                    ssh_secret = next((item for item in
+                                       self._store.current_secrets(session, [connection.connection_id])
+                                       .get(connection.connection_id, ())
+                                       if item.purpose == "ssh_private_key"), None)
+                    if ssh_secret is None:
+                        return ProbeResult("secret_unreadable", "no SSH key is set for this tunnel")
+                    try:
+                        ssh_key = open_secret(
+                            session, self._ring, secret_id=ssh_secret.secret_id,
+                            destination=destination_for(connection.kind, revision.settings,
+                                                        "ssh_private_key"),
+                            repository=self._store,
+                        )
+                    except SecretUnreadableError:
+                        return ProbeResult("secret_unreadable", "the SSH key cannot be opened here")
             settings = revision.settings
         if pull_revision is not None:
             # No key, no address, no transaction open: a runner must take a synthetic task.
@@ -177,6 +194,12 @@ class ProbeRunner:
         if connection.kind == "ssh_command":
             return probe_ssh_command(
                 settings, key, policy=self._policy,
+                input_per_mtok_usd=None if pin is None else pin.input_per_mtok_usd,
+                output_per_mtok_usd=None if pin is None else pin.output_per_mtok_usd,
+            )
+        if connection.kind == "http_api" and settings.transport == "ssh_tunnel":
+            return probe_ssh_tunnel(
+                settings, key, ssh_key, policy=self._policy,
                 input_per_mtok_usd=None if pin is None else pin.input_per_mtok_usd,
                 output_per_mtok_usd=None if pin is None else pin.output_per_mtok_usd,
             )

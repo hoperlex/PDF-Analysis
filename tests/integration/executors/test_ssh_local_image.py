@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import json
 import os
 import shutil
 import socket
 import subprocess
+import threading
 import time
 from datetime import datetime, timezone
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
@@ -17,8 +20,9 @@ import pytest
 from auditmanager.analysis.public import ModelRequest
 from auditmanager.executors.model import RevisionRecord, RevisionSettings
 from auditmanager.executors.ssh_adapter import SshCommandAdapter
-from auditmanager.executors.ssh_probe import probe_ssh_command
+from auditmanager.executors.ssh_probe import probe_ssh_command, probe_ssh_tunnel
 from auditmanager.executors.ssh_transport import SshEndpoint, scan_host_key
+from auditmanager.executors.ssh_tunnel_adapter import SshTunnelAdapter
 from auditmanager.storage.public import derive_blob_id
 
 pytestmark = pytest.mark.skipif(
@@ -27,7 +31,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def test_png_reaches_a_real_forced_ssh_command(tmp_path: Path) -> None:
+def test_png_reaches_a_real_ssh_command_and_tunnel(tmp_path: Path) -> None:
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
@@ -87,7 +91,8 @@ def test_png_reaches_a_real_forced_ssh_command(tmp_path: Path) -> None:
 
         class LocalPolicy:
             def check(self, host, remote_port, *, transport):
-                assert (host, remote_port, transport) == ("localhost.test", port, "ssh_command")
+                assert (host, remote_port) == ("localhost.test", port)
+                assert transport in ("ssh_command", "ssh_tunnel")
                 return ("127.0.0.1",)
 
         response = SshCommandAdapter(revision, (tmp_path / "client").read_text(),
@@ -96,6 +101,59 @@ def test_png_reaches_a_real_forced_ssh_command(tmp_path: Path) -> None:
         checked = probe_ssh_command(settings, (tmp_path / "client").read_text(),
                                     policy=LocalPolicy())
         assert checked.outcome == "ok" and checked.reported_model == "claude-opus-5"
+
+        seen = []
+
+        class ModelHandler(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                return
+
+            def do_POST(self):
+                body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                seen.append((self.path, self.headers["Authorization"], body))
+                raw = json.dumps({
+                    "model": "claude-opus-5",
+                    "choices": [{"message": {"role": "assistant", "content": "seen"},
+                                 "finish_reason": "stop"}],
+                    "usage": {"prompt_tokens": 3, "completion_tokens": 1},
+                }).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(raw)))
+                self.end_headers()
+                self.wfile.write(raw)
+
+        model_server = ThreadingHTTPServer(("127.0.0.1", 0), ModelHandler)
+        model_thread = threading.Thread(target=model_server.serve_forever, daemon=True)
+        model_thread.start()
+        try:
+            tunnel_settings = RevisionSettings(
+                pin_id="claude-opus-5", gateway_model="claude-opus-5", billing="not_metered",
+                allow_client_documents=True, timeout_seconds=30, api_flavour="openai_chat",
+                base_url=f"http://127.0.0.1:{model_server.server_port}/api/v1",
+                transport="ssh_tunnel", ssh_host="localhost.test", ssh_port=port,
+                ssh_user="root", host_key=host_key,
+            )
+            tunnel_revision = RevisionRecord("excr_2", "exc_2", 1, datetime.now(timezone.utc),
+                                             "usr_1", tunnel_settings)
+            tunnel = SshTunnelAdapter(tunnel_revision, "http-key", (tmp_path / "client").read_text(),
+                                      LocalPolicy(), None)
+            forwarded = tunnel.complete(request)
+            assert forwarded.output_text == "seen" and forwarded.model == "claude-opus-5"
+            assert len(seen) == 1, seen
+            assert seen[0][0] == "/api/v1/chat/completions"
+            assert seen[0][1] == "Bearer http-key"
+            content = seen[0][2]["messages"][-1]["content"]
+            assert isinstance(content, list), seen[0][2]
+            encoded = content[-1]["image_url"]["url"].split(",", 1)[1]
+            assert base64.b64decode(encoded) == png
+            tunnel_probe = probe_ssh_tunnel(tunnel_settings, "http-key",
+                                            (tmp_path / "client").read_text(), policy=LocalPolicy())
+            assert tunnel_probe.outcome == "ok" and tunnel_probe.reported_model == "claude-opus-5"
+        finally:
+            model_server.shutdown()
+            model_server.server_close()
+            model_thread.join(timeout=5)
     finally:
         server.terminate()
         server.wait(timeout=5)
