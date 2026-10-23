@@ -16,3 +16,5 @@ The existing [C01–C22 decision sheet](../AR-NORM-MAP-APPROVAL-PREP-01.md) and 
 `AR-V3-BETA-EXECUTE-GUARD-01` closes the current executor's in-process v3-to-v1 fallback before any effect. It is a prerequisite within `AR-V3-BETA-EXECUTE-01`; the full v3 provider path, CITE stage and pack activation remain open.
 
 `AR-V3-BETA-REQUEST-DELIVERY-01` supplies the pure sealed-v3-to-`ModelRequest` bridge with six pinned provider-body digests. The executor must use it after proving Run/Attempt/set custody and journal both the local candidate SHA and provider-body SHA; this bridge makes no provider call.
+
+`AR-V3-BETA-EXECUTE-PREFLIGHT-01` resolves one persisted group member to its reviewed pack and exact Run/scope/map/set pins under a current Attempt. It passed real-PostgreSQL positive and refusal cases; verified set Blob loading, dispatch, response journal and CITE remain for the full executor and subsequent citation task.

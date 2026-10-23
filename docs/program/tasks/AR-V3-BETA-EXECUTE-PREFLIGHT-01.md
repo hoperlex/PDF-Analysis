@@ -1,7 +1,7 @@
 # Task AR-V3-BETA-EXECUTE-PREFLIGHT-01 — resolve one grouped Run under current Attempt
 
 task_id: AR-V3-BETA-EXECUTE-PREFLIGHT-01
-status: implementation in progress
+status: completed in development candidate
 
 ## Outcome
 
@@ -94,7 +94,7 @@ This preflight is unserved and read-only. Revert it before full executor integra
 
 ## Handoff
 
-- changed files: report
-- commands/results: report
+- changed files: Run preflight/public seam, real-PostgreSQL test, queue and report
+- commands/results: 5 real-PostgreSQL and 32 guard/request tests passed; see report
 - known limits: no Blob custody or provider dispatch
 - integration notes: future executor consumes this binding only within current Attempt
