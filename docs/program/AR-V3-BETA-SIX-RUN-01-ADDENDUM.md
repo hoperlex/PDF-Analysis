@@ -9,3 +9,5 @@ Before implementation, the replacement task's allowlist was completed with `web/
 The replacement also owns the narrow `norms.public` export needed to pass the existing typed `SetIdentity` into `select_verified_retrieval_set`. The Run side must consume that public boundary rather than import the norms retrieval internals or duplicate their custody SQL.
 
 The full `1.2.0` reseal must also update `web/FRONTEND_LOCK.json`, the independent `tests/support/expected_facts.json` manifest and `CURRENT_STATE.md`; the previous API reseal changed all three. They were added to the replacement's allowlist before its code lane made any changes.
+
+The Run group must load the sealed v3 profile through `analysis.public`, so that facade was added before the Run group imported it. This keeps the bounded-context public seam intact.
