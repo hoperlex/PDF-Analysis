@@ -11,3 +11,5 @@ The replacement also owns the narrow `norms.public` export needed to pass the ex
 The full `1.2.0` reseal must also update `web/FRONTEND_LOCK.json`, the independent `tests/support/expected_facts.json` manifest and `CURRENT_STATE.md`; the previous API reseal changed all three. They were added to the replacement's allowlist before its code lane made any changes.
 
 The Run group must load the sealed v3 profile through `analysis.public`, so that facade was added before the Run group imported it. This keeps the bounded-context public seam intact.
+
+The existing contract seal test requires the proxy and web forwarder error envelopes to advertise the same new family version. The replacement task owns those three exact files for this reseal; no unrelated proxy or web behavior is in scope.
