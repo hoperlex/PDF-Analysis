@@ -11,7 +11,10 @@ import pytest
 from auditmanager.analysis.public import ArtifactRef, canonical_bytes, sha256_hex
 from auditmanager.jobs.public import AttemptAuthority
 from auditmanager.norms.references.text_pages import reference_pages_from_text_layer
-from auditmanager.runs.reference_text_input import load_saved_reference_text
+from auditmanager.runs.reference_text_input import (
+    SavedReferenceTextInput, load_saved_reference_text,
+    recheck_saved_reference_text_facts,
+)
 from auditmanager.runs.repository import StageResultRow
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import VersionUid
@@ -115,12 +118,19 @@ class FakeDocuments:
 class FakeJobs:
     def __init__(self):
         self.calls = 0
+        self.peek_calls = 0
         self.stale = False
 
     def require_current(self, session: object, authority: AttemptAuthority):
         assert authority is AUTHORITY
         self.calls += 1
         if self.stale and self.calls == 2:
+            raise DomainError(ErrorCode.STALE_ATTEMPT, aggregate_type="Attempt")
+
+    def check_current_unlocked(self, session: object, authority: AttemptAuthority):
+        assert authority is AUTHORITY
+        self.peek_calls += 1
+        if self.stale and self.peek_calls == 2:
             raise DomainError(ErrorCode.STALE_ATTEMPT, aggregate_type="Attempt")
 
 
@@ -160,11 +170,64 @@ def _inputs(document: dict | None = None, payload: bytes | None = None):
     return FakeRuns(stage), FakeJobs(), FakeDocuments(), FakeStore(body), text_ref
 
 
-def _load(runs, jobs, documents, store, *, byte_limit=50_000):
+def _load(runs, jobs, documents, store, *, byte_limit=50_000,
+          lock_authority=True):
     return load_saved_reference_text(
         object(), authority=AUTHORITY, blob_store=store,
         max_input_bytes=byte_limit, runs=runs, jobs=jobs, documents=documents,
+        lock_authority=lock_authority,
     )
+
+
+def test_nonlocking_read_has_no_locked_authority_gate_during_blob():
+    runs, jobs, documents, store, _ = _inputs()
+    original = store.open_stream
+
+    def checked_open(*args, **kwargs):
+        assert jobs.calls == 0
+        assert jobs.peek_calls == 1
+        return original(*args, **kwargs)
+
+    store.open_stream = checked_open
+    saved = _load(runs, jobs, documents, store, lock_authority=False)
+    assert saved.source_stage == runs.stage
+    assert saved.project_uid == PROJECT
+    assert jobs.calls == 0 and jobs.peek_calls == 2
+    recheck_saved_reference_text_facts(
+        object(), authority=AUTHORITY, saved=saved,
+        runs=runs, documents=documents,
+    )
+
+
+def test_nonlocking_read_refuses_stale_attempt_after_blob():
+    runs, jobs, documents, store, _ = _inputs()
+    jobs.stale = True
+    with pytest.raises(DomainError) as caught:
+        _load(runs, jobs, documents, store, lock_authority=False)
+    assert caught.value.code is ErrorCode.STALE_ATTEMPT
+    assert store.closed
+    assert jobs.calls == 0 and jobs.peek_calls == 2
+
+
+@pytest.mark.parametrize("change", ["run", "version", "source", "missing_witness"])
+def test_final_locked_witness_refuses_changed_db_facts(change):
+    runs, jobs, documents, store, _ = _inputs()
+    saved = _load(runs, jobs, documents, store, lock_authority=False)
+    if change == "run":
+        runs.run = replace_namespace(runs.run, state="cancelled")
+    elif change == "version":
+        documents.version = replace_namespace(documents.version, page_count=4)
+    elif change == "source":
+        runs.stage = replace(runs.stage, status="failed")
+    else:
+        saved = SavedReferenceTextInput(saved.text_layer, saved.version_uid,
+                                        saved.page_count)
+    with pytest.raises(DomainError) as caught:
+        recheck_saved_reference_text_facts(
+            object(), authority=AUTHORITY, saved=saved,
+            runs=runs, documents=documents,
+        )
+    assert caught.value.code is ErrorCode.ANALYSIS_INPUT_INVALID
 
 
 def test_exact_text_layer_preserves_cyrillic_offsets_and_empty_page() -> None:
