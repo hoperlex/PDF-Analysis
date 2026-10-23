@@ -1,7 +1,7 @@
 # Task AR-V3-BETA-REQUEST-DELIVERY-01 — bind sealed v3 material to the transport request
 
 task_id: AR-V3-BETA-REQUEST-DELIVERY-01
-status: implementation in progress
+status: completed in development candidate
 
 ## Outcome
 
@@ -95,7 +95,7 @@ This pure builder is unserved. Revert its code and tests before full executor in
 
 ## Handoff
 
-- changed files: report
-- commands/results: report
+- changed files: v3 request delivery module, analysis facade, focused tests, queue and report
+- commands/results: 50 profile/delivery/guard and 57 contract tests passed; see report
 - known limits: no provider dispatch or saved response
 - integration notes: future executor supplies trusted sealed material and provider pins

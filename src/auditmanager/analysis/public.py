@@ -98,7 +98,14 @@ from auditmanager.analysis.profiles.ar_v3.v3_profile import (
     PROMPT_BUNDLE_ID as AR_V3_BETA_BUNDLE_ID,
     BetaV3Profile,
     BetaV3ProfileRefused,
+    SealedV3Request,
+    prepare_beta_v3_request,
     resolve_beta_v3_profile,
+)
+from auditmanager.analysis.profiles.ar_v3.request_delivery import (
+    V3DeliveryRefused,
+    V3GenerationSettings,
+    build_v3_model_request,
 )
 from auditmanager.analysis.profiles.ar_v3.request_candidate import (
     V3RequestCandidate,
@@ -182,6 +189,11 @@ from auditmanager.analysis.text.textlayer import TextLayer
 __all__ = [
     "BetaV3Profile",
     "BetaV3ProfileRefused",
+    "SealedV3Request",
+    "prepare_beta_v3_request",
+    "V3DeliveryRefused",
+    "V3GenerationSettings",
+    "build_v3_model_request",
     "resolve_beta_v3_profile",
     "ARTIFACT_MEDIA_TYPE",
     "ARTIFACT_VERSION",

@@ -14,3 +14,5 @@ The `0.8.0` development candidate exposes the C01–C22 source-status preview an
 The existing [C01–C22 decision sheet](../AR-NORM-MAP-APPROVAL-PREP-01.md) and [beta policy](../AR-BETA-CITATION-REVIEW-GATE-01.md) are candidate input, not an expert decision. A later task may narrow the approved pack; it must keep excluded items visible as `требует проверки эксперта` and never imply all 22 were checked. If source pages or model weights remain unavailable, keep the affected pack/scope unpromoted and the served action disabled. Product version `0.8.0` by itself grants no normative authority.
 
 `AR-V3-BETA-EXECUTE-GUARD-01` closes the current executor's in-process v3-to-v1 fallback before any effect. It is a prerequisite within `AR-V3-BETA-EXECUTE-01`; the full v3 provider path, CITE stage and pack activation remain open.
+
+`AR-V3-BETA-REQUEST-DELIVERY-01` supplies the pure sealed-v3-to-`ModelRequest` bridge with six pinned provider-body digests. The executor must use it after proving Run/Attempt/set custody and journal both the local candidate SHA and provider-body SHA; this bridge makes no provider call.
