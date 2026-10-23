@@ -113,6 +113,13 @@ __all__ = [
     "StartArV3BetaGroupRequest",
     "ArV3BetaGroupMember",
     "ArV3BetaGroup",
+    "ArV3BetaGroupReview",
+    "ArV3BetaGroupReviewMember",
+    "ArV3BetaVisibleReview",
+    "ArV3BetaVisibleTopic",
+    "ArV3BetaVisibleProposal",
+    "ArV3BetaVisibleCitation",
+    "ArV3BetaVisibleEvidence",
     "JobId",
     "RunState",
     "RunStatus",
@@ -718,7 +725,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.3.0"]
+    contract_version: Literal["1.4.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1045,6 +1052,58 @@ class ArV3BetaGroup(_Object):
     pack_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
     provider_mode: ProviderMode
     members: Annotated[list[ArV3BetaGroupMember], Field(min_length=6, max_length=6)]
+
+
+class ArV3BetaVisibleTopic(_Object):
+    item_id: str
+    mode: str
+    reason: str
+    source_ids: list[str]
+    review_status: str
+    provisional_citation_count: Annotated[int, Field(ge=0)]
+
+
+class ArV3BetaVisibleEvidence(_Object):
+    page_number: Annotated[int, Field(ge=1)]
+    quote: str
+
+
+class ArV3BetaVisibleCitation(_Object):
+    item_id: str
+    label: str
+    document_id: str
+    paragraph_id: str
+    raw_quote: str
+    state: str
+
+
+class ArV3BetaVisibleProposal(_Object):
+    proposal_ordinal: Annotated[int, Field(ge=0)]
+    evidence: list[ArV3BetaVisibleEvidence]
+    citations: list[ArV3BetaVisibleCitation]
+
+
+class ArV3BetaVisibleReview(_Object):
+    topics: list[ArV3BetaVisibleTopic]
+    provisional_citations: list[ArV3BetaVisibleProposal]
+    withheld_proposal_count: Annotated[int, Field(ge=0)]
+    rejected_proposal_count: Annotated[int, Field(ge=0)]
+
+
+class ArV3BetaGroupReviewMember(_Object):
+    scope_id: Literal["F1", "F2", "A1", "A2", "S1", "S2"]
+    run_id: RunId
+    run_state: RunState
+    review_state: Literal["pending", "failed", "verification_refused", "available"]
+    terminal_reason: str | None
+    refusal_code: str | None
+    review: ArV3BetaVisibleReview | None
+
+
+class ArV3BetaGroupReview(_Object):
+    group_id: ArV3RunGroupId
+    version_uid: VersionUid
+    members: Annotated[list[ArV3BetaGroupReviewMember], Field(min_length=6, max_length=6)]
 
 
 class StageState(_Object):

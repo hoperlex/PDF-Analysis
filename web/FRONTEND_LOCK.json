@@ -1,7 +1,7 @@
 {
   "lock_version": 1,
   "purpose": "Everything a later regeneration needs to prove the committed API client matches its input: the toolchain pins, the exact generator invocation, and the exact OpenAPI bytes the client was generated from. Verified by web/tests/guards/frontend-lock.guard.test.ts, which recomputes every digest here and fails if one has moved.",
-  "owner": "AR-V3-BETA-RUN-STAGE-SEAL-01 integration reseal",
+  "owner": "AR-V3-BETA-GROUP-API-SEAL-01 integration reseal",
   "toolchain": {
     "node": "22.23.1",
     "npm": "10.9.8",
@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "debfa5546295ac72bacdae82ccae6d8efead276d3deb33be71eb39d1635df152",
-    "content_commit": "e66b2483",
-    "content_commit_subject": "Seal API RunStatus for AR v3 CITE stage",
-    "dispatch_named_commit": "220412634267037c8b5ad561df9b04bdf5c3801a",
-    "commit_note": "AR-V3-BETA-RUN-STAGE-SEAL-01 adds a profile-specific AR v3 CITE RunStatus stage; contract 1.3.0 (90/102/291), migration 0032, no new error code. Legacy StageId remains nine values.",
+    "sha256": "ccc9956d19de3a4989ba4bab077ca957be30bc104a24eca3f74c4d1aa85660c1",
+    "content_commit": "b84c068b",
+    "content_commit_subject": "Seal AR v3 beta group review OpenAPI content",
+    "dispatch_named_commit": "e55192dc6141c3fb5762ae8f7292c09866aaa963",
+    "commit_note": "AR-V3-BETA-GROUP-API-SEAL-01 adds a read-only six-scope review endpoint; contract 1.4.0 (91/103/298), migration 0032, no new error code.",
     "openapi_version": "3.1.0",
-    "info_version": "1.3.0",
-    "paths": 90,
-    "operations": 102,
-    "component_schemas": 291,
+    "info_version": "1.4.0",
+    "paths": 91,
+    "operations": 103,
+    "component_schemas": 298,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "debfa5546295ac72bacdae82ccae6d8efead276d3deb33be71eb39d1635df152",
+    "snapshot_sha256": "ccc9956d19de3a4989ba4bab077ca957be30bc104a24eca3f74c4d1aa85660c1",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "e3f89a255e533a77aafa0cded977ff05656c816e9c70718a35ba4ca7d6015c8e",
-      "index.ts": "5985fb06f26c8923ef407453aa8e5bf8b62532e422c0df5c730291505b892521",
-      "operations.gen.ts": "46cc102a1d12930b2f2726370bdfe9bb6c4e2d7fcb5d3d37b36c0e2de9ff5a95",
-      "types.gen.ts": "d52a08e186dcdf5949c74c9654de3732cde370aaafec541aa26c0d296b3ff5ac"
+      "client.gen.ts": "8f05ee26bfb792f71e9100b967218a4064448200947806a7ec8cb8ebd536eb46",
+      "index.ts": "413d68e32f18f41801ec99883e8d6a0f02147abe379affa92e6c55fd197e13a3",
+      "operations.gen.ts": "add57df90fc4c537ac55d551a1c9c7b6edfb20ced3af3563c5e4111bd9786ba8",
+      "types.gen.ts": "2428849bd287e0a33eced09ac436e61adde24e6665db908e5075f14792f7aeb8"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

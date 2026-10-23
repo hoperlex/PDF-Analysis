@@ -891,6 +891,14 @@ class RunAdapter(_SessionHolder):
         view = self._read(lambda session: get_ar_v3_group(session, group_id))
         return models.ArV3BetaGroup.model_validate(asdict(view))
 
+    def get_ar_v3_group_review(self, *, group_id: str) -> models.ArV3BetaGroupReview:
+        from auditmanager.runs.v3_group_review import read_v3_group_review
+
+        view = self._read(lambda session: read_v3_group_review(
+            session, group_id, blob_store=self._blob_store,
+        ))
+        return models.ArV3BetaGroupReview.model_validate(asdict(view))
+
     def start_run(
         self,
         *,

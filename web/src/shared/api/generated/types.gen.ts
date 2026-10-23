@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.3.0 (OpenAPI 3.1.0)
- *   sha256 debfa5546295ac72bacdae82ccae6d8efead276d3deb33be71eb39d1635df152
+ *   AuditManager PC-01 API 1.4.0 (OpenAPI 3.1.0)
+ *   sha256 ccc9956d19de3a4989ba4bab077ca957be30bc104a24eca3f74c4d1aa85660c1
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.3.0';
+export const CONTRACT_VERSION = '1.4.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'debfa5546295ac72bacdae82ccae6d8efead276d3deb33be71eb39d1635df152';
+export const CONTRACT_DIGEST = 'ccc9956d19de3a4989ba4bab077ca957be30bc104a24eca3f74c4d1aa85660c1';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -35,7 +35,14 @@ export const SCHEMA_NAMES = [
   'ApproveRegistrationRequest',
   'ArV3BetaGroup',
   'ArV3BetaGroupMember',
+  'ArV3BetaGroupReview',
+  'ArV3BetaGroupReviewMember',
   'ArV3BetaStageId',
+  'ArV3BetaVisibleCitation',
+  'ArV3BetaVisibleEvidence',
+  'ArV3BetaVisibleProposal',
+  'ArV3BetaVisibleReview',
+  'ArV3BetaVisibleTopic',
   'ArV3RunGroupId',
   'Assignment',
   'AssignmentDetail',
@@ -438,6 +445,22 @@ export type ArV3BetaGroupMember = {
   state: RunState;
 };
 
+export type ArV3BetaGroupReview = {
+  group_id: ArV3RunGroupId;
+  members: Array<ArV3BetaGroupReviewMember>;
+  version_uid: VersionUid;
+};
+
+export type ArV3BetaGroupReviewMember = {
+  refusal_code: string | null;
+  review: ArV3BetaVisibleReview | null;
+  review_state: "pending" | "failed" | "verification_refused" | "available";
+  run_id: RunId;
+  run_state: RunState;
+  scope_id: "F1" | "F2" | "A1" | "A2" | "S1" | "S2";
+  terminal_reason: string | null;
+};
+
 /** Profile-specific AR v3 beta review stage; the legacy nine-stage registry is unchanged. */
 export const AR_V3_BETA_STAGE_ID_VALUES = [
   'ar_v3_citation_review',
@@ -445,6 +468,42 @@ export const AR_V3_BETA_STAGE_ID_VALUES = [
 
 /** ArV3BetaStageId - the closed value set above. */
 export type ArV3BetaStageId = (typeof AR_V3_BETA_STAGE_ID_VALUES)[number];
+
+export type ArV3BetaVisibleCitation = {
+  document_id: string;
+  item_id: string;
+  label: string;
+  paragraph_id: string;
+  raw_quote: string;
+  state: string;
+};
+
+export type ArV3BetaVisibleEvidence = {
+  page_number: number;
+  quote: string;
+};
+
+export type ArV3BetaVisibleProposal = {
+  citations: Array<ArV3BetaVisibleCitation>;
+  evidence: Array<ArV3BetaVisibleEvidence>;
+  proposal_ordinal: number;
+};
+
+export type ArV3BetaVisibleReview = {
+  provisional_citations: Array<ArV3BetaVisibleProposal>;
+  rejected_proposal_count: number;
+  topics: Array<ArV3BetaVisibleTopic>;
+  withheld_proposal_count: number;
+};
+
+export type ArV3BetaVisibleTopic = {
+  item_id: string;
+  mode: string;
+  provisional_citation_count: number;
+  reason: string;
+  review_status: string;
+  source_ids: Array<string>;
+};
 
 export type ArV3RunGroupId = string;
 
@@ -890,7 +949,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The single externally visible failure shape, mirroring urn:auditmanager:domain:error-envelope:v1. `retryable` is pinned to the catalog value for the reported code; a caller never infers it from the HTTP status or the message. */
 export type ErrorEnvelope = {
-  contract_version: "1.3.0";
+  contract_version: "1.4.0";
   correlation_id: CorrelationId;
   /** Safe scalar classifiers only, restricted to the safe_detail_keys the catalog declares for the reported code. The catalog's forbidden key set is rejected. */
   details?: {

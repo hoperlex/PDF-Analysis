@@ -11,7 +11,15 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Version `1.3.0`
+## Version `1.4.0`
+
+`AR-V3-BETA-GROUP-API-SEAL-01` adds the authenticated, read-only
+`getArV3BetaGroupReview` operation. Its six ordered members expose only verified,
+review-only topics and provisional citations, or an explicit pending, failed or
+verification-refused state. The surface is 91 paths, 103 operations and 298
+schemas. No error code or migration was added.
+
+## Version `1.3.0` (historical)
 
 `AR-V3-BETA-RUN-STAGE-SEAL-01` adds a profile-specific AR v3 beta stage ID to
 `RunStatus.stages` and `degradation_set`. The nine legacy `StageId` values and

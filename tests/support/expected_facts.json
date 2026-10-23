@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 90,
+    "path_count": 91,
     "operations": [
       [
         "POST",
@@ -512,6 +512,11 @@
         "GET",
         "/ar-v3-beta/groups/{group_id}",
         "getArV3BetaGroup"
+      ],
+      [
+        "GET",
+        "/ar-v3-beta/groups/{group_id}/review",
+        "getArV3BetaGroupReview"
       ]
     ],
     "schema_names": [
@@ -805,7 +810,14 @@
       "ArV3BetaGroup",
       "ArV3BetaGroupMember",
       "ArV3RunGroupId",
-      "StartArV3BetaGroupRequest"
+      "StartArV3BetaGroupRequest",
+      "ArV3BetaGroupReview",
+      "ArV3BetaGroupReviewMember",
+      "ArV3BetaVisibleCitation",
+      "ArV3BetaVisibleEvidence",
+      "ArV3BetaVisibleProposal",
+      "ArV3BetaVisibleReview",
+      "ArV3BetaVisibleTopic"
     ]
   },
   "error_catalog": {
@@ -813,5 +825,5 @@
     "stored_vocabulary": 25
   },
   "migration_head": "0032_ar_v3_run_group",
-  "contract_version": "1.3.0"
+  "contract_version": "1.4.0"
 }

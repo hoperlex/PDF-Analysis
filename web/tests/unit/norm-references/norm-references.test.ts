@@ -222,7 +222,7 @@ describe('the section', () => {
       client,
       queryKeys.runs.normReferences(RUN),
       new ApiError(404, {
-        contract_version: '1.3.0', error_code: 'not_found', message: 'Нет такого прогона.',
+        contract_version: '1.4.0', error_code: 'not_found', message: 'Нет такого прогона.',
         correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100', retryable: false,
       }, '0f0e9d8c-7b6a-4948-b726-150413021100'),
     );

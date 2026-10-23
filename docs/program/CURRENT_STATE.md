@@ -1,11 +1,11 @@
 # Current state
 
-**Updated 2026-10-23 for the AR v3 beta RunStatus contract seal.** The earlier night-window state and its `R-137` W54 repair remain recorded below.
+**Updated 2026-10-23 for the AR v3 beta group review API seal.** The earlier night-window state and its `R-137` W54 repair remain recorded below.
 W55b is published on `origin/main` and tagged `v0.6.0`. Its exact-tree gate counts as `GATE OK` under R-125; the deploy workflow selected that tree, and the owner ran `infra/deploy/verify-deployed.sh` on the host with a passing image/tree comparison.
 The workflow's own verify step was skipped because a child consumed its stdin; the tested repair is on `origin/dev`. Moving it to main needs a fresh complete gate and a direct exact-SHA owner instruction.
 The owner waived five credentialed live W55b product checks; those journeys remain unverified. See `W55B-INT-TAG-01.md`, `W55B-INT-MAIN-VERIFY-ADDENDUM-01.md` and `CFB-INT-DEV-PUBLISH-43.md`.
 
-The development API surface is **90 paths / 102 operations / 291 schemas**, the error catalogue has **27** codes, the migration head is **`0032_ar_v3_run_group`**, `VERSION` is `0.8.0`, and the shared contract is `1.3.0` after `AR-V3-BETA-RUN-STAGE-SEAL-01`. This additive API extension names the v3 CITE stage without adding it to the nine-stage legacy registry.
+The development API surface is **91 paths / 103 operations / 298 schemas**, the error catalogue has **27** codes, the migration head is **`0032_ar_v3_run_group`**, `VERSION` is `0.8.0`, and the shared contract is `1.4.0` after `AR-V3-BETA-GROUP-API-SEAL-01`. The new authenticated group review read exposes six verified, user-safe scope outcomes; the trusted-pack registries remain empty.
 The runner can fetch one verified PNG for an active claim; no run stage sends one until W56b activates its image policy. `EXEC-IMAGE-CHANNELS-01` carries a selected PNG through direct/VPN HTTP, pull command, local endpoint and MCP session; the latter two require image opt-in.
 SSH command/tunnel connections are served in `EXEC-SSH-CROPS-01` and `EXEC-SSH-TUNNEL-CROPS-01`: the command carries a verified PNG; the tunnel uses the HTTP adapter after checking current secrets and a pinned SSH host key. The image stage still does not create a task.
 The `R-143` connections and pull channel were added under `R-144` (`EXEC-CANDIDATE-1.md`, `EXEC-CANDIDATE-2.md`). `origin/main` carries `0.7.0` since the owner's merge of pull request #3 (`48c8e34c`, no gate; see `RELEASES.md`); host verification and the `v0.7.0` tag are owed. The last tag is `v0.6.0`.
@@ -53,7 +53,7 @@ for the `R-139` night window of 2026-10-20, `NIGHT-1020-INT-01.md`.
   W56b (Attempt-fenced readers for text windows, crops, regions; vision
   policy open) and W58 (source mirror, isolated DB-plus-Blob restore drill,
   synthetic restore passed, real drill not run).
-- **АР v3 beta group.** The API has explicit start/read operations for an atomic six-Run group with separate identity, immutable pins and idempotent replay. No reviewed six-map/six-set pack is installed, so new group starts refuse before any write or provider action. «Настройки анализа» shows the 22 F1.3 topic/source dispositions and still says v3 execution and numerical conclusions are unavailable. A full repaired snapshot passed isolated local custody qualification (`AR-BETA-LOCAL-CUSTODY-01`); the stand still lacks that import.
+- **АР v3 beta group.** The API has explicit start/read operations for an atomic six-Run group with separate identity, immutable pins and idempotent replay. `getArV3BetaGroupReview` reads six verified, review-only scope outcomes, including pending and failed members; it exposes no internal custody data or numerical conclusions. No reviewed six-map/six-set pack is installed, so new group starts refuse before any write or provider action. «Настройки анализа» shows the 22 F1.3 topic/source dispositions and still says v3 execution and numerical conclusions are unavailable. A full repaired snapshot passed isolated local custody qualification (`AR-BETA-LOCAL-CUSTODY-01`); the stand still lacks that import.
 - **W59 sections (served).** An expert confirms a version's stage (П/Р) and
   one of 15 sections (`classifyDocumentVersion`, `getVersionSectionReview`,
   migration 0024); run start and re-audit route by the confirmed section

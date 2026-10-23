@@ -59,6 +59,11 @@ SAMPLES: dict[str, tuple[str, str]] = {
     "listVersions": ("GET", "/documents/doc_01M2545JSD15ETSNNV904X991H/versions"),
     "startRun": ("POST", "/runs"),
     "getRunStatus": ("GET", "/runs/run_01M2545JSD15ETSNNV904X991K"),
+    "startArV3BetaGroup": ("POST", "/ar-v3-beta/groups"),
+    "getArV3BetaGroup": ("GET", "/ar-v3-beta/groups/arg_01M2545JSD15ETSNNV904X991K"),
+    "getArV3BetaGroupReview": (
+        "GET", "/ar-v3-beta/groups/arg_01M2545JSD15ETSNNV904X991K/review",
+    ),
     "getRunNormVerification": (
         "GET", "/runs/run_01M2545JSD15ETSNNV904X991K/norm-verification"
     ),
@@ -249,6 +254,8 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "listVersions": _ANY_ROLE,
     "listRuns": _ANY_ROLE,
     "getRunStatus": _ANY_ROLE,
+    "getArV3BetaGroup": _ANY_ROLE,
+    "getArV3BetaGroupReview": _ANY_ROLE,
     "getRunNormVerification": _ANY_ROLE,
     "listExecutionQueue": _ANY_ROLE,
     "listExecutionJournal": _ANY_ROLE,
@@ -299,6 +306,7 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     # `W59-VERSION-UPLOAD-01`: the next version takes exactly the first upload's roles.
     "uploadDocumentVersion": _EXPERT,
     "startRun": _EXPERT,
+    "startArV3BetaGroup": _EXPERT,
     # `W59-SECTION-SEAL-01`: only an expert confirms a section; admin alone does not.
     "classifyDocumentVersion": _EXPERT,
     # `CLASSIFICATION-CORRECTION-01`: only an expert corrects a classification; admin alone does not.

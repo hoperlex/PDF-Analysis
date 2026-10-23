@@ -76,6 +76,12 @@ GUARDED = (
     ),
     ("startRun", "POST", "/runs"),
     ("getRunStatus", "GET", "/runs/run_01M2545JSD15ETSNNV904X991K"),
+    ("startArV3BetaGroup", "POST", "/ar-v3-beta/groups"),
+    ("getArV3BetaGroup", "GET", "/ar-v3-beta/groups/arg_01M2545JSD15ETSNNV904X991K"),
+    (
+        "getArV3BetaGroupReview", "GET",
+        "/ar-v3-beta/groups/arg_01M2545JSD15ETSNNV904X991K/review",
+    ),
     ("listRunFindings", "GET", "/runs/run_01M2545JSD15ETSNNV904X991K/findings"),
     ("getFinding", "GET", "/findings/fnd_01M2545JSD15ETSNNV904X991M"),
     ("appendDecision", "POST", "/findings/fnd_01M2545JSD15ETSNNV904X991M/decisions"),

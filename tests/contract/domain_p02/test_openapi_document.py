@@ -46,6 +46,7 @@ REQUIRED_OPERATIONS = {
     "startRun",
     "startArV3BetaGroup",
     "getArV3BetaGroup",
+    "getArV3BetaGroupReview",
     "getRunStatus",
     "listRunFindings",
     "getFinding",

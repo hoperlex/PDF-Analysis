@@ -967,6 +967,16 @@ def router(ingest: IngestService, session: Session, suite_account: str) -> Surfa
     declarations, the middlewares and the exception handlers are the application's, and a
     test that drove the router alone would be testing half the edge. See ``driver.py``.
     """
+    class MissingBetaGroup:
+        def start_ar_v3_group(self, **_: Any) -> Any:
+            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="ArV3RunGroup")
+
+        def get_ar_v3_group(self, **_: Any) -> Any:
+            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="ArV3RunGroup")
+
+        def get_ar_v3_group_review(self, **_: Any) -> Any:
+            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="ArV3RunGroup")
+
     return Surface(build_router(
         projects=IngestProjectAdapter(ingest),
         documents=IngestDocumentAdapter(ingest, session),
@@ -979,6 +989,7 @@ def router(ingest: IngestService, session: Session, suite_account: str) -> Surfa
         # the operation's own kind, never a 403: see `driver.SuiteAccountAdapter`.
         accounts=SuiteAccountAdapter(),
         registrations=SuiteRegistrationAdapter(),
+        ar_v3_groups=MissingBetaGroup(),
     ))
 
 

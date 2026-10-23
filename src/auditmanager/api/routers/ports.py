@@ -497,6 +497,9 @@ class ArV3GroupPort(Protocol):
     def get_ar_v3_group(self, *, group_id: str) -> models.ArV3BetaGroup:
         """Read the six current child states without reselecting normative inputs."""
 
+    def get_ar_v3_group_review(self, *, group_id: str) -> models.ArV3BetaGroupReview:
+        """Read six verified, user-safe scope review outcomes."""
+
 
 @runtime_checkable
 class RunPort(Protocol):
