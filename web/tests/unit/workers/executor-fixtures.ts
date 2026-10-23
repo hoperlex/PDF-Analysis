@@ -21,6 +21,7 @@ import type {
   ExecutorRevision,
   ExecutorRoute,
   ExecutorSecretMetadata,
+  RunnerTokenMetadata,
 } from '@/shared/api';
 import { queryKeys } from '@/shared/api';
 
@@ -40,6 +41,7 @@ export const connectionId = (n: number): `exc_${string}` => `exc_${ulid(n)}`;
 export const revisionId = (n: number): `excr_${string}` => `excr_${ulid(n)}`;
 export const probeId = (n: number): `epb_${string}` => `epb_${ulid(n)}`;
 export const secretId = (n: number): `exs_${string}` => `exs_${ulid(n)}`;
+export const tokenId = (n: number): `ern_${string}` => `ern_${ulid(n)}`;
 export const ADMIN_UID = 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
 
 const HOUR = 3_600_000;
@@ -90,6 +92,23 @@ export function secret(over: Partial<ExecutorSecretMetadata> & Pick<ExecutorSecr
   };
 }
 
+/**
+ * A runner token's metadata (`EXEC-PULL-01`). The prefix is Cyrillic here for the reason every
+ * server value in these fixtures is: a Latin word left on a screen must be chrome the application
+ * wrote, and the real prefix (`amr_` and eight characters) is the server's.
+ */
+export function runnerToken(
+  over: Partial<RunnerTokenMetadata> & Pick<RunnerTokenMetadata, 'token_id' | 'connection_id'>,
+): RunnerTokenMetadata {
+  return {
+    token_prefix: 'токен-А1Б2',
+    created_at: ago(2 * DAY),
+    created_by: ADMIN_UID,
+    expires_at: new Date(Date.now() + 28 * DAY).toISOString(),
+    ...over,
+  };
+}
+
 export interface ExecutorCase {
   readonly connection: ExecutorConnection;
   readonly detail: ExecutorConnectionDetail;
@@ -105,6 +124,9 @@ interface CaseOptions {
   readonly archived?: boolean;
   readonly routed?: boolean;
   readonly createdAt?: string;
+  /** A `pull` connection's runner tokens and the number of tasks open now. */
+  readonly tokens?: readonly Partial<RunnerTokenMetadata>[];
+  readonly openTasks?: number;
 }
 
 const HTTP = {
@@ -147,12 +169,16 @@ export function executorCase(options: CaseOptions): ExecutorCase {
     ...(options.archived === true ? { archived_at: ago(HOUR) } : {}),
     ...(current === undefined ? {} : { current_revision_id: rid, current_revision_no: current.revision_no }),
   };
+  const tokens = (options.tokens ?? []).map((item, index) =>
+    runnerToken({ token_id: tokenId(options.n * 4 + index), connection_id: cid, ...item }));
   return {
     connection,
     detail: {
       connection,
       revisions: current === undefined ? [] : [current],
       probes: latest === undefined ? [] : [latest],
+      // The server sends both for a `pull` connection and neither for any other kind.
+      ...(kind === 'pull' ? { runner_tokens: tokens, open_task_count: options.openTasks ?? 0 } : {}),
     },
   };
 }
@@ -217,10 +243,42 @@ export const SHAPE_CASES: readonly ExecutorCase[] = [
   executorCase({ n: 37, name: 'Старое подключение', secrets: [{}], probe: { ...OK, rate_check: 'not_reported' }, createdAt: ago(40 * DAY) }),
 ];
 
+const MINUTE = 60_000;
+
+/**
+ * A client that is «на связи»: a probe passed, one live token was seen twenty seconds ago, one was
+ * revoked and one has expired; two tasks are open.
+ */
+export const PULL_ONLINE = executorCase({
+  n: 70, kind: 'pull', name: 'Сеанс Claude Code Ивана', routed: false,
+  revision: { billing: 'not_metered' },
+  probe: { outcome: 'ok', reported_model: 'шлюзовая-основная', identity_basis: 'declared', latency_ms: 4200, rate_check: 'not_metered' },
+  tokens: [
+    { token_prefix: 'токен-ЖИВ1', created_at: ago(3 * HOUR), last_seen_at: ago(20_000), last_seen_address: '203.0.113.7' },
+    { token_prefix: 'токен-ОТЗ2', created_at: ago(DAY), revoked_at: ago(2 * HOUR), revoked_by: ADMIN_UID, last_seen_at: ago(3 * HOUR) },
+    { token_prefix: 'токен-СРОК', created_at: ago(40 * DAY), expires_at: ago(10 * DAY) },
+  ],
+  openTasks: 2,
+});
+
+/** A client whose token was last seen ten minutes ago: not «на связи», one task waiting. */
+export const PULL_QUIET = executorCase({
+  n: 71, kind: 'pull', name: 'Агент на машине распознавания', revision: { pull_client: 'agent', billing: 'not_metered' },
+  probe: { outcome: 'ok', reported_model: 'шлюзовая-основная', identity_basis: 'declared', rate_check: 'not_metered' },
+  tokens: [{ token_prefix: 'токен-АГЕ3', created_at: ago(DAY), last_seen_at: ago(10 * MINUTE), last_seen_address: '198.51.100.20' }],
+  openTasks: 1,
+});
+
+/** A client with settings and no token yet. */
+export const PULL_BARE = executorCase({ n: 72, kind: 'pull', name: 'Новый клиент', revision: { billing: 'not_metered' }, probe: null });
+
+export const PULL_CASES: readonly ExecutorCase[] = [PULL_ONLINE, PULL_QUIET, PULL_BARE];
+
 export const ALL_CASES: readonly ExecutorCase[] = [
   ...OUTCOME_CASES.map(([, one]) => one),
   SPARE,
   ...SHAPE_CASES,
+  ...PULL_CASES,
 ];
 
 export const ROUTE: ExecutorRoute = {

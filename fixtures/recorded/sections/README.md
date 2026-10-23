@@ -1,16 +1,19 @@
-# Synthetic section recordings (`W59-ANALYSIS-SETTINGS-01`)
+# Synthetic section recordings (`W59-ANALYSIS-SETTINGS-01`, `SECTION-RECORDINGS-01`)
 
 **Every file here is synthetic.** The replies were authored by hand to prove that a
-document version classified to АИ (`AI`), ПЗ (`PS`), ПОС (`POS`) or ТХ (`TX`) runs end
-to end in recorded mode with its **own** section profile. No model produced them and no
-provider call was made. They are not field evidence for any profile's expert review and
+document version classified to a section runs end to end in recorded mode with its **own**
+section profile: АИ (`AI`), ПЗ (`PS`), ПОС (`POS`) and ТХ (`TX`) since `W59-ANALYSIS-SETTINGS-01`;
+КЖ (`KJ`), КМ (`KM`), ОВ (`OV`), ВК (`VK`), ПТ (`PT`), ЭОМ (`EOM`), СС (`SS`), ИТП (`ITP`),
+ГП (`GP`) and ПБ (`PB`) since `SECTION-RECORDINGS-01`. Fourteen sections, every one with a
+registered profile but AR, whose recording is the canonical `fixtures/recorded/text_analysis/`.
+No model produced them and no provider call was made. They are not field evidence for any profile's expert review and
 never count towards a profile becoming `reviewed`.
 
 ## Layout
 
 | Path | What it is |
 |---|---|
-| `<code_lower>/<request_sha256>.json` | the one recording for that section's profile over the AR corpus text layer |
+| `<code_lower>/<request_sha256>.json` | the one recording for that section's profile over the AR corpus text layer; `origin.task_id` names the task that authored it |
 | `build_fixtures.py` | rebuilds every recording above; `--check` reports drift and stale files |
 
 ## How a recording is found
@@ -27,7 +30,7 @@ explicitly and nothing calls a provider.
 
 ## What each file declares
 
-- `origin.kind: synthetic` with a statement, the task, the section, the profile and
+- `origin.kind: synthetic` with a statement, the authoring task, the section, the profile and
   bundle identities, the bundle's `content_sha256`, the profile status at build time
   and the text layer the request was built over
   (`fixtures/recorded/text_analysis/inputs/ar_baseline_text_layer.json`, the layer
@@ -56,3 +59,10 @@ PYTHONPATH=src .venv/bin/python fixtures/recorded/sections/build_fixtures.py --c
 Editing a section's `system_prompt.md` (or anything in
 `auditmanager.analysis.text.prompt`) changes its key and orphans its recording; re-run
 the builder.
+
+## The ПБ recording is for a draft profile
+
+`pb/` answers the request of the **authored, draft** ПБ profile (`PB-PROFILE-01`: no legacy source, no
+expert review). Its reply says only that the three defects seeded in the AR corpus (two fire-resistance
+degrees, two exit counts, one unfilled window type) are reported in fire-safety vocabulary; it is not
+evidence that the ПБ profile finds anything in a real fire-safety volume.

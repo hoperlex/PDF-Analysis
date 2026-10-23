@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0 (OpenAPI 3.1.0)
- *   sha256 0c1d1af2e441ff58e1dde3c3fff5605d332b9ce6bac77d3f012e3db1a262ef6a
+ *   sha256 53d289eceaa4e1b77b1bf86c4bdca0c0be693f81669ded299a02c5122685b9ee
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.0.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '0c1d1af2e441ff58e1dde3c3fff5605d332b9ce6bac77d3f012e3db1a262ef6a';
+export const CONTRACT_DIGEST = '53d289eceaa4e1b77b1bf86c4bdca0c0be693f81669ded299a02c5122685b9ee';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -47,6 +47,8 @@ export const SCHEMA_NAMES = [
   'CarryoverCandidate',
   'CarryoverSourceDecision',
   'ChangePasswordRequest',
+  'ClaimExecutorTaskRequest',
+  'ClaimedExecutorTask',
   'ClassifyDocumentVersionRequest',
   'ComparedVersion',
   'ComparisonRefusal',
@@ -99,13 +101,19 @@ export const SCHEMA_NAMES = [
   'ExecutorRevisionId',
   'ExecutorRoute',
   'ExecutorRouteList',
+  'ExecutorRunnerTokenId',
   'ExecutorSecretId',
   'ExecutorSecretMetadata',
   'ExecutorSecretPurpose',
   'ExecutorSshKey',
   'ExecutorSshProfile',
+  'ExecutorTaskAck',
+  'ExecutorTaskId',
+  'ExecutorTaskState',
   'ExecutorTransport',
   'ExecutorWorkKind',
+  'ExtendedExecutorTaskClaim',
+  'FailExecutorTaskRequest',
   'Finding',
   'FindingCategory',
   'FindingComparison',
@@ -118,8 +126,10 @@ export const SCHEMA_NAMES = [
   'FindingUid',
   'IdempotencyKey',
   'InputManifestEntry',
+  'IssueRunnerTokenRequest',
   'IssueTokenRequest',
   'IssueTokenResponse',
+  'IssuedRunnerToken',
   'JobId',
   'MarkReleaseNotesReadRequest',
   'ModelCallId',
@@ -228,6 +238,7 @@ export const SCHEMA_NAMES = [
   'RunStateCount',
   'RunStatus',
   'RunStatusPage',
+  'RunnerTokenMetadata',
   'SectionDocumentCount',
   'SectionReview',
   'SectionReviewOption',
@@ -269,6 +280,7 @@ export const SCHEMA_NAMES = [
   'StageState',
   'StageStatus',
   'StartRunRequest',
+  'SubmitExecutorTaskAnswerRequest',
   'SubmitRegistrationRequest',
   'TransitionAssignmentRequest',
   'UngroundedReason',
@@ -572,6 +584,25 @@ export type ChangePasswordRequest = {
   current_password: string;
   /** The password the account will hold. The bounds are mechanical. The deployment enforces a password policy on this operation — a refusal is `validation_failed` and names the rule in `message` — and that policy is not declared here, because it is the deployment's and may differ between them. No history and no expiry are enforced. A value equal to `current_password` is `validation_failed`, because a change that changes nothing would report a password as changed when it was not. */
   new_password: string;
+};
+
+/** The long poll holds the request open for up to ``wait_seconds`` (0 to 25, default 25). */
+export type ClaimExecutorTaskRequest = {
+  wait_seconds?: number;
+};
+
+/**
+ * A task, now claimed by the calling token. ``system`` and ``user_text`` are untrusted,
+ * document-derived text. ``model`` is the pinned gateway model the answer must declare.
+ */
+export type ClaimedExecutorTask = {
+  claim_expires_at: string;
+  deadline_at: string;
+  model: string;
+  output_schema: Record<string, never>;
+  system: string;
+  task_id: ExecutorTaskId;
+  user_text: string;
 };
 
 /** `W59-SECTION-SEAL-01`. An expert's explicit stage and section for one version. */
@@ -927,11 +958,19 @@ export type ExecutorConnection = {
   secrets: Array<ExecutorSecretMetadata>;
 };
 
-/** One connection with every revision (each with its latest probe) and its last 10 probes. */
+/**
+ * One connection with every revision (each with its latest probe) and its last 10 probes.
+ *
+ * For a ``pull`` connection (`EXEC-PULL-01`) it also carries the runner tokens' metadata and
+ * the number of tasks waiting for, or held by, a runner right now. Both are absent for the
+ * other kinds. A token's value is never here: it was shown once, when it was issued.
+ */
 export type ExecutorConnectionDetail = {
   connection: ExecutorConnection;
+  open_task_count?: number;
   probes: Array<ExecutorProbe>;
   revisions: Array<ExecutorRevision>;
+  runner_tokens?: Array<RunnerTokenMetadata>;
 };
 
 export type ExecutorConnectionId = string;
@@ -1107,6 +1146,11 @@ export type ExecutorRouteList = {
   items: Array<ExecutorRoute>;
 };
 
+export type ExecutorRunnerTokenId = string;
+
+/** The contract pattern for `ExecutorRunnerTokenId`. Anchored; use with `new RegExp()`. */
+export const EXECUTOR_RUNNER_TOKEN_ID_PATTERN = "^ern_[0-9A-HJKMNP-TV-Z]{26}$";
+
 export type ExecutorSecretId = string;
 
 /** The contract pattern for `ExecutorSecretId`. Anchored; use with `new RegExp()`. */
@@ -1156,6 +1200,32 @@ export const EXECUTOR_SSH_PROFILE_VALUES = [
 /** ExecutorSshProfile - the closed value set above. */
 export type ExecutorSshProfile = (typeof EXECUTOR_SSH_PROFILE_VALUES)[number];
 
+export type ExecutorTaskAck = {
+  state: ExecutorTaskState;
+  task_id: ExecutorTaskId;
+};
+
+export type ExecutorTaskId = string;
+
+/** The contract pattern for `ExecutorTaskId`. Anchored; use with `new RegExp()`. */
+export const EXECUTOR_TASK_ID_PATTERN = "^ext_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/**
+ * ``open -> claimed -> answered | failed``; ``expired`` and ``cancelled`` end an ``open`` or
+ * ``claimed`` task. A claim whose lease lapses returns the task to ``open``.
+ */
+export const EXECUTOR_TASK_STATE_VALUES = [
+  'open',
+  'claimed',
+  'answered',
+  'failed',
+  'expired',
+  'cancelled',
+] as const;
+
+/** ExecutorTaskState - the closed value set above. */
+export type ExecutorTaskState = (typeof EXECUTOR_TASK_STATE_VALUES)[number];
+
 /** ExecutorTransport. */
 export const EXECUTOR_TRANSPORT_VALUES = [
   'direct',
@@ -1173,6 +1243,15 @@ export const EXECUTOR_WORK_KIND_VALUES = [
 
 /** ExecutorWorkKind - the closed value set above. */
 export type ExecutorWorkKind = (typeof EXECUTOR_WORK_KIND_VALUES)[number];
+
+export type ExtendedExecutorTaskClaim = {
+  claim_expires_at: string;
+};
+
+/** A lower-case code, optionally followed by ``: `` and a short, payload-free detail. */
+export type FailExecutorTaskRequest = {
+  reason: string;
+};
 
 /** A published finding. Every listed finding is grounded: its quotations were verified present at their declared anchors. */
 export type Finding = {
@@ -1311,6 +1390,11 @@ export type InputManifestEntry = {
   size_bytes: number;
 };
 
+/** ``expires_in_days`` defaults to 30 when absent. */
+export type IssueRunnerTokenRequest = {
+  expires_in_days?: number;
+};
+
 export type IssueTokenRequest = {
   /** The caller's login, spelled the way the deployment spells it. Not an identity of this surface: it addresses nothing, appears in no path and is never a foreign key. */
   login: string;
@@ -1324,6 +1408,15 @@ export type IssueTokenResponse = {
   /** Whether the account this credential was just minted for is still on the password the deployment seeded it with. `true` says the password has never been changed; `false` says it has. It is a fact about the account's password and not a statement about what the subject may do -- what follows from it is declared where refusals are declared: every operation but this one and `changePassword` answers `permission_denied` with `required_capability: password_changed` while it is `true`. Required, not optional, because a caller that could not read it would have to assume a value and the only assumable value is the permissive one. */
   is_default_credential: boolean;
   /** The credential, presented on the authorized operations as `Authorization: Bearer <token>`. Opaque: this document states no format for it, and a caller that reads anything out of it has taken a dependency this contract does not offer. */
+  token: string;
+};
+
+/**
+ * The token's value, **shown once**: it is stored only as a one-way hash, so no operation
+ * can return it again. Copy it now; a lost value is revoked and replaced.
+ */
+export type IssuedRunnerToken = {
+  runner_token: RunnerTokenMetadata;
   token: string;
 };
 
@@ -2433,6 +2526,24 @@ export type RunStatusPage = {
   page: PageInfo;
 };
 
+/**
+ * What the API ever says about a runner token after it was issued: that it exists, its
+ * non-secret prefix, when it expires or was revoked, and when and from where it was last seen.
+ * The value and its hash are never returned.
+ */
+export type RunnerTokenMetadata = {
+  connection_id: ExecutorConnectionId;
+  created_at: string;
+  created_by: UserUid;
+  expires_at: string;
+  last_seen_address?: string;
+  last_seen_at?: string;
+  revoked_at?: string;
+  revoked_by?: UserUid;
+  token_id: ExecutorRunnerTokenId;
+  token_prefix: string;
+};
+
 /** How many published documents carry one project section (`R-40`, `D-56`). `section` absent means this row is the unclassified bucket, not a sixteenth section. Every one of the fifteen current codes is present even at `document_count: 0`. */
 export type SectionDocumentCount = {
   document_count: number;
@@ -2907,6 +3018,19 @@ export type StartRunRequest = {
   /** Defaults to the server's configured mode. A client asking for `live` is asking to spend money against the OD-03 ceiling. */
   provider_mode?: ProviderMode;
   version_uid: VersionUid;
+};
+
+/**
+ * ``output_text`` is the bare JSON document (no code fence, no commentary) the task's
+ * ``output_schema`` describes. ``model`` is the model that produced it, as the runner declares
+ * it: an assertion the stand records as such, and holds equal to the connection's pinned model.
+ * The token counts are the runner's own; the call is recorded as unmetered.
+ */
+export type SubmitExecutorTaskAnswerRequest = {
+  input_tokens?: number;
+  model: string;
+  output_text: string;
+  output_tokens?: number;
 };
 
 /** An application for an account. 1-60 characters of letters, separated by single spaces, hyphens or apostrophes, with no word mixing Cyrillic and Latin letters. Surrounding whitespace and invisible characters are removed before the rule is applied. */

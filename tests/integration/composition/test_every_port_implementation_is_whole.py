@@ -158,8 +158,9 @@ PORT_FOR_ARGUMENT = {
     "optimisation_proposals": "OptimisationProposalPort",
     # `W63-SECTION-FORM7-01`.
     "section_specifications": "SectionSpecificationPort",
-    # `EXEC-SEAL-01`, `EXEC-HTTP-01`.
+    # `EXEC-SEAL-01`, `EXEC-HTTP-01`: the connections; `EXEC-PULL-01`: the pull channel.
     "executors": "ExecutorPort",
+    "runner": "RunnerPort",
 }
 
 

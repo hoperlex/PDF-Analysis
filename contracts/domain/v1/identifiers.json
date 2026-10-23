@@ -73,7 +73,9 @@
     "executor_connection_revision_id": "excr",
     "executor_secret_id": "exs",
     "executor_probe_id": "epb",
-    "executor_route_event_id": "ert"
+    "executor_route_event_id": "ert",
+    "executor_runner_token_id": "ern",
+    "executor_task_id": "ext"
   },
   "external_identifiers": {
     "portal_block_id": {
@@ -134,7 +136,9 @@
     "ExecutorConnectionRevision": "executor_connection_revision_id",
     "ExecutorSecret": "executor_secret_id",
     "ExecutorProbe": "executor_probe_id",
-    "ExecutorRouteEvent": "executor_route_event_id"
+    "ExecutorRouteEvent": "executor_route_event_id",
+    "ExecutorRunnerToken": "executor_runner_token_id",
+    "ExecutorTask": "executor_task_id"
   },
   "distinct_identities": [
     {
@@ -289,6 +293,19 @@
       "evidence": [
         "EXEC-SEAL-01",
         "0030_executor_connections"
+      ]
+    },
+    {
+      "name": "executor_task_identity",
+      "identifiers": [
+        "executor_runner_token_id",
+        "executor_task_id"
+      ],
+      "rule": "ExecutorRunnerToken identifies one credential a remote runner presents to the pull channel of exactly one connection, for its whole life; ExecutorTask one unit of model work handed to a runner, tied to the run, Attempt and model call that wait for it. Each is allocated independently. The token's secret value, its shown prefix, its hash and a task's position in a queue are attributes and never identities: the value is shown once and only its one-way hash is stored, so the identity is what an administrator addresses to revoke it.",
+      "authority": "EXEC-PULL-01; R-143",
+      "evidence": [
+        "EXEC-PULL-01",
+        "0031_executor_pull_channel"
       ]
     }
   ],

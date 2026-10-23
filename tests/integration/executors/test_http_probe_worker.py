@@ -150,20 +150,22 @@ def test_an_unpermitted_address_is_destination_refused_by_default(session, gatew
 def test_kinds_this_release_does_not_serve_end_as_kind_not_served(session, gateway) -> None:  # type: ignore[no-untyped-def]
     rings = support.make_rings()
     fake = gateway()
-    pull = create_connection(
-        session, kind="pull", display_name="session", roles=support.ADMIN_ROLES,
+    # `EXEC-CANDIDATE-2` serves `pull` (its probe is the runner channel's, in test_pull_run_path);
+    # the command over SSH is the kind this release still lacks.
+    ssh = create_connection(
+        session, kind="ssh_command", display_name="machine", roles=support.ADMIN_ROLES,
         idempotency_key=support.unique(), actor_uid=support.ACTOR)
     from auditmanager.executors.public import RevisionSettings, revise_connection, pinned_models
 
     revise_connection(
-        session, connection_id=pull.connection_id,
+        session, connection_id=ssh.connection_id,
         settings=RevisionSettings(
-            pin_id=support.PIN.model_id, gateway_model=support.PIN.model_id, billing="not_metered",
-            allow_client_documents=False, timeout_seconds=60, pull_client="agent",
-            answer_deadline_seconds=300, max_claimed_tasks=1),
+            pin_id=support.PIN.model_id, gateway_model=support.PIN.model_id, billing="metered",
+            allow_client_documents=False, timeout_seconds=60, ssh_host="gpu.example.test",
+            ssh_port=22, ssh_user="am", ssh_profile="claude_code_headless"),
         pinned_model_ids={pin.model_id for pin in pinned_models()}, roles=support.ADMIN_ROLES,
         idempotency_key=support.unique(), actor_uid=support.ACTOR)
-    assert _run_probe(session, rings, pull.connection_id, fake.policy())["outcome"] == "kind_not_served"
+    assert _run_probe(session, rings, ssh.connection_id, fake.policy())["outcome"] == "kind_not_served"
     tunnel = _seed(session, rings, fake, name="tunnel")
     support.revise(session, tunnel.connection_id, "http://localhost:11434/v1", transport="ssh_tunnel",
                    ssh_host="gpu.example.test", ssh_port=22, ssh_user="am")

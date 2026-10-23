@@ -38,6 +38,7 @@ from auditmanager.api.security import (
     API_TOKEN_VARIABLE,
     OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES,
     SCHEME_NAME,
+    RUNNER_OPERATIONS,
     UNAUTHENTICATED_OPERATIONS,
     Subject,
     build_signer,
@@ -300,6 +301,27 @@ GUARDED = (
     ),
     ("listExecutorRoutes", "GET", "/executor-routes"),
     ("setExecutorRoute", "PUT", "/executor-routes"),
+    # `EXEC-PULL-01`. The administrator's two token operations are behind the seam like the rest.
+    (
+        "issueRunnerToken", "POST",
+        "/executor-connections/exc_01M2545JSD15ETSNNV904X991K/runner-tokens",
+    ),
+    (
+        "revokeRunnerToken", "POST",
+        "/executor-connections/exc_01M2545JSD15ETSNNV904X991K/runner-tokens/"
+        "ern_01M2545JSD15ETSNNV904X991K/revoke",
+    ),
+)
+
+#: `EXEC-PULL-01`. The four operations a runner calls with a runner token. They are behind the
+#: seam too -- no credential is `authentication_required` -- but by a principal of their own:
+#: a user's credential, default or not, is not a runner token, so they are swept with no
+#: credential and kept out of the sweeps that present a user's.
+RUNNER = (
+    ("claimExecutorTask", "POST", "/runner/tasks/claim"),
+    ("extendExecutorTaskClaim", "POST", "/runner/tasks/ext_01M2545JSD15ETSNNV904X991K/extend"),
+    ("submitExecutorTaskAnswer", "POST", "/runner/tasks/ext_01M2545JSD15ETSNNV904X991K/answer"),
+    ("failExecutorTask", "POST", "/runner/tasks/ext_01M2545JSD15ETSNNV904X991K/fail"),
 )
 
 #: `W49-SEAL-01`. The operations a caller reaches with no credential, written out: the
@@ -384,17 +406,22 @@ def test_every_operation_but_the_register_is_behind_the_seam(router: Surface) ->
     # `W59-SECTION-SEAL-01`: counted from the two tables rather than restated, so the next
     # reseal moves the tables and not a literal (``getRunNormVerification`` was missing from
     # ``GUARDED`` since `W57A-SEAL-01B`; it is swept now).
-    assert len(GUARDED) + len(OPEN) == len({operation for operation, _, _ in (*GUARDED, *OPEN)})
+    assert len(GUARDED) + len(RUNNER) + len(OPEN) == len(
+        {operation for operation, _, _ in (*GUARDED, *RUNNER, *OPEN)}
+    )
+    assert {operation for operation, _, _ in RUNNER} == RUNNER_OPERATIONS
     assert UNAUTHENTICATED_OPERATIONS == {
         "issueToken",
         "submitRegistration",
         "readRegistrationStatus",
     }
-    assert {operation for operation, _, _ in GUARDED} | UNAUTHENTICATED_OPERATIONS == (
-        router.operation_ids
-    )
+    assert (
+        {operation for operation, _, _ in GUARDED}
+        | {operation for operation, _, _ in RUNNER}
+        | UNAUTHENTICATED_OPERATIONS
+    ) == router.operation_ids
     open_surface = []
-    for operation, method, path in GUARDED:
+    for operation, method, path in (*GUARDED, *RUNNER):
         answer = dispatch(router, Request.build(method, path), credential=None)
         if answer.status != 401:
             open_surface.append((operation, answer.status))
@@ -598,7 +625,7 @@ def test_the_open_surface_is_exactly_the_register(router: Surface) -> None:
     open operations that ambiguity would have hidden the two new ones.
     """
     samples = {
-        operation: (method, path) for operation, method, path in (*GUARDED, *OPEN)
+        operation: (method, path) for operation, method, path in (*GUARDED, *RUNNER, *OPEN)
     }
     assert set(samples) == router.operation_ids
 
@@ -877,6 +904,11 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         "optimisation_proposals.py",
         "registrations.py",
         "releases.py",
+        # `EXEC-PULL-01`: issuing and revoking a runner token records WHO did it (the actor of its
+        # journal event and of its row); that only an administrator may is the role register's and
+        # the command's own re-read of the role set. The runner's own four operations read the
+        # runner principal (`CurrentRunner`), never the subject.
+        "runner.py",
         # `W63-SECTION-FORM7-01`: a section's combined specification passes WHO reads it for the
         # same reason as the priced specification below: the read re-reads the role set in its
         # own transaction; whether they may is the role register's (any one role).
@@ -1173,10 +1205,13 @@ def test_a_default_credential_reaches_exactly_the_register(router: Surface) -> N
 
     # The open operations are not asked: no account is read for them, so no credential's
     # state can refuse them (`W49-SEAL-01`).
+    # Nor are the runner's four: a user's credential is not a runner token, so they answer 401
+    # to it whatever the account's state (`EXEC-PULL-01`).
     expected_to_be_refused = (
         router.operation_ids
         - OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES
         - UNAUTHENTICATED_OPERATIONS
+        - RUNNER_OPERATIONS
     )
     refused: set[str] = set()
     served: list[tuple[str, int]] = []

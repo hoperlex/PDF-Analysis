@@ -57,7 +57,9 @@ def test_the_declaration_partitions_exactly_the_tables_schema_coverage_declares(
     assert tool.classification_problems() == []
     # `EXEC-SEAL-01`: the five executor tables (connection, revision, secret, probe, route event)
     # are configuration, like accounts, and join the kept tables: 23 -> 28.
-    assert len(tool.PRODUCT_TABLES) == 29 and len(tool.KEEP_TABLES) == 28 and len(tool.MIXED_TABLES) == 3
+    # `EXEC-PULL-01`: the runner tokens are configuration too (KEEP 28 -> 29) and the tasks carry
+    # the stand's documents and answers (PRODUCT 29 -> 30).
+    assert len(tool.PRODUCT_TABLES) == 30 and len(tool.KEEP_TABLES) == 29 and len(tool.MIXED_TABLES) == 3
     assert tool.PRODUCT_TABLES | tool.KEEP_TABLES | tool.MIXED_TABLES == TABLES
     # the corpus half of KEEP is schema_coverage's own list, not a copy of it
     assert tool.KEEP_NORM_TABLES is EXEMPT_FROM_FINGERPRINT
@@ -588,3 +590,15 @@ def test_the_executor_configuration_is_kept_by_a_product_purge() -> None:
     assert commands <= tool.KEEP_COMMAND_TYPES and not commands & tool.PRODUCT_COMMAND_TYPES
     assert "executor." in tool.KEEP_EVENT_PREFIXES
     assert not any("executor." .startswith(prefix) for prefix in tool.PRODUCT_EVENT_PREFIXES)
+
+
+def test_the_runner_tokens_are_kept_and_the_tasks_are_purged_with_the_product() -> None:
+    """`EXEC-PULL-01`: a runner token is configuration, like an account; a task carries the
+    stand's documents and the model's answers and references runs, Attempts and calls, so it is
+    PRODUCT and is truncated in the same statement as the tables it references."""
+    assert "executor_runner_token" in tool.KEEP_TABLES
+    assert "executor_runner_token" not in tool.PRODUCT_TABLES
+    assert "executor_task" in tool.PRODUCT_TABLES and "executor_task" not in tool.KEEP_TABLES
+    commands = {"issue_runner_token", "revoke_runner_token"}
+    assert commands <= tool.KEEP_COMMAND_TYPES and not commands & tool.PRODUCT_COMMAND_TYPES
+    assert tool.classification_problems() == []

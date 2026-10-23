@@ -13,9 +13,14 @@ guest bucket on the `X-Real-IP` the proxy sets.
 exists -- and the flag lives in `compose.server.yml`. Any one of the three can lose its line
 while the other two still look right, so each is read and each is checked:
 
-* the two `map`s and their two `limit_req_zone`s are http-level, declared **once**, in
+* the `map`s and their `limit_req_zone`s are http-level, declared **once**, in
   `nginx.conf`, and never in `tls-server.conf` (a second declaration stops nginx from
-  starting);
+  starting). `EXEC-PULL-01` adds two pairs, the runner channel's: one counts each runner TOKEN
+  (the key is the token's twelve-character prefix, read out of the `Authorization` header of a
+  call to `/api/v1/runner/tasks/...`; it is empty for everything else), one counts each address
+  for the same paths. Their maps are read as patterns and **run against the contract's own
+  runner paths**: a call with a well-formed token yields exactly the prefix, a user's credential
+  or no credential yields none, and no other path yields anything;
 * each map keys exactly the calls the frozen OpenAPI document names for its zone -- the two
   registration calls for `guest_registration`, `issueToken` for `token_exchange` -- by
   method and by the full served path, and nothing else -- no regex key, no prefix;
@@ -78,6 +83,25 @@ CODE = "rate_limited"
 THROTTLED_OPERATIONS = frozenset({"submitRegistration", "readRegistrationStatus"})
 #: `HARDEN-AUTH-EDGE-01`. The credential exchange has a zone of its own.
 EXCHANGE_OPERATIONS = frozenset({"issueToken"})
+#: `EXEC-PULL-01`. The four operations a runner calls with a runner token, by `operationId`; the
+#: runner-channel maps are held against their full served paths.
+RUNNER_OPERATIONS = frozenset({
+    "claimExecutorTask", "extendExecutorTaskClaim", "submitExecutorTaskAnswer",
+    "failExecutorTask",
+})
+#: The runner channel's two zones and the exact lines that declare them: the rates are the
+#: decision (`docs/program/EXEC-PULL-01.md` replays a scripted runner against them), so they are
+#: written out here and not read back from the file under test.
+RUNNER_ZONE_LINES = {
+    "runner_channel": "limit_req_zone $runner_token_client zone=runner_channel:1m rate=60r/m;",
+    "runner_address": "limit_req_zone $runner_address_client zone=runner_address:1m rate=300r/m;",
+}
+RUNNER_TOKEN_MAP_HEADER = 'map "$uri|$http_authorization" $runner_token_client {'
+RUNNER_ADDRESS_MAP_HEADER = "map $uri $runner_address_client {"
+RUNNER_LIMIT_LINES = (
+    "limit_req zone=runner_channel burst=30 nodelay;",
+    "limit_req zone=runner_address burst=120 nodelay;",
+)
 #: zone name -> the operations whose full served path the zone's map keys on.
 ZONES: dict[str, frozenset[str]] = {
     "guest_registration": THROTTLED_OPERATIONS,
@@ -233,13 +257,15 @@ def declaration_problems(plain: str, tls: str) -> list[str]:
     """The maps and the zones: once each, at http level, in the always-loaded file, keyed exactly."""
     problems: list[str] = []
     lines = statements(plain)
+    declared = len(ZONES) + len(RUNNER_ZONE_LINES)
+    runner_headers = {RUNNER_TOKEN_MAP_HEADER, RUNNER_ADDRESS_MAP_HEADER}
     maps = [line for line in lines if line.startswith("map ")]
     zones = [line for line in lines if line.startswith("limit_req_zone ")]
     outer = top_level(lines)
-    if len(maps) != len(ZONES) or any(line not in outer for line in maps):
-        return [f"nginx.conf must declare exactly {len(ZONES)} maps, at http level: {maps}"]
-    if len(zones) != len(ZONES) or any(line not in outer for line in zones):
-        return [f"nginx.conf must declare exactly {len(ZONES)} limit_req_zones, at http level: {zones}"]
+    if len(maps) != declared or any(line not in outer for line in maps):
+        return [f"nginx.conf must declare exactly {declared} maps, at http level: {maps}"]
+    if len(zones) != declared or any(line not in outer for line in zones):
+        return [f"nginx.conf must declare exactly {declared} limit_req_zones, at http level: {zones}"]
     by_name: dict[str, tuple[str, str]] = {}
     for zone_line in zones:
         zone = ZONE_LINE.match(_norm(zone_line))
@@ -247,8 +273,10 @@ def declaration_problems(plain: str, tls: str) -> list[str]:
             problems.append(f"the limit_req_zone is not the expected shape: {zone_line!r}")
             continue
         by_name[zone.group(2)] = (zone.group(1), zone_line)
-    if sorted(by_name) != sorted(ZONES):
-        return problems + [f"the zones must be exactly {sorted(ZONES)}: {sorted(by_name)}"]
+    if sorted(by_name) != sorted([*ZONES, *RUNNER_ZONE_LINES]):
+        return problems + [
+            f"the zones must be exactly {sorted([*ZONES, *RUNNER_ZONE_LINES])}: {sorted(by_name)}"
+        ]
     for name, operations in ZONES.items():
         variable, _ = by_name[name]
         keyed = [line for line in maps if (m := MAP_HEADER.match(_norm(line))) and m.group(1) == variable]
@@ -267,7 +295,7 @@ def declaration_problems(plain: str, tls: str) -> list[str]:
                 f"the empty string otherwise; it reads {entries}, expected {wanted}"
             )
     for line in maps:
-        if MAP_HEADER.match(_norm(line)) is None:
+        if MAP_HEADER.match(_norm(line)) is None and _norm(line) not in runner_headers:
             problems.append(f'a map is not keyed by "$request_method:$uri": {line!r}')
     for line in statements(tls):
         if line.startswith(("map ", "limit_req_zone ")):
@@ -275,6 +303,99 @@ def declaration_problems(plain: str, tls: str) -> list[str]:
                 "tls-server.conf declares an http-level throttle directive; nginx loads it "
                 f"beside nginx.conf, so this is a duplicate that stops the master: {line!r}"
             )
+    return problems
+
+
+def _python_regex(nginx_key: str) -> re.Pattern[str]:
+    """An nginx ``map`` regex key (``~`` and PCRE named groups) as a Python pattern."""
+    assert nginx_key.startswith("~") and not nginx_key.startswith("~*"), nginx_key
+    return re.compile(nginx_key[1:].replace("(?<", "(?P<"))
+
+
+def runner_problems(plain: str) -> list[str]:
+    """`EXEC-PULL-01`: the runner channel's zones and maps, run against the contract's paths."""
+    problems: list[str] = []
+    lines = statements(plain)
+    for name, wanted in RUNNER_ZONE_LINES.items():
+        if wanted not in [_norm(line) for line in lines]:
+            problems.append(f"nginx.conf lacks the declaration {wanted!r}")
+    document = json.loads(OPENAPI.read_text(encoding="utf-8"))
+    base = document["servers"][0]["url"]
+    paths = {
+        operation["operationId"]: f"{base}{path}"
+        for path, item in document["paths"].items()
+        for operation in item.values()
+        if isinstance(operation, dict) and operation.get("operationId") in RUNNER_OPERATIONS
+    }
+    if set(paths) != RUNNER_OPERATIONS:
+        return problems + [f"the frozen document no longer names every runner operation: {paths}"]
+    served = [path.replace("{task_id}", "ext_01M2545JSD15ETSNNV904X991K") for path in paths.values()]
+    prefix = "amr_ab12cd34"
+    token = f"{prefix}_" + "x" * 43
+
+    token_map = blocks(lines, RUNNER_TOKEN_MAP_HEADER)
+    if len(token_map) != 1:
+        return problems + [f"expected one {RUNNER_TOKEN_MAP_HEADER!r}, found {len(token_map)}"]
+    entries = _map_entries(token_map[0])
+    regexes = {key: value for key, value in entries.items() if key != "default"}
+    if entries.get("default") != "" or len(regexes) != 1:
+        problems.append(f"the runner token map must hold a default of \"\" and one pattern: {entries}")
+    else:
+        ((key, value),) = regexes.items()
+        try:
+            pattern = _python_regex(key)
+        except (AssertionError, re.error) as error:
+            return problems + [f"the runner token map key is not a usable pattern: {error}"]
+        group = re.findall(r"\(\?<(\w+)>", key)
+        if len(group) != 1 or value != f"${group[0]}":
+            problems.append(f"the runner token map must yield its one named group, not {value!r}")
+        for uri in served:
+            hit = pattern.match(f"{uri}|Bearer {token}")
+            if hit is None or hit.group(group[0] if group else 0) != prefix:
+                problems.append(f"{uri} with a runner token must be keyed on its prefix")
+            if pattern.match(f"{uri}|") or pattern.match(f"{uri}|Bearer am2.payload.tag"):
+                problems.append(f"{uri} without a runner token must have no key")
+        for uri in (f"{base}/projects", f"{base}/executor-connections", f"{base}/runner/tasks",
+                    f"{base}/runner/other/claim", "/bff/v1/runner/tasks/claim"):
+            if pattern.match(f"{uri}|Bearer {token}"):
+                problems.append(f"{uri} is not a runner path and must have no key")
+    address_map = blocks(lines, RUNNER_ADDRESS_MAP_HEADER)
+    if len(address_map) != 1:
+        return problems + [f"expected one {RUNNER_ADDRESS_MAP_HEADER!r}, found {len(address_map)}"]
+    entries = _map_entries(address_map[0])
+    regexes = {key: value for key, value in entries.items() if key != "default"}
+    if entries.get("default") != "" or len(regexes) != 1:
+        problems.append(f"the runner address map must hold a default of \"\" and one pattern: {entries}")
+    else:
+        ((key, value),) = regexes.items()
+        if value != CLIENT_ADDRESS:
+            problems.append(f"the runner address map must yield the client address: {value!r}")
+        try:
+            pattern = _python_regex(key)
+        except (AssertionError, re.error) as error:
+            return problems + [f"the runner address map key is not a usable pattern: {error}"]
+        for uri in served:
+            if pattern.match(uri) is None:
+                problems.append(f"{uri} must be counted per address")
+        for uri in (f"{base}/projects", f"{base}/runner", f"{base}/auth/token", "/healthz"):
+            if pattern.match(uri):
+                problems.append(f"{uri} is not a runner path and must not be counted per address")
+    return problems
+
+
+def runner_limit_problems(name: str, config: str) -> list[str]:
+    """Both server bodies carry the runner limits at the rates the zones were sized for, in the
+    one `location /api/v1/` (the upload location repeats them; ``throttle_problems`` holds that),
+    and no ``auth_request`` stands in front of the runner paths: the token is the credential."""
+    lines = statements(config)
+    (prefixed,) = blocks(lines, "location /api/v1/ {")
+    inner = [_norm(line) for line in prefixed]
+    problems = [
+        f"{name}: `location /api/v1/` lacks {needed!r}"
+        for needed in RUNNER_LIMIT_LINES if needed not in inner
+    ]
+    if any(line.startswith("auth_request") for line in inner):
+        problems.append(f"{name}: `location /api/v1/` must not gate the runner paths on a session")
     return problems
 
 
@@ -535,8 +656,10 @@ def all_problems(texts: dict[str, str]) -> list[str]:
     status = _catalog()["codes"][CODE]["http"]
     zones = zone_names(plain)
     problems = declaration_problems(plain, tls)
+    problems += runner_problems(plain)
     for name in ("nginx.conf", "tls-server.conf"):
         problems += throttle_problems(name, texts[name], zones, status)
+        problems += runner_limit_problems(name, texts[name])
         problems += upload_location_problems(name, texts[name])
         problems += envelope_problems(name, texts[name])
     for header in (UPLOAD_API_LOCATION, UPLOAD_BFF_LOCATION):
@@ -559,7 +682,7 @@ def test_the_map_and_the_zone_are_declared_once_in_the_file_nginx_always_loads()
 def test_the_server_body_throttles_inside_the_one_api_location(name: str) -> None:
     texts = _texts()
     zones = zone_names(texts["nginx.conf"])
-    assert sorted(zones) == sorted(ZONES)
+    assert sorted(zones) == sorted([*ZONES, *RUNNER_ZONE_LINES])
     status = _catalog()["codes"][CODE]["http"]
     assert throttle_problems(name, texts[name], zones, status) == []
 
@@ -734,20 +857,23 @@ MUTATIONS = [
         "the api upload location forgets the throttle",
         "tls-server.conf",
         "        limit_req zone=guest_registration burst=10 nodelay;\n        limit_req zone=token_exchange burst=10 nodelay;\n"
+        "        limit_req zone=runner_channel burst=30 nodelay;\n        limit_req zone=runner_address burst=120 nodelay;\n"
         "        limit_req_status 429;\n        error_page 429 = @rate_limited;\n        # The credential",
         "        # The credential",
     ),
     (
         "the api upload location forgets the exchange throttle",
         "nginx.conf",
-        "        limit_req zone=token_exchange burst=10 nodelay;\n        limit_req_status 429;\n        error_page 429 = @rate_limited;\n        # The credential",
+        "        limit_req zone=token_exchange burst=10 nodelay;\n        limit_req zone=runner_channel burst=30 nodelay;\n"
+        "        limit_req zone=runner_address burst=120 nodelay;\n        limit_req_status 429;\n        error_page 429 = @rate_limited;\n        # The credential",
+        "        limit_req zone=runner_channel burst=30 nodelay;\n        limit_req zone=runner_address burst=120 nodelay;\n"
         "        limit_req_status 429;\n        error_page 429 = @rate_limited;\n        # The credential",
     ),
     (
         "the prefix location forgets the exchange throttle",
         "tls-server.conf",
-        "        limit_req zone=token_exchange burst=10 nodelay;\n        limit_req_status 429;\n        error_page 429 = @rate_limited;\n    }\n\n    # The two upload locations",
-        "        limit_req_status 429;\n        error_page 429 = @rate_limited;\n    }\n\n    # The two upload locations",
+        "        limit_req zone=token_exchange burst=10 nodelay;\n        # The runner-channel throttles",
+        "        # The runner-channel throttles",
     ),
     (
         "the exchange map widened to every post",
@@ -847,6 +973,67 @@ MUTATIONS = [
         "nginx.conf",
         "    location @rate_limited {\n        default_type application/json;\n",
         "    location @rate_limited {\n",
+    ),
+    (
+        "the runner token limit removed from nginx.conf",
+        "nginx.conf",
+        "        limit_req zone=runner_channel burst=30 nodelay;\n",
+        "",
+    ),
+    (
+        "the runner address limit removed from tls-server.conf",
+        "tls-server.conf",
+        "        limit_req zone=runner_address burst=120 nodelay;\n",
+        "",
+    ),
+    (
+        "the runner burst widened in tls-server.conf",
+        "tls-server.conf",
+        "        limit_req zone=runner_channel burst=30 nodelay;\n",
+        "        limit_req zone=runner_channel burst=3000 nodelay;\n",
+    ),
+    (
+        "the runner rate raised",
+        "nginx.conf",
+        "zone=runner_channel:1m rate=60r/m;",
+        "zone=runner_channel:1m rate=6000r/m;",
+    ),
+    (
+        "the runner zone declared again in tls-server.conf",
+        "tls-server.conf",
+        "server {\n",
+        "limit_req_zone $runner_token_client zone=runner_channel:1m rate=60r/m;\n"
+        "server {\n",
+    ),
+    (
+        "the runner token map keyed on the whole credential",
+        "nginx.conf",
+        "{43}$\" $runner_token_prefix;",
+        "{43}$\" $http_authorization;",
+    ),
+    (
+        "the runner token map taking a user's credential",
+        "nginx.conf",
+        "(?<runner_token_prefix>amr_[0-9a-z]{8})_[A-Za-z0-9_-]{43}$",
+        "(?<runner_token_prefix>[a-z0-9]{3})[^|]*$",
+    ),
+    (
+        "the runner token map widened to every API path",
+        "nginx.conf",
+        '"~^/api/v1/runner/tasks/[^|]*',
+        '"~^/api/v1/[^|]*',
+    ),
+    (
+        "the runner address map widened to every API path",
+        "nginx.conf",
+        '"~^/api/v1/runner/tasks/" $binary_remote_addr;',
+        '"~^/api/v1/" $binary_remote_addr;',
+    ),
+    (
+        "a session gate put in front of the runner paths",
+        "nginx.conf",
+        "        error_page 429 = @rate_limited;\n    }\n\n    # THE TWO UPLOAD LOCATIONS",
+        "        error_page 429 = @rate_limited;\n        auth_request /_edge/credential/api;\n    }\n\n    # THE TWO UPLOAD LOCATIONS",
     ),
     (
         "the compose flag dropped",

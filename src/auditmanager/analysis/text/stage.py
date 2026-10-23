@@ -56,7 +56,7 @@ from auditmanager.analysis.text.provenance import (
     assert_consistent_mode,
 )
 from auditmanager.analysis.text.response import parse_response
-from auditmanager.analysis.text.proxy import ProxyDispatchError, ReceivedResponse
+from auditmanager.analysis.text.proxy import MODEL_STUBS, ProxyDispatchError, ReceivedResponse
 from auditmanager.analysis.text.textlayer import TextLayer, load_text_layer
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import ModelCallId, RunId
@@ -250,6 +250,53 @@ def _journal_failed_call(
         journal.outcome_unknown(model_call_id, error)
 
 
+def _identity_refusal(
+    response: Any, call: CallBinding | None, mode: ProviderMode
+) -> ProxyDispatchError | None:
+    """`R-133`, enforced on the run path: a live reply must report the model the run asked for.
+
+    Applies only to a *live* call that was handed a binding asking for the check
+    (``CallBinding.check_identity``): a ``recorded`` response is a replayed fixture and names no
+    model. The expected value is the connection revision's gateway name, or ``PROXY_LLM_MODEL``
+    under the environment source. Three ways to fail, all the same typed failure and never a pass:
+
+    * nothing was selected -- the expected name is absent or a gateway stub (``proxy``,
+      ``default``, ``auto``): there is nothing to hold the reply to, so the stage fails closed and
+      its stored message names ``model_not_selected`` (the code's safe detail keys are only
+      ``run_id`` and ``stage_id``, so the word goes into the message);
+    * the reply names no model;
+    * the reply names another model (exact comparison: no prefix, no alias, no case folding).
+
+    The answer arrived and may have been paid for, so the refusal is ``outcome_unknown``, never
+    retry-safe, and carries the usage evidence of what the reply reported. The message names no
+    model, no endpoint and no credential. Nothing from the answer is published.
+    """
+    if call is None or not call.check_identity or mode is not ProviderMode.LIVE:
+        return None
+    expected = (call.expected_model or "").strip()
+    reported = getattr(response, "model", None)
+    if not expected or expected.lower() in MODEL_STUBS:
+        message = (
+            "no model was selected (model_not_selected); the stage fails closed and "
+            "the answer is not published"
+        )
+    elif not isinstance(reported, str) or reported != expected:
+        message = (
+            "the reply names a model other than the one asked for, or none; the answer "
+            "is not published"
+        )
+    else:
+        return None
+    return ProxyDispatchError(
+        ErrorCode.MODEL_IDENTITY_MISMATCH, dispatch_class="outcome_unknown", retry_safe=False,
+        message=message,
+        received=ReceivedResponse(
+            response_sha256=response.response_sha256, input_tokens=response.input_tokens,
+            output_tokens=response.output_tokens, latency_ms=response.latency_ms,
+        ),
+    )
+
+
 def run_text_analysis(
     *,
     run_id: RunId,
@@ -328,6 +375,11 @@ def run_text_analysis(
     )
     try:
         response = adapter.complete(request)
+        refusal = _identity_refusal(response, call, mode)
+        if refusal is not None:
+            # Raised inside the `try` so it takes the path every refused answer takes: the
+            # journal records the usage the reply reported, the stage fails, nothing publishes.
+            raise refusal
     except DomainError as error:
         if call_journal is not None:
             _journal_failed_call(call_journal, model_call_id, error, mode=mode)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Rebuild the SYNTHETIC section recordings (`W59-ANALYSIS-SETTINGS-01`).
+"""Rebuild the SYNTHETIC section recordings (`W59-ANALYSIS-SETTINGS-01`, `SECTION-RECORDINGS-01`).
 
     PYTHONPATH=src .venv/bin/python fixtures/recorded/sections/build_fixtures.py
     PYTHONPATH=src .venv/bin/python fixtures/recorded/sections/build_fixtures.py --check
@@ -22,6 +22,12 @@ made; every file says so in its ``origin`` block, and every finding text opens w
 sections runs end to end with its own profile in recorded mode. They are **not** field
 evidence for any profile's expert review and never count towards a profile becoming
 ``reviewed``. The token counts and latencies are authored too.
+
+Fourteen sections have a recording, every section with a registered profile but AR (whose
+recording is the canonical ``fixtures/recorded/text_analysis``): АИ, ПЗ, ПОС and ТХ came with
+`W59-ANALYSIS-SETTINGS-01` and are rebuilt byte for byte as they were; КЖ, КМ, ОВ, ВК, ПТ, ЭОМ,
+СС, ИТП, ГП and ПБ were added by `SECTION-RECORDINGS-01`. Each file names the task that
+authored it in ``origin.task_id``.
 """
 
 from __future__ import annotations
@@ -47,13 +53,23 @@ HERE = Path(__file__).resolve().parent
 TEXT_LAYER_PATH = _REPO_ROOT / "fixtures/recorded/text_analysis/inputs/ar_baseline_text_layer.json"
 MODEL_ID = "claude-opus-5"
 TASK_ID = "W59-ANALYSIS-SETTINGS-01"
+#: The task that added every section after the first four (`SECTION-RECORDINGS-01`).
+RECORDINGS_TASK_ID = "SECTION-RECORDINGS-01"
+#: The four sections whose files predate `SECTION-RECORDINGS-01` keep their original task.
+FIRST_FOUR: frozenset[str] = frozenset({"AI", "PS", "POS", "TX"})
 _KEY_FILE = re.compile(r"[0-9a-f]{64}\.json")
 
-_STATEMENT = (
-    "Synthetic: authored by hand for W59-ANALYSIS-SETTINGS-01 to prove section routing in "
-    "recorded mode. No model produced this reply and no provider call was made. Not field "
-    "evidence for the profile's review."
-)
+def _statement(task_id: str) -> str:
+    return (
+        f"Synthetic: authored by hand for {task_id} to prove section routing in "
+        "recorded mode. No model produced this reply and no provider call was made. Not field "
+        "evidence for the profile's review."
+    )
+
+
+def task_of(code: str) -> str:
+    return TASK_ID if code in FIRST_FOUR else RECORDINGS_TASK_ID
+
 
 _FIRE_RESISTANCE = [
     {"page_number": 2, "quote": "Степень огнестойкости здания — II."},
@@ -136,6 +152,165 @@ SECTIONS: dict[str, tuple[str, list[dict[str, Any]], int, int, int]] = {
         ],
         2350, 760, 11200,
     ),
+    # `SECTION-RECORDINGS-01`. Every figure below differs from every other section's, and so does
+    # the combination of seeded defects, so no reply could pass for another section's.
+    "KJ": (
+        "КЖ",
+        [
+            _observation(
+                "internal_contradiction", "КЖ",
+                "степень огнестойкости здания записана как II и как III, а несущие конструкции "
+                "рассчитываются по одной из них.",
+                "Согласовать степень огнестойкости здания с принятыми пределами огнестойкости "
+                "несущих конструкций.",
+                _FIRE_RESISTANCE,
+            ),
+        ],
+        2370, 430, 9300,
+    ),
+    "KM": (
+        "КМ",
+        [
+            _observation(
+                "internal_contradiction", "КМ",
+                "число эвакуационных выходов из надземной части здания названо два и три.",
+                "Определить число эвакуационных выходов из надземной части здания.",
+                _EXITS,
+            ),
+        ],
+        2380, 440, 9500,
+    ),
+    "OV": (
+        "ОВ",
+        [
+            _observation(
+                "explicit_placeholder", "ОВ",
+                "заполнение оконных проёмов, от которого зависит теплотехнический расчёт, "
+                "оставлено словом «уточнить».",
+                "Указать тип заполнения оконных проёмов до расчёта теплопотерь.",
+                _WINDOW_PLACEHOLDER,
+            ),
+            _observation(
+                "internal_contradiction", "ОВ",
+                "из надземной части здания предусмотрено два выхода в одном разделе и три в другом.",
+                "Свести число выходов к одному значению для расчёта систем вентиляции.",
+                _EXITS,
+            ),
+        ],
+        2390, 720, 10800,
+    ),
+    "VK": (
+        "ВК",
+        [
+            _observation(
+                "explicit_placeholder", "ВК",
+                "тип заполнения оконных проёмов не определён: стоит отметка «уточнить».",
+                "Определить заполнение оконных проёмов в ведомости.",
+                _WINDOW_PLACEHOLDER,
+            ),
+        ],
+        2400, 410, 8900,
+    ),
+    "PT": (
+        "ПТ",
+        [
+            _observation(
+                "internal_contradiction", "ПТ",
+                "степень огнестойкости здания, по которой назначается противопожарный "
+                "водопровод, дана как II и как III.",
+                "Привести степень огнестойкости здания к одному значению.",
+                _FIRE_RESISTANCE,
+            ),
+            _observation(
+                "explicit_placeholder", "ПТ",
+                "тип заполнения оконных проёмов не принят — оставлено «уточнить».",
+                "Принять тип заполнения оконных проёмов.",
+                _WINDOW_PLACEHOLDER,
+            ),
+        ],
+        2410, 740, 11000,
+    ),
+    "EOM": (
+        "ЭОМ",
+        [
+            _observation(
+                "internal_contradiction", "ЭОМ",
+                "количество эвакуационных выходов, для которых проектируется аварийное "
+                "освещение, указано как два и как три.",
+                "Уточнить число эвакуационных выходов в исходных данных освещения.",
+                _EXITS,
+            ),
+        ],
+        2420, 450, 9200,
+    ),
+    "SS": (
+        "СС",
+        [
+            _observation(
+                "explicit_placeholder", "СС",
+                "в ведомости заполнения проёмов вместо типа оконного заполнения оставлено «уточнить».",
+                "Заполнить тип оконного заполнения в ведомости.",
+                _WINDOW_PLACEHOLDER,
+            ),
+        ],
+        2430, 400, 8800,
+    ),
+    "ITP": (
+        "ИТП",
+        [
+            _observation(
+                "internal_contradiction", "ИТП",
+                "степень огнестойкости здания записана двумя разными значениями: II и III.",
+                "Оставить в тексте одну степень огнестойкости здания.",
+                _FIRE_RESISTANCE,
+            ),
+        ],
+        2440, 460, 9900,
+    ),
+    "GP": (
+        "ГП",
+        [
+            _observation(
+                "internal_contradiction", "ГП",
+                "число эвакуационных выходов из надземной части здания указано как два и как три.",
+                "Согласовать число выходов с решениями по подъездам и площадкам.",
+                _EXITS,
+            ),
+            _observation(
+                "internal_contradiction", "ГП",
+                "степень огнестойкости здания, от которой зависят противопожарные разрывы, "
+                "записана как II и как III.",
+                "Установить одну степень огнестойкости здания для расчёта разрывов.",
+                _FIRE_RESISTANCE,
+            ),
+        ],
+        2450, 790, 11500,
+    ),
+    "PB": (
+        "ПБ",
+        [
+            _observation(
+                "internal_contradiction", "ПБ",
+                "степень огнестойкости здания указана как II в общих данных и как III в "
+                "противопожарных мероприятиях.",
+                "Привести степень огнестойкости здания к одному значению во всех частях документа.",
+                _FIRE_RESISTANCE,
+            ),
+            _observation(
+                "internal_contradiction", "ПБ",
+                "число эвакуационных выходов из надземной части здания названо два и три.",
+                "Согласовать число эвакуационных выходов из надземной части здания.",
+                _EXITS,
+            ),
+            _observation(
+                "explicit_placeholder", "ПБ",
+                "тип заполнения оконных проёмов не определён — оставлено указание «уточнить».",
+                "Определить тип заполнения оконных проёмов в ведомости заполнения проёмов.",
+                _WINDOW_PLACEHOLDER,
+            ),
+        ],
+        2460, 980, 12600,
+    ),
 }
 
 
@@ -162,8 +337,8 @@ def plan() -> list[tuple[Path, dict[str, Any]]]:
             ),
             origin={
                 "kind": "synthetic",
-                "statement": _STATEMENT,
-                "task_id": TASK_ID,
+                "statement": _statement(task_of(code)),
+                "task_id": task_of(code),
                 "section_code": code,
                 "analysis_profile_id": str(profile.analysis_profile_id),
                 "prompt_bundle_id": str(profile.prompt_bundle.prompt_bundle_id),

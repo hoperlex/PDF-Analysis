@@ -26,6 +26,11 @@ export {
 } from './model/readiness';
 export type { RouteBlocker } from './model/readiness';
 export {
+  RUNNER_ONLINE_WINDOW_MS, RUNNER_TOKEN_STATE_LABELS, connectionRunnerIsOnline,
+  hasLiveRunnerToken, runnerTokenIsLive, runnerTokenIsOnline, runnerTokenState, sortedRunnerTokens,
+} from './model/runner-tokens';
+export type { RunnerTokenState } from './model/runner-tokens';
+export {
   BILLING_LABELS, FLAVOUR_LABELS, IDENTITY_BASIS_LABELS, KIND_DESCRIPTIONS, KIND_LABELS,
   PROBE_OUTCOME_HINTS, PROBE_OUTCOME_SENTENCES, PROBE_STATE_LABELS, PULL_CLIENT_LABELS,
   PURPOSE_LABELS, RATE_CHECK_LABELS, SSH_PROFILE_LABELS, TRANSPORT_LABELS, WORK_KIND_LABELS,

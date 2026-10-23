@@ -503,7 +503,10 @@ night screen has both, or says why it has no refusal (`no_negative_case`).
 * **A norms snapshot to designate.** `PYTHONPATH=src .venv/bin/python
   tests/e2e/pc01/journey/seed_norms.py` writes, by SQL, one qualified and one unqualified synthetic
   snapshot into the lane's database (it refuses a database whose name lacks `journey` or `lane`).
-  Run it before each journey: each run designates one.
+  Run it before each journey: each run designates one. Since `PC01-JOURNEY-GAPS-01` it also puts the
+  bytes each document's PDF binding names into the lane's own object store, BEFORE it writes the rows
+  that claim them, so it needs the `S3_*` names of the lane's `.env` (or of its environment) as well as
+  `DATABASE_URL`; with no usable store it exits 2 and writes nothing.
 * **Nothing to install for the specification set.** The journey uploads the committed synthetic set of
   `SPEC-TABLE-RECORDING-01` itself: `fixtures/synthetic/ar_specification/ar_specification.zip` and
   `ar_specification_prices.csv`, and the recorded provider replays the committed answer
@@ -554,12 +557,69 @@ produce; a step that was not reached is a finding, never a pass.
 
 ### What is not reachable here, stated
 
-* The norms document view with a PDF page (`/norms/document?id=…&page=N`): the seeded snapshot's PDFs
-  are bound by rows and have no object in the store, so the page would show a store error that is the
-  seed's, not the screen's.
+* ~~The norms document view with a PDF page~~ is reachable since `PC01-JOURNEY-GAPS-01`: the seed stores
+  the bytes its bindings name (see above), and the steps `norms-document-*` open the view. The bytes are a
+  stand-in, not a PDF, so what is asserted is the three reads (`getNormDocument`, `listNormParagraphs`,
+  `streamNormDocumentContent`) and the viewer's address, not what the browser's viewer draws.
 * The recorded model answers the baseline's text and the committed specification set's. Other sections'
   profiles are proven by their own recordings elsewhere.
 * A norms catalogue «Excel» is the run export above; the catalogue itself has no workbook.
 * The vendor-list `vendor_list_missing` refusal of a pass is global state (a list, once set for the
   section, stays), so it cannot be asserted repeatably on a lane; `tests/integration/optimisation`
   holds it.
+
+## The menu destinations the matrix found unwalked (`PC01-JOURNEY-GAPS-01`)
+
+`docs/program/BETA-MATRIX-02.md` section B12 kept the criterion at NEEDS-CODE for five gaps in this
+journey. Each now has steps, with a result and a refusal; `GAP_STEPS` in the conformance test pins each
+by name, screen, case and the operations it declares.
+
+| gap | steps | what they prove |
+|---|---|---|
+| «Блоки» | `blocks-portal-blocks-of-a-version-with-a-run`, `blocks-text-lines-of-the-same-version`, `blocks-upload-a-document-no-run-has-read`, `blocks-a-version-no-run-has-read-says-so` | choose a project and a version in the chooser; read the version's portal blocks (`listVersionPortalBlocks`, one crop of an image block, `streamVersionPortalBlockCrop`) and its text lines (`getVersionBlocks`); a version no run has reached is told `not_produced` and shows no list, no count and no picture |
+| the norm document view | `norms-document-text-and-pdf`, `norms-document-page-past-the-end` | `getNormDocument`, `listNormParagraphs` and `streamNormDocumentContent` from the catalogue's first document; a page the document does not have is told in words and asks the store for nothing |
+| a successful «Вернуть» | `assign-work-to-be-given-back`, `my-tasks-take-the-work-to-give-it-back`, `my-tasks-give-the-work-back`, `dispatcher-shows-the-work-given-back` | a second assignment, taken, then given back with the reason the form requires: one transition `returned` carrying the reason, the row waiting for an administrator with no move left for an expert; the administrator sees the reason and the moves only an administrator has |
+| `correctVersionClassification` | `classification-correction-is-an-experts-act`, `classification-correction-needs-a-change`, `classification-correction-needs-a-reason`, `classification-correction` | the first version's stage is corrected from П to Р with a reason, pressing twice: one request based on revision 1, revision 2 stored, the history keeping the confirmation beside the correction; an administrator alone is offered nothing; an unchanged pair and a reason with no word are refused by the form and send nothing |
+| the identity continuation | `identity.mjs` (not a step of `--phase all`) | `approveRegistration`, `rejectRegistration`, `updateUser`, `purgeUser` and the other seven operations of `identity.operations`; its handles are now read from the runner and required to exist in `web/src` |
+
+### A click in a row: `click.within`
+
+«Блоки» draws one identical button per project and per document and gives a row no handle of its own, so a
+step names the row by the words in it: `"within": {"selector": "li", "text_contains": "…"}` makes the click
+the button of the nearest `li` whose text contains the words (the project's name with `%STAMP%`, a version's
+identity `{version_uid}`). A row that is not there matches nothing; the first row is never taken instead
+(`locatorExpression` in `cdp.mjs`, shown failing in `write.test.mjs`). A click that names a row carries no
+`text`: the web tier's language guard requires every click `text` to occur in a rendered screen, and the
+chooser's rows are not among the screens it renders.
+
+### Taking the seeded administrator off the shipped password, on a lane (found by `PC01-JOURNEY-GAPS-01`)
+
+Against the API directly (the proxy that strips `/api/v1` is not there): `POST /auth/token` with the seeded
+login and password, `POST /auth/password` with that token, then `PATCH /me` with the new token. The seeded login
+`admin` is not an e-mail, so the profile **must carry an `email`** (else `422`), and **the account's login then
+becomes that e-mail**: `E2E_PC01_LOGIN` is the e-mail from then on. A password lost with the process that
+generated it cannot be recovered; the lane's database row can be returned to the shipped state with the
+application's own `hash_password` (a lane database only) and the three calls repeated.
+
+### Running the identity continuation on a lane stack
+
+It needs the envelope of a completed `--phase all` run and read access to the web tier's session register.
+Measured 2026-10-22 on a lane stack of the full beta tree: `identity: PASS`, 12 operations, 18 checks. Five of
+its stages had gone stale since it was written (`D-137`: it had never run on a built stand) and were repaired
+against the screens they meet: the profile prints the display label; a role removal closes the session inside
+one navigation; a role-less account is turned away at `/403` (its decision is then asked of the API directly and
+refused `403`); archiving and rejecting ask for a confirmation first.
+Start the web tier with `AUDITMANAGER_SESSION_STORE=<a path in the lane>/register.json` and pass the same
+path:
+
+```
+E2E_PC01_LOGIN=<admin> E2E_PC01_PASSWORD=<password> E2E_PC01_SESSION_STORE_PATH=<the same register.json> \
+  node tests/e2e/pc01/journey/identity.mjs --origin <origin> --journey <out>/journey.json --out <out>/identity
+```
+
+### The controls
+
+`prove_the_guard_can_fail.py` rewrites the real manifest once per mutation and reads the conformance test
+red (it restores the file even when a run cannot start; `JOURNEY_PROOF_PYTHON` names the interpreter in a
+worktree that has no `.venv`). `write.test.mjs` (`node --test`) holds the pure rules, including the row
+locator against a minimal DOM.

@@ -1,0 +1,21 @@
+# Copy outside the repository and set the tunnel port to the one you opened locally.
+# The local SSH forward carries this HTTP hop to the stand's loopback-only proxy.
+# Runner token: PDF_ANALYSIS_RUNNER_TOKEN in the agent's environment, never here.
+
+[runner]
+origin = "http://127.0.0.1:31501"
+token_env = "PDF_ANALYSIS_RUNNER_TOKEN"
+wait_seconds = 25
+concurrency = 1
+drain_seconds = 60
+
+[model]
+declared = "gpt-6-sol"
+
+[executor]
+mode = "command"
+
+[command]
+# Replace the path with the absolute path to this repository on this machine.
+argv = ["/usr/bin/python3", "/path/to/PDF-Analysis/tools/executor-runner/codex_answer.py"]
+timeout_seconds = 540

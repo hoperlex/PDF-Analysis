@@ -233,7 +233,12 @@ describe('a 401 from the wire reaches the screen as a 401', () => {
     // account uses: `readRegistrationStatus` is shaped like the exchange (401, no 403),
     // and `submitRegistration` takes no credential at all, so it declares neither. Every
     // other operation carries both.
-    const open = ['issueToken', 'readRegistrationStatus', 'submitRegistration'];
+    // `EXEC-PULL-01` added the four operations a runner calls with its runner token: a principal
+    // of its own that holds no role, so a refused token is the 401 and there is no role to deny.
+    // They declare the 401 and no 403, like the exchange, for the opposite reason: the credential
+    // is required, and it carries nothing a 403 could be about.
+    const runner = ['claimExecutorTask', 'extendExecutorTaskClaim', 'failExecutorTask', 'submitExecutorTaskAnswer'];
+    const open = ['issueToken', 'readRegistrationStatus', 'submitRegistration', ...runner];
     const noCredentialToRefuse = ['submitRegistration'];
     const ids = Object.keys(OPERATIONS);
     expect(ids.length).toBeGreaterThan(10);
@@ -259,7 +264,7 @@ describe('a 401 from the wire reaches the screen as a 401', () => {
     const without403 = ids.filter(
       (id) => ![...OPERATIONS[id as keyof typeof OPERATIONS].errorStatuses].some((s) => s === 403),
     );
-    expect(without403.sort()).toEqual(open);
+    expect(without403.sort()).toEqual([...open].sort());
     const without401 = ids.filter(
       (id) => ![...OPERATIONS[id as keyof typeof OPERATIONS].errorStatuses].some((s) => s === 401),
     );

@@ -1301,3 +1301,69 @@ worker slot (and the queue behind it) for the length of its call, bounded by the
 timeout and the 900 s watchdog. A revision with billing `not_metered` is recorded «не тарифицируется»:
 a run of only unmetered calls reports cost `0` with basis `unmetered`; a mix of unmetered and
 metered calls reports the metered sum, `estimated`.
+
+---
+
+## 15. The runner channel — tokens, the proxy reload, revocation (`EXEC-PULL-01`, `R-143`)
+
+For the owner's **Codex subscription on a machine the stand cannot SSH into**,
+use the outbound SSH local-forward setup in
+`tools/executor-runner/README.md` §D. The stand sees the existing `pull`/`agent`
+connection; its runner reaches the loopback proxy through SSH and answers with
+the local Codex CLI. Configure billing `not_metered`, pin `gpt-6-sol`, and require
+an `ok` probe before routing. No inbound port on the owner's machine, new
+stand-side SSH profile, API key or deployment setting is required.
+
+A `pull` connection (client `claude_code_session` or `agent`) is served by a *runner* that calls
+the stand; the stand never calls it. The runner needs the stand's public HTTPS origin and a runner
+token, and nothing else: no database, no object store, no shell on the stand. Its four calls are
+`POST /api/v1/runner/tasks/claim`, `.../{task_id}/extend`, `.../answer` and `.../fail`
+(`tools/executor-runner/RUNNER_API.md`).
+
+**Issuing a token (an administrator, in «Исполнители → Подключения»).**
+
+1. Create the connection with kind `pull`, set a revision (the pinned model, the answer deadline,
+   `max_claimed_tasks`; `not_metered` for a subscription session) and route «Анализ текста» to it
+   once a probe passes. «Проверить» posts a synthetic task that a runner must claim within 120 s and
+   answer within 120 s; a connection with no runner online ends the probe as «ни один клиент не на
+   связи» and cannot be routed. The worker takes the probe, so a worker must be up.
+2. «Выпустить токен» on the connection's card (`Исполнители → Подключения`) shows the token **once**
+   in a box with a copy button and a warning that it will not be shown again (`amr_` and 52 more characters). The stand keeps
+   only its SHA-256, so a lost value cannot be shown again: revoke it and issue another. The
+   default life is 30 days; the screen shows the prefix, the expiry, when and from where it was
+   last seen.
+3. The owner puts the value into the runner's environment (`PDF_ANALYSIS_RUNNER_TOKEN`), never
+   into a file or a URL. `tools/executor-runner/README.md` has the `claude mcp add …` command and
+   says where Claude Code keeps it in clear.
+
+**The card.** A `pull` connection's card lists each token (prefix, issued, expires, revoked, last seen
+and from which address), says «на связи» when a runner of the connection called the stand less than
+60 s ago, and shows the number of tasks open now. «Отозвать» asks first.
+
+**Revoking.** The revoke action (`POST /executor-connections/{id}/runner-tokens/{token_id}/revoke`)
+takes effect on the runner's next call, which is `401 authentication_required`; a claim it holds
+lapses within two minutes and its task goes back to `open` (or expires at its deadline). The
+same refusal ends an expired token and any token of an archived connection. To take the whole
+surface away: revoke every token, or remove the route; the proxy rule below can stay.
+
+**The proxy.** The throttle is two `limit_req_zone`s and two `map`s at http level in
+`proxy/nginx.conf` plus `limit_req` lines inside `location /api/v1/` of both server bodies. They
+change the *http* context, so a deploy that carries them must reload the proxy: `deploy.sh` does
+(`reload-proxy.sh` runs `nginx -t` in the pinned image first and refuses an invalid file). By hand:
+
+```
+docker exec <proxy container> nginx -t && docker exec <proxy container> nginx -s reload
+```
+
+The budget is 60 requests a minute with a burst of 30 per token (the key is the token's twelve
+visible characters) and 300 a minute with a burst of 120 per client address, for
+`/api/v1/runner/tasks/…` only. A runner that is throttled gets `429` with the `rate_limited`
+envelope and waits (30 s when no `Retry-After` is sent). `docs/program/EXEC-PULL-01.md` replays a
+scripted runner against these numbers.
+
+**What a long wait costs.** While a runner thinks, the worker's only slot is busy inside its
+Attempt and the queue waits behind it (plan section 3). With no runner online a task is not
+claimed and the call ends after the revision's answer deadline (capped below the 900 s watchdog by
+60 s) as `dependency_unavailable`, `no_executor_online`; it never moves to another connection
+unless an administrator configured a standby. A task's text and the runner's answer are cleared
+seven days after it ends.

@@ -50,6 +50,15 @@ const SEAM_OPERATIONS: ReadonlyArray<readonly [string, string, string]> =
  */
 const OPEN_OPERATIONS = ['issueToken', 'readRegistrationStatus', 'submitRegistration'] as const;
 const NO_CREDENTIAL_TO_REFUSE = ['submitRegistration'] as const;
+// `EXEC-PULL-01`: the four operations a runner (a Claude Code session or an unattended agent)
+// calls. They take a credential, the runner token, which is a principal of its own and holds no
+// role: a refused token is the 401, and there is no role to be denied, so no 403 is declared.
+const RUNNER_OPERATIONS = [
+  'claimExecutorTask',
+  'extendExecutorTaskClaim',
+  'failExecutorTask',
+  'submitExecutorTaskAnswer',
+] as const;
 
 const document = JSON.parse(readText(CONTRACT_PATH)) as {
   components: { schemas: Record<string, { required?: string[]; properties?: Record<string, unknown> }> };
@@ -106,9 +115,14 @@ describe('the seam operations', () => {
       // `W60-OPT-PROPOSALS-01`: a decision on a proposal is appended, keyed like `appendDecision`.
       'decideOptimisationProposal',
       'generateExecutorSshKey',
+      // `EXEC-PULL-01`: issuing and revoking a runner token are administrator commands, keyed like
+      // the other executor writes. The runner's own four operations (claim, extend, answer, fail)
+      // are not keyed: the answer is idempotent on the task, and a claim repeats by design.
+      'issueRunnerToken',
       'reauditRun',
       'requestExecutorProbe',
       'reviseExecutorConnection',
+      'revokeRunnerToken',
       'setExecutionPaused',
       'setExecutorRoute',
       'setExecutorSecret',
@@ -292,6 +306,10 @@ describe('the error catalog', () => {
         continue;
       }
       expect(statuses, `${operationId} declares no 401`).toContain('401');
+      if ((RUNNER_OPERATIONS as readonly string[]).includes(operationId)) {
+        expect(statuses, `${operationId} is a runner's: the token holds no role to deny`).not.toContain('403');
+        continue;
+      }
       // `W34-CONTRACT`: 403 is `permission_denied`, which needs an authenticated subject.
       // `issueToken` is the operation that produces one and presents none itself, so it
       // declares the 401 and not the 403, and so does `readRegistrationStatus`

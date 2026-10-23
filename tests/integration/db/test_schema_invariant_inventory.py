@@ -31,6 +31,15 @@ from collections.abc import Iterable
 from sqlalchemy import Engine, text
 
 
+#: Resealed by `EXEC-PULL-01` for ``0031_executor_pull_channel``, measured against a fresh upgrade
+#: of the lane's PostgreSQL 17 + pgvector stack, and equal to the migration's DDL in every family
+#: it moved: columns +35 -> 717 (``executor_runner_token`` 11, ``executor_task`` 24); relations +2
+#: -> 74 (two tables); constraints +44 -> 783 (two primary keys, three unique keys, seven foreign
+#: keys and thirty-two CHECKs, eight of them the identity-format CHECKs of the id columns);
+#: indexes +11 -> 179 (the two primary keys, the token's three unique keys and connection index,
+#: and the task's five partial indexes); triggers +4 -> 83 (the frozen and write-once guards of
+#: each table). Functions, views, extensions, sequences, policies and the state topology are
+#: identical to the 0030 seal.
 #: Resealed by `EXEC-SEAL-01` for ``0030_executor_connections``, measured, not predicted: a fresh
 #: upgrade of the lane's PostgreSQL 17 + pgvector stack, whose per-family counts were taken against
 #: the 0029 seal below (and the constraint and index totals were predicted from the migration's DDL
@@ -210,11 +219,11 @@ from sqlalchemy import Engine, text
 #: ``contract_state_transition`` (the seal adds ``app_user`` and ``registration_request``
 #: to ``state-machines.json``; the registration lifecycle is guarded by its own trigger).
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (682, "cd817c35fab2b4e64c40fef2e08b96a72c184cc4216eb83a2d3449dcdaa4eba3"),
-    "relations": (72, "957c3eb3b1ce9faa01a77ce28382352d9d95a78c3c1293b06d132f3e4bed7639"),
-    "constraints": (739, "ae87c0c03a9884f71915495851915f784eda8480362294524f3da22aab951d47"),
-    "indexes": (168, "396b31b05bc190ad675376f7c91d77c249ac88be6532526fb11182ab57975a35"),
-    "triggers": (79, "fb8303f419c3bb6e1553bd16e1f8f4f2a32fd24d93c6030eda90d25127f62fe0"),
+    "columns": (717, "23ea2c1c13a44c5d8426fb1cffac36128696368425c559f8538ec43d98fa6478"),
+    "relations": (74, "2311b6515e881502317c515899b883c8979b4891228c9e1fa9e06c0adce1f31b"),
+    "constraints": (783, "81a6ace45154c87c18c3717b2db89cdaa0fa43e8cd009f8b6f4284c2ae6c5df4"),
+    "indexes": (179, "f1d40d2c5466f62fd8e578ee6b5e53845bca4441debdcf9970373c2a7368eaac"),
+    "triggers": (83, "0212da57a0f9d692ffc9bdec7c19e29f0bd69fc2fa309c82eb1a95ae1955fc62"),
     "functions": (31, "62391d05e0e1c209227d158d95097c68ce2356ae5f096931dff6b2f69c72f4bd"),
     "views": (5, "c41ad974669882ee5d818591ee1d485b70455ddd4e51d236cc83892d18d11b93"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),

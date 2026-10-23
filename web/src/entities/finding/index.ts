@@ -13,3 +13,14 @@ export { countGrouped, groupByCategory } from './model/grouping';
 
 /** The Russian label of each AR v2 severity; no expert choice is implied. */
 export { SEVERITY_LABELS } from './model/severity-labels';
+
+/** The Russian words for the state of one norm citation of a finding. */
+export {
+  NORM_CITATION_STATE_LABELS,
+  NORM_CITATION_STATE_MEANINGS,
+  normCitationStateLabel,
+  normCitationStateMeaning,
+} from './model/citation-labels';
+
+export type { SeverityBadgeProps } from './ui/severity-badge';
+export { SeverityBadge } from './ui/severity-badge';

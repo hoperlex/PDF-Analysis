@@ -13,6 +13,12 @@
  *
  * A refusal (`conflict` with its `conflict_reason`) wrote nothing, not even the key, so the
  * next press after the inputs were fixed starts cleanly.
+ *
+ * **One request in flight per intent** (`WEB-FOLLOWUPS-02`, `D-195`). A second press of the
+ * same set before the first answer used to send a second `POST` under the same key, which the
+ * server answered `idempotency_key_in_progress`. A press that finds its intent in flight now
+ * joins the request already sent and gets its answer; the gate reopens when that request
+ * settles, so a deliberate press afterwards is a new request.
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -31,19 +37,35 @@ export interface StartOptimisationPassCommand {
 export function useStartOptimisationPass() {
   const client = useQueryClient();
   const intentRef = useRef<IntentRecord | null>(null);
+  const flightRef = useRef<{
+    readonly signature: string;
+    readonly promise: Promise<OptimisationPass>;
+  } | null>(null);
+
+  const send = async ({ projectUid, documentUid }: StartOptimisationPassCommand) => {
+    const intent = resolveIntentKey(
+      intentRef.current,
+      JSON.stringify([projectUid, documentUid]),
+      newIdempotencyKey,
+    );
+    intentRef.current = intent;
+    const response = await startOptimisationPass({
+      path: { project_uid: projectUid, document_uid: documentUid },
+      idempotencyKey: intent.idempotencyKey,
+    });
+    return response.data;
+  };
+
   return useMutation<OptimisationPass, unknown, StartOptimisationPassCommand>({
-    mutationFn: async ({ projectUid, documentUid }) => {
-      const intent = resolveIntentKey(
-        intentRef.current,
-        JSON.stringify([projectUid, documentUid]),
-        newIdempotencyKey,
-      );
-      intentRef.current = intent;
-      const response = await startOptimisationPass({
-        path: { project_uid: projectUid, document_uid: documentUid },
-        idempotencyKey: intent.idempotencyKey,
+    mutationFn: (command) => {
+      const signature = JSON.stringify([command.projectUid, command.documentUid]);
+      const held = flightRef.current;
+      if (held !== null && held.signature === signature) return held.promise;
+      const promise: Promise<OptimisationPass> = send(command).finally(() => {
+        if (flightRef.current?.promise === promise) flightRef.current = null;
       });
-      return response.data;
+      flightRef.current = { signature, promise };
+      return promise;
     },
     retry: false,
     onSuccess: (pass) => {

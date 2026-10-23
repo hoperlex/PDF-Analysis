@@ -14,10 +14,10 @@ The owner waived five credentialed live W55b product checks for that release;
 those journeys remain unverified. See `W55B-INT-TAG-01.md`,
 `W55B-INT-MAIN-VERIFY-ADDENDUM-01.md` and `CFB-INT-DEV-PUBLISH-43.md`.
 
-The development API surface is **81 paths / 93 operations / 272 schemas**, the error
-catalogue has **27** codes, the migration head is **`0030_executor_connections`**,
-`VERSION` is `0.7.0`, the contract is sealed at `1.0.0` with the `R-143` executor connections
-added under `R-144` (`EXEC-CANDIDATE-1.md`; the `1.1.0` label is a separate reseal). `origin/main` carries `0.7.0` since the owner's merge of pull request
+The development API surface is **87 paths / 99 operations / 284 schemas**, the error
+catalogue has **27** codes, the migration head is **`0031_executor_pull_channel`**,
+`VERSION` is `0.7.0`, the contract is sealed at `1.0.0` with the `R-143` executor connections and
+pull channel added under `R-144` (`EXEC-CANDIDATE-1.md`, `EXEC-CANDIDATE-2.md`; the `1.1.0` label is a separate reseal). `origin/main` carries `0.7.0` since the owner's merge of pull request
 #3 (`48c8e34c`, no gate; `RELEASES.md` has the row and the record); host verification and the
 `v0.7.0` tag are owed, the last tag is `v0.6.0`. Run `infra/deploy/verify-deployed.sh` for the
 current deployment; this document is no substitute for that probe.

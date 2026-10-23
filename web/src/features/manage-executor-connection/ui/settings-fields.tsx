@@ -195,8 +195,9 @@ export function SettingsFields({ kind, pinnedModels, initial, idPrefix }: Settin
         <label htmlFor={id('gateway')}>Имя модели на шлюзе</label>
         <input id={id('gateway')} name={FIELD_NAMES.gatewayModel} type="text" autoComplete="off" spellCheck={false} required maxLength={200} value={gatewayModel} onChange={(event) => setGatewayModel(event.target.value)} />
         <p className="am-form__hint">
-          Это имя уходит в запрос и сверяется с моделью, которую назвал ответ. Если шлюз называет
-          модель иначе, чем закреплённый идентификатор, впишите его имя.
+          {kind === 'pull'
+            ? 'Это точное имя модели, под которым клиент обязан ответить: стенд отклоняет ответ, в котором заявлена другая модель. Сеанс Claude Code называет её так, как показывает выбор модели в сеансе.'
+            : 'Это имя уходит в запрос и сверяется с моделью, которую назвал ответ. Если шлюз называет модель иначе, чем закреплённый идентификатор, впишите его имя.'}
         </p>
       </div>
 
@@ -220,6 +221,7 @@ export function SettingsFields({ kind, pinnedModels, initial, idPrefix }: Settin
         <p className="am-form__hint">
           Тарифы вводить не нужно: они берутся из закреплённой модели. Без тарификации прогон
           показывает «не тарифицируется», а не ноль.
+          {kind === 'pull' ? ' Для сеанса на подписке выберите «Не тарифицируется»: стенд не знает стоимости ответа клиента и не выдумывает её.' : ''}
         </p>
       </div>
       <label className="am-form__field">

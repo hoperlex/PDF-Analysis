@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0 (OpenAPI 3.1.0)
- *   sha256 0c1d1af2e441ff58e1dde3c3fff5605d332b9ce6bac77d3f012e3db1a262ef6a
+ *   sha256 53d289eceaa4e1b77b1bf86c4bdca0c0be693f81669ded299a02c5122685b9ee
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -29,6 +29,8 @@ import type {
   CarryOverDecisionRequest,
   CarryOverDecisionResponse,
   ChangePasswordRequest,
+  ClaimExecutorTaskRequest,
+  ClaimedExecutorTask,
   ClassifyDocumentVersionRequest,
   CorrectVersionClassificationRequest,
   CorrelationId,
@@ -58,15 +60,22 @@ import type {
   ExecutorRevision,
   ExecutorRoute,
   ExecutorRouteList,
+  ExecutorRunnerTokenId,
   ExecutorSecretMetadata,
   ExecutorSshKey,
+  ExecutorTaskAck,
+  ExecutorTaskId,
+  ExtendedExecutorTaskClaim,
+  FailExecutorTaskRequest,
   FindingCategory,
   FindingDetail,
   FindingPage,
   FindingUid,
   IdempotencyKey,
+  IssueRunnerTokenRequest,
   IssueTokenRequest,
   IssueTokenResponse,
+  IssuedRunnerToken,
   JobId,
   MarkReleaseNotesReadRequest,
   NormCatalogueEntryPage,
@@ -111,6 +120,7 @@ import type {
   RunNormReferences,
   RunStatus,
   RunStatusPage,
+  RunnerTokenMetadata,
   SectionReview,
   SectionSpecification,
   SectionVendorList,
@@ -124,6 +134,7 @@ import type {
   SetWorkerIntakeRequest,
   SpecificationPrices,
   StartRunRequest,
+  SubmitExecutorTaskAnswerRequest,
   SubmitRegistrationRequest,
   TransitionAssignmentRequest,
   UpdateMyProfileRequest,
@@ -150,6 +161,7 @@ export const OPERATION_IDS = [
   'cancelRun',
   'carryOverDecision',
   'changePassword',
+  'claimExecutorTask',
   'classifyDocumentVersion',
   'compareDocumentVersions',
   'correctVersionClassification',
@@ -160,6 +172,8 @@ export const OPERATION_IDS = [
   'exportOptimisationProposalsCsv',
   'exportRunCsv',
   'exportRunXlsx',
+  'extendExecutorTaskClaim',
+  'failExecutorTask',
   'generateExecutorSshKey',
   'getAssignment',
   'getDashboardSummary',
@@ -178,6 +192,7 @@ export const OPERATION_IDS = [
   'getUser',
   'getVersionBlocks',
   'getVersionSectionReview',
+  'issueRunnerToken',
   'issueToken',
   'listAnalysisProfiles',
   'listAssignments',
@@ -215,6 +230,7 @@ export const OPERATION_IDS = [
   'resetUserPassword',
   'restoreUser',
   'reviseExecutorConnection',
+  'revokeRunnerToken',
   'searchNorms',
   'setCurrentNormSnapshot',
   'setExecutionPaused',
@@ -229,6 +245,7 @@ export const OPERATION_IDS = [
   'streamDocumentVersionContent',
   'streamNormDocumentContent',
   'streamVersionPortalBlockCrop',
+  'submitExecutorTaskAnswer',
   'submitRegistration',
   'transitionAssignment',
   'updateMyProfile',
@@ -436,6 +453,23 @@ export type ChangePasswordInput = {
 
 /** Success body of `changePassword` (`application/json`, HTTP 200). */
 export type ChangePasswordResult = IssueTokenResponse;
+
+// ------------------------------------------------------------------------------------
+// claimExecutorTask - POST /runner/tasks/claim
+// ------------------------------------------------------------------------------------
+
+/** Claim Executor Task */
+export type ClaimExecutorTaskInput = {
+  /** Request body, sent as `application/json`. */
+  body: ClaimExecutorTaskRequest;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `claimExecutorTask` (`application/json`, HTTP 200/204). */
+export type ClaimExecutorTaskResult = ClaimedExecutorTask;
 
 // ------------------------------------------------------------------------------------
 // classifyDocumentVersion - PUT /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification
@@ -700,6 +734,46 @@ export type ExportRunXlsxInput = {
 
 /** Success body of `exportRunXlsx` (`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`, HTTP 200). */
 export type ExportRunXlsxResult = Blob;
+
+// ------------------------------------------------------------------------------------
+// extendExecutorTaskClaim - POST /runner/tasks/{task_id}/extend
+// ------------------------------------------------------------------------------------
+
+/** Extend Executor Task Claim */
+export type ExtendExecutorTaskClaimInput = {
+  /** Path parameters, substituted into `/runner/tasks/{task_id}/extend`. */
+  path: {
+    task_id: ExecutorTaskId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `extendExecutorTaskClaim` (`application/json`, HTTP 200). */
+export type ExtendExecutorTaskClaimResult = ExtendedExecutorTaskClaim;
+
+// ------------------------------------------------------------------------------------
+// failExecutorTask - POST /runner/tasks/{task_id}/fail
+// ------------------------------------------------------------------------------------
+
+/** Fail Executor Task */
+export type FailExecutorTaskInput = {
+  /** Path parameters, substituted into `/runner/tasks/{task_id}/fail`. */
+  path: {
+    task_id: ExecutorTaskId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: FailExecutorTaskRequest;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `failExecutorTask` (`application/json`, HTTP 200). */
+export type FailExecutorTaskResult = ExecutorTaskAck;
 
 // ------------------------------------------------------------------------------------
 // generateExecutorSshKey - POST /executor-connections/{connection_id}/ssh-key
@@ -1115,6 +1189,32 @@ export type GetVersionSectionReviewInput = {
 
 /** Success body of `getVersionSectionReview` (`application/json`, HTTP 200). */
 export type GetVersionSectionReviewResult = SectionReview;
+
+// ------------------------------------------------------------------------------------
+// issueRunnerToken - POST /executor-connections/{connection_id}/runner-tokens
+// ------------------------------------------------------------------------------------
+
+/** Issue Runner Token */
+export type IssueRunnerTokenInput = {
+  /** Path parameters, substituted into `/executor-connections/{connection_id}/runner-tokens`. */
+  path: {
+    connection_id: ExecutorConnectionId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: IssueRunnerTokenRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `issueRunnerToken` (`application/json`, HTTP 201). */
+export type IssueRunnerTokenResult = IssuedRunnerToken;
 
 // ------------------------------------------------------------------------------------
 // issueToken - POST /auth/token
@@ -2082,6 +2182,31 @@ export type ReviseExecutorConnectionInput = {
 export type ReviseExecutorConnectionResult = ExecutorRevision;
 
 // ------------------------------------------------------------------------------------
+// revokeRunnerToken - POST /executor-connections/{connection_id}/runner-tokens/{token_id}/revoke
+// ------------------------------------------------------------------------------------
+
+/** Revoke Runner Token */
+export type RevokeRunnerTokenInput = {
+  /** Path parameters, substituted into `/executor-connections/{connection_id}/runner-tokens/{token_id}/revoke`. */
+  path: {
+    connection_id: ExecutorConnectionId;
+    token_id: ExecutorRunnerTokenId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `revokeRunnerToken` (`application/json`, HTTP 200). */
+export type RevokeRunnerTokenResult = RunnerTokenMetadata;
+
+// ------------------------------------------------------------------------------------
 // searchNorms - GET /norms/search
 // ------------------------------------------------------------------------------------
 
@@ -2444,6 +2569,27 @@ export type StreamVersionPortalBlockCropInput = {
 export type StreamVersionPortalBlockCropResult = Blob;
 
 // ------------------------------------------------------------------------------------
+// submitExecutorTaskAnswer - POST /runner/tasks/{task_id}/answer
+// ------------------------------------------------------------------------------------
+
+/** Submit Executor Task Answer */
+export type SubmitExecutorTaskAnswerInput = {
+  /** Path parameters, substituted into `/runner/tasks/{task_id}/answer`. */
+  path: {
+    task_id: ExecutorTaskId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: SubmitExecutorTaskAnswerRequest;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `submitExecutorTaskAnswer` (`application/json`, HTTP 200). */
+export type SubmitExecutorTaskAnswerResult = ExecutorTaskAck;
+
+// ------------------------------------------------------------------------------------
 // submitRegistration - POST /registrations
 // ------------------------------------------------------------------------------------
 
@@ -2745,6 +2891,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 422, 500, 503],
     tags: ['auth'],
   },
+  claimExecutorTask: {
+    operationId: 'claimExecutorTask',
+    method: 'POST',
+    path: '/runner/tasks/claim',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200, 204],
+    errorStatuses: [401, 422, 500, 503],
+    tags: ['execution'],
+  },
   classifyDocumentVersion: {
     operationId: 'classifyDocumentVersion',
     method: 'PUT',
@@ -2884,6 +3044,34 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['export'],
+  },
+  extendExecutorTaskClaim: {
+    operationId: 'extendExecutorTaskClaim',
+    method: 'POST',
+    path: '/runner/tasks/{task_id}/extend',
+    pathParams: ['task_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 404, 409, 422, 500, 503],
+    tags: ['execution'],
+  },
+  failExecutorTask: {
+    operationId: 'failExecutorTask',
+    method: 'POST',
+    path: '/runner/tasks/{task_id}/fail',
+    pathParams: ['task_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 404, 409, 422, 500, 503],
+    tags: ['execution'],
   },
   generateExecutorSshKey: {
     operationId: 'generateExecutorSshKey',
@@ -3136,6 +3324,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 500, 503],
     tags: ['documents'],
+  },
+  issueRunnerToken: {
+    operationId: 'issueRunnerToken',
+    method: 'POST',
+    path: '/executor-connections/{connection_id}/runner-tokens',
+    pathParams: ['connection_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['execution'],
   },
   issueToken: {
     operationId: 'issueToken',
@@ -3655,6 +3857,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['execution'],
   },
+  revokeRunnerToken: {
+    operationId: 'revokeRunnerToken',
+    method: 'POST',
+    path: '/executor-connections/{connection_id}/runner-tokens/{token_id}/revoke',
+    pathParams: ['connection_id', 'token_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['execution'],
+  },
   searchNorms: {
     operationId: 'searchNorms',
     method: 'GET',
@@ -3850,6 +4066,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 500, 503],
     tags: ['documents'],
+  },
+  submitExecutorTaskAnswer: {
+    operationId: 'submitExecutorTaskAnswer',
+    method: 'POST',
+    path: '/runner/tasks/{task_id}/answer',
+    pathParams: ['task_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 404, 409, 422, 500, 503],
+    tags: ['execution'],
   },
   submitRegistration: {
     operationId: 'submitRegistration',

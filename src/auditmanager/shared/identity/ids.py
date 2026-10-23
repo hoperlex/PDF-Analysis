@@ -376,6 +376,18 @@ class ExecutorRouteEventId(OpaqueId, prefix="ert", entity="ExecutorRouteEvent"):
     """Identity of one appended change of the route for a kind of model work."""
 
 
+class ExecutorRunnerTokenId(OpaqueId, prefix="ern", entity="ExecutorRunnerToken"):
+    """Identity of one runner token of a ``pull`` connection (`EXEC-PULL-01`, migration ``0031``).
+
+    The token's secret value is never an identity: only the hash of it is stored, and this
+    identity addresses the row for the administrator who revokes it.
+    """
+
+
+class ExecutorTaskId(OpaqueId, prefix="ext", entity="ExecutorTask"):
+    """Identity of one task a ``pull`` connection hands to a runner (`EXEC-PULL-01`)."""
+
+
 #: Every concrete identity type, keyed by contract entity name.
 IDENTITY_TYPES_BY_ENTITY: Final[dict[str, type[OpaqueId]]] = {
     identity.entity: identity for identity in _REGISTRY.values()

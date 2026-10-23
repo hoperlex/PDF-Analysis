@@ -13,19 +13,28 @@ database transaction is open while the gateway is slow:
 The plaintext key lives in a local variable for the length of step 2 to 3. A probe that fails for
 any reason is recorded (``protocol_error`` for the unexpected) and never raises into the worker
 loop; the log line names the probe, the outcome and nothing else.
+
+A ``pull`` connection (`EXEC-PULL-01`) has no key and no address: its probe posts a task and waits
+for a runner to take it (up to two minutes) and answer it (two more). That wait would hold the
+probe thread, so a ``pull`` probe is handed to a thread of its own (at most :data:`PULL_PROBE_THREADS`
+at once) and the loop goes on taking the others. A worker that dies leaves the probe ``running``;
+the ``api``'s sweep ends it.
 """
 
 from __future__ import annotations
 
 import logging
+import threading
 from typing import Any
 
+from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.analysis.public import ModelPin, pinned_models
 from auditmanager.executors.destinations import DestinationPolicy
-from auditmanager.executors.model import ProbeRecord, destination_for
+from auditmanager.executors.model import ProbeRecord, RevisionRecord, destination_for
 from auditmanager.executors.probes import ProbeResult, probe_http_api, scrub
+from auditmanager.executors.pull import probe_pull
 from auditmanager.executors.public import (
     SecretUnreadableError,
     open_secret,
@@ -35,9 +44,12 @@ from auditmanager.executors.repository import ExecutorRepository
 from auditmanager.executors.sealing import PrivateRing
 from auditmanager.executors.usability import is_served
 
-__all__ = ["ProbeRunner"]
+__all__ = ["PULL_PROBE_THREADS", "ProbeRunner"]
 
 _log = logging.getLogger(__name__)
+
+#: Probes of ``pull`` connections that wait for a runner at the same time.
+PULL_PROBE_THREADS = 4
 
 
 class ProbeRunner:
@@ -46,13 +58,17 @@ class ProbeRunner:
     def __init__(
         self, session_factory: sessionmaker[Session], *, ring: PrivateRing | None,
         policy: DestinationPolicy, repository: ExecutorRepository | None = None,
-        batch: int = 4,
+        batch: int = 4, engine: Engine | None = None,
     ) -> None:
         self._sessions = session_factory
         self._ring = ring
         self._policy = policy
         self._store = repository or ExecutorRepository()
         self._batch = batch
+        #: The source of the ``LISTEN`` connection a ``pull`` probe waits on (``None`` polls).
+        self._engine = engine
+        self._pull_threads: set[threading.Thread] = set()
+        self._pull_lock = threading.Lock()
 
     def __call__(self) -> int:
         return self.run_pending()
@@ -65,9 +81,36 @@ class ProbeRunner:
                 session.commit()
             if probe is None:
                 break
-            self._run(probe)
+            if not self._run_apart(probe):
+                self._run(probe)
             handled += 1
         return handled
+
+    def join_pull_probes(self, timeout: float | None = None) -> None:
+        """Wait for the ``pull`` probes in flight (a test, or an orderly stop)."""
+        with self._pull_lock:
+            threads = list(self._pull_threads)
+        for thread in threads:
+            thread.join(timeout)
+
+    def _run_apart(self, probe: ProbeRecord) -> bool:
+        """Hand a ``pull`` probe to a thread of its own; ``False`` when it is not one, or when
+        :data:`PULL_PROBE_THREADS` are already waiting (it is then run in line, as any other)."""
+        with self._sessions() as session:
+            connection = self._store.get_connection(session, probe.connection_id)
+        if connection is None or connection.kind != "pull":
+            return False
+        with self._pull_lock:
+            self._pull_threads = {t for t in self._pull_threads if t.is_alive()}
+            if len(self._pull_threads) >= PULL_PROBE_THREADS:
+                return False
+            thread = threading.Thread(
+                target=self._run, args=(probe,), name=f"auditmanager-pull-probe-{probe.probe_id}",
+                daemon=True,
+            )
+            self._pull_threads.add(thread)
+        thread.start()
+        return True
 
     # -- one probe ------------------------------------------------------------------------
     def _run(self, probe: ProbeRecord) -> None:
@@ -101,20 +144,29 @@ class ProbeRunner:
                 return ProbeResult("protocol_error", "the connection or its revision is gone")
             if not is_served(connection, revision):
                 return ProbeResult("kind_not_served", "this kind of connection is not served yet")
-            if probe.secret_id is None:
-                return ProbeResult("secret_unreadable", "no key is set for this connection")
-            try:
-                key = open_secret(
-                    session, self._ring, secret_id=probe.secret_id,
-                    destination=destination_for(connection.kind, revision.settings, "api_key"),
-                    repository=self._store,
-                )
-            except SecretUnreadableError:
-                return ProbeResult(
-                    "secret_unreadable",
-                    "the key cannot be opened here for this address; enter it again",
-                )
+            if connection.kind == "pull":
+                pull_revision: RevisionRecord | None = revision
+                key = ""
+            else:
+                pull_revision = None
+                if probe.secret_id is None:
+                    return ProbeResult("secret_unreadable", "no key is set for this connection")
+                try:
+                    key = open_secret(
+                        session, self._ring, secret_id=probe.secret_id,
+                        destination=destination_for(connection.kind, revision.settings, "api_key"),
+                        repository=self._store,
+                    )
+                except SecretUnreadableError:
+                    return ProbeResult(
+                        "secret_unreadable",
+                        "the key cannot be opened here for this address; enter it again",
+                    )
             settings = revision.settings
+        if pull_revision is not None:
+            # No key, no address, no transaction open: a runner must take a synthetic task.
+            return probe_pull(
+                self._sessions, pull_revision, probe.probe_id, engine=self._engine)
         pin: ModelPin | None = next(
             (item for item in pinned_models() if item.model_id == settings.pin_id), None)
         result = probe_http_api(
@@ -128,8 +180,13 @@ class ProbeRunner:
         )
 
 
-def runner_for(session_factory: sessionmaker[Session], *, ring: Any, environ: dict[str, str]) -> ProbeRunner:
-    """The runner the composition root wires: the private ring and the environment's allowed hosts."""
+def runner_for(
+    session_factory: sessionmaker[Session], *, ring: Any, environ: dict[str, str],
+    engine: Engine | None = None,
+) -> ProbeRunner:
+    """The runner the composition root wires: the private ring and the environment's allowed hosts,
+    and the engine a ``pull`` probe's ``LISTEN`` connection comes from."""
     return ProbeRunner(
         session_factory, ring=ring, policy=DestinationPolicy.from_environment(environ),
+        engine=engine,
     )

@@ -4358,7 +4358,7 @@ class ExecutorAdapter(_SessionHolder):
         def work(session: Session) -> models.ExecutorConnectionDetail:
             # A write transaction: the read path ends the probes nobody can still be running.
             detail = connection_detail(session, connection_id)
-            return models.ExecutorConnectionDetail.model_validate({
+            body = {
                 "connection": _executor_connection_view(detail.summary),
                 "revisions": [
                     _executor_revision_view(
@@ -4366,7 +4366,10 @@ class ExecutorAdapter(_SessionHolder):
                     for revision in detail.revisions
                 ],
                 "probes": [_executor_probe_view(probe) for probe in detail.probes],
-            })
+            }
+            if detail.summary.connection.kind == "pull":
+                body.update(_pull_channel_facts(session, connection_id))
+            return models.ExecutorConnectionDetail.model_validate(body)
         return self._write(work)
 
     def list_routes(self, *, user_uid: str) -> models.ExecutorRouteList:
@@ -4574,3 +4577,17 @@ def _executor_route_view(route: Any) -> dict[str, Any]:
         set_at=route.set_at, set_by=route.set_by,
         standby_connection_id=route.standby_connection_id,
     )
+
+
+def _pull_channel_facts(session: Session, connection_id: str) -> dict[str, Any]:
+    """`EXEC-PULL-01`. A ``pull`` connection's runner tokens (metadata only: the value was shown
+    once) and the number of tasks waiting for, or held by, a runner right now."""
+    from auditmanager.bootstrap.runner import runner_token_view
+    from auditmanager.executors.public import open_task_count, runner_tokens_of
+
+    return {
+        "runner_tokens": [
+            runner_token_view(record) for record in runner_tokens_of(session, connection_id)
+        ],
+        "open_task_count": open_task_count(session, connection_id),
+    }

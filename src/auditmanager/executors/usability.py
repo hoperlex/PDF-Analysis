@@ -4,9 +4,9 @@
 cached:
 
 * **served** -- this release has an adapter factory for the kind (:mod:`.kinds`). Today that is
-  ``http_api`` over ``direct`` or ``vpn``; ``pull``, ``ssh_command`` and the ``ssh_tunnel``
-  transport can be created but are refused at route time with ``validation_failed``
-  (``constraint: kind_not_served``);
+  ``http_api`` over ``direct`` or ``vpn`` and ``pull`` (`EXEC-PULL-01`); ``ssh_command`` and the
+  ``ssh_tunnel`` transport can be created but are refused at route time with
+  ``validation_failed`` (``constraint: kind_not_served``);
 * **probed** -- the *latest finished probe of the current revision on the current secret* is
   ``ok``. A new revision (a changed address), a new key and a failed re-probe each make the
   connection unusable until a probe passes again; that is what stops a stolen session from
@@ -62,10 +62,17 @@ def is_probed_ok(
     session: Session, store: ExecutorRepository, connection: ConnectionRecord,
     revision: RevisionRecord,
 ) -> bool:
-    secret = current_secret(session, store, connection)
-    if secret is None:
-        return False
-    probe = store.latest_finished_probe(session, revision.revision_id, secret.secret_id)
+    entry = adapter_for(connection.kind)
+    if entry is not None and entry.purpose is None:
+        # A channel kind (``pull``) keeps no sealed secret: its probe is taken on no secret, and
+        # a runner token is a credential of the runner, not a condition of the revision.
+        secret_id = None
+    else:
+        secret = current_secret(session, store, connection)
+        if secret is None:
+            return False
+        secret_id = secret.secret_id
+    probe = store.latest_finished_probe(session, revision.revision_id, secret_id)
     return probe is not None and probe.outcome == "ok"
 
 

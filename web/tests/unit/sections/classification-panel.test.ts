@@ -23,6 +23,7 @@
 import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
+import type { SectionReview } from '@/shared/api';
 import { queryKeys } from '@/shared/api';
 import {
   ALREADY_CLASSIFIED_DETAIL,
@@ -72,6 +73,24 @@ function form(props: Partial<Parameters<typeof ClassifyVersionFormView>[0]> = {}
   );
 }
 
+/**
+ * `PB-PROFILE-01`. ПБ has a draft profile now, so the API marks all fifteen options executable.
+ * "A section without a profile" is what a server whose registry lacks one would answer; that
+ * state is built for any section a test names (ГП here) instead of being ПБ, as it used to be,
+ * and `null` is the API's present answer: every option executable. (The shared `review()`
+ * fixture still defaults ПБ to non-executable; it is not changed by this slice.)
+ */
+function reviewWithoutProfile(
+  code: SectionReview['options'][number]['section_code'] | null,
+  overrides: Partial<SectionReview> = {},
+): SectionReview {
+  const base = review(overrides);
+  return {
+    ...base,
+    options: base.options.map((option) => ({ ...option, executable: option.section_code !== code })),
+  };
+}
+
 /** The `data-section-option` codes, in the order the markup lists them. */
 function optionOrder(markup: string): string[] {
   return [...markup.matchAll(/data-section-option="([A-Z]+)"/g)].map((m) => m[1] as string);
@@ -115,13 +134,26 @@ describe('an expert facing an unconfirmed version gets the form', () => {
     expect((markup.match(/data-suggestion-score=/g) ?? []).length).toBe(3);
   });
 
-  it('marks the section without a profile and keeps it choosable', () => {
-    const markup = form();
-    const pb = /<label[^>]*data-section-option="PB"[\s\S]*?<\/label>/.exec(markup)?.[0] ?? '';
-    expect(pb).toContain('data-executable="false"');
-    expect(pb).toContain('профиль анализа недоступен');
-    expect(pb).not.toContain('disabled=""');
+  it('marks a section without a profile and keeps it choosable', () => {
+    const markup = form({ review: reviewWithoutProfile('GP') });
+    const gp = /<label[^>]*data-section-option="GP"[\s\S]*?<\/label>/.exec(markup)?.[0] ?? '';
+    expect(gp).toContain('data-executable="false"');
+    expect(gp).toContain('профиль анализа недоступен');
+    expect(gp).not.toContain('disabled=""');
     expect((markup.match(/data-profile-unavailable=""/g) ?? []).length).toBe(1);
+    // ...and only that one: ПБ has a profile.
+    const pb = /<label[^>]*data-section-option="PB"[\s\S]*?<\/label>/.exec(markup)?.[0] ?? '';
+    expect(pb).toContain('data-executable="true"');
+    expect(pb).not.toContain('профиль анализа недоступен');
+  });
+
+  it('marks nothing when every section has a profile, ПБ included', () => {
+    const markup = form({ review: reviewWithoutProfile(null) });
+    const pb = /<label[^>]*data-section-option="PB"[\s\S]*?<\/label>/.exec(markup)?.[0] ?? '';
+    expect(pb).toContain('data-executable="true"');
+    expect(pb).not.toContain('профиль анализа недоступен');
+    expect(markup).not.toContain('data-profile-unavailable=""');
+    expect(markup).not.toContain('профиль анализа недоступен');
   });
 
   it('says when nothing was suggested, and when the recognised text was not read', () => {
@@ -148,12 +180,19 @@ describe('an expert facing an unconfirmed version gets the form', () => {
   });
 
   it('disables every control while the request is in flight', () => {
-    const markup = form({ stage: 'R', section: 'PB', pending: true });
+    const markup = form({
+      stage: 'R', section: 'GP', pending: true, review: reviewWithoutProfile('GP'),
+    });
     expect(/<button[^>]*data-classification-confirm=""[^>]*disabled=""/.test(markup)).toBe(true);
     expect((markup.match(/<input[^>]*disabled=""/g) ?? []).length).toBe(17);
     expect(markup).toContain('Загрузка: подтверждение стадии и раздела…');
     // A chosen section without a profile says what a run over it will meet.
     expect(markup).toContain('data-chosen-profile="unavailable"');
+  });
+
+  it('says nothing about a missing profile for a chosen ПБ: it has one', () => {
+    const markup = form({ stage: 'R', section: 'PB', review: reviewWithoutProfile(null) });
+    expect(markup).not.toContain('data-chosen-profile="unavailable"');
   });
 });
 
@@ -199,15 +238,29 @@ describe('a confirmed version shows its stage and section', () => {
 
   it('adds «профиль анализа недоступен» exactly when the review says so', () => {
     const markup = view({
-      review: review({ classification: classification({ project_stage: 'R', section_code: 'PB' }) }),
+      review: reviewWithoutProfile('GP', {
+        classification: classification({ project_stage: 'R', section_code: 'GP' }),
+      }),
     });
     expect(markup).toContain('Стадия: Р');
-    expect(markup).toContain('Пожарная безопасность (ПБ)');
+    expect(markup).toContain('Генеральный план (ГП)');
     expect(markup).toContain('профиль анализа недоступен');
     expect(markup).toContain('data-profile-unavailable-note=""');
     // The note refuses a substitute, and never names one.
     expect(markup).toContain('Анализ по другому разделу вместо него не запускается.');
     expect(markup).not.toContain('АР');
+  });
+
+  it('adds no note to a confirmed ПБ version: it has a profile now', () => {
+    const markup = view({
+      review: reviewWithoutProfile(null, {
+        classification: classification({ project_stage: 'R', section_code: 'PB' }),
+      }),
+    });
+    expect(markup).toContain('Стадия: Р');
+    expect(markup).toContain('Пожарная безопасность (ПБ)');
+    expect(markup).not.toContain('профиль анализа недоступен');
+    expect(markup).not.toContain('data-profile-unavailable-note=""');
   });
 
   it('carries the document identity the journey captures', () => {

@@ -9,7 +9,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.0.0 (OpenAPI 3.1.0)
- *   sha256 0c1d1af2e441ff58e1dde3c3fff5605d332b9ce6bac77d3f012e3db1a262ef6a
+ *   sha256 53d289eceaa4e1b77b1bf86c4bdca0c0be693f81669ded299a02c5122685b9ee
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -32,6 +32,8 @@ import type {
   CarryOverDecisionResult,
   ChangePasswordInput,
   ChangePasswordResult,
+  ClaimExecutorTaskInput,
+  ClaimExecutorTaskResult,
   ClassifyDocumentVersionInput,
   ClassifyDocumentVersionResult,
   CompareDocumentVersionsInput,
@@ -52,6 +54,10 @@ import type {
   ExportRunCsvResult,
   ExportRunXlsxInput,
   ExportRunXlsxResult,
+  ExtendExecutorTaskClaimInput,
+  ExtendExecutorTaskClaimResult,
+  FailExecutorTaskInput,
+  FailExecutorTaskResult,
   GenerateExecutorSshKeyInput,
   GenerateExecutorSshKeyResult,
   GetAssignmentInput,
@@ -88,6 +94,8 @@ import type {
   GetVersionBlocksResult,
   GetVersionSectionReviewInput,
   GetVersionSectionReviewResult,
+  IssueRunnerTokenInput,
+  IssueRunnerTokenResult,
   IssueTokenInput,
   IssueTokenResult,
   ListAnalysisProfilesInput,
@@ -162,6 +170,8 @@ import type {
   RestoreUserResult,
   ReviseExecutorConnectionInput,
   ReviseExecutorConnectionResult,
+  RevokeRunnerTokenInput,
+  RevokeRunnerTokenResult,
   SearchNormsInput,
   SearchNormsResult,
   SetCurrentNormSnapshotInput,
@@ -190,6 +200,8 @@ import type {
   StreamNormDocumentContentResult,
   StreamVersionPortalBlockCropInput,
   StreamVersionPortalBlockCropResult,
+  SubmitExecutorTaskAnswerInput,
+  SubmitExecutorTaskAnswerResult,
   SubmitRegistrationInput,
   SubmitRegistrationResult,
   TransitionAssignmentInput,
@@ -289,6 +301,18 @@ export function changePassword(
   options?: RequestOptions,
 ): Promise<ApiResponse<ChangePasswordResult>> {
   return request<ChangePasswordResult>(OPERATIONS.changePassword, input, options);
+}
+
+/**
+ * Claim Executor Task
+ *
+ * `POST /runner/tasks/claim`.
+ */
+export function claimExecutorTask(
+  input: ClaimExecutorTaskInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ClaimExecutorTaskResult>> {
+  return request<ClaimExecutorTaskResult>(OPERATIONS.claimExecutorTask, input, options);
 }
 
 /**
@@ -409,6 +433,30 @@ export function exportRunXlsx(
   options?: RequestOptions,
 ): Promise<ApiResponse<ExportRunXlsxResult>> {
   return request<ExportRunXlsxResult>(OPERATIONS.exportRunXlsx, input, options);
+}
+
+/**
+ * Extend Executor Task Claim
+ *
+ * `POST /runner/tasks/{task_id}/extend`.
+ */
+export function extendExecutorTaskClaim(
+  input: ExtendExecutorTaskClaimInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ExtendExecutorTaskClaimResult>> {
+  return request<ExtendExecutorTaskClaimResult>(OPERATIONS.extendExecutorTaskClaim, input, options);
+}
+
+/**
+ * Fail Executor Task
+ *
+ * `POST /runner/tasks/{task_id}/fail`.
+ */
+export function failExecutorTask(
+  input: FailExecutorTaskInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<FailExecutorTaskResult>> {
+  return request<FailExecutorTaskResult>(OPERATIONS.failExecutorTask, input, options);
 }
 
 /**
@@ -625,6 +673,18 @@ export function getVersionSectionReview(
   options?: RequestOptions,
 ): Promise<ApiResponse<GetVersionSectionReviewResult>> {
   return request<GetVersionSectionReviewResult>(OPERATIONS.getVersionSectionReview, input, options);
+}
+
+/**
+ * Issue Runner Token
+ *
+ * `POST /executor-connections/{connection_id}/runner-tokens` - a write; carries a required Idempotency-Key.
+ */
+export function issueRunnerToken(
+  input: IssueRunnerTokenInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<IssueRunnerTokenResult>> {
+  return request<IssueRunnerTokenResult>(OPERATIONS.issueRunnerToken, input, options);
 }
 
 /**
@@ -1072,6 +1132,18 @@ export function reviseExecutorConnection(
 }
 
 /**
+ * Revoke Runner Token
+ *
+ * `POST /executor-connections/{connection_id}/runner-tokens/{token_id}/revoke` - a write; carries a required Idempotency-Key.
+ */
+export function revokeRunnerToken(
+  input: RevokeRunnerTokenInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<RevokeRunnerTokenResult>> {
+  return request<RevokeRunnerTokenResult>(OPERATIONS.revokeRunnerToken, input, options);
+}
+
+/**
  * Search Norms
  *
  * `GET /norms/search`.
@@ -1240,6 +1312,18 @@ export function streamVersionPortalBlockCrop(
 }
 
 /**
+ * Submit Executor Task Answer
+ *
+ * `POST /runner/tasks/{task_id}/answer`.
+ */
+export function submitExecutorTaskAnswer(
+  input: SubmitExecutorTaskAnswerInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SubmitExecutorTaskAnswerResult>> {
+  return request<SubmitExecutorTaskAnswerResult>(OPERATIONS.submitExecutorTaskAnswer, input, options);
+}
+
+/**
  * Apply for an account.
  *
  * `POST /registrations`.
@@ -1335,6 +1419,7 @@ export const apiClient = {
   cancelRun,
   carryOverDecision,
   changePassword,
+  claimExecutorTask,
   classifyDocumentVersion,
   compareDocumentVersions,
   correctVersionClassification,
@@ -1345,6 +1430,8 @@ export const apiClient = {
   exportOptimisationProposalsCsv,
   exportRunCsv,
   exportRunXlsx,
+  extendExecutorTaskClaim,
+  failExecutorTask,
   generateExecutorSshKey,
   getAssignment,
   getDashboardSummary,
@@ -1363,6 +1450,7 @@ export const apiClient = {
   getUser,
   getVersionBlocks,
   getVersionSectionReview,
+  issueRunnerToken,
   issueToken,
   listAnalysisProfiles,
   listAssignments,
@@ -1400,6 +1488,7 @@ export const apiClient = {
   resetUserPassword,
   restoreUser,
   reviseExecutorConnection,
+  revokeRunnerToken,
   searchNorms,
   setCurrentNormSnapshot,
   setExecutionPaused,
@@ -1414,6 +1503,7 @@ export const apiClient = {
   streamDocumentVersionContent,
   streamNormDocumentContent,
   streamVersionPortalBlockCrop,
+  submitExecutorTaskAnswer,
   submitRegistration,
   transitionAssignment,
   updateMyProfile,

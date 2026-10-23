@@ -34,6 +34,7 @@ from auditmanager.api.security import (
     OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES,
     OPERATIONS_AN_INCOMPLETE_PROFILE_REACHES,
     ROLES_OF_A_ROUTE_WITHOUT_AN_OPERATION,
+    RUNNER_OPERATIONS,
     UNAUTHENTICATED_OPERATIONS,
 )
 from w13_api_driver import Request, Surface, dispatch
@@ -89,6 +90,16 @@ SAMPLES: dict[str, tuple[str, str]] = {
     ),
     "listExecutorRoutes": ("GET", "/executor-routes"),
     "setExecutorRoute": ("PUT", "/executor-routes"),
+    # `EXEC-PULL-01`. Runner tokens are an administrator's (the runner's own four operations
+    # are not role-gated: they are authenticated by the token, see RUNNER_OPERATIONS).
+    "issueRunnerToken": (
+        "POST", "/executor-connections/exc_01M2545JSD15ETSNNV904X991T/runner-tokens"
+    ),
+    "revokeRunnerToken": (
+        "POST",
+        "/executor-connections/exc_01M2545JSD15ETSNNV904X991T/runner-tokens/"
+        "ern_01M2545JSD15ETSNNV904X991T/revoke",
+    ),
     # `W55A-SEAL-01`. The norms operations (R-80 any-role reads; R-113 administrator history
     # and designation). `q` is supplied so the role refusal is the only one in play.
     "searchNorms": ("GET", "/norms/search?q=gost"),
@@ -337,6 +348,8 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "generateExecutorSshKey": _ADMIN,
     "requestExecutorProbe": _ADMIN,
     "setExecutorRoute": _ADMIN,
+    "issueRunnerToken": _ADMIN,
+    "revokeRunnerToken": _ADMIN,
     # `W55A-SEAL-01` (R-113): who designated which snapshot, and the designation itself.
     "listNormSnapshotEvents": _ADMIN,
     "setCurrentNormSnapshot": _ADMIN,
@@ -407,7 +420,9 @@ def test_every_guarded_operation_is_in_the_role_register(router: Surface) -> Non
     An operation with no line is refused to everyone -- closed by default -- and this is
     what reports it rather than letting it sit closed unnoticed.
     """
-    assert set(OPERATION_ROLES) == router.operation_ids - UNAUTHENTICATED_OPERATIONS
+    assert set(OPERATION_ROLES) == (
+        router.operation_ids - UNAUTHENTICATED_OPERATIONS - RUNNER_OPERATIONS
+    )
     assert set(SAMPLES) == set(OPERATION_ROLES)
 
 

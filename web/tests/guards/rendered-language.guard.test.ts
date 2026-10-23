@@ -136,13 +136,14 @@ import { WorkerList } from '@/widgets/worker-list';
 import { WorkersPage } from '@/_pages/workers';
 import type { WorkersPageProps } from '@/_pages/workers';
 import {
-  CommandFailure, CreateConnectionForm, HostKeyControl, ReviseConnectionForm, SettingsFields,
-  SshKeyControl,
+  CommandFailure, CreateConnectionForm, HostKeyControl, IssuedTokenView, ReviseConnectionForm,
+  SettingsFields, SshKeyControl,
 } from '@/features/manage-executor-connection';
 import { EXECUTOR_SECRET_OUTCOMES, SetExecutorSecretForm } from '@/features/set-executor-secret';
 import {
   ALL_CASES as EXECUTOR_CASES, PINNED as EXECUTOR_PINNED, READY as EXECUTOR_READY,
-  OUTCOME_CASES as EXECUTOR_OUTCOME_CASES, seedExecutors,
+  OUTCOME_CASES as EXECUTOR_OUTCOME_CASES, PULL_ONLINE as EXECUTOR_PULL_ONLINE, runnerToken, seedExecutors,
+  tokenId as executorTokenId,
 } from '../unit/workers/executor-fixtures';
 import { RunWorkerLine, WORKER_PAGE_LIMIT } from '@/entities/execution';
 import type { ExecutionWorker } from '@/shared/api';
@@ -907,6 +908,27 @@ const FINDINGS: readonly Finding[] = [
   finding({ finding_uid: `${FINDING_UID.slice(0, -1)}R`, category: 'sound' }),
 ];
 
+/*
+ * ONE ACCEPT PER `Severity` (`WEB-HOOKS-PER-FINDING-01`).
+ *
+ * `WEB-REVIEW-FOLLOWUPS-01` made the decision history and the knowledge base print the severity
+ * the expert decided beside the verdict, as «важность» and the badge's Russian label. This
+ * guard rendered both screens with events that carried none, so the new wording was pinned by
+ * that slice's own test and not here -- and, worse, `Severity` was not among the translated
+ * schemas, so a raw `critical` printed in its place would have been read as contract
+ * vocabulary and permitted. The events are hand-written, one per member, for the reason
+ * `DECISIONS` is: a sixth severity must redden the coverage case below, not seed itself. The
+ * first four events above carry none, so the legacy line of both screens is still rendered.
+ * The knowledge base inherits them through the journal rows built from `DECISIONS`.
+ */
+const SEVERITY_DECISIONS: readonly DecisionEvent[] = [
+  decision({ decision_id: `dec_${ULID}E`, severity: 'critical', comment: 'Принято как критичное.' }),
+  decision({ decision_id: `dec_${ULID}F`, severity: 'economic', comment: 'Принято как экономическое.' }),
+  decision({ decision_id: `dec_${ULID}G`, severity: 'operational', comment: 'Принято как эксплуатационное.' }),
+  decision({ decision_id: `dec_${ULID}H`, severity: 'recommendation', comment: 'Принято как рекомендация.' }),
+  decision({ decision_id: `dec_${ULID}J`, severity: 'check_adjacent', comment: 'Принято как проверка смежного.' }),
+];
+
 /** One decision event per `Verdict`, for the same reason the findings are four. */
 const DECISIONS: readonly DecisionEvent[] = [
   decision(),
@@ -918,6 +940,7 @@ const DECISIONS: readonly DecisionEvent[] = [
     comment: 'Требует ручной проверки.',
   }),
   decision({ decision_id: `dec_${ULID}D`, event_type: 'revoke', verdict: 'pending', comment: 'Решение отозвано.' }),
+  ...SEVERITY_DECISIONS,
 ];
 
 /**
@@ -2217,6 +2240,20 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
       });
     },
   })),
+  {
+    // `EXEC-PULL-01`: the box a freshly issued runner token appears in, which a press reaches.
+    name: 'executor-runner-token-shown',
+    make: () => createElement(IssuedTokenView, {
+      issued: {
+        token: 'токен-значение-для-показа',
+        runner_token: runnerToken({
+          token_id: executorTokenId(9), connection_id: EXECUTOR_PULL_ONLINE.connection.connection_id,
+          token_prefix: 'токен-НОВ9',
+        }),
+      },
+      onClose: () => {},
+    }),
+  },
   ...([false, true] as const).map((hasKey) => ({
     name: `executor-ssh-key-control-${hasKey ? 'replace' : 'first'}`,
     make: () => createElement(SshKeyControl, { connectionId: EXECUTOR_READY.connection.connection_id, hasKey }),
@@ -3080,6 +3117,11 @@ const TRANSLATED_SCHEMAS = [
   // решения (АР)» with the contract value in a `data-` attribute. The Latin code is never text.
   'ProjectStage',
   'ProjectSection',
+  // `WEB-HOOKS-PER-FINDING-01`: the severity the expert decided, said beside the verdict in the
+  // decision history and the knowledge base as «важность Критическое» (`SEVERITY_LABELS`), with
+  // the contract value in `data-severity` only. Left out, `critical` printed in its place would
+  // have been read as contract vocabulary and permitted.
+  'Severity',
   // `EXEC-HTTP-01`: «Подключения» says every kind, format, transport, billing, profile, client,
   // key purpose, probe state, probe outcome, identity basis, rate check and kind of work in
   // Russian, with the contract value in a `data-` attribute. Several are plain English words
@@ -3143,7 +3185,10 @@ describe('the guard reads a contract rather than a list of words', () => {
       // `ProviderMode` and `CostBasis`, added the same day after a PHOTOGRAPH of the run
       // screen showed `live` twice and `measured` once as bare words in Russian prose --
       // which this guard had rendered, seen, and been told to permit.
-      'live', 'recorded', 'measured', 'estimated']) {
+      'live', 'recorded', 'measured', 'estimated',
+      // `Severity`, `WEB-HOOKS-PER-FINDING-01`: all five, so a schema that lost a member is red
+      // here rather than quietly re-permitting the word beside a verdict.
+      'critical', 'economic', 'operational', 'recommendation', 'check_adjacent']) {
       expect(TRANSLATED.has(value), `${value} left the translated schemas`).toBe(true);
       expect(VOCABULARY.has(value), `${value} is permitted as visible text again`).toBe(false);
     }
@@ -3492,6 +3537,11 @@ const SCHEMA_MARKERS: readonly {
     schema: 'ProjectSection',
     attribute: 'data-section-group',
     why: "`widgets/project-sections/ui/project-sections.tsx`, one group per section of the project structure, every one of the fifteen present even when empty.",
+  },
+  {
+    schema: 'Severity',
+    attribute: 'data-severity',
+    why: "`entities/finding/ui/severity-badge.tsx`, beside the verdict in the decision history and the knowledge base, one event per member.",
   },
   {
     schema: 'PortalGeometryState',

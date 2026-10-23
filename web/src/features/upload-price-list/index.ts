@@ -1,5 +1,7 @@
 /** Public API of the `upload-price-list` feature (`W60-PRICE-LIST-01`). */
 
+export { PRICE_LIST_LIMIT_LABEL, priceListUploadFailure } from './model/upload-failure';
+
 export type { UploadPriceListCommand } from './model/use-upload-price-list';
 export { useUploadPriceList } from './model/use-upload-price-list';
 

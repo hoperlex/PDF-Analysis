@@ -183,7 +183,11 @@ describe('readiness is the probe on the current key, and nothing else', () => {
     expect(routeBlocker(withoutSshKey, tunnel.detail.revisions[0])).toBe('secret_missing');
     const client = OUTCOME_CASES.find(([outcome]) => outcome === 'no_runner_online')![1];
     expect(requiredPurposes(client.connection, client.detail.revisions[0])).toEqual([]);
-    expect(routeBlocker(client.connection, client.detail.revisions[0])).toBe('kind_not_served');
+    // `EXEC-PULL-01` is served: a client whose probe found no runner is blocked by that probe,
+    // not by its kind; a command over SSH is still a kind this release does not serve.
+    expect(routeBlocker(client.connection, client.detail.revisions[0])).toBe('probe_failed');
+    const ssh = OUTCOME_CASES.find(([outcome]) => outcome === 'host_key_unpinned')![1];
+    expect(routeBlocker(ssh.connection, ssh.detail.revisions[0])).toBe('kind_not_served');
   });
 
   it('keeps a sentence for every blocker', () => {

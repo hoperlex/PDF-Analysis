@@ -13,6 +13,7 @@ case where the stand connects out.
 | `workspace/` | The dedicated Claude Code workspace: settings that deny every built-in tool, and the loop skill. |
 | `agent.py`, `agent.example.toml`, `pdf-analysis-agent.service` | Unattended agent (command or local OpenAI-compatible model) and its systemd unit. |
 | `ssh-forced-command.sh` | Remote side of the `claude_code_headless` SSH profile. |
+| `codex_answer.py`, `agent.codex-ssh.example.toml` | Codex CLI answer command and pull-agent example over an outbound SSH forward. |
 
 Python: the bridge and the client need 3.9+, `agent.py` needs 3.11+ (`tomllib`); written for
 those and tested on 3.12 only. No dependency is installed. Tests:
@@ -26,8 +27,8 @@ The session is your own interactive session under your own login (`R-143f`). It 
 ### 1. On the stand
 
 In «Исполнители → Подключения» create a `pull` connection with client `claude_code_session`
-and the pinned model, issue a runner token (it is shown once) and route «Анализ текста» to the
-connection.
+and the pinned model, then issue a runner token with «Выпустить токен» (it is shown once, with
+a copy button). Route «Анализ текста» to the connection after the successful probe in step 6.
 
 ### 2. Make the workspace a folder of its own
 
@@ -121,7 +122,7 @@ and watch the probe task be claimed and answered; the connection shows «на с
   result over 50 000 characters is saved to a file, which this workspace cannot read. A task
   that large cannot be served by a session: the stand should keep `text_analysis` payloads
   smaller, or use the agent.
-- **Revoke:** press «Отозвать токен» on the connection (the runner then gets 401 and stops),
+- **Revoke:** press «Отозвать» beside the token on the connection's card and confirm (the runner then gets 401 and stops),
   then `cd ~/pdf-analysis-runner-workspace && claude mcp remove pdf-analysis-runner`, which also
   deletes the token from `~/.claude.json` (verify with `grep -c PDF_ANALYSIS_RUNNER_TOKEN
   ~/.claude.json`, which must print 0).
@@ -156,7 +157,7 @@ The token lives only in that file; the config refuses a key named `token`, `secr
   normal stop, 2 configuration error, 3 token rejected (401: revoked or expired, the unit does
   not restart-loop on 2 or 3). `journalctl -u pdf-analysis-agent` shows the log; it holds task
   ids and timings, never the token or the payload.
-- Revoke: the same «Отозвать токен» button; the agent exits 3 at its next call.
+- Revoke: the same «Отозвать» button; the agent exits 3 at its next call.
 
 ## C. SSH profile `claude_code_headless`
 
@@ -167,7 +168,58 @@ subscription login (plan T-8). Its first real run is a paid call and is `EXEC-SS
 check; the JSON key that carries the model must be captured from the installed Claude Code
 before the stand parses it (the header explains how).
 
-## Known limits
+## D. Codex subscription from this machine, through an outbound SSH forward
+
+Use this when the stand cannot reach this machine by SSH. The machine opens one
+SSH connection **to** the stand and forwards a local loopback port to the stand's
+loopback-only proxy. `agent.py` uses its existing `pull` protocol on that port;
+`codex_answer.py` invokes this machine's Codex CLI. No listener is opened to
+the network on this machine. The transport is SSH; the executor kind is `pull`
+with client `agent`, not `ssh_command`.
+
+1. On this machine, install Codex CLI and run `codex login` under the dedicated
+   runner account, completing the ChatGPT browser sign-in. `codex login status`
+   must say `Logged in using ChatGPT`; an API-key login uses API billing instead.
+   The current adapter pins `gpt-6-sol`, and the stand's revision must name that
+   exact model. Keep the runner account separate from a development account.
+2. On the stand, create a `pull` connection with client `agent`, model/pin
+   `gpt-6-sol`, billing `not_metered`, answer deadline at least 600 seconds and
+   one claimed task. Issue a runner token. Do not route the connection until
+   the agent is running and a probe returns `ok`.
+3. Give the runner account an SSH key allowed to forward only to the stand's
+   loopback proxy. A dedicated `authorized_keys` line can use
+   `restrict,port-forwarding,permitopen="127.0.0.1:31500"` (substitute the
+   stand's actual `ALPHA_HTTP_PORT`). Pin the stand's SSH host key in the local
+   `known_hosts`; never disable host-key checking. Open the forward in a terminal:
+
+   ```bash
+   ssh -N -T -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 \
+     -L 127.0.0.1:31501:127.0.0.1:31500 -i <runner-ssh-key> <runner@stand>
+   ```
+
+4. Copy `agent.codex-ssh.example.toml` outside this repository, set the
+   absolute `codex_answer.py` path and local port, then start `agent.py` in a
+   second terminal under the same dedicated account. Supply the token only in
+   `PDF_ANALYSIS_RUNNER_TOKEN` (as in section B). The agent's origin must be
+   `http://127.0.0.1:31501` with no path. Plain HTTP here is loopback traffic
+   inside the authenticated SSH forward.
+5. In «Исполнители → Подключения», press «Проверить». An `ok` probe proves the
+   forward, token, local CLI and a schema-shaped answer. Then route «Анализ
+   текста» and run one test-data analysis. Revoking the token or removing the
+   route stops new work.
+
+The adapter sends the task through stdin, writes schema and output only in a
+private temporary directory, runs `codex exec --json --output-schema` with
+`--ephemeral`, `--ignore-user-config`, `--sandbox read-only`, shell tool and web
+search disabled, and refuses failed, rerouted, tool-using or malformed turns.
+The CLI's output does not prove the served model independently; the local
+command declares the model selected by `--model`, and the stand records that
+as `identity_basis: declared`. Keep the account and its Codex authentication
+private. The connection is `not_metered`; the app does not convert subscription
+usage into an invented dollar amount. A subscription's availability and limits
+are the account's, so a real probe is required before routing.
+
+## Known limits of the Claude profiles
 
 - No `claude` CLI was available on the host that built this: the settings syntax, the MCP
   handshake and the skill were checked against the documentation (code.claude.com settings,

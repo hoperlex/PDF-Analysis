@@ -21,6 +21,10 @@
  *
  * Navigation is restricted to the observation's declared pages. Offering the other pages of
  * the document invites a reviewer to decide against text this finding never cited.
+ *
+ * Under the two panes, a finding that carries v2 fields shows what it rests on
+ * (`FindingBasis`, `REVIEW-V2-UI-01`): the required and stated values, the norm citations and
+ * the merged observations. A finding without them shows nothing more than it ever did.
  */
 
 import type { Evidence, FindingObservation } from '@/shared/api';
@@ -35,8 +39,12 @@ import {
   observationProviderMode,
 } from '@/entities/finding-observation';
 
+import { FindingBasis } from './finding-basis';
+
 export interface EvidenceViewerProps {
   readonly observation: FindingObservation;
+  /** `FindingDetail.merged_observations`; shown only when the server sent it (`REVIEW-V2-UI-01`). */
+  readonly mergedObservations?: readonly FindingObservation[] | undefined;
   readonly activePage: number;
   readonly onPageChange: (page: number) => void;
   /** `blob:` URL of the fetched version content, or null while it is unavailable. */
@@ -87,6 +95,7 @@ function QuotationCard({ item }: { item: Evidence }) {
 
 export function EvidenceViewer({
   observation,
+  mergedObservations,
   activePage,
   onPageChange,
   documentUrl,
@@ -207,6 +216,8 @@ export function EvidenceViewer({
           </p>
         </div>
       </div>
+
+      <FindingBasis observation={observation} mergedObservations={mergedObservations} />
     </div>
   );
 }

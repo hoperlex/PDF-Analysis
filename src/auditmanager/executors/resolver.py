@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session
 
 from auditmanager.executors.destinations import DestinationPolicy
-from auditmanager.executors.kinds import adapter_for
+from auditmanager.executors.kinds import KindRuntime, adapter_for
 from auditmanager.executors.model import (
     IDENTITY_BASIS_BY_KIND,
     ConnectionRecord,
@@ -126,11 +126,14 @@ def freeze_connection(
 def bind_connection(
     session: Session, revision_id: str, *, ring: PrivateRing | None,
     policy: DestinationPolicy, context: AttemptContext | None,
-    repository: ExecutorRepository | None = None,
+    repository: ExecutorRepository | None = None, runtime: KindRuntime | None = None,
 ) -> BoundConnection:
     """The adapter of a frozen revision for this Attempt. Raises :class:`SecretUnreadableError`
     when the key cannot be opened for the revision's address, and ``dependency_unavailable``
-    (``executor_route_missing``) when the revision or its kind's factory is gone."""
+    (``executor_route_missing``) when the revision or its kind's factory is gone.
+
+    A **channel kind** (``pull``) has no key to open: its adapter is built from ``runtime`` (the
+    worker's database access) and the Attempt's context, and the remote party calls the stand."""
     store = repository or ExecutorRepository()
     revision = store.get_revision(session, revision_id)
     connection = None if revision is None else store.get_connection(session, revision.connection_id)
@@ -142,6 +145,15 @@ def bind_connection(
             ErrorCode.VALIDATION_FAILED, message="this kind of connection is not served yet",
             field="kind", constraint="kind_not_served",
         )
+    if entry.channel is not None:
+        if runtime is None:
+            raise route_missing()
+        return BoundConnection(
+            adapter=entry.channel(revision, context, runtime), revision=revision,
+            connection=connection, identity_basis=IDENTITY_BASIS_BY_KIND[connection.kind],
+            provider_label=entry.provider_label(revision),
+        )
+    assert entry.purpose is not None  # only a channel kind has none, and it returned above
     secret = current_secret(session, store, connection)
     if secret is None:
         raise SecretUnreadableError()

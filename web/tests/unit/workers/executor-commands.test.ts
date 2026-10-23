@@ -24,8 +24,10 @@ import {
   useArchiveExecutorConnection,
   useCreateExecutorConnection,
   useGenerateExecutorSshKey,
+  useIssueRunnerToken,
   useRequestExecutorProbe,
   useReviseExecutorConnection,
+  useRevokeRunnerToken,
   useSetExecutorRoute,
 } from '@/features/manage-executor-connection';
 
@@ -108,6 +110,27 @@ describe('the other commands', () => {
     ]);
   });
 
+  it('issues a runner token with its lifetime and revokes one by its id, each under the caller key', async () => {
+    const TOKEN = 'ern_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
+    answer = { status: 201, body: { token: 'ЗНАЧЕНИЕ', runner_token: { token_id: TOKEN } } };
+    const issue = useIssueRunnerToken() as unknown as Captured<
+      { connectionId: string; expiresInDays: number; idempotencyKey: string }, { token: string }> & { gcTime: number };
+    const revoke = useRevokeRunnerToken() as unknown as Captured<
+      { connectionId: string; tokenId: string; idempotencyKey: string }, unknown>;
+    expect(issue.retry).toBe(false);
+    expect(revoke.retry).toBe(false);
+    // The value is shown once and kept by nothing: the mutation is dropped as soon as it settles.
+    expect(issue.gcTime).toBe(0);
+    const issued = await issue.mutationFn({ connectionId: CONNECTION, expiresInDays: 30, idempotencyKey: 'ik-issue' });
+    expect(issued.token).toBe('ЗНАЧЕНИЕ');
+    answer = { status: 200, body: {} };
+    await revoke.mutationFn({ connectionId: CONNECTION, tokenId: TOKEN, idempotencyKey: 'ik-revoke' });
+    expect(requests).toEqual([
+      { method: 'POST', path: `/bff/v1/executor-connections/${CONNECTION}/runner-tokens`, body: '{"expires_in_days":30}', key: 'ik-issue' },
+      { method: 'POST', path: `/bff/v1/executor-connections/${CONNECTION}/runner-tokens/${TOKEN}/revoke`, body: '', key: 'ik-revoke' },
+    ]);
+  });
+
   it('a route names the primary and sends a standby only when one is chosen', async () => {
     const route = useSetExecutorRoute() as unknown as Captured<
       { workKind: string; primary: string; standby: string | null; idempotencyKey: string }, unknown>;
@@ -124,6 +147,7 @@ describe('the other commands', () => {
     for (const hook of [
       useCreateExecutorConnection, useReviseExecutorConnection, useArchiveExecutorConnection,
       useRequestExecutorProbe, useGenerateExecutorSshKey, useSetExecutorRoute,
+      useIssueRunnerToken, useRevokeRunnerToken,
     ]) {
       calls.invalidations.length = 0;
       (hook() as unknown as Captured<unknown, unknown>).onSuccess({});

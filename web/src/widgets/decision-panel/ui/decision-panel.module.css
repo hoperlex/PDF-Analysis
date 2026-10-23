@@ -1,0 +1,27 @@
+/*
+ * The severity choice of the decision panel (`REVIEW-V2-UI-01`).
+ *
+ * Layout only. Ink, tint and border come from the global rules this markup already meets
+ * (`label`, `select`, `.am-decision__current`, `.am-decision__note`, `.am-decision__refusal`),
+ * so the contrast census measures them where it already measures the panel.
+ */
+
+.severity {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-bottom: var(--am-gap);
+}
+
+.proposal {
+  margin: 0;
+}
+
+.select {
+  max-width: 100%;
+}
+
+.decided {
+  margin-left: var(--am-gap-sm);
+}

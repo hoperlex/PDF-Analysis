@@ -61,6 +61,9 @@ EXPECTED_TABLES = {
     "executor_secret",
     "executor_probe",
     "executor_route_event",
+    # `0031_executor_pull_channel`: a runner's credential (hash only) and the tasks it takes.
+    "executor_runner_token",
+    "executor_task",
     # `0019_execution_workers`: the worker registry.
     "worker",
     # `0020_norms_search`: the one current norms snapshot and its append-only history.
