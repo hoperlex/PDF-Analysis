@@ -1,7 +1,8 @@
 """Read the saved W57b PDF text source for one current Run/Attempt.
 
-This unserved seam holds caller-owned transaction locks across the Blob read.
-It prepares reference input only; any later effect needs its own authority gate.
+The default mode holds caller-owned transaction locks across the Blob read.
+The explicit v3 preflight mode uses nonlocking checks and requires a later
+locked DB-witness check before any provider or publication effect.
 """
 
 from __future__ import annotations
@@ -38,6 +39,8 @@ class SavedReferenceTextInput:
     text_layer: TextLayer
     version_uid: str
     page_count: int
+    project_uid: str | None = None
+    source_stage: StageResultRow | None = None
 
 
 def _refuse(reason: str) -> DomainError:
@@ -88,6 +91,7 @@ def load_saved_reference_text(
     runs: RunRepository | None = None,
     jobs: JobRepository | None = None,
     documents: DocumentRepository | None = None,
+    lock_authority: bool = True,
 ) -> SavedReferenceTextInput:
     """Return exact canonical text under two current-Attempt and row fences.
 
@@ -98,7 +102,12 @@ def load_saved_reference_text(
     job_repo = jobs or JobRepository()
     document_repo = documents or DocumentRepository()
 
-    job_repo.require_current(session, authority)
+    if type(lock_authority) is not bool:
+        raise _refuse("invalid_authority_read_mode")
+    if lock_authority:
+        job_repo.require_current(session, authority)
+    else:
+        job_repo.check_current_unlocked(session, authority)
     if type(max_input_bytes) is not int or max_input_bytes < 1:
         raise _refuse("invalid_input_byte_ceiling")
 
@@ -149,14 +158,60 @@ def load_saved_reference_text(
     except SuppliedTextSourceRefused as exc:
         raise _refuse("saved_text_integrity_invalid") from exc
 
-    job_repo.require_current(session, authority)
+    if lock_authority:
+        job_repo.require_current(session, authority)
+    else:
+        job_repo.check_current_unlocked(session, authority)
     if run_repo.get(session, authority.run_id) != run:
         raise _refuse("run_changed_during_text_read")
     if document_repo.get_version(session, parsed_version) != version:
         raise _refuse("version_changed_during_text_read")
     if _one_source_stage(run_repo.stage_results(session, authority.run_id)) != source_row:
         raise _refuse("source_stage_changed_during_text_read")
-    return SavedReferenceTextInput(text_layer, run.version_uid, version.page_count)
+    return SavedReferenceTextInput(
+        text_layer, run.version_uid, version.page_count,
+        run.project_uid, source_row,
+    )
 
 
-__all__ = ["SavedReferenceTextInput", "load_saved_reference_text"]
+def recheck_saved_reference_text_facts(
+    session: Session,
+    *,
+    authority: AttemptAuthority,
+    saved: SavedReferenceTextInput,
+    runs: RunRepository | None = None,
+    documents: DocumentRepository | None = None,
+) -> None:
+    """Compare saved DB witnesses inside the caller's final locked transaction.
+
+    This method does not acquire authority. Call ``require_current`` first and
+    keep that lock through the ensuing provider intent or StageResult write.
+    """
+    if (not isinstance(saved, SavedReferenceTextInput)
+            or saved.project_uid is None or saved.source_stage is None
+            or saved.text_layer.version_uid != saved.version_uid):
+        raise _refuse("saved_text_witness_missing")
+    run_repo = runs or RunRepository()
+    document_repo = documents or DocumentRepository()
+    run = run_repo.get(session, authority.run_id)
+    if (run.state != "running" or run.run_id != authority.run_id
+            or run.version_uid != saved.version_uid
+            or run.project_uid != saved.project_uid):
+        raise _refuse("run_changed_after_text_read")
+    try:
+        version_uid = VersionUid.parse(saved.version_uid)
+    except IdentityError:
+        raise _refuse("saved_version_identity_invalid") from None
+    version = document_repo.get_version(session, version_uid)
+    if (str(version.version_uid) != saved.version_uid
+            or str(version.project_uid) != saved.project_uid
+            or version.page_count != saved.page_count):
+        raise _refuse("version_changed_after_text_read")
+    if _one_source_stage(run_repo.stage_results(session, authority.run_id)) != saved.source_stage:
+        raise _refuse("source_stage_changed_after_text_read")
+
+
+__all__ = [
+    "SavedReferenceTextInput", "load_saved_reference_text",
+    "recheck_saved_reference_text_facts",
+]

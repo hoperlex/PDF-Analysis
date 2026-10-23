@@ -10,16 +10,18 @@ from sqlalchemy.orm import Session
 
 from auditmanager.api.schemas import models
 from auditmanager.analysis.public import resolve_beta_v3_profile
+from auditmanager.jobs.public import JobRepository
 from auditmanager.norms.public import SetIdentity
 from auditmanager.runs.repository import RunRepository
 from auditmanager.runs.v3_group import (
-    ReviewedScope, TrustedPack, get_ar_v3_group, start_ar_v3_group,
+    ReviewedScope, TrustedPack, TrustedPackRegistry, get_ar_v3_group, start_ar_v3_group,
 )
+from auditmanager.runs.v3_execution_binding import resolve_v3_execution_binding
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import (
     AuditEventId, DocumentUid, NormCustodyAdmissionId,
     NormCustodyBindingId, NormDocumentId, NormParagraphId, NormRetrievalSetId,
-    NormsSnapshotId, ProjectUid, VersionUid,
+    NormsSnapshotId, ProjectUid, RunId, VersionUid,
 )
 from auditmanager.shared.identity.ids import UserUid
 from auditmanager.storage.models import derive_blob_id
@@ -227,6 +229,98 @@ def _seed(session: Session) -> tuple[str, TrustedPack]:
 def _counts(session: Session) -> tuple[int, int, int]:
     return tuple(session.execute(text(f"SELECT count(*) FROM {table}")).scalar_one()
                  for table in ("command_record", "ar_v3_run_group", "audit_run"))
+
+
+def _claim_member(session: Session, run_id: str):
+    runs = RunRepository()
+    runs.advance(session, run_id=run_id, from_state="created", to_state="queued")
+    authority = JobRepository().start_execution(session, run_id=run_id)
+    runs.advance(session, run_id=run_id, from_state="queued", to_state="running")
+    return authority
+
+
+def test_current_attempt_resolves_all_six_reviewed_member_pins(migrated_engine: Engine) -> None:
+    with Session(migrated_engine) as session, session.begin():
+        version, pack = _seed(session)
+    with Session(migrated_engine) as session, session.begin():
+        started = start_ar_v3_group(
+            session, version_uid=version, idempotency_key="ar-v3-preflight",
+            provider_mode="recorded", pack=pack, input_budget_characters=1000,
+        )
+    registry = TrustedPackRegistry("ar-v3-beta-reviewed-pack-registry/1", (pack,))
+    with Session(migrated_engine) as session, session.begin():
+        for member, scope in zip(started.group.members, pack.scopes, strict=True):
+            authority = _claim_member(session, member.run_id)
+            first = resolve_v3_execution_binding(
+                session, authority=authority, registry=registry,
+            )
+            second = resolve_v3_execution_binding(
+                session, authority=authority, registry=registry,
+            )
+            assert first == second
+            assert first.group_id == started.group.group_id
+            assert first.run_id == member.run_id
+            assert first.scope_id == scope.scope_id
+            assert first.map_sha256 == scope.identity.map_sha256
+            assert first.norm_retrieval_set_id == scope.set_id
+            assert first.set_sha256 == scope.set_sha256
+            assert first.pack_sha256 == pack.sha256
+        assert session.execute(text("SELECT count(*) FROM model_call")).scalar_one() == 0
+        assert session.execute(text("SELECT count(*) FROM stage_result")).scalar_one() == 0
+
+
+def test_preflight_refuses_missing_changed_pack_foreign_run_and_stale_attempt(
+    migrated_engine: Engine,
+) -> None:
+    with Session(migrated_engine) as session, session.begin():
+        version, pack = _seed(session)
+    with Session(migrated_engine) as session, session.begin():
+        started = start_ar_v3_group(
+            session, version_uid=version, idempotency_key="ar-v3-preflight-refusals",
+            provider_mode="recorded", pack=pack, input_budget_characters=1000,
+        )
+    member = started.group.members[0]
+    registry = TrustedPackRegistry("ar-v3-beta-reviewed-pack-registry/1", (pack,))
+    with Session(migrated_engine) as session, session.begin():
+        authority = _claim_member(session, member.run_id)
+        with pytest.raises(DomainError) as missing:
+            resolve_v3_execution_binding(
+                session, authority=authority, registry=TrustedPackRegistry.empty(),
+            )
+        assert missing.value.code is ErrorCode.DEPENDENCY_UNAVAILABLE
+        changed_scope = replace(pack.scopes[0], set_sha256="f" * 64)
+        changed_pack = replace(pack, scopes=(changed_scope, *pack.scopes[1:]))
+        with pytest.raises(DomainError) as changed:
+            resolve_v3_execution_binding(
+                session, authority=authority,
+                registry=TrustedPackRegistry("ar-v3-beta-reviewed-pack-registry/1", (changed_pack,)),
+            )
+        assert changed.value.code is ErrorCode.REQUIRED_NORM_UNAVAILABLE
+        with pytest.raises(DomainError) as stale:
+            resolve_v3_execution_binding(
+                session, authority=replace(authority, execution_token="wrong"),
+                registry=registry,
+            )
+        assert stale.value.code is ErrorCode.EXECUTION_TOKEN_INVALID
+
+        foreign = str(RunId.new())
+        session.execute(text("""
+            INSERT INTO audit_run
+                (run_id, project_uid, version_uid, analysis_profile_id,
+                 prompt_bundle_id, provider_mode, frozen_input_digest)
+            VALUES (:run, :project, :version, :profile, :bundle, 'recorded', :digest)
+        """), {
+            "run": foreign, "project": started.group.project_uid,
+            "version": version, "profile": pack.analysis_profile_id,
+            "bundle": pack.prompt_bundle_id, "digest": "0" * 64,
+        })
+        foreign_authority = _claim_member(session, foreign)
+        with pytest.raises(DomainError) as outside:
+            resolve_v3_execution_binding(
+                session, authority=foreign_authority, registry=registry,
+            )
+        assert outside.value.code is ErrorCode.REQUIRED_NORM_UNAVAILABLE
+        assert session.execute(text("SELECT count(*) FROM model_call")).scalar_one() == 0
 
 
 def test_upgrade_from_0031_preserves_old_runs(empty_database, foundation_command) -> None:

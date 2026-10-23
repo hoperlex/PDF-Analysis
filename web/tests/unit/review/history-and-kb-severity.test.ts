@@ -13,8 +13,8 @@
  *     (history) or the event type (knowledge base);
  *   - an event or record WITHOUT one renders exactly the markup it rendered before, byte for
  *     byte (the legacy line is written out below, not derived from the widget);
- *   - no raw contract value is read as a word, and a value outside the closed set is shown as
- *     the badge's own fault, not as a blank and not as the raw string.
+ *   - no raw contract value is read as a word; one unknown history severity hides the whole
+ *     ledger, while the knowledge base retains its own badge fault.
  */
 
 import { createElement } from 'react';
@@ -180,17 +180,26 @@ describe('the decision history shows the severity beside the verdict', () => {
     }
   });
 
-  it('shows a value outside the closed set as the badge’s fault, not as a blank or as a word', () => {
+  it('hides the entire ledger if one event has an unknown severity', () => {
     const markup = history([
       decisionEvent({ severity: 'urgent' as Severity }),
-      decisionEvent({ decision_id: decisionId('B'), recorded_at: '2026-09-10T09:05:00.000Z' }),
+      decisionEvent({
+        decision_id: decisionId('B'),
+        comment: 'Проверенное решение.',
+        recorded_at: '2026-09-10T09:05:00.000Z',
+      }),
     ]);
-    expect(markup).toContain('data-closed-vocabulary-fault="severity"');
-    expect(markup).toContain('Неизвестная важность');
-    // The machine value may sit on a `data-` attribute; no reader sees it there.
-    expect(visibleText(markup).join(' ')).not.toContain('urgent');
-    // The other event is still there: one bad severity does not hide the ledger.
-    expect(markup).toContain('data-event-count="2"');
+    expect(markup).toContain('data-history-fault="closed-vocabulary"');
+    expect(markup).toContain('важность');
+    expect(markup).not.toContain('class="am-history__event"');
+    expect(markup).not.toContain('Проверенное решение.');
+    expect(markup).not.toContain('urgent');
+  });
+
+  it('treats a transported null severity as malformed rather than absent', () => {
+    const markup = history([decisionEvent({ severity: null as unknown as Severity })]);
+    expect(markup).toContain('data-history-fault="closed-vocabulary"');
+    expect(markup).not.toContain('class="am-history__event"');
   });
 });
 

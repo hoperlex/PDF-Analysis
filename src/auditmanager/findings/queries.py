@@ -19,6 +19,9 @@ from typing import Sequence
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from auditmanager.analysis.public import AR_V2_RECORDED_PROFILE_ID, AR_V3_BETA_PROFILE_ID
+from auditmanager.shared.errors import DomainError, ErrorCode
+
 _PUBLISHED_FINDINGS = text(
     """
     SELECT
@@ -27,6 +30,7 @@ _PUBLISHED_FINDINGS = text(
         f.project_uid,
         f.version_uid,
         f.allocated_by_run_id,
+        f.canonical_observation_id,
         o.category,
         o.finding_text,
         o.recommendation_text,
@@ -35,6 +39,7 @@ _PUBLISHED_FINDINGS = text(
         o.prompt_bundle_id,
         o.model_call_id,
         o.provider_mode,
+        o.proposed_severity,
         o.created_at
     FROM finding_observation o
     JOIN finding f ON f.finding_uid = o.finding_uid
@@ -77,7 +82,7 @@ _DIAGNOSTICS = text(
 
 _PUBLISHED_COUNT = text(
     """
-    SELECT count(*)
+    SELECT count(DISTINCT f.finding_uid)
     FROM finding_observation o
     JOIN finding f ON f.finding_uid = o.finding_uid
     WHERE o.run_id = :run_id
@@ -112,6 +117,14 @@ class FindingRow:
     prompt_bundle_id: str
     model_call_id: str | None
     provider_mode: str
+    canonical_observation_id: str | None = None
+    proposed_severity: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class FindingGroupRow:
+    canonical: FindingRow
+    merged: tuple[FindingRow, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -151,9 +164,53 @@ def published_findings(session: Session, run_id: str) -> tuple[FindingRow, ...]:
             prompt_bundle_id=row["prompt_bundle_id"],
             model_call_id=row["model_call_id"],
             provider_mode=row["provider_mode"],
+            canonical_observation_id=row["canonical_observation_id"],
+            proposed_severity=row["proposed_severity"],
         )
         for row in rows
     )
+
+
+def group_published_findings(rows: Sequence[FindingRow]) -> tuple[FindingGroupRow, ...]:
+    """Project persisted finding identity; never infer canonical status from row order."""
+    by_uid: dict[str, list[FindingRow]] = {}
+    for row in rows:
+        by_uid.setdefault(row.finding_uid, []).append(row)
+    groups: list[FindingGroupRow] = []
+    for members in by_uid.values():
+        head = members[0]
+        ids = [member.finding_observation_id for member in members]
+        stored_canonical_id = head.canonical_observation_id
+        canonical_id = stored_canonical_id
+        # The old v1 publisher still inserts one observation and leaves the
+        # post-0022 canonical column null. That exact legacy shape is identifiable
+        # by its single member, absent severity and non-v2/v3 profile.
+        if (canonical_id is None and len(members) == 1
+                and head.proposed_severity is None
+                and head.analysis_profile_id not in {
+                    str(AR_V2_RECORDED_PROFILE_ID), str(AR_V3_BETA_PROFILE_ID),
+                }):
+            canonical_id = head.finding_observation_id
+        if (canonical_id is None or ids.count(canonical_id) != 1
+                or len(set(ids)) != len(ids)
+                or any(
+                    member.canonical_observation_id != stored_canonical_id
+                    or member.project_uid != head.project_uid
+                    or member.version_uid != head.version_uid
+                    or member.run_id != head.run_id
+                    or member.category != head.category
+                    for member in members
+                )):
+            raise DomainError(
+                ErrorCode.STORAGE_INTEGRITY_ERROR,
+                message="published finding observation group is inconsistent",
+            )
+        canonical = next(member for member in members if member.finding_observation_id == canonical_id)
+        groups.append(FindingGroupRow(
+            canonical=canonical,
+            merged=tuple(member for member in members if member.finding_observation_id != canonical_id),
+        ))
+    return tuple(groups)
 
 
 def published_finding_evidence(session: Session, run_id: str) -> tuple[EvidenceRow, ...]:
@@ -174,7 +231,7 @@ def published_finding_evidence(session: Session, run_id: str) -> tuple[EvidenceR
 
 
 def published_finding_count(session: Session, run_id: str) -> int:
-    """The number the CSV row count and the UI badge must both agree with."""
+    """Count persisted Finding identities, not merged observation members."""
     return int(session.execute(_PUBLISHED_COUNT, {"run_id": run_id}).scalar_one())
 
 
@@ -246,6 +303,7 @@ _FINDING_BY_UID = text(
         f.project_uid,
         f.version_uid,
         f.allocated_by_run_id,
+        f.canonical_observation_id,
         o.category,
         o.finding_text,
         o.recommendation_text,
@@ -254,13 +312,21 @@ _FINDING_BY_UID = text(
         o.prompt_bundle_id,
         o.model_call_id,
         o.provider_mode,
+        o.proposed_severity,
         o.created_at
     FROM finding_observation o
     JOIN finding f ON f.finding_uid = o.finding_uid
     WHERE o.finding_uid = :finding_uid
+      AND (o.finding_observation_id = f.canonical_observation_id
+           OR (f.canonical_observation_id IS NULL
+               AND o.proposed_severity IS NULL
+               AND o.analysis_profile_id NOT IN (:v2_profile, :v3_profile)
+               AND NOT EXISTS (
+                   SELECT 1 FROM finding_observation sibling
+                   WHERE sibling.finding_uid = f.finding_uid
+                     AND sibling.finding_observation_id <> o.finding_observation_id
+               )))
       AND o.grounded
-    ORDER BY o.finding_observation_id DESC
-    LIMIT 1
     """
 )
 
@@ -274,11 +340,14 @@ def finding_by_uid(session: Session, finding_uid: str) -> FindingRow | None:
     for the same reason it is unreachable there - by the column the database pairs with
     ``finding_uid``, not by a ``WHERE`` clause a later reader has to remember.
 
-    PC-01 allocates a fresh ``finding_uid`` per published observation per run, so at most
-    one observation carries any given uid. The ordering and ``LIMIT`` are belt and braces
-    against a future that relaxes that, and pick the newest rather than an arbitrary row.
+    V2 may link several observations to one finding. Select only the persisted
+    canonical member; recency or lexical ordering cannot decide that identity.
     """
-    row = session.execute(_FINDING_BY_UID, {"finding_uid": finding_uid}).mappings().first()
+    row = session.execute(_FINDING_BY_UID, {
+        "finding_uid": finding_uid,
+        "v2_profile": str(AR_V2_RECORDED_PROFILE_ID),
+        "v3_profile": str(AR_V3_BETA_PROFILE_ID),
+    }).mappings().first()
     if row is None:
         return None
     return FindingRow(
@@ -295,4 +364,6 @@ def finding_by_uid(session: Session, finding_uid: str) -> FindingRow | None:
         prompt_bundle_id=row["prompt_bundle_id"],
         model_call_id=row["model_call_id"],
         provider_mode=row["provider_mode"],
+        canonical_observation_id=row["canonical_observation_id"],
+        proposed_severity=row["proposed_severity"],
     )

@@ -1,0 +1,37 @@
+{
+  "contract": "auditmanager.analysis.ar_v3_beta_stage_extension",
+  "extension_version": "1.0.0",
+  "analysis_contract_version": "1.2.0",
+  "analysis_profile_id": "ap_01M5M28ZCDD8VPSP1BTAEW92YE",
+  "prompt_bundle_id": "pb_01M5M28ZCDVCR37BX1884JGSPM",
+  "stage": {
+    "stage_id": "ar_v3_citation_review",
+    "stage_version": "1.0.0",
+    "requires_prior_stages": ["source_preparation"],
+    "input_roles": [
+      "prepared.text_layer",
+      "norms.retrieval_set",
+      "analysis.v3_provider_reply"
+    ],
+    "output_role": "analysis.v3_beta_review",
+    "output_media_type": "application/json",
+    "success_metric_keys": [
+      "model_call_id",
+      "candidate_sha256",
+      "provider_body_sha256",
+      "provider_response_sha256",
+      "set_sha256",
+      "reply_blob_sha256",
+      "provisional_citation_count",
+      "withheld_proposal_count",
+      "rejected_proposal_count"
+    ],
+    "partial_allowed": false,
+    "skipped_allowed": false
+  },
+  "beta_policy": {
+    "scenario": "new_multi_apartment_residential_F1.3",
+    "numeric_output_policy": "expert_review_required",
+    "canonical_finding_publication": false
+  }
+}

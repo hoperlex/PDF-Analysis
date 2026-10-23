@@ -34,6 +34,14 @@ from auditmanager.runs.geometry_crop_item_input import (
 )
 from auditmanager.runs.repository import RunRepository
 from auditmanager.runs.v3_group import TrustedPackRegistry, get_ar_v3_group, start_ar_v3_group
+from auditmanager.runs.v3_execution_binding import (
+    V3ExecutionBinding,
+    resolve_v3_execution_binding,
+)
+from auditmanager.runs.v3_execution_request import (
+    V3PreparedExecutionRequest,
+    prepare_v3_execution_request,
+)
 from auditmanager.shared.errors import ErrorCode
 
 
@@ -83,6 +91,10 @@ def fail_reclaimed_run(
 
 __all__ = [
     "TrustedPackRegistry",
+    "V3ExecutionBinding",
+    "resolve_v3_execution_binding",
+    "V3PreparedExecutionRequest",
+    "prepare_v3_execution_request",
     "get_ar_v3_group",
     "start_ar_v3_group",
     "DurableCarrier",

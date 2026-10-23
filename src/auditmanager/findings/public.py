@@ -13,6 +13,7 @@ from auditmanager.findings.retrieval_set_input import (
     RetrievalSetInputRefused,
     VerifiedRetrievalSetInput,
     load_verified_retrieval_set,
+    recheck_verified_retrieval_set_facts,
 )
 from auditmanager.findings.queries import finding_exists, observation_belongs_to_finding
 from auditmanager.findings.recorded_saved_plan import (
@@ -54,6 +55,7 @@ __all__ = [
     "plan_recorded_saved_publication",
     "publication_rows_exist",
     "load_verified_retrieval_set",
+    "recheck_verified_retrieval_set_facts",
     "run_grounding_gate",
     "select_terminal",
 ]

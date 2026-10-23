@@ -1207,7 +1207,40 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
     )
 
 
-def _finding_view(row: Any, evidence: Sequence[Any], verdict: Any) -> FindingView:
+def _observation_view(row: Any, evidence: Sequence[Any]) -> ObservationView:
+    return ObservationView(
+        finding_observation_id=row.finding_observation_id,
+        run_id=row.run_id,
+        category=row.category,
+        finding_text=row.finding_text,
+        recommendation_text=row.recommendation_text,
+        evidence=tuple(
+            EvidenceView(
+                evidence_ordinal=e.evidence_ordinal,
+                page_number=e.page_number,
+                quote=e.quote,
+                char_start=e.char_start,
+                char_end=e.char_end,
+                block_id=getattr(e, "block_id", None),
+            )
+            for e in evidence
+            if e.finding_observation_id == row.finding_observation_id
+        ),
+        provenance=ProvenanceView(
+            stage_id=row.stage_id,
+            analysis_profile_id=row.analysis_profile_id,
+            prompt_bundle_id=row.prompt_bundle_id,
+            provider_mode=row.provider_mode,
+            model_call_id=row.model_call_id,
+        ),
+        proposed_severity=getattr(row, "proposed_severity", None),
+    )
+
+
+def _finding_view(
+    row: Any, evidence: Sequence[Any], verdict: Any,
+    merged_rows: Sequence[Any] = (),
+) -> FindingView:
     return FindingView(
         finding_uid=row.finding_uid,
         project_uid=row.project_uid,
@@ -1218,31 +1251,10 @@ def _finding_view(row: Any, evidence: Sequence[Any], verdict: Any) -> FindingVie
         decided_severity=getattr(verdict, "decided_severity", None),
         latest_decision_id=getattr(verdict, "latest_decision_id", None),
         decision_recorded_at=getattr(verdict, "decision_recorded_at", None),
-        observation=ObservationView(
-            finding_observation_id=row.finding_observation_id,
-            run_id=row.run_id,
-            category=row.category,
-            finding_text=row.finding_text,
-            recommendation_text=row.recommendation_text,
-            evidence=tuple(
-                EvidenceView(
-                    evidence_ordinal=e.evidence_ordinal,
-                    page_number=e.page_number,
-                    quote=e.quote,
-                    char_start=e.char_start,
-                    char_end=e.char_end,
-                    block_id=getattr(e, "block_id", None),
-                )
-                for e in evidence
-                if e.finding_observation_id == row.finding_observation_id
-            ),
-            provenance=ProvenanceView(
-                stage_id=row.stage_id,
-                analysis_profile_id=row.analysis_profile_id,
-                prompt_bundle_id=row.prompt_bundle_id,
-                provider_mode=row.provider_mode,
-                model_call_id=row.model_call_id,
-            ),
+        observation=_observation_view(row, evidence),
+        merged_observations=(
+            tuple(_observation_view(member, evidence) for member in merged_rows)
+            if merged_rows else None
         ),
     )
 
@@ -1619,14 +1631,18 @@ class FindingAdapter(_SessionHolder):
         to move, and the port signature does not change when it does.
         """
         from auditmanager.decisions import current_verdict
-        from auditmanager.findings import published_finding_evidence, published_findings
+        from auditmanager.findings import (
+            group_published_findings, published_finding_evidence, published_findings,
+        )
 
         def work(session: Session) -> Sequence[FindingView]:
             rows = published_findings(session, run_id)
             evidence = published_finding_evidence(session, run_id)
             views = [
-                _finding_view(r, evidence, current_verdict(session, r.finding_uid))
-                for r in rows
+                _finding_view(group.canonical, evidence,
+                              current_verdict(session, group.canonical.finding_uid),
+                              group.merged)
+                for group in group_published_findings(rows)
             ]
             if category is not None:
                 views = [v for v in views if v.category == category]
@@ -1638,18 +1654,31 @@ class FindingAdapter(_SessionHolder):
 
     def get_finding(self, *, finding_uid: str) -> FindingDetailView:
         from auditmanager.decisions import current_verdict, decision_history
-        from auditmanager.findings import finding_by_uid, published_finding_evidence
+        from auditmanager.findings import (
+            finding_by_uid, group_published_findings, published_finding_evidence,
+            published_findings,
+        )
 
         def work(session: Session) -> FindingDetailView:
             row = finding_by_uid(session, finding_uid)
             if row is None:
                 raise _not_found("Finding")
+            members = tuple(
+                candidate for candidate in published_findings(session, row.run_id)
+                if candidate.finding_uid == finding_uid
+            )
+            matches = group_published_findings(members)
+            if len(matches) != 1 or matches[0].canonical.finding_observation_id != row.finding_observation_id:
+                raise DomainError(
+                    ErrorCode.STORAGE_INTEGRITY_ERROR,
+                    message="finding canonical observation changed during read",
+                )
             evidence = published_finding_evidence(session, row.run_id)
             verdict = current_verdict(session, finding_uid)
             history = decision_history(session, finding_uid)
             comments = [e.comment for e in history if e.comment]
             return FindingDetailView(
-                finding=_finding_view(row, evidence, verdict),
+                finding=_finding_view(row, evidence, verdict, matches[0].merged),
                 latest_comment=comments[-1] if comments else None,
                 decision_event_count=len(history),
             )
