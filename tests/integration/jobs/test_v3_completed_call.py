@@ -14,7 +14,9 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 AUTHORITY = AttemptAuthority("run_v3", "job_v3", "att_current", "lease_current", "secret")
 _EFFECT_PARAMS = {
     "max_tokens": 4096, "thinking": {"type": "adaptive"},
-    "output_config": {"effort": "high"},
+    "output_config": {"effort": "high", "format": {
+        "type": "json_schema", "schema": {"type": "object"},
+    }},
     "ar_v3_candidate_sha256": "a" * 64,
     "ar_v3_scope_id": "F1",
     "ar_v3_set_sha256": "b" * 64,
@@ -88,6 +90,8 @@ def test_completed_call_can_be_read_by_a_new_current_attempt_of_same_job():
     assert result.candidate_sha256 == "a" * 64
     assert result.scope_id == "F1"
     assert result.set_sha256 == "b" * 64
+    assert result.max_output_tokens == 4096
+    assert result.effort == "high"
     assert result.request_sha256 == "d" * 64
     assert result.response_sha256 == "e" * 64
     assert result.reply_blob_id == "blob_" + "A" * 26
@@ -106,6 +110,32 @@ def test_provisional_completed_call_uses_only_unlocked_checks():
     assert result.model_call_id == "mc_test"
     assert jobs.unlocked_checks == 2
     assert jobs.current_checks == 0
+
+
+@pytest.mark.parametrize("mutate", [
+    lambda p: p.pop("max_tokens"),
+    lambda p: p.update(max_tokens=True),
+    lambda p: p.update(max_tokens=16_001),
+    lambda p: p.update(thinking={"type": "disabled"}),
+    lambda p: p.update(output_config={"effort": "high"}),
+    lambda p: p.update(output_config={"effort": "ultra", "format": {
+        "type": "json_schema", "schema": {},
+    }}),
+    lambda p: p.update(extra_setting="drift"),
+])
+def test_malformed_saved_generation_settings_refuse(mutate):
+    row = _row()
+    mutate(row["effect_parameters"])
+    row["call_parameters"] = {
+        **row["effect_parameters"],
+        "ar_v3_reply_blob_id": "blob_" + "A" * 26,
+        "ar_v3_reply_blob_sha256": "c" * 64,
+        "ar_v3_reply_blob_size": 1234,
+        "call_status": "succeeded",
+    }
+    with pytest.raises(DomainError) as invalid:
+        CurrentJobs().completed_v3_call(QuerySession([row]), AUTHORITY)
+    assert invalid.value.detail_fields["reason"] == "v3_call_pair_invalid"
 
 
 @pytest.mark.parametrize("rows", ([], [_row(), _row()]))

@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from auditmanager.analysis.public import StageStatus, V3GenerationSettings
+from auditmanager.analysis.public import StageStatus
 from auditmanager.jobs.public import AttemptAuthority
 from auditmanager.runs import v3_cite_stage as stage
 from auditmanager.runs.v3_review_artifact import BuiltV3ReviewArtifact
@@ -17,7 +17,6 @@ from auditmanager.storage.public import derive_blob_id
 
 
 AUTHORITY = AttemptAuthority("run_test", "job_test", "att_cite", "lease_test", "secret")
-SETTINGS = V3GenerationSettings(4096, "high", {"type": "adaptive"})
 NOW = datetime(2026, 10, 23, tzinfo=timezone.utc)
 PAYLOAD = b'{"format":"ar-v3-beta-citation-review/1"}'
 DIGEST = hashlib.sha256(PAYLOAD).hexdigest()
@@ -149,7 +148,7 @@ def _arrange(monkeypatch):
     def prepare(session_, **kwargs):
         assert session_ is session
         assert kwargs["authority"] is AUTHORITY
-        assert kwargs["settings"] is SETTINGS
+        assert "settings" not in kwargs
         events.append("preflight")
         runs.preflight_complete = True
         return preflight
@@ -167,7 +166,7 @@ def _arrange(monkeypatch):
 def _run(session, runs, jobs, blobs):
     return stage.run_v3_cite_stage(
         session, authority=AUTHORITY, registry=object(), blob_store=object(),
-        max_text_bytes=100_000, settings=SETTINGS,
+        max_text_bytes=100_000,
         jobs=jobs, runs=runs, blobs=blobs, clock=lambda: NOW,
     )
 

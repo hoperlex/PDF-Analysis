@@ -76,6 +76,7 @@ def _call(payload):
         model_id="model-pin", provider_mode="live", request_sha256="b" * 64,
         response_sha256=RESPONSE.response_sha256, candidate_sha256="a" * 64,
         scope_id="F1", set_sha256="c" * 64,
+        max_output_tokens=4096, effort="high",
         reply_blob_id=str(derive_blob_id(sha256=digest, size=len(payload))),
         reply_blob_sha256=digest, reply_blob_size=len(payload),
         input_tokens=11, output_tokens=13, latency_ms=17,
@@ -111,7 +112,7 @@ def _arrange(monkeypatch, *, call=None, payload=None, binding_changes=None,
         assert kwargs["expected_provider_mode"] == call.provider_mode
         assert kwargs["model_identity"] == call.model_id
         assert kwargs["idempotency_scope"] == AUTHORITY.run_id
-        assert kwargs["settings"] is SETTINGS
+        assert kwargs["settings"] == SETTINGS
         return prepared
 
     def review(corpus, reply, text_layer):
@@ -135,7 +136,7 @@ def _arrange(monkeypatch, *, call=None, payload=None, binding_changes=None,
 def _execute(jobs, store):
     return preflight.prepare_v3_cite_preflight(
         object(), authority=AUTHORITY, registry=object(), blob_store=store,
-        max_text_bytes=100_000, settings=SETTINGS, jobs=jobs,
+        max_text_bytes=100_000, jobs=jobs,
     )
 
 
@@ -191,6 +192,22 @@ def test_changed_call_after_review_refuses(monkeypatch):
     with pytest.raises(DomainError) as caught:
         _execute(jobs, store)
     assert caught.value.detail_fields["reason"] == "saved_evidence_changed_during_review"
+    assert "reply" in observed
+
+
+def test_changed_saved_settings_at_final_call_fence_refuse(monkeypatch):
+    jobs, store, _, observed = _arrange(monkeypatch)
+    original = jobs.completed_v3_call
+
+    def changed(session, authority, *, lock_authority=True):
+        call = original(session, authority, lock_authority=lock_authority)
+        return replace(call, effort="medium") if lock_authority else call
+
+    jobs.completed_v3_call = changed
+    with pytest.raises(DomainError) as caught:
+        _execute(jobs, store)
+    assert caught.value.detail_fields["reason"] == "saved_evidence_changed_during_review"
+    assert store.reads == 1
     assert "reply" in observed
 
 

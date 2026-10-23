@@ -55,7 +55,6 @@ def prepare_v3_cite_preflight(
     registry: TrustedPackRegistry,
     blob_store: BlobStore,
     max_text_bytes: int,
-    settings: V3GenerationSettings,
     recognised_context: tuple[RecognisedContext, ...] = (),
     jobs: JobRepository | None = None,
     runs: RunRepository | None = None,
@@ -63,8 +62,8 @@ def prepare_v3_cite_preflight(
 ) -> V3CitePreflight:
     """Pair one saved call and reply with the current Run's exact text and set.
 
-    The caller supplies the generation settings used at dispatch. Their exact
-    provider-body digest is checked, so drift cannot silently change the body.
+    The generation settings come from the completed effect/call pair. Their
+    rebuilt provider-body digest must match the saved call after a restart.
     Early call and request reads are provisional. Only after both external
     Blobs and grounding does one final transaction lock and compare their
     saved DB witnesses before the caller may publish a stage.
@@ -75,6 +74,9 @@ def prepare_v3_cite_preflight(
     )
     if call.run_id != authority.run_id or call.job_id != authority.job_id:
         raise _refuse("completed_call_owner_mismatch")
+    settings = V3GenerationSettings(
+        call.max_output_tokens, call.effort, {"type": "adaptive"},
+    )
     prepared = prepare_v3_execution_request(
         session, authority=authority, registry=registry, blob_store=blob_store,
         max_text_bytes=max_text_bytes, expected_provider_mode=call.provider_mode,

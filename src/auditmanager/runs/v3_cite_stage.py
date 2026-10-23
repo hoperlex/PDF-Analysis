@@ -8,7 +8,7 @@ from typing import Callable
 from sqlalchemy.orm import Session
 
 from auditmanager.analysis.public import (
-    ArtifactRef, StageError, StageResult, StageStatus, V3GenerationSettings,
+    ArtifactRef, StageError, StageResult, StageStatus,
     blob_role_for,
 )
 from auditmanager.documents.public import DocumentRepository
@@ -83,7 +83,6 @@ def run_v3_cite_stage(
     registry: TrustedPackRegistry,
     blob_store: BlobStore,
     max_text_bytes: int,
-    settings: V3GenerationSettings,
     jobs: JobRepository | None = None,
     runs: RunRepository | None = None,
     documents: DocumentRepository | None = None,
@@ -116,7 +115,7 @@ def run_v3_cite_stage(
         preflight = prepare_v3_cite_preflight(
             session, authority=authority, registry=registry,
             blob_store=blob_store, max_text_bytes=max_text_bytes,
-            settings=settings, jobs=job_repo, runs=run_repo,
+            jobs=job_repo, runs=run_repo,
             documents=documents,
         )
         if preflight.prepared.binding != binding:

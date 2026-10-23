@@ -412,6 +412,8 @@ class V3CompletedCall:
     candidate_sha256: str
     scope_id: str
     set_sha256: str
+    max_output_tokens: int
+    effort: str
     reply_blob_id: str
     reply_blob_sha256: str
     reply_blob_size: int
@@ -1062,11 +1064,33 @@ class JobRepository:
             candidate = effect_params.get("ar_v3_candidate_sha256")
             scope = effect_params.get("ar_v3_scope_id")
             set_digest = effect_params.get("ar_v3_set_sha256")
+            max_tokens = effect_params.get("max_tokens")
+            thinking = effect_params.get("thinking")
+            output_config = effect_params.get("output_config")
+            effort = (output_config.get("effort")
+                      if isinstance(output_config, Mapping) else None)
+            output_format = (output_config.get("format")
+                             if isinstance(output_config, Mapping) else None)
             blob_id = call_params.get("ar_v3_reply_blob_id")
             blob_sha = call_params.get("ar_v3_reply_blob_sha256")
             blob_size = call_params.get("ar_v3_reply_blob_size")
             valid_pair = (
                 isinstance(candidate, str) and _V3_SHA256.fullmatch(candidate) is not None
+                and set(effect_params) == {
+                    "max_tokens", "thinking", "output_config",
+                    "ar_v3_candidate_sha256", "ar_v3_scope_id", "ar_v3_set_sha256",
+                }
+                and type(max_tokens) is int and 1 <= max_tokens <= 16_000
+                and isinstance(thinking, Mapping)
+                and dict(thinking) == {"type": "adaptive"}
+                and isinstance(output_config, Mapping)
+                and set(output_config) == {"effort", "format"}
+                and isinstance(effort, str)
+                and effort in {"low", "medium", "high", "max"}
+                and isinstance(output_format, Mapping)
+                and set(output_format) == {"type", "schema"}
+                and output_format["type"] == "json_schema"
+                and isinstance(output_format["schema"], Mapping)
                 and isinstance(scope, str) and bool(scope)
                 and isinstance(set_digest, str) and _V3_SHA256.fullmatch(set_digest) is not None
                 and isinstance(blob_id, str) and _V3_BLOB_ID.fullmatch(blob_id) is not None
@@ -1105,7 +1129,8 @@ class JobRepository:
             request_sha256=row["request_sha256"],
             response_sha256=row["response_sha256"],
             candidate_sha256=candidate, scope_id=scope,
-            set_sha256=set_digest, reply_blob_id=blob_id,
+            set_sha256=set_digest, max_output_tokens=max_tokens,
+            effort=effort, reply_blob_id=blob_id,
             reply_blob_sha256=blob_sha, reply_blob_size=blob_size,
             input_tokens=row["input_tokens"], output_tokens=row["output_tokens"],
             latency_ms=row["latency_ms"], cost_micros=row["cost_micros"],
