@@ -67,9 +67,13 @@ An authenticated expert can start one Ф1.3 AR v3 beta group for a confirmed AR 
 - `web/openapi/openapi.json`
 - `web/FRONTEND_LOCK.json`
 - `web/src/shared/api/credentialed-forward.ts`
+- `web/src/shared/api/authorization.ts`
+- `web/src/app/bff/v1/[...path]/route.ts`
 - `web/src/shared/api/generated/**`
 - `infra/deploy/proxy/nginx.conf`
 - `infra/deploy/proxy/tls-server.conf`
+- `infra/deploy/README.md`
+- `infra/deploy/serve.py`
 - `tests/contract/**`
 - `tests/integration/runs/**`
 - `tests/integration/api/**`
