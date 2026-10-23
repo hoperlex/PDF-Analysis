@@ -64,12 +64,15 @@ An authenticated expert can start one Ф1.3 AR v3 beta group for a confirmed AR 
 - `src/auditmanager/api/**`
 - `src/auditmanager/bootstrap/**`
 - `web/openapi/openapi.json`
+- `web/FRONTEND_LOCK.json`
 - `web/src/shared/api/generated/**`
 - `tests/contract/**`
 - `tests/integration/runs/**`
 - `tests/integration/api/**`
 - `tests/integration/db/**`
 - `tests/integration/composition/**`
+- `tests/support/expected_facts.json`
+- `docs/program/CURRENT_STATE.md`
 - `docs/program/tasks/AR-V3-BETA-SIX-RUN-02.md`
 - `docs/program/AR-V3-BETA-SIX-RUN-01-ADDENDUM.md`
 - `docs/program/AR-V3-BETA-SIX-RUN-02.md`

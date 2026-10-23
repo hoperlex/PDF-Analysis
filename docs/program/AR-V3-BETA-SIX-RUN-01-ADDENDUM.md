@@ -7,3 +7,5 @@ No code was started under the original task. [AR-V3-BETA-SIX-RUN-02](tasks/AR-V3
 Before implementation, the replacement task's allowlist was completed with `web/openapi/openapi.json`: the existing web drift guard requires that snapshot to remain byte-identical to the resealed API contract. No replacement-task code or handoff existed when this path was added.
 
 The replacement also owns the narrow `norms.public` export needed to pass the existing typed `SetIdentity` into `select_verified_retrieval_set`. The Run side must consume that public boundary rather than import the norms retrieval internals or duplicate their custody SQL.
+
+The full `1.2.0` reseal must also update `web/FRONTEND_LOCK.json`, the independent `tests/support/expected_facts.json` manifest and `CURRENT_STATE.md`; the previous API reseal changed all three. They were added to the replacement's allowlist before its code lane made any changes.
