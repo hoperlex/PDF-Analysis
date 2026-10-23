@@ -48,8 +48,11 @@ field positive/negative cases or recorded model responses. None was changed to
 ## Checks on this candidate
 
 - Promotion, Run pin, retrieval candidate and qualification: **37 passed**.
+- Complete focused citation/retrieval/Run-pin/programme selection on the
+  transplanted base: **134 passed** (offline).
 - Programme contract: **28 passed**.
 - Draft package and registry: **45 passed**.
+- Draft package, registry and candidate metadata together: **49 passed**.
 - Focused recorded v2, v3 citation and profile content: **58 passed**.
 - Python compilation and `git diff --check`: passed.
 - No paid model call, stand action, full gate or remote publication was made.
