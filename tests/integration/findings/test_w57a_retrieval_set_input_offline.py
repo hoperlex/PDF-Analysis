@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import hashlib
+from dataclasses import replace
 
 import pytest
 
 from auditmanager.findings.retrieval_set_input import (
     RetrievalSetInputRefused,
     load_verified_retrieval_set,
+    recheck_verified_retrieval_set_facts,
 )
 from auditmanager.jobs.public import AttemptAuthority
 from auditmanager.storage.public import BlobNotFoundError
@@ -50,12 +52,19 @@ class _Session:
 class _Jobs:
     def __init__(self, fail_second=False):
         self.calls = 0
+        self.peek_calls = 0
         self.fail_second = fail_second
 
     def require_current(self, session, authority):
         assert authority == _AUTH
         self.calls += 1
         if self.fail_second and self.calls == 2:
+            raise RetrievalSetInputRefused("stale_attempt")
+
+    def check_current_unlocked(self, session, authority):
+        assert authority == _AUTH
+        self.peek_calls += 1
+        if self.fail_second and self.peek_calls == 2:
             raise RetrievalSetInputRefused("stale_attempt")
 
 
@@ -89,13 +98,14 @@ def _row(**changes):
     }
 
 
-def _read(before=None, *, after=None, store=None, jobs=None, cap=10_000_000):
+def _read(before=None, *, after=None, store=None, jobs=None, cap=10_000_000,
+          lock_authority=True):
     session = _Session([_row()] if before is None else before, after)
     object_store = store or _Store()
     authority = jobs or _Jobs()
     return load_verified_retrieval_set(
         session, authority=_AUTH, blob_store=object_store,
-        max_set_bytes=cap, jobs=authority,
+        max_set_bytes=cap, jobs=authority, lock_authority=lock_authority,
     ), session, object_store, authority
 
 
@@ -107,6 +117,48 @@ def test_verified_set_returns_exact_bytes_after_two_authority_checks():
     )
     assert saved.map_sha256 == "a" * 64
     assert (session.calls, jobs.calls, store.calls, store.closed) == (2, 2, 1, True)
+    assert jobs.peek_calls == 0
+
+
+def test_nonlocking_set_read_and_final_pin_recheck():
+    jobs = _Jobs()
+    store = _Store()
+    original_open = store.open_stream
+
+    def checked_open(*args, **kwargs):
+        assert jobs.calls == 0 and jobs.peek_calls == 1
+        return original_open(*args, **kwargs)
+
+    store.open_stream = checked_open
+    saved, session, _, _ = _read(store=store, jobs=jobs,
+                                  lock_authority=False)
+    assert jobs.calls == 0 and jobs.peek_calls == 2
+    assert saved.pin_witness == tuple(sorted(_row().items()))
+    recheck_verified_retrieval_set_facts(session, authority=_AUTH, saved=saved)
+
+
+def test_nonlocking_set_read_refuses_stale_after_blob():
+    jobs = _Jobs(fail_second=True)
+    store = _Store()
+    with pytest.raises(RetrievalSetInputRefused, match="stale_attempt"):
+        _read(store=store, jobs=jobs, lock_authority=False)
+    assert store.closed
+    assert jobs.calls == 0 and jobs.peek_calls == 2
+
+
+def test_final_pin_witness_detects_custody_change_or_missing_witness():
+    saved, session, _, _ = _read(lock_authority=False)
+    session.after = [_row(reviewed_content_key="other")]
+    with pytest.raises(RetrievalSetInputRefused, match="changed_after_read"):
+        recheck_verified_retrieval_set_facts(session, authority=_AUTH, saved=saved)
+    with pytest.raises(RetrievalSetInputRefused, match="witness_missing"):
+        recheck_verified_retrieval_set_facts(
+            session, authority=_AUTH, saved=replace(saved, pin_witness=None),
+        )
+    with pytest.raises(RetrievalSetInputRefused, match="witness_mismatch"):
+        recheck_verified_retrieval_set_facts(
+            session, authority=_AUTH, saved=replace(saved, set_sha256="b" * 64),
+        )
 
 
 @pytest.mark.parametrize("before", [[], [_row(), _row()], [_row(run_state="published")]])

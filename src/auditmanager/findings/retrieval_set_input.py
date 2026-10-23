@@ -2,8 +2,9 @@
 
 This unserved boundary supplies bytes to the citation transaction writer.  It
 does not establish model provenance or reserve authority for a later call.
-The caller owns the transaction and must finish it promptly: current Attempt
-locks are held while the object is read.
+The caller owns the transaction. The default holds current-Attempt locks during
+the object read; the explicit v3 preflight mode uses nonlocking checks and
+requires a later locked DB-pin recheck before any effect.
 """
 
 from __future__ import annotations
@@ -31,6 +32,7 @@ class VerifiedRetrievalSetInput:
     set_blob_id: str
     set_sha256: str
     data: bytes
+    pin_witness: tuple[tuple[str, object], ...] | None = None
 
 
 _PIN = text("""
@@ -111,6 +113,7 @@ def _read_exact(
 def load_verified_retrieval_set(
     session: Session, *, authority: AttemptAuthority, blob_store: BlobStore,
     max_set_bytes: int = 10_000_000, jobs: JobRepository | None = None,
+    lock_authority: bool = True,
 ) -> VerifiedRetrievalSetInput:
     """Bind a current Attempt to confirmed set custody and exact saved bytes.
 
@@ -119,8 +122,13 @@ def load_verified_retrieval_set(
     """
     if type(max_set_bytes) is not int or not 1 <= max_set_bytes <= 10_000_000:
         raise RetrievalSetInputRefused("invalid_set_byte_ceiling")
+    if type(lock_authority) is not bool:
+        raise RetrievalSetInputRefused("invalid_authority_read_mode")
     job_repo = jobs or JobRepository()
-    job_repo.require_current(session, authority)
+    if lock_authority:
+        job_repo.require_current(session, authority)
+    else:
+        job_repo.check_current_unlocked(session, authority)
     rows = session.execute(_PIN, {"run_id": authority.run_id}).mappings().all()
     if len(rows) != 1:
         raise RetrievalSetInputRefused("verified_set_custody_missing_or_duplicate")
@@ -139,7 +147,10 @@ def load_verified_retrieval_set(
         blob_store, blob_id=row["set_blob_id"],
         sha256=row["set_sha256"], size=size,
     )
-    job_repo.require_current(session, authority)
+    if lock_authority:
+        job_repo.require_current(session, authority)
+    else:
+        job_repo.check_current_unlocked(session, authority)
     after = session.execute(_PIN, {"run_id": authority.run_id}).mappings().all()
     if len(after) != 1 or dict(after[0]) != row:
         raise RetrievalSetInputRefused("verified_set_pin_changed_during_read")
@@ -151,10 +162,39 @@ def load_verified_retrieval_set(
         set_blob_id=row["set_blob_id"],
         set_sha256=row["set_sha256"],
         data=payload,
+        pin_witness=tuple(sorted(row.items())),
     )
+
+
+def recheck_verified_retrieval_set_facts(
+    session: Session, *, authority: AttemptAuthority,
+    saved: VerifiedRetrievalSetInput,
+) -> None:
+    """Compare full confirmed set/catalogue pins under the caller's final lock.
+
+    Call ``JobRepository.require_current`` first in the same transaction. This
+    DB-only check is not an authority reservation or a replacement for Blob
+    integrity verification performed by the loader.
+    """
+    if (not isinstance(saved, VerifiedRetrievalSetInput)
+            or saved.run_id != authority.run_id
+            or saved.pin_witness is None):
+        raise RetrievalSetInputRefused("verified_set_witness_missing")
+    witness = dict(saved.pin_witness)
+    if (len(witness) != len(saved.pin_witness)
+            or witness.get("norms_snapshot_id") != saved.norms_snapshot_id
+            or witness.get("norm_retrieval_set_id") != saved.norm_retrieval_set_id
+            or witness.get("map_sha256") != saved.map_sha256
+            or witness.get("set_blob_id") != saved.set_blob_id
+            or witness.get("set_sha256") != saved.set_sha256):
+        raise RetrievalSetInputRefused("verified_set_witness_mismatch")
+    rows = session.execute(_PIN, {"run_id": authority.run_id}).mappings().all()
+    if (len(rows) != 1
+            or tuple(sorted(dict(rows[0]).items())) != saved.pin_witness):
+        raise RetrievalSetInputRefused("verified_set_pin_changed_after_read")
 
 
 __all__ = [
     "RetrievalSetInputRefused", "VerifiedRetrievalSetInput",
-    "load_verified_retrieval_set",
+    "load_verified_retrieval_set", "recheck_verified_retrieval_set_facts",
 ]
