@@ -1,6 +1,6 @@
 # Current state
 
-**Updated 2026-10-23 for the AR v3 beta group review API seal.** The earlier night-window state and its `R-137` W54 repair remain recorded below.
+**Updated 2026-10-23 for the AR v3 beta group review API and browser read.** The earlier night-window state and its `R-137` W54 repair remain recorded below.
 W55b is published on `origin/main` and tagged `v0.6.0`. Its exact-tree gate counts as `GATE OK` under R-125; the deploy workflow selected that tree, and the owner ran `infra/deploy/verify-deployed.sh` on the host with a passing image/tree comparison.
 The workflow's own verify step was skipped because a child consumed its stdin; the tested repair is on `origin/dev`. Moving it to main needs a fresh complete gate and a direct exact-SHA owner instruction.
 The owner waived five credentialed live W55b product checks; those journeys remain unverified. See `W55B-INT-TAG-01.md`, `W55B-INT-MAIN-VERIFY-ADDENDUM-01.md` and `CFB-INT-DEV-PUBLISH-43.md`.
@@ -53,7 +53,7 @@ for the `R-139` night window of 2026-10-20, `NIGHT-1020-INT-01.md`.
   W56b (Attempt-fenced readers for text windows, crops, regions; vision
   policy open) and W58 (source mirror, isolated DB-plus-Blob restore drill,
   synthetic restore passed, real drill not run).
-- **АР v3 beta group.** The API has explicit start/read operations for an atomic six-Run group with separate identity, immutable pins and idempotent replay. `getArV3BetaGroupReview` reads six verified, review-only scope outcomes, including pending and failed members; it exposes no internal custody data or numerical conclusions. No reviewed six-map/six-set pack is installed, so new group starts refuse before any write or provider action. «Настройки анализа» shows the 22 F1.3 topic/source dispositions and still says v3 execution and numerical conclusions are unavailable. A full repaired snapshot passed isolated local custody qualification (`AR-BETA-LOCAL-CUSTODY-01`); the stand still lacks that import.
+- **АР v3 beta group.** The API has explicit start/read operations for an atomic six-Run group with separate identity, immutable pins and idempotent replay. `getArV3BetaGroupReview` reads six verified, review-only scope outcomes, including pending and failed members; it exposes no internal custody data or numerical conclusions. «Настройки анализа» accepts a group ID in the address and shows the six outcomes and provisional quotes without a new start control. No reviewed six-map/six-set pack is installed, so new group starts refuse before any write or provider action. «Настройки анализа» shows the 22 F1.3 topic/source dispositions and still says v3 execution and numerical conclusions are unavailable. A full repaired snapshot passed isolated local custody qualification (`AR-BETA-LOCAL-CUSTODY-01`); the stand still lacks that import.
 - **W59 sections (served).** An expert confirms a version's stage (П/Р) and
   one of 15 sections (`classifyDocumentVersion`, `getVersionSectionReview`,
   migration 0024); run start and re-audit route by the confirmed section

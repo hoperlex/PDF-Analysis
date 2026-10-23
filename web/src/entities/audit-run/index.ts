@@ -46,6 +46,7 @@ export {
 
 export type { TerminalReasonNote } from './model/terminal-reason';
 export { ABSENT_SENTENCE, UNDESCRIBED_PREFIX, terminalReasonNote } from './model/terminal-reason';
+export { looksLikeArV3GroupId } from './model/ar-v3-group-id';
 
 export { looksLikeRunId } from './model/address';
 

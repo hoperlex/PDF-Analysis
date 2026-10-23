@@ -44,6 +44,7 @@ export {
 } from './authorization';
 
 export { UNDESCRIBED_MESSAGE_PREFIX, catalogMessage } from './catalog-message';
+export { failureMessage } from './failure-message';
 
 export type { Pc01ErrorCode } from './errors';
 export {

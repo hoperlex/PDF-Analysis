@@ -37,6 +37,7 @@
 import type { DataTag } from '@tanstack/react-query';
 
 import type {
+  ArV3RunGroupId,
   AssignmentStatus,
   AssignmentUid,
   DocumentUid,
@@ -384,6 +385,9 @@ export const queryKeys = {
   },
   runs: {
     all: () => ['runs'] as const,
+    /** One durable six-Run AR v3 beta group, including its review-only outcomes. */
+    arV3GroupReview: (groupId: ArV3RunGroupId) =>
+      ['runs', 'ar-v3-group-review', groupId] as const,
     /**
      * One run's status. Holds the **model**, never the transport envelope.
      *
