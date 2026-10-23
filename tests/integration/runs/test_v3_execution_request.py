@@ -20,6 +20,7 @@ from auditmanager.jobs.public import AttemptAuthority
 from auditmanager.runs import v3_citations, v3_execution_request
 from auditmanager.runs.repository import RunRow
 from auditmanager.runs.v3_execution_binding import V3ExecutionBinding
+from auditmanager.runs.reference_text_input import SavedReferenceTextInput
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 
@@ -111,6 +112,8 @@ def _arrange(monkeypatch: pytest.MonkeyPatch, scope_id: str = "F1"):
     )
     monkeypatch.setattr(v3_execution_request, "resolve_v3_execution_binding",
                         lambda *args, **kwargs: binding)
+    monkeypatch.setattr(v3_execution_request, "load_saved_reference_text",
+                        lambda *args, **kwargs: SavedReferenceTextInput(_layer(), "ver_test", 1))
     monkeypatch.setattr(v3_citations, "load_verified_retrieval_set",
                         lambda *args, **kwargs: saved)
     return binding, saved
@@ -120,7 +123,7 @@ def _prepare(monkeypatch: pytest.MonkeyPatch, scope_id: str = "F1", **overrides)
     binding, saved = _arrange(monkeypatch, scope_id)
     values = dict(
         authority=AUTHORITY, registry=object(), blob_store=object(),
-        text_layer=_layer(), expected_provider_mode="recorded",
+        max_text_bytes=100_000, expected_provider_mode="recorded",
         model_identity="fixture/ar-v3-beta", settings=SETTINGS,
         idempotency_scope="attempt-1",
         runs=SimpleNamespace(get=lambda *args: _run()), jobs=object(),
@@ -135,6 +138,7 @@ def _prepare(monkeypatch: pytest.MonkeyPatch, scope_id: str = "F1", **overrides)
 def test_six_scopes_bind_saved_bytes_to_one_transport_body(monkeypatch, scope_id):
     binding, saved, prepared = _prepare(monkeypatch, scope_id)
     assert prepared.binding == binding
+    assert prepared.saved_text.text_layer == _layer()
     assert prepared.pinned_corpus.verified_set == saved
     assert prepared.sealed.candidate == prepared.pinned_corpus.candidate
     assert prepared.candidate_sha256 != prepared.provider_body_sha256
@@ -154,13 +158,16 @@ def test_wrong_provider_mode_or_source_version_refuses_before_set_read(monkeypat
                 jobs=object())
     with pytest.raises(DomainError) as mode:
         v3_execution_request.prepare_v3_execution_request(
-            object(), authority=AUTHORITY, text_layer=_layer(),
+            object(), authority=AUTHORITY, max_text_bytes=100_000,
             expected_provider_mode="live", **base,
         )
     assert mode.value.detail_fields["reason"] == "provider_mode_mismatch"
+    monkeypatch.setattr(v3_execution_request, "load_saved_reference_text",
+                        lambda *args, **kwargs: SavedReferenceTextInput(
+                            _layer("ver_foreign"), "ver_foreign", 1))
     with pytest.raises(DomainError) as version:
         v3_execution_request.prepare_v3_execution_request(
-            object(), authority=AUTHORITY, text_layer=_layer("ver_foreign"),
+            object(), authority=AUTHORITY, max_text_bytes=100_000,
             expected_provider_mode="recorded", **base,
         )
     assert version.value.detail_fields["reason"] == "run_or_text_binding_mismatch"
@@ -174,7 +181,7 @@ def test_changed_set_pin_and_group_after_blob_read_refuse(monkeypatch):
                        match="run_set_profile_binding_invalid"):
         v3_execution_request.prepare_v3_execution_request(
             object(), authority=AUTHORITY, registry=object(), blob_store=object(),
-            text_layer=_layer(), expected_provider_mode="recorded",
+            max_text_bytes=100_000, expected_provider_mode="recorded",
             model_identity="fixture/model", settings=SETTINGS,
             runs=SimpleNamespace(get=lambda *args: _run()), jobs=object(),
         )
@@ -186,7 +193,7 @@ def test_changed_set_pin_and_group_after_blob_read_refuse(monkeypatch):
     with pytest.raises(DomainError) as drift:
         v3_execution_request.prepare_v3_execution_request(
             object(), authority=AUTHORITY, registry=object(), blob_store=object(),
-            text_layer=_layer(), expected_provider_mode="recorded",
+            max_text_bytes=100_000, expected_provider_mode="recorded",
             model_identity="fixture/model", settings=SETTINGS,
             runs=SimpleNamespace(get=lambda *args: _run()), jobs=object(),
         )
@@ -201,7 +208,7 @@ def test_stale_attempt_and_failed_blob_custody_refuse(monkeypatch):
     with pytest.raises(DomainError) as stale:
         v3_execution_request.prepare_v3_execution_request(
             object(), authority=AUTHORITY, registry=object(), blob_store=object(),
-            text_layer=_layer(), expected_provider_mode="recorded",
+            max_text_bytes=100_000, expected_provider_mode="recorded",
             model_identity="fixture/model", settings=SETTINGS,
             runs=SimpleNamespace(get=lambda *args: _run()), jobs=object(),
         )
@@ -213,7 +220,25 @@ def test_stale_attempt_and_failed_blob_custody_refuse(monkeypatch):
     with pytest.raises(ValueError, match="set_blob_unreadable"):
         v3_execution_request.prepare_v3_execution_request(
             object(), authority=AUTHORITY, registry=object(), blob_store=object(),
-            text_layer=_layer(), expected_provider_mode="recorded",
+            max_text_bytes=100_000, expected_provider_mode="recorded",
             model_identity="fixture/model", settings=SETTINGS,
             runs=SimpleNamespace(get=lambda *args: _run()), jobs=object(),
         )
+
+
+def test_missing_saved_source_refuses_before_norm_set_read(monkeypatch):
+    _arrange(monkeypatch)
+    monkeypatch.setattr(v3_execution_request, "load_saved_reference_text",
+                        lambda *args, **kwargs: (_ for _ in ()).throw(
+                            DomainError(ErrorCode.ANALYSIS_INPUT_INVALID,
+                                        reason="source_stage_missing_or_duplicate")))
+    monkeypatch.setattr(v3_citations, "load_verified_retrieval_set",
+                        lambda *args, **kwargs: pytest.fail("set read was reached"))
+    with pytest.raises(DomainError) as missing:
+        v3_execution_request.prepare_v3_execution_request(
+            object(), authority=AUTHORITY, registry=object(), blob_store=object(),
+            max_text_bytes=100_000, expected_provider_mode="recorded",
+            model_identity="fixture/model", settings=SETTINGS,
+            runs=SimpleNamespace(get=lambda *args: _run()), jobs=object(),
+        )
+    assert missing.value.detail_fields["reason"] == "source_stage_missing_or_duplicate"

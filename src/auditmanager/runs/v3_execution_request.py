@@ -1,9 +1,8 @@
 """Read-only AR v3 request preparation under a current Job Attempt.
 
-The caller supplies the saved source-stage text layer and the model selected by
-its provider binding. This operation checks the group's installed pack, reads
-the confirmed set Blob and rechecks the same group pins before returning exact
-transport bytes. A later dispatch must recheck authority again.
+This operation checks the group's installed pack, reads the current Run's saved
+source-stage text and confirmed set Blob, and rechecks the same group pins
+before returning exact transport bytes. A later dispatch must recheck authority.
 """
 
 from __future__ import annotations
@@ -16,12 +15,16 @@ from auditmanager.analysis.public import (
     ModelRequest,
     RecognisedContext,
     SealedV3Request,
-    TextLayer,
     V3GenerationSettings,
     build_v3_model_request,
     prepare_beta_v3_request,
 )
+from auditmanager.documents.public import DocumentRepository
 from auditmanager.jobs.public import AttemptAuthority, JobRepository
+from auditmanager.runs.reference_text_input import (
+    SavedReferenceTextInput,
+    load_saved_reference_text,
+)
 from auditmanager.runs.repository import RunRepository
 from auditmanager.runs.v3_citations import PinnedV3CorpusRequest, prepare_v3_corpus_request
 from auditmanager.runs.v3_execution_binding import (
@@ -36,6 +39,7 @@ from auditmanager.storage.public import BlobStore
 @dataclass(frozen=True, slots=True)
 class V3PreparedExecutionRequest:
     binding: V3ExecutionBinding
+    saved_text: SavedReferenceTextInput
     pinned_corpus: PinnedV3CorpusRequest
     sealed: SealedV3Request
     model_request: ModelRequest
@@ -63,7 +67,7 @@ def prepare_v3_execution_request(
     authority: AttemptAuthority,
     registry: TrustedPackRegistry,
     blob_store: BlobStore,
-    text_layer: TextLayer,
+    max_text_bytes: int,
     expected_provider_mode: str,
     model_identity: str,
     settings: V3GenerationSettings,
@@ -71,13 +75,13 @@ def prepare_v3_execution_request(
     recognised_context: tuple[RecognisedContext, ...] = (),
     jobs: JobRepository | None = None,
     runs: RunRepository | None = None,
+    documents: DocumentRepository | None = None,
 ) -> V3PreparedExecutionRequest:
     """Build one provider body from the persisted Run and verified set bytes.
 
-    No provider, Blob write or database write occurs here. The caller must
-    supply a text layer read from this Run's saved deterministic source stage;
-    its version identity is checked here, while source artifact provenance is
-    established by that stage's reader.
+    No provider, Blob write or database write occurs here. The text layer is
+    read only from this Run's saved deterministic source stage and checked
+    against its Version and Blob. The explicit byte ceiling bounds that read.
     """
     job_repo = jobs or JobRepository()
     run_repo = runs or RunRepository()
@@ -87,12 +91,18 @@ def prepare_v3_execution_request(
     if (expected_provider_mode not in {"live", "recorded"}
             or binding.provider_mode != expected_provider_mode):
         raise _refuse("provider_mode_mismatch")
+    saved_text = load_saved_reference_text(
+        session, authority=authority, blob_store=blob_store,
+        max_input_bytes=max_text_bytes, runs=run_repo, jobs=job_repo,
+        documents=documents,
+    )
+    text_layer = saved_text.text_layer
     run = run_repo.get(session, binding.run_id)
     if (run.state != "running"
             or run.project_uid != binding.project_uid
             or run.version_uid != binding.version_uid
             or run.frozen_input_digest != binding.frozen_input_digest
-            or not isinstance(text_layer, TextLayer)
+            or saved_text.version_uid != binding.version_uid
             or text_layer.version_uid != binding.version_uid):
         raise _refuse("run_or_text_binding_mismatch")
     pinned = prepare_v3_corpus_request(
@@ -132,7 +142,7 @@ def prepare_v3_execution_request(
         session, authority=authority, registry=registry, jobs=job_repo,
     ) != binding:
         raise _refuse("group_binding_changed_during_read")
-    return V3PreparedExecutionRequest(binding, pinned, sealed, request)
+    return V3PreparedExecutionRequest(binding, saved_text, pinned, sealed, request)
 
 
 __all__ = ["V3PreparedExecutionRequest", "prepare_v3_execution_request"]
