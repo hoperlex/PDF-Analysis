@@ -17,3 +17,5 @@ The existing contract seal test requires the proxy and web forwarder error envel
 The P02 seam register has an exhaustive API operation table checked against the contract. The two additive group operations and their idempotency rule require updating that one program file; it is assigned to the integration task before editing.
 
 The prose contract gate scans `docs/manual-tests/PC-01_prototype.md` for the current migration head. Updating its single head claim to 0032 belongs to this migration owner.
+
+The same gate scans the current API surface claim in `ALPHA_ROADMAP.md`; the integration task owns the one current-count update to 90/102/290.
