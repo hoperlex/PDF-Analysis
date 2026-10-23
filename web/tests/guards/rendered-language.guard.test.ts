@@ -80,7 +80,7 @@ import type {
   VersionComparison,
 } from '@/shared/api';
 import { RUN_STATE_VALUES } from '@/shared/api';
-import { RUN_PAGE_LIMIT } from '@/entities/audit-run';
+import { AR_V3_BETA_PROFILE_ID, RUN_PAGE_LIMIT } from '@/entities/audit-run';
 import { USER_PAGE_LIMIT } from '@/entities/user';
 import { ASSIGNMENT_PAGE_LIMIT } from '@/entities/assignment';
 import { REGISTRATION_PAGE_LIMIT } from '@/entities/registration-request';
@@ -2918,6 +2918,14 @@ export const CACHE_STATES: readonly {
   { state: 'failed-run-unclassified', run: { state: 'failed', terminal_reason: 'version_classification_required', published_finding_count: 0 } },
   { state: 'failed-run-no-profile', run: { state: 'failed', terminal_reason: 'section_profile_unavailable', published_finding_count: 0 } },
   { state: 'partial-run', run: { state: 'partial', degradation_set: ['text_analysis'] } },
+  {
+    state: 'ar-v3-beta-published',
+    run: {
+      state: 'published', analysis_profile_id: AR_V3_BETA_PROFILE_ID,
+      published_finding_count: 0,
+      stages: [{ stage_id: 'ar_v3_citation_review', status: 'succeeded' }],
+    },
+  },
   { state: 'running', run: { state: 'running', terminal_at: null, published_finding_count: 0 } },
   { state: 'refused', run: null },
   { state: 'empty', run: null },

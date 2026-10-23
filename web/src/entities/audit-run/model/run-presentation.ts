@@ -158,12 +158,12 @@ export function isRunAnimating(
 }
 
 /**
- * Whether this run has a published result, and therefore findings to review and bytes to
- * export. The same `OD-11` `publishes_result` flag the export panel uses — `published`
- * and `partial`, never `failed` and never a non-terminal run.
+ * Whether this run can offer the canonical finding review. The legacy `OD-11` result
+ * states are `published` and `partial`; the v3 beta profile publishes a separate
+ * preliminary citation review and no canonical findings.
  */
-export function runHasPublishedResult(state: RunState): boolean {
-  return isExportableRunState(state);
+export function runHasPublishedResult(state: RunState, analysisProfileId?: string | null): boolean {
+  return analysisProfileId !== AR_V3_BETA_PROFILE_ID && isExportableRunState(state);
 }
 
 /** What the terminal of a run actually is, as an explicit closed set of outcomes. */
