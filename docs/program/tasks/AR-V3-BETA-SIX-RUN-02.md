@@ -70,6 +70,7 @@ An authenticated expert can start one Ф1.3 AR v3 beta group for a confirmed AR 
 - `web/src/shared/api/authorization.ts`
 - `web/src/app/bff/v1/[...path]/route.ts`
 - `web/src/shared/api/generated/**`
+- `web/tests/**`
 - `infra/deploy/proxy/nginx.conf`
 - `infra/deploy/proxy/tls-server.conf`
 - `infra/deploy/README.md`

@@ -21,3 +21,5 @@ The prose contract gate scans `docs/manual-tests/PC-01_prototype.md` for the cur
 The same gate scans the current API surface claim in `ALPHA_ROADMAP.md`; the integration task owns the one current-count update to 90/102/290.
 
 The API prose-count gate also scans four deployment/BFF/authorization files for literal surface totals. The replacement task owns only the 90/102/290 prose corrections in those files; their behavior is unchanged.
+
+Generated-client `1.2.0` types require updating the web test fixtures' ErrorEnvelope literals and the keyed-operation inventory. The replacement task owns `web/tests/**` for those exact contract/typecheck repairs.
