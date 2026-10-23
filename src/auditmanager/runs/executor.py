@@ -94,6 +94,8 @@ from auditmanager.analysis.public import (
     AR_TEXT_PROFILE,
     AR_V2_RECORDED_BUNDLE_ID,
     AR_V2_RECORDED_PROFILE_ID,
+    AR_V3_BETA_BUNDLE_ID,
+    AR_V3_BETA_PROFILE_ID,
     RecordedAdapter,
     RecordedGenerationSettings,
     RecordedProfileError,
@@ -860,6 +862,19 @@ def _execute_run_body(
             meter.unpriced_contributions = max(meter.unpriced_contributions, 1)
 
     run = run_repo.get(session, run_id)
+    # A six-Run beta group pins a distinct profile and bundle, but its verified
+    # provider/CITE executor is a later integration task. Refuse either half of
+    # that identity before the legacy `text_profiles is None` branch can select
+    # AR v1, and before Job, stage, Blob or provider effects begin.
+    if (run.analysis_profile_id == str(AR_V3_BETA_PROFILE_ID)
+            or run.prompt_bundle_id == str(AR_V3_BETA_BUNDLE_ID)):
+        raise DomainError(
+            ErrorCode.REQUIRED_NORM_UNAVAILABLE,
+            message="the pinned AR v3 beta executor is not installed",
+            reference_kind="analysis_profile",
+            analysis_profile_id=run.analysis_profile_id,
+            prompt_bundle_id=run.prompt_bundle_id,
+        )
     recorded_v2 = (
         run.analysis_profile_id == str(AR_V2_RECORDED_PROFILE_ID)
         or run.prompt_bundle_id == str(AR_V2_RECORDED_BUNDLE_ID)

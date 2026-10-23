@@ -94,6 +94,8 @@ from auditmanager.analysis.profiles.ar_v3.local_evaluation import (
     evaluate_v3_supplied_response,
 )
 from auditmanager.analysis.profiles.ar_v3.v3_profile import (
+    PROFILE_ID as AR_V3_BETA_PROFILE_ID,
+    PROMPT_BUNDLE_ID as AR_V3_BETA_BUNDLE_ID,
     BetaV3Profile,
     BetaV3ProfileRefused,
     resolve_beta_v3_profile,
@@ -188,6 +190,8 @@ __all__ = [
     "AR_V2_CATEGORIES",
     "AR_V2_RECORDED_BUNDLE_ID",
     "AR_V2_RECORDED_PROFILE_ID",
+    "AR_V3_BETA_BUNDLE_ID",
+    "AR_V3_BETA_PROFILE_ID",
     "AR_V2_SEVERITIES",
     "BlockIndex",
     "BuiltRecordedArtifact",

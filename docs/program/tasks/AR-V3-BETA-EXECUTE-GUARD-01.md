@@ -1,7 +1,7 @@
 # Task AR-V3-BETA-EXECUTE-GUARD-01 — refuse v3 Runs before an executor exists
 
 task_id: AR-V3-BETA-EXECUTE-GUARD-01
-status: implementation in progress
+status: completed in development candidate
 
 ## Outcome
 
@@ -95,7 +95,7 @@ Revert this narrow guard before full v3 executor integration if needed. New prod
 
 ## Handoff
 
-- changed files: report
-- commands/results: report
+- changed files: analysis public seam, Run executor, focused test, queue and report
+- commands/results: 20 Run tests and 56 contract tests passed; see report
 - known limits: complete v3 execution remains open
 - integration notes: replace guard only with the verified v3 execution path
