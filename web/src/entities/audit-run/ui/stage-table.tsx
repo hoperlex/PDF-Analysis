@@ -130,6 +130,10 @@ export function StageTable({ rows }: StageTableProps) {
     );
   }
 
+  if (rows.length === 0) {
+    return <p data-stage-table-empty>Сведения об этапах пока не поступили.</p>;
+  }
+
   return (
     <div className={styles.scroller}>
       <table>

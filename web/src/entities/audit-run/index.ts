@@ -8,6 +8,7 @@
 
 export type { ProviderModeLabel, RunCostReading, RunOutcome, StageRow } from './model/run-presentation';
 export {
+  AR_V3_BETA_PROFILE_ID,
   PC01_STAGE_IDS,
   PROVIDER_MODE_UNKNOWN,
   PROVIDER_MODE_UNRECOGNIZED,

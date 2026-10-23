@@ -47,6 +47,9 @@ export type ProviderModeLabel =
 
 const PROVIDER_MODES: ReadonlySet<string> = new Set<string>(PROVIDER_MODE_VALUES);
 
+/** Pinned by `contracts/analysis/ar_v3_beta/v1/stage.json`; distinct from legacy AR. */
+export const AR_V3_BETA_PROFILE_ID = 'ap_01M5M28ZCDD8VPSP1BTAEW92YE';
+
 function isProviderMode(value: unknown): value is ProviderMode {
   return typeof value === 'string' && PROVIDER_MODES.has(value);
 }
@@ -75,6 +78,10 @@ export function hasKnownRunVocabulary(status: RunStatus): boolean {
   const stageStatuses: readonly unknown[] = STAGE_STATUS_VALUES;
 
   if (!runStates.includes(candidate.state) || !Array.isArray(candidate.stages)) return false;
+  if (
+    candidate.stages.some((stage) => stage?.stage_id === 'ar_v3_citation_review') &&
+    status.analysis_profile_id !== AR_V3_BETA_PROFILE_ID
+  ) return false;
   if (
     candidate.degradation_set !== undefined &&
     (!Array.isArray(candidate.degradation_set) ||
@@ -287,14 +294,15 @@ export interface StageRow {
  * missing row reads as "nothing to say"; an empty status reads as "not yet", which is
  * what it is.
  */
-export function stageRows(status: Pick<RunStatus, 'stages'>): readonly StageRow[] {
+export function stageRows(status: Pick<RunStatus, 'stages' | 'analysis_profile_id'>): readonly StageRow[] {
   const reported = new Map(status.stages.map((stage) => [stage.stage_id, stage]));
   const rows: StageRow[] = [];
 
-  // A reported profile-specific v3 stage is evidence that this is not the legacy PC-01
-  // schedule. Do not invent four missing legacy stages beside that report.
+  // The pinned profile identifies a v3 Run before any stage has been reported. A
+  // reported profile-specific stage also suppresses legacy placeholders while the
+  // vocabulary guard refuses an inconsistent stage/profile pair.
   const reportsV3 = status.stages.some((stage) => stage.stage_id === 'ar_v3_citation_review');
-  if (!reportsV3) PC01_STAGE_IDS.forEach((stageId, index) => {
+  if (status.analysis_profile_id !== AR_V3_BETA_PROFILE_ID && !reportsV3) PC01_STAGE_IDS.forEach((stageId, index) => {
     const stage = reported.get(stageId);
     rows.push({
       stageId,
