@@ -33,7 +33,7 @@
  */
 
 import type { DecisionEvent, DecisionEventType } from '@/shared/api';
-import { DECISION_EVENT_TYPE_VALUES, VERDICT_VALUES } from '@/shared/api';
+import { DECISION_EVENT_TYPE_VALUES, SEVERITY_VALUES, VERDICT_VALUES } from '@/shared/api';
 import type { ErrorStateProps } from '@/shared/ui';
 import { ErrorState, LoadingState, NotApplicableState } from '@/shared/ui';
 import { formatInstant } from '@/shared/lib';
@@ -62,9 +62,11 @@ const UNKNOWN_HISTORY_TITLE = 'Событие решения содержит н
 function hasKnownVocabulary(event: DecisionEvent): boolean {
   const eventTypes: readonly unknown[] = DECISION_EVENT_TYPE_VALUES;
   const verdicts: readonly unknown[] = VERDICT_VALUES;
+  const severities: readonly unknown[] = SEVERITY_VALUES;
   return (
     eventTypes.includes(event.event_type) &&
-    (event.verdict === null || event.verdict === undefined || verdicts.includes(event.verdict))
+    (event.verdict === null || event.verdict === undefined || verdicts.includes(event.verdict)) &&
+    (event.severity === undefined || severities.includes(event.severity))
   );
 }
 
@@ -85,7 +87,7 @@ export function DecisionHistory({ events, isLoading, error }: DecisionHistoryPro
       <section className="am-history" data-history-fault="closed-vocabulary">
         <ErrorState
           title={UNKNOWN_HISTORY_TITLE}
-          detail="Тип события или вердикт нельзя показать достоверно — история скрыта целиком."
+          detail="Тип события, вердикт или важность нельзя показать достоверно — история скрыта целиком."
         />
       </section>
     );
@@ -133,7 +135,7 @@ export function DecisionHistory({ events, isLoading, error }: DecisionHistoryPro
                 * `WEB-REVIEW-FOLLOWUPS-01`: the severity the expert decided with this event,
                 * as the server served it, beside the verdict. An event that carries none
                 * renders nothing here, so its line is what it always was. A value outside
-                * the closed set is the badge's own fault, not a blank.
+                * the closed set hides the complete history before this line can render.
                 */}
               {event.severity === undefined ? null : (
                 <span data-decided-severity={event.severity}>
