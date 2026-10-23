@@ -46,6 +46,7 @@ records the exact model ID and reference rates.
 | full `tests/unit/executor_runner` and `tests/unit/executors/test_model.py` with loopback sockets permitted | 141 passed |
 | dev candidate: all `tests/unit/executors` and `tests/unit/executor_runner` with loopback sockets permitted | 506 passed |
 | dev candidate: program governance and direct-pin contract checks | 19 passed |
+| `make gate-preflight` on the clean dev candidate | refused before tests: worktree has no `.venv/bin/python` |
 | real Codex CLI, synthetic `{ok: true}` schema and prompt | exit 0, output exactly `{"ok":true}` |
 | `python3 -m py_compile` of adapter and test | exit 0 |
 | `agent.load_config` on the Codex SSH example | accepted; loopback origin, `command` mode, exact model and 540-second timeout |
@@ -57,13 +58,16 @@ when loopback fixture sockets were permitted. The first real Codex command
 attempt failed before model output because a file-size resource limit also
 applied to Codex's own state files. The adapter now bounds its JSONL output by
 monitoring the temporary file, and the repeated real synthetic call passed.
+The dev gate was not started: its preflight refused the isolated worktree's
+missing runtime venv, and the host's 4497 MiB free disk was below the preflight's
+6144 MiB threshold. Development publication uses this task's bounded checks
+under `R-135`, as `EXEC-INT-DEV-01` did; this is not full-gate evidence for main.
 
 ## Integration and limits
 
 The Codex commit was cherry-picked onto `origin/dev` after its pull-channel
 integration. This dev candidate does not carry the unrelated beta branch changes.
-The source candidate remains available at `1515221a`. The dev host had 4497
-MiB free before publication checks; the gate preflight requires 6144 MiB.
+The source candidate remains available at `1515221a`.
 
 The app server cannot call this machine. On the owner machine, open the
 forward with a dedicated key limited to the stand's loopback proxy, then run
