@@ -273,9 +273,37 @@ export function manifestRoles(): ReadonlySet<string> {
   return roles;
 }
 
+interface BetaSourcePolicy {
+  readonly items: readonly { readonly id: string; readonly sources: readonly string[] }[];
+  readonly sources: Readonly<Record<string, unknown>>;
+}
+
+interface BetaScopeGroup {
+  readonly id: string;
+  readonly items: readonly string[];
+}
+
+/** The machine labels printed by the frozen AR beta preview, read from its policy. */
+export function betaPolicyIdentifiers(): ReadonlySet<string> {
+  const canonical = join(REPO_ROOT, 'src/auditmanager/analysis/profiles/ar_v3/norm_map/beta_sources.json');
+  const mirror = join(REPO_ROOT, 'web/src/widgets/ar-v3-beta-status/ui/beta_sources.json');
+  expect(readText(mirror), 'the rendered beta source policy mirrors the canonical policy').toBe(readText(canonical));
+  const policy = readJson<BetaSourcePolicy>(canonical);
+  const groups = readJson<readonly BetaScopeGroup[]>(
+    join(REPO_ROOT, 'web/src/widgets/ar-v3-beta-status/ui/scope_groups.json'),
+  );
+  const topics = new Set(policy.items.map((item) => item.id));
+  const sources = new Set(Object.keys(policy.sources));
+  expect(groups.flatMap((group) => group.items).sort(), 'the preview groups cover the policy once')
+    .toEqual([...topics].sort());
+  expect(policy.items.flatMap((item) => item.sources).every((source) => sources.has(source)),
+    'every displayed source is in the canonical policy').toBe(true);
+  return new Set([...topics, ...sources, ...groups.map((group) => group.id)]);
+}
+
 /** Everything a contract or a frozen seam document puts on a screen. */
 export function contractVocabulary(): ReadonlySet<string> {
-  return new Set([...contractEnums(), ...csvColumnNames(), ...manifestRoles()]);
+  return new Set([...contractEnums(), ...csvColumnNames(), ...manifestRoles(), ...betaPolicyIdentifiers()]);
 }
 
 /**
@@ -395,6 +423,12 @@ const MACHINE_SHAPES: readonly { readonly name: string; readonly pattern: RegExp
     // and a bare `PC` are still offences.
     name: 'the product and phase designations',
     pattern: /\b(?:PC-\d{2}|P\d{2})\b/g,
+  },
+  {
+    name: 'analysis profile version designation',
+    // The AR profile is named v3 in its frozen profile and on the beta screen. A bare
+    // English `version` remains an offence; only the digit-bound designation is masked.
+    pattern: /\bv[1-9][0-9]*\b/g,
   },
   {
     name: 'units attached to a number',
@@ -3197,6 +3231,10 @@ describe('the guard reads a contract rather than a list of words', () => {
     expect(csvColumnNames().size, 'OD-11 and W56a declare nineteen CSV columns').toBe(19);
     expect(csvColumnNames().has('finding_uid')).toBe(true);
     expect(manifestRoles().has('source.document'), 'the stage registry declares it').toBe(true);
+    expect(betaPolicyIdentifiers().has('C01')).toBe(true);
+    expect(betaPolicyIdentifiers().has('D1_LOCAL')).toBe(true);
+    expect(betaPolicyIdentifiers().has('F1')).toBe(true);
+    expect(betaPolicyIdentifiers().has('C23')).toBe(false);
 
     // `proxy` must NOT be derivable, or `NOT_DERIVABLE`'s first entry is stale.
     expect(VOCABULARY.has('proxy'), 'proxy is now in the contract; delete it from NOT_DERIVABLE').toBe(false);
@@ -3239,6 +3277,8 @@ describe('the guard can tell an English label from a legitimate Latin string', (
     expect(unexplainedLatin('application/pdf', VOCABULARY)).toEqual([]);
     expect(unexplainedLatin('Не более 25 MiB.', VOCABULARY)).toEqual([]);
     expect(unexplainedLatin('PC-01', VOCABULARY)).toEqual([]);
+    expect(unexplainedLatin('АР v3, F1, C01, D1_LOCAL', VOCABULARY)).toEqual([]);
+    expect(unexplainedLatin('АР v3, F3, C23, D7_LOCAL', VOCABULARY)).toEqual(['F', 'C', 'D', 'LOCAL']);
     expect(unexplainedLatin('2026-09-10T08:00:00.000Z', VOCABULARY)).toEqual([]);
     expect(unexplainedLatin('Один PDF за загрузку.', VOCABULARY)).toEqual([]);
     expect(unexplainedLatin('Один ZIP-архив за загрузку.', VOCABULARY)).toEqual([]);
