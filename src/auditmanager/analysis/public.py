@@ -97,6 +97,7 @@ from auditmanager.analysis.profiles.ar_v3.request_candidate import (
     V3RequestCandidate,
     V3RequestRefused,
     prepare_v3_request_candidate,
+    prepare_v3_scoped_request_candidate,
 )
 from auditmanager.analysis.stages.finding_merge import (
     ARTIFACT_ROLE as MERGE_ARTIFACT_ROLE,
@@ -262,6 +263,7 @@ __all__ = [
     "publish_artifact",
     "prepare_merge",
     "prepare_v3_request_candidate",
+    "prepare_v3_scoped_request_candidate",
     "evaluate_v3_supplied_response",
     "build_recorded_call_facts",
     "build_recorded_observation_artifact",

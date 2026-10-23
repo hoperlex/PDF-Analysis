@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 import pytest
 
 from auditmanager.analysis.public import SuppliedV3Response, TextLayer
+from auditmanager.analysis.profiles.ar_v3.scope_partition import scope_membership
 from auditmanager.analysis.text.textlayer import Page
 from auditmanager.findings.public import VerifiedRetrievalSetInput
 from auditmanager.jobs.public import AttemptAuthority
@@ -45,7 +46,10 @@ def _set() -> bytes:
     ))]
     prompt = _json({
         "builder_version": "norm-ranking-prep-v1",
-        "paragraphs": [dict(rows[0], item_id="item_a", label="N1")],
+        "paragraphs": [
+            dict(rows[0], item_id=item_id, label=f"N{index}")
+            for index, item_id in enumerate(("C01", "C02", "C03"), 1)
+        ],
     }).decode("utf-8")
     return _json({
         "builder_version": "norm-retrieval-set-prep-v1",
@@ -92,7 +96,8 @@ def _prepare(monkeypatch: pytest.MonkeyPatch, *, run: RunRow | None = None,
     return v3_citations.prepare_v3_corpus_request(
         object(), run=run or _run(), authority=AUTHORITY, blob_store=object(),
         text_layer=_layer(), profile_id=PROFILE, bundle_id=BUNDLE,
-        map_sha256=MAP_SHA,
+        map_sha256=MAP_SHA, scope_id="F1",
+        composition_sha256=scope_membership("F1").composition_sha256,
     )
 
 
@@ -109,6 +114,8 @@ def _response(digest: str, *, label: str = "N1", quote: str = NORM_QUOTE):
 
 def test_exact_saved_selection_forms_request_and_citation_candidate(monkeypatch):
     request = _prepare(monkeypatch)
+    assert request.candidate.scope_id == "F1"
+    assert request.candidate.item_ids == ("C01", "C02", "C03")
     assert NORM_QUOTE in request.candidate.user_prompt
     assert "Скрытый нормативный абзац" not in request.candidate.user_prompt
     result = v3_citations.plan_v3_corpus_citations(
@@ -166,4 +173,31 @@ def test_replay_refuses_a_request_rebound_to_another_saved_set(monkeypatch):
                        match="pinned_request_set_mismatch"):
         v3_citations.plan_v3_corpus_citations(
             rebound, _response(request.candidate.request_sha256), _layer(),
+        )
+
+
+def test_replay_refuses_a_request_rebound_to_another_scope(monkeypatch):
+    request = _prepare(monkeypatch)
+    rebound = replace(request, scope_id="F2")
+    with pytest.raises(v3_citations.V3CorpusCitationRefused,
+                       match="pinned_request_set_mismatch"):
+        v3_citations.plan_v3_corpus_citations(
+            rebound, _response(request.candidate.request_sha256), _layer(),
+        )
+
+
+def test_wrong_scope_refuses_saved_set_before_prompt(monkeypatch):
+    raw = _set()
+    verified = VerifiedRetrievalSetInput(
+        AUTHORITY.run_id, SNAPSHOT, "nrs_test", MAP_SHA,
+        "blob_test", hashlib.sha256(raw).hexdigest(), raw,
+    )
+    monkeypatch.setattr(v3_citations, "load_verified_retrieval_set",
+                        lambda *args, **kwargs: verified)
+    with pytest.raises(ValueError, match="scope_set_item_mismatch"):
+        v3_citations.prepare_v3_corpus_request(
+            object(), run=_run(), authority=AUTHORITY, blob_store=object(),
+            text_layer=_layer(), profile_id=PROFILE, bundle_id=BUNDLE,
+            map_sha256=MAP_SHA, scope_id="F2",
+            composition_sha256=scope_membership("F2").composition_sha256,
         )

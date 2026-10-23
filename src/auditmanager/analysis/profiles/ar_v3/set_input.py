@@ -39,6 +39,7 @@ class V3SetInput:
     prompt_part: str
     paragraphs: tuple[NormParagraph, ...]
     label_bindings: tuple[NormLabelBinding, ...]
+    selected_item_ids: tuple[str, ...] = ()
 
 
 def _unique_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -198,6 +199,7 @@ def parse_v3_set_input(
             or not prompt["paragraphs"]):
         raise V3SetInputRefused("prompt_part_shape_invalid")
     labels: list[NormLabelBinding] = []
+    selected_item_ids: list[str] = []
     seen_pairs: set[tuple[str, str]] = set()
     closed_items: set[str] = set()
     last_item: str | None = None
@@ -220,10 +222,12 @@ def parse_v3_set_input(
         seen_pairs.add(pair)
         if last_item is not None and row["item_id"] != last_item:
             closed_items.add(last_item)
+        if row["item_id"] != last_item:
+            selected_item_ids.append(row["item_id"])
         last_item = row["item_id"]
         last_order = order
         labels.append(NormLabelBinding(row["label"], row["norm_paragraph_id"]))
-    return V3SetInput(part, tuple(paragraphs), tuple(labels))
+    return V3SetInput(part, tuple(paragraphs), tuple(labels), tuple(selected_item_ids))
 
 
 __all__ = ["V3SetInput", "V3SetInputRefused", "parse_v3_set_input"]

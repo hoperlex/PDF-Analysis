@@ -84,6 +84,8 @@ def evaluate_v3_supplied_response(
             expected_snapshot_id=candidate.norms_snapshot_id,
             expected_map_sha256=candidate.map_sha256,
             recognised_context=recognised_context,
+                scope_id=candidate.scope_id,
+                expected_composition_sha256=candidate.composition_sha256,
         )
     except V3RequestRefused as exc:
         raise V3LocalEvaluationRefused("request_inputs_invalid") from exc
