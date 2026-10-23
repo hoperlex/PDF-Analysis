@@ -145,6 +145,7 @@ from auditmanager.runs.retry import (
     RetryPolicy,
     not_attempted,
 )
+from auditmanager.runs.v3_group import TrustedPackRegistry
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import (
     AnalysisProfileId,
@@ -804,6 +805,7 @@ def _execute_run_body(
     recorded_generation_settings: RecordedGenerationSettings | None = None,
     text_profiles: TextProfileResolver | None = None,
     providers: ProviderResolver | None = None,
+    ar_v3_pack_registry: TrustedPackRegistry | None = None,
 ) -> ExecutionResult:
     """Drive one run from ``created`` to a terminal state.
 
@@ -862,15 +864,20 @@ def _execute_run_body(
             meter.unpriced_contributions = max(meter.unpriced_contributions, 1)
 
     run = run_repo.get(session, run_id)
-    # A six-Run beta group pins a distinct profile and bundle, but its verified
-    # provider/CITE executor is a later integration task. Refuse either half of
-    # that identity before the legacy `text_profiles is None` branch can select
-    # AR v1, and before Job, stage, Blob or provider effects begin.
-    if (run.analysis_profile_id == str(AR_V3_BETA_PROFILE_ID)
-            or run.prompt_bundle_id == str(AR_V3_BETA_BUNDLE_ID)):
+    # Only the exact sealed pair and an installed server-owned reviewed pack may
+    # enter the v3 branch. In production the registry is still empty; either
+    # mismatched half refuses before Job, Blob or provider effects begin.
+    v3_profile = run.analysis_profile_id == str(AR_V3_BETA_PROFILE_ID)
+    v3_bundle = run.prompt_bundle_id == str(AR_V3_BETA_BUNDLE_ID)
+    v3_exact = v3_profile and v3_bundle
+    if (v3_profile or v3_bundle) and (
+        not v3_exact
+        or not isinstance(ar_v3_pack_registry, TrustedPackRegistry)
+        or ar_v3_pack_registry.select_beta() is None
+    ):
         raise DomainError(
             ErrorCode.REQUIRED_NORM_UNAVAILABLE,
-            message="the pinned AR v3 beta executor is not installed",
+            message="the pinned AR v3 beta reviewed pack is not installed",
             reference_kind="analysis_profile",
             analysis_profile_id=run.analysis_profile_id,
             prompt_bundle_id=run.prompt_bundle_id,
@@ -913,7 +920,7 @@ def _execute_run_body(
             message="recorded AR v2 fixture inputs require the persisted v2 profile",
         )
 
-    text_profile = (
+    text_profile = None if v3_exact else (
         AR_TEXT_PROFILE
         if recorded_v2 or text_profiles is None
         else _pinned_text_profile(run, text_profiles)
@@ -1077,6 +1084,43 @@ def _execute_run_body(
             # ``missing_required_input`` failures that say nothing extra.
             halted = True
             break
+
+    if v3_exact:
+        # The last deterministic artifact binding holds the Lease row until
+        # commit. The v3 request and reply readers do external Blob I/O without
+        # that lock, and the journal commits each intent before its effect.
+        session.commit()
+        from auditmanager.runs.v3_review_terminal import finish_v3_review_run
+        from auditmanager.runs.v3_worker import run_v3_worker_chain
+
+        if halted:
+            terminal = finish_v3_review_run(
+                session, authority=authority, registry=ar_v3_pack_registry,
+                jobs=job_repo, runs=run_repo,
+            )
+            dispatched = False
+        else:
+            outcome = run_v3_worker_chain(
+                session, authority=authority, registry=ar_v3_pack_registry,
+                blob_store=blob_store,
+                provider_for_dispatch=lambda: _bind_provider(
+                    session, run, attempt_context, providers, adapter, config,
+                ),
+                jobs=job_repo, runs=run_repo, documents=document_repo,
+                blobs=blob_repo,
+            )
+            terminal, dispatched = outcome.terminal, outcome.dispatched
+        attempts = not_attempted(policy)
+        if dispatched:
+            ledger = AttemptLedger(attempt_budget=1)
+            ledger.record(status="succeeded", error=None, waited_seconds=0.0)
+            attempts = ledger.close()
+        return ExecutionResult(
+            run_id=run_id, selection=terminal.selection,
+            stage_statuses=terminal.stage_statuses,
+            published_finding_count=0, diagnostic_count=0,
+            gate_ran=not halted, model_attempts=attempts,
+        )
 
     if recorded_v2:
         # The last deterministic _persist_and_bind holds the Lease lock until

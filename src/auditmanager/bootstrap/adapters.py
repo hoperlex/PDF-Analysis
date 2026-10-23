@@ -1019,6 +1019,7 @@ class RunAdapter(_SessionHolder):
                 provider_config=self._provider_config,
                 text_profiles=self._text_profiles,
                 providers=self._providers,
+                ar_v3_pack_registry=self._ar_v3_pack_registry,
             )
 
         return job

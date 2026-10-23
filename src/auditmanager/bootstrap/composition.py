@@ -154,6 +154,7 @@ def build_worker_runtime(
     # `W59-SECTION-SEAL-01`. The worker runs each claimed run with the profile it pinned,
     # resolved through the same registry the application routes with.
     text_profiles = load_text_profiles()
+    ar_v3_pack_registry = TrustedPackRegistry.empty()
 
     def execute(run_id: str, worker_id: str) -> None:
         run_to_terminal(
@@ -165,6 +166,7 @@ def build_worker_runtime(
             worker_id=worker_id,
             text_profiles=text_profiles.resolve,
             providers=providers.resolve,
+            ar_v3_pack_registry=ar_v3_pack_registry,
         )
 
     # `EXEC-PULL-PROBE-INT-01`: pull probes need no secret. Start the probe loop even
@@ -289,6 +291,7 @@ def build_application(
         else DurableCarrier(sessions)
     )
 
+    ar_v3_pack_registry = TrustedPackRegistry.empty()
     run_adapter = RunAdapter(
         sessions,
         blob_store=store,
@@ -312,7 +315,7 @@ def build_application(
         route_freezer=providers.freeze,
         # No expert-approved six-set pack is installed in the beta candidate.
         # This keeps group start closed while allowing historical group reads.
-        ar_v3_pack_registry=TrustedPackRegistry.empty(),
+        ar_v3_pack_registry=ar_v3_pack_registry,
     )
     if isinstance(carrier, DurableCarrier):
         carrier.configure_runner(run_adapter._job)

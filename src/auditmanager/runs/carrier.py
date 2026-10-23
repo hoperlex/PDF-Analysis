@@ -393,6 +393,7 @@ def run_to_terminal(
     worker_id: str | None = None,
     text_profiles: Any = None,
     providers: Any = None,
+    ar_v3_pack_registry: Any = None,
 ) -> None:
     """Execute one **queued** run to a terminal, in its own sessions.
 
@@ -437,6 +438,7 @@ def run_to_terminal(
                 jobs=JobRepository(worker_id=worker_id),
                 text_profiles=text_profiles,
                 providers=providers,
+                ar_v3_pack_registry=ar_v3_pack_registry,
             )
             session.commit()
     except ExecutionNotClaimed as refusal:
