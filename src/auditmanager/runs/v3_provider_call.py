@@ -8,11 +8,14 @@ and a completed or uncertain call cannot be silently repeated.
 from __future__ import annotations
 
 import math
+import hashlib
+import json
 from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
 from auditmanager.analysis.public import (
+    ArtifactRef,
     ModelResponse,
     ProviderMode,
     ProxyDispatchError,
@@ -20,6 +23,7 @@ from auditmanager.analysis.public import (
 )
 from auditmanager.documents.public import DocumentRepository
 from auditmanager.jobs.public import AttemptAuthority, JobRepository
+from auditmanager.runs.executor import _publication_store
 from auditmanager.runs.provider import ProviderBinding
 from auditmanager.runs.repository import RunRepository
 from auditmanager.runs.v3_execution_binding import resolve_v3_execution_binding
@@ -29,7 +33,15 @@ from auditmanager.runs.v3_execution_request import (
 )
 from auditmanager.runs.v3_group import TrustedPackRegistry
 from auditmanager.shared.errors import DomainError, ErrorCode
-from auditmanager.storage.public import BlobStore
+from auditmanager.storage.public import (
+    BlobMetadataRepository, BlobStore, parse_blob_id, parse_blob_role,
+)
+
+
+REPLY_FORMAT = "ar-v3-provider-reply/1"
+REPLY_ARTIFACT_ROLE = "analysis.v3_provider_reply"
+REPLY_BLOB_ROLE = "analysis_v3_provider_reply"
+MAX_REPLY_BYTES = 2_097_152
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,6 +54,7 @@ class V3ProviderCallReceipt:
     provider: str
     cost_usd: float | None
     cost_basis: str
+    reply_ref: ArtifactRef
 
 
 def _refuse(reason: str) -> DomainError:
@@ -89,6 +102,53 @@ def _record_failure(
     session.commit()
 
 
+def _publish_reply(
+    session: Session, *, authority: AttemptAuthority, jobs: JobRepository,
+    blobs: BlobMetadataRepository, blob_store: BlobStore,
+    response: ModelResponse, model_call_id: object, provider: str,
+    candidate_sha256: str, request_sha256: str,
+) -> ArtifactRef:
+    """Preserve the adapter's parsed answer with a committed upload breadcrumb."""
+    payload = json.dumps({
+        "format": REPLY_FORMAT,
+        "run_id": authority.run_id,
+        "model_call_id": str(model_call_id),
+        "provider": provider,
+        "candidate_sha256": candidate_sha256,
+        "request_sha256": request_sha256,
+        "response_sha256": response.response_sha256,
+        "output_text": response.output_text,
+        "stop_reason": response.stop_reason,
+        "input_tokens": response.input_tokens,
+        "output_tokens": response.output_tokens,
+        "latency_ms": response.latency_ms,
+        "reported_cost_usd": response.reported_cost_usd,
+        "reported_model": response.model,
+    }, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
+    if len(payload) > MAX_REPLY_BYTES:
+        raise _failed("the provider answer exceeds the v3 custody limit")
+    digest = hashlib.sha256(payload).hexdigest()
+    store = _publication_store(
+        session, store=blob_store, jobs=jobs, blobs=blobs,
+        authority=authority, stage_id="text_analysis",
+    )
+    published = store.put_blob(
+        payload, declared_sha256=digest, declared_size=len(payload),
+        role=parse_blob_role(REPLY_BLOB_ROLE), media_type="application/json",
+    )
+    if (published.sha256 != digest or published.size != len(payload)
+            or store.read(parse_blob_id(str(published.blob_id)), verify=True) != payload):
+        raise DomainError(
+            ErrorCode.STORAGE_INTEGRITY_ERROR,
+            message="v3 provider reply Blob readback differed from received answer",
+            blob_id=str(published.blob_id), role=REPLY_ARTIFACT_ROLE,
+        )
+    return ArtifactRef(
+        role=REPLY_ARTIFACT_ROLE, blob_id=str(published.blob_id),
+        sha256=digest, size_bytes=len(payload), media_type="application/json",
+    )
+
+
 def dispatch_v3_provider_call(
     session: Session,
     *,
@@ -101,6 +161,7 @@ def dispatch_v3_provider_call(
     jobs: JobRepository | None = None,
     runs: RunRepository | None = None,
     documents: DocumentRepository | None = None,
+    blobs: BlobMetadataRepository | None = None,
 ) -> V3ProviderCallReceipt:
     """Commit intent, send the exact v3 body once, then journal the received answer.
 
@@ -110,6 +171,7 @@ def dispatch_v3_provider_call(
     """
     job_repo = jobs or JobRepository()
     run_repo = runs or RunRepository()
+    blob_repo = blobs or BlobMetadataRepository()
     adapter, config, call = provider.adapter, provider.config, provider.call
     mode = adapter.provider_mode
     if (mode not in {ProviderMode.LIVE, ProviderMode.RECORDED}
@@ -191,6 +253,24 @@ def dispatch_v3_provider_call(
     )
     session.commit()  # answer evidence survives a later identity/CITE refusal
 
+    if (type(response.input_tokens) is not int or response.input_tokens < 0
+            or type(response.output_tokens) is not int or response.output_tokens < 0
+            or type(response.latency_ms) is not int or response.latency_ms < 0
+            or not isinstance(response.output_text, str)
+            or not isinstance(response.stop_reason, str)):
+        raise _failed("the provider returned invalid usage counters")
+    reported = response.reported_cost_usd
+    if reported is not None and (
+        isinstance(reported, bool) or not isinstance(reported, (int, float))
+        or not math.isfinite(reported) or reported < 0
+    ):
+        raise _failed("the provider returned an invalid cost amount")
+    reply_ref = _publish_reply(
+        session, authority=authority, jobs=job_repo, blobs=blob_repo,
+        blob_store=blob_store, response=response, model_call_id=model_call_id,
+        provider=provider_label, candidate_sha256=prepared.candidate_sha256,
+        request_sha256=prepared.provider_body_sha256,
+    )
     if resolve_v3_execution_binding(
         session, authority=authority, registry=registry, jobs=job_repo,
     ) != prepared.binding:
@@ -200,16 +280,6 @@ def dispatch_v3_provider_call(
             ErrorCode.MODEL_IDENTITY_MISMATCH,
             message="the provider reply did not name the pinned model",
         )
-    if (type(response.input_tokens) is not int or response.input_tokens < 0
-            or type(response.output_tokens) is not int or response.output_tokens < 0
-            or type(response.latency_ms) is not int or response.latency_ms < 0):
-        raise _failed("the provider returned invalid usage counters")
-    reported = response.reported_cost_usd
-    if reported is not None and (
-        isinstance(reported, bool) or not isinstance(reported, (int, float))
-        or not math.isfinite(reported) or reported < 0
-    ):
-        raise _failed("the provider returned an invalid cost amount")
     unmetered = call is not None and call.unmetered
     cost_usd = 0.0 if unmetered else reported
     basis = "unmetered" if unmetered else "measured" if reported is not None else "estimated"
@@ -219,7 +289,12 @@ def dispatch_v3_provider_call(
         "provider": provider_label,
         "model_id": request.model_id,
         "provider_mode": mode.value,
-        "parameters": parameters,
+        "parameters": {
+            **parameters,
+            "ar_v3_reply_blob_id": reply_ref.blob_id,
+            "ar_v3_reply_blob_sha256": reply_ref.sha256,
+            "ar_v3_reply_blob_size": reply_ref.size_bytes,
+        },
         "request_sha256": prepared.provider_body_sha256,
         "response_sha256": response.response_sha256,
         "input_tokens": response.input_tokens,
@@ -233,6 +308,7 @@ def dispatch_v3_provider_call(
     return V3ProviderCallReceipt(
         prepared=prepared, response=response, model_call_id=str(model_call_id),
         provider=provider_label, cost_usd=cost_usd, cost_basis=basis,
+        reply_ref=reply_ref,
     )
 
 

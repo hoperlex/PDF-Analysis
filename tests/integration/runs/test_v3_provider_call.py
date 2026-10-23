@@ -16,9 +16,10 @@ from auditmanager.analysis.public import (
 from auditmanager.analysis.text.binding import CallBinding
 from auditmanager.analysis.text.proxy import ReceivedResponse
 from auditmanager.jobs.public import AttemptAuthority
-from auditmanager.runs import v3_provider_call
+from auditmanager.runs import executor, v3_provider_call
 from auditmanager.runs.provider import ProviderBinding
 from auditmanager.shared.errors import DomainError, ErrorCode
+from auditmanager.storage.public import derive_blob_id
 
 
 AUTHORITY = AttemptAuthority("run_v3", "job_v3", "att_v3", "lease_v3", "secret")
@@ -91,7 +92,8 @@ class Adapter:
 
 
 def _arrange(monkeypatch, *, mode=ProviderMode.LIVE, answer=RESPONSE,
-             call=None, binding_changes=(), prepared_error=None):
+             call=None, binding_changes=(), prepared_error=None,
+             bad_readback=False):
     events = []
     session, jobs = Session(events), Jobs(events)
     binding = SimpleNamespace(scope_id="F1", set_sha256="a" * 64)
@@ -111,6 +113,32 @@ def _arrange(monkeypatch, *, mode=ProviderMode.LIVE, answer=RESPONSE,
         candidate = next(values, None)
         return binding if candidate is None else candidate
     monkeypatch.setattr(v3_provider_call, "resolve_v3_execution_binding", resolve)
+    class Publication:
+        def __init__(self):
+            self.data = b""
+
+        def put_blob(self, data, *, declared_sha256, declared_size, role, media_type):
+            assert hashlib.sha256(data).hexdigest() == declared_sha256
+            assert len(data) == declared_size
+            assert role == "analysis_v3_provider_reply"
+            assert media_type == "application/json"
+            events.append("blob_intent")
+            session.commit()
+            self.data = data
+            events.append("blob_published")
+            return SimpleNamespace(
+                blob_id=derive_blob_id(sha256=declared_sha256, size=declared_size),
+                sha256=declared_sha256, size=declared_size,
+            )
+
+        def read(self, blob_id, *, verify):
+            assert verify is True
+            events.append("blob_readback")
+            return b"wrong" if bad_readback else self.data
+    publication = Publication()
+    session.publication = publication
+    monkeypatch.setattr(v3_provider_call, "_publication_store",
+                        lambda *args, **kwargs: publication)
     if call is None and mode is ProviderMode.LIVE:
         call = CallBinding(
             provider_label="http_api", expected_model="gateway-model",
@@ -122,7 +150,7 @@ def _arrange(monkeypatch, *, mode=ProviderMode.LIVE, answer=RESPONSE,
     kwargs = dict(
         authority=AUTHORITY, registry=object(), blob_store=object(),
         max_text_bytes=100_000, provider=provider, settings=SETTINGS,
-        jobs=jobs, runs=object(),
+        jobs=jobs, runs=object(), blobs=object(),
     )
     return session, jobs, events, kwargs
 
@@ -135,6 +163,7 @@ def test_exact_request_and_answer_are_journaled_around_transport(monkeypatch, mo
     receipt = v3_provider_call.dispatch_v3_provider_call(session, **kwargs)
     assert receipt.response is RESPONSE
     assert receipt.model_call_id == "call_v3"
+    assert receipt.reply_ref.role == "analysis.v3_provider_reply"
     assert jobs.calls[0]["request_sha256"] == REQUEST.request_sha256
     assert jobs.calls[0]["parameters"]["ar_v3_candidate_sha256"] == "b" * 64
     assert jobs.calls[0]["parameters"]["ar_v3_set_sha256"] == "a" * 64
@@ -157,8 +186,18 @@ def test_exact_request_and_answer_are_journaled_around_transport(monkeypatch, mo
     assert completed["response_sha256"] == RESPONSE.response_sha256
     assert completed["cost_usd"] == 0.0042
     assert completed["cost_basis"] == "measured"
+    reply = json.loads(session.publication.data)
+    assert reply["output_text"] == RESPONSE.output_text
+    assert reply["response_sha256"] == RESPONSE.response_sha256
+    assert reply["model_call_id"] == receipt.model_call_id
+    assert hashlib.sha256(session.publication.data).hexdigest() == receipt.reply_ref.sha256
+    assert completed["parameters"]["ar_v3_reply_blob_id"] == receipt.reply_ref.blob_id
+    assert completed["parameters"]["ar_v3_reply_blob_sha256"] == receipt.reply_ref.sha256
     names = [event if isinstance(event, str) else event[0] for event in events]
-    assert names.index("prepared") < names.index("dispatch") < names.index("response") < names.index("completed")
+    assert (names.index("prepared") < names.index("dispatch")
+            < names.index("response") < names.index("blob_intent")
+            < names.index("blob_published") < names.index("blob_readback")
+            < names.index("completed"))
     assert names[names.index("prepared") + 1] == "commit"
     assert names[names.index("response") + 1] == "commit"
     assert names[names.index("completed") + 1] == "commit"
@@ -239,7 +278,82 @@ def test_wrong_live_model_refuses_after_response_receipt(monkeypatch):
         v3_provider_call.dispatch_v3_provider_call(session, **kwargs)
     assert wrong.value.code is ErrorCode.MODEL_IDENTITY_MISMATCH
     assert any(isinstance(row, tuple) and row[0] == "response" for row in events)
+    assert "blob_published" in events
     assert not any(isinstance(row, tuple) and row[0] == "completed" for row in events)
+
+
+def test_blob_readback_mismatch_keeps_received_effect_without_completed_call(monkeypatch):
+    session, jobs, events, kwargs = _arrange(monkeypatch, bad_readback=True)
+    with pytest.raises(DomainError) as mismatch:
+        v3_provider_call.dispatch_v3_provider_call(session, **kwargs)
+    assert mismatch.value.code is ErrorCode.STORAGE_INTEGRITY_ERROR
+    assert any(isinstance(row, tuple) and row[0] == "response" for row in events)
+    assert "blob_intent" in events
+    assert not any(isinstance(row, tuple) and row[0] == "completed" for row in events)
+
+
+def test_real_publication_decorator_commits_intent_before_reply_blob_upload(monkeypatch):
+    monkeypatch.setattr(v3_provider_call, "_publication_store", executor._publication_store)
+    events = []
+    session = Session(events)
+
+    class BlobRows:
+        def record_declared(self, _session, declaration):
+            events.append("declared")
+
+        def record_verified(self, _session, verified):
+            events.append("verified")
+
+    class JobRows:
+        def prepare_artifact(self, _session, authority, *, stage_id, declaration):
+            assert authority == AUTHORITY and stage_id == "text_analysis"
+            assert declaration.role == "analysis_v3_provider_reply"
+            events.append("artifact_intent")
+            return "upload_token"
+
+    class Store:
+        def stage_temporary(self, source, *, declared_sha256, declared_size,
+                            role, media_type, upload_token):
+            assert events[-1] == "commit"
+            assert upload_token == "upload_token"
+            self.data = source
+            self.digest = declared_sha256
+            assert declared_size == len(source)
+            events.append("external_upload")
+            return SimpleNamespace(upload_token=upload_token)
+
+        def verify_temporary(self, temporary):
+            events.append("physical_verification")
+            return SimpleNamespace(blob_id=derive_blob_id(
+                sha256=self.digest, size=len(self.data)), sha256=self.digest,
+                size=len(self.data), role="analysis_v3_provider_reply",
+                media_type="application/json", upload_token=temporary.upload_token)
+
+        def publish(self, verified):
+            assert events[-1] == "commit"
+            events.append("external_publish")
+            return verified
+
+        def read(self, blob_id, *, verify):
+            assert verify and str(blob_id) == str(derive_blob_id(
+                sha256=self.digest, size=len(self.data)))
+            events.append("readback")
+            return self.data
+
+        def discard_temporary(self, temporary):
+            pytest.fail("valid reply must not be discarded")
+
+    ref = v3_provider_call._publish_reply(
+        session, authority=AUTHORITY, jobs=JobRows(), blobs=BlobRows(),
+        blob_store=Store(), response=RESPONSE, model_call_id="call_v3",
+        provider="http_api", candidate_sha256="b" * 64,
+        request_sha256=REQUEST.request_sha256,
+    )
+    assert ref.role == "analysis.v3_provider_reply"
+    assert events == [
+        "declared", "artifact_intent", "commit", "external_upload",
+        "physical_verification", "verified", "commit", "external_publish", "readback",
+    ]
 
 
 def test_unpinned_live_model_refuses_before_request_assembly(monkeypatch):
