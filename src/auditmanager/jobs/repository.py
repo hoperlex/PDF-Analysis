@@ -136,6 +136,17 @@ _LOCK_AUTHORITY_LEASE = text(
     "expires_at > statement_timestamp() AS current FROM lease "
     "WHERE attempt_id = :attempt_id FOR UPDATE"
 )
+_CHECK_AUTHORITY_UNLOCKED = text(
+    "SELECT j.run_id, j.state AS job_state, j.current_attempt_id, "
+    "a.state AS attempt_state, a.execution_token, "
+    "l.lease_id, l.released_at, "
+    "l.expires_at > statement_timestamp() AS lease_current "
+    "FROM job j "
+    "LEFT JOIN attempt a ON a.job_id = j.job_id AND a.attempt_id = :attempt_id "
+    "LEFT JOIN lease l ON l.job_id = j.job_id AND l.attempt_id = a.attempt_id "
+    "AND l.lease_id = :lease_id "
+    "WHERE j.job_id = :job_id"
+)
 
 _INSERT_PROVIDER_EFFECT = text(
     """
@@ -793,6 +804,35 @@ class JobRepository:
                 ) from exc
             raise
         return AttemptAuthority(run_id, job_id, attempt_id, lease_id, token)
+
+    def check_current_unlocked(
+        self, session: Session, authority: AttemptAuthority,
+    ) -> None:
+        """Early read-only check before Blob I/O; never an effect authority fence.
+
+        No row is locked, so a heartbeat can update the lease while a Blob read
+        stalls. The caller must later use ``require_current`` in a short final
+        transaction and compare the saved inputs before writing or dispatching.
+        """
+        row = session.execute(_CHECK_AUTHORITY_UNLOCKED, {
+            "job_id": authority.job_id,
+            "attempt_id": authority.attempt_id,
+            "lease_id": authority.lease_id,
+        }).mappings().first()
+        if (row is None or row["run_id"] != authority.run_id
+                or row["current_attempt_id"] != authority.attempt_id):
+            raise DomainError(ErrorCode.STALE_ATTEMPT, aggregate_type="Attempt")
+        token = row["execution_token"]
+        if (not isinstance(token, str)
+                or not isinstance(authority.execution_token, str)
+                or not secrets.compare_digest(token, authority.execution_token)):
+            raise DomainError(ErrorCode.EXECUTION_TOKEN_INVALID, aggregate_type="Attempt")
+        if (row["job_state"] != "running"
+                or row["attempt_state"] != "running"
+                or row["lease_id"] != authority.lease_id
+                or row["released_at"] is not None
+                or row["lease_current"] is not True):
+            raise DomainError(ErrorCode.STALE_ATTEMPT, aggregate_type="Attempt")
 
     def require_current(self, session: Session, authority: AttemptAuthority) -> None:
         session.execute(_LOCK_RUN, {"run_id": authority.run_id}).scalar_one_or_none()
