@@ -13,3 +13,5 @@ The full `1.2.0` reseal must also update `web/FRONTEND_LOCK.json`, the independe
 The Run group must load the sealed v3 profile through `analysis.public`, so that facade was added before the Run group imported it. This keeps the bounded-context public seam intact.
 
 The existing contract seal test requires the proxy and web forwarder error envelopes to advertise the same new family version. The replacement task owns those three exact files for this reseal; no unrelated proxy or web behavior is in scope.
+
+The P02 seam register has an exhaustive API operation table checked against the contract. The two additive group operations and their idempotency rule require updating that one program file; it is assigned to the integration task before editing.

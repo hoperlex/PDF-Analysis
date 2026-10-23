@@ -77,6 +77,7 @@ An authenticated expert can start one Ф1.3 AR v3 beta group for a confirmed AR 
 - `tests/integration/composition/**`
 - `tests/support/expected_facts.json`
 - `docs/program/CURRENT_STATE.md`
+- `docs/program/P02_SEAMS.md`
 - `docs/program/tasks/AR-V3-BETA-SIX-RUN-02.md`
 - `docs/program/AR-V3-BETA-SIX-RUN-01-ADDENDUM.md`
 - `docs/program/AR-V3-BETA-SIX-RUN-02.md`
