@@ -24,6 +24,7 @@ Rules kept here:
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import signal
@@ -69,7 +70,7 @@ KNOWN_KEYS = {
     "model": {"declared"},
     "executor": {"mode"},
     "command": {"argv", "timeout_seconds", "cwd", "accept_images"},
-    "endpoint": {"url", "model", "api_key_env", "timeout_seconds", "response_format", "temperature", "max_tokens"},
+    "endpoint": {"url", "model", "api_key_env", "timeout_seconds", "response_format", "temperature", "max_tokens", "accept_images"},
 }
 
 
@@ -102,6 +103,7 @@ class Config:
     response_format: str = "none"
     temperature: float = 0.0
     max_tokens: int = 0
+    endpoint_accept_images: bool = False
 
 
 def _reject_secret_keys(document: dict, where: str = "") -> None:
@@ -158,6 +160,7 @@ def load_config(path: str) -> Config:
     cfg.response_format = str(endpoint.get("response_format", cfg.response_format))
     cfg.temperature = float(endpoint.get("temperature", cfg.temperature))
     cfg.max_tokens = int(endpoint.get("max_tokens", cfg.max_tokens))
+    cfg.endpoint_accept_images = endpoint.get("accept_images", False)
     validate_config(cfg)
     return cfg
 
@@ -180,6 +183,8 @@ def validate_config(cfg: Config) -> None:
         if type(cfg.command_accept_images) is not bool:
             raise ConfigError("[command] accept_images must be a boolean")
     else:
+        if type(cfg.endpoint_accept_images) is not bool:
+            raise ConfigError("[endpoint] accept_images must be a boolean")
         if not cfg.endpoint_url.startswith(("http://", "https://")):
             raise ConfigError("[endpoint] url must be an http(s) URL of a /v1/chat/completions endpoint")
         if not cfg.endpoint_model:
@@ -272,7 +277,8 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def run_endpoint(cfg: Config, task: dict, budget: float, should_stop: Any, api_key: str) -> Answer:
+def run_endpoint(cfg: Config, task: dict, budget: float, should_stop: Any, api_key: str,
+                 image_bytes: bytes | None = None) -> Answer:
     """One non-streaming chat completion against a local OpenAI-compatible endpoint."""
     body: dict[str, Any] = {
         "model": cfg.endpoint_model,
@@ -280,6 +286,14 @@ def run_endpoint(cfg: Config, task: dict, budget: float, should_stop: Any, api_k
         "temperature": cfg.temperature,
         "stream": False,
     }
+    if image_bytes is not None:
+        if not cfg.endpoint_accept_images:
+            raise ExecutorFailure("image_input_unsupported")
+        body["messages"][1]["content"] = [
+            {"type": "text", "text": task["user_text"]},
+            {"type": "image_url", "image_url": {
+                "url": "data:image/png;base64," + base64.b64encode(image_bytes).decode("ascii")}},
+        ]
     if cfg.max_tokens > 0:
         body["max_tokens"] = cfg.max_tokens
     if cfg.response_format == "json_object":
@@ -430,7 +444,10 @@ class Agent:
             if budget <= 0:
                 self._fail(task_id, "deadline_exceeded: too little time left to start")
                 return
-            if task.get("images") and (self.cfg.mode != "command" or not self.cfg.command_accept_images):
+            if task.get("images") and not (
+                self.cfg.command_accept_images if self.cfg.mode == "command"
+                else self.cfg.endpoint_accept_images
+            ):
                 self._fail(task_id, "image_input_unsupported")
                 return
             extender.start()
@@ -459,7 +476,14 @@ class Agent:
                         command_task = {**task, "local_images": local_images}
                         answer = run_command(self.cfg, command_task, budget, should_stop)
                 else:
-                    answer = run_endpoint(self.cfg, task, budget, should_stop, self.api_key)
+                    image_bytes = None
+                    for image in task.get("images", []):
+                        if should_stop():
+                            raise Interrupted(should_stop())
+                        image_bytes = self.client.image(
+                            task_id, image, timeout=max(1.0, min(30.0, budget)))
+                    answer = run_endpoint(self.cfg, task, budget, should_stop, self.api_key,
+                                          image_bytes)
             except Interrupted as stop:
                 self._interrupted(task_id, str(stop))
                 return

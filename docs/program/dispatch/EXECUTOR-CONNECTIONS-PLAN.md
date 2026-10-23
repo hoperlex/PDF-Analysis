@@ -94,6 +94,12 @@ configured, probed connection is refused at run start with `dependency_unavailab
 `dependency: executor_route_missing`. It never falls
 back to `provider.env`.
 
+`EXEC-IMAGE-DELIVERY-01` and `EXEC-IMAGE-CHANNELS-01` prepared one verified PNG
+for all presently served connection variants. Neither creates a recognition
+assignment or changes `text_analysis`: the separate W56b image stage remains
+the producer and owner of its prompt, budget and evidence policy. SSH command
+and SSH tunnel still await `EXEC-SSH-01` before they are routable.
+
 ## 3. The seam: where a connection plugs in
 
 Surveyed on `7cb317b0`; every line reference below is from that tree.

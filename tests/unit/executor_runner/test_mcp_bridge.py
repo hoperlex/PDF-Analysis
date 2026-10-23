@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import importlib.util
+import base64
+import hashlib
 import json
 import subprocess
 import sys
@@ -107,6 +109,44 @@ def test_text_only_bridge_refuses_image_task_without_exposing_it():
         assert runner.of_kind("fail")[0]["body"]["reason"] == "image_input_unsupported"
         assert runner.of_kind("image") == []
         assert image["sha256"] not in mcp.text(result)
+
+
+def test_image_capable_bridge_returns_verified_mcp_image_content():
+    raw = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL7WQAAAABJRU5ErkJggg=="
+    )
+    image = {"blob_id": "blob_01M2545JSD15ETSNNV904X991F",
+             "portal_block_id": "blk_" + "a" * 32,
+             "sha256": hashlib.sha256(raw).hexdigest(), "size_bytes": len(raw),
+             "media_type": "image/png"}
+    with S.FakeRunner() as runner, S.McpSession(runner.origin, extra_args=("--accept-images",)) as mcp:
+        mcp.initialize()
+        runner.add_image(image["blob_id"], raw)
+        runner.add_task(S.make_task("ext_MCPIMG", images=[image]))
+        result = _claim(mcp)
+        assert mcp.payload(result)["status"] == "task"
+        assert mcp.payload(result)["image_portal_block_id"] == image["portal_block_id"]
+        assert base64.b64decode(result["content"][1]["data"]) == raw
+        assert result["content"][1]["mimeType"] == "image/png"
+        assert len(runner.of_kind("image")) == 1
+        assert mcp.payload(mcp.call("submit_answer", {
+            "task_id": "ext_MCPIMG", "model": "claude-opus-5", "output_text": '{"findings": []}',
+        }))["status"] == "accepted"
+
+
+def test_image_capable_bridge_fails_corrupted_bytes_without_exposing_an_image():
+    image = {"blob_id": "blob_01M2545JSD15ETSNNV904X991F",
+             "portal_block_id": "blk_" + "a" * 32,
+             "sha256": "a" * 64, "size_bytes": 8, "media_type": "image/png"}
+    with S.FakeRunner() as runner, S.McpSession(runner.origin, extra_args=("--accept-images",)) as mcp:
+        mcp.initialize()
+        runner.add_image(image["blob_id"], b"bad-data")
+        runner.add_task(S.make_task("ext_MCPBAD", images=[image]))
+        result = _claim(mcp)
+        assert mcp.payload(result)["status"] == "image_delivery_failed"
+        assert len(result["content"]) == 1
+        assert runner.of_kind("fail")[0]["body"]["reason"] == "image_delivery_failed"
+        assert not runner.of_kind("answer")
 
 
 def test_idle_204_returns_idle_after_the_wait():

@@ -49,3 +49,4 @@ accept_images = false
 # response_format = "none"              # "none", "json_object" or "json_schema" (constrained decoding)
 # temperature = 0
 # max_tokens = 0                        # 0 = leave to the server
+# accept_images = false                # set true only if the local model accepts image_url data URLs

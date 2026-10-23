@@ -165,6 +165,41 @@ def test_endpoint_json_schema_mode_passes_the_task_schema(tmp_path):
         assert rf["type"] == "json_schema" and rf["json_schema"]["schema"]["required"] == ["findings"]
 
 
+def test_endpoint_image_is_verified_and_sent_as_openai_image_content(tmp_path):
+    raw = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL7WQAAAABJRU5ErkJggg=="
+    )
+    image = {"blob_id": "blob_01M2545JSD15ETSNNV904X991F",
+             "portal_block_id": "blk_" + "a" * 32,
+             "sha256": hashlib.sha256(raw).hexdigest(), "size_bytes": len(raw),
+             "media_type": "image/png"}
+    with S.FakeRunner() as runner, S.FakeOpenAI() as endpoint:
+        cfg = S.agent_config(tmp_path / "agent.toml", runner.origin, mode="endpoint",
+                             endpoint_url=endpoint.url, extra_endpoint="accept_images = true")
+        runner.add_image(image["blob_id"], raw)
+        runner.add_task(S.make_task("ext_EPI", images=[image]))
+        proc = S.AgentProcess(cfg, "--max-tasks", "1")
+        assert proc.wait() == 0, proc.stderr
+        content = endpoint.requests[0]["body"]["messages"][-1]["content"]
+        assert content[0]["type"] == "text"
+        assert base64.b64decode(content[1]["image_url"]["url"].split(",", 1)[1]) == raw
+        assert len(runner.of_kind("image")) == 1 and runner.of_kind("answer")
+
+
+def test_endpoint_image_is_refused_without_opt_in(tmp_path):
+    image = {"blob_id": "blob_01M2545JSD15ETSNNV904X991F",
+             "portal_block_id": "blk_" + "a" * 32, "sha256": "a" * 64,
+             "size_bytes": 8, "media_type": "image/png"}
+    with S.FakeRunner() as runner, S.FakeOpenAI() as endpoint:
+        cfg = S.agent_config(tmp_path / "agent.toml", runner.origin, mode="endpoint",
+                             endpoint_url=endpoint.url)
+        runner.add_task(S.make_task("ext_EPN", images=[image]))
+        proc = S.AgentProcess(cfg, "--max-tasks", "1")
+        assert proc.wait() == 0, proc.stderr
+        assert runner.of_kind("fail")[0]["body"]["reason"] == "image_input_unsupported"
+        assert runner.of_kind("image") == [] and endpoint.requests == []
+
+
 def test_endpoint_failure_and_truncation_become_typed_failures_without_leaking_the_prompt(tmp_path):
     secret = "SENTINEL-DOCUMENT-TEXT-8841"
     with S.FakeRunner() as runner, S.FakeOpenAI(status=500) as endpoint:

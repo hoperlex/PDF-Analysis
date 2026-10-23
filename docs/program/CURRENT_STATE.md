@@ -18,7 +18,11 @@ The development API surface is **88 paths / 100 operations / 286 schemas**, the 
 catalogue has **27** codes, the migration head is **`0031_executor_pull_channel`**,
 `VERSION` is `0.7.0`, and the contract is `1.1.0` after the additive image-delivery reseal
 (`EXEC-IMAGE-DELIVERY-01`). The runner can fetch one verified PNG for an active claim;
-no run stage sends one until W56b activates its image policy. The `R-143` executor connections and
+no run stage sends one until W56b activates its image policy.
+`EXEC-IMAGE-CHANNELS-01` carries a selected PNG through served direct/VPN HTTP
+flavours, pull command, local endpoint and MCP session; the latter two require
+explicit image opt-in. The image stage still does not create a task. SSH
+command/tunnel connections remain unserved. The `R-143` executor connections and
 pull channel were added under `R-144` (`EXEC-CANDIDATE-1.md`, `EXEC-CANDIDATE-2.md`). `origin/main` carries `0.7.0` since the owner's merge of pull request
 #3 (`48c8e34c`, no gate; `RELEASES.md` has the row and the record); host verification and the
 `v0.7.0` tag are owed, the last tag is `v0.6.0`. Run `infra/deploy/verify-deployed.sh` for the

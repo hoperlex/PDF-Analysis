@@ -45,6 +45,7 @@ from auditmanager.executors.destinations import (
     build_opener,
     refusal_of,
 )
+from auditmanager.executors.image_input import add_anthropic_image, add_openai_image, checked_png
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
@@ -186,10 +187,14 @@ class AnthropicMessagesAdapter:
         return ProviderMode.LIVE
 
     def complete(self, request: ModelRequest) -> ModelResponse:
+        image = checked_png(request)
         allowed = effective_timeout(self._timeout_seconds, self._context)
         if allowed is None:
             raise _no_time_left()
         body = {**dict(request.body), "model": self._gateway_model}
+        body.pop("images", None)
+        if image is not None:
+            add_anthropic_image(body, image)
         started = time.monotonic()
         try:
             message = self._client.messages.create(**body, timeout=allowed)
@@ -249,6 +254,21 @@ class AnthropicMessagesAdapter:
             retry_safe=before_send,
             message="the model provider could not be reached",
         )
+
+
+class OpenAIImageAdapter(ProxyAdapter):
+    """A pinned proxy call with the selected PNG in the user message."""
+
+    def complete(self, request: ModelRequest) -> ModelResponse:
+        image = checked_png(request)
+        if image is None:
+            return super().complete(request)
+        body = add_openai_image(dict(request.body), image)
+        body.pop("images", None)
+        return super().complete(ModelRequest(
+            model_id=request.model_id, body=body,
+            idempotency_scope=request.idempotency_scope,
+        ))
 
 
 def http_modules() -> tuple[Any, Any]:
@@ -323,7 +343,7 @@ def build_http_adapter(
         )
     if api_flavour == "openai_chat":
         director = build_opener(policy, transport=transport)
-        return ProxyAdapter(
+        return OpenAIImageAdapter(
             ProxySettings(base_url=base_url, token=api_key, model=gateway_model),
             opener=_Opener(director, timeout_seconds, context),
         )
