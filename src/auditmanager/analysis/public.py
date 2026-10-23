@@ -87,6 +87,17 @@ from auditmanager.analysis.profiles.ar_v2.registered import (
 from auditmanager.analysis.profiles.ar_v2.response_pipeline import FinishedV2Response, finish_response
 from auditmanager.analysis.profiles.ar_v2.response_schema import CATEGORIES as AR_V2_CATEGORIES
 from auditmanager.analysis.profiles.ar_v2.response_schema import SEVERITIES as AR_V2_SEVERITIES
+from auditmanager.analysis.profiles.ar_v3.local_evaluation import (
+    LocalV3Evaluation,
+    SuppliedV3Response,
+    V3LocalEvaluationRefused,
+    evaluate_v3_supplied_response,
+)
+from auditmanager.analysis.profiles.ar_v3.request_candidate import (
+    V3RequestCandidate,
+    V3RequestRefused,
+    prepare_v3_request_candidate,
+)
 from auditmanager.analysis.stages.finding_merge import (
     ARTIFACT_ROLE as MERGE_ARTIFACT_ROLE,
     ARTIFACT_VERSION as MERGE_ARTIFACT_VERSION,
@@ -238,6 +249,11 @@ __all__ = [
     "StageResult",
     "StageStatus",
     "TextAnalysisOutcome",
+    "LocalV3Evaluation",
+    "SuppliedV3Response",
+    "V3LocalEvaluationRefused",
+    "V3RequestCandidate",
+    "V3RequestRefused",
     "default_registry",
     "document_text",
     "finish_response",
@@ -245,6 +261,8 @@ __all__ = [
     "load_provider_config",
     "publish_artifact",
     "prepare_merge",
+    "prepare_v3_request_candidate",
+    "evaluate_v3_supplied_response",
     "build_recorded_call_facts",
     "build_recorded_observation_artifact",
     "check_saved_crop_bytes",

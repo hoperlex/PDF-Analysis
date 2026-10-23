@@ -105,6 +105,7 @@ def test_verified_set_returns_exact_bytes_after_two_authority_checks():
     assert (saved.run_id, saved.norm_retrieval_set_id, saved.set_sha256) == (
         _AUTH.run_id, "nrs_test", _SHA,
     )
+    assert saved.map_sha256 == "a" * 64
     assert (session.calls, jobs.calls, store.calls, store.closed) == (2, 2, 1, True)
 
 
@@ -120,6 +121,13 @@ def test_byte_ceiling_refuses_before_blob_read():
     store = _Store()
     with pytest.raises(RetrievalSetInputRefused, match="verified_set_pin_invalid"):
         _read(store=store, cap=len(_DATA) - 1)
+    assert store.calls == 0
+
+
+def test_invalid_map_identity_refuses_before_blob_read():
+    store = _Store()
+    with pytest.raises(RetrievalSetInputRefused, match="verified_set_pin_invalid"):
+        _read(before=[_row(map_sha256="A" * 64)], store=store)
     assert store.calls == 0
 
 

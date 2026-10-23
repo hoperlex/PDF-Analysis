@@ -8,6 +8,12 @@ from sqlalchemy.orm import Session
 from auditmanager.findings.artifacts import BlockIndex, ObservationSet, TextLayer
 from auditmanager.findings.grounding import run_grounding_gate
 from auditmanager.findings.publication import PublicationResult, publish_gate_result
+from auditmanager.findings.citation_publication import CitationEvidence, V3PublicationCandidate
+from auditmanager.findings.retrieval_set_input import (
+    RetrievalSetInputRefused,
+    VerifiedRetrievalSetInput,
+    load_verified_retrieval_set,
+)
 from auditmanager.findings.queries import finding_exists, observation_belongs_to_finding
 from auditmanager.findings.recorded_saved_plan import (
     SavedRecordedPublicationPlan, plan_recorded_saved_publication,
@@ -30,11 +36,15 @@ def publication_rows_exist(session: Session, run_id: str) -> bool:
 
 __all__ = [
     "BlockIndex",
+    "CitationEvidence",
     "ObservationSet",
     "PublicationResult",
     "SavedRecordedPublicationPlan",
     "TerminalSelection",
     "TextLayer",
+    "RetrievalSetInputRefused",
+    "VerifiedRetrievalSetInput",
+    "V3PublicationCandidate",
     "V2PublicationContext",
     "V2PublicationResult",
     "finding_exists",
@@ -43,6 +53,7 @@ __all__ = [
     "publish_v2_merge_plan",
     "plan_recorded_saved_publication",
     "publication_rows_exist",
+    "load_verified_retrieval_set",
     "run_grounding_gate",
     "select_terminal",
 ]
