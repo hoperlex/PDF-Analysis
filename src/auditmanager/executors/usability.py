@@ -4,8 +4,8 @@
 cached:
 
 * **served** -- this release has an adapter factory for the kind (:mod:`.kinds`). Today that is
-  ``http_api`` over ``direct`` or ``vpn`` and ``pull`` (`EXEC-PULL-01`); ``ssh_command`` and the
-  ``ssh_tunnel`` transport can be created but are refused at route time with
+  ``http_api`` over ``direct`` or ``vpn``, ``pull`` and ``ssh_command``; the
+  ``ssh_tunnel`` transport can be created but is refused at route time with
   ``validation_failed`` (``constraint: kind_not_served``);
 * **probed** -- the *latest finished probe of the current revision on the current secret* is
   ``ok``. A new revision (a changed address), a new key and a failed re-probe each make the

@@ -100,7 +100,7 @@ class TestTheRegistryServesTheKind:
         assert pull_entry is not None and http_entry is not None
         assert pull_entry.channel is not None and pull_entry.purpose is None
         assert http_entry.channel is None and http_entry.purpose == "api_key"
-        assert adapter_for("ssh_command") is None, "this candidate serves pull, not the SSH kind"
+        assert adapter_for("ssh_command") is not None, "SSH command is served by its later slice"
 
     def test_every_pull_revision_is_served_whatever_its_client_and_the_label_names_the_client(self) -> None:
         entry = adapter_for("pull")
@@ -109,7 +109,7 @@ class TestTheRegistryServesTheKind:
             revision = _revision(client=client)
             assert entry.serves(revision) is True and entry.provider_label(revision) == client
         assert is_served(_connection(), _revision()) is True
-        assert is_served(_connection("ssh_command", "exc_S"), _ssh_revision()) is False
+        assert is_served(_connection("ssh_command", "exc_S"), _ssh_revision()) is True
 
     def test_the_sweep_waits_for_the_whole_probe_window_a_runner_needs(self) -> None:
         assert PULL_PROBE_WINDOW_SECONDS == PROBE_CLAIM_SECONDS + PROBE_ANSWER_SECONDS == 240

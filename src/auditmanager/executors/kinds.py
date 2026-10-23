@@ -26,6 +26,7 @@ from auditmanager.executors.destinations import DestinationPolicy
 from auditmanager.executors.http_adapter import build_http_adapter
 from auditmanager.executors.model import RevisionRecord
 from auditmanager.executors.pull import build_pull_adapter
+from auditmanager.executors.ssh_adapter import build_ssh_command_adapter
 
 __all__ = [
     "KindAdapter",
@@ -114,6 +115,13 @@ def _http_api(revision: RevisionRecord, api_key: str, policy: DestinationPolicy,
 register_adapter_factory(
     "http_api", _http_api, purpose="api_key",
     serves=lambda revision: revision.settings.transport in ("direct", "vpn"),
+)
+
+
+register_adapter_factory(
+    "ssh_command", build_ssh_command_adapter, purpose="ssh_private_key",
+    serves=lambda revision: revision.settings.ssh_profile in ("claude_code_headless", "custom_command"),
+    provider_label=lambda revision: revision.settings.ssh_profile or "ssh_command",
 )
 
 

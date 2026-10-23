@@ -42,6 +42,7 @@ from auditmanager.executors.public import (
 )
 from auditmanager.executors.repository import ExecutorRepository
 from auditmanager.executors.sealing import PrivateRing
+from auditmanager.executors.ssh_probe import probe_ssh_command
 from auditmanager.executors.usability import is_served
 
 __all__ = ["PULL_PROBE_THREADS", "ProbeRunner"]
@@ -126,7 +127,8 @@ class ProbeRunner:
                     session, probe.probe_id, outcome=result.outcome,
                     reported_model=result.reported_model, identity_basis=result.identity_basis,
                     latency_ms=result.latency_ms, http_status=result.http_status,
-                    rate_check=result.rate_check, detail=result.detail,
+                    rate_check=result.rate_check, observed_host_key=result.observed_host_key,
+                    detail=result.detail,
                     repository=self._store,
                 )
                 session.commit()
@@ -154,7 +156,10 @@ class ProbeRunner:
                 try:
                     key = open_secret(
                         session, self._ring, secret_id=probe.secret_id,
-                        destination=destination_for(connection.kind, revision.settings, "api_key"),
+                        destination=destination_for(
+                            connection.kind, revision.settings,
+                            "ssh_private_key" if connection.kind == "ssh_command" else "api_key",
+                        ),
                         repository=self._store,
                     )
                 except SecretUnreadableError:
@@ -169,6 +174,12 @@ class ProbeRunner:
                 self._sessions, pull_revision, probe.probe_id, engine=self._engine)
         pin: ModelPin | None = next(
             (item for item in pinned_models() if item.model_id == settings.pin_id), None)
+        if connection.kind == "ssh_command":
+            return probe_ssh_command(
+                settings, key, policy=self._policy,
+                input_per_mtok_usd=None if pin is None else pin.input_per_mtok_usd,
+                output_per_mtok_usd=None if pin is None else pin.output_per_mtok_usd,
+            )
         result = probe_http_api(
             settings, key, policy=self._policy,
             input_per_mtok_usd=None if pin is None else pin.input_per_mtok_usd,

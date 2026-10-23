@@ -1252,6 +1252,29 @@ subsequent worker restarts never overwrite an edit made in the UI. This route us
 same verified PNG image block as other `openai_chat` HTTP connections, once the separate
 image stage creates a crop task. A model that cannot receive images will refuse that call.
 
+**SSH command and PNG crops.** `ssh_command` is served after a successful probe
+on its current SSH key and revision. In «Исполнители → Подключения» create
+«Команда по SSH», install the generated public key for a dedicated remote
+account, press «Проверить», confirm the observed host-key fingerprint in a new
+revision, then probe again. The worker checks the destination on every call,
+dials the checked IP and requires the saved host key. It sends one JSON task on
+stdin with `model`, `system`, `user_text`, optional `output_schema`, and optional
+`image: {media_type: "image/png", data: "<base64>"}`. The PNG bytes must match
+the selected saved crop. A `custom_command` remote script must answer on stdout
+with `model`, `output_text`, `stop_reason`, `input_tokens`, `output_tokens` and
+optional `reported_cost_usd`; the reported model must match the gateway model.
+The supplied `tools/executor-runner/ssh-forced-command.sh` implements the
+`claude_code_headless` profile, including an image content block through
+Claude Code's stream JSON input. It needs an API key in its protected remote
+environment file and the remote `claude` binary. Check the installed CLI's
+version and one real JSON result before routing a production connection; the
+local automated test uses a stub CLI. No image task is created until the
+separate W56b prompt and evidence policy are approved.
+
+`http_api` with «SSH-туннель» remains unserved in this slice. It needs both a
+sealed HTTP key and an SSH key; keep this shape out of assignments until its
+dual-secret probe is implemented.
+
 Then, in this order:
 
 1. verify one run through the connection while the source is still `environment`;
@@ -1302,7 +1325,7 @@ may send a key to an address and can open a connection to it.
 | «нет ответа» | no answer within the revision's timeout, or no worker took the probe within 120 s (`no_worker`) |
 | «адрес недоступен» | the name does not resolve or the connection is refused |
 | `destination_refused` | the address is one the worker may not send a key to |
-| `kind_not_served` | `pull`, `ssh_command` and the SSH-tunnel transport can be created but are not served yet |
+| `kind_not_served` | the SSH-tunnel transport can be created but is not served yet |
 
 A probe never keeps a body, a header or an address; its detail is a fixed phrase.
 

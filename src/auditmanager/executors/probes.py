@@ -74,6 +74,7 @@ class ProbeResult:
     latency_ms: int | None = None
     http_status: int | None = None
     rate_check: str | None = None
+    observed_host_key: str | None = None
 
 
 def scrub(text: str | None, *secrets: str) -> str | None:
