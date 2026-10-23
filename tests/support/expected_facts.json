@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 87,
+    "path_count": 88,
     "operations": [
       [
         "POST",
@@ -484,6 +484,11 @@
         "claimExecutorTask"
       ],
       [
+        "GET",
+        "/runner/tasks/{task_id}/images/{blob_id}",
+        "getExecutorTaskImage"
+      ],
+      [
         "POST",
         "/runner/tasks/{task_id}/extend",
         "extendExecutorTaskClaim"
@@ -774,6 +779,8 @@
       "SetExecutorSecretRequest",
       "ClaimExecutorTaskRequest",
       "ClaimedExecutorTask",
+      "RunnerImage",
+      "RunnerImageBlobId",
       "ExecutorRunnerTokenId",
       "ExecutorTaskAck",
       "ExecutorTaskId",
@@ -791,5 +798,5 @@
     "stored_vocabulary": 25
   },
   "migration_head": "0031_executor_pull_channel",
-  "contract_version": "1.0.0"
+  "contract_version": "1.1.0"
 }

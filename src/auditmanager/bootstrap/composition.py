@@ -386,7 +386,7 @@ def build_application(
         executors=ExecutorAdapter(sessions, ring=resolved.secrets_public_ring),
         # `EXEC-PULL-01`. The pull channel: runner tokens, and the four operations a runner
         # calls with one. It also authenticates the token (the seam asks this port).
-        runner=RunnerAdapter(sessions),
+        runner=RunnerAdapter(sessions, blob_store=store),
     )
     return Application(
         router=router,

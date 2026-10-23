@@ -42,7 +42,7 @@ function envelope(
   details?: ErrorEnvelope['details'],
 ): ErrorEnvelope {
   return {
-    contract_version: '1.0.0',
+    contract_version: '1.1.0',
     correlation_id: 'cid-7f1c',
     error_code: code,
     message,
@@ -237,7 +237,7 @@ describe('a 401 from the wire reaches the screen as a 401', () => {
     // of its own that holds no role, so a refused token is the 401 and there is no role to deny.
     // They declare the 401 and no 403, like the exchange, for the opposite reason: the credential
     // is required, and it carries nothing a 403 could be about.
-    const runner = ['claimExecutorTask', 'extendExecutorTaskClaim', 'failExecutorTask', 'submitExecutorTaskAnswer'];
+    const runner = ['claimExecutorTask', 'extendExecutorTaskClaim', 'failExecutorTask', 'submitExecutorTaskAnswer', 'getExecutorTaskImage'];
     const open = ['issueToken', 'readRegistrationStatus', 'submitRegistration', ...runner];
     const noCredentialToRefuse = ['submitRegistration'];
     const ids = Object.keys(OPERATIONS);

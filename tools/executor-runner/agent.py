@@ -29,6 +29,7 @@ import os
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import tomllib
@@ -36,6 +37,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Optional
 
 from runner_client import (
@@ -66,7 +68,7 @@ KNOWN_KEYS = {
     "runner": {"origin", "token_env", "wait_seconds", "ca_file", "allow_insecure_http", "concurrency", "drain_seconds", "extend_floor_seconds", "backoff_min_seconds", "backoff_max_seconds"},
     "model": {"declared"},
     "executor": {"mode"},
-    "command": {"argv", "timeout_seconds", "cwd"},
+    "command": {"argv", "timeout_seconds", "cwd", "accept_images"},
     "endpoint": {"url", "model", "api_key_env", "timeout_seconds", "response_format", "temperature", "max_tokens"},
 }
 
@@ -92,6 +94,7 @@ class Config:
     command_argv: list[str] = field(default_factory=list)
     command_timeout: float = 540.0
     command_cwd: Optional[str] = None
+    command_accept_images: bool = False
     endpoint_url: str = ""
     endpoint_model: str = ""
     endpoint_api_key_env: str = ""
@@ -147,6 +150,7 @@ def load_config(path: str) -> Config:
     cfg.command_argv = command.get("argv", [])
     cfg.command_timeout = float(command.get("timeout_seconds", cfg.command_timeout))
     cfg.command_cwd = command.get("cwd") or None
+    cfg.command_accept_images = command.get("accept_images", False)
     cfg.endpoint_url = str(endpoint.get("url", ""))
     cfg.endpoint_model = str(endpoint.get("model", ""))
     cfg.endpoint_api_key_env = str(endpoint.get("api_key_env", ""))
@@ -173,6 +177,8 @@ def validate_config(cfg: Config) -> None:
         argv = cfg.command_argv
         if not isinstance(argv, list) or not argv or not all(isinstance(item, str) and item for item in argv):
             raise ConfigError("[command] argv must be a non-empty list of strings")
+        if type(cfg.command_accept_images) is not bool:
+            raise ConfigError("[command] accept_images must be a boolean")
     else:
         if not cfg.endpoint_url.startswith(("http://", "https://")):
             raise ConfigError("[endpoint] url must be an http(s) URL of a /v1/chat/completions endpoint")
@@ -424,6 +430,9 @@ class Agent:
             if budget <= 0:
                 self._fail(task_id, "deadline_exceeded: too little time left to start")
                 return
+            if task.get("images") and (self.cfg.mode != "command" or not self.cfg.command_accept_images):
+                self._fail(task_id, "image_input_unsupported")
+                return
             extender.start()
 
             def should_stop() -> str:
@@ -436,11 +445,34 @@ class Agent:
             started = time.monotonic()
             try:
                 if self.cfg.mode == "command":
-                    answer = run_command(self.cfg, task, budget, should_stop)
+                    with tempfile.TemporaryDirectory(prefix="pdfa-runner-images-") as directory:
+                        local_images = []
+                        for image in task.get("images", []):
+                            if should_stop():
+                                raise Interrupted(should_stop())
+                            raw = self.client.image(task_id, image,
+                                                    timeout=max(1.0, min(30.0, budget)))
+                            path = Path(directory) / f"{image['blob_id']}.png"
+                            path.write_bytes(raw)
+                            path.chmod(0o600)
+                            local_images.append({**image, "path": str(path)})
+                        command_task = {**task, "local_images": local_images}
+                        answer = run_command(self.cfg, command_task, budget, should_stop)
                 else:
                     answer = run_endpoint(self.cfg, task, budget, should_stop, self.api_key)
             except Interrupted as stop:
                 self._interrupted(task_id, str(stop))
+                return
+            except RunnerAuthError:
+                self.auth_failed.set()
+                self.stop.set()
+                return
+            except (RunnerConflict, RunnerNotFound):
+                self._interrupted(task_id, "claim_lost")
+                return
+            except RunnerError as failure:
+                self.log(f"{task_id}: image delivery failed ({failure.error_code or failure.status or 'network'})")
+                self._fail(task_id, "image_delivery_failed")
                 return
             except ExecutorFailure as failure:
                 self.log(f"{task_id}: local work failed ({failure})")

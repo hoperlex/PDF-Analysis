@@ -196,7 +196,7 @@ describe('the token, shown once', () => {
 });
 
 describe('the screen never reaches the runner channel', () => {
-  const RUNNER_OPERATIONS = ['claimExecutorTask', 'extendExecutorTaskClaim', 'submitExecutorTaskAnswer', 'failExecutorTask'];
+  const RUNNER_OPERATIONS = ['claimExecutorTask', 'extendExecutorTaskClaim', 'submitExecutorTaskAnswer', 'failExecutorTask', 'getExecutorTaskImage'];
 
   it('calls none of the four operations a runner uses from anywhere under web/src', () => {
     const offenders: string[] = [];

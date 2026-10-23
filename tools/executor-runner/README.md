@@ -219,6 +219,15 @@ private. The connection is `not_metered`; the app does not convert subscription
 usage into an invented dollar amount. A subscription's availability and limits
 are the account's, so a real probe is required before routing.
 
+For a separate saved-crop image task, set `[command].accept_images = true` only
+when the command accepts `local_images` in the task JSON. The agent downloads the
+claim's PNG over the same authenticated channel, checks its size and SHA-256,
+passes a private temporary file to `codex_answer.py`, and removes it when the
+command ends. `codex_answer.py` attaches it with `codex exec --image`. Text-only
+commands and the Claude MCP bridge refuse image tasks explicitly. The W56b image
+stage will produce these tasks after its prompt and evidence policy is approved;
+the current «Анализ текста» route does not send images.
+
 ## Known limits of the Claude profiles
 
 - No `claude` CLI was available on the host that built this: the settings syntax, the MCP

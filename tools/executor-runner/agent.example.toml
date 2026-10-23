@@ -37,6 +37,8 @@ mode = "command"
 # output_schema (no code fence, no prose) and exit 0. Anything else fails the task.
 argv = ["/usr/bin/python3", "/opt/pdf-analysis-agent/answer.py"]
 timeout_seconds = 540
+# Set true only when the command consumes local_images PNG paths (codex_answer.py does).
+accept_images = false
 # cwd = "/opt/pdf-analysis-agent"
 
 # [endpoint]    # used when mode = "endpoint"

@@ -30,8 +30,9 @@ from auditmanager.shared.errors import CONTRACT_VERSION as DOMAIN_CONTRACT_VERSI
 from tests.support.expected_facts import FACTS
 
 ROOT = Path(__file__).resolve().parents[3]
-SEALED = "1.0.0"
+SEALED = "1.1.0"
 DRAFT = "1.0.0-draft.1"
+PREVIOUS = "1.0.0"
 FAMILIES = ("analysis", "domain", "events")
 DOMAIN = ROOT / "contracts/domain/v1"
 CATALOGS = ("error-codes.json", "identifiers.json", "state-machines.json")
@@ -55,8 +56,8 @@ def _version_values(node: object, found: list[tuple[str, str]], where: str = "")
             elif (
                 key == "const"
                 and isinstance(value, str)
-                and value.startswith("1.0.0")
-                and not where.endswith("/supersedes")  # the one place the draft is named, on purpose
+                and where.endswith(("/contract_version", "/name_map_contract_version"))
+                and value.startswith(("1.0.0", "1.1.0"))
             ):
                 found.append((f"{where}/const", value))
             _version_values(value, found, f"{where}/{key}")
@@ -129,7 +130,7 @@ def test_no_live_contract_artifact_still_names_the_draft_as_its_own_version() ->
 @pytest.mark.parametrize("name", CATALOGS)
 def test_a_domain_catalog_is_frozen_at_the_sealed_round(name: str) -> None:
     catalog = _json(DOMAIN / name)
-    assert (catalog["contract_version"], catalog["supersedes"]) == (SEALED, DRAFT)
+    assert (catalog["contract_version"], catalog["supersedes"]) == (SEALED, PREVIOUS)
     assert (catalog["status"], catalog["frozen"]) == ("frozen", True)
     assert catalog["candidate_revision"] == 19
 
@@ -138,7 +139,7 @@ def test_a_domain_catalog_is_frozen_at_the_sealed_round(name: str) -> None:
 def test_a_domain_schema_refuses_a_catalog_that_is_not_frozen(name: str) -> None:
     properties = _json(DOMAIN / name)["properties"]
     assert properties["contract_version"] == {"const": SEALED}
-    assert properties["supersedes"] == {"const": DRAFT}
+    assert properties["supersedes"] == {"const": PREVIOUS}
     assert properties["status"] == {"const": "frozen"}
     assert properties["frozen"] == {"const": True}
     assert properties["candidate_revision"]["const"] == 19

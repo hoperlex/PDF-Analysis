@@ -9,9 +9,12 @@ dedicated local account whose Codex CLI was signed in with ChatGPT interactively
 from __future__ import annotations
 
 import json
+import hashlib
 import os
+import re
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -21,6 +24,7 @@ from pathlib import Path
 MODEL = "gpt-6-sol"
 MAX_TASK_BYTES = 1024 * 1024
 MAX_OUTPUT_BYTES = 8 * 1024 * 1024
+MAX_IMAGE_BYTES = 16 * 1024 * 1024
 TIMEOUT_SECONDS = 510
 
 
@@ -45,7 +49,44 @@ def read_task(payload: bytes) -> dict:
     schema = task.get("output_schema")
     if not isinstance(schema, dict) or schema.get("type") != "object":
         raise TaskError("missing_object_schema")
+    images = task.get("images", [])
+    local = task.get("local_images", [])
+    if (not isinstance(images, list) or not isinstance(local, list)
+            or len(images) > 1 or len(images) != len(local)):
+        raise TaskError("image_input_invalid")
+    for image, copied in zip(images, local):
+        if (not isinstance(image, dict) or not isinstance(copied, dict)
+                or any(copied.get(key) != image.get(key) for key in
+                       ("blob_id", "portal_block_id", "sha256", "size_bytes", "media_type"))
+                or image.get("media_type") != "image/png"
+                or not isinstance(image.get("portal_block_id"), str)
+                or re.fullmatch(r"blk_[0-9a-f]{32}", image["portal_block_id"]) is None
+                or not isinstance(image.get("sha256"), str)
+                or re.fullmatch(r"[0-9a-f]{64}", image["sha256"]) is None
+                or type(image.get("size_bytes")) is not int
+                or not 1 <= image["size_bytes"] <= MAX_IMAGE_BYTES
+                or not isinstance(copied.get("path"), str)
+                or not Path(copied["path"]).is_absolute()):
+            raise TaskError("image_input_invalid")
     return task
+
+
+def _checked_image(image: dict) -> bytes:
+    """Read one private regular file without following a substituted symlink."""
+    try:
+        fd = os.open(image["path"], os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(fd, "rb") as source:
+            details = os.fstat(source.fileno())
+            if not stat.S_ISREG(details.st_mode) or details.st_size != image["size_bytes"]:
+                raise TaskError("image_input_invalid")
+            raw = source.read(image["size_bytes"] + 1)
+    except OSError:
+        raise TaskError("image_input_invalid") from None
+    if (len(raw) != image["size_bytes"]
+            or hashlib.sha256(raw).hexdigest() != image["sha256"]
+            or not raw.startswith(b"\x89PNG\r\n\x1a\n")):
+        raise TaskError("image_input_invalid")
+    return raw
 
 
 def _events_completed(data: bytes) -> bool:
@@ -96,6 +137,8 @@ def answer(task: dict, *, codex: str | None = None) -> str:
         + json.dumps({"system": task["system"], "user_text": task["user_text"]},
                      ensure_ascii=False)
     )
+    if task.get("local_images"):
+        prompt += "\n\nThe attached image is the crop for portal block " + task["local_images"][0]["portal_block_id"] + "."
     with tempfile.TemporaryDirectory(prefix="pdfa-codex-") as area:
         root = Path(area)
         schema_path, answer_path, events_path = (
@@ -103,6 +146,12 @@ def answer(task: dict, *, codex: str | None = None) -> str:
         schema_path.write_text(json.dumps(task["output_schema"], ensure_ascii=False),
                                encoding="utf-8")
         schema_path.chmod(0o600)
+        image_args: list[str] = []
+        for index, image in enumerate(task.get("local_images", []), start=1):
+            image_path = root / f"image-{index}.png"
+            image_path.write_bytes(_checked_image(image))
+            image_path.chmod(0o600)
+            image_args.extend(("--image", str(image_path)))
         command = [
             executable, "exec", "--ignore-user-config", "--skip-git-repo-check",
             "--ephemeral", "--sandbox", "read-only", "--json", "--model", MODEL,
@@ -110,7 +159,7 @@ def answer(task: dict, *, codex: str | None = None) -> str:
             "-c", "features.shell_tool=false",
             "-c", "web_search=\"disabled\"",
             "--output-schema", str(schema_path),
-            "--output-last-message", str(answer_path), "-",
+            "--output-last-message", str(answer_path), *image_args, "-",
         ]
         with events_path.open("wb") as output:
             process = subprocess.Popen(

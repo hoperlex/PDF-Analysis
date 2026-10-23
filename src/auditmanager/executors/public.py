@@ -65,6 +65,7 @@ from auditmanager.executors.runner import (
     TaskAck,
     authenticate_runner,
     claim_task,
+    claimed_image,
     extend_claim,
     fail_task,
     issue_runner_token,
@@ -89,6 +90,7 @@ from sqlalchemy.orm import Session
 __all__ = [
     "CLAIM_LEASE_SECONDS",
     "ClaimedTask",
+    "claimed_image",
     "ConnectionDetail",
     "ConnectionRecord",
     "ConnectionSummary",

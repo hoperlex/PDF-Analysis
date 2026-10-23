@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import importlib.util
+import base64
+import hashlib
 import json
 import os
 import sys
@@ -39,6 +41,9 @@ def fake_codex(tmp_path: Path, case: str = "ok") -> str:
         "assert args[args.index('--model') + 1] == 'gpt-6-sol'\n"
         "assert 'features.shell_tool=false' in args\n"
         "assert 'web_search=\\\"disabled\\\"' in args\n"
+        "if '--image' in args:\n"
+        " image = pathlib.Path(args[args.index('--image') + 1])\n"
+        " assert image.read_bytes().startswith(b'\\x89PNG\\r\\n\\x1a\\n')\n"
         "assert os.getenv('OPENAI_API_KEY') is None\n"
         "assert os.getenv('PDF_ANALYSIS_RUNNER_TOKEN') is None\n"
         "schema = json.loads(pathlib.Path(args[args.index('--output-schema') + 1]).read_text())\n"
@@ -91,3 +96,24 @@ def test_wrong_model_and_missing_schema_never_start_codex() -> None:
         codex_answer.read_task(json.dumps({**TASK, "output_schema": None}).encode())
     with pytest.raises(codex_answer.TaskError, match="task_too_large"):
         codex_answer.read_task(b"x" * (codex_answer.MAX_TASK_BYTES + 1))
+
+
+def test_verified_png_reaches_codex_as_an_image_and_a_changed_file_is_refused(tmp_path: Path) -> None:
+    raw = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL7WQAAAABJRU5ErkJggg=="
+    )
+    path = tmp_path / "crop.png"
+    path.write_bytes(raw)
+    image = {
+        "blob_id": "blob_01M2545JSD15ETSNNV904X991F",
+        "portal_block_id": "blk_" + "a" * 32,
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "size_bytes": len(raw), "media_type": "image/png",
+    }
+    task = codex_answer.read_task(json.dumps({
+        **TASK, "images": [image], "local_images": [{**image, "path": str(path)}],
+    }).encode())
+    assert codex_answer.answer(task, codex=fake_codex(tmp_path)) == '{"ok":true}'
+    path.write_bytes(raw + b"changed")
+    with pytest.raises(codex_answer.TaskError, match="^image_input_invalid$"):
+        codex_answer.answer(task, codex=fake_codex(tmp_path))

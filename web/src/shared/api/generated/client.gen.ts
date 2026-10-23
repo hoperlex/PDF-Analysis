@@ -8,8 +8,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.0.0 (OpenAPI 3.1.0)
- *   sha256 53d289eceaa4e1b77b1bf86c4bdca0c0be693f81669ded299a02c5122685b9ee
+ *   AuditManager PC-01 API 1.1.0 (OpenAPI 3.1.0)
+ *   sha256 889ac164ad356674471da8de734597d118b6799f352808b80da74d2b6f295a87
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -70,6 +70,8 @@ import type {
   GetEffectiveVendorListsResult,
   GetExecutorConnectionInput,
   GetExecutorConnectionResult,
+  GetExecutorTaskImageInput,
+  GetExecutorTaskImageResult,
   GetFindingInput,
   GetFindingResult,
   GetMeInput,
@@ -529,6 +531,18 @@ export function getExecutorConnection(
   options?: RequestOptions,
 ): Promise<ApiResponse<GetExecutorConnectionResult>> {
   return request<GetExecutorConnectionResult>(OPERATIONS.getExecutorConnection, input, options);
+}
+
+/**
+ * Get Executor Task Image
+ *
+ * `GET /runner/tasks/{task_id}/images/{blob_id}`.
+ */
+export function getExecutorTaskImage(
+  input: GetExecutorTaskImageInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetExecutorTaskImageResult>> {
+  return request<GetExecutorTaskImageResult>(OPERATIONS.getExecutorTaskImage, input, options);
 }
 
 /**
@@ -1438,6 +1452,7 @@ export const apiClient = {
   getDocumentVersion,
   getEffectiveVendorLists,
   getExecutorConnection,
+  getExecutorTaskImage,
   getFinding,
   getMe,
   getNormDocument,

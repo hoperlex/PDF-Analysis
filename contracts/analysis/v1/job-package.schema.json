@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:auditmanager:analysis:job-package:v1",
   "title": "JobPackage v1",
-  "contract_version": "1.0.0",
+  "contract_version": "1.1.0",
   "description": "Immutable unit of analysis work handed to an engine for exactly one Attempt. It carries the full attempt-authority tuple, the pinned stage-registry version and content-addressed input artifacts only.",
   "type": "object",
   "additionalProperties": false,
@@ -17,7 +17,7 @@
   ],
   "properties": {
     "contract_version": {
-      "const": "1.0.0"
+      "const": "1.1.0"
     },
     "attempt_authority": {
       "$ref": "#/$defs/attempt_authority",
@@ -111,7 +111,7 @@
           "const": "auditmanager.analysis.stage_registry"
         },
         "contract_version": {
-          "const": "1.0.0"
+          "const": "1.1.0"
         }
       }
     },

@@ -79,7 +79,9 @@ open or `wait_seconds` elapse.
     "model": "claude-opus-5",
     "system": "…system prompt…",
     "user_text": "…user message…",
-    "output_schema": {"type": "object", "properties": {…}, "required": […]}
+  "output_schema": {"type": "object", "properties": {…}, "required": […]},
+  "images": [{"blob_id": "blob_…", "portal_block_id": "blk_…",
+              "sha256": "…", "size_bytes": 12345, "media_type": "image/png"}]
   }
   ```
 
@@ -89,6 +91,11 @@ open or `wait_seconds` elapse.
     use any other capability.
   - `output_schema` is a JSON Schema (draft 2020-12). The answer's `output_text` must be one
     JSON document that validates against it.
+  - `images` is optional and contains at most one saved PNG. A runner must fetch it with
+    `getExecutorTaskImage`, verify its size and SHA-256 and present it to an image-capable
+    model as an image. A text-only runner fails the task with `image_input_unsupported`;
+    it never silently answers from the text alone. The source `portal_block_id` identifies
+    the crop in the drawing; the Blob ID is opaque and is not an object-store path.
   - `claim_expires_at` is the claim lease. A claim that is not extended before it lapses
     returns the task to `open` and another claim (possibly by another runner) may take it.
   - `deadline_at` is the end of the answer window. After it the task is `expired`; no
@@ -102,6 +109,15 @@ Server notes (not required of runners): a claim by a token that already holds an
 claim SHOULD return that same task again (same payload, lease refreshed), so that a lost
 response or a restarted runner does not strand a task until the lease lapses. A token may
 hold at most the connection's `max claimed tasks`; beyond that the server answers `204`.
+
+### 2.1a `getExecutorTaskImage` - `GET /api/v1/runner/tasks/{task_id}/images/{blob_id}`
+
+Returns exactly the `image/png` bytes named in this token's current claimed task, with
+`Cache-Control: no-store`. There is no redirect or object-store URL. The response is bounded
+to 16 MiB and its bytes are checked against the task's digest and size. The runner repeats
+that check before passing the PNG to a model. Unknown task, foreign connection or image is
+`404`; a lost claim, expired deadline or ended Attempt is `409`. A revoked token is `401`.
+The server makes the authorization check again after a slow Blob read.
 
 ### 2.2 `extendExecutorTaskClaim` - `POST /api/v1/runner/tasks/{task_id}/extend`
 
@@ -189,11 +205,12 @@ limit (nginx zone, `EXEC-PULL-01` Work 4) is sized from that. Clients:
 | operationId | Method and path |
 | --- | --- |
 | `claimExecutorTask` | `POST /api/v1/runner/tasks/claim` |
+| `getExecutorTaskImage` | `GET /api/v1/runner/tasks/{task_id}/images/{blob_id}` |
 | `extendExecutorTaskClaim` | `POST /api/v1/runner/tasks/{task_id}/extend` |
 | `submitExecutorTaskAnswer` | `POST /api/v1/runner/tasks/{task_id}/answer` |
 | `failExecutorTask` | `POST /api/v1/runner/tasks/{task_id}/fail` |
 
-All four use the runner token as their own principal type, never a user session, and are
+All five use the runner token as their own principal type, never a user session, and are
 not reachable with a user bearer token (and a runner token is refused on every other
 operation). `task_id` is an identifier of the form `ext_<ULID>`; clients treat it as an
 opaque string of `[A-Za-z0-9_-]{1,64}` and percent-encode it into the path.
@@ -208,7 +225,13 @@ opaque string of `[A-Za-z0-9_-]{1,64}` and percent-encode it into the path.
     "required": ["task_id", "claim_expires_at", "deadline_at", "model", "system", "user_text", "output_schema"],
     "properties": {"task_id": {"type": "string"}, "claim_expires_at": {"type": "string", "format": "date-time"},
       "deadline_at": {"type": "string", "format": "date-time"}, "model": {"type": "string"},
-      "system": {"type": "string"}, "user_text": {"type": "string"}, "output_schema": {"type": "object"}}},
+      "system": {"type": "string"}, "user_text": {"type": "string"}, "output_schema": {"type": "object"},
+      "images": {"type": "array", "maxItems": 1, "items": {"$ref": "#/RunnerImage"}}}},
+  "RunnerImage": {"type": "object", "additionalProperties": false,
+    "required": ["blob_id", "portal_block_id", "sha256", "size_bytes", "media_type"],
+    "properties": {"blob_id": {"type": "string"}, "portal_block_id": {"type": "string"},
+      "sha256": {"type": "string"}, "size_bytes": {"type": "integer", "maximum": 16777216},
+      "media_type": {"const": "image/png"}}},
   "ExtendResponse": {"type": "object", "required": ["claim_expires_at"],
     "properties": {"claim_expires_at": {"type": "string", "format": "date-time"}}},
   "AnswerRequest": {"type": "object", "additionalProperties": false, "required": ["output_text", "model"],

@@ -28,10 +28,10 @@
       "const": "auditmanager.domain.state-machines"
     },
     "contract_version": {
-      "const": "1.0.0"
+      "const": "1.1.0"
     },
     "supersedes": {
-      "const": "1.0.0-draft.1"
+      "const": "1.0.0"
     },
     "candidate_revision": {
       "const": 19,

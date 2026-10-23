@@ -190,6 +190,8 @@ REQUIRED_OPERATIONS = {
     "issueRunnerToken",
     "revokeRunnerToken",
     "claimExecutorTask",
+    # `EXEC-IMAGE-DELIVERY-01`: a task-scoped PNG read under the live claim.
+    "getExecutorTaskImage",
     "extendExecutorTaskClaim",
     "submitExecutorTaskAnswer",
     "failExecutorTask",
@@ -209,12 +211,12 @@ UNAUTHENTICATED_OPERATIONS = {"issueToken", "submitRegistration", "readRegistrat
 #: refusal -- and have no subject a `403` could deny.
 OPERATIONS_WITH_NO_CREDENTIAL_TO_REFUSE = {"submitRegistration"}
 
-#: `EXEC-PULL-01`. The four operations a runner calls with a runner token. The token is a
+# `EXEC-PULL-01` and `EXEC-IMAGE-DELIVERY-01`. The five runner-token operations. The token is a
 #: principal of its own with no role to lack, so there is no subject a `403` could deny: each
 #: declares the `401` (a wrong, revoked or expired token) and no `403`. The same single
 #: `bearerAuth` scheme is declared for them; what differs is who issued the credential.
 RUNNER_OPERATIONS_WITHOUT_A_403 = {
-    "claimExecutorTask", "extendExecutorTaskClaim", "submitExecutorTaskAnswer",
+    "claimExecutorTask", "getExecutorTaskImage", "extendExecutorTaskClaim", "submitExecutorTaskAnswer",
     "failExecutorTask",
 }
 

@@ -53,7 +53,7 @@ class Reply:
 
 
 def envelope(code: str, message: str, retryable: bool = False) -> dict:
-    return {"contract_version": "1.0.0", "error_code": code, "message": message, "correlation_id": "corr-1", "retryable": retryable}
+    return {"contract_version": "1.1.0", "error_code": code, "message": message, "correlation_id": "corr-1", "retryable": retryable}
 
 
 class FakeRunner:
@@ -65,6 +65,7 @@ class FakeRunner:
         self.revoked = False
         self.requests: list[dict] = []
         self._tasks: "queue.Queue[dict]" = queue.Queue()
+        self._images: dict[str, bytes] = {}
         self._overrides: dict[str, "queue.Queue[Reply]"] = {}
         self._lock = threading.Lock()
         runner = self
@@ -93,17 +94,21 @@ class FakeRunner:
                 with runner._lock:
                     runner.requests.append(record)
                 reply = runner._decide(kind, record)
-                payload = b"" if reply.body is None else json.dumps(reply.body).encode("utf-8")
+                payload = (b"" if reply.body is None else reply.body if isinstance(reply.body, bytes)
+                           else json.dumps(reply.body).encode("utf-8"))
                 self.send_response(reply.status)
                 for name, value in reply.headers.items():
                     self.send_header(name, value)
-                if payload:
+                if payload and "Content-Type" not in reply.headers:
                     self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(payload)))
                 self.send_header("Connection", "close")
                 self.end_headers()
                 if payload:
                     self.wfile.write(payload)
+
+            def do_GET(self) -> None:  # noqa: N802
+                self.do_POST()
 
         self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self.httpd.daemon_threads = True
@@ -122,6 +127,9 @@ class FakeRunner:
     # -- scripting
     def add_task(self, task: dict) -> None:
         self._tasks.put(task)
+
+    def add_image(self, blob_id: str, content: bytes) -> None:
+        self._images[blob_id] = content
 
     def override(self, kind: str, *replies: Reply) -> None:
         with self._lock:
@@ -152,6 +160,8 @@ class FakeRunner:
         if rest == "claim":
             return "claim", None
         task_id, _, action = rest.partition("/")
+        if action.startswith("images/"):
+            return "image", task_id
         return (action if action in ("extend", "answer", "fail") else "other"), task_id
 
     def _decide(self, kind: str, record: dict) -> Reply:
@@ -183,6 +193,11 @@ class FakeRunner:
             return Reply(200, {"task_id": record["task_id"], "state": "answered"})
         if kind == "fail":
             return Reply(200, {"task_id": record["task_id"], "state": "cancelled"})
+        if kind == "image":
+            blob_id = record["path"].rsplit("/", 1)[-1]
+            raw = self._images.get(blob_id)
+            return (Reply(200, raw, {"Content-Type": "image/png"}) if raw is not None
+                    else Reply(404, envelope("not_found", "Unknown image.")))
         return Reply(404, envelope("not_found", "No such operation."))
 
 
@@ -355,6 +370,7 @@ def agent_config(
     extra_runner: str = "",
     extra_endpoint: str = "",
     command_timeout: float = 30.0,
+    accept_images: bool = False,
     drain_seconds: int = 5,
 ) -> Path:
     lines = [
@@ -372,7 +388,8 @@ def agent_config(
         f'mode = "{mode}"',
     ]
     if mode == "command":
-        lines += ["[command]", "argv = " + json.dumps(argv or []), f"timeout_seconds = {command_timeout}"]
+        lines += ["[command]", "argv = " + json.dumps(argv or []), f"timeout_seconds = {command_timeout}",
+                  f"accept_images = {'true' if accept_images else 'false'}"]
     else:
         lines += ["[endpoint]", f'url = "{endpoint_url}"', 'model = "local-model"', extra_endpoint]
     path.write_text("\n".join(lines) + "\n")

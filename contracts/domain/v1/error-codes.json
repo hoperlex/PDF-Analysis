@@ -1,7 +1,7 @@
 {
   "contract": "auditmanager.domain.errors",
-  "contract_version": "1.0.0",
-  "supersedes": "1.0.0-draft.1",
+  "contract_version": "1.1.0",
+  "supersedes": "1.0.0",
   "candidate_revision": 19,
   "revision_note": "Candidate revision 19 by BETA-CONTRACT-SEAL-01 phase B: the 1.0.0 seal of the closed-beta contract. The catalogue is frozen at twenty-seven codes. rate_limited now also names the credential exchange the edge throttles. OPEN-RETENTION stays not_decided and the freeze declares no retention window. No code, identifier or machine changes.",
   "status": "frozen",

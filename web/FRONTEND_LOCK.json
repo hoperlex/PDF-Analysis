@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "53d289eceaa4e1b77b1bf86c4bdca0c0be693f81669ded299a02c5122685b9ee",
-    "content_commit": "e270dbde",
-    "content_commit_subject": "feat(executors): the pull channel, server half: migration 0031, runner API, pull adapter (EXEC-PULL-01) on agent/exec-pull-01 e270dbde",
-    "dispatch_named_commit": "e270dbde",
-    "commit_note": "EXEC-PULL-01 adds the pull channel additively: six operations (issueRunnerToken, revokeRunnerToken and the four a runner calls with a runner token) and twelve schemas (87/99/284), no error code is added; info.version stays 1.0.0 (the label of the additive reseal is the integrator's call).",
+    "sha256": "889ac164ad356674471da8de734597d118b6799f352808b80da74d2b6f295a87",
+    "content_commit": "b5e089b5",
+    "content_commit_subject": "exact dev base for EXEC-IMAGE-DELIVERY-01; contract and lock are published together",
+    "dispatch_named_commit": "b5e089b5",
+    "commit_note": "EXEC-IMAGE-DELIVERY-01 adds one token-scoped PNG read and one optional claim image descriptor; API contract 1.1.0 (88/100/286), no new error code or migration.",
     "openapi_version": "3.1.0",
-    "info_version": "1.0.0",
-    "paths": 87,
-    "operations": 99,
-    "component_schemas": 284,
+    "info_version": "1.1.0",
+    "paths": 88,
+    "operations": 100,
+    "component_schemas": 286,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "53d289eceaa4e1b77b1bf86c4bdca0c0be693f81669ded299a02c5122685b9ee",
+    "snapshot_sha256": "889ac164ad356674471da8de734597d118b6799f352808b80da74d2b6f295a87",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "3c57e904246b828c029add469df88ba02351025124a349c5b3a9f09549da3187",
-      "index.ts": "edb82a9095758d8176d77d86c97a582947219979f38f327fe4fb721fc8f96f99",
-      "operations.gen.ts": "9b023a270b0a1999656d315bbdb9bf856441479c19b4fd72d99e266fe7b6c50d",
-      "types.gen.ts": "e97fd4d151bf0ede52f0ce4ddc2f6982502855de27076d6f6c95a22b99aecd71"
+      "client.gen.ts": "ab647d60d0ffa89eb6ec473542d512a38d9e0f545172b1e641cfe25561b24f04",
+      "index.ts": "7b876f89e8f23b9b0cdb51a803ecfa0760923a248448f8863d24ef905c04e267",
+      "operations.gen.ts": "3caf9c194e3aee38baf1bcd166c4ce89323780c5bfc3afbac2d2cc8b4aba4522",
+      "types.gen.ts": "0f628148f905dcc95343e36a078b2512007827ce22f7e05525d13f1aabe94a4b"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

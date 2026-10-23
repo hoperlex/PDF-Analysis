@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.0.0 (OpenAPI 3.1.0)
- *   sha256 53d289eceaa4e1b77b1bf86c4bdca0c0be693f81669ded299a02c5122685b9ee
+ *   AuditManager PC-01 API 1.1.0 (OpenAPI 3.1.0)
+ *   sha256 889ac164ad356674471da8de734597d118b6799f352808b80da74d2b6f295a87
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.0.0';
+export const CONTRACT_VERSION = '1.1.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '53d289eceaa4e1b77b1bf86c4bdca0c0be693f81669ded299a02c5122685b9ee';
+export const CONTRACT_DIGEST = '889ac164ad356674471da8de734597d118b6799f352808b80da74d2b6f295a87';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -238,6 +238,8 @@ export const SCHEMA_NAMES = [
   'RunStateCount',
   'RunStatus',
   'RunStatusPage',
+  'RunnerImage',
+  'RunnerImageBlobId',
   'RunnerTokenMetadata',
   'SectionDocumentCount',
   'SectionReview',
@@ -598,6 +600,7 @@ export type ClaimExecutorTaskRequest = {
 export type ClaimedExecutorTask = {
   claim_expires_at: string;
   deadline_at: string;
+  images?: Array<RunnerImage>;
   model: string;
   output_schema: Record<string, never>;
   system: string;
@@ -849,7 +852,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The single externally visible failure shape, mirroring urn:auditmanager:domain:error-envelope:v1. `retryable` is pinned to the catalog value for the reported code; a caller never infers it from the HTTP status or the message. */
 export type ErrorEnvelope = {
-  contract_version: "1.0.0";
+  contract_version: "1.1.0";
   correlation_id: CorrelationId;
   /** Safe scalar classifiers only, restricted to the safe_detail_keys the catalog declares for the reported code. The catalog's forbidden key set is rejected. */
   details?: {
@@ -2525,6 +2528,20 @@ export type RunStatusPage = {
   items: Array<RunStatus>;
   page: PageInfo;
 };
+
+/** One checked saved PNG, retrievable only by the current runner claim. */
+export type RunnerImage = {
+  blob_id: RunnerImageBlobId;
+  media_type: "image/png";
+  portal_block_id: PortalBlockId;
+  sha256: string;
+  size_bytes: number;
+};
+
+export type RunnerImageBlobId = string;
+
+/** The contract pattern for `RunnerImageBlobId`. Anchored; use with `new RegExp()`. */
+export const RUNNER_IMAGE_BLOB_ID_PATTERN = "^blob_[0-9A-HJKMNP-TV-Z]{26}$";
 
 /**
  * What the API ever says about a runner token after it was issued: that it exists, its

@@ -14,10 +14,12 @@ The owner waived five credentialed live W55b product checks for that release;
 those journeys remain unverified. See `W55B-INT-TAG-01.md`,
 `W55B-INT-MAIN-VERIFY-ADDENDUM-01.md` and `CFB-INT-DEV-PUBLISH-43.md`.
 
-The development API surface is **87 paths / 99 operations / 284 schemas**, the error
+The development API surface is **88 paths / 100 operations / 286 schemas**, the error
 catalogue has **27** codes, the migration head is **`0031_executor_pull_channel`**,
-`VERSION` is `0.7.0`, the contract is sealed at `1.0.0` with the `R-143` executor connections and
-pull channel added under `R-144` (`EXEC-CANDIDATE-1.md`, `EXEC-CANDIDATE-2.md`; the `1.1.0` label is a separate reseal). `origin/main` carries `0.7.0` since the owner's merge of pull request
+`VERSION` is `0.7.0`, and the contract is `1.1.0` after the additive image-delivery reseal
+(`EXEC-IMAGE-DELIVERY-01`). The runner can fetch one verified PNG for an active claim;
+no run stage sends one until W56b activates its image policy. The `R-143` executor connections and
+pull channel were added under `R-144` (`EXEC-CANDIDATE-1.md`, `EXEC-CANDIDATE-2.md`). `origin/main` carries `0.7.0` since the owner's merge of pull request
 #3 (`48c8e34c`, no gate; `RELEASES.md` has the row and the record); host verification and the
 `v0.7.0` tag are owed, the last tag is `v0.6.0`. Run `infra/deploy/verify-deployed.sh` for the
 current deployment; this document is no substitute for that probe.

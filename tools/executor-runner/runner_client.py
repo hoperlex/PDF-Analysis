@@ -16,6 +16,7 @@ Rules enforced here, because both clients depend on them:
 from __future__ import annotations
 
 import calendar
+import hashlib
 import email.utils
 import http.client
 import ipaddress
@@ -33,10 +34,13 @@ from typing import Any, Optional
 API_PREFIX = "/api/v1/runner/tasks"
 MAX_REQUEST_BYTES = 1 << 20
 MAX_RESPONSE_BYTES = 16 << 20
+MAX_IMAGE_BYTES = 16 << 20
 MAX_WAIT_SECONDS = 25
 DEFAULT_RETRY_AFTER = 30.0
 MAX_RETRY_AFTER = 300.0
 TASK_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+IMAGE_ID_RE = re.compile(r"^blob_[0-9A-HJKMNP-TV-Z]{26}$")
+SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 USER_AGENT = "pdf-analysis-runner-client/1"
 
 
@@ -324,7 +328,54 @@ class RunnerClient:
             parse_timestamp(document["deadline_at"])
         except ValueError:
             raise RunnerUnavailable("the stand answered a claim with a malformed timestamp", status=200) from None
+        images = document.get("images", [])
+        if not isinstance(images, list) or len(images) > 1:
+            raise RunnerUnavailable("the stand answered a claim with malformed images", status=200)
+        for image in images:
+            if (not isinstance(image, dict)
+                    or not isinstance(image.get("blob_id"), str)
+                    or IMAGE_ID_RE.fullmatch(image["blob_id"]) is None
+                    or not isinstance(image.get("portal_block_id"), str)
+                    or re.fullmatch(r"blk_[0-9a-f]{32}", image["portal_block_id"]) is None
+                    or not isinstance(image.get("sha256"), str)
+                    or SHA256_RE.fullmatch(image["sha256"]) is None
+                    or type(image.get("size_bytes")) is not int
+                    or not 1 <= image["size_bytes"] <= MAX_IMAGE_BYTES
+                    or image.get("media_type") != "image/png"):
+                raise RunnerUnavailable("the stand answered a claim with malformed images", status=200)
         return document
+
+    def image(self, task_id: str, image: dict, *, timeout: float = 30.0) -> bytes:
+        """Fetch one image on the same origin and verify it before a local command sees it."""
+        blob_id = image["blob_id"]
+        if not TASK_ID_RE.fullmatch(task_id) or not IMAGE_ID_RE.fullmatch(blob_id):
+            raise RunnerRejected("invalid task or image identity", status=422,
+                                 error_code="validation_failed")
+        request = urllib.request.Request(
+            self.origin + self._task_path(task_id, f"images/{blob_id}"),
+            headers={"Authorization": "Bearer " + self._token,
+                     "Accept": "image/png", "User-Agent": USER_AGENT},
+            method="GET",
+        )
+        try:
+            with self._opener.open(request, timeout=timeout) as response:
+                self._note_date(response.headers)
+                if response.status != 200:
+                    raise RunnerUnavailable("image response was not 200", status=response.status)
+                media_type = response.headers.get("Content-Type", "").split(";", 1)[0].strip()
+                raw = response.read(image["size_bytes"] + 1)
+        except urllib.error.HTTPError as error:
+            if 300 <= error.code < 400:
+                raise RunnerUnavailable("image redirect refused", status=error.code) from None
+            raise self._error_for(error.code, error.read(MAX_REQUEST_BYTES + 1), error.headers) from None
+        except (urllib.error.URLError, socket.timeout, TimeoutError, ConnectionError,
+                http.client.HTTPException, ssl.SSLError, OSError) as error:
+            raise RunnerUnavailable(self.scrub(f"image network error: {type(error).__name__}")) from None
+        if (media_type != "image/png" or len(raw) != image["size_bytes"]
+                or hashlib.sha256(raw).hexdigest() != image["sha256"]
+                or not raw.startswith(b"\x89PNG\r\n\x1a\n")):
+            raise RunnerUnavailable("image bytes failed media type, size or digest verification")
+        return raw
 
     def extend(self, task_id: str) -> dict:
         """extendExecutorTaskClaim. Returns ``{"claim_expires_at": ...}``."""

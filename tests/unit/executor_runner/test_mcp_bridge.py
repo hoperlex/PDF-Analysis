@@ -95,6 +95,20 @@ def test_claim_then_answer_round_trip():
         assert sent["content_type"].startswith("application/json")
 
 
+def test_text_only_bridge_refuses_image_task_without_exposing_it():
+    image = {"blob_id": "blob_01M2545JSD15ETSNNV904X991F",
+             "portal_block_id": "blk_" + "a" * 32,
+             "sha256": "a" * 64, "size_bytes": 8, "media_type": "image/png"}
+    with S.FakeRunner() as runner, S.McpSession(runner.origin) as mcp:
+        mcp.initialize()
+        runner.add_task(S.make_task(images=[image]))
+        result = _claim(mcp)
+        assert mcp.payload(result)["status"] == "unsupported_image_task"
+        assert runner.of_kind("fail")[0]["body"]["reason"] == "image_input_unsupported"
+        assert runner.of_kind("image") == []
+        assert image["sha256"] not in mcp.text(result)
+
+
 def test_idle_204_returns_idle_after_the_wait():
     with S.FakeRunner() as runner, S.McpSession(runner.origin) as mcp:
         mcp.initialize()

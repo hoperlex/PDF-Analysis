@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.0.0 (OpenAPI 3.1.0)
- *   sha256 53d289eceaa4e1b77b1bf86c4bdca0c0be693f81669ded299a02c5122685b9ee
+ *   AuditManager PC-01 API 1.1.0 (OpenAPI 3.1.0)
+ *   sha256 889ac164ad356674471da8de734597d118b6799f352808b80da74d2b6f295a87
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -120,6 +120,7 @@ import type {
   RunNormReferences,
   RunStatus,
   RunStatusPage,
+  RunnerImageBlobId,
   RunnerTokenMetadata,
   SectionReview,
   SectionSpecification,
@@ -180,6 +181,7 @@ export const OPERATION_IDS = [
   'getDocumentVersion',
   'getEffectiveVendorLists',
   'getExecutorConnection',
+  'getExecutorTaskImage',
   'getFinding',
   'getMe',
   'getNormDocument',
@@ -901,6 +903,26 @@ export type GetExecutorConnectionInput = {
 
 /** Success body of `getExecutorConnection` (`application/json`, HTTP 200). */
 export type GetExecutorConnectionResult = ExecutorConnectionDetail;
+
+// ------------------------------------------------------------------------------------
+// getExecutorTaskImage - GET /runner/tasks/{task_id}/images/{blob_id}
+// ------------------------------------------------------------------------------------
+
+/** Get Executor Task Image */
+export type GetExecutorTaskImageInput = {
+  /** Path parameters, substituted into `/runner/tasks/{task_id}/images/{blob_id}`. */
+  path: {
+    blob_id: RunnerImageBlobId;
+    task_id: ExecutorTaskId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getExecutorTaskImage` (`image/png`, HTTP 200). */
+export type GetExecutorTaskImageResult = Blob;
 
 // ------------------------------------------------------------------------------------
 // getFinding - GET /findings/{finding_uid}
@@ -3155,6 +3177,20 @@ export const OPERATIONS = {
     responseMediaType: 'application/json',
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['execution'],
+  },
+  getExecutorTaskImage: {
+    operationId: 'getExecutorTaskImage',
+    method: 'GET',
+    path: '/runner/tasks/{task_id}/images/{blob_id}',
+    pathParams: ['blob_id', 'task_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'image/png',
+    successStatuses: [200],
+    errorStatuses: [401, 404, 409, 422, 500, 503],
     tags: ['execution'],
   },
   getFinding: {

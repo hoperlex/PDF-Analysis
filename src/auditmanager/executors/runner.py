@@ -80,6 +80,7 @@ __all__ = [
     "generate_token",
     "hash_token",
     "issue_runner_token",
+    "claimed_image",
     "open_task_count",
     "revoke_runner_token",
     "runner_tokens_of",
@@ -136,6 +137,7 @@ class ClaimedTask:
     system: str
     user_text: str
     output_schema: Mapping[str, Any]
+    images: tuple[Mapping[str, Any], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -321,7 +323,29 @@ def _claimed(row: ClaimedRow) -> ClaimedTask:
         task_id=row.task_id, claim_expires_at=row.claim_expires_at, deadline_at=row.deadline_at,
         model=row.expected_model, system=str(payload["system"]),
         user_text=str(payload["user_text"]), output_schema=payload["output_schema"],
+        images=tuple(payload.get("images", ())),
     )
+
+
+def claimed_image(
+    session: Session, principal: RunnerPrincipal, task_id: str, blob_id: str,
+    repository: RunnerRepository | None = None,
+) -> Mapping[str, Any]:
+    """One image reference of a live claim, bound to this token and Attempt.
+
+    The caller reads bytes outside this short transaction and repeats this check
+    afterwards, so a cancelled task cannot be served after a slow Blob read.
+    """
+    store = repository or RunnerRepository()
+    task = _own_task(session, principal, task_id, store)
+    _must_hold(task, principal)
+    if not store.live_claim_and_attempt(session, task_id, principal.token_id):
+        raise _conflict("claim_lost", "the claim on the task is lost")
+    payload = store.payload_of(session, task_id)
+    for image in () if payload is None else payload.get("images", ()):
+        if isinstance(image, Mapping) and image.get("blob_id") == blob_id:
+            return image
+    raise _not_found()
 
 
 def claim_task(

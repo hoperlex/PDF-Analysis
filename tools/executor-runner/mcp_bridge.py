@@ -376,6 +376,13 @@ class Bridge:
             if cancelled.is_set():
                 self.log(f"claim of {task['task_id']} arrived after cancellation; the lease will lapse")
                 return None
+            if task.get("images"):
+                # This text-only bridge cannot expose a PNG as a model image. Do not
+                # return a task that the session could appear to answer from text.
+                self.client.fail(task["task_id"], "image_input_unsupported")
+                self.log(f"{task['task_id']}: image task refused by text-only bridge")
+                return _text_result({"status": "unsupported_image_task",
+                                     "next": "Call claim_task for the next task."})
             self._hold(task)
             self.log(f"claimed {task['task_id']} model={task['model']}")
             return _text_result(
