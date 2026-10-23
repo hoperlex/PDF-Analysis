@@ -67,10 +67,15 @@ class CurrentJobs(JobRepository):
     def __init__(self):
         super().__init__()
         self.current_checks = 0
+        self.unlocked_checks = 0
 
     def require_current(self, session, authority):
         assert authority == AUTHORITY
         self.current_checks += 1
+
+    def check_current_unlocked(self, session, authority):
+        assert authority == AUTHORITY
+        self.unlocked_checks += 1
 
 
 def test_completed_call_can_be_read_by_a_new_current_attempt_of_same_job():
@@ -91,6 +96,16 @@ def test_completed_call_can_be_read_by_a_new_current_attempt_of_same_job():
     assert jobs.current_checks == 2
     assert session.params == {"run_id": AUTHORITY.run_id}
     assert "LEFT JOIN provider_call_effect" in session.query
+
+
+def test_provisional_completed_call_uses_only_unlocked_checks():
+    jobs = CurrentJobs()
+    result = jobs.completed_v3_call(
+        QuerySession([_row()]), AUTHORITY, lock_authority=False,
+    )
+    assert result.model_call_id == "mc_test"
+    assert jobs.unlocked_checks == 2
+    assert jobs.current_checks == 0
 
 
 @pytest.mark.parametrize("rows", ([], [_row(), _row()]))

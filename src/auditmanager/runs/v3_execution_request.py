@@ -78,13 +78,18 @@ def prepare_v3_execution_request(
     jobs: JobRepository | None = None,
     runs: RunRepository | None = None,
     documents: DocumentRepository | None = None,
+    defer_final_fence: bool = False,
 ) -> V3PreparedExecutionRequest:
     """Build one provider body from the persisted Run and verified set bytes.
 
     No provider, Blob write or database write occurs here. The text layer is
     read only from this Run's saved deterministic source stage and checked
     against its Version and Blob. The explicit byte ceiling bounds that read.
+    Deferred fencing is only for CITE's provisional, read-only Blob preflight;
+    its caller must invoke ``fence_v3_execution_request`` before publication.
     """
+    if type(defer_final_fence) is not bool:
+        raise _refuse("invalid_request_fence_mode")
     job_repo = jobs or JobRepository()
     run_repo = runs or RunRepository()
     binding = resolve_v3_execution_binding(
@@ -143,18 +148,42 @@ def prepare_v3_execution_request(
         sealed, model_identity=model_identity, settings=settings,
         idempotency_scope=idempotency_scope,
     )
+    prepared = V3PreparedExecutionRequest(binding, saved_text, pinned, sealed, request)
+    if not defer_final_fence:
+        fence_v3_execution_request(
+            session, authority=authority, registry=registry, prepared=prepared,
+            jobs=job_repo, runs=run_repo, documents=documents,
+        )
+    return prepared
+
+
+def fence_v3_execution_request(
+    session: Session,
+    *,
+    authority: AttemptAuthority,
+    registry: TrustedPackRegistry,
+    prepared: V3PreparedExecutionRequest,
+    jobs: JobRepository | None = None,
+    runs: RunRepository | None = None,
+    documents: DocumentRepository | None = None,
+) -> None:
+    """Lock the current Attempt and compare DB witnesses after all Blob I/O."""
+    if not isinstance(prepared, V3PreparedExecutionRequest):
+        raise _refuse("prepared_request_missing")
     if resolve_v3_execution_binding(
-        session, authority=authority, registry=registry, jobs=job_repo,
-    ) != binding:
+        session, authority=authority, registry=registry, jobs=jobs,
+    ) != prepared.binding:
         raise _refuse("group_binding_changed_during_read")
     recheck_saved_reference_text_facts(
-        session, authority=authority, saved=saved_text,
-        runs=run_repo, documents=documents,
+        session, authority=authority, saved=prepared.saved_text,
+        runs=runs, documents=documents,
     )
     recheck_verified_retrieval_set_facts(
-        session, authority=authority, saved=verified,
+        session, authority=authority, saved=prepared.pinned_corpus.verified_set,
     )
-    return V3PreparedExecutionRequest(binding, saved_text, pinned, sealed, request)
 
 
-__all__ = ["V3PreparedExecutionRequest", "prepare_v3_execution_request"]
+__all__ = [
+    "V3PreparedExecutionRequest", "prepare_v3_execution_request",
+    "fence_v3_execution_request",
+]

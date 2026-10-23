@@ -24,13 +24,15 @@ SETTINGS = V3GenerationSettings(4096, "high", {"type": "adaptive"})
 
 
 class FakeJobs:
-    def __init__(self, call):
+    def __init__(self, call, order):
         self.call = call
+        self.order = order
         self.reads = 0
         self.change_after_reply = False
 
-    def completed_v3_call(self, session, authority):
+    def completed_v3_call(self, session, authority, *, lock_authority=True):
         assert authority is AUTHORITY
+        self.order.append("call_lock" if lock_authority else "call_peek")
         self.reads += 1
         if self.change_after_reply and self.reads == 2:
             return replace(self.call, reply_blob_sha256="f" * 64)
@@ -38,12 +40,14 @@ class FakeJobs:
 
 
 class FakeStore:
-    def __init__(self, payload):
+    def __init__(self, payload, order):
         self.payload = payload
+        self.order = order
         self.reads = 0
 
     def read(self, blob_id, *, verify):
         assert verify is True
+        self.order.append("reply_blob")
         self.reads += 1
         return self.payload
 
@@ -96,11 +100,13 @@ def _arrange(monkeypatch, *, call=None, payload=None, binding_changes=None,
     )
     if prepared_changes:
         prepared = SimpleNamespace(**{**vars(prepared), **prepared_changes})
-    jobs = FakeJobs(call)
-    store = FakeStore(payload)
-    observed = {}
+    observed = {"order": []}
+    jobs = FakeJobs(call, observed["order"])
+    store = FakeStore(payload, observed["order"])
 
     def prepare(session, **kwargs):
+        observed["order"].append("request_blobs")
+        assert kwargs["defer_final_fence"] is True
         assert kwargs["authority"] is AUTHORITY
         assert kwargs["expected_provider_mode"] == call.provider_mode
         assert kwargs["model_identity"] == call.model_id
@@ -109,6 +115,7 @@ def _arrange(monkeypatch, *, call=None, payload=None, binding_changes=None,
         return prepared
 
     def review(corpus, reply, text_layer):
+        observed["order"].append("review")
         assert corpus is prepared.pinned_corpus
         assert text_layer is prepared.saved_text.text_layer
         observed["reply"] = reply
@@ -116,8 +123,12 @@ def _arrange(monkeypatch, *, call=None, payload=None, binding_changes=None,
 
     monkeypatch.setattr(preflight, "prepare_v3_execution_request", prepare)
     monkeypatch.setattr(preflight, "plan_v3_beta_citation_review", review)
-    monkeypatch.setattr(preflight, "resolve_v3_execution_binding",
-                        lambda *args, **kwargs: binding)
+    def fence(session, **kwargs):
+        observed["order"].append("request_lock")
+        assert kwargs["prepared"] is prepared
+        assert kwargs["authority"] is AUTHORITY
+
+    monkeypatch.setattr(preflight, "fence_v3_execution_request", fence)
     return jobs, store, prepared, observed
 
 
@@ -137,6 +148,10 @@ def test_prior_attempt_call_and_reply_feed_only_review(monkeypatch):
     assert observed["reply"].request_sha256 == "a" * 64
     assert result.review == "review-only"
     assert jobs.reads == 2 and store.reads == 1
+    assert observed["order"] == [
+        "call_peek", "request_blobs", "reply_blob", "review",
+        "request_lock", "call_lock",
+    ]
     assert not hasattr(result, "normative_candidates")
 
 
@@ -193,18 +208,19 @@ def test_truncated_completed_call_cannot_yield_provisional_review(monkeypatch):
 
 def test_changed_binding_after_review_refuses(monkeypatch):
     jobs, store, prepared, _ = _arrange(monkeypatch)
-    monkeypatch.setattr(preflight, "resolve_v3_execution_binding",
-                        lambda *args, **kwargs: SimpleNamespace(
-                            **{**vars(prepared.binding), "scope_id": "S2"}))
+    def changed_binding(*args, **kwargs):
+        raise DomainError(ErrorCode.REQUIRED_NORM_UNAVAILABLE,
+                          reason="group_binding_changed_during_read")
+    monkeypatch.setattr(preflight, "fence_v3_execution_request", changed_binding)
     with pytest.raises(DomainError) as caught:
         _execute(jobs, store)
-    assert caught.value.detail_fields["reason"] == "saved_evidence_changed_during_review"
+    assert caught.value.detail_fields["reason"] == "group_binding_changed_during_read"
 
 
 def test_stale_current_attempt_from_completed_call_propagates(monkeypatch):
     jobs, store, _, _ = _arrange(monkeypatch)
 
-    def stale(session, authority):
+    def stale(session, authority, *, lock_authority=True):
         raise DomainError(ErrorCode.STALE_ATTEMPT, aggregate_type="Attempt")
 
     jobs.completed_v3_call = stale
@@ -212,3 +228,20 @@ def test_stale_current_attempt_from_completed_call_propagates(monkeypatch):
         _execute(jobs, store)
     assert caught.value.code is ErrorCode.STALE_ATTEMPT
     assert store.reads == 0
+
+
+def test_stale_attempt_at_final_call_fence_refuses_after_reply(monkeypatch):
+    jobs, store, _, observed = _arrange(monkeypatch)
+    original = jobs.completed_v3_call
+
+    def stale_at_final(session, authority, *, lock_authority=True):
+        if lock_authority:
+            raise DomainError(ErrorCode.STALE_ATTEMPT, aggregate_type="Attempt")
+        return original(session, authority, lock_authority=False)
+
+    jobs.completed_v3_call = stale_at_final
+    with pytest.raises(DomainError) as caught:
+        _execute(jobs, store)
+    assert caught.value.code is ErrorCode.STALE_ATTEMPT
+    assert store.reads == 1
+    assert observed["order"][-2:] == ["review", "request_lock"]

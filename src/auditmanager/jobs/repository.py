@@ -1009,14 +1009,20 @@ class JobRepository:
 
     def completed_v3_call(
         self, session: Session, authority: AttemptAuthority,
+        *, lock_authority: bool = True,
     ) -> V3CompletedCall:
-        """Read one completed v3 call/effect for this Run and Job under current authority.
+        """Read one completed v3 call/effect for this Run and Job.
 
         A prior Attempt of the same Job may have completed the call before its
         worker died. The current Attempt may consume that immutable evidence,
         but a second provider call is never inferred or issued here.
+        The explicit unlocked read is provisional and must be compared again
+        under the final locked authority fence before a publication effect.
         """
-        self.require_current(session, authority)
+        if type(lock_authority) is not bool:
+            raise ValueError("lock_authority must be bool")
+        check = self.require_current if lock_authority else self.check_current_unlocked
+        check(session, authority)
         rows = session.execute(
             _V3_COMPLETED_CALLS, {"run_id": authority.run_id}
         ).mappings().all()
@@ -1090,7 +1096,7 @@ class JobRepository:
                 message="AR v3 model call and completed effect do not agree",
                 stage_id="text_analysis", reason="v3_call_pair_invalid",
             )
-        self.require_current(session, authority)
+        check(session, authority)
         return V3CompletedCall(
             run_id=authority.run_id, job_id=authority.job_id,
             attempt_id=row["attempt_id"], model_call_id=row["model_call_id"],

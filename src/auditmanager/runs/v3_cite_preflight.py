@@ -19,9 +19,9 @@ from auditmanager.runs.repository import RunRepository
 from auditmanager.runs.v3_citations import (
     V3BetaCitationReview, plan_v3_beta_citation_review,
 )
-from auditmanager.runs.v3_execution_binding import resolve_v3_execution_binding
 from auditmanager.runs.v3_execution_request import (
-    V3PreparedExecutionRequest, prepare_v3_execution_request,
+    V3PreparedExecutionRequest, fence_v3_execution_request,
+    prepare_v3_execution_request,
 )
 from auditmanager.runs.v3_group import TrustedPackRegistry
 from auditmanager.runs.v3_provider_call import REPLY_ARTIFACT_ROLE
@@ -65,11 +65,14 @@ def prepare_v3_cite_preflight(
 
     The caller supplies the generation settings used at dispatch. Their exact
     provider-body digest is checked, so drift cannot silently change the body.
-    The current reader APIs hold Attempt locks while reading Blobs; use a
-    dedicated transaction and do not perform slow work before committing it.
+    Early call and request reads are provisional. Only after both external
+    Blobs and grounding does one final transaction lock and compare their
+    saved DB witnesses before the caller may publish a stage.
     """
     job_repo = jobs or JobRepository()
-    call = job_repo.completed_v3_call(session, authority)
+    call = job_repo.completed_v3_call(
+        session, authority, lock_authority=False,
+    )
     if call.run_id != authority.run_id or call.job_id != authority.job_id:
         raise _refuse("completed_call_owner_mismatch")
     prepared = prepare_v3_execution_request(
@@ -78,6 +81,7 @@ def prepare_v3_cite_preflight(
         model_identity=call.model_id, settings=settings,
         idempotency_scope=authority.run_id, recognised_context=recognised_context,
         jobs=job_repo, runs=runs, documents=documents,
+        defer_final_fence=True,
     )
     binding = prepared.binding
     if (binding.run_id != call.run_id
@@ -123,9 +127,11 @@ def prepare_v3_cite_preflight(
         prepared.pinned_corpus, reply.supplied_response,
         prepared.saved_text.text_layer,
     )
-    if (resolve_v3_execution_binding(
-        session, authority=authority, registry=registry, jobs=job_repo,
-    ) != binding or job_repo.completed_v3_call(session, authority) != call):
+    fence_v3_execution_request(
+        session, authority=authority, registry=registry, prepared=prepared,
+        jobs=job_repo, runs=runs, documents=documents,
+    )
+    if job_repo.completed_v3_call(session, authority) != call:
         raise _refuse("saved_evidence_changed_during_review")
     return V3CitePreflight(prepared, call, reply, review)
 

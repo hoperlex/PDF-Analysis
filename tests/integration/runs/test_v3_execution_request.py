@@ -190,6 +190,41 @@ def test_nonlocking_blob_reads_precede_one_final_locked_fence(monkeypatch):
                      "text_witness", "set_witness"]
 
 
+def test_cite_can_defer_request_fence_until_after_reply_blob(monkeypatch):
+    binding, saved = _arrange(monkeypatch)
+    order = []
+
+    def resolve(*args, **kwargs):
+        order.append("lock" if kwargs.get("lock_authority", True) else "peek")
+        return binding
+
+    monkeypatch.setattr(v3_execution_request, "resolve_v3_execution_binding", resolve)
+    monkeypatch.setattr(v3_execution_request, "load_saved_reference_text",
+                        lambda *args, **kwargs: (
+                            order.append("text_blob")
+                            or SavedReferenceTextInput(_layer(), "ver_test", 1)))
+    monkeypatch.setattr(v3_citations, "load_verified_retrieval_set",
+                        lambda *args, **kwargs: order.append("set_blob") or saved)
+    monkeypatch.setattr(v3_execution_request, "recheck_saved_reference_text_facts",
+                        lambda *args, **kwargs: order.append("text_witness"))
+    monkeypatch.setattr(v3_execution_request, "recheck_verified_retrieval_set_facts",
+                        lambda *args, **kwargs: order.append("set_witness"))
+    prepared = v3_execution_request.prepare_v3_execution_request(
+        object(), authority=AUTHORITY, registry=object(), blob_store=object(),
+        max_text_bytes=100_000, expected_provider_mode="recorded",
+        model_identity="fixture/model", settings=SETTINGS,
+        runs=SimpleNamespace(get=lambda *args: _run()), jobs=object(),
+        defer_final_fence=True,
+    )
+    order.append("reply_blob")
+    v3_execution_request.fence_v3_execution_request(
+        object(), authority=AUTHORITY, registry=object(), prepared=prepared,
+        jobs=object(), runs=object(),
+    )
+    assert order == ["peek", "text_blob", "set_blob", "reply_blob", "lock",
+                     "text_witness", "set_witness"]
+
+
 @pytest.mark.parametrize("changed", ["text", "set"])
 def test_changed_db_witness_refuses_after_final_locked_fence(monkeypatch, changed):
     binding, _ = _arrange(monkeypatch)
