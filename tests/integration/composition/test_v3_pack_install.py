@@ -185,4 +185,3 @@ def test_a_variable_that_names_a_bad_manifest_refuses_the_start(
         registry_of(monkeypatch, env_of(**{PACK_MANIFEST_ENV: str(path)}))
     assert PACK_MANIFEST_ENV in str(refused.value)
     assert str(tmp_path) not in str(refused.value), "the configured path stays out of the message"
-
