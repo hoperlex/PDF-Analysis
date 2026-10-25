@@ -58,11 +58,34 @@ from auditmanager.bootstrap.adapters import (
 )
 from auditmanager.bootstrap.settings import AppSettings, ConfigurationError
 from auditmanager.bootstrap.settings import load as load_settings
-from auditmanager.runs.public import DurableCarrier, ReclaimingCarrier, TrustedPackRegistry, run_to_terminal
+from auditmanager.runs.public import (
+    PACK_MANIFEST_ENV,
+    DurableCarrier,
+    PackManifestRefused,
+    ReclaimingCarrier,
+    TrustedPackRegistry,
+    load_trusted_pack_registry,
+    run_to_terminal,
+)
 from auditmanager.sections.public import SECTION_CODES, section_names
 from auditmanager.releases.public import (
     ReleaseRepository, compute_build_id, read_product_version,
 )
+
+
+def _ar_v3_pack_registry(env: dict[str, str]) -> TrustedPackRegistry:
+    """`AR-V3-BETA-PACK-INSTALL-01`: install the sealed reviewed pack named by the environment.
+
+    Without ``AR_V3_BETA_PACK_MANIFEST`` the registry stays empty and group starts refuse. With
+    it, a manifest that cannot be loaded refuses the start: an empty registry is never the
+    answer to a pack the operator meant to install.
+    """
+    try:
+        return load_trusted_pack_registry(env.get(PACK_MANIFEST_ENV))
+    except PackManifestRefused as exc:
+        raise ConfigurationError(
+            f"{PACK_MANIFEST_ENV} names a reviewed-pack manifest the server refuses: {exc}"
+        ) from exc
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,7 +177,7 @@ def build_worker_runtime(
     # `W59-SECTION-SEAL-01`. The worker runs each claimed run with the profile it pinned,
     # resolved through the same registry the application routes with.
     text_profiles = load_text_profiles()
-    ar_v3_pack_registry = TrustedPackRegistry.empty()
+    ar_v3_pack_registry = _ar_v3_pack_registry(env)
 
     def execute(run_id: str, worker_id: str) -> None:
         run_to_terminal(
@@ -291,7 +314,7 @@ def build_application(
         else DurableCarrier(sessions)
     )
 
-    ar_v3_pack_registry = TrustedPackRegistry.empty()
+    ar_v3_pack_registry = _ar_v3_pack_registry(env)
     run_adapter = RunAdapter(
         sessions,
         blob_store=store,
