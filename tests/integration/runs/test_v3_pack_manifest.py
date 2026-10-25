@@ -260,6 +260,11 @@ REFUSALS: list[tuple[str, Callable[[dict[str, Any]], None], bool, str, str]] = [
     ("profile_unresolved", _set(("analysis_profile_id",), "ap_01M5M28ZCDD8VPSP1BTAEW92YF"), True, "pack_refused", "required_norm_unavailable (analysis_profile)"),
     ("bundle_unresolved", _set(("prompt_bundle_id",), "pb_01M5M28ZCDVCR37BX1884JGSPN"), True, "pack_refused", "analysis_profile"),
     ("snapshot_differs_from_profile", _all_snapshots("ns_01M59N8QNBVN91ACA2HCE6VE75"), True, "pack_refused", "required_norm_unavailable"),
+    # AR-V3-BETA-REVIEW-FIXES-02 (C): the builder the server selects sets with is not the one named
+    ("builder_version_unknown", _set(("scopes", 0, "builder_version"), "totally-wrong-builder"), True, "builder_version_mismatch", "scopes[0].builder_version"),
+    ("builder_version_previous_release", _set(("scopes", 4, "builder_version"), "norm-retrieval-set-prep-v0"), True, "builder_version_mismatch", "scopes[4].builder_version"),
+    # AR-V3-BETA-REVIEW-FIXES-02 (B): an identity followed by a line break is not that identity
+    ("set_id_trailing_newline", lambda d: d["scopes"][5].update(set_id=d["scopes"][5]["set_id"] + "\n"), False, "manifest_value", "scopes[5].set_id"),
 ]
 
 
@@ -296,6 +301,67 @@ def test_each_refusal_has_its_own_reason(
 )
 def test_bytes_that_are_not_a_manifest_object_are_refused(data: bytes, reason: str) -> None:
     assert _refusal(data).reason == reason
+
+
+def _escaped(document: Any) -> bytes:
+    """JSON with every non-ASCII character escaped, so a lone surrogate survives as ``\\udXXX``."""
+    return json.dumps(document, ensure_ascii=True).encode("ascii")
+
+
+LONE_SURROGATE = "x\ud800"
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        pytest.param(_set(("scopes", 0, "reviewed_content_key"), LONE_SURROGATE), id="hashed_scope_field"),
+        pytest.param(_set(("scopes", 3, "chunking_profile"), LONE_SURROGATE), id="another_hashed_field"),
+        pytest.param(_set(("analysis_profile_id",), LONE_SURROGATE), id="profile_id"),
+        pytest.param(_set(("review", "reviewer"), LONE_SURROGATE), id="unhashed_attestation_field"),
+        pytest.param(_set(("review", "scope_statement"), "ок " + LONE_SURROGATE), id="attestation_after_text"),
+        pytest.param(_set((LONE_SURROGATE,), 1), id="object_key"),
+        pytest.param(_set(("scopes", 1, LONE_SURROGATE), 1), id="nested_object_key"),
+        pytest.param(_set(("review", "reviewed_at"), "2026-10-26\udfff"), id="low_surrogate"),
+    ],
+)
+def test_a_string_that_is_not_utf8_text_is_refused_with_its_own_reason(
+    mutate: Callable[[dict[str, Any]], None],
+) -> None:
+    # `pack.sha256` encodes every hashed field and `encode_json` every attestation field, so a
+    # lone surrogate used to end as a UnicodeEncodeError at group start or on the status route,
+    # not as a refusal the operator can read.
+    document = _document()
+    mutate(document)
+    with pytest.raises(PackManifestRefused) as caught:
+        parse_manifest(_escaped(document))
+    assert caught.value.reason == "manifest_string_encoding"
+    assert LONE_SURROGATE[1:] not in caught.value.detail
+
+
+def test_a_file_holding_a_lone_surrogate_never_installs_and_never_raises_a_raw_error(
+    tmp_path: Path,
+) -> None:
+    document = _document()
+    document["review"]["decision_ref"] = LONE_SURROGATE
+    path = tmp_path / "pack.json"
+    path.write_bytes(_escaped(document))
+    assert _reason(path) == "manifest_string_encoding"
+    status, _out, err = _run(["verify", "--manifest", str(path)])
+    assert status == 2 and err.startswith("v3-pack REFUSED manifest_string_encoding")
+
+
+def test_sealing_refuses_a_string_that_is_not_utf8_text() -> None:
+    review = ReviewAttestation("Test Reviewer", "expert", "2026-10-26", "REF-" + LONE_SURROGATE, "scope")
+    with pytest.raises(PackManifestRefused) as in_review:
+        seal_manifest(_pack(), review)
+    assert in_review.value.reason == "manifest_string_encoding"
+    scopes = list(_pack().scopes)
+    scopes[2] = replace(
+        scopes[2], identity=replace(scopes[2].identity, reviewed_content_key=LONE_SURROGATE),
+    )
+    with pytest.raises(PackManifestRefused) as in_scope:
+        seal_manifest(_pack(scopes=tuple(scopes)), REVIEW)
+    assert in_scope.value.reason == "manifest_string_encoding"
 
 
 def test_a_duplicate_key_is_never_resolved_in_the_last_ones_favour() -> None:
@@ -594,6 +660,8 @@ def test_seal_into_a_missing_directory_is_a_typed_write_failure(tmp_path: Path) 
         pytest.param(lambda s: s["scopes"][1].update(map_sha256=s["scopes"][0]["map_sha256"]), "spec_scopes", id="duplicate_map"),
         pytest.param(lambda s: s["scopes"][0].update(map_sha256="A" * 64), "spec_value", id="map_not_lowercase_hex"),
         pytest.param(lambda s: s["scopes"][0].update(snapshot_id=""), "spec_value", id="blank_value"),
+        pytest.param(lambda s: s.update(analysis_profile_id=LONE_SURROGATE), "spec_value", id="lone_surrogate_in_profile"),
+        pytest.param(lambda s: s["scopes"][3].update(reviewed_content_key=LONE_SURROGATE), "spec_value", id="lone_surrogate_in_scope"),
     ],
 )
 def test_a_malformed_scopes_file_is_refused_before_any_database_read(

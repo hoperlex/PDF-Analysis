@@ -20,7 +20,7 @@ from auditmanager.api.routers.ar_v3_groups import build_ar_v3_group_routes
 from auditmanager.api.schemas import models
 from auditmanager.api.security import OPERATION_ROLES, ROLE_ADMIN, ROLE_EXPERT
 from auditmanager.bootstrap.adapters import RunAdapter
-from auditmanager.norms.public import SetIdentity
+from auditmanager.norms.public import SET_BUILDER_VERSION, SetIdentity
 from auditmanager.runs.public import ParsedPackManifest, ReviewAttestation, parse_manifest, seal_manifest
 from auditmanager.runs.v3_group import SCOPES, ReviewedScope, TrustedPack
 from auditmanager.shared.identity import NormRetrievalSetId
@@ -46,7 +46,7 @@ def _installed() -> ParsedPackManifest:
                     map_sha256=f"{index:x}" * 64, snapshot_id=PROFILE.snapshot_id,
                     reviewed_content_key="ar-v3-beta-synthetic-key",
                     embedding_build="bge-m3-dense-v1:characters-v2:1200",
-                    builder_version="synthetic-builder-9",
+                    builder_version=SET_BUILDER_VERSION,  # the loader refuses any other builder
                 ),
                 chunking_profile="characters-v2:1200",
                 set_id=str(NormRetrievalSetId.new()), set_sha256=f"{index + 8:x}" * 64,
@@ -120,7 +120,7 @@ def test_no_map_set_snapshot_or_scope_digest_is_ever_served() -> None:
         secrets[f"{scope.scope_id} set_id"] = scope.set_id
         secrets[f"{scope.scope_id} set_sha256"] = scope.set_sha256
     secrets["reviewed_content_key"] = "ar-v3-beta-synthetic-key"
-    secrets["builder_version"] = "synthetic-builder-9"
+    secrets["builder_version"] = SET_BUILDER_VERSION
     secrets["embedding_build"] = "bge-m3-dense-v1"
     for what, value in secrets.items():
         assert value not in text, f"{what} reached the response"
