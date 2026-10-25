@@ -1,0 +1,228 @@
+/**
+ * `AR-V3-BETA-PACK-STATUS-WEB-01`: the settings panel that says whether the reviewed AR v3 pack
+ * is installed.
+ *
+ * Two subjects. The pure classification of `getArV3BetaPackStatus` — three outcomes, the third a
+ * fault that is never drawn as installed and never as an empty state — and the panel rendered
+ * from a seeded cache in each of its five states (`D-53`: every assertion is on markup a
+ * reviewer would see).
+ */
+
+import { createElement } from 'react';
+import { describe, expect, it } from 'vitest';
+
+import { ApiError, queryKeys } from '@/shared/api';
+import type { ErrorCode } from '@/shared/api';
+import { AR_V3_PACK_SCOPE_IDS, readArV3PackStatus } from '@/entities/audit-run';
+import type { ArV3PackFaultReason, ArV3PackReading } from '@/entities/audit-run';
+import {
+  ATTESTATION_SENTENCE,
+  PACK_NOT_INSTALLED_SENTENCE,
+  PACK_READ_FAILED_TITLE,
+  packDigestShown,
+} from '@/widgets/ar-v3-beta-pack';
+import { ArV3BetaPack } from '@/widgets/ar-v3-beta-pack';
+import { AnalysisSettingsPage } from '@/_pages/analysis-settings';
+
+import { newClient, renderScreen, seedError } from '../screens/harness';
+
+import { NOT_INSTALLED_PACK, installedPackFixture, withoutMember } from './ar-v3-beta-pack-fixtures';
+
+const REAL_DIGEST = '6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f';
+
+function faultOf(body: unknown): ArV3PackFaultReason {
+  const reading = readArV3PackStatus(body);
+  if (reading.kind !== 'fault') throw new Error(`expected a fault, read ${reading.kind}`);
+  return reading.reason;
+}
+
+describe('the pack status classification has exactly three outcomes', () => {
+  it('reads the installed shape with every member, and keeps the six scopes in order', () => {
+    const reading = readArV3PackStatus(installedPackFixture({ pack_sha256: REAL_DIGEST }));
+    expect(reading.kind).toBe('installed');
+    if (reading.kind !== 'installed') return;
+    expect(reading.packSha256).toBe(REAL_DIGEST);
+    expect(reading.scopeIds).toEqual(['F1', 'F2', 'A1', 'A2', 'S1', 'S2']);
+    expect(reading.scopeIds).toEqual([...AR_V3_PACK_SCOPE_IDS]);
+    expect(reading.review.reviewer).toBe('Иванова Мария Петровна');
+    expect(reading.review.reviewed_at).toBe('2026-10-20');
+  });
+
+  it('reads not_installed only when it carries nothing else', () => {
+    expect(readArV3PackStatus(NOT_INSTALLED_PACK)).toEqual({ kind: 'not_installed' });
+    expect(faultOf({ state: 'not_installed', pack_sha256: REAL_DIGEST })).toBe('members_beside_not_installed');
+    expect(faultOf({ state: 'not_installed', scope_ids: undefined })).toBe('members_beside_not_installed');
+  });
+
+  it('is a fault, never installed and never an empty state, when the answer breaks the contract', () => {
+    const installed = installedPackFixture({ pack_sha256: REAL_DIGEST });
+    const withoutReview = withoutMember(installed, 'review');
+    const withoutScopes = withoutMember(installed, 'scope_ids');
+    const withoutProfile = withoutMember(installed, 'analysis_profile_id');
+    const cases: ReadonlyArray<readonly [string, unknown, ArV3PackFaultReason]> = [
+      ['null', null, 'not_an_object'],
+      ['an array', [installed], 'not_an_object'],
+      ['a string', 'installed', 'not_an_object'],
+      ['no state', {}, 'unknown_state'],
+      ['an undeclared state', { state: 'withdrawn' }, 'unknown_state'],
+      ['an upper-case state', { state: 'Installed' }, 'unknown_state'],
+      ['installed without a review', withoutReview, 'missing_member'],
+      ['installed without its scopes', withoutScopes, 'missing_member'],
+      ['installed without its profile', withoutProfile, 'missing_member'],
+      ['an invented member', { ...installed, snapshot_id: 'ns_x' }, 'unknown_member'],
+      ['a digest of the wrong length', { ...installed, pack_sha256: REAL_DIGEST.slice(1) }, 'bad_digest'],
+      ['an upper-case digest', { ...installed, pack_sha256: REAL_DIGEST.toUpperCase() }, 'bad_digest'],
+      ['five scopes', { ...installed, scope_ids: ['F1', 'F2', 'A1', 'A2', 'S1'] }, 'bad_scope_list'],
+      ['seven scopes', { ...installed, scope_ids: [...AR_V3_PACK_SCOPE_IDS, 'S3'] }, 'bad_scope_list'],
+      ['scopes out of order', { ...installed, scope_ids: ['F2', 'F1', 'A1', 'A2', 'S1', 'S2'] }, 'bad_scope_list'],
+      ['a repeated scope', { ...installed, scope_ids: ['F1', 'F1', 'A1', 'A2', 'S1', 'S2'] }, 'bad_scope_list'],
+      ['scopes that are not an array', { ...installed, scope_ids: 'F1,F2,A1,A2,S1,S2' }, 'bad_scope_list'],
+      ['a null review', { ...installed, review: null }, 'bad_attestation'],
+      [
+        'a blank reviewer',
+        { ...installed, review: { ...installed.review, reviewer: '   ' } },
+        'bad_attestation',
+      ],
+      [
+        'a review date that is not a date',
+        { ...installed, review: { ...installed.review, reviewed_at: '20 октября' } },
+        'bad_attestation',
+      ],
+      [
+        'an invented attestation member',
+        { ...installed, review: { ...installed.review, verified: true } },
+        'bad_attestation',
+      ],
+    ];
+    for (const [name, body, reason] of cases) {
+      const reading: ArV3PackReading = readArV3PackStatus(body);
+      expect(reading.kind, name).toBe('fault');
+      expect(faultOf(body), name).toBe(reason);
+    }
+  });
+
+  it('shows the first twelve hex characters of the digest and says it is shortened', () => {
+    expect(packDigestShown(REAL_DIGEST)).toBe('6d53674f688f…');
+    expect(packDigestShown(REAL_DIGEST).replace('…', '')).toHaveLength(12);
+  });
+});
+
+const panel = (client = newClient()): string => renderScreen(client, createElement(ArV3BetaPack));
+
+describe('the pack panel in each of its five states', () => {
+  it('loading: no panel yet, and no start-related claim', () => {
+    const markup = panel();
+    expect(markup).toContain('Загрузка: статуса пакета проверенных норм АР v3…');
+    expect(markup).not.toContain('data-ar-v3-pack-status="installed"');
+    expect(markup).not.toContain('data-ar-v3-pack-status="not_installed"');
+  });
+
+  it('error: its own sentence, the correlation id and a retry — not the installed or empty panel', () => {
+    const client = newClient();
+    seedError(
+      client,
+      queryKeys.runs.arV3PackStatus(),
+      new ApiError(
+        503,
+        {
+          contract_version: '1.5.0',
+          error_code: 'dependency_unavailable' as ErrorCode,
+          message: 'm',
+          correlation_id: 'cid-pack',
+          retryable: true,
+        },
+        'cid-pack',
+      ),
+    );
+    const markup = panel(client);
+    expect(markup).toContain(PACK_READ_FAILED_TITLE);
+    expect(PACK_READ_FAILED_TITLE).toBe('Не удалось прочитать статус пакета проверенных норм АР v3');
+    expect(markup).toContain('data-ar-v3-pack-status="error"');
+    expect(markup).toContain('cid-pack');
+    expect(markup).toContain('>Повторить</button>');
+    expect(markup).not.toContain(PACK_NOT_INSTALLED_SENTENCE);
+    expect(markup).not.toContain('data-ar-v3-pack-state="installed"');
+  });
+
+  it('not installed: the fixed sentence, and nothing about a reviewer', () => {
+    const client = newClient();
+    client.setQueryData(queryKeys.runs.arV3PackStatus(), NOT_INSTALLED_PACK);
+    const markup = panel(client);
+    expect(markup).toContain('data-ar-v3-pack-state="not_installed"');
+    expect(markup).toContain('Пакет проверенных норм АР v3 не установлен: запуск шести проверок недоступен.');
+    expect(markup).not.toContain('Запись рецензента');
+    expect(markup).not.toContain('<button');
+  });
+
+  it('installed: profile, shortened digest, six scopes, the attestation and the fixed caveat', () => {
+    const client = newClient();
+    client.setQueryData(queryKeys.runs.arV3PackStatus(), installedPackFixture({ pack_sha256: REAL_DIGEST }));
+    const markup = panel(client);
+    expect(markup).toContain('data-ar-v3-pack-state="installed"');
+    expect(markup).toContain('ap_01M5AXG1K22R027A33VTKZ468P');
+    expect(markup).toContain('>6d53674f688f…<');
+    expect(markup).toContain(`title="${REAL_DIGEST}"`);
+    expect(markup).toContain('data-ar-v3-pack-scopes="F1 F2 A1 A2 S1 S2"');
+    expect(markup).toContain('F1, F2, A1, A2, S1, S2');
+    for (const text of [
+      'Иванова Мария Петровна',
+      'главный эксперт по разделу АР',
+      '2026-10-20',
+      'решение владельца № 146',
+      'шесть карт норм и шесть наборов источников для жилых домов Ф1.3',
+    ]) {
+      expect(markup, text).toContain(text);
+    }
+    expect(markup).toContain(
+      'Запись рецензента приложена при установке пакета; система её не проверяет, цитаты остаются ' +
+        'предварительными и требуют проверки эксперта.',
+    );
+    expect(ATTESTATION_SENTENCE).toBe(
+      'Запись рецензента приложена при установке пакета; система её не проверяет, цитаты остаются ' +
+        'предварительными и требуют проверки эксперта.',
+    );
+  });
+
+  it('installed: a reviewer\'s free text is escaped, never markup', () => {
+    const client = newClient();
+    const fixture = installedPackFixture();
+    client.setQueryData(queryKeys.runs.arV3PackStatus(), {
+      ...fixture,
+      review: { ...fixture.review!, scope_statement: '<script>решение</script>' },
+    });
+    const markup = panel(client);
+    expect(markup).toContain('&lt;script&gt;решение&lt;/script&gt;');
+    expect(markup).not.toContain('<script>решение</script>');
+  });
+
+  it('fault: says the answer breaks the contract and draws neither installed nor empty', () => {
+    for (const body of [
+      withoutMember(installedPackFixture(), 'review'),
+      { state: 'withdrawn' },
+      { ...installedPackFixture(), scope_ids: ['F1', 'F2'] },
+    ]) {
+      const client = newClient();
+      client.setQueryData(queryKeys.runs.arV3PackStatus(), body);
+      const markup = panel(client);
+      expect(markup).toContain('data-ar-v3-pack-status="fault"');
+      expect(markup).toContain('Ответ сервера не соответствует контракту');
+      expect(markup).not.toContain('data-ar-v3-pack-state=');
+      expect(markup).not.toContain(PACK_NOT_INSTALLED_SENTENCE);
+      expect(markup).not.toContain('Запись рецензента');
+    }
+  });
+});
+
+describe('«Настройки анализа» mounts the pack panel above the group review', () => {
+  it('puts the panel before the lookup form and after the frozen source preview', () => {
+    const client = newClient();
+    client.setQueryData(queryKeys.runs.arV3PackStatus(), installedPackFixture());
+    const markup = renderScreen(client, createElement(AnalysisSettingsPage));
+    const preview = markup.indexOf('data-ar-v3-beta-status');
+    const pack = markup.indexOf('data-ar-v3-pack-status="installed"');
+    const review = markup.indexOf('data-ar-v3-group-review');
+    expect(preview).toBeGreaterThan(-1);
+    expect(pack).toBeGreaterThan(preview);
+    expect(review).toBeGreaterThan(pack);
+  });
+});

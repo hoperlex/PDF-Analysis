@@ -131,6 +131,10 @@ import NotFound from '@/app/not-found';
 import ErrorBoundary from '@/app/error';
 import { DecisionHistory } from '@/widgets/decision-history';
 import { ArV3BetaReview } from '@/widgets/ar-v3-beta-review';
+import { ArV3BetaPack } from '@/widgets/ar-v3-beta-pack';
+import {
+  MALFORMED_GROUP_ANSWER, StartArV3GroupView, classifyArV3GroupStartFailure,
+} from '@/features/start-ar-v3-group';
 import { ExecutionJournal } from '@/widgets/execution-journal';
 import { ExecutionQueue } from '@/widgets/execution-queue';
 import { WorkerList } from '@/widgets/worker-list';
@@ -175,6 +179,9 @@ import { CONTRACT_PATH, SEAMS_PATH, readJson, readText, repoRelative, walkFiles 
 import { join } from 'node:path';
 import { REPO_ROOT } from './lib/repo';
 import { newClient, renderScreen, seedError } from '../unit/screens/harness';
+import {
+  NOT_INSTALLED_PACK, installedPackFixture, withoutMember,
+} from '../unit/analysis-settings/ar-v3-beta-pack-fixtures';
 import { optimisationShapes } from '../unit/optimisation/fixtures';
 import { proposalShapes } from '../unit/optimisation-proposals/fixtures';
 import { derivedScreens, malformedVariants, wellFormed } from '../unit/screens/route-screens';
@@ -1139,6 +1146,10 @@ const KEYS = {
   executorRoutes: queryKeys.execution.routes(),
   // `W59-ANALYSIS-SETTINGS-01`: «Настройки анализа», the registry's fifteen rows.
   analysisProfiles: queryKeys.analysis.profiles(),
+  // `AR-V3-BETA-PACK-STATUS-WEB-01`: whether the reviewed AR v3 pack is installed. A key of
+  // `KEYS` is seeded in the loaded state and ERRORED in `failedClient`, so the settings panel and
+  // the version's run list are rendered installed, loading (cold) and failed without a case of their own.
+  arV3PackStatus: queryKeys.runs.arV3PackStatus(),
   dashboardSummary: queryKeys.dashboard.summary(),
   // The home page's own two reads (`W50-HOME-01`), seeded by `W50-SHELL-FRAME` so the recent
   // list and the administrator's tile render loaded rather than pending in every state.
@@ -1271,6 +1282,7 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   // Every shape of connection and probe, and a route with a standby.
   seedExecutors(client);
   client.setQueryData(KEYS.analysisProfiles, { items: ANALYSIS_PROFILES });
+  client.setQueryData(KEYS.arV3PackStatus, installedPackFixture());
   // A current snapshot and the three ways another one can stand; two designations; two hits;
   // a document with a heading, a body paragraph and an unreliable table row.
   client.setQueryData(KEYS.normSnapshots, { items: NORM_SNAPSHOTS, page });
@@ -1795,6 +1807,64 @@ const QUEUE_REQUEST: RegistrationRequest = {
   submitted_at: '2026-10-08T00:00:00Z',
 };
 
+/**
+ * A refusal of `startArV3BetaGroup` with the classifiers the server attaches, for the control's
+ * failure branches. Cyrillic message: only the sentences this application wrote are judged.
+ */
+function startRefusal(
+  status: number,
+  code: ErrorCode,
+  details?: Record<string, string | number | boolean | null>,
+): ApiError {
+  const envelope: ErrorEnvelope = {
+    contract_version: '1.5.0',
+    error_code: code,
+    message: 'Сообщение об отказе.',
+    correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
+    retryable: code === 'dependency_unavailable' || code === 'idempotency_key_in_progress',
+    ...(details === undefined ? {} : { details }),
+  };
+  return new ApiError(status, envelope, '0f0e9d8c-7b6a-4948-b726-150413021100');
+}
+
+/**
+ * Every state of «Запустить шесть проверок АР v3» that a settled mutation produces: pending, each
+ * refusal the start raises, the generic reading of a failure outside that set, and a 202 without a
+ * usable group address. The control keeps these in a `useMutation` observer one static pass cannot
+ * settle, so the presentational view is rendered once per failure (`D-82`).
+ */
+function startGroupViews(): ReactElement {
+  const failures = [
+    startRefusal(503, 'dependency_unavailable', { dependency: 'ar_v3_trusted_pack' }),
+    startRefusal(503, 'dependency_unavailable', { dependency: 'metadata_store' }),
+    startRefusal(422, 'required_norm_unavailable', { reference_kind: 'norms_snapshot' }),
+    startRefusal(422, 'version_classification_required'),
+    startRefusal(422, 'section_profile_unavailable'),
+    startRefusal(422, 'analysis_input_invalid', { reason: 'missing_required_input' }),
+    startRefusal(422, 'analysis_input_budget_exceeded', { character_count: 300000, budget_characters: 152000 }),
+    startRefusal(409, 'idempotency_key_reuse'),
+    startRefusal(409, 'idempotency_key_in_progress'),
+    startRefusal(409, 'idempotency_key_stale'),
+    startRefusal(404, 'not_found'),
+    startRefusal(401, 'authentication_required'),
+    startRefusal(403, 'permission_denied'),
+    startRefusal(500, 'internal_error'),
+    new TransportError('Запрос не дошёл.', { retryable: true }),
+  ].map(classifyArV3GroupStartFailure);
+  const view = (key: string, pending: boolean, failure: ReturnType<typeof classifyArV3GroupStartFailure> | null) =>
+    createElement(StartArV3GroupView, {
+      key, projectUid: PROJECT_UID, versionUid: VERSION_UID, pending, failure, onSend: () => undefined,
+    });
+  return createElement(
+    'div',
+    null,
+    view('idle', false, null),
+    view('pending', true, null),
+    ...failures.map((failure, index) => view(`failure-${index}`, false, failure)),
+    view('malformed', false, MALFORMED_GROUP_ANSWER),
+  );
+}
+
 type ScreenCase = {
   readonly name: string;
   readonly make: () => ReactElement;
@@ -1941,6 +2011,40 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
       queryKeys.runs.arV3GroupReview('arg_01M2545JSD15ETSNNV904X991K'),
       { group_id: 'arg_01M2545JSD15ETSNNV904X991K', version_uid: VERSION_UID, members: [] },
     ),
+  },
+  // `AR-V3-BETA-PACK-STATUS-WEB-01`: the pack panel in the states a default cache does not
+  // select. Loading (cold) and failed (`failedClient`) come from `KEYS`; installed is seeded by
+  // `loadedClient`, but these cases seed their own so they do not depend on that.
+  {
+    name: 'ar-v3-pack-installed',
+    make: () => createElement(ArV3BetaPack),
+    seedClient: (client) => client.setQueryData(KEYS.arV3PackStatus, installedPackFixture()),
+  },
+  {
+    name: 'ar-v3-pack-not-installed',
+    make: () => createElement(ArV3BetaPack),
+    seedClient: (client) => client.setQueryData(KEYS.arV3PackStatus, NOT_INSTALLED_PACK),
+  },
+  {
+    name: 'ar-v3-pack-fault-without-review',
+    make: () => createElement(ArV3BetaPack),
+    seedClient: (client) =>
+      client.setQueryData(KEYS.arV3PackStatus, withoutMember(installedPackFixture(), 'review')),
+  },
+  {
+    name: 'ar-v3-pack-fault-unknown-state',
+    make: () => createElement(ArV3BetaPack),
+    seedClient: (client) => client.setQueryData(KEYS.arV3PackStatus, { state: 'withdrawn' }),
+  },
+  {
+    name: 'ar-v3-pack-fault-wrong-scopes',
+    make: () => createElement(ArV3BetaPack),
+    seedClient: (client) =>
+      client.setQueryData(KEYS.arV3PackStatus, { ...installedPackFixture(), scope_ids: ['F1', 'F2'] }),
+  },
+  {
+    name: 'ar-v3-group-start-states',
+    make: startGroupViews,
   },
   // `W60-PRICE-LIST-01`: the project's «Оптимизация» tab in every branch its widgets have.
   ...optimisationShapes(),

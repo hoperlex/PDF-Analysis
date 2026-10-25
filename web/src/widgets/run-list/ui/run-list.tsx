@@ -14,14 +14,22 @@
  *
  * The empty state carries the Start-run control as its action, because a version with no
  * run is exactly the state from which a user needs one.
+ *
+ * `AR-V3-BETA-PACK-STATUS-WEB-01`: beside it, and only beside it when the server's reviewed
+ * AR v3 pack is installed and its status answer is valid, the control that starts the six
+ * checks. While the status is loading, failed, says not installed or breaks the contract the
+ * control is not drawn at all — no disabled button, no placeholder; «Настройки анализа»
+ * carries the explanation. A started group opens its review on that screen.
  */
 
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import type { ProjectUid, RunStatus, VersionUid } from '@/shared/api';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import { classifyListingFailure, routes } from '@/shared/lib';
-import { RunRow, useRunList } from '@/entities/audit-run';
+import { RunRow, arV3GroupReviewAddress, useArV3PackStatus, useRunList } from '@/entities/audit-run';
+import { StartArV3GroupControl } from '@/features/start-ar-v3-group';
 import { StartRunControl } from '@/features/start-run';
 
 export interface RunListProps {
@@ -31,16 +39,36 @@ export interface RunListProps {
   readonly onRunStarted?: ((run: RunStatus) => void) | undefined;
 }
 
+/**
+ * The six-check start, opening the started group's review. Its own component so the router
+ * is read only when the control is drawn: a list without an installed pack mounts none.
+ */
+function StartArV3Group({ projectUid, versionUid }: { readonly projectUid: ProjectUid; readonly versionUid: VersionUid }) {
+  const router = useRouter();
+  return (
+    <StartArV3GroupControl
+      projectUid={projectUid}
+      versionUid={versionUid}
+      onStarted={(group) => router.push(arV3GroupReviewAddress(group.group_id))}
+    />
+  );
+}
+
 export function RunList({ projectUid, versionUid, onRunStarted }: RunListProps) {
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const query = useRunList(versionUid, cursor);
+  const { view: pack } = useArV3PackStatus();
+  const packInstalled = pack.phase === 'read' && pack.reading.kind === 'installed';
 
   const startControl = (
-    <StartRunControl
-      projectUid={projectUid}
-      versionUid={versionUid}
-      {...(onRunStarted === undefined ? {} : { onStarted: onRunStarted })}
-    />
+    <>
+      <StartRunControl
+        projectUid={projectUid}
+        versionUid={versionUid}
+        {...(onRunStarted === undefined ? {} : { onStarted: onRunStarted })}
+      />
+      {packInstalled ? <StartArV3Group projectUid={projectUid} versionUid={versionUid} /> : null}
+    </>
   );
 
   if (query.isPending) return <LoadingState what="прогоны этой версии" />;

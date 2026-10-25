@@ -1,0 +1,5 @@
+.control {
+  margin-top: var(--am-gap);
+  padding-top: var(--am-gap);
+  border-top: 1px solid var(--am-line-soft);
+}
