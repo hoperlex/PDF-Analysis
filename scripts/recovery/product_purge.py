@@ -103,8 +103,15 @@ KEEP_TABLES = (
 MIXED_TABLES = frozenset(("audit_event", "blob", "command_record"))
 
 #: Truncated together, in one statement (they reference each other).
+#: `0032_ar_v3_run_group`: a group of six runs of one version, with their pins and members.
+#: ``ar_v3_run_group`` references the product ``project``, ``document_version`` and command
+#: receipt; ``ar_v3_run_group_member`` references the group and ``audit_run``. Both are
+#: immutable rows (``am_immutable_row``), so a row DELETE is refused by design: the one
+#: multi-table TRUNCATE below is the only way out, and PostgreSQL refuses it unless a table and
+#: every table that references it are named in the same statement.
 PRODUCT_TABLES = frozenset((
-    "analysis_artifact_publication", "attempt", "audit_run", "document", "document_version",
+    "analysis_artifact_publication", "ar_v3_run_group", "ar_v3_run_group_member", "attempt",
+    "audit_run", "document", "document_version",
     "document_version_classification", "document_version_classification_correction",
     "executor_task", "expert_decision_event", "finding", "finding_evidence", "finding_observation",
     "finding_observation_norm_citation", "input_manifest_entry", "job", "lease", "model_call",
@@ -132,8 +139,11 @@ KEEP_COMMAND_TYPES = frozenset((
 PRODUCT_COMMAND_TYPES = frozenset((
     "append_decision", "cancel_audit_run", "carry_over_decision", "create_project",
     "decide_optimisation_proposal", "reaudit_run", "set_execution_paused", "set_job_priority",
-    "set_worker_intake", "start_audit_run", "start_optimisation_pass", "upload_price_list",
-    "upload_source_document",
+    "set_worker_intake",
+    # `0032_ar_v3_run_group`: the receipt of a group start. ``ar_v3_run_group.command_id``
+    # references it, and it is deleted only after the group is truncated.
+    "start_ar_v3_beta_group",
+    "start_audit_run", "start_optimisation_pass", "upload_price_list", "upload_source_document",
 ))
 
 #: Work that is mid-flight in a worker. Queued work is discarded with the rest; work a worker is
