@@ -131,6 +131,7 @@ def test_the_bundle_maps_into_the_library_request_with_the_map_bytes_untouched(
     loaded = promote_cli.load_bundle(directory, require_expected=True)
     request = loaded.request
     assert loaded.compared is True and isinstance(request, PromotionRequest)
+    assert loaded.query_text_digests == {"C01": "3" * 64}
     assert request.map_bytes == padded
     assert request.identity.map_sha256 == _sha(padded)
     assert (request.identity.snapshot_id, request.identity.reviewed_content_key) == (
@@ -432,6 +433,10 @@ def test_plan_prints_the_candidate_digests_and_touches_neither_admission_nor_sto
     assert f"set_sha256: {SET_SHA}\n" in out and f"catalogue_sha256: {CATALOGUE_SHA}\n" in out
     assert "verdict: not_compared\n" in out
     assert f"set_size_bytes: {len(SET_BYTES)}\n" in out
+    assert (
+        f"item: C01 query_text_sha256={'3' * 64} query_vector_sha256={vectors.sha256(PACKED)} "
+        f"targets={DOCUMENT}:0-1\n"
+    ) in out
     assert runner.requests[0].expected_set_sha256 == promote_cli._NO_EXPECTATION
 
 

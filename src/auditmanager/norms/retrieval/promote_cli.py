@@ -143,6 +143,8 @@ class LoadedBundle:
     request: PromotionRequest
     #: True when the bundle carried expected digests, so a verdict is meaningful.
     compared: bool
+    #: Per item id, the reviewer-recorded SHA-256 of the query text its vector came from.
+    query_text_digests: Mapping[str, str]
 
 
 def _read_file(path: Path, limit: int, label: str) -> bytes:
@@ -237,7 +239,7 @@ def _designation(raw: Any, label: str) -> ReviewedDesignation:
     )
 
 
-def _item(raw: Any, label: str) -> RetrievalItem:
+def _item(raw: Any, label: str) -> tuple[RetrievalItem, str]:
     item = _object(
         raw, label, frozenset({"item_id", "query_vector_base64", "provenance", "targets"}),
     )
@@ -245,7 +247,7 @@ def _item(raw: Any, label: str) -> RetrievalItem:
         item["provenance"], f"{label}.provenance",
         frozenset({"query_text_sha256", "query_vector_sha256"}),
     )
-    _digest(provenance["query_text_sha256"], f"{label}.provenance.query_text_sha256")
+    text_digest = _digest(provenance["query_text_sha256"], f"{label}.provenance.query_text_sha256")
     declared = _digest(provenance["query_vector_sha256"], f"{label}.provenance.query_vector_sha256")
     try:
         packed = vectors.from_base64(_text(item["query_vector_base64"], f"{label}.query_vector_base64"))
@@ -264,7 +266,7 @@ def _item(raw: Any, label: str) -> RetrievalItem:
             _target(target, f"{label}.targets[{index}]")
             for index, target in enumerate(_list(item["targets"], f"{label}.targets"))
         ),
-    )
+    ), text_digest
 
 
 def load_bundle(directory: Path, *, require_expected: bool) -> LoadedBundle:
@@ -307,9 +309,10 @@ def load_bundle(directory: Path, *, require_expected: bool) -> LoadedBundle:
         _designation(entry, f"designations[{index}]")
         for index, entry in enumerate(_list(raw["designations"], "designations"))
     )
-    items = tuple(
+    parsed = [
         _item(entry, f"items[{index}]") for index, entry in enumerate(_list(raw["items"], "items"))
-    )
+    ]
+    items = tuple(item for item, _ in parsed)
     request = PromotionRequest(
         set_id=set_id,
         identity=SetIdentity(
@@ -336,7 +339,10 @@ def load_bundle(directory: Path, *, require_expected: bool) -> LoadedBundle:
             if present else _NO_EXPECTATION
         ),
     )
-    return LoadedBundle(request=request, compared=bool(present))
+    return LoadedBundle(
+        request=request, compared=bool(present),
+        query_text_digests={item.item_id: digest for item, digest in parsed},
+    )
 
 
 # --- the world the command acts on ----------------------------------------------------------
@@ -538,7 +544,10 @@ def _uncertain(request: PromotionRequest, bundle: Path, reason: str, message: st
     return EXIT_UNCERTAIN
 
 
-def _print_candidate(prepared: PreparedPromotion, *, compared: bool) -> None:
+def _print_candidate(
+    prepared: PreparedPromotion, *, compared: bool,
+    query_text_digests: Mapping[str, str] | None = None,
+) -> None:
     request, candidate = prepared.request, prepared.candidate
     identity = request.identity
     for name, value in (
@@ -558,6 +567,15 @@ def _print_candidate(prepared: PreparedPromotion, *, compared: bool) -> None:
         ("verdict", prepared.comparison.status if compared else "not_compared"),
     ):
         print(f"{name}: {value}")
+    # The reviewer compares these against the map's own query and target decisions.
+    for item in request.items if query_text_digests is not None else ():
+        spans = ",".join(
+            f"{span.document_id}:{span.ordinal_first}-{span.ordinal_last}" for span in item.targets
+        )
+        print(
+            f"item: {item.item_id} query_text_sha256={query_text_digests[item.item_id]} "
+            f"query_vector_sha256={vectors.sha256(vectors.pack(item.query_vector))} targets={spans}"
+        )
 
 
 def _mismatch(prepared: PreparedPromotion) -> CliRefused:
@@ -572,7 +590,9 @@ def _plan(bundle: Path, factory: RunnerFactory) -> int:
     try:
         loaded = load_bundle(bundle, require_expected=False)
         prepared = factory(False).prepare(loaded.request)
-        _print_candidate(prepared, compared=loaded.compared)
+        _print_candidate(
+            prepared, compared=loaded.compared, query_text_digests=loaded.query_text_digests,
+        )
         if loaded.compared and prepared.comparison.status != "matched":
             raise _mismatch(prepared)
     except (*_REFUSALS, CliRefused, StorageError, DatabaseError, SQLAlchemyError) as exc:
