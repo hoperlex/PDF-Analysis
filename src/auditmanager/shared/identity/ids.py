@@ -55,7 +55,7 @@ def pattern_for(prefix: str) -> str:
     *and* by the CHECK constraints in the migration, so the database and the
     application cannot drift apart on what a well-formed identifier is.
     """
-    if not _PREFIX_RE.match(prefix):
+    if not _PREFIX_RE.fullmatch(prefix):
         raise ValueError(f"prefix {prefix!r} does not match {PREFIX_PATTERN}")
     return rf"^{prefix}_[0-9A-HJKMNP-TV-Z]{{{ULID_LENGTH}}}$"
 
@@ -100,9 +100,10 @@ class OpaqueId:
             raise IdentifierFormatError(
                 f"{cls.entity} identity must be a string, got {type(value).__name__}"
             )
-        if not cls._pattern.match(value):  # type: ignore[attr-defined]
+        # `fullmatch`, not `match`: the pattern's `$` also accepts one trailing newline.
+        if not cls._pattern.fullmatch(value):  # type: ignore[attr-defined]
             head, separator, body = value.partition("_")
-            if separator and head != cls.prefix and _PREFIX_RE.match(head) and is_valid_ulid(body):
+            if separator and head != cls.prefix and _PREFIX_RE.fullmatch(head) and is_valid_ulid(body):
                 raise IdentifierPrefixError(
                     f"expected a {cls.entity} identity with prefix {cls.prefix!r}, "
                     f"got prefix {head!r}"

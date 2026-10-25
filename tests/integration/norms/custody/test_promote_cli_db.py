@@ -164,7 +164,11 @@ def _bundle(root: Path, seed: Seed, *, set_id: str, name: str = "bundle") -> Pat
         "norms_snapshot_id": seed.snapshot,
         "reviewed_content_key": seed.key,
         "embedding_build": f"{EMBEDDING_PROFILE}:{CHUNKING}",
-        "items": [{"id": "C01"}],
+        "synthetic": False,
+        # The command binds the request's spans to the map's: both name the same two paragraphs.
+        "items": [{"id": "C01", "targets": [
+            {"norm_document_id": seed.document, "ordinal_first": 0, "ordinal_last": 1},
+        ]}],
     })
     directory = root / name
     directory.mkdir()
@@ -544,3 +548,26 @@ def test_a_wrong_independent_proof_refuses_plan_and_promote_with_nothing_written
         assert stand.run(command, bundle) == promote_cli.EXIT_REFUSED
         assert message in capsys.readouterr().err
         assert stand.counts() == before and custody.bucket_keys() == objects
+
+
+@pytest.mark.usefixtures("clean_tables")
+def test_a_request_whose_spans_differ_from_the_reviewed_map_writes_nothing(
+    custody: CustodyKit, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The same map bytes with other spans would change the prompt rows and the set digest."""
+    seed = _seed(custody)
+    stand = Stand(custody)
+    bundle = _bundle(tmp_path, seed, set_id=str(NormRetrievalSetId.new()))
+    path = bundle / "request.json"
+    value = json.loads(path.read_text(encoding="utf-8"))
+    # Both paragraphs exist, so the library alone would build a candidate from this narrower span.
+    value["items"][0]["targets"][0]["ordinal_last"] = 0
+    path.write_text(json.dumps(value, ensure_ascii=False), encoding="utf-8")
+    before, objects = stand.counts(), custody.bucket_keys()
+    assert stand.run("plan", bundle) == promote_cli.EXIT_REFUSED
+    assert "plan: REFUSED [request_targets_differ_from_map]" in capsys.readouterr().err
+    _expect(bundle, "8" * 64, "8" * 64)
+    assert stand.run("promote", bundle) == promote_cli.EXIT_REFUSED
+    assert "promote: REFUSED [request_targets_differ_from_map]" in capsys.readouterr().err
+    assert stand.counts() == before and custody.bucket_keys() == objects
+    assert stand.built == []  # refused before any runner, hence before any database read

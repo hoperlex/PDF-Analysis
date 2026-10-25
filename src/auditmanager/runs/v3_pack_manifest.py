@@ -23,11 +23,11 @@ import json
 import os
 import re
 import stat
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import date
 from typing import Any, Final
 
-from auditmanager.norms.public import EMBEDDING_PROFILE, SetIdentity
+from auditmanager.norms.public import EMBEDDING_PROFILE, SET_BUILDER_VERSION, SetIdentity
 from auditmanager.runs.v3_group import SCOPES, ReviewedScope, TrustedPack, TrustedPackRegistry
 from auditmanager.shared.errors import DomainError
 from auditmanager.shared.identity import NormRetrievalSetId
@@ -99,6 +99,32 @@ def _refuse_constant(_name: str) -> Any:
     raise PackManifestRefused("manifest_not_json", "non-finite number")
 
 
+def _require_utf8_text(value: Any) -> None:
+    """Refuse every string, object key included, that cannot be written out as UTF-8.
+
+    ``json.loads`` turns an escaped lone surrogate (``"\\ud800"``) into a ``str`` that is valid
+    JSON and valid Python and has no UTF-8 form. ``TrustedPack.sha256`` encodes the scope fields
+    and the status route encodes the attestation, so such a string would otherwise surface as a
+    ``UnicodeEncodeError`` at the first group start or on the first status read. Iterative, so a
+    deeply nested document cannot exhaust the stack here.
+    """
+    pending = [value]
+    while pending:
+        node = pending.pop()
+        if isinstance(node, str):
+            try:
+                node.encode("utf-8")
+            except UnicodeEncodeError:
+                raise PackManifestRefused(
+                    "manifest_string_encoding", "a string or key is not valid UTF-8 text",
+                ) from None
+        elif isinstance(node, dict):
+            pending.extend(node.keys())
+            pending.extend(node.values())
+        elif isinstance(node, (list, tuple)):
+            pending.extend(node)
+
+
 def _object(value: Any, where: str, keys: frozenset[str]) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise PackManifestRefused("manifest_keys", f"{where} is not an object")
@@ -153,8 +179,13 @@ def _scope(value: Any, index: int) -> ReviewedScope:
         raise PackManifestRefused(
             "manifest_value", f"{where}.set_id is not a retrieval-set identity",
         ) from None
-    # `select_verified_retrieval_set` refuses any other pairing at every group start; refuse it
-    # here once, when the operator can still see which file it came from.
+    # `select_verified_retrieval_set` refuses any other builder or pairing at every group start;
+    # refuse them here once, when the operator can still see which file they came from.
+    if text["builder_version"] != SET_BUILDER_VERSION:
+        raise PackManifestRefused(
+            "builder_version_mismatch",
+            f"{where}.builder_version is not the retrieval-set builder this server selects with",
+        )
     if text["embedding_build"] != f"{EMBEDDING_PROFILE}:{text['chunking_profile']}":
         raise PackManifestRefused(
             "manifest_value", f"{where}.embedding_build does not match chunking_profile",
@@ -204,6 +235,7 @@ def parse_manifest(data: bytes) -> ParsedPackManifest:
         raise
     except (UnicodeDecodeError, ValueError, RecursionError):
         raise PackManifestRefused("manifest_not_json", "not UTF-8 JSON") from None
+    _require_utf8_text(document)
     root = _object(document, "manifest", _ROOT_KEYS)
     if root["format"] != MANIFEST_FORMAT:
         raise PackManifestRefused("manifest_format", "unknown manifest format")
@@ -231,6 +263,8 @@ def parse_manifest(data: bytes) -> ParsedPackManifest:
 
 def seal_manifest(pack: TrustedPack, review: ReviewAttestation) -> bytes:
     """Canonical manifest bytes. Refuses whatever ``parse_manifest`` would refuse."""
+    _require_utf8_text(asdict(pack))  # before `pack.sha256` encodes it
+    _require_utf8_text(asdict(review))
     document = {
         "format": MANIFEST_FORMAT,
         "analysis_profile_id": pack.analysis_profile_id,

@@ -86,6 +86,10 @@ def open_database_selector(database_url: str) -> Iterator[SetSelector]:
 def _nonempty(value: Any, where: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise PackManifestRefused("spec_value", f"{where} must be a non-empty string")
+    try:
+        value.encode("utf-8")  # an escaped lone surrogate parses as a str with no UTF-8 form
+    except UnicodeEncodeError:
+        raise PackManifestRefused("spec_value", f"{where} is not valid UTF-8 text") from None
     return value
 
 

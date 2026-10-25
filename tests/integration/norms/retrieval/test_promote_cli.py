@@ -46,7 +46,23 @@ from auditmanager.storage.errors import StorageConfigurationError
 SNAPSHOT = "ns_01M59N8QNBVN91ACA2HCE6VE74"
 DOCUMENT = "ndoc_01J9ZQ8K7NHVXW3T2R5M6P4Q8B"
 CHUNKING = "characters-v2:1200"
-MAP_BYTES = canonical_json_bytes({"mapped_document_ids": [DOCUMENT], "note": "reviewed"})
+
+
+def _reviewed_map(**changes: Any) -> dict[str, Any]:
+    """The map's own view of C01, in the shape ``map_pack`` writes: reviewed targets per item."""
+    value: dict[str, Any] = {
+        "mapped_document_ids": [DOCUMENT],
+        "synthetic": False,
+        "items": [{
+            "id": "C01",
+            "targets": [{"norm_document_id": DOCUMENT, "ordinal_first": 0, "ordinal_last": 1}],
+        }],
+    }
+    value.update(changes)
+    return value
+
+
+MAP_BYTES = canonical_json_bytes(_reviewed_map())
 SET_BYTES = canonical_json_bytes({"set": "canonical paragraph"})
 CATALOGUE_BYTES = canonical_json_bytes({"catalogue": "canonical documents"})
 
@@ -89,10 +105,11 @@ def _request(*, expected: bool = True, set_id: str | None = None) -> dict[str, A
 def _bundle(
     root: Path, mutate: Callable[[dict[str, Any]], None] | None = None, *,
     expected: bool = True, raw: str | None = None, name: str = "bundle",
+    map_bytes: bytes | None = None,
 ) -> Path:
     directory = root / name
     directory.mkdir()
-    (directory / "map.json").write_bytes(MAP_BYTES)
+    (directory / "map.json").write_bytes(MAP_BYTES if map_bytes is None else map_bytes)
     value = _request(expected=expected)
     if mutate is not None:
         mutate(value)
@@ -125,15 +142,13 @@ def test_new_id_prints_a_fresh_nrs_identity(capsys: pytest.CaptureFixture[str]) 
 def test_the_bundle_maps_into_the_library_request_with_the_map_bytes_untouched(
     tmp_path: Path,
 ) -> None:
-    padded = MAP_BYTES + b"\n"  # whatever is on disk is hashed, never re-serialised
     directory = _bundle(tmp_path)
-    (directory / "map.json").write_bytes(padded)
     loaded = promote_cli.load_bundle(directory, require_expected=True)
     request = loaded.request
     assert loaded.compared is True and isinstance(request, PromotionRequest)
     assert loaded.query_text_digests == {"C01": "3" * 64}
-    assert request.map_bytes == padded
-    assert request.identity.map_sha256 == _sha(padded)
+    assert request.map_bytes == MAP_BYTES == (directory / "map.json").read_bytes()
+    assert request.identity.map_sha256 == _sha(MAP_BYTES)  # hashed as stored, never re-serialised
     assert (request.identity.snapshot_id, request.identity.reviewed_content_key) == (
         SNAPSHOT, "reviewed-drop",
     )
@@ -311,6 +326,265 @@ def test_oversize_files_are_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     assert _refusal(_bundle(tmp_path, name="map")).reason == "bundle_oversize"
     monkeypatch.setattr(promote_cli, "MAX_ARTIFACT_BYTES", len(MAP_BYTES))
     promote_cli.load_bundle(_bundle(tmp_path, name="exact"), require_expected=True)
+
+
+# --- the request is bound to the reviewed map (AR-V3-BETA-REVIEW-FIXES-02, finding A) ---------
+#
+# `candidate.py` compares only the SET of document ids and item ids with the map; the target
+# spans and the query vectors were taken from `request.json` unchecked, so the same map bytes
+# (same `map_sha256`, same `nrs_` identity) could carry prompt rows the map never listed.
+
+OTHER = "ndoc_01J9ZQ8K7NHVXW3T2R5M6P4Q8C"
+
+
+def _span(document: str, first: int, last: int) -> dict[str, Any]:
+    return {"document_id": document, "ordinal_first": first, "ordinal_last": last}
+
+
+def _map_target(document: str, first: int, last: int) -> dict[str, Any]:
+    return {"norm_document_id": document, "ordinal_first": first, "ordinal_last": last}
+
+
+def _two_item_map() -> bytes:
+    return canonical_json_bytes(_reviewed_map(
+        mapped_document_ids=sorted([DOCUMENT, OTHER]),
+        items=[
+            {"id": "C01", "targets": [_map_target(DOCUMENT, 0, 1), _map_target(DOCUMENT, 5, 6)]},
+            {"id": "C02", "targets": [_map_target(OTHER, 2, 3)]},
+        ],
+    ))
+
+
+def _two_item_request(value: dict[str, Any]) -> None:
+    first = value["items"][0]
+    first["targets"] = [_span(DOCUMENT, 0, 1), _span(DOCUMENT, 5, 6)]
+    second = json.loads(json.dumps(first))
+    second["item_id"], second["targets"] = "C02", [_span(OTHER, 2, 3)]
+    value["items"] = [first, second]
+    value["designations"].append({"document_id": OTHER, "slug": "other_slug", "designation": "СП 99.2"})
+
+
+def _two_item_bundle(
+    root: Path, mutate: Callable[[dict[str, Any]], None] | None = None, *, name: str = "two",
+) -> Path:
+    def build(value: dict[str, Any]) -> None:
+        _two_item_request(value)
+        if mutate is not None:
+            mutate(value)
+    return _bundle(root, build, name=name, map_bytes=_two_item_map())
+
+
+def test_a_request_that_repeats_the_maps_targets_per_item_is_accepted(tmp_path: Path) -> None:
+    loaded = promote_cli.load_bundle(_two_item_bundle(tmp_path), require_expected=True)
+    assert [item.item_id for item in loaded.request.items] == ["C01", "C02"]
+
+
+def test_the_order_of_a_requests_targets_is_not_a_difference(tmp_path: Path) -> None:
+    def reverse(value: dict[str, Any]) -> None:
+        value["items"][0]["targets"].reverse()
+    promote_cli.load_bundle(_two_item_bundle(tmp_path, reverse), require_expected=True)
+
+
+TARGET_DRIFT: dict[str, Callable[[dict[str, Any]], None]] = {
+    "a span widened by one paragraph": _set("items", 0, "targets", 0, "ordinal_last", to=2),
+    "a span narrowed": _set("items", 0, "targets", 0, "ordinal_last", to=0),
+    "a span moved": _set("items", 0, "targets", 0, "ordinal_first", to=1),
+    "another document": _set("items", 0, "targets", 0, "document_id", to=OTHER),
+    "an extra span": lambda value: value["items"][0]["targets"].append(_span(OTHER, 0, 0)),
+    "a span listed twice": lambda value: value["items"][0]["targets"].append(_span(DOCUMENT, 0, 1)),
+}
+
+
+@pytest.mark.parametrize("case", sorted(TARGET_DRIFT))
+def test_targets_that_differ_from_the_reviewed_map_are_refused(tmp_path: Path, case: str) -> None:
+    refused = _refusal(_bundle(tmp_path, TARGET_DRIFT[case]))
+    assert refused.reason == "request_targets_differ_from_map"
+    assert "C01" in refused.message and DOCUMENT not in refused.message
+
+
+def test_targets_swapped_between_two_items_are_refused_and_both_items_are_named(
+    tmp_path: Path,
+) -> None:
+    def swap(value: dict[str, Any]) -> None:
+        first, second = value["items"]
+        first["targets"], second["targets"] = second["targets"], first["targets"]
+    refused = _refusal(_two_item_bundle(tmp_path, swap))
+    assert refused.reason == "request_targets_differ_from_map"
+    assert "C01" in refused.message and "C02" in refused.message
+
+
+ITEM_DRIFT: dict[str, Callable[[dict[str, Any]], None]] = {
+    "a map item missing from the request": lambda value: value["items"].pop(),
+    "an item the map does not list": lambda value: value["items"].append(
+        dict(json.loads(json.dumps(value["items"][0])), item_id="C03")),
+    "an item listed twice": lambda value: value["items"].__setitem__(
+        1, json.loads(json.dumps(value["items"][0]))),
+}
+
+
+@pytest.mark.parametrize("case", sorted(ITEM_DRIFT))
+def test_request_items_that_are_not_the_maps_items_are_refused(tmp_path: Path, case: str) -> None:
+    assert _refusal(_two_item_bundle(tmp_path, ITEM_DRIFT[case])).reason == (
+        "request_items_differ_from_map")
+
+
+def test_a_drifted_request_refuses_plan_and_promote_before_any_runner_is_built(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], stores: list[bool],
+) -> None:
+    for command, expected in (("plan", False), ("promote", True)):
+        runner = FakeRunner()
+        bundle = _bundle(
+            tmp_path, TARGET_DRIFT["a span widened by one paragraph"],
+            expected=expected, name=command,
+        )
+        assert _run(runner, command, bundle, stores) == promote_cli.EXIT_REFUSED
+        assert f"{command}: REFUSED [request_targets_differ_from_map]" in capsys.readouterr().err
+        assert runner.calls == [] and stores == []
+
+
+def test_a_synthetic_map_is_never_promoted(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], stores: list[bool],
+) -> None:
+    synthetic = canonical_json_bytes(_reviewed_map(synthetic=True))
+    refused = _refusal(_bundle(tmp_path, map_bytes=synthetic))
+    assert refused.reason == "map_synthetic"
+    runner = FakeRunner()
+    bundle = _bundle(tmp_path, map_bytes=synthetic, name="cli")
+    assert _run(runner, "promote", bundle, stores) == promote_cli.EXIT_REFUSED
+    assert "promote: REFUSED [map_synthetic]" in capsys.readouterr().err
+    assert runner.calls == [] and stores == []
+
+
+def _without(key: str) -> bytes:
+    value = _reviewed_map()
+    del value[key]
+    return canonical_json_bytes(value)
+
+
+def _in_item(**changes: Any) -> bytes:
+    value = _reviewed_map()
+    value["items"][0].update(changes)
+    return canonical_json_bytes(value)
+
+
+def _in_target(**changes: Any) -> bytes:
+    value = _reviewed_map()
+    value["items"][0]["targets"][0].update(changes)
+    return canonical_json_bytes(value)
+
+
+UNREADABLE_MAPS: dict[str, bytes] = {
+    "not JSON": b"{",
+    "not UTF-8": b"\xff\xfe{}",
+    "not an object": b"[]",
+    "a nesting bomb": b"[" * 500_000,
+    "padded with a newline": MAP_BYTES + b"\n",
+    "not in canonical form": json.dumps(_reviewed_map()).encode("utf-8"),
+    "no items": _without("items"),
+    "empty items": canonical_json_bytes(_reviewed_map(items=[])),
+    "items not a list": canonical_json_bytes(_reviewed_map(items={"id": "C01"})),
+    "an item that is not an object": canonical_json_bytes(_reviewed_map(items=["C01"])),
+    "an item without an id": canonical_json_bytes(_reviewed_map(items=[{"targets": []}])),
+    "an item with an empty id": _in_item(id=""),
+    "an item listed twice": canonical_json_bytes(_reviewed_map(items=[
+        _reviewed_map()["items"][0], _reviewed_map()["items"][0]])),
+    "an item without targets": canonical_json_bytes(_reviewed_map(items=[{"id": "C01"}])),
+    "an item with no target": _in_item(targets=[]),
+    "targets that are not a list": _in_item(targets={"norm_document_id": DOCUMENT}),
+    "a target that is not an object": _in_item(targets=["x"]),
+    "a target without its document": canonical_json_bytes(_reviewed_map(items=[{
+        "id": "C01", "targets": [{"ordinal_first": 0, "ordinal_last": 1}]}])),
+    "a target document that is not text": _in_target(norm_document_id=7),
+    "a boolean ordinal": _in_target(ordinal_first=True),
+    "a negative ordinal": _in_target(ordinal_first=-1),
+    "a span that ends before it starts": _in_target(ordinal_first=3, ordinal_last=2),
+    "no synthetic flag": _without("synthetic"),
+    "a synthetic flag that is text": canonical_json_bytes(_reviewed_map(synthetic="false")),
+    "a null synthetic flag": canonical_json_bytes(_reviewed_map(synthetic=None)),
+}
+
+
+@pytest.mark.parametrize("case", sorted(UNREADABLE_MAPS))
+def test_a_map_the_binding_cannot_read_is_refused(tmp_path: Path, case: str) -> None:
+    refused = _refusal(_bundle(tmp_path, map_bytes=UNREADABLE_MAPS[case]))
+    assert refused.reason == "map_invalid"
+    assert DOCUMENT not in refused.message
+
+
+def test_a_float_in_the_map_is_refused(tmp_path: Path) -> None:
+    # `canonical_json_bytes` has no floats, so such a map could never have been canonical.
+    data = MAP_BYTES.replace(b'"ordinal_last":1', b'"ordinal_last":1.5')
+    assert data != MAP_BYTES
+    assert _refusal(_bundle(tmp_path, map_bytes=data)).reason == "map_invalid"
+
+
+# --- no identity with a line break, whatever the shared parser accepts -------------------------
+
+
+def test_a_set_id_with_a_trailing_newline_is_refused(tmp_path: Path) -> None:
+    set_id = str(NormRetrievalSetId.new()) + "\n"
+    assert _refusal(_bundle(tmp_path, _set("set_id", to=set_id))).reason == "request_invalid"
+
+
+def test_the_set_id_check_does_not_depend_on_the_shared_parser_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Lenient:
+        """What the shared parser did before its fix: any text passes."""
+
+        @staticmethod
+        def parse(value: str) -> str:
+            return value
+
+    monkeypatch.setattr(promote_cli, "NormRetrievalSetId", Lenient)
+    set_id = str(NormRetrievalSetId.new()) + "\n"
+    refused = _refusal(_bundle(tmp_path, _set("set_id", to=set_id)))
+    assert (refused.reason, refused.message) == ("request_invalid", "set_id is not an nrs_ identity")
+    promote_cli.load_bundle(
+        _bundle(tmp_path, _set("set_id", to=str(NormRetrievalSetId.new())), name="ok"),
+        require_expected=True,
+    )
+
+
+# --- hostile input ends as a typed refusal, never a traceback ----------------------------------
+
+
+def test_a_deeply_nested_request_is_a_refusal_not_a_recursion_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], stores: list[bool],
+) -> None:
+    bundle = _bundle(tmp_path, raw="[" * 500_000)
+    assert _refusal(bundle).reason == "request_invalid"
+    runner = FakeRunner()
+    assert _run(runner, "plan", bundle, stores) == promote_cli.EXIT_REFUSED
+    assert "plan: REFUSED [request_invalid]" in capsys.readouterr().err
+    assert runner.calls == []
+
+
+def test_a_bundle_directory_that_cannot_be_listed_is_a_refusal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str], stores: list[bool],
+) -> None:
+    bundle = _bundle(tmp_path)
+
+    def denied(_path: Any) -> list[str]:
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(promote_cli.os, "listdir", denied)
+    assert _refusal(bundle).reason == "bundle_unreadable"
+    assert _run(FakeRunner(), "plan", bundle, stores) == promote_cli.EXIT_REFUSED
+    assert "plan: REFUSED [bundle_unreadable]" in capsys.readouterr().err
+
+
+def test_a_bundle_path_with_a_nul_byte_is_a_refusal(tmp_path: Path) -> None:
+    assert _refusal(tmp_path / "bad\0name").reason == "bundle_unreadable"
+
+
+def test_the_exit_status_text_names_the_signals_that_leave_admissions_behind() -> None:
+    doc = " ".join(promote_cli.__doc__.split())
+    for signal_name in ("SIGTERM", "SIGKILL"):
+        assert signal_name in doc
+    assert "re-running the same command is idempotent" in doc
+    assert "before the admission step wrote anything" not in doc
 
 
 # --- the custody manifest and source ----------------------------------------------------------
