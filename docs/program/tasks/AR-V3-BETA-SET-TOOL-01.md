@@ -121,7 +121,7 @@ Temporary lane files, ignored by Git and removed or left untracked at hand-back:
 ## Verification
 
 - `PYTHONPATH=src /root/projects/PDF-Analysis/.venv/bin/python -m pytest -q -p no:cacheprovider tests/integration/norms/retrieval/test_promote_cli.py` — offline, 61 tests.
-- `PYTHONPATH=src /root/projects/PDF-Analysis/.venv/bin/python -m pytest -q -p no:cacheprovider tests/integration/norms/custody/test_promote_cli_db.py` — 9 tests on the lane's PostgreSQL and S3.
+- `PYTHONPATH=src /root/projects/PDF-Analysis/.venv/bin/python -m pytest -q -p no:cacheprovider tests/integration/norms/custody/test_promote_cli_db.py` — 11 tests on the lane's PostgreSQL and S3.
 - `PYTHONPATH=src /root/projects/PDF-Analysis/.venv/bin/python -m pytest -q -p no:cacheprovider tests/integration/norms/retrieval tests/integration/norms/custody -k "promotion or promote"` on the lane's stack.
 - The governance check of this file prints `[]`; `python -m compileall` and `git diff --check` pass. Full `make gate` is deferred by `R-135`.
 

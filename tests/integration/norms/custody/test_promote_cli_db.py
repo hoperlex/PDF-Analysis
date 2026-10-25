@@ -520,3 +520,27 @@ def test_a_poisoned_admission_is_reported_and_completes_after_the_documented_req
     assert stand.run("promote", bundle) == 0
     assert _field(capsys.readouterr().out, "replayed") == "false"
     assert not poisoned()
+
+
+@pytest.mark.usefixtures("clean_tables")
+@pytest.mark.parametrize("proof, message", [
+    ("independently_checked_source_digest", "source digest differs from independent proof"),
+    ("independently_checked_embedding_digest", "embedding set digest differs from expected"),
+])
+def test_a_wrong_independent_proof_refuses_plan_and_promote_with_nothing_written(
+    custody: CustodyKit, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    proof: str, message: str,
+) -> None:
+    seed = _seed(custody)
+    stand = Stand(custody)
+    bundle = _bundle(tmp_path, seed, set_id=str(NormRetrievalSetId.new()))
+    path = bundle / "request.json"
+    value = json.loads(path.read_text(encoding="utf-8"))
+    value[proof] = "9" * 64
+    value["expected_set_sha256"] = value["expected_catalogue_sha256"] = "8" * 64
+    path.write_text(json.dumps(value, ensure_ascii=False), encoding="utf-8")
+    before, objects = stand.counts(), custody.bucket_keys()
+    for command in ("plan", "promote"):
+        assert stand.run(command, bundle) == promote_cli.EXIT_REFUSED
+        assert message in capsys.readouterr().err
+        assert stand.counts() == before and custody.bucket_keys() == objects
