@@ -64,6 +64,7 @@ SAMPLES: dict[str, tuple[str, str]] = {
     "getArV3BetaGroupReview": (
         "GET", "/ar-v3-beta/groups/arg_01M2545JSD15ETSNNV904X991K/review",
     ),
+    "getArV3BetaPackStatus": ("GET", "/ar-v3-beta/pack"),
     "getRunNormVerification": (
         "GET", "/runs/run_01M2545JSD15ETSNNV904X991K/norm-verification"
     ),
@@ -256,6 +257,7 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "getRunStatus": _ANY_ROLE,
     "getArV3BetaGroup": _ANY_ROLE,
     "getArV3BetaGroupReview": _ANY_ROLE,
+    "getArV3BetaPackStatus": _ANY_ROLE,
     "getRunNormVerification": _ANY_ROLE,
     "listExecutionQueue": _ANY_ROLE,
     "listExecutionJournal": _ANY_ROLE,

@@ -82,6 +82,7 @@ GUARDED = (
         "getArV3BetaGroupReview", "GET",
         "/ar-v3-beta/groups/arg_01M2545JSD15ETSNNV904X991K/review",
     ),
+    ("getArV3BetaPackStatus", "GET", "/ar-v3-beta/pack"),
     ("listRunFindings", "GET", "/runs/run_01M2545JSD15ETSNNV904X991K/findings"),
     ("getFinding", "GET", "/findings/fnd_01M2545JSD15ETSNNV904X991M"),
     ("appendDecision", "POST", "/findings/fnd_01M2545JSD15ETSNNV904X991M/decisions"),

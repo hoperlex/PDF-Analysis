@@ -358,6 +358,7 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "getRunStatus": _ANY_ROLE,
         "getArV3BetaGroup": _ANY_ROLE,
         "getArV3BetaGroupReview": _ANY_ROLE,
+        "getArV3BetaPackStatus": _ANY_ROLE,
         "getRunNormVerification": _ANY_ROLE,
         "listRunFindings": _ANY_ROLE,
         "getFinding": _ANY_ROLE,

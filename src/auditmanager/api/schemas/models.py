@@ -115,6 +115,8 @@ __all__ = [
     "ArV3BetaGroup",
     "ArV3BetaGroupReview",
     "ArV3BetaGroupReviewMember",
+    "ArV3BetaPackReview",
+    "ArV3BetaPackStatus",
     "ArV3BetaVisibleReview",
     "ArV3BetaVisibleTopic",
     "ArV3BetaVisibleProposal",
@@ -725,7 +727,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.4.0"]
+    contract_version: Literal["1.5.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1104,6 +1106,46 @@ class ArV3BetaGroupReview(_Object):
     group_id: ArV3RunGroupId
     version_uid: VersionUid
     members: Annotated[list[ArV3BetaGroupReviewMember], Field(min_length=6, max_length=6)]
+
+
+class ArV3BetaPackReview(_Object):
+    """The human attestation that travelled with the installed pack's manifest.
+
+    A record, not a check: the server shows what the manifest says and nothing about
+    whether anyone really reviewed anything.
+    """
+
+    reviewer: str
+    capacity: str
+    reviewed_at: Annotated[str, Field(pattern=r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")]
+    decision_ref: str
+    scope_statement: str
+
+
+class ArV3BetaPackStatus(_Object):
+    """Whether a reviewed AR v3 beta pack is installed on this server, and its attestation.
+
+    Everything but `state` is absent, never null, while no pack is installed. No map, set or
+    snapshot identity, digest of a scope, path or environment value is ever a property.
+    """
+
+    state: Literal["installed", "not_installed"]
+    analysis_profile_id: AnalysisProfileId = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+    prompt_bundle_id: PromptBundleId = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+    pack_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+    scope_ids: Annotated[
+        list[Literal["F1", "F2", "A1", "A2", "S1", "S2"]],
+        Field(min_length=6, max_length=6),
+    ] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    review: ArV3BetaPackReview = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
 
 
 class StageState(_Object):
