@@ -12,9 +12,11 @@ builders; this module checks the same invariants earlier and in one place.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import datetime
 import hashlib
 import json
+import os
 import re
 import sys
 import unicodedata
@@ -173,7 +175,11 @@ def _load_json(raw: bytes, code: str) -> Any:
     try:
         return json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_pairs,
                           parse_constant=_reject_constant)
-    except (UnicodeError, json.JSONDecodeError, RecursionError) as exc:
+    except MapPackRefused:
+        raise  # a duplicate key or a constant keeps its own code; it is a ValueError too
+    except (ValueError, RecursionError) as exc:
+        # Bad UTF-8, bad JSON, and the plain ValueError of a 5,000-digit integer (beyond
+        # Python's int/str conversion limit) all end as the file's code, not a traceback.
         raise MapPackRefused(code) from exc
 
 
@@ -224,7 +230,9 @@ def _sha(value: object, code: str) -> str:
 
 
 def _ident(value: object, identity: type, code: str) -> str:
-    if not isinstance(value, str):
+    # An identity is the whole string: a line break is never part of one, whatever the shared
+    # parser's anchoring accepts (it used to take a trailing newline).
+    if not isinstance(value, str) or "\n" in value:
         _refuse(code)
     try:
         identity.parse(value)  # type: ignore[attr-defined]
@@ -690,18 +698,40 @@ def _map_file(directory: Path, scope_id: str) -> Path:
 
 
 def write_pack(directory: Path, maps: ScopeMaps, summary: Mapping[str, Any]) -> None:
-    """Write seven new files; an existing file is a refusal, never an overwrite."""
+    """Write seven new files, all or none; an existing name is a refusal, never an overwrite.
+
+    Every target is looked at with ``lstat`` first, so a dangling symlink counts as taken and
+    nothing is written. Each file is created exclusively (``xb``); if any step still fails, or
+    the process is interrupted, every file and directory this call created is removed again, so
+    a re-run starts from the same state and a half-written pack never exists to be validated.
+    """
     files = [(_map_file(directory, entry.scope_id), entry.data) for entry in maps.maps]
     files.append((directory / SUMMARY_FILE, render_summary(summary)))
+    created: list[Path] = []
+    new_directories: list[Path] = []
     try:
-        directory.mkdir(parents=True, exist_ok=True)
-        if any(path.exists() for path, _ in files):
+        if any(os.path.lexists(path) for path, _ in files):
             _refuse("output_exists")
+        missing = directory
+        while not os.path.lexists(missing):
+            new_directories.append(missing)
+            missing = missing.parent
+        directory.mkdir(parents=True, exist_ok=True)
         for path, data in files:
             with path.open("xb") as handle:
+                # Recorded only once the exclusive create succeeded: never a stranger's file.
+                created.append(path)
                 handle.write(data)
-    except OSError as exc:
-        raise MapPackRefused("output_unwritable") from exc
+    except BaseException as exc:
+        for path in created:
+            with contextlib.suppress(OSError):
+                path.unlink()
+        for path in new_directories:  # deepest first: the list was built from the leaf upward
+            with contextlib.suppress(OSError):
+                path.rmdir()
+        if isinstance(exc, OSError):
+            raise MapPackRefused("output_unwritable") from exc
+        raise
 
 
 def read_pack(directory: Path) -> tuple[ScopeMaps, bytes]:

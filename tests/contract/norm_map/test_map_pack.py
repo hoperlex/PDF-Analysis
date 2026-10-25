@@ -38,6 +38,7 @@ from auditmanager.analysis.profiles.ar_v3.prompt_material import prepare_v3_prom
 from auditmanager.analysis.profiles.ar_v3.scope_partition import scope_membership
 from auditmanager.analysis.profiles.ar_v3.set_input import parse_v3_set_input
 from auditmanager.analysis.text.textlayer import Page, TextLayer
+from auditmanager.norms.embedding import vectors as norm_vectors
 from auditmanager.norms.embedding.profile import DIMENSIONS
 from auditmanager.norms.retrieval.artifact import (
     ArtifactRefused,
@@ -47,6 +48,7 @@ from auditmanager.norms.retrieval.artifact import (
     build_retrieval_set,
     canonical_json_bytes,
 )
+from auditmanager.norms.retrieval import promote_cli
 from auditmanager.norms.retrieval.promotion import PromotionRequest, _checked
 from auditmanager.norms.retrieval.ranking import (
     RetrievalItem,
@@ -54,7 +56,7 @@ from auditmanager.norms.retrieval.ranking import (
     TargetSpan,
     select_prompt_part,
 )
-from auditmanager.shared.identity import NormRetrievalSetId
+from auditmanager.shared.identity import NormDocumentId, NormRetrievalSetId
 
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "ar_v3_map_pack"
@@ -834,3 +836,249 @@ def test_python_dash_m_entry_point_exits_2_on_refusal(tmp_path: Path) -> None:
         check=False)
     assert result.returncode == 2
     assert "REFUSED: synthetic_refused" in result.stderr
+
+
+# ---------------------------------------------------------------- AR-V3-BETA-REVIEW-FIXES-02
+#
+# The set tool (`promote_cli`) must follow the maps this tool writes; these tests hold the two
+# formats together. The rest are the robustness findings of the review of this tool itself.
+
+DOCUMENT_ID = "ndoc_01J9ZQ8K7NHVXW3T2R5M6P4Q8B"
+
+
+class _LenientIdentity:
+    """What the shared identity parser did before it used fullmatch: any text passed."""
+
+    @staticmethod
+    def parse(value: str) -> str:
+        return value
+
+
+def test_an_identity_with_a_line_break_is_refused_without_relying_on_the_shared_parser() -> None:
+    assert map_pack._ident(DOCUMENT_ID, _LenientIdentity, "code") == DOCUMENT_ID
+    for value in (DOCUMENT_ID + "\n", "\n" + DOCUMENT_ID, DOCUMENT_ID[:6] + "\n" + DOCUMENT_ID[6:]):
+        with _refused("code"):
+            map_pack._ident(value, _LenientIdentity, "code")
+
+
+def test_an_identity_with_a_trailing_newline_is_refused_in_every_input_that_names_one() -> None:
+    decisions = _decisions()
+    target = _item(decisions, "C01")["targets"][0]
+    target["norm_document_id"] += "\n"
+    with _refused("target_value_invalid:C01"):
+        _build(decisions)
+    decisions = _decisions()
+    _item(decisions, "C01")["targets"][0]["norm_paragraph_id_first"] += "\n"
+    with _refused("target_value_invalid:C01"):
+        _build(decisions)
+    payload = _paragraph_payload()
+    payload["paragraphs"][0]["norm_document_id"] += "\n"
+    with _refused("paragraph_row_invalid"):
+        _paragraphs(payload)
+    payload = _paragraph_payload()
+    payload["norms_snapshot_id"] += "\n"
+    with _refused("paragraphs_shape_invalid"):
+        _paragraphs(payload)
+    maps = _build()
+    with _refused("mapped_document_ids_invalid:F1"):
+        check_scope_maps(_remap(maps, "F1", lambda m: m["mapped_document_ids"].__setitem__(
+            0, m["mapped_document_ids"][0] + "\n")), allow_synthetic=True)
+
+
+# --- the set tool binds its request to these maps -------------------------------------------------
+
+def _request_for(mapping: dict[str, Any], *, widen: bool = False) -> dict[str, Any]:
+    packed = norm_vectors.pack([1.0] + [0.0] * (DIMENSIONS - 1))
+    return {
+        "format": promote_cli.REQUEST_FORMAT,
+        "set_id": str(NormRetrievalSetId.new()),
+        "snapshot_id": mapping["norms_snapshot_id"],
+        "reviewed_content_key": mapping["reviewed_content_key"],
+        "embedding_build": mapping["embedding_build"],
+        "chunking_profile": "characters-v2:1000",
+        "independently_checked_source_digest": "1" * 64,
+        "independently_checked_embedding_digest": "2" * 64,
+        "designations": [
+            {"document_id": document, "slug": "synthetic_slug", "designation": "SYNTH"}
+            for document in mapping["mapped_document_ids"]
+        ],
+        "items": [{
+            "item_id": item["id"],
+            "query_vector_base64": norm_vectors.to_base64(packed),
+            "provenance": {"query_text_sha256": "3" * 64,
+                           "query_vector_sha256": norm_vectors.sha256(packed)},
+            "targets": [
+                {"document_id": target["norm_document_id"], "ordinal_first": target["ordinal_first"],
+                 "ordinal_last": target["ordinal_last"] + (1 if widen else 0)}
+                for target in item["targets"]
+            ],
+        } for item in mapping["items"]],
+    }
+
+
+def _bundle_of(tmp_path: Path, name: str, entry: ScopeMap, request: dict[str, Any]) -> Path:
+    directory = tmp_path / name
+    directory.mkdir()
+    (directory / "map.json").write_bytes(entry.data)
+    (directory / "request.json").write_text(json.dumps(request, ensure_ascii=False), encoding="utf-8")
+    return directory
+
+
+def test_the_set_tool_accepts_each_real_map_with_a_request_that_repeats_its_targets(
+    tmp_path: Path,
+) -> None:
+    decisions, _ = _real_like()
+    for entry in build_scope_maps(decisions).maps:
+        mapping = json.loads(entry.data)
+        loaded = promote_cli.load_bundle(
+            _bundle_of(tmp_path, entry.scope_id, entry, _request_for(mapping)), require_expected=False,
+        )
+        assert [item.item_id for item in loaded.request.items] == list(
+            scope_membership(entry.scope_id).item_ids)
+        assert loaded.request.identity.map_sha256 == entry.sha256
+
+
+def test_the_set_tool_refuses_the_same_map_bytes_with_spans_widened_by_one_paragraph(
+    tmp_path: Path,
+) -> None:
+    # The review's reproduction: same map, same `map_sha256`, 5 prompt rows became 8 and the
+    # set digest changed, and the library built it. The map lists the spans; the request may not.
+    decisions, _ = _real_like()
+    entry = build_scope_maps(decisions).maps[0]
+    mapping = json.loads(entry.data)
+    promote_cli.load_bundle(_bundle_of(tmp_path, "same", entry, _request_for(mapping)),
+                            require_expected=False)
+    with pytest.raises(promote_cli.CliRefused) as refused:
+        promote_cli.load_bundle(
+            _bundle_of(tmp_path, "widened", entry, _request_for(mapping, widen=True)),
+            require_expected=False,
+        )
+    assert refused.value.reason == "request_targets_differ_from_map"
+
+
+def test_the_set_tool_refuses_a_synthetic_map_that_this_tool_wrote(tmp_path: Path) -> None:
+    entry = _build().maps[0]
+    mapping = json.loads(entry.data)
+    assert mapping["synthetic"] is True
+    with pytest.raises(promote_cli.CliRefused) as refused:
+        promote_cli.load_bundle(_bundle_of(tmp_path, "synthetic", entry, _request_for(mapping)),
+                                require_expected=False)
+    assert refused.value.reason == "map_synthetic"
+
+
+# --- build is all or nothing -------------------------------------------------------------------
+
+def _build_args(tmp_path: Path, out: Path) -> list[str]:
+    decisions, paragraphs, _ = _paths(tmp_path)
+    return ["build", "--decisions", decisions, "--paragraphs", paragraphs, "--out", str(out),
+            "--allow-synthetic"]
+
+
+@pytest.mark.parametrize("dangling", ["pack-summary.json", "scope-F1.map.json", "scope-S2.map.json"])
+def test_a_dangling_symlink_in_the_output_refuses_before_any_file_is_written(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], dangling: str,
+) -> None:
+    out = tmp_path / "pack"
+    out.mkdir()
+    (out / dangling).symlink_to(tmp_path / "nowhere")
+    for _attempt in range(2):  # the second run must say the same thing, not `output_exists` later
+        assert _cli(*_build_args(tmp_path, out)) == 2
+        assert "REFUSED: output_exists" in capsys.readouterr().err
+        assert sorted(path.name for path in out.iterdir()) == [dangling]
+        assert (out / dangling).is_symlink() and not (out / dangling).exists()
+
+
+@pytest.mark.parametrize("failure", [OSError(28, "No space left on device"), KeyboardInterrupt()],
+                         ids=["disk_full", "interrupt"])
+@pytest.mark.parametrize("existing_directory", [False, True], ids=["new_directory", "empty_directory"])
+def test_a_write_that_fails_part_way_leaves_nothing_and_a_rerun_succeeds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+    failure: BaseException, existing_directory: bool,
+) -> None:
+    out = tmp_path / "nested" / "pack"
+    if existing_directory:
+        out.mkdir(parents=True)
+    original = Path.open
+
+    def fail_on_the_fourth_file(self: Path, *args: Any, **kwargs: Any):
+        if self.name == "scope-S1.map.json" and args[:1] == ("xb",):
+            raise failure
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", fail_on_the_fourth_file)
+    argv = _build_args(tmp_path, out)
+    if isinstance(failure, KeyboardInterrupt):
+        with pytest.raises(KeyboardInterrupt):
+            _cli(*argv)
+    else:
+        assert _cli(*argv) == 2
+        assert "REFUSED: output_unwritable" in capsys.readouterr().err
+    assert sorted(out.iterdir()) == [] if existing_directory else not (tmp_path / "nested").exists()
+    monkeypatch.undo()
+    assert _cli(*argv) == 0
+    assert len(list(out.iterdir())) == 7
+
+
+def test_a_file_that_appears_between_the_check_and_the_create_is_never_removed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    out = tmp_path / "pack"
+    original = Path.open
+
+    def lose_the_race(self: Path, *args: Any, **kwargs: Any):
+        if self.name == "scope-A1.map.json" and args[:1] == ("xb",):
+            original(self, "wb").write(b"someone else's file")
+            raise FileExistsError(17, "File exists")
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", lose_the_race)
+    assert _cli(*_build_args(tmp_path, out)) == 2
+    assert "REFUSED: output_unwritable" in capsys.readouterr().err
+    assert [path.name for path in out.iterdir()] == ["scope-A1.map.json"]
+    assert (out / "scope-A1.map.json").read_bytes() == b"someone else's file"
+
+
+# --- hostile input is a typed refusal, never a traceback ----------------------------------------
+
+HUGE_INTEGER = "1" * 5_000  # beyond Python's 4,300-digit int/str conversion limit
+
+
+def test_a_5000_digit_integer_is_a_typed_refusal_in_every_input_file(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str],
+) -> None:
+    with _refused("decisions_json_invalid"):
+        map_pack.parse_decisions(f'{{"a": {HUGE_INTEGER}}}'.encode())
+    with _refused("paragraphs_json_invalid"):
+        parse_paragraphs(f'{{"a": {HUGE_INTEGER}}}'.encode())
+    decisions, paragraphs, out = _paths(tmp_path)
+    huge = tmp_path / "huge.json"
+    huge.write_text(f'{{"decision_version": {HUGE_INTEGER}}}', encoding="utf-8")
+    assert _cli("build", "--decisions", str(huge), "--paragraphs", paragraphs, "--out", out,
+                "--allow-synthetic") == 2
+    assert "REFUSED: decisions_json_invalid" in capsys.readouterr().err
+    assert not Path(out).exists()
+    assert _cli(*_build_args(tmp_path, Path(out))) == 0
+    capsys.readouterr()
+    validate = ("validate", "--maps", out, "--paragraphs", paragraphs, "--allow-synthetic")
+    pack = Path(out)
+    summary, first_map = pack / "pack-summary.json", pack / "scope-F1.map.json"
+    good_summary, good_map = summary.read_bytes(), first_map.read_bytes()
+    summary.write_text(f'{{"review": {HUGE_INTEGER}}}', encoding="utf-8")
+    assert _cli(*validate) == 2
+    assert "REFUSED: summary_json_invalid" in capsys.readouterr().err
+    summary.write_bytes(good_summary)
+    first_map.write_text(f'{{"x": {HUGE_INTEGER}}}', encoding="utf-8")
+    assert _cli(*validate) == 2
+    assert "REFUSED: map_json_invalid:F1" in capsys.readouterr().err
+    first_map.write_bytes(good_map)
+    assert _cli(*validate) == 0
+
+
+def test_a_duplicate_key_keeps_its_own_code_next_to_the_broadened_json_errors() -> None:
+    # `MapPackRefused` is a `ValueError`; broadening the JSON guard must not re-label it.
+    with _refused("duplicate_json_key"):
+        map_pack.parse_decisions(b'{"a":1,"a":2}')
+    with _refused("invalid_json_constant:NaN"):
+        map_pack.parse_decisions(b'{"a":NaN}')
+    with _refused("decisions_json_invalid"):
+        map_pack.parse_decisions(b"[" * 500_000)
