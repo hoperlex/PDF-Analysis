@@ -1,9 +1,9 @@
 {
   "contract": "auditmanager.domain.errors",
-  "contract_version": "1.4.0",
-  "supersedes": "1.3.0",
-  "candidate_revision": 22,
-  "revision_note": "Candidate revision 22 by AR-V3-BETA-GROUP-API-SEAL-01: additive six-scope review API and family 1.4.0 seal.",
+  "contract_version": "1.5.0",
+  "supersedes": "1.4.0",
+  "candidate_revision": 23,
+  "revision_note": "Candidate revision 23 by AR-V3-BETA-PACK-STATUS-API-01: additive reviewed-pack status read API and family 1.5.0 seal.",
   "status": "frozen",
   "frozen": true,
   "envelope": {

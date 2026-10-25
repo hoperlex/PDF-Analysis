@@ -11,7 +11,18 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Version `1.4.0`
+## Version `1.5.0`
+
+`AR-V3-BETA-PACK-STATUS-API-01` adds the authenticated, read-only
+`getArV3BetaPackStatus` operation. It reports whether a reviewed AR v3 beta pack is
+installed on the server and, when it is, the pack's profile and prompt-bundle IDs, the
+sealed pack digest, the six scope IDs and the reviewer attestation that came with the
+manifest. The attestation is a record the server shows, not a statement that it is true;
+no map, set or snapshot identity, scope digest, file path or environment value is
+exposed. The surface is 92 paths, 104 operations and 300 schemas. No error code or
+migration was added.
+
+## Version `1.4.0` (historical)
 
 `AR-V3-BETA-GROUP-API-SEAL-01` adds the authenticated, read-only
 `getArV3BetaGroupReview` operation. Its six ordered members expose only verified,

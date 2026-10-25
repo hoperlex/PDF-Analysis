@@ -30,9 +30,9 @@ from auditmanager.shared.errors import CONTRACT_VERSION as DOMAIN_CONTRACT_VERSI
 from tests.support.expected_facts import FACTS
 
 ROOT = Path(__file__).resolve().parents[3]
-SEALED = "1.4.0"
+SEALED = "1.5.0"
 DRAFT = "1.0.0-draft.1"
-PREVIOUS = "1.3.0"
+PREVIOUS = "1.4.0"
 FAMILIES = ("analysis", "domain", "events")
 DOMAIN = ROOT / "contracts/domain/v1"
 CATALOGS = ("error-codes.json", "identifiers.json", "state-machines.json")
@@ -57,7 +57,7 @@ def _version_values(node: object, found: list[tuple[str, str]], where: str = "")
                 key == "const"
                 and isinstance(value, str)
                 and where.endswith(("/contract_version", "/name_map_contract_version"))
-                and value.startswith(("1.0.0", "1.1.0", "1.2.0", "1.4.0"))
+                and value.startswith(("1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0"))
             ):
                 found.append((f"{where}/const", value))
             _version_values(value, found, f"{where}/{key}")
@@ -132,7 +132,7 @@ def test_a_domain_catalog_is_frozen_at_the_sealed_round(name: str) -> None:
     catalog = _json(DOMAIN / name)
     assert (catalog["contract_version"], catalog["supersedes"]) == (SEALED, PREVIOUS)
     assert (catalog["status"], catalog["frozen"]) == ("frozen", True)
-    assert catalog["candidate_revision"] == 22
+    assert catalog["candidate_revision"] == 23
 
 
 @pytest.mark.parametrize("name", SCHEMAS)
@@ -142,7 +142,7 @@ def test_a_domain_schema_refuses_a_catalog_that_is_not_frozen(name: str) -> None
     assert properties["supersedes"] == {"const": PREVIOUS}
     assert properties["status"] == {"const": "frozen"}
     assert properties["frozen"] == {"const": True}
-    assert properties["candidate_revision"]["const"] == 22
+    assert properties["candidate_revision"]["const"] == 23
 
 
 def test_the_envelope_schema_pins_the_sealed_version() -> None:

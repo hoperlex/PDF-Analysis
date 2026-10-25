@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.4.0 (OpenAPI 3.1.0)
- *   sha256 ccc9956d19de3a4989ba4bab077ca957be30bc104a24eca3f74c4d1aa85660c1
+ *   AuditManager PC-01 API 1.5.0 (OpenAPI 3.1.0)
+ *   sha256 425b17f6f4734dafb7faa1f744aed5f51264955e400fde9d5da8752f6ed83df5
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.4.0';
+export const CONTRACT_VERSION = '1.5.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'ccc9956d19de3a4989ba4bab077ca957be30bc104a24eca3f74c4d1aa85660c1';
+export const CONTRACT_DIGEST = '425b17f6f4734dafb7faa1f744aed5f51264955e400fde9d5da8752f6ed83df5';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -37,6 +37,8 @@ export const SCHEMA_NAMES = [
   'ArV3BetaGroupMember',
   'ArV3BetaGroupReview',
   'ArV3BetaGroupReviewMember',
+  'ArV3BetaPackReview',
+  'ArV3BetaPackStatus',
   'ArV3BetaStageId',
   'ArV3BetaVisibleCitation',
   'ArV3BetaVisibleEvidence',
@@ -459,6 +461,35 @@ export type ArV3BetaGroupReviewMember = {
   run_state: RunState;
   scope_id: "F1" | "F2" | "A1" | "A2" | "S1" | "S2";
   terminal_reason: string | null;
+};
+
+/**
+ * The human attestation that travelled with the installed pack's manifest.
+ *
+ * A record, not a check: the server shows what the manifest says and nothing about
+ * whether anyone really reviewed anything.
+ */
+export type ArV3BetaPackReview = {
+  capacity: string;
+  decision_ref: string;
+  reviewed_at: string;
+  reviewer: string;
+  scope_statement: string;
+};
+
+/**
+ * Whether a reviewed AR v3 beta pack is installed on this server, and its attestation.
+ *
+ * Everything but `state` is absent, never null, while no pack is installed. No map, set or
+ * snapshot identity, digest of a scope, path or environment value is ever a property.
+ */
+export type ArV3BetaPackStatus = {
+  analysis_profile_id?: AnalysisProfileId;
+  pack_sha256?: string;
+  prompt_bundle_id?: PromptBundleId;
+  review?: ArV3BetaPackReview;
+  scope_ids?: Array<("F1" | "F2" | "A1" | "A2" | "S1" | "S2")>;
+  state: "installed" | "not_installed";
 };
 
 /** Profile-specific AR v3 beta review stage; the legacy nine-stage registry is unchanged. */
@@ -949,7 +980,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The single externally visible failure shape, mirroring urn:auditmanager:domain:error-envelope:v1. `retryable` is pinned to the catalog value for the reported code; a caller never infers it from the HTTP status or the message. */
 export type ErrorEnvelope = {
-  contract_version: "1.4.0";
+  contract_version: "1.5.0";
   correlation_id: CorrelationId;
   /** Safe scalar classifiers only, restricted to the safe_detail_keys the catalog declares for the reported code. The catalog's forbidden key set is rejected. */
   details?: {
