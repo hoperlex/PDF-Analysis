@@ -34,6 +34,15 @@ from auditmanager.runs.geometry_crop_item_input import (
 )
 from auditmanager.runs.repository import RunRepository
 from auditmanager.runs.v3_group import TrustedPackRegistry, get_ar_v3_group, start_ar_v3_group
+from auditmanager.runs.v3_pack_manifest import (
+    PACK_MANIFEST_ENV,
+    PackManifestRefused,
+    ParsedPackManifest,
+    ReviewAttestation,
+    load_trusted_pack_registry,
+    parse_manifest,
+    seal_manifest,
+)
 from auditmanager.runs.v3_execution_binding import (
     V3ExecutionBinding,
     resolve_v3_execution_binding,
@@ -90,7 +99,14 @@ def fail_reclaimed_run(
 
 
 __all__ = [
+    "PACK_MANIFEST_ENV",
+    "PackManifestRefused",
+    "ParsedPackManifest",
+    "ReviewAttestation",
     "TrustedPackRegistry",
+    "load_trusted_pack_registry",
+    "parse_manifest",
+    "seal_manifest",
     "V3ExecutionBinding",
     "resolve_v3_execution_binding",
     "V3PreparedExecutionRequest",
