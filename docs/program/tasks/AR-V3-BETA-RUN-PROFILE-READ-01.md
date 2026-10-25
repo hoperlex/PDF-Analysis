@@ -26,12 +26,19 @@ The generic Run page identifies a pinned AR v3 beta profile before its CITE stag
 
 ## Captured premise evidence
 
+- premise: the Run page keys its PC-01 placeholder rows on a reported v3 CITE stage, not on the Run's pinned profile
+
 ### P-01 — current placeholder rule
 
-- captured_at: 2026-10-23
-- command: `rg -n 'reportsV3|PC01_STAGE_IDS.forEach|analysis_profile_id' web/src/entities/audit-run/model/run-presentation.ts contracts/analysis/ar_v3_beta/v1/stage.json`
-- captured_output: `stageRows` suppresses PC-01 rows only after a reported v3 CITE stage; the frozen contract declares an earlier stable v3 profile ID.
-- interpretation: a queued v3 Run with no stage row receives four false legacy placeholders.
+- captured_at: 2026-10-26
+- command: `git grep -n -E 'reportsV3|PC01_STAGE_IDS.forEach|analysis_profile_id' 6650f1eeb8fbf2c18ac33a6e3973646215e6e6c4 -- web/src/entities/audit-run/model/run-presentation.ts contracts/analysis/ar_v3_beta/v1/stage.json`
+- captured_output:
+  ```text
+  6650f1eeb8fbf2c18ac33a6e3973646215e6e6c4:contracts/analysis/ar_v3_beta/v1/stage.json:5:  "analysis_profile_id": "ap_01M5M28ZCDD8VPSP1BTAEW92YE",
+  6650f1eeb8fbf2c18ac33a6e3973646215e6e6c4:web/src/entities/audit-run/model/run-presentation.ts:296:  const reportsV3 = status.stages.some((stage) => stage.stage_id === 'ar_v3_citation_review');
+  6650f1eeb8fbf2c18ac33a6e3973646215e6e6c4:web/src/entities/audit-run/model/run-presentation.ts:297:  if (!reportsV3) PC01_STAGE_IDS.forEach((stageId, index) => {
+  ```
+- interpretation: Re-captured on 2026-10-26 from base commit 6650f1eeb8fbf2c18ac33a6e3973646215e6e6c4 with git grep against that tree (not at dispatch time). At the base, run-presentation.ts:296 computes reportsV3 from the status stages containing 'ar_v3_citation_review' and :297 runs PC01_STAGE_IDS.forEach (the PC-01 placeholder rows) only when reportsV3 is false. The file has no analysis_profile_id reference (the only analysis_profile_id hit is contracts/analysis/ar_v3_beta/v1/stage.json:5, which declares ap_01M5M28ZCDD8VPSP1BTAEW92YE), so a queued v3 Run with no stage row falls into the placeholder branch. Not shown: that exactly four rows are produced (the task states the first four PC-01 stages). Dispatch-time record (2026-10-23, quoted from the original section, not re-run): command `rg -n 'reportsV3|PC01_STAGE_IDS.forEach|analysis_profile_id' web/src/entities/audit-run/model/run-presentation.ts contracts/analysis/ar_v3_beta/v1/stage.json`; captured_output was a prose summary: `stageRows` suppresses PC-01 rows only after a reported v3 CITE stage; the frozen contract declares an earlier stable v3 profile ID. Original interpretation: a queued v3 Run with no stage row receives four false legacy placeholders.
 
 ## Historical evidence
 

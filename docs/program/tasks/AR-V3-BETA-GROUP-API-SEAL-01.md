@@ -21,10 +21,16 @@ An authenticated `getArV3BetaGroupReview` read returns six ordered AR v3 beta sc
 ## Captured premise evidence
 - premise: the persisted six-scope service is available but no public group review route exists
 ### P-01 — public read seam
-- captured_at: 2026-10-23
-- command: `rg -n 'getArV3BetaGroup|read_v3_group_review' src/auditmanager/api src/auditmanager/bootstrap/adapters.py src/auditmanager/runs/v3_group_review.py`
-- captured_output: `getArV3BetaGroup` exists in the router and security register; `read_v3_group_review` exists only in the Runs service.
-- interpretation: this task owns one additive route, its exact response schema and the synchronized contract family.
+- captured_at: 2026-10-26
+- command: `git grep -n -E 'getArV3BetaGroup|read_v3_group_review' e55192dc6141c3fb5762ae8f7292c09866aaa963 -- src/auditmanager/api src/auditmanager/bootstrap/adapters.py src/auditmanager/runs/v3_group_review.py`
+- captured_output:
+  ```text
+  e55192dc6141c3fb5762ae8f7292c09866aaa963:src/auditmanager/api/routers/ar_v3_groups.py:39:        operation_id="getArV3BetaGroup",
+  e55192dc6141c3fb5762ae8f7292c09866aaa963:src/auditmanager/api/security.py:359:        "getArV3BetaGroup": _ANY_ROLE,
+  e55192dc6141c3fb5762ae8f7292c09866aaa963:src/auditmanager/runs/v3_group_review.py:112:def read_v3_group_review(
+  e55192dc6141c3fb5762ae8f7292c09866aaa963:src/auditmanager/runs/v3_group_review.py:173:    "V3VisibleProposal", "V3VisibleReview", "V3VisibleTopic", "read_v3_group_review",
+  ```
+- interpretation: Re-captured on 2026-10-26 from base commit e55192dc6141c3fb5762ae8f7292c09866aaa963 with git grep against that tree (not at dispatch time). At the base, getArV3BetaGroup is the operation id of a router (api/routers/ar_v3_groups.py:39) and has a role entry in the security register (api/security.py:359). read_v3_group_review exists only in runs/v3_group_review.py (definition 112, export 173); there is no hit for it under src/auditmanager/api or in bootstrap/adapters.py. The pattern getArV3BetaGroup would also match a getArV3BetaGroupReview route; none appears, so no public group review route exists at the base. Dispatch-time record (2026-10-23, quoted from the original section, not re-run): command `rg -n 'getArV3BetaGroup|read_v3_group_review' src/auditmanager/api src/auditmanager/bootstrap/adapters.py src/auditmanager/runs/v3_group_review.py`; captured_output was a prose summary: `getArV3BetaGroup` exists in the router and security register; `read_v3_group_review` exists only in the Runs service. Original interpretation: this task owns one additive route, its exact response schema and the synchronized contract family.
 
 ## Historical evidence
 - correction_mode: none
