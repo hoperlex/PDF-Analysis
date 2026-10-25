@@ -196,7 +196,7 @@ REQUEST_REFUSALS = {
     "set id is not an nrs identity": (_set("set_id", to=SNAPSHOT), "request_invalid"),
     "set id missing": (_set("set_id", to=""), "request_invalid"),
     "proof digest is not lowercase sha256": (
-        _set("independently_checked_source_digest", to="ABC"), "request_invalid"),
+        _set("independently_checked_source_digest", to="A" * 64), "request_invalid"),
     "expected digest is not sha256": (_set("expected_set_sha256", to="1" * 63), "request_invalid"),
     "empty items": (_set("items", to=[]), "request_invalid"),
     "empty designations": (_set("designations", to=[]), "request_invalid"),
@@ -252,7 +252,9 @@ def test_request_json_must_be_strict(tmp_path: Path, case: str) -> None:
 
 def test_invalid_utf8_is_refused(tmp_path: Path) -> None:
     directory = _bundle(tmp_path)
-    (directory / "request.json").write_bytes(b'{"format": "\xff"}')
+    good = json.dumps(_request(), ensure_ascii=False).encode("utf-8")
+    assert b"reviewed-drop" in good  # otherwise valid: only the one bad byte can refuse it
+    (directory / "request.json").write_bytes(good.replace(b"reviewed-drop", b"reviewed-\xff"))
     assert _refusal(directory).reason == "request_invalid"
 
 
