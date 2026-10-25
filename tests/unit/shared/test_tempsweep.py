@@ -32,11 +32,7 @@ import pytest
 from auditmanager.jobs import temporaries
 from auditmanager.jobs.public import ATTEMPT_WATCHDOG_SECONDS, SweepReport
 from auditmanager.workers import service as service_module
-from auditmanager.workers.service import (
-    TEMPORARIES_LIVE_MARGIN_SECONDS,
-    WorkerService,
-    sweep_running_temporaries,
-)
+from auditmanager.workers.service import WorkerService, sweep_running_temporaries
 
 SOURCE = "am-source-a1b2c3d4.pdf"
 GEOMETRY = "am-geometry-e5f6g7h8.pdf"
@@ -211,8 +207,8 @@ def directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _Directory:
 
 def test_the_running_sweep_leaves_what_a_live_attempt_could_still_hold(directory: _Directory) -> None:
     directory.populate()
-    # Past the watchdog and the start sweep's minute, short of the live margin.
-    directory.advance_to(ATTEMPT_WATCHDOG_SECONDS + TEMPORARIES_LIVE_MARGIN_SECONDS - 100)
+    # 200 s past the watchdog: beyond the start sweep's minute, short of the live margin (300 s).
+    directory.advance_to(ATTEMPT_WATCHDOG_SECONDS + 200)
 
     report = sweep_running_temporaries()
 
@@ -224,7 +220,7 @@ def test_the_running_sweep_removes_the_stale_stage_temporaries_and_only_those(
     directory: _Directory,
 ) -> None:
     directory.populate()
-    directory.advance_to(ATTEMPT_WATCHDOG_SECONDS + TEMPORARIES_LIVE_MARGIN_SECONDS + 100)
+    directory.advance_to(ATTEMPT_WATCHDOG_SECONDS + 400)
 
     report = sweep_running_temporaries()
 
@@ -238,7 +234,7 @@ def test_a_started_worker_with_the_default_sweep_reclaims_a_killed_stage_file(
 ) -> None:
     """The default wiring: no sweep is passed, and the started service still reclaims."""
     directory.populate()
-    directory.advance_to(ATTEMPT_WATCHDOG_SECONDS + TEMPORARIES_LIVE_MARGIN_SECONDS + 100)
+    directory.advance_to(ATTEMPT_WATCHDOG_SECONDS + 400)
     service = make_service(temporaries_sweep_seconds=0.02)
 
     service.start()
