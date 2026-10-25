@@ -518,6 +518,14 @@ def test_serving_lifespan_dispatches_an_ordinary_run_adapter_submission(
         _restore_the_queue(sessions, parked)
 
 
+def _job_and_availability(sessions: sessionmaker[Session], run_id: str) -> tuple[Any, Any]:
+    with sessions() as opened:
+        row = opened.execute(text(
+            "SELECT job_id, available_at FROM job WHERE run_id = :run_id"
+        ), {"run_id": run_id}).one()
+    return row[0], row[1]
+
+
 def _unpause(sessions: sessionmaker[Session]) -> None:
     with sessions() as opened:
         JobRepository().set_paused(opened, paused=False)
@@ -586,6 +594,42 @@ def test_a_leftover_reclaimed_after_the_parking_still_sorts_behind_this_run(
     finally:
         _restore_the_queue(sessions, parked)
         _cancel_leftovers(sessions, made)
+
+
+def test_a_job_queued_between_the_quieting_and_the_resume_is_parked_and_remembered(
+    sessions: sessionmaker[Session], blob_store: Any,
+    recorded_adapter: RecordedAdapter, provider_config: Any,
+    committed_version: Any,
+) -> None:
+    """D-152: the second parking catches what the first could not see, and restores it.
+
+    A foreign Job arrives after the queue was quieted and outranks this run (priority 100,
+    older), so only parking it keeps it from being picked. It must also be remembered, or
+    the cleanup would leave it parked until 2099.
+    """
+    client = next(_client(sessions, blob_store, recorded_adapter, provider_config, _NoCarrier()))
+    made: list[str] = []
+    parked = _quiet_the_queue(sessions)
+    try:
+        arrival = _start(client, committed_version.version_uid)["run_id"]
+        made.append(arrival)
+        own = _start(client, committed_version.version_uid)["run_id"]
+        made.append(own)
+        with sessions() as promote:
+            promote.execute(text(
+                "UPDATE job SET priority = 100 WHERE run_id = :run_id"
+            ), {"run_id": arrival})
+            promote.commit()
+        arrival_job, arrival_available = _job_and_availability(sessions, arrival)
+        _resume_with_this_run_first(sessions, own, parked)
+        assert (arrival_job, arrival_available) in [(row[0], row[1]) for row in parked]
+        with sessions() as picker:
+            assert JobRepository().next_queued_run(picker) == own
+            picker.rollback()
+    finally:
+        _restore_the_queue(sessions, parked)
+        _cancel_leftovers(sessions, made)
+    assert _job_and_availability(sessions, arrival) == (arrival_job, arrival_available)
 
 
 def test_quieting_the_queue_reclaims_an_expired_leftover_before_it_parks(
