@@ -152,7 +152,9 @@ def _read_file(path: Path, limit: int, label: str) -> bytes:
     try:
         descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
     except OSError as exc:
-        raise CliRefused("bundle_unreadable", f"{label} is missing, a symlink or unreadable") from exc
+        raise CliRefused(
+            "bundle_unreadable", f"{label} is missing, a symlink or unreadable"
+        ) from exc
     try:
         if not stat.S_ISREG(os.fstat(descriptor).st_mode):
             raise CliRefused("bundle_unreadable", f"{label} is not a regular file")
@@ -250,7 +252,8 @@ def _item(raw: Any, label: str) -> tuple[RetrievalItem, str]:
     text_digest = _digest(provenance["query_text_sha256"], f"{label}.provenance.query_text_sha256")
     declared = _digest(provenance["query_vector_sha256"], f"{label}.provenance.query_vector_sha256")
     try:
-        packed = vectors.from_base64(_text(item["query_vector_base64"], f"{label}.query_vector_base64"))
+        encoded = _text(item["query_vector_base64"], f"{label}.query_vector_base64")
+        packed = vectors.from_base64(encoded)
         vectors.require_unit(packed)
     except vectors.VectorRefused as exc:
         raise CliRefused("request_invalid", f"{label}.query_vector_base64: {exc}") from exc
@@ -280,7 +283,8 @@ def load_bundle(directory: Path, *, require_expected: bool) -> LoadedBundle:
     names = sorted(os.listdir(directory))
     if names != sorted((MAP_NAME, REQUEST_NAME)):
         raise CliRefused(
-            "bundle_layout", f"the bundle must hold exactly {MAP_NAME} and {REQUEST_NAME}, found {names}"
+            "bundle_layout",
+            f"the bundle must hold exactly {MAP_NAME} and {REQUEST_NAME}, found {names}",
         )
     map_bytes = _read_file(directory / MAP_NAME, MAX_ARTIFACT_BYTES, MAP_NAME)
     raw = _object(
@@ -332,7 +336,8 @@ def load_bundle(directory: Path, *, require_expected: bool) -> LoadedBundle:
             raw["independently_checked_embedding_digest"], "independently_checked_embedding_digest"
         ),
         expected_set_sha256=(
-            _digest(raw["expected_set_sha256"], "expected_set_sha256") if present else _NO_EXPECTATION
+            _digest(raw["expected_set_sha256"], "expected_set_sha256")
+            if present else _NO_EXPECTATION
         ),
         expected_catalogue_sha256=(
             _digest(raw["expected_catalogue_sha256"], "expected_catalogue_sha256")
@@ -427,9 +432,9 @@ class DatabaseRunner:
     def prepare(self, request: PromotionRequest) -> PreparedPromotion:
         session = self._factory()
         try:
-            session.connection(
-                execution_options={"isolation_level": "REPEATABLE READ", "postgresql_readonly": True},
-            )
+            session.connection(execution_options={
+                "isolation_level": "REPEATABLE READ", "postgresql_readonly": True,
+            })
             return promotion.prepare_promotion(session, request)
         finally:
             session.rollback()
