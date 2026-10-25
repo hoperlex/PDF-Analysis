@@ -23,10 +23,14 @@ from sqlalchemy import text
 from sqlalchemy.exc import InternalError
 
 from auditmanager.norms.custody import (
+    NORM_CATALOGUE,
+    NORM_RETRIEVAL_SET,
     NORM_SOURCE,
     CustodyDispatcher,
     admit,
     publish_bindings,
+    report,
+    requeue,
 )
 from auditmanager.norms.embedding import vectors
 from auditmanager.norms.embedding.digest import EmbeddingSetDigest
@@ -464,3 +468,55 @@ def test_the_default_runner_is_built_from_the_application_environment(
         "SELECT state FROM norm_retrieval_set WHERE norm_retrieval_set_id = :set_id",
         set_id=set_id,
     ) == "verified"
+
+
+@pytest.mark.usefixtures("clean_tables")
+def test_a_poisoned_admission_is_reported_and_completes_after_the_documented_requeue(
+    custody: CustodyKit, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+) -> None:
+    seed = _seed(custody)
+    stand = Stand(custody)
+    set_id = str(NormRetrievalSetId.new())
+    bundle = _bundle(tmp_path, seed, set_id=set_id)
+    _expect(bundle, *_plan_digests(stand, bundle, capsys))
+
+    def broken(point: str) -> None:
+        if point == "temporary_staged":
+            raise RuntimeError("the store keeps failing")
+
+    def poisoned() -> list[str]:
+        with session_scope(custody.session_factory) as session:
+            return [
+                admission.admission_id
+                for role in (NORM_RETRIEVAL_SET, NORM_CATALOGUE)
+                for admission in report(session, role=role, targets=[set_id]).poisoned
+            ]
+
+    stand.checkpoint = broken
+    for _attempt in range(12):  # five counted tries poison one admission
+        assert stand.run("promote", bundle) == promote_cli.EXIT_UNCERTAIN
+        with custody.engine.begin() as connection:
+            connection.execute(text(
+                "UPDATE norm_custody_admission SET available_at = clock_timestamp() "
+                "WHERE target_id = :set_id AND state = 'pending'"
+            ), {"set_id": set_id})
+        if poisoned():
+            break
+    capsys.readouterr()
+    stand.checkpoint = None
+    assert poisoned()
+    assert stand.run("promote", bundle) == promote_cli.EXIT_UNCERTAIN
+    err = capsys.readouterr().err
+    assert "UNCERTAIN [dispatch_unsettled]" in err and "=poisoned" in err and "requeue" in err
+
+    # The runbook's recovery: list this set's poisoned admissions, requeue exactly those.
+    with session_scope(custody.session_factory) as session:
+        assert requeue(session, poisoned())
+    with custody.engine.begin() as connection:
+        connection.execute(text(
+            "UPDATE norm_custody_admission SET available_at = clock_timestamp() "
+            "WHERE target_id = :set_id AND state = 'pending'"
+        ), {"set_id": set_id})
+    assert stand.run("promote", bundle) == 0
+    assert _field(capsys.readouterr().out, "replayed") == "false"
+    assert not poisoned()
