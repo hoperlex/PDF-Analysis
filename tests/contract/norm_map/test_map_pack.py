@@ -311,6 +311,26 @@ def test_a_provisional_item_must_state_its_branch_and_evidence_list(field: str) 
         _build(decisions)
 
 
+def test_edition_evidence_is_unique_and_sorted_whatever_the_input_order() -> None:
+    entries = [{"source_id": "D1_MCHS_1", "pages": "1", "page_sha256": "1" * 64},
+               {"source_id": "D1_PUBLIC_2", "pages": "2", "page_sha256": "2" * 64},
+               {"source_id": "D1_PUBLIC_2", "pages": "3", "page_sha256": "0" * 64}]
+    forward, backward = _decisions(), _decisions()
+    _item(forward, "C01")["edition_evidence"] = entries
+    _item(backward, "C01")["edition_evidence"] = list(reversed(entries))
+    assert _build(forward) == _build(backward)
+    mapping = json.loads(_build(forward).maps[0].data)
+    assert [e["page_sha256"] for e in mapping["items"][0]["edition_evidence"]] == ["1" * 64, "0" * 64, "2" * 64]
+    duplicated = _decisions()
+    _item(duplicated, "C01")["edition_evidence"] = [entries[0], dict(entries[0])]
+    with _refused("edition_evidence_not_canonical:C01"):
+        _build(duplicated)
+    unsorted = _build(forward)
+    with _refused("edition_evidence_not_canonical:C01"):
+        check_scope_maps(_remap(unsorted, "F1", lambda m: m["items"][0]["edition_evidence"].reverse()),
+                         allow_synthetic=True)
+
+
 def test_evidence_must_come_from_a_text_source_the_policy_names_for_that_item() -> None:
     entry = {"source_id": "D1_LOCAL", "pages": "1", "page_sha256": "0" * 64}
     for source_id in ("D1_LOCAL", "NOT_A_SOURCE", "D3_PUBLIC_CONSOLIDATED"):
@@ -599,6 +619,10 @@ def test_targets_must_resolve_to_the_declared_reliable_paragraphs() -> None:
     _paragraph(wrong_id, "SYNTD1", 1)["norm_paragraph_id"] = "npar_00000000000000000000SYNXTH"
     with _refused("target_not_in_paragraphs:C01"):
         validate_scope_maps(maps, _paragraphs(wrong_id), allow_synthetic=True)
+    wrong_first = _paragraph_payload()
+    _paragraph(wrong_first, "SYNTD1", 0)["norm_paragraph_id"] = "npar_00000000000000000000SYNXTH"
+    with _refused("target_not_in_paragraphs:C01"):
+        validate_scope_maps(maps, _paragraphs(wrong_first), allow_synthetic=True)
     missing = _paragraph_payload()
     missing["paragraphs"].remove(_paragraph(missing, "SYNTD1", 1))
     with _refused("target_not_in_paragraphs:C01"):
