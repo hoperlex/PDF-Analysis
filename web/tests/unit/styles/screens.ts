@@ -46,6 +46,7 @@ import { WorkersPage } from '@/_pages/workers';
 import { ReviseConnectionForm } from '@/features/manage-executor-connection';
 import { SetExecutorSecretForm } from '@/features/set-executor-secret';
 import { AnalysisProfileTable } from '@/widgets/analysis-profile-table';
+import { ArV3BetaReview } from '@/widgets/ar-v3-beta-review';
 import { SpecificationPricesAnswer } from '@/widgets/specification-prices';
 import { NormReferencesAnswer } from '@/widgets/norm-references';
 import { SectionSpecificationAnswer } from '@/widgets/section-specification';
@@ -125,6 +126,7 @@ import {
 } from '../workers/executor-fixtures';
 import { proposalShapes, seedLoadedProposals } from '../optimisation-proposals/fixtures';
 import { SECTION_NO_ROWS, sectionAnswer } from '../section-specification/fixtures';
+import { GROUP_ID, groupReviewFixture } from '../analysis-settings/ar-v3-beta-review-fixtures';
 
 import type { Screen } from './contrast';
 
@@ -764,6 +766,20 @@ export function screens(): Screen[] {
   add('AnalysisProfileTable one section without a profile', render(createElement(AnalysisProfileTable, {
     items: [{ section_code: UNPROFILED, section_name: 'Генеральный план', profile: null }],
   })));
+  /*
+   * `AR-V3-BETA-GROUP-REVIEW-SCREEN-01`: the AR v3 group review LOADED. `/analysis-settings` is
+   * derived above, but with no `group_id` in its address the panel draws only its lookup form --
+   * so `.member details` (the per-scope disclosure) and `.quote` (the blockquote carrying a page
+   * quotation and a norm quotation) were reached by no screen, and `names every colour-bearing
+   * rule that NO rendered screen reaches` said so. The address carries the group, the shape is
+   * answered here: six scopes, each in a different state (available with provisional evidence,
+   * failed, verification refused, three pending), seeded as the server's answer.
+   */
+  {
+    const client = newClient();
+    client.setQueryData(queryKeys.runs.arV3GroupReview(GROUP_ID), groupReviewFixture());
+    add('ArV3BetaReview six scopes loaded', renderScreen(client, createElement(ArV3BetaReview, { groupId: GROUP_ID })));
+  }
   // `W60-PRICE-LIST-01`: the «Оптимизация» tab loaded (revisions, a positions page with its
   // report, the fifteen vendor lists), and every other shape its widgets have.
   {
