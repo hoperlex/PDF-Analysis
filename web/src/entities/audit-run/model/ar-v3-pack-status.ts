@@ -5,10 +5,11 @@
  * `{ state: "installed", ... }` carries the profile and prompt-bundle ids, the sealed pack
  * digest, the six scope ids in order and the reviewer's five-field attestation. Anything
  * else is a **fault**, not an empty state and not an installed pack: a response that omits a
- * member, invents one, names a state the contract does not, or lists another set of scopes
- * is a response this client cannot vouch for. The screen that offers to start six checks must
- * never do so on the strength of such an answer, so the reading has exactly three outcomes
- * and the third is not "probably installed".
+ * member, invents one, names a state the contract does not, carries an identifier or digest
+ * the contract's pattern refuses, or lists another set of scopes is a response this client
+ * cannot vouch for. The screen that offers to start six checks must never do so on the
+ * strength of such an answer, so the reading has exactly three outcomes and the third is not
+ * "probably installed".
  *
  * The attestation is a record of what the pack manifest said. Nothing here, and nothing on
  * the server, checks that a review took place; a reading that carries one says so in words
@@ -29,6 +30,7 @@ export type ArV3PackFaultReason =
   | 'members_beside_not_installed'
   | 'unknown_member'
   | 'missing_member'
+  | 'bad_identifier'
   | 'bad_digest'
   | 'bad_scope_list'
   | 'bad_attestation';
@@ -58,6 +60,11 @@ const INSTALLED_MEMBERS: readonly string[] = [
 const REVIEW_MEMBERS = ['reviewer', 'capacity', 'reviewed_at', 'decision_ref', 'scope_statement'] as const;
 
 const SHA256_HEX = /^[0-9a-f]{64}$/;
+// The contract's own patterns for `AnalysisProfileId` and `PromptBundleId`: a Crockford ULID
+// body after the prefix. `$` with no `m` flag does not stop before a trailing newline in
+// JavaScript, so a value with one is not an identifier here.
+const ANALYSIS_PROFILE_ID = /^ap_[0-9A-HJKMNP-TV-Z]{26}$/;
+const PROMPT_BUNDLE_ID = /^pb_[0-9A-HJKMNP-TV-Z]{26}$/;
 const ISO_DATE = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -90,6 +97,7 @@ export function readArV3PackStatus(body: unknown): ArV3PackReading {
 
   const { analysis_profile_id: profileId, prompt_bundle_id: bundleId, pack_sha256: digest } = body;
   if (!isNonEmptyString(profileId) || !isNonEmptyString(bundleId)) return fault('missing_member');
+  if (!ANALYSIS_PROFILE_ID.test(profileId) || !PROMPT_BUNDLE_ID.test(bundleId)) return fault('bad_identifier');
   if (typeof digest !== 'string' || !SHA256_HEX.test(digest)) return fault('bad_digest');
 
   const scopes = body.scope_ids;

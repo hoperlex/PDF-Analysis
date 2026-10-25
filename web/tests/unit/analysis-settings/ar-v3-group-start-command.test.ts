@@ -50,6 +50,9 @@ import { GROUP_ID } from './ar-v3-beta-review-fixtures';
 const PROJECT_UID = 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 const VERSION_UID = 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 const KEY = 'ik-one-intent';
+// What the caller of the control holds for it (`useArV3GroupStartIntent`): the key and whether a
+// start is pending. The control sends exactly this key and mints none of its own.
+const INTENT = { idempotencyKey: KEY, inFlight: false };
 const GROUP = { group_id: GROUP_ID, project_uid: PROJECT_UID, version_uid: VERSION_UID } as ArV3BetaGroup;
 
 type Captured = {
@@ -97,7 +100,12 @@ describe('the start command', () => {
 describe('the control hands over only a group the settings screen can open', () => {
   const render = (onStarted: (group: ArV3BetaGroup) => void): string =>
     renderToStaticMarkup(
-      createElement(StartArV3GroupControl, { projectUid: PROJECT_UID, versionUid: VERSION_UID, onStarted }),
+      createElement(StartArV3GroupControl, {
+        projectUid: PROJECT_UID,
+        versionUid: VERSION_UID,
+        intent: INTENT,
+        onStarted,
+      }),
     );
 
   it('calls onStarted with a 202 group that carries a valid address, and with no other', () => {
@@ -110,6 +118,7 @@ describe('the control hands over only a group the settings screen can open', () 
       const element = StartArV3GroupControl({
         projectUid: PROJECT_UID,
         versionUid: VERSION_UID,
+        intent: INTENT,
         onStarted: (group) => started.push(group),
       });
       onSend = (element.props as { onSend: () => void }).onSend;
@@ -123,7 +132,7 @@ describe('the control hands over only a group the settings screen can open', () 
       { onSuccess: (group: ArV3BetaGroup) => void },
     ];
     expect(variables.versionUid).toBe(VERSION_UID);
-    expect(variables.idempotencyKey.length).toBeGreaterThan(8);
+    expect(variables.idempotencyKey, 'the control must send the key it was handed, not one of its own').toBe(KEY);
 
     options.onSuccess(GROUP);
     expect(started).toEqual([GROUP]);

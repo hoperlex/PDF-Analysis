@@ -12,7 +12,7 @@ import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
 import { ApiError, queryKeys } from '@/shared/api';
-import type { ErrorCode } from '@/shared/api';
+import type { ArV3BetaPackStatus, ErrorCode } from '@/shared/api';
 import { AR_V3_PACK_SCOPE_IDS, readArV3PackStatus } from '@/entities/audit-run';
 import type { ArV3PackFaultReason, ArV3PackReading } from '@/entities/audit-run';
 import {
@@ -30,6 +30,38 @@ import { NOT_INSTALLED_PACK, installedPackFixture, withoutMember } from './ar-v3
 
 const REAL_DIGEST = '6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f';
 
+const PROFILE_ID = 'ap_01M5AXG1K22R027A33VTKZ468P';
+const BUNDLE_ID = 'pb_01M5AXG1K2JQQH7R4ACTBW8974';
+
+/**
+ * Identifiers the contract's patterns (`^ap_[0-9A-HJKMNP-TV-Z]{26}$`, `^pb_...`) refuse, one defect
+ * each: not a ULID at all, padded, a trailing newline, lower case, the wrong length, a letter
+ * Crockford leaves out, and the other kind's prefix. A pack with any of them is not installed.
+ */
+function malformedIdentifierCases(
+  installed: ArV3BetaPackStatus,
+): ReadonlyArray<readonly [string, unknown, ArV3PackFaultReason]> {
+  const withProfile = (value: string) => ({ ...installed, analysis_profile_id: value });
+  const withBundle = (value: string) => ({ ...installed, prompt_bundle_id: value });
+  return [
+    ['a profile id that is "x"', withProfile('x'), 'bad_identifier'],
+    ['a profile id with a leading space', withProfile(` ${PROFILE_ID}`), 'bad_identifier'],
+    ['a profile id with a trailing space', withProfile(`${PROFILE_ID} `), 'bad_identifier'],
+    ['a profile id with a trailing newline', withProfile(`${PROFILE_ID}\n`), 'bad_identifier'],
+    ['a lower-case profile id', withProfile(PROFILE_ID.toLowerCase()), 'bad_identifier'],
+    ['a profile id one character short', withProfile(PROFILE_ID.slice(0, -1)), 'bad_identifier'],
+    ['a profile id one character long', withProfile(`${PROFILE_ID}0`), 'bad_identifier'],
+    ['a profile id with a letter Crockford omits', withProfile(`ap_01M5AXG1K22R027A33VTKZ468U`), 'bad_identifier'],
+    ['a profile id with the bundle prefix', withProfile(BUNDLE_ID), 'bad_identifier'],
+    ['a bundle id that is "x"', withBundle('x'), 'bad_identifier'],
+    ['a bundle id with a leading space', withBundle(` ${BUNDLE_ID}`), 'bad_identifier'],
+    ['a bundle id with a trailing newline', withBundle(`${BUNDLE_ID}\n`), 'bad_identifier'],
+    ['a lower-case bundle id', withBundle(BUNDLE_ID.toLowerCase()), 'bad_identifier'],
+    ['a bundle id one character short', withBundle(BUNDLE_ID.slice(0, -1)), 'bad_identifier'],
+    ['a bundle id with the profile prefix', withBundle(PROFILE_ID), 'bad_identifier'],
+  ];
+}
+
 function faultOf(body: unknown): ArV3PackFaultReason {
   const reading = readArV3PackStatus(body);
   if (reading.kind !== 'fault') throw new Error(`expected a fault, read ${reading.kind}`);
@@ -46,6 +78,14 @@ describe('the pack status classification has exactly three outcomes', () => {
     expect(reading.scopeIds).toEqual([...AR_V3_PACK_SCOPE_IDS]);
     expect(reading.review.reviewer).toBe('Иванова Мария Петровна');
     expect(reading.review.reviewed_at).toBe('2026-10-20');
+  });
+
+  it('reads the identifiers the contract pattern accepts, unchanged', () => {
+    const reading = readArV3PackStatus(installedPackFixture());
+    expect(reading.kind).toBe('installed');
+    if (reading.kind !== 'installed') return;
+    expect(reading.analysisProfileId).toBe(PROFILE_ID);
+    expect(reading.promptBundleId).toBe(BUNDLE_ID);
   });
 
   it('reads not_installed only when it carries nothing else', () => {
@@ -70,6 +110,7 @@ describe('the pack status classification has exactly three outcomes', () => {
       ['installed without its scopes', withoutScopes, 'missing_member'],
       ['installed without its profile', withoutProfile, 'missing_member'],
       ['an invented member', { ...installed, snapshot_id: 'ns_x' }, 'unknown_member'],
+      ...malformedIdentifierCases(installed),
       ['a digest of the wrong length', { ...installed, pack_sha256: REAL_DIGEST.slice(1) }, 'bad_digest'],
       ['an upper-case digest', { ...installed, pack_sha256: REAL_DIGEST.toUpperCase() }, 'bad_digest'],
       ['five scopes', { ...installed, scope_ids: ['F1', 'F2', 'A1', 'A2', 'S1'] }, 'bad_scope_list'],
@@ -104,6 +145,29 @@ describe('the pack status classification has exactly three outcomes', () => {
   it('shows the first twelve hex characters of the digest and says it is shortened', () => {
     expect(packDigestShown(REAL_DIGEST)).toBe('6d53674f688f…');
     expect(packDigestShown(REAL_DIGEST).replace('…', '')).toHaveLength(12);
+  });
+});
+
+/**
+ * The longest stretch of `digest` that appears, unbroken, in `markup`. The rule is a bound on
+ * this number, not on a particular attribute: a digest in a `title`, a `data-` attribute, a
+ * comment or hidden text is in the DOM for any role whatever it is called.
+ */
+function longestDigestRun(markup: string, digest: string): number {
+  for (let length = digest.length; length > 0; length -= 1) {
+    for (let start = 0; start + length <= digest.length; start += 1) {
+      if (markup.includes(digest.slice(start, start + length))) return length;
+    }
+  }
+  return 0;
+}
+
+describe('no more than twelve characters of the pack digest are in the markup', () => {
+  it('measures a whole digest wherever it sits, so the bound below can fail', () => {
+    expect(longestDigestRun(`<code title="${REAL_DIGEST}">6d53674f688f…</code>`, REAL_DIGEST)).toBe(64);
+    expect(longestDigestRun(`<code data-digest="${REAL_DIGEST}"></code>`, REAL_DIGEST)).toBe(64);
+    expect(longestDigestRun('<code>6d53674f688f…</code>', REAL_DIGEST)).toBe(12);
+    expect(longestDigestRun('<code>nothing</code>', REAL_DIGEST)).toBeLessThan(3);
   });
 });
 
@@ -161,7 +225,6 @@ describe('the pack panel in each of its five states', () => {
     expect(markup).toContain('data-ar-v3-pack-state="installed"');
     expect(markup).toContain('ap_01M5AXG1K22R027A33VTKZ468P');
     expect(markup).toContain('>6d53674f688f…<');
-    expect(markup).toContain(`title="${REAL_DIGEST}"`);
     expect(markup).toContain('data-ar-v3-pack-scopes="F1 F2 A1 A2 S1 S2"');
     expect(markup).toContain('F1, F2, A1, A2, S1, S2');
     for (const text of [
@@ -181,6 +244,20 @@ describe('the pack panel in each of its five states', () => {
       'Запись рецензента приложена при установке пакета; система её не проверяет, цитаты остаются ' +
         'предварительными и требуют проверки эксперта.',
     );
+  });
+
+  it('installed: the 64-character digest is nowhere in the markup, only its first twelve characters', () => {
+    const client = newClient();
+    client.setQueryData(queryKeys.runs.arV3PackStatus(), installedPackFixture({ pack_sha256: REAL_DIGEST }));
+    const markup = panel(client);
+    expect(markup).not.toContain(REAL_DIGEST);
+    // Exactly the twelve shown: none hidden elsewhere, and the twelve are there (not a vacuous pass).
+    expect(longestDigestRun(markup, REAL_DIGEST)).toBe(12);
+    // The same on the screen that mounts the panel.
+    const screen = renderScreen(client, createElement(AnalysisSettingsPage));
+    expect(screen).toContain('data-ar-v3-pack-state="installed"');
+    expect(screen).not.toContain(REAL_DIGEST);
+    expect(longestDigestRun(screen, REAL_DIGEST)).toBe(12);
   });
 
   it('installed: a reviewer\'s free text is escaped, never markup', () => {

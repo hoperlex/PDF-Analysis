@@ -9,5 +9,8 @@ export { MALFORMED_GROUP_ANSWER, classifyArV3GroupStartFailure } from './model/s
 export type { StartArV3GroupCommand } from './model/use-start-ar-v3-group';
 export { useStartArV3Group } from './model/use-start-ar-v3-group';
 
+export type { ArV3GroupStartIntent } from './model/use-ar-v3-group-start-intent';
+export { useArV3GroupStartIntent } from './model/use-ar-v3-group-start-intent';
+
 export type { StartArV3GroupControlProps, StartArV3GroupViewProps } from './ui/start-ar-v3-group-control';
 export { StartArV3GroupControl, StartArV3GroupView } from './ui/start-ar-v3-group-control';
