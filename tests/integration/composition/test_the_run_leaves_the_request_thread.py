@@ -518,6 +518,12 @@ def test_serving_lifespan_dispatches_an_ordinary_run_adapter_submission(
         _restore_the_queue(sessions, parked)
 
 
+def _unpause(sessions: sessionmaker[Session]) -> None:
+    with sessions() as opened:
+        JobRepository().set_paused(opened, paused=False)
+        opened.commit()
+
+
 def _lose_the_lease(sessions: sessionmaker[Session], run_id: str) -> None:
     """Leave ``run_id`` running under a lease that has already expired, committed."""
     with sessions() as owner:
@@ -553,11 +559,17 @@ def test_a_leftover_reclaimed_after_the_parking_still_sorts_behind_this_run(
     same default priority, so only this run's raised priority keeps it from being picked.
     """
     client = next(_client(sessions, blob_store, recorded_adapter, provider_config, _NoCarrier()))
-    leftover = _start(client, committed_version.version_uid)["run_id"]
-    own = _start(client, committed_version.version_uid)["run_id"]
-    _lose_the_lease(sessions, leftover)
-    parked: list[Any] = []
+    # Every other suite's leftover is reclaimed and parked first, so the only Job that can
+    # turn claimable late is the one made here; a claim needs dispatch unpaused meanwhile.
+    parked = _quiet_the_queue(sessions)
+    made: list[str] = []
     try:
+        _unpause(sessions)
+        leftover = _start(client, committed_version.version_uid)["run_id"]
+        made.append(leftover)
+        own = _start(client, committed_version.version_uid)["run_id"]
+        made.append(own)
+        _lose_the_lease(sessions, leftover)
         _resume_with_this_run_first(sessions, own, parked)
         with sessions() as late:
             assert JobRepository().reclaim_expired(late) >= 1
@@ -573,7 +585,7 @@ def test_a_leftover_reclaimed_after_the_parking_still_sorts_behind_this_run(
             picker.rollback()
     finally:
         _restore_the_queue(sessions, parked)
-        _cancel_leftovers(sessions, [leftover, own])
+        _cancel_leftovers(sessions, made)
 
 
 def test_quieting_the_queue_reclaims_an_expired_leftover_before_it_parks(
@@ -588,11 +600,15 @@ def test_quieting_the_queue_reclaims_an_expired_leftover_before_it_parks(
     the carrier's first pass nor its first poll can find anything of theirs.
     """
     client = next(_client(sessions, blob_store, recorded_adapter, provider_config, _NoCarrier()))
-    waiting = _start(client, committed_version.version_uid)["run_id"]
-    lost = _start(client, committed_version.version_uid)["run_id"]
-    _lose_the_lease(sessions, lost)
+    made: list[str] = []
     parked: list[Any] = []
     try:
+        _unpause(sessions)  # claiming the lost lease needs dispatch on
+        waiting = _start(client, committed_version.version_uid)["run_id"]
+        made.append(waiting)
+        lost = _start(client, committed_version.version_uid)["run_id"]
+        made.append(lost)
+        _lose_the_lease(sessions, lost)
         parked = _quiet_the_queue(sessions)
         with sessions() as observer:
             rows = observer.execute(text(
@@ -607,7 +623,7 @@ def test_quieting_the_queue_reclaims_an_expired_leftover_before_it_parks(
             )).scalar_one() is True
     finally:
         _restore_the_queue(sessions, parked)
-        _cancel_leftovers(sessions, [waiting, lost])
+        _cancel_leftovers(sessions, made)
 
 
 class TestACrashDoesNotStrandARun:
