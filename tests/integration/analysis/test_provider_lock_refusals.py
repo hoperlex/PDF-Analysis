@@ -34,6 +34,10 @@ LOCK_PATH = REPO_ROOT / "docs" / "program" / "P02_LOCK.json"
 #: compared against them, so a lock edit that is not mirrored here is a red test.
 PRIMARY_MODEL_ID = "claude-opus-5"
 CHEAPER_MODEL_ID = "claude-sonnet-5"
+#: The owner's Codex subscription through the pull agent (`EXEC-CODEX-SSH-01`): a third pinned
+#: identity, not metered, whose rates are a reference only. It is a pin like the others.
+CODEX_MODEL_ID = "gpt-6-sol"
+PINNED_MODEL_IDS = {PRIMARY_MODEL_ID, CHEAPER_MODEL_ID, CODEX_MODEL_ID}
 PRIMARY_INPUT_PER_MTOK_USD = 5.0
 PRIMARY_OUTPUT_PER_MTOK_USD = 25.0
 
@@ -44,13 +48,14 @@ def test_the_lock_document_still_says_what_this_file_pins() -> None:
     models = document["models"]
     assert models["primary"]["model_id"] == PRIMARY_MODEL_ID
     assert models["cheaper_tier"]["model_id"] == CHEAPER_MODEL_ID
+    assert models["codex_subscription"]["model_id"] == CODEX_MODEL_ID
     assert models["primary"]["input_per_mtok_usd"] == PRIMARY_INPUT_PER_MTOK_USD
     assert models["primary"]["output_per_mtok_usd"] == PRIMARY_OUTPUT_PER_MTOK_USD
 
 
-def test_the_loaded_lock_carries_exactly_the_two_pinned_identities() -> None:
+def test_the_loaded_lock_carries_exactly_the_three_pinned_identities() -> None:
     lock = provider_lock()
-    assert set(lock.models) == {PRIMARY_MODEL_ID, CHEAPER_MODEL_ID}
+    assert set(lock.models) == PINNED_MODEL_IDS
     assert lock.primary_model_id == PRIMARY_MODEL_ID
 
 
@@ -78,6 +83,7 @@ def test_a_pinned_identity_is_not_refused() -> None:
     lock = provider_lock()
     assert lock.model(PRIMARY_MODEL_ID).model_id == PRIMARY_MODEL_ID
     assert lock.model(CHEAPER_MODEL_ID).model_id == CHEAPER_MODEL_ID
+    assert lock.model(CODEX_MODEL_ID).model_id == CODEX_MODEL_ID
 
 
 def test_a_lock_declaring_no_primary_model_is_refused(tmp_path: Path) -> None:
@@ -104,7 +110,7 @@ def test_an_annotation_key_is_skipped_rather_than_parsed_as_a_model(tmp_path: Pa
     variant.write_text(json.dumps(document), encoding="utf-8")
 
     lock = load_provider_lock(variant)
-    assert set(lock.models) == {PRIMARY_MODEL_ID, CHEAPER_MODEL_ID}
+    assert set(lock.models) == PINNED_MODEL_IDS
 
 
 def test_an_unreadable_lock_document_names_no_path(tmp_path: Path) -> None:

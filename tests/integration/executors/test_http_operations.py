@@ -7,6 +7,7 @@ import base64
 import hashlib
 import sys
 from contextlib import nullcontext
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +15,7 @@ import pytest
 from sqlalchemy import text
 
 from auditmanager.analysis.public import ModelRequest
+from auditmanager.executors import kinds
 from auditmanager.executors.operations import (
     IMPORT_DISPLAY_NAME,
     OperationRefused,
@@ -113,10 +115,13 @@ def freeze_connection_error(session: Any) -> str:
     return str(_refusal(lambda: freeze_connection(session, "text_analysis")).detail_fields["dependency"])
 
 
-def test_kinds_and_transports_this_release_does_not_serve_are_refused_at_route_time(
-    session, fake  # type: ignore[no-untyped-def]
+def test_a_kind_or_transport_the_registry_does_not_serve_is_refused_at_route_time(
+    session, fake, monkeypatch  # type: ignore[no-untyped-def]
 ) -> None:
-    # `EXEC-CANDIDATE-2` serves `pull`; the command over SSH is the kind this release still lacks.
+    # This release registers all three kinds (`http_api`, `ssh_command`, `pull`) and the three
+    # transports, so "not served" is no longer a state a real connection can be in. The refusal is
+    # kept by taking the registration away for the test: the command over SSH with no adapter
+    # factory, and the SSH tunnel with an `http_api` entry that does not serve it.
     ssh = create_connection(
         session, kind="ssh_command", display_name="machine", roles=support.ADMIN_ROLES,
         idempotency_key=support.unique(), actor_uid=support.ACTOR)
@@ -128,13 +133,25 @@ def test_kinds_and_transports_this_release_does_not_serve_are_refused_at_route_t
             ssh_port=22, ssh_user="am", ssh_profile="claude_code_headless"),
         pinned_model_ids={pin.model_id for pin in pinned_models()}, roles=support.ADMIN_ROLES,
         idempotency_key=support.unique(), actor_uid=support.ACTOR)
-    refused = _refusal(lambda: support.route(session, ssh.connection_id))
-    assert (refused.code.value, refused.detail_fields) == (
-        "validation_failed", {"field": "kind", "constraint": "kind_not_served"})
     rings = support.make_rings()
     tunnel = support.seed_connection(session, rings, "http://localhost:11434/v1", probe="ok",
                                      routed=False, transport="ssh_tunnel", ssh_host="gpu.example.test",
                                      ssh_port=22, ssh_user="am")
+    # The negative half: while the registry serves them, neither is refused as a kind. The command
+    # has no probe yet, the tunnel has no SSH key yet, so each ends on its own, different refusal.
+    assert _refusal(lambda: support.route(session, ssh.connection_id)).detail_fields == {
+        "conflict_reason": "connection_not_probed"}
+    assert _refusal(lambda: support.route(session, tunnel.connection_id)).detail_fields == {
+        "conflict_reason": "connection_not_probed"}
+
+    monkeypatch.delitem(kinds._REGISTRY, "ssh_command")
+    refused = _refusal(lambda: support.route(session, ssh.connection_id))
+    assert (refused.code.value, refused.detail_fields) == (
+        "validation_failed", {"field": "kind", "constraint": "kind_not_served"})
+    http_api = kinds.adapter_for("http_api")
+    assert http_api is not None
+    monkeypatch.setitem(kinds._REGISTRY, "http_api", replace(
+        http_api, serves=lambda revision: revision.settings.transport in ("direct", "vpn")))
     assert _refusal(lambda: support.route(session, tunnel.connection_id)).detail_fields[
         "constraint"] == "kind_not_served"
 
@@ -197,6 +214,10 @@ def test_worker_bootstrap_lists_openrouter_and_preserves_codex_route_with_image_
     session, fake  # type: ignore[no-untyped-def]
 ) -> None:
     rings = support.make_rings()
+    store = ExecutorRepository()
+    # The suite rolls each test back, but a committed connection of another suite (the dump
+    # tests commit theirs) stays in the shared database: count what this test adds, not the table.
+    before = len(store.list_connections(session))
     codex = support.seed_connection(session, rings, fake.base_url(), name="Codex")
     first = import_env(
         _factory(session), _environ(fake), ring=rings.private, policy=fake.policy(),
@@ -204,7 +225,6 @@ def test_worker_bootstrap_lists_openrouter_and_preserves_codex_route_with_image_
     )
     assert first.created and first.probe_outcome is None and not first.routed
     assert resolve_route(session, "text_analysis").route.primary_connection_id == codex.connection_id
-    store = ExecutorRepository()
     connection = store.get_connection(session, first.connection_id)
     revision = store.current_revisions(session, [first.connection_id])[first.connection_id]
     assert connection.display_name == IMPORT_DISPLAY_NAME and revision.settings.api_flavour == "openai_chat"
@@ -220,7 +240,7 @@ def test_worker_bootstrap_lists_openrouter_and_preserves_codex_route_with_image_
         queue_only=True,
     )
     assert not second.created and second.connection_id == first.connection_id
-    assert len(store.list_connections(session)) == 2
+    assert len(store.list_connections(session)) == before + 2
 
     png = base64.b64decode(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL7WQAAAABJRU5ErkJggg=="

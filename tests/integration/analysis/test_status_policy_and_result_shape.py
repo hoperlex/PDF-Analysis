@@ -30,6 +30,7 @@ from auditmanager.analysis.engine.registry import StageRegistry, default_registr
 from auditmanager.analysis.engine.result import ArtifactRef, StageStatus
 from auditmanager.analysis.engine.runner import assert_status_allowed
 from auditmanager.shared.errors import DomainError, ErrorCode
+from tests.support.expected_facts import FACTS
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CONTRACT = REPO_ROOT / "contracts" / "analysis" / "v1" / "stage-registry.json"
@@ -37,7 +38,10 @@ CONTRACT = REPO_ROOT / "contracts" / "analysis" / "v1" / "stage-registry.json"
 #: Pinned literals. The authority is `contracts/analysis/v1/stage-registry.json`, read and
 #: compared below, so a contract edit that is not mirrored here reddens.
 EXPECTED_CONTRACT = "auditmanager.analysis.stage_registry"
-CONTRACT_VERSION = "1.0.0"
+#: Every reseal moves the whole contract family to one version (`test_contract_seal.py`), so the
+#: registry's version is the hand-maintained expectation of that family, not a literal restated
+#: here that the next reseal would leave behind (it said `1.0.0` while the family was `1.5.0`).
+CONTRACT_VERSION = FACTS.contract_version
 PREPARATION_STAGES = ("source_preparation", "page_geometry_extraction", "document_context_build")
 BLOB_ID = "blob_01M2545JSD15ETSNNV904X991J"
 SHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
