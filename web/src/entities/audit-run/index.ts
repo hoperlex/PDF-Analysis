@@ -47,7 +47,10 @@ export {
 
 export type { TerminalReasonNote } from './model/terminal-reason';
 export { ABSENT_SENTENCE, UNDESCRIBED_PREFIX, terminalReasonNote } from './model/terminal-reason';
-export { looksLikeArV3GroupId } from './model/ar-v3-group-id';
+export { arV3GroupReviewAddress, looksLikeArV3GroupId } from './model/ar-v3-group-id';
+
+export type { ArV3PackFaultReason, ArV3PackReading, ArV3PackScopeId } from './model/ar-v3-pack-status';
+export { AR_V3_PACK_SCOPE_IDS, readArV3PackStatus } from './model/ar-v3-pack-status';
 
 export { looksLikeRunId } from './model/address';
 
@@ -67,6 +70,9 @@ export { DIGIT_GROUP_SEPARATOR, groupDigits, inputBudgetFigures, inputBudgetSent
 export { RUN_PAGE_LIMIT, runListQueryOptions, useRunList } from './api/use-run-list';
 
 export { runStatusQueryOptions } from './api/run-status-query';
+
+export type { ArV3PackView } from './api/use-ar-v3-pack-status';
+export { arV3PackStatusQueryOptions, useArV3PackStatus } from './api/use-ar-v3-pack-status';
 
 export type { RunStatusPolling } from './api/use-run-status';
 export { useRunStatus } from './api/use-run-status';

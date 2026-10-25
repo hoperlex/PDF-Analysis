@@ -1,0 +1,36 @@
+.panel {
+  display: grid;
+  gap: var(--am-gap);
+  padding: var(--am-gap);
+  margin-bottom: var(--am-gap-lg);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius);
+}
+
+.panel h2,
+.panel h3,
+.panel p {
+  margin: 0;
+}
+
+.facts {
+  display: grid;
+  gap: var(--am-gap-xs);
+  margin: 0;
+}
+
+.facts dt {
+  font-weight: 600;
+}
+
+.facts dd {
+  margin: 0 0 var(--am-gap-sm);
+  overflow-wrap: anywhere;
+}
+
+.attestation {
+  display: grid;
+  gap: var(--am-gap-sm);
+  padding-top: var(--am-gap);
+  border-top: 1px solid var(--am-line-soft);
+}
