@@ -34,14 +34,18 @@ from auditmanager.norms.retrieval.promotion import (
 )
 from auditmanager.norms.retrieval.qualification_decision import DigestComparison
 from auditmanager.norms.retrieval.ranking import PromptSelection
-from auditmanager.shared.db import DatabaseConfigurationError
+from auditmanager.shared.db import (
+    DatabaseConfigurationError,
+    reset_session_factory,
+)
+from auditmanager.shared.db.engine import dispose_engine
 from auditmanager.shared.errors import ErrorCode
 from auditmanager.shared.identity import NormRetrievalSetId
 from auditmanager.storage.errors import StorageConfigurationError
 
 SNAPSHOT = "ns_01M59N8QNBVN91ACA2HCE6VE74"
 DOCUMENT = "ndoc_01J9ZQ8K7NHVXW3T2R5M6P4Q8B"
-CHUNKING = "reliable-v1-1200"
+CHUNKING = "characters-v2:1200"
 MAP_BYTES = canonical_json_bytes({"mapped_document_ids": [DOCUMENT], "note": "reviewed"})
 SET_BYTES = canonical_json_bytes({"set": "canonical paragraph"})
 CATALOGUE_BYTES = canonical_json_bytes({"catalogue": "canonical documents"})
@@ -591,6 +595,22 @@ def test_the_rerun_command_quotes_a_bundle_path_with_spaces(
     bundle = _bundle(tmp_path, name="a bundle")
     assert _run(FakeRunner(admit_error=RuntimeError("x")), "promote", bundle, stores) == 3
     assert f"promote '{bundle}'\n" in capsys.readouterr().err
+
+
+def test_the_default_runner_refuses_cleanly_without_its_environment(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for name in (
+        "DATABASE_URL", "S3_ENDPOINT_URL", "S3_REGION", "S3_ACCESS_KEY_ID",
+        "S3_SECRET_ACCESS_KEY", "S3_BUCKET",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    reset_session_factory()
+    dispose_engine()
+    assert promote_cli.main(["plan", str(_bundle(tmp_path, expected=False, name="p"))]) == 2
+    assert "plan: REFUSED [database_unavailable]" in capsys.readouterr().err
+    assert promote_cli.main(["promote", str(_bundle(tmp_path, name="q"))]) == 2
+    assert "promote: REFUSED [blob_store_unavailable]" in capsys.readouterr().err
 
 
 def test_an_unreached_unclassified_state_in_plan_is_not_swallowed(

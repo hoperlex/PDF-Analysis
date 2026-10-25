@@ -170,20 +170,10 @@ def _object_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return dict(pairs)
 
 
-def _no_float(_: str) -> Any:
-    raise ValueError("floats are not part of the request format")
-
-
-def _no_constant(_: str) -> Any:
-    raise ValueError("non-finite number")
-
-
 def _strict_json(data: bytes) -> Any:
+    # Floats and NaN parse, then fail the integer/text checks of every field that follows.
     try:
-        return json.loads(
-            data.decode("utf-8"), object_pairs_hook=_object_pairs,
-            parse_float=_no_float, parse_constant=_no_constant,
-        )
+        return json.loads(data.decode("utf-8"), object_pairs_hook=_object_pairs)
     except (UnicodeError, ValueError) as exc:
         raise CliRefused(
             "request_invalid", f"{REQUEST_NAME} is not strict JSON ({exc})"
