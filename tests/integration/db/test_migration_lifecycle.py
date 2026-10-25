@@ -64,6 +64,9 @@ EXPECTED_TABLES = {
     # `0031_executor_pull_channel`: a runner's credential (hash only) and the tasks it takes.
     "executor_runner_token",
     "executor_task",
+    # `0032_ar_v3_run_group`: a group of six runs of one version, and its six members.
+    "ar_v3_run_group",
+    "ar_v3_run_group_member",
     # `0019_execution_workers`: the worker registry.
     "worker",
     # `0020_norms_search`: the one current norms snapshot and its append-only history.
