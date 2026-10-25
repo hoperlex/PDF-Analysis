@@ -10,6 +10,11 @@ for both planes and now has the service on its side.
 
 ``GATE-REPAIR-01`` measured the window this closes: 19 to 26 ms of ``/readyz`` ``200`` before
 the API port was bound, over 12 real starts.
+
+``DEBT-READYZ-ERRORS-FIX-01`` adds the other end: ``uvicorn`` never clears ``Server.started``, so
+on SIGTERM (``should_exit``) or a forced exit (``force_exit``) the listener closes while
+``started`` stays true. The predicate must read the exit flags too, or ``/readyz`` keeps saying
+``200`` for a port that refuses new connections. The cases here flip the stand-in's flags.
 """
 
 from __future__ import annotations
@@ -20,6 +25,7 @@ import types
 from pathlib import Path
 from typing import Any
 
+import pytest
 from starlette.testclient import TestClient
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -55,6 +61,8 @@ def _run_main(monkeypatch: Any, on_api_run: Any) -> tuple[Any, Any]:
         def __init__(self, config: _Config) -> None:
             self.config = config
             self.started = False
+            self.should_exit = False  # uvicorn sets it on SIGTERM; it never clears `started`
+            self.force_exit = False
             servers.append(self)
 
         def run(self) -> None:
@@ -112,3 +120,41 @@ def test_the_health_plane_is_built_for_the_application_the_process_wired(monkeyp
     _run_main(monkeypatch, on_api_run)
 
     assert seen["body"] == {"status": "ok", "wired": True}
+
+
+@pytest.mark.parametrize("exit_flag", ["should_exit", "force_exit"])
+def test_readyz_is_withdrawn_when_the_api_server_starts_to_exit(monkeypatch, exit_flag: str) -> None:  # type: ignore[no-untyped-def]
+    """``started`` stays true through a drain; the exit flags say the listener is closing."""
+    observed: dict[str, int] = {}
+
+    def on_api_run(server: Any, health_app: Any) -> None:
+        client = TestClient(health_app)
+        server.started = True
+        observed["serving"] = client.get("/readyz").status_code
+        # SIGTERM sets `should_exit`; a second SIGINT sets `force_exit`.
+        setattr(server, exit_flag, True)
+        assert server.started, "the stand-in must keep `started` true, as uvicorn does"
+        observed["draining"] = client.get("/readyz").status_code
+        observed["live while draining"] = client.get("/healthz").status_code
+
+    _run_main(monkeypatch, on_api_run)
+
+    assert observed == {"serving": 200, "draining": 503, "live while draining": 200}
+
+
+def test_the_listener_predicate_follows_the_server_it_is_bound_to() -> None:
+    """Unbound, not started, serving, draining: the four states, on a stand-in server object."""
+    serve = _load_serve()
+    server = types.SimpleNamespace(started=False, should_exit=False, force_exit=False)
+    listener = serve._ApiListener()
+
+    assert listener() is False  # no server bound yet
+    listener.server = server
+    assert listener() is False  # bound, not started
+    server.started = True
+    assert listener() is True  # serving
+    server.should_exit = True
+    assert listener() is False  # SIGTERM: draining
+    server.should_exit = False
+    server.force_exit = True
+    assert listener() is False  # forced exit
