@@ -106,7 +106,7 @@ The DB tests do not substitute preparation. They seed one snapshot (one document
 
 ### Mutation proofs
 
-Each guard was mutated in place, the named tests run, then the file restored (`git status` clean after each; harness `scratchpad/l2/mutate.py`, results `mutation-results.txt`). All 45 mutations turned the run red:
+Each guard was mutated in place (a one-line textual change to `promote_cli.py`), the named test files run, then the file restored (`git status` clean after each). The run was repeated on the final source. All 45 mutations turned the run red:
 
 | Guard (mutation) | Red test |
 | --- | --- |
