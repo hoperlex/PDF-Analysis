@@ -153,7 +153,7 @@ All with `BS=$(ls -d /root/projects/PDF-Analysis/.venv/bootstrap/lib/python3*/si
 - `tests/integration/composition/test_v3_pack_install.py` and `test_v3_worker_registry.py`, `tests/integration/api/test_ar_v3_pack_status_route.py`, `tests/contract/architecture`: passed.
 - Against the running integration stack only (throwaway database and bucket per test): `tests/integration/norms/custody/test_promote_cli_db.py` 12 passed (11 + the new spans test), `tests/integration/db/test_ar_v3_pack_seal.py` 3 passed, `tests/integration/db/test_ar_v3_run_group.py` 5 passed.
 - Every non-database test file that imports `shared.identity` (120 files outside `tests/integration/db`): the only failures are database/object-store set-up errors (no `DATABASE_URL` or `S3_*`) and two `test_v2_recorded_durable_stage.py` cases that fail identically on the base `ids.py` (a stale fake session in `jobs/repository.py`, unrelated).
-- The whole `tests/contract` once at the end; `git diff --check`; the governance check of this file prints `[]`.
+- The whole `tests/contract` once at the end: 1,295 passed; the 82 failures and 126 errors are all in `test_cp00_candidate.py`, `test_validate_bootstrap.py` and `test_cp00_final_state.py` and are identical on a detached checkout of the base `809d5c73` (worktree `.git` file, missing `jsonschema` in a subprocess). `git diff --check` is clean; the governance check of this file prints `[]`.
 
 ## Integration contract
 
