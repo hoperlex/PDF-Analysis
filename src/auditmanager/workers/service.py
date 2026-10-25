@@ -6,7 +6,7 @@ both processes fence expired leases. The authority boundary is unchanged from W5
 the database: a claim is a Job, a current Attempt and a Lease with the execution token,
 taken under the run-first lock order by ``jobs``. This module decides only *when* to ask.
 
-What it does, in four threads
+What it does, in five threads
 -----------------------------
 * **registry** -- at start a new ``wrk`` identity is registered in ``worker`` and written
   to the state directory (a tmpfs on the stand, so a restarted container is a new worker);
@@ -25,6 +25,18 @@ What it does, in four threads
 * **probes** -- when a probe runner is given (`EXEC-HTTP-01`), a thread that takes the
   ``requested`` connection probes and runs them on this worker's network path. A draining worker
   takes no new probe.
+* **temporaries** -- every :data:`TEMPORARIES_SWEEP_SECONDS`, the stage temporaries a killed
+  process left in this container's ``/tmp`` (`DEBT-TEMP-SWEEP-01`, D-170; see below).
+
+Temporaries
+-----------
+A stage's temporary PDF is removed by a context manager, which a ``SIGKILL`` never reaches. The
+sweep at process start (``__main__``) takes what is older than the attempt watchdog plus a
+minute, and the files of the kill that *caused* the restart are younger than that, so they stay
+until a later start -- never, in a worker that is not restarted again. This thread repeats the
+sweep while the worker runs, with a margin of :data:`TEMPORARIES_LIVE_MARGIN_SECONDS` over the
+watchdog because this process's own attempts may be live. Housekeeping: a sweep that fails is
+logged at error and tried again; it never stops the worker.
 
 Drain
 -----
@@ -48,7 +60,13 @@ from typing import Any, Final
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from auditmanager.jobs.public import JOB_WAKEUP_CHANNEL, JobRepository
+from auditmanager.jobs.public import (
+    ATTEMPT_WATCHDOG_SECONDS,
+    JOB_WAKEUP_CHANNEL,
+    JobRepository,
+    SweepReport,
+    sweep_stale_temporaries,
+)
 from auditmanager.workers.registry import HEARTBEAT_SECONDS, WorkerRegistry
 
 _log = logging.getLogger(__name__)
@@ -62,11 +80,28 @@ _TICK_SECONDS: Final[float] = 1.0
 #: How often the probe loop looks for a ``requested`` probe when the last look found none
 #: (`EXEC-HTTP-01`). A poll rather than a ``LISTEN``: a probe is a person pressing a button.
 PROBE_POLL_SECONDS: Final[float] = 2.0
+#: How often a running worker looks for the temporaries a killed process left
+#: (`DEBT-TEMP-SWEEP-01`). A pass lists one directory and removes nothing unless something
+#: stale is there.
+TEMPORARIES_SWEEP_SECONDS: Final[float] = 300.0
+#: What a running worker adds to the attempt watchdog before it calls a temporary stale. The sweep
+#: at process start runs before any attempt exists and adds a minute; here this process's own
+#: attempts may hold a file, so the margin is five minutes. The file is made after the claim and
+#: the watchdog fences the attempt at its limit, so an older file belongs to an attempt that no
+#: longer holds authority.
+TEMPORARIES_LIVE_MARGIN_SECONDS: Final[float] = 300.0
 
 #: Files in the state directory. The identity is written once; the heartbeat file's
 #: modification time is what ``python -m auditmanager.workers health`` reads.
 IDENTITY_FILE: Final[str] = "worker-id"
 HEARTBEAT_FILE: Final[str] = "heartbeat"
+
+
+def sweep_running_temporaries() -> SweepReport:
+    """The sweep of a worker that is running: the start sweep's rules, a longer margin."""
+    return sweep_stale_temporaries(
+        older_than=float(ATTEMPT_WATCHDOG_SECONDS) + TEMPORARIES_LIVE_MARGIN_SECONDS,
+    )
 
 
 class JobWakeup:
@@ -170,9 +205,13 @@ class WorkerService:
         registry: WorkerRegistry | None = None,
         probe_runner: Callable[[], int] | None = None,
         probe_poll_seconds: float = PROBE_POLL_SECONDS,
+        temporaries_sweep: Callable[[], SweepReport] = sweep_running_temporaries,
+        temporaries_sweep_seconds: float = TEMPORARIES_SWEEP_SECONDS,
     ) -> None:
         if slots < 1:
             raise ValueError("a worker needs at least one slot")
+        if temporaries_sweep_seconds <= 0:
+            raise ValueError("the temporaries sweep needs a positive interval")
         self._engine = engine
         self._sessions = session_factory
         self._execute = execute
@@ -185,6 +224,8 @@ class WorkerService:
         self._registry = registry or WorkerRegistry()
         self._probe_runner = probe_runner
         self._probe_poll_seconds = probe_poll_seconds
+        self._temporaries_sweep = temporaries_sweep
+        self._temporaries_sweep_seconds = temporaries_sweep_seconds
         self._worker_id: str | None = None
         self._stopped = threading.Event()
         self._draining = threading.Event()
@@ -229,6 +270,7 @@ class WorkerService:
         loops = [
             (self._heartbeat_loop, "auditmanager-worker-heartbeat"),
             (self._dispatch_loop, "auditmanager-worker-dispatch"),
+            (self._temporaries_loop, "auditmanager-worker-temporaries"),
         ]
         if self._probe_runner is not None:
             loops.append((self._probe_loop, "auditmanager-worker-probes"))
@@ -324,6 +366,21 @@ class WorkerService:
                     _log.exception("worker %s probe pass failed; retried", self._worker_id)
             self._stopped.wait(0.1 if handled else self._probe_poll_seconds)
 
+    def _temporaries_loop(self) -> None:
+        """Reclaim the temporaries of killed processes while the service runs (D-170).
+
+        Housekeeping, so the one place a failure is logged and the worker carries on; the sweep
+        itself logs what it removed and what it could not.
+        """
+        while not self._stopped.wait(self._temporaries_sweep_seconds):
+            try:
+                self._temporaries_sweep()
+            except Exception:
+                _log.exception(
+                    "worker %s temporaries sweep failed; retried in %g s",
+                    self._worker_id, self._temporaries_sweep_seconds,
+                )
+
     def _reclaim(self) -> None:
         try:
             with self._sessions() as session:
@@ -398,7 +455,10 @@ __all__ = [
     "POLL_SECONDS",
     "PROBE_POLL_SECONDS",
     "RECLAIM_SECONDS",
+    "TEMPORARIES_LIVE_MARGIN_SECONDS",
+    "TEMPORARIES_SWEEP_SECONDS",
     "JobWakeup",
     "WorkerService",
     "healthy",
+    "sweep_running_temporaries",
 ]
