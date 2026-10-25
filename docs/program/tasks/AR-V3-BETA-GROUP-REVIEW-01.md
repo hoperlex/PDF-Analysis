@@ -21,10 +21,29 @@ A read-only Runs service returns all six AR v3 scope outcomes for one durable gr
 ## Captured premise evidence
 - premise: the group read has six Run IDs/states but no review material, and the new saved-review reader returns an internal document that also carries hashes and Blob pointers
 ### P-01 — read seams
-- captured_at: 2026-10-23
-- command: `rg -n 'class GroupView|def get_ar_v3_group|class V3SavedReview|def read_v3_saved_review' src/auditmanager/runs/v3_group.py src/auditmanager/runs/v3_review_reader.py`
-- captured_output: `GroupView.members` carries six scope/run/state pins; `read_v3_saved_review` verifies and returns the full internal document for one terminal Run.
-- interpretation: a safe six-scope projection must whitelist user-facing fields and retain one outcome per durable member.
+- captured_at: 2026-10-26
+- command: `git grep -n -E 'class GroupView|members: tuple|def get_ar_v3_group|class V3SavedReview|document: Mapping|def read_v3_saved_review|"reply_ref"|provider_body_sha256|return V3SavedReview' e4001a2c21aabd0b5e1af4b97ea8169da26ecf48 -- src/auditmanager/runs/v3_group.py src/auditmanager/runs/v3_review_reader.py; git grep -n -A 5 'class GroupMember' e4001a2c21aabd0b5e1af4b97ea8169da26ecf48 -- src/auditmanager/runs/v3_group.py`
+- captured_output:
+  ```text
+  e4001a2c21aabd0b5e1af4b97ea8169da26ecf48:src/auditmanager/runs/v3_group.py:120:class GroupView:
+  e4001a2c21aabd0b5e1af4b97ea8169da26ecf48:src/auditmanager/runs/v3_group.py:129:    members: tuple[GroupMember, ...]
+  e4001a2c21aabd0b5e1af4b97ea8169da26ecf48:src/auditmanager/runs/v3_group.py:175:def get_ar_v3_group(session: Session, group_id: str) -> GroupView:
+  e4001a2c21aabd0b5e1af4b97ea8169da26ecf48:src/auditmanager/runs/v3_review_reader.py:35:    "candidate_sha256", "provider_body_sha256", "provider_response_sha256",
+  e4001a2c21aabd0b5e1af4b97ea8169da26ecf48:src/auditmanager/runs/v3_review_reader.py:36:    "answer_text_sha256", "model_call_id", "reply_ref", "topics",
+  e4001a2c21aabd0b5e1af4b97ea8169da26ecf48:src/auditmanager/runs/v3_review_reader.py:50:class V3SavedReview:
+  e4001a2c21aabd0b5e1af4b97ea8169da26ecf48:src/auditmanager/runs/v3_review_reader.py:54:    document: Mapping[str, Any]
+  e4001a2c21aabd0b5e1af4b97ea8169da26ecf48:src/auditmanager/runs/v3_review_reader.py:162:        "provider_body_sha256": metrics["provider_body_sha256"],
+  e4001a2c21aabd0b5e1af4b97ea8169da26ecf48:src/auditmanager/runs/v3_review_reader.py:175:    reply = value["reply_ref"]
+  e4001a2c21aabd0b5e1af4b97ea8169da26ecf48:src/auditmanager/runs/v3_review_reader.py:192:def read_v3_saved_review(
+  e4001a2c21aabd0b5e1af4b97ea8169da26ecf48:src/auditmanager/runs/v3_review_reader.py:246:    return V3SavedReview(run_id, group.group_id, document["scope_id"], document)
+  e4001a2c21aabd0b5e1af4b97ea8169da26ecf48:src/auditmanager/runs/v3_group.py:111:class GroupMember:
+  e4001a2c21aabd0b5e1af4b97ea8169da26ecf48:src/auditmanager/runs/v3_group.py-112-    scope_id: str
+  e4001a2c21aabd0b5e1af4b97ea8169da26ecf48:src/auditmanager/runs/v3_group.py-113-    run_id: str
+  e4001a2c21aabd0b5e1af4b97ea8169da26ecf48:src/auditmanager/runs/v3_group.py-114-    state: str
+  e4001a2c21aabd0b5e1af4b97ea8169da26ecf48:src/auditmanager/runs/v3_group.py-115-    map_sha256: str
+  e4001a2c21aabd0b5e1af4b97ea8169da26ecf48:src/auditmanager/runs/v3_group.py-116-    norm_retrieval_set_id: str
+  ```
+- interpretation: Re-captured on 2026-10-26 from base commit e4001a2c21aabd0b5e1af4b97ea8169da26ecf48 with git grep against that tree (not at dispatch time). At the base, GroupView (v3_group.py:120) holds members: tuple[GroupMember, ...] (129), returned by get_ar_v3_group (175); GroupMember (111-116) carries scope_id, run_id, state, map_sha256 and norm_retrieval_set_id, which are pins and a state, not review material. read_v3_saved_review (v3_review_reader.py:192) returns V3SavedReview whose document is a Mapping[str, Any] (54), passed through whole at line 246; the internal field set _FIELDS (35-36) includes provider_body_sha256 and reply_ref, i.e. hash and Blob-pointer fields. Not shown by this output: that the group has exactly six members (that check is in get_ar_v3_group, outside the captured lines). Dispatch-time record (2026-10-23, quoted from the original section, not re-run): command `rg -n 'class GroupView|def get_ar_v3_group|class V3SavedReview|def read_v3_saved_review' src/auditmanager/runs/v3_group.py src/auditmanager/runs/v3_review_reader.py`; captured_output was a prose summary: `GroupView.members` carries six scope/run/state pins; `read_v3_saved_review` verifies and returns the full internal document for one terminal Run. Original interpretation: a safe six-scope projection must whitelist user-facing fields and retain one outcome per durable member.
 
 ## Historical evidence
 - correction_mode: none

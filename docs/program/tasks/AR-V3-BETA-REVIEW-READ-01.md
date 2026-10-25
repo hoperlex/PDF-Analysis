@@ -21,10 +21,28 @@ A read-only Runs service returns one saved AR v3 beta review document only after
 ## Captured premise evidence
 - premise: CITE persists a bounded canonical JSON review Blob and stage metrics, but no service reads it for a historical terminal Run
 ### P-01 — artifact and existing API
-- captured_at: 2026-10-23
-- command: `rg -n 'MAX_REVIEW_BYTES|analysis.v3_beta_review|get_norm_verification' src/auditmanager/runs/v3_review_artifact.py src/auditmanager/runs/v3_cite_stage.py src/auditmanager/bootstrap/adapters.py`
-- captured_output: the writer saves the review as an `analysis.v3_beta_review` StageResult artifact; `get_norm_verification` still returns `dependency_unavailable` and its frozen schema describes canonical finding partitions, not this review-only artifact.
-- interpretation: add a verified Runs reader first; a later API contract must name a separate review-only response shape.
+- captured_at: 2026-10-26
+- command: `git grep -n -E 'MAX_REVIEW_BYTES|analysis\.v3_beta_review|build_v3_beta_review_artifact|v3_review_reader|read_v3_saved_review' 0d0626111ad969dda525677fae45d4387b360ebd -- src; git grep -n -A 7 'def get_norm_verification' 0d0626111ad969dda525677fae45d4387b360ebd -- src/auditmanager/bootstrap/adapters.py`
+- captured_output:
+  ```text
+  0d0626111ad969dda525677fae45d4387b360ebd:src/auditmanager/runs/v3_cite_stage.py:24:from auditmanager.runs.v3_review_artifact import build_v3_beta_review_artifact
+  0d0626111ad969dda525677fae45d4387b360ebd:src/auditmanager/runs/v3_cite_stage.py:123:        artifact = build_v3_beta_review_artifact(preflight)
+  0d0626111ad969dda525677fae45d4387b360ebd:src/auditmanager/runs/v3_cite_stage_contract.py:99:            or stage["output_role"] != "analysis.v3_beta_review"
+  0d0626111ad969dda525677fae45d4387b360ebd:src/auditmanager/runs/v3_review_artifact.py:13:ROLE = "analysis.v3_beta_review"
+  0d0626111ad969dda525677fae45d4387b360ebd:src/auditmanager/runs/v3_review_artifact.py:15:MAX_REVIEW_BYTES = 2_097_152
+  0d0626111ad969dda525677fae45d4387b360ebd:src/auditmanager/runs/v3_review_artifact.py:35:def build_v3_beta_review_artifact(value: V3CitePreflight) -> BuiltV3ReviewArtifact:
+  0d0626111ad969dda525677fae45d4387b360ebd:src/auditmanager/runs/v3_review_artifact.py:197:    if len(payload) > MAX_REVIEW_BYTES:
+  0d0626111ad969dda525677fae45d4387b360ebd:src/auditmanager/runs/v3_review_artifact.py:204:__all__ = ["BuiltV3ReviewArtifact", "build_v3_beta_review_artifact"]
+  0d0626111ad969dda525677fae45d4387b360ebd:src/auditmanager/bootstrap/adapters.py:1067:    def get_norm_verification(self, *, run_id: str) -> models.NormVerificationReport:
+  0d0626111ad969dda525677fae45d4387b360ebd:src/auditmanager/bootstrap/adapters.py-1068-        """Refuse until a reader proves the 0023 partition and the pinned set.
+  0d0626111ad969dda525677fae45d4387b360ebd:src/auditmanager/bootstrap/adapters.py-1069-
+  0d0626111ad969dda525677fae45d4387b360ebd:src/auditmanager/bootstrap/adapters.py-1070-        An empty citation SELECT is not a certificate of zero. CITE will replace this
+  0d0626111ad969dda525677fae45d4387b360ebd:src/auditmanager/bootstrap/adapters.py-1071-        seam after it checks stage success and every canonical/member partition.
+  0d0626111ad969dda525677fae45d4387b360ebd:src/auditmanager/bootstrap/adapters.py-1072-        """
+  0d0626111ad969dda525677fae45d4387b360ebd:src/auditmanager/bootstrap/adapters.py-1073-        raise DomainError(
+  0d0626111ad969dda525677fae45d4387b360ebd:src/auditmanager/bootstrap/adapters.py-1074-            ErrorCode.DEPENDENCY_UNAVAILABLE,
+  ```
+- interpretation: Re-captured on 2026-10-26 from base commit 0d0626111ad969dda525677fae45d4387b360ebd with git grep against that tree (not at dispatch time). At the base, v3_cite_stage.py imports (24) and calls (123) build_v3_beta_review_artifact, defined at v3_review_artifact.py:35; the artifact role is analysis.v3_beta_review (v3_review_artifact.py:13, also checked as the stage output_role at v3_cite_stage_contract.py:99) and its size is bounded by MAX_REVIEW_BYTES = 2_097_152 (15), enforced at 197. No line under src/ mentions read_v3_saved_review or v3_review_reader, so no reader existed under those names (absence of hits; a reader under another name is not excluded). bootstrap/adapters.py:1067 get_norm_verification raises ErrorCode.DEPENDENCY_UNAVAILABLE (1073-1074) and its docstring says it refuses until a reader proves the 0023 partition. Not shown: the stage metrics and the frozen schema of the norm-verification response; those parts rest on the dispatch-time record. Dispatch-time record (2026-10-23, quoted from the original section, not re-run): command `rg -n 'MAX_REVIEW_BYTES|analysis.v3_beta_review|get_norm_verification' src/auditmanager/runs/v3_review_artifact.py src/auditmanager/runs/v3_cite_stage.py src/auditmanager/bootstrap/adapters.py`; captured_output was a prose summary: the writer saves the review as an `analysis.v3_beta_review` StageResult artifact; `get_norm_verification` still returns `dependency_unavailable` and its frozen schema describes canonical finding partitions, not this review-only artifact. Original interpretation: add a verified Runs reader first; a later API contract must name a separate review-only response shape.
 
 ## Historical evidence
 - correction_mode: none

@@ -28,12 +28,32 @@ The development frontend compiles against the `1.4.0` RunStatus union and the re
 
 ## Captured premise evidence
 
+- premise: the generated RunStatus types admit ArV3BetaStageId while the run UI model is typed to StageId only, and RequestOptions.signal is an exact optional while the new widget passes AbortSignal | undefined
+
 ### P-01 — compiler and guard
 
-- captured_at: 2026-10-23
-- command: `npm --prefix web run typecheck` and `npm --prefix web test -- --run tests/unit/analysis-settings/analysis-settings.test.ts tests/unit/sections/classification-panel.test.ts tests/unit/sections/classification-correction.test.ts tests/guards/rendered-language.guard.test.ts`
-- captured_output: typecheck exits 2 on v3 stage union and optional signal; rendered suite 101 passed, 1 failed and names the four group-review branch labels.
-- interpretation: these are consumer/guard gaps after the v3 API and screen seals, not contract or provider failures.
+- captured_at: 2026-10-26
+- command: `git grep -n -E 'ArV3BetaStageId' 573dbdce4ca728e7ff930ccd7f9eeecd5595c61c -- web/src/shared/api/generated/types.gen.ts; git grep -n -E 'readonly signal\?|exactOptionalPropertyTypes|\{ signal \}' 573dbdce4ca728e7ff930ccd7f9eeecd5595c61c -- web/src/shared/api/transport.ts web/tsconfig.json web/src/widgets/ar-v3-beta-review/ui/ar-v3-beta-review.tsx; git grep -n -E 'StageId' 573dbdce4ca728e7ff930ccd7f9eeecd5595c61c -- web/src/entities/audit-run/model/run-presentation.ts`
+- captured_output:
+  ```text
+  573dbdce4ca728e7ff930ccd7f9eeecd5595c61c:web/src/shared/api/generated/types.gen.ts:40:  'ArV3BetaStageId',
+  573dbdce4ca728e7ff930ccd7f9eeecd5595c61c:web/src/shared/api/generated/types.gen.ts:469:/** ArV3BetaStageId - the closed value set above. */
+  573dbdce4ca728e7ff930ccd7f9eeecd5595c61c:web/src/shared/api/generated/types.gen.ts:470:export type ArV3BetaStageId = (typeof AR_V3_BETA_STAGE_ID_VALUES)[number];
+  573dbdce4ca728e7ff930ccd7f9eeecd5595c61c:web/src/shared/api/generated/types.gen.ts:2593:  degradation_set?: Array<(StageId | ArV3BetaStageId)>;
+  573dbdce4ca728e7ff930ccd7f9eeecd5595c61c:web/src/shared/api/generated/types.gen.ts:3114:  stage_id: StageId | ArV3BetaStageId;
+  573dbdce4ca728e7ff930ccd7f9eeecd5595c61c:web/src/shared/api/transport.ts:61:  readonly signal?: AbortSignal;
+  573dbdce4ca728e7ff930ccd7f9eeecd5595c61c:web/src/widgets/ar-v3-beta-review/ui/ar-v3-beta-review.tsx:19:    queryFn: async ({ signal }: { signal?: AbortSignal }): Promise<ArV3BetaGroupReview> =>
+  573dbdce4ca728e7ff930ccd7f9eeecd5595c61c:web/src/widgets/ar-v3-beta-review/ui/ar-v3-beta-review.tsx:20:      (await getArV3BetaGroupReview({ path: { group_id: groupId } }, { signal })).data,
+  573dbdce4ca728e7ff930ccd7f9eeecd5595c61c:web/tsconfig.json:18:    "exactOptionalPropertyTypes": true,
+  573dbdce4ca728e7ff930ccd7f9eeecd5595c61c:web/src/entities/audit-run/model/run-presentation.ts:21:import type { CostBasis, ProviderMode, RunState, RunStatus, StageId, StageStatus } from '@/shared/api';
+  573dbdce4ca728e7ff930ccd7f9eeecd5595c61c:web/src/entities/audit-run/model/run-presentation.ts:165:  | { readonly kind: 'partial'; readonly degradation: readonly StageId[] }
+  573dbdce4ca728e7ff930ccd7f9eeecd5595c61c:web/src/entities/audit-run/model/run-presentation.ts:209: * The contract's `StageId` enum declares nine; PC-01 schedules the first four. The other
+  573dbdce4ca728e7ff930ccd7f9eeecd5595c61c:web/src/entities/audit-run/model/run-presentation.ts:218:] as const satisfies readonly StageId[];
+  573dbdce4ca728e7ff930ccd7f9eeecd5595c61c:web/src/entities/audit-run/model/run-presentation.ts:246:export const STAGE_DEPENDS_ON: Readonly<Record<StageId, readonly StageId[]>> = {
+  573dbdce4ca728e7ff930ccd7f9eeecd5595c61c:web/src/entities/audit-run/model/run-presentation.ts:259:  readonly stageId: StageId;
+  573dbdce4ca728e7ff930ccd7f9eeecd5595c61c:web/src/entities/audit-run/model/run-presentation.ts:278:  readonly dependsOn: readonly StageId[];
+  ```
+- interpretation: Re-captured on 2026-10-26 from base commit 573dbdce4ca728e7ff930ccd7f9eeecd5595c61c with git grep against that tree (not at dispatch time). SCOPE: only the static causes are re-captured. The typecheck exit status 2 and the rendered-language result 101 passed / 1 failed (and the four unrendered strings) were NOT re-run in this lane (no web toolchain here) and remain only the dispatch-time measurements in Frozen inputs. At the base, generated types.gen.ts defines ArV3BetaStageId (470) and widens degradation_set to Array<(StageId | ArV3BetaStageId)> (2593) and stage_id to StageId | ArV3BetaStageId (3114); entities/audit-run/model/run-presentation.ts imports and types with StageId alone (21, 165, 218, 246, 259, 278); transport.ts:61 declares signal?: AbortSignal under exactOptionalPropertyTypes: true (web/tsconfig.json:18), and ar-v3-beta-review.tsx:19-20 destructures signal as optional and passes { signal } to getArV3BetaGroupReview. These are the type-level conditions the measured typecheck failure is attributed to; the output does not itself prove the compiler errors. Dispatch-time record (2026-10-23, quoted from the original section, not re-run): command `npm --prefix web run typecheck` and `npm --prefix web test -- --run tests/unit/analysis-settings/analysis-settings.test.ts tests/unit/sections/classification-panel.test.ts tests/unit/sections/classification-correction.test.ts tests/guards/rendered-language.guard.test.ts`; captured_output was a prose summary: typecheck exits 2 on v3 stage union and optional signal; rendered suite 101 passed, 1 failed and names the four group-review branch labels. Original interpretation: these are consumer/guard gaps after the v3 API and screen seals, not contract or provider failures.
 
 ## Historical evidence
 

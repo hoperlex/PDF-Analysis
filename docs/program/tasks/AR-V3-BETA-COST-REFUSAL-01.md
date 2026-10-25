@@ -21,10 +21,17 @@ A reviewed-pack v3 worker refuses before a new provider effect when the Run's re
 ## Captured premise evidence
 - premise: the v3 worker currently passes directly from a completed call to CITE without consulting the per-Run ceiling, while the generic carrier replaces a provider DomainError with `analysis_failed`
 ### P-01 — worker and carrier
-- captured_at: 2026-10-23
-- command: `rg -n 'completed_v3_call|run_v3_cite_stage|terminal_reason=ErrorCode.ANALYSIS_FAILED' src/auditmanager/runs/v3_worker.py src/auditmanager/runs/carrier.py`
-- captured_output: worker reads a call before CITE but does not inspect `cost_micros`; carrier `_record_crash` always writes `analysis_failed`.
-- interpretation: the completed-call record is the durable cost witness after any recovery, and the exact v3 pair identifies the terminal that should preserve a typed refusal.
+- captured_at: 2026-10-26
+- command: `git grep -n -E 'completed_v3_call|run_v3_cite_stage|terminal_reason=ErrorCode.ANALYSIS_FAILED|def _record_crash|cost_micros|ceiling' e4c3ae357e19205d62d7652660aefaa9d0ceecd2 -- src/auditmanager/runs/v3_worker.py src/auditmanager/runs/carrier.py`
+- captured_output:
+  ```text
+  e4c3ae357e19205d62d7652660aefaa9d0ceecd2:src/auditmanager/runs/carrier.py:473:def _record_crash(
+  e4c3ae357e19205d62d7652660aefaa9d0ceecd2:src/auditmanager/runs/carrier.py:507:                terminal_reason=ErrorCode.ANALYSIS_FAILED.value,
+  e4c3ae357e19205d62d7652660aefaa9d0ceecd2:src/auditmanager/runs/v3_worker.py:15:from auditmanager.runs.v3_cite_stage import run_v3_cite_stage
+  e4c3ae357e19205d62d7652660aefaa9d0ceecd2:src/auditmanager/runs/v3_worker.py:72:            job_repo.completed_v3_call(
+  e4c3ae357e19205d62d7652660aefaa9d0ceecd2:src/auditmanager/runs/v3_worker.py:85:        run_v3_cite_stage(
+  ```
+- interpretation: Re-captured on 2026-10-26 from base commit e4c3ae357e19205d62d7652660aefaa9d0ceecd2 with git grep against that tree (not at dispatch time). At the base, v3_worker.py reads the completed call (completed_v3_call, line 72) and then runs the CITE stage (run_v3_cite_stage, call at line 85, import at 15). Neither cost_micros nor ceiling occurs in v3_worker.py or carrier.py (absence of hits is the evidence, limited to these two files and these two names). carrier.py defines _record_crash at line 473 and its terminal_reason is ErrorCode.ANALYSIS_FAILED.value at 507; that this is the only terminal_reason in the function comes from reading carrier.py:473-508 of the base, not from the output. Not shown: that a provider DomainError reaches _record_crash; that part rests on the dispatch-time record. Dispatch-time record (2026-10-23, quoted from the original section, not re-run): command `rg -n 'completed_v3_call|run_v3_cite_stage|terminal_reason=ErrorCode.ANALYSIS_FAILED' src/auditmanager/runs/v3_worker.py src/auditmanager/runs/carrier.py`; captured_output was a prose summary: worker reads a call before CITE but does not inspect `cost_micros`; carrier `_record_crash` always writes `analysis_failed`. Original interpretation: the completed-call record is the durable cost witness after any recovery, and the exact v3 pair identifies the terminal that should preserve a typed refusal.
 
 ## Historical evidence
 - correction_mode: none

@@ -21,10 +21,19 @@ An expert or administrator can open `/analysis-settings?group_id=<arg_...>` or e
 ## Captured premise evidence
 - premise: the browser shows the frozen C01–C22 source preview but has no group-review consumer
 ### P-01 — existing screen
-- captured_at: 2026-10-23
-- command: `rg -n 'ArV3BetaStatus|getArV3BetaGroupReview' web/src/_pages/analysis-settings web/src/widgets web/src/shared/api/generated/client.gen.ts`
-- captured_output: `AnalysisSettingsPage` mounts `ArV3BetaStatus`; the generated client exports `getArV3BetaGroupReview`; no widget calls it.
-- interpretation: the existing authenticated settings screen can host a linkable beta review panel without adding a new screen route or changing the API.
+- captured_at: 2026-10-26
+- command: `git grep -n -E 'ArV3BetaStatus|getArV3BetaGroupReview' b4291c1261225d4cfaeb75ad9194e5ded87e2079 -- web/src/_pages/analysis-settings web/src/widgets web/src/shared/api/generated/client.gen.ts`
+- captured_output:
+  ```text
+  b4291c1261225d4cfaeb75ad9194e5ded87e2079:web/src/_pages/analysis-settings/ui/analysis-settings-page.tsx:16:import { ArV3BetaStatus } from '@/widgets/ar-v3-beta-status';
+  b4291c1261225d4cfaeb75ad9194e5ded87e2079:web/src/_pages/analysis-settings/ui/analysis-settings-page.tsx:28:      <ArV3BetaStatus />
+  b4291c1261225d4cfaeb75ad9194e5ded87e2079:web/src/shared/api/generated/client.gen.ts:499:export function getArV3BetaGroupReview(
+  b4291c1261225d4cfaeb75ad9194e5ded87e2079:web/src/shared/api/generated/client.gen.ts:503:  return request<GetArV3BetaGroupReviewResult>(OPERATIONS.getArV3BetaGroupReview, input, options);
+  b4291c1261225d4cfaeb75ad9194e5ded87e2079:web/src/shared/api/generated/client.gen.ts:1493:  getArV3BetaGroupReview,
+  b4291c1261225d4cfaeb75ad9194e5ded87e2079:web/src/widgets/ar-v3-beta-status/index.ts:1:export { ArV3BetaStatus } from './ui/ar-v3-beta-status';
+  b4291c1261225d4cfaeb75ad9194e5ded87e2079:web/src/widgets/ar-v3-beta-status/ui/ar-v3-beta-status.tsx:34:export function ArV3BetaStatus() {
+  ```
+- interpretation: Re-captured on 2026-10-26 from base commit b4291c1261225d4cfaeb75ad9194e5ded87e2079 with git grep against that tree (not at dispatch time). At the base, analysis-settings-page.tsx imports ArV3BetaStatus (line 16) and renders it (28). The generated client defines getArV3BetaGroupReview (client.gen.ts:499, request at 503) and exports it (1493). The only other hits are the widget's own index.ts:1 and ar-v3-beta-status.tsx:34, which define ArV3BetaStatus; no hit under web/src/widgets or the analysis-settings page calls getArV3BetaGroupReview, so the generated client has no consumer in those paths. Dispatch-time record (2026-10-23, quoted from the original section, not re-run): command `rg -n 'ArV3BetaStatus|getArV3BetaGroupReview' web/src/_pages/analysis-settings web/src/widgets web/src/shared/api/generated/client.gen.ts`; captured_output was a prose summary: `AnalysisSettingsPage` mounts `ArV3BetaStatus`; the generated client exports `getArV3BetaGroupReview`; no widget calls it. Original interpretation: the existing authenticated settings screen can host a linkable beta review panel without adding a new screen route or changing the API.
 
 ## Historical evidence
 - correction_mode: none

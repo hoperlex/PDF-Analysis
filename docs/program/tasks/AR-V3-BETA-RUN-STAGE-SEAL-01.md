@@ -23,10 +23,33 @@ The served `RunStatus` contract can represent the profile-specific `ar_v3_citati
 ## Captured premise evidence
 - premise: current API `StageId` lists nine legacy stages and `RunStatus` refers to it for stage states and degradation
 ### P-01 — stage surface
-- captured_at: 2026-10-23
-- command: `rg -n 'class StageId|stage_id: StageId|degradation_set: list\[StageId\]|"StageId"|"StageState"|"RunStatus"' src/auditmanager/api/schemas/models.py contracts/api/v1/openapi.json`
-- captured_output: `StageId` at models.py 579 has nine values; `StageState.stage_id` at 1046 and `RunStatus.degradation_set` at 1078 use it. OpenAPI carries the same three schemas.
-- interpretation: persisted v3 CITE rows cannot be represented without a profile-specific API extension.
+- captured_at: 2026-10-26
+- command: `git grep -n -E 'stage_id: StageId|degradation_set: list\[StageId\]|"StageId"|"StageState"|"RunStatus"' 220412634267037c8b5ad561df9b04bdf5c3801a -- src/auditmanager/api/schemas/models.py contracts/api/v1/openapi.json; git grep -n -A 11 'class StageId' 220412634267037c8b5ad561df9b04bdf5c3801a -- src/auditmanager/api/schemas/models.py`
+- captured_output:
+  ```text
+  220412634267037c8b5ad561df9b04bdf5c3801a:contracts/api/v1/openapi.json:7547:      "StageId": {
+  220412634267037c8b5ad561df9b04bdf5c3801a:contracts/api/v1/openapi.json:9243:      "StageState": {
+  220412634267037c8b5ad561df9b04bdf5c3801a:contracts/api/v1/openapi.json:9296:      "RunStatus": {
+  220412634267037c8b5ad561df9b04bdf5c3801a:src/auditmanager/api/schemas/models.py:118:    "RunStatus",
+  220412634267037c8b5ad561df9b04bdf5c3801a:src/auditmanager/api/schemas/models.py:179:    "StageId",
+  220412634267037c8b5ad561df9b04bdf5c3801a:src/auditmanager/api/schemas/models.py:180:    "StageState",
+  220412634267037c8b5ad561df9b04bdf5c3801a:src/auditmanager/api/schemas/models.py:1046:    stage_id: StageId
+  220412634267037c8b5ad561df9b04bdf5c3801a:src/auditmanager/api/schemas/models.py:1078:    degradation_set: list[StageId] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+  220412634267037c8b5ad561df9b04bdf5c3801a:src/auditmanager/api/schemas/models.py:1391:    stage_id: StageId
+  220412634267037c8b5ad561df9b04bdf5c3801a:src/auditmanager/api/schemas/models.py:579:class StageId(str, enum.Enum):
+  220412634267037c8b5ad561df9b04bdf5c3801a:src/auditmanager/api/schemas/models.py-580-    SOURCE_PREPARATION = "source_preparation"
+  220412634267037c8b5ad561df9b04bdf5c3801a:src/auditmanager/api/schemas/models.py-581-    PAGE_GEOMETRY_EXTRACTION = "page_geometry_extraction"
+  220412634267037c8b5ad561df9b04bdf5c3801a:src/auditmanager/api/schemas/models.py-582-    DOCUMENT_CONTEXT_BUILD = "document_context_build"
+  220412634267037c8b5ad561df9b04bdf5c3801a:src/auditmanager/api/schemas/models.py-583-    TEXT_ANALYSIS = "text_analysis"
+  220412634267037c8b5ad561df9b04bdf5c3801a:src/auditmanager/api/schemas/models.py-584-    BLOCK_ANALYSIS = "block_analysis"
+  220412634267037c8b5ad561df9b04bdf5c3801a:src/auditmanager/api/schemas/models.py-585-    FINDING_MERGE = "finding_merge"
+  220412634267037c8b5ad561df9b04bdf5c3801a:src/auditmanager/api/schemas/models.py-586-    FINDING_REVIEW = "finding_review"
+  220412634267037c8b5ad561df9b04bdf5c3801a:src/auditmanager/api/schemas/models.py-587-    FINDING_CORRECTION = "finding_correction"
+  220412634267037c8b5ad561df9b04bdf5c3801a:src/auditmanager/api/schemas/models.py-588-    NORM_VERIFICATION = "norm_verification"
+  220412634267037c8b5ad561df9b04bdf5c3801a:src/auditmanager/api/schemas/models.py-589-
+  220412634267037c8b5ad561df9b04bdf5c3801a:src/auditmanager/api/schemas/models.py-590-
+  ```
+- interpretation: Re-captured on 2026-10-26 from base commit 220412634267037c8b5ad561df9b04bdf5c3801a with git grep against that tree (not at dispatch time). At the base, models.py:579 declares class StageId with nine members (580-588, source_preparation through norm_verification), none profile-specific. Fields typed StageId or list[StageId] exist at models.py:1046, 1078 and 1391; that 1046 belongs to StageState and 1078 to RunStatus comes from the dispatch-time record (the class headers are outside the captured lines). contracts/api/v1/openapi.json carries the three schemas StageId (7547), StageState (9243) and RunStatus (9296). Dispatch-time record (2026-10-23, quoted from the original section, not re-run): command `rg -n 'class StageId|stage_id: StageId|degradation_set: list\[StageId\]|"StageId"|"StageState"|"RunStatus"' src/auditmanager/api/schemas/models.py contracts/api/v1/openapi.json`; captured_output was a prose summary: `StageId` at models.py 579 has nine values; `StageState.stage_id` at 1046 and `RunStatus.degradation_set` at 1078 use it. OpenAPI carries the same three schemas. Original interpretation: persisted v3 CITE rows cannot be represented without a profile-specific API extension.
 
 ## Historical evidence
 - correction_mode: none
