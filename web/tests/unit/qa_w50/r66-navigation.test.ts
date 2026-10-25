@@ -261,7 +261,7 @@ describe('R-66: the stubs have graduated, and each keeps its ruled row and place
     expect(client.getQueryCache().getAll().map((query) => query.queryKey[1])).toEqual(['snapshots']);
   });
 
-  it('/analysis-settings graduated (W59-ANALYSIS-SETTINGS-01): its ruled row and place are kept, and it reads the profile registry and the group review', async () => {
+  it('/analysis-settings graduated (W59-ANALYSIS-SETTINGS-01): its ruled row and place are kept, and it reads the profile registry, the group review and the pack status', async () => {
     expect(screenAt('/analysis-settings')).toEqual({
       address: '/analysis-settings',
       label: 'Настройки анализа',
@@ -275,14 +275,16 @@ describe('R-66: the stubs have graduated, and each keeps its ruled row and place
     const markup = renderScreen(client, routed);
     expect(markup).not.toContain('Раздел пока недоступен');
     expect(markup).not.toContain('data-route="/analysis-settings"');
-    // Exactly two reads, each under its own key: the registry, and the AR v3 beta group review
-    // (`AR-V3-BETA-GROUP-REVIEW-SCREEN-01`). With no `group_id` in the address the review has no
+    // Exactly three reads, each under its own key: the registry, the AR v3 beta group review
+    // (`AR-V3-BETA-GROUP-REVIEW-SCREEN-01`) and the installed-pack status
+    // (`AR-V3-BETA-PACK-STATUS-WEB-01`). With no `group_id` in the address the review has no
     // group to ask about: its query is registered under the empty address and DISABLED, so the
-    // screen reads the registry alone and asks the server nothing about any group. A third read,
-    // or a lost one, reddens this list.
+    // screen asks the server nothing about any group; the pack status is always read, because
+    // it names no group. A fourth read, or a lost one, reddens this list.
     expect(readsOf(client)).toEqual([
       { key: ['analysis', 'profiles'], enabled: true },
       { key: ['runs', 'ar-v3-group-review', ''], enabled: false },
+      { key: ['runs', 'ar-v3-pack-status'], enabled: true },
     ]);
   });
 
@@ -293,6 +295,7 @@ describe('R-66: the stubs have graduated, and each keeps its ruled row and place
     expect(readsOf(client)).toEqual([
       { key: ['analysis', 'profiles'], enabled: true },
       { key: ['runs', 'ar-v3-group-review', GROUP_ID], enabled: true },
+      { key: ['runs', 'ar-v3-pack-status'], enabled: true },
     ]);
   });
 
