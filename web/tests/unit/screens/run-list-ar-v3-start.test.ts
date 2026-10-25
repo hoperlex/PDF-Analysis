@@ -8,10 +8,7 @@
  * no disabled button, no placeholder, no explanation (the settings panel carries that).
  */
 
-import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime';
-import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import { createElement } from 'react';
-import type { ReactElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
 import { ApiError, queryKeys } from '@/shared/api';
@@ -23,7 +20,7 @@ import {
   NOT_INSTALLED_PACK, installedPackFixture, withoutMember,
 } from '../analysis-settings/ar-v3-beta-pack-fixtures';
 import { PROJECT_UID, VERSION_UID, runStatus } from '../review/fixtures';
-import { newClient, renderWith, seedError } from './harness';
+import { newClient, renderScreen, seedError } from './harness';
 
 type Client = ReturnType<typeof newClient>;
 
@@ -39,17 +36,8 @@ function listClient(withRuns: boolean): Client {
   return client;
 }
 
-const ROUTER = {
-  push: () => {}, replace: () => {}, back: () => {}, forward: () => {}, refresh: () => {}, prefetch: () => {},
-} as unknown as AppRouterInstance;
-
 function listMarkup(client: Client): string {
-  const element: ReactElement = createElement(
-    AppRouterContext.Provider,
-    { value: ROUTER },
-    createElement(RunList, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
-  );
-  return renderWith(client, element);
+  return renderScreen(client, createElement(RunList, { projectUid: PROJECT_UID, versionUid: VERSION_UID }));
 }
 
 const SIX_CHECKS = 'Запустить шесть проверок АР v3';

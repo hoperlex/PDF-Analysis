@@ -6,8 +6,6 @@
  * the real control.
  */
 
-import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime';
-import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import { createElement } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -16,6 +14,14 @@ import { queryKeys } from '@/shared/api';
 import { RUN_PAGE_LIMIT, arV3GroupReviewAddress, looksLikeArV3GroupId } from '@/entities/audit-run';
 
 const captured = vi.hoisted(() => ({ props: null as null | { onStarted?: (group: unknown) => void } }));
+const navigation = vi.hoisted(() => ({ pushed: [] as string[] }));
+
+// The harness mounts a router whose `push` is a no-op; the address the run list pushes is the
+// subject here, so `useRouter` answers with a recorder instead.
+vi.mock('next/navigation', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useRouter: () => ({ push: (href: string) => navigation.pushed.push(href) }),
+}));
 
 vi.mock('@/features/start-ar-v3-group', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
@@ -33,24 +39,17 @@ import { RunList } from '@/widgets/run-list';
 import { GROUP_ID } from '../analysis-settings/ar-v3-beta-review-fixtures';
 import { NOT_INSTALLED_PACK, installedPackFixture } from '../analysis-settings/ar-v3-beta-pack-fixtures';
 import { PROJECT_UID, VERSION_UID } from '../review/fixtures';
-import { newClient, renderWith } from './harness';
+import { newClient, renderScreen } from './harness';
 
 const PACK = queryKeys.runs.arV3PackStatus();
 
-function listMarkup(pack: unknown, push: (href: string) => void): string {
+function listMarkup(pack: unknown): string {
   const client = newClient();
   client.setQueryData(queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT), {
     items: [], page: { next_cursor: null },
   });
   client.setQueryData(PACK, pack);
-  const router = {
-    push, replace: () => {}, back: () => {}, forward: () => {}, refresh: () => {}, prefetch: () => {},
-  } as unknown as AppRouterInstance;
-  return renderWith(client, createElement(
-    AppRouterContext.Provider,
-    { value: router },
-    createElement(RunList, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
-  ));
+  return renderScreen(client, createElement(RunList, { projectUid: PROJECT_UID, versionUid: VERSION_UID }));
 }
 
 describe('a started group opens its review on the settings screen', () => {
@@ -64,17 +63,17 @@ describe('a started group opens its review on the settings screen', () => {
   });
 
   it('pushes that address when the control reports a started group', () => {
-    const pushed: string[] = [];
+    navigation.pushed.length = 0;
     captured.props = null;
-    listMarkup(installedPackFixture(), (href) => pushed.push(href));
+    listMarkup(installedPackFixture());
     expect(captured.props, 'the run list never mounted the six-check control').not.toBeNull();
     captured.props!.onStarted!({ group_id: GROUP_ID } as ArV3BetaGroup);
-    expect(pushed).toEqual([`/analysis-settings?group_id=${GROUP_ID}`]);
+    expect(navigation.pushed).toEqual([`/analysis-settings?group_id=${GROUP_ID}`]);
   });
 
   it('mounts no control, and so pushes nothing, when the pack is not installed', () => {
     captured.props = null;
-    listMarkup(NOT_INSTALLED_PACK, () => {});
+    listMarkup(NOT_INSTALLED_PACK);
     expect(captured.props).toBeNull();
   });
 });

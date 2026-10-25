@@ -150,7 +150,7 @@ function fromApiError(error: ApiError): ArV3GroupStartFailure | null {
         kind: 'key_reused',
         presentation: 'error',
         title: 'Этот ключ запуска уже использован для другого запроса.',
-        detail: `${NOTHING_CREATED} Ничего не отправлено повторно.`,
+        detail: `${NOTHING_CREATED} Повторной отправки не было.`,
       };
     case 'idempotency_key_in_progress':
       return {
