@@ -28,11 +28,21 @@ duplicate keys, floats, oversize files, symlinks and extra directory entries are
 ``set_id`` is supplied by the operator so a retry names the same set; ``new-id`` prints a
 fresh one. ``DATABASE_URL`` and the ``S3_*`` names come from the process environment.
 
+The request is bound to the reviewed map before anything else happens: ``map.json`` is parsed
+and every item's target spans in ``request.json`` must equal the spans the map lists for that
+item, exactly (``request_targets_differ_from_map``); a map flagged ``synthetic`` is refused
+(``map_synthetic``). The library alone compares only the *set* of document ids with the map, so
+without this the same map bytes and ``map_sha256`` could carry prompt rows the map never listed.
+
 Exit status: 0 verified or replayed (``plan``: a candidate was computed and, if the bundle
 carried expectations, they match); 2 refused with ``promote: REFUSED [reason]`` on stderr and
 no database or object-store effect; 3 uncertain, some admission or dispatch state may exist,
-and stderr names the ``set_id`` and the exact command to run next. Any other status is an
-unclassified fault before the admission step wrote anything.
+and stderr names the ``set_id`` and the exact command to run next. Any other status is not
+classified by this command: a bug before the admission step wrote nothing, but the process
+being stopped by SIGTERM, SIGKILL or the out-of-memory killer during dispatch (Python cannot
+catch the last two, and SIGTERM is not turned into an interrupt) can leave admissions behind
+with no exit 3 and no ``next:`` line. After any such stop, re-running the same command is
+idempotent: the same admissions are replayed, never duplicated.
 
 The candidate bytes are the custody source: after an interruption a re-run recomputes them from
 the same snapshot and bundle, and the dispatcher re-verifies their SHA-256 against what the
@@ -73,7 +83,7 @@ from auditmanager.norms.custody import (
 from auditmanager.norms.custody.repository import CustodyRepository
 from auditmanager.norms.embedding import vectors
 from auditmanager.norms.retrieval import promotion
-from auditmanager.norms.retrieval.artifact import ArtifactRefused, SetIdentity
+from auditmanager.norms.retrieval.artifact import ArtifactRefused, SetIdentity, canonical_json_bytes
 from auditmanager.norms.retrieval.candidate import CandidateRefused
 from auditmanager.norms.retrieval.evidence_bridge import (
     EvidenceBridgeRefused,
@@ -182,6 +192,8 @@ def _strict_json(data: bytes) -> Any:
         raise CliRefused(
             "request_invalid", f"{REQUEST_NAME} is not strict JSON ({exc})"
         ) from exc
+    except RecursionError as exc:
+        raise CliRefused("request_invalid", f"{REQUEST_NAME} is nested too deeply") from exc
 
 
 def _object(
@@ -272,15 +284,93 @@ def _item(raw: Any, label: str) -> tuple[RetrievalItem, str]:
     ), text_digest
 
 
+def _reviewed_targets(map_bytes: bytes) -> dict[str, list[tuple[str, int, int]]]:
+    """Per item id, the sorted ``(document, first, last)`` spans the reviewed map lists.
+
+    Reads the map the way the library validates it (``json.loads`` of the UTF-8 bytes, which must
+    equal their own canonical encoding) and refuses a map it cannot read, because a request that
+    cannot be compared with its map cannot be trusted to follow it.
+    """
+    try:
+        mapping = json.loads(map_bytes.decode("utf-8"))
+        canonical = canonical_json_bytes(mapping)
+    except (UnicodeError, ValueError, TypeError, RecursionError) as exc:
+        # `ArtifactRefused` (a float, non-NFC text) is a ValueError as well.
+        raise CliRefused("map_invalid", f"{MAP_NAME} is not canonical JSON") from exc
+    if not isinstance(mapping, dict) or canonical != map_bytes:
+        raise CliRefused("map_invalid", f"{MAP_NAME} is not a canonical JSON object")
+    synthetic = mapping.get("synthetic")
+    if synthetic is True:
+        raise CliRefused(
+            "map_synthetic", f"{MAP_NAME} is flagged synthetic; a real promotion refuses it"
+        )
+    if synthetic is not False:
+        raise CliRefused("map_invalid", f"{MAP_NAME} carries no boolean synthetic flag")
+    items = mapping.get("items")
+    if not isinstance(items, list) or not items:
+        raise CliRefused("map_invalid", f"{MAP_NAME} lists no items")
+    reviewed: dict[str, list[tuple[str, int, int]]] = {}
+    for index, item in enumerate(items):
+        label = f"{MAP_NAME} items[{index}]"
+        item_id = item.get("id") if isinstance(item, dict) else None
+        targets = item.get("targets") if isinstance(item, dict) else None
+        if not isinstance(item_id, str) or not item_id or item_id in reviewed:
+            raise CliRefused("map_invalid", f"{label} has no unique id")
+        if not isinstance(targets, list) or not targets:
+            raise CliRefused("map_invalid", f"{label} lists no targets")
+        spans: list[tuple[str, int, int]] = []
+        for target in targets:
+            document = target.get("norm_document_id") if isinstance(target, dict) else None
+            first = target.get("ordinal_first") if isinstance(target, dict) else None
+            last = target.get("ordinal_last") if isinstance(target, dict) else None
+            if (
+                not isinstance(document, str) or not document or type(first) is not int
+                or type(last) is not int or first < 0 or last < first
+            ):
+                raise CliRefused("map_invalid", f"{label} has a target that is not a document span")
+            spans.append((document, first, last))
+        reviewed[item_id] = sorted(spans)
+    return reviewed
+
+
+def _bind_request_to_map(map_bytes: bytes, items: tuple[RetrievalItem, ...]) -> None:
+    """The request's items and spans must be exactly the reviewed map's, item by item.
+
+    The library compares only the set of document ids and the ordered item ids with the map; the
+    spans, and with them the prompt rows, would otherwise be whatever the request said. The order
+    of one item's spans is not a difference, their number and values are.
+    """
+    reviewed = _reviewed_targets(map_bytes)
+    requested = [item.item_id for item in items]
+    if len(set(requested)) != len(requested) or set(requested) != set(reviewed):
+        differing = sorted(set(requested) ^ set(reviewed)) or sorted(requested)
+        raise CliRefused(
+            "request_items_differ_from_map",
+            "the request's items are not the reviewed map's items: " + ", ".join(differing),
+        )
+    def spans(item: RetrievalItem) -> list[tuple[str, int, int]]:
+        return sorted((s.document_id, s.ordinal_first, s.ordinal_last) for s in item.targets)
+
+    differing = [item.item_id for item in items if spans(item) != reviewed[item.item_id]]
+    if differing:
+        raise CliRefused(
+            "request_targets_differ_from_map",
+            "the request's target spans differ from the reviewed map for: " + ", ".join(differing),
+        )
+
+
 def load_bundle(directory: Path, *, require_expected: bool) -> LoadedBundle:
     """Parse and strictly validate one bundle directory; touches nothing else."""
     try:
         info = os.lstat(directory)
-    except OSError as exc:
+    except (OSError, ValueError) as exc:  # ValueError: an embedded NUL byte in the path
         raise CliRefused("bundle_unreadable", "the bundle directory is missing") from exc
     if not stat.S_ISDIR(info.st_mode):
         raise CliRefused("bundle_unreadable", "the bundle path is not a real directory (symlink?)")
-    names = sorted(os.listdir(directory))
+    try:
+        names = sorted(os.listdir(directory))
+    except OSError as exc:
+        raise CliRefused("bundle_unreadable", "the bundle directory cannot be listed") from exc
     if names != sorted((MAP_NAME, REQUEST_NAME)):
         raise CliRefused(
             "bundle_layout",
@@ -306,6 +396,10 @@ def load_bundle(directory: Path, *, require_expected: bool) -> LoadedBundle:
         )
     set_id = _text(raw["set_id"], "set_id")
     try:
+        # The explicit line-break test keeps this check independent of the shared parser's
+        # anchoring: an identity is the whole string.
+        if "\n" in set_id:
+            raise ValueError("line break")
         NormRetrievalSetId.parse(set_id)
     except (TypeError, ValueError) as exc:
         raise CliRefused("request_invalid", "set_id is not an nrs_ identity") from exc
@@ -317,6 +411,7 @@ def load_bundle(directory: Path, *, require_expected: bool) -> LoadedBundle:
         _item(entry, f"items[{index}]") for index, entry in enumerate(_list(raw["items"], "items"))
     ]
     items = tuple(item for item, _ in parsed)
+    _bind_request_to_map(map_bytes, items)
     request = PromotionRequest(
         set_id=set_id,
         identity=SetIdentity(
