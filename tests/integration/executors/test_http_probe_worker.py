@@ -10,12 +10,14 @@ from __future__ import annotations
 import importlib.util
 import sys
 from contextlib import nullcontext
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 import pytest
 from sqlalchemy import text
 
+from auditmanager.executors import kinds
 from auditmanager.executors.public import (
     ExecutorRepository,
     create_connection,
@@ -147,11 +149,16 @@ def test_an_unpermitted_address_is_destination_refused_by_default(session, gatew
     assert row["outcome"] == "destination_refused" and fake.requests == []
 
 
-def test_kinds_this_release_does_not_serve_end_as_kind_not_served(session, gateway) -> None:  # type: ignore[no-untyped-def]
+def test_a_kind_or_transport_the_registry_does_not_serve_ends_as_kind_not_served(
+    session, gateway, monkeypatch  # type: ignore[no-untyped-def]
+) -> None:
+    # This release registers all three kinds and the three transports (`pull`, the command over
+    # SSH and the SSH tunnel were each served by a later slice), so "not served" is no longer a
+    # state a real connection can be in. The probe's refusal is kept by taking the registration
+    # away for the test: the command with no adapter factory, the tunnel with an `http_api` entry
+    # that does not serve it.
     rings = support.make_rings()
     fake = gateway()
-    # `EXEC-CANDIDATE-2` serves `pull` (its probe is the runner channel's, in test_pull_run_path);
-    # the command over SSH is the kind this release still lacks.
     ssh = create_connection(
         session, kind="ssh_command", display_name="machine", roles=support.ADMIN_ROLES,
         idempotency_key=support.unique(), actor_uid=support.ACTOR)
@@ -165,8 +172,18 @@ def test_kinds_this_release_does_not_serve_end_as_kind_not_served(session, gatew
             ssh_port=22, ssh_user="am", ssh_profile="claude_code_headless"),
         pinned_model_ids={pin.model_id for pin in pinned_models()}, roles=support.ADMIN_ROLES,
         idempotency_key=support.unique(), actor_uid=support.ACTOR)
-    assert _run_probe(session, rings, ssh.connection_id, fake.policy())["outcome"] == "kind_not_served"
     tunnel = _seed(session, rings, fake, name="tunnel")
     support.revise(session, tunnel.connection_id, "http://localhost:11434/v1", transport="ssh_tunnel",
                    ssh_host="gpu.example.test", ssh_port=22, ssh_user="am")
+    # The negative half: while the registry serves them the probe goes on to open the keys, and
+    # neither connection has the keys it needs (no SSH key is set), so it ends on another outcome.
+    assert _run_probe(session, rings, ssh.connection_id, fake.policy())["outcome"] == "secret_unreadable"
+    assert _run_probe(session, rings, tunnel.connection_id, fake.policy())["outcome"] == "secret_unreadable"
+
+    monkeypatch.delitem(kinds._REGISTRY, "ssh_command")
+    assert _run_probe(session, rings, ssh.connection_id, fake.policy())["outcome"] == "kind_not_served"
+    http_api = kinds.adapter_for("http_api")
+    assert http_api is not None
+    monkeypatch.setitem(kinds._REGISTRY, "http_api", replace(
+        http_api, serves=lambda revision: revision.settings.transport in ("direct", "vpn")))
     assert _run_probe(session, rings, tunnel.connection_id, fake.policy())["outcome"] == "kind_not_served"

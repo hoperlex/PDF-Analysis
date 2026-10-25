@@ -34,7 +34,10 @@ from starlette.testclient import TestClient
 from auditmanager.access.accounts import AccountRepository as AccountAccessRepository
 from auditmanager.access.repository import UserRepository as UserAccessRepository
 from auditmanager.analysis.text.profile import AR_TEXT_PROFILE
-from auditmanager.analysis.text.profile_registry import load_text_profile_registry
+from auditmanager.analysis.text.profile_registry import (
+    TextProfileRegistry,
+    load_text_profile_registry,
+)
 from auditmanager.api.app import create_asgi_app
 from auditmanager.api.routers import build_router
 from auditmanager.api.routers.idempotency import IDEMPOTENCY_HEADER
@@ -52,6 +55,11 @@ from auditmanager.shared.identity import DocumentUid, ProjectUid, RunId, Version
 
 SECRET = "classification-correction-http-token"
 REGISTRY = load_text_profile_registry()
+#: The registry as it stood while PB had no profile (`PB-PROFILE-01`): every catalogue section
+#: now has one, so this is the seam for "a section with no registered profile".
+WITHOUT_PB = TextProfileRegistry(
+    entry for code, entry in REGISTRY.entries.items() if code != "PB"
+)
 
 
 @pytest.fixture(autouse=True)
@@ -181,13 +189,15 @@ def _admin_only(sessions: sessionmaker[Session]) -> str:
     ).token
 
 
-def _client(sessions: sessionmaker[Session], blob_store: Any) -> tuple[TestClient, _Carrier]:
+def _client(
+    sessions: sessionmaker[Session], blob_store: Any, registry: TextProfileRegistry = REGISTRY,
+) -> tuple[TestClient, _Carrier]:
     carrier = _Carrier()
     run_adapter = RunAdapter(
         sessions, blob_store=None, adapter=None, provider_config=None, provider_mode="recorded",
         analysis_profile_id=str(AR_TEXT_PROFILE.analysis_profile_id),
         prompt_bundle_id=str(AR_TEXT_PROFILE.prompt_bundle.prompt_bundle_id), carrier=carrier,
-        section_profiles=REGISTRY.section_profiles(), text_profiles=REGISTRY.resolve,
+        section_profiles=registry.section_profiles(), text_profiles=registry.resolve,
     )
     signer = build_signer({API_TOKEN_VARIABLE: SECRET})
     assert signer is not None
@@ -203,7 +213,7 @@ def _client(sessions: sessionmaker[Session], blob_store: Any) -> tuple[TestClien
         ),
         execution=ExecutionAdapter(sessions, runs=run_adapter),
         sections=SectionAdapter(
-            sessions, blob_store=blob_store, executable_sections=REGISTRY.executable_sections()
+            sessions, blob_store=blob_store, executable_sections=registry.executable_sections()
         ),
     )
     app = create_asgi_app(environ={API_TOKEN_VARIABLE: SECRET}, application=_Built(router, carrier, sessions))  # type: ignore[arg-type]
@@ -442,7 +452,10 @@ class TestRuns:
     def test_a_correction_to_a_section_without_a_profile_refuses_the_next_start(
         self, sessions, blob_store, world
     ) -> None:
-        client, carrier = _client(sessions, blob_store)
+        # PB has a registered profile now, so the section with none is PB on a registry built
+        # without it; the same corrected version starts a run on the full registry.
+        assert "PB" in REGISTRY.section_profiles() and "PB" not in WITHOUT_PB.section_profiles()
+        client, carrier = _client(sessions, blob_store, WITHOUT_PB)
         token, _ = _expert()
         path = _version_path(world, world.pb)
         assert _classify(client, token, path, "P", "AR").status_code == 200
@@ -452,6 +465,12 @@ class TestRuns:
         assert refused.json()["error_code"] == "section_profile_unavailable"
         assert "details" not in refused.json()
         assert carrier.submitted == []
+        # The negative half: the full registry starts the very same corrected version, under
+        # PB's own profile and bundle.
+        started = _start(_client(sessions, blob_store)[0], token, world.pb, _key())
+        assert started.status_code == 202, started.content
+        assert (started.json()["analysis_profile_id"], started.json()["prompt_bundle_id"]) == (
+            REGISTRY.section_profiles()["PB"])
 
     def test_a_reaudit_routes_from_the_corrected_section_and_the_source_keeps_its_pin(
         self, sessions, blob_store, world

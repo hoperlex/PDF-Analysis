@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -315,7 +316,13 @@ def test_host_capacity_samples_one_minute_load_and_refuses_unavailable_load(
             return "MemAvailable: 8388608 kB\n"
         return original_read_text(path, *args, **kwargs)
 
+    def stable_disk(_path: object) -> SimpleNamespace:
+        # Memory is pinned above for the same reason: the refusal asserted here is the load's,
+        # and a host with less than the disk reserve free (`df`) would add a `disk_floor` to it.
+        return SimpleNamespace(f_bavail=20 * preflight.GIB // 4096, f_frsize=4096)
+
     monkeypatch.setattr(Path, "read_text", stable_memory)
+    monkeypatch.setattr(preflight.os, "statvfs", stable_disk)
     monkeypatch.setattr(preflight.os, "getloadavg", lambda: (8.25, 0.0, 0.0))
     result = _inspect(tmp_path, manifest_sha, "source-sums")
     assert result.capacity is not None and result.capacity.load_average_1 == 8.25
