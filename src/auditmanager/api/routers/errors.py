@@ -36,9 +36,8 @@ from __future__ import annotations
 
 from typing import Any, Callable, Final
 
-from sqlalchemy.exc import DBAPIError
-
 from auditmanager.documents.public import sqlstate_of
+from auditmanager.shared.db.public import DBAPIError
 from auditmanager.shared.db.schema import SQLSTATE_TO_CATALOG_CODE
 from auditmanager.shared.errors import DomainError, ErrorCode, build
 from auditmanager.api.routers.correlation import CORRELATION_HEADER
