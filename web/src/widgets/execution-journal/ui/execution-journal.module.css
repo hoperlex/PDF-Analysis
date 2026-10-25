@@ -15,7 +15,7 @@
   min-width: 0;
   max-width: 100%;
   padding: 1rem;
-  border: 1px solid var(--am-border, currentColor);
+  border: 1px solid var(--am-line);
   border-radius: 0.5rem;
 }
 

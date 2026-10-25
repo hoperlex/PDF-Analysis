@@ -3,7 +3,7 @@
   gap: 0.75rem;
   padding: 1rem;
   margin-bottom: 1.5rem;
-  border: 1px solid var(--am-border, currentColor);
+  border: 1px solid var(--am-line);
   border-radius: 0.75rem;
 }
 
@@ -18,7 +18,7 @@
 }
 
 .group {
-  border-top: 1px solid var(--am-border, currentColor);
+  border-top: 1px solid var(--am-line-soft);
   padding-top: 0.5rem;
 }
 
