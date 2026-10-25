@@ -95,16 +95,6 @@ const describeReference = (reference: TokenReference): string =>
  * token became defined, must be deleted.
  */
 const KNOWN_UNDEFINED: readonly { readonly token: string; readonly file: string; readonly why: string }[] = [
-  {
-    token: '--am-gap-md',
-    file: 'web/src/entities/document-version/ui/classification-history.module.css',
-    why:
-      'The list gap names a spacing step that does not exist: the scale is `--am-gap-xs`, ' +
-      '`--am-gap-sm` (8px), `--am-gap` (16px), `--am-gap-lg` and `--am-gap-xl`, so the gap is ' +
-      'invalid at computed-value time and the grid list renders with no gap at all. The right ' +
-      'step is a layout choice between `--am-gap-sm` and `--am-gap`, and the file is outside ' +
-      'the task that found it (`WEB-BORDER-TOKEN-01` owns the eight border stylesheets only).',
-  },
 ];
 
 // ================================================================================ tests
