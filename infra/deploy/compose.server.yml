@@ -216,6 +216,9 @@ services:
       # ring (`AUDITMANAGER_SECRETS_KEYS`) is in provider.env and only the worker reads it.
       AUDITMANAGER_SECRETS_PUBLIC_KEYS: ${AUDITMANAGER_SECRETS_PUBLIC_KEYS:-}
       AUDITMANAGER_SECRETS_ACTIVE_KID: ${AUDITMANAGER_SECRETS_ACTIVE_KID:-}
+      # `AR-V3-BETA-PACK-INSTALL-01`. Path INSIDE the container of the sealed reviewed-pack
+      # manifest (`/run/ar-v3/<file>`, mounted read-only below); blank installs no pack.
+      AR_V3_BETA_PACK_MANIFEST: ${AR_V3_BETA_PACK_MANIFEST:-}
       # `T-6`. Required at construction since `W14-PKG`: a container started without it
       # exits non-zero instead of serving `authentication_required` to everything.
       AUDITMANAGER_API_TOKEN: ${AUDITMANAGER_API_TOKEN:?AUDITMANAGER_API_TOKEN is unset. The seam is fail-closed; see infra/deploy/env/alpha.env.example.}
@@ -229,6 +232,10 @@ services:
     # nor the private key ring; it seals a connection's key to the PUBLIC keys above and can
     # never open one. A stolen admin session or a compromised api can therefore replace a key
     # but not read one. (The worker below still reads the file.)
+    # `AR-V3-BETA-PACK-INSTALL-01`: the operator-sealed pack manifest, read-only and holding no
+    # secret. The directory is untracked content except its README; see its README.
+    volumes:
+      - ./ar-v3-pack:/run/ar-v3:ro
     # No `ports:`. The proxy reaches 8000 and 8001 over the compose network.
     healthcheck:
       # `T-3`'s liveness plane on the SECOND port, which needs no credential. Polling
@@ -281,6 +288,9 @@ services:
       # ring (`AUDITMANAGER_SECRETS_KEYS`) is in provider.env and only the worker reads it.
       AUDITMANAGER_SECRETS_PUBLIC_KEYS: ${AUDITMANAGER_SECRETS_PUBLIC_KEYS:-}
       AUDITMANAGER_SECRETS_ACTIVE_KID: ${AUDITMANAGER_SECRETS_ACTIVE_KID:-}
+      # `AR-V3-BETA-PACK-INSTALL-01`. The same manifest the API reads; both services must name
+      # the same file or a started group could not be executed.
+      AR_V3_BETA_PACK_MANIFEST: ${AR_V3_BETA_PACK_MANIFEST:-}
       # A literal, like the API's. See the API service above.
       EXECUTION_ROLE: worker
       # The identity and heartbeat files the health check reads. On the tmpfs below, so a
@@ -293,6 +303,8 @@ services:
     env_file:
       - path: env/provider.env
         required: false
+    volumes:
+      - ./ar-v3-pack:/run/ar-v3:ro
     tmpfs:
       - /run/auditmanager:uid=10001,gid=10001,mode=0700,size=1m
     # `SIGTERM` drains: no new claim, the run in flight finishes (at most 270 s, then the
