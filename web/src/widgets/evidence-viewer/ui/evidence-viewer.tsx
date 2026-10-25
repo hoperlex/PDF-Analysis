@@ -34,6 +34,7 @@ import { pdfPageUrl } from '@/features/open-evidence';
 import {
   anchorLabel,
   anchorMatchesQuotation,
+  anchorRangeLabel,
   declaredPages,
   evidenceOnPage,
   observationProviderMode,
@@ -77,16 +78,21 @@ function QuotationCard({ item }: { item: Evidence }) {
       {/*
         `block_id` is deliberately not rendered. The contract calls it "a secondary anchor
         into this version's block index. Not a contract identifier" — it is an internal
-        index handle that tells the reviewer nothing the page number and character range do
-        not, and printing an internal handle is how an object key reaches a screen when
-        something upstream puts one in the wrong field. The leakage check in
+        index handle that tells the reviewer nothing the page number does not, and printing
+        an internal handle is how an object key reaches a screen when something upstream
+        puts one in the wrong field. The leakage check in
         tests/unit/review/key-leakage.test.ts caught exactly that and this is the repair.
+
+        The character range is not rendered here either, by owner ruling `R-43` (`D-50`):
+        it is a document-global offset in the coordinate system of one extractor, and no
+        second extractor resolves it. It appears only inside the alert below, where it is
+        the evidence of a discrepancy.
       */}
       <p className="am-quotation__anchor">{anchorLabel(item)}</p>
       {consistent ? null : (
         <p className="am-quotation__inconsistent" role="alert">
           Заявленная длина фрагмента не совпадает с цитатой. Якорь показан так, как его
-          прислал сервер, и здесь он не пересчитывается.
+          прислал сервер, и здесь он не пересчитывается: {anchorRangeLabel(item)}.
         </p>
       )}
     </li>

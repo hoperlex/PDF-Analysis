@@ -40,51 +40,64 @@ export function quotationCodePointLength(evidence: Evidence): number {
  *
  * `span_length_mismatch` is one of the five `ungrounded_reason` values, so the backend has
  * already refused any item where this is false — a published finding cannot carry one.
- * The viewer states the anchor to the reviewer, and a stated anchor that disagrees with
- * the string beside it would be worse than no anchor at all, so the panel checks rather
- * than asserts.
+ * A stated anchor that disagrees with the string beside it would be worse than no anchor
+ * at all, so the panel checks rather than asserts, and it states the character range only
+ * when this is false (`R-43`, `anchorRangeLabel`).
  */
 export function anchorMatchesQuotation(evidence: Evidence): boolean {
   return evidence.char_end - evidence.char_start === quotationCodePointLength(evidence);
 }
 
 /**
- * The anchor, formatted for display. Never parsed back and never used to slice anything.
+ * The page of the anchor, formatted for display. Never parsed back and never used to slice
+ * anything.
  *
- * **The caption states its own convention, because the numbers are not the ones a reader
- * assumes.** `char_start`/`char_end` index the *document-global* prepared text layer — the
- * frozen `Evidence` schema says so in as many words, and `model/pages` repeats it. The
- * previous caption read `page 2, chars 712-746`, and next to the words "page 2" that range
- * reads as an offset into page 2. `D-25` was found by `W21-CERT` driving criterion 5, and
- * the anchor above is the live one: `run_01M2TB4QP6B784MQ7NN1TFFP79`, first quotation,
- * read back from `GET /v1/runs/{run_id}/findings` by `W22-WEB`. `W21-CERT` measured page
- * 2 of that document at 539 characters, which is a backend figure -- the prepared text
- * layer is not reachable from here, so this session did not re-measure it. What matters
- * needs no re-measuring: **712 is past the end of a 539-character page**, so an expert
- * checking the citation by hand counts 712 characters into a page that has 539, finds
- * nothing, and concludes the tool is fabricating a quotation it had exactly right.
- * **The data was correct and the caption was wrong, which is the worse half** — a wrong
- * number invites a re-check, a wrong convention invites a wrong conclusion.
- *
- * **Why the global range is kept rather than converted or dropped.** Converting is not
- * available here: a page-local offset is `char_start` minus the page's own start in the
- * prepared text layer, and the browser holds neither the layer nor that start. `Evidence`
- * carries `page_number`, the two global offsets and the quote, and nothing else; the page
- * pane is the PDF's own bytes, not the extracted text. A client-side conversion would have
- * to re-derive the layer, which is the one thing `P3-WEB-02` forbids and `model/pages`
- * refuses by design. Dropping the range instead would take a fact off the screen that the
- * viewer needs: `anchorMatchesQuotation` renders an alert when the declared span disagrees
- * with the string beside it, and an alert about numbers the reviewer cannot see is not
- * actionable.
- *
- * So the range stays and the caption says what it is. `of the whole document, not of page
- * N` is self-describing: a reader acts on it correctly without being told anywhere else
- * which convention it uses, and the page is named a second time so the negation cannot be
- * misread as referring to some other page.
+ * **Page only, by owner ruling `R-43`.** The caption under a quotation names the page and
+ * nothing else. The character range does not appear next to the quotation: `D-50` measured
+ * that `char_start`/`char_end` are true only in the coordinate system of the extractor that
+ * produced them (a second extractor puts the same string at a different index, and the drift
+ * grows at every page boundary), and that system is named nowhere a reader can see. A number
+ * like that invites a check that fails for the wrong reason, and an expert who tries it
+ * concludes that the tool is lying rather than that two coordinate systems differ. The
+ * offsets stay in the data and keep working at the binding seam; only the screen loses them.
  */
 export function anchorLabel(evidence: Evidence): string {
+  return `стр. ${evidence.page_number}`;
+}
+
+/**
+ * The character range of the anchor, formatted for the discrepancy alert and for nowhere
+ * else. Never parsed back and never used to slice anything.
+ *
+ * **Why the range survives at all.** `anchorMatchesQuotation` renders an alert when the
+ * declared span disagrees with the string beside it, and an alert about numbers the
+ * reviewer cannot see is not actionable. So the range appears exactly when it is evidence
+ * of a discrepancy, and the alert is the only caller.
+ *
+ * **The label states its own convention, because the numbers are not the ones a reader
+ * assumes.** `char_start`/`char_end` index the *document-global* prepared text layer — the
+ * frozen `Evidence` schema says so in as many words, and `model/pages` repeats it. The
+ * caption this replaces once read `page 2, chars 712-746`, and next to the words "page 2"
+ * that range reads as an offset into page 2 (`D-25`, found by `W21-CERT` driving criterion
+ * 5; the anchor is the live one, `run_01M2TB4QP6B784MQ7NN1TFFP79`, first quotation, read
+ * back from `GET /v1/runs/{run_id}/findings` by `W22-WEB`). `W21-CERT` measured page 2 of
+ * that document at 539 characters, a backend figure this session did not re-measure; what
+ * matters needs no re-measuring: **712 is past the end of a 539-character page**, so an
+ * expert counting 712 characters into that page finds nothing and concludes the tool is
+ * fabricating a quotation it had exactly right.
+ *
+ * **Why the global range is kept rather than converted.** A page-local offset is
+ * `char_start` minus the page's own start in the prepared text layer, and the browser holds
+ * neither the layer nor that start. `Evidence` carries `page_number`, the two global offsets
+ * and the quote, and nothing else. A client-side conversion would have to re-derive the
+ * layer, which is the one thing `P3-WEB-02` forbids and `model/pages` refuses by design.
+ *
+ * `of the whole document, not of page N` is self-describing: a reader acts on it correctly
+ * without being told anywhere else which convention it uses, and the page is named a second
+ * time so the negation cannot be misread as referring to some other page.
+ */
+export function anchorRangeLabel(evidence: Evidence): string {
   return (
-    `стр. ${evidence.page_number}, ` +
     `символы ${evidence.char_start}–${evidence.char_end} ` +
     `по всему документу, а не по странице ${evidence.page_number}`
   );
