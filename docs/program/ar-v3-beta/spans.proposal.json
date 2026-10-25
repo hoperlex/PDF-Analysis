@@ -1,0 +1,267 @@
+{
+  "proposal_version": "ar-beta-spans-proposal-v1",
+  "status": "proposal_from_sheet_not_a_decision",
+  "source": "docs/program/AR-NORM-MAP-APPROVAL-PREP-01.md, section \"Item decision sheet\" (candidate spans, inclusive ordinals)",
+  "norms_snapshot_id": "ns_01M59N8QNBVN91ACA2HCE6VE74",
+  "documents": {
+    "D1": "ndoc_01M59N9JD4VPS1C8ACDFC01BGG",
+    "D2": "ndoc_01M59N9WF2B93HJQ3GYNR5FCWS",
+    "D3": "ndoc_01M59N9WJPYS8FAQED34RPJF14",
+    "D4": "ndoc_01M59N9VSS64AB4R6N6XX3Q74G",
+    "D5": "ndoc_01M59N9W1JY06JA08QK08DE2HT",
+    "D6": "ndoc_01M59N9Z9MD1RNV7QJDBFNC87X"
+  },
+  "note": "C22 lists two alternative candidate spans (the sheet says \"or\"); neither is chosen. No span is approved and no mode is set here.",
+  "items": [
+    {
+      "id": "C01",
+      "document_alias": "D1",
+      "candidates": [
+        {
+          "norm_document_id": "ndoc_01M59N9JD4VPS1C8ACDFC01BGG",
+          "ordinal_first": 132,
+          "ordinal_last": 137
+        }
+      ]
+    },
+    {
+      "id": "C02",
+      "document_alias": "D1",
+      "candidates": [
+        {
+          "norm_document_id": "ndoc_01M59N9JD4VPS1C8ACDFC01BGG",
+          "ordinal_first": 168,
+          "ordinal_last": 169
+        }
+      ]
+    },
+    {
+      "id": "C03",
+      "document_alias": "D1",
+      "candidates": [
+        {
+          "norm_document_id": "ndoc_01M59N9JD4VPS1C8ACDFC01BGG",
+          "ordinal_first": 213,
+          "ordinal_last": 214
+        }
+      ]
+    },
+    {
+      "id": "C04",
+      "document_alias": "D1",
+      "candidates": [
+        {
+          "norm_document_id": "ndoc_01M59N9JD4VPS1C8ACDFC01BGG",
+          "ordinal_first": 240,
+          "ordinal_last": 248
+        }
+      ]
+    },
+    {
+      "id": "C05",
+      "document_alias": "D6",
+      "candidates": [
+        {
+          "norm_document_id": "ndoc_01M59N9Z9MD1RNV7QJDBFNC87X",
+          "ordinal_first": 489,
+          "ordinal_last": 492
+        }
+      ]
+    },
+    {
+      "id": "C06",
+      "document_alias": "D1",
+      "candidates": [
+        {
+          "norm_document_id": "ndoc_01M59N9JD4VPS1C8ACDFC01BGG",
+          "ordinal_first": 206,
+          "ordinal_last": 207
+        }
+      ]
+    },
+    {
+      "id": "C07",
+      "document_alias": "D1",
+      "candidates": [
+        {
+          "norm_document_id": "ndoc_01M59N9JD4VPS1C8ACDFC01BGG",
+          "ordinal_first": 100,
+          "ordinal_last": 100
+        }
+      ]
+    },
+    {
+      "id": "C08",
+      "document_alias": "D6",
+      "candidates": [
+        {
+          "norm_document_id": "ndoc_01M59N9Z9MD1RNV7QJDBFNC87X",
+          "ordinal_first": 932,
+          "ordinal_last": 932
+        }
+      ]
+    },
+    {
+      "id": "C09",
+      "document_alias": "D2",
+      "candidates": [
+        {
+          "norm_document_id": "ndoc_01M59N9WF2B93HJQ3GYNR5FCWS",
+          "ordinal_first": 343,
+          "ordinal_last": 345
+        }
+      ]
+    },
+    {
+      "id": "C10",
+      "document_alias": "D6",
+      "candidates": [
+        {
+          "norm_document_id": "ndoc_01M59N9Z9MD1RNV7QJDBFNC87X",
+          "ordinal_first": 356,
+          "ordinal_last": 356
+        }
+      ]
+    },
+    {
+      "id": "C11",
+      "document_alias": "D3",
+      "candidates": [
+        {
+          "norm_document_id": "ndoc_01M59N9WJPYS8FAQED34RPJF14",
+          "ordinal_first": 301,
+          "ordinal_last": 304
+        }
+      ]
+    },
+    {
+      "id": "C12",
+      "document_alias": "D3",
+      "candidates": [
+        {
+          "norm_document_id": "ndoc_01M59N9WJPYS8FAQED34RPJF14",
+          "ordinal_first": 365,
+          "ordinal_last": 373
+        }
+      ]
+    },
+    {
+      "id": "C13",
+      "document_alias": "D3",
+      "candidates": [
+        {
+          "norm_document_id": "ndoc_01M59N9WJPYS8FAQED34RPJF14",
+          "ordinal_first": 365,
+          "ordinal_last": 373
+        }
+      ]
+    },
+    {
+      "id": "C14",
+      "document_alias": "D3",
+      "candidates": [
+        {
+          "norm_document_id": "ndoc_01M59N9WJPYS8FAQED34RPJF14",
+          "ordinal_first": 377,
+          "ordinal_last": 380
+        }
+      ]
+    },
+    {
+      "id": "C15",
+      "document_alias": "D3",
+      "candidates": [
+        {
+          "norm_document_id": "ndoc_01M59N9WJPYS8FAQED34RPJF14",
+          "ordinal_first": 390,
+          "ordinal_last": 391
+        }
+      ],
+      "sheet_blocked": true
+    },
+    {
+      "id": "C16",
+      "document_alias": "D3",
+      "candidates": [
+        {
+          "norm_document_id": "ndoc_01M59N9WJPYS8FAQED34RPJF14",
+          "ordinal_first": 296,
+          "ordinal_last": 300
+        }
+      ]
+    },
+    {
+      "id": "C17",
+      "document_alias": "D3",
+      "candidates": [
+        {
+          "norm_document_id": "ndoc_01M59N9WJPYS8FAQED34RPJF14",
+          "ordinal_first": 345,
+          "ordinal_last": 346
+        }
+      ]
+    },
+    {
+      "id": "C18",
+      "document_alias": "D3",
+      "candidates": [
+        {
+          "norm_document_id": "ndoc_01M59N9WJPYS8FAQED34RPJF14",
+          "ordinal_first": 447,
+          "ordinal_last": 452
+        }
+      ]
+    },
+    {
+      "id": "C19",
+      "document_alias": "D4",
+      "candidates": [
+        {
+          "norm_document_id": "ndoc_01M59N9VSS64AB4R6N6XX3Q74G",
+          "ordinal_first": 138,
+          "ordinal_last": 142
+        }
+      ]
+    },
+    {
+      "id": "C20",
+      "document_alias": "D4",
+      "candidates": [
+        {
+          "norm_document_id": "ndoc_01M59N9VSS64AB4R6N6XX3Q74G",
+          "ordinal_first": 138,
+          "ordinal_last": 142
+        }
+      ]
+    },
+    {
+      "id": "C21",
+      "document_alias": "D5",
+      "candidates": [
+        {
+          "norm_document_id": "ndoc_01M59N9W1JY06JA08QK08DE2HT",
+          "ordinal_first": 289,
+          "ordinal_last": 300
+        }
+      ],
+      "sheet_blocked": true
+    },
+    {
+      "id": "C22",
+      "document_alias": "D5",
+      "candidates": [
+        {
+          "norm_document_id": "ndoc_01M59N9W1JY06JA08QK08DE2HT",
+          "ordinal_first": 289,
+          "ordinal_last": 300
+        },
+        {
+          "norm_document_id": "ndoc_01M59N9W1JY06JA08QK08DE2HT",
+          "ordinal_first": 301,
+          "ordinal_last": 308
+        }
+      ],
+      "sheet_blocked": true
+    }
+  ]
+}
