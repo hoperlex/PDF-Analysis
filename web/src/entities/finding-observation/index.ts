@@ -17,6 +17,7 @@ export {
 export {
   anchorLabel,
   anchorMatchesQuotation,
+  anchorRangeLabel,
   quotationCodePointLength,
   quotationText,
 } from './model/quotation';

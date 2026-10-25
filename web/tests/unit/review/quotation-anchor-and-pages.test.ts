@@ -11,8 +11,8 @@
  *     form, so `quote.normalize('NFC')` was indistinguishable from `quote`;
  *   - a **code-point** count from a UTF-16 count — nothing reached
  *     `quotationCodePointLength`, so counting code units read the same;
- *   - `anchorMatchesQuotation` and `anchorLabel` from any constant — both are rendered by
- *     the viewer and neither was read by a test;
+ *   - `anchorMatchesQuotation`, `anchorLabel` and `anchorRangeLabel` from any constant — all
+ *     three are rendered by the viewer and none was read by a test;
  *   - a **numeric** page sort from a lexicographic one — the only multi-page fixture is
  *     `[2, 7]`, which sorts the same either way;
  *   - `firstDeclaredPage`, `isDeclaredPage`, `evidenceOnPage`'s page filter and
@@ -30,6 +30,7 @@ import type { Evidence, FindingObservation } from '@/shared/api';
 import {
   anchorLabel,
   anchorMatchesQuotation,
+  anchorRangeLabel,
   declaredPages,
   evidenceOnPage,
   firstDeclaredPage,
@@ -135,17 +136,48 @@ describe('a stated anchor that disagrees with its quotation is reported, not ass
   });
 });
 
-describe('the anchor label states the page, the range, and which convention the range uses', () => {
+describe('the anchor label states the page and nothing else (R-43)', () => {
   /**
-   * `D-25`. The offsets are document-global (`Evidence` in the frozen contract), and the
-   * defect was that the caption did not say so: beside the words "page 2", `chars 712-746`
-   * reads as an offset into page 2.
+   * `R-43` / `D-50`: the character range leaves the caption. `D-50` measured that the
+   * offsets are true only in the coordinate system of the extractor that produced them (a
+   * second extractor puts the same quotation at a different index, and the drift grows at
+   * every page boundary), so a number printed beside the quotation invites a check that
+   * fails for the wrong reason. The range is stated only inside the discrepancy alert
+   * (`anchorRangeLabel`, below); the caption names the page.
    *
    * `REAL_CASE` is not invented. It is the first quotation of
    * `run_01M2TB4QP6B784MQ7NN1TFFP79`, read back from the running alpha stack by `W22-WEB`
-   * and rendered in a cold browser as:
-   *
-   *     page 2, characters 712–746 of the whole document, not of page 2
+   * (`D-25`): page 2, offsets 712 to 746.
+   */
+  const REAL_CASE = item({ quote: 'x', page_number: 2, char_start: 712, char_end: 746 });
+
+  it('is exactly the page, for the case D-25 and D-50 were found on', () => {
+    expect(anchorLabel(REAL_CASE)).toBe('стр. 2');
+  });
+
+  it('carries neither end of the character range', () => {
+    const label = anchorLabel(REAL_CASE);
+    expect(label).not.toContain('712');
+    expect(label).not.toContain('746');
+    expect(label).not.toContain('символы');
+    expect(label).not.toContain('по всему документу');
+    expect([...label.matchAll(/\d+/g)].map((m) => Number(m[0]))).toEqual([2]);
+  });
+
+  it('uses the server page number unchanged', () => {
+    const label = anchorLabel(item({ quote: 'x', page_number: 11, char_start: 0, char_end: 1 }));
+    expect(label).toBe('стр. 11');
+    expect(label).not.toContain('стр. 12');
+    expect(label).not.toContain('стр. 10');
+  });
+});
+
+describe('the range label states the range, and which convention the range uses', () => {
+  /**
+   * `D-25`. The offsets are document-global (`Evidence` in the frozen contract), and the
+   * defect was that the caption did not say so: beside the words "page 2", `chars 712-746`
+   * reads as an offset into page 2. Under `R-43` the range is shown only in the discrepancy
+   * alert, and there it keeps stating its own convention.
    *
    * `W21-CERT` measured page 2 of that document at 539 characters. That figure comes from
    * the prepared text layer, which is not reachable from the browser, so it is cited and
@@ -153,67 +185,64 @@ describe('the anchor label states the page, the range, and which convention the 
    * the end of a 539-character page either way.
    *
    * Every assertion below is written against the reader who checks the citation by hand,
-   * not against the string: the whole label, the convention clause, the page named twice,
-   * and the refusal to print a page-local number anywhere.
+   * not against the string: the whole label, the convention clause, the page named
+   * again, and the refusal to print a page-local number anywhere.
    */
   const REAL_CASE = item({ quote: 'x', page_number: 2, char_start: 712, char_end: 746 });
 
   it('is exactly this string, for the case D-25 was found on', () => {
-    // The full label, pinned. U+2013 EN DASH is an escape on purpose: a change to a hyphen
-    // is a change to what the reviewer reads and should not pass unnoticed.
-    expect(anchorLabel(REAL_CASE)).toBe(
-      'стр. 2, символы 712–746 по всему документу, а не по странице 2',
+    // The full label, pinned. U+2013 EN DASH is written as an escape on purpose: a change to a
+    // hyphen is a change to what the reviewer reads and should not pass unnoticed.
+    expect(anchorRangeLabel(REAL_CASE)).toBe(
+      'символы 712\u2013746 по всему документу, а не по странице 2',
     );
   });
 
   it('names the convention, so the reader needs nothing else to act on the number', () => {
-    // The load-bearing clause. Without it the caption is D-25 again, whatever else it says.
-    expect(anchorLabel(REAL_CASE)).toContain('по всему документу');
+    // The load-bearing clause. Without it the range is D-25 again, whatever else it says.
+    expect(anchorRangeLabel(REAL_CASE)).toContain('по всему документу');
   });
 
-  it('denies the page-local reading explicitly, naming the same page again', () => {
-    // "not of page 2", not "not of the page": the page is named a second time so the
-    // negation cannot be read as referring to some other page.
-    expect(anchorLabel(REAL_CASE)).toContain('а не по странице 2');
+  it('denies the page-local reading explicitly, naming the page again', () => {
+    // "not of page 2", not "not of the page": the page is named so the negation cannot be
+    // read as referring to some other page.
+    expect(anchorRangeLabel(REAL_CASE)).toContain('а не по странице 2');
     const other = item({ quote: 'x', page_number: 11, char_start: 5, char_end: 9 });
-    expect(anchorLabel(other)).toContain('а не по странице 11');
-    expect(anchorLabel(other)).not.toContain('а не по странице 2');
+    expect(anchorRangeLabel(other)).toContain('а не по странице 11');
+    expect(anchorRangeLabel(other)).not.toContain('а не по странице 2');
   });
 
   it('never prints the page-local offsets, which the browser cannot compute anyway', () => {
     // A page-local offset is char_start minus the page's own start in the prepared text
-    // layer. The browser holds neither, so a caption showing one could only have guessed.
+    // layer. The browser holds neither, so a label showing one could only have guessed.
     // Asserted because "just convert it" is the obvious wrong repair: any page-local
     // rendering of this anchor is a number strictly below char_start, and none appears.
-    const label = anchorLabel(REAL_CASE);
+    const label = anchorRangeLabel(REAL_CASE);
     const printed = [...label.matchAll(/\d+/g)].map((m) => Number(m[0]));
-    expect(printed).toEqual([2, 712, 746, 2]);
+    expect(printed).toEqual([712, 746, 2]);
   });
 
-  it('uses the server page number unchanged', () => {
-    const label = anchorLabel(item({ quote: 'x', page_number: 11, char_start: 0, char_end: 1 }));
-    expect(label).toContain('стр. 11,');
-    expect(label).not.toContain('page 12');
-    expect(label).not.toContain('page 10');
+  it('does not repeat the page caption, which the card already shows once', () => {
+    expect(anchorRangeLabel(REAL_CASE)).not.toContain('стр.');
   });
 
   it('carries both ends of the range, not only the start', () => {
-    const label = anchorLabel(item({ quote: 'x', page_number: 3, char_start: 40, char_end: 95 }));
+    const label = anchorRangeLabel(item({ quote: 'x', page_number: 3, char_start: 40, char_end: 95 }));
     expect(label).toContain('40');
     expect(label).toContain('95');
   });
 
   it('states the range in the order the server declares it, start before end', () => {
-    const label = anchorLabel(item({ quote: 'x', page_number: 3, char_start: 40, char_end: 95 }));
+    const label = anchorRangeLabel(item({ quote: 'x', page_number: 3, char_start: 40, char_end: 95 }));
     expect(label.indexOf('40')).toBeLessThan(label.indexOf('95'));
   });
 
   it('passes both offsets through unchanged, with no off-by-one adjustment', () => {
-    // A well-meaning "+1 to make it 1-based" is exactly the class of edit this caption
+    // A well-meaning "+1 to make it 1-based" is exactly the class of edit this label
     // must not acquire: the contract's offsets are what the grounding gate verified.
-    expect(anchorLabel(item({ quote: 'x', page_number: 1, char_start: 0, char_end: 0 }))).toContain(
-      'символы 0–0 ',
-    );
+    expect(
+      anchorRangeLabel(item({ quote: 'x', page_number: 1, char_start: 0, char_end: 0 })),
+    ).toContain('символы 0\u20130 ');
   });
 });
 
