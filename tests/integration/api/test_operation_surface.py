@@ -106,6 +106,13 @@ def test_every_declared_operation_is_reachable(
         # `W60-OPT-PROPOSALS-01`: a pass and one of its proposals.
         "optimisation_pass_id": "opp_01M2545JSD15ETSNNV904X991W",
         "optimisation_proposal_id": "opr_01M2545JSD15ETSNNV904X991W",
+        # `EXEC-SEAL-01`: an executor connection and one of its runner tokens. `EXEC-PULL-01`:
+        # a runner's task. `EXEC-IMAGE-DELIVERY-01`: a saved image of that task (the `blob_`
+        # identity, not an external one).
+        "connection_id": "exc_01M2545JSD15ETSNNV904X991W",
+        "token_id": "ern_01M2545JSD15ETSNNV904X991W",
+        "task_id": "ext_01M2545JSD15ETSNNV904X991W",
+        "blob_id": "blob_01M2545JSD15ETSNNV904X991W",
     }
     for operation_id, method, template in sorted(declared_operations(openapi_document)):
         path = template
