@@ -30,13 +30,18 @@ from typing import Any
 import pytest
 
 from auditmanager.shared.errors import ErrorCode
+from tests.support.expected_facts import FACTS
 from w13_api_driver import Answer, Request, Surface, dispatch, probe_surface
 
 #: Exactly the required properties of ``#/components/schemas/ErrorEnvelope``, written out.
 ENVELOPE_REQUIRED = ("contract_version", "error_code", "message", "correlation_id", "retryable")
 
-#: ``info.version`` of the frozen document, and the ``contract_version`` const.
-CONTRACT_VERSION = "1.0.0"
+#: ``info.version`` of the frozen document, and the ``contract_version`` const. The hand-kept
+#: figure of ``tests/support/expected_facts.json`` (pinned to the seal by
+#: ``tests/contract/api_v1/test_contract_seal.py``) and not a literal of this file: it said
+#: ``1.0.0`` until the reseals to ``1.5.0`` moved the family, and every envelope this sweep reads
+#: carries the sealed one.
+CONTRACT_VERSION = FACTS.contract_version
 
 #: The keys FastAPI's own error bodies carry, and Starlette's. If any of these is the
 #: *top level* of a response body, a framework body reached a client.

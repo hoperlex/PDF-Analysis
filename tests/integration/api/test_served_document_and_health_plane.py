@@ -201,6 +201,11 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "extendExecutorTaskClaim",
             "submitExecutorTaskAnswer",
             "failExecutorTask",
+            # `EXEC-IMAGE-DELIVERY-01`: the runner's image read takes two pattern-checked path
+            # identities (`task_id`, `blob_id`) and declares the catalog's validation envelope.
+            "getExecutorTaskImage",
+            # `AR-V3-BETA-SIX-RUN-02`: starting a six-Run group takes a keyed closed body.
+            "startArV3BetaGroup",
         }, declared_422
 
     def test_no_schema_property_declares_a_default(self) -> None:
