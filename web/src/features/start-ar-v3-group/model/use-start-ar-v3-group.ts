@@ -21,6 +21,12 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ArV3BetaGroup, VersionUid } from '@/shared/api';
 import { queryKeys, startArV3BetaGroup } from '@/shared/api';
 
+/**
+ * The mutation's key, so a caller can ask the cache whether a start is pending
+ * (`useArV3GroupStartIntent`) without owning the mutation.
+ */
+export const START_AR_V3_GROUP_MUTATION_KEY = ['start-ar-v3-group'] as const;
+
 export interface StartArV3GroupCommand {
   readonly versionUid: VersionUid;
   /** Minted once per intent by the caller and reused on every retry. */
@@ -31,6 +37,7 @@ export function useStartArV3Group() {
   const queryClient = useQueryClient();
 
   return useMutation<ArV3BetaGroup, unknown, StartArV3GroupCommand>({
+    mutationKey: START_AR_V3_GROUP_MUTATION_KEY,
     mutationFn: async ({ versionUid, idempotencyKey }) => {
       const response = await startArV3BetaGroup({ body: { version_uid: versionUid }, idempotencyKey });
       return response.data;

@@ -30,7 +30,12 @@ export const ATTESTATION_SENTENCE =
 /** How many leading hex characters of the pack digest the panel prints. */
 export const PACK_DIGEST_SHOWN = 12;
 
-/** The leading characters of the sealed pack digest, with the full value left to a tooltip. */
+/**
+ * The leading characters of the sealed pack digest — all the panel shows, and the most of it any
+ * markup may carry: no more than `PACK_DIGEST_SHOWN` characters of the digest appear in the DOM
+ * for any role, so the full value is not in a `title`, a `data-` attribute or hidden text either.
+ * The whole digest stays in memory, on the reading, for whatever must compare it.
+ */
 export function packDigestShown(packSha256: string): string {
   return `${packSha256.slice(0, PACK_DIGEST_SHOWN)}…`;
 }

@@ -20,6 +20,13 @@
  * checks. While the status is loading, failed, says not installed or breaks the contract the
  * control is not drawn at all — no disabled button, no placeholder; «Настройки анализа»
  * carries the explanation. A started group opens its review on that screen.
+ *
+ * `AR-V3-BETA-PACK-STATUS-WEB-FIX-01`: a start already sent keeps the control drawn. The status
+ * is re-read while the page is open, and a re-read that fails would otherwise take the control
+ * off the page under a request in flight — losing the navigation to the group it makes and the
+ * idempotency key, so the next press could make a second group. The list therefore holds the
+ * key (`useArV3GroupStartIntent`, for as long as the list lives) and draws the control while a
+ * start for this version is pending as well as while the pack is installed.
  */
 
 import { useRouter } from 'next/navigation';
@@ -29,7 +36,8 @@ import type { ProjectUid, RunStatus, VersionUid } from '@/shared/api';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import { classifyListingFailure, routes } from '@/shared/lib';
 import { RunRow, arV3GroupReviewAddress, useArV3PackStatus, useRunList } from '@/entities/audit-run';
-import { StartArV3GroupControl } from '@/features/start-ar-v3-group';
+import type { ArV3GroupStartIntent } from '@/features/start-ar-v3-group';
+import { StartArV3GroupControl, useArV3GroupStartIntent } from '@/features/start-ar-v3-group';
 import { StartRunControl } from '@/features/start-run';
 
 export interface RunListProps {
@@ -43,12 +51,21 @@ export interface RunListProps {
  * The six-check start, opening the started group's review. Its own component so the router
  * is read only when the control is drawn: a list without an installed pack mounts none.
  */
-function StartArV3Group({ projectUid, versionUid }: { readonly projectUid: ProjectUid; readonly versionUid: VersionUid }) {
+function StartArV3Group({
+  projectUid,
+  versionUid,
+  intent,
+}: {
+  readonly projectUid: ProjectUid;
+  readonly versionUid: VersionUid;
+  readonly intent: ArV3GroupStartIntent;
+}) {
   const router = useRouter();
   return (
     <StartArV3GroupControl
       projectUid={projectUid}
       versionUid={versionUid}
+      intent={intent}
       onStarted={(group) => router.push(arV3GroupReviewAddress(group.group_id))}
     />
   );
@@ -59,6 +76,7 @@ export function RunList({ projectUid, versionUid, onRunStarted }: RunListProps) 
   const query = useRunList(versionUid, cursor);
   const { view: pack } = useArV3PackStatus();
   const packInstalled = pack.phase === 'read' && pack.reading.kind === 'installed';
+  const startIntent = useArV3GroupStartIntent(versionUid);
 
   const startControl = (
     <>
@@ -67,7 +85,9 @@ export function RunList({ projectUid, versionUid, onRunStarted }: RunListProps) 
         versionUid={versionUid}
         {...(onRunStarted === undefined ? {} : { onStarted: onRunStarted })}
       />
-      {packInstalled ? <StartArV3Group projectUid={projectUid} versionUid={versionUid} /> : null}
+      {packInstalled || startIntent.inFlight ? (
+        <StartArV3Group projectUid={projectUid} versionUid={versionUid} intent={startIntent} />
+      ) : null}
     </>
   );
 

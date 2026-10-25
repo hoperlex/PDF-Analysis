@@ -10,8 +10,10 @@
  *   error          the read failed (a sentence of its own, with a retry — it is a read);
  *   not installed  the server has no pack, so the six checks cannot start and the run list
  *                  draws no start control at all;
- *   installed      the profile, the first characters of the sealed digest, the six scopes and
- *                  the reviewer's record, followed by the sentence that the record is not checked;
+ *   installed      the profile, the first twelve characters of the sealed digest (and no more of
+ *                  it anywhere in the markup — not in a title, a data attribute or a hidden
+ *                  element), the six scopes and the reviewer's record, followed by the sentence
+ *                  that the record is not checked;
  *   fault          the answer breaks the contract (installed without a review, a wrong scope
  *                  list, a state nobody declared). It is never drawn as installed and never as an
  *                  empty state; the run list offers nothing on it either.
@@ -51,7 +53,7 @@ function InstalledPack({ pack }: { readonly pack: Installed }) {
         </dd>
         <dt>Контрольная сумма пакета</dt>
         <dd>
-          <code title={pack.packSha256}>{packDigestShown(pack.packSha256)}</code>
+          <code>{packDigestShown(pack.packSha256)}</code>
         </dd>
         <dt>Области шести проверок</dt>
         <dd data-ar-v3-pack-scopes={pack.scopeIds.join(' ')}>{pack.scopeIds.join(', ')}</dd>
