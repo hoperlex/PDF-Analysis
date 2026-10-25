@@ -47,6 +47,7 @@ REQUIRED_OPERATIONS = {
     "startArV3BetaGroup",
     "getArV3BetaGroup",
     "getArV3BetaGroupReview",
+    "getArV3BetaPackStatus",
     "getRunStatus",
     "listRunFindings",
     "getFinding",
@@ -603,8 +604,10 @@ def _takes_caller_input(document: dict, operation: dict) -> bool:
 INPUT_LESS_OPERATIONS: frozenset[str] = frozenset(
     # `W59-ANALYSIS-SETTINGS-01` adds ``listAnalysisProfiles``: the registry takes no input.
     # `EXEC-SEAL-01` adds the two executor lists: a connection list and a route list take no input.
+    # `AR-V3-BETA-PACK-STATUS-API-01` adds ``getArV3BetaPackStatus``: it reads the server's own
+    # installed pack and addresses no identity.
     {"getDashboardSummary", "getMe", "getProductVersion", "listReleases", "listAnalysisProfiles",
-     "listExecutorConnections", "listExecutorRoutes"}
+     "listExecutorConnections", "listExecutorRoutes", "getArV3BetaPackStatus"}
 )
 
 

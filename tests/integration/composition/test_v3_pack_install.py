@@ -5,6 +5,11 @@ group starts refuse). With it, the API and the worker hold the same one-pack reg
 variable that names anything the loader refuses stops the start with ``ConfigurationError``
 rather than quietly serving an empty registry.
 
+`AR-V3-BETA-PACK-STATUS-API-01`: the same load also gives the API root the attestation that came
+with the pack, and ``getArV3BetaPackStatus`` answers from it -- ``not_installed`` while the
+variable is unset or blank, the pack's ids, digest, scopes and attestation once it names a good
+manifest, and never the configured path.
+
 Container-free: ``build_application`` and ``build_worker_runtime`` open their engine lazily and
 nothing here runs a statement. The environment is built from scratch (no ambient ``DATABASE_URL``,
 no real endpoint), so the suite depends on nothing outside this file.
@@ -17,9 +22,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from fastapi import APIRouter
 
 from auditmanager.analysis.public import resolve_beta_v3_profile
 from auditmanager.api.composition import ConfigurationError, build_application
+from auditmanager.api.routers.ar_v3_groups import build_ar_v3_group_routes
 from auditmanager.bootstrap import adapters as adapters_module
 from auditmanager.bootstrap import composition as composition_module
 from auditmanager.bootstrap.composition import build_worker_runtime
@@ -185,3 +192,73 @@ def test_a_variable_that_names_a_bad_manifest_refuses_the_start(
         registry_of(monkeypatch, env_of(**{PACK_MANIFEST_ENV: str(path)}))
     assert PACK_MANIFEST_ENV in str(refused.value)
     assert str(tmp_path) not in str(refused.value), "the configured path stays out of the message"
+
+
+# --- `AR-V3-BETA-PACK-STATUS-API-01`: the API root also exposes what was installed ----------
+
+
+def _api_status(monkeypatch: pytest.MonkeyPatch, env: dict[str, str]) -> tuple[int, dict[str, Any], bytes]:
+    """Build the served application, then ask its group port the way the route does."""
+    built: dict[str, Any] = {}
+
+    class RunAdapterSpy(adapters_module.RunAdapter):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            built["adapter"] = self
+
+    monkeypatch.setattr(composition_module, "RunAdapter", RunAdapterSpy)
+    build_application(environ=env)
+    router = APIRouter()
+    build_ar_v3_group_routes(router, built["adapter"])
+    route = next(route for route in router.routes if route.operation_id == "getArV3BetaPackStatus")
+    response = route.endpoint()
+    return response.status_code, json.loads(response.body), response.body
+
+
+@pytest.mark.parametrize("env_extra", [{}, {PACK_MANIFEST_ENV: "   "}], ids=["unset", "blank"])
+def test_the_api_reports_not_installed_while_no_manifest_is_named(
+    monkeypatch: pytest.MonkeyPatch, env_extra: dict[str, str],
+) -> None:
+    status, answer, _body = _api_status(monkeypatch, _api_env(**env_extra))
+    assert (status, answer) == (200, {"state": "not_installed"})
+
+
+def test_the_api_reports_the_installed_pack_and_its_attestation(
+    monkeypatch: pytest.MonkeyPatch, manifest: tuple[Path, TrustedPack],
+) -> None:
+    path, pack = manifest
+    status, answer, body = _api_status(monkeypatch, _api_env(**{PACK_MANIFEST_ENV: str(path)}))
+    assert status == 200
+    assert answer == {
+        "state": "installed",
+        "analysis_profile_id": pack.analysis_profile_id,
+        "prompt_bundle_id": pack.prompt_bundle_id,
+        "pack_sha256": pack.sha256,
+        "scope_ids": list(SCOPES),
+        "review": {
+            "reviewer": REVIEW.reviewer, "capacity": REVIEW.capacity,
+            "reviewed_at": REVIEW.reviewed_at, "decision_ref": REVIEW.decision_ref,
+            "scope_statement": REVIEW.scope_statement,
+        },
+    }
+    assert str(path.parent) not in body.decode("utf-8"), "the configured path stays out of the answer"
+
+
+def test_the_status_and_the_registry_come_from_one_load(
+    monkeypatch: pytest.MonkeyPatch, manifest: tuple[Path, TrustedPack],
+) -> None:
+    """What the screen is told is installed is what a group start would pin."""
+    path, _pack_ = manifest
+    env = _api_env(**{PACK_MANIFEST_ENV: str(path)})
+    registry = _api_registry(monkeypatch, env)
+    _status, answer, _body = _api_status(monkeypatch, env)
+    selected = registry.select_beta()
+    assert selected is not None and answer["pack_sha256"] == selected.sha256
+
+
+def test_the_worker_root_still_needs_and_gets_only_the_registry(
+    monkeypatch: pytest.MonkeyPatch, manifest: tuple[Path, TrustedPack],
+) -> None:
+    path, pack = manifest
+    registry = _worker_registry(monkeypatch, _worker_env(**{PACK_MANIFEST_ENV: str(path)}))
+    assert registry.select_beta() == pack

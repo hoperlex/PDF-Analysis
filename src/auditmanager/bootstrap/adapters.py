@@ -839,6 +839,7 @@ class RunAdapter(_SessionHolder):
         providers: Any = None,
         route_freezer: Any = None,
         ar_v3_pack_registry: Any = None,
+        ar_v3_installed_pack: Any = None,
     ) -> None:
         super().__init__(session_factory)
         # `EXEC-HTTP-01`. The provider resolver the executor binds each Attempt with, and, for
@@ -847,6 +848,10 @@ class RunAdapter(_SessionHolder):
         self._providers = providers
         self._route_freezer = route_freezer
         self._ar_v3_pack_registry = ar_v3_pack_registry
+        # `AR-V3-BETA-PACK-STATUS-API-01`. The parsed manifest the registry above was built from
+        # (``ParsedPackManifest``), or ``None`` while none is installed. Only the status read uses
+        # it; group start and the executor still decide from the registry.
+        self._ar_v3_installed_pack = ar_v3_installed_pack
         # `W59-SECTION-SEAL-01`. The sealed section -> (profile, bundle) table run start and
         # re-audit route through, and the registry resolver the executor runs a run's pinned
         # profile with. The composition root always passes both
@@ -898,6 +903,24 @@ class RunAdapter(_SessionHolder):
             session, group_id, blob_store=self._blob_store,
         ))
         return models.ArV3BetaGroupReview.model_validate(asdict(view))
+
+    def get_ar_v3_pack_status(self) -> models.ArV3BetaPackStatus:
+        """What the server holds, as the manifest said it: no database, no provider.
+
+        The review is the human attestation the manifest carried; nothing here says it is true.
+        """
+        installed = self._ar_v3_installed_pack
+        if installed is None:
+            return models.ArV3BetaPackStatus(state="not_installed")
+        pack = installed.pack
+        return models.ArV3BetaPackStatus(
+            state="installed",
+            analysis_profile_id=pack.analysis_profile_id,
+            prompt_bundle_id=pack.prompt_bundle_id,
+            pack_sha256=pack.sha256,
+            scope_ids=[scope.scope_id for scope in pack.scopes],
+            review=models.ArV3BetaPackReview.model_validate(asdict(installed.review)),
+        )
 
     def start_run(
         self,

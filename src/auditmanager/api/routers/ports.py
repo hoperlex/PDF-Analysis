@@ -500,6 +500,9 @@ class ArV3GroupPort(Protocol):
     def get_ar_v3_group_review(self, *, group_id: str) -> models.ArV3BetaGroupReview:
         """Read six verified, user-safe scope review outcomes."""
 
+    def get_ar_v3_pack_status(self) -> models.ArV3BetaPackStatus:
+        """Whether a reviewed pack is installed on this server, with its attestation record."""
+
 
 @runtime_checkable
 class RunPort(Protocol):

@@ -62,9 +62,10 @@ from auditmanager.runs.public import (
     PACK_MANIFEST_ENV,
     DurableCarrier,
     PackManifestRefused,
+    ParsedPackManifest,
     ReclaimingCarrier,
     TrustedPackRegistry,
-    load_trusted_pack_registry,
+    load_manifest,
     run_to_terminal,
 )
 from auditmanager.sections.public import SECTION_CODES, section_names
@@ -73,19 +74,33 @@ from auditmanager.releases.public import (
 )
 
 
-def _ar_v3_pack_registry(env: dict[str, str]) -> TrustedPackRegistry:
-    """`AR-V3-BETA-PACK-INSTALL-01`: install the sealed reviewed pack named by the environment.
+def _ar_v3_installed_pack(env: dict[str, str]) -> ParsedPackManifest | None:
+    """`AR-V3-BETA-PACK-INSTALL-01`: load the sealed reviewed pack named by the environment.
 
-    Without ``AR_V3_BETA_PACK_MANIFEST`` the registry stays empty and group starts refuse. With
-    it, a manifest that cannot be loaded refuses the start: an empty registry is never the
-    answer to a pack the operator meant to install.
+    Without ``AR_V3_BETA_PACK_MANIFEST`` (or with a blank value, as ``load_trusted_pack_registry``
+    reads it) nothing is installed and group starts refuse. With it, a manifest that cannot be
+    loaded refuses the start: an empty registry is never the answer to a pack the operator meant
+    to install. The one load yields both the registry and, for `AR-V3-BETA-PACK-STATUS-API-01`,
+    the attestation that came with the pack.
     """
+    path = env.get(PACK_MANIFEST_ENV)
+    if path is None or not path.strip():
+        return None
     try:
-        return load_trusted_pack_registry(env.get(PACK_MANIFEST_ENV))
+        return load_manifest(path.strip())
     except PackManifestRefused as exc:
         raise ConfigurationError(
             f"{PACK_MANIFEST_ENV} names a reviewed-pack manifest the server refuses: {exc}"
         ) from exc
+
+
+def _registry_of(installed: ParsedPackManifest | None) -> TrustedPackRegistry:
+    return TrustedPackRegistry.empty() if installed is None else installed.registry
+
+
+def _ar_v3_pack_registry(env: dict[str, str]) -> TrustedPackRegistry:
+    """The registry alone: what the worker needs, and what group start decides from."""
+    return _registry_of(_ar_v3_installed_pack(env))
 
 
 @dataclass(frozen=True, slots=True)
@@ -314,7 +329,7 @@ def build_application(
         else DurableCarrier(sessions)
     )
 
-    ar_v3_pack_registry = _ar_v3_pack_registry(env)
+    ar_v3_installed_pack = _ar_v3_installed_pack(env)
     run_adapter = RunAdapter(
         sessions,
         blob_store=store,
@@ -338,7 +353,9 @@ def build_application(
         route_freezer=providers.freeze,
         # No expert-approved six-set pack is installed in the beta candidate.
         # This keeps group start closed while allowing historical group reads.
-        ar_v3_pack_registry=ar_v3_pack_registry,
+        ar_v3_pack_registry=_registry_of(ar_v3_installed_pack),
+        # `AR-V3-BETA-PACK-STATUS-API-01`: the same load, with the attestation that came with it.
+        ar_v3_installed_pack=ar_v3_installed_pack,
     )
     if isinstance(carrier, DurableCarrier):
         carrier.configure_runner(run_adapter._job)

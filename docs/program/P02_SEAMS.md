@@ -834,7 +834,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-103 operations, sealed. `A5` generates the typed client from this document; `B6`
+104 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -982,6 +982,7 @@ could.
 | `startArV3BetaGroup` | `POST /ar-v3-beta/groups` |
 | `getArV3BetaGroup` | `GET /ar-v3-beta/groups/{group_id}` |
 | `getArV3BetaGroupReview` | `GET /ar-v3-beta/groups/{group_id}/review` |
+| `getArV3BetaPackStatus` | `GET /ar-v3-beta/pack` |
 | `getRunStatus` | `GET /runs/{run_id}` |
 | `listRunFindings` | `GET /runs/{run_id}/findings` |
 | `getFinding` | `GET /findings/{finding_uid}` |

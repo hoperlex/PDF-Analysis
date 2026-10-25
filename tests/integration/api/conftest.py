@@ -72,6 +72,7 @@ SuiteAccountAdapter = _driver.SuiteAccountAdapter
 SuiteRegistrationAdapter = _driver.SuiteRegistrationAdapter
 TEST_TOKEN = _driver.TEST_TOKEN
 dispatch = _driver.dispatch
+from auditmanager.api.schemas import models
 from auditmanager.api.schemas.decisions import DecisionEventView, DecisionRecordView
 from auditmanager.api.schemas.documents import DocumentVersionView, ManifestEntryView
 from auditmanager.api.schemas.findings import (
@@ -976,6 +977,9 @@ def router(ingest: IngestService, session: Session, suite_account: str) -> Surfa
 
         def get_ar_v3_group_review(self, **_: Any) -> Any:
             raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="ArV3RunGroup")
+
+        def get_ar_v3_pack_status(self) -> Any:
+            return models.ArV3BetaPackStatus(state="not_installed")
 
     return Surface(build_router(
         projects=IngestProjectAdapter(ingest),
