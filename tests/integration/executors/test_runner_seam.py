@@ -57,6 +57,9 @@ class StubRunner:
     def revoke_token(self, **_):  # pragma: no cover - not reached here
         raise AssertionError
 
+    def read_image(self, **_):  # pragma: no cover - not reached here
+        raise AssertionError
+
 
 @pytest.fixture
 def stub(surface) -> StubRunner:
