@@ -146,14 +146,17 @@ def test_authored_shape_and_form() -> None:
     # (W55b released as 0.6.0 under R-123), revised once for W55B-NOTES-JUDGE's edits E2, E4-E6;
     # 0.7.0 by RELEASE-0-7-0-RECORD-01 (the owner's own merge of dev into main, R-141e), revised once
     # for the independent judge's edits. 0.8.0 is an honestly limited AR v3 beta-status
-    # development candidate; no six-Run or verified citation claim is authored.
+    # development candidate; no six-Run or verified citation claim is authored. 0.8.1
+    # (RELEASE-0-8-1-DEV-01) is the next development candidate: the pack status, the
+    # pack-gated six-check start and its group review, and three interface repairs; it
+    # claims no verified citation, installed pack or numerical conclusion.
     assert {entry["version"]: entry["revision"] for _, entry in entries} == {
-        "0.8.0": 1, "0.7.0": 2, "0.6.0": 2, "0.5.1": 1, "0.5.0": 1,
+        "0.8.1": 1, "0.8.0": 1, "0.7.0": 2, "0.6.0": 2, "0.5.1": 1, "0.5.0": 1,
         "0.4.0": 1, "0.3.0": 2, "0.2.0": 2,
     }
     assert form_failures(entries, version=(ROOT / "VERSION").read_text().strip(), terms=_dictionary()) == set()
     assert [entry["version"] for _, entry in entries] == [
-        "0.8.0", "0.7.0", "0.6.0", "0.5.1", "0.5.0", "0.4.0", "0.3.0", "0.2.0",
+        "0.8.1", "0.8.0", "0.7.0", "0.6.0", "0.5.1", "0.5.0", "0.4.0", "0.3.0", "0.2.0",
     ]
     archive = entries[-1][1]
     assert archive["is_archive"] is True
