@@ -20,6 +20,15 @@ skipped and the API server keeps the main thread and the SIGTERM that stops the 
 A daemon thread also cannot outlive a crashed API server and leave a container that still
 answers ``/healthz`` while serving nothing.
 
+**Why ``/readyz`` waits for the API socket** (`D-196`). The health plane starts first and does
+not depend on the API port, so without more it would report ready for as long as the API's
+lifespan startup takes -- tens of milliseconds measured, seconds when startup touches the
+database -- while the API port refuses connections. ``uvicorn.Server.started`` is set once the
+API's lifespan startup has completed *and* its listener is bound, so the health plane is
+handed ``lambda: api_server.started`` and answers ``503`` until then. ``/healthz`` does not
+consult it: liveness stays "the process answers", which is what the container's healthcheck
+reads.
+
 **Configuration is the environment and nothing else.** ``create_asgi_app(environ=None)``
 reads ``os.environ``; ``bootstrap/settings.py:load`` refuses to start on a missing value,
 ``AUDITMANAGER_API_TOKEN`` among them since `W14-PKG`. So a container with an incomplete
@@ -85,7 +94,11 @@ def main(argv: list[str] | None = None) -> int:
 
     bind_host = environ.get(BIND_VARIABLE, "").strip() or DEFAULT_BIND_HOST
     api_app = create_asgi_app(environ=environ, application=application)
-    health_app = build_health_app(application)
+    # Built before the health plane: its `started` flag is what `/readyz` waits for.
+    api_server = uvicorn.Server(
+        uvicorn.Config(api_app, host=bind_host, port=api_port, access_log=True)
+    )
+    health_app = build_health_app(application, serving=lambda: api_server.started)
 
     health = uvicorn.Server(
         uvicorn.Config(health_app, host=bind_host, port=health_port, access_log=False)
@@ -98,9 +111,7 @@ def main(argv: list[str] | None = None) -> int:
         f"api={bind_host}:{api_port}, health={bind_host}:{health_port}",
         flush=True,
     )
-    uvicorn.Server(
-        uvicorn.Config(api_app, host=bind_host, port=api_port, access_log=True)
-    ).run()
+    api_server.run()
     return 0
 
 
