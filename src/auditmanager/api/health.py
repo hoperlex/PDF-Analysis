@@ -22,7 +22,8 @@ never under ``/api/v1``.* Three consequences, each of them a decision and not an
   with a database-touching lifespan, seconds -- before the API port accepts a connection; a
   probe that routes on ``/readyz`` would send traffic to a port that refuses it. The process
   that owns the API server hands this plane a ``serving`` predicate, and ``/readyz`` answers
-  ``503`` until it is true. ``/healthz`` never consults it: liveness is "the process answers".
+  ``503`` until it is true -- and again once it turns false because the listener is draining.
+  ``/healthz`` never consults it: liveness is "the process answers".
 
 The bodies carry no product meaning, no identity and no version -- an operational plane that
 reported the contract version would be a second place the contract version lives.
@@ -55,8 +56,9 @@ def build_health_app(
     constructed* rather than a constant. ``None`` is allowed so the plane can be built and
     polled by a test without a database.
 
-    ``serving`` answers "has the API listener bound and started serving?". It is called on
-    every ``/readyz`` request, so it must be a cheap read of a flag the API server owns, and
+    ``serving`` answers "is the API listener bound and still accepting?" -- false before it
+    has started and false again once it is shutting down. It is called on every ``/readyz``
+    request, so it must be a cheap read of flags the API server owns, and
     an exception from it is a ``500``, never a ready answer. ``None`` means no API listener
     is paired with this plane (a test polling the plane alone), and readiness is then the
     wiring fact alone; the one production caller, ``infra/deploy/serve.py``, passes it, and
