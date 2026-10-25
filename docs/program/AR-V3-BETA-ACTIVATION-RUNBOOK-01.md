@@ -15,6 +15,8 @@ approval, no expert decision and no legal-source check.
 | promote one reviewed set into custody (`plan` read-only, `promote` after the reviewer's digests match, idempotent replay) | `python -m auditmanager.norms.retrieval.promote_cli {new-id,plan,promote}` | `AR-V3-BETA-SET-TOOL-01`; 72 tests incl. real PostgreSQL/S3 |
 | seal the six verified sets into a reviewed-pack manifest, verify it offline | `python -m auditmanager.runs.v3_pack_cli {seal,verify}` | `AR-V3-BETA-PACK-INSTALL-01` |
 | install: both services read `AR_V3_BETA_PACK_MANIFEST` and refuse start on a bad file | composition roots; `infra/deploy/compose.server.yml`, `infra/deploy/ar-v3-pack/` | `AR-V3-BETA-PACK-DEPLOY-01` |
+| read the paragraph rows of the candidate spans out of the snapshot (read-only, refuses gaps and unreliable rows) | `python scripts/norms/export_paragraph_rows.py` | `AR-V3-BETA-SPANS-MEASURE-01`; ran on the qualified local snapshot |
+| the pack status and the «Запустить шесть проверок АР v3» control | `getArV3BetaPackStatus`, «Настройки анализа», the version's run list | `AR-V3-BETA-PACK-STATUS-API-01`, `AR-V3-BETA-PACK-STATUS-WEB-01` |
 
 ## The order of the sequence (every step has an owner that is not this session)
 
@@ -24,6 +26,7 @@ approval, no expert decision and no legal-source check.
    (`AR-NORM-MAP-APPROVAL-PREP-01.md`). The beta policy keeps C05, C06, C08, C09, C10, C15, C21, C22 `context_only`; the tool refuses any upgrade of them.
 3. **Official source pages** (`D-204`): acquire and hash the missing D1–D5 amendment pages, the C15 ГОСТ correction page and the applicable D6 law text; record what changed.
 4. **Query vectors** (`D-204`): BGE-M3 revision `5617a9f61b028005a4858fdac845db406aefb181`, CLS pooling, 1024 dimensions, with reproducible provenance. The weights are not on this host; no synthetic vector may stand in.
+4a. **Measured already (2026-10-26, `AR-V3-BETA-SPANS-MEASURE-01`, a proposal and not a decision):** the sheet's 22 candidate spans (`docs/program/ar-v3-beta/spans.proposal.json`) all exist in snapshot `ns_01M59N8QNBVN91ACA2HCE6VE74`, are reliable, and the six target-only prompt parts are 5,728 / 11,958 / 15,032 / 14,143 / 14,078 / 14,078 characters (F1 / F2 / A1 / A2 / S1 / S2 with C22 as 289–300; 5,789 with C22 as 301–308), all under 22,000. These are lower bounds (no retrieved windows). Repeated spans: C13 repeats C12, C20 repeats C19, S1 and S2 share 12 paragraphs.
 5. `map_pack build` then `validate` → six maps with six distinct `map_sha256` and the pack summary (`review_state: pending_expert` until a complete attestation is supplied).
 6. For each of the six scopes: a reviewer computes the source and embedding digests independently; run `promote_cli plan`, compare, then `promote`. Six invocations; six `nrs_` sets.
 7. `v3_pack_cli seal` with the reviewer attestation → manifest; `v3_pack_cli verify` → exit 0.
