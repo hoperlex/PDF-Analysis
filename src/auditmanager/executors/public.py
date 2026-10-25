@@ -18,6 +18,8 @@ The ``api`` never imports :func:`open_secret`'s ring: it loads public keys only
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from auditmanager.analysis.public import ModelPin, pinned_models
 from auditmanager.executors.commands import (
     GeneratedKey,
@@ -29,6 +31,7 @@ from auditmanager.executors.commands import (
     set_route,
     set_secret,
 )
+from auditmanager.executors.destinations import DestinationPolicy
 from auditmanager.executors.model import (
     ConnectionRecord,
     ConnectionSummary,
@@ -87,6 +90,9 @@ from auditmanager.executors.sealing import (
 from auditmanager.shared.errors import DomainError, ErrorCode
 from sqlalchemy.orm import Session
 
+if TYPE_CHECKING:
+    from auditmanager.executors.operations import OperationRefused, import_env
+
 __all__ = [
     "CLAIM_LEASE_SECONDS",
     "ClaimedTask",
@@ -94,9 +100,11 @@ __all__ = [
     "ConnectionDetail",
     "ConnectionRecord",
     "ConnectionSummary",
+    "DestinationPolicy",
     "GeneratedKey",
     "IssuedToken",
     "ModelPin",
+    "OperationRefused",
     "PrivateRing",
     "ProbeRecord",
     "PublicRing",
@@ -125,6 +133,7 @@ __all__ = [
     "fail_task",
     "generate_ssh_key",
     "host_key_fingerprint",
+    "import_env",
     "issue_runner_token",
     "list_connection_summaries",
     "list_routes",
@@ -146,6 +155,20 @@ __all__ = [
     "submit_answer",
     "sweep",
 ]
+
+
+#: The worker's baseline import (`EXEC-ENV-OPENROUTER-01`). Resolved on first use, because
+#: ``operations`` imports this module (and so do ``probe_runner`` and ``resolver``): a top-level
+#: import here would break ``import auditmanager.executors.operations`` on the cycle.
+_OPERATIONS_EXPORTS = frozenset({"OperationRefused", "import_env"})
+
+
+def __getattr__(name: str) -> object:
+    if name in _OPERATIONS_EXPORTS:
+        from auditmanager.executors import operations
+
+        return getattr(operations, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 class SecretUnreadableError(DomainError):

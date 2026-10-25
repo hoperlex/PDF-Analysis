@@ -19,6 +19,7 @@ SCRIPT = ROOT / "scripts" / "manual-alpha-check.sh"
 VERIFY = ROOT / "tests" / "e2e" / "pc01" / "journey" / "verify-acceptance.mjs"
 MAKEFILE = ROOT / "Makefile"
 MANIFEST = ROOT / "tests" / "e2e" / "pc01" / "journey" / "manifest.json"
+CONTRACT = ROOT / "contracts" / "api" / "v1" / "openapi.json"
 
 # The cold routes a complete read phase walks: the journey manifest's own count, which the
 # verifier reads the same way. Since W50 neither side writes the number down, so a wave that
@@ -31,10 +32,19 @@ WRITE_STEPS = len(json.loads(MANIFEST.read_text(encoding="utf-8"))["write"]["ste
 REVIEWER_ENV = {"E2E_PC01_LOGIN": "synthetic-reviewer", "E2E_PC01_PASSWORD": "not-a-real-secret"}
 
 
+def _candidate_contract_version() -> str:
+    """The frozen contract's own version, read as the verifier reads it: a reseal moves both."""
+    return json.loads(CONTRACT.read_text(encoding="utf-8"))["info"]["version"]
+
+
 @pytest.fixture
 def version_server():
     """A local credentialed API with a mutable served-build answer."""
-    state = {"build_id": compute_build_id(), "version_status": 200}
+    state = {
+        "build_id": compute_build_id(),
+        "version_status": 200,
+        "contract_version": _candidate_contract_version(),
+    }
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, _format: str, *_args: object) -> None:
@@ -71,7 +81,7 @@ def version_server():
             self.answer(state["version_status"], {
                 "product_version": (ROOT / "VERSION").read_text(encoding="utf-8").strip(),
                 "build_id": state["build_id"],
-                "contract_version": "1.0.0",
+                "contract_version": state["contract_version"],
             })
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
@@ -571,6 +581,34 @@ def test_build_measurement_refuses_mismatch_and_missing_response(
     assert evidence["verdict"] == expected_phase
     assert "not-a-real-secret" not in result.stdout + result.stderr + verdict.read_text()
     assert "stub-private-token" not in result.stdout + result.stderr + verdict.read_text()
+
+
+def test_served_contract_version_must_equal_the_candidates_contract_version(
+    tmp_path: Path, version_server
+) -> None:
+    """The version the fixture serves is derived, so this is the one place a mismatch is staged."""
+    origin, state = version_server
+    state["contract_version"] = _candidate_contract_version() + "-stale"
+    journey = tmp_path / "journey.json"
+    refusals = tmp_path / "refusals.json"
+    verdict = tmp_path / "verdict.json"
+    journey.write_text(json.dumps(_journey()), encoding="utf-8")
+    refusals.write_text(json.dumps(_refusals()), encoding="utf-8")
+    result = run(
+        "node", str(VERIFY),
+        "--journey", str(journey), "--refusals", str(refusals),
+        "--out", str(verdict),
+        "--candidate-sha", "a" * 40, "--deployed-sha", "a" * 40,
+        "--origin", origin, "--candidate-build-id", compute_build_id(),
+        "--journey-exit", "0", "--refusals-exit", "0",
+        env={**os.environ, **REVIEWER_ENV},
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    evidence = json.loads(verdict.read_text())
+    assert evidence["phases"]["apiBuild"]["outcome"] == "FAIL"
+    assert evidence["phases"]["apiBuild"]["contractVersion"] == state["contract_version"]
+    assert evidence["verdict"] == "FAIL"
+    assert "served contract version differs from candidate" in evidence["findings"]
 
 
 @pytest.mark.parametrize(
