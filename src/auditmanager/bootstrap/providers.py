@@ -7,7 +7,9 @@ between them is assembled here and nowhere else:
   adapter is built once at start-up from ``PROXY_LLM_*`` or ``ANTHROPIC_API_KEY``, exactly as
   before, and every run uses it. Two things are new: ``R-133`` is enforced (the stage holds the
   reply to the configured model, so the stand needs an explicit ``PROXY_LLM_MODEL``), and a run
-  that froze a connection revision is refused rather than served by the wrong source;
+  that froze a connection revision is refused rather than served by the wrong source. One more
+  (`PROD-11C`, `D-225` piece 2): a *recorded* adapter may carry a second binding, handed to the
+  AR v3 beta Runs only, that says the replayed call charges nothing (see the class);
 * :class:`DatabaseProviders` -- ``database``. ``freeze`` resolves the ``text_analysis`` route at
   run start; ``resolve`` builds, per Attempt, the adapter of the revision the run froze, opening
   that connection's current key with the worker's private ring.
@@ -23,7 +25,11 @@ from typing import Any, Final
 from sqlalchemy import Connection
 from sqlalchemy.orm import Session, sessionmaker
 
-from auditmanager.analysis.public import input_budget_characters
+from auditmanager.analysis.public import (
+    AR_V3_BETA_BUNDLE_ID,
+    AR_V3_BETA_PROFILE_ID,
+    input_budget_characters,
+)
 from auditmanager.analysis.text import CallBinding, ModelRequest, ModelResponse, ProviderMode
 from auditmanager.executors.public import SecretUnreadableError
 from auditmanager.executors.runtime import (
@@ -79,9 +85,45 @@ class ProviderSource:
         raise NotImplementedError
 
 
+def _is_ar_v3_beta_run(run: Any) -> bool:
+    """The exact sealed pair the executor routes to the v3 review chain (`v3_exact`), nothing looser."""
+    return (
+        getattr(run, "analysis_profile_id", None) == str(AR_V3_BETA_PROFILE_ID)
+        and getattr(run, "prompt_bundle_id", None) == str(AR_V3_BETA_BUNDLE_ID)
+    )
+
+
 class EnvironmentProviders(ProviderSource):
-    def __init__(self, adapter: Any, config: Any, call: CallBinding | None = None) -> None:
+    """Every run uses the one adapter built at start-up.
+
+    ``ar_v3_replay_call`` (`PROD-11C`, `D-225` piece 2) is the call binding of a **recorded replay**
+    that costs nothing. The AR v3 worker refuses, after the provider call, a call whose cost is not
+    a measured or estimated amount or an explicit ``unmetered`` (`AR-V3-BETA-COST-REFUSAL-01`), and
+    a replayed reply carries no cost; without the mark no recorded v3 Run could publish. It is
+    handed to the AR v3 beta Runs **only**, never to a v1 Run (whose recorded calls keep the pin
+    estimate they have always had), and it is accepted only together with a recorded adapter: a live
+    or proxied adapter with it is refused here, at construction, so no live call can reach the cost
+    check marked as costing nothing through this source. The `database` source's ``not_metered``
+    connections are a different, declared route and are untouched.
+    """
+
+    def __init__(
+        self, adapter: Any, config: Any, call: CallBinding | None = None, *,
+        ar_v3_replay_call: CallBinding | None = None,
+    ) -> None:
+        if ar_v3_replay_call is not None:
+            if getattr(adapter, "provider_mode", None) is not ProviderMode.RECORDED:
+                raise ValueError(
+                    "a call binding that charges nothing is for a recorded adapter only; "
+                    "a live or proxied call must report its own cost"
+                )
+            if not ar_v3_replay_call.unmetered:
+                raise ValueError("the AR v3 replay call binding must be explicitly unmetered")
         self._binding = ProviderBinding(adapter=adapter, config=config, call=call)
+        self._ar_v3_replay = (
+            None if ar_v3_replay_call is None
+            else ProviderBinding(adapter=adapter, config=config, call=ar_v3_replay_call)
+        )
         self.freeze = None
 
     def resolve(self, session: Session, run: Any, context: Any) -> ProviderBinding:
@@ -90,6 +132,8 @@ class EnvironmentProviders(ProviderSource):
             # `environment` one. Using its adapter would record a call against a revision that
             # did not serve it, and a silent switch is what the plan forbids.
             raise route_missing()
+        if self._ar_v3_replay is not None and _is_ar_v3_beta_run(run):
+            return self._ar_v3_replay
         return self._binding
 
 

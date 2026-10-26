@@ -560,6 +560,16 @@ def _build_provider(
     else:
         adapter = RecordedAdapter()
         call = None
+        # `PROD-11C` (`D-225` piece 2): a replayed reply costs nothing and carries no amount, so the
+        # AR v3 worker's cost check (`a metered AR v3 call has no verifiable cost amount`) refused
+        # every recorded v3 Run after its provider call. The AR v3 beta Runs of a *recorded* process
+        # are told the replay is unmetered; the live and proxy branches above build no such binding,
+        # and `EnvironmentProviders` refuses one for a non-recorded adapter.
+        replay = CallBinding(unmetered=True)
+        return (
+            adapter, config, identity[0], identity[1],
+            EnvironmentProviders(adapter, config, call, ar_v3_replay_call=replay),
+        )
     return (
         adapter, config, identity[0], identity[1],
         EnvironmentProviders(adapter, config, call),
