@@ -359,8 +359,10 @@ describe('every number the dashboard renders is the fixture, and nothing else is
  * and confirmed red, then reverted (the table is in `docs/program/WEB-SECTION-COPY-01.md`):
  *
  *   1. the old paragraph restored in `sections-panel.tsx` — caught by the first two cases;
- *   2. a figure written into the new paragraph («из 15 разделов») — caught by the case that
- *      forbids a digit in the sentence, and by `renders exactly the fixture's numbers`;
+ *   2. a figure written into the new paragraph («Всего разделов: 99.») — caught by the case
+ *      that forbids a digit in the sentence, and by `renders exactly the fixture's numbers`.
+ *      The local case exists because the global one is blind to a figure that happens to be a
+ *      fixture count: with «15» in the sentence only the local case goes red;
  *   3. `data-analysed-by` put back to the removed `data-analysed` — caught by the last case;
  *   4. the `<p>` deleted — caught by the first case.
  */
