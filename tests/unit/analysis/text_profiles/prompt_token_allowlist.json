@@ -59,6 +59,28 @@
       "token": "ГПЗУ",
       "reason": "Abbreviation of the urban-planning plan of a land plot, in the placeholder bullet and in the near-miss pair added by the lane. None of the five pinned files holds it; the lane report disclosed it among the vocabulary already in the draft prompt that the source lacks (assumption 5).",
       "disclosed_by": "SECTION-PS-FULL-01.md"
+    },
+    {
+      "section": "ITP",
+      "token": "1,163",
+      "reason": "Factor of the ITP unit rule «1 Гкал/ч = 1,163 МВт = 1163 кВт»: megawatts per gigacalorie per hour. A definition of units, not a norm. None of the five pinned ITP files holds a conversion factor or the units Гкал/ч and МВт; the lane report SECTION-WIDEN-G3-01 discloses it (rule 4 of the wave brief).",
+      "disclosed_by": "SECTION-WIDEN-G3-01.md",
+      "class": "a",
+      "justification": "It is the unit-conversion definition that rule 4 of PRODUCTION-WAVE-PW4 section 6 allows and the integrator's decision (c) confirms, not a norm, a threshold or a class designation; it stands only in the one rule that converts a heat load written in two of the three units, and the same rule forbids converting anything else."
+    },
+    {
+      "section": "ITP",
+      "token": "1163",
+      "reason": "Factor of the ITP unit rule «1 Гкал/ч = 1,163 МВт = 1163 кВт»: kilowatts per gigacalorie per hour. A definition of units, not a norm. None of the five pinned ITP files holds a conversion factor; the pinned project_params.md writes loads in kW only. The lane report SECTION-WIDEN-G3-01 discloses it (rule 4 of the wave brief).",
+      "disclosed_by": "SECTION-WIDEN-G3-01.md",
+      "class": "a",
+      "justification": "It is the unit-conversion definition that rule 4 of PRODUCTION-WAVE-PW4 section 6 allows and the integrator's decision (c) confirms, not a norm, a threshold or a class designation; it stands only in the one rule that converts a heat load written in two of the three units, and the same rule forbids converting anything else."
+    },
+    {
+      "section": "ITP",
+      "token": "МВт",
+      "reason": "Abbreviation of the megawatt in the ITP unit rule (Гкал/ч, кВт, МВт). The five pinned files hold кВт but not МВт; the lane report SECTION-WIDEN-G3-01 discloses it as one of the three units the rule converts between (rule 4 of the wave brief).",
+      "disclosed_by": "SECTION-WIDEN-G3-01.md"
     }
   ]
 }
