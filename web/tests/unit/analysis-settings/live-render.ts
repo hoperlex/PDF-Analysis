@@ -52,6 +52,14 @@ class FakeNode {
     const siblings = this.parentNode?.childNodes ?? [];
     return siblings[siblings.indexOf(this) + 1] ?? null;
   }
+  /**
+   * A `<select>`'s options. React reads `.options.length` when it sets a select's value, and the
+   * start-run control now draws one («Исполнитель», `EXEC-PAR-WEB-01`). Direct `<option>` children
+   * only, which is every select this application draws.
+   */
+  get options(): FakeNode[] {
+    return this.childNodes.filter((child) => child.nodeName === 'option');
+  }
   get nodeValue(): string {
     return this.text;
   }

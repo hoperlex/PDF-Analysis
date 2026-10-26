@@ -151,12 +151,12 @@ def test_authored_shape_and_form() -> None:
     # pack-gated six-check start and its group review, and three interface repairs; it
     # claims no verified citation, installed pack or numerical conclusion.
     assert {entry["version"]: entry["revision"] for _, entry in entries} == {
-        "0.8.1": 1, "0.8.0": 1, "0.7.0": 2, "0.6.0": 2, "0.5.1": 1, "0.5.0": 1,
+        "0.8.2": 1, "0.8.1": 1, "0.8.0": 1, "0.7.0": 2, "0.6.0": 2, "0.5.1": 1, "0.5.0": 1,
         "0.4.0": 1, "0.3.0": 2, "0.2.0": 2,
     }
     assert form_failures(entries, version=(ROOT / "VERSION").read_text().strip(), terms=_dictionary()) == set()
     assert [entry["version"] for _, entry in entries] == [
-        "0.8.1", "0.8.0", "0.7.0", "0.6.0", "0.5.1", "0.5.0", "0.4.0", "0.3.0", "0.2.0",
+        "0.8.2", "0.8.1", "0.8.0", "0.7.0", "0.6.0", "0.5.1", "0.5.0", "0.4.0", "0.3.0", "0.2.0",
     ]
     archive = entries[-1][1]
     assert archive["is_archive"] is True

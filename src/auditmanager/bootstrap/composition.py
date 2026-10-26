@@ -13,7 +13,7 @@ takes six protocols and constructs none of them, and this is the other half of t
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
@@ -167,8 +167,12 @@ def build_worker_runtime(
     from auditmanager.shared.db.config import DatabaseSettings, parse_database_url
     from auditmanager.storage import S3BlobStore, S3StorageSettings
 
+    # `EXEC-PAR-QUEUE-01`: every slot may hold a claim, a heartbeat and a final transaction at
+    # once on top of the service's own threads, so the pool grows by two connections per slot
+    # beyond the first. One slot keeps the pool exactly as it was (5 + 5 overflow).
+    database = DatabaseSettings(url=parse_database_url(resolved.database_url))
     engine = create_database_engine(
-        DatabaseSettings(url=parse_database_url(resolved.database_url))
+        replace(database, pool_size=database.pool_size + 2 * (resolved.worker_slots - 1))
     )
     sessions = create_session_factory(engine)
     try:
@@ -221,8 +225,10 @@ def build_worker_runtime(
         session_factory=sessions,
         execute=execute,
         version=version,
-        # `RUN_CONCURRENCY`: one run at a time, per `PROTOTYPE_PROFILE.md` section 2.
-        slots=1,
+        # `EXEC-PAR-QUEUE-01`: `AUDITMANAGER_WORKER_SLOTS`, validated once by `settings.load`
+        # (a whole number in 1..16; anything else refused the start). Unset is one run at a time,
+        # per `PROTOTYPE_PROFILE.md` section 2, which is today's behaviour and the rollback.
+        slots=resolved.worker_slots,
         state_dir=None if resolved.worker_state_dir is None else Path(resolved.worker_state_dir),
         probe_runner=probe_runner,
     )

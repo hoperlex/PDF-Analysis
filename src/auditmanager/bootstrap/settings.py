@@ -78,6 +78,14 @@ EXECUTION_ROLES: Final[frozenset[str]] = frozenset({"all", "api", "worker"})
 #: it writes nothing and the container health check has nothing to read.
 WORKER_STATE_DIR_ENV: Final[str] = "AUDITMANAGER_WORKER_STATE_DIR"
 
+#: `EXEC-PAR-QUEUE-01` (`EXEC-PAR-DECISION-01`, owner poll 2026-10-26). How many runs one worker
+#: process executes at once. Unset is :data:`DEFAULT_WORKER_SLOTS`, which is the
+#: behaviour before this setting existed and the rollback; anything else must be a whole number in
+#: ``1 .. MAX_WORKER_SLOTS`` or the process refuses to start. Read by the worker service only.
+WORKER_SLOTS_ENV: Final[str] = "AUDITMANAGER_WORKER_SLOTS"
+DEFAULT_WORKER_SLOTS: Final[int] = 1
+MAX_WORKER_SLOTS: Final[int] = 16
+
 #: `W55A-SEARCH-01` (`W55-PLAN.md` section A3.4, owner ruling R-112). The
 #: ``statement_timeout`` every ``searchNorms`` query runs under, in milliseconds; a cancelled
 #: search answers ``validation_failed`` (``norms_search_too_broad``). Read from the process
@@ -153,6 +161,8 @@ class AppSettings:
     execution_role: str = "all"
     #: :data:`WORKER_STATE_DIR_ENV`; read by the worker service only.
     worker_state_dir: str | None = None
+    #: :data:`WORKER_SLOTS_ENV`, validated; read by the worker service only.
+    worker_slots: int = DEFAULT_WORKER_SLOTS
     #: :data:`NORMS_SEARCH_TIMEOUT_ENV`, validated; milliseconds.
     norms_search_timeout_ms: int = DEFAULT_NORMS_SEARCH_TIMEOUT_MS
     #: `EXEC-SEAL-01`. The ring the ``api`` seals executor secrets to (public keys only), or
@@ -252,6 +262,27 @@ def _norms_search_timeout_ms(environ: dict[str, str]) -> int:
         raise ConfigurationError(
             f"{NORMS_SEARCH_TIMEOUT_ENV} is {value}; it must be between 1 and "
             f"{MAX_NORMS_SEARCH_TIMEOUT_MS} milliseconds"
+        )
+    return value
+
+
+def _worker_slots(environ: dict[str, str]) -> int:
+    """:data:`WORKER_SLOTS_ENV`: unset is the default; anything else, **blank included**, must be
+    a whole number in ``1 .. MAX_WORKER_SLOTS``, written plainly (no sign, no leading zero, no
+    separator). A value that does not parse refuses the start: a slot count that silently
+    fell back to one would be a concurrency nobody chose, and one clamped into range would be
+    a concurrency nobody asked for."""
+    if WORKER_SLOTS_ENV not in environ:
+        return DEFAULT_WORKER_SLOTS
+    raw = environ[WORKER_SLOTS_ENV].strip()
+    if not raw.isascii() or not raw.isdecimal() or raw != str(int(raw)):
+        raise ConfigurationError(
+            f"{WORKER_SLOTS_ENV} is {raw!r}; it is a whole number of runs, written plainly"
+        )
+    value = int(raw)
+    if not 1 <= value <= MAX_WORKER_SLOTS:
+        raise ConfigurationError(
+            f"{WORKER_SLOTS_ENV} is {value}; it must be between 1 and {MAX_WORKER_SLOTS}"
         )
     return value
 
@@ -397,6 +428,7 @@ def load(environ: dict[str, str] | None = None) -> AppSettings:
         api_token=_api_token(role, env),
         execution_role=role,
         worker_state_dir=env.get(WORKER_STATE_DIR_ENV, "").strip() or None,
+        worker_slots=_worker_slots(env),
         norms_search_timeout_ms=_norms_search_timeout_ms(env),
         proxy_base_url=proxy_base_url,
         proxy_token=proxy_token,

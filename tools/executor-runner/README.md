@@ -14,6 +14,7 @@ case where the stand connects out.
 | `agent.py`, `agent.example.toml`, `pdf-analysis-agent.service` | Unattended agent (command or local OpenAI-compatible model) and its systemd unit. |
 | `ssh-forced-command.sh` | Remote side of the `claude_code_headless` SSH profile. |
 | `codex_answer.py`, `agent.codex-ssh.example.toml` | Codex CLI answer command and pull-agent example over an outbound SSH forward. |
+| `claude_answer.py`, `agent.claude-ssh.example.toml` | Claude Code CLI (`claude-opus-5` by default, or `claude-sonnet-5` with `--model`) on the owner's subscription: the pull agent's answer command (section E) and, with `--ssh-envelope`, the forced command of a stand-initiated SSH connection (section F). |
 
 Python: the bridge and the client need 3.9+, `agent.py` needs 3.11+ (`tomllib`); written for
 those and tested on 3.12 only. No dependency is installed. Tests:
@@ -235,6 +236,115 @@ Messages image block. SSH command and SSH tunnel connections are still unserved.
 The W56b image
 stage will produce these tasks after its prompt and evidence policy is approved;
 the current «Анализ текста» route does not send images.
+
+## E. Claude Opus subscription from this machine, through an outbound SSH forward
+
+Use this when the stand cannot reach this machine by SSH (the same shape as section D, with
+Claude Code in place of Codex). The machine opens one SSH connection **to** the stand and
+forwards a local loopback port to the stand's loopback-only proxy. `agent.py` pulls its tasks
+through that forward; `claude_answer.py` answers each one with this machine's Claude Code CLI
+under the owner's own subscription login (`R-143f`). The executor kind is `pull` with client
+`agent`, not `ssh_command`; the API-key profile of section C is the separate, stand-initiated
+route.
+
+1. On this machine, run `claude` once under the dedicated runner account and sign in with the
+   subscription (`/login`). Prefer a profile of its own: `export CLAUDE_CONFIG_DIR=$HOME/.claude-runner`
+   before that first run and in the agent's environment, so the runner's login and settings are not
+   the development account's. `claude auth status` must name the subscription, not an API key.
+   The command serves `claude-opus-5` unless it is started with `--model claude-sonnet-5` (the two pins of `R-143g`;
+   no other value is accepted). The stand's revision must name that exact model; add `--model claude-sonnet-5` to
+   `argv` for Sonnet.
+   The `--bare` mode of the CLI is deliberately not used: it reads only an API key, never the login.
+2. On the stand, create a `pull` connection with client `agent`, model/pin `claude-opus-5`, billing
+   `not_metered`, answer deadline at least 600 seconds and one claimed task. Issue a runner token.
+   Do not route the connection until the agent is running and a probe returns `ok`.
+3. Give the runner account an SSH key allowed to forward only to the stand's loopback proxy, pin the
+   stand's host key in the local `known_hosts`, and open the forward exactly as in section D step 3
+   (`restrict,port-forwarding,permitopen="127.0.0.1:<ALPHA_HTTP_PORT>"`; never disable host-key checking).
+4. Copy `agent.claude-ssh.example.toml` outside this repository, set the absolute `claude_answer.py`
+   path, the absolute path of the `claude` binary (`--claude`, needed when it is not on the agent's
+   `PATH`) and the local port, then start `agent.py` in a second terminal under the same account.
+   Supply the token only in `PDF_ANALYSIS_RUNNER_TOKEN` (as in section B).
+5. In «Исполнители → Подключения», press «Проверить». An `ok` probe proves the forward, the token, the
+   local CLI and a schema-shaped answer. Then route «Анализ текста» and run one test-data analysis.
+   Revoking the token or removing the route stops new work.
+
+The adapter sends the task through stdin (the task text is never on the command line) to
+`claude -p --output-format json --model <the served model> --tools "" --strict-mcp-config
+--no-session-persistence --disable-slash-commands --setting-sources "" --json-schema <schema>`, in a
+private temporary directory outside any repository, with an environment reduced to `HOME`, `PATH`,
+locale, `CLAUDE_CONFIG_DIR`, proxy and certificate variables plus three switches that keep `CLAUDE.md`
+files, auto-memory and non-essential traffic out. An inherited `ANTHROPIC_API_KEY`,
+`ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN` and the runner token never reach the CLI.
+
+It accepts the result only when the CLI reports a successful, tool-free turn whose `modelUsage` names
+the served model (`claude-opus-5` or, with `--model`, `claude-sonnet-5`) and nothing else; a different or additional model, a denied tool, a failed or
+unfinished turn, or a missing or non-object `structured_output` fails the task with a fixed reason.
+That report is the CLI's own, so this route is stronger than section D, but the pull protocol still
+records the model as **declared** (`identity_basis: declared`): the stand has no way to check it. The
+connection is `not_metered`; the app does not turn subscription usage into a dollar amount, and the
+account's availability and limits are the subscription's, so a real probe is required before routing.
+Image tasks are refused (`image_input_unsupported`): the CLI runs with no tool and cannot open a file.
+
+## F. Claude Opus subscription, the stand starts the session over SSH
+
+Use this when the stand can reach this machine's sshd (the owner's answer of 2026-10-26: the
+production stand connects by SSH and raises the session itself). It is the `ssh_command` kind of
+`EXEC-SSH-01`, with `claude_answer.py --ssh-envelope` as the forced command, authenticated by the
+owner's **subscription login** instead of the API key of section C. That is an owner decision
+that changes `R-143f` for this route (`headless SSH keeps an API key`): it rests on `R-143f`'s
+premise that no commercial use is foreseen. If the product is ever offered to others, return this
+connection to the API-key profile of section C.
+
+1. On this machine, create a dedicated low-privilege account (for example `pdfa`) and install Claude
+   Code for it. Sign in as that account with `claude` and `/login` (the subscription, not an API key;
+   `claude auth status` must say so). Do not reuse a development account's login. Nothing in the
+   account's environment may set `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` or
+   `CLAUDE_CODE_OAUTH_TOKEN`; the adapter drops them anyway.
+2. Install the command where the account cannot edit it:
+   `sudo install -d -m 0755 /opt/pdf-analysis && sudo install -m 0755 claude_answer.py /opt/pdf-analysis/`
+   (a copy from this repository; re-install after every change to it).
+3. On the stand, in «Исполнители → Подключения», create an `ssh_command` connection: this machine's
+   public name, port 22, user `pdfa`, profile `custom_command` (the `claude_code_headless` profile is
+   the API-key one), model/pin `claude-opus-5`, billing `not_metered`, timeout 840 seconds or less (the command stops its own CLI at 840 seconds,
+   below the stand's 900-second Attempt limit).
+   Generate the key: the application shows the public half and the line
+   `restrict ssh-ed25519 AAAA… auditmanager:<connection id>`.
+4. Put that line in `~pdfa/.ssh/authorized_keys` with the forced command added to its options:
+
+   ```text
+   restrict,command="/usr/bin/python3 /opt/pdf-analysis/claude_answer.py --ssh-envelope --claude /home/pdfa/.local/bin/claude" ssh-ed25519 AAAA… auditmanager:<connection id>
+   ```
+
+   `restrict` switches off forwarding, agent, X11 and the terminal; `command=` makes sshd run only this,
+   whatever the client asks for. Replace the `claude` path with `command -v claude` of that account
+   (sshd gives the command a minimal `PATH`, so the path is absolute). `~pdfa/.ssh` and the file must
+   be owned by `pdfa` and not writable by others.
+
+   **Sonnet** is a second connection, not a setting of the first: one command line serves one model. Create
+   another `ssh_command` connection with model/pin `claude-sonnet-5` (its own key, its own line) and put
+   `--model claude-sonnet-5` before `--claude`:
+
+   ```text
+   restrict,command="/usr/bin/python3 /opt/pdf-analysis/claude_answer.py --ssh-envelope --model claude-sonnet-5 --claude /home/pdfa/.local/bin/claude" ssh-ed25519 AAAA… auditmanager:<id of the Sonnet connection>
+   ```
+
+   Both lines may sit in the same account's `authorized_keys`. They share that account's subscription and its limits.
+5. Press «Проверить». On first contact the stand shows the host key fingerprint instead of calling:
+   compare it with `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on this machine, confirm it, and
+   press «Проверить» again. An `ok` probe proves reachability, the pinned host key, the forced command,
+   the login and the reported model. Then route «Анализ текста» and run one test-data analysis.
+   Removing the line from `authorized_keys`, or the route, stops use at once.
+
+The stand sends one task JSON on stdin and reads one JSON line on stdout:
+`{"model","output_text","stop_reason","input_tokens","output_tokens","reported_cost_usd"}`. The same
+CLI boundary as section E applies (no tool, no MCP server, no `CLAUDE.md`, task text never on the
+command line, environment allow-list), and the same acceptance rule: the CLI's own `modelUsage` must
+name `claude-opus-5` and nothing else, so the stand records the model as **reported**. With a schema
+in the task the answer is the structured object; the probe sends none and gets plain text.
+`reported_cost_usd` is always `null`: the CLI prints a list-price estimate for a subscription run, and
+the connection is `not_metered`. A task with an image is refused (`image_input_unsupported`); the
+stage that sends crops is not active.
 
 ## Known limits of the Claude profiles
 

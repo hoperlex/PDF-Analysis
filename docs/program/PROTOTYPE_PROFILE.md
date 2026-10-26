@@ -33,6 +33,11 @@ not a reduced claim of production readiness.
   direction, but framework architecture is implemented only where the journey needs it.
 - One local execution process is sufficient. Run and stage state are persisted before
   execution, but distributed-worker semantics are deferred.
+- That process executes one run at a time unless `AUDITMANAGER_WORKER_SLOTS` says otherwise (a
+  whole number from 1 to 16; unset is 1, which is also the rollback; anything else refuses the
+  start). With more than one slot, a run frozen to an executor connection waits in the queue while
+  that connection has another active run, and the next queued run for a free connection runs
+  instead: one connection, at most one active run (`EXEC-PAR-QUEUE-01`, `EXEC-PAR-DECISION-01`).
 - Automated tests use a recorded provider response. A live provider or an isolated
   characterized legacy adapter supplies the real demonstration path.
 - No customer or production payload is committed to Git.

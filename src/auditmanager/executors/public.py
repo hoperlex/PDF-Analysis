@@ -53,7 +53,9 @@ from auditmanager.executors.pull import (
 )
 from auditmanager.executors.queries import (
     ConnectionDetail,
+    RunExecutor,
     connection_detail,
+    executor_of_revision,
     list_connection_summaries,
     list_routes,
     resolve_route,
@@ -113,6 +115,7 @@ __all__ = [
     "RevisionRecord",
     "RevisionSettings",
     "RouteRecord",
+    "RunExecutor",
     "RunnerPrincipal",
     "RunnerTokenRecord",
     "SealingConfigurationError",
@@ -129,6 +132,7 @@ __all__ = [
     "create_connection",
     "current_revision",
     "destination_for",
+    "executor_of_revision",
     "extend_claim",
     "fail_task",
     "generate_ssh_key",

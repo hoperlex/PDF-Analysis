@@ -339,6 +339,8 @@ def test_the_run_status_view_carries_the_pin(monkeypatch, pinned) -> None:
         analysis_profile_id=PROFILE, prompt_bundle_id=BUNDLE, degradation_set=(),
         terminal_reason=None, terminal_detail=None, interrupted_reason=None,
         terminal_at=None, reaudit_of_run_id=None, norms_snapshot_id=pinned,
+        # `RunRow` always has the field (`EXEC-PAR-START-01` reads it for the status's executor).
+        connection_revision_id=None,
     )
 
     class _Repository:
