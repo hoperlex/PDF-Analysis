@@ -21,12 +21,14 @@ flag did anything.
 
 **What this does not cover, measured on the lane's PostgreSQL (``docs/program/HARDEN-01.md``).**
 ``hide_parameters`` removes SQLAlchemy's ``[parameters: ...]``. The *server's own* message still
-travels in the exception string: a CHECK refusal prints ``DETAIL:  Failing row contains (k2,
+travelled in the exception string: a CHECK refusal printed ``DETAIL:  Failing row contains (k2,
 forbidden).`` and a unique refusal ``DETAIL:  Key (a)=(k1) already exists.``, so a value that is
-a column of the refused row (``D-225``'s model output in a ``stage_result`` insert) can still reach
-a log line that prints ``str(exc)``. This test does not assert that away and must not be read as
-if it did; the follow-up is named in the report (``connect`` hook setting libpq's error verbosity,
-or scrubbing at the two ``_log.exception`` sinks).
+a column of the refused row (``D-225``'s model output in a ``stage_result`` insert) could still reach
+a log line that prints ``str(exc)``. This test never asserted that away, and it cannot: SQLite has
+no such message. The other half is closed by a ``connect`` hook that sets libpq's error verbosity
+to terse (``SEC-DB-TERSE-ERRORS-01``) and is measured on PostgreSQL in
+``tests/integration/db/test_database_errors_are_terse.py``; the hook's guards are in
+``test_engine_terse_hook.py``.
 """
 
 from __future__ import annotations
