@@ -32,7 +32,7 @@ the accepted-risk register `A-1`…`A-5`, the open decisions and what the plan d
 
 `R-146` is the only source of owner decisions in the pack. Everything labelled `AD-nn` in the ADRs is the architect's choice within it. After the second poll round (`R-146o`…`R-146v`):
 
-**Confirmed (the ADR status lines say "confirmed by `R-146x`")**
+**Confirmed (the ADR status lines say "confirmed by" and the ruling id)**
 
 | Id | Ruling | What it settled |
 | --- | --- | --- |
@@ -123,9 +123,9 @@ All run on the committed tree of branch `agent/production-adr-pack-01` (venv: th
 
 ## Round 2 — the independent judge's findings and the owner's second poll round
 
-Every finding was re-opened in the tree first. `fixed in` names the document and section; `refuted` and `corrected` give the evidence. Premises re-captured this round: `reset.sh:236-243` (the `restore-complete` guard needs `database.dump`, `objects.attrs` and `objects`),
-`copy-serve.sh:631` and `:932` (`pg_dump` and `pg_restore` with `--no-owner --no-privileges`, the schema dropped and recreated), `purge-product-data.sh:230-238` (`api_python` runs `product_purge` on the api service's `DATABASE_URL`), `storage/README.md` "Identity and idempotency" and `blob_repository.py` `record_declared`,
-`tests/unit/analysis/text_profiles/test_text_profile_packages.py:173-174` and `:197`, `ar_v2/registered.py`, `prompt_material.py`, `content.py` and the five `ar_v3` importers, `ar_v3/response_schema.py`, `prompt_material.py` and `runs/v3_review_artifact.py`, `src/auditmanager/access/accounts.py` (`reset_password`).
+Every finding was re-opened in the tree first. `fixed in` names the document and section; `refuted` and `corrected` give the evidence. Premises re-captured this round: `infra/deploy/reset.sh:236-243` (the `restore-complete` guard needs `database.dump`, `objects.attrs` and `objects`),
+`infra/deploy/copy-serve.sh:631` and `:932` (`pg_dump` and `pg_restore` with `--no-owner --no-privileges`, the schema dropped and recreated), `infra/deploy/purge-product-data.sh:230-238` (`api_python` runs `product_purge` on the api service's `DATABASE_URL`), `src/auditmanager/storage/README.md` "Identity and idempotency" and `src/auditmanager/storage/blob_repository.py` `record_declared`,
+`tests/unit/analysis/text_profiles/test_text_profile_packages.py:173-174` and `:197`, `src/auditmanager/analysis/profiles/ar_v2/registered.py`, `src/auditmanager/analysis/profiles/ar_v2/prompt_material.py`, `src/auditmanager/analysis/profiles/ar_v2/content.py` and the five `ar_v3` importers, `src/auditmanager/analysis/profiles/ar_v3/response_schema.py`, `src/auditmanager/analysis/profiles/ar_v3/prompt_material.py` and `src/auditmanager/runs/v3_review_artifact.py`, `src/auditmanager/access/accounts.py` (`reset_password`).
 
 | # | Verdict | Where |
 | --- | --- | --- |
@@ -136,7 +136,7 @@ Every finding was re-opened in the tree first. `fixed in` names the document and
 | 5 (MED, re-upload after erase) | fixed, under `AD-07` | `ADR-0022` section 3: the `blob` row is deleted (a derived identity would meet a terminal `erased` row), a manifest keeps the hashes, a re-upload test is in `PROD-07` |
 | 6 (MED, `PROD-14.0` files) | fixed | plan `PROD-14.0`: `test_text_profile_packages.py` lines 173-174 and 197 added, version included, one expectations file with one line per section |
 | 7 (MED, import closure) | fixed, with a correction | `ADR-0024` section 2, `PROD-10`: the closure of `registered.py` as it stands is six modules plus six data files (the judge is right); splitting it (v3 uses only two constants) reduces what moves to three modules, six data files and two constants. Also the string search under-counts (`recorded_saved_plan.py`, `merge_publication_plan.py`, `finding_merge.py`) |
-| 8 (MED, capacity) | fixed; path corrected | `ADR-0024` section 5, `ADR-0021` section 4, new `AD-18` and `PROD-20`. The watchdog is `src/auditmanager/jobs/lease.py:21` (the judge wrote `runs/lease.py`; the finding stands). The "better part of an hour" sentence was wrong |
+| 8 (MED, capacity) | fixed; path corrected | `ADR-0024` section 5, `ADR-0021` section 4, new `AD-18` and `PROD-20`. The watchdog is `src/auditmanager/jobs/lease.py:21` (the judge wrote runs/lease.py; the finding stands). The "better part of an hour" sentence was wrong |
 | 9 (LOW, v3 and the old categories) | fixed | `ADR-0024` section 1 and the context: v3 is asked for all seven non-normative categories and its review artifact drops them; the user-visible claim holds; proposed debt row `PROD-D1` |
 | 10 (LOW, "no copy off the host") | fixed | `ADR-0021` sections 9 and 10, plan `A-1`/`A-4`: three copies leave the host and none is a maintained backup; the latest pre-migration copy fetched for the `R-93` restore test is the exception to `A-1` |
 | 11 (LOW) | fixed | the "single point of failure the owner asked to remove" clause is gone; `ADR-0021` section 8 reconciles `ADR-0015` with `R-146k`; the four index rows carry "mechanisms are unconfirmed AD-s" |
@@ -199,4 +199,4 @@ For the integrator to enter (ids to be assigned; the register's own rule is that
 | **PROD-20** | an attempt is failed at 900 s, a large real document can exhaust its attempts (`D-171`, `D-175`) | the owner's measurement and decision, then a Sonnet lane; check: `python3 -I -c "import re;print(re.search(r'ATTEMPT_WATCHDOG_SECONDS = (\d+)',open('src/auditmanager/jobs/lease.py').read()).group(1))"` prints the decided value, or an input above the page limit is refused with `analysis_input_budget_exceeded` (test) |
 | **PROD-21** | the live certificate expires on 2026-12-30 and its renewal is not in the tree (`D-191`) | the owner, before 2026-12-16; check: `echo \| openssl s_client -connect <name>:443 -servername <name> 2>/dev/null \| openssl x509 -noout -checkend 1209600` exits 0 |
 | **PROD-22** | the frozen domain-contract sentence "never deletes decision, finding or audit history" contradicts the erase exception (`R-146o`) | the contract owner's slot; check: the sentence in `contracts/domain/v1/state-machines.json` names the exception and `pytest -q tests/contract` stays green |
-| **PROD-D1** | the v3 prompt and schema solicit seven non-normative categories that the review artifact drops, so the model's output for them is paid for and never shown (`ar_v3/response_schema.py`, `ar_v3/prompt_material.py`, `runs/v3_review_artifact.py`) | a later prompt decision (not an item of this plan); check: `grep -n "internal_contradiction" src/auditmanager/analysis/profiles/ar_v3/response_schema.py` stays a hit until the prompt changes |
+| **PROD-D1** | the v3 prompt and schema solicit seven non-normative categories that the review artifact drops, so the model's output for them is paid for and never shown (`src/auditmanager/analysis/profiles/ar_v3/response_schema.py`, `src/auditmanager/analysis/profiles/ar_v3/prompt_material.py`, `src/auditmanager/runs/v3_review_artifact.py`) | a later prompt decision (not an item of this plan); check (documentation check only): `grep -n "internal_contradiction" src/auditmanager/analysis/profiles/ar_v3/response_schema.py` stays a hit until the prompt changes |

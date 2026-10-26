@@ -32,7 +32,7 @@ mechanically against the tree.
 
 ## Captured premise evidence
 
-- premise: the surface and version figures, the 14 rulings, and six facts the design depends on (no dump in `deploy.sh`, no `access.check` call in the deploy scripts, v3 importing v2, an unread `allow_client_documents`, exact model comparison, no access audit writer)
+- premise: the surface and version figures, the 22 rulings, and the facts the design depends on (no dump in `deploy.sh`, no `access.check` call in the deploy scripts, v3 importing v2, an unread `allow_client_documents`, exact model comparison, no access audit writer, the copy record as receipt, the two restore formats, the must-change flag, the 900-second watchdog)
 
 ### P-01 — the surface, the version and the contract version
 
@@ -54,15 +54,15 @@ mechanically against the tree.
   ```
 - interpretation: the head is `0032_ar_v3_run_group`; the pack proposes the next revision (`0033`) and writes none.
 
-### P-03 — the fourteen rulings the pack quotes
+### P-03 — the twenty-two rulings the pack quotes
 
 - captured_at: 2026-10-26
-- command: `grep -o '^| .R-146[a-n]' docs/program/OWNER_RULINGS_2026-09-17.md | grep -o 'R-146[a-n]' | tr '\n' ' '`
+- command: `grep -o '^| .R-146[a-v]' docs/program/OWNER_RULINGS_2026-09-17.md | grep -o 'R-146[a-v]' | tr '\n' ' '`
 - captured_output:
   ```text
-  R-146a R-146b R-146c R-146d R-146e R-146f R-146g R-146h R-146i R-146j R-146k R-146l R-146m R-146n
+  R-146a R-146b R-146c R-146d R-146e R-146f R-146g R-146h R-146i R-146j R-146k R-146l R-146m R-146n R-146o R-146p R-146q R-146r R-146s R-146t R-146u R-146v
   ```
-- interpretation: `R-146a` to `R-146n` exist as table rows of section 3.46. Every statement the pack attributes to the owner is a paraphrase of one of them.
+- interpretation: `R-146a` to `R-146v` exist as table rows of section 3.46 (`R-146o` to `R-146v` are the second poll round, merged in round 2). Every statement the pack attributes to the owner is a paraphrase of one of them.
 
 ### P-04 — `deploy.sh` takes no dump
 
@@ -166,6 +166,53 @@ mechanically against the tree.
   ProxySettings( in composition.py: 1; model_aliases= in src: 0
   ```
 - interpretation: the one served construction of `ProxySettings` passes no aliases, and nothing in `src/` assigns the field.
+
+### P-13 — the copy key's record already is a receipt (round 2)
+
+- captured_at: 2026-10-26
+- command: `grep -n 'set_rec dump \|quiesced_at' infra/deploy/copy-serve.sh | cut -c1-110 | head -4`
+- captured_output:
+  ```text
+  496:        quiesced_at null \
+  515:    set_rec quiesced_at "\"$(fc_now)\""
+  643:    set_rec dump "{\"file\": \"db.dump\", \"size_bytes\": $size, \"sha256\": \"$sha\"}"
+  755:        if ! window_open_since "$(rec_str quiesced_at)"; then
+  ```
+- interpretation: `dump-db` writes the dump's file, size and SHA-256 and the quiesce time into the record, which is the file, SHA-256 and time `R-146t` asks for; `ADR-0021` section 5 uses it instead of a new script.
+
+### P-14 — the two restore formats differ and the copy key's restore drops the grants (round 2)
+
+- captured_at: 2026-10-26
+- command: `grep -n 'for required in' infra/deploy/reset.sh; grep -n 'DROP SCHEMA IF EXISTS public' infra/deploy/copy-serve.sh | cut -c1-90; grep -c 'no-privileges' infra/deploy/reset.sh infra/deploy/copy-serve.sh infra/deploy/purge-product-data.sh`
+- captured_output:
+  ```text
+  236:    for required in "$RESTORE/database.dump" "$RESTORE/objects.attrs" "$RESTORE/objects"; do
+  931:    psql_stand --command "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;
+  infra/deploy/reset.sh:1
+  infra/deploy/copy-serve.sh:2
+  infra/deploy/purge-product-data.sh:1
+  ```
+- interpretation: `reset.sh --restore` needs a directory with `database.dump`, `objects.attrs` and `objects`; `copy-serve.sh restore-db` consumes a PostgreSQL-only dump after recreating the schema, and every dump tool uses `--no-privileges`. `ADR-0021` sections 3 and 6 follow.
+
+### P-15 — an administrator's password reset marks the account must-change (round 2)
+
+- captured_at: 2026-10-26
+- command: `grep -n 'is_default_credential = true' src/auditmanager/access/accounts.py`
+- captured_output:
+  ```text
+  201:        is_default_credential = true,
+  ```
+- interpretation: `access.check` lists every account with that flag, so the gate of `R-146s` also fires for a temporary password; this is `AD-19`.
+
+### P-16 — the attempt watchdog is 900 seconds (round 2)
+
+- captured_at: 2026-10-26
+- command: `grep -n 'ATTEMPT_WATCHDOG_SECONDS = ' src/auditmanager/jobs/lease.py`
+- captured_output:
+  ```text
+  21:ATTEMPT_WATCHDOG_SECONDS = 900
+  ```
+- interpretation: an attempt is failed at 900 seconds while the deterministic stages of a 500-page set take 722 seconds (`D-171`); `AD-18`.
 
 ## Historical evidence
 
