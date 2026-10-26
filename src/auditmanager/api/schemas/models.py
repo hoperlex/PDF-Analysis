@@ -2450,12 +2450,13 @@ class CarryOverDecisionResponse(_Object):
 class AnalysisProfileStatus(str, enum.Enum):
     """`W59-ANALYSIS-SETTINGS-01`. Where a registered text profile stands.
 
-    ``builtin``: AR's v1 profile, written in this repository. ``draft``: a package ported from
-    the legacy prompts and not yet reviewed by an expert. ``reviewed``: a package an expert has
-    reviewed. Every status is executable; the status is recorded, never hidden.
+    ``draft``: a package ported from the legacy prompts, or authored in this repository, whose
+    open questions no lane has answered in writing. ``reviewed``: a package whose open questions a
+    lane answered in writing; no human review (`R-146ag`). Every status is executable; the status is
+    recorded, never hidden. АР has no status because it has no text profile
+    (`PROD-11-AR-V1-V2-REMOVAL-01`): its row carries ``profile: null``.
     """
 
-    BUILTIN = "builtin"
     DRAFT = "draft"
     REVIEWED = "reviewed"
 
@@ -2484,7 +2485,7 @@ class AnalysisProfileSummary(_Object):
     status: AnalysisProfileStatus
     prompt_bundle_sha256: Sha256
     content_sha256: Sha256
-    #: ``null`` for the builtin AR profile, whose prompt was written here, not ported.
+    #: ``null`` for an authored profile (ПБ), whose prompt was written here, not ported.
     source: AnalysisProfileSource | None
 
 
