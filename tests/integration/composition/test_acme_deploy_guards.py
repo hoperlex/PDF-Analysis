@@ -31,6 +31,7 @@ read off the files in ``test_acme_overlay.py``; the other two are the owner's st
 
 from __future__ import annotations
 
+import contextlib
 import http.server
 import os
 import re
@@ -199,8 +200,10 @@ def serving() -> Iterator[int]:
 
 
 def _free_port() -> int:
+    """A port no socket of this host listens on, on ANY address: the wildcard bind is refused by the kernel
+    while a listener holds the port on a single address, and the guard under test asks the same question."""
     with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
+        probe.bind(("0.0.0.0", 0))
         return probe.getsockname()[1]
 
 
@@ -210,6 +213,35 @@ def held_port() -> Iterator[int]:
     holder = socket.socket()
     holder.bind(("127.0.0.1", 0))
     holder.listen(4)
+    try:
+        yield holder.getsockname()[1]
+    finally:
+        holder.close()
+
+
+def _outward_address() -> str | None:
+    """The address this host would use to reach a non-loopback destination, or ``None`` if it has none. A
+    datagram ``connect`` only picks a route; no packet is sent."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.connect(("192.0.2.1", 9))
+            address = probe.getsockname()[0]
+    except OSError:
+        return None
+    return None if address.startswith("127.") else address
+
+
+@contextlib.contextmanager
+def _listening_on(address: str) -> Iterator[int]:
+    """A TCP listener bound to ONE address of this host, on a port the kernel picked. Skips the case where the
+    host cannot bind that address (no IPv6, say)."""
+    holder = socket.socket(socket.AF_INET6 if ":" in address else socket.AF_INET)
+    try:
+        holder.bind((address, 0))
+        holder.listen(4)
+    except OSError as exc:
+        holder.close()
+        pytest.skip(f"this host cannot listen on {address}: {exc}")
     try:
         yield holder.getsockname()[1]
     finally:
@@ -551,6 +583,109 @@ class TestPublicPortsFree:
         assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
         assert "already in use" in completed.stderr
 
+    # --- D-229 item 1: a holder bound to the host's OWN address, not to loopback -----------------------------
+    #
+    # The judge measured it: a host nginx with `listen <ip>:80;` is not seen by a connect to 127.0.0.1, while
+    # Docker's default publish (`0.0.0.0:80`) collides with it, so `compose up` fails on the bind AFTER the
+    # build -- and has by then recreated the `proxy`, the only owner of the loopback port the host nginx
+    # forwards to. The guard therefore asks the kernel's table of listeners, not one address.
+
+    ADDRESSES = ("127.0.0.2", "OUTWARD", "0.0.0.0", "::1", "::")
+
+    @staticmethod
+    def _address(name: str) -> str:
+        if name != "OUTWARD":
+            return name
+        address = _outward_address()
+        if address is None:
+            pytest.skip("this host has no non-loopback IPv4 address")
+        return address
+
+    @pytest.mark.parametrize("name", ADDRESSES)
+    def test_a_holder_on_any_address_of_the_host_is_refused_before_the_build(self, name: str, tmp_path: Path) -> None:
+        with _listening_on(self._address(name)) as port:
+            script = _stage(tmp_path)
+            completed, log = _run(script, _env(tmp_path, _free_port(), **_acme_settings(http_port=port)), tmp_path)
+        assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
+        assert f"public port {port} is already in use, and not by {INSTANCE}'s proxy" in completed.stderr, completed.stderr
+        assert f"listening on port {port}" in completed.stderr, completed.stderr
+        assert "DEPLOYMENT_RUNBOOK.md section 6" in completed.stderr
+        assert _compose_calls(log, "build") == [] and _compose_calls(log, "up") == [], _calls(log)
+
+    @pytest.mark.parametrize("name", ("127.0.0.2", "OUTWARD"))
+    def test_the_old_loopback_connect_would_have_called_that_port_free(self, name: str) -> None:
+        """The premise of the finding, kept as a fact of this host: while a socket listens on another address,
+        a connect to 127.0.0.1 on the same port is refused -- which is all the guard used to ask."""
+        with _listening_on(self._address(name)) as port, socket.socket() as probe:
+            assert probe.connect_ex(("127.0.0.1", port)) != 0
+
+    @pytest.mark.parametrize("name", ("0.0.0.0", "127.0.0.2"))
+    def test_https_is_checked_across_addresses_too_when_this_deploy_would_publish_it(
+        self, name: str, tmp_path: Path
+    ) -> None:
+        with _listening_on(self._address(name)) as port:
+            script = _stage(tmp_path)
+            settings = _acme_settings(https_port=port, ALPHA_PUBLISH_HTTPS="yes")
+            completed, log = _run(script, _env(tmp_path, _free_port(), **settings), tmp_path)
+        assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
+        assert f"public port {port} is already in use" in completed.stderr, completed.stderr
+        assert _compose_calls(log, "build") == []
+
+    def test_a_port_this_instances_proxy_publishes_on_every_address_is_still_not_foreign(
+        self, tmp_path: Path, serving: int
+    ) -> None:
+        """The idempotent case against the real shape of Docker's publish: a listener on `0.0.0.0`, which the
+        proxy's own `docker port` answer excuses."""
+        with _listening_on("0.0.0.0") as port:
+            script = _stage(tmp_path)
+            completed, _ = _run(
+                script,
+                _env(tmp_path, serving, **_acme_settings(http_port=port)),
+                tmp_path,
+                stub={"STUB_PORT_OUT": f"0.0.0.0:{port}\n[::]:{port}\n"},
+            )
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+
+    def test_a_host_that_holds_nothing_on_the_port_is_not_refused(self, tmp_path: Path, serving: int) -> None:
+        """The guard must not refuse for a listener elsewhere: another port on the same address is nothing."""
+        with _listening_on("127.0.0.2"):
+            script = _stage(tmp_path)
+            completed, _ = _run(script, _env(tmp_path, serving, **_acme_settings()), tmp_path)
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        assert "already in use" not in completed.stderr and "NOTE" not in completed.stderr, completed.stderr
+
+    # --- the fallback: a host whose listener table cannot be read ---------------------------------------------
+
+    @staticmethod
+    def _without_a_listener_table(tmp_path: Path) -> Path:
+        """A copy of deploy.sh whose table of listeners is a path that does not exist (a host without /proc)."""
+        source = DEPLOY.read_text(encoding="utf-8")
+        line = 'LISTENER_TABLES="/proc/net/tcp /proc/net/tcp6"'
+        assert source.count(line) == 1, "the guard no longer names its tables in one place"
+        cut = tmp_path / "no-table.sh"
+        cut.write_text(source.replace(line, 'LISTENER_TABLES="/nonexistent/net/tcp /nonexistent/net/tcp6"'), encoding="utf-8")
+        return cut
+
+    def test_without_a_table_a_loopback_holder_is_still_refused(self, tmp_path: Path, held_port: int) -> None:
+        script = _stage(tmp_path, script=self._without_a_listener_table(tmp_path))
+        completed, log = _run(
+            script, _env(tmp_path, _free_port(), **_acme_settings(http_port=held_port)), tmp_path
+        )
+        assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
+        assert f"public port {held_port} is already in use" in completed.stderr
+        assert _compose_calls(log, "build") == []
+
+    def test_without_a_table_the_limit_is_said_and_not_hidden(self, tmp_path: Path, serving: int) -> None:
+        """No silent fallback (`AGENTS.md` section 4): the loopback-only question is answered AND the operator is
+        told that it is the only question that could be asked. A holder on another address goes unseen here,
+        and this test records that this is the stated limit and not an oversight."""
+        with _listening_on("127.0.0.2") as port:
+            script = _stage(tmp_path, script=self._without_a_listener_table(tmp_path))
+            completed, _ = _run(script, _env(tmp_path, serving, **_acme_settings(http_port=port)), tmp_path)
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        assert "NOTE" in completed.stderr and "127.0.0.1 only" in completed.stderr, completed.stderr
+        assert f"{port}" in completed.stderr
+
     def test_that_guard_is_shown_able_to_fail(self, tmp_path: Path, held_port: int) -> None:
         cut = _mutant(tmp_path, "public-ports-free")
         script = _stage(tmp_path, script=cut)
@@ -559,6 +694,15 @@ class TestPublicPortsFree:
         )
         assert "already in use" not in completed.stderr, completed.stderr
         assert _compose_calls(log, "build") != [], "the mutant did not reach the build, so this case was not testing that guard"
+
+    @pytest.mark.parametrize("name", ("127.0.0.2", "0.0.0.0"))
+    def test_the_deletion_also_lets_a_holder_on_another_address_through(self, name: str, tmp_path: Path) -> None:
+        with _listening_on(self._address(name)) as port:
+            cut = _mutant(tmp_path, "public-ports-free")
+            script = _stage(tmp_path, script=cut)
+            completed, log = _run(script, _env(tmp_path, _free_port(), **_acme_settings(http_port=port)), tmp_path)
+        assert "already in use" not in completed.stderr, completed.stderr
+        assert _compose_calls(log, "build") != []
 
 
 # --- acme-pair-answerable and the listener decision ----------------------------------------------------------------
