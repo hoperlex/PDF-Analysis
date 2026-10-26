@@ -38,14 +38,22 @@
  * branches draw the control under their own message; with no start pending they draw nothing
  * more, as before. The component is keyed by the version, so the cursor, the key and the
  * observer belong to one version.
+ *
+ * `PROD-11-AR-V1-V2-REMOVAL-01`: a version classified АР has no ordinary start. The server refuses
+ * `startRun` for it (`section_profile_unavailable`: АР is analysed only by the six-check group), so
+ * the list draws the six-check control for it, when the pack allows, and a sentence saying why
+ * there is no other — never the ordinary «Запустить прогон». The section comes from the version the
+ * page has read; until it arrives (`undefined`) the list is what it always was, and a press in
+ * that interval is refused by the server in the same words.
  */
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
-import type { ProjectUid, RunStatus, VersionUid } from '@/shared/api';
+import type { ProjectSection, ProjectUid, RunStatus, VersionUid } from '@/shared/api';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import { classifyListingFailure, routes } from '@/shared/lib';
+import { AR_START_NOTE } from '@/entities/analysis-profile';
 import { RunRow, arV3GroupReviewAddress, useArV3PackStatus, useRunList } from '@/entities/audit-run';
 import type { ArV3GroupStartIntent } from '@/features/start-ar-v3-group';
 import { StartArV3GroupControl, useArV3GroupStartIntent } from '@/features/start-ar-v3-group';
@@ -54,6 +62,11 @@ import { StartRunControl } from '@/features/start-run';
 export interface RunListProps {
   readonly projectUid: ProjectUid;
   readonly versionUid: VersionUid;
+  /**
+   * The section the version's classification confirms, once the page has read it. `'AR'` takes the
+   * АР start (the six checks only); anything else, and `undefined`, the ordinary start.
+   */
+  readonly sectionCode?: ProjectSection | null | undefined;
   /** Called with the 202 reading so the screen can move to run progress. */
   readonly onRunStarted?: ((run: RunStatus) => void) | undefined;
 }
@@ -86,7 +99,7 @@ export function RunList(props: RunListProps) {
   return <VersionRunList key={props.versionUid} {...props} />;
 }
 
-function VersionRunList({ projectUid, versionUid, onRunStarted }: RunListProps) {
+function VersionRunList({ projectUid, versionUid, sectionCode, onRunStarted }: RunListProps) {
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const query = useRunList(versionUid, cursor);
   const { view: pack } = useArV3PackStatus();
@@ -101,7 +114,10 @@ function VersionRunList({ projectUid, versionUid, onRunStarted }: RunListProps) 
   // already sent. A fresh visit with the list not showing draws no control.
   const sixChecksInFlight = startIntent.inFlight ? sixChecks : null;
 
-  const startControl = (
+  const isAr = sectionCode === 'AR';
+  const startControl = isAr ? (
+    sixChecks ?? <p className="am-note" data-ar-start-note="">{AR_START_NOTE}</p>
+  ) : (
     <>
       <StartRunControl
         projectUid={projectUid}
@@ -174,7 +190,7 @@ function VersionRunList({ projectUid, versionUid, onRunStarted }: RunListProps) 
           </button>
         )}
       </div>
-      <h3>Запустить ещё один прогон</h3>
+      <h3>{isAr ? 'Запустить анализ АР' : 'Запустить ещё один прогон'}</h3>
       {startControl}
     </div>
   );

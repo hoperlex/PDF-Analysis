@@ -1,7 +1,7 @@
 {
   "lock_version": 1,
   "purpose": "Everything a later regeneration needs to prove the committed API client matches its input: the toolchain pins, the exact generator invocation, and the exact OpenAPI bytes the client was generated from. Verified by web/tests/guards/frontend-lock.guard.test.ts, which recomputes every digest here and fails if one has moved.",
-  "owner": "EXEC-PAR-START-01 reseal",
+  "owner": "PROD-11-AR-V1-V2-REMOVAL-01 reseal",
   "toolchain": {
     "node": "22.23.1",
     "npm": "10.9.8",
@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "664a9069d2d476c84dacbd171cd9f31cb4c51299a4a6f56d89b97552106a25af",
-    "content_commit": "d81a14f3",
-    "content_commit_subject": "Seal executor choice OpenAPI content",
+    "sha256": "a182d4fa902b263243e09b9936227760b45e8e6e744b6783a7023522a285e9df",
+    "content_commit": "22c1df66",
+    "content_commit_subject": "PROD-11 stage 2a (contract content): AnalysisProfileStatus loses builtin; reviewed described as it is (D-223)",
     "dispatch_named_commit": "a3e83f39cfcb02f4ea5565e6f45f3f2b2f720e97",
-    "commit_note": "EXEC-PAR-START-01 adds an optional executor_connection_id to startRun and a read-only executor to RunStatus; contract 1.6.0 (92/104/301), migration 0032, no new error code.",
+    "commit_note": "PROD-11-AR-V1-V2-REMOVAL-01 removes the enum member AnalysisProfileStatus.builtin and corrects the prose of reviewed, listAnalysisProfiles and info.description; contract 1.6.0 (92/104/301), migration 0033, no new error code.",
     "openapi_version": "3.1.0",
     "info_version": "1.6.0",
     "paths": 92,
     "operations": 104,
     "component_schemas": 301,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "664a9069d2d476c84dacbd171cd9f31cb4c51299a4a6f56d89b97552106a25af",
+    "snapshot_sha256": "a182d4fa902b263243e09b9936227760b45e8e6e744b6783a7023522a285e9df",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "b517b7368a42bfa428a28e8bda2d085cf62b8e1b0a79affd88d7a5600477e69c",
-      "index.ts": "601542b8cbbbf81c4b1d6fdfee173eaa1a23d2674b7932661c333608c750c385",
-      "operations.gen.ts": "6e6cd352d7e662a47c9f16b5fdb8cc8c50d3fe0de3d8d0c67125749f666c6b87",
-      "types.gen.ts": "89239349ad05933b78c2b124ba0ca23542f0964449f9f2232e1900dba760fc99"
+      "client.gen.ts": "cf971d7e9ad0d97263402a43d2a17ade84fbfd417608132d4c175f47199b0a33",
+      "index.ts": "25286b567dec0f94a7442686936aeacf5e098a8fe3546f3f727baa3aeb60afb8",
+      "operations.gen.ts": "4af01923f6d55d45c97e499bf9733f8f7c54bcbce407d90143e51cc920ac7133",
+      "types.gen.ts": "77aa4fbee4429c2fafb8bfa52b351fc0bfe4658496f118420d81431fca828086"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

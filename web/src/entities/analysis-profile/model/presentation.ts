@@ -13,7 +13,6 @@ import type { AnalysisProfileStatus } from '@/shared/api';
 import { ANALYSIS_PROFILE_STATUS_VALUES } from '@/shared/api';
 
 export const ANALYSIS_PROFILE_STATUS_LABELS: Readonly<Record<AnalysisProfileStatus, string>> = {
-  builtin: 'встроенный',
   draft: 'черновик, требует экспертной проверки',
   reviewed: 'рабочая версия, проверка человеком не проводилась',
 };
@@ -23,6 +22,22 @@ export const NO_PROFILE_LABEL = 'профиль не создан';
 
 /** Why it matters, beside {@link NO_PROFILE_LABEL}. */
 export const NO_PROFILE_CONSEQUENCE = 'Прогон версии этого раздела будет отклонён.';
+
+/**
+ * What АР shows instead (`PROD-11-AR-V1-V2-REMOVAL-01`, `ADR-0024`): АР has no text profile, and it
+ * is not a missing one. Its analysis is the group of six AR v3 checks, started from its own control.
+ */
+export const AR_NO_TEXT_PROFILE_LABEL = 'текстовый профиль не используется';
+
+/** Why, beside {@link AR_NO_TEXT_PROFILE_LABEL}. */
+export const AR_NO_TEXT_PROFILE_CONSEQUENCE =
+  'Версия АР анализируется группой из шести проверок АР v3; обычный прогон по ней будет отклонён.';
+
+/** The note on a version screen where АР has no ordinary start (no pack, or none yet read). */
+export const AR_START_NOTE =
+  'Версия АР анализируется группой из шести проверок АР v3, а не обычным прогоном. Группа ' +
+  'становится доступной, когда на сервере установлен проверенный экспертом набор; состояние ' +
+  'набора — в разделе «Настройки анализа».';
 
 /** The label of a status this build does not know. Never a guess at its meaning. */
 export const UNKNOWN_STATUS_LABEL = 'состояние вне набора, известного этой версии приложения';

@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.6.0 (OpenAPI 3.1.0)
- *   sha256 664a9069d2d476c84dacbd171cd9f31cb4c51299a4a6f56d89b97552106a25af
+ *   sha256 a182d4fa902b263243e09b9936227760b45e8e6e744b6783a7023522a285e9df
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.6.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '664a9069d2d476c84dacbd171cd9f31cb4c51299a4a6f56d89b97552106a25af';
+export const CONTRACT_DIGEST = 'a182d4fa902b263243e09b9936227760b45e8e6e744b6783a7023522a285e9df';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -385,12 +385,13 @@ export type AnalysisProfileSourceFile = {
 /**
  * `W59-ANALYSIS-SETTINGS-01`. Where a registered text profile stands.
  *
- * ``builtin``: AR's v1 profile, written in this repository. ``draft``: a package ported from
- * the legacy prompts and not yet reviewed by an expert. ``reviewed``: a package an expert has
- * reviewed. Every status is executable; the status is recorded, never hidden.
+ * ``draft``: a package ported from the legacy prompts, or authored in this repository, whose
+ * open questions no lane has answered in writing. ``reviewed``: a package whose open questions a
+ * lane answered in writing; no human review (`R-146ag`). Every status is executable; the status is
+ * recorded, never hidden. АР has no status because it has no text profile
+ * (`PROD-11-AR-V1-V2-REMOVAL-01`): its row carries ``profile: null``.
  */
 export const ANALYSIS_PROFILE_STATUS_VALUES = [
-  'builtin',
   'draft',
   'reviewed',
 ] as const;

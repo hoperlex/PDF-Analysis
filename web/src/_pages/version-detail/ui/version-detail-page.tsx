@@ -116,6 +116,7 @@ export function VersionDetailPage({ projectUid, versionUid, roles }: VersionDeta
       <RunList
         projectUid={ownerProjectUid}
         versionUid={versionUid}
+        sectionCode={version.data?.classification?.section_code}
         onRunStarted={(run: RunStatus) => router.push(routes.run(run.project_uid, run.run_id))}
       />
     </PageShell>
