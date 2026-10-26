@@ -203,10 +203,13 @@ tests/unit/analysis/text_profiles/section_profile_expectations.json
 
 ## Final checks
 
-See the lane's final message for the tip SHA. On the committed tree (`git status --short` empty):
+On the committed tree (`git status --short` empty), the last commit before this paragraph being `acc9ae82` plus one whitespace fix to the task file (a trailing space in a captured line, found by `git diff --check` and removed):
 
 | Command | Result |
 |---|---|
-| `pytest tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py` | filled in below |
+| `pytest tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py` | `105 passed` |
 | governance one-liner on `docs/program/tasks/SECTION-PB-FULL-01.md` | `[]` |
-| `git diff --check 82068f3b..HEAD` | filled in below |
+| `git diff --check 82068f3b..HEAD` | rc 0 |
+| section set, `build_fixtures.py --check`, HTTP test (lane `.env`), `vitest` analysis-settings | `211 passed`; `fixtures match` rc 0; `4 passed`; `95 passed` |
+
+This paragraph is the only text added after the whitespace fix; the contract run above was repeated on the tree that contains it (see the lane's final message for the tip SHA).
