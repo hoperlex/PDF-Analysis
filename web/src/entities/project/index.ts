@@ -15,7 +15,7 @@ export {
   validateProjectName,
 } from './model/project';
 
-export type { ProjectSection, ProjectSectionCode } from './model/section';
+export type { ProjectSection, ProjectSectionCode, SectionAnalysis } from './model/section';
 export {
   ANALYSED_SECTION_CODE,
   PROJECT_SECTIONS,

@@ -16,6 +16,8 @@
  * never asked the server for.
  */
 
+import { readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -24,6 +26,8 @@ import {
   findProjectSection,
   projectSectionTitle,
 } from '@/entities/project';
+
+import { REPO_ROOT, readJson } from '../../guards/lib/repo';
 
 /**
  * The legacy set, as `docs/program/DEBT_REGISTER.md` `D-56` records it, in its order.
@@ -89,14 +93,51 @@ describe('nothing a reviewer reads is Latin', () => {
   });
 });
 
-describe('exactly one section is the one the analysis is built for', () => {
-  it('marks AR and nothing else', () => {
-    expect(PROJECT_SECTIONS.filter((section) => section.analysed).map((s) => s.code))
-      .toEqual([ANALYSED_SECTION_CODE]);
-    expect(ANALYSED_SECTION_CODE).toBe('AR');
+/**
+ * `WEB-SECTION-COPY-01`. Until this lane the registry said that exactly one section, АР, was
+ * «analysed». That described the original АР-only text prompt; after `W59-SECTION-SEAL-01` and
+ * `PROD-11-AR-V1-V2-REMOVAL-01` it said the opposite of the server: fourteen sections have a text
+ * profile, and АР has none because it is analysed by the group of six AR v3 checks. The registry now records
+ * the route of every section, and the fourteen are held to the packages the server loads, so
+ * that a package added or removed without the catalogue changing fails here and not on a screen.
+ */
+const PROFILES_DIRECTORY = join(REPO_ROOT, 'src', 'auditmanager', 'analysis', 'text', 'profiles');
+
+interface ProfilePackage {
+  readonly section_code: string;
+}
+
+/** The `section_code` of every text-profile package the server loads, sorted. */
+function packagedSectionCodes(): string[] {
+  return readdirSync(PROFILES_DIRECTORY, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith('_'))
+    .map((entry) => readJson<ProfilePackage>(join(PROFILES_DIRECTORY, entry.name, 'profile.json')).section_code)
+    .sort();
+}
+
+function codesAnalysedBy(route: 'text_profile' | 'six_run_group'): string[] {
+  return PROJECT_SECTIONS.filter((section) => section.analysedBy === route).map((s) => s.code);
+}
+
+describe('every section is analysed by one of two routes, and the registry says which', () => {
+  it('sends АР to the group of six checks and the fourteen others to their text profile', () => {
+    expect(codesAnalysedBy('six_run_group')).toEqual(['AR']);
+    expect(codesAnalysedBy('text_profile')).toHaveLength(14);
+    expect(codesAnalysedBy('text_profile')).not.toContain('AR');
+    expect(codesAnalysedBy('six_run_group').length + codesAnalysedBy('text_profile').length)
+      .toBe(PROJECT_SECTIONS.length);
   });
 
-  it('keeps the analysed code in the registry, so the screen’s default is a real section', () => {
-    expect(findProjectSection(ANALYSED_SECTION_CODE)?.analysed).toBe(true);
+  it('holds the text-profile sections to the packages the server loads, in both directions', () => {
+    const packaged = packagedSectionCodes();
+    expect(codesAnalysedBy('text_profile').sort()).toEqual(packaged);
+    // A package for АР is refused by the server (`profile_registry.py`); the catalogue agrees.
+    expect(packaged).not.toContain('AR');
+  });
+
+  it('keeps the section pickers’ default a real section', () => {
+    expect(ANALYSED_SECTION_CODE).toBe('AR');
+    expect(findProjectSection(ANALYSED_SECTION_CODE))
+      .toMatchObject({ code: 'AR', analysedBy: 'six_run_group' });
   });
 });
