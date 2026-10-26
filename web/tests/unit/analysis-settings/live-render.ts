@@ -12,8 +12,11 @@
  *
  * What it is NOT: a browser. There is no layout, no event propagation, no focus, no style, no
  * text selection. A press calls the `onClick` the React element carries, which is exactly what
- * a click on that button would call. Anything that depends on a real event path (a label, a
- * form submit, a portal) is outside it and must not be tested here.
+ * a click on that button would call — except that a browser dispatches no click to a disabled
+ * button, so neither does `press` (`AR-V3-BETA-PACK-STATUS-WEB-FIX-02`): it does nothing and
+ * returns `false`, and a test that means to press a disabled button asserts that flag. Anything
+ * that depends on a real event path (a label, a form submit, a portal) is outside it and must
+ * not be tested here.
  */
 
 import { act } from 'react';
@@ -124,6 +127,9 @@ class FakeDocument extends FakeNode {
       event: undefined,
       addEventListener() {},
       removeEventListener() {},
+      // `next/link` defers its prefetch with `self.setTimeout` when there is no idle callback.
+      setTimeout: (...args: Parameters<typeof setTimeout>) => setTimeout(...args),
+      clearTimeout: (...args: Parameters<typeof clearTimeout>) => clearTimeout(...args),
     };
   }
   createElement(name: string): FakeNode {
@@ -178,14 +184,18 @@ export interface LiveRender {
   update(element: ReactElement): Promise<void>;
   /** Run `work` inside `act`, so the updates it causes are flushed before it returns. */
   settle(work: () => Promise<unknown> | unknown): Promise<void>;
-  /** Press the one button whose whole text is `label`. Throws when there is not exactly one. */
-  press(label: string): Promise<void>;
+  /**
+   * Press the one button whose whole text is `label`. Throws when there is not exactly one.
+   * Resolves `true` when the click was delivered and `false` when the button is disabled, in
+   * which case nothing was called, as in a browser.
+   */
+  press(label: string): Promise<boolean>;
   /** How many buttons carry exactly this text. */
   count(label: string): number;
   unmount(): Promise<void>;
 }
 
-const GLOBALS = ['window', 'document', 'IS_REACT_ACT_ENVIRONMENT'] as const;
+const GLOBALS = ['window', 'self', 'document', 'IS_REACT_ACT_ENVIRONMENT'] as const;
 
 /** Mount `element` and flush its first render, effects included. Call `unmount` when done. */
 export async function mountLive(element: ReactElement): Promise<LiveRender> {
@@ -193,6 +203,7 @@ export async function mountLive(element: ReactElement): Promise<LiveRender> {
   const holder = globalThis as unknown as Record<string, unknown>;
   const before = GLOBALS.map((name) => [name, holder[name]] as const);
   holder.window = document.defaultView;
+  holder.self = document.defaultView;
   holder.document = document;
   holder.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -225,13 +236,18 @@ export async function mountLive(element: ReactElement): Promise<LiveRender> {
     press: async (label) => {
       const found = buttons(label);
       if (found.length !== 1) throw new Error(`expected one button «${label}», found ${found.length}`);
-      const onClick = propsOf(found[0] as FakeNode).onClick;
+      const button = found[0] as FakeNode;
+      // React writes a boolean `disabled` as a bare attribute; a browser would not dispatch the
+      // click to a button that carries it.
+      if (button.getAttribute('disabled') !== null) return false;
+      const onClick = propsOf(button).onClick;
       if (onClick === undefined) throw new Error(`button «${label}» has no onClick`);
       await act(async () => {
         onClick({ type: 'click', preventDefault() {}, stopPropagation() {} });
         await tick();
         await tick();
       });
+      return true;
     },
     count: (label) => buttons(label).length,
     unmount: async () => {

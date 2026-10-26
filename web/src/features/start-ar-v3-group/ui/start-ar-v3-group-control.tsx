@@ -5,9 +5,10 @@
  *
  * It is the group's counterpart of `StartRunControl` and borrows its discipline: one
  * idempotency key per intent, a retry under the same key and nothing else, no provider-mode
- * selector, no pack selection and no text input. Unlike `StartRunControl` it does not hold the
- * key: it is drawn only on an installed pack and can be taken off the page by a failed status
- * re-read, so the caller holds the key and whether a request is pending
+ * selector, no pack selection and no text input. Unlike `StartRunControl` it holds neither the
+ * key nor the mutation: it is drawn only on an installed pack or while a start is pending, and
+ * can be taken off the page by a failed status re-read or by the list around it loading, so the
+ * caller holds the key, the mutation's observer and whether a request is pending
  * (`useArV3GroupStartIntent`) and hands them in. On failure the refusal is
  * said in its own sentence (`../model/start-failure.ts`) and the single-run start is never
  * offered as a substitute.
@@ -35,7 +36,6 @@ import {
   classifyArV3GroupStartFailure,
 } from '../model/start-failure';
 import type { ArV3GroupStartIntent } from '../model/use-ar-v3-group-start-intent';
-import { useStartArV3Group } from '../model/use-start-ar-v3-group';
 
 import styles from './start-ar-v3-group-control.module.css';
 
@@ -113,7 +113,7 @@ export interface StartArV3GroupControlProps {
   /** The project the version belongs to, for the link a classification refusal carries. */
   readonly projectUid: ProjectUid;
   readonly versionUid: VersionUid;
-  /** Held by the caller, so it outlives this control; see `useArV3GroupStartIntent`. */
+  /** Held by the caller, so the key, the observer and the answer outlive this control; see `useArV3GroupStartIntent`. */
   readonly intent: ArV3GroupStartIntent;
   /** Called with the 202 group, so the mounting widget can open its review. */
   readonly onStarted?: ((group: ArV3BetaGroup) => void) | undefined;
@@ -125,7 +125,7 @@ export function StartArV3GroupControl({
   intent,
   onStarted,
 }: StartArV3GroupControlProps) {
-  const mutation = useStartArV3Group();
+  const { mutation } = intent;
 
   const send = () => {
     mutation.mutate(
