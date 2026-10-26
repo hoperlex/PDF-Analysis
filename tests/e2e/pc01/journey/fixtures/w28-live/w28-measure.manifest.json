@@ -1,5 +1,12 @@
 {
   "$comment": [
+    "PROD-10B-JOURNEY-REBASE-01: the write half gained a `classify-version` step (stage П, section ПБ) before",
+    "`start-run`, because a run starts only for a version an expert has classified (W59-SECTION-SEAL-01); without it",
+    "the run is refused before any recording or provider is asked. The profile is now ПБ's, not АР's: the document",
+    "still has no recording under `fixtures/recorded/text_analysis/` or `fixtures/recorded/sections/`, so recorded",
+    "mode ends `failed` as before. The labels and sentences of this file are the ones it had (English, stale: see the",
+    "notes below) and nothing here has been re-measured against a stand.",
+    "",
     "W28-LIVE's measuring manifest. It is a copy of the journey's own write half with",
     "one document swapped: `tests/e2e/pc01/journey/fixtures/w28-live/w28_own_document.zip`,",
     "a synthetic AR document that is NOT `ar_baseline.pdf` and therefore has no recording",
@@ -145,6 +152,68 @@
         "forbids_rendered": [
           "[data-upload-failure]",
           "[data-precheck-problem]"
+        ]
+      },
+      {
+        "name": "classify-version",
+        "at": "/projects/{project_uid}/versions/{version_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
+        "control_module": "web/src/features/classify-version/ui/classify-version-form.tsx",
+        "$comment": [
+          "PROD-10B-JOURNEY-REBASE-01. Since W59-SECTION-SEAL-01 a run starts only for a version whose stage and section an",
+          "expert confirmed: an unclassified version is refused (422) before any run exists, so this file, written before",
+          "that, could not reach its run. This is the real manifest's `classify-version` -- stage П and the section ПБ,",
+          "which stays when PROD-11 removes the АР v1 run. Not re-measured against a stand."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "input[data-stage-choice=\"P\"]"
+          },
+          {
+            "do": "click",
+            "selector": "input[data-section-choice=\"PB\"]"
+          },
+          {
+            "do": "click",
+            "selector": "button[data-classification-confirm]",
+            "text": "Подтвердить раздел"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "PUT",
+            "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification",
+            "operationId": "classifyDocumentVersion",
+            "expect_status": 200
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "classifyDocumentVersion",
+            "json_path": "project_stage",
+            "equals": "P"
+          },
+          {
+            "of": "classifyDocumentVersion",
+            "json_path": "section_code",
+            "equals": "PB"
+          }
+        ],
+        "capture": {
+          "kind": "attribute",
+          "$why": "the panel switches to the confirmed classification, which carries the version's document identity",
+          "selector": "[data-classified-document]",
+          "attribute": "data-classified-document",
+          "as": [
+            "document_uid"
+          ],
+          "matches": "^(doc_%ID%)$",
+          "bound_ms": 30000
+        },
+        "forbids_rendered": [
+          "[data-classification-failure]",
+          "[data-classification-conflict]"
         ]
       },
       {

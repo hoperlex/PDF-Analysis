@@ -37,6 +37,14 @@ BASELINE_BUNDLE = BUNDLES / "ar_baseline.zip"
 EXPECTED_ISSUES = CORPUS / "expected_issues.json"
 OPENAPI = REPOSITORY_ROOT / "contracts" / "api" / "v1" / "openapi.json"
 
+#: `PROD-10B-JOURNEY-REBASE-01`: the section the journey's baseline set is confirmed in. It was
+#: AR, whose v1 run `PROD-11` removes; ПБ stays and has a synthetic recording over the same text
+#: layer whose findings are the AR baseline recording's, category for category and quotation for
+#: quotation (`fixtures/recorded/sections/pb/`), so every figure this suite pinned on the AR run
+#: holds for it. `tests/e2e/test_pc01_journey_section.py` proves that equality, and that the
+#: manifest's classification steps name this same code, without a database or a browser.
+JOURNEY_SECTION = "PB"
+
 #: This run's tag. Every identity the suite allocates carries it, so a run can never
 #: collide with a peer's rows in the shared instance database, and "the same idempotency
 #: key" in the criterion-9 tests means the same key and no other.
@@ -240,12 +248,13 @@ class Client:
 
     def classify_version(
         self, *, project_uid: str, document_uid: str, version_uid: str,
-        project_stage: str = "R", section_code: str = "AR",
+        project_stage: str = "R", section_code: str = JOURNEY_SECTION,
     ) -> Answer:
         """`W59-SECTION-SEAL-01`: an expert's stage and section for one version.
 
         Run start routes the analysis profile from this persisted classification and refuses
-        a version that has none, so the journey classifies its AR baseline before it runs.
+        a version that has none, so the journey classifies its baseline before it runs --
+        in :data:`JOURNEY_SECTION` unless the caller names another (`PROD-10B-JOURNEY-REBASE-01`).
         """
         return self.request(
             "PUT",

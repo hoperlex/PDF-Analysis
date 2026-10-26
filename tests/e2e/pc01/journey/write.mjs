@@ -1,5 +1,5 @@
 /**
- * The PC-01 journey's **write half**: create a project, upload the AR PDF, start a run --
+ * The PC-01 journey's **write half**: create a project, upload the portal bundle, start a run --
  * through the browser, pressing the application's own controls, on the public origin.
  *
  * **Why this file exists.** `D-5` was `POST /api/v1/runs` -> 500, twice, through a browser,

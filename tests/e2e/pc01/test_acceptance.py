@@ -181,8 +181,10 @@ def journey(client: Client) -> Journey:
     ranged = client.stream_content(version["version_uid"], byte_range="bytes=0-1023")
 
     # `W59-SECTION-SEAL-01`: run start routes from the version's expert classification and
-    # refuses an unclassified version, so the baseline is classified as AR first. The repeat
-    # is a replay of the same row, which a re-run of the session-scoped journey also sends.
+    # refuses an unclassified version, so the baseline is classified first, in the journey's
+    # section (`driver.JOURNEY_SECTION`, `PROD-10B-JOURNEY-REBASE-01`: the AR v1 run is what
+    # `PROD-11` removes). The repeat is a replay of the same row, which a re-run of the
+    # session-scoped journey also sends.
     answer = client.classify_version(
         project_uid=project["project_uid"],
         document_uid=version["document_uid"],
@@ -493,19 +495,21 @@ def test_c3_the_surface_declares_no_operation_that_can_mutate_a_version(
         for route in client.app.router.routes
         if route.methods & {"PUT", "PATCH", "DELETE"}
     }
-    assert set(mutating) == {
-        "updateMyProfile",
-        "updateUser",
-        "purgeUser",
-        "markReleaseNotesRead",
-        "setJobPriority",
-        "setExecutionPaused",
-        "setWorkerIntake",
-        "setCurrentNormSnapshot",
-        "classifyDocumentVersion",
-        "setGlobalVendorList",
-        "setProjectVendorList",
-    }, mutating
+    # `D-226` / `PROD-10B-JOURNEY-REBASE-01`. The list this test kept by hand stopped being the
+    # set the surface serves when `setExecutorRoute` (``PUT /executor-routes``) joined it, and
+    # the next operation would have reddened it again. The set is now this suite's own facts
+    # source -- the hand-maintained, contract-independent ``FACTS`` that criterion 1 already
+    # counts operations against -- read for the methods that change something. The checks on
+    # WHERE a mutating operation may point, below, are unchanged.
+    facts_mutating = {
+        operation_id
+        for method, _path, operation_id in FACTS.operations
+        if method in {"PUT", "PATCH", "DELETE"}
+    }
+    assert set(mutating) == facts_mutating, (
+        "the router serves a PUT, PATCH or DELETE the expected facts do not list, or the "
+        f"facts list one it does not serve: {sorted(set(mutating) ^ facts_mutating)}"
+    )
     assert mutating["classifyDocumentVersion"].endswith("/versions/{version_uid}/classification")
     assert not [
         path
@@ -565,7 +569,7 @@ def test_c3_a_second_upload_publishes_a_new_identity_and_leaves_the_first_untouc
     classification = reread_body.pop("classification", None)
     assert classification is not None, reread.json
     assert (classification["version_uid"], classification["section_code"]) == (
-        journey.version_uid, "AR",
+        journey.version_uid, driver.JOURNEY_SECTION,
     )
     assert reread_body == journey.version_read, (
         "publishing a second version changed the first one"
@@ -1342,6 +1346,8 @@ def test_c10_every_failure_leaves_the_edge_as_one_typed_envelope(client: Client)
             "correlation_id",
             "retryable",
         }, payload
-        assert payload["contract_version"] == "1.0.0"
+        # `D-226`: the contract version the facts source holds, not a literal of this file
+        # that goes stale at each reseal.
+        assert payload["contract_version"] == FACTS.contract_version
         assert isinstance(payload["retryable"], bool)
         assert answer.header("X-Correlation-Id") == payload["correlation_id"]
