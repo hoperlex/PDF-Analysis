@@ -285,7 +285,7 @@ Prefix for every command: `env $(grep -v '^#' .env | grep -v '^$' | xargs) PYTHO
 | the neighbouring suites of section 4 | 207 passed; `tests/unit/{jobs,workers,runs,analysis}` 320 passed |
 | `tests/integration/qa_w55b/test_p3_input_budget.py` (outside the lane) | 3 passed, 2 failed, predicted and explained in section 9 |
 | mutations (section 5) | 45 of 45 red, tree clean after each |
-| `pytest tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py`; `git diff --check` | see the closing line of this section |
+| `pytest tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py`; `git diff --check` | 105 passed; `git diff --check` exit 0 |
 | governance one-liner on the task file | `[]` |
 
 ## 8. Limits
