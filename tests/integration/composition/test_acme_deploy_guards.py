@@ -12,9 +12,13 @@ guards, in the order the script asks them:
 * ``acme-client-pinned`` -- ``infra/acme/client.pin`` must name a package version; the shipped word
   ``UNRESOLVED`` is refused here, in our words, before a build fails in apk's;
 * ``public-ports-free`` -- the host's own nginx (or anything else) holding port 80, or 443 when this deploy
-  would publish it, is a sentence before the build and not a bind error after it;
+  would publish it, **on any address of the host** (``D-229`` item 1: a connect to 127.0.0.1 never saw a
+  listener bound to the host's own address), is a sentence before the build and not a bind error after it;
 * ``acme-pair-answerable`` -- whether the certificate volume holds a pair is asked of the volume through the
   acme image, and an unanswerable question refuses instead of reading as "no pair".
+
+A sixth guard, ``trusted-proxies-empty-with-name`` (``JUDGE-FIXES-F2-01``, ``D-229`` item 4), is tested in
+:class:`TestTrustedProxiesEmptyWithName`: a certificate name and a non-empty trust list are refused together.
 
 **The shape of each case is ``test_deploy_script_refusals.py``'s, deliberately.** An invocation that should
 trip a guard exits 3 and says why; for the guards that sit before the first ``docker`` call the evidence is
