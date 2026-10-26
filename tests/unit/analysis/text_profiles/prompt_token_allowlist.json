@@ -59,6 +59,14 @@
       "token": "ГПЗУ",
       "reason": "Abbreviation of the urban-planning plan of a land plot, in the placeholder bullet and in the near-miss pair added by the lane. None of the five pinned files holds it; the lane report disclosed it among the vocabulary already in the draft prompt that the source lacks (assumption 5).",
       "disclosed_by": "SECTION-PS-FULL-01.md"
+    },
+    {
+      "section": "PT",
+      "token": "3,6",
+      "reason": "Factor of the equality 1 л/с = 3,6 м³/ч in the unit-equivalence rule that SECTION-WIDEN-G2-01 added to the PT prompt (PRODUCTION-WAVE-PW4 section 6, rule 4). One litre per second is 3600 litres per hour, that is 3,6 cubic metres per hour: a definition of the two units. The pinned PT files write the same flow in л/с (project_params.md) and in м³/ч (checklist.md) but hold no factor.",
+      "disclosed_by": "SECTION-WIDEN-G2-01.md",
+      "class": "a",
+      "justification": "A physical unit-conversion factor that follows from the definitions of the litre, the cubic metre and the hour (1000 litres per cubic metre, 3600 seconds per hour), not a norm number, a threshold or a class designation. It is the only conversion the prompt allows: the same sentence forbids every other factor and every other pair of units, and a head in metres is never compared with a pressure in МПа."
     }
   ]
 }

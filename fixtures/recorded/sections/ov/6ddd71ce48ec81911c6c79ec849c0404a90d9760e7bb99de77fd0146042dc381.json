@@ -7,7 +7,7 @@
     "kind": "synthetic",
     "profile_status": "reviewed",
     "prompt_bundle_id": "pb_01M5AXG1KDEVEZ88HR6KYX2YP9",
-    "prompt_bundle_sha256": "e855ec2fea1357ee4caf77fe414e6abadb8fcf32854cc575b334898c6f05f5a4",
+    "prompt_bundle_sha256": "df443a6d66c5c2f888898811e2fbee5f577e8fb33d64e3597757ac4aa1720e50",
     "section_code": "OV",
     "statement": "Synthetic: authored by hand for SECTION-RECORDINGS-01 to prove section routing in recorded mode. No model produced this reply and no provider call was made. Not field evidence for the profile's review.",
     "task_id": "SECTION-RECORDINGS-01",
@@ -15,7 +15,7 @@
   },
   "output_text": "{\"observations\": [{\"category\": \"explicit_placeholder\", \"finding_text\": \"Синтетический ответ (ОВ), не результат вызова модели: заполнение оконных проёмов, от которого зависит теплотехнический расчёт, оставлено словом «уточнить».\", \"recommendation_text\": \"Указать тип заполнения оконных проёмов до расчёта теплопотерь.\", \"evidence\": [{\"page_number\": 8, \"quote\": \"Тип заполнения оконных проёмов — уточнить.\"}]}, {\"category\": \"internal_contradiction\", \"finding_text\": \"Синтетический ответ (ОВ), не результат вызова модели: из надземной части здания предусмотрено два выхода в одном разделе и три в другом.\", \"recommendation_text\": \"Свести число выходов к одному значению для расчёта систем вентиляции.\", \"evidence\": [{\"page_number\": 3, \"quote\": \"Из надземной части здания предусмотрено два эвакуационных выхода.\"}, {\"page_number\": 7, \"quote\": \"Из надземной части здания предусмотрено три эвакуационных выхода.\"}]}]}",
   "recording_version": "1.0.0",
-  "request_sha256": "93087ffb2bff43d5fb132e05667372e6f861bc8d65795cdcc81cdfe6db9edc96",
+  "request_sha256": "6ddd71ce48ec81911c6c79ec849c0404a90d9760e7bb99de77fd0146042dc381",
   "stop_reason": "end_turn",
   "usage": {
     "input_tokens": 2390,
