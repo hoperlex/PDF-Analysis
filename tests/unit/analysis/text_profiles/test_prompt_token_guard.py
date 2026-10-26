@@ -18,8 +18,9 @@ matched substrings: ``LS`` was found inside ``FRLS``, ``КМ`` inside ``КМ0–
 is a maximal run of letters and digits, with a decimal comma or point between digits and a
 hyphen between words kept inside the token (``Е0,5``, ``123-ФЗ``, ``PE-проводника``); an en or
 em dash, a slash, a parenthesis and an underscore separate tokens. Matching is exact: case,
-script (Cyrillic ``Е`` is not Latin ``E``) and every character count. A prompt token also matches
-a *part* of a hyphen-joined source token (``LS`` in ``нг-LS``): the hyphen is a delimiter there.
+script (Cyrillic ``Е`` is not Latin ``E``) and every character count. A hyphen-joined token is one
+token on both sides: ``LS`` is not sourced by ``нг-LS`` (decided by the lane: no current prompt
+token needed the looser reading, and the looser one can only hide an invention).
 
 The legacy repository is not on every host. The part that needs it skips with an explicit reason
 string; the part that does not (tokenizer, class rules, allowlist hygiene, PB which has no
@@ -94,14 +95,8 @@ def designations(text: str) -> frozenset[str]:
 
 
 def universe(text: str) -> frozenset[str]:
-    """Every whole token of ``text``, plus the parts of each hyphen-joined token."""
-    found: set[str] = set()
-    for token in tokens(text):
-        found.add(token)
-        parts = HYPHEN_SPLIT.split(token)
-        if len(parts) > 1:
-            found.update(parts)
-    return frozenset(found)
+    """Every whole token of ``text``: the set a prompt token has to be a member of."""
+    return frozenset(tokens(text))
 
 
 def unexplained(
@@ -276,17 +271,19 @@ def test_matching_is_exact_in_case_script_and_characters() -> None:
     assert unexplained("Е0.5", v1=none, source=universe("Е0,5"), allowed=none) == ["Е0.5"]
 
 
-def test_a_hyphen_joined_prompt_token_must_be_whole_in_the_source() -> None:
+def test_a_hyphen_joined_token_is_one_token_on_both_sides() -> None:
     none = frozenset()
     source = universe("шины PE-шины и нг-LS, Г1-Г4")
-    # the whole compound is not in the source: only its first part is
+    # the whole compound is not in the source: only its first part is a word there
     assert unexplained("PE-проводника", v1=none, source=source, allowed=none) == ["PE-проводника"]
     assert unexplained("PE-шины", v1=none, source=source, allowed=none) == []
-    # a part delimited by a hyphen in the source is a whole token there
-    assert unexplained("LS", v1=none, source=source, allowed=none) == []
-    assert unexplained("Г4 Г1", v1=none, source=source, allowed=none) == []
+    # a part of a hyphen-joined source token does not source the part alone (and the reverse)
+    assert unexplained("LS", v1=none, source=source, allowed=none) == ["LS"]
+    assert unexplained("Г4 Г1", v1=none, source=source, allowed=none) == ["Г1", "Г4"]
+    assert unexplained("Г1-Г4 нг-LS", v1=none, source=source, allowed=none) == []
     # an en dash range is two tokens, each needing its own source
-    assert unexplained("Г1–Г9", v1=none, source=source, allowed=none) == ["Г9"]
+    assert unexplained("Г1–Г9", v1=none, source=universe("Г1 Г9"), allowed=none) == []
+    assert unexplained("Г1–Г9", v1=none, source=source, allowed=none) == ["Г1", "Г9"]
 
 
 def test_each_source_is_checked_separately_v1_and_allowlist_only_cover_their_own() -> None:
