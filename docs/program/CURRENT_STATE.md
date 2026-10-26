@@ -18,7 +18,7 @@ Run `infra/deploy/verify-deployed.sh` for the current deployment; this document 
 After an `ok` probe it is selectable; registration does not replace the Codex route. The `/api/v1` OpenAI Chat variant carries the same verified PNG as other HTTP variants.
 A graphical-analysis stage still needs W56b prompt and evidence policy before issuing crop tasks; SSH command/tunnel transports can carry a verified PNG when a future stage issues one.
 
-`EXEC-PAR-START-01` lets `startRun` name an executor connection (`executor_connection_id`; no fallback, `reauditRun` keeps it, `RunStatus.executor` shows it) and `EXEC-PAR-QUEUE-01` adds `AUDITMANAGER_WORKER_SLOTS` (default `1`) with one active run per connection in the claim. Both are on `integration/exec-par-1026`, not yet on `origin/main`; the web selector (`EXEC-PAR-WEB-01`) is not built, so a stand gains no visible parallelism until it is, and a named executor needs `AUDITMANAGER_PROVIDER_SOURCE=database`. See `dispatch/EXEC-PARALLEL-RUNS-PLAN.md`.
+`EXEC-PAR-START-01` lets `startRun` name an executor connection (`executor_connection_id`; no fallback, `reauditRun` keeps it, `RunStatus.executor` shows it), `EXEC-PAR-QUEUE-01` adds `AUDITMANAGER_WORKER_SLOTS` (default `1`) with one active run per connection in the claim, and `EXEC-PAR-WEB-01` adds the «Исполнитель» selector to the start control and the executor to the run list and page. All three are on `integration/exec-par-1026`, not yet on `origin/main`. A stand shows parallel runs only with `AUDITMANAGER_PROVIDER_SOURCE=database`, `AUDITMANAGER_WORKER_SLOTS` above `1` and two probed connections; the journey is an operator check. See `dispatch/EXEC-PARALLEL-RUNS-PLAN.md`.
 
 ## Normative corpus (W54)
 
