@@ -161,7 +161,7 @@ Test-level mutations (the tool is patched inside the test): the second-apply pat
 | the governance one-liner on the task file | `[]` |
 | `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py`, `git diff --check` | see the lane's final message (run on the committed tree) |
 
-Free disk stayed above 1.8 GiB throughout; every database and bucket a test made was dropped.
+Free disk stayed above 1.8 GiB throughout; every database, bucket and role a test made was dropped. Found, not made by this lane and left alone: five `a1_tpl_*` template databases (created 01:43 to 13:15 UTC) and 55 `*-tpl-*-c-*` buckets (created 13:16 to 13:17 UTC) from earlier sessions, hours before this lane's `.env` was copied (17:06 UTC).
 
 ## 8. What `infra/deploy/erase-project.sh` must do (not in this lane)
 
@@ -170,7 +170,7 @@ The wrapper waits for the database-role work (`PROD-04`). It is `purge-product-d
 1. keep the purge wrapper's skeleton: `set -Eeuo pipefail`, the environment file, typed `--database` and `--bucket` equal to the configured ones, the compose file and the four modules present (`project_erase.py`, `product_purge.py`, `schema_coverage.py`, `blob_reference_audit.py` mounted read-only at `/purge/scripts/recovery` with `PYTHONPATH=/app/src:/purge`), refuse unknown options and more than one mode, guard markers and a test per guard (`tests/integration/composition`);
 2. run the module inside the `api` image with `DATABASE_URL` set explicitly to **the migrator's URL** (`AD-02`: the api's own URL is the restricted role the tool refuses) and no `PG*` variable;
 3. default to the dry run (`--project prj_...` only, prints the plan and `plan-sha256`); `--apply` needs `--project`, `--actor`, `--reason` (one of `client_request`, `end_of_engagement`, `test_data`, `other`), `--owner-permission-ref` and the digest, and shows the plan again and asks the operator to retype the project id and the digest;
-4. mount a **writable** `--dump-dir` (`infra/deploy/dumps/erasures/`) and tell the operator to keep `<era_id>/plan.json` and `manifest.json` with the release record (the database holds only their digests);
+4. mount a **writable** `--dump-dir` (`infra/deploy/dumps/erasures/`) and tell the operator to keep `<era_id>/plan.json` and `manifest.json` with the release record (the database holds only their digests). The tool writes the directory 0700 and the files 0600 (the manifest holds a fingerprint of every erased document, which the ADR keeps out of the database on purpose): run the container as the operator's uid, or chown the directory afterwards, so the operator can read what the tool wrote;
 5. **take no `pg_dump` and no object mirror before the erase**, unlike the purge: a dump would keep the erased data. Say so, and that every existing dump, mirror and copy still holds it;
 6. pass the exit codes through; on 4 after the commit print the `erase-id:` line and the exact `--resume era_... --actor ... --owner-permission-ref ... --dump-dir ...` command (a `--resume` mode of its own); on 3 with "could not lock" offer the purge wrapper's stop-the-worker-and-restart trap;
 7. after success print the manifest path and `manifest-sha256`, the tool's closing list of what an erase does not reach, and the two rest-state queries of `ADR-0022` (`select count(*) from blob where state = 'erasure_pending'` is 0; `select count(*) from project where project_uid = '<id>'` is 0 and an `erasure.completed` event names it);
