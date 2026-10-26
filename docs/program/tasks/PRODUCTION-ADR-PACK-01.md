@@ -238,7 +238,15 @@ Forward revert of the nine files. Behaviour is unchanged.
 
 ## Handoff
 
-- changed files: see the report.
-- commands/results: see the report; filled below at hand-back.
-- known limits: see the report.
-- integration notes: see the integration contract above.
+- changed files: the nine files of the allowed paths, on branch `agent/production-adr-pack-01` from base `4d7b7c38dc8239df6831b2587b71c0d74e8b1ec0`; nothing else (`git diff --name-only 4d7b7c38..HEAD` lists exactly them).
+- commands/results (2026-10-26, lane worktree production-adr-pack-01, on the committed tree):
+  1. governance one-liner on this file: prints `[]`.
+  2. `git diff --check 4d7b7c38..HEAD`: exit 0, no output.
+  3. the existence check over the nine files: 1592 checked, 0 missing, 0 unclassified; 23 commands run here and compared, 90 commands that need a stand or a lane not run (their path, operationId and
+     module parts checked); 318 token occurrences accepted by class as literals and not verified. Its own mutation proof: 14 of 14 mutations turn it red (table in the report).
+  4. `pytest -q -p no:cacheprovider tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py`: 105 passed.
+  5. ADR-index tests: `tests/contract/test_validate_bootstrap.py` and `tests/contract/test_cp00_candidate.py` fail identically on the base tree and on this branch (191 failures and errors, none added, none removed);
+     `scripts/validate_bootstrap.py` differs from its base output only in two count lines (adrs 20 to 24, markdown_files 1736 to 1740).
+- known limits: nothing was executed against a stand, a container or a database; a check marked "no" in an ADR table does not exist yet; the `AD-` decisions are unconfirmed; the sizes in the plan are counted, not
+  experienced; the local tracking refs were not fetched; the whole contract battery, the web battery and the gate were not run (`R-135`).
+- integration notes: see the integration contract above and the report's "Instruction to the integrator".
