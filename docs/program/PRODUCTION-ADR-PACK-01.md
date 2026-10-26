@@ -105,7 +105,7 @@ All run on the committed tree of branch `agent/production-adr-pack-01` (venv: th
 5. **`pytest -q -p no:cacheprovider tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py`:** 105 passed in 19.80 s, exit 0.
 6. **The ADR-index tests.** `tests/contract/test_validate_bootstrap.py` and `tests/contract/test_cp00_candidate.py` already fail in this environment on the base tree `4d7b7c38` (191 failures and errors, among them
    `tests/contract/test_cp00_candidate.py::ArchitectureCoverageTests::test_adr_files_index_and_review_agree`, which has been red since `ADR-0019` and `ADR-0020`). Run on the base tree and on this branch, the sets of failing test ids are identical (a `comm` of the two sorted lists
-   prints nothing in either direction), so the pack adds and removes none. `scripts/validate_bootstrap.py` on the branch differs from the base only in two count lines (adrs 20 to 24, markdown_files 1736 to 1740); it reports no ADR or index error.
+   prints nothing in either direction), so the pack adds and removes none. `scripts/validate_bootstrap.py` on the branch differs from the base only in two count lines (adrs 20 to 24, markdown_files 1736 to 1743); it reports no ADR or index error.
 7. **Scope of the change:** `git diff --name-only 4d7b7c38..HEAD` lists the nine files of the table above and no other; `git status --short` is empty.
 
 

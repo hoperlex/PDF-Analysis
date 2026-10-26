@@ -246,7 +246,7 @@ Forward revert of the nine files. Behaviour is unchanged.
      module parts checked); 318 token occurrences accepted by class as literals and not verified. Its own mutation proof: 14 of 14 mutations turn it red (table in the report).
   4. `pytest -q -p no:cacheprovider tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py`: 105 passed.
   5. ADR-index tests: `tests/contract/test_validate_bootstrap.py` and `tests/contract/test_cp00_candidate.py` fail identically on the base tree and on this branch (191 failures and errors, none added, none removed);
-     `scripts/validate_bootstrap.py` differs from its base output only in two count lines (adrs 20 to 24, markdown_files 1736 to 1740).
+     `scripts/validate_bootstrap.py` differs from its base output only in two count lines (adrs 20 to 24, markdown_files 1736 to 1743).
 - known limits: nothing was executed against a stand, a container or a database; a check marked "no" in an ADR table does not exist yet; the `AD-` decisions are unconfirmed; the sizes in the plan are counted, not
   experienced; the local tracking refs were not fetched; the whole contract battery, the web battery and the gate were not run (`R-135`).
 - integration notes: see the integration contract above and the report's "Instruction to the integrator".
