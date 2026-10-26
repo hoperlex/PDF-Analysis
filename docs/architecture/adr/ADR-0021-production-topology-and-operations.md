@@ -220,19 +220,21 @@ the published ports (a Docker-published port bypasses `ufw`: `compose.server.yml
 
 Run on the VPS from the checkout `/srv/auditmanager`, `<name>` being the public DNS name and `$DC`
 being `docker compose --env-file infra/deploy/env/alpha.env -f infra/deploy/compose.server.yml`.
+`docker compose config` prints secrets in clear (`provider.env.example` says so); the rows below pipe it
+into a program that prints names only, and its raw output is never shown or pasted.
 "Exists" means the check can be run today; the lane named delivers the rest
 (`PRODUCTION-READINESS-PLAN-01.md`).
 
 | # | Commitment | Mechanical check, which fails when the commitment is false | Exists | Delivered by |
 | --- | --- | --- | --- | --- |
-| 1 | Only the proxy publishes a port | `$DC config --format json \| python3 -I -c "import json,sys;print(sorted(k for k,v in json.load(sys.stdin)['services'].items() if v.get('ports')))"` prints `['proxy']` | command yes | `PROD-01` keeps it true |
+| 1 | Only the proxy publishes a port | `$DC config --no-env-resolution --format json \| python3 -I -c "import json,sys;print(sorted(k for k,v in json.load(sys.stdin)['services'].items() if v.get('ports')))"` prints `['proxy']` | command yes | `PROD-01` keeps it true |
 | 2 | TLS answers on the public name with a trusted chain | `curl -sS -o /dev/null -w '%{http_code} %{ssl_verify_result}\n' https://<name>/login` prints `200 0` | command yes | `PROD-01` |
 | 3 | HSTS on every TLS answer (`R-146a`) | `curl -sSI https://<name>/login \| grep -i '^strict-transport-security: max-age=31536000'` exits 0; in the tree `tests/integration/composition/test_proxy_tls_path.py::test_hsts_is_sent_by_the_tls_block_and_never_by_the_plain_one` | yes | `PROD-01` extends it to the live name |
 | 4 | The session cookie is `Secure` (`R-146a`) | `curl -sS -D - -o /dev/null -H "Cookie: am_session=$(openssl rand -hex 16)" https://<name>/bff/v1/projects \| grep -i '^set-cookie: am_session=;.*Secure'` exits 0 (an inert cookie draws `401` and a clearing `Set-Cookie` from the BFF route handler, the method of `EXPOSURE-REVIEW-01.md` E-2) | command yes | `PROD-01` |
 | 5 | The certificate is renewed before it expires | `echo \| openssl s_client -connect <name>:443 -servername <name> 2>/dev/null \| openssl x509 -noout -checkend 1209600` exits 0 (valid for 14 more days) | command yes | `PROD-01` puts it in `verify-deployed.sh` |
 | 6 | A deployment is not successful while `admin`/`password` is valid (`R-146i`) | `$DC run --rm --no-deps -T --entrypoint python api -m auditmanager.access.check` exits `0` (`1` means a default credential) | command yes; wiring no | `PROD-02` |
 | 7 | The application connects with a role that cannot change the schema (`R-146n` item 1) | `$DC exec -T postgres psql -U <migrator> -d <db> -Atc "select rolsuper, has_schema_privilege(rolname,'public','CREATE') from pg_roles where rolname='<application role>'"` prints `f\|f`; and `select has_table_privilege('<application role>','public.audit_event','DELETE')` prints `f` | no | `PROD-04` |
-| 8 | Memory and log limits on every long-running service (`R-146n` item 2) | `$DC config --format json` has `mem_limit` (or `deploy.resources.limits.memory`) and `logging.options.max-size` for each service except the one-shot ones | no | `PROD-05` |
+| 8 | Memory and log limits on every long-running service (`R-146n` item 2) | `$DC config --no-env-resolution --format json` has `mem_limit` (or `deploy.resources.limits.memory`) and `logging.options.max-size` for each service except the one-shot ones | no | `PROD-05` |
 | 9 | A migrating deploy follows a dump (`R-146n` item 3) | run `infra/deploy/deploy.sh` on a checkout with a newer revision and no receipt: exit `3` and `REFUSED [dump-receipt]`; the guard is shown to fail by deleting its marked block, as `tests/integration/composition/test_deploy_script_refusals.py` does for the others | no | `PROD-03` |
 | 10 | The release checklist carries the manual scan (`R-146n` item 5) | `grep -n "manual_scan" docs/program/RELEASE_PROCESS.md` has a hit and `scripts/release/manual_scan.sh --check-tools` exits non-zero when a scanner is missing | no | `PROD-09` |
 | 11 | No CI workflow is added (`R-146h`) | `ls .github/workflows` prints only `deploy-auto.yml`; `tests/contract/test_deploy_auto_workflow.py` pins that workflow | yes | none (non-expansion) |
