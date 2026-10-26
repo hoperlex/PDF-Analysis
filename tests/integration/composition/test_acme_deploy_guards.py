@@ -12,9 +12,13 @@ guards, in the order the script asks them:
 * ``acme-client-pinned`` -- ``infra/acme/client.pin`` must name a package version; the shipped word
   ``UNRESOLVED`` is refused here, in our words, before a build fails in apk's;
 * ``public-ports-free`` -- the host's own nginx (or anything else) holding port 80, or 443 when this deploy
-  would publish it, is a sentence before the build and not a bind error after it;
+  would publish it, **on any address of the host** (``D-229`` item 1: a connect to 127.0.0.1 never saw a
+  listener bound to the host's own address), is a sentence before the build and not a bind error after it;
 * ``acme-pair-answerable`` -- whether the certificate volume holds a pair is asked of the volume through the
   acme image, and an unanswerable question refuses instead of reading as "no pair".
+
+A sixth guard, ``trusted-proxies-empty-with-name`` (``JUDGE-FIXES-F2-01``, ``D-229`` item 4), is tested in
+:class:`TestTrustedProxiesEmptyWithName`: a certificate name and a non-empty trust list are refused together.
 
 **The shape of each case is ``test_deploy_script_refusals.py``'s, deliberately.** An invocation that should
 trip a guard exits 3 and says why; for the guards that sit before the first ``docker`` call the evidence is
@@ -31,6 +35,7 @@ read off the files in ``test_acme_overlay.py``; the other two are the owner's st
 
 from __future__ import annotations
 
+import contextlib
 import http.server
 import os
 import re
@@ -158,6 +163,11 @@ if argv[:1] == ["compose"]:
         if "auditmanager.shared.db.check" in joined:
             sys.stdout.write("FOUNDATION-CHECK OK check-db\n")
             sys.exit(0)
+        if "auditmanager.access.check" in joined:
+            # `PROD-02`: the credential gate, clean unless a case says otherwise. The cases about the gate
+            # itself are in `test_default_credential_gate.py`.
+            sys.stdout.write(setting("STUB_GATE_OUTPUT", "access-check GATE OK no published credential") + "\n")
+            sys.exit(int(setting("STUB_GATE_STATUS", "0")))
         if "openapi_conformance.py" in joined:
             sys.stdin.buffer.read()
             sys.stdout.write("differences: 0\n")
@@ -194,8 +204,10 @@ def serving() -> Iterator[int]:
 
 
 def _free_port() -> int:
+    """A port no socket of this host listens on, on ANY address: the wildcard bind is refused by the kernel
+    while a listener holds the port on a single address, and the guard under test asks the same question."""
     with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
+        probe.bind(("0.0.0.0", 0))
         return probe.getsockname()[1]
 
 
@@ -205,6 +217,35 @@ def held_port() -> Iterator[int]:
     holder = socket.socket()
     holder.bind(("127.0.0.1", 0))
     holder.listen(4)
+    try:
+        yield holder.getsockname()[1]
+    finally:
+        holder.close()
+
+
+def _outward_address() -> str | None:
+    """The address this host would use to reach a non-loopback destination, or ``None`` if it has none. A
+    datagram ``connect`` only picks a route; no packet is sent."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.connect(("192.0.2.1", 9))
+            address = probe.getsockname()[0]
+    except OSError:
+        return None
+    return None if address.startswith("127.") else address
+
+
+@contextlib.contextmanager
+def _listening_on(address: str) -> Iterator[int]:
+    """A TCP listener bound to ONE address of this host, on a port the kernel picked. Skips the case where the
+    host cannot bind that address (no IPv6, say)."""
+    holder = socket.socket(socket.AF_INET6 if ":" in address else socket.AF_INET)
+    try:
+        holder.bind((address, 0))
+        holder.listen(4)
+    except OSError as exc:
+        holder.close()
+        pytest.skip(f"this host cannot listen on {address}: {exc}")
     try:
         yield holder.getsockname()[1]
     finally:
@@ -442,6 +483,92 @@ class TestAcmeSettingsWellFormed:
         assert "not usable" not in completed.stderr, completed.stderr
 
 
+# --- trusted-proxies-empty-with-name (D-229 item 4) -----------------------------------------------------------------
+
+
+class TestTrustedProxiesEmptyWithName:
+    """`ALPHA_TRUSTED_PROXY_CIDRS` names the peers the proxy believes about `X-Forwarded-For`, for a host whose
+    TLS is terminated by ANOTHER nginx in front. Once this stack terminates TLS itself there is no such nginx,
+    the client address arrives on the connection, and a peer left in the list can name its own bucket for the
+    guest throttle. The runbook said "remove it"; nothing refused it. Now the deploy does, before anything is
+    built."""
+
+    LIST = "172.20.0.1/32"
+
+    def _refused(self, tmp_path: Path, value: str) -> subprocess.CompletedProcess[str]:
+        script = _stage(tmp_path)
+        completed, log = _run(
+            script,
+            _env(tmp_path, _free_port(), **_acme_settings(), ALPHA_TRUSTED_PROXY_CIDRS=value),
+            tmp_path,
+        )
+        assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
+        assert not log.exists(), _calls(log)
+        return completed
+
+    def test_a_list_with_a_name_is_refused_before_docker_is_touched(self, tmp_path: Path) -> None:
+        completed = self._refused(tmp_path, self.LIST)
+        assert "ALPHA_TRUSTED_PROXY_CIDRS is set" in completed.stderr, completed.stderr
+        assert "ALPHA_CERT_NAME is set too" in completed.stderr, completed.stderr
+        assert "Nothing was built" in completed.stderr, completed.stderr
+        assert "DEPLOYMENT_RUNBOOK.md section 6" in completed.stderr, completed.stderr
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "172.20.0.1/32, 10.0.0.0/8",
+            "172.20.0.1/32 10.0.0.0/8",
+            '"172.20.0.1/32"',
+            "'172.20.0.1/32'",
+            "172.20.0.1",
+            "::1",
+        ],
+    )
+    def test_every_spelling_of_a_non_empty_list_is_refused(self, value: str, tmp_path: Path) -> None:
+        self._refused(tmp_path, value)
+
+    def test_the_refusal_names_what_the_list_would_have_trusted(self, tmp_path: Path) -> None:
+        completed = self._refused(tmp_path, "172.20.0.1/32, 10.0.0.0/8")
+        assert "172.20.0.1/32" in completed.stderr and "10.0.0.0/8" in completed.stderr, completed.stderr
+
+    @pytest.mark.parametrize("value", ["", ", ,", " \t "])
+    def test_a_value_with_no_entry_is_the_empty_list_and_is_not_refused(
+        self, value: str, tmp_path: Path, serving: int
+    ) -> None:
+        """`trusted-proxies.sh` reads a value of only separators as "trust nobody"; so does this guard."""
+        script = _stage(tmp_path)
+        completed, _ = _run(
+            script, _env(tmp_path, serving, **_acme_settings(), ALPHA_TRUSTED_PROXY_CIDRS=value), tmp_path
+        )
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+
+    def test_without_a_name_the_list_is_the_host_nginx_configuration_and_is_left_alone(
+        self, tmp_path: Path, serving: int
+    ) -> None:
+        """The control: the guard is gated on the name. A host still behind its own nginx keeps the list."""
+        script = _stage(tmp_path)
+        completed, _ = _run(
+            script, _env(tmp_path, serving, ALPHA_TRUSTED_PROXY_CIDRS=self.LIST), tmp_path
+        )
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        assert "ALPHA_CERT_NAME is set too" not in completed.stderr
+
+    def test_a_list_the_proxy_would_refuse_is_still_refused_with_a_name(self, tmp_path: Path) -> None:
+        """Two guards can speak about one value; either way the deploy stops before docker."""
+        self._refused(tmp_path, "0.0.0.0/0")
+
+    def test_that_guard_is_shown_able_to_fail(self, tmp_path: Path) -> None:
+        cut = _mutant(tmp_path, "trusted-proxies-empty-with-name")
+        script = _stage(tmp_path, script=cut)
+        completed, log = _run(
+            script,
+            _env(tmp_path, _free_port(), **_acme_settings(), ALPHA_TRUSTED_PROXY_CIDRS=self.LIST),
+            tmp_path,
+        )
+        assert "ALPHA_CERT_NAME is set too" not in completed.stderr, completed.stderr
+        assert _compose_calls(log, "build") != [], "the mutant did not reach the build, so this case was not testing that guard"
+
+
 # --- acme-client-pinned ---------------------------------------------------------------------------------------------
 
 
@@ -546,6 +673,124 @@ class TestPublicPortsFree:
         assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
         assert "already in use" in completed.stderr
 
+    # --- D-229 item 1: a holder bound to the host's OWN address, not to loopback -----------------------------
+    #
+    # The judge measured it: a host nginx with `listen <ip>:80;` is not seen by a connect to 127.0.0.1, while
+    # Docker's default publish (`0.0.0.0:80`) collides with it, so `compose up` fails on the bind AFTER the
+    # build -- and has by then recreated the `proxy`, the only owner of the loopback port the host nginx
+    # forwards to. The guard therefore asks the kernel's table of listeners, not one address.
+
+    ADDRESSES = ("127.0.0.2", "OUTWARD", "0.0.0.0", "::1", "::")
+
+    @staticmethod
+    def _address(name: str) -> str:
+        if name != "OUTWARD":
+            return name
+        address = _outward_address()
+        if address is None:
+            pytest.skip("this host has no non-loopback IPv4 address")
+        return address
+
+    @pytest.mark.parametrize("name", ADDRESSES)
+    def test_a_holder_on_any_address_of_the_host_is_refused_before_the_build(self, name: str, tmp_path: Path) -> None:
+        with _listening_on(self._address(name)) as port:
+            script = _stage(tmp_path)
+            completed, log = _run(script, _env(tmp_path, _free_port(), **_acme_settings(http_port=port)), tmp_path)
+        assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
+        assert f"public port {port} is already in use, and not by {INSTANCE}'s proxy" in completed.stderr, completed.stderr
+        assert f"listening on port {port}" in completed.stderr, completed.stderr
+        assert "DEPLOYMENT_RUNBOOK.md section 6" in completed.stderr
+        assert _compose_calls(log, "build") == [] and _compose_calls(log, "up") == [], _calls(log)
+
+    @pytest.mark.parametrize("name", ("127.0.0.2", "OUTWARD"))
+    def test_the_old_loopback_connect_would_have_called_that_port_free(self, name: str) -> None:
+        """The premise of the finding, kept as a fact of this host: while a socket listens on another address,
+        a connect to 127.0.0.1 on the same port is refused -- which is all the guard used to ask."""
+        with _listening_on(self._address(name)) as port, socket.socket() as probe:
+            assert probe.connect_ex(("127.0.0.1", port)) != 0
+
+    @pytest.mark.parametrize("name", ("0.0.0.0", "127.0.0.2"))
+    def test_https_is_checked_across_addresses_too_when_this_deploy_would_publish_it(
+        self, name: str, tmp_path: Path
+    ) -> None:
+        with _listening_on(self._address(name)) as port:
+            script = _stage(tmp_path)
+            settings = _acme_settings(https_port=port, ALPHA_PUBLISH_HTTPS="yes")
+            completed, log = _run(script, _env(tmp_path, _free_port(), **settings), tmp_path)
+        assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
+        assert f"public port {port} is already in use" in completed.stderr, completed.stderr
+        assert _compose_calls(log, "build") == []
+
+    def test_a_port_this_instances_proxy_publishes_on_every_address_is_still_not_foreign(
+        self, tmp_path: Path, serving: int
+    ) -> None:
+        """The idempotent case against the real shape of Docker's publish: a listener on `0.0.0.0`, which the
+        proxy's own `docker port` answer excuses."""
+        with _listening_on("0.0.0.0") as port:
+            script = _stage(tmp_path)
+            completed, _ = _run(
+                script,
+                _env(tmp_path, serving, **_acme_settings(http_port=port)),
+                tmp_path,
+                stub={"STUB_PORT_OUT": f"0.0.0.0:{port}\n[::]:{port}\n"},
+            )
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+
+    def test_a_host_that_holds_nothing_on_the_port_is_not_refused(self, tmp_path: Path, serving: int) -> None:
+        """The guard must not refuse for a listener elsewhere: another port on the same address is nothing."""
+        with _listening_on("127.0.0.2"):
+            script = _stage(tmp_path)
+            completed, _ = _run(script, _env(tmp_path, serving, **_acme_settings()), tmp_path)
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        assert "already in use" not in completed.stderr and "NOTE" not in completed.stderr, completed.stderr
+
+    def test_a_connected_socket_on_that_port_is_not_a_listener(self, tmp_path: Path, serving: int) -> None:
+        """The table also lists connections. One whose LOCAL port is the challenge port does not stop Docker
+        binding it (a bind is refused only by a socket in the LISTEN state), so it must not stop the deploy."""
+        with socket.socket() as server:
+            server.bind(("127.0.0.1", 0))
+            server.listen(1)
+            with socket.socket() as client:
+                client.bind(("127.0.0.1", 0))
+                client.connect(server.getsockname())
+                port = client.getsockname()[1]
+                script = _stage(tmp_path)
+                completed, _ = _run(script, _env(tmp_path, serving, **_acme_settings(http_port=port)), tmp_path)
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        assert "already in use" not in completed.stderr, completed.stderr
+
+    # --- the fallback: a host whose listener table cannot be read ---------------------------------------------
+
+    @staticmethod
+    def _without_a_listener_table(tmp_path: Path) -> Path:
+        """A copy of deploy.sh whose table of listeners is a path that does not exist (a host without /proc)."""
+        source = DEPLOY.read_text(encoding="utf-8")
+        line = 'LISTENER_TABLES="/proc/net/tcp /proc/net/tcp6"'
+        assert source.count(line) == 1, "the guard no longer names its tables in one place"
+        cut = tmp_path / "no-table.sh"
+        cut.write_text(source.replace(line, 'LISTENER_TABLES="/nonexistent/net/tcp /nonexistent/net/tcp6"'), encoding="utf-8")
+        return cut
+
+    def test_without_a_table_a_loopback_holder_is_still_refused(self, tmp_path: Path, held_port: int) -> None:
+        script = _stage(tmp_path, script=self._without_a_listener_table(tmp_path))
+        completed, log = _run(
+            script, _env(tmp_path, _free_port(), **_acme_settings(http_port=held_port)), tmp_path
+        )
+        assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
+        assert f"public port {held_port} is already in use" in completed.stderr
+        assert _compose_calls(log, "build") == []
+
+    def test_without_a_table_the_limit_is_said_and_not_hidden(self, tmp_path: Path, serving: int) -> None:
+        """No silent fallback (`AGENTS.md` section 4): the loopback-only question is answered AND the operator is
+        told that it is the only question that could be asked. A holder on another address goes unseen here,
+        and this test records that this is the stated limit and not an oversight."""
+        with _listening_on("127.0.0.2") as port:
+            script = _stage(tmp_path, script=self._without_a_listener_table(tmp_path))
+            completed, _ = _run(script, _env(tmp_path, serving, **_acme_settings(http_port=port)), tmp_path)
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        assert "NOTE" in completed.stderr and "127.0.0.1 only" in completed.stderr, completed.stderr
+        assert f"{port}" in completed.stderr
+
     def test_that_guard_is_shown_able_to_fail(self, tmp_path: Path, held_port: int) -> None:
         cut = _mutant(tmp_path, "public-ports-free")
         script = _stage(tmp_path, script=cut)
@@ -555,14 +800,29 @@ class TestPublicPortsFree:
         assert "already in use" not in completed.stderr, completed.stderr
         assert _compose_calls(log, "build") != [], "the mutant did not reach the build, so this case was not testing that guard"
 
+    @pytest.mark.parametrize("name", ("127.0.0.2", "0.0.0.0"))
+    def test_the_deletion_also_lets_a_holder_on_another_address_through(self, name: str, tmp_path: Path) -> None:
+        with _listening_on(self._address(name)) as port:
+            cut = _mutant(tmp_path, "public-ports-free")
+            script = _stage(tmp_path, script=cut)
+            completed, log = _run(script, _env(tmp_path, _free_port(), **_acme_settings(http_port=port)), tmp_path)
+        assert "already in use" not in completed.stderr, completed.stderr
+        assert _compose_calls(log, "build") != []
+
 
 # --- acme-pair-answerable and the listener decision ----------------------------------------------------------------
 
 
 def _up_line(log: Path) -> str:
-    ups = _compose_calls(log, "up")
+    """The ONE full `up` of a deploy. Since `PROD-02` the proxy may be brought up a second time, alone
+    (`up -d --no-deps proxy`), by `default-credential-gate`; that call is `_proxy_up_lines`."""
+    ups = [line for line in _compose_calls(log, "up") if "--no-deps proxy" not in line]
     assert len(ups) == 1, ups
     return ups[0]
+
+
+def _proxy_up_lines(log: Path) -> list[str]:
+    return [line for line in _compose_calls(log, "up") if line.endswith("up -d --no-deps proxy")]
 
 
 class TestAcmePairAnswerable:
@@ -634,14 +894,25 @@ class TestTheListenersADeployHas:
         completed, log = self._deploy(tmp_path, serving, publish="no", pair="pair-present")
         assert completed.returncode == 0, (completed.stdout, completed.stderr)
         assert "compose.tls.yml" not in _up_line(log)
+        assert _proxy_up_lines(log) == [], "the proxy was recreated although 443 was not to change"
         assert "credential gate is not satisfied" in completed.stdout
 
     def test_cleared_and_a_pair_publishes_443_after_the_acme_overlay(self, tmp_path: Path, serving: int) -> None:
+        """BEFORE `PROD-02` this asserted that the ONE `up` carried the acme overlay and then the 443 overlay.
+        NOW the full `up` never opens 443 on a proxy that does not already publish it (the credential gate has
+        not been asked yet: the database does not exist before `up`); 443 is opened by the proxy-only `up`
+        that `default-credential-gate` issues after a clean gate, with the same two overlays in the same order."""
         completed, log = self._deploy(tmp_path, serving, publish="yes", pair="pair-present")
         assert completed.returncode == 0, (completed.stdout, completed.stderr)
-        up = _up_line(log)
-        assert re.search(r"compose\.server\.yml --file \S+compose\.acme\.yml --file \S+compose\.tls\.yml up", up), up
-        assert "application listener (TLS) : public port" in completed.stdout and "-- published" in completed.stdout
+        full = _up_line(log)
+        assert "compose.acme.yml" in full and "compose.tls.yml" not in full, full
+        proxy_ups = _proxy_up_lines(log)
+        assert len(proxy_ups) == 1, proxy_ups
+        assert re.search(
+            r"compose\.server\.yml --file \S+compose\.acme\.yml --file \S+compose\.tls\.yml up -d --no-deps proxy$",
+            proxy_ups[0],
+        ), proxy_ups[0]
+        assert "published on port" in completed.stdout and "(the credential gate is clean)" in completed.stdout
 
     def test_the_build_sees_the_acme_service_and_only_the_acme_overlay(self, tmp_path: Path, serving: int) -> None:
         completed, log = self._deploy(tmp_path, serving, publish="yes", pair="pair-present")

@@ -889,18 +889,52 @@ class RunAdapter(_SessionHolder):
         self._input_budget_characters = input_budget_characters
 
     def start_ar_v3_group(self, *, version_uid: str, idempotency_key: str) -> models.ArV3BetaGroup:
-        from auditmanager.runs.public import start_ar_v3_group
+        """Create the six pinned Runs, queue them, and hand them to the carrier (`PROD-11D`).
 
-        started = self._write(lambda session: start_ar_v3_group(
-            session,
-            version_uid=version_uid,
-            idempotency_key=idempotency_key,
-            provider_mode=self._provider_mode,
-            pack=(None if self._ar_v3_pack_registry is None
-                  else self._ar_v3_pack_registry.select_beta()),
-            input_budget_characters=self._input_budget_characters,
-            connection_route=self._route_freezer,
-        ))
+        The ordinary ``start_run`` does three things after its command and this method did
+        none: it advanced the Run ``created -> queued`` and enqueued its Job in the
+        accepting transaction, and after the commit it submitted the work to the carrier. A
+        group left six ``created`` Runs and no Job, which a served carrier's poller
+        (``JobRepository.next_queued_run``: a queued Job of a queued or running Run) never
+        finds. The same three steps are taken here for each member, with the same ordering and
+        the same replay rule, and the domain command stays free of both Job and carrier.
+        """
+        from dataclasses import replace
+
+        from auditmanager.jobs.public import JobRepository
+        from auditmanager.runs import RunRepository
+        from auditmanager.runs.public import get_ar_v3_group, start_ar_v3_group
+
+        def work(session: Session) -> Any:
+            started = start_ar_v3_group(
+                session,
+                version_uid=version_uid,
+                idempotency_key=idempotency_key,
+                provider_mode=self._provider_mode,
+                pack=(None if self._ar_v3_pack_registry is None
+                      else self._ar_v3_pack_registry.select_beta()),
+                input_budget_characters=self._input_budget_characters,
+                connection_route=self._route_freezer,
+            )
+            if started.replayed:
+                return started
+            # `D-20`, as in `start_run`: `created -> queued` is taken in the transaction that
+            # accepts the Runs, which has just resolved the pack, the profile, the snapshot and
+            # the six verified sets, and the Job shares it, so a process dying after the 202
+            # leaves claimable rows. Member order is scope order, so the Jobs queue F1 .. S2.
+            for member in started.group.members:
+                RunRepository().advance(
+                    session, run_id=member.run_id, from_state="created", to_state="queued",
+                )
+                JobRepository().enqueue(session, run_id=member.run_id)
+            # The answer says what was accepted (`queued`), not the state read before the edge.
+            return replace(started, group=get_ar_v3_group(session, started.group.group_id))
+
+        started = self._write(work)
+        if not started.replayed:
+            # A replay submits nothing: the key's first request already did.
+            for member in started.group.members:
+                self._carrier.submit(self._job(member.run_id))
         return models.ArV3BetaGroup.model_validate(asdict(started.group))
 
     def get_ar_v3_group(self, *, group_id: str) -> models.ArV3BetaGroup:

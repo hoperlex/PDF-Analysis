@@ -31,12 +31,12 @@ down`. This is the deployed stack.
 | `proxy/tls-server.conf` | the TLS server block. **nginx never loads it unless a certificate is there** |
 | `proxy/enable-tls.sh` | the switch: the image runs it before nginx starts, and it asks one question |
 | `proxy/trusted-proxies.sh` | `REAL-IP-EDGE-01` — the other start-up hook: turns `ALPHA_TRUSTED_PROXY_CIDRS` into the proxy's `set_real_ip_from` lines, or into none |
-| `proxy/compose.tls.yml` | `PROD-01-TLS-ACME-01` — the 443 overlay: it publishes container port 8443 as public 443 and does nothing else; `deploy.sh` passes it only for a deploy that is cleared to publish and has a certificate |
+| `proxy/compose.tls.yml` | `PROD-01-TLS-ACME-01` — the 443 overlay: it publishes container port 8443 as public 443 and does nothing else; `deploy.sh` passes it only for a deploy that has `ALPHA_PUBLISH_HTTPS=yes`, a certificate **and a clean credential gate** (`PROD-02`) |
 | `proxy/acme-challenge.conf` | `PROD-01-TLS-ACME-01` — the challenge listener (public port 80): the ACME webroot and a redirect to HTTPS, **no route to any other tier** |
 | `proxy/watch-certificate.sh` | `PROD-01-TLS-ACME-01` — the proxy's timer: when the pair on the volume changes it re-runs the switch, tests the configuration and reloads nginx |
 | `proxy/tls/` | no longer mounted by anything; kept, with its ignore rule, so a key dropped there out of habit still cannot be committed |
-| `../acme/` | `PROD-01-TLS-ACME-01` — the ACME client as a service of the same project: `Dockerfile`, `client.pin` (the exact client version), `entrypoint.sh`, `export-pair.sh`, `check-served.sh`, and `compose.acme.yml`, the overlay passed whenever `ALPHA_CERT_NAME` is set |
-| `lib/proxy-listeners.sh` | `PROD-01-TLS-ACME-01` — the one place that decides which of the proxy's three listeners a deploy has |
+| `../acme/` | `PROD-01-TLS-ACME-01` — the ACME client as a service of the same project: `Dockerfile`, `client.pin` (the exact client version), `entrypoint.sh`, `export-pair.sh`, `check-served.sh`, and `compose.acme.yml`, the overlay passed whenever `ALPHA_CERT_NAME` is set (it also declares the client's own network, `acme-edge`, shared only with the proxy) |
+| `lib/proxy-listeners.sh` | `PROD-01-TLS-ACME-01`, `PROD-02` — the one place that decides which of the proxy's three listeners a deploy has, and the one place that asks the default-credential gate (`deploy.sh`, `verify-deployed.sh`, `reset.sh --restore` and `copy-serve.sh restore-db` all call it) |
 | `deploy.sh` | `PA-01` criterion 1 — bring this clone up, and refuse to call it deployed until the stack has answered |
 | `reset.sh` | `T-5` — the guarded wipe, and the restore of its own dump |
 | `purge-product-data.sh` | `STAND-PURGE-TOOL-01` — delete the stand's product data (projects, documents, runs, findings, decisions, price lists, their objects) and **keep the accounts and the norm corpus**; dumps and verifies first. `docs/program/STAND-PURGE-TOOL-01.md` |
@@ -389,15 +389,39 @@ that typed it** — and both fail by producing something plausible.
 obtains and renews its own certificate.** `compose.server.yml` is still not changed and `nginx.conf` still
 names no certificate. `ALPHA_CERT_NAME` in `alpha.env` is the one switch: empty, nothing below exists and
 the stack is what it was; set, `deploy.sh` adds the ACME overlay (`infra/acme/compose.acme.yml`: an ACME
-client, the challenge listener on public port 80, the volumes) and, for a deploy that is cleared to publish
-and already has a certificate, `proxy/compose.tls.yml` (public port 443). Three listeners, and
-`lib/proxy-listeners.sh` decides which exist:
+client, the challenge listener on public port 80, the volumes, a network of its own) and, for a deploy that
+may publish 443, `proxy/compose.tls.yml` (public port 443). Three listeners, and `lib/proxy-listeners.sh`
+decides which exist:
 
-| listener | where | serves |
-|---|---|---|
-| application, plain | `127.0.0.1:${ALPHA_HTTP_PORT}` | the whole application — always, loopback |
-| challenge | public port 80 | the ACME webroot and a redirect to HTTPS; **no application route** |
-| application, TLS | public port 443 | the application over TLS with HSTS — only when cleared and a certificate exists |
+| listener | where | serves | exists when |
+|---|---|---|---|
+| application, plain | `127.0.0.1:${ALPHA_HTTP_PORT}` | the whole application | always, on loopback; with a name set `deploy.sh` refuses any other `ALPHA_BIND_ADDRESS` |
+| challenge | public port 80 (`ALPHA_PUBLIC_ADDRESS`, `ALPHA_ACME_HTTP_PORT`) | the ACME webroot and a redirect to HTTPS; **no application route** | whenever `ALPHA_CERT_NAME` is set, so issuance works while the seeded password is still the seeded one |
+| application, TLS | public port 443 (`ALPHA_PUBLIC_ADDRESS`, `ALPHA_HTTPS_PORT`) | the application over TLS with HSTS | only when **all three** hold: `ALPHA_PUBLISH_HTTPS=yes` (the operator's half), a certificate pair exists on the `certs` volume, **and the default-credential gate is clean** (`PROD-02`, `R-146s`) |
+
+**Who decides 443, and when.** The gate is `python -m auditmanager.access.check --gate` run in the `api` image: it
+asks whether the published seeded pair (`admin` / `password`) is still valid. It needs the database, so a deploy decides
+443 in two steps: the full `up` never *opens* 443 (it keeps an already published one only while the setting still says
+`yes` and a pair exists), and the gate step after `migrations-at-head` then opens it, or withdraws it by recreating
+**only the proxy** without the 443 overlay. The restore paths (`reset.sh --restore`, `copy-serve.sh restore-db`) end by
+asking the same gate and withdraw 443 on a finding, or on an answer they could not get; they never open it.
+`verify-deployed.sh` exits 8 on the pair and says loudly if 443 is published meanwhile. The decision functions
+(`listeners_https_wanted`, `listeners_apply_https`, `listeners_withhold_https`) are in `lib/proxy-listeners.sh`.
+
+**Networks.** Every service of `compose.server.yml` is on the data network `<instance>-net`. The ACME client is on
+`<instance>-acme-net`, shared with the `proxy` and with nothing else (`D-229` item 3): it needs only the proxy (its probe
+on 8081, `check-served.sh` on 8443) and the way out to the authority, and it holds no route to postgres, s3 or the api.
+The `proxy` is on both networks. `reload-proxy.sh` therefore takes the network of its throwaway `nginx -t` container from
+the `api` container and not from "the proxy's first", which would sort to the client's network.
+
+**What `deploy.sh` refuses before it builds, for a stack with a name** (each guard is a marked block with a test that
+deletes it): the clone lacks a terminator file (`acme-files-present`); a setting is unusable, or one of the TLS settings
+is set with no name (`acme-settings-well-formed`); the client is not pinned (`acme-client-pinned`); a socket of this host
+listens on port 80, or on 443 when this deploy would publish it, **on any address** — the kernel's table of listeners is
+read, because a host nginx bound to the host's own address is invisible to a connect to `127.0.0.1` and collides with
+Docker's `0.0.0.0` publish (`public-ports-free`, `D-229` item 1); a non-empty `ALPHA_TRUSTED_PROXY_CIDRS` is left over
+from the host nginx this stack replaces (`trusted-proxies-empty-with-name`, `D-229` item 4); the certificate volume
+cannot be asked (`acme-pair-answerable`).
 
 The operator's procedure — the staging rehearsal that comes before the first real issuance, the cutover
 from the host's nginx, the expected output of every step — is `docs/program/DEPLOYMENT_RUNBOOK.md` section 6.

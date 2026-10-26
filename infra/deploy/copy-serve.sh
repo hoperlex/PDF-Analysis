@@ -7,8 +7,9 @@
 #     restrict,from="<development host>",command="ALPHA_CHECKOUT=/srv/auditmanager STAND_COPY_DIR=/srv/auditmanager-copy /srv/auditmanager/copy-serve/copy-serve.sh" ssh-ed25519 AAAA... w54-copy
 #
 # INSTALLED APART FROM THE CHECKOUT. The owner extracts this file, `capacity-probe.sh` and
-# `lib/forced-command.sh` from the candidate's git objects into `/srv/auditmanager/copy-serve/`
-# (`DEPLOYMENT_RUNBOOK.md` §13). Everything it acts on comes from `ALPHA_CHECKOUT` -- the
+# `lib/forced-command.sh` and, since `PROD-02`, `lib/proxy-listeners.sh` (the credential gate and the
+# "withdraw 443" step `restore-db` ends with) from the candidate's git objects into
+# `/srv/auditmanager/copy-serve/` (`DEPLOYMENT_RUNBOOK.md` §13). Everything it acts on comes from `ALPHA_CHECKOUT` -- the
 # deployed checkout's compose file, environment and `git HEAD` -- and never from where this
 # file lies, so the same script serves a stand whose checkout is an older tree.
 #
@@ -35,8 +36,12 @@
 #   verify-objects <N> [<seed>] reads back a seeded sample of N `available` Blobs against
 #                               their recorded size and SHA-256
 #   restore-db <STAMP> <sha256> the owner's way back: stops the writers again, checks the
-#                               dump's digest, restores it, compares the fingerprint, and
-#                               leaves the writers stopped and the record open. <STAMP> is
+#                               dump's digest, restores it, compares the fingerprint, raises
+#                               every account's `token_epoch` (`R-52`, as `reset.sh --restore`
+#                               does), asks the credential gate (`PROD-02`: is the published
+#                               `admin`/`password` pair valid again?) and, unless it is clean,
+#                               recreates the `proxy` WITHOUT the 443 overlay; leaves the
+#                               writers stopped and the record open. <STAMP> is
 #                               the record's, or -- while a newer dump-db has not completed
 #                               -- the previous record's (`record.prev.json`)
 #   resume <STAMP>              starts the stopped writers and closes the record, holding
@@ -871,10 +876,22 @@ verb_verify_objects() {
 
 verb_restore_db() {
     local stamp="$1" sha="$2" actual present=() writer stopped recorded restored previous=no carried=()
+    local revoke_status=0 door_state
     require_checkout
     require_copy_dir
     take_copy_lock
     hold_import_lock
+    # `PROD-02`. Checked BEFORE anything is stopped or restored: a restore that cannot ask the gate afterwards
+    # would leave the published pair able to sign in on a site whose door nothing can shut.
+    # >>> guard: listeners-library-present
+    if [ ! -r "$HERE/lib/proxy-listeners.sh" ]; then
+        fc_refuse listeners-library-present "$HERE/lib/proxy-listeners.sh is not installed beside this script." \
+            "restore-db ends by asking whether the published admin/password pair came back and by closing public" \
+            "port 443 if it did (R-146s). The owner extracts that file too (DEPLOYMENT_RUNBOOK.md section 13). Nothing was stopped."
+    fi
+    # <<< guard: listeners-library-present
+    # shellcheck source=infra/deploy/lib/proxy-listeners.sh
+    . "$HERE/lib/proxy-listeners.sh"
     # >>> guard: restore-record-present
     if ! record_exists; then
         fc_refuse restore-record-present "there is no copy record, so there is no dump to restore."
@@ -942,7 +959,47 @@ verb_restore_db() {
             "The writers stay stopped and the record open. The owner decides; do not resume blind."
     fi
     # <<< guard: fingerprint-restored
+
+    # --- `PROD-02`: THE RESTORE TAKES BACK WHAT IT PUT BACK, AND ASKS THE SAME GATE AS A DEPLOY (`R-52`, `R-146s`).
+    # AFTER the fingerprint comparison, because raising `token_epoch` changes `app_user` and the comparison is
+    # about the database as the dump left it. `pg_restore` brings `app_user` back entire -- password digests,
+    # `token_epoch` and `is_default_credential` -- so a dump taken before the forced password change puts the
+    # published `admin`/`password` pair back, and a dump taken before a `revoke --everyone` un-revokes. Same
+    # statuses as `reset.sh --restore`: 0 revoked something, 1 matched nothing (a dump with no accounts), 2 could
+    # not reach the database. The third is a refusal HERE and not a report, because the writers are still
+    # stopped: nothing is exposed until `resume`, and `resume` must not follow a restore whose credentials are live.
+    compose run --rm --no-deps -T --entrypoint python api \
+        -m auditmanager.access.revoke --everyone < /dev/null >&2 || revoke_status=$?
+    # >>> guard: credentials-revoked
+    if [ "$revoke_status" -ge 2 ]; then
+        fc_refuse credentials-revoked "the restored credentials were not revoked (access.revoke --everyone exited $revoke_status)." \
+            "The writers stay stopped and the record open. Run it yourself, then resume $stamp:" \
+            "docker compose --env-file $ENV_FILE --file $COMPOSE_FILE run --rm --no-deps -T --entrypoint python api -m auditmanager.access.revoke --everyone"
+    fi
+    # <<< guard: credentials-revoked
+
+    # THE GATE. A finding -- or an answer that could not be had, which after a restore is not "fine" -- recreates
+    # ONLY the proxy without the 443 overlay: the site is unreachable from outside until an administrator changes
+    # the password through the loopback port (the consequence `R-146s` accepts). A restore never OPENS 443; only a
+    # deploy does, after a clean gate.
+    listeners_gate_run compose
+    printf '%s\n' "$LISTENERS_GATE_OUTPUT" | sed 's/^/gate: /' >&2
+    door_state="unchanged (the gate is clean; a restore never opens 443, the next deploy decides)"
+    if [ "$LISTENERS_GATE_VERDICT" != clean ]; then
+        # >>> guard: https-withheld
+        if ! listeners_withhold_https compose "$CHECKOUT/infra/deploy" "$ENV_FILE" "$(configured ALPHA_CERT_NAME)"; then
+            fc_refuse https-withheld "the credential gate said $LISTENERS_GATE_VERDICT and public port 443 could not be withdrawn." \
+                "The writers stay stopped and the record open. Close it by hand, then resume $stamp:" \
+                "docker compose --env-file $ENV_FILE --file $COMPOSE_FILE up -d --force-recreate --no-deps proxy"
+        fi
+        # <<< guard: https-withheld
+        door_state="not published (the gate said $LISTENERS_GATE_VERDICT; the proxy runs without the 443 overlay)"
+    fi
     printf 'restored: %s\nfingerprint_sha256: %s (matches the copy)\nwriters_stopped: %s\n' "$stamp" "$restored" "$stopped"
+    printf 'token_epoch: raised on every account (access.revoke exited %s)\n' "$revoke_status"
+    printf 'credential_gate: %s%s\n' "$LISTENERS_GATE_VERDICT" \
+        "$([ "$LISTENERS_GATE_VERDICT" = finding ] && printf ' (%s)' "$(listeners_gate_logins "$LISTENERS_GATE_OUTPUT" | paste -sd, -)")"
+    printf 'https_443: %s\n' "$door_state"
     printf 'next: a reviewed revert (re-attest publish <sha> to bind it), its deploy, then resume %s\n' "$stamp"
 }
 
@@ -979,9 +1036,10 @@ verb_resume() {
 verb_status() {
     local age=""
     printf 'copy-serve.sh status\n'
-    printf 'script: %s  lib: %s  probe: %s\n' "$(sha256_of "${BASH_SOURCE[0]}")" \
+    printf 'script: %s  lib: %s  probe: %s  listeners: %s\n' "$(sha256_of "${BASH_SOURCE[0]}")" \
         "$(sha256_of "$HERE/lib/forced-command.sh")" \
-        "$( [ -r "$HERE/capacity-probe.sh" ] && sha256_of "$HERE/capacity-probe.sh" || echo absent)"
+        "$( [ -r "$HERE/capacity-probe.sh" ] && sha256_of "$HERE/capacity-probe.sh" || echo absent)" \
+        "$( [ -r "$HERE/lib/proxy-listeners.sh" ] && sha256_of "$HERE/lib/proxy-listeners.sh" || echo absent)"
     printf 'checkout: %s  deployed_tree: %s\n' "$CHECKOUT" \
         "$(git -C "$CHECKOUT" rev-parse --verify --quiet 'HEAD^{commit}' 2>/dev/null || echo unknown)"
     printf 'copy_dir: %s\n' "$COPY_DIR"

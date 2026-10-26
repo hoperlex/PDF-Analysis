@@ -5,7 +5,8 @@
 #
 # Exit 0: the deployed stack is this working tree. Exit 6: it is not. Exit 4: the question
 # could not be answered. Exit 7: the stack is this tree and the certificate it serves is not
-# acceptable (`PROD-01-TLS-ACME-01`, below). **All failures are failures.** The row this closes is not "the
+# acceptable (`PROD-01-TLS-ACME-01`, below). Exit 8: the stack is this tree and the published
+# seeded pair (`admin` / `password`) is valid (`PROD-02`, section 5 below). **All failures are failures.** The row this closes is not "the
 # stack drifted" -- it is that three waves running, nothing noticed, because there was no
 # check to be red. A probe that skips when it is unsure is the same nothing with a nicer
 # face, so there is no path through this script that reports success without having
@@ -82,6 +83,7 @@ REPO="$(cd "$HERE/../.." && pwd)"
 DRIFT=6
 UNANSWERABLE=4
 CERTIFICATE=7
+CREDENTIAL=8
 REHEARSAL=no
 
 while [ "$#" -gt 0 ]; do
@@ -489,5 +491,39 @@ if [ -n "$CERT_NAME" ]; then
     esac
     echo
 fi
+
+# --- 5. the published default credential (`PROD-02`, `R-146i`, `R-146s`, `R-146z`; ADR-0023 section 3) -----------
+# A deployment is not successful while the PUBLISHED seeded pair (`admin` / `password`) is valid. Asked of the
+# database by `python -m auditmanager.access.check --gate` in the api image (the host has no python), after the
+# stack has been shown to be this tree, so the bytes that answer are the bytes of this checkout. A temporary
+# password an administrator issued is a WARNING line of that output and not a failure (`R-146z`). `unknown` (the
+# check could not run, or printed neither sentinel) is exit 4: it is not an answer, and "no finding" is an answer.
+echo "-- the published default credential is not valid --"
+LISTENERS_LIB="$HERE/lib/proxy-listeners.sh"
+[ -r "$LISTENERS_LIB" ] || fail "$UNANSWERABLE" "$LISTENERS_LIB is missing, so the credential gate cannot be asked."
+# shellcheck source=lib/proxy-listeners.sh
+. "$LISTENERS_LIB"
+# >>> step: default-credential-gate
+listeners_gate_run compose
+printf '%s\n' "$LISTENERS_GATE_OUTPUT" | sed 's/^/  /'
+case "$LISTENERS_GATE_VERDICT" in
+    clean) ;;
+    finding)
+        if listeners_https_published compose; then
+            PUBLISHED_NOTE="PUBLIC PORT 443 IS PUBLISHED while the pair is valid: withdraw it now (deploy.sh does, on its next run)."
+        else
+            PUBLISHED_NOTE="Public port 443 is not published, as it must not be while the pair is valid."
+        fi
+        fail "$CREDENTIAL" "the published admin/password pair is valid: $(listeners_gate_logins "$LISTENERS_GATE_OUTPUT" | paste -sd, -) still accepts the published password." \
+            "$PUBLISHED_NOTE" \
+            "The deployment is not successful (R-146i). Sign in through an SSH tunnel to the loopback port," \
+            "change the password, and deploy again." ;;
+    *)
+        fail "$UNANSWERABLE" "the credential gate could not be answered (access.check --gate exited $LISTENERS_GATE_STATUS and printed neither sentinel)." \
+            "What it printed is above. Whether the published pair is valid is NOT known, so nothing is claimed." ;;
+esac
+# <<< step: default-credential-gate
+echo "  no account accepts the published password; temporary passwords, if any, are warned about above."
+echo
 
 echo "verify-deployed.sh: the deployed stack IS this tree ($HEAD_SHA$DIRTY)."

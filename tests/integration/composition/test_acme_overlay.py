@@ -107,6 +107,39 @@ def published(text: str) -> list[str]:
     return out
 
 
+def network_names(body: dict[str, list[str]]) -> set[str]:
+    """The networks a service lists, from either spelling: ``networks: [a, b]`` or a ``- a`` item per line."""
+    found: set[str] = set()
+    for item in body.get("networks", []):
+        item = item.removeprefix("- ").strip()
+        if item.startswith("[") and item.endswith("]"):
+            found |= {name.strip() for name in item[1:-1].split(",") if name.strip()}
+        elif item and not item.endswith(":"):
+            found.add(item)
+        elif item.endswith(":"):
+            found.add(item[:-1])
+    return found
+
+
+def top_level_networks(text: str) -> dict[str, list[str]]:
+    """``{network: [its attribute lines]}`` for the top-level ``networks:`` block of a compose file."""
+    lines = code(text)
+    if "networks:" not in lines:
+        return {}
+    found: dict[str, list[str]] = {}
+    current = ""
+    for line in lines[lines.index("networks:") + 1 :]:
+        indent = len(line) - len(line.lstrip())
+        if indent == 0:
+            break
+        if indent == 2 and line.strip().endswith(":"):
+            current = line.strip()[:-1]
+            found[current] = []
+        elif current:
+            found[current].append(line.strip())
+    return found
+
+
 FILES = {"base": BASE, "acme": ACME_OVERLAY, "tls": TLS_OVERLAY}
 
 
@@ -190,11 +223,49 @@ class TestTheAcmeService:
         staging = next(line for line in env if line.startswith("ACME_STAGING"))
         assert "${ALPHA_ACME_STAGING:-yes}" in staging, "the default must be the TEST endpoint (R-146ac)"
 
-    def test_it_is_on_the_stacks_network_and_waits_for_the_proxy_to_have_started(self) -> None:
+    def test_it_is_on_a_network_of_its_own_and_waits_for_the_proxy_to_have_started(self) -> None:
+        """Before `D-229` item 3 this read ``["[alpha]"]``: the client sat on the data tier's network. The only
+        peer it needs is the proxy (the probe on 8081, the verification script on 8443)."""
         body = self.body()
-        assert body["networks"] == ["[alpha]"]
+        assert body["networks"] == ["[acme-edge]"]
         assert body["depends_on"] == ["proxy:", "condition: service_started"]
         assert body["restart"] == ["unless-stopped"]
+
+    def test_it_shares_no_network_with_the_data_tier(self) -> None:
+        """`D-229` item 3. The client holds no credential, socket or port, but a container with TCP reach to
+        postgres, s3 and the api is one floating certbot dependency away from using it. Whatever network any
+        base service other than the proxy is on, the client is not on it."""
+        base = services(BASE.read_text())
+        data_tier = set()
+        for name, body in base.items():
+            if name != "proxy":
+                data_tier |= network_names(body)
+        assert data_tier == {"alpha"}, f"the premise changed: the base services are on {sorted(data_tier)}"
+        assert network_names(self.body()).isdisjoint(data_tier), network_names(self.body())
+
+    def test_only_the_proxy_and_the_client_are_on_the_client_network(self) -> None:
+        members = {
+            name
+            for path in FILES.values()
+            for name, body in services(path.read_text()).items()
+            if "acme-edge" in network_names(body)
+        }
+        assert members == {"acme", "proxy"}, members
+
+    def test_the_proxy_stays_on_the_data_network_and_joins_the_client_network(self) -> None:
+        """The proxy is the bridge between the two and must keep reaching api and web. It lists BOTH names in
+        the overlay so the result is the same whether compose merges the lists or replaces one with the other."""
+        assert network_names(services(BASE.read_text())["proxy"]) == {"alpha"}
+        assert network_names(services(ACME_OVERLAY.read_text())["proxy"]) == {"alpha", "acme-edge"}
+
+    def test_the_client_network_is_declared_by_the_overlay_and_is_not_internal(self) -> None:
+        """Declared here and not in the base (the rollback is the absence of the overlays); named from the
+        instance like every other network and volume; NOT ``internal``: the client must reach the authority."""
+        declared = top_level_networks(ACME_OVERLAY.read_text())
+        assert set(declared) == {"acme-edge"}, sorted(declared)
+        assert declared["acme-edge"] == ["name: ${ALPHA_INSTANCE:?ALPHA_INSTANCE is unset.}-acme-net"], declared
+        assert "acme-edge" not in top_level_networks(BASE.read_text())
+        assert "internal" not in "\n".join(code(ACME_OVERLAY.read_text()))
 
     def test_it_is_healthy_when_a_pair_has_been_exported(self) -> None:
         health = " ".join(self.body()["healthcheck"])
