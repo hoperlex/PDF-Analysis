@@ -400,9 +400,17 @@ services:
     #
     # Reaching the stand is now `ssh -L 31500:127.0.0.1:31500 <host>` and opening
     # `http://127.0.0.1:31500` locally. `ALPHA_BIND_ADDRESS` exists so a host that genuinely
-    # should publish — one behind a real firewall, serving TLS on `ALPHA_HTTPS_PORT` under
-    # `R-1` — can say so deliberately in `alpha.env`, rather than getting it by default from
-    # an omission. **The default is the safe value and changing it is a decision someone has
-    # to write down.**
+    # should publish the PLAIN application port — one behind a real firewall — can say so
+    # deliberately in `alpha.env`, rather than getting it by default from an omission. **The
+    # default is the safe value and changing it is a decision someone has to write down.**
+    #
+    # `PROD-01-TLS-ACME-01` (`ADR-0021` section 2, `R-146a`, `R-146s`): THIS PORT IS THE FIRST OF
+    # THREE LISTENERS AND THE ONLY ONE THIS FILE PUBLISHES. When `ALPHA_CERT_NAME` is set,
+    # `deploy.sh` adds `infra/acme/compose.acme.yml` (an ACME client, and public port 80 for the
+    # challenge and a redirect -- no application route) and, for a deploy that is cleared to
+    # publish and has a certificate, `infra/deploy/proxy/compose.tls.yml` (public port 443). With the
+    # name empty nothing is added and this file is the whole stack, as before. The application
+    # port stays on loopback in every case; the old `ALPHA_BIND_ADDRESS` route to a public plain
+    # listener is refused once a name is set.
     ports:
       - "${ALPHA_BIND_ADDRESS:-127.0.0.1}:${ALPHA_HTTP_PORT:?ALPHA_HTTP_PORT is unset.}:8080"

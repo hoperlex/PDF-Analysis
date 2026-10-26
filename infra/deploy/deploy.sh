@@ -352,6 +352,121 @@ if [ -n "$TRUSTED_PROXIES" ]; then
 fi
 # <<< guard: trusted-proxies-well-formed
 
+# --- the TLS terminator and the certificate (`PROD-01-TLS-ACME-01`, `ADR-0021` section 2) ----------
+# `ALPHA_CERT_NAME` is the one switch. EMPTY (the default) is the stack as it was before this block
+# existed: no ACME client, no public listener, nothing below this comment changes a byte of what is built
+# or started. SET, the stack terminates TLS itself -- an ACME client as a service of the same project, the
+# challenge listener on public port 80, the pair in a volume the proxy reads -- and the three guards below
+# make every way that can go wrong a sentence here, before docker is touched.
+#
+# Read as DATA, like every other value in this file. `PUBLISH_HTTPS` is the INTERIM form of the credential
+# gate of `R-146s`: the operator says `yes` once the seeded password is gone, and `PROD-02` replaces that one
+# word by the exit status of `python -m auditmanager.access.check` without touching the rest.
+CERT_NAME="$(configured ALPHA_CERT_NAME)"
+ACME_EMAIL="$(configured ALPHA_ACME_EMAIL)"
+ACME_STAGING="$(configured ALPHA_ACME_STAGING)"
+PUBLISH_HTTPS="$(configured ALPHA_PUBLISH_HTTPS)"
+BIND_ADDRESS="$(configured ALPHA_BIND_ADDRESS)"
+ACME_HTTP_PORT="$(configured ALPHA_ACME_HTTP_PORT)"
+HTTPS_PORT="$(configured ALPHA_HTTPS_PORT)"
+[ -n "$ACME_HTTP_PORT" ] || ACME_HTTP_PORT=80
+[ -n "$HTTPS_PORT" ] || HTTPS_PORT=443
+ACME_DIR="$HERE/../acme"
+LISTENERS_LIB="$HERE/lib/proxy-listeners.sh"
+
+# >>> guard: acme-files-present
+# Asked FIRST, because everything after it reads these files. A clone that lacks one -- a partial copy, a
+# sparse checkout, a branch from before this lane -- must not produce a shorter list of compose files that
+# looks like a working deploy and has no TLS. Only when a name is configured: without one none of them is
+# used and a clone without them is the stack it always was.
+if [ -n "$CERT_NAME" ]; then
+    ACME_MISSING=""
+    for needed in "$LISTENERS_LIB" "$ACME_DIR/compose.acme.yml" "$ACME_DIR/Dockerfile" "$ACME_DIR/client.pin" \
+        "$ACME_DIR/entrypoint.sh" "$ACME_DIR/export-pair.sh" "$ACME_DIR/check-served.sh" \
+        "$HERE/proxy/acme-challenge.conf" "$HERE/proxy/tls-server.conf" "$HERE/proxy/enable-tls.sh" \
+        "$HERE/proxy/watch-certificate.sh" "$HERE/proxy/compose.tls.yml"; do
+        [ -f "$needed" ] || ACME_MISSING="$ACME_MISSING $needed"
+    done
+    if [ -n "$ACME_MISSING" ]; then
+        refuse "ALPHA_CERT_NAME is set and this clone is missing files the TLS terminator is built from." \
+               " $ACME_MISSING" \
+               "Nothing was built. Clear ALPHA_CERT_NAME in $ENV_FILE to deploy without a terminator," \
+               "or deploy a clone that has infra/acme/ and infra/deploy/proxy/ whole."
+    fi
+fi
+# <<< guard: acme-files-present
+
+# >>> guard: acme-settings-well-formed
+# Every value below ends up on a command line, in a redirect or in a published port, so each one is
+# validated here and not trusted. The name is judged by `listeners_name_problem` (one definition, shared with
+# the rest of the stack); a placeholder or a reserved name is refused by the same function.
+#
+# A setting that does nothing without a name is refused when there is no name, rather than ignored: an
+# operator who wrote `ALPHA_PUBLISH_HTTPS=yes` and no name would otherwise believe 443 was open.
+#
+# `ALPHA_BIND_ADDRESS` must be loopback (or absent) when a name is set. The plain APPLICATION listener is
+# one of the three (`R-146s`) and it is the one that must never be public: the public ports are 80, which
+# serves the challenge and a redirect, and 443, which serves the application over TLS. The old setting that
+# could publish plain HTTP stops being a way to do that the moment this stack terminates TLS itself.
+if [ -z "$CERT_NAME" ]; then
+    if [ -n "$ACME_EMAIL" ] || [ -n "$ACME_STAGING" ] || [ "$PUBLISH_HTTPS" = yes ]; then
+        refuse "ALPHA_ACME_EMAIL, ALPHA_ACME_STAGING or ALPHA_PUBLISH_HTTPS is set in $ENV_FILE and ALPHA_CERT_NAME is not." \
+               "Those settings only act on a stack that terminates TLS, and there is no name for it to" \
+               "obtain a certificate for. Set ALPHA_CERT_NAME, or remove them. Nothing was built."
+    fi
+else
+    # shellcheck source=lib/proxy-listeners.sh
+    . "$LISTENERS_LIB"
+    [ -n "$ACME_STAGING" ] || ACME_STAGING=yes
+    [ -n "$PUBLISH_HTTPS" ] || PUBLISH_HTTPS=no
+    ACME_PROBLEMS=()
+    if ! NAME_WHY="$(listeners_name_problem "$CERT_NAME")"; then
+        ACME_PROBLEMS+=("  ALPHA_CERT_NAME '$CERT_NAME': $NAME_WHY")
+    fi
+    case "$ACME_STAGING" in yes|no) ;; *) ACME_PROBLEMS+=("  ALPHA_ACME_STAGING is '$ACME_STAGING', which is neither yes nor no") ;; esac
+    case "$PUBLISH_HTTPS" in yes|no) ;; *) ACME_PROBLEMS+=("  ALPHA_PUBLISH_HTTPS is '$PUBLISH_HTTPS', which is neither yes nor no") ;; esac
+    if [ -n "$ACME_EMAIL" ] && ! [[ "$ACME_EMAIL" =~ ^[A-Za-z0-9._+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; then
+        ACME_PROBLEMS+=("  ALPHA_ACME_EMAIL is not an address (letters, digits and . _ + - around one @)")
+    fi
+    case "$BIND_ADDRESS" in
+        ''|127.0.0.1|::1|localhost) ;;
+        *) ACME_PROBLEMS+=("  ALPHA_BIND_ADDRESS is '$BIND_ADDRESS': with a certificate name set the plain application listener must stay on loopback (the public ports are 80 and 443)") ;;
+    esac
+    for port_setting in "ALPHA_ACME_HTTP_PORT=$ACME_HTTP_PORT" "ALPHA_HTTPS_PORT=$HTTPS_PORT"; do
+        port_value="${port_setting#*=}"
+        if ! [[ "$port_value" =~ ^[0-9]{1,5}$ ]] || [ "$port_value" -lt 1 ] || [ "$port_value" -gt 65535 ]; then
+            ACME_PROBLEMS+=("  ${port_setting%%=*} is '$port_value', not a port number")
+        elif [ "$port_value" = "$HTTP_PORT" ]; then
+            ACME_PROBLEMS+=("  ${port_setting%%=*} is the same port as ALPHA_HTTP_PORT ($HTTP_PORT)")
+        fi
+    done
+    if [ "${#ACME_PROBLEMS[@]}" -gt 0 ]; then
+        refuse "the TLS settings in $ENV_FILE are not usable." \
+               "${ACME_PROBLEMS[@]}" \
+               "Nothing was built. See infra/deploy/env/alpha.env.example, \"the TLS terminator\"."
+    fi
+fi
+# <<< guard: acme-settings-well-formed
+
+# >>> guard: acme-client-pinned
+# The client is installed by exact package version (`infra/acme/client.pin`), and the lane that wrote that
+# file had no network to resolve one, so it ships the word UNRESOLVED. Building from it would fail late and
+# in apk's words; this fails first, in ours, naming the one step that fixes it.
+if [ -n "$CERT_NAME" ]; then
+    ACME_PIN="$(sed -n 's/^ACME_CLIENT_APK_VERSION=//p' "$ACME_DIR/client.pin" | tail -1)"
+    if [ -z "$ACME_PIN" ] || [ "$ACME_PIN" = UNRESOLVED ]; then
+        refuse "the ACME client is not pinned: $ACME_DIR/client.pin says ACME_CLIENT_APK_VERSION=${ACME_PIN:-<absent>}." \
+               "The image installs certbot by exact package version and refuses to build without one." \
+               "Resolve it once, from a machine with docker and network (DEPLOYMENT_RUNBOOK.md section 6," \
+               "step 1), commit infra/acme/client.pin, and deploy that commit. Nothing was built."
+    fi
+    if ! printf '%s\n' "$ACME_PIN" | grep -Eq '^[0-9][0-9A-Za-z._+~]*-r[0-9]+$'; then
+        refuse "ACME_CLIENT_APK_VERSION in $ACME_DIR/client.pin is '$ACME_PIN', which is not an apk package version." \
+               "Expected <upstream version>-r<release>, as 'apk policy certbot' prints it. Nothing was built."
+    fi
+fi
+# <<< guard: acme-client-pinned
+
 # >>> guard: placeholder-secrets
 # THE EXAMPLE FILE'S OWN VALUES, REFUSED BY IDENTITY RATHER THAN BY PATTERN. `cp` the
 # example and forget to edit it and you get a reachable stack whose database password is in
@@ -566,13 +681,33 @@ if [ -n "$MISSING" ]; then
 fi
 # <<< guard: build-context-complete
 
-compose() { docker compose --env-file "$ENV_FILE" --file "$COMPOSE_FILE" "$@"; }
+# THE COMPOSE FILES ARE A LIST, and `compose.server.yml` is always its first member. With no certificate name
+# the list has that one member and every call below is byte-for-byte the call it was before
+# `PROD-01-TLS-ACME-01` (`docker compose --env-file E --file F ...`). With a name the ACME overlay is added
+# here, so the build, the pair check and `up` all see the acme service; the 443 overlay is added later, once,
+# by the listener decision just before `up`.
+COMPOSE_FILES=("$COMPOSE_FILE")
+if [ -n "$CERT_NAME" ]; then
+    while IFS= read -r overlay; do
+        [ -z "$overlay" ] || COMPOSE_FILES+=("$overlay")
+    done < <(listeners_overlay_files "$HERE" "$CERT_NAME" no no)
+fi
+compose() {
+    local args=(--env-file "$ENV_FILE") file
+    for file in "${COMPOSE_FILES[@]}"; do
+        args+=(--file "$file")
+    done
+    docker compose "${args[@]}" "$@"
+}
 
 echo "deploy.sh: instance   $INSTANCE"
 echo "deploy.sh: repository $REPO"
 echo "deploy.sh: port       $HTTP_PORT"
 echo "deploy.sh: database   $DATABASE"
 echo "deploy.sh: bucket     $BUCKET"
+if [ -n "$CERT_NAME" ]; then
+    echo "deploy.sh: tls name   $CERT_NAME (ACME: $([ "$ACME_STAGING" = yes ] && echo 'STAGING, rehearsal only' || echo production))"
+fi
 echo
 
 # >>> guard: port-not-foreign
@@ -605,6 +740,41 @@ if [ "$PORT_HELD" = yes ] && [ -z "$OWN_PROXY" ]; then
            "ALPHA_HTTP_PORT in $ENV_FILE, or stop the other stack on purpose."
 fi
 # <<< guard: port-not-foreign
+
+# >>> guard: public-ports-free
+# THE SAME QUESTION AS ABOVE FOR THE TWO PUBLIC PORTS, and the likeliest answer to it is the nginx on the
+# host that terminates TLS today (`D-191`): while it holds port 80 or 443, `docker compose up` fails on the
+# bind -- after the build, and in a message about a port allocation. The cutover from that nginx is the
+# owner's act (DEPLOYMENT_RUNBOOK.md section 6) and this is the sentence that says it has not happened yet.
+# Port 80 is checked whenever a name is configured; 443 only when this deploy is to publish it.
+#
+# THE OWN-PROXY CASE, again: a port this instance's proxy already publishes is the idempotent one. It is
+# asked of docker by container port (`docker port <proxy> 8081/tcp`, `8443/tcp`) and not inferred from "a
+# proxy exists", because a proxy that exists WITHOUT the new port is exactly the case where something else
+# may be holding it.
+if [ -n "$CERT_NAME" ]; then
+    PUBLIC_CHECKS="$ACME_HTTP_PORT:8081"
+    [ "$PUBLISH_HTTPS" != yes ] || PUBLIC_CHECKS="$PUBLIC_CHECKS $HTTPS_PORT:8443"
+    for public in $PUBLIC_CHECKS; do
+        public_port="${public%%:*}"
+        public_inside="${public##*:}"
+        if (exec 3<>"/dev/tcp/127.0.0.1/$public_port") 2>/dev/null; then
+            OURS=no
+            if [ -n "$OWN_PROXY" ] && docker port "$OWN_PROXY" "$public_inside/tcp" 2>/dev/null | grep -q ":$public_port\$"; then
+                OURS=yes
+            fi
+            if [ "$OURS" = no ]; then
+                refuse "public port $public_port is already in use, and not by $INSTANCE's proxy." \
+                       "  something answers on 127.0.0.1:$public_port" \
+                       "Nothing was built and nothing was started. This stack terminates TLS itself, so the" \
+                       "nginx that did it on this host (or anything else on that port) has to be stopped" \
+                       "first -- the cutover is DEPLOYMENT_RUNBOOK.md section 6, step 3. For a rehearsal on a" \
+                       "development machine, ALPHA_ACME_HTTP_PORT and ALPHA_HTTPS_PORT name other ports."
+            fi
+        fi
+    done
+fi
+# <<< guard: public-ports-free
 
 # --- 1. build, and ONLY then bring up ------------------------------------------------
 # WHAT THE TWO IMAGE NAMES POINT AT BEFORE THE BUILD, and A SECOND TAG SO THAT IMAGE IS
@@ -682,15 +852,17 @@ if [ "$BUILD_STATUS" -ne 0 ]; then
            "before this run is still serving it, because images are built before anything" \
            "is brought up and this run never got past the build."
 fi
-for image in "$INSTANCE-api" "$INSTANCE-web"; do
+BUILT_IMAGES="$INSTANCE-api $INSTANCE-web"
+[ -z "$CERT_NAME" ] || BUILT_IMAGES="$BUILT_IMAGES $INSTANCE-acme"
+for image in $BUILT_IMAGES; do
     if ! docker image inspect "$image" >/dev/null 2>&1; then
         refuse "the build reported success and there is no image called $image." \
-               "  expected: $INSTANCE-api and $INSTANCE-web" \
+               "  expected: $BUILT_IMAGES" \
                "NOTHING WAS STARTED OR REPLACED. A zero exit that built nothing is the" \
                "one build failure that would otherwise reach the containers."
     fi
 done
-echo "  $INSTANCE-api and $INSTANCE-web are built"
+echo "  ${BUILT_IMAGES// /, } are built"
 echo
 # <<< guard: images-built
 
@@ -800,6 +972,58 @@ else
 fi
 echo
 
+# --- 1b. which listeners this deploy has (`R-146s`) -----------------------------------------------
+# Decided here, after the build and before `up`, because the decision needs the acme image (it is the tool
+# that looks into the certificate volume) and `up` needs the answer. Nothing below runs without a name.
+#
+# The sentence printed is the verdict of `listeners_https_verdict`, and `withheld` is not a failure: it is the
+# state of a host that has never been published, which serves the challenge port and the loopback
+# application port and waits.
+PAIR_PRESENT=no
+PAIR_STATUS=0
+PAIR_OUTPUT=""
+# >>> guard: acme-pair-answerable
+# Whether a pair exists is asked of the volume itself, through the acme image, with a sentinel on stdout
+# and NOT by an exit status: a `run` that could not start (no image, no daemon, no volume) exits non-zero
+# too, and "nothing could be asked" must not read as "there is no pair" -- that would silently withhold
+# 443 on a host that has a certificate, or the reverse. Anything but one of the two sentinels refuses.
+if [ -n "$CERT_NAME" ]; then
+    PAIR_OUTPUT="$(compose run --rm --no-deps -T --entrypoint sh acme -c \
+        'if [ -s /export/fullchain.pem ] && [ -s /export/privkey.pem ]; then echo pair-present; else echo pair-absent; fi' \
+        2>/dev/null)" || PAIR_STATUS=$?
+    PAIR_PRESENT=unknown
+    if [ "$PAIR_STATUS" -eq 0 ]; then
+        case "$PAIR_OUTPUT" in
+            pair-present) PAIR_PRESENT=yes ;;
+            pair-absent) PAIR_PRESENT=no ;;
+        esac
+    fi
+    if [ "$PAIR_PRESENT" = unknown ]; then
+        refuse "whether the certificate volume holds a pair could not be asked (status $PAIR_STATUS)." \
+               "  answer: ${PAIR_OUTPUT:-<none>}" \
+               "The acme image was built and a one-off container from it did not answer. Nothing was started." \
+               "A listener decision made without this fact would either open 443 on no certificate or" \
+               "keep it shut on a host that has one."
+    fi
+fi
+# <<< guard: acme-pair-answerable
+HTTPS_VERDICT=""
+if [ -n "$CERT_NAME" ]; then
+    echo "-- the listeners this deploy has --"
+    COMPOSE_FILES=("$COMPOSE_FILE")
+    while IFS= read -r overlay; do
+        [ -z "$overlay" ] || COMPOSE_FILES+=("$overlay")
+    done < <(listeners_overlay_files "$HERE" "$CERT_NAME" "$PUBLISH_HTTPS" "$PAIR_PRESENT")
+    HTTPS_VERDICT="$(listeners_https_verdict "$CERT_NAME" "$PUBLISH_HTTPS" "$PAIR_PRESENT")"
+    echo "  plain application listener : 127.0.0.1:$HTTP_PORT (always)"
+    echo "  challenge listener         : public port $ACME_HTTP_PORT (the ACME webroot and a redirect; no application route)"
+    case "$HTTPS_VERDICT" in
+        published) echo "  application listener (TLS) : public port $HTTPS_PORT -- published" ;;
+        *) echo "  application listener (TLS) : NOT published -- ${HTTPS_VERDICT#withheld: }" ;;
+    esac
+    echo
+fi
+
 # --- 2. up. `migrate` runs once here and `api` waits for it --------------------------
 # Migrations are a deploy step and never something a serving process does on start: two
 # replicas starting together would race the same upgrade. `compose.server.yml` says so and
@@ -898,6 +1122,9 @@ LONG_RUNNING="postgres s3 api web proxy"
 # one. Nothing depends on it, so `up -d` does not wait for its first health check; a
 # `starting` state is given up to two minutes here before it is judged.
 [ "$WORKER_ROLE" = no-service ] || LONG_RUNNING="postgres s3 api worker web proxy"
+# The ACME client is a long-running service when a name is configured. It is healthy once a pair has been
+# exported, so a deploy whose certificate has not been issued is refused here by name, with its log to read.
+[ -z "$CERT_NAME" ] || LONG_RUNNING="$LONG_RUNNING acme"
 for service in $LONG_RUNNING; do
     cid="$(compose ps --quiet "$service" 2>/dev/null | head -1 || true)"
     if [ -z "$cid" ]; then
@@ -1149,6 +1376,19 @@ else
     echo "deploy.sh: running it again is safe -- no layer rebuilds and no data is touched,"
     echo "deploy.sh: but api, web and migrate are recreated, because"
     echo "deploy.sh: ALPHA_PRESERVE_IMAGE_IDENTITY is no. See the note at the top."
+fi
+if [ -n "$CERT_NAME" ]; then
+    echo "deploy.sh: TLS for $CERT_NAME: the challenge listener is public on port $ACME_HTTP_PORT; the application over TLS is"
+    case "$HTTPS_VERDICT" in
+        published) echo "deploy.sh: published on port $HTTPS_PORT." ;;
+        *)
+            echo "deploy.sh: ${HTTPS_VERDICT}."
+            if [ "$PUBLISH_HTTPS" = yes ] && [ "$PAIR_PRESENT" != yes ]; then
+                echo "deploy.sh: the acme service is healthy only once a pair is exported, and this deploy found it healthy,"
+                echo "deploy.sh: so run this script again: the next deploy sees the pair and publishes port $HTTPS_PORT."
+            fi ;;
+    esac
+    [ "$ACME_STAGING" != yes ] || echo "deploy.sh: ALPHA_ACME_STAGING is yes: the certificate is the authority's TEST one, trusted by no browser."
 fi
 echo "deploy.sh: then ask the other question --"
 echo "  infra/deploy/verify-deployed.sh --env-file $ENV_FILE"
