@@ -13,7 +13,7 @@ export {
   OptimisationProposals,
   PassList,
   ProposalSetChooser,
-  arDocumentSets,
+  classifiedDocumentSets,
 } from './ui/optimisation-proposals';
 export type { PassSummaryProps } from './ui/pass-summary';
 export { PassSummary } from './ui/pass-summary';

@@ -93,6 +93,13 @@ export function otherSectionVersion(): DocumentVersion {
   });
 }
 
+/** A set no expert has classified: the `classification` key is absent, not `undefined`. */
+export function unclassifiedVersion(): DocumentVersion {
+  const version: Record<string, unknown> = { ...arVersion() };
+  delete version['classification'];
+  return version as unknown as DocumentVersion;
+}
+
 export function pass(overrides: Partial<OptimisationPass> = {}): OptimisationPass {
   return {
     optimisation_pass_id: PASS_ID,
@@ -295,10 +302,10 @@ export function proposalShapes(): readonly ProposalShape[] {
       },
     },
     {
-      name: 'proposals-no-ar-sets',
+      name: 'proposals-no-classified-sets',
       make: section(['expert']),
       seedClient: (client) => {
-        client.setQueryData(KEYS.documents, { items: [otherSectionVersion()], page: { next_cursor: 'c2' } as never });
+        client.setQueryData(KEYS.documents, { items: [unclassifiedVersion()], page: { next_cursor: 'c2' } as never });
       },
     },
     {

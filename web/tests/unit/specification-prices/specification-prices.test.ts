@@ -29,7 +29,7 @@ import {
   SpecificationPricesAnswer,
   SpecificationPricesChooser,
   SpecificationPricesSection,
-  arDocumentSets,
+  classifiedDocumentSets,
 } from '@/widgets/specification-prices';
 
 import { newClient, renderScreen, seedError } from '../screens/harness';
@@ -212,7 +212,7 @@ describe('paging', () => {
   });
 });
 
-describe('the set chooser offers only sets confirmed as АР', () => {
+describe('the set chooser offers the sets an expert confirmed in any section', () => {
   const ar = { classification: { version_uid: VERSION, project_stage: 'R', section_code: 'AR',
     confirmed_at: '2026-10-20T08:00:00Z', confirmed_by_user_uid: `usr_${ULID}` } } as const;
   const versions = [
@@ -222,28 +222,30 @@ describe('the set chooser offers only sets confirmed as АР', () => {
     { document_uid: 'doc_01J9ZQ8K7NHVXW3T2R5M6P4Q8H', version_ordinal: 1 },
   ] as unknown as DocumentVersion[];
 
-  it('filters by the current version\'s confirmed section', () => {
-    expect(arDocumentSets(versions).map((v) => v.document_uid)).toEqual([DOCUMENT]);
+  it('keeps every set whose current version is classified, whatever the section, and drops the rest', () => {
+    expect(classifiedDocumentSets(versions).map((v) => v.document_uid)).toEqual([DOCUMENT, OTHER_DOCUMENT]);
   });
 
   it('says when there is none, and where a section is confirmed', () => {
     const markup = renderToStaticMarkup(createElement(SpecificationPricesChooser, {
       sets: [], selected: null, onSelect: () => undefined, partial: false,
     }));
-    expect(markup).toContain('В проекте нет комплектов раздела АР');
+    expect(markup).toContain('В проекте нет комплектов с подтверждённым разделом');
     expect(markup).toContain('Подтвердите раздел на экране версии.');
+    expect(markup).not.toContain('раздела АР');
   });
 
-  it('reads the first АР set from the project\'s documents', () => {
+  it('offers the set of another section with its section named, and reads the first set', () => {
     const client = newClient();
     client.setQueryData(queryKeys.projects.documents(PROJECT, undefined, 50), {
       items: versions, page: { next_cursor: null },
     });
     client.setQueryData(queryKeys.optimisation.specificationPrices(PROJECT, DOCUMENT, 0, SPECIFICATION_ROW_LIMIT), answer());
     const markup = renderScreen(client, createElement(SpecificationPricesSection, { projectUid: PROJECT }));
-    expect(markup).toContain('data-spec-chooser="1"');
-    expect(markup).toContain('Архитектурные решения — версия 2');
-    expect(markup).not.toContain('Конструкции');
+    expect(markup).toContain('data-spec-chooser="2"');
+    expect(markup).toContain('Архитектурные решения — версия 2, раздел АР');
+    expect(markup).toContain('Конструкции — версия 1, раздел КЖ');
+    expect(markup).not.toContain('Комплект АР');
     expect(markup).toContain('data-spec-state="ready"');
   });
 
