@@ -20,11 +20,17 @@ One read, in the caller's session, composes the prepared W59 modules:
    :func:`~auditmanager.comparison.finding_match_suggestions.suggest_finding_matches_on_sheet_suggestions`
    proposes finding matches across them.
 
+5. when the service was built with an approved-link reader (the composition root always does,
+   `COMPARE-PERSISTED-SUMMARY-01`), the stored approvals of the pair are read in the same session
+   and :func:`~auditmanager.comparison.approved_evidence.project_approved_pairs` recomputes, for
+   the approved pairs only, their deterministic differences and the seal that binds them. The
+   proposals above are never promoted to an approval by this read.
+
 A failed precondition is an explicit :class:`~auditmanager.comparison.read_model.ComparisonRefusal`
 in the result, never a relabelled pair and never a fallback to another version,
 stage, section or run. A stored fact that contradicts its own constraints is a
 :class:`ComparisonIntegrityError`. Nothing is written: no SheetLink, no finding
-match, no decision and no AI artifact. The two ports are this context's own
+match, no decision and no AI artifact. The ports are this context's own
 protocols; the composition root adapts the documents, runs, analysis, storage
 and findings contexts to them.
 
@@ -59,6 +65,7 @@ from auditmanager.comparison.finding_match_suggestions import (
     SuggestedSheetPair,
     suggest_finding_matches_on_sheet_suggestions,
 )
+from auditmanager.comparison.approved_evidence import project_approved_pairs
 from auditmanager.comparison.raw_text import RawTextDiffRefused, diff_page_lines
 from auditmanager.comparison.read_model import (
     BASIS_EVIDENCE_OVER_LIMIT,
@@ -101,6 +108,7 @@ from auditmanager.comparison.read_model import (
     SheetPairing,
     VersionComparison,
 )
+from auditmanager.comparison.sheet_links import ApprovedLinkReader
 from auditmanager.comparison.sheet_match_suggestions import (
     EXACT_PAIR_ALGORITHM,
     SheetMatchSuggestionRefused,
@@ -219,6 +227,24 @@ class CurrentFindingProposals:
 
 
 @dataclass(frozen=True, slots=True)
+class CurrentComparison:
+    """A comparison recomputed for the pairing commands: the proposals and the texts behind them.
+
+    ``comparison`` carries the sheet proposals (no diff page, no finding proposals, no approved
+    pairs). ``pair``, ``suggestions`` and both page maps are those the proposals were built from,
+    so a command can prove that the pair an expert confirmed is still the one proposed and can
+    seal the approved set over exactly this text. For a refusal ``pair`` is ``None`` and the rest
+    is empty.
+    """
+
+    comparison: VersionComparison
+    pair: OrderedVersionPair | None
+    suggestions: tuple[SheetPairSuggestion, ...]
+    source_pages: Mapping[int, str]
+    target_pages: Mapping[int, str]
+
+
+@dataclass(frozen=True, slots=True)
 class ComparisonRequest:
     project_uid: str
     document_uid: str
@@ -311,12 +337,14 @@ class VersionComparisonService:
         classifications: VersionClassificationReader,
         analyses: VersionAnalysisReader,
         section_codes: frozenset[str],
+        links: ApprovedLinkReader | None = None,
     ) -> None:
         if not isinstance(section_codes, frozenset) or not section_codes:
             raise ValueError("section_codes must be the sealed, non-empty catalogue")
         self._classifications = classifications
         self._analyses = analyses
         self._section_codes = section_codes
+        self._links = links
 
     def compare(self, session: Session, request: ComparisonRequest) -> VersionComparison:
         """The comparison of ``request``'s pair, or its explicit refusal.
@@ -328,7 +356,41 @@ class VersionComparisonService:
         prepared = self._prepare(session, request)
         if isinstance(prepared, VersionComparison):
             return prepared
-        return _assemble(request, prepared, with_diff_page=True)
+        assembled = _assemble(request, prepared, with_diff_page=True)
+        if self._links is None:
+            return assembled
+        state = self._links.state(
+            session,
+            source_version_uid=prepared.pair.source.version_uid,
+            target_version_uid=prepared.pair.target.version_uid,
+        )
+        return replace(assembled, approved_pairs=project_approved_pairs(
+            pair=prepared.pair, state=state,
+            source_pages=prepared.source.text.pages, target_pages=prepared.target.text.pages,
+        ))
+
+    def current_comparison(self, session: Session, request: ComparisonRequest) -> CurrentComparison:
+        """The sheet proposals and the texts behind them, recomputed now, for a pairing command.
+
+        The same preconditions as :meth:`compare` (a refusal is the same refusal); nothing is
+        written and no finding is compared.
+        """
+        _check_request(request)
+        prepared = self._prepare(session, request)
+        if isinstance(prepared, VersionComparison):
+            return CurrentComparison(prepared, None, (), {}, {})
+        pair, source, target = prepared.pair, prepared.source, prepared.target
+        return CurrentComparison(
+            VersionComparison(
+                pair.project_uid, pair.document_uid,
+                source.facts.version_uid, target.facts.version_uid,
+                request.mode, OUTCOME_COMPARED, None,
+                prepared.progress[SIDE_SOURCE], prepared.progress[SIDE_TARGET],
+                _comparison_sha256(pair, request.mode, prepared.progress, prepared.suggestions),
+                _sheet_rows(prepared.suggestions, source, target), None, None,
+            ),
+            pair, prepared.suggestions, source.text.pages, target.text.pages,
+        )
 
     def current_finding_proposals(
         self, session: Session, request: ComparisonRequest,
@@ -868,7 +930,7 @@ def _finding_comparison(
 
 __all__ = [
     "COMPARISON_ALGORITHM", "ComparisonIntegrityError", "ComparisonRequest",
-    "ComparisonRequestInvalid", "CurrentFindingProposals", "DEFAULT_DIFF_LIMIT",
+    "ComparisonRequestInvalid", "CurrentComparison", "CurrentFindingProposals", "DEFAULT_DIFF_LIMIT",
     "FindingEvidenceSnapshot",
     "FindingSnapshot", "MAX_DIFF_LIMIT", "MAX_DIFF_PAGE_CHARACTERS", "RUN_STATE_PUBLISHED",
     "RunCandidate", "SHEET_DIFF_ALGORITHM", "SavedPageText", "VersionAnalysisReader",

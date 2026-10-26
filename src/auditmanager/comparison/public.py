@@ -4,6 +4,9 @@ The composition root builds :class:`VersionComparisonService` with adapters for
 its two ports and the sealed section catalogue; the API maps the read model.
 `W59-DECISION-CARRYOVER-01` adds :class:`DecisionCarryoverService` (the confirmed
 carryover command over that service) and :func:`carryover_candidates` (its read).
+`COMPARE-PERSISTED-SUMMARY-01` adds :class:`SheetPairingService` (approve and withdraw a sheet
+pairing over the append-only history in ``comparison_sheet_link``) and the approved pairs the read
+now carries.
 Everything else in this package stays private to it.
 """
 
@@ -17,7 +20,25 @@ from auditmanager.comparison.carryover import (
     DecisionCarryoverService,
     carryover_candidates,
 )
+from auditmanager.comparison.pairing import (
+    CONFLICT_REASONS as PAIRING_CONFLICT_REASONS,
+)
+from auditmanager.comparison.pairing import (
+    ApproveSheetPairingRequest,
+    PairingOutcome,
+    SheetPairingService,
+    WithdrawSheetPairingRequest,
+)
 from auditmanager.comparison.read_model import (
+    EVIDENCE_NONE,
+    EVIDENCE_SEAL_CHANGED,
+    EVIDENCE_SEALED,
+    EVIDENCE_STATES,
+    EVIDENCE_TEXT_CHANGED,
+    EVIDENCE_TOO_LARGE,
+    LINK_STATES,
+    LINK_TEXT_CHANGED,
+    LINK_VERIFIED,
     MODE_STAGE,
     MODE_VERSION,
     MODES,
@@ -27,6 +48,10 @@ from auditmanager.comparison.read_model import (
     PROPOSAL_KINDS,
     REFUSAL_REASONS,
     SHEET_STATUSES,
+    ApprovedDiffHunk,
+    ApprovedSheetDiff,
+    ApprovedSheetPair,
+    ApprovedSheetPairs,
     ComparedVersion,
     ComparisonRefusal,
     DiffHunk,
@@ -44,6 +69,7 @@ from auditmanager.comparison.service import (
     ComparisonIntegrityError,
     ComparisonRequest,
     ComparisonRequestInvalid,
+    CurrentComparison,
     CurrentFindingProposals,
     FindingEvidenceSnapshot,
     FindingSnapshot,
@@ -53,10 +79,17 @@ from auditmanager.comparison.service import (
     VersionClassificationReader,
     VersionComparisonService,
 )
+from auditmanager.comparison.sheet_links import ApprovedLinkReader, LinkEvent, SheetLinkRepository
 from auditmanager.comparison.version_reader import VersionFacts
 from auditmanager.comparison.version_section_pair import SuppliedVersionClassification
 
 __all__ = [
+    "ApproveSheetPairingRequest",
+    "ApprovedDiffHunk",
+    "ApprovedLinkReader",
+    "ApprovedSheetDiff",
+    "ApprovedSheetPair",
+    "ApprovedSheetPairs",
     "CarriedSourceDecision",
     "CarryoverCandidate",
     "CarryoverOutcome",
@@ -66,22 +99,35 @@ __all__ = [
     "ComparisonRefusal",
     "ComparisonRequest",
     "ComparisonRequestInvalid",
+    "CurrentComparison",
     "CurrentFindingProposals",
     "DEFAULT_DIFF_LIMIT",
     "DecisionCarryoverService",
     "DiffHunk",
+    "EVIDENCE_NONE",
+    "EVIDENCE_SEALED",
+    "EVIDENCE_SEAL_CHANGED",
+    "EVIDENCE_STATES",
+    "EVIDENCE_TEXT_CHANGED",
+    "EVIDENCE_TOO_LARGE",
     "FindingComparison",
     "FindingEvidenceSnapshot",
     "FindingProposal",
     "FindingRef",
     "FindingSnapshot",
+    "LINK_STATES",
+    "LINK_TEXT_CHANGED",
+    "LINK_VERIFIED",
+    "LinkEvent",
     "MAX_DIFF_LIMIT",
     "MODES",
     "MODE_STAGE",
     "MODE_VERSION",
     "OUTCOME_COMPARED",
     "OUTCOME_REFUSED",
+    "PAIRING_CONFLICT_REASONS",
     "PROPOSAL_BASES",
+    "PairingOutcome",
     "PROPOSAL_KINDS",
     "REFUSAL_REASONS",
     "RunCandidate",
@@ -89,12 +135,15 @@ __all__ = [
     "SavedPageText",
     "SheetDiff",
     "SheetDiffPage",
+    "SheetLinkRepository",
     "SheetPairing",
+    "SheetPairingService",
     "SuppliedVersionClassification",
     "VersionAnalysisReader",
     "VersionClassificationReader",
     "VersionComparison",
     "VersionComparisonService",
     "VersionFacts",
+    "WithdrawSheetPairingRequest",
     "carryover_candidates",
 ]

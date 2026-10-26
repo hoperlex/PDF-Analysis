@@ -1,11 +1,16 @@
 """The read model of one served version comparison (`W59-VERSION-COMPARE-01`).
 
 Everything here is computed on request from immutable inputs -- two published
-versions, their persisted classifications and one published run of each -- and
-nothing is stored. Every pairing and every finding label is a *proposal*: it
-approves no SheetLink, matches no finding and records no decision. The raw line
-differences are deterministic and bound by digest; no AI layer produces or edits
-any value in this model.
+versions, their persisted classifications and one published run of each. Every
+pairing and every finding label is a *proposal*: it approves no SheetLink, matches
+no finding and records no decision. The raw line differences are deterministic and
+bound by digest; no AI layer produces or edits any value in this model.
+
+The one stored layer beside it (`COMPARE-PERSISTED-SUMMARY-01`) is an expert's
+approval of a sheet pairing: ``VersionComparison.approved_pairs`` lists the active
+approvals of the pair and, for approved pairs only, their deterministic differences,
+sealed by ``raw_evidence_seal``. It is read from ``comparison_sheet_link`` and never
+produced by a proposal.
 
 The vocabularies below are closed. The API boundary restates them as enums, so a
 new value is a contract change rather than a string that slips through.
@@ -14,6 +19,7 @@ new value is a contract change rather than a string that slips through.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Final
 
 #: ``version``: the same explicit stage and section on both versions (W59). ``stage``: a
@@ -66,6 +72,26 @@ DIFF_TOO_LARGE: Final[str] = "too_large"
 FINDINGS_COMPARED: Final[str] = "compared"
 FINDINGS_UNAVAILABLE: Final[str] = "unavailable"
 FINDINGS_OVER_LIMIT: Final[str] = "findings_over_limit"
+
+#: The state of the approved pairs' raw evidence (`COMPARE-PERSISTED-SUMMARY-01`). ``none``: no
+#: active approval. ``sealed``: every approved page still has the digest the expert saw, the raw
+#: differences were recomputed and their seal equals the stored one. ``text_changed``: a page's
+#: text is no longer the approved one, so no difference is served for any pair. ``seal_changed``:
+#: the texts are as approved but the recomputed seal differs from the stored one. ``too_large``: the
+#: differences exceed the bounds of one response; none is truncated, none is served.
+EVIDENCE_NONE: Final[str] = "none"
+EVIDENCE_SEALED: Final[str] = "sealed"
+EVIDENCE_TEXT_CHANGED: Final[str] = "text_changed"
+EVIDENCE_SEAL_CHANGED: Final[str] = "seal_changed"
+EVIDENCE_TOO_LARGE: Final[str] = "too_large"
+EVIDENCE_STATES: Final[tuple[str, ...]] = (
+    EVIDENCE_NONE, EVIDENCE_SEALED, EVIDENCE_TEXT_CHANGED, EVIDENCE_SEAL_CHANGED,
+    EVIDENCE_TOO_LARGE,
+)
+
+LINK_VERIFIED: Final[str] = "verified"
+LINK_TEXT_CHANGED: Final[str] = "text_changed"
+LINK_STATES: Final[tuple[str, ...]] = (LINK_VERIFIED, LINK_TEXT_CHANGED)
 
 PROPOSAL_UNCHANGED: Final[str] = "unchanged"
 PROPOSAL_PROBABLY_FIXED: Final[str] = "probably_fixed"
@@ -206,6 +232,67 @@ class FindingComparison:
 
 
 @dataclass(frozen=True, slots=True)
+class ApprovedDiffHunk:
+    """One span of an approved pair's raw line diff (0-based, end exclusive).
+
+    A changed span carries ``hunk_id`` (``<sheet_link_id>:<n>``, ``n`` counting the sheet's
+    non-equal spans from 0); an ``equal`` span carries its ranges only and no id.
+    """
+
+    tag: str
+    source_start: int
+    source_end: int
+    target_start: int
+    target_end: int
+    source_lines: tuple[str, ...]
+    target_lines: tuple[str, ...]
+    hunk_id: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class ApprovedSheetDiff:
+    """The deterministic differences of one approved pair (``raw_text.diff_approved_pairs``)."""
+
+    source_line_count: int
+    target_line_count: int
+    added_line_count: int
+    removed_line_count: int
+    hunks: tuple[ApprovedDiffHunk, ...]
+    #: ``RawTextDiff.evidence_sha256``: binds the complete diff, equal lines included.
+    evidence_sha256: str
+
+
+@dataclass(frozen=True, slots=True)
+class ApprovedSheetPair:
+    """One active approval of a source page against a target page."""
+
+    sheet_link_id: str
+    source_page_number: int
+    target_page_number: int
+    state: str
+    #: The proposal the expert confirmed (``SheetPairing.suggestion_sha256``).
+    suggestion_sha256: str
+    approved_by_label: str
+    approved_at: datetime
+    #: The link revision of the approval itself.
+    link_revision: int
+    #: Present only when the whole set is ``sealed``.
+    diff: ApprovedSheetDiff | None
+
+
+@dataclass(frozen=True, slots=True)
+class ApprovedSheetPairs:
+    """The approved pairs of the compared pair and their evidence, or why it is withheld."""
+
+    #: The current link revision of the comparison; ``None`` when nothing was ever approved.
+    link_revision: int | None
+    evidence_state: str
+    #: The recomputed ``raw_evidence_seal`` of the active set; ``None`` unless ``sealed``.
+    raw_evidence_seal_sha256: str | None
+    items: tuple[ApprovedSheetPair, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class VersionComparison:
     project_uid: str
     document_uid: str
@@ -221,9 +308,16 @@ class VersionComparison:
     sheets: tuple[SheetPairing, ...]
     sheet_diffs: SheetDiffPage | None
     findings: FindingComparison | None
+    #: `COMPARE-PERSISTED-SUMMARY-01`. ``None`` for a refused comparison, and for a service built
+    #: without the approved-link reader (the unit tests of the proposals).
+    approved_pairs: ApprovedSheetPairs | None = None
 
 
 __all__ = [
+    "ApprovedDiffHunk", "ApprovedSheetDiff", "ApprovedSheetPair", "ApprovedSheetPairs",
+    "EVIDENCE_NONE", "EVIDENCE_SEALED", "EVIDENCE_SEAL_CHANGED", "EVIDENCE_STATES",
+    "EVIDENCE_TEXT_CHANGED", "EVIDENCE_TOO_LARGE", "LINK_STATES", "LINK_TEXT_CHANGED",
+    "LINK_VERIFIED",
     "BASIS_EVIDENCE_OVER_LIMIT", "BASIS_EXACT_MATCH", "BASIS_NO_SOURCE_MATCH",
     "BASIS_QUOTES_ABSENT", "BASIS_QUOTE_PRESENT", "BASIS_SHEET_UNPAIRED",
     "ComparedVersion", "ComparisonRefusal", "DIFF_COMPUTED", "DIFF_TOO_LARGE",
