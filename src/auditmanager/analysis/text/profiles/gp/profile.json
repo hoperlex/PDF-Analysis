@@ -3,8 +3,8 @@
   "section_code": "GP",
   "analysis_profile_id": "ap_01M5AXG1KSSZM53N2CBV6XX83E",
   "prompt_bundle_id": "pb_01M5AXG1KSRDEWMP2WT3KNGWJ2",
-  "profile_version": "1.0.0",
-  "status": "draft",
+  "profile_version": "1.1.0",
+  "status": "reviewed",
   "title_ru": "Генеральный план",
   "source": {
     "repository": "PDF-proverka",
