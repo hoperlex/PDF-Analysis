@@ -1,9 +1,9 @@
 # ADR-0022: Production data governance: what is kept, how a project is erased, what leaves the host
 
-- Status: accepted for production by the repository owner (`R-146b`, `R-146c`, `R-146f`, `R-146m`, `R-146n`); the implementation choices marked `AD-` are the architect's, proposed and not yet confirmed
+- Status: accepted for production by the repository owner (`R-146b`, `R-146c`, `R-146f`, `R-146m`, `R-146n`, `R-146o`); `AD-06` is confirmed by `R-146o`; `AD-07`, `AD-08`, `AD-09` and `AD-16` are the architect's, proposed and not yet confirmed
 - Date: 2026-10-26
 - Owners: repository owner / `PRODUCTION-ADR-PACK-01`
-- Supersedes: nothing; it fills the retention and erasure half that `ADR-0014` left open and that `contracts/domain/v1/identifiers.json` (`OPEN-RETENTION`, `U-04`) reserves
+- Amends: `ADR-0012` (erase exception, `R-146o`; the addendum is in that ADR); supersedes nothing. It fills the retention and erasure half that `ADR-0014` left open and that `contracts/domain/v1/identifiers.json` (`OPEN-RETENTION`, `U-04`) reserves
 - Related principles: P-01, P-03, P-06, P-07, P-13, P-15, P-18
 
 ## Context
@@ -86,13 +86,17 @@ declares one before the owner's input, which `R-146c` now gives. The legal-hold 
 the product has no hold concept, an erase does not check one, and the operator is responsible for not
 erasing a project that is subject to a hold. Data classification labels are open.
 
-### 3. The operator project erase (`R-146c`)
+### 3. The operator project erase (`R-146c`, `R-146o`)
 
-`AD-06`, `AD-07` (architect's implementation decisions within `R-146c`, to be confirmed).
+`AD-06`, confirmed by `R-146o` in full: the erase of one project removes its documents, pages, files, extracted
+text, crops, findings, evidence quotes, comments and expert decisions, and what stays is the record of the erasure
+itself (who, when, what, hashes). `AD-07` (the tool's design below) is the architect's and is to be confirmed.
 
 **Entry points.** A new `infra/deploy/erase-project.sh` (guards, dry run by default, runs inside the
 `api` image like `purge-product-data.sh`) and a new `scripts/recovery/project_erase.py` modelled on
-`product_purge.py`. It connects as the migrator role (`ADR-0021` `AD-02`) and refuses any other.
+`product_purge.py`. The wrapper passes the migrator's connection URL explicitly (`ADR-0021` `AD-02`: the api's own
+`DATABASE_URL` is the restricted role, which the `owner-may-write` guard of the purge would refuse) and the tool
+refuses any other role.
 
 **Inputs.** `--project prj_<ULID>` (an identity, never a name); `--actor <login>`, which must be an
 active account holding `admin` and is resolved to its `usr_` identity; `--reason`, one of a closed list
@@ -103,36 +107,42 @@ put personal data into an append-only table); `--dry-run` (the default) or `--ap
 project-scoped subset of the `PRODUCT_TABLES` of `product_purge.py`, found by a foreign-key closure
 from `project` and not by a hand list, plus the `project_uid IS NOT NULL` rows of
 `vendor_list_revision` and their entries; the idempotency receipts (`command_record`) of the erased
-rows; and the bytes of every Blob that no other project and no KEEP table references. `worker`, the
+rows; and every Blob that no other project and no KEEP table references, with its object. `worker`, the
 global vendor list (`project_uid IS NULL`) and everything account-side are not project-scoped and stay.
 A table that is in neither the closure nor an explicit keep list stops the tool before it touches
 anything, as in `product_purge.py`; a migration that adds a table is therefore a decision about that
 table (`D-213`).
 
-**What it must keep.**
+**What it keeps.**
 
 - Accounts, roles, registrations, release notes, executor configuration, the norm corpus.
-- **Every `audit_event` row**, including the project's run journal: the payloads are identities
-  and classifiers only, and "an audit entry that a cascade could delete is not an audit trail"
-  (the comment on `audit_event.aggregate_id`). The erase appends its own events (below).
-- **The `blob` row of an erased Blob**, moved through the frozen state machine to `erased` with its
-  SHA-256, size and media type, because the domain contract says metadata and checksums are
-  retained (`AD-06`: the alternative is to delete the row, which contradicts that text).
-- A Blob still referenced elsewhere, with its object. A shared Blob loses only this project's
-  bindings.
+- **The record of the erasure**: the `erasure.requested` and `erasure.completed` events (below) and the manifest file.
+- **The project's run journal**, the `audit_event` rows whose payloads are identities and classifiers only:
+  "an audit entry that a cascade could delete is not an audit trail" (the comment on `audit_event.aggregate_id`),
+  and they hold no client content. `R-146o` says only the record of the erasure stays; whether it also means the
+  identity-only journal is part of `AD-07` (a one-line change in the tool if the owner says delete it).
+- A Blob still referenced elsewhere, with its object. A shared Blob loses only this project's bindings.
 
-**The ledger question (`AD-06`).** `ADR-0012` makes expert decisions append-only: a verdict change is a
-new event and nothing rewrites a human event. Erasing a project does not change a verdict; it removes
-the aggregate, and it is the one operation allowed to do so, only through this tool, only as the
-table owner. The database triggers that refuse `DELETE` on the project's immutable and append-only
-tables are switched off one named trigger at a time inside the transaction and switched on again
-before it commits, with the trigger state compared before and after, exactly as `product_purge.py`
-does for `audit_event`; the application role has no privilege to do this (`ADR-0021` `AD-02`). The
-domain contract's "never deletes decision, finding or audit history" describes what erasing
-**bytes** means for a Blob and the Blob rows here follow it; the decision and finding rows of the erased
-project are removed because they carry verbatim client text (evidence quotes to 2000 characters,
-comments to 4000). This is the point the owner is asked to confirm; if the answer is "keep them", the
-text columns cannot be cleared (the rows are immutable) and the erase degrades to deleting bytes only.
+**The exception to the ledger and to the frozen sentence (`R-146o`).** `ADR-0012` makes expert decisions
+append-only. The frozen domain contract says of a Blob that was erased: "Erasing bytes never deletes decision, finding
+or audit history" (`contracts/domain/v1/state-machines.json:167`). `R-146o` grants a **deliberate exception** to both
+for this one operation, and `ADR-0012` carries the addendum. The exception is named here and the frozen file is **not
+edited** by this pack; the sentence stays true of the Blob `erased` transition, which this operation does not use
+(it deletes the row, below). A clarifying edit of that frozen text is a contract-owner item, `PROD-22`. Mechanically
+the exception is the one place where the append-only and immutable triggers are switched off: one named trigger
+at a time inside the transaction, switched on again before it commits, with the trigger state compared before and
+after, exactly as `product_purge.py` does for `audit_event`; only the table owner can do it and the application role
+cannot (`ADR-0021` `AD-02`).
+
+**Erased Blobs leave no row, and a re-upload meets nothing (`AD-07`).** A `blob_id` is derived from `(sha256, size)`
+(`src/auditmanager/storage/README.md`), `record_declared` returns an existing row of that identity, and `erased` is
+terminal in the state machine; a row left in `erased` would therefore meet a byte-identical upload after the erase and
+leave it nowhere to go. The tool deletes the `blob` row together with its object, as `product_purge.py` deletes its blob
+rows, so a later upload of the same bytes declares a fresh row. What the owner's "hashes" need is kept in the record:
+the tool writes a manifest of the erased Blobs (`blob_id`, SHA-256, size, media type) next to its plan under the dump
+root, and the SHA-256 of that manifest is a field of the erasure event. The manifest file is kept with the release
+record by the operator; it is not in the database. This is what lets someone holding the file prove that a known
+document was erased without the database keeping a fingerprint of client content.
 
 **Phases (`AD-07`).** The external side effect (object deletion) must not be a dual write
 (`AGENTS.md` section 4):
@@ -144,7 +154,7 @@ text columns cannot be cleared (the rows are immutable) and the erase degrades t
    the trigger switch, verify that every keep row is unchanged by count and digest and every trigger is
    restored, commit.
 3. *Objects*: delete each exclusive Blob's object by exact key (a 404 counts as done).
-4. *Finish* (one transaction): move those Blobs to `erased`, append `erasure.completed`.
+4. *Finish* (one transaction): delete those Blob rows, append `erasure.completed` with the manifest digest.
 
 A crash after phase 2 leaves Blobs in `erasure_pending` and nothing referencing them; the same command
 with `--resume era_<ULID>` completes phases 3 and 4. Re-running a finished erase finds
@@ -158,15 +168,15 @@ lock; the actor is an active `admin`.
 
 **Journal.** Event types `erasure.requested` and `erasure.completed`; aggregate type `ErasureRequest`;
 aggregate id `era_<ULID>` (the identity the frozen domain contract reserves; no table is added). Payload
-keys, identities and counts only: `project_uid`, `actor_uid`, `reason_code`, `plan_sha256`,
-`rows_deleted`, `blobs_exclusive`, `blobs_shared`, `objects_deleted`, `objects_missing`, `outcome`.
-`product_purge.py` must keep the `erasure.` prefix (it stops on an event type nobody classified).
+keys, identities, counts and digests only: `project_uid`, `actor_uid`, `reason_code`, `plan_sha256`,
+`manifest_sha256`, `rows_deleted`, `blobs_exclusive`, `blobs_shared`, `objects_deleted`, `objects_missing`,
+`outcome`. `product_purge.py` must keep the `erasure.` prefix (it stops on an event type nobody classified).
 
 **What an erase does not reach**, and the operator is told so by the tool's closing message:
 
-- manual dumps, mirrors and copies on the host (`infra/deploy/dumps/`, the copy directory), the VPS
-  provider's snapshots, and any copy outside the host: the operator removes or ages them by hand
-  and records that in the release record;
+- manual dumps, mirrors and copies on the host (`infra/deploy/dumps/`, the copy directory), the copy fetched
+  to the development host for an `R-93` restore test, the VPS provider's snapshots, and any copy outside the host:
+  the operator removes or ages them by hand and records that in the release record;
 - the model provider and anything OpenRouter routed the text to (`A-2`), and the local copies of a remote
   executor;
 - the disk blocks of a deleted object (there is no secure wipe), container logs, and exports a user
@@ -235,11 +245,11 @@ as they were, so every credential is revoked and default passwords are reported 
 
 ### Positive
 
-- A client's data can be removed on request by a script that is tested, dry-runnable, journalled and
-  safe to repeat.
+- A client's data, findings and expert decisions included, can be removed on request by a script that is
+  tested, dry-runnable, journalled and safe to repeat.
 - The erase reuses the classification and refusal discipline of the purge, so a new table cannot be
   forgotten silently.
-- Nothing in the audit trail is rewritten or deleted by an erase.
+- No audit event is rewritten or deleted by an erase; the erase adds its own record.
 
 ### Negative / cost
 
@@ -248,17 +258,20 @@ as they were, so every credential is revoked and default passwords are reported 
   the purge has.
 - Erased data survives in every copy, in the provider's systems and on the disk blocks; "erased" in a
   client conversation means "removed from the live service", and the operator must say so.
-- Keeping the SHA-256 of an erased document in a `blob` row lets anyone with the database confirm that a
-  known file once existed (`AD-06`).
+- The record of an erasure is a digest in an event and a manifest file the operator must keep; if the file is
+  lost the digest proves nothing about what was erased.
+- The one exception to the append-only ledger (`R-146o`) is a destructive operator path; the exception is not
+  reversible except from a copy.
 - The product asks the provider for nothing: whatever the provider does with the text is outside the
   product's reach (`A-2`).
 
 ## Alternatives considered
 
 1. **Delete bytes only and keep findings and decisions** (the literal reading of the domain contract):
-   leaves quoted client text in the database; rejected as the default, offered as the fallback.
-2. **Delete the `blob` rows too.** Contradicts "metadata and checksums are retained"; not chosen,
-   offered to the owner.
+   leaves quoted client text in the database; rejected by `R-146o`.
+2. **Keep the `blob` row of an erased document as the frozen `erased` state** with its SHA-256 and size: rejected, the
+   derived identity would make a byte-identical re-upload meet a terminal row, and the owner's record is the event and
+   the manifest.
 3. **An automatic TTL.** Declined by `R-146c`.
 4. **An erase through the API (an administrator operation).** Needs a contract reseal and puts a
    trigger-disabling path behind the application role; rejected for 1.0, an operator script keeps the
@@ -273,7 +286,8 @@ as they were, so every credential is revoked and default passwords are reported 
   block makes the refusal disappear (the discipline of `tests/integration/recovery/test_product_purge.py`);
   a test that the keep rows are byte-identical by count and digest; a test that the trigger state is
   identical after a failed run; a test that a second `--apply` exits 0 and a `--resume` after a forced
-  crash between the phases completes; a test that a shared Blob keeps its object
+  crash between the phases completes; a test that a shared Blob keeps its object; **a test that a byte-identical
+  upload after an erase succeeds and creates a fresh `blob` row** (the re-upload case of `AD-07`)
 - mechanical checks at rest: `select count(*) from blob where state = 'erasure_pending'` is `0`;
   `select count(*) from project where project_uid = '<erased id>'` is `0` and an `erasure.completed`
   event names it
