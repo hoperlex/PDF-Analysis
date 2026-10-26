@@ -38,12 +38,13 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-HEAD = "0034_pass_scope_all_sections"
+HEAD = "0035_comparison_records"
 
 #: Every base table of the schema at ``HEAD`` (``relkind`` ``r``, schema ``public``).
 TABLES = frozenset((
     "account_release_mark", "alembic_version", "analysis_artifact_publication", "app_user", "app_user_role",
-    "ar_v3_run_group", "ar_v3_run_group_member", "attempt", "audit_event", "audit_run", "blob", "command_record", "contract_state_transition", "document",
+    "ar_v3_run_group", "ar_v3_run_group_member", "attempt", "audit_event", "audit_run", "blob", "command_record", "comparison_sheet_link",
+    "contract_state_transition", "document",
     "document_version", "document_version_classification", "document_version_classification_correction",
     "execution_control", "executor_connection", "executor_connection_revision", "executor_probe",
     "executor_route_event", "executor_runner_token", "executor_secret", "executor_task", "expert_decision_event", "finding", "finding_evidence", "finding_observation",
@@ -99,6 +100,8 @@ TRIGGERS = (
     ("blob", "trg_blob_write_once_guard", "am_guard_write_once_columns", 19),
     ("command_record", "trg_command_record_frozen_guard", "am_guard_frozen_columns", 19),
     ("command_record", "trg_command_record_state_guard", "am_guard_state_transition", 23),
+    ("comparison_sheet_link", "trg_comparison_sheet_link_chain", "am_check_comparison_sheet_link_chain", 7),
+    ("comparison_sheet_link", "trg_comparison_sheet_link_immutable", "am_immutable_row", 27),
     ("contract_state_transition", "trg_contract_state_transition_immutable", "am_immutable_row", 31),
     ("document_version", "trg_document_version_immutable", "am_immutable_row", 27),
     ("document_version_classification", "trg_document_version_classification_immutable", "am_immutable_row", 27),
@@ -198,10 +201,10 @@ SEQUENCES = {
 
 #: ``pg_constraint.contype -> count`` in schema ``public`` at ``HEAD``: p primary key, u unique,
 #: f foreign key, c check, t constraint trigger. A restore that lost one is not the schema.
-CONSTRAINT_COUNTS = {"c": 560, "f": 134, "p": 63, "t": 9, "u": 48}
+CONSTRAINT_COUNTS = {"c": 579, "f": 139, "p": 64, "t": 9, "u": 51}
 
 #: Indexes in schema ``public`` at ``HEAD`` (primary-key and unique indexes included).
-INDEX_COUNT = 184
+INDEX_COUNT = 190
 
 #: Trigger functions that make a table immutable or append-only (the claim a restore must keep).
 GUARD_FUNCTIONS = frozenset((

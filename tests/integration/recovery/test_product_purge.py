@@ -63,7 +63,9 @@ def test_the_declaration_partitions_exactly_the_tables_schema_coverage_declares(
     # the stand's documents and answers (PRODUCT 29 -> 30).
     # `0032_ar_v3_run_group`: the group and its six members are product data (PRODUCT 30 -> 32).
     assert {"ar_v3_run_group", "ar_v3_run_group_member"} <= tool.PRODUCT_TABLES
-    assert len(tool.PRODUCT_TABLES) == 32 and len(tool.KEEP_TABLES) == 29 and len(tool.MIXED_TABLES) == 3
+    # `0035_comparison_records`: the sheet-link history is product data (PRODUCT 32 -> 33).
+    assert "comparison_sheet_link" in tool.PRODUCT_TABLES
+    assert len(tool.PRODUCT_TABLES) == 33 and len(tool.KEEP_TABLES) == 29 and len(tool.MIXED_TABLES) == 3
     assert tool.PRODUCT_TABLES | tool.KEEP_TABLES | tool.MIXED_TABLES == TABLES
     # the corpus half of KEEP is schema_coverage's own list, not a copy of it
     assert tool.KEEP_NORM_TABLES is EXEMPT_FROM_FINGERPRINT
