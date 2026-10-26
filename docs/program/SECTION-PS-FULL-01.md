@@ -79,12 +79,24 @@ Run in `.local/worktrees/section-ps-full-01`, one pytest at a time, `PYTHONPATH=
 | `pytest -q tests/integration/composition/test_analysis_profiles_over_http.py` (lane `.env`) | 4 passed |
 | `npx vitest run tests/unit/analysis-settings` in `web/` | 7 files, 95 passed |
 | governance one-liner on the task file | `[]` |
-| `pytest -q tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py` | see the end of this section |
+| `pytest -q tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py` (clean tree, after the first docs commit) | 105 passed |
 | `git diff --check` | exit 0 |
 
 ## Integration notes
 
-- The lane touches nothing outside its five paths: `git diff --name-only 0e663fd0..HEAD` lists the `ps` prompt, the `ps` profile, the two `ps` recordings, the expectations file and the two docs.
+- The lane touches nothing outside its allowed paths. `git diff --name-status --no-renames 0e663fd0..HEAD` prints exactly:
+
+  ```text
+  M	src/auditmanager/analysis/text/profiles/ps/profile.json
+  M	src/auditmanager/analysis/text/profiles/ps/system_prompt.md
+  D	fixtures/recorded/sections/ps/5dad5c5fdc7dfda6713e38aa056f833e5497e07f7d1b83a444c604617f2411f3.json
+  A	fixtures/recorded/sections/ps/caf8aa0fe2a34349618b85b74dd04175f4757579f9c4d0b64f726b5c2902ab85.json
+  M	tests/unit/analysis/text_profiles/section_profile_expectations.json
+  A	docs/program/SECTION-PS-FULL-01.md
+  A	docs/program/tasks/SECTION-PS-FULL-01.md
+  ```
+
+  No other section's package or recording, no registry, no builder, no `contracts/**`, no migration, no `web/**`, no `infra/**`, no `P02_LOCK.json`, no `W59-SECTION-PROFILES-01.md`.
 - The expectations file is one line per section, so this lane merges without conflict with the other section lanes; the `PS` line is the only one changed.
 - **The web label of `reviewed` says «проверен экспертом»** (`web/src/entities/analysis-profile/model/presentation.ts`, `ANALYSIS_PROFILE_STATUS_LABELS`, pinned in `analysis-settings.test.ts`). With the first section lane merged, the settings screen will show the words «проверен экспертом» on a profile no expert saw, which is what `A-7` says must not happen. This is outside the lane (`web/**` is forbidden) and is the integrator's to settle: a different label for the section profiles, or the owner's decision to live with it.
 - `tests/e2e/pc01/journey/manifest.json` selects `tr[data-profile="draft"]` (the journey step that reads a draft row). While any section is still `draft` it passes; when the last section lane merges, no row matches. `PB` is the one that may stay `draft` (no legacy source), but the integrator should check before the last merge.
