@@ -22,6 +22,11 @@ What it does, in five threads
   fallback, never a silent one.
 * **reclaim** -- inside the dispatch loop, every :data:`RECLAIM_SECONDS`.
 * **slots** -- a pool of ``slots`` threads, each running one claimed run to a terminal.
+  ``slots`` is ``AUDITMANAGER_WORKER_SLOTS`` (`EXEC-PAR-QUEUE-01`; one by default). With more
+  than one, the dispatch loop fills a free slot straight after it filled the last one rather
+  than waiting for the next poll, never offers a run it has already handed to a slot, and
+  asks for a Job whose executor connection is free: a connection has one active run, so a run
+  for a busy connection waits in the queue and does not hold a slot (see ``jobs``).
 * **probes** -- when a probe runner is given (`EXEC-HTTP-01`), a thread that takes the
   ``requested`` connection probes and runs them on this worker's network path. A draining worker
   takes no new probe.
@@ -63,6 +68,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from auditmanager.jobs.public import (
     ATTEMPT_WATCHDOG_SECONDS,
     JOB_WAKEUP_CHANNEL,
+    ExecutionNotClaimed,
     JobRepository,
     SweepReport,
     sweep_stale_temporaries,
@@ -75,6 +81,11 @@ _log = logging.getLogger(__name__)
 POLL_SECONDS: Final[float] = 5.0
 #: W53's reclaim cadence, shared with the API process.
 RECLAIM_SECONDS: Final[float] = 30.0
+#: `EXEC-PAR-QUEUE-01`. How many claims a slot may lose in a row (a run whose connection turned
+#: busy between the hint and the claim) before the dispatch loop stops asking again at once and
+#: waits for its next timed poll. A lost claim leaves the run queued and unchanged, so the cost of
+#: the bound is at most one poll interval of delay, never a lost run.
+CLAIM_RETRY_LIMIT: Final[int] = 8
 #: The longest the dispatch loop blocks before it looks at its stop and drain flags.
 _TICK_SECONDS: Final[float] = 1.0
 #: How often the probe loop looks for a ``requested`` probe when the last look found none
@@ -232,7 +243,11 @@ class WorkerService:
         self._failed = threading.Event()
         self._poll_now = threading.Event()
         self._lock = threading.Lock()
-        self._in_flight: set[Future[None]] = set()
+        #: The runs handed to a slot and not yet finished, by their future. The run ids are what
+        #: the hint must not offer again and must treat as occupying their connection.
+        self._in_flight: dict[Future[None], str] = {}
+        #: Claims lost in a row, bounded by :data:`CLAIM_RETRY_LIMIT` (`EXEC-PAR-QUEUE-01`).
+        self._refused_in_a_row = 0
         self._pool = ThreadPoolExecutor(max_workers=slots, thread_name_prefix="auditmanager-worker-run")
         self._threads: list[threading.Thread] = []
         self.wakeup = JobWakeup(engine, poll_seconds=poll_seconds)
@@ -339,11 +354,18 @@ class WorkerService:
                     woken = True
                 can_claim = not self._draining.is_set() and self.busy < self._slots
                 if can_claim and (woken or now >= next_poll):
+                    if now >= next_poll:
+                        # A timed poll starts a fresh budget of lost claims.
+                        self._set_refusals(0)
                     woken = False
-                    claimed = self._claim_next()
-                    next_poll = monotonic() + self._poll_seconds
-                    if claimed:
-                        continue
+                    if self._refused_in_a_row < CLAIM_RETRY_LIMIT:
+                        claimed = self._claim_next()
+                        next_poll = monotonic() + self._poll_seconds
+                        if claimed:
+                            # `EXEC-PAR-QUEUE-01`: a slot may still be free, so ask again at
+                            # once. With one slot `can_claim` is false until the run ends.
+                            woken = self._slots > 1
+                            continue
                 # Busy or draining: nothing to claim until a slot frees (`_poll_now`), so
                 # wait a whole tick instead of spinning on an overdue poll.
                 tick = (
@@ -391,11 +413,13 @@ class WorkerService:
 
     def _claim_next(self) -> bool:
         """Hand one runnable Job to a free slot. The claim itself happens in the slot."""
+        with self._lock:
+            submitted = tuple(self._in_flight.values())
         try:
             with self._sessions() as session:
                 if not self._registry.intake_enabled(session, self.worker_id):
                     return False
-                run_id = JobRepository().next_queued_run(session)
+                run_id = JobRepository().next_queued_run(session, submitted=submitted)
         except Exception:
             _log.exception("worker %s could not read the queue", self._worker_id)
             return False
@@ -403,22 +427,37 @@ class WorkerService:
             return False
         future = self._pool.submit(self._run_one, str(run_id))
         with self._lock:
-            self._in_flight.add(future)
+            self._in_flight[future] = str(run_id)
         future.add_done_callback(self._finished)
         return True
 
     def _run_one(self, run_id: str) -> None:
         try:
             self._execute(run_id, self.worker_id)
+        except ExecutionNotClaimed as refusal:
+            # The claim was lost (the connection turned busy, dispatch was paused, another
+            # process took the Job): nothing was written and the run is still queued. Counted,
+            # so a run that keeps losing does not spin the dispatch loop (`CLAIM_RETRY_LIMIT`).
+            with self._lock:
+                self._refused_in_a_row += 1
+            _log.info("worker %s: run %s was not claimed (%s)", self._worker_id, run_id,
+                      refusal.code.value)
         except Exception as failure:
             # `run_to_terminal` has already written the outcome to the run row, or left
             # the run untouched when the claim was refused; this is the log line only.
+            self._set_refusals(0)
             _log.info("worker %s: run %s ended here with %s", self._worker_id, run_id,
                       type(failure).__name__)
+        else:
+            self._set_refusals(0)
+
+    def _set_refusals(self, count: int) -> None:
+        with self._lock:
+            self._refused_in_a_row = count
 
     def _finished(self, future: Future[None]) -> None:
         with self._lock:
-            self._in_flight.discard(future)
+            self._in_flight.pop(future, None)
         self._poll_now.set()
 
     # -- the state directory ------------------------------------------------------------
