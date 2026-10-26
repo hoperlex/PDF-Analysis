@@ -167,7 +167,8 @@ def _bundle(root: Path, seed: Seed, *, set_id: str, name: str = "bundle") -> Pat
         "synthetic": False,
         # The command binds the request's spans to the map's: both name the same two paragraphs.
         "items": [{"id": "C01", "targets": [
-            {"norm_document_id": seed.document, "ordinal_first": 0, "ordinal_last": 1},
+            {"norm_document_id": seed.document, "designation": "СП 99.1", "ordinal_first": 0,
+             "ordinal_last": 1},
         ]}],
     })
     directory = root / name
@@ -548,6 +549,33 @@ def test_a_wrong_independent_proof_refuses_plan_and_promote_with_nothing_written
         assert stand.run(command, bundle) == promote_cli.EXIT_REFUSED
         assert message in capsys.readouterr().err
         assert stand.counts() == before and custody.bucket_keys() == objects
+
+
+@pytest.mark.usefixtures("clean_tables")
+def test_a_request_whose_label_differs_from_the_reviewed_map_writes_nothing(
+    custody: CustodyKit, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+) -> None:
+    """AR-V3-BETA-REVIEW-FIXES-03: the label is printed in every prompt row, so another label
+    over the same map bytes and spans would build a different set that cites another norm."""
+    seed = _seed(custody)
+    stand = Stand(custody)
+    honest = _bundle(tmp_path, seed, set_id=str(NormRetrievalSetId.new()), name="honest")
+    assert stand.run("plan", honest) == 0
+    assert f'designation: {seed.document} "СП 99.1"' in capsys.readouterr().out.splitlines()
+    bundle = _bundle(tmp_path, seed, set_id=str(NormRetrievalSetId.new()))
+    path = bundle / "request.json"
+    value = json.loads(path.read_text(encoding="utf-8"))
+    value["designations"][0]["designation"] = "FAKE-LABEL 1.2.3"
+    path.write_text(json.dumps(value, ensure_ascii=False), encoding="utf-8")
+    before, objects = stand.counts(), custody.bucket_keys()
+    built = len(stand.built)
+    assert stand.run("plan", bundle) == promote_cli.EXIT_REFUSED
+    assert "plan: REFUSED [request_designations_differ_from_map]" in capsys.readouterr().err
+    _expect(bundle, "8" * 64, "8" * 64)
+    assert stand.run("promote", bundle) == promote_cli.EXIT_REFUSED
+    assert "promote: REFUSED [request_designations_differ_from_map]" in capsys.readouterr().err
+    assert stand.counts() == before and custody.bucket_keys() == objects
+    assert len(stand.built) == built  # refused before any runner, hence before any database read
 
 
 @pytest.mark.usefixtures("clean_tables")
