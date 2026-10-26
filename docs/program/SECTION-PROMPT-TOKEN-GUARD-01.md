@@ -122,7 +122,9 @@ All with `BS=$(ls -d /root/projects/PDF-Analysis/.venv/bootstrap/lib/python3*/si
 - `tests/unit/analysis/text_profiles/test_prompt_token_guard.py`: **109 passed** (about 1 s).
 - `tests/unit/analysis/text_profiles` with `tests/unit/analysis/test_text_profile_registry.py`: **159 passed**.
 - the same guard file with `AUDITMANAGER_LEGACY_PROMPTS_REPO=/nonexistent`: **46 passed, 63 skipped**, every skip carrying the reason string above.
-- DOCS_CHECKS_PLACEHOLDER
+- `tests/contract/analysis_packages`: **52 passed**.
+- `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py` (run on the committed tree, the contract test refuses a dirty one): **105 passed**; `git diff --check` exit 0.
+- the governance one-liner on `docs/program/tasks/SECTION-PROMPT-TOKEN-GUARD-01.md`: prints `[]`.
 
 ## Integration notes
 
@@ -142,4 +144,13 @@ All with `BS=$(ls -d /root/projects/PDF-Analysis/.venv/bootstrap/lib/python3*/si
 
 ## Proof that forbidden paths are untouched
 
-`git diff --name-only 2aec42072c7ba81be59570206e99e29bfd9e041c..HEAD` prints exactly the four paths of the table «Files» (checked on the final commit; see the lane's final message for the output). `/root/projects/PDF-proverka` was only read: its `HEAD` is the pinned `16ba8e5d…` and `git status --short` there prints nothing.
+`git diff --name-only 2aec42072c7ba81be59570206e99e29bfd9e041c..HEAD` prints exactly the four paths of the table «Files»:
+
+```text
+docs/program/SECTION-PROMPT-TOKEN-GUARD-01.md
+docs/program/tasks/SECTION-PROMPT-TOKEN-GUARD-01.md
+tests/unit/analysis/text_profiles/prompt_token_allowlist.json
+tests/unit/analysis/text_profiles/test_prompt_token_guard.py
+```
+
+ `/root/projects/PDF-proverka` was only read: its `HEAD` is the pinned `16ba8e5d…` and `git status --short` there prints nothing.
