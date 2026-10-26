@@ -1,7 +1,7 @@
 {
   "lock_version": 1,
   "purpose": "Everything a later regeneration needs to prove the committed API client matches its input: the toolchain pins, the exact generator invocation, and the exact OpenAPI bytes the client was generated from. Verified by web/tests/guards/frontend-lock.guard.test.ts, which recomputes every digest here and fails if one has moved.",
-  "owner": "OPT-PROJECT-ALL-SECTIONS-01 reseal",
+  "owner": "COMPARE-PERSISTED-SUMMARY-01 reseal",
   "toolchain": {
     "node": "22.23.1",
     "npm": "10.9.8",
@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "14375c443fb530324592bdb3dfb1f40dbe10e45ad82785e9797331ecbfd9357a",
-    "content_commit": "19f4781d",
-    "content_commit_subject": "docs(contract): section_not_ar is no longer produced; uploadDocument and the dashboard say what is true",
+    "sha256": "15125f8f6b6c5662d556dcc5f959f36b4c53446bf54d787ecfca4cefd409d21c",
+    "content_commit": "7e6eb754",
+    "content_commit_subject": "fix(api): approved_pairs is optional and nullable like RunStatus.executor; the operation-surface test names a sheet link",
     "dispatch_named_commit": "a3e83f39cfcb02f4ea5565e6f45f3f2b2f720e97",
-    "commit_note": "OPT-PROJECT-ALL-SECTIONS-01 repairs prose only: getSpecificationPrices and startOptimisationPass accept a version of any section (section_not_ar stays in the enum, no longer produced), uploadDocument says what routes an analysis, getDashboardSummary says fifteen sections, one reseal paragraph in info.description; contract 1.7.0 (92/104/301), migration 0034, no new error code.",
+    "commit_note": "COMPARE-PERSISTED-SUMMARY-01 (B1) adds approveSheetPairing and withdrawSheetPairing, nine schemas and the optional approved_pairs of compareDocumentVersions; contract content under 1.7.0 (94/106/310), migration 0035, no new error code.",
     "openapi_version": "3.1.0",
     "info_version": "1.7.0",
-    "paths": 92,
-    "operations": 104,
-    "component_schemas": 301,
+    "paths": 94,
+    "operations": 106,
+    "component_schemas": 310,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "14375c443fb530324592bdb3dfb1f40dbe10e45ad82785e9797331ecbfd9357a",
+    "snapshot_sha256": "15125f8f6b6c5662d556dcc5f959f36b4c53446bf54d787ecfca4cefd409d21c",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "e905afb72af12f2d9867752371e50f15083ae7315ca96ec19340477c0a29702a",
-      "index.ts": "c1adb3a7a351c302c31dc70b871d8bbb744b90be38e67dfdae2b8e48a2e5582e",
-      "operations.gen.ts": "16f110bba9f614e7062e7a24e3f62a7eddfec71787da94027af41c77cf75e066",
-      "types.gen.ts": "77f90291913f03deb265917f1ed5ef749cfb601762041b34006683afdc3ffe68"
+      "client.gen.ts": "efa2d4f422207099f641ffbd1c7de596f079038de8db27745e359775e86c6d2d",
+      "index.ts": "926dcd49df1cac8e8b3c846d024deaef3e2fb8e879102d4f088a4e69d8474db9",
+      "operations.gen.ts": "92c0f9e18323878b582f3a1d21a893c63d6c0cb11c22e992930b773c2a50303f",
+      "types.gen.ts": "f6085ad586fe087f42af1109522cf2a2f674e544e9d9241882c2ef1ec82ecb56"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },
