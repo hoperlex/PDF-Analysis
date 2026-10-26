@@ -212,7 +212,7 @@ On the committed tree (`git status --short` empty), at the commit before this pa
 
 | Command | Result |
 |---|---|
-| `pytest tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py` | filled in below |
-| governance one-liner on `docs/program/tasks/SECTION-VK-FULL-01.md` | filled in below |
-| `git diff --check bb18c323..HEAD` | filled in below |
+| `pytest tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py` | `105 passed` |
+| governance one-liner on `docs/program/tasks/SECTION-VK-FULL-01.md` | `[]` |
+| `git diff --check bb18c323..HEAD` | rc 0 |
 | section set, `build_fixtures.py --check`, HTTP test, web test | `211 passed`; `fixtures match`; `4 passed`; `95 passed` |
