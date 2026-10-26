@@ -7,7 +7,7 @@
     "kind": "synthetic",
     "profile_status": "reviewed",
     "prompt_bundle_id": "pb_01M5AXG1K2JQQH7R4ACTBW8974",
-    "prompt_bundle_sha256": "6a34bb49728f40572d16f7e507ab5e998b2db796351a5c466cddd1da8c1a7ca7",
+    "prompt_bundle_sha256": "a7454996956fcb7733774b5b20443315a2867e8bd3759e3d31e00df52cd45fb1",
     "section_code": "PS",
     "statement": "Synthetic: authored by hand for W59-ANALYSIS-SETTINGS-01 to prove section routing in recorded mode. No model produced this reply and no provider call was made. Not field evidence for the profile's review.",
     "task_id": "W59-ANALYSIS-SETTINGS-01",
@@ -15,7 +15,7 @@
   },
   "output_text": "{\"observations\": [{\"category\": \"internal_contradiction\", \"finding_text\": \"Синтетический ответ (ПЗ), не результат вызова модели: степень огнестойкости здания указана как II в общих данных и как III в противопожарных мероприятиях.\", \"recommendation_text\": \"Привести степень огнестойкости здания к одному значению во всех частях документа.\", \"evidence\": [{\"page_number\": 2, \"quote\": \"Степень огнестойкости здания — II.\"}, {\"page_number\": 6, \"quote\": \"Степень огнестойкости здания — III.\"}]}]}",
   "recording_version": "1.0.0",
-  "request_sha256": "caf8aa0fe2a34349618b85b74dd04175f4757579f9c4d0b64f726b5c2902ab85",
+  "request_sha256": "37de6fe13bdecb615949ecd331a1e88816d5e7b7698f35abe7fb58f9544dfd23",
   "stop_reason": "end_turn",
   "usage": {
     "input_tokens": 2290,
