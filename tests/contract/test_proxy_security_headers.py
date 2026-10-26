@@ -257,3 +257,80 @@ def test_each_check_can_fail(case: str) -> None:
         assert old in tls, f"the mutation for {case!r} no longer matches tls-server.conf"
         tls = tls.replace(old, new, 1)
     assert all_problems(plain, tls) != [], f"{case!r} was not caught"
+
+
+# ---------------------------------------------------------------------------------------
+# The challenge listener -- `PROD-01-TLS-ACME-01`
+# ---------------------------------------------------------------------------------------
+#
+# `infra/deploy/proxy/acme-challenge.conf` is a third server block, loaded beside the plain one when a
+# certificate name is configured and published as public port 80. It answers two things -- a file from the
+# ACME webroot and a redirect -- and the redirect and the 404 are pages a browser renders, so the four headers
+# must be on both locations by the same rule as the other two bodies: at server level, `always`, and no
+# `location` may declare an `add_header` of its own. Its locations do not all `proxy_pass` or `return` (the
+# webroot one serves a file with `root` and `try_files`), so `answering_locations` would miss it; this walks
+# EVERY location. No HSTS: it is a plain-HTTP listener, where the header means nothing.
+
+CHALLENGE = PROXY / "acme-challenge.conf"
+
+
+def challenge_problems(config: str) -> list[str]:
+    try:
+        tree = parse(config)
+    except ValueError as error:
+        return [f"acme-challenge.conf: {error}"]
+    servers = [child for child in tree.children if child.header == "server {"]
+    if len(servers) != 1:
+        return [f"acme-challenge.conf: expected one server block, found {len(servers)}"]
+    server = servers[0]
+    locations = [child for child in server.children if child.header.startswith("location ")]
+    problems: list[str] = []
+    if len(locations) != 2:
+        problems.append(f"acme-challenge.conf: expected two locations, found {len(locations)} -- the walk is broken")
+    for location in locations:
+        sent = effective_headers(server, location)
+        missing = SECURITY_HEADERS - sent
+        if missing:
+            problems.append(f"acme-challenge.conf: `{location.header}` does not send {sorted(missing)}")
+        if any(line.startswith("add_header Strict-Transport-Security") for line in sent):
+            problems.append(f"acme-challenge.conf: `{location.header}` sends HSTS on a plain-HTTP listener")
+    for line in statements(config):
+        if line.startswith("add_header ") and not line.endswith(" always;"):
+            problems.append(f"acme-challenge.conf: `{line}` is not `always`, so error answers lose it")
+    return problems
+
+
+def test_the_challenge_block_sends_the_four_headers_from_both_locations() -> None:
+    assert challenge_problems(CHALLENGE.read_text()) == []
+
+
+CHALLENGE_MUTATIONS = {
+    "a header dropped from the challenge server": (
+        '    add_header Referrer-Policy "same-origin" always;\n',
+        "",
+    ),
+    "a location that declares its own header drops the inherited four": (
+        "        default_type text/plain;\n",
+        '        default_type text/plain;\n        add_header Cache-Control "no-store" always;\n',
+    ),
+    "HSTS on the plain challenge listener": (
+        '    add_header Referrer-Policy "same-origin" always;\n',
+        '    add_header Referrer-Policy "same-origin" always;\n    ' + HSTS + "\n",
+    ),
+    "a header without always": (
+        '    add_header X-Frame-Options "DENY" always;\n',
+        '    add_header X-Frame-Options "DENY";\n',
+    ),
+    "a third location": (
+        "    location / {\n",
+        "    location /extra {\n        return 204;\n    }\n\n    location / {\n",
+    ),
+}
+
+
+@pytest.mark.parametrize("case", sorted(CHALLENGE_MUTATIONS))
+def test_each_challenge_check_can_fail(case: str) -> None:
+    old, new = CHALLENGE_MUTATIONS[case]
+    config = CHALLENGE.read_text()
+    assert old in config, f"the mutation for {case!r} no longer matches acme-challenge.conf"
+    assert challenge_problems(config.replace(old, new, 1)) != [], f"{case!r} was not caught"

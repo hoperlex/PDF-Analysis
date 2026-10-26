@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # `D-27` -- one command that answers "is the stack in front of me this tree?"
 #
-#   infra/deploy/verify-deployed.sh [--env-file <path>] [--repo <path>]
+#   infra/deploy/verify-deployed.sh [--env-file <path>] [--repo <path>] [--acme-rehearsal]
 #
 # Exit 0: the deployed stack is this working tree. Exit 6: it is not. Exit 4: the question
-# could not be answered. **Both failures are failures.** The row this closes is not "the
+# could not be answered. Exit 7: the stack is this tree and the certificate it serves is not
+# acceptable (`PROD-01-TLS-ACME-01`, below). **All failures are failures.** The row this closes is not "the
 # stack drifted" -- it is that three waves running, nothing noticed, because there was no
 # check to be red. A probe that skips when it is unsure is the same nothing with a nicer
 # face, so there is no path through this script that reports success without having
@@ -80,11 +81,14 @@ REPO="$(cd "$HERE/../.." && pwd)"
 
 DRIFT=6
 UNANSWERABLE=4
+CERTIFICATE=7
+REHEARSAL=no
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --env-file) ENV_FILE="${2:-}"; shift 2 ;;
         --repo) REPO="${2:-}"; shift 2 ;;
+        --acme-rehearsal) REHEARSAL=yes; shift ;;
         -h|--help)
             sed -n '2,4p' "${BASH_SOURCE[0]}" >&2
             exit 2 ;;
@@ -310,7 +314,8 @@ echo
 
 # --- 3. what the running proxy reads, against the tree ------------------------------
 # `B-1`. The mounts are read from the container, not from the compose file: the container is
-# what serves, and it may carry an overlay (`proxy/compose.tls.yml`) this script never names.
+# what serves, and it may carry overlays (`infra/acme/compose.acme.yml`, `proxy/compose.tls.yml`) this
+# script's proxy comparison never names.
 # Each bind-mount source must be this checkout's `infra/deploy/proxy/` -- a mount from
 # anywhere else is a proxy that is not serving this tree, whatever its bytes are -- and every
 # tracked file under each source is compared inside the container. `proxy/nginx.conf` is
@@ -413,8 +418,76 @@ if [ "$PROXY_PROBLEMS" -ne 0 ]; then
         "reads it. reload-proxy.sh restarts the proxy when a mounted file changed:" \
         "    infra/deploy/reload-proxy.sh" \
         "A proxy mounted from another checkout has to be recreated from this one, with the" \
-        "same -f files it was created with (add proxy/compose.tls.yml if TLS is on):" \
+        "same -f files it was created with (add infra/acme/compose.acme.yml if ALPHA_CERT_NAME is set, and proxy/compose.tls.yml if 443 is published):" \
         "    docker compose --env-file $ENV_FILE -f $COMPOSE_FILE up -d --force-recreate proxy" \
         "Until then, no claim about this stack is a claim about $HEAD_SHA."
 fi
+# --- 4. the certificate the proxy serves (`PROD-01-TLS-ACME-01`, `ADR-0021` rows 2 and 5) -----------
+# Only on a stack that terminates TLS itself (`ALPHA_CERT_NAME` set); without a name this section does not
+# exist and the script is what it was. The question is asked of the proxy's own TLS listener, on the compose
+# network, by a one-off container of the ACME image (it has `openssl` and the CA bundle; the host promises
+# neither -- `DEPLOYMENT_RUNBOOK.md` section 1), so what is judged is what a client would be served, whether
+# or not port 443 is published yet. Judged, in the script's order of importance:
+#
+#   * a certificate is served at all (a deploy is not successful while the name has none);
+#   * it is the right KIND: a staging certificate on a production name is a failure, and the default for
+#     `ALPHA_ACME_STAGING` is `yes`, so a host that lost its setting is caught here and not by a customer;
+#   * it chains to the CA bundle and names the host (production only);
+#   * it has at least 14 days left. The 14 is the architect's number (`ADR-0021` row 5); renewal starts at 30,
+#     so a certificate this close is a renewal that has been failing for two weeks.
+#
+# `--acme-rehearsal` is the one explicit way to accept a STAGING certificate: the staging rehearsal of the
+# runbook is a deploy that is meant to serve one, and that run states it. Everything else about the check is
+# unchanged by it, and a production certificate is a failure under it.
+CERT_NAME="$(configured ALPHA_CERT_NAME)"
+if [ -n "$CERT_NAME" ]; then
+    echo "-- the certificate the proxy serves --"
+    LISTENERS_LIB="$HERE/lib/proxy-listeners.sh"
+    [ -r "$LISTENERS_LIB" ] || fail "$UNANSWERABLE" "$LISTENERS_LIB is missing, so ALPHA_CERT_NAME cannot be judged."
+    # shellcheck source=lib/proxy-listeners.sh
+    . "$LISTENERS_LIB"
+    if ! NAME_WHY="$(listeners_name_problem "$CERT_NAME")"; then
+        fail "$UNANSWERABLE" "ALPHA_CERT_NAME '$CERT_NAME' in $ENV_FILE is not a usable name: $NAME_WHY."
+    fi
+    CERT_STAGING="$(configured ALPHA_ACME_STAGING)"
+    [ -n "$CERT_STAGING" ] || CERT_STAGING=yes
+    case "$CERT_STAGING" in
+        yes|no) ;;
+        *) fail "$UNANSWERABLE" "ALPHA_ACME_STAGING in $ENV_FILE is '$CERT_STAGING', which is neither yes nor no." ;;
+    esac
+    # >>> step: staging-certificate-is-a-failure
+    if [ "$CERT_STAGING" = yes ] && [ "$REHEARSAL" = no ]; then
+        fail "$CERTIFICATE" "ALPHA_ACME_STAGING is yes in $ENV_FILE: this stack is set to the authority's TEST endpoint." \
+            "A staging certificate is trusted by no browser, so this deployment is not one a user can use." \
+            "For production set ALPHA_ACME_STAGING=no and deploy. For the rehearsal of the runbook, say so:" \
+            "    infra/deploy/verify-deployed.sh --env-file $ENV_FILE --acme-rehearsal"
+    fi
+    # <<< step: staging-certificate-is-a-failure
+    CERT_MODE=production
+    [ "$CERT_STAGING" = no ] || CERT_MODE=staging
+    [ "$REHEARSAL" = no ] || [ "$CERT_STAGING" = yes ] || fail "$CERTIFICATE" \
+        "--acme-rehearsal was given and ALPHA_ACME_STAGING is no: a rehearsal expects the TEST endpoint."
+    CERT_ARGS=(--env-file "$ENV_FILE" --file "$COMPOSE_FILE")
+    while IFS= read -r overlay; do
+        [ -z "$overlay" ] || CERT_ARGS+=(--file "$overlay")
+    done < <(listeners_overlay_files "$HERE" "$CERT_NAME" no no)
+    CERT_STATUS=0
+    CERT_OUTPUT="$(docker compose "${CERT_ARGS[@]}" run --rm --no-deps -T \
+        --entrypoint /usr/local/bin/check-served.sh acme "$CERT_NAME" proxy:8443 14 "$CERT_MODE" \
+        2>"$WORK/cert-stderr")" || CERT_STATUS=$?
+    printf '%s\n' "$CERT_OUTPUT" | sed 's/^/  /'
+    case "$CERT_STATUS" in
+        0) ;;
+        10|11|12|13)
+            fail "$CERTIFICATE" "the certificate this stack serves for $CERT_NAME is not acceptable (check-served.sh exit $CERT_STATUS)." \
+                "What it found is above. The images and the proxy's configuration are this tree's;" \
+                "the public name is not ready to be used." ;;
+        *)
+            fail "$UNANSWERABLE" "the certificate could not be asked (exit $CERT_STATUS)." \
+                "$(sed 's/^/  /' "$WORK/cert-stderr" | head -5)" \
+                "Is the acme service built (deploy.sh) and the proxy up? Nothing is claimed about the certificate." ;;
+    esac
+    echo
+fi
+
 echo "verify-deployed.sh: the deployed stack IS this tree ($HEAD_SHA$DIRTY)."
