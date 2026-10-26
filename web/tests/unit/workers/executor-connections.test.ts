@@ -21,6 +21,7 @@ import {
   connectionFailure,
   probeOutcomeSentence,
   recentChanges,
+  kindIsServed,
   routeBlocker,
   requiredPurposes,
   secretOfPurpose,
@@ -148,7 +149,9 @@ describe('what a card says without ever holding the key', () => {
   it('says a connection is ready to be routed, or why it is not', () => {
     const markup = connections(['expert']);
     expect(markup).toContain('data-executor-ready="yes"');
-    for (const blocker of ['secret_unreadable', 'probe_failed', 'probe_pending', 'not_probed', 'secret_missing', 'no_revision', 'kind_not_served', 'archived']) {
+    // `kind_not_served` is drawn only for a kind this release does not know (see the test below):
+    // no case of the three served kinds carries it.
+    for (const blocker of ['secret_unreadable', 'probe_failed', 'probe_pending', 'not_probed', 'secret_missing', 'no_revision', 'archived']) {
       expect(markup, blocker).toContain(blocker === 'archived' ? 'data-executor-archived="yes"' : `data-executor-blocker="${blocker}"`);
     }
   });
@@ -184,10 +187,25 @@ describe('readiness is the probe on the current key, and nothing else', () => {
     const client = OUTCOME_CASES.find(([outcome]) => outcome === 'no_runner_online')![1];
     expect(requiredPurposes(client.connection, client.detail.revisions[0])).toEqual([]);
     // `EXEC-PULL-01` is served: a client whose probe found no runner is blocked by that probe,
-    // not by its kind; a command over SSH is still a kind this release does not serve.
+    // not by its kind. So is a command over SSH (`EXEC-SSH-01`): this one is blocked by its probe,
+    // because its host key is not pinned yet.
     expect(routeBlocker(client.connection, client.detail.revisions[0])).toBe('probe_failed');
     const ssh = OUTCOME_CASES.find(([outcome]) => outcome === 'host_key_unpinned')![1];
-    expect(routeBlocker(ssh.connection, ssh.detail.revisions[0])).toBe('kind_not_served');
+    expect(routeBlocker(ssh.connection, ssh.detail.revisions[0])).toBe('probe_failed');
+  });
+
+  it('routes a command over SSH on its key and its probe, and blocks only a kind it does not know', () => {
+    expect(['http_api', 'pull', 'ssh_command'].map((kind) => kindIsServed(kind as never))).toEqual([true, true, true]);
+    const probeOk = { outcome: 'ok', reported_model: 'заявленная-модель', identity_basis: 'reported', latency_ms: 900, rate_check: 'not_metered' } as const;
+    const withKey = executorCase({ n: 60, kind: 'ssh_command', name: 'Команда по SSH', secrets: [{ purpose: 'ssh_private_key' }], probe: probeOk });
+    expect(routeBlocker(withKey.connection, withKey.detail.revisions[0])).toBeNull();
+    expect(connections(['expert'], [withKey])).toContain('data-executor-ready="yes"');
+    const withoutKey = executorCase({ n: 61, kind: 'ssh_command', name: 'Команда без ключа', probe: probeOk });
+    expect(routeBlocker(withoutKey.connection, withoutKey.detail.revisions[0])).toBe('secret_missing');
+    const unknown = executorCase({ n: 62, kind: 'future_kind' as never, name: 'Вид из будущего', secrets: [{}], probe: probeOk });
+    expect(kindIsServed('future_kind' as never)).toBe(false);
+    expect(routeBlocker(unknown.connection, unknown.detail.revisions[0])).toBe('kind_not_served');
+    expect(connections(['expert'], [unknown])).toContain('data-executor-blocker="kind_not_served"');
   });
 
   it('keeps a sentence for every blocker', () => {

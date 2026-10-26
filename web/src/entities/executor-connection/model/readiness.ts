@@ -69,11 +69,14 @@ export const ROUTE_BLOCKER_SENTENCES: Readonly<Record<RouteBlocker, string>> = {
 };
 
 /**
- * Kinds whose probe and route the stand serves in this release: the HTTP API (`EXEC-HTTP-01`)
- * and the client that pulls tasks (`EXEC-PULL-01`, wired by `EXEC-CANDIDATE-2`).
+ * Kinds whose probe and route the stand serves in this release: the HTTP API (`EXEC-HTTP-01`),
+ * the client that pulls tasks (`EXEC-PULL-01`, wired by `EXEC-CANDIDATE-2`) and the command over
+ * SSH (`EXEC-SSH-01`; its probe, adapter and route are served by the worker). Whether one
+ * revision of a served kind can be served is the stand's answer in the probe (`kind_not_served`
+ * for an SSH profile the worker does not know), not a rule kept here.
  */
 export function kindIsServed(kind: ExecutorConnection['kind']): boolean {
-  return kind === 'http_api' || kind === 'pull';
+  return kind === 'http_api' || kind === 'pull' || kind === 'ssh_command';
 }
 
 /**
