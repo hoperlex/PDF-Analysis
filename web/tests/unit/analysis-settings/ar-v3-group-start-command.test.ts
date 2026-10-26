@@ -50,9 +50,17 @@ import { GROUP_ID } from './ar-v3-beta-review-fixtures';
 const PROJECT_UID = 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 const VERSION_UID = 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 const KEY = 'ik-one-intent';
-// What the caller of the control holds for it (`useArV3GroupStartIntent`): the key and whether a
-// start is pending. The control sends exactly this key and mints none of its own.
-const INTENT = { idempotencyKey: KEY, inFlight: false };
+// What the caller of the control holds for it (`useArV3GroupStartIntent`): the key, whether a start
+// is pending, and the start's observer. The control sends exactly this key through exactly this
+// observer and mints and opens none of its own. Read at call time, so a test can move `settled`.
+const intent = () => ({
+  idempotencyKey: KEY,
+  inFlight: false,
+  mutation: {
+    ...settled.mutation,
+    mutate: (...args: unknown[]) => settled.mutate.push(args),
+  } as never,
+});
 const GROUP = { group_id: GROUP_ID, project_uid: PROJECT_UID, version_uid: VERSION_UID } as ArV3BetaGroup;
 
 type Captured = {
@@ -103,7 +111,7 @@ describe('the control hands over only a group the settings screen can open', () 
       createElement(StartArV3GroupControl, {
         projectUid: PROJECT_UID,
         versionUid: VERSION_UID,
-        intent: INTENT,
+        intent: intent(),
         onStarted,
       }),
     );
@@ -118,7 +126,7 @@ describe('the control hands over only a group the settings screen can open', () 
       const element = StartArV3GroupControl({
         projectUid: PROJECT_UID,
         versionUid: VERSION_UID,
-        intent: INTENT,
+        intent: intent(),
         onStarted: (group) => started.push(group),
       });
       onSend = (element.props as { onSend: () => void }).onSend;
