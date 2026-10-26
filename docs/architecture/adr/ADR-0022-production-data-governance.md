@@ -97,8 +97,7 @@ erasing a project that is subject to a hold. Data classification labels are open
 **Inputs.** `--project prj_<ULID>` (an identity, never a name); `--actor <login>`, which must be an
 active account holding `admin` and is resolved to its `usr_` identity; `--reason`, one of a closed list
 (`client_request`, `end_of_engagement`, `test_data`, `other`; free text is refused because it would
-put personal data into an append-only table); `--dry-run` (the default) or `--apply --plan-sha256
-<hex>`; `--resume era_<ULID>`.
+put personal data into an append-only table); `--dry-run` (the default) or `--apply --plan-sha256 <hex>`; `--resume era_<ULID>`.
 
 **Scope: what it removes.** Every row reachable from `project` by foreign key, which is the
 project-scoped subset of the `PRODUCT_TABLES` of `product_purge.py`, found by a foreign-key closure

@@ -32,7 +32,7 @@ carries an older tree (neither ref was fetched for this plan). No complete `make
 ### PROD-00 — The owner confirms or changes the architect's decisions and the open questions
 - **Result:** a ruling record (its number assigned by the integrator) that, for every `AD-` decision of the pack and every open question of section 7, says
   confirmed, changed, or refused. No item below is dispatched on an unconfirmed `AD-` that it depends on.
-- **depends_on:** — · **Hotspots:** `OWNER_RULINGS_*.md` (integrator) · **Size:** S (one document) · **Executor:** owner (by direct poll), integrator records.
+- **depends_on:** — · **Hotspots:** `docs/program/OWNER_RULINGS_*.md` (integrator) · **Size:** S (one document) · **Executor:** owner (by direct poll), integrator records.
 - **Check:** `grep -n "PRODUCTION-ADR-PACK-01" docs/program/OWNER_RULINGS_2026-09-17.md` finds the ruling that answers the poll and names each `AD-` id.
 
 ### PROD-01 — The TLS terminator and certificate renewal in `infra/` (`R-146a`, `AD-01`)
@@ -40,7 +40,7 @@ carries an older tree (neither ref was fetched for this plan). No complete `make
   only the challenge and a redirect; the plain listener stays on loopback; `verify-deployed.sh` fails on a certificate with fewer than 14 days left; `readiness.sh`
   `tls` and `plain-http` describe the new layout. `D-191` closes.
 - **depends_on:** PROD-00 (the DNS name, `AD-01`) · **Hotspots:** `infra/**` owner of its wave · **Size:** L: `compose.server.yml`, five files under `infra/deploy/proxy/`,
-  a new `infra/acme/`, `deploy.sh`, `verify-deployed.sh`, `readiness.sh`, `env/alpha.env.example`, the runbook, and the TLS and readiness composition tests.
+  a new `infra/acme/`, `deploy.sh`, `verify-deployed.sh`, `readiness.sh`, `infra/deploy/env/alpha.env.example`, the runbook, and the TLS and readiness composition tests.
 - **Executor:** Sonnet lane, then owner (DNS record, inbound 80 and 443, the first issuance against the staging endpoint and then the real one).
 - **Check:** `ADR-0021` rows 1 to 5; `pytest -q tests/integration/composition/test_proxy_tls_path.py tests/contract/test_proxy_security_headers.py tests/integration/composition/test_deploy_script_refusals.py tests/integration/composition/test_readiness_command.py`.
 
@@ -102,8 +102,8 @@ carries an older tree (neither ref was fetched for this plan). No complete `make
 - **Check:** `ADR-0021` row 10.
 
 ### PROD-10 — Preparation for removing АР v1 and v2 (`AD-12`)
-- **Result:** the live journey, `tests/e2e/pc01/` and the manual protocol run on a section that stays; `recognised_context`, `content`, `grounding` and `registered` live outside `ar_v2/`; nothing else changes.
-- **depends_on:** — (every non-АР section already has a synthetic recording over the same text layer: `SECTION-RECORDINGS-01.md`) · **Hotspots:** none of the four (it edits `ar_v3/*`, `analysis/recognised/`, `fixtures/`, `tests/e2e/`) ·
+- **Result:** the live journey, `tests/e2e/pc01/` and the manual protocol run on a section that stays; `recognised_context`, `content`, `grounding` and `registered` live outside `src/auditmanager/analysis/profiles/ar_v2/`; nothing else changes.
+- **depends_on:** — (every non-АР section already has a synthetic recording over the same text layer: `SECTION-RECORDINGS-01.md`) · **Hotspots:** none of the four (it edits `src/auditmanager/analysis/profiles/ar_v3/*`, `src/auditmanager/analysis/recognised/`, `fixtures/`, `tests/e2e/`) ·
   **Size:** L: five `ar_v3` modules, one `recognised` module, four moved modules, the journey (`journey.mjs`, `manifest.json`, fixtures), the manual protocol and about 15 test files that import the moved modules.
 - **Executor:** Sonnet lane.
 - **Check:** `grep -rn "profiles.ar_v2" src/auditmanager/analysis/profiles/ar_v3 src/auditmanager/analysis/recognised` prints nothing; the live journey in a lane stand (`npm --prefix web run e2e:pc01 -- --phase all`) is a task for `PROD-18`'s window.
@@ -111,7 +111,7 @@ carries an older tree (neither ref was fetched for this plan). No complete `make
 ### PROD-11 — Removal of АР v1 and v2 and the contract reseal (`R-146l`, `AD-12`)
 - **Result:** the scope of `ADR-0024` section 2: `startRun` on an АР version answers `section_profile_unavailable`; `AnalysisProfileStatus` has no `builtin`; `AR_TEXT_PROFILE` and the v2 modules are gone;
   92/104/300 unchanged unless the reseal owner decides otherwise; the web start control sends an АР version to the v3 control.
-- **depends_on:** PROD-10 · **Hotspots:** the contract (sole owner), the composition-root neighbour `runs/executor.py` and, if `bootstrap/**` changes, the composition root (sole owner) ·
+- **depends_on:** PROD-10 · **Hotspots:** the contract (sole owner), the composition-root neighbour `src/auditmanager/runs/executor.py` and, if `src/auditmanager/bootstrap/**` changes, the composition root (sole owner) ·
   **Size:** L: 30 source files name v2, six name `AR_TEXT_PROFILE`, 65 test files, seven web files, the contract, the generated client and the frontend lock.
 - **Executor:** Sonnet lane (the reseal needs the contract owner's slot); the integrator names the new contract version.
 - **Check:** `ADR-0024` rows 1 to 4; `pytest -q tests/contract/api_v1` and the focused integration directories of `runs`, `findings`, `analysis`, `sections`; `npm --prefix web run api:verify`.

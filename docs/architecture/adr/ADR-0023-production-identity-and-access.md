@@ -105,7 +105,7 @@ and a deployment is not successful while it reports a default credential.
 
 `AD-10` (architect's implementation decision within `R-146n` item 6, to be confirmed).
 
-A writer local to the `access` context appends to `audit_event`, modelled on `jobs/events.py`, with
+A writer local to the `access` context appends to `audit_event`, modelled on `src/auditmanager/jobs/events.py`, with
 its own allow-list of payload keys. Identities, controlled classifiers and counts only; **never** a
 password, a hash, a token, a cookie, a registration's names or e-mail, an IP address or a user agent.
 (An IP address is deliberately left out: behind a terminator it is the proxy's unless

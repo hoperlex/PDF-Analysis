@@ -33,9 +33,9 @@ from the tree at `4d7b7c38` on 2026-10-26:
   reviewed them and no field case exists (`D-178`, `D-183`). A section with no profile is refused with
   `section_profile_unavailable`, with no АР fallback.
 - **v3 stands on v2 code.** Thirty source files name v2 (`grep -rlE "ar_v2|recorded_v2|AR_V2|v2_publication|v2_recorded|RecordedV2" src --include=*.py | wc -l`
-  prints 30; 13 are inside `src/auditmanager/analysis/profiles/ar_v2/`). Five modules of `ar_v3/`
-  and `analysis/recognised/region_candidate.py` import `ar_v2.recognised_context`, `ar_v2.content`, `ar_v2.grounding`
-  and `ar_v2.registered`. `AR_TEXT_PROFILE` is named in six source files, among them `runs/executor.py`, whose
+  prints 30; 13 are inside `src/auditmanager/analysis/profiles/ar_v2/`). Five modules of `src/auditmanager/analysis/profiles/ar_v3/`
+  and `src/auditmanager/analysis/recognised/region_candidate.py` import `ar_v2.recognised_context`, `ar_v2.content`, `ar_v2.grounding`
+  and `ar_v2.registered`. `AR_TEXT_PROFILE` is named in six source files, among them `src/auditmanager/runs/executor.py`, whose
   `execute_run` serves v1, recorded v2 and v3 in one function.
 - **The contract.** 92 paths, 104 operations, 300 schemas, contract `1.5.0`. No operation is specific to v1 or v2. The
   contract text names them in `listAnalysisProfiles` (the status `builtin`, which only the AR v1 profile
@@ -46,7 +46,7 @@ from the tree at `4d7b7c38` on 2026-10-26:
   registers an OpenRouter-compatible HTTP connection from `PROXY_LLM_*` in `provider.env` under
   `AUDITMANAGER_PROVIDER_SOURCE=database`, after which an administrator selects it. On the run path the reply's
   `model` string must equal the connection revision's gateway name **exactly** (no prefix, no alias, no case
-  folding): `analysis/text/stage.py::_identity_refusal` for the text stage and `runs/v3_provider_call.py` for v3.
+  folding): `src/auditmanager/analysis/text/stage.py::_identity_refusal` for the text stage and `src/auditmanager/runs/v3_provider_call.py` for v3.
   `ProxySettings.model_aliases` exists but no configuration reader in `src/` ever sets it. The refusal is
   `model_identity_mismatch`, `outcome_unknown` and not retry-safe, so a mismatch is paid for and nothing is
   published. `W56A-MODEL-PIN-01` stopped: the stand's proxy gateway ignored the requested model and answered with another
@@ -86,13 +86,13 @@ the source PDF, and the pack status in «Настройки анализа». Wh
 **What goes.**
 
 1. The АР v1 registration: `AR_TEXT_PROFILE` as the AR entry of `load_text_profile_registry`, and the default `text_profile = AR_TEXT_PROFILE` in
-   `runs/executor.py` (a silent fallback that `AGENTS.md` section 4 forbids once AR is no longer a profile). After it, `startRun` and `reauditRun` on a version
+   `src/auditmanager/runs/executor.py` (a silent fallback that `AGENTS.md` section 4 forbids once AR is no longer a profile). After it, `startRun` and `reauditRun` on a version
    classified `AR` answer the existing `section_profile_unavailable` (no new error code, the catalogue stays at 27), and
    the web start control sends an АР version to the v3 control instead.
-2. The recorded v2 path: `runs/recorded_v2_{merge,publication,sources,stage}.py`, `findings/v2_publication.py`,
-   `findings/v2_recorded.py`, `findings/recorded_saved_plan.py`, the `recorded_v2` branch and `plan_recorded_v2_execution` of
-   `runs/executor.py`, the v2 exports of `analysis/public.py`, and the recorded and merge modules of
-   `analysis/profiles/ar_v2/`.
+2. The recorded v2 path: `src/auditmanager/runs/recorded_v2_{merge,publication,sources,stage}.py`, `src/auditmanager/findings/v2_publication.py`,
+   `src/auditmanager/findings/v2_recorded.py`, `src/auditmanager/findings/recorded_saved_plan.py`, the `recorded_v2` branch and `plan_recorded_v2_execution` of
+   `src/auditmanager/runs/executor.py`, the v2 exports of `src/auditmanager/analysis/public.py`, and the recorded and merge modules of
+   `src/auditmanager/analysis/profiles/ar_v2/`.
 3. The contract text and enum that name them: `AnalysisProfileStatus.builtin`, the `builtin` sentence of `listAnalysisProfiles`
    and the АР v2 sentence of `info.description`; `listAnalysisProfiles` returns `profile: null` for АР.
 4. The tests of those paths (65 test files: `grep -rlE 'ar_v2|recorded_v2|v2_publication|v2_recorded|AR_V2' tests --include=*.py | wc -l`
@@ -101,8 +101,8 @@ the source PDF, and the pack status in «Настройки анализа». Wh
 
 **What stays.**
 
-- The v1 **machinery**: `analysis/text/prompt.py`, `stage.py`, `budget.py`, `proxy.py`, `profile_registry.py`, the
-  nine stage ids and the packages under `profiles/<code>/`. The 14 other sections run on it.
+- The v1 **machinery**: `src/auditmanager/analysis/text/prompt.py`, `stage.py`, `budget.py`, `proxy.py`, `profile_registry.py`, the
+  nine stage ids and the packages under `src/auditmanager/analysis/text/profiles/<code>/`. The 14 other sections run on it.
 - The closed `FindingCategory` list and its database `CHECK`s, **unchanged** (`AD-12`): narrowing the list needs a
   migration and a reseal and buys nothing, because the old rows are purged at the release. Five v2 categories remain declared
   and no registered profile emits them; that is recorded as a debt row, not removed.
@@ -216,7 +216,7 @@ removal of v1/v2 first, in parallel with the infrastructure items; `D-204` proce
 
 - АР analysis does not exist until `D-204` is finished by people outside the code: until then the production АР product is the empty pack status.
 - The product stops detecting internal contradictions and empty placeholders in АР documents.
-- The removal touches the contract, `runs/executor.py`, 65 test files and the web, and the live journey must change first.
+- The removal touches the contract, `src/auditmanager/runs/executor.py`, 65 test files and the web, and the live journey must change first.
 - A strict `model_identity_mismatch` on a provider that reports variant names fails runs after payment.
 - A single worker makes the product slow under any concurrent use, with no promise.
 
