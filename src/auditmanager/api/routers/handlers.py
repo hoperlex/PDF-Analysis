@@ -28,6 +28,7 @@ thing it is describing cannot tell you that the thing moved.
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Final, Mapping, Sequence
 
 from fastapi import Request
@@ -42,6 +43,8 @@ from auditmanager.api.routers.errors import (
 )
 from auditmanager.api.routers.wire import WireResponse
 from auditmanager.shared.errors import DomainError, ErrorCode
+
+_log = logging.getLogger(__name__)
 
 __all__ = [
     "AGGREGATE_OF_OPERATION_PATH_PARAMETER",
@@ -199,10 +202,62 @@ _STATUS_CODES: Final[Mapping[int, ErrorCode]] = {
 # ---------------------------------------------------------------------------------------
 
 
+def _record_internal_error(exc: BaseException, correlation_id: str) -> None:
+    """Leave the one log line that makes an ``internal_error`` answer addressable (``F-13``).
+
+    ``EXPOSURE-REVIEW-02`` ``F-13``: the envelope carries a correlation id "that addresses a
+    diagnostic record", and until this function no record existed -- a 500 storm, or an exploit
+    attempt, left nothing behind. The line carries the exception's **type**, the **module, line
+    and function that raised it**, and the **correlation id**. It never carries the message, the
+    arguments, the cause or the traceback text, because a driver's message can hold a row value
+    and a ``DomainError`` message can hold ``reason`` text; so no ``exc_info`` is passed.
+    """
+    kind = type(exc)
+    _log.error(
+        "internal_error: %s.%s raised at %s (correlation_id=%s)",
+        kind.__module__,
+        kind.__qualname__,
+        _origin_of(exc),
+        correlation_id,
+    )
+
+
+def _origin_of(exc: BaseException) -> str:
+    """``module:line in function`` of the innermost traceback frame: code, never data."""
+    frame = exc.__traceback__
+    if frame is None:
+        return "an unknown location"
+    while frame.tb_next is not None:
+        frame = frame.tb_next
+    module = frame.tb_frame.f_globals.get("__name__", "?")
+    return f"{module}:{frame.tb_lineno} in {frame.tb_frame.f_code.co_name}"
+
+
+def _answer_for(exc: BaseException) -> WireResponse:
+    """Classify, leave the line when the answer is ``internal_error``, and render the envelope.
+
+    The one place the three paths that can end in ``internal_error`` (the registered
+    ``DomainError`` handler, :func:`on_unhandled` and :class:`FailureEnvelopeMiddleware`) share,
+    so none of them can be a way back to a silent 500. Every other code is the caller's doing
+    and is not an incident: it leaves no line.
+    """
+    correlation_id = current_correlation_id()
+    error = to_domain_error(exc)
+    if error.code is ErrorCode.INTERNAL_ERROR:
+        _record_internal_error(exc, correlation_id)
+    return envelope_response(error, correlation_id)
+
+
 def on_domain_error(request: Request, exc: DomainError) -> WireResponse:
-    """A typed failure renders itself. The status comes from the code, never the reverse."""
+    """A typed failure renders itself. The status comes from the code, never the reverse.
+
+    :func:`~auditmanager.api.routers.errors.to_domain_error` passes a ``DomainError`` through
+    unchanged, so this is :func:`_answer_for` with the same answer as before -- plus, for a
+    ``DomainError`` that already carries ``internal_error`` (several call sites raise one with
+    a ``reason``), the log line of ``F-13``.
+    """
     del request
-    return envelope_response(exc, current_correlation_id())
+    return _answer_for(exc)
 
 
 def on_http_exception(request: Request, exc: StarletteHTTPException) -> WireResponse:
@@ -263,10 +318,11 @@ def on_unhandled(request: Request, exc: Exception) -> WireResponse:
     :func:`~auditmanager.api.routers.errors.to_domain_error` reads a database refusal's
     SQLSTATE and reports nothing else -- not the driver's message, not the exception class,
     not the SQLSTATE itself. Those stay in the diagnostic record the correlation id
-    addresses.
+    addresses -- and, since ``F-13``, that record exists: :func:`_answer_for` writes one line
+    when the answer is ``internal_error``.
     """
     del request
-    return envelope_response(to_domain_error(exc), current_correlation_id())
+    return _answer_for(exc)
 
 
 def install_exception_handlers(app: Any) -> None:
@@ -510,5 +566,6 @@ class FailureEnvelopeMiddleware:
         except BaseException as exc:  # noqa: BLE001 - the edge classifies everything
             if started:
                 raise
-            response = envelope_response(to_domain_error(exc), current_correlation_id())
+            # `F-13`: "declines to re-raise" made this the only place a 500 could be seen.
+            response = _answer_for(exc)
             await response(scope, receive, send)

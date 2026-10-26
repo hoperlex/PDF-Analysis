@@ -63,6 +63,14 @@ line = " ".join(argv)
 with open(os.environ["STUB_LOG"], "a", encoding="utf-8") as handle:
     handle.write(line + "\n")
 
+GOOD_HEADERS = (
+    "HTTP/1.1 401 Unauthorized\r\nServer: nginx\r\nContent-Type: application/json\r\n"
+    "Set-Cookie: am_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0; Secure\r\n"
+    "Strict-Transport-Security: max-age=31536000\r\nX-Content-Type-Options: nosniff\r\n"
+    "X-Frame-Options: DENY\r\nContent-Security-Policy: frame-ancestors 'none'\r\n"
+    "Referrer-Policy: same-origin\r\n\r\n" + '{"error_code": "authentication_required"}'
+)
+
 IMAGE = pathlib.Path(os.environ["STUB_IMAGE"])          # stands in for the container
 OMIT = set(filter(None, os.environ.get("STUB_OMIT", "").split(":")))
 CORRUPT = set(filter(None, os.environ.get("STUB_CORRUPT", "").split(":")))
@@ -73,6 +81,14 @@ def inside(container_path):
     """The staged file standing in for `container_path` inside the image."""
     return IMAGE / container_path.lstrip("/")
 
+
+if "served-headers-probe" in line:
+    # `HARDEN-01` (`F-17`): the raw answer of the proxy's TLS listener to the one request section 4b sends. Good
+    # unless a case says otherwise (the cases about it are in `test_verify_deployed_served_headers.py`, which
+    # builds on this harness). Only reached with a certificate name set, so every older case is unaffected.
+    sys.stdout.write(os.environ.get("STUB_HEADERS_OUTPUT", GOOD_HEADERS))
+    sys.stderr.write(os.environ.get("STUB_HEADERS_STDERR", ""))
+    sys.exit(int(os.environ.get("STUB_HEADERS_STATUS", "0")))
 
 if "ps" in argv and "--quiet" in argv:
     if os.environ.get("STUB_NO_CONTAINER") == "yes":

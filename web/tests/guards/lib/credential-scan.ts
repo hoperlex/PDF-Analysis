@@ -1,6 +1,13 @@
 /**
  * Pure scanner for the one property that cannot be repaired after the fact: **the
- * deployment credential is not in the browser bundle.**
+ * deployment's signing key is not in the browser bundle.**
+ *
+ * Since `HARDEN-01` (`EXPOSURE-REVIEW-02` `F-03`) the key is not in the web *container*
+ * either: the compose file no longer hands `AUDITMANAGER_API_TOKEN` to the web service, and
+ * the BFF authenticates with a session's own credential. The rules below still hold and
+ * matter more, not less: they keep the NAME out of every module but the reader (a
+ * developer's `web/.env` may still set it for `next dev`), and rule 5 fails the day a
+ * module starts to call the readers of a key the deployed container no longer has.
  *
  * Pure for the same reason as `source-scan.ts`: the guard runs it over the real `web/src`
  * tree and over in-memory fixtures that break every rule, so it is shown to fire rather
@@ -17,6 +24,10 @@
  * Rule 2 is enforced structurally rather than by tracing the whole graph: exactly one
  * module reads the names, nothing re-exports it from a barrel a client imports, and the
  * only importers are route handlers under `src/app/bff/`.
+ *
+ * Rule 5 (`HARDEN-01`): no module calls `getApiToken` or `hasServerCredential`. They are
+ * defined in the reader and have no caller; a caller would work on a developer's machine
+ * and fail closed in a deployed container, which is the worst place to learn it.
  */
 
 export interface ScannedFile {
@@ -49,11 +60,15 @@ const SECRET_WORDS = ['TOKEN', 'SECRET', 'PASSWORD', 'CREDENTIAL', 'KEY', 'AUTH'
 const NEXT_PUBLIC_NAME = /NEXT_PUBLIC_[A-Z0-9_]+/g;
 const SERVER_ENV_IMPORT = /from\s+['"](?:@\/shared\/config\/server-env|\.\/server-env|\.\.\/config\/server-env)['"]/;
 
+/** A call, as opposed to the definition, an import or a mention in prose. */
+const SIGNING_KEY_READER_CALL = /\b(?:getApiToken|hasServerCredential)\s*\(/;
+
 export const CREDENTIAL_RULE_IDS = [
   'public-secret-name',
   'credential-read-outside-reader',
   'credential-reader-reexported',
   'credential-reader-imported-outside-bff',
+  'signing-key-reader-called',
 ] as const;
 
 /** Every violation in the supplied files, in file then rule order. */
@@ -110,6 +125,18 @@ export function scanCredentialExposure(files: readonly ScannedFile[]): Credentia
         path: file.path,
         rule: 'credential-reader-imported-outside-bff',
         detail: `server-env is imported outside ${CREDENTIAL_IMPORTER_PREFIX}.`,
+      });
+    }
+
+    // 5. Nothing calls the readers of the signing key (`HARDEN-01`, `F-03`): the deployed web
+    //    container is not given it, so a call would only ever work on a developer's machine.
+    if (file.path !== CREDENTIAL_READER && SIGNING_KEY_READER_CALL.test(file.text)) {
+      violations.push({
+        path: file.path,
+        rule: 'signing-key-reader-called',
+        detail:
+          'getApiToken or hasServerCredential is called here; the web container does not ' +
+          'receive the signing key, so nothing under web/src may call them.',
       });
     }
   }

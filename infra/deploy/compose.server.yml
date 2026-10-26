@@ -343,14 +343,19 @@ services:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:?NEXT_PUBLIC_API_BASE_URL is unset.}
         NEXT_PUBLIC_INSTANCE_LABEL: ${NEXT_PUBLIC_INSTANCE_LABEL:-alpha}
     image: ${ALPHA_INSTANCE:?ALPHA_INSTANCE is unset.}-web
-    # Runtime, not build args: these two must NOT be inlined into the browser bundle.
-    # `W15-AUTH` put the credential in a Next Route Handler that runs on the server, so the
-    # token reaches the API and never the browser -- proved by building with the token as a
-    # sentinel and finding 0 occurrences in all of `.next/`, with a NEXT_PUBLIC_ sentinel
-    # present in the same build as the control.
+    # Runtime, not build args: these must NOT be inlined into the browser bundle.
+    # NO SIGNING KEY HERE -- `HARDEN-01`, `EXPOSURE-REVIEW-02` `F-03`. The deployment secret the `api`
+    # service receives is the key the API SIGNS every user credential with (`derive_signing_key`):
+    # whoever holds it mints a credential for any known account offline, an administrator's
+    # included. This service used to receive it under the comment "the web tier forwards it;
+    # without it every operation answers 401", which stopped being true when the bearer became
+    # a per-session credential: no module under `web/src` reads it (`getApiToken` and
+    # `hasServerCredential` have no caller; `credentialed-forward.ts` presents "a session's,
+    # never the deployment's signing key"). The web tier is the container an internet visitor
+    # reaches first, so it must not hold the one secret whose loss is a takeover.
+    # `tests/integration/composition/test_web_service_holds_no_signing_key.py` holds this.
     environment:
       AUDITMANAGER_API_UPSTREAM: http://api:8000
-      AUDITMANAGER_API_TOKEN: ${AUDITMANAGER_API_TOKEN:?AUDITMANAGER_API_TOKEN is unset. The web tier forwards it; without it every operation answers 401.}
       # `R-51`. The file on the volume below. A literal and not a `${...}` substitution:
       # it is a path inside this image, fixed by `Dockerfile.web`, and not a deployment
       # choice -- an operator who could set it could point it outside the volume and get a

@@ -25,6 +25,12 @@ def create_database_engine(settings: DatabaseSettings) -> Engine:
     ``pool_pre_ping`` is on: a connection recycled by the server between requests
     is discovered and replaced rather than surfacing as a random operational error
     in the middle of a transaction.
+
+    ``hide_parameters`` is on (``EXPOSURE-REVIEW-02`` ``F-12``): without it a SQLAlchemy
+    exception renders ``[parameters: (...)]`` after the statement, and the sinks that log an
+    exception (the run carrier, the worker) would write bound values -- client text, model
+    output -- into the container log. The statement text stays in the message; the values do
+    not, in the exception string and in the statement log that ``echo`` turns on.
     """
     return create_engine(
         settings.url,
@@ -34,6 +40,7 @@ def create_database_engine(settings: DatabaseSettings) -> Engine:
         pool_recycle=settings.pool_recycle,
         pool_pre_ping=True,
         echo=settings.echo,
+        hide_parameters=True,
         future=True,
     )
 
