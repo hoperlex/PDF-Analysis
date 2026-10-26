@@ -20,17 +20,19 @@ What is real, what is stood in
   proposal that cites ``N1`` of its scope and, deliberately, a stated and a required numeric value, so
   that "no numerical conclusion reaches a reviewer" is asserted against a reply that *tried*.
 
-How the Runs are carried (a measured gap, fact 5)
--------------------------------------------------
-``startArV3BetaGroup`` creates six Runs in ``created`` and no Job (``runs/v3_group.py``: "No Job or
-provider call is made here"; ``RunAdapter.start_ar_v3_group`` neither queues a Run nor submits to the
-carrier). The serving carrier discovers only ``queued`` Jobs of ``queued`` or ``running`` Runs, so in a
-served process nothing carries the group's Runs after the HTTP start. This module therefore carries them
-at the one seam the product offers an already-accepted Run: ``RunAdapter.submit_existing`` ->
-``carrier.submit(RunAdapter._job)`` -> ``run_to_terminal`` on the application's own ``DurableCarrier``
-(not started: ``start`` belongs to the serving lifespan), waited on with ``carrier.drain``. Fact 5 pins
-what the poller's own query sees right after the start; if the product starts queueing the group's Runs
-that test turns red and this carry step must be replaced by the poller.
+How the Runs are carried (``PROD-11D-V3-GROUP-QUEUE-01``)
+---------------------------------------------------------
+``startArV3BetaGroup`` is accepted exactly as ``startRun`` is: in the command's transaction each of the six
+Runs goes ``created -> queued`` and gets its Job, and after the commit, only when the start was not a replay,
+the adapter submits each Run's work to the carrier (``RunAdapter._job``). Before that task the start left six
+``created`` Runs and no Job, nothing in a served process carried them, and this module carried them by hand
+with ``RunAdapter.submit_existing`` (the gap this module's fact 5 pinned). The carry step is now what the
+product does. One seam remains and is deliberate: the application's ``DurableCarrier`` is not started (the
+serving lifespan starts it), so its ``submit`` would run the first Run on the pool at once and race every
+reading taken right after the start. ``HeldCarrier`` therefore sits between the ``RunAdapter`` and that
+carrier: it records what the adapter submits and forwards it, unchanged and in order, to the application's
+own carrier when the module calls ``release()``; ``carrier.drain`` then waits for the Runs. The module itself
+submits nothing.
 
 Everything is measured once, in a module-scoped fixture, before the suite's ``_no_network`` autouse
 fixture installs (a ``TestClient`` needs a socket pair); the tests below read what was captured.
@@ -218,6 +220,46 @@ class _SwappedSource:
         return dataclasses.replace(self._source.resolve(session, run, context), adapter=self._adapter)
 
 
+class HeldCarrier:
+    """The seam between the ``RunAdapter`` and the application's own carrier, observed.
+
+    ``submitted`` is every Run id the adapter handed to the carrier, in order, for ever (a Run id is read
+    from the job: the spy tags what ``RunAdapter._job`` returns). While ``holding`` the jobs are kept, not
+    run; ``release`` forwards them to the inner carrier unchanged. ``observe`` (optional) is called with the
+    Run id at the moment of each ``submit``, before anything is kept: a test uses it to read, through another
+    connection, what is already committed at the moment the adapter submits."""
+
+    def __init__(self, inner: Any) -> None:
+        self.inner = inner
+        self.submitted: list[str | None] = []
+        self.observed: list[Any] = []
+        self.observe: Callable[[str | None], Any] | None = None
+        self.holding = True
+        self._held: list[Callable[[], None]] = []
+
+    def submit(self, job: Callable[[], None]) -> None:
+        run_id = getattr(job, "run_id", None)
+        self.submitted.append(run_id)
+        if self.observe is not None:
+            self.observed.append(self.observe(run_id))
+        if self.holding:
+            self._held.append(job)
+        else:
+            self.inner.submit(job)
+
+    def release(self) -> None:
+        self.holding = False
+        held, self._held = self._held, []
+        for job in held:
+            self.inner.submit(job)
+
+    def drain(self, timeout: float | None = None) -> bool:
+        return self.inner.drain(timeout)
+
+    def shutdown(self) -> None:
+        self.inner.shutdown()
+
+
 @dataclass(slots=True)
 class BuiltApplication:
     client: TestClient
@@ -225,6 +267,7 @@ class BuiltApplication:
     application: Any
     run_adapter: Any
     replay: _GatedReplay
+    held: HeldCarrier
 
 
 def _build(environ: dict[str, str], recordings: Path) -> BuiltApplication:
@@ -239,6 +282,13 @@ def _build(environ: dict[str, str], recordings: Path) -> BuiltApplication:
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             super().__init__(*args, **kwargs)
             seen["run_adapter"] = self
+            # What the adapter submits goes through the held seam to the application's own carrier.
+            self._carrier = seen["held"] = HeldCarrier(self._carrier)
+
+        def _job(self, run_id: str) -> Any:
+            job = super()._job(run_id)  # the unit of work the product submits, tagged with its Run
+            job.run_id = run_id
+            return job
 
     def build_provider(settings: Any, env: Any, *, runtime: Any = None) -> Any:
         _adapter, config, profile_id, bundle_id, source = real_build_provider(
@@ -254,7 +304,8 @@ def _build(environ: dict[str, str], recordings: Path) -> BuiltApplication:
         patch.undo()
     app = create_asgi_app(environ={API_TOKEN_VARIABLE: DEPLOYMENT_SECRET}, application=application)
     client = TestClient(app, raise_server_exceptions=False)
-    return BuiltApplication(client, Wire(client), application, seen["run_adapter"], seen["replay"])
+    return BuiltApplication(client, Wire(client), application, seen["run_adapter"], seen["replay"],
+                            seen["held"])
 
 
 def _environment(database_url: str, manifest: Path | None) -> dict[str, str]:
@@ -327,6 +378,13 @@ def _runs_of_group(factory: sessionmaker[Session], group_id: str) -> list[tuple[
     """, g=group_id)]
 
 
+def _jobs_of_group(factory: sessionmaker[Session], group_id: str) -> list[tuple[str, str]]:
+    return [(str(scope), str(state)) for scope, state in _rows(factory, """
+        SELECT m.scope_id, j.state FROM ar_v3_run_group_member m
+          JOIN job j ON j.run_id = m.run_id WHERE m.group_id = :g ORDER BY m.ordinal
+    """, g=group_id)]
+
+
 def _counts(factory: sessionmaker[Session], version_uid: str) -> dict[str, int]:
     return {
         "groups": _rows(factory, "SELECT count(*) FROM ar_v3_run_group WHERE version_uid = :v",
@@ -386,12 +444,15 @@ def _drive(probe_database_url: str, blob_store: Any, recordings: Path, manifest_
             "POST", GROUPS, token=tokens["expert"], key="accept-authority",
             body={**body, "pack_sha256": "a" * 64, "scopes": ["F1"]})
         out.db["after_refusals"] = _counts(factory, served.version_uid)
+        out.db["submitted_after_refusals"] = installed.held.submitted + empty.held.submitted
 
         x["start"] = wire.call("POST", GROUPS, token=tokens["expert"], key="accept-start", body=body)
         group = x["start"].data
         gid = group["group_id"]
         out.db["after_start"] = _counts(factory, served.version_uid)
         out.db["states_after_start"] = _runs_of_group(factory, gid)
+        out.db["job_states_after_start"] = _jobs_of_group(factory, gid)
+        out.db["submitted_after_start"] = list(installed.held.submitted)
         with factory() as session:
             out.db["next_queued_run_after_start"] = JobRepository().next_queued_run(session)
         x["group_before"] = wire.call("GET", f"{GROUPS}/{gid}", token=tokens["expert"])
@@ -401,16 +462,19 @@ def _drive(probe_database_url: str, blob_store: Any, recordings: Path, manifest_
                                           body={"version_uid": other.version_uid})
         out.db["after_replay"] = _counts(factory, served.version_uid)
         out.db["other_after_replay"] = _counts(factory, other.version_uid)
+        out.db["submitted_after_replay"] = list(installed.held.submitted)
+        out.db["job_states_after_replay"] = _jobs_of_group(factory, gid)
 
-        # Carry the six Runs on the application's own carrier; read while the first is at the provider.
+        # The product has already queued the Runs and submitted them; the held seam forwards exactly what
+        # the adapter submitted to the application's own carrier. Read while the first is at the provider.
         app = installed
         try:
-            for member in group["members"]:
-                app.run_adapter.submit_existing(member["run_id"])
+            app.held.release()
             assert app.replay.entered.wait(timeout=180), "no Run reached the provider"
             x["group_midway"] = wire.call("GET", f"{GROUPS}/{gid}", token=tokens["expert"])
             x["review_midway"] = wire.call("GET", f"{GROUPS}/{gid}/review", token=tokens["expert"])
             out.db["states_midway"] = _runs_of_group(factory, gid)
+            out.db["job_states_midway"] = _jobs_of_group(factory, gid)
         finally:
             app.replay.release.set()
         assert app.application.carrier.drain(timeout=300), "the six Runs never finished"
@@ -423,6 +487,8 @@ def _drive(probe_database_url: str, blob_store: Any, recordings: Path, manifest_
         x["pack_after"] = wire.call("GET", PACK, token=tokens["expert"])
         out.db["after_carry"] = _counts(factory, served.version_uid)
         out.db["states_after"] = _runs_of_group(factory, gid)
+        out.db["job_states_after"] = _jobs_of_group(factory, gid)
+        out.db["submitted_after_all"] = list(app.held.submitted)
         out.db["model_calls"] = _rows(factory, """
             SELECT m.scope_id, c.provider_mode, c.cost_basis, c.cost_micros, c.status
               FROM ar_v3_run_group_member m JOIN model_call c ON c.run_id = m.run_id
@@ -688,6 +754,30 @@ def check_one_group_of_six(counts: dict[str, int], jobs: int) -> None:
     assert counts == {"groups": 1, "runs": 6, "jobs": jobs}
 
 
+def check_accepted_like_start_run(db: dict[str, Any], group: dict[str, Any]) -> None:
+    """What ``startRun`` leaves, six times: right after the 202 every Run is ``queued`` with a ``queued``
+    Job (committed with the group), the poller's own query finds the first of them, and the adapter has
+    submitted exactly the group's Runs to the carrier, once each, in scope order."""
+    run_ids = [member["run_id"] for member in group["members"]]
+    assert db["after_start"] == {"groups": 1, "runs": 6, "jobs": 6}
+    assert db["states_after_start"] == [(scope, "queued") for scope in SCOPE_LABELS]
+    assert db["job_states_after_start"] == [(scope, "queued") for scope in SCOPE_LABELS]
+    assert db["next_queued_run_after_start"] == run_ids[0]
+    assert db["submitted_after_start"] == run_ids
+
+
+def check_a_replay_adds_nothing(db: dict[str, Any]) -> None:
+    """The second request with the same key and body creates no Run and no Job, queues nothing again and
+    submits nothing to the carrier."""
+    assert db["after_replay"] == {"groups": 1, "runs": 6, "jobs": 6}
+    assert db["job_states_after_replay"] == db["job_states_after_start"]
+    assert db["submitted_after_replay"] == db["submitted_after_start"]
+
+
+def check_a_refusal_submits_nothing(db: dict[str, Any]) -> None:
+    assert db["submitted_after_refusals"] == []
+
+
 # --- the facts -----------------------------------------------------------------------------------
 
 def _ex(m: Measurement, name: str) -> Exchange:
@@ -775,9 +865,9 @@ def test_the_start_creates_the_group_of_six_with_the_right_scope_labels(measured
     check_group_keys(start.data)
     check_scope_labels(start.data)
     check_group_binds_the_server_pack(start.data, measured)
-    check_group_states(start.data, ["created"] * 6)
-    check_one_group_of_six(measured.db["after_start"], jobs=0)
-    assert measured.db["states_after_start"] == [(scope, "created") for scope in SCOPE_LABELS]
+    check_group_states(start.data, ["queued"] * 6)
+    check_one_group_of_six(measured.db["after_start"], jobs=6)
+    assert measured.db["states_after_start"] == [(scope, "queued") for scope in SCOPE_LABELS]
 
 
 def test_the_group_read_after_the_start_is_the_group_the_start_answered(measured: Measurement) -> None:
@@ -785,20 +875,19 @@ def test_the_group_read_after_the_start_is_the_group_the_start_answered(measured
     assert before.status == 200
     check_group_keys(before.data)
     check_same_group(_ex(measured, "start").data, before.data)
-    check_group_states(before.data, ["created"] * 6)
+    check_group_states(before.data, ["queued"] * 6)
 
 
-def test_the_http_start_leaves_the_six_runs_created_and_unqueued_for_the_serving_poller(
+def test_the_http_start_queues_the_six_runs_and_hands_them_to_the_carrier_like_start_run(
     measured: Measurement,
 ) -> None:
-    """Fact 5, a measured GAP and not a design: the start creates six ``created`` Runs and no Job, and
-    the query the serving carrier's poller runs (``JobRepository.next_queued_run``) finds nothing, so
-    in a served process nothing would carry them. This module carries them with
-    ``RunAdapter.submit_existing``. If the product starts queueing the group's Runs, this test turns
-    red: replace the carry step by the poller and flip this fact."""
-    assert measured.db["states_after_start"] == [(scope, "created") for scope in SCOPE_LABELS]
-    assert measured.db["after_start"]["jobs"] == 0
-    assert measured.db["next_queued_run_after_start"] is None
+    """Fact 5, flipped by ``PROD-11D-V3-GROUP-QUEUE-01``. It pinned a GAP (six ``created`` Runs, no Job,
+    ``next_queued_run`` answering ``None``, so in a served process nothing carried the group). It now pins
+    what ``startRun`` leaves, six times: ``queued`` Runs, ``queued`` Jobs, the poller's query finding the
+    first Run, and one carrier submission per Run in scope order. The carry step that used to stand here
+    (``RunAdapter.submit_existing``) is gone: the module submits nothing."""
+    check_accepted_like_start_run(measured.db, _ex(measured, "start").data)
+    check_a_refusal_submits_nothing(measured.db)
 
 
 def test_the_review_read_before_the_runs_finish_says_pending(measured: Measurement) -> None:
@@ -806,7 +895,7 @@ def test_the_review_read_before_the_runs_finish_says_pending(measured: Measureme
     assert before.status == 200
     check_review_keys(before.data)
     check_scope_labels(before.data)
-    check_pending(before.data, ["created"] * 6)
+    check_pending(before.data, ["queued"] * 6)
     check_review_agrees_with_group(before.data, _ex(measured, "group_before").data)
 
 
@@ -814,7 +903,7 @@ def test_a_read_while_the_first_run_is_at_the_provider_says_one_running_and_five
     measured: Measurement,
 ) -> None:
     group, review = _ex(measured, "group_midway"), _ex(measured, "review_midway")
-    expected = ["running"] + ["created"] * 5
+    expected = ["running"] + ["queued"] * 5
     assert (group.status, review.status) == (200, 200)
     check_group_keys(group.data)
     check_review_keys(review.data)
@@ -822,6 +911,10 @@ def test_a_read_while_the_first_run_is_at_the_provider_says_one_running_and_five
     check_pending(review.data, expected)
     check_review_agrees_with_group(review.data, group.data)
     assert measured.db["states_midway"] == list(zip(SCOPE_LABELS, expected))
+    # One slot, serially (R-146j): the first Run's Job is claimed, the other five still wait in the queue.
+    first, rest = measured.db["job_states_midway"][0], measured.db["job_states_midway"][1:]
+    assert first[0] == "F1" and first[1] in {"leased", "running"}, first
+    assert rest == [(scope, "queued") for scope in SCOPE_LABELS[1:]]
 
 
 def test_a_second_identical_start_is_the_same_group_and_creates_no_run(measured: Measurement) -> None:
@@ -829,14 +922,15 @@ def test_a_second_identical_start_is_the_same_group_and_creates_no_run(measured:
     assert again.status == 202
     check_group_keys(again.data)
     check_same_group(_ex(measured, "start").data, again.data)
-    check_one_group_of_six(measured.db["after_replay"], jobs=0)
+    check_group_states(again.data, ["queued"] * 6)
+    check_a_replay_adds_nothing(measured.db)
 
 
 def test_the_same_key_with_another_version_is_a_conflict_and_creates_nothing(measured: Measurement) -> None:
     check_typed_refusal(_ex(measured, "start_reused_key"), "idempotency_key_reuse",
                         {"command_type": "start_ar_v3_beta_group"})
     check_nothing_created(measured.db["other_after_replay"])
-    check_one_group_of_six(measured.db["after_replay"], jobs=0)
+    check_one_group_of_six(measured.db["after_replay"], jobs=6)
 
 
 def test_the_six_runs_reach_published_through_the_applications_own_carrier(measured: Measurement) -> None:
@@ -848,6 +942,8 @@ def test_the_six_runs_reach_published_through_the_applications_own_carrier(measu
     check_same_group(_ex(measured, "start").data, after.data)
     check_group_states(after.data, ["published"] * 6)
     assert measured.db["states_after"] == [(scope, "published") for scope in SCOPE_LABELS]
+    # The Jobs the start enqueued are the ones the carrier ran: all six succeeded, none was added.
+    assert measured.db["job_states_after"] == [(scope, "succeeded") for scope in SCOPE_LABELS]
     assert measured.provider_requests == 6
     assert measured.db["run_modes"] == [("recorded",)]
     assert measured.db["model_calls"] == [(scope, "recorded", "unmetered", 0, "succeeded") for scope in SCOPE_LABELS]
@@ -885,7 +981,8 @@ def test_a_start_after_the_runs_finished_is_still_the_same_group_with_no_new_wor
     check_group_keys(after.data)
     check_same_group(_ex(measured, "start").data, after.data)
     check_group_states(after.data, ["published"] * 6)
-    check_one_group_of_six(measured.db["after_carry"], jobs=6)
+    check_one_group_of_six(measured.db["after_carry"], jobs=6)  # the six the start enqueued, no seventh
+    assert measured.db["submitted_after_all"] == measured.db["submitted_after_start"]  # nothing submitted again
     assert measured.provider_requests == 6
 
 
@@ -949,10 +1046,10 @@ CHECK_CASES = [
     _case("a published group with one failed Run", lambda d: check_group_states(d, ["published"] * 6),
           lambda m: (_ex(m, "group_after").data,), _first(lambda d: d["members"][3].update(state="failed"))),
     _case("a pending review that shows a review", check_pending,
-          lambda m: (_ex(m, "review_before").data, ["created"] * 6),
+          lambda m: (_ex(m, "review_before").data, ["queued"] * 6),
           _first(lambda d: d["members"][0].update(review_state="available", review={}))),
     _case("a pending review that is not pending", check_pending,
-          lambda m: (_ex(m, "review_midway").data, ["running"] + ["created"] * 5),
+          lambda m: (_ex(m, "review_midway").data, ["running"] + ["queued"] * 5),
           _first(lambda d: d["members"][0].update(review_state="failed"))),
     _case("a review that disagrees with its group about a Run", check_review_agrees_with_group,
           lambda m: (_ex(m, "review_after").data, _ex(m, "group_after").data),
@@ -1021,10 +1118,37 @@ CHECK_CASES = [
           lambda a: (a[0], _with(a[1], lambda d: d["members"][5].update(run_id="run_00000000000000000000000000")))),
     _case("a refusal that created a group", check_nothing_created,
           lambda m: (m.db["after_refusals"],), lambda a: ({**a[0], "groups": 1},)),
-    _case("a replay that made a seventh Run", lambda c: check_one_group_of_six(c, 0),
+    _case("a replay that made a seventh Run", lambda c: check_one_group_of_six(c, 6),
           lambda m: (m.db["after_replay"],), lambda a: ({**a[0], "runs": 7},)),
-    _case("a replay that made a second group", lambda c: check_one_group_of_six(c, 0),
+    _case("a replay that made a second group", lambda c: check_one_group_of_six(c, 6),
           lambda m: (m.db["after_replay"],), lambda a: ({**a[0], "groups": 2},)),
+    _case("a start that left a Run created", check_accepted_like_start_run,
+          lambda m: (m.db, _ex(m, "start").data),
+          lambda a: (_with(a[0], lambda d: d["states_after_start"].__setitem__(3, ("A2", "created"))), a[1])),
+    _case("a start that left a Run without its Job", check_accepted_like_start_run,
+          lambda m: (m.db, _ex(m, "start").data),
+          lambda a: (_with(a[0], lambda d: d.update(after_start={**d["after_start"], "jobs": 5})), a[1])),
+    _case("a start whose Job is not queued", check_accepted_like_start_run,
+          lambda m: (m.db, _ex(m, "start").data),
+          lambda a: (_with(a[0], lambda d: d["job_states_after_start"].__setitem__(0, ("F1", "leased"))), a[1])),
+    _case("a start the poller's query cannot see", check_accepted_like_start_run,
+          lambda m: (m.db, _ex(m, "start").data),
+          lambda a: (_with(a[0], lambda d: d.update(next_queued_run_after_start=None)), a[1])),
+    _case("a start that submitted five of the six Runs", check_accepted_like_start_run,
+          lambda m: (m.db, _ex(m, "start").data),
+          lambda a: (_with(a[0], lambda d: d["submitted_after_start"].pop()), a[1])),
+    _case("a start that submitted the Runs in another order", check_accepted_like_start_run,
+          lambda m: (m.db, _ex(m, "start").data),
+          lambda a: (_with(a[0], lambda d: d["submitted_after_start"].reverse()), a[1])),
+    _case("a replay that submitted a Run again", check_a_replay_adds_nothing,
+          lambda m: (m.db,),
+          lambda a: (_with(a[0], lambda d: d["submitted_after_replay"].append(d["submitted_after_start"][0])),)),
+    _case("a replay that enqueued a seventh Job", check_a_replay_adds_nothing,
+          lambda m: (m.db,),
+          lambda a: (_with(a[0], lambda d: d.update(after_replay={**d["after_replay"], "jobs": 7})),)),
+    _case("a refusal that submitted work", check_a_refusal_submits_nothing,
+          lambda m: (m.db,),
+          lambda a: (_with(a[0], lambda d: d["submitted_after_refusals"].append("run_00000000000000000000000000")),)),
 ]
 
 
