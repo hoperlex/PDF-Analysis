@@ -1193,6 +1193,17 @@ class TestTheControl:
         assert "does not conform to the frozen contract" not in completed.stderr
 
 
+#: The five guards `PROD-01-TLS-ACME-01` added. Their cases are in `test_acme_deploy_guards.py`; the names are
+#: spelled here so that a sixth cannot be added without this list, and the count below, changing.
+ACME_GUARDS = (
+    "acme-files-present",
+    "acme-settings-well-formed",
+    "acme-client-pinned",
+    "public-ports-free",
+    "acme-pair-answerable",
+)
+
+
 def test_every_guard_in_the_script_has_a_case_here() -> None:
     """A guard added without a test is caught here rather than in a deployment.
 
@@ -1205,11 +1216,13 @@ def test_every_guard_in_the_script_has_a_case_here() -> None:
     the five stand-copy guards, covered in :class:`TestNoDeployWhileACopyOrAnImportIsOpen`,
     and 21 since `W54-FIX-SHELL` added `stand-dirs-searchable` (`W54-JUDGE-A` F1), covered
     there too, and 22 since `REAL-IP-EDGE-01` added `trusted-proxies-well-formed`, covered above
-    and in :class:`TestTheTrustListIsCheckedBeforeAnythingIsBuilt`.
+    and in :class:`TestTheTrustListIsCheckedBeforeAnythingIsBuilt`, and 27 since
+    `PROD-01-TLS-ACME-01` added the five TLS-terminator guards, whose cases live in
+    `test_acme_deploy_guards.py` beside this file and are named in the set below.
     """
     markers = re.findall(r"^# >>> guard: ([a-z-]+)$", DEPLOY.read_text(encoding="utf-8"), re.M)
     assert len(markers) == len(set(markers)), markers
-    assert len(markers) == 22, markers
+    assert len(markers) == 27, markers
     covered = set(BEFORE_DOCKER) | set(STAND_GUARDS) | {
         "port-not-foreign",
         "images-built",
@@ -1222,12 +1235,18 @@ def test_every_guard_in_the_script_has_a_case_here() -> None:
         # claim this test makes is that every guard has a case SOMEWHERE, and a guard
         # silently excluded from the set would be a guard nobody tests.
         "identity-policy-known",
+        # `PROD-01-TLS-ACME-01`, and their cases are in the file beside this one:
+        # `test_acme_deploy_guards.py`. Named here for the reason `identity-policy-known` is.
+        *ACME_GUARDS,
     }
     assert set(markers) == covered, set(markers) ^ covered
     identity_suite = ROOT / "tests/integration/composition/test_deploy_image_identity.py"
     assert "identity-policy-known" in identity_suite.read_text(encoding="utf-8"), (
         "identity-policy-known is excused here against a file that no longer names it"
     )
+    acme_suite = (ROOT / "tests/integration/composition/test_acme_deploy_guards.py").read_text(encoding="utf-8")
+    for guard in ACME_GUARDS:
+        assert guard in acme_suite, f"{guard} is excused here against a file that no longer names it"
 
 
 def test_the_script_is_executable_and_runnable_by_its_documented_path() -> None:
