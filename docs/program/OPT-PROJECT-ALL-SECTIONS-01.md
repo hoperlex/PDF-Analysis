@@ -39,6 +39,6 @@ So the guard at `project_match.py:281` is not the only AR rule: the database hol
 
 - Changed: `docs/program/tasks/OPT-PROJECT-ALL-SECTIONS-01.md`, `docs/program/OPT-PROJECT-ALL-SECTIONS-01.md` (this file). Nothing else.
 - Modified tests: none (no before/after table). Mutation table: none (no guard was added).
-- Commands: the premise greps of the task file; one temporary probe test (1 failed, as intended, 2.4 s; file removed); the governance one-liner on the task file prints `[]`; `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py` on the committed tree (result in the hand-back); `git diff --check`.
+- Commands: the premise greps of the task file; one temporary probe test (1 failed, as intended, 2.4 s; file removed); the governance one-liner on the task file prints `[]`; `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py` on the committed tree: 105 passed in 20.8 s; the whole `tests/contract/api_v1`: 366 passed in 39.0 s; `npm --prefix web run api:verify`: OK (104 operations, contract sha256 `f98c4704…793ff8`, i.e. unchanged); `git diff --check`: exit 0.
 - Free disk on `/` stayed at 1.8 GiB; no `npm ci`, no docker, no network, no push, no tag, no process killed.
 - Forbidden paths untouched: `git diff --name-only 6075df88..HEAD` lists only the two files above (migrations, `contracts/**`, `bootstrap/**`, `web/**`, `src/**`, `tests/**` do not appear).
