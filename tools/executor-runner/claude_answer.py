@@ -10,8 +10,10 @@ account whose Claude Code was signed in interactively (``R-143f``):
   the stand's task (schema optional, as in the probe) is answered with the reply envelope the
   stand's SSH adapter reads (``model``, ``output_text``, token counts, no cost).
 
-The model is the pinned ``claude-opus-5`` (``R-143g``); the CLI's own usage report must
-name that model and no other, or the answer is refused.
+The model is one of the two pinned Claude models (``R-143g``): ``claude-opus-5`` by default, or
+``claude-sonnet-5`` with ``--model``.  The task must name that model, and the CLI's own usage
+report must name it and no other, or the answer is refused.  One command line serves one model, so
+a stand with both has two connections and two ``authorized_keys`` lines.
 """
 
 from __future__ import annotations
@@ -26,7 +28,10 @@ import tempfile
 import time
 from pathlib import Path
 
-MODEL = "claude-opus-5"
+ALLOWED_MODELS = ("claude-opus-5", "claude-sonnet-5")
+#: Without ``--model`` the command serves Opus, as it did before Sonnet was added, so an
+#: ``authorized_keys`` line or an agent configuration written then keeps working.
+DEFAULT_MODEL = ALLOWED_MODELS[0]
 MAX_TASK_BYTES = 1024 * 1024
 MAX_SSH_TASK_BYTES = 24 << 20  # the stand's SSH adapter sends at most this much
 MAX_OUTPUT_BYTES = 8 * 1024 * 1024
@@ -46,7 +51,7 @@ class TaskError(Exception):
     pass
 
 
-def read_task(payload: bytes, *, ssh: bool = False) -> dict:
+def read_task(payload: bytes, *, ssh: bool = False, model: str = DEFAULT_MODEL) -> dict:
     if len(payload) > (MAX_SSH_TASK_BYTES if ssh else MAX_TASK_BYTES):
         raise TaskError("task_too_large")
     try:
@@ -55,7 +60,7 @@ def read_task(payload: bytes, *, ssh: bool = False) -> dict:
         raise TaskError("invalid_task_json") from None
     if not isinstance(task, dict):
         raise TaskError("invalid_task_shape")
-    if task.get("model") != MODEL:
+    if task.get("model") != model:
         raise TaskError("model_mismatch")
     if not all(isinstance(task.get(key), str) and task[key].strip()
                for key in ("system", "user_text")):
@@ -91,7 +96,7 @@ def _environment() -> dict[str, str]:
     return environment
 
 
-def _report(raw: bytes) -> dict:
+def _report(raw: bytes, model: str) -> dict:
     """Accept exactly one successful, tool-free result served by the pinned model."""
     try:
         report = json.loads(raw.decode("utf-8"))
@@ -105,7 +110,7 @@ def _report(raw: bytes) -> dict:
     if report.get("permission_denials"):
         raise TaskError("claude_tool_denied")
     usage = report.get("modelUsage")
-    if not isinstance(usage, dict) or set(usage) != {MODEL}:
+    if not isinstance(usage, dict) or set(usage) != {model}:
         raise TaskError("claude_model_mismatch")
     return report
 
@@ -119,10 +124,10 @@ def _structured_answer(report: dict) -> str:
     return json.dumps(document, ensure_ascii=False, separators=(",", ":"))
 
 
-def _envelope(report: dict, text: str) -> dict:
+def _envelope(report: dict, text: str, model: str) -> dict:
     """The reply the stand's SSH adapter reads.  A subscription run has no per-call price, so
     the cost is left out rather than invented from the list-price estimate the CLI prints."""
-    usage = report["modelUsage"][MODEL]
+    usage = report["modelUsage"][model]
     if not isinstance(usage, dict):
         raise TaskError("claude_usage_invalid")
     tokens_in = sum(usage.get(name, 0) for name in
@@ -132,12 +137,12 @@ def _envelope(report: dict, text: str) -> dict:
             or type(tokens_out) is not int or tokens_out < 0):
         raise TaskError("claude_usage_invalid")
     return {
-        "model": MODEL, "output_text": text, "stop_reason": "end_turn",
+        "model": model, "output_text": text, "stop_reason": "end_turn",
         "input_tokens": tokens_in, "output_tokens": tokens_out, "reported_cost_usd": None,
     }
 
 
-def _run(task: dict, *, claude: str | None, timeout: int) -> dict:
+def _run(task: dict, *, claude: str | None, timeout: int, model: str) -> dict:
     executable = claude or shutil.which("claude")
     if executable is None:
         raise TaskError("claude_cli_missing")
@@ -147,7 +152,7 @@ def _run(task: dict, *, claude: str | None, timeout: int) -> dict:
         root = Path(area)
         report_path = root / "report.json"
         command = [
-            executable, "-p", "--output-format", "json", "--model", MODEL,
+            executable, "-p", "--output-format", "json", "--model", model,
             "--tools", "", "--strict-mcp-config", "--no-session-persistence",
             "--disable-slash-commands", "--setting-sources", "",
             "--system-prompt",
@@ -185,44 +190,48 @@ def _run(task: dict, *, claude: str | None, timeout: int) -> dict:
             raise TaskError("claude_failed")
         if report_path.stat().st_size > MAX_OUTPUT_BYTES:
             raise TaskError("claude_output_too_large")
-        return _report(report_path.read_bytes())
+        return _report(report_path.read_bytes(), model)
 
 
-def answer(task: dict, *, claude: str | None = None) -> str:
+def answer(task: dict, *, claude: str | None = None, model: str = DEFAULT_MODEL) -> str:
     """The bare JSON answer for a pull agent: the schema is required (see ``read_task``)."""
-    return _structured_answer(_run(task, claude=claude, timeout=TIMEOUT_SECONDS))
+    return _structured_answer(_run(task, claude=claude, timeout=TIMEOUT_SECONDS, model=model))
 
 
-def ssh_reply(task: dict, *, claude: str | None = None) -> str:
+def ssh_reply(task: dict, *, claude: str | None = None, model: str = DEFAULT_MODEL) -> str:
     """The stand's SSH reply envelope, one JSON line.  With a schema the answer is the
     structured object; without one it is the model's text."""
-    report = _run(task, claude=claude, timeout=SSH_TIMEOUT_SECONDS)
+    report = _run(task, claude=claude, timeout=SSH_TIMEOUT_SECONDS, model=model)
     if task.get("output_schema") is not None:
         text = _structured_answer(report)
     else:
         text = report.get("result")
         if not isinstance(text, str) or not text.strip():
             raise TaskError("claude_answer_missing")
-    return json.dumps(_envelope(report, text), ensure_ascii=False, separators=(",", ":"))
+    return json.dumps(_envelope(report, text, model), ensure_ascii=False, separators=(",", ":"))
 
 
 def main(argv: list[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
-    claude, ssh = None, False
+    claude, ssh, model = None, False, None
     while arguments:
         flag = arguments.pop(0)
         if flag == "--ssh-envelope" and not ssh:
             ssh = True
         elif flag == "--claude" and claude is None and arguments:
             claude = arguments.pop(0)
+        elif flag == "--model" and model is None and arguments and arguments[0] in ALLOWED_MODELS:
+            model = arguments.pop(0)
         else:
             print("claude_answer: usage: claude_answer.py [--claude /path/to/claude] "
-                  "[--ssh-envelope]", file=sys.stderr)
+                  f"[--model {'|'.join(ALLOWED_MODELS)}] [--ssh-envelope]", file=sys.stderr)
             return 2
+    model = model or DEFAULT_MODEL
     try:
         limit = MAX_SSH_TASK_BYTES if ssh else MAX_TASK_BYTES
-        task = read_task(sys.stdin.buffer.read(limit + 1), ssh=ssh)
-        print(ssh_reply(task, claude=claude) if ssh else answer(task, claude=claude))
+        task = read_task(sys.stdin.buffer.read(limit + 1), ssh=ssh, model=model)
+        print(ssh_reply(task, claude=claude, model=model) if ssh
+              else answer(task, claude=claude, model=model))
     except (TaskError, OSError) as error:
         # Reasons are fixed words; no task text, token or Claude output reaches stderr.
         print(f"claude_answer: {error if isinstance(error, TaskError) else 'local_io_error'}",

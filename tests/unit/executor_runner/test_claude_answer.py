@@ -26,7 +26,7 @@ TASK = {
 }
 
 
-def fake_claude(tmp_path: Path, case: str = "ok") -> str:
+def fake_claude(tmp_path: Path, case: str = "ok", model: str = "claude-opus-5") -> str:
     """A stand-in for ``claude -p`` that asserts the fixed boundary and prints one result."""
     path = tmp_path / "claude"
     path.write_text(
@@ -36,7 +36,9 @@ def fake_claude(tmp_path: Path, case: str = "ok") -> str:
         "for flag in ('-p', '--no-session-persistence', '--strict-mcp-config', "
         "'--disable-slash-commands'):\n"
         " assert flag in args, flag\n"
-        "assert args[args.index('--model') + 1] == 'claude-opus-5'\n"
+        f"MODEL = {model!r}\n"
+        "OTHER = 'claude-sonnet-5' if MODEL == 'claude-opus-5' else 'claude-opus-5'\n"
+        "assert args[args.index('--model') + 1] == MODEL\n"
         "assert args[args.index('--output-format') + 1] == 'json'\n"
         "assert args[args.index('--tools') + 1] == ''\n"
         "assert args[args.index('--setting-sources') + 1] == ''\n"
@@ -60,12 +62,12 @@ def fake_claude(tmp_path: Path, case: str = "ok") -> str:
         "report = {'type': 'result', 'subtype': 'success', 'is_error': False,\n"
         "          'terminal_reason': 'completed', 'permission_denials': [],\n"
         "          'structured_output': {'ok': True}, 'result': '{\"ok\":true}',\n"
-        "          'modelUsage': {'claude-opus-5': {'inputTokens': 12, 'outputTokens': 3,\n"
+        "          'modelUsage': {MODEL: {'inputTokens': 12, 'outputTokens': 3,\n"
         "                                           'cacheReadInputTokens': 5,\n"
         "                                           'cacheCreationInputTokens': 7}},\n"
         "          'total_cost_usd': 0.0153}\n"
         "if case == 'other_model':\n"
-        " report['modelUsage'] = {'claude-sonnet-5': {}}\n"
+        " report['modelUsage'] = {OTHER: {}}\n"
         "if case == 'extra_model':\n"
         " report['modelUsage']['claude-haiku-5-5'] = {}\n"
         "if case == 'no_usage':\n"
@@ -77,7 +79,7 @@ def fake_claude(tmp_path: Path, case: str = "ok") -> str:
         "if case == 'plain_empty':\n"
         " del report['structured_output']; report['result'] = '  '\n"
         "if case == 'bad_usage':\n"
-        " report['modelUsage']['claude-opus-5']['outputTokens'] = 'many'\n"
+        " report['modelUsage'][MODEL]['outputTokens'] = 'many'\n"
         "if case == 'flag_only':\n"
         " report['is_error'] = True\n"
         "if case == 'denied':\n"
@@ -192,7 +194,8 @@ def test_the_command_line_prints_the_answer_and_never_the_task(tmp_path: Path, c
 def test_the_fixed_boundary_is_in_the_source() -> None:
     source = SCRIPT.read_text()
     assert '"--bare"' not in source  # --bare would read only an API key and never the login
-    assert 'MODEL = "claude-opus-5"' in source
+    assert 'ALLOWED_MODELS = ("claude-opus-5", "claude-sonnet-5")' in source
+    assert "DEFAULT_MODEL = ALLOWED_MODELS[0]" in source
     assert os.access(SCRIPT, os.R_OK)
 
 
@@ -259,3 +262,62 @@ def test_the_ssh_command_line_prints_one_json_line(tmp_path: Path, capsys: pytes
     assert out.count("\n") == 1 and json.loads(out)["model"] == "claude-opus-5"
     for bad in (["--ssh-envelope", "--ssh-envelope"], ["--claude", "a", "--claude", "b"], ["--x"]):
         assert claude_answer.main(bad) == 2
+
+
+SONNET = "claude-sonnet-5"
+SONNET_TASK = {**TASK, "model": SONNET}
+SONNET_SSH_TASK = {**SSH_TASK, "model": SONNET}
+
+
+def test_sonnet_is_served_when_it_is_asked_for_by_name(tmp_path: Path) -> None:
+    task = claude_answer.read_task(json.dumps(SONNET_TASK).encode(), model=SONNET)
+    cli = fake_claude(tmp_path, model=SONNET)
+    assert claude_answer.answer(task, claude=cli, model=SONNET) == '{"ok":true}'
+    ssh_task = claude_answer.read_task(json.dumps(SONNET_SSH_TASK).encode(), ssh=True, model=SONNET)
+    envelope = json.loads(claude_answer.ssh_reply(ssh_task, claude=cli, model=SONNET))
+    assert envelope["model"] == SONNET and envelope["reported_cost_usd"] is None
+
+
+def test_the_model_is_never_inferred_from_the_task(tmp_path: Path) -> None:
+    # A Sonnet task to a command that serves Opus (the default), and an Opus task to a command that
+    # serves Sonnet, are refused before any CLI starts.
+    with pytest.raises(claude_answer.TaskError, match="^model_mismatch$"):
+        claude_answer.read_task(json.dumps(SONNET_TASK).encode())
+    with pytest.raises(claude_answer.TaskError, match="^model_mismatch$"):
+        claude_answer.read_task(json.dumps(TASK).encode(), model=SONNET)
+
+
+@pytest.mark.parametrize("served,reported", [("claude-opus-5", SONNET), (SONNET, "claude-opus-5")])
+def test_a_cli_that_reports_the_other_model_is_refused(tmp_path: Path, served: str, reported: str) -> None:
+    task = {**TASK, "model": served}
+    with pytest.raises(claude_answer.TaskError, match="^claude_model_mismatch$"):
+        claude_answer.answer(task, claude=fake_claude(tmp_path, "other_model", model=served), model=served)
+
+
+def test_the_cli_is_started_with_the_model_that_was_asked_for(tmp_path: Path) -> None:
+    claude_answer.answer(SONNET_TASK, claude=fake_claude(tmp_path, model=SONNET), model=SONNET)
+    args = json.loads((tmp_path / "args.json").read_text())
+    assert args[args.index("--model") + 1] == SONNET
+
+
+def test_the_command_line_takes_the_model_once_from_the_two_pins_and_defaults_to_opus(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:
+    import io
+
+    class Stdin:
+        buffer = io.BytesIO(json.dumps(SONNET_SSH_TASK).encode())
+
+    monkeypatch.setattr(sys, "stdin", Stdin)
+    assert claude_answer.main(["--ssh-envelope", "--model", SONNET, "--claude",
+                               fake_claude(tmp_path, "plain", model=SONNET)]) == 0
+    assert json.loads(capsys.readouterr().out)["model"] == SONNET
+
+    # no --model: Opus, so a Sonnet task is refused by name and nothing else is said
+    Stdin.buffer = io.BytesIO(json.dumps(SONNET_SSH_TASK).encode())
+    assert claude_answer.main(["--ssh-envelope", "--claude", fake_claude(tmp_path, "plain")]) == 1
+    assert capsys.readouterr().err == "claude_answer: model_mismatch\n"
+
+    for bad in (["--model"], ["--model", "claude-haiku-5"], ["--model", "gpt-6-sol"],
+                ["--model", SONNET, "--model", SONNET], ["--model", "claude-opus-5", "--model", SONNET]):
+        assert claude_answer.main(bad) == 2
+    assert "claude-opus-5|claude-sonnet-5" in capsys.readouterr().err

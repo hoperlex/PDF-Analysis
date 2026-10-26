@@ -14,7 +14,7 @@ case where the stand connects out.
 | `agent.py`, `agent.example.toml`, `pdf-analysis-agent.service` | Unattended agent (command or local OpenAI-compatible model) and its systemd unit. |
 | `ssh-forced-command.sh` | Remote side of the `claude_code_headless` SSH profile. |
 | `codex_answer.py`, `agent.codex-ssh.example.toml` | Codex CLI answer command and pull-agent example over an outbound SSH forward. |
-| `claude_answer.py`, `agent.claude-ssh.example.toml` | Claude Code CLI (`claude-opus-5`) on the owner's subscription: the pull agent's answer command (section E) and, with `--ssh-envelope`, the forced command of a stand-initiated SSH connection (section F). |
+| `claude_answer.py`, `agent.claude-ssh.example.toml` | Claude Code CLI (`claude-opus-5` by default, or `claude-sonnet-5` with `--model`) on the owner's subscription: the pull agent's answer command (section E) and, with `--ssh-envelope`, the forced command of a stand-initiated SSH connection (section F). |
 
 Python: the bridge and the client need 3.9+, `agent.py` needs 3.11+ (`tomllib`); written for
 those and tested on 3.12 only. No dependency is installed. Tests:
@@ -251,7 +251,9 @@ route.
    subscription (`/login`). Prefer a profile of its own: `export CLAUDE_CONFIG_DIR=$HOME/.claude-runner`
    before that first run and in the agent's environment, so the runner's login and settings are not
    the development account's. `claude auth status` must name the subscription, not an API key.
-   The adapter pins `claude-opus-5` (`R-143g`); the stand's revision must name that exact model.
+   The command serves `claude-opus-5` unless it is started with `--model claude-sonnet-5` (the two pins of `R-143g`;
+   no other value is accepted). The stand's revision must name that exact model; add `--model claude-sonnet-5` to
+   `argv` for Sonnet.
    The `--bare` mode of the CLI is deliberately not used: it reads only an API key, never the login.
 2. On the stand, create a `pull` connection with client `agent`, model/pin `claude-opus-5`, billing
    `not_metered`, answer deadline at least 600 seconds and one claimed task. Issue a runner token.
@@ -268,7 +270,7 @@ route.
    Revoking the token or removing the route stops new work.
 
 The adapter sends the task through stdin (the task text is never on the command line) to
-`claude -p --output-format json --model claude-opus-5 --tools "" --strict-mcp-config
+`claude -p --output-format json --model <the served model> --tools "" --strict-mcp-config
 --no-session-persistence --disable-slash-commands --setting-sources "" --json-schema <schema>`, in a
 private temporary directory outside any repository, with an environment reduced to `HOME`, `PATH`,
 locale, `CLAUDE_CONFIG_DIR`, proxy and certificate variables plus three switches that keep `CLAUDE.md`
@@ -276,7 +278,7 @@ files, auto-memory and non-essential traffic out. An inherited `ANTHROPIC_API_KE
 `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN` and the runner token never reach the CLI.
 
 It accepts the result only when the CLI reports a successful, tool-free turn whose `modelUsage` names
-`claude-opus-5` and nothing else; a different or additional model, a denied tool, a failed or
+the served model (`claude-opus-5` or, with `--model`, `claude-sonnet-5`) and nothing else; a different or additional model, a denied tool, a failed or
 unfinished turn, or a missing or non-object `structured_output` fails the task with a fixed reason.
 That report is the CLI's own, so this route is stronger than section D, but the pull protocol still
 records the model as **declared** (`identity_basis: declared`): the stand has no way to check it. The
@@ -318,6 +320,16 @@ connection to the API-key profile of section C.
    whatever the client asks for. Replace the `claude` path with `command -v claude` of that account
    (sshd gives the command a minimal `PATH`, so the path is absolute). `~pdfa/.ssh` and the file must
    be owned by `pdfa` and not writable by others.
+
+   **Sonnet** is a second connection, not a setting of the first: one command line serves one model. Create
+   another `ssh_command` connection with model/pin `claude-sonnet-5` (its own key, its own line) and put
+   `--model claude-sonnet-5` before `--claude`:
+
+   ```text
+   restrict,command="/usr/bin/python3 /opt/pdf-analysis/claude_answer.py --ssh-envelope --model claude-sonnet-5 --claude /home/pdfa/.local/bin/claude" ssh-ed25519 AAAA… auditmanager:<id of the Sonnet connection>
+   ```
+
+   Both lines may sit in the same account's `authorized_keys`. They share that account's subscription and its limits.
 5. Press «Проверить». On first contact the stand shows the host key fingerprint instead of calling:
    compare it with `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on this machine, confirm it, and
    press «Проверить» again. An `ok` probe proves reachability, the pinned host key, the forced command,

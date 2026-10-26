@@ -71,3 +71,32 @@ def test_a_task_for_another_gateway_model_never_starts_the_cli(model: str) -> No
     other["model"] = model
     with pytest.raises(claude_answer.TaskError, match="^model_mismatch$"):
         claude_answer.read_task(json.dumps(other).encode(), ssh=True)
+
+
+def test_the_sonnet_connection_wire_agrees_with_the_stand_end_to_end(tmp_path: Path) -> None:
+    """A stand connection pinned to Sonnet: the stand's task, this command with ``--model``, the stand's
+    reader and identity check."""
+    def fake(model: str) -> str:
+        path = tmp_path / "claude-sonnet"
+        report = {
+            "type": "result", "subtype": "success", "is_error": False, "terminal_reason": "completed",
+            "permission_denials": [], "result": "да",
+            "modelUsage": {model: {"inputTokens": 7, "outputTokens": 2,
+                                   "cacheReadInputTokens": 0, "cacheCreationInputTokens": 0}},
+        }
+        path.write_text(f"#!{sys.executable}\nimport sys\nsys.stdin.read()\nprint({json.dumps(report)!r})\n",
+                        encoding="utf-8")
+        path.chmod(0o700)
+        return str(path)
+
+    body = {"system": "Ответь кратко.", "messages": [{"role": "user", "content": PROMPT}], "max_tokens": 16}
+    task = claude_answer.read_task(
+        _task(ModelRequest(model_id="claude-sonnet-5", body=body), "claude-sonnet-5"),
+        ssh=True, model="claude-sonnet-5")
+    raw = claude_answer.ssh_reply(task, claude=fake("claude-sonnet-5"), model="claude-sonnet-5")
+    answer = _reply(raw.encode(), 100)
+    assert (answer.model, answer.output_text, answer.reported_cost_usd) == ("claude-sonnet-5", "да", None)
+    assert assess_identity(answer.model, "claude-sonnet-5") == ("ok", "claude-sonnet-5")
+    # the same connection answered by the other model is not accepted
+    with pytest.raises(claude_answer.TaskError, match="^claude_model_mismatch$"):
+        claude_answer.ssh_reply(task, claude=fake("claude-opus-5"), model="claude-sonnet-5")

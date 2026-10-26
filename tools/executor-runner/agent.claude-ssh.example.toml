@@ -10,6 +10,7 @@ concurrency = 1
 drain_seconds = 60
 
 [model]
+# For Sonnet, set this to "claude-sonnet-5" and add "--model", "claude-sonnet-5" to argv below.
 declared = "claude-opus-5"
 
 [executor]
