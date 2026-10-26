@@ -187,4 +187,13 @@ No other section's files, no `W59-SECTION-PROFILES-01.md`, registry, `P02_LOCK.j
 
 ## Final checks
 
-See the lane's final message for the tip SHA and the last runs on the committed tree.
+On the committed tree (`git status --short` empty), the last commit before this paragraph being `df69fa4a`:
+
+| Command | Result |
+|---|---|
+| `pytest tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py` | `105 passed` |
+| governance one-liner on `docs/program/tasks/SECTION-EOM-FULL-01.md` | `[]` |
+| `git diff --check ae751f23..HEAD` | rc 0 |
+| section set, `build_fixtures.py --check`, HTTP test (lane `.env`), `vitest` analysis-settings | `211 passed`; `fixtures match` rc 0; `4 passed`; `95 passed` |
+
+This paragraph is the only text added after `df69fa4a`; the contract run above was repeated on the tree that contains it (see the lane's final message for the tip SHA).
