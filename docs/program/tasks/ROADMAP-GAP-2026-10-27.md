@@ -5,7 +5,7 @@ status: completed (read-only audit; documents only)
 
 ## Outcome
 
-One document, `docs/program/ROADMAP-GAP-2026-10-27.md`, that the integrator can dispatch from: the wave table of `docs/program/dispatch/ROADMAP-TO-BETA.md` section 4 from W56a to W64 and «after 1.0» in 59 items with a status and its evidence (DONE 23, PARTIAL 18, MISSING 13, SUPERSEDED 5); one row for each of the 14 non-АР sections saying what its analysis does, what the legacy profile checked and the prompt excludes, and which exclusions could be reinstated inside the existing contract, which need a contract change, which need norms or experts and which are not possible in one document; the section workflow from upload to export in 24 steps with the scope of each (all sections, the 14, АР only, not implemented); what the prompts ask for and return and a sized option list for letting a section emit more categories; one list of what cannot be finished without a human or a host (27 items); and five code lanes with hotspots, sizes, dependencies, check commands and a parallel plan. The owner asked on 2026-10-27 («как там с разделами, их промптами и workflow? Надо доделать! … завершай всё, что было в плане большого роудмапа»).
+One document, `docs/program/ROADMAP-GAP-2026-10-27.md`, that the integrator can dispatch from: the wave table of `docs/program/dispatch/ROADMAP-TO-BETA.md` section 4 from W56a to W64 and «after 1.0» in 59 items with a status and its evidence (DONE 24, PARTIAL 18, MISSING 13, SUPERSEDED 4); one row for each of the 14 non-АР sections saying what its analysis does, what the legacy profile checked and the prompt excludes, and which exclusions could be reinstated inside the existing contract, which need a contract change, which need norms or experts and which are not possible in one document; the section workflow from upload to export in 24 steps with the scope of each (all sections, the 14, АР only, not implemented); what the prompts ask for and return and a sized option list for letting a section emit more categories; one list of what cannot be finished without a human or a host (27 items); and five code lanes with hotspots, sizes, dependencies, check commands and a parallel plan. The owner asked on 2026-10-27 («как там с разделами, их промптами и workflow? Надо доделать! … завершай всё, что было в плане большого роудмапа»).
 
 ## Depends on
 
@@ -229,6 +229,18 @@ No route, screen, error code or migration is added or removed.
   (no output; exit status 1)
   ```
 - interpretation: no migration names a sheet link, a comparison revision or an approved pair, so the comparison of two versions stores nothing; the domain identifier `SheetLinkId` and the pure modules under `src/auditmanager/comparison/` exist without a table.
+
+### P-18 — the files that name what the three larger lanes change
+
+- captured_at: 2026-10-27
+- command: `for p in "section_not_ar\|SECTION_AR\|STATE_SECTION_NOT_AR" "analysis_input_budget_exceeded\|input_budget_characters\|run_text_analysis\|PC01_STAGES" "compareDocumentVersions\|VersionComparisonService\|comparison.public"; do grep -rl "$p" src web/src web/tests tests contracts web/openapi 2>/dev/null | wc -l; done`
+- captured_output:
+  ```text
+  24
+  84
+  30
+  ```
+- interpretation: 24 files name the АР-only guard or its reason code, 84 name the one-call budget, its refusal or the stage list, 30 name the version comparison; these are the "files counted" behind the sizes of the lanes in section 6 of the report. The lane's own change set is a subset plus new files, which is an estimate.
 
 ## Historical evidence
 
