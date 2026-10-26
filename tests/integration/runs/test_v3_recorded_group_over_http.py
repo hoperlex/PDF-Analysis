@@ -873,7 +873,7 @@ def test_every_topic_and_citation_is_provisional_and_labelled_for_expert_review(
 def test_no_answer_carries_a_numerical_conclusion(measured: Measurement) -> None:
     answers = [exchange for name, exchange in measured.x.items()
                if exchange.status < 300 and exchange.data is not None]
-    assert len(answers) >= 12
+    assert len(answers) == 14  # pack x4, start x3, group x3, review x4: the set cannot shrink silently
     check_no_numeric_conclusion(answers)
 
 
