@@ -17,7 +17,7 @@ carries an older tree (neither ref was fetched for this plan). No complete `make
 
 - **Size** counts the files an item touches and the hotspots it owns: **S** up to 5 files and no hotspot; **M** 6 to 15 files, or one file of
   a hotspot; **L** more than 15 files, or the contract, the migration head, or the core of `infra/deploy`. A size is a reason, not a forecast; this plan
-  gives no calendar dates (see section 9).
+  gives no calendar dates (see section 8).
 - **Executor:** *Sonnet lane* (a code or document lane that returns the `AGENTS.md` section 5 hand-back), *owner* (only the owner can: a host, a
   credential, a payment, a decision), *expert* (a qualified person's review), *integrator* (merges, gates, rulings; `AGENTS.md` section 7.1).
 - **Hotspots** are those of `AGENTS.md` section 3: the contract (`contracts/**`, `web/openapi/`, `web/FRONTEND_LOCK.json`, the generated client), the
@@ -150,6 +150,9 @@ document that is neither synthetic nor a client document (`R-141c`) and is recor
   `fixtures/recorded/sections/<code>/**` only, which is disjoint across sections once 14.0 has merged.
 - **Who reviews:** the discipline expert for the section; the tree names no one (`OD-18`, three to five named experts with committed slots, is open). Proposed grouping so that one expert pass covers several sections:
   architecture and general (AI, PS, POS, TX, GP), structures (KJ, KM), engineering systems (OV, VK, PT, EOM, SS, ITP), fire safety (PB, authored, with open questions).
+- **depends_on:** PROD-00 (`AD-15`); steps (d) and (e) also PROD-13 (the production connection) and PROD-14.1 (how a field case is recorded) · **Hotspots:** the section's own directories only, after PROD-14.0;
+  no contract, migration, composition root or `infra/**` · **Size:** M per section (one package, one fixture directory, one test run) and L for the epic: 14 sections, two preparation lanes, four proposed expert passes ·
+  **Executor:** expert (a, e), owner (c, d), Sonnet lane (b, f, 14.0, 14.1).
 - **Check:** `ADR-0024` row 9 prints fourteen `reviewed`; `PROD-18` repeats B1–B12 on the candidate.
 
 ### PROD-15 — The exposure re-review (`D-217`, `R-29` clause 2)

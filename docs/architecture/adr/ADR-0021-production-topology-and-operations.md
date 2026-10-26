@@ -151,10 +151,10 @@ covers PostgreSQL only; the S3 bucket is not touched by a migration (assumption:
 
 The deployment path is unchanged: owner instruction naming the SHA, fast-forward to `main`, the
 workflow, `deploy.sh`, `verify-deployed.sh` (`AGENTS.md` section 6). **Rollback is a forward fix.**
-An older image cannot be started against a newer schema, so a failed migrating release is
-recovered by a reviewed revert deployed through the same path and, if the schema must go back, by
-restoring the pre-migration dump with `infra/deploy/reset.sh --restore <dump directory>`, whose
-behaviour (every credential revoked, default credentials reported) is `R-52`.
+An older image is not guaranteed to run against a newer schema, and the migrations' downgrades refuse where data would be lost
+(`0006_app_user` and `0032_ar_v3_run_group` say so), so a failed migrating release is recovered by a reviewed revert deployed through
+the same path and, if the schema must go back, by restoring the pre-migration dump with
+`infra/deploy/reset.sh --restore <dump directory>`, whose behaviour (every credential revoked, default credentials reported) is `R-52`.
 
 ### 7. The manual release checklist and the manual scan (`R-146h`, `R-146n` item 5)
 

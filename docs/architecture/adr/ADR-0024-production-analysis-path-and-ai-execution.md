@@ -36,7 +36,9 @@ from the tree at `4d7b7c38` on 2026-10-26:
   prints 30; 13 are inside `src/auditmanager/analysis/profiles/ar_v2/`). Five modules of `src/auditmanager/analysis/profiles/ar_v3/`
   and `src/auditmanager/analysis/recognised/region_candidate.py` import `ar_v2.recognised_context`, `ar_v2.content`, `ar_v2.grounding`
   and `ar_v2.registered`. `AR_TEXT_PROFILE` is named in six source files, among them `src/auditmanager/runs/executor.py`, whose
-  `execute_run` serves v1, recorded v2 and v3 in one function.
+  `execute_run` serves v1, recorded v2 and v3 in one function. The count is by name: v2 code that does not carry the string
+  (for example `src/auditmanager/findings/recorded_saved_plan.py`, `src/auditmanager/findings/merge_publication_plan.py`,
+  `src/auditmanager/analysis/stages/finding_merge.py`) is found by following imports, which is the first task of `PROD-10`.
 - **The contract.** 92 paths, 104 operations, 300 schemas, contract `1.5.0`. No operation is specific to v1 or v2. The
   contract text names them in `listAnalysisProfiles` (the status `builtin`, which only the AR v1 profile
   carries) and in the schema `AnalysisProfileStatus`; `FindingCategory` is a closed list of twelve, of
