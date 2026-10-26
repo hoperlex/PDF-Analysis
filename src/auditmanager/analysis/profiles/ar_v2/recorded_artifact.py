@@ -20,7 +20,7 @@ from auditmanager.analysis.engine.serialization import (
     sha256_hex,
 )
 from auditmanager.analysis.profiles.ar_v2 import prompt_material, registered
-from auditmanager.analysis.profiles.ar_v2.grounding import REASON_RECOGNISED_ONLY
+from auditmanager.analysis.profiles.ar_shared.grounding import REASON_RECOGNISED_ONLY
 from auditmanager.analysis.profiles.ar_v2.merge_input import prepare_merge
 from auditmanager.analysis.profiles.ar_v2.proposal_grounding import (
     GroundedProposal, ProposalGroundingResult, RejectedProposal, UnresolvedEvidence,

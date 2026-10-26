@@ -11,7 +11,8 @@ import json
 from dataclasses import dataclass
 from typing import Final
 
-from auditmanager.analysis.profiles.ar_v2.content import reviewed_content_sha256
+from auditmanager.analysis.profiles.ar_shared import v2_identities
+from auditmanager.analysis.profiles.ar_shared.content import reviewed_content_sha256
 from auditmanager.analysis.profiles.ar_v2.prompt_material import material_sha256
 from auditmanager.analysis.profiles.ar_v2.response_schema import CATEGORIES, response_schema
 from auditmanager.shared.identity import AnalysisProfileId, PromptBundleId
@@ -21,12 +22,6 @@ class RecordedProfileError(ValueError):
     """The requested registration or its reviewed material has changed."""
 
 
-PROFILE_ID: Final[AnalysisProfileId] = AnalysisProfileId.parse(
-    "ap_01K7F4N2A9R8T6V5W3X2Y1Z0QH"
-)
-PROMPT_BUNDLE_ID: Final[PromptBundleId] = PromptBundleId.parse(
-    "pb_01K7F4N2A9R8T6V5W3X2Y1Z0QJ"
-)
 PROFILE_VERSION: Final[str] = "2.0.0-recorded"
 PROVIDER_MODE: Final[str] = "recorded"
 STAGE_PLAN: Final[tuple[str, ...]] = (
@@ -71,8 +66,8 @@ class RecordedArV2Profile:
 def _profile_content_sha256() -> str:
     return _canonical_sha256(
         {
-            "analysis_profile_id": str(PROFILE_ID),
-            "prompt_bundle_id": str(PROMPT_BUNDLE_ID),
+            "analysis_profile_id": str(v2_identities.PROFILE_ID),
+            "prompt_bundle_id": str(v2_identities.PROMPT_BUNDLE_ID),
             "profile_version": PROFILE_VERSION,
             "provider_mode": PROVIDER_MODE,
             "categories": CATEGORIES,
@@ -99,8 +94,8 @@ def resolve_recorded_profile(
     Callers must obtain these identities independently of a persisted run row.
     """
     if (
-        str(analysis_profile_id) != str(PROFILE_ID)
-        or str(prompt_bundle_id) != str(PROMPT_BUNDLE_ID)
+        str(analysis_profile_id) != str(v2_identities.PROFILE_ID)
+        or str(prompt_bundle_id) != str(v2_identities.PROMPT_BUNDLE_ID)
     ):
         raise RecordedProfileError("AR v2 profile or bundle identity is not registered")
     if (
@@ -111,8 +106,8 @@ def resolve_recorded_profile(
     ):
         raise RecordedProfileError("recorded AR v2 profile material has changed")
     return RecordedArV2Profile(
-        analysis_profile_id=PROFILE_ID,
-        prompt_bundle_id=PROMPT_BUNDLE_ID,
+        analysis_profile_id=v2_identities.PROFILE_ID,
+        prompt_bundle_id=v2_identities.PROMPT_BUNDLE_ID,
         profile_version=PROFILE_VERSION,
         provider_mode=PROVIDER_MODE,
         categories=CATEGORIES,

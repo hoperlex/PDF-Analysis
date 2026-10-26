@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from auditmanager.analysis.profiles.ar_v2.recognised_context import (
+from auditmanager.analysis.profiles.ar_shared.recognised_context import (
     RecognisedContextError,
     render_context,
     select_context,

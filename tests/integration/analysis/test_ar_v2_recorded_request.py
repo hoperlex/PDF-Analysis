@@ -8,8 +8,9 @@ from pathlib import Path
 
 import pytest
 
+from auditmanager.analysis.profiles.ar_shared import v2_identities
 from auditmanager.analysis.profiles.ar_v2 import prompt_material, registered
-from auditmanager.analysis.profiles.ar_v2.recognised_context import RecognisedContext
+from auditmanager.analysis.profiles.ar_shared.recognised_context import RecognisedContext
 from auditmanager.analysis.profiles.ar_v2.recorded_request import (
     RecordedGenerationSettings,
     RecordedRequestError,
@@ -31,8 +32,8 @@ def _layer(text: str = "Стена А: 200 мм") -> TextLayer:
 
 def _build(**changes: object) -> ModelRequest:
     arguments = {
-        "analysis_profile_id": registered.PROFILE_ID,
-        "prompt_bundle_id": registered.PROMPT_BUNDLE_ID,
+        "analysis_profile_id": v2_identities.PROFILE_ID,
+        "prompt_bundle_id": v2_identities.PROMPT_BUNDLE_ID,
         "fixture_model_id": "fixture/ar-v2-recorded",
         "settings": RecordedGenerationSettings(4096, "high", {"type": "adaptive"}),
         "text_layer": _layer(),

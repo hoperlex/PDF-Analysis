@@ -14,7 +14,7 @@ from auditmanager.analysis.profiles.ar_v2.proposal_grounding import (
     ProposalGroundingResult,
     ground_proposals,
 )
-from auditmanager.analysis.profiles.ar_v2.recognised_context import RecognisedContext
+from auditmanager.analysis.profiles.ar_shared.recognised_context import RecognisedContext
 from auditmanager.analysis.profiles.ar_v2.response import parse_response
 from auditmanager.analysis.text.adapter import ModelResponse
 from auditmanager.analysis.text.anchors import BlockIndex

@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from auditmanager.analysis.profiles.ar_v2.grounding import (
+from auditmanager.analysis.profiles.ar_shared.grounding import (
     REASON_RECOGNISED_ONLY,
     resolve_v2_anchor,
 )
-from auditmanager.analysis.profiles.ar_v2.recognised_context import RecognisedContext
+from auditmanager.analysis.profiles.ar_shared.recognised_context import RecognisedContext
 from auditmanager.analysis.text.anchors import ResolvedAnchor, UnresolvedAnchor
 from auditmanager.analysis.text.textlayer import Page, TextLayer
 

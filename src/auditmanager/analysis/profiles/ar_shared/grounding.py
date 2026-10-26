@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Final
 
-from auditmanager.analysis.profiles.ar_v2.recognised_context import RecognisedContext
+from auditmanager.analysis.profiles.ar_shared.recognised_context import RecognisedContext
 from auditmanager.analysis.text.anchors import (
     BlockIndex,
     REASON_ABSENT,
