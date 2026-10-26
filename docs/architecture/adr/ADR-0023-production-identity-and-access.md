@@ -1,6 +1,6 @@
 # ADR-0023: Production identity and access: one organisation, local accounts, audited access changes
 
-- Status: accepted for production by the repository owner (`R-146d`, `R-146i`, `R-146n`); the implementation choices marked `AD-` are the architect's, proposed and not yet confirmed
+- Status: accepted for production by the repository owner (`R-146d`, `R-146i`, `R-146n`, `R-146s`); `AD-11` is confirmed by `R-146s`; `AD-10` and the new `AD-19` are the architect's, proposed and not yet confirmed
 - Date: 2026-10-26
 - Owners: repository owner / `PRODUCTION-ADR-PACK-01`
 - Supersedes: nothing; it settles `U-04` for 1.0 except the legal-hold authority (`R-146d`) and partly accepts `ADR-0014`
@@ -78,28 +78,36 @@ terminated by the stack (`ADR-0021` `AD-01`) the proxy forwards `https` and the 
 The cookie rules are, in full: name `am_session`, `Path=/`, `HttpOnly`, `SameSite=Strict`, `Max-Age` no
 longer than the credential's lifetime, `Secure` on every TLS answer.
 
-### 3. The seeded administrator is closed by the deploy (`R-146i`)
+### 3. The seeded administrator is closed by the deploy (`R-146i`, `R-146s`)
 
 `verify-deployed.sh` and `readiness.sh` run `python -m auditmanager.access.check` in the `api` image,
-and a deployment is not successful while it reports a default credential.
+and a deployment is not successful while it reports a default credential (`R-146i`).
 
-`AD-11` (architect's implementation decision within `R-146i`, to be confirmed):
+`AD-11`, confirmed by `R-146s`: when the check reports a default credential, the deploy ends non-zero **and the
+public listener is not opened** until the password is changed; the stack stays on loopback.
 
-- `verify-deployed.sh` ends non-zero (inside its existing scheme: `0` this tree, `4` could not be
-  answered, `6` not this tree; a new reason with its own refusal text) and names the logins, so the
-  workflow's verify step fails and the release is not recorded as done. `deploy.sh` runs the same check after
-  `migrations-at-head`, prints the logins and ends non-zero, **without stopping any service**: the
-  precedent is `D-72` (a correct fail-closed repair took the stand down for a day) and `R-52`, where the owner
-  chose to report rather than refuse after a restore. The consequence to be accepted: the public site
-  stays up during the window in which the default credential is valid, and `R-50` limits what that credential can
-  reach to a password change, which is exactly the account takeover of `EXPOSURE-REVIEW-01.md` E-1.
-  Whether a failed check should also take the `proxy` down is a question for the owner.
-- `readiness.sh` keeps `R-46` for its other six checks; `default-credential` becomes the one check
-  whose finding is also a failure of the deploy.
-- Order on a host that has never been published (or after `reset.sh` or a restore): the stack comes
-  up bound to loopback, which is the default (`D-49`); the administrator signs in through an SSH tunnel and changes the
-  password; only then is `ALPHA_BIND_ADDRESS` opened and the stack redeployed. A restore raises every
-  `token_epoch` and reports default accounts (`R-52`); that report is the cue.
+- `deploy.sh` runs the check after `migrations-at-head`, prints the logins, ends non-zero, and does not add the
+  overlay that publishes the application port 443 (`ADR-0021` section 2, the listener table); it stops no service, only
+  the published mapping is absent. `verify-deployed.sh` ends non-zero in its existing scheme (`0` this tree, `4` could not
+  be answered, `6` not this tree; a new reason with its own refusal text), names the logins, and so the workflow's verify
+  step fails and the release is not recorded as done. `readiness.sh` keeps `R-46` for its other six checks;
+  `default-credential` becomes the one check whose finding is also a failure of the deploy. `R-52` and `D-72` (a correct
+  fail-closed repair took the stand down for a day) argued for reporting instead of refusing; `R-146s` is the owner's later
+  choice, and it is bounded: services keep running, only the outside door stays shut.
+- **Fresh host.** The stack comes up on loopback with port 80 answering only the ACME challenge; the administrator signs in
+  through an SSH tunnel to the loopback port and changes the password; the next deploy publishes 443. The window of
+  `EXPOSURE-REVIEW-01.md` E-1 (a public sign-in that accepts `admin`/`password`) therefore never opens on a new host.
+- **Restore.** A restore brings back the credentials as the dump held them (`R-52`; `reset.sh --restore` also raises every
+  `token_epoch`, and `copy-serve.sh restore-db` is changed to do the same, `PROD-02`). Both restore paths end with the check
+  and, on a finding, recreate the `proxy` without the 443 overlay. The accepted consequence (`R-146s`): after a restore that
+  brings `admin`/`password` back, the site is unreachable from outside until an administrator changes it through loopback.
+- **Which accounts count (`AD-19`, new, to be confirmed).** `access.check` exits `1` for every account with
+  `is_default_credential`, and that flag is set not only by the seeded account but by `resetUserPassword`
+  (`src/auditmanager/access/accounts.py`: an administrator's temporary password marks the account must-change).
+  Read literally, a deploy while any account has not yet changed a temporary password would close the public listener.
+  The question for the owner: keep the literal behaviour of the existing check (`R-146i` says to run it), or gate only on the
+  published pair (a narrower check that verifies the stored hash of the seeded `admin` against the published password, so a
+  temporary password an administrator chose does not close the site)?
 
 ### 4. Audit events for access changes (`R-146n` item 6)
 
@@ -150,10 +158,10 @@ Retention: forever; `audit_event` is append-only and the 1.0 purge keeps these e
 
 | # | Commitment | Mechanical check | Exists | Delivered by |
 | --- | --- | --- | --- | --- |
-| 1 | No account is on the seeded password after a deploy (`R-146i`) | `$DC run --rm --no-deps -T --entrypoint python api -m auditmanager.access.check` exits `0`; `infra/deploy/verify-deployed.sh` exits `0` only then | the command yes; the wiring no | `PROD-02` |
+| 1 | No account is on the seeded password after a deploy, and the public listener stays shut while one is (`R-146i`, `R-146s`) | `$DC run --rm --no-deps -T --entrypoint python api -m auditmanager.access.check` exits `0`; `infra/deploy/verify-deployed.sh` exits `0` only then; while the check exits `1`, `$DC port proxy 8443` exits non-zero (`ADR-0021` row 6) | the first command yes; the wiring no | `PROD-01`, `PROD-02` |
 | 2 | An operation named in no register is refused | `pytest -q tests/integration/api/test_role_register.py` | yes | none |
 | 3 | A default credential reaches only the password change | `pytest -q tests/integration/api/test_authorization.py` | yes | none |
-| 4 | The lockout is 5 failures in 900 s and 300 s of cooling-off | `grep -n "FAILED_SIGN_IN_ALLOWANCE: Final\[int\] = 5" src/auditmanager/access/repository.py` | yes | none |
+| 4 | The lockout is 5 failures in 900 s and 300 s of cooling-off | `python3 -I -c "import re;t=open('src/auditmanager/access/repository.py').read();print([re.search(n+r': Final\[int\] = (\d+)',t).group(1) for n in ('FAILED_SIGN_IN_ALLOWANCE','ATTEMPT_WINDOW_SECONDS','COOLING_OFF_SECONDS')])"` prints `['5', '900', '300']` | yes | none |
 | 5 | Sign-in, role grant and password change are journalled | `select event_type, count(*) from audit_event where event_type like 'access.%' group by 1` after one of each; a test per code path (API, registration approval, host command) that deletes the emission and goes red | no | `PROD-06` |
 | 6 | No event payload carries a secret or a name | a test that every key an `access.*` event writes is in the writer's allow-list and every value is a scalar | no | `PROD-06` |
 | 7 | The session cookie is `Secure` on TLS | `ADR-0021` row 4 | command yes | `PROD-01` |
@@ -163,7 +171,7 @@ Retention: forever; `audit_event` is append-only and the 1.0 purge keeps these e
 
 ### Positive
 
-- The account takeover window of `EXPOSURE-REVIEW-01.md` E-1 is detected by the deploy itself rather than by a
+- The account takeover window of `EXPOSURE-REVIEW-01.md` E-1 is closed by the deploy itself rather than by a
   person remembering a readiness run.
 - Who signed in, who granted a role and who changed a password becomes a question the database
   can answer, and the answer survives every purge.
@@ -174,14 +182,14 @@ Retention: forever; `audit_event` is append-only and the 1.0 purge keeps these e
 - Every expert sees every project. A client who cannot accept that cannot be served by this version.
 - A password-only product with a one-hour token and a lockout; a stolen password is a full account
   until the person or an administrator changes it.
-- The deploy check does not close the window it detects (section 3); a fresh or restored host is exposed
-  until the password is changed unless the operator follows the loopback order.
+- Every deploy and restore with a must-change account closes the outside door (`AD-19`); the only way back in is
+  loopback, and the operator must be able to reach the host over SSH.
 - Failed sign-ins on unknown logins and on accounts below the lockout threshold are not recorded.
 
 ## Alternatives considered
 
-1. **A deploy that stops the proxy while a default credential is valid.** Closes the window; takes the
-   public site down, the shape of `D-72`. Offered to the owner as the alternative to section 3.
+1. **A deploy that stops every service while a default credential is valid.** Rejected by `R-146s`, which closes only
+   the public listener; a stopped stack is the shape of `D-72`.
 2. **Random one-time seed password printed by the migration.** The longer-term fix `EXPOSURE-REVIEW-01.md` E-1
    suggests; needs a migration and changes `R-50`'s account story. Not asked; not built.
 3. **Journal every failed sign-in.** Rejected: unbounded growth under attack in an append-only table.
@@ -193,7 +201,7 @@ Retention: forever; `audit_event` is append-only and the 1.0 purge keeps these e
 - automated check/test: the eight rows above; `tests/integration/composition/test_readiness_command.py` pins that
   `readiness.sh` reports (`R-46`), which `PROD-02` changes for one check and must keep for the others
 - manual/operational evidence: the release rehearsal (`PROD-17`) starts from a database in which the
-  default credential is valid and shows `verify-deployed.sh` failing, then passing after the change;
+  default credential is valid and shows `verify-deployed.sh` failing with the application port unpublished, then passing and published after the change;
   one sign-in, one role grant and one password change are made and the three families are read back
 
 ## Revisit trigger
