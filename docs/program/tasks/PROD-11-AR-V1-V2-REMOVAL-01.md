@@ -1,7 +1,7 @@
 # Task PROD-11-AR-V1-V2-REMOVAL-01 — АР v1 and v2 are removed from the server, the contract, the web and the tests; the journey marks what has no АР source
 
 task_id: PROD-11-AR-V1-V2-REMOVAL-01
-status: in progress (see the report for the state of each stage)
+status: completed in the development candidate, stages 0 to 5 (state and counts in the report)
 
 ## Outcome
 
@@ -437,6 +437,15 @@ status: in progress (see the report for the state of each stage)
 - `fixtures/recorded/text_analysis/**`
 - `docs/program/tasks/PROD-11-AR-V1-V2-REMOVAL-01.md`
 - `docs/program/PROD-11-AR-V1-V2-REMOVAL-01.md`
+- `contracts/domain/v1/**`
+- `contracts/analysis/**`
+- `contracts/events/**`
+- `infra/deploy/proxy/nginx.conf`
+- `infra/deploy/proxy/tls-server.conf`
+- `tools/evaluation/**`
+- `scripts/recovery/synthetic_drill_seed.py`
+- `fixtures/recorded/sections/ar_specification/build_fixtures.py`
+- `docs/manual-tests/ALPHA_PUBLIC_ACCEPTANCE.md`
 
 ## Lane resources
 
@@ -446,7 +455,7 @@ The lane stack of the integrator is up (`auditmanager-ar-close`, PostgreSQL 5864
 
 - migrations, `infra/**`, `.github/**`, the section profile packages and recordings, `P02_LOCK.json`
 - `DEBT_REGISTER.md`, `CURRENT_STATE.md`, the plan, the rulings, the ADRs
-- see D-4 for the one exception the version sweep needs
+- the exceptions the lane took are the paths added to "Allowed paths" above, each with its reason in D-4 to D-14; the section profile packages and every recording file are untouched
 
 ## Non-goals
 
@@ -488,3 +497,19 @@ Every small decision is recorded here and in the report as "decided by the lane"
 - **D-4 (paths outside the brief's list that the removal forces).** `contracts/{domain,analysis,events}/**` and `tests/support/expected_facts.json` for the version literal (they move with the API document, `CONTRACT_PIN_REGISTRY.md`); the four literals of `infra/deploy/proxy/{nginx,tls-server}.conf` that a test pins to the facts file (only the string `1.6.0`, in the stage 2b commit alone); `tools/evaluation/{bridge,run_sources,local_bundle}.py` and `scripts/recovery/synthetic_drill_seed.py`, which import removed names (D-5, D-6).
 - **D-5 (the offline AR v2 seeded evaluator).** `tools/evaluation/{bridge,run_sources,local_bundle}.py` project v2 publication plans and read the recorded v2 profile; with those gone they cannot import. They are deleted with their tests (`tests/contract/evaluation/test_bridge.py`, `tests/integration/evaluation/*`); `matcher.py`, the seeded generator and `fixtures/evaluation/ar_v2/**` are pure data and stay.
 - **D-6 (the recovery drill seed).** `scripts/recovery/synthetic_drill_seed.py` runs АР v1 through `execute_run`; it is repointed to the v1 reference profile of D-2 (one import and one argument), so the recovery tests keep their seed.
+- **D-7 (a constant of `findings/queries.py`).** The legacy-shape test of `group_published_findings` and the `getFinding` query excluded the AR v2 profile identity from "an old v1 row" (`AR_V2_RECORDED_PROFILE_ID`, a v2 export of `analysis.public`). The v2 publisher is gone and its rows always carried a severity and a canonical member, so the exclusion keeps only the AR v3 profile. The two retired identities stay in `ar_shared/v2_identities.py` and `text/profile.py` for one reason, `ar_v3.v3_profile`'s distinctness check.
+- **D-8 (no silent defaults in `src`).** `run_text_analysis` requires `profile`; `execute_run` with no `text_profiles` refuses a non-v3 run like an unregistered pair (`required_norm_unavailable`) instead of running АР; `python -m auditmanager.analysis.text` requires `--section`; `_build_provider` returns `(adapter, config, source)` (the configured АР pair is gone) and `RunAdapter` takes no profile pair from the composition root (a pair or a section table is required, else `ValueError`). A package named `ar` is refused by the registry loader (`section_code_not_a_text_profile`), otherwise it would register АР again.
+- **D-9 (the characterization journey).** `tests/characterization/w13_baseline` starts a run over HTTP. Its vehicle is the v1 reference profile registered under `KJ` for that journey only (`journey.build_apps` substitutes the registry the composition root loads while the two apps are built), so records 03 to 12 and 34 are byte for byte what they were and the four records that carry the classification moved by the section code alone (`AR` to `KJ`), pinned by digest against the base. The suite was already red at the base on 16 refusal records (stale `contract_version` `1.0.0`); the same 16 are red now. Re-capturing against ПБ was rejected: it moves the finding texts, tokens and the CSV and ties the corpus to a section lane's recording.
+- **D-10 (suites that need a published АР run).** The AR specification, price and optimisation reads take the saved text of the newest published run whatever made it. Their suites get that run in-process (`tests/support/published_run.py`: explicit reference pair, reference profile, recorded adapter) and assert that the served `POST /runs` is refused for the same version. Suites that only need *a* published run through the served route classify ПБ (the journey lane's choice). The shared run harness seeds the reference pair instead of a random one, because an unrouted executor can no longer ignore the pinned pair.
+- **D-11 (what "pending" does to the exit code).** A step marked `pending_v3_activation` is not run, not counted as checked and not a failure: the live journey ends `e2e:pc01 OK WITH PENDING` with exit 0 and says so twice, and `verify-acceptance.mjs` refuses such an envelope. The alternative (exit 3, "PARTIAL") would keep the complete gate red until `D-204` is done; if the integrator wants that, it is the one `process.exit` in `journey.mjs`.
+- **D-12 (left alone).** `scripts/rehearsal/w53/{proxy_faults,process_recovery}.py` (historical operator rehearsals that call `execute_run` through the test harness with no registry) now meet the unrouted refusal. They are outside the allowed paths, run in no gate and a repeat of that rehearsal would pass `text_profiles=` (one argument each).
+- **D-13 (a builder, not a recording).** `fixtures/recorded/sections/ar_specification/build_fixtures.py` imported `AR_TEXT_PROFILE`; it now builds the same profile from the constants `analysis.text` keeps. Its `--check` prints `fixtures match`: no recording file moved.
+- **D-14 (web wording).** `RunList` takes the version's confirmed section (`sectionCode`, handed over by the version page); for `AR` it draws the six-check control when the pack allows it and a sentence otherwise, never the ordinary start. The classification form and panel stop promising a profile "when it appears" for АР. The settings table words АР as "no text profile, analysed by the six checks"; `data-profile-source="builtin"` became `authored` (it only ever marked a profile with no legacy source; ПБ is the one left). One line of the manual protocol (item 21) is corrected for the same reason.
+- **D-15 (AD-12, order).** `ADR-0024`'s order is kept: the journey already ran on ПБ (`PROD-10B`), the shared modules had moved (`PROD-10`), and this lane removed, resealed and regenerated in one set of commits.
+
+## Handoff
+
+- changed files: `git diff --name-status 1c8d29fa..HEAD` (284 files: 56 deleted, 5 added, 3 renamed); the report lists them by group.
+- commands/results: the report, section "Commands and counts".
+- known limits: the report, section "Limits".
+- integration notes: the report, section "Integration notes".
