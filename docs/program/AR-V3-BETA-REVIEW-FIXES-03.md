@@ -42,7 +42,7 @@ Run from the lane directory (`.venv` and `.env` linked in), `PYTHONPATH=src:<boo
 - One combined run of those plus `tests/integration/norms/retrieval`, `tests/contract/norm_map` and `tests/contract/architecture`: 750 passed.
 - `tests/integration/norms` (whole directory): 1,242 passed, 1 failed: `test_embedding_bakeoff_fixture.py::test_every_relevance_anchor_resolves_to_the_exact_real_corpus` asserts `.local/norms/corpus` exists in the checkout ("real corpus required"); a worktree has no `.local` corpus, so it fails on any lane tree and has nothing to do with this change.
 - The 30 integration and unit files that use `parse_blob_id`, `BLOB_ID_PATTERN` or `ArtifactRef` (outside the directories above): 396 passed.
-- The whole `tests/contract` on the committed tree: see the last line of this section.
+- The whole `tests/contract` once, on the committed tree `446583d2` (`.env` set aside): 1,307 passed (1,295 in the previous lane, plus the 12 new `norm_map` contract tests), 82 failed, 126 errors, 19,707 subtests passed. Every failure and error is in `test_cp00_candidate.py` (44 failed, 126 errors), `test_validate_bootstrap.py` (21) or `test_cp00_final_state.py` (3), the rest being their subtests; the same three files give exactly 82 failed and 126 errors in the previous lane's report on its base. Causes visible in the run: `NotADirectoryError` because `.git` is a file in a worktree (146 lines) and a validator subprocess without `jsonschema` (28 lines). None comes from this lane. The commit after `446583d2` changes only this report.
 - `git diff --check 4e6b0b4d` is clean. The governance check of the task file prints `[]`.
 
 ## Integrator actions
