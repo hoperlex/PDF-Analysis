@@ -31,6 +31,13 @@ from collections.abc import Iterable
 from sqlalchemy import Engine, text
 
 
+#: Resealed by `PROD-11B-V3-STAGE-ID-MIGRATION-01` for ``0033_ar_v3_cite_stage_id``, measured, not
+#: predicted: two fresh databases on the lane's PostgreSQL 17 stack, one upgraded to ``0032`` and one
+#: to ``0033``, had the columns, relations, constraints, indexes and triggers diffed row by row.
+#: One family moved and by exactly the migration's DDL: constraints stay 814 with no row added or
+#: removed, and one row is redefined -- ``stage_result.ck_stage_result_stage_id`` -- by one quoted
+#: literal, ``ar_v3_citation_review``, appended after the nine registry ids and by nothing else
+#: (still validated). The other ten families are identical to the 0032 seal.
 #: Resealed by `AR-V3-BETA-SIX-RUN-02` for ``0032_ar_v3_run_group`` on a fresh
 #: PostgreSQL clone: columns +19, relations +2, constraints +31, indexes +5,
 #: triggers +3 and functions +1. Views, extensions, sequences, policies and
@@ -226,7 +233,7 @@ from sqlalchemy import Engine, text
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
     "columns": (736, "c7bc9e13f3bca0a0507cd81ccaba7b15901a2cf0c91e1e60c903b2ce49905c67"),
     "relations": (76, "2725a7c6c6417f1862a831ba76678909e14b9a050e8cfaf978785f5f5a25a539"),
-    "constraints": (814, "25ea815f8371c94b9b7f48bd1aaad131ae85ef773c47464a2af9d5ad08e7cda1"),
+    "constraints": (814, "61200aa0b25e778172d50dfd20ab2f2857a5ff49ee0a71626fba0c78254ee300"),
     "indexes": (184, "f446c62baa74bcdae4304197c77546c7db769767727ba3d0601c48464cc5c47a"),
     "triggers": (86, "691154ca1227ef801cf6c85adcbc3a56d7f195a5f58fb8bc17ddc30147aff40e"),
     "functions": (32, "38aa2359517b7c52db5a3565cbfaf57f42ac18ef40b9e4322d514b5c47e767ab"),

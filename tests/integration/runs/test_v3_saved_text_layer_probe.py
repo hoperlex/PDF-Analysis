@@ -26,6 +26,18 @@ and answered" for the path that works today, otherwise the instrument, not the v
 
 Every fact asserted below is a measured fact (the report ``docs/program/PROD-11A-V3-TEXT-LAYER-PROBE-01.md``
 carries the table). A later change to the v3 path that alters one of them turns this module red.
+
+After ``0033_ar_v3_cite_stage_id`` (`PROD-11B-V3-STAGE-ID-MIGRATION-01`, `D-225`)
+------------------------------------------------------------------------------
+The module first measured UNSAFE: at head ``0032`` the database refused the CITE ``stage_result`` row
+of every v3 Run. The migration admits ``ar_v3_citation_review`` and the facts that followed from the
+refusal flipped; the ones that did not are kept as they were. Flipped: the schema admits the CITE stage
+(fact 1); an unmetered call publishes every Run with a succeeded CITE row (facts 2 and 4); the outcome
+of the twelve Runs is decided by the cost seam alone (fact 5); the readers answer ``ready`` on the
+published group (fact 7). Kept: the served recorded composition still refuses every Run on cost
+(fact 3, piece 2 of `D-225`), the text layer is saved whatever the terminal (fact 6) and the v1
+control (fact 8). The what-if group (the CHECK widened by ``ALTER`` in the throw-away database) is gone:
+the unmetered group on the migrated schema is what it measured, now through the real migration.
 """
 
 from __future__ import annotations
@@ -474,8 +486,7 @@ class Measurement:
     v1_run: RunReading | None = None
     v1_version: VersionReading | None = None
     peers: list[str] = field(default_factory=list)
-    stage_check_before: str = ""
-    stage_check_after: str = ""
+    stage_check: str = ""
 
 
 def _reading(session: Session, store: Any, reader: Any, version: Source, run_id: str, *,
@@ -536,10 +547,15 @@ def _version_reading(session: Session, reader: Any, source: Source, label: str) 
 
 SERVED_RECORDED = "served recorded composition"
 UNMETERED_RECORDED = "recorded replay, call marked unmetered"
-WHAT_IF = "what-if: unmetered replay, stage CHECK widened in the throw-away database"
 CITE_STAGE = "ar_v3_citation_review"
+CITE_ROLE = "analysis.v3_beta_review"
 STAGE_CHECK = "ck_stage_result_stage_id"
 PROBE_DATABASE_PREFIX = "prod11a_probe_"
+#: The nine stages of the analysis registry that ``0002`` admitted, written out here.
+REGISTRY_STAGES = (
+    "source_preparation", "page_geometry_extraction", "document_context_build", "text_analysis",
+    "block_analysis", "finding_merge", "finding_review", "finding_correction", "norm_verification",
+)
 
 
 def _unmetered(adapter: Any, config: Any) -> Any:
@@ -556,22 +572,6 @@ def _stage_check(session: Session) -> str:
         "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = :name"
         " AND conrelid = 'stage_result'::regclass"
     ), {"name": STAGE_CHECK}).scalar_one()
-
-
-def _widen_stage_check(session: Session) -> None:
-    """What-if only: admit the tenth stage id in the *throw-away* database, then nothing else."""
-    name = session.execute(text("SELECT current_database()")).scalar_one()
-    _require_probe_database(name)
-    admitted = re.findall(r"'([a-z0-9_]+)'::text", _stage_check(session))
-    if CITE_STAGE in admitted:
-        return  # a migration has since admitted it: fact 1 turns red, there is nothing to widen
-    assert len(admitted) == 9, admitted
-    listed = ", ".join(f"'{stage}'::text" for stage in (*admitted, CITE_STAGE))
-    session.execute(text(f"ALTER TABLE stage_result DROP CONSTRAINT {STAGE_CHECK}"))
-    session.execute(text(
-        f"ALTER TABLE stage_result ADD CONSTRAINT {STAGE_CHECK} "
-        f"CHECK (stage_id = ANY (ARRAY[{listed}]))"
-    ))
 
 
 def _require_probe_database(name: str) -> None:
@@ -639,6 +639,8 @@ def _drive(probe_database: str, store: Any, config: Any, recordings: Path) -> Me
     try:
         actor = str(UserUid.new())
         with factory() as session, session.begin():
+            # The probe seeds users, norms and Runs: only ever into its own throw-away database.
+            _require_probe_database(session.execute(text("SELECT current_database()")).scalar_one())
             session.execute(text("""
                 INSERT INTO app_user (user_uid, login, password_algorithm,
                     password_iterations, password_salt, password_hash)
@@ -648,8 +650,6 @@ def _drive(probe_database: str, store: Any, config: Any, recordings: Path) -> Me
                                      register_blob=True, actor=actor)
             unmetered = _publish_source(session, store, title="AR v3 unmetered recorded",
                                         register_blob=False, actor=actor)
-            what_if = _publish_source(session, store, title="AR v3 what-if",
-                                      register_blob=False, actor=actor)
             control = _publish_source(session, store, title="AR v1 control",
                                       register_blob=False, actor=actor)
 
@@ -678,14 +678,7 @@ def _drive(probe_database: str, store: Any, config: Any, recordings: Path) -> Me
             factory, store, config, recordings, unmetered, pack, reader,
             binding=UNMETERED_RECORDED, key="prod11a-probe-unmetered")
         with factory() as session:
-            out.stage_check_before = _stage_check(session)
-        with factory() as session, session.begin():
-            _widen_stage_check(session)
-        with factory() as session:
-            out.stage_check_after = _stage_check(session)
-        out.groups[WHAT_IF] = _drive_group(
-            factory, store, config, recordings, what_if, pack, reader,
-            binding=WHAT_IF, key="prod11a-probe-what-if")
+            out.stage_check = _stage_check(session)
         with factory() as session:
             out.v1_run = _reading(session, store, reader, control, started.run_id,
                                   label="v1 control", scope_id=None, error=v1_error)
@@ -717,65 +710,69 @@ def measured(probe_database: str, blob_store: Any, provider_config: Any,
 
 # --- the measured facts ------------------------------------------------------------------
 
-REAL_SCHEMA = (SERVED_RECORDED, UNMETERED_RECORDED)
+BINDINGS = (SERVED_RECORDED, UNMETERED_RECORDED)
 TEXT_LAYER_ROLE = "prepared.text_layer"
 DETERMINISTIC = {
     "source_preparation": "succeeded",
     "page_geometry_extraction": "succeeded",
     "document_context_build": "succeeded",
 }
+#: The stage rows a Run of each group leaves: the cost-refused group stops before CITE.
+EXPECTED_STAGES = {
+    SERVED_RECORDED: DETERMINISTIC,
+    UNMETERED_RECORDED: {**DETERMINISTIC, CITE_STAGE: "succeeded"},
+}
 
 
-def test_the_migrated_schema_does_not_admit_the_cite_stage(measured: Measurement) -> None:
-    """Fact 1. ``stage_result`` is checked against nine stage ids; ``ar_v3_citation_review`` is not one.
-
-    The contract seal (``AR-V3-BETA-RUN-STAGE-SEAL-01``) added the tenth id to the API vocabulary and
-    no migration widened ``ck_stage_result_stage_id`` (head ``0032_ar_v3_run_group``).
-    """
-    admitted = re.findall(r"'([a-z0-9_]+)'::text", measured.stage_check_before)
-    assert len(admitted) == 9
-    assert CITE_STAGE not in admitted
-    # The instrument: the what-if step really changed the constraint and nothing else about it.
-    widened = re.findall(r"'([a-z0-9_]+)'::text", measured.stage_check_after)
-    assert widened == [*admitted, CITE_STAGE]
+def test_the_migrated_schema_admits_the_cite_stage(measured: Measurement) -> None:
+    """Fact 1 (flipped by ``0033``, `D-225`). ``stage_result`` is checked against the nine registry
+    stage ids and ``ar_v3_citation_review``, in that order, and no other."""
+    admitted = re.findall(r"'([a-z0-9_]+)'::text", measured.stage_check)
+    assert admitted == [*REGISTRY_STAGES, CITE_STAGE]
 
 
-@pytest.mark.parametrize("binding", REAL_SCHEMA)
-def test_every_provider_request_was_answered_before_the_run_failed(
+@pytest.mark.parametrize("binding", BINDINGS)
+def test_every_provider_request_was_answered_and_the_stage_rows_are_those_the_cost_seam_allows(
     measured: Measurement, binding: str
 ) -> None:
-    """Fact 2. The six Runs of each group reached the provider seam once each (replayed reply),
-    so the failures below are not failures to start, to read the text or to build the request."""
+    """Fact 2. The six Runs of each group reached the provider seam once each (replayed reply), so
+    nothing below is a failure to start, to read the text or to build the request. The deterministic
+    stages succeeded in every Run; the CITE row exists exactly where the cost seam let the Run reach it
+    (before ``0033`` the unmetered group had no CITE row: the database refused it)."""
     group = measured.groups[binding]
     assert group.scopes == SCOPES
     assert group.recorded_requests == 6
-    assert [run.stage_statuses for run in group.runs] == [DETERMINISTIC] * 6
+    assert [run.stage_statuses for run in group.runs] == [EXPECTED_STAGES[binding]] * 6
 
 
 def test_the_served_recorded_composition_refuses_every_run_on_cost(measured: Measurement) -> None:
-    """Fact 3. ``EnvironmentProviders(RecordedAdapter, config, call=None)``: a replayed reply carries
-    no cost and the call is not marked unmetered, so ``_check_completed_cost`` refuses before CITE."""
+    """Fact 3 (kept; piece 2 of `D-225`). ``EnvironmentProviders(RecordedAdapter, config, call=None)``:
+    a replayed reply carries no cost and the call is not marked unmetered, so ``_check_completed_cost``
+    refuses before CITE."""
     for run in measured.groups[SERVED_RECORDED].runs:
         assert (run.state, run.terminal_reason) == ("failed", "analysis_input_invalid")
         assert run.error is not None and "no verifiable cost amount" in run.error
 
 
-def test_an_unmetered_call_is_refused_at_the_cite_stage_row(measured: Measurement) -> None:
-    """Fact 4. With the cost seam satisfied (an unmetered binding) every Run fails writing its CITE
-    ``stage_result`` row: ``ck_stage_result_stage_id`` refuses ``ar_v3_citation_review``."""
+def test_an_unmetered_call_publishes_every_run_with_a_succeeded_cite_row(measured: Measurement) -> None:
+    """Fact 4 (flipped by ``0033``). With the cost seam satisfied (an unmetered binding) every Run
+    writes its CITE ``stage_result`` row, binds the review artifact and reaches ``published``; before
+    ``0033`` every one failed ``internal_error`` on ``ck_stage_result_stage_id``."""
     for run in measured.groups[UNMETERED_RECORDED].runs:
-        assert (run.state, run.terminal_reason) == ("failed", "internal_error")
-        assert run.error is not None and STAGE_CHECK in run.error
-        assert CITE_STAGE not in run.stage_statuses
+        assert (run.state, run.terminal_reason, run.error) == ("published", None, None)
+        assert run.stage_statuses[CITE_STAGE] == "succeeded"
+        assert run.bound_artifact_roles[CITE_STAGE] == [CITE_ROLE]
 
 
-def test_no_v3_run_is_published_on_the_migrated_schema(measured: Measurement) -> None:
-    """Fact 5, the answer to the first question: on the schema at head no v3 Run is ``published``."""
-    states = [run.state for binding in REAL_SCHEMA for run in measured.groups[binding].runs]
-    assert states == ["failed"] * 12
+def test_the_outcome_of_the_twelve_runs_is_decided_by_the_cost_seam_alone(measured: Measurement) -> None:
+    """Fact 5 (flipped by ``0033``), the answer to the first question: on the schema at head a v3 Run
+    is ``published`` exactly when its call is not refused on cost; the stage row no longer decides."""
+    outcomes = [(run.state, run.terminal_reason) for binding in BINDINGS
+                for run in measured.groups[binding].runs]
+    assert outcomes == [("failed", "analysis_input_invalid")] * 6 + [("published", None)] * 6
 
 
-@pytest.mark.parametrize("binding", [*REAL_SCHEMA, WHAT_IF])
+@pytest.mark.parametrize("binding", BINDINGS)
 def test_every_v3_run_leaves_the_saved_text_layer_whatever_its_terminal(
     measured: Measurement, binding: str
 ) -> None:
@@ -796,18 +793,27 @@ def group_page_count(measured: Measurement, binding: str) -> int:
     return measured.groups[binding].version.page_count
 
 
-@pytest.mark.parametrize("binding", REAL_SCHEMA)
-def test_the_readers_find_no_published_run_of_an_unpublished_v3_group(
-    measured: Measurement, binding: str
-) -> None:
-    """Fact 7. Because no Run is published, ``_newest_published`` is ``None`` and ``_read_source``
-    answers ``analysis_missing``, although the layer is saved (fact 6): the state, not the layer,
-    is what is missing."""
-    version = measured.groups[binding].version
+def test_the_readers_find_no_published_run_of_the_cost_refused_group(measured: Measurement) -> None:
+    """Fact 7a (kept). Because no Run of the cost-refused group is published, ``_newest_published`` is
+    ``None`` and ``_read_source`` answers ``analysis_missing``, although the layer is saved (fact 6):
+    the state, not the layer, is what is missing."""
+    version = measured.groups[SERVED_RECORDED].version
     assert version.newest_published is None
     assert version.source_state == "analysis_missing"
     assert version.source_run_id is None
     assert version.source_text_layer_sha256 is None
+
+
+def test_the_readers_answer_ready_on_the_published_group(measured: Measurement) -> None:
+    """Fact 7b (flipped by ``0033``; the content of the old what-if fact 9). On the published group the
+    newest published Run is one of the six, ``_read_source`` answers ``ready`` on it and the text layer
+    it reads is the one that Run saved. Nothing else blocked in this setting."""
+    version = measured.groups[UNMETERED_RECORDED].version
+    published = {run.run_id: run for run in measured.groups[UNMETERED_RECORDED].runs}
+    assert version.newest_published in published
+    assert version.source_run_id == version.newest_published
+    assert version.source_state == "ready"
+    assert version.source_text_layer_sha256 == published[version.newest_published].saved_page_text_sha256
 
 
 def test_the_v1_control_is_published_and_the_same_readers_answer(measured: Measurement) -> None:
@@ -819,25 +825,6 @@ def test_the_v1_control_is_published_and_the_same_readers_answer(measured: Measu
     assert version.source_state == "ready"
     assert version.source_text_layer_sha256 == run.saved_page_text_sha256
     assert run.saved_page_text_pages == version.page_count
-
-
-def test_with_the_stage_check_widened_all_six_publish_and_the_readers_answer(
-    measured: Measurement,
-) -> None:
-    """Fact 9, the what-if: in the throw-away database, with only the constraint widened, the same
-    drive publishes all six Runs and the readers answer ``ready``. Nothing else blocks (in this
-    setting); the widening itself is a migration this lane does not write."""
-    group = measured.groups[WHAT_IF]
-    assert [(run.state, run.terminal_reason, run.error) for run in group.runs] == [
-        ("published", None, None)
-    ] * 6
-    assert [run.stage_statuses.get(CITE_STAGE) for run in group.runs] == ["succeeded"] * 6
-    version = group.version
-    published = {run.run_id: run for run in group.runs}
-    assert version.newest_published in published
-    assert version.source_run_id == version.newest_published
-    assert version.source_state == "ready"
-    assert version.source_text_layer_sha256 == published[version.newest_published].saved_page_text_sha256
 
 
 def test_the_probe_stayed_on_the_loopback(measured: Measurement) -> None:

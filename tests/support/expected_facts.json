@@ -831,6 +831,6 @@
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0032_ar_v3_run_group",
+  "migration_head": "0033_ar_v3_cite_stage_id",
   "contract_version": "1.5.0"
 }

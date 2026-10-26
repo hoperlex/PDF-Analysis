@@ -79,6 +79,8 @@ UPGRADE_SURFACE_DIGESTS = {
     # `EXEC-PULL-01`: likewise, taken from the revision's own bytes once it was final.
     "20261022_0031_executor_pull_channel.py": "e0bf052c6a2f255bf87ebc703231ed8c1caa2eb5b2cc0c1c4bc4be6fe56c120f",
     "20261023_0032_ar_v3_run_group.py": "a6fa2d4e1a42a86e4a0320691ac083b29d78b4e029dd359f89ee3e56deaef7f9",
+    # `PROD-11B-V3-STAGE-ID-MIGRATION-01`: likewise, taken from the revision's own bytes once it was final.
+    "20261026_0033_ar_v3_cite_stage_id.py": "903e2c60e9b120ac775d1cdd8bdc4e674c784fae56809488f4d2a32c7fb379a3",
 }
 
 
