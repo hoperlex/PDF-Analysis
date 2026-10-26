@@ -887,8 +887,15 @@ def test_an_identity_with_a_trailing_newline_is_refused_in_every_input_that_name
 
 # --- the set tool binds its request to these maps -------------------------------------------------
 
-def _request_for(mapping: dict[str, Any], *, widen: bool = False) -> dict[str, Any]:
+def _request_for(
+    mapping: dict[str, Any], *, widen: bool = False, label: str | None = None,
+) -> dict[str, Any]:
     packed = norm_vectors.pack([1.0] + [0.0] * (DIMENSIONS - 1))
+    # What a reviewer copies: each mapped document's one designation, as its targets carry it.
+    designation = {
+        target["norm_document_id"]: target["designation"]
+        for item in mapping["items"] for target in item["targets"]
+    }
     return {
         "format": promote_cli.REQUEST_FORMAT,
         "set_id": str(NormRetrievalSetId.new()),
@@ -899,7 +906,8 @@ def _request_for(mapping: dict[str, Any], *, widen: bool = False) -> dict[str, A
         "independently_checked_source_digest": "1" * 64,
         "independently_checked_embedding_digest": "2" * 64,
         "designations": [
-            {"document_id": document, "slug": "synthetic_slug", "designation": "SYNTH"}
+            {"document_id": document, "slug": "synthetic_slug",
+             "designation": designation[document] if label is None else label}
             for document in mapping["mapped_document_ids"]
         ],
         "items": [{
@@ -954,6 +962,50 @@ def test_the_set_tool_refuses_the_same_map_bytes_with_spans_widened_by_one_parag
             require_expected=False,
         )
     assert refused.value.reason == "request_targets_differ_from_map"
+
+
+def test_the_set_tool_refuses_the_same_map_bytes_with_another_label_for_every_real_map(
+    tmp_path: Path,
+) -> None:
+    # AR-V3-BETA-REVIEW-FIXES-03: the label reaches every prompt row, so a request that repeats
+    # the spans but names another norm builds a different set from the same map bytes.
+    decisions, _ = _real_like()
+    for entry in build_scope_maps(decisions).maps:
+        mapping = json.loads(entry.data)
+        with pytest.raises(promote_cli.CliRefused) as refused:
+            promote_cli.load_bundle(
+                _bundle_of(tmp_path, entry.scope_id, entry,
+                           _request_for(mapping, label="FAKE-LABEL 1.2.3")),
+                require_expected=False,
+            )
+        assert refused.value.reason == "request_designations_differ_from_map", entry.scope_id
+
+
+def test_every_map_this_tool_writes_gives_each_document_one_designation_the_set_tool_reads(
+) -> None:
+    # The set tool refuses a map in which a document carries two designations; map_pack must
+    # never write one, because it checks each target against the paragraphs' one designation.
+    decisions, _ = _real_like()
+    for entry in build_scope_maps(decisions).maps:
+        mapping = json.loads(entry.data)
+        labels: dict[str, set[str]] = {}
+        for item in mapping["items"]:
+            for target in item["targets"]:
+                labels.setdefault(target["norm_document_id"], set()).add(target["designation"])
+        assert sorted(labels) == mapping["mapped_document_ids"], entry.scope_id
+        assert all(len(found) == 1 for found in labels.values()), entry.scope_id
+
+
+def test_the_set_tool_refuses_a_request_whose_snapshot_is_not_the_one_a_map_names(
+    tmp_path: Path,
+) -> None:
+    decisions, _ = _real_like()
+    entry = build_scope_maps(decisions).maps[0]
+    request = _request_for(json.loads(entry.data))
+    request["snapshot_id"] = "ns_01M59N8QNBVN91ACA2HCE6VE75"
+    with pytest.raises(promote_cli.CliRefused) as refused:
+        promote_cli.load_bundle(_bundle_of(tmp_path, "snapshot", entry, request), require_expected=False)
+    assert refused.value.reason == "request_snapshot_differs_from_map"
 
 
 def test_the_set_tool_refuses_a_synthetic_map_that_this_tool_wrote(tmp_path: Path) -> None:
@@ -1036,6 +1088,109 @@ def test_a_file_that_appears_between_the_check_and_the_create_is_never_removed(
     assert "REFUSED: output_unwritable" in capsys.readouterr().err
     assert [path.name for path in out.iterdir()] == ["scope-A1.map.json"]
     assert (out / "scope-A1.map.json").read_bytes() == b"someone else's file"
+
+
+# --- the rollback also covers the instant between the create and its bookkeeping ---------------
+#
+# AR-V3-BETA-REVIEW-FIXES-03, finding F3. The rollback used to learn of a file only after
+# `Path.open("xb")` had returned, so an interrupt in that instant left an empty file the rollback
+# did not know about, and the next run said `output_exists`. The patched `open` below creates the
+# real file and then raises, which is the same state: the file exists, the call has not heard.
+
+def _create_then(count: int, raise_: Callable[[Path], BaseException]) -> Callable[..., Any]:
+    """`Path.open` that really creates the `count`-th exclusive file, then raises."""
+    original = Path.open
+    seen = {"creates": 0}
+
+    def patched(self: Path, *args: Any, **kwargs: Any):
+        handle = original(self, *args, **kwargs)
+        if args[:1] == ("xb",):
+            seen["creates"] += 1
+            if seen["creates"] == count:
+                handle.close()
+                raise raise_(self)
+        return handle
+
+    return patched
+
+
+@pytest.mark.parametrize("count", [1, 4, 7], ids=["first_map", "fourth_map", "summary"])
+@pytest.mark.parametrize("existing_directory", [False, True], ids=["new_directory", "empty_directory"])
+def test_an_interrupt_right_after_a_create_leaves_no_file_behind_and_a_rerun_succeeds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, count: int, existing_directory: bool,
+) -> None:
+    out = tmp_path / "nested" / "pack"
+    if existing_directory:
+        out.mkdir(parents=True)
+    monkeypatch.setattr(Path, "open", _create_then(count, lambda _path: KeyboardInterrupt()))
+    with pytest.raises(KeyboardInterrupt):
+        _cli(*_build_args(tmp_path, out))
+    assert sorted(out.iterdir()) == [] if existing_directory else not (tmp_path / "nested").exists()
+    monkeypatch.undo()
+    assert _cli(*_build_args(tmp_path, out)) == 0
+    assert len(list(out.iterdir())) == 7
+
+
+def test_a_file_that_is_not_the_empty_leftover_of_a_create_survives_an_interrupt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The claim is made before the create, so an interrupt before the create finds the name
+    # claimed. If a stranger's file is there by then it is not an unwritten file of ours.
+    out = tmp_path / "pack"
+    original = Path.open
+
+    def stranger_then_interrupt(self: Path, *args: Any, **kwargs: Any):
+        if self.name == "scope-A1.map.json" and args[:1] == ("xb",):
+            original(self, "wb").write(b"someone else's file")
+            raise KeyboardInterrupt
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", stranger_then_interrupt)
+    with pytest.raises(KeyboardInterrupt):
+        _cli(*_build_args(tmp_path, out))
+    assert [path.name for path in out.iterdir()] == ["scope-A1.map.json"]
+    assert (out / "scope-A1.map.json").read_bytes() == b"someone else's file"
+
+
+def test_an_empty_file_that_a_stranger_created_first_is_never_removed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    # `FileExistsError` is the create's own word that the name was taken: the claim is dropped,
+    # so even an empty file (which looks like our own leftover) is left alone.
+    out = tmp_path / "pack"
+    original = Path.open
+
+    def lose_the_race_to_an_empty_file(self: Path, *args: Any, **kwargs: Any):
+        if self.name == "scope-A1.map.json" and args[:1] == ("xb",):
+            original(self, "wb").close()
+            raise FileExistsError(17, "File exists")
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", lose_the_race_to_an_empty_file)
+    assert _cli(*_build_args(tmp_path, out)) == 2
+    assert "REFUSED: output_unwritable" in capsys.readouterr().err
+    assert [path.name for path in out.iterdir()] == ["scope-A1.map.json"]
+    assert (out / "scope-A1.map.json").read_bytes() == b""
+
+
+def test_a_file_that_vanished_before_the_rollback_does_not_stop_the_rollback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    # The second map is removed behind the call's back while the fifth create fails; the rollback
+    # must still remove the others and the directory, and say what it said before.
+    out = tmp_path / "nested" / "pack"
+    original = Path.open
+
+    def vanish_and_fail(self: Path, *args: Any, **kwargs: Any):
+        if self.name == "scope-S1.map.json" and args[:1] == ("xb",):
+            (out / "scope-F2.map.json").unlink()
+            raise OSError(28, "No space left on device")
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", vanish_and_fail)
+    assert _cli(*_build_args(tmp_path, out)) == 2
+    assert "REFUSED: output_unwritable" in capsys.readouterr().err
+    assert not (tmp_path / "nested").exists()
 
 
 # --- hostile input is a typed refusal, never a traceback ----------------------------------------

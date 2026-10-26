@@ -18,6 +18,7 @@ import hashlib
 import json
 import os
 import re
+import stat
 import sys
 import unicodedata
 from dataclasses import dataclass
@@ -697,6 +698,15 @@ def _map_file(directory: Path, scope_id: str) -> Path:
     return directory / f"scope-{scope_id}.map.json"
 
 
+def _is_unwritten_file(path: Path) -> bool:
+    """A regular, empty, unshared file: all that an interrupted exclusive create leaves behind."""
+    try:
+        info = path.lstat()
+    except OSError:
+        return False
+    return stat.S_ISREG(info.st_mode) and info.st_size == 0 and info.st_nlink == 1
+
+
 def write_pack(directory: Path, maps: ScopeMaps, summary: Mapping[str, Any]) -> None:
     """Write seven new files, all or none; an existing name is a refusal, never an overwrite.
 
@@ -704,10 +714,19 @@ def write_pack(directory: Path, maps: ScopeMaps, summary: Mapping[str, Any]) -> 
     nothing is written. Each file is created exclusively (``xb``); if any step still fails, or
     the process is interrupted, every file and directory this call created is removed again, so
     a re-run starts from the same state and a half-written pack never exists to be validated.
+
+    Each path is claimed *before* its create and marked created only once the create returned, so
+    an interrupt that lands between the two still finds the path in the rollback. A claim that is
+    not yet marked is removed only if the file there is an unwritten empty regular file (what the
+    create leaves; this call writes nothing before it marks the claim), and the claim is dropped
+    when the create says the name is taken (``FileExistsError``): that file is a stranger's and
+    is never removed. The one case this cannot tell apart is a stranger's *empty* regular file
+    appearing at the very name in the instant before the create, together with an interrupt in
+    the same instant.
     """
     files = [(_map_file(directory, entry.scope_id), entry.data) for entry in maps.maps]
     files.append((directory / SUMMARY_FILE, render_summary(summary)))
-    created: list[Path] = []
+    claims: dict[Path, bool] = {}  # path -> the exclusive create returned
     new_directories: list[Path] = []
     try:
         if any(os.path.lexists(path) for path, _ in files):
@@ -718,14 +737,20 @@ def write_pack(directory: Path, maps: ScopeMaps, summary: Mapping[str, Any]) -> 
             missing = missing.parent
         directory.mkdir(parents=True, exist_ok=True)
         for path, data in files:
-            with path.open("xb") as handle:
-                # Recorded only once the exclusive create succeeded: never a stranger's file.
-                created.append(path)
+            claims[path] = False
+            try:
+                handle = path.open("xb")
+            except FileExistsError:
+                del claims[path]  # not ours: someone else's file must survive the rollback
+                raise
+            claims[path] = True
+            with handle:
                 handle.write(data)
     except BaseException as exc:
-        for path in created:
-            with contextlib.suppress(OSError):
-                path.unlink()
+        for path, created in claims.items():
+            if created or _is_unwritten_file(path):
+                with contextlib.suppress(OSError):  # FileNotFoundError: no create happened yet
+                    path.unlink()
         for path in new_directories:  # deepest first: the list was built from the leaf upward
             with contextlib.suppress(OSError):
                 path.rmdir()

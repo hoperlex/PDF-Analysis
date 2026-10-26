@@ -30,9 +30,20 @@ fresh one. ``DATABASE_URL`` and the ``S3_*`` names come from the process environ
 
 The request is bound to the reviewed map before anything else happens: ``map.json`` is parsed
 and every item's target spans in ``request.json`` must equal the spans the map lists for that
-item, exactly (``request_targets_differ_from_map``); a map flagged ``synthetic`` is refused
-(``map_synthetic``). The library alone compares only the *set* of document ids with the map, so
-without this the same map bytes and ``map_sha256`` could carry prompt rows the map never listed.
+item, exactly (``request_targets_differ_from_map``); the label the request gives each mapped
+document must equal the one designation the map's targets carry for it
+(``request_designations_differ_from_map``), because that label is printed in every prompt row and
+is a sort key; the request's snapshot must be the map's (``request_snapshot_differs_from_map``);
+a map flagged ``synthetic`` is refused (``map_synthetic``). The library alone compares only the
+*set* of document ids with the map, so without this the same map bytes and ``map_sha256`` could
+carry prompt rows the map never listed, or rows attributed to another norm.
+
+The ``synthetic`` flag is a guard against accidents, not a control against forgery: the map is
+the reviewer's file, anyone who can write it can write ``false``, and this module does not load
+the beta policy snapshot that ``map_pack validate`` compares with (the norms context does not
+import the analysis profile). What holds a forged map is the library, which compares the map's
+identity with the request's snapshot and reads that snapshot from the database, and the
+reviewer's independently computed digests.
 
 Exit status: 0 verified or replayed (``plan``: a candidate was computed and, if the bundle
 carried expectations, they match); 2 refused with ``promote: REFUSED [reason]`` on stderr and
@@ -284,12 +295,24 @@ def _item(raw: Any, label: str) -> tuple[RetrievalItem, str]:
     ), text_digest
 
 
-def _reviewed_targets(map_bytes: bytes) -> dict[str, list[tuple[str, int, int]]]:
-    """Per item id, the sorted ``(document, first, last)`` spans the reviewed map lists.
+@dataclass(frozen=True, slots=True)
+class _ReviewedMap:
+    """What the reviewed ``map.json`` itself says, in the terms the request is compared in."""
+
+    snapshot_id: str
+    #: Per item id, the sorted ``(document, first, last)`` spans.
+    spans: Mapping[str, list[tuple[str, int, int]]]
+    #: Per mapped document, the one designation every target of that document carries.
+    designations: Mapping[str, str]
+
+
+def _reviewed_targets(map_bytes: bytes) -> _ReviewedMap:
+    """The snapshot, per-item spans and per-document designations the reviewed map lists.
 
     Reads the map the way the library validates it (``json.loads`` of the UTF-8 bytes, which must
     equal their own canonical encoding) and refuses a map it cannot read, because a request that
-    cannot be compared with its map cannot be trusted to follow it.
+    cannot be compared with its map cannot be trusted to follow it. A map that gives one document
+    two designations contradicts itself and is refused as well.
     """
     try:
         mapping = json.loads(map_bytes.decode("utf-8"))
@@ -306,10 +329,14 @@ def _reviewed_targets(map_bytes: bytes) -> dict[str, list[tuple[str, int, int]]]
         )
     if synthetic is not False:
         raise CliRefused("map_invalid", f"{MAP_NAME} carries no boolean synthetic flag")
+    snapshot_id = mapping.get("norms_snapshot_id")
+    if not isinstance(snapshot_id, str) or not snapshot_id:
+        raise CliRefused("map_invalid", f"{MAP_NAME} carries no norms snapshot id")
     items = mapping.get("items")
     if not isinstance(items, list) or not items:
         raise CliRefused("map_invalid", f"{MAP_NAME} lists no items")
     reviewed: dict[str, list[tuple[str, int, int]]] = {}
+    designations: dict[str, str] = {}
     for index, item in enumerate(items):
         label = f"{MAP_NAME} items[{index}]"
         item_id = item.get("id") if isinstance(item, dict) else None
@@ -323,27 +350,51 @@ def _reviewed_targets(map_bytes: bytes) -> dict[str, list[tuple[str, int, int]]]
             document = target.get("norm_document_id") if isinstance(target, dict) else None
             first = target.get("ordinal_first") if isinstance(target, dict) else None
             last = target.get("ordinal_last") if isinstance(target, dict) else None
+            designation = target.get("designation") if isinstance(target, dict) else None
             if (
                 not isinstance(document, str) or not document or type(first) is not int
                 or type(last) is not int or first < 0 or last < first
             ):
                 raise CliRefused("map_invalid", f"{label} has a target that is not a document span")
+            if not isinstance(designation, str) or not designation:
+                raise CliRefused("map_invalid", f"{label} has a target without a designation")
+            if designations.setdefault(document, designation) != designation:
+                raise CliRefused(
+                    "map_invalid", f"{label} gives one document two different designations"
+                )
             spans.append((document, first, last))
         reviewed[item_id] = sorted(spans)
-    return reviewed
+    # Every mapped document must have a designation in the map to be compared with (`map_pack`
+    # writes exactly the documents of the targets, sorted).
+    if mapping.get("mapped_document_ids") != sorted(designations):
+        raise CliRefused(
+            "map_invalid", f"{MAP_NAME} mapped_document_ids are not the documents of its targets"
+        )
+    return _ReviewedMap(snapshot_id, reviewed, designations)
 
 
-def _bind_request_to_map(map_bytes: bytes, items: tuple[RetrievalItem, ...]) -> None:
-    """The request's items and spans must be exactly the reviewed map's, item by item.
+def _bind_request_to_map(
+    map_bytes: bytes,
+    items: tuple[RetrievalItem, ...],
+    designations: tuple[ReviewedDesignation, ...],
+    snapshot_id: str,
+) -> None:
+    """The request's snapshot, items, spans and document labels must be the reviewed map's.
 
     The library compares only the set of document ids and the ordered item ids with the map; the
-    spans, and with them the prompt rows, would otherwise be whatever the request said. The order
-    of one item's spans is not a difference, their number and values are.
+    spans, and with them the prompt rows, would otherwise be whatever the request said, and so
+    would the label printed in each row. The order of one item's spans is not a difference, their
+    number and values are. A refusal names item ids or counts, never a span, a label or a document.
     """
     reviewed = _reviewed_targets(map_bytes)
+    if snapshot_id != reviewed.snapshot_id:
+        raise CliRefused(
+            "request_snapshot_differs_from_map",
+            f"the request's snapshot_id is not the reviewed {MAP_NAME}'s norms_snapshot_id",
+        )
     requested = [item.item_id for item in items]
-    if len(set(requested)) != len(requested) or set(requested) != set(reviewed):
-        differing = sorted(set(requested) ^ set(reviewed)) or sorted(requested)
+    if len(set(requested)) != len(requested) or set(requested) != set(reviewed.spans):
+        differing = sorted(set(requested) ^ set(reviewed.spans)) or sorted(requested)
         raise CliRefused(
             "request_items_differ_from_map",
             "the request's items are not the reviewed map's items: " + ", ".join(differing),
@@ -351,11 +402,24 @@ def _bind_request_to_map(map_bytes: bytes, items: tuple[RetrievalItem, ...]) -> 
     def spans(item: RetrievalItem) -> list[tuple[str, int, int]]:
         return sorted((s.document_id, s.ordinal_first, s.ordinal_last) for s in item.targets)
 
-    differing = [item.item_id for item in items if spans(item) != reviewed[item.item_id]]
+    differing = [item.item_id for item in items if spans(item) != reviewed.spans[item.item_id]]
     if differing:
         raise CliRefused(
             "request_targets_differ_from_map",
             "the request's target spans differ from the reviewed map for: " + ", ".join(differing),
+        )
+    labelled = [entry.document_id for entry in designations]
+    differing_documents = (set(labelled) ^ set(reviewed.designations)) | {
+        entry.document_id for entry in designations
+        if reviewed.designations.get(entry.document_id) != entry.designation
+    }
+    if len(set(labelled)) != len(labelled) or differing_documents:
+        raise CliRefused(
+            "request_designations_differ_from_map",
+            "the request's designations are not the reviewed map's for "
+            f"{max(len(differing_documents), 1)} of {len(reviewed.designations)} mapped "
+            "documents; compare each document's designation in request.json with the "
+            f"designation of its targets in {MAP_NAME}",
         )
 
 
@@ -411,12 +475,13 @@ def load_bundle(directory: Path, *, require_expected: bool) -> LoadedBundle:
         _item(entry, f"items[{index}]") for index, entry in enumerate(_list(raw["items"], "items"))
     ]
     items = tuple(item for item, _ in parsed)
-    _bind_request_to_map(map_bytes, items)
+    snapshot_id = _text(raw["snapshot_id"], "snapshot_id")
+    _bind_request_to_map(map_bytes, items, designations, snapshot_id)
     request = PromotionRequest(
         set_id=set_id,
         identity=SetIdentity(
             map_sha256=hashlib.sha256(map_bytes).hexdigest(),
-            snapshot_id=_text(raw["snapshot_id"], "snapshot_id"),
+            snapshot_id=snapshot_id,
             reviewed_content_key=_text(raw["reviewed_content_key"], "reviewed_content_key"),
             embedding_build=_text(raw["embedding_build"], "embedding_build"),
         ),
@@ -676,6 +741,12 @@ def _print_candidate(
             f"item: {item.item_id} query_text_sha256={query_text_digests[item.item_id]} "
             f"query_vector_sha256={vectors.sha256(vectors.pack(item.query_vector))} targets={spans}"
         )
+    if query_text_digests is not None:
+        # The label that reaches every prompt row of a document; `load_bundle` has already proved
+        # it equal to the designation of that document's targets in the reviewed map.
+        for reviewed in sorted(request.reviewed_designations, key=lambda row: row.document_id):
+            label = json.dumps(reviewed.designation, ensure_ascii=False)
+            print(f"designation: {reviewed.document_id} {label}")
 
 
 def _mismatch(prepared: PreparedPromotion) -> CliRefused:

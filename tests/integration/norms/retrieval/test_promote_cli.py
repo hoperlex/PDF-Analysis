@@ -52,10 +52,14 @@ def _reviewed_map(**changes: Any) -> dict[str, Any]:
     """The map's own view of C01, in the shape ``map_pack`` writes: reviewed targets per item."""
     value: dict[str, Any] = {
         "mapped_document_ids": [DOCUMENT],
+        "norms_snapshot_id": SNAPSHOT,
         "synthetic": False,
         "items": [{
             "id": "C01",
-            "targets": [{"norm_document_id": DOCUMENT, "ordinal_first": 0, "ordinal_last": 1}],
+            "targets": [{
+                "norm_document_id": DOCUMENT, "designation": "СП 99.1",
+                "ordinal_first": 0, "ordinal_last": 1,
+            }],
         }],
     }
     value.update(changes)
@@ -341,8 +345,14 @@ def _span(document: str, first: int, last: int) -> dict[str, Any]:
     return {"document_id": document, "ordinal_first": first, "ordinal_last": last}
 
 
+DESIGNATIONS = {DOCUMENT: "СП 99.1", OTHER: "СП 99.2"}
+
+
 def _map_target(document: str, first: int, last: int) -> dict[str, Any]:
-    return {"norm_document_id": document, "ordinal_first": first, "ordinal_last": last}
+    return {
+        "norm_document_id": document, "designation": DESIGNATIONS[document],
+        "ordinal_first": first, "ordinal_last": last,
+    }
 
 
 def _two_item_map() -> bytes:
@@ -498,6 +508,21 @@ UNREADABLE_MAPS: dict[str, bytes] = {
     "a boolean ordinal": _in_target(ordinal_first=True),
     "a negative ordinal": _in_target(ordinal_first=-1),
     "a span that ends before it starts": _in_target(ordinal_first=3, ordinal_last=2),
+    "one document with two designations": canonical_json_bytes(_reviewed_map(items=[{
+        "id": "C01", "targets": [
+            _map_target(DOCUMENT, 0, 1), dict(_map_target(DOCUMENT, 5, 6), designation="СП 99.9")]}])),
+    "a target without a designation": canonical_json_bytes(_reviewed_map(items=[{
+        "id": "C01", "targets": [{"norm_document_id": DOCUMENT, "ordinal_first": 0, "ordinal_last": 1}]}])),
+    "a target with an empty designation": _in_target(designation=""),
+    "a designation that is not text": _in_target(designation=7),
+    "mapped documents that are not the targets' documents": canonical_json_bytes(
+        _reviewed_map(mapped_document_ids=[DOCUMENT, OTHER])),
+    "no mapped documents": _without("mapped_document_ids"),
+    "mapped documents listed twice": canonical_json_bytes(_reviewed_map(
+        mapped_document_ids=[DOCUMENT, DOCUMENT])),
+    "no snapshot id": _without("norms_snapshot_id"),
+    "an empty snapshot id": canonical_json_bytes(_reviewed_map(norms_snapshot_id="")),
+    "a snapshot id that is not text": canonical_json_bytes(_reviewed_map(norms_snapshot_id=7)),
     "no synthetic flag": _without("synthetic"),
     "a synthetic flag that is text": canonical_json_bytes(_reviewed_map(synthetic="false")),
     "a null synthetic flag": canonical_json_bytes(_reviewed_map(synthetic=None)),
@@ -516,6 +541,151 @@ def test_a_float_in_the_map_is_refused(tmp_path: Path) -> None:
     data = MAP_BYTES.replace(b'"ordinal_last":1', b'"ordinal_last":1.5')
     assert data != MAP_BYTES
     assert _refusal(_bundle(tmp_path, map_bytes=data)).reason == "map_invalid"
+
+
+# --- the request's labels and snapshot are bound to the map as well (AR-V3-BETA-REVIEW-FIXES-03) -
+#
+# The label a request gives a document is printed in every prompt row of that document and is a
+# sort key, so the same map bytes and `map_sha256` with another label would attribute a citation
+# to another norm. The map's targets carry the reviewed designation; the request must repeat it.
+
+FAKE_LABEL = "FAKE-LABEL 1.2.3"
+
+LABEL_DRIFT: dict[str, Callable[[dict[str, Any]], None]] = {
+    "a label that names another norm": _set("designations", 0, "designation", to=FAKE_LABEL),
+    "a label with a trailing space": _set("designations", 0, "designation", to="СП 99.1 "),
+    "a label in another case": _set("designations", 0, "designation", to="сп 99.1"),
+    "a label in another script": _set("designations", 0, "designation", to="CP 99.1"),
+    "a label that was decomposed": _set("designations", 0, "designation", to="СП 99.1\u0301"),
+    "a label for a document the map does not list": lambda value: value["designations"].append(
+        {"document_id": OTHER, "slug": "other_slug", "designation": "СП 99.2"}),
+    "the same document labelled twice": lambda value: value["designations"].append(
+        dict(value["designations"][0])),
+}
+
+
+@pytest.mark.parametrize("case", sorted(LABEL_DRIFT))
+def test_labels_that_differ_from_the_reviewed_maps_designations_are_refused(
+    tmp_path: Path, case: str,
+) -> None:
+    refused = _refusal(_bundle(tmp_path, LABEL_DRIFT[case]))
+    assert refused.reason == "request_designations_differ_from_map"
+    # The message counts documents; it never echoes a label or an identity of the bundle.
+    assert FAKE_LABEL not in refused.message and "СП" not in refused.message
+    assert DOCUMENT not in refused.message and OTHER not in refused.message
+
+
+def test_a_mapped_document_without_a_label_is_refused(tmp_path: Path) -> None:
+    refused = _refusal(_two_item_bundle(tmp_path, lambda value: value["designations"].pop()))
+    assert refused.reason == "request_designations_differ_from_map"
+    assert "1 of 2" in refused.message
+
+
+def test_labels_swapped_between_two_documents_are_refused(tmp_path: Path) -> None:
+    def swap(value: dict[str, Any]) -> None:
+        first, second = value["designations"]
+        first["designation"], second["designation"] = second["designation"], first["designation"]
+    refused = _refusal(_two_item_bundle(tmp_path, swap))
+    assert refused.reason == "request_designations_differ_from_map"
+    assert "2 of 2" in refused.message
+
+
+def test_a_request_that_repeats_each_documents_designation_is_accepted(tmp_path: Path) -> None:
+    loaded = promote_cli.load_bundle(_two_item_bundle(tmp_path), require_expected=True)
+    assert {d.document_id: d.designation for d in loaded.request.reviewed_designations} == DESIGNATIONS
+
+
+def test_the_order_of_a_requests_designations_is_not_a_difference(tmp_path: Path) -> None:
+    promote_cli.load_bundle(
+        _two_item_bundle(tmp_path, lambda value: value["designations"].reverse()),
+        require_expected=True,
+    )
+
+
+def test_a_drifted_label_refuses_plan_and_promote_before_any_runner_is_built(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], stores: list[bool],
+) -> None:
+    for command, expected in (("plan", False), ("promote", True)):
+        runner = FakeRunner()
+        bundle = _bundle(
+            tmp_path, LABEL_DRIFT["a label that names another norm"], expected=expected, name=command,
+        )
+        assert _run(runner, command, bundle, stores) == promote_cli.EXIT_REFUSED
+        err = capsys.readouterr().err
+        assert f"{command}: REFUSED [request_designations_differ_from_map]" in err
+        assert FAKE_LABEL not in err and runner.calls == [] and stores == []
+
+
+def test_plan_prints_the_designation_of_every_mapped_document_next_to_the_spans(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], stores: list[bool],
+) -> None:
+    runner = FakeRunner()
+    bundle = _two_item_bundle(tmp_path)
+    request = json.loads((bundle / "request.json").read_text(encoding="utf-8"))
+    request.pop("expected_set_sha256"), request.pop("expected_catalogue_sha256")
+    request["designations"].reverse()  # the printed order is the documents', not the request's
+    (bundle / "request.json").write_text(json.dumps(request, ensure_ascii=False), encoding="utf-8")
+    assert _run(runner, "plan", bundle, stores) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert [line for line in lines if line.startswith("designation: ")] == [
+        f'designation: {DOCUMENT} "СП 99.1"', f'designation: {OTHER} "СП 99.2"',
+    ]
+    # They follow the item lines, so the reviewer reads spans and labels together.
+    assert max(i for i, line in enumerate(lines) if line.startswith("item: ")) < lines.index(
+        f'designation: {DOCUMENT} "СП 99.1"')
+
+
+def test_a_label_with_a_line_break_is_printed_escaped_on_one_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], stores: list[bool],
+) -> None:
+    # The label is the reviewed map's own (the binding proved it), but it is still text from a
+    # file: it must not be able to start a line of the report that the reviewer reads.
+    label = "СП 99.1\nverdict: matched"
+    target = _map_target(DOCUMENT, 0, 1) | {"designation": label}
+    mapping = canonical_json_bytes(_reviewed_map(items=[{"id": "C01", "targets": [target]}]))
+    bundle = _bundle(
+        tmp_path, _set("designations", 0, "designation", to=label), expected=False,
+        map_bytes=mapping,
+    )
+    assert _run(FakeRunner(), "plan", bundle, stores) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert 'designation: ' + DOCUMENT + ' "СП 99.1\\nverdict: matched"' in lines
+    assert [line for line in lines if line.startswith("verdict:")] == ["verdict: not_compared"]
+
+
+# `norms_snapshot_id`: the library compares it with the request's snapshot only after a database
+# read; the tool refuses before any runner exists.
+
+def test_a_requests_snapshot_that_is_not_the_maps_is_refused(tmp_path: Path) -> None:
+    other = "ns_01M59N8QNBVN91ACA2HCE6VE75"
+    refused = _refusal(_bundle(tmp_path, _set("snapshot_id", to=other)))
+    assert refused.reason == "request_snapshot_differs_from_map"
+    assert other not in refused.message and SNAPSHOT not in refused.message
+
+
+def test_a_snapshot_with_a_trailing_newline_is_not_the_maps_snapshot(tmp_path: Path) -> None:
+    refused = _refusal(_bundle(tmp_path, _set("snapshot_id", to=SNAPSHOT + "\n")))
+    assert refused.reason == "request_snapshot_differs_from_map"
+
+
+def test_a_snapshot_mismatch_refuses_plan_and_promote_before_any_runner_is_built(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], stores: list[bool],
+) -> None:
+    for command, expected in (("plan", False), ("promote", True)):
+        runner = FakeRunner()
+        bundle = _bundle(
+            tmp_path, _set("snapshot_id", to="ns_01M59N8QNBVN91ACA2HCE6VE75"),
+            expected=expected, name=command,
+        )
+        assert _run(runner, command, bundle, stores) == promote_cli.EXIT_REFUSED
+        assert f"{command}: REFUSED [request_snapshot_differs_from_map]" in capsys.readouterr().err
+        assert runner.calls == [] and stores == []
+
+
+def test_the_module_says_what_the_synthetic_flag_is_and_is_not() -> None:
+    doc = " ".join(promote_cli.__doc__.split())
+    assert "a guard against accidents, not a control against forgery" in doc
+    assert "request_designations_differ_from_map" in doc and "request_snapshot_differs_from_map" in doc
 
 
 # --- no identity with a line break, whatever the shared parser accepts -------------------------
