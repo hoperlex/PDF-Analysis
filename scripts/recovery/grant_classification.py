@@ -677,14 +677,14 @@ def main(argv: list[str] | None = None) -> int:
     if arguments.kind:
         sys.stdout.write(render_sql(arguments.kind))
         return 0
-    path = Path(arguments.verify_script or arguments.write_script)
-    original = path.read_text(encoding="utf-8")
+    target = Path(arguments.verify_script or arguments.write_script)
+    original = target.read_text(encoding="utf-8")
     if arguments.verify_script:
         drift = script_drift(original)
         for line in drift:
-            print(f"{path}: {line}", file=sys.stderr)
+            print(f"{target}: {line}", file=sys.stderr)
         return 1 if drift else 0
-    path.write_text(write_blocks(original), encoding="utf-8")
+    target.write_text(write_blocks(original), encoding="utf-8")
     return 0
 
 
