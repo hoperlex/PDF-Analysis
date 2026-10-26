@@ -37,6 +37,7 @@ from auditmanager.api.routers import build_router
 from auditmanager.api.routers.idempotency import IDEMPOTENCY_HEADER
 from auditmanager.api.security import API_TOKEN_VARIABLE, build_signer
 from auditmanager.bootstrap.adapters import CredentialAdapter, ExecutionAdapter, RunAdapter
+from auditmanager.analysis.public import windowed_budget_characters
 from auditmanager.documents.public import DocumentRepository
 from auditmanager.runs import RunRepository
 from auditmanager.shared.errors import ErrorCode
@@ -44,6 +45,9 @@ from auditmanager.shared.identity import DocumentUid, RunId, VersionUid
 
 SECRET = "w55b-budget-http-token"
 BUDGET = 50_000
+#: What a run takes (`SECTION-CHUNKED-ANALYSIS-01`): ``input_budget_characters`` is the budget of one model
+#: call and a section run above it is analysed in whole-page windows, ``MAX_ANALYSIS_WINDOWS`` of them.
+LIMIT = windowed_budget_characters(BUDGET)
 
 
 @pytest.fixture(autouse=True)
@@ -135,18 +139,24 @@ def _terminal_source(session: Session, seeded: Any, version_uid: str) -> str:
 
 @pytest.fixture
 def world(sessions: sessionmaker[Session], blob_store: Any, helpers: Any) -> Any:
-    """Committed: a document, a version with no count, and versions at, over and under the budget."""
+    """Committed: a document, a version with no count, and versions at, over and under the limit.
+
+    ``windowed`` is above one call and within the windows: accepted since `SECTION-CHUNKED-ANALYSIS-01`.
+    """
     with sessions() as session:
         seeded = helpers.seed_version(session, blob_store)
-        over = _counted_version(session, seeded, BUDGET + 1)
-        at = _counted_version(session, seeded, BUDGET)
+        over = _counted_version(session, seeded, LIMIT + 1)
+        at = _counted_version(session, seeded, LIMIT)
+        windowed = _counted_version(session, seeded, BUDGET + 1)
         source_over = _terminal_source(session, seeded, over)
         source_at = _terminal_source(session, seeded, at)
+        source_windowed = _terminal_source(session, seeded, windowed)
         session.commit()
     return type(
         "World", (), {
             "seeded": seeded, "null": seeded.version_uid, "over": over, "at": at,
-            "source_over": source_over, "source_at": source_at,
+            "windowed": windowed, "source_over": source_over, "source_at": source_at,
+            "source_windowed": source_windowed,
         },
     )
 
@@ -238,7 +248,7 @@ class TestStartRun:
         key = _key()
         before = _runs_of(sessions, world.over)  # the fixture's own terminal source run
         answer = _start(client, world.over, key)
-        _assert_the_envelope(answer, character_count=BUDGET + 1, budget=BUDGET)
+        _assert_the_envelope(answer, character_count=LIMIT + 1, budget=LIMIT)
         assert _runs_of(sessions, world.over) == before
         assert _commands_with_key(sessions, key) == 0
         assert carrier.submitted == []
@@ -246,6 +256,12 @@ class TestStartRun:
     def test_a_version_exactly_at_the_budget_is_accepted(self, sessions, world) -> None:
         client, carrier = _client(sessions, world, BUDGET)
         answer = _start(client, world.at, _key())
+        assert answer.status_code == 202, answer.content
+        assert answer.json()["state"] == "queued" and len(carrier.submitted) == 1
+
+    def test_a_version_above_one_call_and_within_the_windows_is_accepted(self, sessions, world) -> None:
+        client, carrier = _client(sessions, world, BUDGET)
+        answer = _start(client, world.windowed, _key())
         assert answer.status_code == 202, answer.content
         assert answer.json()["state"] == "queued" and len(carrier.submitted) == 1
 
@@ -259,7 +275,7 @@ class TestStartRun:
         key = _key()
         before = _runs_of(sessions, world.over)
         strict, _ = _client(sessions, world, BUDGET)
-        _assert_the_envelope(_start(strict, world.over, key), character_count=BUDGET + 1, budget=BUDGET)
+        _assert_the_envelope(_start(strict, world.over, key), character_count=LIMIT + 1, budget=LIMIT)
 
         raised, carrier = _client(sessions, world, BUDGET + 1)
         accepted = _start(raised, world.over, key)
@@ -281,7 +297,7 @@ class TestReauditRun:
         key = _key()
         before = _runs_of(sessions, world.over)
         answer = _reaudit(client, world.source_over, key)
-        _assert_the_envelope(answer, character_count=BUDGET + 1, budget=BUDGET)
+        _assert_the_envelope(answer, character_count=LIMIT + 1, budget=LIMIT)
         assert _runs_of(sessions, world.over) == before
         assert _commands_with_key(sessions, key) == 0
         assert carrier.submitted == []
@@ -292,13 +308,19 @@ class TestReauditRun:
         assert answer.status_code == 202, answer.content
         assert len(carrier.submitted) == 1
 
+    def test_a_source_above_one_call_and_within_the_windows_is_accepted(self, sessions, world) -> None:
+        client, carrier = _client(sessions, world, BUDGET)
+        answer = _reaudit(client, world.source_windowed, _key())
+        assert answer.status_code == 202, answer.content
+        assert len(carrier.submitted) == 1
+
     def test_the_same_key_after_the_operator_raises_the_ceiling_is_a_fresh_re_audit(
         self, sessions, world
     ) -> None:
         key = _key()
         strict, _ = _client(sessions, world, BUDGET)
         _assert_the_envelope(
-            _reaudit(strict, world.source_over, key), character_count=BUDGET + 1, budget=BUDGET
+            _reaudit(strict, world.source_over, key), character_count=LIMIT + 1, budget=LIMIT
         )
         raised, carrier = _client(sessions, world, BUDGET + 1)
         accepted = _reaudit(raised, world.source_over, key)
