@@ -27,6 +27,15 @@ and answered" for the path that works today, otherwise the instrument, not the v
 Every fact asserted below is a measured fact (the report ``docs/program/PROD-11A-V3-TEXT-LAYER-PROBE-01.md``
 carries the table). A later change to the v3 path that alters one of them turns this module red.
 
+After ``PROD-11C-RECORDED-COST-01`` (`D-225` piece 2)
+-----------------------------------------------------
+The served recorded composition no longer refuses every v3 Run on cost: the composition root hands
+the AR v3 beta Runs of a recorded process a call binding that says the replay is unmetered, and the
+binding now comes **from the stock composition** (``_build_provider``), not from a hand-built
+``EnvironmentProviders``. Two controls keep the cost check measured: a recorded replay whose call is
+*not* marked (the old shape) and a **live-mode** call whose reply carries no cost amount, built by the
+stock live composition, are both still refused after the provider call.
+
 After ``0033_ar_v3_cite_stage_id`` (`PROD-11B-V3-STAGE-ID-MIGRATION-01`, `D-225`)
 ------------------------------------------------------------------------------
 The module first measured UNSAFE: at head ``0032`` the database refused the CITE ``stage_result`` row
@@ -34,14 +43,14 @@ of every v3 Run. The migration admits ``ar_v3_citation_review`` and the facts th
 refusal flipped; the ones that did not are kept as they were. Flipped: the schema admits the CITE stage
 (fact 1); an unmetered call publishes every Run with a succeeded CITE row (facts 2 and 4); the outcome
 of the twelve Runs is decided by the cost seam alone (fact 5); the readers answer ``ready`` on the
-published group (fact 7). Kept: the served recorded composition still refuses every Run on cost
-(fact 3, piece 2 of `D-225`), the text layer is saved whatever the terminal (fact 6) and the v1
-control (fact 8). The what-if group (the CHECK widened by ``ALTER`` in the throw-away database) is gone:
+published group (fact 7). Kept: the text layer is saved whatever the terminal (fact 6) and the v1
+control (fact 8). Fact 3 was rewritten by ``PROD-11C`` (see above). The what-if group (the CHECK widened by ``ALTER`` in the throw-away database) is gone:
 the unmetered group on the migrated schema is what it measured, now through the real migration.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import os
@@ -60,17 +69,18 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.analysis.profiles.ar_v3.scope_partition import scope_membership
 from auditmanager.analysis.public import resolve_beta_v3_profile
-from auditmanager.analysis.text import CallBinding, RecordedAdapter
+from auditmanager.analysis.text import ModelResponse, ProviderMode, RecordedAdapter
 from auditmanager.analysis.text.recorded import recording_document
 from auditmanager.bootstrap import adapters
+from auditmanager.bootstrap.composition import _build_provider
 from auditmanager.bootstrap.providers import EnvironmentProviders
+from auditmanager.bootstrap.settings import load as load_settings
 from auditmanager.documents import DocumentRepository, ManifestEntry
 from auditmanager.documents.models import MANIFEST_ROLE_SOURCE_DOCUMENT
 from auditmanager.norms.public import SetIdentity
 from auditmanager.optimisation.project_match import _newest_published
 from auditmanager.optimisation.section_specification import _read_source
 from auditmanager.runs import RunRepository, run_to_terminal, start_audit_run
-from auditmanager.runs.provider import ProviderBinding
 from auditmanager.runs.v3_group import (
     ReviewedScope,
     SCOPES,
@@ -454,6 +464,8 @@ class RunReading:
     saved_page_text_sha256: str | None
     saved_page_text_pages: int | None
     saved_page_text_error: str | None
+    #: ``(provider_mode, cost_basis, cost_micros, status)`` of every ``text_analysis`` call row.
+    model_calls: list[tuple[str, str, int | None, str]]
 
 
 @dataclass(slots=True)
@@ -504,6 +516,13 @@ def _reading(session: Session, store: Any, reader: Any, version: Source, run_id:
          WHERE run_id = :run AND state = 'bound' ORDER BY stage_id, artifact_role
     """), {"run": run_id}).all():
         bound.setdefault(stage_id, []).append(role)
+    calls = [
+        (str(mode), str(basis), None if micros is None else int(micros), str(status))
+        for mode, basis, micros, status in session.execute(text("""
+            SELECT provider_mode, cost_basis, cost_micros, status FROM model_call
+             WHERE run_id = :run AND stage_id = 'text_analysis' ORDER BY model_call_id
+        """), {"run": run_id}).all()
+    ]
     answers, sha, pages, failure = False, None, None, None
     try:
         saved = reader.saved_page_text(session, run_id=run_id, version_uid=version.version_uid,
@@ -519,7 +538,7 @@ def _reading(session: Session, store: Any, reader: Any, version: Source, run_id:
         bound_artifact_roles=bound,
         text_layer_reference_sha256=(references[0].get("sha256") if references else None),
         saved_page_text_answers=answers, saved_page_text_sha256=sha,
-        saved_page_text_pages=pages, saved_page_text_error=failure,
+        saved_page_text_pages=pages, saved_page_text_error=failure, model_calls=calls,
     )
 
 
@@ -546,7 +565,11 @@ def _version_reading(session: Session, reader: Any, source: Source, label: str) 
 # --- the drive ---------------------------------------------------------------------------
 
 SERVED_RECORDED = "served recorded composition"
-UNMETERED_RECORDED = "recorded replay, call marked unmetered"
+#: Control: the recorded replay whose call is NOT marked unmetered, the shape the composition had
+#: before ``PROD-11C`` (``EnvironmentProviders(adapter, config, call=None)``).
+METERED_RECORDED = "control: recorded replay, call not marked unmetered"
+#: Control: a live-mode call (stock live composition, a stood-in LIVE adapter) whose reply has no cost.
+LIVE_UNCOSTED = "control: live call, reply without a cost amount"
 CITE_STAGE = "ar_v3_citation_review"
 CITE_ROLE = "analysis.v3_beta_review"
 STAGE_CHECK = "ck_stage_result_stage_id"
@@ -558,13 +581,48 @@ REGISTRY_STAGES = (
 )
 
 
-def _unmetered(adapter: Any, config: Any) -> Any:
-    """A binding like the ``database`` source's ``billing = not_metered``: nothing is charged."""
+#: What `bootstrap/settings.load` and `_build_provider` read; nothing here is connected to.
+STOCK_ENVIRONMENT = {
+    "DATABASE_URL": "postgresql+psycopg://u:p@127.0.0.1:9/d", "S3_ENDPOINT_URL": "http://127.0.0.1:9",
+    "S3_REGION": "r", "S3_ACCESS_KEY_ID": "a", "S3_SECRET_ACCESS_KEY": "b", "S3_BUCKET": "c",
+    "AUDITMANAGER_API_TOKEN": "token",
+}
+#: Not a credential: the stock live composition refuses to be built without some key, and the stood-in
+#: adapter below replaces the real one before any request exists.
+PLACEHOLDER_KEY = "placeholder-not-a-credential"
+LIVE_ENVIRONMENT = {**STOCK_ENVIRONMENT, "AUDITMANAGER_PROVIDER_MODE": "live",
+                    "ANTHROPIC_API_KEY": PLACEHOLDER_KEY}
 
-    def resolve(session: Session, run: Any, context: Any) -> ProviderBinding:
-        return ProviderBinding(adapter=adapter, config=config, call=CallBinding(unmetered=True))
+
+def _stock_composition(environ: dict[str, str]) -> tuple[Any, Any]:
+    """The ``(config, ProviderSource)`` the composition root builds for these settings."""
+    _adapter, config, _profile, _bundle, source = _build_provider(load_settings(environ), environ)
+    return config, source
+
+
+def _with_adapter(source: Any, adapter: Any, config: Any) -> Any:
+    """The stock source's binding with this adapter and configuration; its ``call`` is untouched."""
+
+    def resolve(session: Session, run: Any, context: Any) -> Any:
+        return dataclasses.replace(source.resolve(session, run, context), adapter=adapter, config=config)
 
     return resolve
+
+
+class _LiveWithoutCost:
+    """A stood-in adapter of the ``live`` mode: it answers with usage and the pinned model name and
+    states **no cost amount**, the reply a direct provider call gives. It makes no request anywhere."""
+
+    provider_mode = ProviderMode.LIVE
+
+    def __init__(self, model: str, output_text: str) -> None:
+        self._model = model
+        self._reply = output_text
+        self.requests: list[str] = []
+
+    def complete(self, request: Any) -> ModelResponse:
+        self.requests.append(request.request_sha256)
+        return ModelResponse(self._reply, "end_turn", 100, 10, 1, None, self._model)
 
 
 def _stage_check(session: Session) -> str:
@@ -589,17 +647,31 @@ def _drive_group(
     factory: Any, store: Any, config: Any, recordings: Path, source: Source, pack: TrustedPack,
     reader: Any, *, binding: str, key: str,
 ) -> GroupMeasurement:
+    provider_mode = "live" if binding == LIVE_UNCOSTED else "recorded"
     with factory() as session, session.begin():
         group = start_ar_v3_group(
             session, version_uid=source.version_uid, idempotency_key=key,
-            provider_mode="recorded", pack=pack, input_budget_characters=1_000_000,
+            provider_mode=provider_mode, pack=pack, input_budget_characters=1_000_000,
         ).group
     registry = TrustedPackRegistry("ar-v3-beta-reviewed-pack-registry/1", (pack,))
-    adapter = _RecordOnFirstSight(recordings, V3_REPLY)
-    # The served composition for ``provider_mode == "recorded"`` hands every run
-    # ``EnvironmentProviders(RecordedAdapter(), config, call=None)`` (bootstrap/composition.py).
-    providers = (EnvironmentProviders(adapter, config, None).resolve
-                 if binding == SERVED_RECORDED else _unmetered(adapter, config))
+    adapter: Any
+    if binding == LIVE_UNCOSTED:
+        # The stock *live* composition: its call binding is what decides; the adapter is stood in for
+        # and the configuration is the stock live one (mode, pinned model).
+        config, stock = _stock_composition(LIVE_ENVIRONMENT)
+        adapter = _LiveWithoutCost(config.model_id, V3_REPLY)
+        providers = _with_adapter(stock, adapter, config)
+    elif binding == SERVED_RECORDED:
+        # The stock *recorded* composition (``_build_provider``): its call binding is what is
+        # measured. Only the adapter is swapped, for the replay that writes the reply on first sight,
+        # and the configuration is the harness's.
+        _stock_config, stock = _stock_composition(STOCK_ENVIRONMENT)
+        adapter = _RecordOnFirstSight(recordings, V3_REPLY)
+        providers = _with_adapter(stock, adapter, config)
+    else:
+        # The pre-``PROD-11C`` shape, kept as a control: the replay is not marked unmetered.
+        adapter = _RecordOnFirstSight(recordings, V3_REPLY)
+        providers = EnvironmentProviders(adapter, config, None).resolve
     errors: dict[str, str | None] = {}
     for member in group.members:
         try:
@@ -648,8 +720,10 @@ def _drive(probe_database: str, store: Any, config: Any, recordings: Path) -> Me
             """), {"id": actor, "login": actor.lower(), "salt": "0" * 32, "hash": "0" * 64})
             served = _publish_source(session, store, title="AR v3 served recorded",
                                      register_blob=True, actor=actor)
-            unmetered = _publish_source(session, store, title="AR v3 unmetered recorded",
-                                        register_blob=False, actor=actor)
+            metered = _publish_source(session, store, title="AR v3 recorded, not marked",
+                                      register_blob=False, actor=actor)
+            live = _publish_source(session, store, title="AR v3 live, no cost",
+                                   register_blob=False, actor=actor)
             control = _publish_source(session, store, title="AR v1 control",
                                       register_blob=False, actor=actor)
 
@@ -674,9 +748,12 @@ def _drive(probe_database: str, store: Any, config: Any, recordings: Path) -> Me
         out.groups[SERVED_RECORDED] = _drive_group(
             factory, store, config, recordings, served, pack, reader,
             binding=SERVED_RECORDED, key="prod11a-probe-served")
-        out.groups[UNMETERED_RECORDED] = _drive_group(
-            factory, store, config, recordings, unmetered, pack, reader,
-            binding=UNMETERED_RECORDED, key="prod11a-probe-unmetered")
+        out.groups[METERED_RECORDED] = _drive_group(
+            factory, store, config, recordings, metered, pack, reader,
+            binding=METERED_RECORDED, key="prod11a-probe-metered")
+        out.groups[LIVE_UNCOSTED] = _drive_group(
+            factory, store, config, recordings, live, pack, reader,
+            binding=LIVE_UNCOSTED, key="prod11a-probe-live")
         with factory() as session:
             out.stage_check = _stage_check(session)
         with factory() as session:
@@ -710,18 +787,22 @@ def measured(probe_database: str, blob_store: Any, provider_config: Any,
 
 # --- the measured facts ------------------------------------------------------------------
 
-BINDINGS = (SERVED_RECORDED, UNMETERED_RECORDED)
+BINDINGS = (SERVED_RECORDED, METERED_RECORDED, LIVE_UNCOSTED)
+#: The two controls: the cost check refuses them after the provider call.
+REFUSED_ON_COST = (METERED_RECORDED, LIVE_UNCOSTED)
 TEXT_LAYER_ROLE = "prepared.text_layer"
 DETERMINISTIC = {
     "source_preparation": "succeeded",
     "page_geometry_extraction": "succeeded",
     "document_context_build": "succeeded",
 }
-#: The stage rows a Run of each group leaves: the cost-refused group stops before CITE.
+#: The stage rows a Run of each group leaves: the cost-refused groups stop before CITE.
 EXPECTED_STAGES = {
-    SERVED_RECORDED: DETERMINISTIC,
-    UNMETERED_RECORDED: {**DETERMINISTIC, CITE_STAGE: "succeeded"},
+    SERVED_RECORDED: {**DETERMINISTIC, CITE_STAGE: "succeeded"},
+    METERED_RECORDED: DETERMINISTIC,
+    LIVE_UNCOSTED: DETERMINISTIC,
 }
+COST_REFUSAL = "no verifiable cost amount"
 
 
 def test_the_migrated_schema_admits_the_cite_stage(measured: Measurement) -> None:
@@ -735,41 +816,63 @@ def test_the_migrated_schema_admits_the_cite_stage(measured: Measurement) -> Non
 def test_every_provider_request_was_answered_and_the_stage_rows_are_those_the_cost_seam_allows(
     measured: Measurement, binding: str
 ) -> None:
-    """Fact 2. The six Runs of each group reached the provider seam once each (replayed reply), so
-    nothing below is a failure to start, to read the text or to build the request. The deterministic
-    stages succeeded in every Run; the CITE row exists exactly where the cost seam let the Run reach it
-    (before ``0033`` the unmetered group had no CITE row: the database refused it)."""
+    """Fact 2. The six Runs of each group reached the provider seam once each, so nothing below is a
+    failure to start, to read the text or to build the request. The deterministic stages succeeded in
+    every Run; the CITE row exists exactly where the cost seam let the Run reach it. The refused groups
+    were answered first and refused afterwards: the cost check sits after the call."""
     group = measured.groups[binding]
     assert group.scopes == SCOPES
     assert group.recorded_requests == 6
     assert [run.stage_statuses for run in group.runs] == [EXPECTED_STAGES[binding]] * 6
 
 
-def test_the_served_recorded_composition_refuses_every_run_on_cost(measured: Measurement) -> None:
-    """Fact 3 (kept; piece 2 of `D-225`). ``EnvironmentProviders(RecordedAdapter, config, call=None)``:
-    a replayed reply carries no cost and the call is not marked unmetered, so ``_check_completed_cost``
-    refuses before CITE."""
+def test_the_served_recorded_composition_journals_every_replayed_call_as_unmetered(
+    measured: Measurement,
+) -> None:
+    """Fact 3, rewritten by ``PROD-11C`` (was: the served recorded composition refuses every Run on
+    cost, piece 2 of `D-225`). The binding the stock composition hands an AR v3 beta Run of a recorded
+    process marks the replay unmetered: each Run has exactly one call row, ``recorded``, cost basis
+    ``unmetered``, zero cost, and the Run is not refused on cost."""
     for run in measured.groups[SERVED_RECORDED].runs:
+        assert run.model_calls == [("recorded", "unmetered", 0, "succeeded")]
+        assert run.error is None
+
+
+@pytest.mark.parametrize("binding,mode", ((METERED_RECORDED, "recorded"), (LIVE_UNCOSTED, "live")))
+def test_a_call_without_a_cost_amount_that_is_not_marked_unmetered_is_still_refused_on_cost(
+    measured: Measurement, binding: str, mode: str
+) -> None:
+    """Fact 3b, the safety of ``PROD-11C`` (``R-29``, ADR-0011), kept from the old fact 3 and extended
+    to the live mode. A recorded replay that is NOT marked unmetered, and a **live-mode** call (the
+    stock live composition) whose reply states no cost, both end ``failed / analysis_input_invalid``
+    naming the missing amount, with no CITE row; the call row says the cost is unknown (basis
+    ``estimated``, no amount), never ``unmetered`` and never zero."""
+    for run in measured.groups[binding].runs:
         assert (run.state, run.terminal_reason) == ("failed", "analysis_input_invalid")
-        assert run.error is not None and "no verifiable cost amount" in run.error
+        assert run.error is not None and COST_REFUSAL in run.error
+        assert CITE_STAGE not in run.stage_statuses
+        assert run.model_calls == [(mode, "estimated", None, "succeeded")]
 
 
 def test_an_unmetered_call_publishes_every_run_with_a_succeeded_cite_row(measured: Measurement) -> None:
-    """Fact 4 (flipped by ``0033``). With the cost seam satisfied (an unmetered binding) every Run
-    writes its CITE ``stage_result`` row, binds the review artifact and reaches ``published``; before
-    ``0033`` every one failed ``internal_error`` on ``ck_stage_result_stage_id``."""
-    for run in measured.groups[UNMETERED_RECORDED].runs:
+    """Fact 4 (flipped by ``0033``, now on the stock composition). With the cost seam satisfied by the
+    composition root's own binding every Run writes its CITE ``stage_result`` row, binds the review
+    artifact and reaches ``published``; before ``0033`` every one failed ``internal_error`` on
+    ``ck_stage_result_stage_id``."""
+    for run in measured.groups[SERVED_RECORDED].runs:
         assert (run.state, run.terminal_reason, run.error) == ("published", None, None)
         assert run.stage_statuses[CITE_STAGE] == "succeeded"
         assert run.bound_artifact_roles[CITE_STAGE] == [CITE_ROLE]
 
 
-def test_the_outcome_of_the_twelve_runs_is_decided_by_the_cost_seam_alone(measured: Measurement) -> None:
-    """Fact 5 (flipped by ``0033``), the answer to the first question: on the schema at head a v3 Run
-    is ``published`` exactly when its call is not refused on cost; the stage row no longer decides."""
+def test_the_outcome_of_the_eighteen_runs_is_decided_by_the_cost_seam_alone(
+    measured: Measurement,
+) -> None:
+    """Fact 5 (flipped by ``0033``, extended by ``PROD-11C``): on the schema at head a v3 Run is
+    ``published`` exactly when its call is not refused on cost; the stage row no longer decides."""
     outcomes = [(run.state, run.terminal_reason) for binding in BINDINGS
                 for run in measured.groups[binding].runs]
-    assert outcomes == [("failed", "analysis_input_invalid")] * 6 + [("published", None)] * 6
+    assert outcomes == [("published", None)] * 6 + [("failed", "analysis_input_invalid")] * 12
 
 
 @pytest.mark.parametrize("binding", BINDINGS)
@@ -793,11 +896,14 @@ def group_page_count(measured: Measurement, binding: str) -> int:
     return measured.groups[binding].version.page_count
 
 
-def test_the_readers_find_no_published_run_of_the_cost_refused_group(measured: Measurement) -> None:
-    """Fact 7a (kept). Because no Run of the cost-refused group is published, ``_newest_published`` is
-    ``None`` and ``_read_source`` answers ``analysis_missing``, although the layer is saved (fact 6):
-    the state, not the layer, is what is missing."""
-    version = measured.groups[SERVED_RECORDED].version
+@pytest.mark.parametrize("binding", REFUSED_ON_COST)
+def test_the_readers_find_no_published_run_of_a_cost_refused_group(
+    measured: Measurement, binding: str
+) -> None:
+    """Fact 7a (kept, on the two controls). Because no Run of a cost-refused group is published,
+    ``_newest_published`` is ``None`` and ``_read_source`` answers ``analysis_missing``, although the
+    layer is saved (fact 6): the state, not the layer, is what is missing."""
+    version = measured.groups[binding].version
     assert version.newest_published is None
     assert version.source_state == "analysis_missing"
     assert version.source_run_id is None
@@ -805,11 +911,11 @@ def test_the_readers_find_no_published_run_of_the_cost_refused_group(measured: M
 
 
 def test_the_readers_answer_ready_on_the_published_group(measured: Measurement) -> None:
-    """Fact 7b (flipped by ``0033``; the content of the old what-if fact 9). On the published group the
+    """Fact 7b (flipped by ``0033``; now the stock composition's group). On the published group the
     newest published Run is one of the six, ``_read_source`` answers ``ready`` on it and the text layer
     it reads is the one that Run saved. Nothing else blocked in this setting."""
-    version = measured.groups[UNMETERED_RECORDED].version
-    published = {run.run_id: run for run in measured.groups[UNMETERED_RECORDED].runs}
+    version = measured.groups[SERVED_RECORDED].version
+    published = {run.run_id: run for run in measured.groups[SERVED_RECORDED].runs}
     assert version.newest_published in published
     assert version.source_run_id == version.newest_published
     assert version.source_state == "ready"
