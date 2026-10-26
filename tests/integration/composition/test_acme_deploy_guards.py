@@ -479,6 +479,92 @@ class TestAcmeSettingsWellFormed:
         assert "not usable" not in completed.stderr, completed.stderr
 
 
+# --- trusted-proxies-empty-with-name (D-229 item 4) -----------------------------------------------------------------
+
+
+class TestTrustedProxiesEmptyWithName:
+    """`ALPHA_TRUSTED_PROXY_CIDRS` names the peers the proxy believes about `X-Forwarded-For`, for a host whose
+    TLS is terminated by ANOTHER nginx in front. Once this stack terminates TLS itself there is no such nginx,
+    the client address arrives on the connection, and a peer left in the list can name its own bucket for the
+    guest throttle. The runbook said "remove it"; nothing refused it. Now the deploy does, before anything is
+    built."""
+
+    LIST = "172.20.0.1/32"
+
+    def _refused(self, tmp_path: Path, value: str) -> subprocess.CompletedProcess[str]:
+        script = _stage(tmp_path)
+        completed, log = _run(
+            script,
+            _env(tmp_path, _free_port(), **_acme_settings(), ALPHA_TRUSTED_PROXY_CIDRS=value),
+            tmp_path,
+        )
+        assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
+        assert not log.exists(), _calls(log)
+        return completed
+
+    def test_a_list_with_a_name_is_refused_before_docker_is_touched(self, tmp_path: Path) -> None:
+        completed = self._refused(tmp_path, self.LIST)
+        assert "ALPHA_TRUSTED_PROXY_CIDRS is set" in completed.stderr, completed.stderr
+        assert "ALPHA_CERT_NAME is set too" in completed.stderr, completed.stderr
+        assert "Nothing was built" in completed.stderr, completed.stderr
+        assert "DEPLOYMENT_RUNBOOK.md section 6" in completed.stderr, completed.stderr
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "172.20.0.1/32, 10.0.0.0/8",
+            "172.20.0.1/32 10.0.0.0/8",
+            '"172.20.0.1/32"',
+            "'172.20.0.1/32'",
+            "172.20.0.1",
+            "::1",
+        ],
+    )
+    def test_every_spelling_of_a_non_empty_list_is_refused(self, value: str, tmp_path: Path) -> None:
+        self._refused(tmp_path, value)
+
+    def test_the_refusal_names_what_the_list_would_have_trusted(self, tmp_path: Path) -> None:
+        completed = self._refused(tmp_path, "172.20.0.1/32, 10.0.0.0/8")
+        assert "172.20.0.1/32" in completed.stderr and "10.0.0.0/8" in completed.stderr, completed.stderr
+
+    @pytest.mark.parametrize("value", ["", ", ,", " \t "])
+    def test_a_value_with_no_entry_is_the_empty_list_and_is_not_refused(
+        self, value: str, tmp_path: Path, serving: int
+    ) -> None:
+        """`trusted-proxies.sh` reads a value of only separators as "trust nobody"; so does this guard."""
+        script = _stage(tmp_path)
+        completed, _ = _run(
+            script, _env(tmp_path, serving, **_acme_settings(), ALPHA_TRUSTED_PROXY_CIDRS=value), tmp_path
+        )
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+
+    def test_without_a_name_the_list_is_the_host_nginx_configuration_and_is_left_alone(
+        self, tmp_path: Path, serving: int
+    ) -> None:
+        """The control: the guard is gated on the name. A host still behind its own nginx keeps the list."""
+        script = _stage(tmp_path)
+        completed, _ = _run(
+            script, _env(tmp_path, serving, ALPHA_TRUSTED_PROXY_CIDRS=self.LIST), tmp_path
+        )
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        assert "ALPHA_CERT_NAME is set too" not in completed.stderr
+
+    def test_a_list_the_proxy_would_refuse_is_still_refused_with_a_name(self, tmp_path: Path) -> None:
+        """Two guards can speak about one value; either way the deploy stops before docker."""
+        self._refused(tmp_path, "0.0.0.0/0")
+
+    def test_that_guard_is_shown_able_to_fail(self, tmp_path: Path) -> None:
+        cut = _mutant(tmp_path, "trusted-proxies-empty-with-name")
+        script = _stage(tmp_path, script=cut)
+        completed, log = _run(
+            script,
+            _env(tmp_path, _free_port(), **_acme_settings(), ALPHA_TRUSTED_PROXY_CIDRS=self.LIST),
+            tmp_path,
+        )
+        assert "ALPHA_CERT_NAME is set too" not in completed.stderr, completed.stderr
+        assert _compose_calls(log, "build") != [], "the mutant did not reach the build, so this case was not testing that guard"
+
+
 # --- acme-client-pinned ---------------------------------------------------------------------------------------------
 
 

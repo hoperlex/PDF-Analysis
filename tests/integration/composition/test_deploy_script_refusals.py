@@ -1225,6 +1225,11 @@ DEPLOY_GATE_GUARDS = (
 )
 
 
+#: The guard `JUDGE-FIXES-F2-01` added for `D-229` item 4: a certificate name AND a trust list. Its cases are in
+#: `test_acme_deploy_guards.py`, class `TestTrustedProxiesEmptyWithName`.
+JUDGE_FIX_GUARDS = ("trusted-proxies-empty-with-name",)
+
+
 def test_every_guard_in_the_script_has_a_case_here() -> None:
     """A guard added without a test is caught here rather than in a deployment.
 
@@ -1242,11 +1247,13 @@ def test_every_guard_in_the_script_has_a_case_here() -> None:
     `test_acme_deploy_guards.py` beside this file and are named in the set below, and 30 since
     `PROD-02-03-DEPLOY-GATES-01` added `stand-copy-fresh` (cases in `test_stand_copy_fresh.py`),
     `default-credential-gate` and `listeners-library-present` (cases in
-    `test_default_credential_gate.py`), named in the set below as well.
+    `test_default_credential_gate.py`), named in the set below as well, and 31 since
+    `JUDGE-FIXES-F2-01` added `trusted-proxies-empty-with-name` (`D-229` item 4; cases in
+    `test_acme_deploy_guards.py`).
     """
     markers = re.findall(r"^# >>> guard: ([a-z-]+)$", DEPLOY.read_text(encoding="utf-8"), re.M)
     assert len(markers) == len(set(markers)), markers
-    assert len(markers) == 30, markers
+    assert len(markers) == 31, markers
     covered = set(BEFORE_DOCKER) | set(STAND_GUARDS) | {
         "port-not-foreign",
         "images-built",
@@ -1264,6 +1271,8 @@ def test_every_guard_in_the_script_has_a_case_here() -> None:
         *ACME_GUARDS,
         # `PROD-02-03-DEPLOY-GATES-01`: cases in the two files beside this one.
         *DEPLOY_GATE_GUARDS,
+        # `JUDGE-FIXES-F2-01`: its cases are in `test_acme_deploy_guards.py`, checked below.
+        *JUDGE_FIX_GUARDS,
     }
     assert set(markers) == covered, set(markers) ^ covered
     identity_suite = ROOT / "tests/integration/composition/test_deploy_image_identity.py"
@@ -1277,7 +1286,7 @@ def test_every_guard_in_the_script_has_a_case_here() -> None:
     for guard in DEPLOY_GATE_GUARDS:
         assert guard in gate_suites, f"{guard} is excused here against files that no longer name it"
     acme_suite = (ROOT / "tests/integration/composition/test_acme_deploy_guards.py").read_text(encoding="utf-8")
-    for guard in ACME_GUARDS:
+    for guard in (*ACME_GUARDS, *JUDGE_FIX_GUARDS):
         assert guard in acme_suite, f"{guard} is excused here against a file that no longer names it"
 
 

@@ -466,6 +466,41 @@ else
 fi
 # <<< guard: acme-settings-well-formed
 
+# >>> guard: trusted-proxies-empty-with-name
+# `D-229` item 4. `ALPHA_TRUSTED_PROXY_CIDRS` is for a host whose TLS is terminated by ANOTHER nginx in front of
+# this stack (`REAL-IP-EDGE-01`): the proxy then believes the `X-Forwarded-For` of the peers in the list and of
+# nobody else. Once `ALPHA_CERT_NAME` is set THERE IS NO SUCH NGINX -- this stack terminates TLS itself, the
+# client address arrives on the connection -- and a peer left in the list (the compose network's gateway, which
+# every SSH-tunnelled operator and every process on the host also reaches the plain listener through) can write
+# its own address into the guest throttle's bucket. The runbook said "remove it" (section 6, step 5); this is
+# the line that makes the omission a sentence here instead of a setting nobody notices.
+#
+# REFUSED, not warned: the setting has no effect that the operator wants once the name is set (the nginx it was
+# for is the one the cutover stopped), so no live configuration needs it, and it is a one-line edit to remove.
+# It costs the cutover window a minute if forgotten and nothing has been built or stopped by this script.
+#
+# "Non-empty" means what `proxy/trusted-proxies.sh` means by it: at least one entry once commas, tabs and
+# line breaks are read as spaces. A value of separators alone trusts nobody and is not refused. Read again
+# here and not from `TRUSTED_PROXIES` above, so deleting either guard leaves the other whole.
+TRUSTED_WITH_NAME="$(configured ALPHA_TRUSTED_PROXY_CIDRS)"
+if [ -n "$CERT_NAME" ] && [ -n "$TRUSTED_WITH_NAME" ]; then
+    TRUSTED_ENTRIES=""
+    set -f
+    for trusted_entry in $(printf '%s' "$TRUSTED_WITH_NAME" | tr ',\t\r\n' '    '); do
+        TRUSTED_ENTRIES="${TRUSTED_ENTRIES:+$TRUSTED_ENTRIES }$trusted_entry"
+    done
+    set +f
+    if [ -n "$TRUSTED_ENTRIES" ]; then
+        refuse "ALPHA_TRUSTED_PROXY_CIDRS is set in $ENV_FILE and ALPHA_CERT_NAME is set too." \
+               "  trusted peers: $TRUSTED_ENTRIES" \
+               "That list is for a host whose TLS is terminated by another nginx in front of this stack. With a" \
+               "certificate name this stack terminates TLS itself, so a peer in the list could name its own" \
+               "address for the guest throttle. Remove ALPHA_TRUSTED_PROXY_CIDRS from $ENV_FILE" \
+               "(DEPLOYMENT_RUNBOOK.md section 6, step 5), or clear ALPHA_CERT_NAME. Nothing was built."
+    fi
+fi
+# <<< guard: trusted-proxies-empty-with-name
+
 # >>> guard: acme-client-pinned
 # The client is installed by exact package version (`infra/acme/client.pin`), and the lane that wrote that
 # file had no network to resolve one, so it ships the word UNRESOLVED. Building from it would fail late and
