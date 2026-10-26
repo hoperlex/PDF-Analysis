@@ -47,6 +47,10 @@ READINESS = ROOT / "infra/deploy/readiness.sh"
 PG_USER = "the_configured_user"
 PG_DB = "the_configured_database"
 PG_PASSWORD = "an-edited-postgres-password"
+#: `PROD-04`: the application role api and worker connect as, and its (second) password.
+APP_ROLE = "the_application_role"
+APP_PASSWORD = "an-edited-application-db-password-0001"
+APP_URL = f"postgresql+psycopg://{APP_ROLE}:{APP_PASSWORD}@postgres:5432/{PG_DB}"
 MINIO_USER = "an-edited-minio-root"
 MINIO_PASSWORD = "an-edited-minio-password"
 
@@ -72,10 +76,10 @@ def _alpha_env(
         "S3_REGION=us-east-1",
         f"S3_ACCESS_KEY_ID={MINIO_USER}",
         f"S3_SECRET_ACCESS_KEY={MINIO_PASSWORD}",
-        (
-            "DATABASE_URL=postgresql+psycopg://"
-            f"{PG_USER}:{PG_PASSWORD}@postgres:5432/{PG_DB}"
-        ),
+        f"ALPHA_APP_DB_USER={APP_ROLE}",
+        f"ALPHA_APP_DB_PASSWORD={APP_PASSWORD}",
+        f"DATABASE_URL={APP_URL}",
+        f"MIGRATOR_DATABASE_URL=postgresql+psycopg://{PG_USER}:{PG_PASSWORD}@postgres:5432/{PG_DB}",
         "AUDITMANAGER_API_TOKEN=an-edited-token-that-authorizes-something",
         f"AUDITMANAGER_PROVIDER_MODE={provider_mode}",
     ]
@@ -115,6 +119,23 @@ if argv[:1] == ["compose"]:
     if "auditmanager.access.check" in joined:
         sys.stdout.write(os.environ.get("STUB_ACCESS_OUTPUT", "access-check OK no default credentials\n"))
         sys.exit(int(os.environ.get("STUB_ACCESS_STATUS", "0")))
+    if " exec -T api " in joined or " exec -T worker " in joined:
+        # `PROD-04`: `db-roles` asks the running containers which user their DATABASE_URL names. Clean by default.
+        name = "API" if " exec -T api " in joined else "WORKER"
+        if os.environ.get("STUB_%s_DOWN" % name):
+            sys.exit(1)
+        sys.stdout.write(os.environ.get("STUB_%s_URL" % name, os.environ["STUB_APP_URL"]))
+        sys.exit(0)
+    if " exec -T postgres psql " in joined:
+        if "from pg_roles" in joined:
+            # the `ADR-0021` row 7 query, given in argv
+            sys.stdout.write(os.environ.get("STUB_ROLE_FACTS", "f|f|f|t") + "\n")
+            sys.exit(int(os.environ.get("STUB_ROLE_STATUS", "0")))
+        # `apply-grants.sh --check`: its SQL arrives on stdin
+        sys.stdin.read()
+        sys.stdout.write(os.environ.get("STUB_GRANTS_CHECK_OUT", ""))
+        sys.stderr.write(os.environ.get("STUB_GRANTS_CHECK_ERR", ""))
+        sys.exit(int(os.environ.get("STUB_GRANTS_CHECK_STATUS", "0")))
     if "check-served.sh" in joined:
         # `PROD-01-TLS-ACME-01`: the one question `tls` asks of the acme image. The real script has its
         # own suite (`test_acme_client.py`); here it is a scripted answer, so what is tested is how
@@ -143,6 +164,7 @@ def _run(
         docker.chmod(0o755)
         environment["PATH"] = f"{binary}{os.pathsep}{environment['PATH']}"
         environment["STUB_LOG"] = str(log)
+        environment["STUB_APP_URL"] = APP_URL
     if env:
         environment.update(env)
     completed = subprocess.run(
@@ -629,7 +651,9 @@ class TestTheSummaryAndExitStatus:
         # than hidden.
         assert "readiness OK      tls " in completed.stdout, completed.stdout
         assert "readiness OK      plain-http " in completed.stdout, completed.stdout
+        assert "readiness OK      db-roles " in completed.stdout, completed.stdout
         assert "2 finding(s)" in completed.stdout, completed.stdout
+        assert "8 checks" in completed.stdout, completed.stdout
         assert completed.returncode == 1
 
     def test_missing_env_file_makes_every_file_dependent_check_unknown_not_ok(
@@ -764,6 +788,101 @@ class TestExecutorSource:
         assert "executor-source" not in completed.stdout
 
 
+class TestDbRoles:
+    """`PROD-04`. Which role api and worker connect as, and whether it is the restricted one. The docker is the
+    stub above: it answers what the running containers' `DATABASE_URL` names, what `ADR-0021` row 7's query returns
+    and what `apply-grants.sh --check` finds. Every case has a clean control; the check is shown able to fail by
+    deleting its block."""
+
+    @staticmethod
+    def _out(tmp_path: Path, stub: dict[str, str] | None = None, **alpha: object) -> tuple[str, subprocess.CompletedProcess[str]]:
+        env_file = _alpha_env(tmp_path, **alpha)  # type: ignore[arg-type]
+        completed, _ = _run(
+            ("--env-file", str(env_file), "--provider-env-file", str(tmp_path / "np.env")),
+            tmp_path=tmp_path, stub_docker=True, env=stub,
+        )
+        line = next((raw for raw in completed.stdout.splitlines() if " db-roles " in raw), "")
+        return line, completed
+
+    def test_both_services_on_the_restricted_role_and_a_matching_database_is_ok(self, tmp_path: Path) -> None:
+        line, completed = self._out(tmp_path)
+        assert line.startswith("readiness OK      db-roles "), completed.stdout
+        assert f"api={APP_ROLE} worker={APP_ROLE}" in line and "f|f|f|t" in line, line
+
+    def test_it_says_which_role_each_connects_as_and_never_prints_a_password(self, tmp_path: Path) -> None:
+        line, completed = self._out(tmp_path)
+        assert APP_PASSWORD not in completed.stdout + completed.stderr and PG_PASSWORD not in completed.stdout
+
+    @pytest.mark.parametrize("service", ["API", "WORKER"])
+    def test_a_service_still_on_the_owner_role_is_a_finding(self, tmp_path: Path, service: str) -> None:
+        owner_url = f"postgresql+psycopg://{PG_USER}:{PG_PASSWORD}@postgres:5432/{PG_DB}"
+        line, completed = self._out(tmp_path, {f"STUB_{service}_URL": owner_url})
+        assert line.startswith("readiness FINDING db-roles "), completed.stdout
+        assert f"{service.lower()} connects as the OWNER role '{PG_USER}'" in line, line
+        assert PG_PASSWORD not in completed.stdout
+
+    def test_a_service_on_some_other_role_is_a_finding(self, tmp_path: Path) -> None:
+        line, _ = self._out(tmp_path, {"STUB_API_URL": f"postgresql+psycopg://someone_else:x@postgres:5432/{PG_DB}"})
+        assert line.startswith("readiness FINDING db-roles ") and "api connects as 'someone_else', not as ALPHA_APP_DB_USER" in line, line
+
+    @pytest.mark.parametrize("facts", ["t|t|t|t", "f|t|f|t", "f|f|t|t", "f|f|f|f"])
+    def test_a_role_that_can_do_more_than_the_application_may_is_a_finding(self, tmp_path: Path, facts: str) -> None:
+        line, _ = self._out(tmp_path, {"STUB_ROLE_FACTS": facts})
+        assert line.startswith("readiness FINDING db-roles ") and f"= {facts}, not f|f|f|t" in line, line
+
+    def test_a_role_the_database_does_not_have_is_a_finding(self, tmp_path: Path) -> None:
+        line, _ = self._out(tmp_path, {"STUB_ROLE_FACTS": ""})
+        assert line.startswith("readiness FINDING db-roles ") and f"has no role '{APP_ROLE}'" in line, line
+
+    def test_rights_that_differ_from_the_classification_are_a_finding(self, tmp_path: Path) -> None:
+        line, _ = self._out(tmp_path, {"STUB_GRANTS_CHECK_OUT": "table audit_event: the role holds TRUNCATE\n"})
+        assert line.startswith("readiness FINDING db-roles "), line
+        assert "the rights differ from the classification" in line and "the role holds TRUNCATE" in line, line
+
+    def test_no_application_role_configured_is_a_finding(self, tmp_path: Path) -> None:
+        env_file = _alpha_env(tmp_path)
+        text = env_file.read_text(encoding="utf-8").replace(f"ALPHA_APP_DB_USER={APP_ROLE}\n", "")
+        env_file.write_text(text, encoding="utf-8")
+        completed, _ = _run(("--env-file", str(env_file), "--provider-env-file", str(tmp_path / "np.env")),
+                            tmp_path=tmp_path, stub_docker=True)
+        assert "readiness FINDING db-roles" in completed.stdout and "ALPHA_APP_DB_USER is '<unset>'" in completed.stdout
+
+    @pytest.mark.parametrize("down", ["STUB_API_DOWN", "STUB_WORKER_DOWN"])
+    def test_a_service_that_is_not_running_is_unknown_and_never_ok(self, tmp_path: Path, down: str) -> None:
+        line, completed = self._out(tmp_path, {down: "1"})
+        assert line.startswith("readiness UNKNOWN db-roles ") and "is not running" in line, line
+        assert "OK      db-roles" not in completed.stdout
+
+    def test_a_check_that_could_not_be_run_is_unknown(self, tmp_path: Path) -> None:
+        line, _ = self._out(tmp_path, {"STUB_GRANTS_CHECK_STATUS": "2", "STUB_GRANTS_CHECK_ERR": "psql: connection refused\n"})
+        assert line.startswith("readiness UNKNOWN db-roles ") and "could not be run" in line, line
+
+    def test_a_finding_outranks_an_unknown(self, tmp_path: Path) -> None:
+        line, _ = self._out(tmp_path, {"STUB_API_DOWN": "1", "STUB_ROLE_FACTS": "t|f|f|t"})
+        assert line.startswith("readiness FINDING db-roles "), line
+
+    def test_no_docker_on_path_is_unknown_not_ok(self, tmp_path: Path) -> None:
+        env_file = _alpha_env(tmp_path)
+        bare = tmp_path / "bare"
+        bare.mkdir()
+        for tool in ("bash", "sed", "tr", "cat", "head", "grep", "env", "dirname", "mktemp", "rm", "wc", "awk", "date", "sort", "uniq", "printf", "tail"):
+            found = shutil.which(tool)
+            if found:
+                (bare / tool).symlink_to(found)
+        completed, _ = _run(("--env-file", str(env_file), "--provider-env-file", str(tmp_path / "np.env")),
+                            tmp_path=tmp_path, env={"PATH": str(bare)})
+        assert "readiness UNKNOWN db-roles" in completed.stdout and "no docker on PATH" in completed.stdout, completed.stdout
+
+    def test_the_check_is_shown_able_to_fail(self, tmp_path: Path) -> None:
+        mutant = _write_mutant(tmp_path, "db-roles")
+        owner_url = f"postgresql+psycopg://{PG_USER}:{PG_PASSWORD}@postgres:5432/{PG_DB}"
+        completed, _ = _run(
+            ("--env-file", str(_alpha_env(tmp_path)), "--provider-env-file", str(tmp_path / "np.env")),
+            tmp_path=tmp_path, script=mutant, stub_docker=True, env={"STUB_API_URL": owner_url},
+        )
+        assert "db-roles" not in completed.stdout
+
+
 def test_every_check_in_the_script_has_a_case_here() -> None:
     """The same claim `test_deploy_script_refusals.py` makes about `deploy.sh`'s guards, for
     this script's checks: a check added without a test is caught here, not in a deployment."""
@@ -771,9 +890,10 @@ def test_every_check_in_the_script_has_a_case_here() -> None:
         r"^# >>> check: ([a-z-]+)$", READINESS.read_text(encoding="utf-8"), re.M
     )
     assert len(markers) == len(set(markers)), markers
-    assert len(markers) == 7, markers
+    assert len(markers) == 8, markers
     assert set(markers) == {
         "default-credential",
+        "db-roles",
         "tls",
         "plain-http",
         "provider-mode",

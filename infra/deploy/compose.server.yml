@@ -18,6 +18,14 @@
 # `T-4`: there is no `make` target for any of this. `OD-16` makes a tenth root target an
 # FF-01 freeze-break needing an explicit break record, and nothing here needs one.
 #
+# TWO DATABASE ROLES, TWO URLS (`PROD-04-DB-ROLES-01`, `R-146n` item 1, `AD-02`, `ADR-0021` section 3).
+# `DATABASE_URL` is the APPLICATION's: `api` and `worker` connect as `ALPHA_APP_DB_USER`, a role that cannot
+# change the schema, cannot truncate and owns nothing. `MIGRATOR_DATABASE_URL` is the OWNER's (`POSTGRES_USER`):
+# only the one-shot `migrate` and `release-notes` below receive it, and the operator tools that need
+# write-everything are handed it by their wrappers -- it is in no always-on service's environment. The rights of
+# the application role are applied by `infra/deploy/apply-grants.sh` after every `migrate` and every restore
+# (a `pg_dump --no-owner --no-privileges` carries none); `deploy.sh` runs it between `migrate` and `up`.
+#
 # IMAGE IDENTITY. Every third-party image input is pinned by digest. PostgreSQL is a
 # repository-owned derivative of its exact base plus checksum-pinned pgvector.
 # MINIO-IMAGE-01 replaces the withdrawn direct object-store repositories with the two
@@ -156,7 +164,8 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is unset.}
+      # The OWNER's url: the role that owns every object and the only one that may change the schema.
+      DATABASE_URL: ${MIGRATOR_DATABASE_URL:?MIGRATOR_DATABASE_URL is unset. It is the owner role's url (POSTGRES_USER); see infra/deploy/env/alpha.env.example.}
     working_dir: /app
     command: ["alembic", "--config", "db/migrations/alembic.ini", "upgrade", "head"]
     restart: "no"
@@ -173,7 +182,7 @@ services:
       migrate:
         condition: service_completed_successfully
     environment:
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is unset.}
+      DATABASE_URL: ${MIGRATOR_DATABASE_URL:?MIGRATOR_DATABASE_URL is unset. It is the owner role's url (POSTGRES_USER); see infra/deploy/env/alpha.env.example.}
     working_dir: /app
     command: ["python", "-m", "auditmanager.releases.load"]
     restart: "no"
@@ -200,7 +209,8 @@ services:
     # the application reads. The service passwords and the NEXT_PUBLIC_* build values are
     # in that file too and have no business inside this container.
     environment:
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is unset.}
+      # The APPLICATION role's url (ALPHA_APP_DB_USER): it owns nothing and cannot change the schema.
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is unset. It is the application role's url (ALPHA_APP_DB_USER); see infra/deploy/env/alpha.env.example.}
       S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:?S3_ENDPOINT_URL is unset.}
       S3_REGION: ${S3_REGION:?S3_REGION is unset.}
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?S3_ACCESS_KEY_ID is unset.}
@@ -272,7 +282,8 @@ services:
         condition: service_completed_successfully
     command: ["python", "-m", "auditmanager.workers", "serve"]
     environment:
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is unset.}
+      # The APPLICATION role's url (ALPHA_APP_DB_USER): it owns nothing and cannot change the schema.
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is unset. It is the application role's url (ALPHA_APP_DB_USER); see infra/deploy/env/alpha.env.example.}
       S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:?S3_ENDPOINT_URL is unset.}
       S3_REGION: ${S3_REGION:?S3_REGION is unset.}
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?S3_ACCESS_KEY_ID is unset.}

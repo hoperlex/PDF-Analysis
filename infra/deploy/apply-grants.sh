@@ -7,6 +7,9 @@
 #   infra/deploy/apply-grants.sh [--env-file <path>] --check    verify only; changes nothing
 #   infra/deploy/apply-grants.sh [--env-file <path>] --config-only
 #                                                               judge the settings only; touches no docker
+#   infra/deploy/apply-grants.sh --env-file <path> --compose-file <path>
+#                                                               for a copy installed apart from the checkout
+#                                                               (`copy-serve.sh`): the compose file is the checkout's
 #
 # WHY A STEP AND NOT A MIGRATION. The dump tools run `pg_dump --no-owner --no-privileges` (`reset.sh`,
 # `purge-product-data.sh`, `copy-serve.sh`) and restore with `--no-owner`; `copy-serve.sh restore-db` first runs
@@ -72,9 +75,10 @@ fail() {
 
 usage() {
     cat >&2 <<'USAGE'
-usage: apply-grants.sh [--env-file <path>] [--check | --config-only]
+usage: apply-grants.sh [--env-file <path>] [--compose-file <path>] [--check | --config-only]
 
-  --env-file <path>   default: infra/deploy/env/alpha.env
+  --env-file <path>      default: infra/deploy/env/alpha.env
+  --compose-file <path>  default: compose.server.yml beside this script
   --check             verify the application role's rights against the classification; change nothing.
                       Exit 0: nothing differs. Exit 1: a difference (printed, one per line).
   --config-only       judge ALPHA_APP_DB_USER, ALPHA_APP_DB_PASSWORD and the two database URLs only.
@@ -89,6 +93,7 @@ USAGE
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --env-file) ENV_FILE="${2:-}"; shift 2 ;;
+        --compose-file) COMPOSE_FILE="${2:-}"; shift 2 ;;
         --check) MODE=check; shift ;;
         --config-only) MODE=config; shift ;;
         -h|--help) usage ;;
@@ -521,12 +526,18 @@ psql_owner() {
         --username "$PG_USER" --dbname "$PG_DB" -v ON_ERROR_STOP=1 -v "app_role=$APP_ROLE"
 }
 
+# The statements go to `psql` from a file, not a pipe: a `docker` that exits before reading its input (a stub, a
+# daemon that refused) would otherwise hand this script a SIGPIPE in the middle of a write. The file holds the
+# password for the length of the run, so it is created private and removed on every exit.
+umask 077
 SQL_ERR="$(mktemp)"
-trap 'rm -f "$SQL_ERR"' EXIT
+SQL_IN="$(mktemp)"
+trap 'rm -f "$SQL_ERR" "$SQL_IN"' EXIT
 
 verify() {
     local out status=0
-    out="$(printf '%s\n' "$CHECK_SQL" | psql_owner 2>"$SQL_ERR")" || status=$?
+    printf '%s\n' "$CHECK_SQL" > "$SQL_IN"
+    out="$(psql_owner < "$SQL_IN" 2>"$SQL_ERR")" || status=$?
     if [ "$status" -ne 0 ]; then
         cat "$SQL_ERR" >&2
         fail "the verification could not be run (status $status)." \
@@ -547,11 +558,12 @@ if [ "$MODE" = check ]; then
 fi
 
 echo "apply-grants.sh: applying the grant classification to $PG_DB for the application role '$APP_ROLE' (owner: $PG_USER)"
-STATUS=0
 {
     printf '\\set app_password '"'"'%s'"'"'\n' "$APP_PASSWORD"
     printf '%s\n' "$APPLY_SQL"
-} | psql_owner >/dev/null 2>"$SQL_ERR" || STATUS=$?
+} > "$SQL_IN"
+STATUS=0
+psql_owner < "$SQL_IN" >/dev/null 2>"$SQL_ERR" || STATUS=$?
 if [ "$STATUS" -ne 0 ]; then
     # The SQL may quote nothing secret on failure, but a server message can echo a statement: print only the
     # lines that name the reason, never the whole stream.

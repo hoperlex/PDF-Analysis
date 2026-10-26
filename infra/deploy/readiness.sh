@@ -75,7 +75,7 @@ usage: readiness.sh [--env-file <path>] [--provider-env-file <path>]
   --env-file <path>           default: infra/deploy/env/alpha.env
   --provider-env-file <path>  default: infra/deploy/env/provider.env
 
-Reports on seven publication-readiness questions and registers each finding. Refuses nothing
+Reports on eight publication-readiness questions and registers each finding. Refuses nothing
 and blocks no deploy (R-46). Exit 0: every check answered clean. Exit 1: at least one
 finding. Exit 2: at least one check could not be answered (missing tooling, missing file --
 never read as clean).
@@ -151,6 +151,70 @@ else
 fi
 echo
 # <<< check: default-credential
+
+# >>> check: db-roles
+# `PROD-04-DB-ROLES-01`, `R-146n` item 1, `ADR-0021` section 3 and row 7. Which database role do `api` and `worker`
+# connect as, and is it the restricted application role -- one that cannot change the schema, cannot truncate and owns
+# nothing -- and not the owner (a superuser)? Three questions, each asked of the thing that knows:
+#
+#   1. the RUNNING `api` and `worker` containers, for the user of the `DATABASE_URL` they were started with (only the
+#      user is read and printed; the password never leaves the container);
+#   2. the database, for the facts `ADR-0021` row 7 names: not a superuser, no CREATE on schema public, no DELETE and
+#      an INSERT on audit_event -- `f|f|f|t`;
+#   3. `apply-grants.sh --check`, which compares every table, view and sequence with the grant classification.
+#
+# Reported, not enforced (`R-46`): `deploy.sh` is what refuses a stack whose roles are not configured.
+DB_ROLE="$(configured ALPHA_APP_DB_USER)"
+DB_OWNER="$(configured POSTGRES_USER)"
+DB_NAME="$(configured POSTGRES_DB)"
+if [ ! -r "$ENV_FILE" ]; then
+    unknown db-roles "no $ENV_FILE to read the roles from."
+elif ! command -v docker >/dev/null 2>&1; then
+    unknown db-roles "no docker on PATH; the roles are asked of the running containers and of the database."
+elif [[ ! "$DB_ROLE" =~ ^[a-z_][a-z0-9_]{2,62}$ ]]; then
+    finding db-roles "ALPHA_APP_DB_USER is '${DB_ROLE:-<unset>}' in $ENV_FILE: no application role is configured, so api and worker can only be connecting as the owner (PROD-04). Set it, choose the second password and deploy (DEPLOYMENT_RUNBOOK.md section 16)."
+else
+    ROLES_ARGS=(--env-file "$ENV_FILE" --file "$COMPOSE_FILE")
+    ROLES_FINDINGS=()
+    ROLES_UNKNOWNS=()
+    ROLES_SEEN=()
+    for service in api worker; do
+        SERVICE_URL="$(docker compose "${ROLES_ARGS[@]}" exec -T "$service" sh -c 'printf %s "$DATABASE_URL"' 2>/dev/null || true)"
+        SERVICE_USER="$(printf '%s' "$SERVICE_URL" | sed -n 's#^[A-Za-z0-9+]*://\([^:@/]*\):.*#\1#p')"
+        if [ -z "$SERVICE_USER" ]; then
+            ROLES_UNKNOWNS+=("$service is not running or has no DATABASE_URL, so the role it connects as is unknown")
+        elif [ "$SERVICE_USER" = "$DB_OWNER" ]; then
+            ROLES_FINDINGS+=("$service connects as the OWNER role '$SERVICE_USER' (a superuser that owns every object): its DATABASE_URL is still the pre-PROD-04 one")
+        elif [ "$SERVICE_USER" != "$DB_ROLE" ]; then
+            ROLES_FINDINGS+=("$service connects as '$SERVICE_USER', not as ALPHA_APP_DB_USER '$DB_ROLE'")
+        else
+            ROLES_SEEN+=("$service=$SERVICE_USER")
+        fi
+    done
+    ROLE_FACTS="$(docker compose "${ROLES_ARGS[@]}" exec -T postgres psql --no-psqlrc --username "$DB_OWNER" --dbname "$DB_NAME" -Atc \
+        "select rolsuper, has_schema_privilege(rolname,'public','CREATE'), has_table_privilege(rolname,'public.audit_event','DELETE'), has_table_privilege(rolname,'public.audit_event','INSERT') from pg_roles where rolname='$DB_ROLE'" 2>/dev/null </dev/null || true)"
+    case "$ROLE_FACTS" in
+        "f|f|f|t") ;;
+        "") ROLES_FINDINGS+=("the database has no role '$DB_ROLE' (or could not be asked): nothing has run apply-grants.sh") ;;
+        *) ROLES_FINDINGS+=("the role '$DB_ROLE' is (superuser|CREATE on public|DELETE on audit_event|INSERT on audit_event) = $ROLE_FACTS, not f|f|f|t") ;;
+    esac
+    GRANTS_STATUS=0
+    GRANTS_OUTPUT="$("$HERE/apply-grants.sh" --env-file "$ENV_FILE" --check 2>&1 </dev/null)" || GRANTS_STATUS=$?
+    case "$GRANTS_STATUS" in
+        0) ;;
+        1) ROLES_FINDINGS+=("apply-grants.sh --check: the rights differ from the classification (run it, or deploy): $(printf '%s\n' "$GRANTS_OUTPUT" | sed -n '2,4p' | tr -s ' \n' ' ')") ;;
+        *) ROLES_UNKNOWNS+=("apply-grants.sh --check could not be run (status $GRANTS_STATUS): $(printf '%s\n' "$GRANTS_OUTPUT" | head -2 | tr -s ' \n' ' ')") ;;
+    esac
+    if [ "${#ROLES_FINDINGS[@]}" -gt 0 ]; then
+        finding db-roles "${ROLES_FINDINGS[0]}$([ "${#ROLES_FINDINGS[@]}" -gt 1 ] && printf ' (+%s more: %s)' "$((${#ROLES_FINDINGS[@]} - 1))" "$(printf '%s; ' "${ROLES_FINDINGS[@]:1}")")"
+    elif [ "${#ROLES_UNKNOWNS[@]}" -gt 0 ]; then
+        unknown db-roles "${ROLES_UNKNOWNS[0]}$([ "${#ROLES_UNKNOWNS[@]}" -gt 1 ] && printf ' (+%s more: %s)' "$((${#ROLES_UNKNOWNS[@]} - 1))" "$(printf '%s; ' "${ROLES_UNKNOWNS[@]:1}")")"
+    else
+        ok db-roles "${ROLES_SEEN[*]} -- the application role '$DB_ROLE' is not a superuser, cannot create in schema public, cannot delete from audit_event and can insert into it ($ROLE_FACTS); apply-grants.sh --check: its rights match the classification."
+    fi
+fi
+echo
+# <<< check: db-roles
 
 # >>> check: tls
 # `PROD-01-TLS-ACME-01`. Is the certificate the proxy SERVES one a client can use? Asked of the proxy's own
@@ -427,7 +491,7 @@ finding off-host-backup "no destination exists in this repository. reset.sh's du
 echo
 # <<< check: off-host-backup
 
-echo "readiness.sh: $FINDINGS finding(s), $UNKNOWNS unknown, 7 checks."
+echo "readiness.sh: $FINDINGS finding(s), $UNKNOWNS unknown, 8 checks."
 echo "readiness.sh: this is a report, not a gate (R-46). Each finding is a register row for the owner's ruling."
 
 if [ "$UNKNOWNS" -gt 0 ]; then
