@@ -8,8 +8,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.6.0 (OpenAPI 3.1.0)
- *   sha256 a182d4fa902b263243e09b9936227760b45e8e6e744b6783a7023522a285e9df
+ *   AuditManager PC-01 API 1.7.0 (OpenAPI 3.1.0)
+ *   sha256 f98c4704bf04bea5191d48d05f7248f3380675c95b257088213ae4254b793ff8
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.

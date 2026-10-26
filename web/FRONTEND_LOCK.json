@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "a182d4fa902b263243e09b9936227760b45e8e6e744b6783a7023522a285e9df",
-    "content_commit": "22c1df66",
-    "content_commit_subject": "PROD-11 stage 2a (contract content): AnalysisProfileStatus loses builtin; reviewed described as it is (D-223)",
+    "sha256": "f98c4704bf04bea5191d48d05f7248f3380675c95b257088213ae4254b793ff8",
+    "content_commit": "b7e5fdf1",
+    "content_commit_subject": "PROD-11 stage 2b (contract version, proposed 1.7.0): shared contract_version 1.6.0 -> 1.7.0",
     "dispatch_named_commit": "a3e83f39cfcb02f4ea5565e6f45f3f2b2f720e97",
-    "commit_note": "PROD-11-AR-V1-V2-REMOVAL-01 removes the enum member AnalysisProfileStatus.builtin and corrects the prose of reviewed, listAnalysisProfiles and info.description; contract 1.6.0 (92/104/301), migration 0033, no new error code.",
+    "commit_note": "PROD-11-AR-V1-V2-REMOVAL-01 removes the enum member AnalysisProfileStatus.builtin and corrects the prose of reviewed, listAnalysisProfiles and info.description; contract 1.7.0 (92/104/301), migration 0033, no new error code.",
     "openapi_version": "3.1.0",
-    "info_version": "1.6.0",
+    "info_version": "1.7.0",
     "paths": 92,
     "operations": 104,
     "component_schemas": 301,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "a182d4fa902b263243e09b9936227760b45e8e6e744b6783a7023522a285e9df",
+    "snapshot_sha256": "f98c4704bf04bea5191d48d05f7248f3380675c95b257088213ae4254b793ff8",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "cf971d7e9ad0d97263402a43d2a17ade84fbfd417608132d4c175f47199b0a33",
-      "index.ts": "25286b567dec0f94a7442686936aeacf5e098a8fe3546f3f727baa3aeb60afb8",
-      "operations.gen.ts": "4af01923f6d55d45c97e499bf9733f8f7c54bcbce407d90143e51cc920ac7133",
-      "types.gen.ts": "77aa4fbee4429c2fafb8bfa52b351fc0bfe4658496f118420d81431fca828086"
+      "client.gen.ts": "3c7487794abf7e8fa47e4bffc72eb202e7ecdeb50f62fddaac8bfb2e8b0eb962",
+      "index.ts": "1c32813d6654676cf2d5e331fc43bbb19705760f92c076df505e653cc8f15442",
+      "operations.gen.ts": "5b8b31eb4c7b4599f19858dd78bc25155ccda96fecc3c94aaf0ca5b14e82a7c2",
+      "types.gen.ts": "c84ae79d08f47d6e36e897b9ea4d8fbd546b9b4571e9e0ea63a63ce8a585821e"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },
