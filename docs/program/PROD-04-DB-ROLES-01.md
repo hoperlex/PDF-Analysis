@@ -189,7 +189,7 @@ Two runs: the first four files, **288 passed in 170 s**; the other eight, **504 
 
 What the table says: **every statement of the product code that was executed ran as the restricted role and was granted**; the failures and errors are test set-up that needs the owner, assertions about the trigger layer, or `pg_dump` as the role. Not exercised as the role: `ingest` (set-up truncates), the `norms` custody/repair/bundle/search database suites (set-up DDL), and anything needing a docker daemon.
 
-**(d) Governance, prose guards and whitespace** (after the last commit): see the end of this section.
+**(d) Governance, prose guards and whitespace** (on the tree after the last code commit, clean): `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py` **105 passed in 22 s**; the governance one-liner on the task file prints `[]`; `git diff --check cfbae64a..HEAD` exits 0. The first run found one hit: `test_surface_counts_in_prose.py` read `return 0` followed by the variable `path` in the classification module's `main()` as "0 path" (a surface-count claim); the variable was renamed (`target`) and the generated SQL is unaffected (`--verify-script` exits 0). The 24 database-free tests of `test_grant_classification.py` pass after the rename (the other 9 need a migrated clone and were not re-run).
 
 ## 7. Integration notes (for the integrator)
 
