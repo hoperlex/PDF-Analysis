@@ -1,0 +1,41 @@
+# DEV-PURGE-EXECUTOR-EVENTS-01 — the product purge no longer deletes the executor audit events
+
+`scripts/recovery/product_purge.py` declared `KEEP_EVENT_PREFIXES = ("norm_custody.", "executor.")`, and `docs/program/EXEC-SEAL-01.md` ("`executor.` events KEEP") and `docs/program/EXEC-HTTP-01.md` ("`audit_run.` PRODUCT, `executor.` KEEP") say the executor events stay. The SQL said otherwise. One constant, `_EVENT_KEEP = "starts_with(t.event_type, 'norm_custody.')"`, fed the keep predicate and the delete predicate, so the apply step ran `DELETE FROM audit_event WHERE NOT starts_with(event_type, 'norm_custody.')` and removed every `executor.*` event (`executor.connection_created`, `executor.secret_set`, `executor.route_set`, `executor.runner_token_issued` and the rest) while the executor tables and their command receipts stayed. The append-only record of who set a secret or a route, and when, was gone after a purge; only a dump restored it. The `keep-unchanged` and `product-emptied` guards could not notice, because they measure the same predicate, and `event-types-classified` already accepted the family through the tuple. This was in the tool since `EXEC-SEAL-01`; it was found by an independent judge on `origin/dev` `37da1176`.
+
+## What changed
+
+- `product_purge.py`: `_event_keep()` replaces the constant and builds `(starts_with(t.event_type, 'norm_custody.') OR starts_with(t.event_type, 'executor.'))` from `KEEP_EVENT_PREFIXES` at call time. `_predicates` returns it as the keep predicate and `NOT` of it as the delete predicate. The keep-row fingerprint (`keep_fingerprints`), the plan's delete/keep counts, the plan digest and the apply step all read that one pair, so they cover the same set. The module docstring and the comment above the tuple were updated. No table, command type, refusal, lock, ordering or guard text was touched; the 26 guard markers are unchanged.
+- New `tests/integration/recovery/test_product_purge_executor_events.py` (3 tests, the stand in miniature of `purge_stand`): one test with no database that every prefix of the tuple is in the keep predicate, the delete predicate is its exact negation, no product family is in it, and a prefix added to the tuple alone (monkeypatched) reaches both predicates; one dry run with an `executor.secret_set`, a `norm_custody.bound` and an `audit_run.created` that prints `audit_event  (delete 25 rows, keep 5 rows)` and changes nothing; one full plan, snapshot, apply and delete that leaves the executor and custody events (by `audit_event_id`) and removes the run event, with the keep fingerprint equal before and after, measured with the tool's `keep_fingerprints` and with the test's own `digest_of` over a predicate the test states itself. A second plan after the purge says `nothing-to-purge: yes` and `delete 0 rows, keep 5 rows`. The executor event is written by the product's journal writer (`append_execution_event`) with the payload `set_secret` writes.
+- `test_product_purge.py`: the declaration test `test_the_executor_configuration_is_kept_by_a_product_purge` also asserts the keep predicate contains `executor.` (one line) and points to the new module.
+
+## Before and after (existing integration stack, real PostgreSQL and S3)
+
+| run | command | result |
+|---|---|---|
+| base tool, whole directory | `pytest tests/integration/recovery` at `37da1176` | `315 passed in 85.70s`, 0 failed |
+| base tool, new module | the new file with `git show 37da1176:scripts/recovery/product_purge.py` put back | `3 failed in 5.92s` |
+| fixed tool, new module | the new file | `3 passed in 6.22s` |
+| fixed tool, whole directory | `pytest tests/integration/recovery` at `93da237e` (fix and tests committed; this task file untracked) | `318 passed in 89.94s`, 0 failed |
+
+The command, from the lane directory, was `BS=$(ls -d /root/projects/PDF-Analysis/.venv/bootstrap/lib/python3*/site-packages); env $(grep -v '^#' .env | grep -v '^$' | xargs) PYTHONPATH=src:$BS /root/projects/PDF-Analysis/.venv/bin/python -m pytest -c pyproject.toml --rootdir=. -q -p no:cacheprovider tests/integration/recovery`. All DB-backed tests ran; nothing was skipped. The tests used the shared integration stack through throwaway databases and buckets (`purge_clone_*`, `purge_tpl_*`); nothing else was started, stopped or written.
+
+## Mutation proofs (each reverted afterwards with `git checkout -- scripts/recovery/product_purge.py`)
+
+| mutation | result |
+|---|---|
+| the base file put back (`git show 37da1176:scripts/recovery/product_purge.py`) | 3 failed: `assert "starts_with(t.event_type, 'executor.')" in "starts_with(t.event_type, 'norm_custody.')"`; the base dry run prints `audit_event  (delete 26 rows, keep 4 rows)` (measured with a throwaway probe test, deleted afterwards) instead of `delete 25 rows, keep 5 rows`; `the executor.secret_set event was deleted by the purge` (apply and delete-objects exited 0: no guard noticed) |
+| M1: `_event_keep` returns the single literal `starts_with(t.event_type, 'norm_custody.')` | same 3 failed; also the one-line assertion added to `test_the_executor_configuration_is_kept_by_a_product_purge` fails (`1 failed`) |
+| M2: only the delete predicate falls back (`"NOT starts_with(t.event_type, 'norm_custody.')"`, keep predicate still names both) | 3 failed: the exact-negation assertion; the dry-run count; and the real apply is now REFUSED by the existing `keep-unchanged` guard (`the purge would have changed KEEP data in ['audit_event[keep rows]']; rolled back`). This is the proof that the guard works once the two predicates are allowed to disagree |
+| M3: `_event_keep` iterates a frozen literal tuple instead of `KEEP_EVENT_PREFIXES` | 1 failed, 2 passed: `assert "starts_with(t.event_type, 'zz_future.')" in "(starts_with(t.event_type, 'norm_custody.') OR starts_with(t.event_type, 'executor.'))"` (a prefix added to the tuple alone does not reach the SQL) |
+
+## Out of scope, reported only: `RUNNING_STATES` does not cover `executor_task`
+
+`RUNNING_STATES` (`product_purge.py`, the `quiescent` guard) lists `audit_run` (`running`, `validating`), `job` (`leased`, `running`) and `attempt` (`leased`, `running`). `executor_task` (PRODUCT, truncated) has states `open`, `claimed`, `answered`, `failed`, `expired`, `cancelled` (`ck_executor_task_state`, migration `0031`). A task with `origin = 'run_call'` carries `run_id` and `attempt_id` (`ck_executor_task_origin_shape`), and while a runner holds it (`claimed`) its Attempt is `leased` or `running`, so the existing refusal covers it. A task with `origin = 'probe'` carries `probe_id` and no run or Attempt: a standalone probe task claimed by a runner is not seen by any `RUNNING_STATES` entry, so the `quiescent` guard does not refuse and `--allow-running` is not needed. The purge then truncates `executor_task` under the runner; the runner's later answer finds no task, and the `executor_probe` row (KEEP) stays without its task. The effect is narrow (a probe's answer is lost, nothing in a KEEP table changes, and the apply step itself holds `ACCESS EXCLUSIVE` locks), but it is a gap in the "work is running right now" refusal. Not changed here.
+
+## Proposed register note (not written; `DEBT_REGISTER.md` is outside this lane)
+
+> `product_purge.RUNNING_STATES` lacks `executor_task.state = 'claimed'`. Runs and Attempts are covered, a standalone probe task (`origin = 'probe'`, no `attempt_id`) claimed by a runner is not, so the `quiescent` guard does not refuse while a runner holds it. Check: `rg -n "RUNNING_STATES" -A5 scripts/recovery/product_purge.py` shows no `executor_task` key; to prove it, claim a probe task in a throwaway database and run `product_purge plan`, which prints `running now: nothing`. Fix: add `"executor_task": ("claimed",)` with a scenario in `SCENARIOS` of `test_product_purge.py` (the guard `quiescent` already has one for `audit_run`). Standing rule this exposes: a declaration that appears twice in a tool (a tuple and the SQL built from it) must be one construction; the new test fails by name if the SQL stops following the tuple.
+
+## Not run
+
+No purge against a real stand, no run of `infra/deploy/purge-product-data.sh` (it keeps no event list and was not touched), no `make gate` (`R-135`), no linter (the lane venv has no `ruff`; `git diff --check` is clean).
