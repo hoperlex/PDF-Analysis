@@ -93,9 +93,9 @@ None modified. `git diff --name-only b0644fd3..HEAD` lists no existing test; the
 | `tests/integration/runs/test_v3_recorded_group_over_http.py` | 55 passed, 7.3 s |
 | `tests/integration/runs/test_v3_saved_text_layer_probe.py` after | 18 passed |
 | the two modules together, either order | 73 passed, 16.5 s |
-| `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py` (clean committed tree) | see the last section of this file |
+| `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py` (clean committed tree) | 105 passed, 20 s |
 | governance one-liner on the task file | `[]` |
-| `git diff --check b0644fd3..HEAD` | see the last section of this file |
+| `git diff --check b0644fd3..HEAD` | exit 0 |
 
 Free disk stayed between 2.1 and 2.3 GiB for the whole lane (above the 1.5 GiB line of this lane and the 1.3 GiB line of `D-205`); the module's database is dropped by the probe's fixture and `SELECT datname FROM pg_database WHERE datname LIKE 'prod11a_probe_%'` was empty after the last run. No full gate and no whole `tests/integration` (`R-135`), no browser, no network.
 
