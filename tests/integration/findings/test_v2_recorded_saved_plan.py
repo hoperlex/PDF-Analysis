@@ -10,7 +10,7 @@ import pytest
 
 from auditmanager.analysis.engine.result import ArtifactRef, StageResult, StageStatus
 from auditmanager.analysis.engine.serialization import canonical_bytes, sha256_hex
-from auditmanager.analysis.profiles.ar_v2.registered import PROFILE_ID, PROMPT_BUNDLE_ID
+from auditmanager.analysis.profiles.ar_shared.v2_identities import PROFILE_ID, PROMPT_BUNDLE_ID
 from auditmanager.analysis.stages.finding_merge import (
     MergeEvidence, MergeObservation, merge_grounded,
 )

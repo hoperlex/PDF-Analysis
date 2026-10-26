@@ -8,7 +8,7 @@ from dataclasses import asdict
 
 import pytest
 
-from auditmanager.analysis.profiles.ar_v2.recognised_context import RecognisedContext
+from auditmanager.analysis.profiles.ar_shared.recognised_context import RecognisedContext
 from auditmanager.analysis.profiles.ar_v3.request_candidate import (
     V3RequestRefused,
     prepare_v3_request_candidate,

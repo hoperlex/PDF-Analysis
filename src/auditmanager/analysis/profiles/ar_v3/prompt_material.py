@@ -12,8 +12,8 @@ import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 
-from auditmanager.analysis.profiles.ar_v2.content import reviewed_sections
-from auditmanager.analysis.profiles.ar_v2.recognised_context import (
+from auditmanager.analysis.profiles.ar_shared.content import reviewed_sections
+from auditmanager.analysis.profiles.ar_shared.recognised_context import (
     RecognisedContext,
     render_context,
 )

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from auditmanager.analysis.profiles.ar_v2.recognised_context import RecognisedContext
+from auditmanager.analysis.profiles.ar_shared.recognised_context import RecognisedContext
 from auditmanager.analysis.profiles.ar_v3.citation_grounding import ground_v3_proposals
 from auditmanager.analysis.profiles.ar_v3.response import parse_response
 from auditmanager.analysis.text.textlayer import Page, TextLayer

@@ -8,7 +8,7 @@ from dataclasses import replace
 
 import pytest
 
-from auditmanager.analysis.profiles.ar_v2.recognised_context import RecognisedContext
+from auditmanager.analysis.profiles.ar_shared.recognised_context import RecognisedContext
 from auditmanager.analysis.profiles.ar_v3.local_evaluation import (
     SuppliedV3Response,
     V3LocalEvaluationRefused,

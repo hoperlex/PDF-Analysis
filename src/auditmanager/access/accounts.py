@@ -38,6 +38,13 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
+from auditmanager.access.audit import (
+    SOURCE_API,
+    SOURCE_HOST_CLI,
+    record_password_reset,
+    record_role_granted,
+    record_role_revoked,
+)
 from auditmanager.access.models import (
     ROLE_ADMIN,
     Account,
@@ -641,6 +648,8 @@ class AccountRepository:
                 },
             ).one()
         )
+        # `PROD-06` (ADR-0023 section 4): in the transaction of the UPDATE above.
+        record_password_reset(session, subject_uid=user_uid, actor_uid=actor_uid)
         _log.warning(
             "%s: %s (%r) by %s; it must change the temporary password at its next sign-in "
             "and every credential it held is refused.",
@@ -666,6 +675,12 @@ class AccountRepository:
         ``granted_by`` is the administrator's identity, or ``None`` for the operator's
         command (:mod:`auditmanager.access.grant`). A change raises ``token_epoch`` in the
         same transaction; a grant of a role already held changes nothing and bumps nothing.
+
+        `PROD-06`: a change appends ``access.role_granted`` in that same transaction. Its
+        ``source`` is read from ``granted_by`` -- the one fact this signature already carries
+        about who is asking: an administrator's identity is ``api``, and ``None`` is the host
+        command (``host_cli``, with no ``actor_uid``). A grant of a role already held writes
+        no event, because it changed nothing.
         """
         role = parse_role(role)
         current = self._lock(session, user_uid)
@@ -678,6 +693,13 @@ class AccountRepository:
         if inserted is None:
             return False
         session.execute(_BUMP_EPOCH, {"user_uid": user_uid})
+        record_role_granted(
+            session,
+            subject_uid=user_uid,
+            role=role,
+            actor_uid=granted_by,
+            source=SOURCE_HOST_CLI if granted_by is None else SOURCE_API,
+        )
         _log.warning(
             "%s: %s (%r) now holds %r; every credential it held is refused from now on.",
             ROLES_CHANGED,
@@ -727,6 +749,19 @@ class AccountRepository:
             )
         if losing or gaining:
             session.execute(_BUMP_EPOCH, {"user_uid": user_uid})
+            # `PROD-06`: one event per role that actually moved, in the same transaction.
+            for role in sorted(losing):
+                record_role_revoked(
+                    session, subject_uid=user_uid, role=role, actor_uid=actor_uid
+                )
+            for role in sorted(gaining):
+                record_role_granted(
+                    session,
+                    subject_uid=user_uid,
+                    role=role,
+                    actor_uid=actor_uid,
+                    source=SOURCE_API,
+                )
             _log.warning(
                 "%s: %s (%r) now holds %s (by %s); every credential it held is refused.",
                 ROLES_CHANGED,

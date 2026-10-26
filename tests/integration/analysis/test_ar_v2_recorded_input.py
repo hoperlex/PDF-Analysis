@@ -15,8 +15,8 @@ from auditmanager.analysis.profiles.ar_v2.recorded_input import (
     prepare_recorded_v2_input,
 )
 from auditmanager.analysis.profiles.ar_v2.recorded_request import RecordedGenerationSettings
-from auditmanager.analysis.profiles.ar_v2.registered import PROFILE_ID, PROMPT_BUNDLE_ID
-from auditmanager.analysis.profiles.ar_v2.recognised_context import RecognisedContextError
+from auditmanager.analysis.profiles.ar_shared.v2_identities import PROFILE_ID, PROMPT_BUNDLE_ID
+from auditmanager.analysis.profiles.ar_shared.recognised_context import RecognisedContextError
 
 
 VERSION = "ver_01M2545JSD15ETSNNV904X991J"

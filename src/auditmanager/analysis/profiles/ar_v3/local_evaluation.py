@@ -10,7 +10,7 @@ import hashlib
 import re
 from dataclasses import dataclass
 
-from auditmanager.analysis.profiles.ar_v2.recognised_context import RecognisedContext
+from auditmanager.analysis.profiles.ar_shared.recognised_context import RecognisedContext
 from auditmanager.analysis.profiles.ar_v3.citation_grounding import (
     V3GroundingResult,
     ground_v3_proposals,

@@ -19,7 +19,7 @@ from auditmanager.analysis.recognised.artifact import (
     QUOTE_SOURCE_RECOGNISED,
 )
 from auditmanager.analysis.recognised.portal import PORTAL_BLOCK_ID, TEXT
-from auditmanager.analysis.profiles.ar_v2.recognised_context import (
+from auditmanager.analysis.profiles.ar_shared.recognised_context import (
     RecognisedContextError,
     select_context,
 )

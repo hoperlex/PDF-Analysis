@@ -12,7 +12,10 @@ What it pins:
   (`PB-PROFILE-01`) has the one authored package, AR has none, and no section code is
   duplicated or outside the 15-code catalogue;
 * identities are fresh, parse as their contract types and are unique;
-* every profile is ``draft``; each legacy profile's source files are hash-pinned, both
+* every profile's ``status`` and ``profile_version`` are the ones its line of
+  ``section_profile_expectations.json`` names (all ``draft`` at ``1.0.0`` until a section's
+  expert review moves its line), and there is a line for exactly the packages that exist;
+  each legacy profile's source files are hash-pinned, both
   against the already-catalogued candidate metadata and, when the legacy repository is on
   this host, against the blob at the recorded commit; the authored profile declares
   ``"source": null`` and carries ``open_questions.md`` instead;
@@ -39,6 +42,9 @@ ROOT = Path(__file__).resolve().parents[4]
 PROFILES = ROOT / "src/auditmanager/analysis/text/profiles"
 CATALOGUE = ROOT / "src/auditmanager/sections/suggestion_patterns.json"
 CANDIDATES = ROOT / "src/auditmanager/analysis/profiles/section_candidates/metadata.json"
+#: One line per package: the status and version its ``profile.json`` must declare
+#: (`PROD-14-0-EXPECTATIONS-01`). A section lane edits its own line, not this suite.
+EXPECTATIONS = Path(__file__).resolve().with_name("section_profile_expectations.json")
 LEGACY = Path(os.environ.get("AUDITMANAGER_LEGACY_PROMPTS_REPO", "/root/projects/PDF-proverka"))
 
 EXPECTED_SECTIONS = frozenset(
@@ -62,6 +68,12 @@ HEX40 = re.compile(r"^[0-9a-f]{40}$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 ID_LITERAL = re.compile(r"\b(?:ap|pb)_[0-9A-HJKMNP-TV-Z]{26}\b")
 SNAKE_TOKEN = re.compile(r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b")
+
+
+def _expected_sections() -> dict[str, tuple[str, str]]:
+    """``code -> (status, profile_version)`` for every non-AR package of this tree."""
+    rows = json.loads(EXPECTATIONS.read_text("utf-8"))["sections"]
+    return {row["code"]: (row["status"], row["profile_version"]) for row in rows}
 
 
 def _catalogue() -> dict[str, str]:
@@ -145,6 +157,9 @@ def test_exactly_the_thirteen_legacy_sections_and_pb_have_a_package() -> None:
     assert len(codes) == len(set(codes)), f"duplicate section_code across packages: {sorted(codes)}"
     assert set(codes) == EXPECTED_SECTIONS | AUTHORED_SECTIONS
     assert not NO_PACKAGE & set(codes)
+    expected = _expected_sections()
+    assert set(codes) - set(expected) == set(), "a package has no line in the expectations file"
+    assert set(expected) - set(codes) == set(), "a line of the expectations file has no package"
     assert {manifest["section_code"] for _, manifest in _legacy_packages()} == EXPECTED_SECTIONS
     assert {manifest["section_code"] for _, manifest in _authored_packages()} == AUTHORED_SECTIONS
     catalogue = _catalogue()
@@ -164,14 +179,22 @@ def test_exactly_the_thirteen_legacy_sections_and_pb_have_a_package() -> None:
 
 def test_every_profile_manifest_has_the_text_profile_1_shape() -> None:
     catalogue = _catalogue()
+    expected = _expected_sections()
     for directory, manifest in _legacy_packages():
         code = manifest["section_code"]
         assert set(manifest) == PROFILE_KEYS, directory.name
         assert manifest["format"] == "text-profile/1", code
         assert code in catalogue, code
         assert directory.name == code.lower(), (directory.name, code)
-        assert manifest["profile_version"] == "1.0.0", code
-        assert manifest["status"] == "draft", code
+        assert code in expected, f"{code}: no line in the expectations file"
+        assert manifest["profile_version"] == expected[code][1], (
+            f"{code}: profile.json declares version {manifest['profile_version']!r}, "
+            f"the expectations file {expected[code][1]!r}"
+        )
+        assert manifest["status"] == expected[code][0], (
+            f"{code}: profile.json declares status {manifest['status']!r}, "
+            f"the expectations file {expected[code][0]!r}"
+        )
         assert manifest["title_ru"] == catalogue[code], code
         source = manifest["source"]
         assert set(source) == {"repository", "commit", "files"}, code
@@ -186,15 +209,20 @@ def test_every_profile_manifest_has_the_text_profile_1_shape() -> None:
         assert {f"prompts/disciplines/{code}/{name}" for name in ("role.md", "checklist.md")} <= set(paths), code
 
 
-def test_the_authored_profile_declares_no_source_and_is_a_draft() -> None:
+def test_the_authored_profile_declares_no_source_and_the_expected_status() -> None:
     catalogue = _catalogue()
+    expected_status, expected_version = _expected_sections()["PB"]
     (directory, manifest), = _authored_packages()
     assert manifest["section_code"] == "PB" and directory.name == "pb"
     assert set(manifest) == PROFILE_KEYS, "the key set is the legacy one: source is declared null"
     assert manifest["source"] is None
     assert manifest["format"] == "text-profile/1"
-    assert manifest["profile_version"] == "1.0.0"
-    assert manifest["status"] == "draft"
+    assert manifest["profile_version"] == expected_version, (
+        f"PB: profile.json declares version {manifest['profile_version']!r}, the expectations file {expected_version!r}"
+    )
+    assert manifest["status"] == expected_status, (
+        f"PB: profile.json declares status {manifest['status']!r}, the expectations file {expected_status!r}"
+    )
     assert manifest["title_ru"] == catalogue["PB"] == "Пожарная безопасность"
 
 
@@ -320,6 +348,8 @@ def test_pb_open_questions_are_listed_in_the_package() -> None:
     questions = re.findall(r"(?m)^\d+\. ", text)
     assert len(questions) >= 8, "the package must list the expert's open questions"
     assert [int(n.rstrip(". ")) for n in questions] == list(range(1, len(questions) + 1))
-    # Honest about what the profile is: a draft without expert review, evidence or recordings.
-    assert "`draft`" in text and "D-178" in text
+    # Honest about what the profile is while it is a draft: no expert review, evidence or recordings.
+    if _expected_sections()["PB"][0] == "draft":
+        assert "`draft`" in text
+    assert "D-178" in text
     assert "\r" not in text and text.endswith("\n")

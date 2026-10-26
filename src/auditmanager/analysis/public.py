@@ -52,7 +52,7 @@ from auditmanager.analysis.profiles.ar_v2.proposal_grounding import (
     RejectedProposal,
 )
 from auditmanager.analysis.profiles.ar_v2.response import ProposedObservation
-from auditmanager.analysis.profiles.ar_v2.recognised_context import RecognisedContext
+from auditmanager.analysis.profiles.ar_shared.recognised_context import RecognisedContext
 from auditmanager.analysis.profiles.ar_v2.recorded_input import (
     RecordedV2Input,
     prepare_recorded_v2_input,
@@ -78,9 +78,11 @@ from auditmanager.analysis.profiles.ar_v2.recorded_response import (
 from auditmanager.analysis.profiles.ar_v2.recorded_stage_result import (
     seal_recorded_v2_stage_result,
 )
-from auditmanager.analysis.profiles.ar_v2.registered import (
+from auditmanager.analysis.profiles.ar_shared.v2_identities import (
     PROFILE_ID as AR_V2_RECORDED_PROFILE_ID,
     PROMPT_BUNDLE_ID as AR_V2_RECORDED_BUNDLE_ID,
+)
+from auditmanager.analysis.profiles.ar_v2.registered import (
     RecordedProfileError,
     resolve_recorded_profile,
 )

@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 
 from auditmanager.analysis.profiles.ar_v2 import prompt_material, registered
-from auditmanager.analysis.profiles.ar_v2.recognised_context import RecognisedContext
+from auditmanager.analysis.profiles.ar_shared.recognised_context import RecognisedContext
 from auditmanager.analysis.recognised.flags import FLAG_ORDER
 from auditmanager.analysis.text.adapter import ModelRequest
 from auditmanager.analysis.text.textlayer import Page, TextLayer

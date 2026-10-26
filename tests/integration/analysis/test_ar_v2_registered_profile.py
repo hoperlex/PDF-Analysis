@@ -5,14 +5,14 @@ from pathlib import Path
 
 import pytest
 
+from auditmanager.analysis.profiles.ar_shared import content, v2_identities
 from auditmanager.analysis.profiles.ar_v2 import registered
-from auditmanager.analysis.profiles.ar_v2 import content
 from auditmanager.analysis.text.profile import AR_TEXT_PROFILE
 
 
 def test_exact_registration_binds_reviewed_material_and_stage_plan() -> None:
     profile = registered.resolve_recorded_profile(
-        registered.PROFILE_ID, registered.PROMPT_BUNDLE_ID
+        v2_identities.PROFILE_ID, v2_identities.PROMPT_BUNDLE_ID
     )
 
     assert profile.analysis_profile_id != AR_TEXT_PROFILE.analysis_profile_id
@@ -28,7 +28,7 @@ def test_exact_registration_binds_reviewed_material_and_stage_plan() -> None:
     assert profile.material_sha256 == registered.MATERIAL_SHA256
     assert profile.content_sha256 == registered.PROFILE_CONTENT_SHA256
     assert profile == registered.resolve_recorded_profile(
-        str(registered.PROFILE_ID), str(registered.PROMPT_BUNDLE_ID)
+        str(v2_identities.PROFILE_ID), str(v2_identities.PROMPT_BUNDLE_ID)
     )
     with pytest.raises(FrozenInstanceError):
         profile.provider_mode = "live"  # type: ignore[misc]
@@ -37,13 +37,13 @@ def test_exact_registration_binds_reviewed_material_and_stage_plan() -> None:
 @pytest.mark.parametrize("wrong", ["ap_01M25P3TH08VVTTGJRXYBZZ7RP", "ap_invalid"])
 def test_wrong_profile_identity_is_refused(wrong: str) -> None:
     with pytest.raises(registered.RecordedProfileError, match="not registered"):
-        registered.resolve_recorded_profile(wrong, registered.PROMPT_BUNDLE_ID)
+        registered.resolve_recorded_profile(wrong, v2_identities.PROMPT_BUNDLE_ID)
 
 
 def test_wrong_bundle_identity_is_refused() -> None:
     with pytest.raises(registered.RecordedProfileError, match="not registered"):
         registered.resolve_recorded_profile(
-            registered.PROFILE_ID, "pb_01M25P3TH0PDQYVKTRQFEM0CYS"
+            v2_identities.PROFILE_ID, "pb_01M25P3TH0PDQYVKTRQFEM0CYS"
         )
 
 
@@ -61,7 +61,7 @@ def test_changed_reviewed_inputs_are_refused(
     monkeypatch.setattr(registered, name, lambda: changed)
     with pytest.raises(registered.RecordedProfileError, match="material has changed"):
         registered.resolve_recorded_profile(
-            registered.PROFILE_ID, registered.PROMPT_BUNDLE_ID
+            v2_identities.PROFILE_ID, v2_identities.PROMPT_BUNDLE_ID
         )
 
 
@@ -69,7 +69,7 @@ def test_changed_schema_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(registered, "response_schema", lambda: {"type": "null"})
     with pytest.raises(registered.RecordedProfileError, match="material has changed"):
         registered.resolve_recorded_profile(
-            registered.PROFILE_ID, registered.PROMPT_BUNDLE_ID
+            v2_identities.PROFILE_ID, v2_identities.PROMPT_BUNDLE_ID
         )
 
 
@@ -85,5 +85,5 @@ def test_changed_reviewed_resource_bytes_are_refused(
 
     with pytest.raises(content.ProfileContentError, match="digest mismatch"):
         registered.resolve_recorded_profile(
-            registered.PROFILE_ID, registered.PROMPT_BUNDLE_ID
+            v2_identities.PROFILE_ID, v2_identities.PROMPT_BUNDLE_ID
         )

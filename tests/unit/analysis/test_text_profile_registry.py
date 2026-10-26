@@ -31,6 +31,16 @@ from auditmanager.analysis.text.prompt import (
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 PROMPT = "Ты — инструмент проверки синтетического раздела.\nОтвечай по схеме."
+#: One line per real package: the status and version its ``profile.json`` must declare
+#: (`PROD-14-0-EXPECTATIONS-01`). The real-tree cases below read it; the synthetic packages that
+#: the other cases write to a temporary directory keep their own ``draft`` / ``1.0.0``.
+EXPECTATIONS = Path(__file__).resolve().parent / "text_profiles" / "section_profile_expectations.json"
+
+
+def _expected_sections() -> dict[str, tuple[str, str]]:
+    """``code -> (status, profile_version)`` for every non-AR package of this tree."""
+    rows = json.loads(EXPECTATIONS.read_text(encoding="utf-8"))["sections"]
+    return {row["code"]: (row["status"], row["profile_version"]) for row in rows}
 
 
 def _profile(code: str, **overrides: Any) -> dict[str, Any]:
@@ -176,12 +186,19 @@ def test_private_entries_are_not_packages(tmp_path: Path) -> None:
 def test_the_tree_registers_without_error_and_without_an_ar_package() -> None:
     """The real root: whatever packages the tree holds load, and AR stays the v1 constants."""
     registry = load_text_profile_registry()
+    expected = _expected_sections()
     assert registry.entries["AR"].profile is AR_TEXT_PROFILE
     assert not (PACKAGES_ROOT / "ar").exists()
+    packages = set(registry.entries) - {"AR"}
+    assert packages - set(expected) == set(), "a registered package has no line in the expectations file"
+    assert set(expected) - packages == set(), "a line of the expectations file has no registered package"
     for code, entry in registry.entries.items():
         if code == "AR":
             continue
         assert entry.package == code.lower() and entry.status in {"draft", "reviewed"}
+        assert (entry.status, entry.profile.profile_version) == expected[code], (
+            f"{code}: the registry and the expectations file disagree on (status, profile_version)"
+        )
         text = (PACKAGES_ROOT / entry.package / "system_prompt.md").read_text(encoding="utf-8")
         assert entry.profile.prompt_bundle.system_prompt == text.removesuffix("\n")
 
@@ -192,7 +209,9 @@ def test_the_tree_registers_all_fifteen_sections_pb_included() -> None:
     assert set(registry.entries) == SECTION_CODES and len(registry.entries) == 15
     assert registry.executable_sections() == SECTION_CODES
     entry = registry.entries["PB"]
-    assert entry.status == "draft", "no expert review exists: the status says so"
+    status, version = _expected_sections()["PB"]
+    assert entry.status == status, "PB's status is the one the expectations file names"
+    assert entry.profile.profile_version == version, "PB's version is the one the expectations file names"
     assert entry.source is None and entry.package == "pb"
     assert entry.title_ru == "Пожарная безопасность"
     assert entry.profile.discipline == "PB"
