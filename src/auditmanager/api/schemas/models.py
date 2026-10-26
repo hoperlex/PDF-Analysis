@@ -124,6 +124,7 @@ __all__ = [
     "ArV3BetaVisibleEvidence",
     "JobId",
     "RunState",
+    "RunExecutor",
     "RunStatus",
     "RunStatusPage",
     "Severity",
@@ -1030,6 +1031,11 @@ class PortalBlockPage(_Object):
 class StartRunRequest(_Object):
     version_uid: VersionUid
     provider_mode: ProviderMode = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `EXEC-PAR-START-01`. Optional and **not nullable**, like ``provider_mode``: absent means
+    #: the global route, exactly as before; present means that connection or a refusal.
+    executor_connection_id: ExecutorConnectionId = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
 
 
 class StartArV3BetaGroupRequest(_Object):
@@ -1159,6 +1165,15 @@ class StageState(_Object):
     finished_at: datetime | None = Field(default=None, json_schema_extra=optional_property)
 
 
+class RunExecutor(_Object):
+    """`EXEC-PAR-START-01`. Which executor a run is on: the connection, the name an administrator
+    gave it and the model its frozen revision pins. Nothing else about the connection."""
+
+    connection_id: ExecutorConnectionId
+    display_name: Annotated[str, Field(min_length=1, max_length=120)]
+    pin_id: Annotated[str, Field(min_length=1, max_length=128)]
+
+
 class RunStatus(_Object):
     run_id: RunId
     reaudit_of_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
@@ -1211,6 +1226,9 @@ class RunStatus(_Object):
     )  # type: ignore[assignment]
     created_at: datetime
     terminal_at: datetime | None = Field(default=None, json_schema_extra=optional_property)
+    #: `EXEC-PAR-START-01`. The executor the run froze, read-only; null (and omitted) for a run
+    #: that froze none.
+    executor: RunExecutor | None = Field(default=None, json_schema_extra=optional_property)
 
 
 class RunStatusPage(_Object):

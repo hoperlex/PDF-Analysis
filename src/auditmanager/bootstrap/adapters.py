@@ -62,7 +62,7 @@ from auditmanager.api.schemas.models import (
 )
 from auditmanager.api.schemas import models
 from auditmanager.api.schemas.common import paginate, decode_cursor, encode_cursor
-from auditmanager.api.schemas.runs import RunStatusView, StageStateView
+from auditmanager.api.schemas.runs import RunExecutorView, RunStatusView, StageStateView
 from auditmanager.api.security import (
     ROLE_ADMIN,
     ROLE_EXPERT,
@@ -928,6 +928,7 @@ class RunAdapter(_SessionHolder):
         version_uid: str,
         idempotency_key: str,
         provider_mode: str | None = None,
+        executor_connection_id: str | None = None,
     ) -> Any:
         """A caller-supplied provider mode is refused, never silently overridden.
 
@@ -936,6 +937,9 @@ class RunAdapter(_SessionHolder):
         it: a client asking for `live` against a recorded deployment was told nothing and
         got a recorded run. Silently substituting a mode is the same failure class as
         publishing a recorded run as live, which `B-III` found one level down.
+
+        `EXEC-PAR-START-01`: ``executor_connection_id`` is the connection the caller named. It
+        is passed to the command beside the freezer; absent, the call is the one it always was.
         """
         from auditmanager.runs import start_audit_run
 
@@ -974,6 +978,7 @@ class RunAdapter(_SessionHolder):
                 # `EXEC-HTTP-01`: with the `database` source the run freezes the route's
                 # revision here, and its budget follows that revision's pinned model.
                 connection_route=self._route_freezer,
+                executor_connection_id=executor_connection_id,
             )
             if not started.replayed:
                 # `D-20`. `created -> queued` happens here, in the transaction that
@@ -1167,12 +1172,20 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
     `RunStatus.stages` was permanently empty and nothing said so - a `getattr` default is a
     silent answer to a question the object cannot answer.
     """
+    from auditmanager.executors.public import executor_of_revision
     from auditmanager.findings import diagnostics, published_finding_count
     from auditmanager.runs import RunRepository
 
     repository = RunRepository()
     run = repository.get(session, run_id)
     stages = repository.stage_results(session, run_id)
+    # `EXEC-PAR-START-01`. Which executor the run froze, from its frozen revision; none for a
+    # run that froze none. The name and the pinned model only -- nothing of the connection's
+    # address, key or probe is read here.
+    chosen = (
+        None if run.connection_revision_id is None
+        else executor_of_revision(session, run.connection_revision_id)
+    )
     # `D-21`. Read from the `model_call` rows, which are exact, and not from
     # `stage_result.metrics` -- `D-15` measures that pair as a sum over attempts wearing
     # one attempt's provenance, and that ambiguity is not being inherited into a contract.
@@ -1212,6 +1225,10 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
         cost_basis=None if cost is None else cost.basis,
         model_call_count=None if cost is None else cost.model_call_count,
         terminal_at=run.terminal_at,
+        executor=None if chosen is None else RunExecutorView(
+            connection_id=chosen.connection_id, display_name=chosen.display_name,
+            pin_id=chosen.pin_id,
+        ),
         stages=tuple(
             StageStateView(
                 stage_id=stage.stage_id,
