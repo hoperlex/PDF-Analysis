@@ -28,6 +28,7 @@ import type { ErrorCode, RunState, RunStatus } from '@/shared/api';
 import { queryKeys } from '@/shared/api';
 import { PROVIDER_MODE_LABELS, STATE_LABELS } from '@/shared/ui';
 import { WORKER_LOOKUP_LIMIT } from '@/entities/execution';
+import { AR_V3_BETA_PROFILE_ID } from '@/entities/audit-run';
 import { RunProgress } from '@/widgets/run-progress';
 
 import { PROJECT_UID, RUN_ID, runStatus } from '../review/fixtures';
@@ -45,6 +46,13 @@ function screen(overrides: Partial<RunStatus> = {}): string {
 }
 
 describe('the harness reaches this widget at all', () => {
+  it('shows an in-flight v3 Run with no fabricated PC-01 stages', () => {
+    const markup = screen({ state: 'queued', analysis_profile_id: AR_V3_BETA_PROFILE_ID, stages: [] });
+    expect(markup).toContain('Сведения об этапах пока не поступили.');
+    expect(markup).not.toContain('data-stage-id=');
+    expect(markup).not.toContain('Подготовка источника');
+  });
+
   it('renders a real reading, not a spinner, when the cache carries one', () => {
     const markup = screen({ state: 'published' });
     expect(markup).toContain(`data-run-id="${RUN_ID}"`);
@@ -311,6 +319,26 @@ describe('unknown label-table keys fail the whole run reading closed', () => {
 
 /** `published` is the success terminal; `partial` and `failed` borrow nothing from it. */
 describe('the three terminals are three different claims', () => {
+  it('keeps a published v3 preliminary review separate from canonical findings', () => {
+    const markup = screen({
+      state: 'published', analysis_profile_id: AR_V3_BETA_PROFILE_ID,
+      published_finding_count: 0,
+      stages: [{ stage_id: 'ar_v3_citation_review', status: 'succeeded' }],
+    });
+    expect(markup).toContain('data-review-only="ar-v3-beta"');
+    expect(markup).toContain('Каждая тема и цитата требует проверки эксперта');
+    expect(markup).toContain('укажите идентификатор группы из ответа запуска');
+    expect(markup).not.toContain('Опубликованных находок');
+    expect(markup).not.toContain('Разобрать находки');
+  });
+
+  it('does not claim a complete or canonical result for a partial v3 Run', () => {
+    const markup = screen({ state: 'partial', analysis_profile_id: AR_V3_BETA_PROFILE_ID, stages: [] });
+    expect(markup).toContain('Полный проверенный результат не подтверждён');
+    expect(markup).not.toContain('Разобрать находки');
+    expect(markup).not.toContain('Опубликованных находок');
+  });
+
   it('published states its finding count', () => {
     expect(screen({ state: 'published', published_finding_count: 7 })).toContain(
       'Опубликованных находок',

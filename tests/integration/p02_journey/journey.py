@@ -156,6 +156,24 @@ P02_TABLES = (
     # classification already confirmed; an upload and a run write none, so the count is expected
     # unchanged across a replay. The two views the migration also creates are not base tables.
     "document_version_classification_correction",
+    # `0030_executor_connections` and `0031_executor_pull_channel` (`EXEC-SEAL-01`,
+    # `EXEC-PULL-01`). Where a process sends model work: connections, their immutable revisions,
+    # sealed secrets, probes, route events, a runner's credential and the tasks it takes. The
+    # journey configures no executor and issues no task, so every count is expected unchanged
+    # across a replay. (The list was not extended when those two migrations landed; the
+    # completeness guard above went red for them and for `0032` together.)
+    "executor_connection",
+    "executor_connection_revision",
+    "executor_secret",
+    "executor_probe",
+    "executor_route_event",
+    "executor_runner_token",
+    "executor_task",
+    # `0032_ar_v3_run_group`. A group of six runs of one version and its members. Only
+    # `start_ar_v3_group` writes them (behind the reviewed-pack registry, empty here); the
+    # journey starts single runs, so both counts are expected unchanged across a replay.
+    "ar_v3_run_group",
+    "ar_v3_run_group_member",
 )
 
 

@@ -46,6 +46,9 @@ import { WorkersPage } from '@/_pages/workers';
 import { ReviseConnectionForm } from '@/features/manage-executor-connection';
 import { SetExecutorSecretForm } from '@/features/set-executor-secret';
 import { AnalysisProfileTable } from '@/widgets/analysis-profile-table';
+import { ArV3BetaReview } from '@/widgets/ar-v3-beta-review';
+import { ArV3BetaPack } from '@/widgets/ar-v3-beta-pack';
+import { StartArV3GroupView, classifyArV3GroupStartFailure } from '@/features/start-ar-v3-group';
 import { SpecificationPricesAnswer } from '@/widgets/specification-prices';
 import { NormReferencesAnswer } from '@/widgets/norm-references';
 import { SectionSpecificationAnswer } from '@/widgets/section-specification';
@@ -125,6 +128,10 @@ import {
 } from '../workers/executor-fixtures';
 import { proposalShapes, seedLoadedProposals } from '../optimisation-proposals/fixtures';
 import { SECTION_NO_ROWS, sectionAnswer } from '../section-specification/fixtures';
+import { GROUP_ID, groupReviewFixture } from '../analysis-settings/ar-v3-beta-review-fixtures';
+import {
+  NOT_INSTALLED_PACK, installedPackFixture, withoutMember,
+} from '../analysis-settings/ar-v3-beta-pack-fixtures';
 
 import type { Screen } from './contrast';
 
@@ -134,7 +141,7 @@ function withRouter(element: ReactElement): string {
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.2.0',
+    contract_version: '1.5.0',
     error_code: code,
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-contrast-1',
@@ -265,6 +272,9 @@ function populatedClient() {
   client.setQueryData(queryKeys.versions.detail(VERSION_UID), version());
   client.setQueryData(queryKeys.versions.sectionReview(VERSION_UID), sectionReview());
   client.setQueryData(queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT), { items: [runStatus({ run_id: RUN_ID })], page });
+  // `AR-V3-BETA-PACK-STATUS-WEB-01`: an installed reviewed pack, so every screen drawn from this
+  // client that holds the run list also draws the six-check start and its separating rule.
+  client.setQueryData(queryKeys.runs.arV3PackStatus(), installedPackFixture());
   // `diagnostic_observation_count` on purpose: the review header's diagnostics sentence
   // renders only above zero, and every fixture in this file left it at the default.
   client.setQueryData(
@@ -764,6 +774,60 @@ export function screens(): Screen[] {
   add('AnalysisProfileTable one section without a profile', render(createElement(AnalysisProfileTable, {
     items: [{ section_code: UNPROFILED, section_name: 'Генеральный план', profile: null }],
   })));
+  /*
+   * `AR-V3-BETA-GROUP-REVIEW-SCREEN-01`: the AR v3 group review LOADED. `/analysis-settings` is
+   * derived above, but with no `group_id` in its address the panel draws only its lookup form --
+   * so `.member details` (the per-scope disclosure) and `.quote` (the blockquote carrying a page
+   * quotation and a norm quotation) were reached by no screen, and `names every colour-bearing
+   * rule that NO rendered screen reaches` said so. The address carries the group, the shape is
+   * answered here: six scopes, each in a different state (available with provisional evidence,
+   * failed, verification refused, three pending), seeded as the server's answer.
+   */
+  {
+    const client = newClient();
+    client.setQueryData(queryKeys.runs.arV3GroupReview(GROUP_ID), groupReviewFixture());
+    add('ArV3BetaReview six scopes loaded', renderScreen(client, createElement(ArV3BetaReview, { groupId: GROUP_ID })));
+  }
+  /*
+   * `AR-V3-BETA-PACK-STATUS-WEB-01`: the pack panel in each of its five states, and the
+   * six-check control in its three. `/analysis-settings` is derived above, but with no pack
+   * answer seeded its panel is only the loading line -- so `.panel`, `.facts` and `.attestation`
+   * (the installed state alone carries the last two) were reached by no screen. The control keeps
+   * its refusals in a mutation observer one pass cannot settle, so its presentational view is
+   * rendered with the pending state and with one warning refusal (which carries the link) and one
+   * transient failure (which carries the retry).
+   */
+  {
+    const answered = (answer: unknown): ReturnType<typeof newClient> => {
+      const client = newClient();
+      client.setQueryData(queryKeys.runs.arV3PackStatus(), answer);
+      return client;
+    };
+    const pack = createElement(ArV3BetaPack);
+    add('ArV3BetaPack installed', renderScreen(answered(installedPackFixture()), pack));
+    add('ArV3BetaPack not installed', renderScreen(answered(NOT_INSTALLED_PACK), pack));
+    add('ArV3BetaPack contract fault', renderScreen(answered(withoutMember(installedPackFixture(), 'review')), pack));
+    add('ArV3BetaPack loading', renderScreen(newClient(), pack));
+    {
+      const client = newClient();
+      seedError(client, queryKeys.runs.arV3PackStatus(), apiError(503, 'dependency_unavailable', true));
+      add('ArV3BetaPack read failed', renderScreen(client, pack));
+    }
+    const startView = (pending: boolean, failure: ReturnType<typeof classifyArV3GroupStartFailure> | null): string =>
+      renderScreen(newClient(), createElement(StartArV3GroupView, {
+        projectUid: PROJECT_UID, versionUid: VERSION_UID, pending, failure, onSend: noop,
+      }));
+    add('StartArV3GroupView idle', startView(false, null));
+    add('StartArV3GroupView pending', startView(true, null));
+    add(
+      'StartArV3GroupView refused with the classification link',
+      startView(false, classifyArV3GroupStartFailure(apiError(422, 'version_classification_required', false))),
+    );
+    add(
+      'StartArV3GroupView transient failure with a retry',
+      startView(false, classifyArV3GroupStartFailure(apiError(503, 'dependency_unavailable', true))),
+    );
+  }
   // `W60-PRICE-LIST-01`: the «Оптимизация» tab loaded (revisions, a positions page with its
   // report, the fifteen vendor lists), and every other shape its widgets have.
   {

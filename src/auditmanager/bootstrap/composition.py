@@ -58,11 +58,49 @@ from auditmanager.bootstrap.adapters import (
 )
 from auditmanager.bootstrap.settings import AppSettings, ConfigurationError
 from auditmanager.bootstrap.settings import load as load_settings
-from auditmanager.runs.public import DurableCarrier, ReclaimingCarrier, TrustedPackRegistry, run_to_terminal
+from auditmanager.runs.public import (
+    PACK_MANIFEST_ENV,
+    DurableCarrier,
+    PackManifestRefused,
+    ParsedPackManifest,
+    ReclaimingCarrier,
+    TrustedPackRegistry,
+    load_manifest,
+    run_to_terminal,
+)
 from auditmanager.sections.public import SECTION_CODES, section_names
 from auditmanager.releases.public import (
     ReleaseRepository, compute_build_id, read_product_version,
 )
+
+
+def _ar_v3_installed_pack(env: dict[str, str]) -> ParsedPackManifest | None:
+    """`AR-V3-BETA-PACK-INSTALL-01`: load the sealed reviewed pack named by the environment.
+
+    Without ``AR_V3_BETA_PACK_MANIFEST`` (or with a blank value, as ``load_trusted_pack_registry``
+    reads it) nothing is installed and group starts refuse. With it, a manifest that cannot be
+    loaded refuses the start: an empty registry is never the answer to a pack the operator meant
+    to install. The one load yields both the registry and, for `AR-V3-BETA-PACK-STATUS-API-01`,
+    the attestation that came with the pack.
+    """
+    path = env.get(PACK_MANIFEST_ENV)
+    if path is None or not path.strip():
+        return None
+    try:
+        return load_manifest(path.strip())
+    except PackManifestRefused as exc:
+        raise ConfigurationError(
+            f"{PACK_MANIFEST_ENV} names a reviewed-pack manifest the server refuses: {exc}"
+        ) from exc
+
+
+def _registry_of(installed: ParsedPackManifest | None) -> TrustedPackRegistry:
+    return TrustedPackRegistry.empty() if installed is None else installed.registry
+
+
+def _ar_v3_pack_registry(env: dict[str, str]) -> TrustedPackRegistry:
+    """The registry alone: what the worker needs, and what group start decides from."""
+    return _registry_of(_ar_v3_installed_pack(env))
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,6 +192,7 @@ def build_worker_runtime(
     # `W59-SECTION-SEAL-01`. The worker runs each claimed run with the profile it pinned,
     # resolved through the same registry the application routes with.
     text_profiles = load_text_profiles()
+    ar_v3_pack_registry = _ar_v3_pack_registry(env)
 
     def execute(run_id: str, worker_id: str) -> None:
         run_to_terminal(
@@ -165,6 +204,7 @@ def build_worker_runtime(
             worker_id=worker_id,
             text_profiles=text_profiles.resolve,
             providers=providers.resolve,
+            ar_v3_pack_registry=ar_v3_pack_registry,
         )
 
     # `EXEC-PULL-PROBE-INT-01`: pull probes need no secret. Start the probe loop even
@@ -289,6 +329,7 @@ def build_application(
         else DurableCarrier(sessions)
     )
 
+    ar_v3_installed_pack = _ar_v3_installed_pack(env)
     run_adapter = RunAdapter(
         sessions,
         blob_store=store,
@@ -312,7 +353,9 @@ def build_application(
         route_freezer=providers.freeze,
         # No expert-approved six-set pack is installed in the beta candidate.
         # This keeps group start closed while allowing historical group reads.
-        ar_v3_pack_registry=TrustedPackRegistry.empty(),
+        ar_v3_pack_registry=_registry_of(ar_v3_installed_pack),
+        # `AR-V3-BETA-PACK-STATUS-API-01`: the same load, with the attestation that came with it.
+        ar_v3_installed_pack=ar_v3_installed_pack,
     )
     if isinstance(carrier, DurableCarrier):
         carrier.configure_runner(run_adapter._job)

@@ -22,10 +22,42 @@ CITE rebuilds the exact saved AR v3 provider body after a worker restart using t
 ## Captured premise evidence
 - premise: completed call stores parameter JSON but CITE accepts independent generation settings
 ### P-01 — replay seam
-- captured_at: 2026-10-23
-- command: `rg -n 'class V3CompletedCall|effect_params =|settings: V3GenerationSettings|settings=settings' src/auditmanager/jobs/repository.py src/auditmanager/runs/v3_cite_preflight.py src/auditmanager/runs/v3_cite_stage.py`
-- captured_output: `V3CompletedCall` has no generation parameters; `completed_v3_call` reads `effect_parameters`; CITE preflight and writer require `settings` from their caller.
-- interpretation: saved exact body replay can use only the canonical call/effect parameters after validating the v3 settings shape.
+- captured_at: 2026-10-26
+- command: `git grep -n -E 'effect_params =|settings: V3GenerationSettings|settings=settings' 3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f -- src/auditmanager/jobs/repository.py src/auditmanager/runs/v3_cite_preflight.py src/auditmanager/runs/v3_cite_stage.py; git grep -n -A 24 'class V3CompletedCall' 3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f -- src/auditmanager/jobs/repository.py`
+- captured_output:
+  ```text
+  3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f:src/auditmanager/jobs/repository.py:1036:        effect_params = row["effect_parameters"]
+  3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f:src/auditmanager/runs/v3_cite_preflight.py:58:    settings: V3GenerationSettings,
+  3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f:src/auditmanager/runs/v3_cite_preflight.py:81:        model_identity=call.model_id, settings=settings,
+  3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f:src/auditmanager/runs/v3_cite_stage.py:86:    settings: V3GenerationSettings,
+  3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f:src/auditmanager/runs/v3_cite_stage.py:119:            settings=settings, jobs=job_repo, runs=run_repo,
+  3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f:src/auditmanager/jobs/repository.py:402:class V3CompletedCall:
+  3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f:src/auditmanager/jobs/repository.py-403-    run_id: str
+  3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f:src/auditmanager/jobs/repository.py-404-    job_id: str
+  3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f:src/auditmanager/jobs/repository.py-405-    attempt_id: str
+  3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f:src/auditmanager/jobs/repository.py-406-    model_call_id: str
+  3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f:src/auditmanager/jobs/repository.py-407-    provider: str
+  3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f:src/auditmanager/jobs/repository.py-408-    model_id: str
+  3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f:src/auditmanager/jobs/repository.py-409-    provider_mode: str
+  3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f:src/auditmanager/jobs/repository.py-410-    request_sha256: str
+  3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f:src/auditmanager/jobs/repository.py-411-    response_sha256: str
+  3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f:src/auditmanager/jobs/repository.py-412-    candidate_sha256: str
+  3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f:src/auditmanager/jobs/repository.py-413-    scope_id: str
+  3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f:src/auditmanager/jobs/repository.py-414-    set_sha256: str
+  3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f:src/auditmanager/jobs/repository.py-415-    reply_blob_id: str
+  3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f:src/auditmanager/jobs/repository.py-416-    reply_blob_sha256: str
+  3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f:src/auditmanager/jobs/repository.py-417-    reply_blob_size: int
+  3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f:src/auditmanager/jobs/repository.py-418-    input_tokens: int
+  3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f:src/auditmanager/jobs/repository.py-419-    output_tokens: int
+  3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f:src/auditmanager/jobs/repository.py-420-    latency_ms: int
+  3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f:src/auditmanager/jobs/repository.py-421-    cost_micros: int | None
+  3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f:src/auditmanager/jobs/repository.py-422-    cost_basis: str
+  3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f:src/auditmanager/jobs/repository.py-423-    status: str
+  3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f:src/auditmanager/jobs/repository.py-424-    connection_revision_id: str | None
+  3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f:src/auditmanager/jobs/repository.py-425-    identity_basis: str | None
+  3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f:src/auditmanager/jobs/repository.py-426-
+  ```
+- interpretation: Re-captured on 2026-10-26 from base commit 3bffe5eb8f21b53595737a82b2e116a2c7ef6e4f with git grep against that tree (not at dispatch time). At the base, V3CompletedCall (repository.py:402-425) has no generation-parameter or settings field. completed_v3_call reads effect_parameters (line 1036) into a local; v3_cite_preflight.py takes settings: V3GenerationSettings (58) and forwards settings=settings (81); v3_cite_stage.py takes settings (86) and forwards it (119). So CITE preflight and writer require caller-supplied settings. Not shown: that the effect parameters are validated or discarded after line 1036 (the return statement is outside the captured lines). Dispatch-time record (2026-10-23, quoted from the original section, not re-run): command `rg -n 'class V3CompletedCall|effect_params =|settings: V3GenerationSettings|settings=settings' src/auditmanager/jobs/repository.py src/auditmanager/runs/v3_cite_preflight.py src/auditmanager/runs/v3_cite_stage.py`; captured_output was a prose summary: `V3CompletedCall` has no generation parameters; `completed_v3_call` reads `effect_parameters`; CITE preflight and writer require `settings` from their caller. Original interpretation: saved exact body replay can use only the canonical call/effect parameters after validating the v3 settings shape.
 
 ## Historical evidence
 - correction_mode: none

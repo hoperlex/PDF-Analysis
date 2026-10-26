@@ -18,7 +18,7 @@ from auditmanager.shared.identity import RunId
 from auditmanager.storage.public import BlobMetadataRepository, declare_blob
 
 
-def _queued_run(session, seeded) -> str:
+def _queued_run(session, seeded, *, mode: str = "recorded") -> str:
     run_id = str(RunId.new())
     runs = RunRepository()
     runs.create(
@@ -26,7 +26,7 @@ def _queued_run(session, seeded) -> str:
         version_uid=seeded.version_uid,
         analysis_profile_id=seeded.analysis_profile_id,
         prompt_bundle_id=seeded.prompt_bundle_id,
-        provider_mode="recorded", frozen_input_digest="a" * 64,
+        provider_mode=mode, frozen_input_digest="a" * 64,
         command_id=None,
     )
     runs.advance(session, run_id=run_id, from_state="created", to_state="queued")
@@ -157,6 +157,45 @@ def test_lease_reclaim_journals_the_effect_outcome(session, blob_store, helpers)
         and item.payload.get("dispatch_class") == "not_sent"
         for item in events
     )
+    # ... and nothing about it fenced the run: the Job is back in the queue for a new Attempt.
+    assert session.execute(text(
+        "SELECT state FROM job WHERE run_id = :run_id"
+    ), {"run_id": run_id}).scalar_one() == "queued"
+
+
+def test_lease_reclaim_of_a_live_effect_journals_outcome_unknown(
+    session, blob_store, helpers,
+) -> None:
+    """The inverse of D-150: a live call may have been sent, so it is never `not_processed`."""
+    seeded = helpers.seed_version(session, blob_store)
+    run_id = _queued_run(session, seeded, mode="live")
+    jobs = JobRepository()
+    jobs.enqueue(session, run_id=run_id)
+    authority = jobs.start_execution(session, run_id=run_id)
+    RunRepository().advance(session, run_id=run_id, from_state="queued", to_state="running")
+    effect = jobs.prepare_provider_call(
+        session, authority, provider="synthetic", model_identity="synthetic",
+        provider_mode="live", parameters={}, request_sha256="c" * 64,
+    )
+    session.execute(text(
+        "UPDATE lease SET expires_at = statement_timestamp() - interval '1 second' "
+        "WHERE lease_id = :lease_id"
+    ), {"lease_id": authority.lease_id})
+    assert jobs.reclaim_expired(session) >= 1
+    assert session.execute(text(
+        "SELECT state, dispatch_class FROM provider_call_effect WHERE model_call_id = :effect"
+    ), {"effect": str(effect)}).one() == ("outcome_unknown", "outcome_unknown")
+    events = ExecutionRepository().list_journal(session, run_id=run_id, cursor=None, limit=100)
+    assert any(
+        item.aggregate_id == authority.attempt_id
+        and item.event_type == "provider.outcome_unknown"
+        and item.payload.get("dispatch_class") == "outcome_unknown"
+        for item in events
+    )
+    assert not any(item.event_type == "provider.not_processed" for item in events)
+    assert session.execute(text(
+        "SELECT state FROM audit_run WHERE run_id = :run_id"
+    ), {"run_id": run_id}).scalar_one() == "failed"
 
 
 def test_terminal_effect_settlement_journals_abandonment(session, blob_store, helpers) -> None:

@@ -92,6 +92,38 @@ def test_a_recorded_prepared_effect_is_settled_not_processed_and_the_run_resumes
     ), {"attempt_id": authority.attempt_id}).scalar_one() == 1
 
 
+def test_a_settled_recorded_effect_lets_a_fresh_attempt_retry_the_call(
+    session, blob_store, helpers,
+) -> None:
+    """Retryable means the next Attempt can claim, pass the stage fence and prepare the call.
+
+    ``not_processed`` is the one settled state the recorded text-stage fence ignores; an
+    ``outcome_unknown`` effect would make ``require_recorded_stage_call_available`` refuse.
+    """
+    seeded = helpers.seed_version(session, blob_store)
+    run_id = _queued_run(session, seeded, mode="recorded")
+    jobs = JobRepository()
+    first = _claim(session, run_id, jobs)
+    _prepare(session, jobs, first, mode="recorded", digest="5")
+    _expire_and_reclaim(session, first)
+    assert _states(session, run_id) == ("running", "queued")
+
+    second = jobs.start_execution(session, run_id=run_id)
+    assert second.attempt_id != first.attempt_id
+    jobs.require_recorded_stage_call_available(session, second)
+    retried = _prepare(session, jobs, second, mode="recorded", digest="5")
+
+    assert dict(session.execute(text(
+        "SELECT attempt_id, state FROM provider_call_effect WHERE run_id = :run_id"
+    ), {"run_id": run_id}).all()) == {
+        first.attempt_id: "not_processed", second.attempt_id: "prepared",
+    }
+    assert str(retried)
+    assert session.execute(text(
+        "SELECT state FROM attempt WHERE attempt_id = :attempt_id"
+    ), {"attempt_id": first.attempt_id}).scalar_one() == "lost"
+
+
 def test_a_completed_recorded_effect_does_not_block_the_resume(
     session, blob_store, helpers,
 ) -> None:

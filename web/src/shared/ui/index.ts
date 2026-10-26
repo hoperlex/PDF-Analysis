@@ -27,7 +27,7 @@ export { COST_BASIS_LABELS, PROVIDER_MODE_LABELS, PROVIDER_MODE_UNKNOWN_LABEL, S
 export type { StageStatusBadgeProps } from './stage-status-badge';
 export { StageStatusBadge } from './stage-status-badge';
 
-export { STAGE_LABELS } from './stage-label';
+export { AR_V3_BETA_STAGE_LABELS, STAGE_LABELS, runStageLabel } from './stage-label';
 
 export type { PageShellProps } from './page-shell';
 export { PageShell } from './page-shell';

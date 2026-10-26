@@ -36,13 +36,13 @@
       "const": "auditmanager.domain.identifiers"
     },
     "contract_version": {
-      "const": "1.2.0"
+      "const": "1.5.0"
     },
     "supersedes": {
-      "const": "1.1.0"
+      "const": "1.4.0"
     },
     "candidate_revision": {
-      "const": 20,
+      "const": 23,
       "description": "Review round of this contract. At the 1.0.0 seal it is the sealed round: it is pinned here so the contract cannot change meaning without a deliberate edit of both the catalog and this schema, exactly as contract_version is pinned, and after the seal such an edit follows the freeze-break and version procedure of VERSIONING_AND_FREEZE_POLICY.md."
     },
     "revision_note": {
@@ -330,6 +330,7 @@
                 "import_id",
                 "blob_id",
                 "run_id",
+                "ar_v3_run_group_id",
                 "job_id",
                 "attempt_id",
                 "lease_id",

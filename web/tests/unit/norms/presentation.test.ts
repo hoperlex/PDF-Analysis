@@ -17,7 +17,7 @@ import { NORM_DOCUMENT_ID, NORM_SNAPSHOTS, normDocument } from './fixtures';
 
 function refusal(status: number, code: ErrorCode, details: Record<string, string> = {}): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.2.0',
+    contract_version: '1.5.0',
     error_code: code,
     message: 'English the client never prints.',
     correlation_id: 'cid-norms-1',

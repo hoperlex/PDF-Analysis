@@ -50,3 +50,36 @@ def build_ar_v3_group_routes(router: APIRouter, groups: ArV3GroupPort) -> None:
     ) -> WireResponse:
         group = groups.get_ar_v3_group(group_id=group_id)
         return json_response(200, encode_json(group.model_dump(mode="json")))
+
+    @router.get(
+        "/ar-v3-beta/groups/{group_id}/review",
+        operation_id="getArV3BetaGroupReview",
+        tags=["runs"],
+        status_code=200,
+        response_model=models.ArV3BetaGroupReview,
+        responses={
+            **success(200, "The six verified, review-only scope outcomes."),
+            **envelope_responses(401, 403, 404, 500, 503),
+        },
+    )
+    def get_ar_v3_beta_group_review(
+        group_id: Annotated[models.ArV3RunGroupId, Path()],
+    ) -> WireResponse:
+        review = groups.get_ar_v3_group_review(group_id=group_id)
+        return json_response(200, encode_json(review.model_dump(mode="json")))
+
+    @router.get(
+        "/ar-v3-beta/pack",
+        operation_id="getArV3BetaPackStatus",
+        tags=["runs"],
+        status_code=200,
+        response_model=models.ArV3BetaPackStatus,
+        responses={
+            **success(200, "Whether a reviewed pack is installed, and its reviewer attestation."),
+            **envelope_responses(401, 403, 500, 503),
+        },
+    )
+    def get_ar_v3_beta_pack_status() -> WireResponse:
+        status = groups.get_ar_v3_pack_status()
+        # `exclude_unset`: a pack that is not installed omits every property but `state`.
+        return json_response(200, encode_json(status.model_dump(mode="json", exclude_unset=True)))

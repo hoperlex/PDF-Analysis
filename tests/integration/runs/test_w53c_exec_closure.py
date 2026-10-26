@@ -165,6 +165,9 @@ class _ConfiguredRuns:
     #: unrouted test wiring may; the served application always routes
     #: (``test_the_served_application_routes_by_section.py``).
     section_profiles: None = None
+    #: `EXEC-HTTP-01`. No route freezer: ``ExecutionAdapter.reaudit_run`` passes the adapter's
+    #: freezer to the command, and ``None`` is a wiring without the ``database`` provider source.
+    route_freezer: None = None
 
     def __init__(self, configuration: tuple[str, str, str]) -> None:
         self.configuration = configuration

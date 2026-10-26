@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.2.0 (OpenAPI 3.1.0)
- *   sha256 6d4402a62e93dd255a40e30869d42d543cbd7cb64bba75e56b0b4c087ff18c1b
+ *   AuditManager PC-01 API 1.5.0 (OpenAPI 3.1.0)
+ *   sha256 425b17f6f4734dafb7faa1f744aed5f51264955e400fde9d5da8752f6ed83df5
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -22,6 +22,8 @@ import type {
   AppendDecisionResponse,
   ApproveRegistrationRequest,
   ArV3BetaGroup,
+  ArV3BetaGroupReview,
+  ArV3BetaPackStatus,
   ArV3RunGroupId,
   Assignment,
   AssignmentDetail,
@@ -180,6 +182,8 @@ export const OPERATION_IDS = [
   'failExecutorTask',
   'generateExecutorSshKey',
   'getArV3BetaGroup',
+  'getArV3BetaGroupReview',
+  'getArV3BetaPackStatus',
   'getAssignment',
   'getDashboardSummary',
   'getDocumentVersion',
@@ -824,6 +828,40 @@ export type GetArV3BetaGroupInput = {
 
 /** Success body of `getArV3BetaGroup` (`application/json`, HTTP 200). */
 export type GetArV3BetaGroupResult = ArV3BetaGroup;
+
+// ------------------------------------------------------------------------------------
+// getArV3BetaGroupReview - GET /ar-v3-beta/groups/{group_id}/review
+// ------------------------------------------------------------------------------------
+
+/** Get Ar V3 Beta Group Review */
+export type GetArV3BetaGroupReviewInput = {
+  /** Path parameters, substituted into `/ar-v3-beta/groups/{group_id}/review`. */
+  path: {
+    group_id: ArV3RunGroupId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getArV3BetaGroupReview` (`application/json`, HTTP 200). */
+export type GetArV3BetaGroupReviewResult = ArV3BetaGroupReview;
+
+// ------------------------------------------------------------------------------------
+// getArV3BetaPackStatus - GET /ar-v3-beta/pack
+// ------------------------------------------------------------------------------------
+
+/** Get Ar V3 Beta Pack Status */
+export type GetArV3BetaPackStatusInput = {
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getArV3BetaPackStatus` (`application/json`, HTTP 200). */
+export type GetArV3BetaPackStatusResult = ArV3BetaPackStatus;
 
 // ------------------------------------------------------------------------------------
 // getAssignment - GET /assignments/{assignment_uid}
@@ -3167,6 +3205,34 @@ export const OPERATIONS = {
     responseMediaType: 'application/json',
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['runs'],
+  },
+  getArV3BetaGroupReview: {
+    operationId: 'getArV3BetaGroupReview',
+    method: 'GET',
+    path: '/ar-v3-beta/groups/{group_id}/review',
+    pathParams: ['group_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['runs'],
+  },
+  getArV3BetaPackStatus: {
+    operationId: 'getArV3BetaPackStatus',
+    method: 'GET',
+    path: '/ar-v3-beta/pack',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 500, 503],
     tags: ['runs'],
   },
   getAssignment: {

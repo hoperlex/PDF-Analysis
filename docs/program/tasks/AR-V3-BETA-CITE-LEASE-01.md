@@ -22,10 +22,29 @@ The unserved AR v3 CITE preflight reads the saved request and private reply Blob
 ## Captured premise evidence
 - premise: the completed-call reader locks authority and CITE calls it before request and reply Blob reads
 ### P-01 — CITE order and completed-call lock
-- captured_at: 2026-10-23
-- command: `rg -n 'completed_v3_call\(|prepare_v3_execution_request\(|read_v3_reply\(|require_current\(session, authority\)' src/auditmanager/runs/v3_cite_preflight.py src/auditmanager/jobs/repository.py`
-- captured_output: current `v3_cite_preflight.py` calls completed call at line 72, request at 75, reply at 95, and completed call again at 128; `JobRepository.completed_v3_call` calls `require_current` before and after its DB query.
-- interpretation: both request and reply external reads can inherit an authority lock; move all Blob reads before one final locked witness check.
+- captured_at: 2026-10-26
+- command: `git grep -n -E 'def completed_v3_call|def record_provider_response|completed_v3_call\(|prepare_v3_execution_request\(|read_v3_reply\(|require_current\(session, authority\)' f475a179f35d51f6316a5f4694eab6f335b9395f -- src/auditmanager/runs/v3_cite_preflight.py src/auditmanager/jobs/repository.py`
+- captured_output:
+  ```text
+  f475a179f35d51f6316a5f4694eab6f335b9395f:src/auditmanager/jobs/repository.py:864:        self.require_current(session, authority)
+  f475a179f35d51f6316a5f4694eab6f335b9395f:src/auditmanager/jobs/repository.py:925:        self.require_current(session, authority)
+  f475a179f35d51f6316a5f4694eab6f335b9395f:src/auditmanager/jobs/repository.py:960:        self.require_current(session, authority)
+  f475a179f35d51f6316a5f4694eab6f335b9395f:src/auditmanager/jobs/repository.py:1010:    def completed_v3_call(
+  f475a179f35d51f6316a5f4694eab6f335b9395f:src/auditmanager/jobs/repository.py:1019:        self.require_current(session, authority)
+  f475a179f35d51f6316a5f4694eab6f335b9395f:src/auditmanager/jobs/repository.py:1093:        self.require_current(session, authority)
+  f475a179f35d51f6316a5f4694eab6f335b9395f:src/auditmanager/jobs/repository.py:1111:    def record_provider_response(
+  f475a179f35d51f6316a5f4694eab6f335b9395f:src/auditmanager/jobs/repository.py:1122:        self.require_current(session, authority)
+  f475a179f35d51f6316a5f4694eab6f335b9395f:src/auditmanager/jobs/repository.py:1153:        self.require_current(session, authority)
+  f475a179f35d51f6316a5f4694eab6f335b9395f:src/auditmanager/jobs/repository.py:1177:        self.require_current(session, authority)
+  f475a179f35d51f6316a5f4694eab6f335b9395f:src/auditmanager/jobs/repository.py:1207:        self.require_current(session, authority)
+  f475a179f35d51f6316a5f4694eab6f335b9395f:src/auditmanager/jobs/repository.py:1275:        self.require_current(session, authority)
+  f475a179f35d51f6316a5f4694eab6f335b9395f:src/auditmanager/jobs/repository.py:1298:        self.require_current(session, authority)
+  f475a179f35d51f6316a5f4694eab6f335b9395f:src/auditmanager/runs/v3_cite_preflight.py:72:    call = job_repo.completed_v3_call(session, authority)
+  f475a179f35d51f6316a5f4694eab6f335b9395f:src/auditmanager/runs/v3_cite_preflight.py:75:    prepared = prepare_v3_execution_request(
+  f475a179f35d51f6316a5f4694eab6f335b9395f:src/auditmanager/runs/v3_cite_preflight.py:96:    reply = read_v3_reply(
+  f475a179f35d51f6316a5f4694eab6f335b9395f:src/auditmanager/runs/v3_cite_preflight.py:128:    ) != binding or job_repo.completed_v3_call(session, authority) != call):
+  ```
+- interpretation: Re-captured on 2026-10-26 from base commit f475a179f35d51f6316a5f4694eab6f335b9395f with git grep against that tree (not at dispatch time). At the base, v3_cite_preflight.py calls completed_v3_call at line 72, prepare_v3_execution_request (the saved-request Blob read) at 75, read_v3_reply (the reply Blob read) at 96 and completed_v3_call again at 128. JobRepository.completed_v3_call starts at repository.py:1010 and calls require_current(session, authority) at 1019 and 1093, with the next def (record_provider_response) at 1111, so the authority check sits at both ends of the completed-call reader and the reader runs before the request and reply reads. Not shown by this output: that the SQL read lies between lines 1019 and 1093 (taken from reading repository.py:1010-1109 of the base) and that require_current takes the lock (the task's own premise). Difference from the dispatch-time record: it placed the reply read at line 95; the base commit has it at line 96. Dispatch-time record (2026-10-23, quoted from the original section, not re-run): command `rg -n 'completed_v3_call\(|prepare_v3_execution_request\(|read_v3_reply\(|require_current\(session, authority\)' src/auditmanager/runs/v3_cite_preflight.py src/auditmanager/jobs/repository.py`; captured_output was a prose summary: current `v3_cite_preflight.py` calls completed call at line 72, request at 75, reply at 95, and completed call again at 128; `JobRepository.completed_v3_call` calls `require_current` before and after its DB query. Original interpretation: both request and reply external reads can inherit an authority lock; move all Blob reads before one final locked witness check.
 
 ## Historical evidence
 - correction_mode: none

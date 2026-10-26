@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import ast
+import os
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -156,3 +158,25 @@ def test_literal_dynamic_cross_context_import_is_visible(monkeypatch, tmp_path: 
         ("deep", "auditmanager.storage.models"),
         ("package-root", "auditmanager.storage"),
     ]
+
+
+# `operations`, `probe_runner` and `resolver` import `executors.public`, so `public` may not import
+# `operations` eagerly: the worker takes `import_env` from `public`, and a module-level import
+# there makes `python -m auditmanager.executors` (which imports `operations` first) fail on the cycle.
+_WORKER_BASELINE_PROBE = (
+    "import importlib; importlib.import_module({first!r}); "
+    "from auditmanager.executors import destinations, operations, public; "
+    "assert public.import_env is operations.import_env; "
+    "assert public.OperationRefused is operations.OperationRefused; "
+    "assert public.DestinationPolicy is destinations.DestinationPolicy"
+)
+
+
+def test_worker_baseline_names_resolve_from_executors_public_in_any_import_order() -> None:
+    environment = {**os.environ, "PYTHONPATH": str(SOURCE_ROOT.parent)}
+    for first in ("auditmanager.executors.operations", "auditmanager.executors.public"):
+        result = subprocess.run(
+            [sys.executable, "-c", _WORKER_BASELINE_PROBE.format(first=first)],
+            capture_output=True, text=True, env=environment, check=False,
+        )
+        assert result.returncode == 0, f"importing {first} first:\n{result.stderr}"

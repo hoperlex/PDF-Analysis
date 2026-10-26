@@ -59,7 +59,9 @@ def test_the_declaration_partitions_exactly_the_tables_schema_coverage_declares(
     # are configuration, like accounts, and join the kept tables: 23 -> 28.
     # `EXEC-PULL-01`: the runner tokens are configuration too (KEEP 28 -> 29) and the tasks carry
     # the stand's documents and answers (PRODUCT 29 -> 30).
-    assert len(tool.PRODUCT_TABLES) == 30 and len(tool.KEEP_TABLES) == 29 and len(tool.MIXED_TABLES) == 3
+    # `0032_ar_v3_run_group`: the group and its six members are product data (PRODUCT 30 -> 32).
+    assert {"ar_v3_run_group", "ar_v3_run_group_member"} <= tool.PRODUCT_TABLES
+    assert len(tool.PRODUCT_TABLES) == 32 and len(tool.KEEP_TABLES) == 29 and len(tool.MIXED_TABLES) == 3
     assert tool.PRODUCT_TABLES | tool.KEEP_TABLES | tool.MIXED_TABLES == TABLES
     # the corpus half of KEEP is schema_coverage's own list, not a copy of it
     assert tool.KEEP_NORM_TABLES is EXEMPT_FROM_FINGERPRINT
@@ -580,6 +582,9 @@ def test_the_executor_configuration_is_kept_by_a_product_purge() -> None:
 
     Each of the five tables, the seven command types and the ``executor.`` event family is KEEP,
     and none is PRODUCT: a purge of product data must never delete a sealed secret or a route.
+    The event family is declared in the tuple AND must reach the SQL that decides which rows stay
+    (``DEV-PURGE-EXECUTOR-EVENTS-01``); the purge of real rows is
+    ``test_product_purge_executor_events.py``.
     """
     tables = {"executor_connection", "executor_connection_revision", "executor_probe",
               "executor_route_event", "executor_secret"}
@@ -589,6 +594,7 @@ def test_the_executor_configuration_is_kept_by_a_product_purge() -> None:
                 "generate_executor_ssh_key", "request_executor_probe", "set_executor_route"}
     assert commands <= tool.KEEP_COMMAND_TYPES and not commands & tool.PRODUCT_COMMAND_TYPES
     assert "executor." in tool.KEEP_EVENT_PREFIXES
+    assert "starts_with(t.event_type, 'executor.')" in tool._predicates([])["audit_event"][0]
     assert not any("executor." .startswith(prefix) for prefix in tool.PRODUCT_EVENT_PREFIXES)
 
 

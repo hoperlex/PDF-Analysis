@@ -164,7 +164,7 @@ from auditmanager.norms.retrieval.promotion import (
     select_verified_retrieval_set,
 )
 from auditmanager.norms.retrieval.promotion_repository import VerifiedSetReference
-from auditmanager.norms.retrieval.artifact import SetIdentity
+from auditmanager.norms.retrieval.artifact import SET_BUILDER_VERSION, SetIdentity
 from auditmanager.norms.repository import (  # W54-SNAPSHOT-01
     NormsProjectionConflict,
     SnapshotImportConflict,
@@ -207,6 +207,7 @@ def reference_pages_from_text_layer(
 
 
 __all__ = [
+    "SET_BUILDER_VERSION",
     "SetIdentity",
     "ADMIT_COMMAND_TYPE",
     "D143_MESSAGE",

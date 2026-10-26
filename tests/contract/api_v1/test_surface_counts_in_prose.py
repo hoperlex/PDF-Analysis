@@ -587,7 +587,7 @@ def test_a_stale_claim_in_a_previously_excluded_conf_file_is_red() -> None:
     """`D-99`: mutate the real extensionless scanner input in memory; `.conf` is not skipped."""
     relative = "infra/deploy/proxy/nginx.conf"
     text = (REPO_ROOT / relative).read_text(encoding="utf-8")
-    mutated = text.replace("the ninety paths", "the eighty-nine paths", 1)
+    mutated = text.replace("the ninety-two paths", "the eighty-nine paths", 1)
     assert mutated != text
     wrong = _wrong_surface_claims(relative, mutated)
     assert any("'eighty-nine paths' states 89" in item for item in wrong), wrong
@@ -597,7 +597,7 @@ def test_a_stale_current_claim_in_p02_seams_is_red() -> None:
     """`D-100`: the once-unscanned live seam document is mutation-tested by path."""
     relative = "docs/program/P02_SEAMS.md"
     text = (REPO_ROOT / relative).read_text(encoding="utf-8")
-    mutated = text.replace("102 operations, sealed.", "101 operations, sealed.", 1)
+    mutated = text.replace("104 operations, sealed.", "101 operations, sealed.", 1)
     assert mutated != text
     wrong = _wrong_surface_claims(relative, mutated)
     assert any("'101 operations' states 101" in item for item in wrong), wrong

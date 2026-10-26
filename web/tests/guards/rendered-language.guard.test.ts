@@ -80,7 +80,7 @@ import type {
   VersionComparison,
 } from '@/shared/api';
 import { RUN_STATE_VALUES } from '@/shared/api';
-import { RUN_PAGE_LIMIT } from '@/entities/audit-run';
+import { AR_V3_BETA_PROFILE_ID, RUN_PAGE_LIMIT } from '@/entities/audit-run';
 import { USER_PAGE_LIMIT } from '@/entities/user';
 import { ASSIGNMENT_PAGE_LIMIT } from '@/entities/assignment';
 import { REGISTRATION_PAGE_LIMIT } from '@/entities/registration-request';
@@ -130,6 +130,11 @@ import { MY_TASKS_LIMIT } from '@/widgets/my-tasks';
 import NotFound from '@/app/not-found';
 import ErrorBoundary from '@/app/error';
 import { DecisionHistory } from '@/widgets/decision-history';
+import { ArV3BetaReview } from '@/widgets/ar-v3-beta-review';
+import { ArV3BetaPack } from '@/widgets/ar-v3-beta-pack';
+import {
+  MALFORMED_GROUP_ANSWER, StartArV3GroupView, classifyArV3GroupStartFailure,
+} from '@/features/start-ar-v3-group';
 import { ExecutionJournal } from '@/widgets/execution-journal';
 import { ExecutionQueue } from '@/widgets/execution-queue';
 import { WorkerList } from '@/widgets/worker-list';
@@ -174,6 +179,9 @@ import { CONTRACT_PATH, SEAMS_PATH, readJson, readText, repoRelative, walkFiles 
 import { join } from 'node:path';
 import { REPO_ROOT } from './lib/repo';
 import { newClient, renderScreen, seedError } from '../unit/screens/harness';
+import {
+  NOT_INSTALLED_PACK, installedPackFixture, withoutMember,
+} from '../unit/analysis-settings/ar-v3-beta-pack-fixtures';
 import { optimisationShapes } from '../unit/optimisation/fixtures';
 import { proposalShapes } from '../unit/optimisation-proposals/fixtures';
 import { derivedScreens, malformedVariants, wellFormed } from '../unit/screens/route-screens';
@@ -770,8 +778,8 @@ const sectionReview = (over: Partial<SectionReview> = {}): SectionReview => ({
   options: PROJECT_SECTIONS.map((section) => ({
     section_code: section.code,
     name: section.name,
-    // One section without a registered profile, so the mark renders.
-    executable: section.code !== 'PB',
+    // All fifteen sections have a registered profile, including the draft ПБ profile.
+    executable: true,
     suggestion:
       section.code === 'AR'
         ? { score: 7, filename_patterns: ['АР'], text_keywords: ['поэтажный план'], name_in_text: true }
@@ -995,7 +1003,7 @@ const record = (over: Partial<DecisionRecord> = {}): DecisionRecord => ({
 
 function apiError(status: number, code: ErrorCode): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.2.0',
+    contract_version: '1.5.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1007,7 +1015,7 @@ function apiError(status: number, code: ErrorCode): ApiError {
 /** A norms refusal with the one classifier the seal registered for it (`W55A-WEB-NORMS`). */
 function normsRefusal(code: ErrorCode, details: Readonly<Record<string, string>>): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.2.0',
+    contract_version: '1.5.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1069,13 +1077,12 @@ function dashboardSummary(over: Partial<DashboardSummary> = {}): DashboardSummar
 
 /**
  * `W59-ANALYSIS-SETTINGS-01`: the registry «Настройки анализа» lists. AR builtin with no
- * source, ПБ with no profile, every other section a draft ported from a Cyrillic-named
- * repository — server data, seeded Cyrillic so that anything Latin left is chrome.
+ * source, ПБ as an authored draft, and the other profiles with their status and legacy
+ * sources — server data, seeded Cyrillic so that anything Latin left is chrome.
  */
 const ANALYSIS_PROFILES: readonly AnalysisProfileListItem[] = PROJECT_STRUCTURE_ORDER.map((code, index) => {
   const digit = (index % 10).toString();
   const section = projectSectionOf(code);
-  if (code === 'PB') return { section_code: code, section_name: section.name, profile: null };
   return {
     section_code: code,
     section_name: section.name,
@@ -1086,7 +1093,7 @@ const ANALYSIS_PROFILES: readonly AnalysisProfileListItem[] = PROJECT_STRUCTURE_
       status: code === 'AR' ? 'builtin' : code === 'PS' ? 'reviewed' : 'draft',
       prompt_bundle_sha256: digit.repeat(64),
       content_sha256: 'a'.repeat(63) + digit,
-      source: code === 'AR' ? null : {
+      source: code === 'AR' || code === 'PB' ? null : {
         repository: 'прежняя-система',
         commit: 'b'.repeat(40),
         files: [{ path: `prompts/disciplines/${code}/role.md`, sha256: 'c'.repeat(64) }],
@@ -1139,6 +1146,10 @@ const KEYS = {
   executorRoutes: queryKeys.execution.routes(),
   // `W59-ANALYSIS-SETTINGS-01`: «Настройки анализа», the registry's fifteen rows.
   analysisProfiles: queryKeys.analysis.profiles(),
+  // `AR-V3-BETA-PACK-STATUS-WEB-01`: whether the reviewed AR v3 pack is installed. A key of
+  // `KEYS` is seeded in the loaded state and ERRORED in `failedClient`, so the settings panel and
+  // the version's run list are rendered installed, loading (cold) and failed without a case of their own.
+  arV3PackStatus: queryKeys.runs.arV3PackStatus(),
   dashboardSummary: queryKeys.dashboard.summary(),
   // The home page's own two reads (`W50-HOME-01`), seeded by `W50-SHELL-FRAME` so the recent
   // list and the administrator's tile render loaded rather than pending in every state.
@@ -1271,6 +1282,7 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   // Every shape of connection and probe, and a route with a standby.
   seedExecutors(client);
   client.setQueryData(KEYS.analysisProfiles, { items: ANALYSIS_PROFILES });
+  client.setQueryData(KEYS.arV3PackStatus, installedPackFixture());
   // A current snapshot and the three ways another one can stand; two designations; two hits;
   // a document with a heading, a body paragraph and an unreliable table row.
   client.setQueryData(KEYS.normSnapshots, { items: NORM_SNAPSHOTS, page });
@@ -1795,6 +1807,64 @@ const QUEUE_REQUEST: RegistrationRequest = {
   submitted_at: '2026-10-08T00:00:00Z',
 };
 
+/**
+ * A refusal of `startArV3BetaGroup` with the classifiers the server attaches, for the control's
+ * failure branches. Cyrillic message: only the sentences this application wrote are judged.
+ */
+function startRefusal(
+  status: number,
+  code: ErrorCode,
+  details?: Record<string, string | number | boolean | null>,
+): ApiError {
+  const envelope: ErrorEnvelope = {
+    contract_version: '1.5.0',
+    error_code: code,
+    message: 'Сообщение об отказе.',
+    correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
+    retryable: code === 'dependency_unavailable' || code === 'idempotency_key_in_progress',
+    ...(details === undefined ? {} : { details }),
+  };
+  return new ApiError(status, envelope, '0f0e9d8c-7b6a-4948-b726-150413021100');
+}
+
+/**
+ * Every state of «Запустить шесть проверок АР v3» that a settled mutation produces: pending, each
+ * refusal the start raises, the generic reading of a failure outside that set, and a 202 without a
+ * usable group address. The control keeps these in a `useMutation` observer one static pass cannot
+ * settle, so the presentational view is rendered once per failure (`D-82`).
+ */
+function startGroupViews(): ReactElement {
+  const failures = [
+    startRefusal(503, 'dependency_unavailable', { dependency: 'ar_v3_trusted_pack' }),
+    startRefusal(503, 'dependency_unavailable', { dependency: 'metadata_store' }),
+    startRefusal(422, 'required_norm_unavailable', { reference_kind: 'norms_snapshot' }),
+    startRefusal(422, 'version_classification_required'),
+    startRefusal(422, 'section_profile_unavailable'),
+    startRefusal(422, 'analysis_input_invalid', { reason: 'missing_required_input' }),
+    startRefusal(422, 'analysis_input_budget_exceeded', { character_count: 300000, budget_characters: 152000 }),
+    startRefusal(409, 'idempotency_key_reuse'),
+    startRefusal(409, 'idempotency_key_in_progress'),
+    startRefusal(409, 'idempotency_key_stale'),
+    startRefusal(404, 'not_found'),
+    startRefusal(401, 'authentication_required'),
+    startRefusal(403, 'permission_denied'),
+    startRefusal(500, 'internal_error'),
+    new TransportError('Запрос не дошёл.', { retryable: true }),
+  ].map(classifyArV3GroupStartFailure);
+  const view = (key: string, pending: boolean, failure: ReturnType<typeof classifyArV3GroupStartFailure> | null) =>
+    createElement(StartArV3GroupView, {
+      key, projectUid: PROJECT_UID, versionUid: VERSION_UID, pending, failure, onSend: () => undefined,
+    });
+  return createElement(
+    'div',
+    null,
+    view('idle', false, null),
+    view('pending', true, null),
+    ...failures.map((failure, index) => view(`failure-${index}`, false, failure)),
+    view('malformed', false, MALFORMED_GROUP_ANSWER),
+  );
+}
+
 type ScreenCase = {
   readonly name: string;
   readonly make: () => ReactElement;
@@ -1916,6 +1986,66 @@ const BLOCKS_SHAPES: readonly ScreenCase[] = [
 ];
 
 const EXTRA_SHAPES: readonly ScreenCase[] = [
+  // `AR-V3-BETA-SCREEN-GATE-REPAIR-01`: these four branches are conditional on the
+  // group ID and its separate read, so the default settings route cannot reach them.
+  {
+    name: 'ar-v3-group-pending',
+    make: () => createElement(ArV3BetaReview, { groupId: 'arg_01M2545JSD15ETSNNV904X991K' }),
+  },
+  {
+    name: 'ar-v3-group-invalid-id',
+    make: () => createElement(ArV3BetaReview, { groupId: 'arg_bad' }),
+  },
+  {
+    name: 'ar-v3-group-read-refused',
+    make: () => createElement(ArV3BetaReview, { groupId: 'arg_01M2545JSD15ETSNNV904X991K' }),
+    seedClient: (client) => seedError(
+      client, queryKeys.runs.arV3GroupReview('arg_01M2545JSD15ETSNNV904X991K'),
+      apiError(503, 'dependency_unavailable'),
+    ),
+  },
+  {
+    name: 'ar-v3-group-inconsistent-answer',
+    make: () => createElement(ArV3BetaReview, { groupId: 'arg_01M2545JSD15ETSNNV904X991K' }),
+    seedClient: (client) => client.setQueryData(
+      queryKeys.runs.arV3GroupReview('arg_01M2545JSD15ETSNNV904X991K'),
+      { group_id: 'arg_01M2545JSD15ETSNNV904X991K', version_uid: VERSION_UID, members: [] },
+    ),
+  },
+  // `AR-V3-BETA-PACK-STATUS-WEB-01`: the pack panel in the states a default cache does not
+  // select. Loading (cold) and failed (`failedClient`) come from `KEYS`; installed is seeded by
+  // `loadedClient`, but these cases seed their own so they do not depend on that.
+  {
+    name: 'ar-v3-pack-installed',
+    make: () => createElement(ArV3BetaPack),
+    seedClient: (client) => client.setQueryData(KEYS.arV3PackStatus, installedPackFixture()),
+  },
+  {
+    name: 'ar-v3-pack-not-installed',
+    make: () => createElement(ArV3BetaPack),
+    seedClient: (client) => client.setQueryData(KEYS.arV3PackStatus, NOT_INSTALLED_PACK),
+  },
+  {
+    name: 'ar-v3-pack-fault-without-review',
+    make: () => createElement(ArV3BetaPack),
+    seedClient: (client) =>
+      client.setQueryData(KEYS.arV3PackStatus, withoutMember(installedPackFixture(), 'review')),
+  },
+  {
+    name: 'ar-v3-pack-fault-unknown-state',
+    make: () => createElement(ArV3BetaPack),
+    seedClient: (client) => client.setQueryData(KEYS.arV3PackStatus, { state: 'withdrawn' }),
+  },
+  {
+    name: 'ar-v3-pack-fault-wrong-scopes',
+    make: () => createElement(ArV3BetaPack),
+    seedClient: (client) =>
+      client.setQueryData(KEYS.arV3PackStatus, { ...installedPackFixture(), scope_ids: ['F1', 'F2'] }),
+  },
+  {
+    name: 'ar-v3-group-start-states',
+    make: startGroupViews,
+  },
   // `W60-PRICE-LIST-01`: the project's «Оптимизация» tab in every branch its widgets have.
   ...optimisationShapes(),
   // `W60-OPT-PROPOSALS-01`: «Предложения» in every branch its widget, features and entity have.
@@ -2447,7 +2577,7 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
   ...BLOCKS_SHAPES,
   /*
    * `W59-SECTION-UI-01`. The stage-and-section panel's shapes an address does not select:
-   * the confirmed classification (with a section that has no profile, and after the
+   * the confirmed classification (with a synthetic section lacking a profile, and after the
    * reader's own confirmation was refused with `409`), the expert's form in flight and
    * refused (`409`, `403`), a review that could not be read, and the project structure with
    * documents confirmed under both stages. Each is a branch chosen by a settled mutation or
@@ -2458,7 +2588,12 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     make: () =>
       createElement(VersionClassificationView, {
         address: { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID, versionUid: VERSION_UID },
-        review: sectionReview({ classification: classification({ project_stage: 'R', section_code: 'PB' }) }),
+        review: sectionReview({
+          classification: classification({ project_stage: 'R', section_code: 'GP' }),
+          options: sectionReview().options.map((option) => ({
+            ...option, executable: option.section_code !== 'GP',
+          })),
+        }),
         roles: ['expert'],
         conflict: true,
         onConflict: () => undefined,
@@ -2887,6 +3022,14 @@ export const CACHE_STATES: readonly {
   { state: 'failed-run-unclassified', run: { state: 'failed', terminal_reason: 'version_classification_required', published_finding_count: 0 } },
   { state: 'failed-run-no-profile', run: { state: 'failed', terminal_reason: 'section_profile_unavailable', published_finding_count: 0 } },
   { state: 'partial-run', run: { state: 'partial', degradation_set: ['text_analysis'] } },
+  {
+    state: 'ar-v3-beta-published',
+    run: {
+      state: 'published', analysis_profile_id: AR_V3_BETA_PROFILE_ID,
+      published_finding_count: 0,
+      stages: [{ stage_id: 'ar_v3_citation_review', status: 'succeeded' }],
+    },
+  },
   { state: 'running', run: { state: 'running', terminal_at: null, published_finding_count: 0 } },
   { state: 'refused', run: null },
   { state: 'empty', run: null },
@@ -3310,7 +3453,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           422,
           {
-            contract_version: '1.2.0',
+            contract_version: '1.5.0',
             error_code: 'validation_failed',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -3332,7 +3475,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           503,
           {
-            contract_version: '1.2.0',
+            contract_version: '1.5.0',
             error_code: 'dependency_unavailable',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',

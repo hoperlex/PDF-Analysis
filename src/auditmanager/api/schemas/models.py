@@ -113,6 +113,15 @@ __all__ = [
     "StartArV3BetaGroupRequest",
     "ArV3BetaGroupMember",
     "ArV3BetaGroup",
+    "ArV3BetaGroupReview",
+    "ArV3BetaGroupReviewMember",
+    "ArV3BetaPackReview",
+    "ArV3BetaPackStatus",
+    "ArV3BetaVisibleReview",
+    "ArV3BetaVisibleTopic",
+    "ArV3BetaVisibleProposal",
+    "ArV3BetaVisibleCitation",
+    "ArV3BetaVisibleEvidence",
     "JobId",
     "RunState",
     "RunStatus",
@@ -176,6 +185,7 @@ __all__ = [
     "SectionReviewOption",
     "SectionSuggestion",
     "Sha256",
+    "ArV3BetaStageId",
     "StageId",
     "StageState",
     "StageStatus",
@@ -588,6 +598,10 @@ class StageId(str, enum.Enum):
     NORM_VERIFICATION = "norm_verification"
 
 
+class ArV3BetaStageId(str, enum.Enum):
+    CITATION_REVIEW = "ar_v3_citation_review"
+
+
 class ProviderMode(str, enum.Enum):
     LIVE = "live"
     RECORDED = "recorded"
@@ -713,7 +727,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.2.0"]
+    contract_version: Literal["1.5.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1042,8 +1056,100 @@ class ArV3BetaGroup(_Object):
     members: Annotated[list[ArV3BetaGroupMember], Field(min_length=6, max_length=6)]
 
 
+class ArV3BetaVisibleTopic(_Object):
+    item_id: str
+    mode: str
+    reason: str
+    source_ids: list[str]
+    review_status: str
+    provisional_citation_count: Annotated[int, Field(ge=0)]
+
+
+class ArV3BetaVisibleEvidence(_Object):
+    page_number: Annotated[int, Field(ge=1)]
+    quote: str
+
+
+class ArV3BetaVisibleCitation(_Object):
+    item_id: str
+    label: str
+    document_id: str
+    paragraph_id: str
+    raw_quote: str
+    state: str
+
+
+class ArV3BetaVisibleProposal(_Object):
+    proposal_ordinal: Annotated[int, Field(ge=0)]
+    evidence: list[ArV3BetaVisibleEvidence]
+    citations: list[ArV3BetaVisibleCitation]
+
+
+class ArV3BetaVisibleReview(_Object):
+    topics: list[ArV3BetaVisibleTopic]
+    provisional_citations: list[ArV3BetaVisibleProposal]
+    withheld_proposal_count: Annotated[int, Field(ge=0)]
+    rejected_proposal_count: Annotated[int, Field(ge=0)]
+
+
+class ArV3BetaGroupReviewMember(_Object):
+    scope_id: Literal["F1", "F2", "A1", "A2", "S1", "S2"]
+    run_id: RunId
+    run_state: RunState
+    review_state: Literal["pending", "failed", "verification_refused", "available"]
+    terminal_reason: str | None
+    refusal_code: str | None
+    review: ArV3BetaVisibleReview | None
+
+
+class ArV3BetaGroupReview(_Object):
+    group_id: ArV3RunGroupId
+    version_uid: VersionUid
+    members: Annotated[list[ArV3BetaGroupReviewMember], Field(min_length=6, max_length=6)]
+
+
+class ArV3BetaPackReview(_Object):
+    """The human attestation that travelled with the installed pack's manifest.
+
+    A record, not a check: the server shows what the manifest says and nothing about
+    whether anyone really reviewed anything.
+    """
+
+    reviewer: str
+    capacity: str
+    reviewed_at: Annotated[str, Field(pattern=r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")]
+    decision_ref: str
+    scope_statement: str
+
+
+class ArV3BetaPackStatus(_Object):
+    """Whether a reviewed AR v3 beta pack is installed on this server, and its attestation.
+
+    Everything but `state` is absent, never null, while no pack is installed. No map, set or
+    snapshot identity, digest of a scope, path or environment value is ever a property.
+    """
+
+    state: Literal["installed", "not_installed"]
+    analysis_profile_id: AnalysisProfileId = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+    prompt_bundle_id: PromptBundleId = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+    pack_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+    scope_ids: Annotated[
+        list[Literal["F1", "F2", "A1", "A2", "S1", "S2"]],
+        Field(min_length=6, max_length=6),
+    ] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    review: ArV3BetaPackReview = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+
+
 class StageState(_Object):
-    stage_id: StageId
+    stage_id: StageId | ArV3BetaStageId
     stage_version: Annotated[str, Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")] = Field(
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
@@ -1075,7 +1181,7 @@ class RunStatus(_Object):
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
     stages: list[StageState]
-    degradation_set: list[StageId] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    degradation_set: list[StageId | ArV3BetaStageId] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     terminal_reason: ErrorCode | None = Field(default=None, json_schema_extra=optional_property)
     #: `D-46`. **The same shape as ``ErrorEnvelope.details``, and the same constant**: it
     #: is the same rule -- safe scalar classifiers, restricted to the ``safe_detail_keys``

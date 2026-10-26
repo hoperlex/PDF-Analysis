@@ -81,7 +81,7 @@ def test_manifest_drift_refuses(tmp_path, change):
     elif change == "numeric":
         document["beta_policy"]["numeric_output_policy"] = "model_verdict"
     elif change == "family":
-        document["analysis_contract_version"] = "1.3.0"
+        document["analysis_contract_version"] = "1.2.0"
     else:
         document["unknown"] = True
     path = tmp_path / "stage.json"

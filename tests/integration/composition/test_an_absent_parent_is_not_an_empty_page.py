@@ -41,6 +41,7 @@ from starlette.testclient import TestClient
 
 from auditmanager.api.app import create_app, create_asgi_app
 from auditmanager.api.security import API_TOKEN_VARIABLE
+from auditmanager.runs.public import PACK_MANIFEST_ENV
 
 #: This lane's deployment secret for this suite. A literal, as in every sibling suite.
 DEPLOYMENT_SECRET = "absent-parent-sweep-token"
@@ -98,7 +99,13 @@ _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 # on a pass or a proposal identity. With all of them, the addressed half is thirty.
 # `NORM-REFS-RUN-01` added ``getRunNormReferences`` on ``run_id``: an absent run is
 # ``404 not_found`` (``AuditRun``), as for ``getRunStatus``. Thirty-one.
-EXPECTED_ADDRESSED = 31
+# Four more were never counted here: `EXEC-SEAL-01`'s ``getExecutorConnection`` on
+# ``connection_id`` (an absent connection is ``404 not_found``, administrators only);
+# `AR-V3-BETA-SIX-RUN-02`'s ``getArV3BetaGroup`` and `AR-V3-BETA-GROUP-API-SEAL-01`'s
+# ``getArV3BetaGroupReview``, both on ``group_id``; and `EXEC-IMAGE-DELIVERY-01`'s
+# ``getExecutorTaskImage`` on ``task_id`` and ``blob_id``, a runner-token read swept by
+# :data:`RUNNER_ADDRESSED`. With all four, the addressed half is thirty-five.
+EXPECTED_ADDRESSED = 35
 
 #: Addressed ``GET`` operations with a required query parameter, and a well-formed value for
 #: it naming nothing. Without it the bare path would be ``422`` for the missing parameter --
@@ -112,7 +119,11 @@ REQUIRED_QUERY: dict[str, str] = {
 # :data:`CURRENT_SNAPSHOT_COLLECTIONS`.
 # With ``listAssignments`` (`W61-DISPATCHER-01`) and ``listNormDocuments`` the unaddressed half is
 # seventeen.
-EXPECTED_UNADDRESSED = 17
+# Three more were never counted here: `EXEC-SEAL-01`'s ``listExecutorConnections`` and
+# ``listExecutorRoutes`` (collections) and `AR-V3-BETA-PACK-STATUS-API-01`'s
+# ``getArV3BetaPackStatus`` (a server singleton, see :data:`SERVER_STATUS_OPERATIONS`).
+# With all three, the unaddressed half is twenty.
+EXPECTED_UNADDRESSED = 20
 
 #: Unaddressed `GET` operations that are not collections and are exempt from
 #: ``test_a_collection_that_names_no_parent_answers_a_page``'s page-shape assertion.
@@ -133,6 +144,22 @@ AGGREGATE_OPERATIONS = frozenset({"getDashboardSummary"})
 #: missing and nothing to page. Exempt from the page check, and checked for its own shape by
 #: :func:`test_the_callers_own_account_answers_its_own_shape`.
 SELF_OPERATIONS = frozenset({"getMe"})
+
+#: `AR-V3-BETA-PACK-STATUS-API-01`. ``getArV3BetaPackStatus`` reads **the server's** one
+#: reviewed-pack status: no parent identity and nothing to page, so it is a singleton and not a
+#: collection. Exempt from the page check, and checked for its own shape by
+#: :func:`test_the_server_pack_status_answers_its_own_shape`.
+SERVER_STATUS_OPERATIONS = frozenset({"getArV3BetaPackStatus"})
+
+#: `EXEC-IMAGE-DELIVERY-01`. Addressed ``GET`` operations a *runner token* calls: a user's
+#: credential, this sweep's included, is not a runner token, so the answer to it is the
+#: seam's ``401`` and never a ``404`` -- exempt from the ``404`` sweep (an identity that
+#: names nothing is not what is being refused) and asserted to be exactly that refusal
+#: instead (:func:`test_a_runner_token_read_is_not_answered_to_a_users_credential`). The
+#: runner's own answers: ``tests/integration/executors/test_runner_seam.py`` covers the ``200``
+#: and the ``401``; the ``404`` and claim-loss refusals are covered at adapter level in
+#: ``tests/unit/executors/test_pull_images.py``.
+RUNNER_ADDRESSED = frozenset({"getExecutorTaskImage"})
 
 # These GETs are neither a page of projects nor the account itself. Their own
 # response shapes are checked below after the Stage-C release adapter is wired.
@@ -189,6 +216,18 @@ CURRENT_SNAPSHOT_COLLECTIONS = frozenset({"listNormDocuments"})
 SECTION_FILTER_OPERATIONS = frozenset({"getSectionSpecification"})
 
 
+#: Path parameters whose name is not the catalog's key for the identity they carry. Written out
+#: rather than guessed: ``group_id`` is ``ar_v3_run_group_id`` (``arg_``, `AR-V3-BETA-SIX-RUN-02`), and
+#: `EXEC-SEAL-01` / `EXEC-PULL-01` name an executor connection ``connection_id`` (``executor_connection_id``,
+#: ``exc_``) and a runner's task ``task_id`` (``executor_task_id``, ``ext_``). A parameter in
+#: neither the catalog nor this table is still an error.
+_CATALOG_KEY: dict[str, str] = {
+    "group_id": "ar_v3_run_group_id",
+    "connection_id": "executor_connection_id",
+    "task_id": "executor_task_id",
+}
+
+
 def _prefixes() -> dict[str, str]:
     catalog = json.loads(_CATALOG.read_text(encoding="utf-8"))
     return dict(catalog["identifiers"])
@@ -201,12 +240,13 @@ def _absent_identity(parameter: str) -> str:
         # catalog's own pattern's shape (`blk_` and 32 hexadecimal digits), never a ULID.
         return f"{external[parameter]['prefix']}_" + "0" * 32
     prefixes = _prefixes()
-    if parameter not in prefixes:
+    key = _CATALOG_KEY.get(parameter, parameter)
+    if key not in prefixes:
         raise AssertionError(
             f"the catalog declares no prefix for the path parameter {parameter!r}; "
             "filling it with a guess would produce a refusal for the wrong reason"
         )
-    return f"{prefixes[parameter]}_{_ABSENT_ULID}"
+    return f"{prefixes[key]}_{_ABSENT_ULID}"
 
 
 class Composed:
@@ -220,7 +260,11 @@ class Composed:
 @pytest.fixture(scope="module")
 def app() -> Composed:
     assert os.environ.get("DATABASE_URL"), "this suite needs the lane's .env loaded"
-    environ = dict(os.environ) | {API_TOKEN_VARIABLE: DEPLOYMENT_SECRET}
+    # No reviewed pack is installed in this suite, whatever the process environment names:
+    # `test_the_server_pack_status_answers_its_own_shape` asserts that state.
+    environ = {k: v for k, v in os.environ.items() if k != PACK_MANIFEST_ENV} | {
+        API_TOKEN_VARIABLE: DEPLOYMENT_SECRET
+    }
     application = create_app(environ=environ)
     asgi = create_asgi_app(environ=environ, application=application)
     return Composed(application, TestClient(asgi, raise_server_exceptions=False))
@@ -324,7 +368,7 @@ def test_every_get_that_names_a_parent_refuses_an_identity_that_names_nothing(
     """
     disagreements = []
     for operation_id, template in _addressed(_get_routes(app)):
-        if operation_id in SEALED_STUB_ADDRESSED:
+        if operation_id in SEALED_STUB_ADDRESSED or operation_id in RUNNER_ADDRESSED:
             continue
         path = re.sub(r"\{(\w+)\}", lambda m: _absent_identity(m.group(1)), template)
         status, body = _get(app, path + REQUIRED_QUERY.get(operation_id, ""))
@@ -384,6 +428,7 @@ def test_a_collection_that_names_no_parent_answers_a_page(app: Composed) -> None
         if (
             operation_id in AGGREGATE_OPERATIONS
             or operation_id in SELF_OPERATIONS
+            or operation_id in SERVER_STATUS_OPERATIONS
             or operation_id in RELEASE_OPERATIONS
             or operation_id in SEALED_STUB_COLLECTIONS
             or operation_id in QUERY_OPERATIONS
@@ -525,3 +570,40 @@ def test_the_callers_own_account_answers_its_own_shape(app: Composed) -> None:
         assert isinstance(body, dict) and "items" not in body, body
         for key in ("user_uid", "login", "display_label", "roles", "profile_complete"):
             assert key in body, f"{operation_id} answered without {key!r}: {body}"
+
+
+def test_the_server_pack_status_answers_its_own_shape(app: Composed) -> None:
+    """``getArV3BetaPackStatus``, the operation :data:`SERVER_STATUS_OPERATIONS` excuses.
+
+    Not a page and not a read of a parent: what the server holds, which with no reviewed pack
+    installed is exactly ``{"state": "not_installed"}`` -- every other property is absent, never
+    null (the installed shape, with its attestation, is covered by the pack-status API tests).
+    Exempt from *paging*, not from *shape*.
+    """
+    unaddressed = _unaddressed(_get_routes(app))
+    status_reads = [(op, path) for op, path in unaddressed if op in SERVER_STATUS_OPERATIONS]
+    assert {op for op, _ in status_reads} == SERVER_STATUS_OPERATIONS
+    for operation_id, template in status_reads:
+        status, body = _get(app, template)
+        assert status == 200, f"{operation_id} answered {status}: {body}"
+        assert body == {"state": "not_installed"}, (
+            f"{operation_id} answered {body!r} with no reviewed pack installed"
+        )
+
+
+def test_a_runner_token_read_is_not_answered_to_a_users_credential(app: Composed) -> None:
+    """``getExecutorTaskImage``, the operation :data:`RUNNER_ADDRESSED` excuses from the ``404`` sweep.
+
+    The caller here is an administrator with a valid user credential, and still the answer is the
+    seam's ``401 authentication_required`` -- neither ``404`` (the identities do name nothing, but a
+    user's credential does not get as far as asking) nor ``403`` (the credential is not a known
+    principal of this operation at all), so the read reveals nothing about which tasks exist.
+    """
+    addressed = _addressed(_get_routes(app))
+    reads = [(op, path) for op, path in addressed if op in RUNNER_ADDRESSED]
+    assert {op for op, _ in reads} == RUNNER_ADDRESSED
+    for operation_id, template in reads:
+        path = re.sub(r"\{(\w+)\}", lambda m: _absent_identity(m.group(1)), template)
+        status, body = _get(app, path)
+        assert status == 401, f"{operation_id} answered {status}: {body}"
+        assert isinstance(body, dict) and body.get("error_code") == "authentication_required", body

@@ -38,12 +38,12 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-HEAD = "0031_executor_pull_channel"
+HEAD = "0032_ar_v3_run_group"
 
 #: Every base table of the schema at ``HEAD`` (``relkind`` ``r``, schema ``public``).
 TABLES = frozenset((
     "account_release_mark", "alembic_version", "analysis_artifact_publication", "app_user", "app_user_role",
-    "attempt", "audit_event", "audit_run", "blob", "command_record", "contract_state_transition", "document",
+    "ar_v3_run_group", "ar_v3_run_group_member", "attempt", "audit_event", "audit_run", "blob", "command_record", "contract_state_transition", "document",
     "document_version", "document_version_classification", "document_version_classification_correction",
     "execution_control", "executor_connection", "executor_connection_revision", "executor_probe",
     "executor_route_event", "executor_runner_token", "executor_secret", "executor_task", "expert_decision_event", "finding", "finding_evidence", "finding_observation",
@@ -84,6 +84,11 @@ TRIGGERS = (
     ("account_release_mark", "trg_account_release_mark", "am_guard_account_release_mark", 31),
     ("analysis_artifact_publication", "trg_analysis_artifact_frozen_guard", "am_guard_frozen_columns", 19),
     ("analysis_artifact_publication", "trg_analysis_artifact_state_guard", "am_guard_durable_effect_transition", 23),
+    # `0032_ar_v3_run_group`: the group and its six members are immutable; the group's
+    # co-commit check is a deferred AFTER INSERT constraint trigger (5 = ROW | INSERT).
+    ("ar_v3_run_group", "trg_ar_v3_group_complete", "am_ar_v3_group_complete", 5),
+    ("ar_v3_run_group", "trg_ar_v3_run_group_frozen", "am_immutable_row", 27),
+    ("ar_v3_run_group_member", "trg_ar_v3_run_group_member_frozen", "am_immutable_row", 27),
     ("attempt", "trg_attempt_frozen_guard", "am_guard_frozen_columns", 19),
     ("attempt", "trg_attempt_state_guard", "am_guard_state_transition", 23),
     ("audit_event", "trg_audit_event_append_only", "am_append_only", 27),
@@ -169,6 +174,7 @@ TRIGGERS = (
 #: The constraint triggers that are ``DEFERRABLE INITIALLY DEFERRED``: a parent row must
 #: commit together with its children. They fire at commit, never during ``pg_restore``.
 DEFERRED_TRIGGERS = frozenset((
+    "trg_ar_v3_group_complete",
     "trg_finding_observation_partition",
     "trg_norm_citation_partition",
     "trg_norm_current_snapshot_event_designates",
@@ -192,10 +198,10 @@ SEQUENCES = {
 
 #: ``pg_constraint.contype -> count`` in schema ``public`` at ``HEAD``: p primary key, u unique,
 #: f foreign key, c check, t constraint trigger. A restore that lost one is not the schema.
-CONSTRAINT_COUNTS = {"c": 542, "f": 127, "p": 61, "t": 8, "u": 45}
+CONSTRAINT_COUNTS = {"c": 560, "f": 134, "p": 63, "t": 9, "u": 48}
 
 #: Indexes in schema ``public`` at ``HEAD`` (primary-key and unique indexes included).
-INDEX_COUNT = 179
+INDEX_COUNT = 184
 
 #: Trigger functions that make a table immutable or append-only (the claim a restore must keep).
 GUARD_FUNCTIONS = frozenset((

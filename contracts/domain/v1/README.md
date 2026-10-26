@@ -1,15 +1,20 @@
-# Domain contract v1 — `1.2.0`, frozen (sealed revision 20)
+# Domain contract v1 — `1.5.0`, frozen (sealed revision 23)
 
 Owner lane: [W0-DOM-01](../../../docs/program/tasks/W0-DOM-01.md) (domain contract
 owner); the additive norm-identity amendment is owned by
 [NORM-ID-01](../../../docs/program/tasks/NORM-ID-01.md). Status: **frozen for the closed
 beta** by `BETA-CONTRACT-SEAL-01` ([the report](../../../docs/program/BETA-CONTRACT-SEAL-01.md)).
-Every catalog in this directory declares `contract_version` `1.2.0`, `supersedes`
-`1.1.0`, `candidate_revision` `20`, `status` `frozen` and `frozen` `true`, and the
-three family schemas pin `candidate_revision` `const: 20`, `status` `const: frozen` and
+Every catalog in this directory declares `contract_version` `1.5.0`, `supersedes`
+`1.4.0`, `candidate_revision` `23`, `status` `frozen` and `frozen` `true`, and the
+three family schemas pin `candidate_revision` `const: 23`, `status` `const: frozen` and
 `frozen` `const: true` to match, so a catalog that fell back to a draft would fail its own
-schema. `AR-V3-BETA-SIX-RUN-02` adds `ar_v3_run_group_id` (`arg`) as a distinct
-opaque identity and reseals the family at revision 20. Revision 19 was the
+schema. `AR-V3-BETA-PACK-STATUS-API-01` advances the shared version for an
+additive installed-pack status read; the domain catalogues themselves add no code,
+identity or machine. `AR-V3-BETA-GROUP-API-SEAL-01` advanced the prior shared version for an
+additive review read, with the same effect on the catalogues. `AR-V3-BETA-RUN-STAGE-SEAL-01` advanced the prior shared version for an
+additive API stage identity; the domain catalogues themselves add no code,
+identity or machine. `AR-V3-BETA-SIX-RUN-02` added `ar_v3_run_group_id` (`arg`)
+as a distinct opaque identity at revision 20. Revision 19 was the
 `1.1.0` seal after `EXEC-IMAGE-DELIVERY-01`. Revision 13 added the fail-closed `model_identity_mismatch` code for the recorded-only
 W56a seal; revisions 14 to 17 moved the identity register with the later waves; revision 18
 (`BETA-CONTRACT-SEAL-01` phase A, `D-179`) added the two codes

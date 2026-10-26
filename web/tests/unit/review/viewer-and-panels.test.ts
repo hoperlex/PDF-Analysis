@@ -66,51 +66,44 @@ function viewer(item: Evidence, activePage: number, documentUrl: string | null =
 // The evidence viewer
 // ---------------------------------------------------------------------------------------
 
-describe('each quotation is shown with the anchor it was verified at', () => {
-  it('states the page and the character range beside the quotation', () => {
+describe('each quotation is shown with the page it was verified on', () => {
+  it('names the page beside the quotation, and only the page', () => {
     const markup = viewer(
       anchored({ quote: 'thirty days', page_number: 7, char_start: 1200 }),
       7,
     );
-    expect(markup).toContain('am-quotation__anchor');
-    expect(markup).toContain('стр. 7, символы 1200');
-    expect(markup).toContain('1211');
+    expect(markup).toContain('<p class="am-quotation__anchor">стр. 7</p>');
   });
 
-  it('states a different anchor for a different item', () => {
+  it('names a different page for a different item', () => {
     const markup = viewer(
       anchored({ quote: 'forty-five days', page_number: 9, char_start: 40 }),
       9,
     );
-    expect(markup).toContain('стр. 9, символы 40');
-    expect(markup).toContain('55');
+    expect(markup).toContain('<p class="am-quotation__anchor">стр. 9</p>');
   });
 
   /**
-   * `D-25`, asserted where the reviewer actually reads it.
+   * `R-43` / `D-50`, asserted where the reviewer actually reads it.
    *
    * The unit test on `anchorLabel` constrains the helper; this constrains the *rendered
    * markup*, because the defect the row is about is what reaches the screen. A repair that
-   * fixed the helper and left the widget printing something else would pass there and fail
-   * here.
+   * fixed the helper and left the widget printing the range from somewhere else would pass
+   * there and fail here. The offsets are chosen to appear nowhere else in the markup (the
+   * object URL, the ordinal and the page are other numbers), so their absence is a claim
+   * about the range and not about a coincidence.
    */
-  it('the rendered anchor says the range is the document\u2019s, not the page\u2019s', () => {
+  it('prints no character range anywhere when the anchor agrees with the quotation', () => {
     const markup = viewer(
-      anchored({ quote: 'thirty days', page_number: 2, char_start: 712 }),
+      anchored({ quote: 'thirty days', page_number: 2, char_start: 8731 }),
       2,
     );
-    expect(markup).toContain('стр. 2, символы 712\u2013723 по всему документу, а не по странице 2');
-  });
-
-  it('the rendered anchor never shows a bare \u201Cchars\u201D range with no convention', () => {
-    // The exact pre-repair spelling. It is asserted absent rather than merely different,
-    // because "chars 712-746" beside "page 2" is the wrong reading D-25 names.
-    const markup = viewer(
-      anchored({ quote: 'thirty days', page_number: 2, char_start: 712 }),
-      2,
-    );
-    expect(markup).not.toContain('chars 712');
-    expect(markup).toContain('по всему документу');
+    expect(markup).toContain('<p class="am-quotation__anchor">стр. 2</p>');
+    expect(markup).not.toContain('8731');
+    expect(markup).not.toContain('8742');
+    expect(markup).not.toContain('символы');
+    expect(markup).not.toContain('по всему документу');
+    expect(markup).not.toContain('а не по странице');
   });
 });
 
@@ -163,6 +156,11 @@ describe('the page the viewer opens is always a page with a quotation on it', ()
   }
 });
 
+/** The text of the span-mismatch alert, or null when the markup has none. */
+function alertOf(markup: string): string | null {
+  return /<p class="am-quotation__inconsistent" role="alert">[\s\S]*?<\/p>/.exec(markup)?.[0] ?? null;
+}
+
 describe('an anchor that disagrees with its quotation is said so, in the open', () => {
   it('renders the alert when the declared span is not the quotation length', () => {
     const markup = viewer(
@@ -178,6 +176,51 @@ describe('an anchor that disagrees with its quotation is said so, in the open', 
     const markup = viewer(anchored({ quote: 'thirty days' }), 7);
     expect(markup).not.toContain('am-quotation__inconsistent');
     expect(markup).not.toContain('Заявленная длина фрагмента не совпадает с цитатой');
+  });
+
+  /**
+   * `R-43`: the range is the evidence of the discrepancy, so it is stated exactly there. The
+   * alert is cut out of the markup and the remainder is searched, so a range that also
+   * leaked back into the caption would fail this even though the alert carries it.
+   */
+  it('states the declared range inside the alert, and only inside it', () => {
+    const markup = viewer(
+      { evidence_ordinal: 1, page_number: 7, quote: 'thirty days', char_start: 1200, char_end: 1300 },
+      7,
+    );
+    const alert = alertOf(markup);
+    expect(alert).not.toBeNull();
+    expect(alert).toContain('символы 1200\u20131300 по всему документу, а не по странице 7');
+    const outside = markup.replace(alert as string, '');
+    expect(outside).not.toContain('символы');
+    expect(outside).not.toContain('1200');
+    expect(outside).not.toContain('1300');
+    expect(outside).not.toContain('по всему документу');
+    // The caption is the page and stays the page, discrepancy or not.
+    expect(outside).toContain('<p class="am-quotation__anchor">стр. 7</p>');
+  });
+
+  /**
+   * `D-25`, asserted where the reviewer actually reads it: the range that survives in the
+   * alert still says it is the document\u2019s, not the page\u2019s.
+   */
+  it('the range in the alert says it is the document\u2019s, not the page\u2019s', () => {
+    const markup = viewer(
+      { evidence_ordinal: 1, page_number: 2, quote: 'thirty days', char_start: 712, char_end: 746 },
+      2,
+    );
+    expect(alertOf(markup)).toContain('символы 712\u2013746 по всему документу, а не по странице 2');
+  });
+
+  it('the range in the alert is never a bare \u201Cchars\u201D range with no convention', () => {
+    // The exact pre-repair spelling. It is asserted absent rather than merely different,
+    // because "chars 712-746" beside "page 2" is the wrong reading D-25 names.
+    const markup = viewer(
+      { evidence_ordinal: 1, page_number: 2, quote: 'thirty days', char_start: 712, char_end: 746 },
+      2,
+    );
+    expect(markup).not.toContain('chars 712');
+    expect(alertOf(markup)).toContain('по всему документу');
   });
 });
 

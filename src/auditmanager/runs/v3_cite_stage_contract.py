@@ -1,6 +1,6 @@
 """Profile-specific AR v3 CITE stage declaration beside the frozen legacy registry.
 
-The nine legacy stages and family contract stay at 1.2.0. This extension is
+The nine legacy stages and family contract stay at 1.5.0. This extension is
 strictly for the beta profile's review artifact, before finding publication.
 """
 

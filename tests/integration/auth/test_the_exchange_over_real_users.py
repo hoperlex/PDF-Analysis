@@ -31,6 +31,7 @@ from auditmanager.api.app import create_asgi_app
 from auditmanager.api.routers import build_router
 from auditmanager.api.security import API_TOKEN_VARIABLE, build_signer
 from auditmanager.bootstrap.adapters import CredentialAdapter
+from tests.support.expected_facts import FACTS
 
 #: This suite's deployment secret. Not a credential -- the key the credential is signed
 #: with is derived from it, and presenting it is one of the refusals asserted below.
@@ -170,7 +171,7 @@ def test_every_refusal_is_the_same_refusal(
     envelope = response.json()
     assert envelope["error_code"] == "authentication_required", envelope
     assert envelope["retryable"] is False, envelope
-    assert envelope["contract_version"] == "1.0.0", envelope
+    assert envelope["contract_version"] == FACTS.contract_version, envelope
     assert response.headers["X-Correlation-Id"]
     # The envelope is the catalog's, not a story about what went wrong.
     assert user.login not in response.text, response.text

@@ -6,13 +6,17 @@
  * which is a different claim from "this stage has not run".
  */
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-import type { RunState, RunStatus, StageState } from '@/shared/api';
+import type { RunState, RunStatus, StageId, StageState } from '@/shared/api';
 import { STAGE_ID_VALUES } from '@/shared/api';
-import { PC01_STAGE_IDS, STAGE_DEPENDS_ON, stageRows } from '@/entities/audit-run';
+import { AR_V3_BETA_PROFILE_ID, PC01_STAGE_IDS, STAGE_DEPENDS_ON, StageTable, hasKnownRunVocabulary, stageRows } from '@/entities/audit-run';
 
-function reading(state: RunState, stages: StageState[]): RunStatus {
+function reading(state: RunState, stages: StageState[], analysisProfileId?: string): RunStatus {
   return {
     run_id: 'run_01M2545JSD15ETSNNV904X991J',
     project_uid: 'prj_01M2545JSD15ETSNNV904X991J',
@@ -21,6 +25,7 @@ function reading(state: RunState, stages: StageState[]): RunStatus {
     created_at: '2026-01-01T00:00:00Z',
     state,
     stages,
+    ...(analysisProfileId === undefined ? {} : { analysis_profile_id: analysisProfileId }),
   };
 }
 
@@ -62,7 +67,7 @@ describe('the four stages PC-01 schedules', () => {
     ]);
     // From the one map, so a dependency cannot be right in the table and wrong in the
     // model. `stage-vocabulary.guard.test.ts` holds that map to the analysis contract.
-    for (const row of rows) expect(row.dependsOn).toBe(STAGE_DEPENDS_ON[row.stageId]);
+    for (const row of rows) expect(row.dependsOn).toBe(STAGE_DEPENDS_ON[row.stageId as StageId]);
   });
 });
 
@@ -97,6 +102,48 @@ describe('a reported stage fills its row', () => {
 });
 
 describe('a stage PC-01 does not schedule is shown, and marked as such', () => {
+  it('pins the v3 profile to the existing analysis-stage contract', () => {
+    const extension = JSON.parse(readFileSync(
+      resolve(process.cwd(), '../contracts/analysis/ar_v3_beta/v1/stage.json'), 'utf8',
+    )) as { analysis_profile_id: string };
+    expect(AR_V3_BETA_PROFILE_ID).toBe(extension.analysis_profile_id);
+  });
+
+  it('shows no legacy placeholders before a v3 Run reports its stage', () => {
+    const status = reading('queued', [], AR_V3_BETA_PROFILE_ID);
+    expect(hasKnownRunVocabulary(status)).toBe(true);
+    const rows = stageRows(status);
+    expect(rows).toEqual([]);
+    const markup = renderToStaticMarkup(createElement(StageTable, { rows }));
+    expect(markup).toContain('Сведения об этапах пока не поступили.');
+    expect(markup).not.toContain('data-stage-id=');
+    expect(stageRows(reading('queued', [], 'ap_unknown'))).toHaveLength(4);
+  });
+
+  it('shows a reported v3 citation review without inventing four legacy stages', () => {
+    const status = reading('published', [
+      { stage_id: 'ar_v3_citation_review', status: 'succeeded' },
+    ], AR_V3_BETA_PROFILE_ID);
+    const rows = stageRows(status);
+    expect(hasKnownRunVocabulary(status)).toBe(true);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      stageId: 'ar_v3_citation_review', status: 'succeeded', expected: true,
+      ordinal: null, dependsOn: [],
+    });
+    const markup = renderToStaticMarkup(createElement(StageTable, { rows }));
+    expect(markup).toContain('Предварительная проверка нормативных ссылок АР v3');
+    expect(markup).toContain('этап отдельного профиля АР v3');
+    expect(markup).not.toContain('первый этап');
+    expect(markup).not.toContain('на этом этапе не планируется');
+  });
+
+  it('refuses a v3 stage reported under another or missing profile', () => {
+    const v3Stage: StageState = { stage_id: 'ar_v3_citation_review', status: 'succeeded' };
+    expect(hasKnownRunVocabulary(reading('published', [v3Stage], 'ap_unknown'))).toBe(false);
+    expect(hasKnownRunVocabulary(reading('published', [v3Stage]))).toBe(false);
+  });
+
   it('appends it after the four, flagged as unexpected', () => {
     const rows = stageRows(
       reading('running', [

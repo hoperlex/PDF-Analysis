@@ -36,9 +36,8 @@ from __future__ import annotations
 
 from typing import Any, Callable, Final
 
-from sqlalchemy.exc import DBAPIError
-
 from auditmanager.documents.public import sqlstate_of
+from auditmanager.shared.db.public import DBAPIError
 from auditmanager.shared.db.schema import SQLSTATE_TO_CATALOG_CODE
 from auditmanager.shared.errors import DomainError, ErrorCode, build
 from auditmanager.api.routers.correlation import CORRELATION_HEADER
@@ -53,7 +52,7 @@ __all__ = [
     "to_domain_error",
 ]
 
-#: 405 has no catalog code of its own. The surface declares 102 operations and no
+#: 405 has no catalog code of its own. The surface declares 104 operations and no
 #: other method on any of their paths, so a method the document does not declare is
 #: simply not a resource here -- and answering 405 would make the API an oracle for which
 #: paths exist. ``records/29-dispatch.method_not_allowed.json`` pins the 404.

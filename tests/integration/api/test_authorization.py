@@ -76,6 +76,13 @@ GUARDED = (
     ),
     ("startRun", "POST", "/runs"),
     ("getRunStatus", "GET", "/runs/run_01M2545JSD15ETSNNV904X991K"),
+    ("startArV3BetaGroup", "POST", "/ar-v3-beta/groups"),
+    ("getArV3BetaGroup", "GET", "/ar-v3-beta/groups/arg_01M2545JSD15ETSNNV904X991K"),
+    (
+        "getArV3BetaGroupReview", "GET",
+        "/ar-v3-beta/groups/arg_01M2545JSD15ETSNNV904X991K/review",
+    ),
+    ("getArV3BetaPackStatus", "GET", "/ar-v3-beta/pack"),
     ("listRunFindings", "GET", "/runs/run_01M2545JSD15ETSNNV904X991K/findings"),
     ("getFinding", "GET", "/findings/fnd_01M2545JSD15ETSNNV904X991M"),
     ("appendDecision", "POST", "/findings/fnd_01M2545JSD15ETSNNV904X991M/decisions"),
@@ -313,12 +320,17 @@ GUARDED = (
     ),
 )
 
-#: `EXEC-PULL-01`. The four operations a runner calls with a runner token. They are behind the
+#: `EXEC-PULL-01`. The four operations a runner calls with a runner token, and the fifth that
+#: `EXEC-IMAGE-DELIVERY-01` added (``getExecutorTaskImage``, a GET). They are behind the
 #: seam too -- no credential is `authentication_required` -- but by a principal of their own:
 #: a user's credential, default or not, is not a runner token, so they are swept with no
 #: credential and kept out of the sweeps that present a user's.
 RUNNER = (
     ("claimExecutorTask", "POST", "/runner/tasks/claim"),
+    (
+        "getExecutorTaskImage", "GET",
+        "/runner/tasks/ext_01M2545JSD15ETSNNV904X991K/images/blob_01M2545JSD15ETSNNV904X991K",
+    ),
     ("extendExecutorTaskClaim", "POST", "/runner/tasks/ext_01M2545JSD15ETSNNV904X991K/extend"),
     ("submitExecutorTaskAnswer", "POST", "/runner/tasks/ext_01M2545JSD15ETSNNV904X991K/answer"),
     ("failExecutorTask", "POST", "/runner/tasks/ext_01M2545JSD15ETSNNV904X991K/fail"),
@@ -906,7 +918,7 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         "releases.py",
         # `EXEC-PULL-01`: issuing and revoking a runner token records WHO did it (the actor of its
         # journal event and of its row); that only an administrator may is the role register's and
-        # the command's own re-read of the role set. The runner's own four operations read the
+        # the command's own re-read of the role set. The runner's own five operations read the
         # runner principal (`CurrentRunner`), never the subject.
         "runner.py",
         # `W63-SECTION-FORM7-01`: a section's combined specification passes WHO reads it for the
@@ -1205,7 +1217,7 @@ def test_a_default_credential_reaches_exactly_the_register(router: Surface) -> N
 
     # The open operations are not asked: no account is read for them, so no credential's
     # state can refuse them (`W49-SEAL-01`).
-    # Nor are the runner's four: a user's credential is not a runner token, so they answer 401
+    # Nor are the runner's five: a user's credential is not a runner token, so they answer 401
     # to it whatever the account's state (`EXEC-PULL-01`).
     expected_to_be_refused = (
         router.operation_ids

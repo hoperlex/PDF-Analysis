@@ -14,9 +14,11 @@ import { useAnalysisProfiles } from '@/entities/analysis-profile';
 import { failureMessage } from '@/shared/api/failure-message';
 import { AnalysisProfileTable } from '@/widgets/analysis-profile-table';
 import { ArV3BetaStatus } from '@/widgets/ar-v3-beta-status';
+import { ArV3BetaPack } from '@/widgets/ar-v3-beta-pack';
+import { ArV3BetaReview } from '@/widgets/ar-v3-beta-review';
 import { ErrorState, LoadingState, PageShell } from '@/shared/ui';
 
-export function AnalysisSettingsPage() {
+export function AnalysisSettingsPage({ groupId = null }: { readonly groupId?: string | null }) {
   const profiles = useAnalysisProfiles();
   const failure = profiles.error === null ? null : failureMessage(profiles.error);
   return (
@@ -26,6 +28,8 @@ export function AnalysisSettingsPage() {
       actions={<button className="am-button am-button--quiet" type="button" onClick={() => void profiles.refetch()}>Обновить</button>}
     >
       <ArV3BetaStatus />
+      <ArV3BetaPack />
+      <ArV3BetaReview groupId={groupId} />
       {profiles.isPending ? <LoadingState what="профилей анализа" /> : null}
       {failure !== null ? (
         <div data-analysis-profiles-failure={failure.kind}>

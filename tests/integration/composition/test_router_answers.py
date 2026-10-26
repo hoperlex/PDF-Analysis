@@ -29,6 +29,7 @@ from starlette.testclient import TestClient
 from auditmanager.api.app import create_app, create_asgi_app
 from auditmanager.api.routers.idempotency import IDEMPOTENCY_HEADER
 from auditmanager.api.security import API_TOKEN_VARIABLE
+from tests.support.expected_facts import FACTS
 
 #: `T-6`. This suite configures the seam's deployment secret, as a literal, and presents
 #: a credential minted from it -- which is what the deployment itself does.
@@ -407,13 +408,16 @@ class TestAFailedStageReportsItsCode:
 
 
 def test_the_composed_product_version_reports_the_sealed_contract_version(app: Composed) -> None:
-    """`BETA-CONTRACT-SEAL-01`: ``getProductVersion`` read through the composed adapter says ``1.0.0``.
+    """`BETA-CONTRACT-SEAL-01`: ``getProductVersion`` read through the composed adapter says the sealed version.
 
-    The literal is written here and not read from the catalog the adapter reads it from: the
-    adapter takes ``contract_version`` from the domain error catalog at start-up, so a seal
-    that moved the document and left the catalog behind would answer a different version from
-    the one the served OpenAPI declares.
+    The expectation is the hand-kept ``tests/support/expected_facts.json`` figure
+    (``FACTS.contract_version``, which ``tests/contract/api_v1/test_contract_seal.py`` pins to the
+    seal), not the catalog the adapter reads it from: the adapter takes ``contract_version`` from
+    the domain error catalog at start-up, so a seal that moved the document and left the catalog
+    behind would answer a different version from the one the served OpenAPI declares. It said
+    ``1.0.0`` until the reseals to ``1.5.0`` (the last one `AR-V3-BETA-PACK-STATUS-API-01`) moved
+    the family without moving this literal.
     """
     status, body = call(app, "GET", "/system/version")
     assert status == 200, body
-    assert body["contract_version"] == "1.0.0", body
+    assert body["contract_version"] == FACTS.contract_version, body

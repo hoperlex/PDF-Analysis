@@ -22,6 +22,8 @@ from tests.integration.executors.conftest import driver
 Request, dispatch = driver.Request, driver.dispatch
 TOKEN = "amr_abcd1234_" + "A" * 43
 TASK = "ext_01M2545JSD15ETSNNV904X991K"
+BLOB = "blob_01M2545JSD15ETSNNV904X991K"
+PNG = b"\x89PNG\r\n\x1a\nthe bytes the port returns"
 
 
 class StubRunner:
@@ -57,6 +59,10 @@ class StubRunner:
     def revoke_token(self, **_):  # pragma: no cover - not reached here
         raise AssertionError
 
+    def read_image(self, *, runner, task_id, blob_id):
+        self.calls.append(("image", runner, task_id, blob_id))
+        return PNG
+
 
 @pytest.fixture
 def stub(surface) -> StubRunner:
@@ -91,12 +97,36 @@ PATHS = {
     "submitExecutorTaskAnswer": f"/runner/tasks/{TASK}/answer",
     "failExecutorTask": f"/runner/tasks/{TASK}/fail",
 }
+#: The fifth runner operation (`EXEC-IMAGE-DELIVERY-01`) is a GET, so it is not in ``PATHS``,
+#: which the POST-driven cases below iterate.
+IMAGE_OPERATION = "getExecutorTaskImage"
+IMAGE_PATH = f"/runner/tasks/{TASK}/images/{BLOB}"
 BODIES = {"submitExecutorTaskAnswer": {"output_text": "{}", "model": "m"},
           "failExecutorTask": {"reason": "model_mismatch: x"}}
 
 
-def test_the_runner_operations_are_exactly_the_four_paths_under_runner_tasks() -> None:
-    assert set(PATHS) == RUNNER_OPERATIONS
+def test_the_runner_operations_are_exactly_the_four_posts_and_the_image_read_under_runner_tasks() -> None:
+    assert set(PATHS) | {IMAGE_OPERATION} == RUNNER_OPERATIONS
+    assert IMAGE_OPERATION not in PATHS
+
+
+def test_a_runner_token_reaches_the_image_read_and_the_port_sees_its_identity(surface, stub) -> None:
+    answer = dispatch(surface, Request.build(
+        "GET", IMAGE_PATH, headers={"Authorization": f"Bearer {TOKEN}"}), credential=None)
+    assert answer.status == 200 and answer.body == PNG
+    assert answer.header("Content-Type") == "image/png" and answer.header("X-Correlation-Id")
+    assert stub.calls == [("image", RunnerIdentity("ern_T", "exc_C"), TASK, BLOB)]
+
+
+def test_a_wrong_token_no_token_and_a_users_credential_cannot_read_an_image(surface, stub) -> None:
+    for headers in ({"Authorization": "Bearer amr_zzzzzzzz_" + "B" * 43},
+                    {"Authorization": "Bearer garbage"}, {}):
+        answer = dispatch(surface, Request.build("GET", IMAGE_PATH, headers=headers), credential=None)
+        assert answer.status == 401 and answer.json()["error_code"] == "authentication_required"
+    # A user's credential (the suite's default one) is not a runner token.
+    answer = dispatch(surface, Request.build("GET", IMAGE_PATH))
+    assert answer.status == 401 and answer.json()["error_code"] == "authentication_required"
+    assert stub.calls == []
 
 
 @pytest.mark.parametrize("operation", sorted(PATHS))

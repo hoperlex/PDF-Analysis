@@ -257,7 +257,10 @@ class TestTheComposeService:
     def test_the_worker_publishes_nothing_and_reads_the_provider_file(self) -> None:
         worker = self.blocks["worker"]
         assert "ports:" not in worker
-        assert "volumes:" not in worker
+        # No named volume (R-105). The one mount is the read-only, operator-sealed reviewed-pack
+        # directory (`AR-V3-BETA-PACK-INSTALL-01`): no state, no secret.
+        assert worker.count("volumes:") == 1
+        assert "- ./ar-v3-pack:/run/ar-v3:ro" in worker
         assert "path: env/provider.env" in worker
 
     def test_the_identity_is_on_a_tmpfs_the_health_check_reads(self) -> None:

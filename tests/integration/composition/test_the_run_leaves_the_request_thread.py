@@ -414,6 +414,68 @@ class TestRunningIsAReadingAndNotAnInternalStep:
             carrier.shutdown()
 
 
+_PARKED_UNTIL = "timestamptz '2099-01-01'"
+
+
+def _quiet_the_queue(sessions: sessionmaker[Session]) -> list[Any]:
+    """D-152, before an application starts: reclaim, then park every queued Job and pause.
+
+    Reclaiming first matters: the serving carrier's first pass runs the moment its
+    lifespan starts, and an expired leftover lease it turns back into a queued, available
+    Job would otherwise appear *after* the parking. Returns the parked
+    ``(job_id, available_at)`` rows for :func:`_restore_the_queue`.
+    """
+    with sessions() as setup:
+        JobRepository().reclaim_expired(setup)
+        setup.commit()
+    with sessions() as setup:
+        parked = setup.execute(text(
+            "SELECT job_id, available_at FROM job WHERE state = 'queued' FOR UPDATE"
+        )).all()
+        setup.execute(text(
+            f"UPDATE job SET available_at = {_PARKED_UNTIL} WHERE state = 'queued'"
+        ))
+        JobRepository().set_paused(setup, paused=True)
+        setup.commit()
+    return list(parked)
+
+
+def _resume_with_this_run_first(
+    sessions: sessionmaker[Session], run_id: str, parked: list[Any]
+) -> None:
+    """D-152, right before unpausing: park what became queued meanwhile, put this Job first.
+
+    A previous crashed test may have been reclaimed at startup. Every foreign queued Job is
+    parked again (and remembered, if the quieting did not see it), and this run's Job takes
+    the top priority, so a foreign Job that turns queued and available *after* this point
+    -- a late reclaim -- still sorts behind it.
+    """
+    with sessions() as controller:
+        parked += controller.execute(text(
+            "SELECT job_id, available_at FROM job WHERE state = 'queued' "
+            f"AND run_id <> :run_id AND available_at < {_PARKED_UNTIL} FOR UPDATE"
+        ), {"run_id": run_id}).all()
+        controller.execute(text(
+            f"UPDATE job SET available_at = {_PARKED_UNTIL} "
+            "WHERE state = 'queued' AND run_id <> :run_id"
+        ), {"run_id": run_id})
+        controller.execute(text(
+            "UPDATE job SET priority = 100 WHERE run_id = :run_id AND state = 'queued'"
+        ), {"run_id": run_id})
+        JobRepository().set_paused(controller, paused=False)
+        controller.commit()
+
+
+def _restore_the_queue(sessions: sessionmaker[Session], parked: list[Any]) -> None:
+    with sessions() as cleanup:
+        for job_id, available_at in parked:
+            cleanup.execute(text(
+                "UPDATE job SET available_at = :available_at WHERE job_id = :job_id"
+            ), {"job_id": job_id, "available_at": available_at})
+        JobRepository().set_paused(cleanup, paused=False)
+        cleanup.commit()
+
+
 def test_serving_lifespan_dispatches_an_ordinary_run_adapter_submission(
     sessions: sessionmaker[Session], blob_store: Any,
     recorded_adapter: RecordedAdapter, provider_config: Any,
@@ -430,19 +492,7 @@ def test_serving_lifespan_dispatches_an_ordinary_run_adapter_submission(
     """
     # Quarantine earlier disposable-test queue rows while proving this run's
     # serving path. Restore their availability in the finally block.
-    with sessions() as setup:
-        JobRepository().reclaim_expired(setup)
-        setup.commit()
-    with sessions() as setup:
-        old_jobs = setup.execute(text(
-            "SELECT job_id, available_at FROM job WHERE state = 'queued' FOR UPDATE"
-        )).all()
-        setup.execute(text(
-            "UPDATE job SET available_at = timestamptz '2099-01-01' "
-            "WHERE state = 'queued'"
-        ))
-        JobRepository().set_paused(setup, paused=True)
-        setup.commit()
+    parked = _quiet_the_queue(sessions)
     gated = GatedAdapter(recorded_adapter)
     carrier = DurableCarrier(sessions)
     client = next(_client(sessions, blob_store, gated, provider_config, carrier))
@@ -450,25 +500,7 @@ def test_serving_lifespan_dispatches_an_ordinary_run_adapter_submission(
         with client:
             started = _start(client, committed_version.version_uid)
             assert started["state"] == "queued"
-            with sessions() as controller:
-                # A previous crashed test may have been reclaimed at startup. Park every
-                # foreign queued Job, remembering the ones the setup did not see, and put
-                # this run first in the dispatcher's order before unpausing (D-152).
-                old_jobs += controller.execute(text(
-                    "SELECT job_id, available_at FROM job WHERE state = 'queued' "
-                    "AND run_id <> :run_id AND available_at < timestamptz '2099-01-01' "
-                    "FOR UPDATE"
-                ), {"run_id": started["run_id"]}).all()
-                controller.execute(text(
-                    "UPDATE job SET available_at = timestamptz '2099-01-01' "
-                    "WHERE state = 'queued' AND run_id <> :run_id"
-                ), {"run_id": started["run_id"]})
-                controller.execute(text(
-                    "UPDATE job SET priority = 100 WHERE run_id = :run_id "
-                    "AND state = 'queued'"
-                ), {"run_id": started["run_id"]})
-                JobRepository().set_paused(controller, paused=False)
-                controller.commit()
+            _resume_with_this_run_first(sessions, started["run_id"], parked)
             assert gated.entered.wait(timeout=120), (
                 "the serving carrier did not reach the recorded provider within 120s; "
                 f"run status: {_status(client, started['run_id'])!r}"
@@ -483,13 +515,159 @@ def test_serving_lifespan_dispatches_an_ordinary_run_adapter_submission(
             assert _status(client, started["run_id"])["state"] == "published"
     finally:
         gated.release.set()
-        with sessions() as cleanup:
-            for job_id, available_at in old_jobs:
-                cleanup.execute(text(
-                    "UPDATE job SET available_at = :available_at WHERE job_id = :job_id"
-                ), {"job_id": job_id, "available_at": available_at})
-            JobRepository().set_paused(cleanup, paused=False)
-            cleanup.commit()
+        _restore_the_queue(sessions, parked)
+
+
+def _job_and_availability(sessions: sessionmaker[Session], run_id: str) -> tuple[Any, Any]:
+    with sessions() as opened:
+        row = opened.execute(text(
+            "SELECT job_id, available_at FROM job WHERE run_id = :run_id"
+        ), {"run_id": run_id}).one()
+    return row[0], row[1]
+
+
+def _unpause(sessions: sessionmaker[Session]) -> None:
+    with sessions() as opened:
+        JobRepository().set_paused(opened, paused=False)
+        opened.commit()
+
+
+def _lose_the_lease(sessions: sessionmaker[Session], run_id: str) -> None:
+    """Leave ``run_id`` running under a lease that has already expired, committed."""
+    with sessions() as owner:
+        RunRepository().advance(owner, run_id=run_id, from_state="queued", to_state="running")
+        authority = JobRepository().start_execution(owner, run_id=run_id)
+        owner.execute(text(
+            "UPDATE lease SET expires_at = statement_timestamp() - interval '1 second' "
+            "WHERE lease_id = :lease_id"
+        ), {"lease_id": authority.lease_id})
+        owner.commit()
+
+
+def _cancel_leftovers(sessions: sessionmaker[Session], run_ids: list[str]) -> None:
+    with sessions() as cleanup:
+        for run_id in run_ids:
+            cancel_audit_run(
+                cleanup, run_id=run_id, roles=frozenset({"expert"}),
+                idempotency_key=f"d152-cleanup-{uuid.uuid4().hex}",
+            )
+        cleanup.commit()
+
+
+def test_a_leftover_reclaimed_after_the_parking_still_sorts_behind_this_run(
+    sessions: sessionmaker[Session], blob_store: Any,
+    recorded_adapter: RecordedAdapter, provider_config: Any,
+    committed_version: Any,
+) -> None:
+    """D-152's own claim, deterministic: a Job that turns claimable late cannot go first.
+
+    A foreign Run, older than this one, is left running under an expired lease. After
+    dispatch resumes, the carrier's late reclaim pass turns that Job queued and available
+    -- the race that put a foreign Run in the gated adapter. It is created first and has the
+    same default priority, so only this run's raised priority keeps it from being picked.
+    """
+    client = next(_client(sessions, blob_store, recorded_adapter, provider_config, _NoCarrier()))
+    # Every other suite's leftover is reclaimed and parked first, so the only Job that can
+    # turn claimable late is the one made here; a claim needs dispatch unpaused meanwhile.
+    parked = _quiet_the_queue(sessions)
+    made: list[str] = []
+    try:
+        _unpause(sessions)
+        leftover = _start(client, committed_version.version_uid)["run_id"]
+        made.append(leftover)
+        own = _start(client, committed_version.version_uid)["run_id"]
+        made.append(own)
+        _lose_the_lease(sessions, leftover)
+        _resume_with_this_run_first(sessions, own, parked)
+        with sessions() as late:
+            assert JobRepository().reclaim_expired(late) >= 1
+            late.commit()
+        with sessions() as picker:
+            assert picker.execute(text(
+                "SELECT state, available_at <= statement_timestamp() FROM job "
+                "WHERE run_id = :run_id"
+            ), {"run_id": leftover}).one() == ("queued", True), (
+                "the leftover was not claimable, so this test would prove nothing"
+            )
+            assert JobRepository().next_queued_run(picker) == own
+            picker.rollback()
+    finally:
+        _restore_the_queue(sessions, parked)
+        _cancel_leftovers(sessions, made)
+
+
+def test_a_job_queued_between_the_quieting_and_the_resume_is_parked_and_remembered(
+    sessions: sessionmaker[Session], blob_store: Any,
+    recorded_adapter: RecordedAdapter, provider_config: Any,
+    committed_version: Any,
+) -> None:
+    """D-152: the second parking catches what the first could not see, and restores it.
+
+    A foreign Job arrives after the queue was quieted and outranks this run (priority 100,
+    older), so only parking it keeps it from being picked. It must also be remembered, or
+    the cleanup would leave it parked until 2099.
+    """
+    client = next(_client(sessions, blob_store, recorded_adapter, provider_config, _NoCarrier()))
+    made: list[str] = []
+    parked = _quiet_the_queue(sessions)
+    try:
+        arrival = _start(client, committed_version.version_uid)["run_id"]
+        made.append(arrival)
+        own = _start(client, committed_version.version_uid)["run_id"]
+        made.append(own)
+        with sessions() as promote:
+            promote.execute(text(
+                "UPDATE job SET priority = 100 WHERE run_id = :run_id"
+            ), {"run_id": arrival})
+            promote.commit()
+        arrival_job, arrival_available = _job_and_availability(sessions, arrival)
+        _resume_with_this_run_first(sessions, own, parked)
+        assert (arrival_job, arrival_available) in [(row[0], row[1]) for row in parked]
+        with sessions() as picker:
+            assert JobRepository().next_queued_run(picker) == own
+            picker.rollback()
+    finally:
+        _restore_the_queue(sessions, parked)
+        _cancel_leftovers(sessions, made)
+    assert _job_and_availability(sessions, arrival) == (arrival_job, arrival_available)
+
+
+def test_quieting_the_queue_reclaims_an_expired_leftover_before_it_parks(
+    sessions: sessionmaker[Session], blob_store: Any,
+    recorded_adapter: RecordedAdapter, provider_config: Any,
+    committed_version: Any,
+) -> None:
+    """D-152: the leftovers an application's first reclaim pass would requeue are already parked.
+
+    One foreign Run holds an expired lease and another is plainly queued. After the
+    quieting, both Jobs are queued *and* unavailable, and dispatch is paused, so neither
+    the carrier's first pass nor its first poll can find anything of theirs.
+    """
+    client = next(_client(sessions, blob_store, recorded_adapter, provider_config, _NoCarrier()))
+    made: list[str] = []
+    parked: list[Any] = []
+    try:
+        _unpause(sessions)  # claiming the lost lease needs dispatch on
+        waiting = _start(client, committed_version.version_uid)["run_id"]
+        made.append(waiting)
+        lost = _start(client, committed_version.version_uid)["run_id"]
+        made.append(lost)
+        _lose_the_lease(sessions, lost)
+        parked = _quiet_the_queue(sessions)
+        with sessions() as observer:
+            rows = observer.execute(text(
+                "SELECT run_id, state, available_at >= timestamptz '2099-01-01' FROM job "
+                "WHERE run_id IN (:waiting, :lost)"
+            ), {"waiting": waiting, "lost": lost}).all()
+            assert sorted(tuple(row) for row in rows) == sorted(
+                [(waiting, "queued", True), (lost, "queued", True)]
+            )
+            assert observer.execute(text(
+                "SELECT paused FROM execution_control WHERE singleton"
+            )).scalar_one() is True
+    finally:
+        _restore_the_queue(sessions, parked)
+        _cancel_leftovers(sessions, made)
 
 
 class TestACrashDoesNotStrandARun:

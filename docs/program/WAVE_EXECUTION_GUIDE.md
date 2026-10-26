@@ -65,7 +65,7 @@ Integrator records:
 wave_id: W4.2
 contract_set:
   domain: 1.0.0
-  api: 1.3.0
+  api: 1.4.0
   analysis: 1.4.0
   events: 1.1.0
   comparison: null

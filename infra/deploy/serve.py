@@ -1,7 +1,7 @@
 """The alpha's process entry point: one built application, served on two ports.
 
 `W13-API` built everything this needs and serves none of it. ``api/app.py`` has
-:func:`create_asgi_app` (the 102 operations) and ``api/health.py`` has
+:func:`create_asgi_app` (the 104 operations) and ``api/health.py`` has
 :func:`build_health_app` (`T-3`'s liveness and readiness), and ``api/app.py:main`` only
 *constructs* and prints -- deliberately, so an operator can ask "would this process
 start?" for free. Nothing in the repository binds either application to a socket. This
@@ -19,6 +19,24 @@ only on the main thread, so the health server runs as a daemon thread with signa
 skipped and the API server keeps the main thread and the SIGTERM that stops the container.
 A daemon thread also cannot outlive a crashed API server and leave a container that still
 answers ``/healthz`` while serving nothing.
+
+**Why ``/readyz`` waits for the API socket** (`D-196`). The health plane starts first and does
+not depend on the API port, so without more it would report ready for as long as the API's
+lifespan startup takes -- tens of milliseconds measured, seconds when startup touches the
+database -- while the API port refuses connections. ``uvicorn.Server.started`` is set once the
+API's lifespan startup has completed *and* its listener is bound, so the health plane is
+handed :class:`_ApiListener` and answers ``503`` until then. uvicorn never clears ``started``,
+but a SIGTERM sets ``should_exit`` (a second SIGINT sets ``force_exit``) and the listener
+closes, so the same predicate withdraws readiness from that moment: ``/readyz`` does not
+claim a port that refuses new connections. ``/healthz`` does not consult it: liveness stays
+"the process answers", which is what the container's healthcheck reads.
+
+**Why the API ``Config`` is built last** (`DEBT-READYZ-ERRORS-FIX-01`). ``uvicorn.Config.__init__``
+reconfigures the *process-global* ``uvicorn.access`` logger, and a ``Config`` with
+``access_log=False`` (the health plane's) strips its handler. Whichever ``Config`` is built
+last wins, so the API's -- the one that must log -- is built after the health plane's. The
+health app needs the API server before that server exists, so it reads it through
+:class:`_ApiListener`, bound once the API server has been built.
 
 **Configuration is the environment and nothing else.** ``create_asgi_app(environ=None)``
 reads ``os.environ``; ``bootstrap/settings.py:load`` refuses to start on a missing value,
@@ -65,6 +83,24 @@ def _port(name: str, default: int, environ: dict[str, str]) -> int:
     return value
 
 
+class _ApiListener:
+    """What ``/readyz`` asks: is the API server accepting connections right now?
+
+    Bound to the API ``uvicorn.Server`` after that server is built (see the module note on
+    construction order); until then, and once the server has been told to exit, the answer
+    is no. ``started`` is never cleared by uvicorn, so the exit flags are read as well.
+    """
+
+    def __init__(self) -> None:
+        self.server: uvicorn.Server | None = None
+
+    def __call__(self) -> bool:
+        server = self.server
+        if server is None:
+            return False
+        return server.started and not (server.should_exit or server.force_exit)
+
+
 def main(argv: list[str] | None = None) -> int:
     """Build once, serve twice. Returns non-zero without binding anything on refusal."""
     del argv
@@ -85,11 +121,18 @@ def main(argv: list[str] | None = None) -> int:
 
     bind_host = environ.get(BIND_VARIABLE, "").strip() or DEFAULT_BIND_HOST
     api_app = create_asgi_app(environ=environ, application=application)
-    health_app = build_health_app(application)
-
+    # The health plane's `Config` first, the API's last: see the module note on the global
+    # `uvicorn.access` logger. `listener` is how the health app reaches the API server that
+    # does not exist yet.
+    listener = _ApiListener()
+    health_app = build_health_app(application, serving=listener)
     health = uvicorn.Server(
         uvicorn.Config(health_app, host=bind_host, port=health_port, access_log=False)
     )
+    api_server = uvicorn.Server(
+        uvicorn.Config(api_app, host=bind_host, port=api_port, access_log=True)
+    )
+    listener.server = api_server
     threading.Thread(target=health.run, name="health-plane", daemon=True).start()
 
     print(
@@ -98,9 +141,7 @@ def main(argv: list[str] | None = None) -> int:
         f"api={bind_host}:{api_port}, health={bind_host}:{health_port}",
         flush=True,
     )
-    uvicorn.Server(
-        uvicorn.Config(api_app, host=bind_host, port=api_port, access_log=True)
-    ).run()
+    api_server.run()
     return 0
 
 

@@ -1,0 +1,465 @@
+{
+  "decision_version": "ar-beta-map-decisions-v1",
+  "synthetic": true,
+  "comment": "SYNTHETIC TEST FIXTURE. Every identifier, paragraph, edition label, branch statement and digest below is invented to exercise the toolchain; it records no owner or expert decision and must never be used for a real map.",
+  "identity": {
+    "norms_snapshot_id": "ns_00000000000000000000SYNTH1",
+    "reviewed_content_key": "SYNTHETIC-CONTENT-KEY",
+    "embedding_build": "bge-m3-dense-v1:characters-v2:1000",
+    "scenario": "new_multi_apartment_residential_F1.3"
+  },
+  "query_vectors": {
+    "profile": "bge-m3-dense-v1",
+    "model_revision": "0000000000000000000000000000000000000000",
+    "sha256_by_scope": {
+      "F1": "7eab2ea0c4205faa3ee84979a33720107349befb925781377d18fc40b5bb7ab7",
+      "F2": "3674726068ed918d2aa5d2a60ef0cd95fcf91b06b1548abdfec7e3b183433a05",
+      "A1": "540ac88f7a82c8b3332f1a0681538af56a7ce2c5b4a02fecb56e84ce3a19f9e9",
+      "A2": "15c9776ebf0c5eda18b5570e6ae3d60e57926c9b8a008899643a88271ce3ba77",
+      "S1": "5531514b34f2f7b03bfffb4420e8282ea8f4bcfa706d29af58d7fe29dd110e06",
+      "S2": "be5640de4217d8e38607cfa6eb0581d7a3442d367ba3ede37cde99c627e4a5fb"
+    }
+  },
+  "items": [
+    {
+      "id": "C01",
+      "mode": "provisional_citation",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_00000000000000000000SYNTD1",
+          "designation": "SYNTH-D1",
+          "edition": "SYNTHETIC edition label D1",
+          "kind": "clause",
+          "ordinal_first": 0,
+          "ordinal_last": 1,
+          "norm_paragraph_id_first": "npar_0000000000000000000SYN1P00",
+          "norm_paragraph_id_last": "npar_0000000000000000000SYN1P01"
+        }
+      ],
+      "branch": {
+        "id": "N",
+        "applicability": "SYNTHETIC branch statement for C01"
+      },
+      "edition_evidence": [
+        {
+          "source_id": "D1_MCHS_1",
+          "pages": "1-2",
+          "page_sha256": "6fa33ce50f779198208272a0d09ea0fa09614dd378e721616a28ad9435fc130d"
+        }
+      ]
+    },
+    {
+      "id": "C02",
+      "mode": "provisional_citation",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_00000000000000000000SYNTD1",
+          "designation": "SYNTH-D1",
+          "edition": "SYNTHETIC edition label D1",
+          "kind": "clause",
+          "ordinal_first": 2,
+          "ordinal_last": 2,
+          "norm_paragraph_id_first": "npar_0000000000000000000SYN1P02",
+          "norm_paragraph_id_last": "npar_0000000000000000000SYN1P02"
+        }
+      ],
+      "branch": {
+        "id": "N",
+        "applicability": "SYNTHETIC branch statement for C02"
+      },
+      "edition_evidence": []
+    },
+    {
+      "id": "C03",
+      "mode": "provisional_citation",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_00000000000000000000SYNTD1",
+          "designation": "SYNTH-D1",
+          "edition": "SYNTHETIC edition label D1",
+          "kind": "clause",
+          "ordinal_first": 3,
+          "ordinal_last": 4,
+          "norm_paragraph_id_first": "npar_0000000000000000000SYN1P03",
+          "norm_paragraph_id_last": "npar_0000000000000000000SYN1P04"
+        }
+      ],
+      "branch": {
+        "id": "N",
+        "applicability": "SYNTHETIC branch statement for C03"
+      },
+      "edition_evidence": []
+    },
+    {
+      "id": "C04",
+      "mode": "provisional_citation",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_00000000000000000000SYNTD1",
+          "designation": "SYNTH-D1",
+          "edition": "SYNTHETIC edition label D1",
+          "kind": "table",
+          "ordinal_first": 5,
+          "ordinal_last": 6,
+          "norm_paragraph_id_first": "npar_0000000000000000000SYN1P05",
+          "norm_paragraph_id_last": "npar_0000000000000000000SYN1P06"
+        }
+      ],
+      "branch": {
+        "id": "N",
+        "applicability": "SYNTHETIC branch statement for C04"
+      },
+      "edition_evidence": []
+    },
+    {
+      "id": "C05",
+      "mode": "context_only",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_00000000000000000000SYNTD6",
+          "designation": "SYNTH-D6",
+          "edition": "SYNTHETIC edition label D6",
+          "kind": "clause",
+          "ordinal_first": 0,
+          "ordinal_last": 0,
+          "norm_paragraph_id_first": "npar_0000000000000000000SYN6P00",
+          "norm_paragraph_id_last": "npar_0000000000000000000SYN6P00"
+        }
+      ]
+    },
+    {
+      "id": "C06",
+      "mode": "context_only",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_00000000000000000000SYNTD1",
+          "designation": "SYNTH-D1",
+          "edition": "SYNTHETIC edition label D1",
+          "kind": "clause",
+          "ordinal_first": 7,
+          "ordinal_last": 7,
+          "norm_paragraph_id_first": "npar_0000000000000000000SYN1P07",
+          "norm_paragraph_id_last": "npar_0000000000000000000SYN1P07"
+        }
+      ]
+    },
+    {
+      "id": "C07",
+      "mode": "provisional_citation",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_00000000000000000000SYNTD1",
+          "designation": "SYNTH-D1",
+          "edition": "SYNTHETIC edition label D1",
+          "kind": "range",
+          "ordinal_first": 8,
+          "ordinal_last": 9,
+          "norm_paragraph_id_first": "npar_0000000000000000000SYN1P08",
+          "norm_paragraph_id_last": "npar_0000000000000000000SYN1P09"
+        }
+      ],
+      "branch": {
+        "id": "N",
+        "applicability": "SYNTHETIC branch statement for C07"
+      },
+      "edition_evidence": []
+    },
+    {
+      "id": "C08",
+      "mode": "context_only",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_00000000000000000000SYNTD6",
+          "designation": "SYNTH-D6",
+          "edition": "SYNTHETIC edition label D6",
+          "kind": "clause",
+          "ordinal_first": 1,
+          "ordinal_last": 1,
+          "norm_paragraph_id_first": "npar_0000000000000000000SYN6P01",
+          "norm_paragraph_id_last": "npar_0000000000000000000SYN6P01"
+        }
+      ]
+    },
+    {
+      "id": "C09",
+      "mode": "context_only",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_00000000000000000000SYNTD2",
+          "designation": "SYNTH-D2",
+          "edition": "SYNTHETIC edition label D2",
+          "kind": "clause",
+          "ordinal_first": 0,
+          "ordinal_last": 1,
+          "norm_paragraph_id_first": "npar_0000000000000000000SYN2P00",
+          "norm_paragraph_id_last": "npar_0000000000000000000SYN2P01"
+        }
+      ]
+    },
+    {
+      "id": "C10",
+      "mode": "context_only",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_00000000000000000000SYNTD6",
+          "designation": "SYNTH-D6",
+          "edition": "SYNTHETIC edition label D6",
+          "kind": "clause",
+          "ordinal_first": 2,
+          "ordinal_last": 2,
+          "norm_paragraph_id_first": "npar_0000000000000000000SYN6P02",
+          "norm_paragraph_id_last": "npar_0000000000000000000SYN6P02"
+        }
+      ]
+    },
+    {
+      "id": "C11",
+      "mode": "provisional_citation",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_00000000000000000000SYNTD3",
+          "designation": "SYNTH-D3",
+          "edition": "SYNTHETIC edition label D3",
+          "kind": "clause",
+          "ordinal_first": 0,
+          "ordinal_last": 1,
+          "norm_paragraph_id_first": "npar_0000000000000000000SYN3P00",
+          "norm_paragraph_id_last": "npar_0000000000000000000SYN3P01"
+        }
+      ],
+      "branch": {
+        "id": "N",
+        "applicability": "SYNTHETIC branch statement for C11"
+      },
+      "edition_evidence": [
+        {
+          "source_id": "D3_PUBLIC_CONSOLIDATED",
+          "pages": "3",
+          "page_sha256": "cfe79431b4a200ae45e44b5e0bc4f3e56eb2229e549e476d121e8ef24eeb10c3"
+        }
+      ]
+    },
+    {
+      "id": "C12",
+      "mode": "provisional_citation",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_00000000000000000000SYNTD3",
+          "designation": "SYNTH-D3",
+          "edition": "SYNTHETIC edition label D3",
+          "kind": "clause",
+          "ordinal_first": 2,
+          "ordinal_last": 3,
+          "norm_paragraph_id_first": "npar_0000000000000000000SYN3P02",
+          "norm_paragraph_id_last": "npar_0000000000000000000SYN3P03"
+        }
+      ],
+      "branch": {
+        "id": "N",
+        "applicability": "SYNTHETIC branch statement for C12"
+      },
+      "edition_evidence": []
+    },
+    {
+      "id": "C13",
+      "mode": "provisional_citation",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_00000000000000000000SYNTD3",
+          "designation": "SYNTH-D3",
+          "edition": "SYNTHETIC edition label D3",
+          "kind": "clause",
+          "ordinal_first": 2,
+          "ordinal_last": 3,
+          "norm_paragraph_id_first": "npar_0000000000000000000SYN3P02",
+          "norm_paragraph_id_last": "npar_0000000000000000000SYN3P03"
+        }
+      ],
+      "branch": {
+        "id": "N",
+        "applicability": "SYNTHETIC branch statement for C13"
+      },
+      "edition_evidence": []
+    },
+    {
+      "id": "C14",
+      "mode": "provisional_citation",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_00000000000000000000SYNTD3",
+          "designation": "SYNTH-D3",
+          "edition": "SYNTHETIC edition label D3",
+          "kind": "clause",
+          "ordinal_first": 4,
+          "ordinal_last": 5,
+          "norm_paragraph_id_first": "npar_0000000000000000000SYN3P04",
+          "norm_paragraph_id_last": "npar_0000000000000000000SYN3P05"
+        }
+      ],
+      "branch": {
+        "id": "N",
+        "applicability": "SYNTHETIC branch statement for C14"
+      },
+      "edition_evidence": []
+    },
+    {
+      "id": "C15",
+      "mode": "context_only",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_00000000000000000000SYNTD3",
+          "designation": "SYNTH-D3",
+          "edition": "SYNTHETIC edition label D3",
+          "kind": "clause",
+          "ordinal_first": 6,
+          "ordinal_last": 6,
+          "norm_paragraph_id_first": "npar_0000000000000000000SYN3P06",
+          "norm_paragraph_id_last": "npar_0000000000000000000SYN3P06"
+        }
+      ]
+    },
+    {
+      "id": "C16",
+      "mode": "provisional_citation",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_00000000000000000000SYNTD3",
+          "designation": "SYNTH-D3",
+          "edition": "SYNTHETIC edition label D3",
+          "kind": "clause",
+          "ordinal_first": 7,
+          "ordinal_last": 8,
+          "norm_paragraph_id_first": "npar_0000000000000000000SYN3P07",
+          "norm_paragraph_id_last": "npar_0000000000000000000SYN3P08"
+        }
+      ],
+      "branch": {
+        "id": "N",
+        "applicability": "SYNTHETIC branch statement for C16"
+      },
+      "edition_evidence": []
+    },
+    {
+      "id": "C17",
+      "mode": "provisional_citation",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_00000000000000000000SYNTD3",
+          "designation": "SYNTH-D3",
+          "edition": "SYNTHETIC edition label D3",
+          "kind": "clause",
+          "ordinal_first": 9,
+          "ordinal_last": 9,
+          "norm_paragraph_id_first": "npar_0000000000000000000SYN3P09",
+          "norm_paragraph_id_last": "npar_0000000000000000000SYN3P09"
+        }
+      ],
+      "branch": {
+        "id": "N",
+        "applicability": "SYNTHETIC branch statement for C17"
+      },
+      "edition_evidence": []
+    },
+    {
+      "id": "C18",
+      "mode": "provisional_citation",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_00000000000000000000SYNTD3",
+          "designation": "SYNTH-D3",
+          "edition": "SYNTHETIC edition label D3",
+          "kind": "clause",
+          "ordinal_first": 10,
+          "ordinal_last": 11,
+          "norm_paragraph_id_first": "npar_0000000000000000000SYN3P10",
+          "norm_paragraph_id_last": "npar_0000000000000000000SYN3P11"
+        }
+      ],
+      "branch": {
+        "id": "N",
+        "applicability": "SYNTHETIC branch statement for C18"
+      },
+      "edition_evidence": []
+    },
+    {
+      "id": "C19",
+      "mode": "provisional_citation",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_00000000000000000000SYNTD4",
+          "designation": "SYNTH-D4",
+          "edition": "SYNTHETIC edition label D4",
+          "kind": "clause",
+          "ordinal_first": 0,
+          "ordinal_last": 1,
+          "norm_paragraph_id_first": "npar_0000000000000000000SYN4P00",
+          "norm_paragraph_id_last": "npar_0000000000000000000SYN4P01"
+        }
+      ],
+      "branch": {
+        "id": "N",
+        "applicability": "SYNTHETIC branch statement for C19"
+      },
+      "edition_evidence": [
+        {
+          "source_id": "D4_FAU_EXCERPT",
+          "pages": "2-3",
+          "page_sha256": "901b54a62de5e8bc7ab0f7cb3e6db0553a76a346cc98883a8221ee43a80f30a7"
+        }
+      ]
+    },
+    {
+      "id": "C20",
+      "mode": "provisional_citation",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_00000000000000000000SYNTD4",
+          "designation": "SYNTH-D4",
+          "edition": "SYNTHETIC edition label D4",
+          "kind": "clause",
+          "ordinal_first": 0,
+          "ordinal_last": 1,
+          "norm_paragraph_id_first": "npar_0000000000000000000SYN4P00",
+          "norm_paragraph_id_last": "npar_0000000000000000000SYN4P01"
+        }
+      ],
+      "branch": {
+        "id": "N",
+        "applicability": "SYNTHETIC branch statement for C20"
+      },
+      "edition_evidence": []
+    },
+    {
+      "id": "C21",
+      "mode": "context_only",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_00000000000000000000SYNTD5",
+          "designation": "SYNTH-D5",
+          "edition": "SYNTHETIC edition label D5",
+          "kind": "table",
+          "ordinal_first": 0,
+          "ordinal_last": 2,
+          "norm_paragraph_id_first": "npar_0000000000000000000SYN5P00",
+          "norm_paragraph_id_last": "npar_0000000000000000000SYN5P02"
+        }
+      ]
+    },
+    {
+      "id": "C22",
+      "mode": "context_only",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_00000000000000000000SYNTD5",
+          "designation": "SYNTH-D5",
+          "edition": "SYNTHETIC edition label D5",
+          "kind": "table",
+          "ordinal_first": 0,
+          "ordinal_last": 2,
+          "norm_paragraph_id_first": "npar_0000000000000000000SYN5P00",
+          "norm_paragraph_id_last": "npar_0000000000000000000SYN5P02"
+        }
+      ]
+    }
+  ]
+}

@@ -32,7 +32,7 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 
 #: The one contract version this package speaks. A consumer reading anything else
 #: fails closed rather than guessing.
-CONTRACT_VERSION: Final[str] = "1.2.0"
+CONTRACT_VERSION: Final[str] = "1.5.0"
 
 _METRIC_KEY: Final[re.Pattern[str]] = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _ARTIFACT_ROLE: Final[re.Pattern[str]] = re.compile(
@@ -74,9 +74,11 @@ class ArtifactRef:
     def __post_init__(self) -> None:
         if not _ARTIFACT_ROLE.match(self.role):
             raise ValueError(f"artifact role {self.role!r} is not contract-shaped")
-        if not _BLOB_ID.match(self.blob_id):
+        # `fullmatch` on the identifier and the digest: their patterns end in `$`, which also
+        # matches before one trailing newline.
+        if not _BLOB_ID.fullmatch(self.blob_id):
             raise ValueError("blob_id is not a contract-shaped blob identifier")
-        if not _SHA256.match(self.sha256):
+        if not _SHA256.fullmatch(self.sha256):
             raise ValueError("sha256 must be 64 lowercase hex characters")
         if self.size_bytes < 0:
             raise ValueError("size_bytes may not be negative")

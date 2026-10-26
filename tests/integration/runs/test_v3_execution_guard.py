@@ -17,6 +17,7 @@ from auditmanager.analysis.public import (
 )
 from auditmanager.runs.executor import execute_run
 from auditmanager.runs.repository import RunRow
+from auditmanager.runs.v3_group import TrustedPackRegistry
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 
@@ -122,4 +123,17 @@ def test_historical_v1_reaches_its_existing_path() -> None:
             blob_store=_NoEffects(), adapter=_Adapter(), provider_config=CONFIG,
             runs=_Runs(row), documents=_V1DocumentProbe(), jobs=_NoEffects(),
             blob_metadata=_NoEffects(),
+        )
+
+
+def test_exact_v3_with_injected_reviewed_registry_passes_early_guard(monkeypatch) -> None:
+    monkeypatch.setattr(TrustedPackRegistry, "select_beta", lambda self: object())
+    with pytest.raises(_PassedV3Guard):
+        execute_run(
+            _NoEffects(), RUN_ID,
+            blob_store=_NoEffects(), adapter=_Adapter(), provider_config=CONFIG,
+            runs=_Runs(_run()), documents=_V1DocumentProbe(), jobs=_NoEffects(),
+            blob_metadata=_NoEffects(),
+            text_profiles=lambda *_: pytest.fail("v3 cannot resolve a legacy text profile"),
+            ar_v3_pack_registry=TrustedPackRegistry.empty(),
         )

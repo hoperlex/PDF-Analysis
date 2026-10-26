@@ -8,8 +8,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.2.0 (OpenAPI 3.1.0)
- *   sha256 6d4402a62e93dd255a40e30869d42d543cbd7cb64bba75e56b0b4c087ff18c1b
+ *   AuditManager PC-01 API 1.5.0 (OpenAPI 3.1.0)
+ *   sha256 425b17f6f4734dafb7faa1f744aed5f51264955e400fde9d5da8752f6ed83df5
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -62,6 +62,10 @@ import type {
   GenerateExecutorSshKeyResult,
   GetArV3BetaGroupInput,
   GetArV3BetaGroupResult,
+  GetArV3BetaGroupReviewInput,
+  GetArV3BetaGroupReviewResult,
+  GetArV3BetaPackStatusInput,
+  GetArV3BetaPackStatusResult,
   GetAssignmentInput,
   GetAssignmentResult,
   GetDashboardSummaryInput,
@@ -487,6 +491,30 @@ export function getArV3BetaGroup(
   options?: RequestOptions,
 ): Promise<ApiResponse<GetArV3BetaGroupResult>> {
   return request<GetArV3BetaGroupResult>(OPERATIONS.getArV3BetaGroup, input, options);
+}
+
+/**
+ * Get Ar V3 Beta Group Review
+ *
+ * `GET /ar-v3-beta/groups/{group_id}/review`.
+ */
+export function getArV3BetaGroupReview(
+  input: GetArV3BetaGroupReviewInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetArV3BetaGroupReviewResult>> {
+  return request<GetArV3BetaGroupReviewResult>(OPERATIONS.getArV3BetaGroupReview, input, options);
+}
+
+/**
+ * Get Ar V3 Beta Pack Status
+ *
+ * `GET /ar-v3-beta/pack`.
+ */
+export function getArV3BetaPackStatus(
+  input: GetArV3BetaPackStatusInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetArV3BetaPackStatusResult>> {
+  return request<GetArV3BetaPackStatusResult>(OPERATIONS.getArV3BetaPackStatus, input, options);
 }
 
 /**
@@ -1476,6 +1504,8 @@ export const apiClient = {
   failExecutorTask,
   generateExecutorSshKey,
   getArV3BetaGroup,
+  getArV3BetaGroupReview,
+  getArV3BetaPackStatus,
   getAssignment,
   getDashboardSummary,
   getDocumentVersion,

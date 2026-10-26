@@ -40,7 +40,7 @@ class _PatternValue:
     _label: str = "value"
 
     def __init__(self, value: str) -> None:
-        if not isinstance(value, str) or not type(self)._regex.match(value):
+        if not isinstance(value, str) or not type(self)._regex.fullmatch(value):
             raise IdentifierFormatError(
                 f"{type(self)._label} must match {type(self)._regex.pattern}"
             )

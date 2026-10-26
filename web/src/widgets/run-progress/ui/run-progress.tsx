@@ -62,7 +62,7 @@ import {
   LoadingState,
   NotApplicableState,
   RunStateBadge,
-  STAGE_LABELS,
+  runStageLabel,
   STATE_LABELS,
   COST_BASIS_LABELS,
   PROVIDER_MODE_LABELS,
@@ -71,6 +71,7 @@ import {
 import styles from './run-progress.module.css';
 
 import {
+  AR_V3_BETA_PROFILE_ID,
   StageTable,
   badgeProviderMode,
   costBasisCaption,
@@ -106,6 +107,7 @@ const UNKNOWN_RUN_TITLE = 'Прогон содержит неизвестное 
 
 function Outcome({ status }: { readonly status: RunStatus }) {
   const outcome = runOutcome(status);
+  const v3Beta = status.analysis_profile_id === AR_V3_BETA_PROFILE_ID;
 
   switch (outcome.kind) {
     case 'in_flight':
@@ -117,6 +119,12 @@ function Outcome({ status }: { readonly status: RunStatus }) {
         </p>
       );
     case 'published':
+      if (v3Beta) return (
+        <div className={styles.outcome} data-run-outcome="published" data-review-only="ar-v3-beta">
+          <p>Прогон завершён. Предварительный нормативный разбор АР v3 сохранён.</p>
+          <p>Канонические находки здесь не публикуются. Каждая тема и цитата требует проверки эксперта; числовой или правовой вывод не утверждён.</p>
+        </div>
+      );
       return (
         <div className={styles.outcome} data-run-outcome="published">
           <p>
@@ -130,6 +138,12 @@ function Outcome({ status }: { readonly status: RunStatus }) {
         </div>
       );
     case 'partial':
+      if (v3Beta) return (
+        <div className={styles.outcome} data-run-outcome="partial" data-review-only="ar-v3-beta">
+          <p>Предварительный нормативный разбор АР v3 завершился частично. Полный проверенный результат не подтверждён.</p>
+          <p>Канонические находки не публикуются; требуется проверка эксперта.</p>
+        </div>
+      );
       return (
         <div className={styles.outcome} data-run-outcome="partial">
           <p>
@@ -156,7 +170,7 @@ function Outcome({ status }: { readonly status: RunStatus }) {
                  */}
                 {outcome.degradation.map((stageId) => (
                   <li key={stageId} data-degraded-stage={stageId}>
-                    {STAGE_LABELS[stageId]}
+                    {runStageLabel(stageId)}
                   </li>
                 ))}
               </ul>
@@ -372,7 +386,16 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
       <StageTable rows={stageRows(status)} />
 
       <h2>Разбор</h2>
-      {runHasPublishedResult(status.state) ? (
+      {status.analysis_profile_id === AR_V3_BETA_PROFILE_ID ? (
+        <NotApplicableState
+          title="Предварительный разбор АР v3"
+          detail={
+            <p>
+              Для просмотра шести прогонов откройте «Настройки анализа» и укажите идентификатор группы из ответа запуска. Здесь нет канонических находок для разбора или принятия решения.
+            </p>
+          }
+        />
+      ) : runHasPublishedResult(status.state, status.analysis_profile_id) ? (
         <p>
           <Link href={routes.review(projectUid, status.run_id)}>Разобрать находки</Link>{' '}
           — режим провайдера этого прогона:{' '}

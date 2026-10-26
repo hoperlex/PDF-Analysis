@@ -239,10 +239,18 @@ def test_job_writer_preserves_unknown_and_existing_numeric_costs(
     from auditmanager.jobs import repository as jobs_module
 
     inserted: dict = {}
+    # The prepared effect carries the connection revision and the identity basis, both set or
+    # both NULL (migration 0030): a recorded call has neither, a live one the pair of its route.
+    effect = (
+        {"connection_revision_id": None, "identity_basis": None} if provider_mode == "recorded"
+        else {"connection_revision_id": "exr_01M2545JSD15ETSNNV904X991J", "identity_basis": "reported"}
+    )
+
     class DbSession:
         def execute(self, statement, parameters):
             if statement is jobs_module._PROVIDER_FOR_COMPLETION:
-                return SimpleNamespace(scalar_one_or_none=lambda: 1)
+                return SimpleNamespace(
+                    mappings=lambda: SimpleNamespace(first=lambda: effect))
             if statement is jobs_module._INSERT_MODEL_CALL:
                 inserted.update(parameters)
                 return SimpleNamespace(rowcount=1)
@@ -263,3 +271,5 @@ def test_job_writer_preserves_unknown_and_existing_numeric_costs(
     assert inserted["cost_micros"] == expected_micros
     assert inserted["cost_basis"] == "estimated"
     assert inserted["provider_mode"] == provider_mode
+    assert (inserted["connection_revision_id"], inserted["identity_basis"]) == (
+        effect["connection_revision_id"], effect["identity_basis"])

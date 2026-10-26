@@ -51,7 +51,7 @@
 import type { RunStatus, StageId, StageStatus } from '@/shared/api';
 
 import type { StageRow } from './run-presentation';
-import { STAGE_DEPENDS_ON, elapsedMs, runCost, stageRows } from './run-presentation';
+import { elapsedMs, runCost, stageRows } from './run-presentation';
 
 /** What comparing one fact across two readings produced. */
 export type Comparison = 'same' | 'differs' | 'one_sided' | 'absent';
@@ -220,7 +220,7 @@ export interface StageSide {
  * not declare.
  */
 export interface ComparedStage {
-  readonly stageId: StageId;
+  readonly stageId: StageRow['stageId'];
   readonly ordinal: number | null;
   readonly dependsOn: readonly StageId[];
   readonly expected: boolean;
@@ -243,16 +243,16 @@ export interface ComparedStage {
 export function comparedStages(left: RunStatus, right: RunStatus): readonly ComparedStage[] {
   const leftRows = stageRows(left);
   const rightRows = stageRows(right);
-  const byId = new Map<StageId, { ordinal: number | null; expected: boolean }>();
-  const order: StageId[] = [];
+  const byId = new Map<StageRow['stageId'], { ordinal: number | null; expected: boolean; dependsOn: readonly StageId[] }>();
+  const order: StageRow['stageId'][] = [];
 
   for (const row of [...leftRows, ...rightRows]) {
     if (byId.has(row.stageId)) continue;
-    byId.set(row.stageId, { ordinal: row.ordinal, expected: row.expected });
+    byId.set(row.stageId, { ordinal: row.ordinal, expected: row.expected, dependsOn: row.dependsOn });
     order.push(row.stageId);
   }
 
-  const side = (rows: readonly StageRow[], stageId: StageId): StageSide => {
+  const side = (rows: readonly StageRow[], stageId: StageRow['stageId']): StageSide => {
     const row = rows.find((candidate) => candidate.stageId === stageId);
     if (row === undefined) return { status: null, errorCode: null, elapsedMs: null };
     return {
@@ -269,7 +269,7 @@ export function comparedStages(left: RunStatus, right: RunStatus): readonly Comp
     return {
       stageId,
       ordinal: known?.ordinal ?? null,
-      dependsOn: STAGE_DEPENDS_ON[stageId],
+      dependsOn: known?.dependsOn ?? [],
       expected: known?.expected ?? false,
       left: leftSide,
       right: rightSide,
