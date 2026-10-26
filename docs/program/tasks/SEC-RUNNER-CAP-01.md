@@ -101,7 +101,7 @@ No route, screen, error code, migration or constraint value is added. The refusa
     once (the 25 s wait is the pacing) unless it asked for `wait_seconds` 0, in which case it
     sleeps at least 5 s between claims.
   - 401, 422 (`wait_seconds`), 429, 5xx as in section 1.
-  
+
   Server notes (not required of runners): a claim by a token that already holds an unexpired
   claim SHOULD return that same task again (same payload, lease refreshed), so that a lost
   response or a restarted runner does not strand a task until the lease lapses. A token may

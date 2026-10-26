@@ -377,4 +377,3 @@ def test_two_instances_do_not_share_state() -> None:
     assert second.try_acquire("a")
     first.release("a")
     second.release("a")
-
