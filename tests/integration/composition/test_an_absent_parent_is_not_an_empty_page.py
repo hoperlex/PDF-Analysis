@@ -156,7 +156,9 @@ SERVER_STATUS_OPERATIONS = frozenset({"getArV3BetaPackStatus"})
 #: seam's ``401`` and never a ``404`` -- exempt from the ``404`` sweep (an identity that
 #: names nothing is not what is being refused) and asserted to be exactly that refusal
 #: instead (:func:`test_a_runner_token_read_is_not_answered_to_a_users_credential`). The
-#: runner's own answers are swept in ``tests/integration/executors``.
+#: runner's own answers: ``tests/integration/executors/test_runner_seam.py`` covers the ``200``
+#: and the ``401``; the ``404`` and claim-loss refusals are covered at adapter level in
+#: ``tests/unit/executors/test_pull_images.py``.
 RUNNER_ADDRESSED = frozenset({"getExecutorTaskImage"})
 
 # These GETs are neither a page of projects nor the account itself. Their own
