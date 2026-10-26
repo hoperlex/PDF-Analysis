@@ -84,7 +84,8 @@ Run in the lane worktree on the tree being committed, one pytest at a time; the 
 | `npx tsc --noEmit`, `npx eslint tests/unit/analysis-settings/analysis-settings.test.ts` | exit 0, exit 0 |
 | `git diff --check` | exit 0 |
 | governance one-liner on the task file | `[]` |
-| `pytest -q tests/contract/program` on the committed tree | CONTRACT_PROGRAM_RESULT |
+| `pytest -q tests/contract/program` on the committed tree (clean) | `28 passed` |
+| `pytest -q tests/contract/analysis_packages tests/contract/architecture tests/contract/release_notes` | `79 passed` |
 
 No full gate and no live journey was run (`R-135`: the complete gate comes after the code series).
 
