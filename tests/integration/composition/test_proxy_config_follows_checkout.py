@@ -151,7 +151,12 @@ if argv[:1] == ["inspect"]:
         for source, destination in proxy["mounts"]:
             print("%s\t%s" % (source, destination))
     elif ".Networks" in fmt:
-        print("an-instance-net")
+        # One network, as before -- unless a case says the proxy is on several (`D-229` item 3: the ACME
+        # overlay puts it on the client's network as well). `docker inspect` prints a map's keys sorted.
+        if argv[-1] == "container-proxy" and os.environ.get("STUB_PROXY_NETWORKS"):
+            print("\n".join(sorted(os.environ["STUB_PROXY_NETWORKS"].split(","))))
+        else:
+            print("an-instance-net")
     elif ".Image" in fmt:
         print("sha256:the-pinned-nginx")
     sys.exit(0)
@@ -298,9 +303,12 @@ class _Host:
     def proxy(self) -> dict:
         return json.loads((self.state / "proxy.json").read_text(encoding="utf-8"))
 
-    def run(self, script: str) -> tuple[subprocess.CompletedProcess[str], str]:
+    def run(
+        self, script: str, extra_environment: dict[str, str] | None = None
+    ) -> tuple[subprocess.CompletedProcess[str], str]:
         """One script, and the docker calls it made (only its own, not earlier ones)."""
         environment = dict(os.environ)
+        environment.update(extra_environment or {})
         environment["PATH"] = f"{self.bin}{os.pathsep}{environment['PATH']}"
         environment["STUB_LOG"] = str(self.log)
         environment["STUB_STATE"] = str(self.state)
@@ -432,6 +440,40 @@ class TestAnUnchangedConfigurationRestartsNothing:
         completed, calls = host.run("reload-proxy.sh")
         assert completed.returncode == 0, (completed.stdout, completed.stderr)
         assert "restart" not in _verbs(calls), calls
+
+
+class TestTheThrowawayContainerJoinsTheNetworkTheUpstreamsLiveOn:
+    """`D-229` item 3 put the proxy on a second network (`<instance>-acme-net`, shared with the ACME client).
+    `reload-proxy.sh` used to take the FIRST network the proxy lists for its throwaway `nginx -t` container,
+    and `docker inspect` prints a map's keys sorted: `an-instance-acme-net` sorts before `an-instance-net`,
+    so the test container would have landed where `api` and `web` do not resolve, and every stale-config
+    repair would have been refused as an invalid configuration (exit 5) on a host with a certificate name."""
+
+    NETWORKS = {"STUB_PROXY_NETWORKS": "an-instance-net,an-instance-acme-net"}
+
+    def test_the_throwaway_container_is_on_the_network_of_the_api(self, host: _Host) -> None:
+        host.checkout(host.commit_b)
+        completed, calls = host.run("reload-proxy.sh", self.NETWORKS)
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        throwaway = [line for line in calls.splitlines() if line.startswith("run ")]
+        assert len(throwaway) == 1, calls
+        assert "--network an-instance-net " in throwaway[0] + " ", throwaway[0]
+        assert "acme-net" not in throwaway[0], throwaway[0]
+        assert host.proxy_reads() == CONF_B
+
+    def test_the_network_is_asked_of_the_api_container_and_not_taken_from_the_proxys_list(self, host: _Host) -> None:
+        host.checkout(host.commit_b)
+        _, calls = host.run("reload-proxy.sh", self.NETWORKS)
+        asked = [line for line in calls.splitlines() if line.startswith("inspect ") and ".Networks" in line]
+        assert [line.split()[-1] for line in asked] == ["container-api"], asked
+
+    def test_a_proxy_on_one_network_is_unchanged(self, host: _Host) -> None:
+        host.checkout(host.commit_b)
+        completed, calls = host.run("reload-proxy.sh")
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        assert "--network an-instance-net " in "\n".join(
+            line + " " for line in calls.splitlines() if line.startswith("run ")
+        )
 
 
 class TestABrokenConfigurationIsNeverRestartedInto:
