@@ -1,51 +1,36 @@
-# THE TLS OVERLAY. `compose.server.yml` is not edited; this is added beside it.
+# THE 443 OVERLAY -- `PROD-01-TLS-ACME-01` rewrote this file for `ADR-0021` section 2; `R-146s` is why it
+# exists as a file of its own. It adds ONE thing: the proxy's container port 8443 published as public 443.
 #
 #   docker compose --env-file infra/deploy/env/alpha.env \
 #     -f infra/deploy/compose.server.yml \
-#     -f infra/deploy/proxy/compose.tls.yml \
-#     up -d
+#     -f infra/acme/compose.acme.yml \
+#     -f infra/deploy/proxy/compose.tls.yml up -d
 #
-# WHY AN OVERLAY AND NOT A CHANGE TO `compose.server.yml`. Two reasons, and the second is
-# the durable one:
+# `deploy.sh` passes it (`infra/deploy/lib/proxy-listeners.sh` decides) for a deploy that BOTH may open the
+# application to the public AND already has a certificate pair, and recreates the proxy WITHOUT it
+# otherwise. That is the whole mechanism of `R-146s`: *443 exists only when the gate allows it*, and a host
+# that has never been published, or whose default credential came back with a restore, serves the challenge
+# port and the loopback application port and nothing else. Today the gate is the explicit setting
+# `ALPHA_PUBLISH_HTTPS=yes`; `PROD-02` replaces that one setting by the default-credential check.
 #
-#   1. `W26-OPS` owns that file this wave and `AGENTS.md` section 3 allows it one writer;
-#   2. TLS has to be switchable off, and an overlay is the cleanest OFF there is -- drop
-#      the second `-f` and the stack is byte-for-byte the deployment that was certified.
-#      Nothing has to be un-edited, and the thing that is turned off is not a flag that has
-#      to be read correctly but a file that is not there. See the runbook, section 7.
+# IT IS USELESS ALONE, deliberately. The TLS server block, its switch, the certificate volume and the
+# watcher are mounted by `infra/acme/compose.acme.yml`, which is the file that is present whenever a
+# certificate name is configured; this overlay is never passed without it (`proxy-listeners.sh` cannot
+# produce that list, and `test_acme_overlay.py` asserts it). Before this rewrite the overlay mounted a
+# certificate DIRECTORY the owner filled by hand (`proxy/tls/`); nothing reads that directory now, and a
+# pair is only ever the one the ACME client exported (`R-146a`: a certificate placed and renewed by hand was
+# rejected as the design).
 #
-# WHAT IT ADDS, and it adds nothing else: one published port and three read-only mounts on
-# the `proxy` service. No service is added, no image changes, no environment name is
-# introduced that could carry a secret -- `ALPHA_HTTPS_PORT` is a port number and the
-# certificate is a PATH, so `docker compose config` on these two files prints where the key
-# is and never what is in it. That is the same shape as the provider credential, which
-# `compose.server.yml` reaches with `env_file:` precisely so it never enters substitution.
+# `ADR-0021` row 6 reads this file's effect off the running stack: with the overlay absent,
+# `docker compose ... port proxy 8443` exits non-zero, and with it present it prints the mapping.
 #
-# RELATIVE PATHS BELOW RESOLVE AGAINST `infra/deploy/`, NOT AGAINST THIS FILE. Compose
-# resolves them against the project directory, which is the directory of the FIRST `-f`.
-# That is why `./proxy/tls` and not `./tls`. Two things keep the subtlety from biting:
-# `tests/integration/composition/test_proxy_tls_path.py` asserts the rendered
-# configuration's source paths, and `D-37` means a source the daemon cannot see becomes an
-# empty directory rather than a refusal -- which `enable-tls.sh` reports as TLS IS OFF on
-# the plain port rather than as a stack that will not start.
+# THE INTERFACE IS `ALPHA_PUBLIC_ADDRESS` (all interfaces unless the host says one), the SAME variable as the
+# challenge port, so port 80 and port 443 are public or not public together. It is NOT `ALPHA_BIND_ADDRESS`:
+# that one still governs the plain APPLICATION listener (`compose.server.yml`), which must stay on loopback
+# whenever ACME is configured (`deploy.sh` refuses otherwise). The names this file substitutes are a host
+# interface and a port number, both safe for `docker compose config` to print.
 
 services:
   proxy:
-    volumes:
-      # The certificate and its private key, placed on the host by the owner. READ-ONLY:
-      # nothing in this stack ever writes a key.
-      - ./proxy/tls:/etc/nginx/tls:ro
-      # The TLS server block, mounted OUTSIDE conf.d so nginx does not load it by itself.
-      - ./proxy/tls-server.conf:/etc/nginx/tls-server.conf:ro
-      # The switch. The official image runs executable *.sh here before nginx starts.
-      - ./proxy/enable-tls.sh:/docker-entrypoint.d/25-enable-tls.sh:ro
     ports:
-      # 443 by default because that is what a browser reaching a host name asks for, and
-      # this is the file an operator changes when the host says otherwise. The plain port
-      # `compose.server.yml` publishes is untouched and keeps serving -- see the
-      # "NO REDIRECT" note in `tls-server.conf`.
-      # Same binding rule as `compose.server.yml`'s plain port and for the same reason
-      # (`D-49`): the interface is explicit and defaults to loopback. A host that is
-      # genuinely meant to serve TLS to the world sets `ALPHA_BIND_ADDRESS=0.0.0.0` in
-      # `alpha.env` once, and it then applies to both ports rather than to one of them.
-      - "${ALPHA_BIND_ADDRESS:-127.0.0.1}:${ALPHA_HTTPS_PORT:-443}:8443"
+      - "${ALPHA_PUBLIC_ADDRESS:-0.0.0.0}:${ALPHA_HTTPS_PORT:-443}:8443"
