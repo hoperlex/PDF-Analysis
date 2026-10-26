@@ -4,9 +4,11 @@ Plan `W55-PLAN.md` section B3.3 (G-11, R-118). The command refuses **up front** 
 version is read, before the idempotency key is claimed -- when the version's recorded
 ``text_character_count`` is strictly above ``input_budget_characters``:
 
-* a count of ``budget + 1`` is refused, a count of exactly ``budget`` is accepted, a version
-  with no recorded count (published before the bundle upload) is accepted, for a start **and**
-  for a re-audit;
+* `SECTION-CHUNKED-ANALYSIS-01`: ``input_budget_characters`` is the budget of one model call and a
+  section run above it is analysed in whole-page windows, so the limit is ``MAX_ANALYSIS_WINDOWS`` calls'
+  worth (``LIMIT`` below): a count of ``LIMIT + 1`` is refused, a count of exactly ``LIMIT`` is accepted, a
+  count between ``BUDGET + 1`` and ``LIMIT`` is accepted (it is windowed), a version with no recorded count
+  (published before the bundle upload) is accepted, for a start **and** for a re-audit;
 * the refusal's details are exactly ``character_count`` and ``budget_characters``, integers;
   the envelope is ``422 analysis_input_budget_exceeded``;
 * **nothing is created**: no run, no job, no command record, no event -- the whole database is
@@ -30,6 +32,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
+from auditmanager.analysis.public import MAX_ANALYSIS_WINDOWS, windowed_budget_characters
 from auditmanager.api.routers.errors import envelope_response
 from auditmanager.bootstrap.adapters import ExecutionAdapter, RunAdapter
 from auditmanager.documents.public import DocumentRepository
@@ -40,6 +43,8 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import DocumentUid, IdempotencyKey, VersionUid
 
 BUDGET = 50_000
+#: What a run takes: ``MAX_ANALYSIS_WINDOWS`` calls of ``BUDGET`` (`SECTION-CHUNKED-ANALYSIS-01`).
+LIMIT = windowed_budget_characters(BUDGET)
 
 
 def _key(label: str = "budget") -> str:
@@ -162,9 +167,9 @@ def _refusal(call) -> DomainError:
 
 
 def test_a_start_above_the_budget_is_refused_with_both_figures(session, seeded) -> None:
-    version = _counted_version(session, seeded, BUDGET + 1)
+    version = _counted_version(session, seeded, LIMIT + 1)
     refused = _refusal(lambda: _start(session, seeded, version, _key(), BUDGET))
-    assert dict(refused.detail_fields) == {"character_count": BUDGET + 1, "budget_characters": BUDGET}
+    assert dict(refused.detail_fields) == {"character_count": LIMIT + 1, "budget_characters": LIMIT}
     assert all(type(value) is int for value in refused.detail_fields.values())
 
 
@@ -210,7 +215,7 @@ def test_a_budget_that_is_not_a_whole_number_of_characters_is_a_wiring_fault(
 
 def test_a_refused_start_creates_nothing_at_all(session, seeded) -> None:
     """Up front: no run, no job, no command record, no event -- every table counted."""
-    version = _counted_version(session, seeded, BUDGET + 1)
+    version = _counted_version(session, seeded, LIMIT + 1)
     key = _key()
     before = _table_counts(session)
     _refusal(lambda: _start(session, seeded, version, key, BUDGET))
@@ -226,7 +231,7 @@ def test_a_refused_start_creates_nothing_at_all(session, seeded) -> None:
 def test_the_same_key_after_the_budget_is_raised_is_a_fresh_start_not_a_replayed_refusal(
     session, seeded, helpers
 ) -> None:
-    version = _counted_version(session, seeded, BUDGET + 1)
+    version = _counted_version(session, seeded, LIMIT + 1)
     key = _key()
     _refusal(lambda: _start(session, seeded, version, key, BUDGET))
     runs_before = helpers.count_runs(session)
@@ -267,31 +272,88 @@ def test_a_known_key_over_a_different_payload_is_still_a_key_reuse_not_a_budget_
     key = _key()
     small = _counted_version(session, seeded, 10)
     _start(session, seeded, small, key, BUDGET)
-    large = _counted_version(session, seeded, BUDGET + 1)
+    large = _counted_version(session, seeded, LIMIT + 1)
     with pytest.raises(DomainError) as reused:
         _start(session, seeded, large, key, BUDGET)
     assert reused.value.code is ErrorCode.IDEMPOTENCY_KEY_REUSE
 
 
 def test_the_refusal_is_a_422_envelope_carrying_exactly_the_two_integers(session, seeded) -> None:
-    version = _counted_version(session, seeded, BUDGET + 7)
+    version = _counted_version(session, seeded, LIMIT + 7)
     refused = _refusal(lambda: _start(session, seeded, version, _key(), BUDGET))
     response = envelope_response(refused, "cid-input-budget-0001")
     body = json.loads(response.body)
     assert response.status_code == 422
     assert body["error_code"] == "analysis_input_budget_exceeded"
     assert body["retryable"] is False
-    assert body["details"] == {"character_count": BUDGET + 7, "budget_characters": BUDGET}
+    assert body["details"] == {"character_count": LIMIT + 7, "budget_characters": LIMIT}
+
+
+# --- SECTION-CHUNKED-ANALYSIS-01: above one call, within the windows -------------------------
+
+
+def test_the_limit_is_that_many_calls_of_the_budget() -> None:
+    assert LIMIT == BUDGET * MAX_ANALYSIS_WINDOWS and MAX_ANALYSIS_WINDOWS > 1
+
+
+@pytest.mark.parametrize("count", [BUDGET + 1, 2 * BUDGET, LIMIT - 1, LIMIT])
+def test_a_start_above_one_call_and_within_the_windows_is_accepted(
+    session, seeded, helpers, count
+) -> None:
+    """Before this task these counts were the refusal; now the run is analysed in windows."""
+    version = _counted_version(session, seeded, count)
+    started = _start(session, seeded, version, _key(), BUDGET)
+    assert started.replayed is False
+    assert helpers.audit_run_row(session, started.run_id)["version_uid"] == version
+
+
+@pytest.mark.parametrize("count", [BUDGET + 1, 2 * BUDGET, LIMIT])
+def test_a_reaudit_above_one_call_and_within_the_windows_is_accepted(
+    session, seeded, helpers, count
+) -> None:
+    version = _counted_version(session, seeded, count)
+    source = _terminal(session, seeded, version)
+    started = _reaudit(session, seeded, source, _key("reaudit"), BUDGET)
+    assert started.replayed is False
+    assert helpers.audit_run_row(session, started.run_id)["reaudit_of_run_id"] == source
+
+
+def test_one_window_as_the_limit_restores_the_one_call_refusal(
+    session, seeded, monkeypatch
+) -> None:
+    """The rollback of the whole feature: ``MAX_ANALYSIS_WINDOWS = 1`` is the refusal it always was."""
+    import auditmanager.runs.commands as commands
+
+    monkeypatch.setattr(commands, "MAX_ANALYSIS_WINDOWS", 1)
+    version = _counted_version(session, seeded, BUDGET + 1)
+    refused = _refusal(lambda: _start(session, seeded, version, _key(), BUDGET))
+    assert dict(refused.detail_fields) == {"character_count": BUDGET + 1, "budget_characters": BUDGET}
+    at = _counted_version(session, seeded, BUDGET)
+    assert _start(session, seeded, at, _key(), BUDGET).replayed is False
+
+
+def test_the_ar_v3_group_keeps_the_one_call_refusal() -> None:
+    """The group start shares ``_checked_budget`` and ``_refuse_over_budget``; only the section runs window."""
+    import auditmanager.runs.v3_group as v3_group
+    from auditmanager.runs.commands import _refuse_over_budget
+
+    assert v3_group._refuse_over_budget is _refuse_over_budget
+    with pytest.raises(DomainError) as refused:
+        _refuse_over_budget(BUDGET + 1, BUDGET)
+    assert refused.value.code is ErrorCode.ANALYSIS_INPUT_BUDGET_EXCEEDED
+    assert dict(refused.value.detail_fields) == {
+        "character_count": BUDGET + 1, "budget_characters": BUDGET,
+    }
 
 
 # --- reauditRun ------------------------------------------------------------------------------
 
 
 def test_a_reaudit_above_the_budget_is_refused_with_both_figures(session, seeded) -> None:
-    version = _counted_version(session, seeded, BUDGET + 1)
+    version = _counted_version(session, seeded, LIMIT + 1)
     source = _terminal(session, seeded, version)
     refused = _refusal(lambda: _reaudit(session, seeded, source, _key("reaudit"), BUDGET))
-    assert dict(refused.detail_fields) == {"character_count": BUDGET + 1, "budget_characters": BUDGET}
+    assert dict(refused.detail_fields) == {"character_count": LIMIT + 1, "budget_characters": LIMIT}
     assert all(type(value) is int for value in refused.detail_fields.values())
 
 
@@ -310,7 +372,7 @@ def test_a_reaudit_over_a_version_with_no_recorded_count_is_accepted(session, se
 
 
 def test_a_refused_reaudit_creates_nothing_at_all(session, seeded) -> None:
-    version = _counted_version(session, seeded, BUDGET + 1)
+    version = _counted_version(session, seeded, LIMIT + 1)
     source = _terminal(session, seeded, version)
     key = _key("reaudit")
     before = _table_counts(session)
@@ -329,7 +391,7 @@ def test_a_reaudit_faces_todays_budget_not_the_one_its_source_was_accepted_under
 ) -> None:
     """R-82: the budget is between the source run and the re-audit, and the re-audit sees the later one."""
     version = _counted_version(session, seeded, 30_000)
-    source = _start(session, seeded, version, _key(), 40_000)  # accepted: 30 000 <= 40 000
+    source = _start(session, seeded, version, _key(), 40_000)  # accepted: 30 000 <= 40 000 x the windows
     runs = RunRepository()
     runs.advance(session, run_id=source.run_id, from_state="created", to_state="queued")
     runs.advance(session, run_id=source.run_id, from_state="queued", to_state="running")
@@ -338,12 +400,17 @@ def test_a_reaudit_faces_todays_budget_not_the_one_its_source_was_accepted_under
         terminal_reason=ErrorCode.ANALYSIS_FAILED.value,
     )
 
-    # The operator lowers the ceiling: today's budget is 20 000. The source stays accepted.
-    refused = _refusal(lambda: _reaudit(session, seeded, source.run_id, _key("reaudit"), 20_000))
-    assert dict(refused.detail_fields) == {"character_count": 30_000, "budget_characters": 20_000}
+    # The operator lowers the ceiling: today's call budget is 2 000, a limit of 2 000 x the windows
+    # (24 000 at twelve), below the count. The source stays accepted.
+    lowered = windowed_budget_characters(2_000)
+    assert lowered < 30_000
+    refused = _refusal(lambda: _reaudit(session, seeded, source.run_id, _key("reaudit"), 2_000))
+    assert dict(refused.detail_fields) == {"character_count": 30_000, "budget_characters": lowered}
 
-    # Raised again: the same source, a new key, today's budget 30 000 admits it.
-    again = _reaudit(session, seeded, source.run_id, _key("reaudit"), 30_000)
+    # Raised again: the same source, a new key, a call budget whose limit reaches the count admits it.
+    raised = -(-30_000 // MAX_ANALYSIS_WINDOWS)
+    assert windowed_budget_characters(raised) >= 30_000
+    again = _reaudit(session, seeded, source.run_id, _key("reaudit"), raised)
     assert again.replayed is False
     assert helpers.audit_run_row(session, again.run_id)["reaudit_of_run_id"] == source.run_id
 
@@ -351,7 +418,7 @@ def test_a_reaudit_faces_todays_budget_not_the_one_its_source_was_accepted_under
 def test_the_same_reaudit_key_after_the_budget_is_raised_is_a_fresh_start(
     session, seeded, helpers
 ) -> None:
-    version = _counted_version(session, seeded, BUDGET + 1)
+    version = _counted_version(session, seeded, LIMIT + 1)
     source = _terminal(session, seeded, version)
     key = _key("reaudit")
     _refusal(lambda: _reaudit(session, seeded, source, key, BUDGET))
@@ -374,7 +441,7 @@ def test_a_known_reaudit_key_replays_whatever_the_budget_is_now(session, seeded)
 def test_the_role_is_checked_before_the_budget_so_a_refusal_tells_a_stranger_nothing(
     session, seeded
 ) -> None:
-    version = _counted_version(session, seeded, BUDGET + 1)
+    version = _counted_version(session, seeded, LIMIT + 1)
     source = _terminal(session, seeded, version)
     with pytest.raises(DomainError) as denied:
         _reaudit(session, seeded, source, _key("reaudit"), BUDGET, roles=frozenset())
@@ -411,16 +478,16 @@ def _adapters(session: Session, seeded, budget: int | None):
 
 def test_the_shipped_run_adapter_refuses_a_start_above_its_budget(session, seeded) -> None:
     adapters = _adapters(session, seeded, BUDGET)
-    over = _counted_version(session, seeded, BUDGET + 1)
+    over = _counted_version(session, seeded, LIMIT + 1)
     before = _table_counts(session)
     refused = _refusal(
         lambda: adapters.runs.start_run(version_uid=over, idempotency_key=_key())
     )
-    assert dict(refused.detail_fields) == {"character_count": BUDGET + 1, "budget_characters": BUDGET}
+    assert dict(refused.detail_fields) == {"character_count": LIMIT + 1, "budget_characters": LIMIT}
     assert adapters.carrier.submitted == []
     assert _table_counts(session) == before
 
-    at = _counted_version(session, seeded, BUDGET)
+    at = _counted_version(session, seeded, LIMIT)
     view = adapters.runs.start_run(version_uid=at, idempotency_key=_key())
     assert view.state == "queued" and len(adapters.carrier.submitted) == 1
 
@@ -432,7 +499,7 @@ def test_the_shipped_execution_adapter_refuses_a_reaudit_above_its_budget(
         ExecutionAdapter, "_roles", staticmethod(lambda _session, _user: frozenset({"expert"}))
     )
     adapters = _adapters(session, seeded, BUDGET)
-    over = _counted_version(session, seeded, BUDGET + 1)
+    over = _counted_version(session, seeded, LIMIT + 1)
     source = _terminal(session, seeded, over)
     before = _table_counts(session)
     refused = _refusal(
@@ -440,11 +507,11 @@ def test_the_shipped_execution_adapter_refuses_a_reaudit_above_its_budget(
             run_id=source, user_uid="usr_00000000000000000000000000", idempotency_key=_key("reaudit")
         )
     )
-    assert dict(refused.detail_fields) == {"character_count": BUDGET + 1, "budget_characters": BUDGET}
+    assert dict(refused.detail_fields) == {"character_count": LIMIT + 1, "budget_characters": LIMIT}
     assert adapters.carrier.submitted == []
     assert _table_counts(session) == before
 
-    at = _counted_version(session, seeded, BUDGET)
+    at = _counted_version(session, seeded, LIMIT)
     admitted = _terminal(session, seeded, at)
     view = adapters.execution.reaudit_run(
         run_id=admitted, user_uid="usr_00000000000000000000000000", idempotency_key=_key("reaudit")

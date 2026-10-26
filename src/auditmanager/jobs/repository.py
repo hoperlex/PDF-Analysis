@@ -303,6 +303,35 @@ _V3_COMPLETED_CALLS = text(
 )
 _V3_SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 _V3_BLOB_ID = re.compile(r"blob_[0-9A-HJKMNP-TV-Z]{26}\Z")
+#: `SECTION-CHUNKED-ANALYSIS-01`. The ``model_call.parameters`` keys a finished text window carries
+#: (``analysis.text.windows`` writes them; this context may not import that one, and
+#: ``tests/unit/analysis/test_text_windows.py`` pins the two spellings together).
+_WINDOW_KEY = "text_window_key"
+_WINDOW_INDEX = "text_window_index"
+_WINDOW_COUNT = "text_window_count"
+_WINDOW_FIRST = "text_window_first_page"
+_WINDOW_LAST = "text_window_last_page"
+_WINDOW_BLOB_ID = "text_window_reply_blob_id"
+_WINDOW_BLOB_SHA = "text_window_reply_blob_sha256"
+_WINDOW_BLOB_SIZE = "text_window_reply_blob_size"
+_WINDOW_CALLS = text(
+    "SELECT m.model_call_id, m.provider, m.model_identity, m.provider_mode, "
+    "m.parameters AS call_parameters, m.request_sha256, m.response_sha256, "
+    "m.input_tokens, m.output_tokens, m.latency_ms, m.cost_micros, m.cost_basis, "
+    "m.status, m.error_code AS call_error, "
+    "e.job_id, e.attempt_id, e.stage_id AS effect_stage, "
+    "e.provider AS effect_provider, e.model_identity AS effect_model, "
+    "e.provider_mode AS effect_mode, e.request_sha256 AS effect_request, "
+    "e.response_sha256 AS effect_response, e.state AS effect_state, "
+    "e.error_code AS effect_error, e.final_model_call_id, "
+    "r.provider_mode AS run_mode "
+    "FROM model_call m "
+    "JOIN provider_call_effect e ON e.run_id = m.run_id AND e.model_call_id = m.model_call_id "
+    "JOIN audit_run r ON r.run_id = m.run_id "
+    "WHERE m.run_id = :run_id AND m.stage_id = 'text_analysis' "
+    f"AND m.parameters ->> '{_WINDOW_KEY}' IS NOT NULL "
+    "ORDER BY m.created_at, m.model_call_id"
+)
 _INSERT_MODEL_CALL = text(
     """
     INSERT INTO model_call (
@@ -478,6 +507,35 @@ class V3CompletedCall:
     status: str
     connection_revision_id: str | None
     identity_basis: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class CompletedWindowCall:
+    """One finished text-analysis window of a Run: its call, its effect, and where its reply is kept."""
+
+    key: str
+    run_id: str
+    job_id: str
+    attempt_id: str
+    model_call_id: str
+    provider: str
+    model_id: str
+    provider_mode: str
+    request_sha256: str
+    response_sha256: str
+    input_tokens: int
+    output_tokens: int
+    latency_ms: int
+    cost_micros: int | None
+    cost_basis: str
+    status: str
+    window_index: int
+    window_count: int
+    first_page: int
+    last_page: int
+    reply_blob_id: str
+    reply_blob_sha256: str
+    reply_blob_size: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -677,10 +735,19 @@ class JobRepository:
                              "error_code": ErrorCode.ANALYSIS_FAILED.value,
                              "dispatch_class": "not_sent"},
                 )
+            # `SECTION-CHUNKED-ANALYSIS-01`: a ``completed`` effect whose ``model_call`` carries a
+            # finished text window's saved reply is settled with durable evidence -- the provider
+            # answered, the answer is kept, the spend is on the ``model_call`` row -- so it does not
+            # make the lost Attempt ambiguous and a run killed *between* windows resumes. A window
+            # still ``prepared`` or ``response_received`` stays ambiguous, exactly as a single call.
             ambiguous = bool(session.execute(text(
-                "SELECT EXISTS (SELECT 1 FROM provider_call_effect "
-                "WHERE attempt_id = :attempt_id AND state <> 'not_processed' "
-                "AND provider_mode <> 'recorded')"
+                "SELECT EXISTS (SELECT 1 FROM provider_call_effect e "
+                "WHERE e.attempt_id = :attempt_id AND e.state <> 'not_processed' "
+                "AND e.provider_mode <> 'recorded' "
+                "AND NOT (e.state = 'completed' AND EXISTS ("
+                "SELECT 1 FROM model_call m WHERE m.run_id = e.run_id "
+                "AND m.model_call_id = e.final_model_call_id "
+                f"AND m.parameters ->> '{_WINDOW_BLOB_ID}' IS NOT NULL)))"
             ), {"attempt_id": candidate["attempt_id"]}).scalar_one())
             count = int(session.execute(text(
                 "SELECT count(*) FROM attempt WHERE job_id = :job_id"
@@ -1234,6 +1301,91 @@ class JobRepository:
             identity_basis=row["call_basis"],
         )
 
+    def completed_window_calls(
+        self, session: Session, authority: AttemptAuthority
+    ) -> dict[str, CompletedWindowCall]:
+        """Every finished text window of this Run, by window key, each call and effect cross-checked.
+
+        A prior Attempt of the same Job may have finished windows before its worker died; the current
+        Attempt may consume that immutable evidence and must never call the provider again for it.
+        The read is early and unlocked (:meth:`check_current_unlocked`): it authorises no effect, and
+        the caller fences the Attempt again before it writes. A row whose call and effect disagree
+        with each other or with the Run, a key shared by two calls, or a malformed reference is a
+        refusal (``analysis_input_invalid``), never a window that is quietly called again.
+        """
+        self.check_current_unlocked(session, authority)
+        calls: dict[str, CompletedWindowCall] = {}
+        for row in session.execute(_WINDOW_CALLS, {"run_id": authority.run_id}).mappings().all():
+            call = self._window_call_of(row, authority)
+            if call.key in calls:
+                raise self._window_refusal("window_call_duplicate")
+            calls[call.key] = call
+        return calls
+
+    @staticmethod
+    def _window_refusal(reason: str) -> DomainError:
+        return DomainError(
+            ErrorCode.ANALYSIS_INPUT_INVALID,
+            message="a saved text window and its completed effect do not agree",
+            stage_id="text_analysis", reason=reason,
+        )
+
+    def _window_call_of(
+        self, row: Mapping[str, Any], authority: AttemptAuthority
+    ) -> CompletedWindowCall:
+        params = row["call_parameters"]
+        if not (
+            isinstance(params, Mapping)
+            and row["job_id"] == authority.job_id
+            and row["effect_stage"] == "text_analysis"
+            and row["effect_state"] == "completed"
+            and row["final_model_call_id"] == row["model_call_id"]
+            and row["call_error"] is None and row["effect_error"] is None
+            and row["status"] in {"succeeded", "truncated"}
+            and row["provider_mode"] in {"live", "recorded"}
+            and row["provider_mode"] == row["effect_mode"] == row["run_mode"]
+            and row["provider"] == row["effect_provider"]
+            and row["model_identity"] == row["effect_model"]
+            and row["request_sha256"] == row["effect_request"]
+            and row["response_sha256"] == row["effect_response"]
+            and isinstance(row["response_sha256"], str)
+            and _V3_SHA256.fullmatch(row["response_sha256"]) is not None
+            and isinstance(row["request_sha256"], str)
+            and _V3_SHA256.fullmatch(row["request_sha256"]) is not None
+            and all(type(row[name]) is int and row[name] >= 0
+                    for name in ("input_tokens", "output_tokens", "latency_ms"))
+            and row["cost_basis"] in {"measured", "estimated", "unmetered"}
+            and (row["cost_micros"] is None
+                 or type(row["cost_micros"]) is int and row["cost_micros"] >= 0)
+        ):
+            raise self._window_refusal("window_call_pair_invalid")
+        key = params.get(_WINDOW_KEY)
+        index, count = params.get(_WINDOW_INDEX), params.get(_WINDOW_COUNT)
+        first, last = params.get(_WINDOW_FIRST), params.get(_WINDOW_LAST)
+        blob_id, blob_sha = params.get(_WINDOW_BLOB_ID), params.get(_WINDOW_BLOB_SHA)
+        blob_size = params.get(_WINDOW_BLOB_SIZE)
+        if not (
+            isinstance(key, str) and _V3_SHA256.fullmatch(key) is not None
+            and all(type(value) is int for value in (index, count, first, last))
+            and 0 <= index < count and 1 <= first <= last
+            and isinstance(blob_id, str) and _V3_BLOB_ID.fullmatch(blob_id) is not None
+            and isinstance(blob_sha, str) and _V3_SHA256.fullmatch(blob_sha) is not None
+            and type(blob_size) is int and blob_size > 0
+        ):
+            raise self._window_refusal("window_call_reference_invalid")
+        return CompletedWindowCall(
+            key=key, run_id=authority.run_id, job_id=row["job_id"],
+            attempt_id=row["attempt_id"],
+            model_call_id=row["model_call_id"], provider=row["provider"],
+            model_id=row["model_identity"], provider_mode=row["provider_mode"],
+            request_sha256=row["request_sha256"], response_sha256=row["response_sha256"],
+            input_tokens=row["input_tokens"], output_tokens=row["output_tokens"],
+            latency_ms=row["latency_ms"], cost_micros=row["cost_micros"],
+            cost_basis=row["cost_basis"], status=row["status"],
+            window_index=index, window_count=count, first_page=first, last_page=last,
+            reply_blob_id=blob_id, reply_blob_sha256=blob_sha, reply_blob_size=blob_size,
+        )
+
     def record_provider_response(
         self,
         session: Session,
@@ -1585,6 +1737,7 @@ class JobRepository:
 __all__ = [
     "JOB_WAKEUP_CHANNEL",
     "AttemptAuthority",
+    "CompletedWindowCall",
     "ExecutionNotClaimed",
     "JobRepository",
     "SettledProviderEffect",

@@ -25,6 +25,8 @@ Where to look:
   live one.
 * :mod:`.cost` - the ``OD-03`` per-run ceiling and its ``cost_budget_exceeded`` halt.
 * :mod:`.stage` - the entry point, ``run_text_analysis``.
+* :mod:`.windows` and :mod:`.windowed` - the same stage over whole-page windows, for a volume above the
+  one-call budget (`SECTION-CHUNKED-ANALYSIS-01`).
 """
 
 from __future__ import annotations
@@ -72,6 +74,14 @@ from auditmanager.analysis.text.stage import (
     run_text_analysis,
 )
 from auditmanager.analysis.text.textlayer import TextLayer, load_text_layer
+from auditmanager.analysis.text.windowed import run_text_analysis_windows
+from auditmanager.analysis.text.windows import (
+    RecoveredWindow,
+    WindowCustody,
+    WindowIdentity,
+    WindowPolicy,
+    text_window_policy,
+)
 
 __all__ = [
     "CallBinding",
@@ -108,10 +118,14 @@ __all__ = [
     "ProxyAdapter",
     "ProxySettings",
     "RecordedAdapter",
+    "RecoveredWindow",
     "ResolvedAnchor",
     "TextAnalysisOutcome",
     "TextLayer",
     "UnresolvedAnchor",
+    "WindowCustody",
+    "WindowIdentity",
+    "WindowPolicy",
     "assert_consistent_mode",
     "build_request",
     "build_text_observations",
@@ -120,4 +134,6 @@ __all__ = [
     "provider_lock",
     "recording_document",
     "run_text_analysis",
+    "run_text_analysis_windows",
+    "text_window_policy",
 ]

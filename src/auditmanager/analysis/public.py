@@ -102,7 +102,28 @@ from auditmanager.analysis.text import (
     load_provider_config,
     run_text_analysis,
 )
-from auditmanager.analysis.text.budget import REFERENCE_DOCUMENT_CHARACTERS, input_budget_characters
+from auditmanager.analysis.text.budget import (
+    MAX_ANALYSIS_WINDOWS,
+    REFERENCE_DOCUMENT_CHARACTERS,
+    input_budget_characters,
+    windowed_budget_characters,
+)
+from auditmanager.analysis.text.windowed import run_text_analysis_windows  # SECTION-CHUNKED-ANALYSIS-01
+from auditmanager.analysis.text.windows import (  # SECTION-CHUNKED-ANALYSIS-01
+    PARAM_COUNT as TEXT_WINDOW_PARAM_COUNT,
+    PARAM_FIRST_PAGE as TEXT_WINDOW_PARAM_FIRST_PAGE,
+    PARAM_INDEX as TEXT_WINDOW_PARAM_INDEX,
+    PARAM_KEY as TEXT_WINDOW_PARAM_KEY,
+    PARAM_LAST_PAGE as TEXT_WINDOW_PARAM_LAST_PAGE,
+    PARAM_REPLY_BLOB_ID as TEXT_WINDOW_PARAM_REPLY_BLOB_ID,
+    PARAM_REPLY_BLOB_SHA256 as TEXT_WINDOW_PARAM_REPLY_BLOB_SHA256,
+    PARAM_REPLY_BLOB_SIZE as TEXT_WINDOW_PARAM_REPLY_BLOB_SIZE,
+    RecoveredWindow,
+    WindowCustody,
+    WindowIdentity,
+    WindowPolicy,
+    text_window_policy,
+)
 from auditmanager.analysis.recognised import KIND_PORTAL_DESCRIPTION, KIND_RECOGNISED_TEXT, QUOTE_SOURCE_RECOGNISED  # W55B-RECOGNISED-01
 from auditmanager.analysis.ports.artifacts import ROLE_CROP_IMAGE, ROLE_PORTAL_BLOCKS  # W55B-GEOMETRY-01
 from auditmanager.analysis.geometry.saved_crop_custody import (
@@ -164,6 +185,7 @@ __all__ = [
     "NORMALIZATION_DESCRIPTION",
     "NORMALIZATION_ID",
     "QUOTE_SOURCE_RECOGNISED",
+    "MAX_ANALYSIS_WINDOWS",
     "REFERENCE_DOCUMENT_CHARACTERS",
     "ROLE_BLOCK_INDEX",
     "ROLE_CROP_IMAGE",
@@ -193,6 +215,7 @@ __all__ = [
     "ProxySettings",
     "RecognisedContext",
     "RecordedAdapter",
+    "RecoveredWindow",
     "RecognisedRegionCandidate",
     "RecognisedRegionRefused",
     "ResolvedAnchor",
@@ -203,6 +226,17 @@ __all__ = [
     "SuppliedTextSourceRefused",
     "TextLayer",
     "TEXT_STAGE_VERSION",
+    "TEXT_WINDOW_PARAM_COUNT",
+    "TEXT_WINDOW_PARAM_FIRST_PAGE",
+    "TEXT_WINDOW_PARAM_INDEX",
+    "TEXT_WINDOW_PARAM_KEY",
+    "TEXT_WINDOW_PARAM_LAST_PAGE",
+    "TEXT_WINDOW_PARAM_REPLY_BLOB_ID",
+    "TEXT_WINDOW_PARAM_REPLY_BLOB_SHA256",
+    "TEXT_WINDOW_PARAM_REPLY_BLOB_SIZE",
+    "WindowCustody",
+    "WindowIdentity",
+    "WindowPolicy",
     "StageContext",
     "StageDefinition",
     "StageError",
@@ -239,7 +273,10 @@ __all__ = [
     "read_artifact",
     "run_stage",
     "run_text_analysis",
+    "run_text_analysis_windows",
     "select_run_text_layer_ref",
+    "text_window_policy",
+    "windowed_budget_characters",
     "sha256_hex",
     "prepare_saved_crop_item",
 ]

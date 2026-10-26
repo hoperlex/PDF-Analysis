@@ -114,7 +114,7 @@ class ModelAdapter(Protocol):
 
 def build_request(
     *, model_id: str, bundle: PromptBundle, text_layer: TextLayer,
-    idempotency_scope: str | None = None,
+    idempotency_scope: str | None = None, user_content: str | None = None,
 ) -> ModelRequest:
     """Build the one request this stage makes for a document.
 
@@ -122,13 +122,21 @@ def build_request(
     identity, no profile ULID, no timestamp. Two replays of the same document with the
     same bundle therefore produce byte-identical bodies and identical checksums, which
     is what makes the recorded adapter deterministic.
+
+    ``user_content`` (`SECTION-CHUNKED-ANALYSIS-01`) replaces the rendered document as the
+    user message and is given only by the windowed analysis, which renders a fragment of the
+    text layer. ``None`` is every other caller, and the body is then byte-for-byte what it
+    always was.
     """
     body: dict[str, Any] = {
         "model": model_id,
         "max_tokens": bundle.max_output_tokens,
         "system": bundle.system_prompt,
         "messages": [
-            {"role": "user", "content": render_document(text_layer)},
+            {
+                "role": "user",
+                "content": render_document(text_layer) if user_content is None else user_content,
+            },
         ],
         "thinking": dict(bundle.thinking),
         "output_config": {
