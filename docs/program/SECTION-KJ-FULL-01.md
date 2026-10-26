@@ -116,8 +116,26 @@ All eleven went green again after the restore (`211 passed`, HTTP `4 passed`, we
 
 ## Forbidden paths untouched
 
-`git diff --name-only 0e663fd0e608fcf5f79075ea71713c24ddf027e5..HEAD` lists only the allowed paths (see «Final checks»).
+`git diff --name-only 0e663fd0e608fcf5f79075ea71713c24ddf027e5..HEAD`, run on the tip of the branch:
+
+```text
+docs/program/SECTION-KJ-FULL-01.md
+docs/program/tasks/SECTION-KJ-FULL-01.md
+fixtures/recorded/sections/kj/0f61471253016dc653d9df836d5a0449443eff32c8be2836a2f7b780459e4bea.json
+src/auditmanager/analysis/text/profiles/kj/profile.json
+src/auditmanager/analysis/text/profiles/kj/system_prompt.md
+tests/unit/analysis/text_profiles/section_profile_expectations.json
+```
+
+Every path is in the task's allowed list (git reports the old recording `fixtures/recorded/sections/kj/7208e6f7…4938.json` as renamed to the new one; with `--no-renames` it appears as a deletion in the same directory). Nothing under `contracts/**`, `db/**`, `infra/**`, `web/`, the registry, the builder, `W59-SECTION-PROFILES-01.md`, `P02_LOCK.json`, any other section or any test file changed. The legacy repository was only read (`git status --short` there: 0 lines before and after).
 
 ## Final checks
 
-Filled in after the last commit (see the end of this file).
+On the committed tree (clean, `git status --short` empty), last commit before this paragraph:
+
+| Command | Result |
+| --- | --- |
+| `pytest tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py` | `105 passed` |
+| governance one-liner on `docs/program/tasks/SECTION-KJ-FULL-01.md` | `[]` |
+| `git diff --check` | rc 0 |
+| `pytest` (registry, text_profiles, section recordings, analysis_packages), `build_fixtures.py --check`, HTTP test, `vitest` analysis-settings | `211 passed`; `fixtures match`; `4 passed`; `95 passed` |
