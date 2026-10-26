@@ -77,11 +77,11 @@ All run on the committed tree of branch `agent/production-adr-pack-01` (venv: th
    checked to be absent, so "new" is true. Commands that state a figure are run and compared; a figure command that is not registered is a failure, so an edited command cannot drop out silently. Last line:
 
    ```text
-   CHK_LINE
+   1583 checked, 0 missing, 0 unclassified; 23 commands run here, 87 commands need a stand or a lane (their path/operationId/module parts were checked, the commands were not run); 316 further token occurrences accepted by class as literals, not verified
    ```
 
-   The commands that need a stand, a database or a lane (NOT_RUN_COUNT) were not run; their path, operationId and module parts were checked. Every unclassifiable token is a failure; the 10 vocabulary classes the checker accepts as literals
-   (external tool names, docker vocabulary, proposed vocabulary of the new tool, and so on) each carry a printed reason.
+   The 87 commands that need a stand, a database or a lane were not run; their path, operationId and module parts were checked, the 23 that can run here were run and compared. Every unclassifiable token is a failure. The 316 token
+   occurrences accepted as literals (section codes, status words, risk and criterion labels, external tool names, the proposed vocabulary of the new tools) fall in nine classes, each with a printed reason, and are not verified.
 2. **Mutation proof of the checker** (on scratch copies, the real files untouched; "red" is a new `MISSING` or `UNCLASSIFIED` line): 14 of 14 mutations turned it red.
 
    | mutation | result |
@@ -102,7 +102,7 @@ All run on the committed tree of branch `agent/production-adr-pack-01` (venv: th
    | the head stated as 0031_executor_pull_channel | red: MISSING figure-head |
 3. **Governance of the task file:** the one-liner of the task prints `[]`.
 4. **`git diff --check 4d7b7c38..HEAD`:** exit 0, no output.
-5. **`pytest -q -p no:cacheprovider tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py`:** PYTEST_LINE
+5. **`pytest -q -p no:cacheprovider tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py`:** `105 passed in 19.80s`, exit 0.
 6. **The ADR-index tests.** `tests/contract/test_validate_bootstrap.py` and `tests/contract/test_cp00_candidate.py` already fail in this environment on the base tree `4d7b7c38` (191 failures and errors, among them
    `tests/contract/test_cp00_candidate.py::ArchitectureCoverageTests::test_adr_files_index_and_review_agree`, which has been red since `ADR-0019` and `ADR-0020`). Run on the base tree and on this branch, the sets of failing test ids are identical (a `comm` of the two sorted lists
    prints nothing in either direction), so the pack adds and removes none. `scripts/validate_bootstrap.py` on the branch differs from the base only in two count lines (adrs 20 to 24, markdown_files 1736 to 1740); it reports no ADR or index error.
