@@ -72,3 +72,92 @@ source maps, secret patterns in the public bundles.
 (4 operations under `/api/v1/ar-v3-beta/`, `getArV3BetaPackStatus` among them), release notes (`getProductVersion`, `listReleases`, `markReleaseNotesRead`), the executor connection
 administration (`createExecutorConnection` ... `issueRunnerToken`, `revokeRunnerToken`, `generateExecutorSshKey`), the public challenge port 80 and gated 443, the ACME client, the access audit
 events, migration `0033`, and (not yet merged to a wrapper) the project-erase core.
+
+## 3. The review by theme
+
+Each theme lists what was read, what is sound, and the findings (`F-nn`, severity, position needed, evidence). Section 4 is the table of all findings; section 5 names the
+ones that change who can reach the system.
+
+### 3.1 Route groups and their authorization register
+
+**How the seam decides.** One dependency, attached to the whole application (`src/auditmanager/api/app.py`, `_assemble`: `dependencies=[Depends(declare_correlation_id), build_authorization_dependency(...)]`),
+runs before every handler, the four documentation routes included (they have no `operationId`, "an unreadable route is a closed route", `api/security.py:1054-1065`). Order, as read at `security.py:1137-1230`:
+`operation in UNAUTHENTICATED_OPERATIONS` returns (`:1137`); `operation in RUNNER_OPERATIONS` authenticates a runner token and nothing else (`:1139-1148`); then signature and expiry of the `am2` credential, the account's
+standing read from its row on every request (archived, unknown or stale `token_epoch` is one `authentication_required`), the default-credential register, the incomplete-profile register and finally
+`OPERATION_ROLES` (`:1206-1209`: an operation named in no register is `permission_denied` for everybody). Roles are never carried in the credential.
+
+**Totality, measured.** A script that reads `contracts/api/v1/openapi.json` (92 paths, 104 operations) and imports the three registers printed:
+`{'open': 3, 'runner token': 5, 'any complete account': 6, 'expert': 15, 'admin|expert': 49, 'admin': 26}` = 104, `UNREGISTERED: 0`; the operations with `security: []` in the contract are exactly
+`issueToken`, `submitRegistration`, `readRegistrationStatus`, which is `UNAUTHENTICATED_OPERATIONS` (`security.py:243-246`). The served-application sweeps that pin this at run time
+(`tests/integration/api/test_role_register.py`, `test_authorization.py:625` `test_the_open_surface_is_exactly_the_register`, `tests/integration/executors/test_runner_seam.py`) need PostgreSQL and were **not run** here.
+
+| Group | Operations | Credential | Who is let in | Reachable without a credential or by the wrong role? |
+| --- | --- | --- | --- | --- |
+| Exchange and registration | `issueToken`, `submitRegistration`, `readRegistrationStatus` | none | anyone | By design (`R-56`); per-address edge throttle (`nginx.conf:117-150`); a status read answers every pair it cannot prove with the exchange's own 401 (`routers/registrations.py`, `read_registration_status`). Residual: `F-09`, `F-18`, `F-19`. |
+| Own account, release notes, product version | `getMe`, `updateMyProfile`, `changePassword`, `markReleaseNotesRead`, `getProductVersion`, `listReleases` | user credential | any active, complete account, roles or none | The subject is `request.state.subject` (verified), never a request field (`routers/releases.py`, `routers/me.py`). An account on the seeded/temporary password or with an incomplete profile reaches only `{getMe, changePassword}` / `{getMe, updateMyProfile, changePassword}` (`security.py:289-291`, `:316-318`). No gap. |
+| Product reads (49) | listing, reading, streaming and export-preview of projects, documents, versions, blocks, runs, findings, decisions, norms, optimisation, **`getArV3BetaGroup`, `getArV3BetaGroupReview`, `getArV3BetaPackStatus`**, connections/routes/workers/queue (secret-free by schema) | user credential | `admin` or `expert` | A role-less account is refused (`required.isdisjoint(standing.roles)`, `security.py:1219-1223`, `R-80`). Inside the role there is no per-project check: one organisation, every expert reads every project (`R-146al`, by design). |
+| Product writes (15) | `createProject`, `uploadDocument`, `uploadDocumentVersion`, `startRun`, **`startArV3BetaGroup`**, `appendDecision`, `carryOverDecision`, `classifyDocumentVersion`, `correctVersionClassification`, `uploadPriceList`, `setProjectVendorList`, `startOptimisationPass`, `decideOptimisationProposal`, `exportRunCsv`, `exportRunXlsx` | user credential | `expert` | An admin-only account is refused. `cancelRun`/`reauditRun` take `admin` or `expert` (`security.py`, `R-78`). Spend: `F-07`. |
+| Administration (26) | users and registrations (`approve/rejectRegistration`, `listUsers`, `updateUser`, `archive/restore/purgeUser`, `resetUserPassword`), executor connections and routes (`create/revise/archiveExecutorConnection`, `setExecutorSecret`, `generateExecutorSshKey`, `requestExecutorProbe`, `setExecutorRoute`), **`issueRunnerToken`, `revokeRunnerToken`**, norm snapshot, execution controls | user credential | `admin` | Self-protection and last-admin rules are in `access/accounts.py` (`_refuse_self`, `_refuse_last_admin`). No gap found; account-level audit gaps: `F-14`. |
+| Runner channel (5) | `claimExecutorTask`, `extendExecutorTaskClaim`, `submitExecutorTaskAnswer`, `failExecutorTask`, **`getExecutorTaskImage`** | runner token `amr_<8>_<43>` (own principal) | the token's connection only | A user credential presented here is `authentication_required`; a runner token presented anywhere else fails the `am2` signature check (`security.py:261-264`). Detail below. |
+
+**The runner channel, read end to end** (`api/routers/runner.py`, `executors/runner.py`). Sound: the token shape is checked before any read (`runner.py:279-291`, regex `amr_[0-9a-z]{8}_[A-Za-z0-9_-]{43}`); the
+value has 256 bits (`generate_token`, `:152-157`), is shown once and stored as SHA-256 only; comparison is `hmac.compare_digest` and a miss compares against a fixed digest; revoked, expired, archived-connection and
+unknown tokens are the same `None`, so there is no oracle (`:279-303`); every task lookup is scoped to the token's connection and a foreign task is `not_found` (`_own_task`, `:311-317`); an image is served only for the
+**live claim of this token and Attempt**, only when its `blob_id` is listed in that task's own payload, and the check is repeated after the Blob read (`claimed_image`, `:330-349`; the route returns `Cache-Control: no-store`);
+an answer is idempotent, must declare the connection's pinned model, is validated against the task's `output_schema`, and a refusal leaves the claim as it was (`submit_answer`, `:426-459`); a failure reason is
+control-stripped and cut at 512 characters (`:472-474`); token lifetime is 1 to 365 days (`api/schemas/models.py:3727`); issue and revoke append `executor.runner_token_issued/revoked` with the actor (`:221-231`, `:255-261`).
+Findings: `F-06` (thread starvation by the long poll) and `F-20` (the runner declares the model and the answer text: nothing can verify either, and `R-133` cannot be enforced on this channel).
+
+**AR v3 routes** (`routers/ar_v3_groups.py`, `runs/v3_group.py`). `startArV3BetaGroup` is `expert`; with no sealed pack installed it refuses `dependency_unavailable` (`v3_group.py:225-226`), so the paid path is closed until `PROD-12`. Group and review
+ids are ULIDs (`ArV3RunGroupId`), not enumerable. `getArV3BetaPackStatus` answers `state` and, when installed, profile/bundle ids, `pack_sha256`, six scope ids and the reviewer attestation; its schema states
+"No map, set or snapshot identity, digest of a scope, path or environment value is ever a property" (`contracts/api/v1/openapi.json`, `ArV3BetaPackStatus.description`). The start command creates a **new group of six Runs for each new idempotency key**
+(`v3_group.py:202-330`; `INSERT INTO ar_v3_run_group` with a fresh `ArV3RunGroupId.new()`), with no per-version or per-user limit: `F-07`.
+
+**Release notes and account routes.** Read only `subject.user_uid`; `listReleases` and `markReleaseNotesRead` cannot address another account. `getProductVersion` returns product/build/contract versions to any complete account, roles or none (INFO, `F-23`).
+
+**Registration and users.** Described in `E-9` above. `approveRegistration` takes an `Idempotency-Key` and appends `access.role_granted` with the actor (`access/registrations.py:461`); the applicant's password is stored hashed until the decision.
+
+**Verdict for 3.1: no operation is reachable without a credential beyond the three of the register, and none is reachable by the wrong role in the static sweep.**
+
+### 3.2 Trust boundaries: what the nginx layers forward and set
+
+Files: `infra/deploy/proxy/nginx.conf` (plain listener 8080; http-level maps, zones and `real_ip_*`), `tls-server.conf` (8443, copied beside it by `enable-tls.sh` only when a pair exists), `acme-challenge.conf` (8081, published as public 80).
+The three server bodies are kept equal by `tests/integration/composition/test_proxy_tls_path.py` (not run here).
+
+| What a client sends | What the proxy does | What it means |
+| --- | --- | --- |
+| `Host` | forwarded as `$http_host` (`nginx.conf:254`); `server_name _` on every listener | any name resolving to the host reaches the application; the API builds redirects from it and `proxy_redirect` re-prefixes them (`:329`, `:334`); cookies are host-only; no impact found. The 80 listener answers `301 https://$host$request_uri` (`acme-challenge.conf:51-53`): reflects only to the requester itself. |
+| `X-Forwarded-For` | **appended to**, not replaced: `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for` (`:256`) | upstream sees `<client-written>, <peer>`. Nothing in `src/` or `web/src/` reads it (`rg -i "x-forwarded-for" src web/src`: comments only); `real_ip_header X-Forwarded-For` (`:63`) acts only for peers named in `ALPHA_TRUSTED_PROXY_CIDRS` (none by default; refused together with a certificate name, `deploy.sh:471-500`). |
+| `X-Real-IP`, `X-Forwarded-Proto` | **overwritten** at server level on both listeners (`nginx.conf:255,257`; `tls-server.conf:98,102`) and again in both `_edge/credential` subrequests (`nginx.conf:463-465,474-477`) | not client-influenceable. The API takes the runner token's "last seen" address from `X-Real-IP` (`security.py:1275-1284`); the web tier keys its guest bucket on it (`guest-throttle.ts:52-53`). |
+| `Authorization`, `Cookie` | passed through; the upload `auth_request` forwards the caller's own headers to `getMe` | as intended. The BFF forwards only `accept`, `content-type`, `idempotency-key`, `range`, `x-correlation-id` upstream and replaces the credential with the session's (`web/src/shared/api/credentialed-forward.ts:73-80`). |
+| `X-Correlation-Id` | forwarded by the BFF allow-list; honoured by the API when it matches `^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$` (`routers/correlation.py`) | the id written into `audit_event.correlation_id` (`access/audit.py`) is caller-chosen: a collision with another request's id can confuse an investigation (INFO, `F-23`). |
+| Body | 32 MiB default (`nginx.conf:212`); 260 MiB at the two upload regex locations (`:385`, `:404`), whose application cap is 251 MiB (`multipart.py:73`) | upload locations authenticate before the body (`E-5`); `client_body_timeout 120s` there only. |
+
+**Rate limits.** Four `limit_req_zone`s of 1 MiB (about 16 000 addresses each): `guest_registration` and `token_exchange` (6 r/m, burst 10, per `$binary_remote_addr`; `nginx.conf:117-150`), `runner_channel` (60 r/m, burst 30, per token prefix)
+and `runner_address` (300 r/m, burst 120) (`:188-200`), applied inside `location /api/v1/` and both API upload regexes (`:338-345`, `:391-394`). `location /` (the whole web tier and `/bff/v1/*`, sign-in included) has none (`:503-505`);
+no `limit_conn` exists anywhere in `infra/deploy/proxy/*.conf`. **Headers.** The four security headers are set at server level with `always` on all three server bodies, HSTS `max-age=31536000` on 8443 only (`tls-server.conf:83`); no CSP beyond `frame-ancestors`
+(decision `C-18`); no `server_tokens off` (`rg server_tokens infra` finds nothing): the nginx version is in every `Server:` header (`F-16`). **TLS.** `ssl_protocols TLSv1.2 TLSv1.3` (`tls-server.conf:77`), no `ssl_ciphers`, no stapling.
+**The challenge listener has no `proxy_pass`** (`acme-challenge.conf`; `test_acme_overlay.py` pins it): a request to port 80 cannot reach the application, as `R-146s` requires.
+
+Findings: `F-16` (cipher list and banner), `F-17` (no live assertion of the headers and the cookie flag), `F-18` (no limit on the web sign-in door), `F-10` (no `limit_conn`).
+
+### 3.3 Secrets: where they live and who can read them
+
+| Secret | Where it is | Who can read it | Notes |
+| --- | --- | --- | --- |
+| Deployment secret `AUDITMANAGER_API_TOKEN` = HMAC key of every user credential (`security.py:545`, `derive_signing_key`) | `infra/deploy/env/alpha.env` (host, mode 600 by instruction) -> env of **`api`** (`compose.server.yml:224`) **and `web`** (`:342`) | operator; any code running in `api` or `web` | `web/src` never reads it (`getApiToken` and `hasServerCredential` are called by tests only; `credentialed-forward.ts:73-80` says the BFF presents "a session's, never the deployment's signing key"). A forged `am2` credential for a known `usr_` id is a full takeover: `F-03`. |
+| PostgreSQL password and `DATABASE_URL` | `alpha.env`; env of `postgres`, `migrate`, `release-notes`, `api`, `worker` (`compose.server.yml:74,159,176,203,275`) | operator; code in any of those | One URL for four services, and the user is the image's bootstrap **superuser** (`ADR-0021` line 41): `F-05`. |
+| MinIO root credentials = the application's S3 keys | `alpha.env:214-215,224-225`; env of `s3`, `s3-init`, `api`, `worker` | operator; code in `api`/`worker` | The application holds the object store's root account; the server runs as root (`infra/minio/Dockerfile` has no `USER`): `F-21`, `A-6`. |
+| Provider key (`PROXY_LLM_TOKEN` / `ANTHROPIC_API_KEY`) and the **private** key ring `AUDITMANAGER_SECRETS_KEYS` | `infra/deploy/env/provider.env` (host), `env_file` of **`worker` only** (`compose.server.yml:308-310`); the `api` "refuses to start with" the ring | operator; code in `worker` | Sound: a stolen administrator session or a compromised `api` can replace a connection's key but not read one (`compose.server.yml:230-234`); the stored connection key is X25519-sealed ciphertext bound to its destination, so editing a revision's address leaves the key unreadable (`executors/commands.py:176-179`); a database dump opens nothing (`provider.env.example:93-95`). `docker compose config` prints `alpha.env` values and, without `--no-env-resolution`, `provider.env` too (`provider.env.example:19-35`): an operator trap, documented. |
+| Runner token | shown once in the `issueRunnerToken` response; SHA-256 only in the database | the administrator who issued it; the runner | prefix (12 characters) is shown to administrators and is the throttle key. |
+| TLS private key, ACME account key | named volumes `certs` (written by `acme`, mounted read-only into `proxy`) and `acme-state` (mounted by `acme` alone) (`infra/acme/compose.acme.yml:26-30,98-100`) | operator; code in `acme` (account key) / `proxy` (pair) | Sound: the public-facing process never holds the account key. |
+| Live user credentials (`am2`, at most 1 h) | `register.json` in volume `web-sessions` (`store.ts:343-345`: mode 600 in a 700 directory), mounted by `web` only | operator; code in `web` | `R-51`, accepted; they never reach a browser. |
+| Executor SSH private key | sealed in the database; opened by the `worker`, written to a per-call directory (`executors/ssh_transport.py:283-296`), host key pinned (`StrictHostKeyChecking=yes`, no TOFU in the call path) | operator; code in `worker` | Sound design. |
+
+**Logs, error envelopes, audit payloads.**
+*Error envelope:* an unknown exception becomes `internal_error` "carrying nothing from the original" (`routers/errors.py:77-93`); detail keys are screened against the catalog's `safe_detail_keys`; the model provider's own error body is read (at most 4096 bytes,
+`analysis/text/proxy.py:86,262`) and dropped (`http_adapter.py`: fixed sentences). *Audit payloads:* the six `access.*` events accept only allow-listed keys with value rules (`access/audit.py:86-110`, `:150-185`): never a password, digest, token, cookie, e-mail, name, IP or user agent;
+`executor.*` events carry ids and the secret's `purpose` (`executors/commands.py:263-268`). *Logs:* nginx writes the image's default access format (no `log_format` in `infra/`): client address, request line with query, referer, user agent and the client-written `X-Forwarded-For`, never `Authorization` or `Cookie`;
+the API writes uvicorn access lines and warnings that contain **logins and `usr_` ids** (`access/accounts.py:524-529,557,596-601,642-647`); the web tier logs paths only (`store.ts:246-311,349`). What can still carry client text or a secret into a log line: `F-12`. What leaves no log line at all: `F-13`.
+
+Findings: `F-03`, `F-05`, `F-12`, `F-13`, `F-21`.
