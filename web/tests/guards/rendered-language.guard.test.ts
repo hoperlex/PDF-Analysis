@@ -80,7 +80,7 @@ import type {
   VersionComparison,
 } from '@/shared/api';
 import { RUN_STATE_VALUES } from '@/shared/api';
-import { AR_V3_BETA_PROFILE_ID, RUN_PAGE_LIMIT } from '@/entities/audit-run';
+import { AR_V3_BETA_PROFILE_ID, RUN_PAGE_LIMIT, classifyRunFailure } from '@/entities/audit-run';
 import { USER_PAGE_LIMIT } from '@/entities/user';
 import { ASSIGNMENT_PAGE_LIMIT } from '@/entities/assignment';
 import { REGISTRATION_PAGE_LIMIT } from '@/entities/registration-request';
@@ -145,6 +145,8 @@ import {
   SettingsFields, SshKeyControl,
 } from '@/features/manage-executor-connection';
 import { EXECUTOR_SECRET_OUTCOMES, SetExecutorSecretForm } from '@/features/set-executor-secret';
+import { ExecutorSelectView, StartRunControl, StartRunFailureView } from '@/features/start-run';
+import { executorChoices } from '@/entities/executor-connection';
 import {
   ALL_CASES as EXECUTOR_CASES, PINNED as EXECUTOR_PINNED, READY as EXECUTOR_READY,
   OUTCOME_CASES as EXECUTOR_OUTCOME_CASES, PULL_ONLINE as EXECUTOR_PULL_ONLINE, runnerToken, seedExecutors,
@@ -842,6 +844,13 @@ const run = (over: Partial<RunStatus> = {}): RunStatus => ({
   model_call_count: 4,
   cost_micros: 1234,
   cost_basis: 'measured',
+  // `EXEC-PAR-WEB-01`: the executor the run froze, in Cyrillic like every server value here. Every
+  // run screen in every state names it, and the `queued-run` state says it is waiting for it.
+  executor: {
+    connection_id: EXECUTOR_READY.connection.connection_id,
+    display_name: 'Основной шлюз',
+    pin_id: 'модель-основная',
+  },
   ...over,
 });
 
@@ -1274,6 +1283,12 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
       run_id: RUN_ID, aggregate_id: RUN_ID, aggregate_type: 'AuditRun',
       event_type: 'audit_run.transition', occurred_at: '2026-10-09T10:00:00Z',
       payload: { to_state: 'queued' },
+    }, {
+      // `EXEC-PAR-WEB-01`: the entry a start that names its executor writes.
+      event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8G',
+      run_id: RUN_ID, aggregate_id: RUN_ID, aggregate_type: 'AuditRun',
+      event_type: 'audit_run.executor_chosen', occurred_at: '2026-10-09T09:59:00Z',
+      payload: {},
     }],
     page,
   });
@@ -1985,7 +2000,75 @@ const BLOCKS_SHAPES: readonly ScreenCase[] = [
   },
 ];
 
+/*
+ * `EXEC-PAR-WEB-01`. The start control's «Исполнитель» and the refusals of a chosen executor.
+ *
+ * The control itself is rendered in every cache state, so its loading, failed and read shapes
+ * (every probe outcome, an archived connection, a connection with no settings) are all on a screen.
+ * What a settled `useMutation` or a `useState` decides is not: a refusal of the executor that was
+ * chosen, and a select whose value is a connection that cannot serve or has left the list. Those
+ * are rendered through the views the control renders (`StartRunFailureView`, `ExecutorSelectView`).
+ */
+function startRunExecutorShapes(): ReactElement {
+  const details = new Map(EXECUTOR_CASES.map((one) => [one.connection.connection_id as string, one.detail]));
+  const connections = EXECUTOR_CASES.map((one) => one.connection);
+  const choices = executorChoices(connections, details);
+  const blocked = choices.find((choice) => choice.blocker === 'probe_failed');
+  const archived = choices.find((choice) => choice.archived);
+  if (blocked === undefined || archived === undefined) {
+    throw new Error('the executor fixtures hold no blocked and no archived connection to choose');
+  }
+  // A connection whose settings were not read: only the list, with no detail for it.
+  const unread = executorChoices([EXECUTOR_READY.connection], new Map());
+  const select = (key: string, reading: Parameters<typeof ExecutorSelectView>[0]['reading'], value: string | null) =>
+    createElement(ExecutorSelectView, { key, id: `select-${key}`, reading, value, disabled: false, onChange: () => undefined });
+  const ready = { phase: 'ready', choices } as const;
+
+  const refusal = (
+    code: ErrorCode, status: number, retryable: boolean,
+    details: Readonly<Record<string, string>>, message = 'Сообщение об отказе.',
+  ): ApiError => new ApiError(status, {
+    contract_version: '1.6.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
+    retryable, details,
+  }, '0f0e9d8c-7b6a-4948-b726-150413021100');
+  const cannotServe = (reason: string) =>
+    refusal('dependency_unavailable', 503, true, { dependency: 'executor_connection' },
+      `the chosen executor connection cannot serve a run now (${reason})`);
+  const failures = [
+    ...['archived', 'kind_not_served', 'not_probed', 'no_revision'].map((reason) => cannotServe(reason)),
+    refusal('dependency_unavailable', 503, true, { dependency: 'executor_connection' }),
+    ...['unknown_connection', 'pattern', 'kind_not_routable', 'something_else'].map((constraint) =>
+      refusal('validation_failed', 422, false, { field: 'executor_connection_id', constraint })),
+  ].map(classifyRunFailure);
+
+  return createElement(
+    'div',
+    null,
+    select('ready-default', ready, null),
+    select('ready-blocked-chosen', ready, blocked.connectionId),
+    select('ready-archived-chosen', ready, archived.connectionId),
+    select('ready-chosen-left-the-list', ready, 'exc_01J9ZQ8K7NHVXW3T2R5M6P4Q8Z'),
+    select('ready-unread', { phase: 'ready', choices: unread }, null),
+    select('ready-empty', { phase: 'ready', choices: [] }, null),
+    select('failed', {
+      phase: 'failed', detail: 'Сервер не ответил.', correlationId: '0f0e9d8c-7b6a-4948-b726-150413021100',
+      onRetry: () => undefined,
+    }, null),
+    ...failures.map((failure, index) => createElement(StartRunFailureView, {
+      key: `failure-${index}`, failure, projectUid: PROJECT_UID, versionUid: VERSION_UID, onRetry: () => undefined,
+    })),
+  );
+}
+
 const EXTRA_SHAPES: readonly ScreenCase[] = [
+  {
+    name: 'start-run-control',
+    make: () => createElement(StartRunControl, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
+  },
+  {
+    name: 'start-run-executor-shapes',
+    make: startRunExecutorShapes,
+  },
   // `AR-V3-BETA-SCREEN-GATE-REPAIR-01`: these four branches are conditional on the
   // group ID and its separate read, so the default settings route cannot reach them.
   {
