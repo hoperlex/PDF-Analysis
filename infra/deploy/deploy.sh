@@ -33,6 +33,13 @@
 #      succeed against a stack that is missing a container, and the message it fails with
 #      names `nginx.conf`, a file that is fine. See `# --- 3.` below.
 #
+# THE TLS TERMINATOR (`PROD-01-TLS-ACME-01`, `ADR-0021` section 2). `ALPHA_CERT_NAME` empty is everything
+# above, unchanged -- one compose file, every call as it was. Set, the compose files are a LIST: the base,
+# `infra/acme/compose.acme.yml` (an ACME client and public port 80 for the challenge and a redirect) and, for
+# a deploy that is cleared to publish and has a certificate, `proxy/compose.tls.yml` (public port 443).
+# `lib/proxy-listeners.sh` decides; five guards (`acme-*`, `public-ports-free`) make each way it can go wrong
+# a sentence before the build. `DEPLOYMENT_RUNBOOK.md` section 6 is the procedure.
+#
 # WHAT A SECOND RUN DOES, MEASURED RATHER THAN CLAIMED. This comment said "a second run
 # changes nothing" until `W23-DEPLOY` ran it twice from a clean clone, and that was false.
 # What that drive found, recorded in `docs/program/reviews/W23-DEPLOY.md` and as `D-36`:

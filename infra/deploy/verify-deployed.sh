@@ -314,7 +314,8 @@ echo
 
 # --- 3. what the running proxy reads, against the tree ------------------------------
 # `B-1`. The mounts are read from the container, not from the compose file: the container is
-# what serves, and it may carry an overlay (`proxy/compose.tls.yml`) this script never names.
+# what serves, and it may carry overlays (`infra/acme/compose.acme.yml`, `proxy/compose.tls.yml`) this
+# script's proxy comparison never names.
 # Each bind-mount source must be this checkout's `infra/deploy/proxy/` -- a mount from
 # anywhere else is a proxy that is not serving this tree, whatever its bytes are -- and every
 # tracked file under each source is compared inside the container. `proxy/nginx.conf` is
@@ -417,7 +418,7 @@ if [ "$PROXY_PROBLEMS" -ne 0 ]; then
         "reads it. reload-proxy.sh restarts the proxy when a mounted file changed:" \
         "    infra/deploy/reload-proxy.sh" \
         "A proxy mounted from another checkout has to be recreated from this one, with the" \
-        "same -f files it was created with (add proxy/compose.tls.yml if TLS is on):" \
+        "same -f files it was created with (add infra/acme/compose.acme.yml if ALPHA_CERT_NAME is set, and proxy/compose.tls.yml if 443 is published):" \
         "    docker compose --env-file $ENV_FILE -f $COMPOSE_FILE up -d --force-recreate proxy" \
         "Until then, no claim about this stack is a claim about $HEAD_SHA."
 fi

@@ -63,10 +63,14 @@ One optional extra: §2 suggests `python3` for one line that generates a token.
 * **one published port** for the stack, `ALPHA_HTTP_PORT` — the proxy's, and nothing else
   leaves the host. PostgreSQL, MinIO, the API and the web app are reachable only on the
   compose network and publish nothing;
-* **one more if TLS is turned on**, `ALPHA_HTTPS_PORT`, default `443` (§6).
+* **two more if the stack terminates TLS itself** (`ALPHA_CERT_NAME` is set, §6): public port
+  `80`, which serves the ACME challenge and a redirect to HTTPS and **reaches no part of the
+  application**, and public port `443` (`ALPHA_HTTPS_PORT`), which exists only for a deploy that is
+  cleared to publish and has a certificate (`R-146s`). Both are the proxy's, and the proxy is still
+  the only service that publishes anything.
 
-**Both are bound to `127.0.0.1` unless you say otherwise, and you reach the stand over an SSH
-tunnel.** Ruled by the owner 2026-09-22, closing `D-49`:
+**The application's own port is bound to `127.0.0.1` unless you say otherwise, and you reach the
+stand over an SSH tunnel.** Ruled by the owner 2026-09-22, closing `D-49`:
 
 ```
 ssh -L 31500:127.0.0.1:31500 <host>        # then open http://127.0.0.1:31500 locally
@@ -95,11 +99,12 @@ iptables -t nat -L DOCKER -n | grep 31500
 **Do not read a green `ufw status` as evidence about a published container port.** It is
 evidence about traffic ufw sees, and this traffic does not reach it.
 
-**`ALPHA_BIND_ADDRESS` is how a host that genuinely should publish says so** — one behind a
-firewall you have *verified against the chains above*, serving TLS under `R-1`. It governs
-both ports, so a host is published or not published rather than published on one by accident.
-`R-4` puts real client documents on the pilot server, and this is the line that decides who
-can reach them.
+**`ALPHA_BIND_ADDRESS` is how a host that genuinely should publish the plain application port
+says so** — one behind a firewall you have *verified against the chains above*. Since
+`PROD-01-TLS-ACME-01` it governs **only that plain listener**: the public ports 80 and 443 follow
+`ALPHA_PUBLIC_ADDRESS`, and once `ALPHA_CERT_NAME` is set `deploy.sh` refuses a non-loopback value
+here, because the application is then public only over TLS. `R-4` puts real client documents on
+the pilot server, and these are the lines that decide who can reach them.
 
 Check, after any deploy:
 
@@ -113,7 +118,10 @@ The second must fail to connect. On this host it printed `200` before the fix an
 ### Behind a host nginx — the client address (`REAL-IP-EDGE-01`)
 
 **Applies only if a nginx on the host terminates TLS and passes to the published port**
-(`proxy_pass http://127.0.0.1:<ALPHA_HTTP_PORT>`), which is how the stand is served. Without this
+(`proxy_pass http://127.0.0.1:<ALPHA_HTTP_PORT>`), which is how the stand is served **until §6 is
+done**. When the stack terminates TLS itself (`ALPHA_CERT_NAME` set) there is no host terminator
+and this section is the thing to **undo**: empty `ALPHA_TRUSTED_PROXY_CIDRS`, because the client
+address then arrives on the connection and a client in the list could name its own bucket. Without this
 step the stack is correct and safe, but every per-address throttle — sign-up, the sign-in token
 exchange (`POST /api/v1/auth/token`) and the web tier's guest bucket — is **one bucket for all
 visitors**, because the proxy container sees every connection from the compose network's
@@ -407,9 +415,9 @@ address back — so *"the last rebuild was fine"* is not evidence about the next
 * **anything needing a second machine** — no blue/green, no failover, no off-host backup
   target. `reset.sh`'s dumps land on this host's disk and getting them off it is not
   automated here;
-* **certificate renewal.** §6 activates a certificate; nothing here renews one. Whatever
-  renews it must drop the new pair into the same directory and restart the proxy
-  container — one `docker compose ... restart proxy`, which re-runs the switch.
+* **certificate renewal on a host whose terminator is not this stack.** With `ALPHA_CERT_NAME` set the
+  stack renews its own certificate (§6). Without it nothing here obtains or renews one, and the host's
+  nginx, outside this repository, is whatever it was (`D-191`).
 
 **And one thing it will not stop you doing, so it says it here.** `docker compose ... down`
 leaves all three named volumes alone. **`docker compose ... down --volumes` removes them —
@@ -421,78 +429,248 @@ before it drops. **`down --volumes` dumps nothing.**
 
 ---
 
-## 6. TLS — activating it, verifying it, turning it off
+## 6. TLS — the stack's own terminator, the staging rehearsal, the cutover, turning it off
 
-**Nothing about TLS is in `compose.server.yml`, and nothing in `proxy/nginx.conf` mentions
-a certificate.** With no certificate on this host, the TLS path is not merely disabled; it
-is **not loaded** — proved, both halves, in `docs/program/reviews/W26-HOST.md` §2.
+**`PROD-01-TLS-ACME-01` (`ADR-0021` section 2, `R-146a`, `R-146aa`, `R-146ac`, `R-146s`) rewrote this section.**
+Until then it said the owner puts a certificate pair into a directory by hand. Now the stack **obtains and
+renews its own certificate**: an ACME client runs as a service of the same compose project, proves control
+of the name over HTTP-01 through port 80, and writes the pair to a named volume that the `proxy` reads
+read-only. **Nothing in this section has been run against a certificate authority, and nothing in it has run
+on the host**: the lane that built it had no network and no docker, and its tests drive the scripts against
+stand-ins (`tests/integration/composition/test_acme_*.py`). The procedure below is therefore a **rehearsal
+plan with the expected output of each step**, and the first run of it is the owner's.
 
-### Turning it on
+**Nothing about it is on by default.** With `ALPHA_CERT_NAME` empty or absent, none of this exists and the
+stack is byte-for-byte the deployment that was certified before — which is also the rollback.
 
-1. put the pair on the host, in the clone, **by hand, by whoever holds root**:
+### The three listeners (`R-146s`)
 
-   ```
-   infra/deploy/proxy/tls/fullchain.pem      # the certificate and its chain
-   infra/deploy/proxy/tls/privkey.pem        # the private key
-   chmod 600 infra/deploy/proxy/tls/privkey.pem
-   ```
+| listener | where | serves | when it exists |
+|---|---|---|---|
+| plain application | `127.0.0.1:${ALPHA_HTTP_PORT}` | the whole application, as before (`deploy.sh`'s `proxy-answers` guard wants `401` on it) | always |
+| challenge | public port **80** | the ACME webroot and a **redirect to HTTPS**; **no route to the application at all** | whenever `ALPHA_CERT_NAME` is set — so issuance and renewal work while the seeded password is still the seeded one |
+| application over TLS | public port **443** | the application, with HSTS | only for a deploy that is cleared to publish **and** whose certificate pair exists |
 
-   That directory is tracked and its contents are ignored **whole** — `git check-ignore`
-   is asked about both names by a test, not trusted to a comment. **A key is never
-   committed, never pasted into a message and never leaves that host.**
+So on a host that has never been published the stack comes up on loopback with port 80 answering the
+challenge; you reach the loopback port through an SSH tunnel and change the administrator's password; the
+next deploy publishes 443. **Today "cleared to publish" is one setting you write yourself,
+`ALPHA_PUBLISH_HTTPS=yes`; `PROD-02` replaces it by the result of the default-credential check**, and
+makes `reset.sh --restore` and `copy-serve.sh restore-db` close 443 again after a restore that brings the
+seeded password back. **Until `PROD-02` lands neither restore path touches the listeners**: after any restore,
+set `ALPHA_PUBLISH_HTTPS=no` (or remove the line) and deploy before you decide the password is changed.
 
-2. bring the stack up with the overlay beside the compose file:
+### What goes in `alpha.env`
 
-   ```
-   docker compose --env-file infra/deploy/env/alpha.env \
-     -f infra/deploy/compose.server.yml \
-     -f infra/deploy/proxy/compose.tls.yml up -d
-   infra/deploy/reload-proxy.sh
-   ```
+`infra/deploy/env/alpha.env.example` has the commented block ("the TLS terminator"); the values:
 
-   Set `ALPHA_HTTPS_PORT` in `alpha.env` if `443` is not the port to publish.
+| setting | meaning | default |
+|---|---|---|
+| `ALPHA_CERT_NAME` | the public DNS name of this host; lower case, at least two labels, no wildcard, no port. A placeholder or reserved name is refused by `deploy.sh`. **The live name belongs here, on the host, and in no default anywhere in the repository** | empty: no terminator |
+| `ALPHA_ACME_EMAIL` | contact address for the authority; optional | none |
+| `ALPHA_ACME_STAGING` | `yes`: the authority's TEST endpoint (certificates no browser trusts, loose limits). `no`: the real issuance | **`yes`** — a forgotten line spends the test endpoint's limits and never the real one's |
+| `ALPHA_PUBLISH_HTTPS` | `yes` publishes 443 for a deploy that has a certificate | `no` |
+| `ALPHA_PUBLIC_ADDRESS` | the interface 80 and 443 bind | all interfaces |
+| `ALPHA_ACME_HTTP_PORT`, `ALPHA_HTTPS_PORT` | the published ports; change them only for a rehearsal on a machine whose 80 and 443 are not free | `80`, `443` |
+| `ALPHA_BIND_ADDRESS` | the **plain application** listener. With a name set `deploy.sh` refuses anything but loopback | loopback |
 
-### Reading whether it took
+### The procedure (the owner's; every step has the output to expect)
 
-The switch says which branch it took, every start, on the container log:
+*Lines that a script of this repository prints are exact. Lines that certbot, docker or the operating
+system print are given by shape and are marked "shape": they were not observed by the lane that wrote this,
+and a difference in wording is not a failure — a difference in meaning is.*
+
+**0. Know the deadline.** `PROD-01` is deployed, with its first real issuance, by **2026-12-16**; the live
+certificate (the host nginx's) ends 2026-12-30 (`D-191`). `PROD-21` is the owner's interim renewal of that
+certificate if this slips.
 
 ```
-docker compose --env-file infra/deploy/env/alpha.env \
-  -f infra/deploy/compose.server.yml logs proxy | grep enable-tls
+echo | openssl s_client -connect <name>:443 -servername <name> 2>/dev/null | openssl x509 -noout -enddate
 ```
+Expect (shape): `notAfter=Dec 30 ... 2026 GMT`.
 
-* `enable-tls: TLS IS ON.` — the block was installed and nginx has it;
-* `enable-tls: TLS IS OFF.` — followed by the **two paths it looked at**. If you meant to
-  turn TLS on, compare those paths with where you put the files. This is the line that
-  tells a mis-resolved mount apart from a missing certificate, and `D-37` is why it prints
-  the path rather than a verdict: a bind source the **daemon** cannot see becomes an
-  invented empty directory, not a refusal.
-
-Then ask the port, not the log:
+**1. Resolve the client pin once, from any machine with docker and network.** The image installs `certbot`
+by exact package version from `infra/acme/client.pin`, which ships saying `UNRESOLVED`; `deploy.sh` refuses to
+deploy a host with a name set until it is resolved (guard `acme-client-pinned`), and so does the image build.
 
 ```
-curl -sS -o /dev/null -w '%{http_code} %{http_version} verify=%{ssl_verify_result}\n' \
-  https://<the host name>/
+docker run --rm alpine:3.22.1@sha256:4bcff63911fcb4448bd4fdacec207030997caf25e9bea4045fa6c8c44de311d1 \
+  sh -c 'apk update >/dev/null && apk policy certbot'
 ```
+Expect (shape): a first line `certbot policy:` and under it one or more lines `  <version>-r<n>:` each with the
+repository that serves it. Write the highest one that the `community` repository serves into
+`infra/acme/client.pin` as `ACME_CLIENT_APK_VERSION=<version>-r<n>`, commit it, and deploy that commit. **The
+packages certbot depends on float within Alpine 3.22's repository at build time**; the image is identified by
+its base digest and this version, not by a lock of its dependencies.
 
-`verify=0` is a certificate the client trusts. Any other value is the certificate's
-problem, not the proxy's.
+**2. Decide about the other application on this host.** `EXPOSURE-REVIEW-01.md` `E-6`: the host's nginx also
+serves a different application on this machine. **Stopping that nginx in step 4 takes that application down
+too.** If that is not acceptable, stop here: this stack cannot hold ports 80 and 443 beside another
+terminator, and the layout needs a decision from the architect, not a workaround.
 
-### Turning it off, and what is lost
+**3. Check the name and the ports.**
+```
+getent hosts <name>
+```
+Expect: the VPS's public address first on the line. (For a name under `sslip.io` the address is in the name.)
+The provider's firewall must let **80 and 443** in. `deploy.sh` checks that nothing else holds the ports on this
+host and says so (guard `public-ports-free`): `deploy.sh: REFUSED: public port 80 is already in use, and not by
+<instance>'s proxy.`
 
-**Drop the second `-f`** and bring the stack up again. Nothing has to be un-edited; the
-deployment is byte-for-byte the one without TLS. Removing the certificate pair and
-restarting the proxy does the same thing one layer in — the switch **un-installs** the
-block it wrote earlier, which matters because a restarted container keeps its writable
-layer and would otherwise try to load a certificate that is no longer there.
+**4. The cutover window begins: stop the host's nginx.** From here the public site is down until step 9
+(about ten minutes if nothing goes wrong).
+```
+sudo systemctl stop nginx
+ss -ltn '( sport = :80 or sport = :443 )'
+```
+Expect: `ss` prints only its header line.
 
-What is lost is exactly the TLS listener. **The plain port keeps serving in both cases** —
-there is deliberately no redirect from it, because `deploy.sh`'s `proxy-answers` guard
-requires **401** on `/api/v1/openapi.json` there, and a `301` is not 401, so a redirect
-would turn every successful deploy into a refusal. *(`Y3`: this said 200. The conclusion
-survives — a 301 was never the answer the guard wants — and the number was wrong. The guard
-is at `infra/deploy/deploy.sh:751-772`; `readiness.sh` printed the same false number at the
-operator and is corrected with it.)*
+**5. The staging rehearsal.** In `alpha.env` set `ALPHA_CERT_NAME=<name>`, `ALPHA_ACME_STAGING=yes`, optionally
+`ALPHA_ACME_EMAIL`, and **remove `ALPHA_TRUSTED_PROXY_CIDRS`** (the host nginx is gone; the client address now
+arrives on the connection). Leave `ALPHA_PUBLISH_HTTPS` unset. Then
+```
+infra/deploy/deploy.sh
+```
+Expect, among the usual lines (exact):
+```
+deploy.sh: tls name   <name> (ACME: STAGING, rehearsal only)
+...
+-- the listeners this deploy has --
+  plain application listener : 127.0.0.1:<ALPHA_HTTP_PORT> (always)
+  challenge listener         : public port 80 (the ACME webroot and a redirect; no application route)
+  application listener (TLS) : NOT published -- the credential gate is not satisfied (ALPHA_PUBLISH_HTTPS is not yes), so 443 stays closed
+...
+  acme      running/healthy
+...
+deploy.sh: ALPHA_ACME_STAGING is yes: the certificate is the authority's TEST one, trusted by no browser.
+```
+If `deploy.sh` refuses with `the 'acme' service of <instance> is running/starting`, issuance is slower than the
+two minutes the deploy waits: read step 6 and run `deploy.sh` again.
+
+**6. Read the issuance.**
+```
+docker compose --env-file infra/deploy/env/alpha.env -f infra/deploy/compose.server.yml \
+  -f infra/acme/compose.acme.yml logs acme
+```
+Expect (exact, from our scripts): `acme: STAGING: certificates come from the authority's test endpoint...`,
+`acme: name <name>, lineage <name>-staging.`, then certbot's own output (shape: it ends in a success line and
+`Certificate is saved at: /etc/letsencrypt/live/<name>-staging/fullchain.pem`), then
+`export-pair: exported the pair of /etc/letsencrypt/live/<name>-staging to /export; the proxy picks it up on its next tick.`
+and `acme: the certificate for <name> is in place and exported; next pass in 43200s.`
+A failed attempt prints `acme: no certificate yet (attempt N)...` and the delay (60 s, 300 s, 900 s, then an
+hour). **A failure here is the rehearsal doing its job**: read certbot's reason (DNS, port 80 not reaching the
+proxy, the firewall) and fix it before step 8.
+
+**7. The proxy applies it, within a minute.**
+```
+docker compose --env-file infra/deploy/env/alpha.env -f infra/deploy/compose.server.yml \
+  -f infra/acme/compose.acme.yml logs proxy | grep -E 'watch-certificate|enable-tls'
+```
+Expect (exact): `watch-certificate: the certificate pair changed; applying it.`, `enable-tls: TLS IS ON.`,
+`watch-certificate: nginx reloaded; the proxy serves the pair that is on the volume now.` A pair nginx refuses
+prints `watch-certificate: REFUSED: nginx does not accept this pair...` with nginx's own words and is not
+applied.
+
+**8. Verify the rehearsal, and see that the production check refuses it.**
+```
+infra/deploy/verify-deployed.sh --acme-rehearsal
+infra/deploy/verify-deployed.sh
+```
+Expect for the first (exact except the dates and issuer): `served-certificate: OK name=<name> mode=staging
+notAfter="..." issuer="... (STAGING) ..." valid-for-at-least-days=14` and `the deployed stack IS this tree`.
+Expect for the second: exit **7**, `ALPHA_ACME_STAGING is yes ...: this stack is set to the authority's TEST
+endpoint.` The port-80 listener, from outside the host:
+```
+curl -sI http://<name>/api/v1/openapi.json
+```
+Expect: `HTTP/1.1 301 Moved Permanently` and `Location: https://<name>/api/v1/openapi.json` — and **not** `401`:
+a `401` would mean port 80 reaches the application (`readiness.sh`'s `plain-http` check asks the same).
+
+**9. The real issuance.** Set `ALPHA_ACME_STAGING=no` in `alpha.env` and run `infra/deploy/deploy.sh`. Expect
+`(ACME: production)` on the `tls name` line, and in the log `acme: PRODUCTION: ...` and
+`acme: name <name>, lineage <name>`. The production pair replaces the staging pair on the volume (the reverse is
+refused: `export-pair: REFUSED: the exported certificate is a production one...`). **If the authority refuses for a
+rate limit** — `R-146ac` recorded that a name under `sslip.io` shares its limits with every other user of that zone —
+**stop**; the owner decides on a name of their own. Then:
+```
+infra/deploy/verify-deployed.sh
+```
+Expect (exact except dates and issuer): `served-certificate: OK name=<name> mode=production ...
+valid-for-at-least-days=14` and `the deployed stack IS this tree`.
+
+**10. Close the cutover: the administrator's password, then 443.** Reach the loopback port by tunnel
+(`ssh -L 31500:127.0.0.1:31500 <host>`, `http://127.0.0.1:31500`), sign in as the seeded administrator and **change
+the password**. Only then set `ALPHA_PUBLISH_HTTPS=yes` and run `infra/deploy/deploy.sh`. Expect (exact):
+`application listener (TLS) : public port 443 -- published` and
+`deploy.sh: TLS for <name>: the challenge listener is public on port 80; the application over TLS is` /
+`deploy.sh: published on port 443.` On the first publication the deploy that issued the certificate and the deploy
+that publishes it are two runs; if they were one, the deploy prints `no certificate pair exists yet ...` and
+`run this script again`.
+
+**11. The public probes** (`ADR-0021` rows 2 to 5), from a machine outside the host:
+```
+curl -sS -o /dev/null -w '%{http_code} %{ssl_verify_result}\n' https://<name>/login
+curl -sSI https://<name>/login | grep -i '^strict-transport-security: max-age=31536000'
+curl -sS -D - -o /dev/null -H "Cookie: am_session=$(openssl rand -hex 16)" https://<name>/bff/v1/projects | grep -i '^set-cookie: am_session=;.*Secure'
+echo | openssl s_client -connect <name>:443 -servername <name> 2>/dev/null | openssl x509 -noout -checkend 1209600
+```
+Expect: `200 0`; the HSTS header line (exit 0); the clearing `Set-Cookie` line carrying `Secure` (exit 0 — an inert
+cookie draws `401` and a clearing cookie from the BFF route, the method of `EXPOSURE-REVIEW-01.md` `E-2`);
+`Certificate will not expire` (exit 0). On the host: `docker compose ... port proxy 8443` prints the mapping
+(`0.0.0.0:443`); with `ALPHA_PUBLISH_HTTPS=no` it does not (row 6). **HSTS is a promise about the name for a
+year (`max-age=31536000`, no `includeSubDomains`, no `preload`); turning TLS off again does not withdraw it.**
+
+**12. Run the readiness command.** `infra/deploy/readiness.sh` — expect `readiness OK      tls` and
+`readiness OK      plain-http` (§9).
+
+### Renewal, and how it fails
+
+The ACME service asks again every twelve hours (`certbot certonly --keep-until-expiring`): it renews when the
+certificate is within thirty days of its end, and does nothing otherwise. The proxy picks up the new pair
+within a minute, with no restart. **A failed renewal does not alert anyone** (`R-146k`): it is found by the check
+that runs when somebody deploys or verifies — `verify-deployed.sh` exits 7 with `served-certificate: EXPIRING`
+when fewer than **14 days** remain (the 14 is the architect's number; renewal starts at 30, so reaching 14 means
+two weeks of failed renewals). To rehearse a renewal without spending the real endpoint's limits:
+```
+docker compose --env-file infra/deploy/env/alpha.env -f infra/deploy/compose.server.yml \
+  -f infra/acme/compose.acme.yml exec acme certbot renew --dry-run --cert-name <name>
+```
+Expect (shape): `Congratulations, all simulated renewals succeeded`.
+
+### The messages, and what each means
+
+| from | line | meaning |
+|---|---|---|
+| `deploy.sh` | `REFUSED: ALPHA_CERT_NAME is set and this clone is missing files...` | a partial checkout; nothing was built |
+| `deploy.sh` | `REFUSED: the TLS settings in <env> are not usable.` | the lines under it name each value; a setting without a name is refused, not ignored |
+| `deploy.sh` | `REFUSED: the ACME client is not pinned` | step 1 |
+| `deploy.sh` | `REFUSED: public port N is already in use...` | the host's nginx (or another stack) holds it; step 4 |
+| `deploy.sh` | `REFUSED: whether the certificate volume holds a pair could not be asked` | the acme image did not answer; nothing was started |
+| `verify-deployed.sh` | exit 7, `served-certificate: NOT SERVED` | no TLS answer from `proxy:8443`: the pair is not exported yet, or the proxy has not loaded it |
+| `verify-deployed.sh` | exit 7, `STAGING CERTIFICATE` / `NOT TRUSTED` / `EXPIRING` | the kind, the chain or the margin; the line says which |
+| `enable-tls` | `TLS IS OFF.` | no usable pair on the volume; `docker compose logs acme` says why |
+| `watch-certificate` | `the pair is not the cause` | nginx refused the configuration with and without the TLS block (an upstream restarting, usually); it retries |
+
+### Turning it off, and what stays
+
+Empty `ALPHA_CERT_NAME` **and remove the other TLS settings** (`deploy.sh` refuses them without a name), run
+`infra/deploy/deploy.sh`, then remove the client that deploy leaves behind (the file list no longer names it, so
+compose treats it as an orphan and leaves it running):
+```
+docker compose --env-file infra/deploy/env/alpha.env -f infra/deploy/compose.server.yml \
+  -f infra/acme/compose.acme.yml rm -sf acme
+```
+Expect (shape): `Container <instance>-acme-1  Stopped` then `Removed`. Start the host's nginx again if it is to
+terminate TLS. The volumes `<instance>-acme-state` (the account key and the lineages), `<instance>-certs` and
+`<instance>-acme-webroot` stay; `down` never removes them, and `down --volumes` would — the account key with them.
+
+### What this section does not do
+
+* it has **not been run**: no certificate authority was contacted, no image was built, no host was touched;
+* it does not resolve `infra/acme/client.pin` (step 1) or choose between a name under `sslip.io` and one of the
+  owner's own (step 9) — both are the owner's;
+* it does not wire the restore paths to the listener decision (`PROD-02`);
+* it does not restart anything on a renewal: the proxy reloads on its own timer, so a renewal needs no right to
+  touch another service.
 
 ---
 
@@ -752,8 +930,8 @@ Criterion 2's **second** clause is driven and holds today.
 
 **Nothing in this repository is the reason they stay open.** Criterion 1 needs a machine.
 Criterion 2 needs a certificate, and §6 is the whole of what this repository can do about
-it in advance: put the certificate in that directory, add one `-f`, and the browser reaches
-the app over TLS.
+it in advance: set the host's name, rehearse against the authority's test endpoint, and the
+stack obtains the certificate itself and the browser reaches the app over TLS.
 
 ---
 
@@ -784,8 +962,8 @@ Six checks, none of them re-deriving a question this tree already answers elsewh
 | check | what it asks | reuses |
 |---|---|---|
 | `default-credential` | step 5 — is any account still on the password this system seeded it with? | `src/auditmanager/access/check.py`'s own stable sentinels, run inside the deployed api image the way `deploy.sh`'s `migrations-at-head` guard runs `shared.db.check` |
-| `tls` | is a certificate pair on disk at `proxy/tls/`? | `enable-tls.sh`'s own test (`[ -s "$CERT" ]`, not merely present) |
-| `plain-http` | is the plain port published off this host, with no way in this tree to close it once it is? | `ALPHA_BIND_ADDRESS` (`D-49`) and §6's own words: *"there is deliberately no redirect ... the plain port keeps serving in both cases"* |
+| `tls` | what certificate does the proxy's TLS listener serve, and is it production, trusted, for this name and good for 14 more days? (`PROD-01-TLS-ACME-01`; it used to ask whether a pair was on disk) | `infra/acme/check-served.sh`, run in a one-off container of the acme image against `proxy:8443` — the same question `verify-deployed.sh` enforces; no name set, or the test endpoint selected, are findings |
+| `plain-http` | is the plain application port off this host, and, with a name, does port 80 answer an application path with a redirect to HTTPS and nothing else? | `ALPHA_BIND_ADDRESS` (`D-49`); with a name, a `curl` of the challenge listener (`R-146s`); without one, the old reading: nothing in this tree closes plain HTTP once it is published |
 | `provider-mode` | is `AUDITMANAGER_PROVIDER_MODE` a real provider, and does it have the credential it needs? | `auditmanager.bootstrap.settings.load()` — the composition root's own validation, the thing that actually decides whether `api` starts |
 | `cost-ceiling` | what does `AUDITMANAGER_RUN_COST_CEILING_USD` resolve to? | the same `load()` call |
 | `off-host-backup` | is there a destination off this host for `reset.sh`'s dumps? | nothing — §5 above already says this is not automated anywhere in this tree, so this check always finds it open, honestly, rather than inventing a name for a mechanism that does not exist |
