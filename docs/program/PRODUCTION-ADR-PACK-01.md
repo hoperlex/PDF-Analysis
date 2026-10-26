@@ -94,7 +94,7 @@ All run on the committed tree of branch `agent/production-adr-pack-01` (venv: th
    | --- | --- |
    | a script path misspelt (verify-deploy.sh) | red: MISSING path |
    | an operationId lengthened by one letter | red: MISSING operationId |
-   | a ruling letter that does not exist (R-146z) | red: MISSING ruling |
+   | a ruling id that does not exist (R-147a) | red: MISSING ruling |
    | a debt id that does not exist (D-9215) | red: MISSING debt |
    | a test function name lengthened | red: MISSING test-name |
    | the surface triple altered to 105 operations | red: MISSING figure-surface |
