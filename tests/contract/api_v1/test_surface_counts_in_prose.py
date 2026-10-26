@@ -597,8 +597,11 @@ def test_a_stale_current_claim_in_p02_seams_is_red() -> None:
     """`D-100`: the once-unscanned live seam document is mutation-tested by path."""
     relative = "docs/program/P02_SEAMS.md"
     text = (REPO_ROOT / relative).read_text(encoding="utf-8")
-    mutated = text.replace("104 operations, sealed.", "101 operations, sealed.", 1)
-    assert mutated != text
+    # The sentence is found by the surface's own current size, read from the frozen document:
+    # a reseal moves it by itself (`COMPARE-PERSISTED-SUMMARY-01`; it was the literal 104).
+    sealed = f"{_surface_counts()['operations']} operations, sealed."
+    mutated = text.replace(sealed, "101 operations, sealed.", 1)
+    assert mutated != text, f"P02_SEAMS no longer says {sealed!r}"
     wrong = _wrong_surface_claims(relative, mutated)
     assert any("'101 operations' states 101" in item for item in wrong), wrong
 

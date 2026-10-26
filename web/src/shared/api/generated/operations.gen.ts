@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.7.0 (OpenAPI 3.1.0)
- *   sha256 14375c443fb530324592bdb3dfb1f40dbe10e45ad82785e9797331ecbfd9357a
+ *   sha256 d5b21e0c47506b3cb671d87a9bf6e9f7c08d23ca7ff066c86b4ccb763ac07ded
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -21,6 +21,7 @@ import type {
   AppendDecisionRequest,
   AppendDecisionResponse,
   ApproveRegistrationRequest,
+  ApproveSheetPairingRequest,
   ArV3BetaGroup,
   ArV3BetaGroupReview,
   ArV3BetaPackStatus,
@@ -137,6 +138,8 @@ import type {
   SetJobPriorityRequest,
   SetProjectVendorListRequest,
   SetWorkerIntakeRequest,
+  SheetLinkId,
+  SheetPairingEvent,
   SpecificationPrices,
   StartArV3BetaGroupRequest,
   StartRunRequest,
@@ -155,6 +158,7 @@ import type {
   VersionClassification,
   VersionComparison,
   VersionUid,
+  WithdrawSheetPairingRequest,
   WorkerId,
 } from './types.gen';
 
@@ -162,6 +166,7 @@ import type {
 export const OPERATION_IDS = [
   'appendDecision',
   'approveRegistration',
+  'approveSheetPairing',
   'archiveExecutorConnection',
   'archiveUser',
   'cancelRun',
@@ -264,6 +269,7 @@ export const OPERATION_IDS = [
   'uploadDocument',
   'uploadDocumentVersion',
   'uploadPriceList',
+  'withdrawSheetPairing',
 ] as const;
 
 /** The closed set of operations this client can perform. */
@@ -330,6 +336,38 @@ export type ApproveRegistrationInput = {
 
 /** Success body of `approveRegistration` (`application/json`, HTTP 200). */
 export type ApproveRegistrationResult = RegistrationRequest;
+
+// ------------------------------------------------------------------------------------
+// approveSheetPairing - POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/sheet-pairings
+// ------------------------------------------------------------------------------------
+
+/**
+ * Approve Sheet Pairing
+ *
+ * Store the calling expert's approval of one sheet pair that the comparison of the path's (older) version with `target_version_uid` proposes: a source page and a target page of the two immutable versions, identified by the SHA-256 of their text and by `suggestion_sha256`, never by a display number. The comparison is recomputed with the body's `mode` and runs when the confirmation arrives and must still propose exactly this pair under this digest. The approval is one new row of an append-only history, with the actor, the time and the seal of the raw evidence of the approved set, and one audit event, in one transaction; it is never updated. An exact repeat of an active approval answers it, `replayed: true`. A refusal is `conflict` with `conflict_reason` `sheet_pair_not_proposed`, `sheet_page_already_paired`, `sheet_pair_limit_reached` (at most 32 active approvals), `approved_text_changed` (an earlier approval's page text is no longer the approved one; withdraw it first) or `sheet_pair_too_large`. `expert` is required; `admin` alone is refused (`required_capability: role:expert`).
+ */
+export type ApproveSheetPairingInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/sheet-pairings`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+    version_uid: VersionUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: ApproveSheetPairingRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `approveSheetPairing` (`application/json`, HTTP 201). */
+export type ApproveSheetPairingResult = SheetPairingEvent;
 
 // ------------------------------------------------------------------------------------
 // archiveExecutorConnection - POST /executor-connections/{connection_id}/archive
@@ -516,7 +554,7 @@ export type ClassifyDocumentVersionResult = VersionClassification;
 /**
  * Compare Document Versions
  *
- * Compare two versions of one document set: the path names the older (source) version and `target_version_uid` the newer one. Both must be published versions of the named document in the named project with the same confirmed section and, with `mode=version` (the default), the same explicit project stage; with `mode=stage` the source must be classified `P` and the target `R` (design to working documentation of one set). Each needs a published run (the newest one, or the one `source_run_id` / `target_run_id` names). A path that names no such version is `404`; otherwise a pair the rule does not admit is `outcome: refused` with one `refusal.reason`, never relabelled. The answer carries proposed sheet pairs with their evidence, one page of raw line differences (`diff_offset`, `diff_limit`, `next_offset`) and proposed matches between the two runs' findings. Every pairing and match is a proposal; nothing is written. Any one role, `role:admin|expert`.
+ * Compare two versions of one document set: the path names the older (source) version and `target_version_uid` the newer one. Both must be published versions of the named document in the named project with the same confirmed section and, with `mode=version` (the default), the same explicit project stage; with `mode=stage` the source must be classified `P` and the target `R` (design to working documentation of one set). Each needs a published run (the newest one, or the one `source_run_id` / `target_run_id` names). A path that names no such version is `404`; otherwise a pair the rule does not admit is `outcome: refused` with one `refusal.reason`, never relabelled. The answer carries proposed sheet pairs with their evidence, one page of raw line differences (`diff_offset`, `diff_limit`, `next_offset`) and proposed matches between the two runs' findings. Every pairing and match in `sheets`, `sheet_diffs` and `findings` is a proposal; this read writes nothing. `approved_pairs` (null for a refused comparison) lists the sheet pairs an expert approved for exactly this pair of versions (`approveSheetPairing`) and, for approved pairs only, their deterministic line differences, recomputed from the immutable text and bound to the version bytes by a seal; when a page's text is no longer the approved one (`text_changed`), the seal differs (`seal_changed`) or the set exceeds the response budget (`too_large`) the differences are withheld, never truncated. Any one role, `role:admin|expert`.
  */
 export type CompareDocumentVersionsInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison`. */
@@ -2121,7 +2159,7 @@ export type ReadRegistrationStatusResult = RegistrationStatusResponse;
 /**
  * Reaudit Run
  *
- * A re-audit runs the same version on the current configuration (R-82), so it faces today's analysis input budget, not the source run's: over it, the answer is `422 analysis_input_budget_exceeded` with `details.character_count` and `details.budget_characters`, and no run exists (R-118). A v3 re-audit may refuse absent verified retrieval set with 422 required_norm_unavailable and reference_kind norm_retrieval_set. `W59-SECTION-SEAL-01`: the new run is routed from the version's persisted classification exactly as `startRun` is, never from the source run's profile; an unclassified version is `422 version_classification_required` and a section with no registered text profile is `422 section_profile_unavailable`. `EXEC-PAR-START-01`: a re-audit of a run whose executor was named at its start runs on that same connection (its current revision), not on today's route; if that connection can no longer serve, the answer is `503 dependency_unavailable` with `details.dependency` `executor_connection` and no run exists. It is never redirected to the standby or to another connection.
+ * A re-audit runs the same version on the current configuration (R-82), so it faces today's limit (the one-call analysis input budget times the number of windows a run may use), not the source run's: over it, the answer is `422 analysis_input_budget_exceeded` with `details.character_count` and `details.budget_characters`, and no run exists (R-118). A v3 re-audit may refuse absent verified retrieval set with 422 required_norm_unavailable and reference_kind norm_retrieval_set. `W59-SECTION-SEAL-01`: the new run is routed from the version's persisted classification exactly as `startRun` is, never from the source run's profile; an unclassified version is `422 version_classification_required` and a section with no registered text profile is `422 section_profile_unavailable`. `EXEC-PAR-START-01`: a re-audit of a run whose executor was named at its start runs on that same connection (its current revision), not on today's route; if that connection can no longer serve, the answer is `503 dependency_unavailable` with `details.dependency` `executor_connection` and no run exists. It is never redirected to the standby or to another connection.
  */
 export type ReauditRunInput = {
   /** Path parameters, substituted into `/runs/{run_id}/reaudit`. */
@@ -2573,7 +2611,7 @@ export type StartOptimisationPassResult = OptimisationPass;
  *
  * PD-03, in the subset PC-01 exercises. A new idempotency key creates a run. The same key with the same payload returns the existing run and creates nothing, whatever state that run is in, terminal included. The same key with a different payload returns `idempotency_key_reuse` and creates nothing. A new key over a terminal run creates a new run and leaves the terminal one exactly as it was: a terminal run is never reopened.
  *
- * A version whose recorded text is larger than the analysis input budget is refused up front with `422 analysis_input_budget_exceeded` and no run exists (R-118). A version published before the portal-bundle upload has no recorded count and is not refused by this rule.
+ * A version whose recorded text is larger than the most a run takes (the analysis input budget of one model call times the number of windows a run may use) is refused up front with `422 analysis_input_budget_exceeded` and no run exists (R-118). A version published before the portal-bundle upload has no recorded count and is not refused by this rule.
  *
  * `W59-SECTION-SEAL-01`: the run's analysis profile is routed from the version's persisted classification through the section-keyed profile registry -- never from a file name, a suggestion or the document's legacy `section`, and never by an AR fallback. A version with no classification is refused with `422 version_classification_required`; a confirmed section with no registered text profile is refused with `422 section_profile_unavailable` (`BETA-CONTRACT-SEAL-01`, `D-179`: both used to be `required_norm_unavailable` told apart by `details.reference_kind`). Neither carries details, and both refusals precede the key's claim, so nothing is written. An existing run keeps the profile it pinned.
  *
@@ -2893,6 +2931,39 @@ export type UploadPriceListInput = {
 export type UploadPriceListResult = PriceListRevision;
 
 // ------------------------------------------------------------------------------------
+// withdrawSheetPairing - POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/sheet-pairings/{sheet_link_id}/withdrawals
+// ------------------------------------------------------------------------------------
+
+/**
+ * Withdraw Sheet Pairing
+ *
+ * End one active sheet link of the path's (older) version with a new row of the append-only history: nothing is updated or deleted, and the approval stays in the history. The body names the comparison view the expert was looking at (`mode` and runs): the approved set that remains is sealed over that view's text. A link that is not of this path is `404`; a link already withdrawn is `conflict` with `conflict_reason` `sheet_link_not_active`; a view that cannot be recomputed is `conflict` with `comparison_not_available`. The same key repeated answers the first withdrawal, `replayed: true`. `expert` is required; `admin` alone is refused (`required_capability: role:expert`).
+ */
+export type WithdrawSheetPairingInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/sheet-pairings/{sheet_link_id}/withdrawals`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+    sheet_link_id: SheetLinkId;
+    version_uid: VersionUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: WithdrawSheetPairingRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `withdrawSheetPairing` (`application/json`, HTTP 201). */
+export type WithdrawSheetPairingResult = SheetPairingEvent;
+
+// ------------------------------------------------------------------------------------
 // Runtime descriptors
 // ------------------------------------------------------------------------------------
 
@@ -2928,6 +2999,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['registrations'],
+  },
+  approveSheetPairing: {
+    operationId: 'approveSheetPairing',
+    method: 'POST',
+    path: '/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/sheet-pairings',
+    pathParams: ['document_uid', 'project_uid', 'version_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['documents'],
   },
   archiveExecutorConnection: {
     operationId: 'archiveExecutorConnection',
@@ -4356,5 +4441,19 @@ export const OPERATIONS = {
     successStatuses: [201],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['optimisation'],
+  },
+  withdrawSheetPairing: {
+    operationId: 'withdrawSheetPairing',
+    method: 'POST',
+    path: '/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/sheet-pairings/{sheet_link_id}/withdrawals',
+    pathParams: ['document_uid', 'project_uid', 'sheet_link_id', 'version_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['documents'],
   },
 } as const;

@@ -9,7 +9,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.7.0 (OpenAPI 3.1.0)
- *   sha256 14375c443fb530324592bdb3dfb1f40dbe10e45ad82785e9797331ecbfd9357a
+ *   sha256 d5b21e0c47506b3cb671d87a9bf6e9f7c08d23ca7ff066c86b4ccb763ac07ded
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -22,6 +22,8 @@ import type {
   AppendDecisionResult,
   ApproveRegistrationInput,
   ApproveRegistrationResult,
+  ApproveSheetPairingInput,
+  ApproveSheetPairingResult,
   ArchiveExecutorConnectionInput,
   ArchiveExecutorConnectionResult,
   ArchiveUserInput,
@@ -226,6 +228,8 @@ import type {
   UploadDocumentVersionResult,
   UploadPriceListInput,
   UploadPriceListResult,
+  WithdrawSheetPairingInput,
+  WithdrawSheetPairingResult,
 } from './operations.gen';
 import { OPERATIONS } from './operations.gen';
 
@@ -251,6 +255,18 @@ export function approveRegistration(
   options?: RequestOptions,
 ): Promise<ApiResponse<ApproveRegistrationResult>> {
   return request<ApproveRegistrationResult>(OPERATIONS.approveRegistration, input, options);
+}
+
+/**
+ * Approve Sheet Pairing
+ *
+ * `POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/sheet-pairings` - a write; carries a required Idempotency-Key.
+ */
+export function approveSheetPairing(
+  input: ApproveSheetPairingInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ApproveSheetPairingResult>> {
+  return request<ApproveSheetPairingResult>(OPERATIONS.approveSheetPairing, input, options);
 }
 
 /**
@@ -1478,12 +1494,25 @@ export function uploadPriceList(
 }
 
 /**
+ * Withdraw Sheet Pairing
+ *
+ * `POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/sheet-pairings/{sheet_link_id}/withdrawals` - a write; carries a required Idempotency-Key.
+ */
+export function withdrawSheetPairing(
+  input: WithdrawSheetPairingInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<WithdrawSheetPairingResult>> {
+  return request<WithdrawSheetPairingResult>(OPERATIONS.withdrawSheetPairing, input, options);
+}
+
+/**
  * The whole client as one object, for a consumer that would rather inject it than
  * import each function. The named exports above are the ordinary way in.
  */
 export const apiClient = {
   appendDecision,
   approveRegistration,
+  approveSheetPairing,
   archiveExecutorConnection,
   archiveUser,
   cancelRun,
@@ -1586,4 +1615,5 @@ export const apiClient = {
   uploadDocument,
   uploadDocumentVersion,
   uploadPriceList,
+  withdrawSheetPairing,
 } as const;

@@ -2904,15 +2904,24 @@ class ComparisonAdapter(_SessionHolder):
         blob_store: Any,
         section_codes: frozenset[str],
     ) -> None:
-        from auditmanager.comparison.public import VersionComparisonService
+        from auditmanager.comparison.public import (
+            SheetLinkRepository,
+            SheetPairingService,
+            VersionComparisonService,
+        )
 
         super().__init__(session_factory)
         self._blob_store = blob_store
+        links = SheetLinkRepository()
         self._service = VersionComparisonService(
             classifications=_ClassificationReader(),
             analyses=_AnalysisReader(blob_store),
             section_codes=section_codes,
+            # `COMPARE-PERSISTED-SUMMARY-01`: the stored approvals are read in the same session as
+            # the comparison; a service built without them would silently serve no approved pairs.
+            links=links,
         )
+        self._pairings = SheetPairingService(comparisons=self._service, links=links)
 
     def compare_versions(
         self,
@@ -3053,6 +3062,139 @@ class ComparisonAdapter(_SessionHolder):
             target_version_uid=outcome.target_version_uid,
             mode=outcome.mode,  # type: ignore[arg-type]
         )
+
+
+    def approve_sheet_pairing(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        source_version_uid: str,
+        target_version_uid: str,
+        mode: str,
+        source_page_number: int,
+        target_page_number: int,
+        suggestion_sha256: str,
+        source_run_id: str | None,
+        target_run_id: str | None,
+        idempotency_key: str,
+        author_label: str,
+        author_user_uid: str,
+    ) -> models.SheetPairingEvent:
+        """`COMPARE-PERSISTED-SUMMARY-01`. One write transaction: the actor's roles, the path,
+        the receipt, the recomputed proposal, the row, its audit event (``comparison.public``)."""
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.api.routers.correlation import current_correlation_id
+        from auditmanager.comparison.public import ApproveSheetPairingRequest
+
+        request = ApproveSheetPairingRequest(
+            project_uid=project_uid,
+            document_uid=document_uid,
+            source_version_uid=source_version_uid,
+            target_version_uid=target_version_uid,
+            source_page_number=source_page_number,
+            target_page_number=target_page_number,
+            suggestion_sha256=suggestion_sha256,
+            mode=mode,
+            source_run_id=source_run_id,
+            target_run_id=target_run_id,
+        )
+
+        def work(session: Session) -> Any:
+            return self._pairings.approve(
+                session,
+                request,
+                actor_uid=author_user_uid,
+                actor_label=author_label,
+                # Read in this transaction: the request register checked the role before the
+                # route; this is the command's own check (`R-60`).
+                actor_roles=AccountRepository().roles_of(session, author_user_uid),
+                idempotency_key=idempotency_key,
+                correlation_id=current_correlation_id(),
+            )
+
+        return _pairing_event(self._pairing_write(work))
+
+    def withdraw_sheet_pairing(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        source_version_uid: str,
+        sheet_link_id: str,
+        mode: str,
+        source_run_id: str | None,
+        target_run_id: str | None,
+        idempotency_key: str,
+        author_label: str,
+        author_user_uid: str,
+    ) -> models.SheetPairingEvent:
+        """`COMPARE-PERSISTED-SUMMARY-01`. The same transaction shape, ending one link."""
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.api.routers.correlation import current_correlation_id
+        from auditmanager.comparison.public import WithdrawSheetPairingRequest
+
+        request = WithdrawSheetPairingRequest(
+            project_uid=project_uid,
+            document_uid=document_uid,
+            source_version_uid=source_version_uid,
+            sheet_link_id=sheet_link_id,
+            mode=mode,
+            source_run_id=source_run_id,
+            target_run_id=target_run_id,
+        )
+
+        def work(session: Session) -> Any:
+            return self._pairings.withdraw(
+                session,
+                request,
+                actor_uid=author_user_uid,
+                actor_label=author_label,
+                actor_roles=AccountRepository().roles_of(session, author_user_uid),
+                idempotency_key=idempotency_key,
+                correlation_id=current_correlation_id(),
+            )
+
+        return _pairing_event(self._pairing_write(work))
+
+    def _pairing_write(self, work: Any) -> Any:
+        from auditmanager.comparison.public import (
+            ComparisonIntegrityError,
+            ComparisonRequestInvalid,
+        )
+
+        try:
+            return self._write(work)
+        except ComparisonRequestInvalid as exc:
+            raise DomainError(
+                ErrorCode.VALIDATION_FAILED, field=str(exc).removesuffix("_invalid"),
+                constraint="format",
+            ) from None
+        except ComparisonIntegrityError as exc:
+            raise DomainError(
+                ErrorCode.INTERNAL_ERROR,
+                message="the stored comparison inputs contradict their own constraints",
+            ) from exc
+
+
+def _pairing_event(outcome: Any) -> models.SheetPairingEvent:
+    """A stored sheet-link row as the frozen ``SheetPairingEvent``."""
+    event = outcome.event
+    return models.SheetPairingEvent(
+        comparison_id=event.comparison_id,
+        sheet_link_id=event.sheet_link_id,
+        event_kind=event.event_kind,
+        link_revision=event.link_revision,
+        replayed=outcome.replayed,
+        source_version_uid=event.source_version_uid,
+        target_version_uid=event.target_version_uid,
+        source_page_number=event.source_page_number,
+        target_page_number=event.target_page_number,
+        suggestion_sha256=event.suggestion_sha256,
+        raw_evidence_seal_sha256=event.raw_evidence_seal_sha256,
+        actor_label=event.actor_label,
+        decided_at=event.decided_at,
+    )
 
 
 class _ClassificationReader:

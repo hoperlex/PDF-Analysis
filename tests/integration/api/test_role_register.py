@@ -155,6 +155,19 @@ SAMPLES: dict[str, tuple[str, str]] = {
         "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
         "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison/carryovers",
     ),
+    # `COMPARE-PERSISTED-SUMMARY-01`. The expert's approval and withdrawal of a sheet pairing,
+    # addressed the same way; a missing body is refused by the body model only after the role decided.
+    "approveSheetPairing": (
+        "POST",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison/sheet-pairings",
+    ),
+    "withdrawSheetPairing": (
+        "POST",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison/sheet-pairings"
+        "/sln_01M2545JSD15ETSNNV904X991M/withdrawals",
+    ),
     # `W59-ANALYSIS-SETTINGS-01`. The text-profile registry (any role); no parameter.
     "listAnalysisProfiles": ("GET", "/analysis/profiles"),
     # `W61-DISPATCHER-01`. «Диспетчер»: creating (admin) and listing, reading and moving
@@ -318,6 +331,10 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "appendDecision": _EXPERT,
     # `W59-DECISION-CARRYOVER-01`: a carried decision is a verdict; admin alone does not.
     "carryOverDecision": _EXPERT,
+    # `COMPARE-PERSISTED-SUMMARY-01`: approving or withdrawing a sheet pairing is a decision about
+    # evidence; only an expert, admin alone does not.
+    "approveSheetPairing": _EXPERT,
+    "withdrawSheetPairing": _EXPERT,
     # `W60-PRICE-LIST-01`: an expert uploads a price list and overrides a project's vendor
     # list; the global vendor list is an administrator's; any one role reads.
     "uploadPriceList": _EXPERT,

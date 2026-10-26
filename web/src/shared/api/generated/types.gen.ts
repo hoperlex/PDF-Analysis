@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.7.0 (OpenAPI 3.1.0)
- *   sha256 14375c443fb530324592bdb3dfb1f40dbe10e45ad82785e9797331ecbfd9357a
+ *   sha256 d5b21e0c47506b3cb671d87a9bf6e9f7c08d23ca7ff066c86b4ccb763ac07ded
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.7.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '14375c443fb530324592bdb3dfb1f40dbe10e45ad82785e9797331ecbfd9357a';
+export const CONTRACT_DIGEST = 'd5b21e0c47506b3cb671d87a9bf6e9f7c08d23ca7ff066c86b4ccb763ac07ded';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -33,6 +33,11 @@ export const SCHEMA_NAMES = [
   'AppendDecisionRequest',
   'AppendDecisionResponse',
   'ApproveRegistrationRequest',
+  'ApproveSheetPairingRequest',
+  'ApprovedDiffHunk',
+  'ApprovedSheetDiff',
+  'ApprovedSheetPair',
+  'ApprovedSheetPairs',
   'ArV3BetaGroup',
   'ArV3BetaGroupMember',
   'ArV3BetaGroupReview',
@@ -64,6 +69,7 @@ export const SCHEMA_NAMES = [
   'ClaimedExecutorTask',
   'ClassifyDocumentVersionRequest',
   'ComparedVersion',
+  'ComparisonId',
   'ComparisonRefusal',
   'CorrectVersionClassificationRequest',
   'CorrelationId',
@@ -278,7 +284,9 @@ export const SCHEMA_NAMES = [
   'Sha256',
   'SheetDiff',
   'SheetDiffPage',
+  'SheetLinkId',
   'SheetPairing',
+  'SheetPairingEvent',
   'SpecificationCurrencyTotal',
   'SpecificationExclusionCounts',
   'SpecificationExtractionSummary',
@@ -320,6 +328,7 @@ export const SCHEMA_NAMES = [
   'VersionClassificationRevision',
   'VersionComparison',
   'VersionUid',
+  'WithdrawSheetPairingRequest',
   'WorkerId',
   'WorkerState',
 ] as const;
@@ -427,6 +436,75 @@ export type AppendDecisionResponse = {
 export type ApproveRegistrationRequest = {
   /** The roles the new account receives: at least one. */
   roles: Array<Role>;
+};
+
+/**
+ * `COMPARE-PERSISTED-SUMMARY-01`. One expert confirmation of one proposed sheet pair.
+ *
+ * The path names the source (older) version; the comparison is recomputed with these values
+ * when the confirmation arrives and must still propose exactly these pages under exactly this
+ * ``suggestion_sha256``.
+ */
+export type ApproveSheetPairingRequest = {
+  mode: "version" | "stage";
+  source_page_number: number;
+  source_run_id?: RunId;
+  suggestion_sha256: Sha256;
+  target_page_number: number;
+  target_run_id?: RunId;
+  target_version_uid: VersionUid;
+};
+
+/**
+ * One span of an approved pair's raw line diff; 0-based line indices, end exclusive. A
+ * changed span carries ``hunk_id`` (``<sheet_link_id>:<n>``, ``n`` counting the sheet's
+ * non-equal spans from 0); an ``equal`` span carries its ranges and neither lines nor an id.
+ */
+export type ApprovedDiffHunk = {
+  hunk_id: string | null;
+  source_end: number;
+  source_lines: Array<string>;
+  source_start: number;
+  tag: "equal" | "insert" | "delete" | "replace";
+  target_end: number;
+  target_lines: Array<string>;
+  target_start: number;
+};
+
+/** The deterministic differences of one approved pair, recomputed on every read. */
+export type ApprovedSheetDiff = {
+  added_line_count: number;
+  evidence_sha256: Sha256;
+  hunks: Array<ApprovedDiffHunk>;
+  removed_line_count: number;
+  source_line_count: number;
+  target_line_count: number;
+};
+
+/** One active expert approval of a source page against a target page. */
+export type ApprovedSheetPair = {
+  approved_at: string;
+  approved_by_label: string;
+  diff: ApprovedSheetDiff | null;
+  link_revision: number;
+  sheet_link_id: SheetLinkId;
+  source_page_number: number;
+  state: "verified" | "text_changed";
+  suggestion_sha256: Sha256;
+  target_page_number: number;
+};
+
+/**
+ * `COMPARE-PERSISTED-SUMMARY-01`. The active approvals of the compared pair and their
+ * deterministic evidence. ``evidence_state``: ``none`` (no active approval), ``sealed`` (the
+ * differences were recomputed and their seal equals the stored one), ``text_changed``,
+ * ``seal_changed`` or ``too_large`` (no difference is served, none is truncated).
+ */
+export type ApprovedSheetPairs = {
+  evidence_state: "none" | "sealed" | "text_changed" | "seal_changed" | "too_large";
+  items: Array<ApprovedSheetPair>;
+  link_revision: number | null;
+  raw_evidence_seal_sha256: Sha256 | null;
 };
 
 export type ArV3BetaGroup = {
@@ -755,6 +833,11 @@ export type ComparedVersion = {
   version_ordinal: number;
   version_uid: VersionUid;
 };
+
+export type ComparisonId = string;
+
+/** The contract pattern for `ComparisonId`. Anchored; use with `new RegExp()`. */
+export const COMPARISON_ID_PATTERN = "^cmp_[0-9A-HJKMNP-TV-Z]{26}$";
 
 /** Why two versions are not compared; ``side`` when the reason is one side's. */
 export type ComparisonRefusal = {
@@ -2964,6 +3047,11 @@ export type SheetDiffPage = {
   total: number;
 };
 
+export type SheetLinkId = string;
+
+/** The contract pattern for `SheetLinkId`. Anchored; use with `new RegExp()`. */
+export const SHEET_LINK_ID_PATTERN = "^sln_[0-9A-HJKMNP-TV-Z]{26}$";
+
 /** One sheet of either version and its proposed counterpart, if any. */
 export type SheetPairing = {
   pairing_basis: "exact_text" | "similar_text" | null;
@@ -2974,6 +3062,27 @@ export type SheetPairing = {
   suggestion_sha256: Sha256 | null;
   target_page_number: number | null;
   textless: boolean;
+};
+
+/**
+ * `COMPARE-PERSISTED-SUMMARY-01`. The stored approval or withdrawal of one sheet link.
+ * ``replayed`` is true when this call appended nothing: the same key repeated, or an exact
+ * repeat of an active link under another key.
+ */
+export type SheetPairingEvent = {
+  actor_label: string;
+  comparison_id: ComparisonId;
+  decided_at: string;
+  event_kind: "approved" | "withdrawn";
+  link_revision: number;
+  raw_evidence_seal_sha256: Sha256 | null;
+  replayed: boolean;
+  sheet_link_id: SheetLinkId;
+  source_page_number: number;
+  source_version_uid: VersionUid;
+  suggestion_sha256: Sha256;
+  target_page_number: number;
+  target_version_uid: VersionUid;
 };
 
 /** The exact sum of the amounts in one currency; never converted, never rounded. */
@@ -3408,6 +3517,7 @@ export type VersionClassificationRevision = {
 
 /** Two versions of one set compared, or the explicit reason they are not. */
 export type VersionComparison = {
+  approved_pairs: ApprovedSheetPairs | null;
   comparison_sha256: Sha256 | null;
   document_uid: DocumentUid;
   findings: FindingComparison | null;
@@ -3427,6 +3537,16 @@ export type VersionUid = string;
 
 /** The contract pattern for `VersionUid`. Anchored; use with `new RegExp()`. */
 export const VERSION_UID_PATTERN = "^ver_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/**
+ * `COMPARE-PERSISTED-SUMMARY-01`. The comparison view the withdrawing expert was looking at:
+ * the text the remaining approved set is sealed over is that view's text.
+ */
+export type WithdrawSheetPairingRequest = {
+  mode: "version" | "stage";
+  source_run_id?: RunId;
+  target_run_id?: RunId;
+};
 
 export type WorkerId = string;
 

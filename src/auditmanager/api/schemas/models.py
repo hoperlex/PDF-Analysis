@@ -53,6 +53,15 @@ __all__ = [
     "AnalysisProfileStatus",
     "AnalysisProfileSummary",
     "ApproveRegistrationRequest",
+    "ApproveSheetPairingRequest",
+    "ApprovedDiffHunk",
+    "ApprovedSheetDiff",
+    "ApprovedSheetPair",
+    "ApprovedSheetPairs",
+    "ComparisonId",
+    "SheetLinkId",
+    "SheetPairingEvent",
+    "WithdrawSheetPairingRequest",
     "AppendDecisionRequest",
     "AppendDecisionResponse",
     "ClassifyDocumentVersionRequest",
@@ -486,6 +495,15 @@ FindingObservationId = TypeAliasType(
 )
 DecisionId = TypeAliasType(
     "DecisionId", Annotated[str, Field(pattern=rf"^dec_{_ULID}$")]
+)
+#: `COMPARE-PERSISTED-SUMMARY-01`. A comparison (one ordered pair of versions of one set) and one
+#: approved sheet link; both declared in ``contracts/domain/v1/identifiers.json`` and allocated
+#: from migration ``0035``.
+ComparisonId = TypeAliasType(
+    "ComparisonId", Annotated[str, Field(pattern=rf"^cmp_{_ULID}$")]
+)
+SheetLinkId = TypeAliasType(
+    "SheetLinkId", Annotated[str, Field(pattern=rf"^sln_{_ULID}$")]
 )
 AnalysisProfileId = TypeAliasType(
     "AnalysisProfileId", Annotated[str, Field(pattern=rf"^ap_{_ULID}$")]
@@ -2389,6 +2407,66 @@ class FindingComparison(_Object):
     carryover_candidates: Annotated[list[CarryoverCandidate], Field(max_length=200)]
 
 
+class ApprovedDiffHunk(_Object):
+    """One span of an approved pair's raw line diff; 0-based line indices, end exclusive. A
+    changed span carries ``hunk_id`` (``<sheet_link_id>:<n>``, ``n`` counting the sheet's
+    non-equal spans from 0); an ``equal`` span carries its ranges and neither lines nor an id."""
+
+    tag: Literal["equal", "insert", "delete", "replace"]
+    source_start: _LineIndex
+    source_end: _LineIndex
+    target_start: _LineIndex
+    target_end: _LineIndex
+    source_lines: Annotated[list[str], Field(max_length=1000)]
+    target_lines: Annotated[list[str], Field(max_length=1000)]
+    hunk_id: Annotated[str, Field(pattern=rf"^sln_{_ULID}:[0-9]{{1,4}}$")] | None
+
+
+class ApprovedSheetDiff(_Object):
+    """The deterministic differences of one approved pair, recomputed on every read."""
+
+    source_line_count: _LineIndex
+    target_line_count: _LineIndex
+    added_line_count: _LineIndex
+    removed_line_count: _LineIndex
+    hunks: list[ApprovedDiffHunk]
+    #: Binds the complete raw diff of the sheet and its link, equal lines included.
+    evidence_sha256: Sha256
+
+
+class ApprovedSheetPair(_Object):
+    """One active expert approval of a source page against a target page."""
+
+    sheet_link_id: SheetLinkId
+    source_page_number: _PageNumber
+    target_page_number: _PageNumber
+    #: ``verified``: both pages still have the text digest the expert saw. ``text_changed``: a
+    #: page is of another text now; no difference is served for any pair of the set.
+    state: Literal["verified", "text_changed"]
+    #: The proposal the expert confirmed (``SheetPairing.suggestion_sha256``).
+    suggestion_sha256: Sha256
+    approved_by_label: Annotated[str, Field(min_length=1, max_length=128)]
+    approved_at: datetime
+    #: The link revision of the approval itself.
+    link_revision: Annotated[int, Field(ge=1)]
+    #: Present only when the whole set is ``sealed``.
+    diff: ApprovedSheetDiff | None
+
+
+class ApprovedSheetPairs(_Object):
+    """`COMPARE-PERSISTED-SUMMARY-01`. The active approvals of the compared pair and their
+    deterministic evidence. ``evidence_state``: ``none`` (no active approval), ``sealed`` (the
+    differences were recomputed and their seal equals the stored one), ``text_changed``,
+    ``seal_changed`` or ``too_large`` (no difference is served, none is truncated)."""
+
+    #: The comparison's current link revision; null when nothing was ever approved.
+    link_revision: Annotated[int, Field(ge=1)] | None
+    evidence_state: Literal["none", "sealed", "text_changed", "seal_changed", "too_large"]
+    #: The recomputed ``raw_evidence_seal`` of the active set; null unless ``sealed``.
+    raw_evidence_seal_sha256: Sha256 | None
+    items: Annotated[list[ApprovedSheetPair], Field(max_length=32)]
+
+
 class VersionComparison(_Object):
     """Two versions of one set compared, or the explicit reason they are not."""
 
@@ -2407,6 +2485,56 @@ class VersionComparison(_Object):
     sheets: Annotated[list[SheetPairing], Field(max_length=1000)]
     sheet_diffs: SheetDiffPage | None
     findings: FindingComparison | None
+    #: `COMPARE-PERSISTED-SUMMARY-01`. Null for a refused comparison.
+    approved_pairs: ApprovedSheetPairs | None
+
+
+class ApproveSheetPairingRequest(_Object):
+    """`COMPARE-PERSISTED-SUMMARY-01`. One expert confirmation of one proposed sheet pair.
+
+    The path names the source (older) version; the comparison is recomputed with these values
+    when the confirmation arrives and must still propose exactly these pages under exactly this
+    ``suggestion_sha256``.
+    """
+
+    target_version_uid: VersionUid
+    mode: Literal["version", "stage"]
+    source_page_number: _PageNumber
+    target_page_number: _PageNumber
+    suggestion_sha256: Sha256
+    source_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    target_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class WithdrawSheetPairingRequest(_Object):
+    """`COMPARE-PERSISTED-SUMMARY-01`. The comparison view the withdrawing expert was looking at:
+    the text the remaining approved set is sealed over is that view's text."""
+
+    mode: Literal["version", "stage"]
+    source_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    target_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class SheetPairingEvent(_Object):
+    """`COMPARE-PERSISTED-SUMMARY-01`. The stored approval or withdrawal of one sheet link.
+    ``replayed`` is true when this call appended nothing: the same key repeated, or an exact
+    repeat of an active link under another key."""
+
+    comparison_id: ComparisonId
+    sheet_link_id: SheetLinkId
+    event_kind: Literal["approved", "withdrawn"]
+    link_revision: Annotated[int, Field(ge=1)]
+    replayed: bool
+    source_version_uid: VersionUid
+    target_version_uid: VersionUid
+    source_page_number: _PageNumber
+    target_page_number: _PageNumber
+    suggestion_sha256: Sha256
+    #: The seal of the approved set after this event; null when a withdrawal left nothing, or
+    #: nothing that can be sealed.
+    raw_evidence_seal_sha256: Sha256 | None
+    actor_label: Annotated[str, Field(min_length=1, max_length=128)]
+    decided_at: datetime
 
 
 class CarryOverDecisionRequest(_Object):

@@ -104,6 +104,9 @@ describe('the seam operations', () => {
     expect(writes).toEqual([
       'appendDecision',
       'approveRegistration',
+      // `COMPARE-PERSISTED-SUMMARY-01`: approving a sheet pairing appends a row of the
+      // comparison's history, keyed like `carryOverDecision`.
+      'approveSheetPairing',
       // EXEC candidate 1 (additive executor operations): the executor connection writes below are keyed like
       // every other create or command on this surface; the descriptor table is generated from
       // the contract, so this list follows it and does not lead it.
@@ -139,6 +142,8 @@ describe('the seam operations', () => {
       'uploadDocumentVersion',
       // `W60-PRICE-LIST-01`: a price-list upload stores a file and a revision, keyed like an upload.
       'uploadPriceList',
+      // `COMPARE-PERSISTED-SUMMARY-01`: ending a sheet link appends a row too, keyed like its approval.
+      'withdrawSheetPairing',
     ]);
   });
 

@@ -136,6 +136,10 @@ REQUIRED_OPERATIONS = {
     # `W59-DECISION-CARRYOVER-01`. An expert-confirmed carryover of one decision to the
     # matched finding of the next version: a keyed write to the decision ledger.
     "carryOverDecision",
+    # `COMPARE-PERSISTED-SUMMARY-01`. An expert's approval of a proposed sheet pair and its
+    # withdrawal: keyed writes to the append-only history of the comparison.
+    "approveSheetPairing",
+    "withdrawSheetPairing",
     # `W59-ANALYSIS-SETTINGS-01`. The text-profile registry run start routes through,
     # read-only, for «Настройки анализа».
     "listAnalysisProfiles",
@@ -242,6 +246,9 @@ WRITE_OPERATIONS = {
     "setWorkerIntake",
     # `W59-DECISION-CARRYOVER-01`. Appends a decision event, so it is keyed like `appendDecision`.
     "carryOverDecision",
+    # `COMPARE-PERSISTED-SUMMARY-01`. Each appends a row of the sheet-link history, so both are keyed.
+    "approveSheetPairing",
+    "withdrawSheetPairing",
     # `W60-PRICE-LIST-01`. Stores a file and a revision, keyed like `uploadDocument`. The two
     # vendor-list writes are not keyed: an exact repeat writes nothing, and a stale writer is
     # refused by `expected_vendor_list_id`.

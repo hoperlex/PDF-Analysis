@@ -1081,6 +1081,56 @@ class ComparisonPort(Protocol):
         a severity the target cannot hold are each ``conflict`` with a ``conflict_reason``.
         """
 
+    def approve_sheet_pairing(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        source_version_uid: str,
+        target_version_uid: str,
+        mode: str,
+        source_page_number: int,
+        target_page_number: int,
+        suggestion_sha256: str,
+        source_run_id: str | None,
+        target_run_id: str | None,
+        idempotency_key: str,
+        author_label: str,
+        author_user_uid: str,
+    ) -> models.SheetPairingEvent:
+        """`COMPARE-PERSISTED-SUMMARY-01`. Store the expert's approval of one proposed pair.
+
+        The expert role is read from the account in the writing transaction; ``admin`` alone is
+        ``permission_denied``. The comparison is recomputed with the request's mode and runs and
+        must still propose exactly this pair under this digest (``conflict``,
+        ``sheet_pair_not_proposed``); a page already held by an active link, the 33rd active
+        link, an earlier approval whose page text has changed and an input beyond the bounds of
+        the raw evidence are each ``conflict`` with their own ``conflict_reason``. The row, its
+        audit event and the receipt commit together.
+        """
+
+    def withdraw_sheet_pairing(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        source_version_uid: str,
+        sheet_link_id: str,
+        mode: str,
+        source_run_id: str | None,
+        target_run_id: str | None,
+        idempotency_key: str,
+        author_label: str,
+        author_user_uid: str,
+    ) -> models.SheetPairingEvent:
+        """`COMPARE-PERSISTED-SUMMARY-01`. End one active link with a new row.
+
+        ``not_found`` for a link that is not of this path; ``conflict`` /
+        ``sheet_link_not_active`` for one already withdrawn; ``conflict`` /
+        ``comparison_not_available`` when the comparison the expert was looking at cannot be
+        recomputed. Nothing is updated or deleted.
+        """
+
 @runtime_checkable
 class AnalysisProfilePort(Protocol):
     """``listAnalysisProfiles``. `W59-ANALYSIS-SETTINGS-01`.
