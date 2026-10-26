@@ -17,6 +17,10 @@ Task: `docs/program/tasks/PROD-11-AR-V1-V2-REMOVAL-01.md` (premise P-01 to P-08,
 
 What the product does now. `startRun` and `reauditRun` on a version classified АР answer `422 section_profile_unavailable` before the idempotency key is claimed (the routing of `W59-SECTION-SEAL-01`, unchanged; the registry no longer holds АР); the error catalogue keeps its 27 codes. `listAnalysisProfiles` answers `profile: null` for АР. An unrouted `execute_run` (no registry) refuses a non-v3 run (`required_norm_unavailable`) instead of running АР. The web sends an АР version to the six-check control and tells it why there is no other start. The 33 АР-bound journey steps are reported `PENDING`, not run and not passed.
 
+## The branch
+
+Besides the lane's commits the branch carries three that are not this lane's, made from another session in this worktree between 23:33 and 23:35: `05283f58` (the in-progress report and task file committed as they stood), `6483c4ce` (a merge of `integration/ar-close-1026` with lanes Q, I2, F2, E1 and the judge fixes) and `405a4203` (lane Q's recorded-group test now unpacks the three-name `_build_provider`). The merge killed this lane's database sweep from outside at 86 % of `tests/integration/api`. Every statistic and every path proof below is over `1c8d29fa..357ceb07`, the lane's own stages 0 to 5; every test count dated after 23:35 was measured on the merged tree, including `tests/contract` (1175 passed) and the unit suites.
+
 ## Premise (details in the task file)
 
 - Removal list and import graph (P-01, P-02): three surviving `src` files imported the removed set (`analysis/public.py`, `findings/public.py`, `runs/executor.py`) and all three are edited; one more took a v2 constant by name (`findings/queries.py`). After the removal the committed guard `tests/unit/analysis/test_ar_v1_v2_removal.py` proves it for `src`, `tests`, `tools` and `scripts`.
@@ -25,7 +29,7 @@ What the product does now. `startRun` and `reauditRun` on a version classified �
 
 ## Files
 
-Counts from `git diff --stat 1c8d29fa..HEAD` (before this report): 284 files changed, 2535 insertions(+), 10774 deletions(-); `src` +141/-3802, `tests` +1385/-6162, `web` +376/-145; 56 files deleted (23 in `src`, 30 tests, 3 tools), 5 added, 3 renamed.
+Counts from `git diff --stat 1c8d29fa..357ceb07` (stages 0 to 5; see "The branch" below): 284 files changed, 2535 insertions(+), 10774 deletions(-); `src` +141/-3802, `tests` +1385/-6162, `web` +376/-145; 56 files deleted (23 in `src`, 30 tests, 3 tools), 5 added, 3 renamed.
 
 | Group | What |
 | --- | --- |
@@ -122,7 +126,7 @@ One pytest at a time; `PYTHONPATH=src:<bootstrap site-packages>`; the database t
 
 ## Integration notes
 
-- Merge order: no conflict with `PW3` lanes C, G, A3 is expected except `tests/integration/runs/test_v3_saved_text_layer_probe.py` (lane C edited it; this lane changed three lines of it) and the `infra/deploy/proxy/*.conf` literals against lane I2 (stage 2b alone).
+- Merge: `integration/ar-close-1026` (lanes Q, I2, F2, E1) is already merged into the branch (`6483c4ce`), so the conflicts with this lane are resolved there; the `infra/deploy/proxy/*.conf` literals (stage 2b) merged with lane I2's changes without a conflict. Lanes C, G and A3 are not in that merge: `tests/integration/runs/test_v3_saved_text_layer_probe.py` (lane C edited it, this lane changed four lines of it) is the file to look at.
 - **The contract number is a proposal.** If it changes: revert the two commits `b7e5fdf1` and `56b25ebe` (or run `python3 tools/plan/pin_sweep.py contract-version` and sweep), then set `candidate_revision` and `supersedes` of the three domain catalogues and schemas, `SEALED`/`PREVIOUS` in `test_contract_seal.py`, regenerate the client (`npm --prefix web run api:generate`) and refresh `web/FRONTEND_LOCK.json`.
 - Docs the integrator owns and which now disagree: `CURRENT_STATE.md` (contract `1.6.0`, "АР builtin"), `ALPHA_ROADMAP.md` and `P02_SEAMS.md` (live claims of `1.6.0`), `CONTRACT_PIN_REGISTRY.md` (unchanged rule), `DEBT_REGISTER.md` (`D-222` closes with `PROD-11a`; `D-223`'s contract half is done here; the `reviewed` description is corrected in the contract, `W59-SECTION-PROFILES-01.md` and the ADR text are not mine). `scripts/light_acceptance.py` still does not list `tests/e2e/test_pc01_journey_section.py` (noted by `PROD-10B`).
 - `tests/integration/composition` takes about 17 minutes on the lane stack (the port-completeness test); the run of this lane is in the counts above.
@@ -141,9 +145,9 @@ One pytest at a time; `PYTHONPATH=src:<bootstrap site-packages>`; the database t
 ## Forbidden paths: proof
 
 ```text
-$ git diff --name-only 1c8d29fa..HEAD | grep -E '^(db/|\.github/|src/auditmanager/analysis/text/profiles/|fixtures/recorded/sections/[a-z]+/[0-9a-f]{64}\.json|docs/program/P02_LOCK\.json)|DEBT_REGISTER|CURRENT_STATE|OWNER_RULINGS|/adr/'
+$ git diff --name-only 1c8d29fa..357ceb07 | grep -E '^(db/|\.github/|src/auditmanager/analysis/text/profiles/|fixtures/recorded/sections/[a-z]+/[0-9a-f]{64}\.json|docs/program/P02_LOCK\.json)|DEBT_REGISTER|CURRENT_STATE|OWNER_RULINGS|/adr/'
 (no output)
-$ git diff --name-only 1c8d29fa..HEAD | grep -E '^(infra/|fixtures/recorded/sections/)'
+$ git diff --name-only 1c8d29fa..357ceb07 | grep -E '^(infra/|fixtures/recorded/sections/)'
 fixtures/recorded/sections/ar_specification/build_fixtures.py
 infra/deploy/proxy/nginx.conf
 infra/deploy/proxy/tls-server.conf
