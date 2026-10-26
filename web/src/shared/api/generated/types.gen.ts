@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.7.0 (OpenAPI 3.1.0)
- *   sha256 f98c4704bf04bea5191d48d05f7248f3380675c95b257088213ae4254b793ff8
+ *   sha256 14375c443fb530324592bdb3dfb1f40dbe10e45ad82785e9797331ecbfd9357a
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.7.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'f98c4704bf04bea5191d48d05f7248f3380675c95b257088213ae4254b793ff8';
+export const CONTRACT_DIGEST = '14375c443fb530324592bdb3dfb1f40dbe10e45ad82785e9797331ecbfd9357a';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -3069,11 +3069,13 @@ export type SpecificationPriceRow = {
 };
 
 /**
- * The priced specification of a set's current AR version, or the state that stops it.
+ * The priced specification of a set's current version, or the state that stops it.
  *
  * The states are checked in order -- ``version_unclassified``, ``section_not_ar``,
  * ``price_list_missing``, ``analysis_missing``, ``text_unavailable``,
- * ``specification_too_large`` -- and each answer carries the facts read before it stopped.
+ * ``specification_too_large`` -- and each answer carries the facts read before it stopped. ``section_not_ar`` is kept so that no
+ * value is removed, but it is no longer produced: a version confirmed in any of the fifteen
+ * sections is read.
  */
 export type SpecificationPrices = {
   document_uid: DocumentUid;
