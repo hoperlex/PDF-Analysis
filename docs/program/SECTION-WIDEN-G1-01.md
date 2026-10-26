@@ -576,7 +576,7 @@ From `/root/projects/PDF-Analysis/.local/worktrees/section-widen-g1-01`, shared 
 | `tests/integration/composition/test_analysis_profiles_over_http.py`, lane `.env` exported | `4 passed` |
 | `npx vitest run tests/unit/analysis-settings` in `web/` | `7 passed` files, `96 passed` |
 | governance one-liner on the task file | `[]` |
-| `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py`, `git diff --check` (committed, clean tree) | see the final answer of the lane |
+| `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py`, `git diff --check` (committed, clean tree) | `105 passed` (about 21 s); `git diff --check 6075df88..HEAD` rc 0 |
 
 Free disk: 1.9 GiB at the start, 1.8 GiB at the end. No docker command, no push, no tag, no model call, no network, no process killed, no database created.
 
