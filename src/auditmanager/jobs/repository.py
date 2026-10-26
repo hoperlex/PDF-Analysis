@@ -36,11 +36,55 @@ _LOCK_JOB_WAIT = text(
     "SELECT job_id, state, current_attempt_id FROM job WHERE run_id = :run_id "
     "FOR UPDATE"
 )
+#: `EXEC-PAR-QUEUE-01`. The Job states in which a Run is **active**, i.e. executing or owed a
+#: release: ``leased`` and ``running`` (an unreleased Lease, live or expired -- an expired one
+#: stays active until the reclaim releases it, so a killed worker's connection is not handed to a
+#: second Run while the first might still be sending) and ``retry_wait`` (written only inside the
+#: reclaim's own transaction, listed so that no committed state of an unfinished Job escapes the
+#: definition). ``queued`` is waiting and the other four are terminal. The state machine writes
+#: the Lease and the Job state together, so this set and "has an unreleased Lease" agree.
+_ACTIVE_JOB_STATES = "('leased', 'running', 'retry_wait')"
+#: One connection serves at most one active Run (`EXEC-PAR-DECISION-01`, ruling 3). The
+#: connection of a Run is the one its frozen revision belongs to: ``audit_run.connection_revision_id``
+#: is written once at INSERT, and a Run with none (the ``environment`` source) is never limited.
+_CONNECTION_OF_RUN = text(
+    "SELECT rev.connection_id FROM audit_run r "
+    "JOIN executor_connection_revision rev ON rev.revision_id = r.connection_revision_id "
+    "WHERE r.run_id = :run_id"
+)
+#: A transaction-scoped advisory lock keyed on the connection: the claim's guard, taken before
+#: the check and held to the claim's commit. A hash collision only serialises two connections
+#: that did not need it; the check below compares the real identity.
+_LOCK_CONNECTION = text(
+    "SELECT pg_advisory_xact_lock("
+    "hashtextextended('auditmanager.executor_connection|' || :connection_id, 0))"
+)
+_CONNECTION_HAS_OTHER_ACTIVE_RUN = text(
+    "SELECT EXISTS (SELECT 1 FROM job other_job "
+    "JOIN audit_run other ON other.run_id = other_job.run_id "
+    "JOIN executor_connection_revision peer ON peer.revision_id = other.connection_revision_id "
+    "WHERE peer.connection_id = :connection_id AND other.run_id <> :run_id "
+    f"AND other_job.state IN {_ACTIVE_JOB_STATES})"
+)
+#: The dispatcher's hint. ``:submitted`` is the Runs this process has already handed to a slot:
+#: they are not offered again, and they count as active for the connection test, because a slot
+#: that has not claimed yet has not written its Job state. The hint is advisory -- the claim
+#: re-checks under the lock -- but it is what keeps a slot from being spent on a Run whose
+#: connection is busy: the next Job for a free connection is the one returned.
 _NEXT_JOB = text(
     "SELECT j.run_id FROM job j JOIN audit_run r ON r.run_id = j.run_id "
     "WHERE j.state = 'queued' AND r.state IN ('queued', 'running') "
     "AND j.available_at <= statement_timestamp() "
     "AND NOT EXISTS (SELECT 1 FROM execution_control WHERE singleton AND paused) "
+    "AND j.run_id <> ALL (CAST(:submitted AS text[])) "
+    "AND NOT EXISTS ("
+    "SELECT 1 FROM executor_connection_revision mine "
+    "JOIN executor_connection_revision peer ON peer.connection_id = mine.connection_id "
+    "JOIN audit_run other ON other.connection_revision_id = peer.revision_id "
+    "JOIN job other_job ON other_job.run_id = other.run_id "
+    "WHERE mine.revision_id = r.connection_revision_id AND other.run_id <> r.run_id "
+    f"AND (other_job.state IN {_ACTIVE_JOB_STATES} "
+    "OR other.run_id = ANY (CAST(:submitted AS text[])))) "
     "ORDER BY j.priority DESC, j.created_at, j.job_id LIMIT 1 "
     "FOR UPDATE OF r SKIP LOCKED"
 )
@@ -500,13 +544,21 @@ class JobRepository:
             held.setdefault(str(row[0]), []).append(str(row[1]))
         return {worker_id: tuple(runs) for worker_id, runs in held.items()}
 
-    def next_queued_run(self, session: Session) -> str | None:
+    def next_queued_run(
+        self, session: Session, *, submitted: Sequence[str] = (),
+    ) -> str | None:
         """Hint the highest runnable Job whose Run is not held by another claimant.
 
         Only the Run is briefly locked here. Every writer follows Run then Job;
         the worker later makes the authoritative claim under that same order.
+
+        `EXEC-PAR-QUEUE-01`. A Job whose Run is frozen to a connection that already has an
+        active Run is skipped, and the next Job in the unchanged priority-then-age order is
+        returned instead. ``submitted`` names Runs the caller has handed to a slot and that may
+        not have claimed yet: they are neither offered again nor ignored as busy connections.
+        Without a connection, or with the default single slot, the order is today's.
         """
-        return session.execute(_NEXT_JOB).scalar_one_or_none()
+        return session.execute(_NEXT_JOB, {"submitted": list(submitted)}).scalar_one_or_none()
 
     def heartbeat(self, session: Session, authority: AttemptAuthority) -> bool:
         """Extend only a live lease, with database time and a bounded lock wait."""
@@ -732,6 +784,7 @@ class JobRepository:
                     ErrorCode.CONFLICT, message="the worker's intake is switched off",
                     aggregate_type="Worker",
                 )
+        self._hold_connection_limit(session, run_id=run_id)
         # The singleton must exist before it can be locked. Its insert races with
         # an administrator's upsert safely: whichever transaction commits first
         # is observed by the other before a new Attempt can be created.
@@ -806,6 +859,39 @@ class JobRepository:
                 ) from exc
             raise
         return AttemptAuthority(run_id, job_id, attempt_id, lease_id, token)
+
+    @staticmethod
+    def _hold_connection_limit(session: Session, *, run_id: str) -> None:
+        """One active Run per connection, decided under a lock the claim keeps to its commit.
+
+        `EXEC-PAR-QUEUE-01`. Take the connection's advisory lock, then ask whether another Run
+        of that connection is active (:data:`_ACTIVE_JOB_STATES`). Two claims of one connection
+        queue on the lock, and the second reads the first's committed Job state; a claim that
+        finds the connection busy raises before it has written anything, so its Run and Job
+        stay as the caller found them (:class:`ExecutionNotClaimed`).
+
+        This is taken and decided **before** the dispatch-control row is locked. That row's lock
+        also happens to serialise every claim, but the connection limit must not depend on a
+        lock taken for another purpose: ahead of it the limit is decided by its own lock alone,
+        and removing that lock lets two claims both pass the check. Every claim takes the locks
+        in one order (worker intake, connection, control, Run, Job), so none waits in a cycle.
+        A Run without a connection takes no lock and is never limited.
+        """
+        connection_id = session.execute(
+            _CONNECTION_OF_RUN, {"run_id": run_id}
+        ).scalar_one_or_none()
+        if connection_id is None:
+            return
+        session.execute(_LOCK_CONNECTION, {"connection_id": connection_id})
+        if session.execute(
+            _CONNECTION_HAS_OTHER_ACTIVE_RUN,
+            {"connection_id": connection_id, "run_id": run_id},
+        ).scalar_one():
+            raise DomainError(
+                ErrorCode.CONFLICT,
+                message="the run's executor connection already has an active run",
+                aggregate_type="ExecutorConnection",
+            )
 
     def check_current_unlocked(
         self, session: Session, authority: AttemptAuthority,
