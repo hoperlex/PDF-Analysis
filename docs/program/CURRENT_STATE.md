@@ -60,8 +60,9 @@ for the `R-139` night window of 2026-10-20, `NIGHT-1020-INT-01.md`.
 - **W59 sections (served).** An expert confirms a version's stage (П/Р) and
   one of 15 sections (`classifyDocumentVersion`, `getVersionSectionReview`,
   migration 0024); run start and re-audit route by the confirmed section
-  through a text-profile registry — AR, 13 draft legacy-ported profiles and
-  an authored draft for ПБ — and refuse an unclassified version or a section
+  through a text-profile registry — AR, 13 legacy-ported profiles and an
+  authored one for ПБ, all `reviewed` since 2026-10-26 **without any human
+  review** (`R-146ag`, accepted risk `A-7`, `SECTION-REVIEW-LEDGER-01.md`) — and refuse an unclassified version or a section
   without a profile; the project screen groups documents by section.
   «Настройки анализа» lists the profiles (`listAnalysisProfiles`); all 14
   non-AR profiles have synthetic recorded replay cases, not expert acceptance.
@@ -92,7 +93,7 @@ for the `R-139` night window of 2026-10-20, `NIGHT-1020-INT-01.md`.
   section's Form-7 specification across projects whose current version is
   confirmed in it — rows never merged across projects, each priced from its
   own project's list, per-project totals only. No menu item is a stub any
-  more. Expert review of the draft profiles remains open.
+  more. A human review of the 14 profiles has not happened and is not scheduled (`R-146ag`, `A-7`).
 
 ## Pointers and history
 
