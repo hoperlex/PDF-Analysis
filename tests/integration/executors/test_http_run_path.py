@@ -107,7 +107,7 @@ def test_a_run_goes_through_the_frozen_connection_and_every_call_row_names_it(
             + RECORDING["usage"]["output_tokens"] * support.PIN.output_per_mtok_usd) / 1e6
     fake = gateway_for(cost)
     try:
-        connection = support.seed_connection(session, rings, fake.base_url())
+        connection = support.seed_connection(session, rings, fake.vpn_url())
         providers = _providers(rings, fake)
         started = _start(session, seeded, new_key, "http-ok", providers)
         result = _execute(session, blob_store, started.run_id, providers)
@@ -142,7 +142,7 @@ def test_an_unmetered_connection_reports_cost_zero_basis_unmetered_and_the_call_
     rings = support.make_rings()
     fake = gateway_for(None)
     try:
-        support.seed_connection(session, rings, fake.base_url(), billing="not_metered")
+        support.seed_connection(session, rings, fake.vpn_url(), billing="not_metered")
         providers = _providers(rings, fake)
         started = _start(session, seeded, new_key, "http-unmetered", providers)
         result = _execute(session, blob_store, started.run_id, providers)
@@ -165,7 +165,7 @@ def test_the_run_level_cost_rule_in_sql_covers_unmetered_mixed_and_measured(
     rings = support.make_rings()
     fake = gateway_for(None)
     try:
-        support.seed_connection(session, rings, fake.base_url(), billing="not_metered")
+        support.seed_connection(session, rings, fake.vpn_url(), billing="not_metered")
         providers = _providers(rings, fake)
         run_id = _start(session, seeded, new_key, "http-mix", providers).run_id
         _execute(session, blob_store, run_id, providers)
@@ -218,8 +218,8 @@ def test_with_no_usable_route_the_start_is_refused_and_nothing_is_written(
         assert "executor_route_missing" in str(refused.value.detail_fields)
         # A route to a connection that has not passed a probe cannot even be set; a route to one
         # whose revision changed afterwards makes the start refuse until it is probed again.
-        connection = support.seed_connection(session, rings, fake.base_url())
-        support.revise(session, connection.connection_id, fake.base_url("/v2"))
+        connection = support.seed_connection(session, rings, fake.vpn_url())
+        support.revise(session, connection.connection_id, fake.vpn_url("/v2"))
         with pytest.raises(DomainError) as unprobed:
             _start(session, seeded, new_key, "unprobed", providers)
         assert "executor_route_missing" in str(unprobed.value.detail_fields)
@@ -237,8 +237,8 @@ def test_the_standby_serves_only_at_run_start_when_the_primary_is_unusable_and_t
     rings = support.make_rings()
     fake = gateway_for(None)
     try:
-        primary = support.seed_connection(session, rings, fake.base_url(), name="primary")
-        standby = support.seed_connection(session, rings, fake.base_url("/b"), name="standby",
+        primary = support.seed_connection(session, rings, fake.vpn_url(), name="primary")
+        standby = support.seed_connection(session, rings, fake.vpn_url("/b"), name="standby",
                                           routed=False)
         support.route(session, primary.connection_id, standby.connection_id)
         providers = _providers(rings, fake)
@@ -247,7 +247,7 @@ def test_the_standby_serves_only_at_run_start_when_the_primary_is_unusable_and_t
             "SELECT connection_revision_id FROM audit_run WHERE run_id = :r"), {"r": first.run_id}).scalar_one()
         assert row == primary.revision_id, "a usable primary is always chosen"
         # The primary's address changes: its new revision is unprobed, so the standby serves.
-        support.revise(session, primary.connection_id, fake.base_url("/moved"))
+        support.revise(session, primary.connection_id, fake.vpn_url("/moved"))
         second = _start(session, seeded, new_key, "standby-used", providers)
         frozen = session.execute(text(
             "SELECT connection_revision_id FROM audit_run WHERE run_id = :r"), {"r": second.run_id}).scalar_one()
@@ -272,11 +272,11 @@ def test_a_revision_changed_or_archived_after_the_freeze_still_serves_the_run(
     rings = support.make_rings()
     fake = gateway_for(None)
     try:
-        first = support.seed_connection(session, rings, fake.base_url(), name="first", billing="not_metered")
+        first = support.seed_connection(session, rings, fake.vpn_url(), name="first", billing="not_metered")
         providers = _providers(rings, fake)
         started = _start(session, seeded, new_key, "frozen-then-archived", providers)
         # The route moves to another connection and the first is archived.
-        other = support.seed_connection(session, rings, fake.base_url("/other"), name="other")
+        other = support.seed_connection(session, rings, fake.vpn_url("/other"), name="other")
         archive_connection(session, connection_id=first.connection_id, roles=support.ADMIN_ROLES,
                            idempotency_key=support.unique(), actor_uid=support.ACTOR)
         assert ExecutorRepository().get_connection(session, first.connection_id).archived_at is not None
@@ -296,7 +296,7 @@ def test_a_rotated_key_is_picked_up_at_the_next_attempt_without_a_new_revision(
     rings = support.make_rings()
     fake = gateway_for(None)
     try:
-        connection = support.seed_connection(session, rings, fake.base_url())
+        connection = support.seed_connection(session, rings, fake.vpn_url())
         context = None
         policy = fake.policy()
         from auditmanager.analysis.public import ModelRequest
@@ -323,7 +323,7 @@ def test_a_key_that_cannot_be_opened_fails_the_stage_as_credential_refused_and_c
     rings, wrong = support.make_rings(), support.make_rings("other")
     fake = gateway_for(None)
     try:
-        support.seed_connection(session, rings, fake.base_url())
+        support.seed_connection(session, rings, fake.vpn_url())
         providers = _providers(rings, fake, ring=wrong.private)
         started = _start(session, seeded, new_key, "unreadable", providers)
         result = _execute(session, blob_store, started.run_id, providers)
@@ -363,11 +363,11 @@ def test_a_reaudit_freezes_todays_route(
     rings = support.make_rings()
     fake = gateway_for(None)
     try:
-        first = support.seed_connection(session, rings, fake.base_url(), name="first")
+        first = support.seed_connection(session, rings, fake.vpn_url(), name="first")
         providers = _providers(rings, fake)
         started = _start(session, seeded, new_key, "reaudit-source", providers)
         _execute(session, blob_store, started.run_id, providers)
-        second = support.seed_connection(session, rings, fake.base_url("/second"), name="second")
+        second = support.seed_connection(session, rings, fake.vpn_url("/second"), name="second")
         again = reaudit_run(
             session, source_run_id=started.run_id, roles=ADMIN, idempotency_key=support.unique(),
             provider_mode="live", connection_route=providers.freeze,
@@ -404,7 +404,7 @@ def test_a_new_kind_plugs_in_by_registering_a_factory_and_is_handed_the_attempt_
     register_adapter_factory("http_api", recording, purpose=original.purpose,
                              serves=original.serves, provider_label=original.provider_label)
     try:
-        connection = support.seed_connection(session, rings, fake.base_url())
+        connection = support.seed_connection(session, rings, fake.vpn_url())
         providers = _providers(rings, fake)
         started = _start(session, seeded, new_key, "plug-in", providers)
         _execute(session, blob_store, started.run_id, providers)
@@ -438,7 +438,7 @@ def test_a_reply_from_another_model_fails_the_run_closed_and_publishes_nothing(
     rings = support.make_rings()
     fake = gateway_for(None, behaviour=behaviour)
     try:
-        base = fake.base_url("" if flavour == "anthropic_messages" else "/agent/v1")
+        base = fake.vpn_url("" if flavour == "anthropic_messages" else "/agent/v1")
         support.seed_connection(session, rings, base, api_flavour=flavour)
         providers = _providers(rings, fake)
         started = _start(session, seeded, new_key, f"mismatch-{flavour}-{behaviour}", providers)
@@ -464,7 +464,7 @@ def test_the_anthropic_flavour_runs_through_the_sdk_and_records_the_connection(
     fake = gateway_for(None)
     try:
         connection = support.seed_connection(
-            session, rings, fake.base_url(""), api_flavour="anthropic_messages",
+            session, rings, fake.vpn_url(""), api_flavour="anthropic_messages",
             billing="not_metered")
         providers = _providers(rings, fake)
         started = _start(session, seeded, new_key, "anthropic-ok", providers)
