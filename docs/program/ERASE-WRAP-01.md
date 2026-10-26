@@ -138,7 +138,7 @@ Ten reads (task file P-01 to P-10) against the base; **all present, none differs
 | `test_exposure_text_is_current`, `test_real_client_address_at_the_edge`, `test_stand_copy_refusals`, `test_readiness_command`, `test_proxy_config_follows_checkout`, `test_composition_root`, `test_settings_defaults`, `tests/integration/workers/test_worker_composition.py`, the two new files, `test_purge_product_data_script`, `test_deploy_script_refusals`, `test_db_roles_deploy_guards`, `test_acme_overlay`, `test_session_register_volume`, `test_api_token_channel` (with `.env`) | 886 passed, 2 skipped, **8 red, all in `test_real_client_address_at_the_edge.py`**: its tests that run `docker run` / `docker compose config` get the harmless stub's empty answer; they need a real daemon and do not read the lines this lane changed |
 | `shellcheck -S warning infra/deploy/erase-project.sh` | exit 0 (also 0 for `purge-product-data.sh`) |
 | the governance one-liner on the task file | `[]` |
-| `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py`, `git diff --check` | RESULT-C |
+| `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py`, `git diff --check` | **105 passed** in 20.7 s on the committed tree (`863963d9`); `git diff --check` exit 0 |
 
 `test_api_token_channel.py` needs the lane's `.env` loaded (it asserts so); with it copied and loaded all 10 pass. The `.env` is untracked and ignored.
 
@@ -163,4 +163,4 @@ Ten reads (task file P-01 to P-10) against the base; **all present, none differs
 
 ## 10. Forbidden paths untouched
 
-RESULT-D
+`git diff --name-only 9cdad4551719a9893bddce93e5006fe73c67fe30..HEAD` lists exactly these eight paths: `docs/program/DEPLOYMENT_RUNBOOK.md`, `docs/program/ERASE-WRAP-01.md`, `docs/program/tasks/ERASE-WRAP-01.md`, `infra/deploy/compose.server.yml`, `infra/deploy/env/alpha.env.example`, `infra/deploy/erase-project.sh`, `tests/integration/composition/test_compose_log_and_memory_limits.py`, `tests/integration/composition/test_erase_project_script.py`. Nothing under `src/`, `scripts/`, `contracts/`, `db/`, `web/`, `.github/`, `infra/acme/`, `infra/deploy/proxy/`, `deploy.sh`, `reset.sh`, `copy-serve.sh`, the ADRs, `DEBT_REGISTER.md` or `CURRENT_STATE.md`. `compose.server.yml` is edited in the header comment and the lines after each `restart: unless-stopped` only (the diff has insertions and no deletion).
