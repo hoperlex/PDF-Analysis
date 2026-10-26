@@ -41,7 +41,12 @@ record = {
 }
 open(out, "w").write(json.dumps(record))
 sys.stderr.write(os.environ.get("STUB_STDERR", ""))
-print(os.environ.get("STUB_STDOUT", json.dumps({"type": "result", "result": "{\"findings\": []}", "modelUsage": {"claude-opus-5": {}}})))
+print(os.environ.get("STUB_STDOUT", json.dumps({
+    "type": "result", "subtype": "success", "is_error": False, "result": "{\"findings\": []}",
+    "total_cost_usd": 0.0123,
+    "modelUsage": {"claude-opus-5": {"inputTokens": 11, "outputTokens": 7,
+                                     "cacheReadInputTokens": 3, "cacheCreationInputTokens": 5}},
+})))
 sys.exit(int(os.environ.get("STUB_EXIT", "0")))
 '''
 
@@ -96,15 +101,24 @@ def test_runs_claude_with_no_tools_the_task_prompt_and_the_key_from_the_file(tmp
     env, record_path, tmp = _setup(tmp_path)
     result = _run(env, _task())
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout)["modelUsage"] == {"claude-opus-5": {}}  # the CLI's JSON passes through untouched
+    # The script answers with the stand's envelope, built from the CLI's own report: the reported model,
+    # the answer, and the token counts summed from `modelUsage` (11 + 3 + 5 in, 7 out) and the cost.
+    assert json.loads(result.stdout) == {
+        "model": "claude-opus-5", "output_text": '{"findings": []}', "stop_reason": "end_turn",
+        "input_tokens": 19, "output_tokens": 7, "reported_cost_usd": 0.0123,
+    }
     record = json.loads(record_path.read_text())
     argv = record["argv"]
-    assert argv[:11] == ["-p", "--bare", "--tools", "", "--disallowedTools", "mcp__*", "--output-format", "json", "--max-turns", "1", "--model"]
-    assert argv[11] == "claude-opus-5" and argv[12] == "--system-prompt-file" and argv[14] == "--no-session-persistence" and len(argv) == 15
+    # The task carries an output schema, so the script passes it as `--json-schema` (after the output format).
+    assert argv[:13] == ["-p", "--bare", "--tools", "", "--disallowedTools", "mcp__*", "--output-format", "json",
+                         "--json-schema", '{"type":"object"}', "--max-turns", "1", "--model"]
+    assert argv[13] == "claude-opus-5" and argv[14] == "--system-prompt-file" and argv[16] == "--no-session-persistence" and len(argv) == 17
     assert record["stdin"] == f"Contract: {PAYLOAD}" and record["system_file"] == "You answer in JSON."
     assert record["system_file_mode"] == "0o600"
     assert record["api_key"] == API_KEY
-    assert record["cwd_entries"] == ["model", "system.txt", "task.json", "user.txt"]  # a private directory, not the user's home or a repository
+    # model, the schema the task carried, the prompt files, the task itself, and `result.json`, where the
+    # script collects the CLI's stdout before it answers.
+    assert record["cwd_entries"] == ["model", "result.json", "schema.json", "system.txt", "task.json", "user.txt"]  # a private directory, not the user's home or a repository
     assert list(tmp.iterdir()) == []  # the private working directory is removed on exit
 
 
@@ -139,6 +153,43 @@ def test_quoted_and_bare_key_lines_are_accepted(tmp_path, line):
     env, record_path, _ = _setup(tmp_path, env_text=line + "\n")
     assert _run(env, _task()).returncode == 0
     assert json.loads(record_path.read_text())["api_key"] == API_KEY
+
+
+_USAGE = {"claude-opus-5": {"inputTokens": 1, "outputTokens": 1}}
+
+
+def _report(**over) -> str:
+    return json.dumps({"type": "result", "subtype": "success", "is_error": False, "result": "ok",
+                       "modelUsage": _USAGE, **over})
+
+
+@pytest.mark.parametrize("stdout", [
+    "{}",
+    "not json",
+    _report(modelUsage={}),
+    _report(modelUsage={"claude-opus-5": {"inputTokens": 1, "outputTokens": 1}, "claude-haiku-5": {"inputTokens": 1, "outputTokens": 1}}),
+    _report(is_error=True),
+    _report(subtype="error_max_turns"),
+    _report(modelUsage={"claude-opus-5": {"inputTokens": 1, "outputTokens": "many"}}),
+    _report(modelUsage={"claude-opus-5": {"inputTokens": 1}}),
+    _report(total_cost_usd=-1),
+    _report(structured_output=["not", "an", "object"]),
+    _report(result=""),
+])
+def test_a_reply_that_does_not_name_exactly_one_model_with_whole_counts_is_refused(tmp_path, stdout):
+    # `R-133`: the stand compares the model the CLI reports with the pinned one, so the script never
+    # answers on a report that is incomplete, names two models, or says the turn failed.
+    env, _, _ = _setup(tmp_path)
+    result = _run(env, _task(), {"STUB_STDOUT": stdout})
+    assert result.returncode == 65 and result.stdout == ""
+    assert "incomplete answer" in result.stderr
+
+
+def test_a_structured_answer_is_returned_as_the_envelopes_text(tmp_path):
+    env, _, _ = _setup(tmp_path)
+    result = _run(env, _task(), {"STUB_STDOUT": _report(structured_output={"findings": [1]}, result="ignored")})
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["output_text"] == '{"findings":[1]}'
 
 
 def test_claudes_exit_status_and_stderr_propagate(tmp_path):
