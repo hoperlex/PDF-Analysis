@@ -245,11 +245,13 @@ def test_a_drain_waits_for_every_run_in_flight_and_takes_no_new_one(
                 support.cancel(sessions, run_id)
 
 
-def test_a_run_that_keeps_losing_its_claim_does_not_spin_the_dispatch_loop(
+def test_a_run_that_keeps_losing_its_claim_is_retried_only_a_bounded_number_of_times(
     sessions: sessionmaker[Session], plant: Plant,
     start_service: Callable[..., WorkerService],
 ) -> None:
-    """Eight lost claims in a row end the immediate retries; the timed poll (30 s) takes over."""
+    """Eight lost claims in a row end the retries that each lost claim triggers; the timed poll
+    (30 s here) takes over. Each retry waits for the loop's one-second tick, so without the bound
+    the ninth call arrives within the quiet window below."""
     run_id = _queue(sessions, plant, None, None)
     plant.refuse_always = True
     try:
