@@ -7,7 +7,7 @@ It plans; it builds nothing, claims no approval and changes no state of the stan
 [`ADR-0022`](../architecture/adr/ADR-0022-production-data-governance.md),
 [`ADR-0023`](../architecture/adr/ADR-0023-production-identity-and-access.md) and
 [`ADR-0024`](../architecture/adr/ADR-0024-production-analysis-path-and-ai-execution.md). Every `AD-nn` named below is the architect's
-implementation decision within `R-146`. `AD-01`, `AD-03`, `AD-06`, `AD-11`, `AD-14` and `AD-15` are confirmed by `R-146p`, `R-146t`, `R-146o`, `R-146s`, `R-146u` and `R-146v`;
+implementation decision within `R-146`. `AD-01`, `AD-03`, `AD-06`, `AD-11`, `AD-14` and `AD-15` are confirmed by `R-146p` (`AD-01` as to the server name only; its ACME mechanism is not confirmed), `R-146t`, `R-146o`, `R-146s`, `R-146u` and `R-146v`;
 `AD-02`, `AD-04`, `AD-05`, `AD-07`, `AD-08`, `AD-09`, `AD-10`, `AD-12`, `AD-13`, `AD-16`, `AD-17`, `AD-18` and `AD-19` are proposed and not yet confirmed (`PROD-00`).
 
 **Baseline.** The tree of `integration/ar-close-1026` including its commit `1a7f6f65` (`R-146o`…`R-146v`): `VERSION` `0.8.1`, shared contract `1.5.0`, 92 paths / 104 operations / 300 schemas,

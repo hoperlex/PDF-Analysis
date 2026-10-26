@@ -1,6 +1,6 @@
 # ADR-0021: Production topology and operations: one VPS, TLS in `infra/`, manual copies
 
-- Status: accepted for production by the repository owner (`R-146a`, `R-146b`, `R-146h`, `R-146j`, `R-146k`, `R-146n`, `R-146p`, `R-146s`, `R-146t`); `AD-01` is confirmed by `R-146p` and `AD-03` by `R-146t`; `AD-02`, `AD-04`, `AD-05`, `AD-16`, `AD-17` and `AD-18` are the architect's, proposed and not yet confirmed
+- Status: accepted for production by the repository owner (`R-146a`, `R-146b`, `R-146h`, `R-146j`, `R-146k`, `R-146n`, `R-146p`, `R-146s`, `R-146t`); `AD-01` is confirmed by `R-146p` as to the server name only (its ACME mechanism is not) and `AD-03` by `R-146t`; `AD-02`, `AD-04`, `AD-05`, `AD-16`, `AD-17` and `AD-18` are the architect's, proposed and not yet confirmed
 - Date: 2026-10-26
 - Owners: repository owner / `PRODUCTION-ADR-PACK-01`
 - Supersedes: the reading of `R-1` that no host exists yet (`R-146a`); no earlier ADR is replaced
