@@ -12,8 +12,8 @@ import auditmanager.analysis.profiles.ar_v3.prompt_material as prompt_material
 import auditmanager.analysis.profiles.ar_v3.v3_profile as seal
 from auditmanager.analysis.profiles.ar_v3.norm_map.beta_sources import SNAPSHOT_ID
 from auditmanager.analysis.profiles.ar_v3.scope_partition import scope_membership
-from auditmanager.analysis.text.profile import AR_TEXT_PROFILE
 from auditmanager.analysis.text.textlayer import Page, TextLayer
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE
 
 
 DOCUMENT = "ndoc_01K7F4N2A9R8T6V5W3X2Y1Z0QJ"
@@ -112,9 +112,9 @@ def test_profile_identity_bundle_and_historical_profile_are_distinct() -> None:
     assert profile.content_sha256 == seal.PROFILE_CONTENT_SHA256
     assert profile.bundle_sha256 == seal.BUNDLE_CONTENT_SHA256
     assert profile.scopes == ("F1", "F2", "A1", "A2", "S1", "S2")
-    assert profile.analysis_profile_id != AR_TEXT_PROFILE.analysis_profile_id
-    assert profile.prompt_bundle_id != AR_TEXT_PROFILE.prompt_bundle.prompt_bundle_id
-    assert profile.content_sha256 != AR_TEXT_PROFILE.content_sha256
+    assert profile.analysis_profile_id != V1_REFERENCE_PROFILE.analysis_profile_id
+    assert profile.prompt_bundle_id != V1_REFERENCE_PROFILE.prompt_bundle.prompt_bundle_id
+    assert profile.content_sha256 != V1_REFERENCE_PROFILE.content_sha256
     assert profile.policy_sha256 == (
         "9d3b7e53b512fbde1ea478a77a63c3c48042e85ddc50d57c96241c79bcb91d58"
     )
@@ -178,7 +178,7 @@ def test_changed_original_topic_or_system_prompt_refuses_before_material(
 def test_identity_collision_refuses_even_with_matching_caller(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(seal, "PROFILE_ID", AR_TEXT_PROFILE.analysis_profile_id)
+    monkeypatch.setattr(seal, "PROFILE_ID", V1_REFERENCE_PROFILE.analysis_profile_id)
     with pytest.raises(seal.BetaV3ProfileRefused, match="v3_profile_identity_collision"):
         seal.resolve_beta_v3_profile(seal.PROFILE_ID, seal.PROMPT_BUNDLE_ID)
 

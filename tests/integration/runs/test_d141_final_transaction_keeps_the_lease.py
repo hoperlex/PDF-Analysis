@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 
 import auditmanager.runs.executor as executor_module
 from auditmanager.runs import RunRepository, execute_run, start_audit_run
+from tests.support.v1_reference_profile import resolve_reference_profile
 
 
 def _calls_in_order(function: Any) -> list[tuple[int, str, dict[str, str]]]:
@@ -90,6 +91,7 @@ def test_a_run_reads_no_artifact_after_the_validating_advance(
     result = execute_run(
         session, started.run_id, blob_store=blob_store, adapter=recorded_adapter,
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
     assert result.terminal_state == "published" and result.gate_ran, result
     assert "advance:validating" in events, events

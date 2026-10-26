@@ -58,7 +58,7 @@ def _run(profile: str, bundle: str, revision: str | None = None) -> Any:
 
 def _source(extra: dict[str, str]) -> tuple[Any, Any]:
     environ = {**BASE, **extra}
-    adapter, _config, _profile, _bundle, source = _build_provider(load(environ), environ)
+    adapter, _config, source = _build_provider(load(environ), environ)
     return adapter, source
 
 

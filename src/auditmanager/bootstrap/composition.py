@@ -190,7 +190,7 @@ def build_worker_runtime(
     )
     from auditmanager.executors.runtime import KindRuntime
 
-    model_adapter, provider_config, _profile_id, _bundle_id, providers = _build_provider(
+    model_adapter, provider_config, providers = _build_provider(
         resolved, env, runtime=KindRuntime(session_factory=sessions, engine=engine),
     )
     # `W59-SECTION-SEAL-01`. The worker runs each claimed run with the profile it pinned,
@@ -285,11 +285,11 @@ def build_application(
 
     from auditmanager.executors.runtime import KindRuntime
 
-    model_adapter, provider_config, profile_id, bundle_id, providers = _build_provider(
+    model_adapter, provider_config, providers = _build_provider(
         resolved, env, runtime=KindRuntime(session_factory=sessions, engine=engine),
     )
-    # `W59-SECTION-SEAL-01`. The section-keyed text-profile registry: AR from the v1
-    # constants plus every `text-profile/1` package. Loaded once; a bad package refuses the
+    # `W59-SECTION-SEAL-01`. The section-keyed text-profile registry: every `text-profile/1`
+    # package (АР is not one, `PROD-11-AR-V1-V2-REMOVAL-01`). Loaded once; a bad package refuses the
     # start rather than serving a partial table. Run start routes through its table, the
     # executor resolves pinned profiles through it, and the review reports its sections.
     text_profiles = load_text_profiles()
@@ -342,15 +342,14 @@ def build_application(
         adapter=model_adapter,
         provider_config=provider_config,
         provider_mode=_provenance_mode(resolved.provider_mode),
-        analysis_profile_id=profile_id,
-        prompt_bundle_id=bundle_id,
         carrier=carrier,
         # `W55B-BUDGET-01`: derived once by `settings.load` from the model and the ceiling, and
         # refused there when it cannot hold the AR document set. Always passed, never None.
         input_budget_characters=resolved.input_budget_characters,
         # `W59-SECTION-SEAL-01`. Always both: a served run start routes from the version's
-        # persisted classification, never from the configured AR pair above, and a served
-        # run executes its pinned profile. ``test_the_served_application_routes_by_section``.
+        # persisted classification, never from a configured pair (there is none since
+        # `PROD-11-AR-V1-V2-REMOVAL-01`), and a served run executes its pinned profile.
+        # ``test_the_served_application_routes_by_section``.
         section_profiles=text_profiles.section_profiles(),
         text_profiles=text_profiles.resolve,
         # `EXEC-HTTP-01`. Which source serves a run: ``providers.freeze`` is set for the
@@ -483,7 +482,7 @@ def _provenance_mode(transport: str) -> str:
 
 def _build_provider(
     settings: AppSettings, environ: Mapping[str, str], *, runtime: Any = None,
-) -> tuple[Any, Any, str, str, ProviderSource]:
+) -> tuple[Any, Any, ProviderSource]:
     """Construct the model adapter the configured mode and source name.
 
     Constructing it here rather than at first run is what makes a broken provider a startup
@@ -506,7 +505,6 @@ def _build_provider(
         ProxySettings,
         RecordedAdapter,
         load_provider_config,
-        resolve_profile,
     )
     from auditmanager.executors.runtime import DestinationPolicy
 
@@ -518,8 +516,6 @@ def _build_provider(
     config = load_provider_config(
         dict(environ) | {"AUDITMANAGER_PROVIDER_MODE": _provenance_mode(settings.provider_mode)}
     )
-    profile = resolve_profile()
-    identity = (str(profile.analysis_profile_id), str(profile.prompt_bundle.prompt_bundle_id))
 
     if settings.provider_source == "database":
         # Every connection is a live transport. This process holds no adapter of its own: a run
@@ -530,7 +526,7 @@ def _build_provider(
             policy=DestinationPolicy.from_environment(dict(environ)),
             base_config=config, ceiling_usd=settings.run_cost_ceiling_usd, runtime=runtime,
         )
-        return UnboundAdapter(), config, identity[0], identity[1], source
+        return UnboundAdapter(), config, source
 
     call: CallBinding | None
     if settings.execution_role == "api":
@@ -566,11 +562,5 @@ def _build_provider(
         # are told the replay is unmetered; the live and proxy branches above build no such binding,
         # and `EnvironmentProviders` refuses one for a non-recorded adapter.
         replay = CallBinding(unmetered=True)
-        return (
-            adapter, config, identity[0], identity[1],
-            EnvironmentProviders(adapter, config, call, ar_v3_replay_call=replay),
-        )
-    return (
-        adapter, config, identity[0], identity[1],
-        EnvironmentProviders(adapter, config, call),
-    )
+        return adapter, config, EnvironmentProviders(adapter, config, call, ar_v3_replay_call=replay)
+    return adapter, config, EnvironmentProviders(adapter, config, call)

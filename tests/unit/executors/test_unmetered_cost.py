@@ -26,6 +26,7 @@ from auditmanager.analysis.text import (
     run_text_analysis,
 )
 from auditmanager.shared.identity import ModelCallId, RunId
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE
 
 ROOT = Path(__file__).resolve().parents[3]
 TEXT_LAYER = json.loads(
@@ -91,6 +92,7 @@ def _run(call: CallBinding | None) -> tuple[Any, _Journal, CostMeter]:
     outcome = run_text_analysis(
         run_id=RunId.new(), text_layer_document=TEXT_LAYER, adapter=_LiveAdapter(), config=config,
         meter=meter, call_journal=journal, call=call,
+        profile=V1_REFERENCE_PROFILE,
     )
     return outcome, journal, meter
 

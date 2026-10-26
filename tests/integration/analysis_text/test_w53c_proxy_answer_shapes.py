@@ -36,6 +36,7 @@ from auditmanager.analysis.text.proxy import (
 from auditmanager.analysis.text.stage import STATUS_FAILED, run_text_analysis
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import ModelCallId, RunId
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE
 
 MODEL_ID = "claude-opus-5"
 _USAGE = {"prompt_tokens": 1200, "completion_tokens": 340}
@@ -192,6 +193,7 @@ def _stage(adapter: Any, mode: ProviderMode) -> tuple[Any, _RecordingJournal]:
     outcome = run_text_analysis(
         run_id=RunId.new(), text_layer_document=_text_layer_document(),
         adapter=adapter, config=_config(mode), call_journal=journal,
+        profile=V1_REFERENCE_PROFILE,
     )
     return outcome, journal
 

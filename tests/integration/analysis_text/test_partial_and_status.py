@@ -27,6 +27,7 @@ from auditmanager.analysis.text import (
 )
 from auditmanager.shared.errors import ErrorCode
 from auditmanager.shared.identity import RunId
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE
 
 
 def test_a_truncated_reply_is_partial_and_never_succeeded(
@@ -36,6 +37,7 @@ def test_a_truncated_reply_is_partial_and_never_succeeded(
         run_id=RunId.new(),
         text_layer_document=text_layer_document,
         adapter=variant_adapter("truncated"),
+        profile=V1_REFERENCE_PROFILE,
     )
     assert outcome.status == STATUS_PARTIAL
     assert outcome.status != STATUS_SUCCEEDED
@@ -49,6 +51,7 @@ def test_partial_reports_a_strict_subset_of_pages(text_layer_document, variant_a
         run_id=RunId.new(),
         text_layer_document=text_layer_document,
         adapter=variant_adapter("truncated"),
+        profile=V1_REFERENCE_PROFILE,
     )
     text_layer = load_text_layer(text_layer_document)
     every_page = set(text_layer.page_numbers)
@@ -72,6 +75,7 @@ def test_the_incomplete_tail_of_a_truncated_reply_is_discarded(
         run_id=RunId.new(),
         text_layer_document=text_layer_document,
         adapter=variant_adapter("truncated"),
+        profile=V1_REFERENCE_PROFILE,
     )
     assert outcome.metrics["observations_proposed"] == 2
     assert len(outcome.artifact["observations"]) == 2
@@ -85,6 +89,7 @@ def test_the_truncated_call_is_recorded_as_truncated(text_layer_document, varian
         run_id=RunId.new(),
         text_layer_document=text_layer_document,
         adapter=variant_adapter("truncated"),
+        profile=V1_REFERENCE_PROFILE,
     )
     (call,) = outcome.model_calls
     assert call.status == "truncated"
@@ -104,6 +109,7 @@ def test_an_unavailable_provider_is_failed_and_never_partial(
         run_id=RunId.new(),
         text_layer_document=text_layer_document,
         adapter=unreachable_provider,
+        profile=V1_REFERENCE_PROFILE,
     )
     assert unreachable_provider.calls == 1
     assert outcome.status == STATUS_FAILED
@@ -119,6 +125,7 @@ def test_a_corpus_that_cannot_answer_is_failed_and_never_partial(
         run_id=RunId.new(),
         text_layer_document=text_layer_document,
         adapter=RecordedAdapter(empty_recording_dir),
+        profile=V1_REFERENCE_PROFILE,
     )
     assert outcome.status == STATUS_FAILED
     assert outcome.status != STATUS_PARTIAL
@@ -135,7 +142,8 @@ def test_the_stage_never_reports_skipped(text_layer_document, recorded_adapter, 
     ]
     for adapter in adapters:
         outcome = run_text_analysis(
-            run_id=RunId.new(), text_layer_document=text_layer_document, adapter=adapter
+            run_id=RunId.new(), text_layer_document=text_layer_document, adapter=adapter,
+            profile=V1_REFERENCE_PROFILE,
         )
         assert outcome.status in {STATUS_SUCCEEDED, STATUS_PARTIAL, STATUS_FAILED}
         assert outcome.status != "skipped"
@@ -163,7 +171,8 @@ def test_a_text_layer_of_an_unexpected_version_fails_closed(text_layer_document)
     document = dict(text_layer_document)
     document["artifact_version"] = "2.0.0"
     outcome = run_text_analysis(
-        run_id=RunId.new(), text_layer_document=document, adapter=RecordedAdapter()
+        run_id=RunId.new(), text_layer_document=document, adapter=RecordedAdapter(),
+        profile=V1_REFERENCE_PROFILE,
     )
     assert outcome.status == STATUS_FAILED
     assert outcome.error.code is ErrorCode.ANALYSIS_INPUT_INVALID

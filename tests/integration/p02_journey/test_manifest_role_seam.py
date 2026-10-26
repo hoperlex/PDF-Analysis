@@ -23,6 +23,7 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import text
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 STAGE_REGISTRY = REPOSITORY_ROOT / "contracts" / "analysis" / "v1" / "stage-registry.json"
@@ -101,7 +102,7 @@ def test_a_real_upload_can_start_a_run(session, ingest, journey_harness) -> None
 
     This is the journey's step 2 and the gate for everything after it.
     """
-    from auditmanager.analysis.text import AR_TEXT_PROFILE, AR_TEXT_PROMPT_BUNDLE
+    from auditmanager.analysis.text import AR_TEXT_PROMPT_BUNDLE
     from auditmanager.runs import start_audit_run
     from auditmanager.shared.identity import ProjectUid
 
@@ -118,7 +119,7 @@ def test_a_real_upload_can_start_a_run(session, ingest, journey_harness) -> None
     started = start_audit_run(
         session,
         version_uid=str(outcome.version.version_uid),
-        analysis_profile_id=str(AR_TEXT_PROFILE.analysis_profile_id),
+        analysis_profile_id=str(V1_REFERENCE_PROFILE.analysis_profile_id),
         prompt_bundle_id=str(AR_TEXT_PROMPT_BUNDLE.prompt_bundle_id),
         provider_mode="recorded",
         idempotency_key=h.new_key("run"),

@@ -33,6 +33,7 @@ from auditmanager.runs import (
     reconcile_interrupted_runs,
     start_audit_run,
 )
+from tests.support.v1_reference_profile import resolve_reference_profile
 
 EXECUTOR_SOURCE = (
     Path(__file__).resolve().parents[3]
@@ -120,6 +121,7 @@ def test_terminal_selection_is_delegated(
         blob_store=blob_store,
         adapter=recorded_adapter,
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
 
     assert calls, "the executor reached a terminal without consulting the gate"
@@ -183,6 +185,7 @@ def test_a_partial_stage_yields_a_partial_run_with_a_non_empty_degradation_set(
         blob_store=blob_store,
         adapter=variant_adapter("truncated"),
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
 
     assert result.terminal_state == "partial"
@@ -224,6 +227,7 @@ def test_an_unresolvable_quotation_never_becomes_a_finding(
         blob_store=blob_store,
         adapter=variant_adapter("ungrounded_quotation"),
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
 
     # One observation survives: the one whose real quotation resolved.

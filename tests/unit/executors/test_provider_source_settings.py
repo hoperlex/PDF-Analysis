@@ -92,7 +92,7 @@ def test_the_api_role_demands_no_provider_credential_in_either_branch() -> None:
 
 def test_the_environment_source_hands_every_run_its_adapter_and_holds_the_reply_to_the_model() -> None:
     settings = _load(**PROXY)
-    adapter, _config, _profile, _bundle, source = _build_provider(settings, {**BASE, **PROXY})
+    adapter, _config, source = _build_provider(settings, {**BASE, **PROXY})
     assert isinstance(source, EnvironmentProviders) and source.freeze is None
     binding = source.resolve(None, type("Run", (), {"connection_revision_id": None})(), None)  # type: ignore[arg-type]
     assert binding.adapter is adapter
@@ -119,7 +119,7 @@ def test_the_api_role_builds_no_provider_adapter_and_the_database_source_none_of
     assert isinstance(adapter, UnboundAdapter)
     database = _load(AUDITMANAGER_PROVIDER_SOURCE="database", AUDITMANAGER_PROVIDER_MODE="live",
                      EXECUTION_ROLE="worker", AUDITMANAGER_SECRETS_KEYS=RING, **ACTIVE)
-    adapter, _config, _p, _b, source = _build_provider(database, {
+    adapter, _config, source = _build_provider(database, {
         **WORKER_BASE, "AUDITMANAGER_PROVIDER_MODE": "live",
         "AUDITMANAGER_PROVIDER_SOURCE": "database", "EXECUTION_ROLE": "worker"})
     assert isinstance(adapter, UnboundAdapter) and isinstance(source, DatabaseProviders)

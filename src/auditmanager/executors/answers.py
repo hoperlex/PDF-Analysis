@@ -8,7 +8,7 @@ held to the schema the task carried.
 
 The runtime lock carries no JSON Schema library and a root dependency is not this slice's to
 add, so this is a small validator for exactly the keywords the stage's response schemas use
-(``AR v1`` ``RESPONSE_SCHEMA``, ``ar_v2`` and ``ar_v3``)::
+(``AR v1`` ``RESPONSE_SCHEMA`` and ``ar_v3``)::
 
     type  enum  const  properties  required  additionalProperties  items
     minItems  maxItems  minLength  maxLength  minimum  maximum  pattern  oneOf  anyOf

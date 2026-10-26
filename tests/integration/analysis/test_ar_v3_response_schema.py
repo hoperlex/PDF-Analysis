@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-from auditmanager.analysis.profiles.ar_v2.response_schema import (
-    CATEGORIES as V2_CATEGORIES,
-)
 from auditmanager.analysis.profiles.ar_v3.response_schema import (
     CATEGORIES,
     NONNORMATIVE_CATEGORIES,
@@ -16,7 +13,12 @@ from auditmanager.api.schemas.models import FindingCategory, Severity
 
 
 def test_category_and_severity_sets_are_total_against_the_sealed_api() -> None:
-    assert NONNORMATIVE_CATEGORIES == V2_CATEGORIES
+    # The seven categories of the removed recorded v2 schema (`PROD-11-AR-V1-V2-REMOVAL-01`), now
+    # stated here instead of compared with a module that no longer exists.
+    assert NONNORMATIVE_CATEGORIES == (
+        "internal_contradiction", "explicit_placeholder", "dimensions", "layout", "facade",
+        "roof", "documentation",
+    )
     assert NORMATIVE_CATEGORIES == (
         "evacuation", "fire_safety", "accessibility", "insulation", "sound",
     )

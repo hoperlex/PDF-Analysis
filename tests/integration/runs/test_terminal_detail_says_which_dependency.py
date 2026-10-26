@@ -45,6 +45,7 @@ from auditmanager.findings.terminal import TerminalSelection, select_terminal
 from auditmanager.runs import execute_run, start_audit_run
 from auditmanager.shared.errors import DomainError, ErrorCode, UnsafeDetailKey
 from auditmanager.shared.identity import IdempotencyKey
+from tests.support.v1_reference_profile import resolve_reference_profile
 
 #: ``analysis_input_invalid``'s declared safe keys, written out rather than read from the
 #: catalog. ``OPERATING_CONSTRAINTS.md`` §12: a test that derived its expectation from the
@@ -78,6 +79,7 @@ def _drive(session, seeded, blob_store, adapter, provider_config, tag: str) -> s
             adapter=adapter,
             provider_config=provider_config,
             sleep=lambda _seconds: None,
+            text_profiles=resolve_reference_profile,
         )
     except DomainError:
         pass

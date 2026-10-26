@@ -29,7 +29,6 @@ import httpx2
 import pytest
 
 from auditmanager.analysis.text import (
-    AR_TEXT_PROFILE,
     DEPENDENCY_NAME,
     LiveAdapter,
     ProviderMode,
@@ -38,6 +37,7 @@ from auditmanager.analysis.text import (
     provider_lock,
 )
 from auditmanager.shared.errors import DomainError, ErrorCode
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE
 
 EMPTY_REPLY = '{"observations": []}'
 
@@ -68,7 +68,7 @@ def _client(handler: Any) -> anthropic.Anthropic:
 def request_for_corpus(text_layer_document):
     return build_request(
         model_id=provider_lock().primary_model_id,
-        bundle=AR_TEXT_PROFILE.prompt_bundle,
+        bundle=V1_REFERENCE_PROFILE.prompt_bundle,
         text_layer=load_text_layer(text_layer_document),
     )
 

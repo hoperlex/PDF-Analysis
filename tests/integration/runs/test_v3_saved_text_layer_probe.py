@@ -105,6 +105,7 @@ from auditmanager.shared.identity.ids import UserUid
 from auditmanager.storage import sha256_of
 from auditmanager.storage.blob_repository import BlobMetadataRepository
 from auditmanager.storage.models import VerifiedBlob, derive_blob_id, parse_blob_role
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE, resolve_reference_profile
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 BASELINE_PDF = REPOSITORY_ROOT / "fixtures" / "synthetic" / "ar" / "ar_baseline.pdf"
@@ -596,7 +597,7 @@ LIVE_ENVIRONMENT = {**STOCK_ENVIRONMENT, "AUDITMANAGER_PROVIDER_MODE": "live",
 
 def _stock_composition(environ: dict[str, str]) -> tuple[Any, Any]:
     """The ``(config, ProviderSource)`` the composition root builds for these settings."""
-    _adapter, config, _profile, _bundle, source = _build_provider(load_settings(environ), environ)
+    _adapter, config, source = _build_provider(load_settings(environ), environ)
     return config, source
 
 
@@ -731,14 +732,18 @@ def _drive(probe_database: str, store: Any, config: Any, recordings: Path) -> Me
         with factory() as session, session.begin():
             started = start_audit_run(
                 session, version_uid=control.version_uid,
-                analysis_profile_id="ap_01M5M28ZCDD8VPSP1BTAEW92YF",
-                prompt_bundle_id="pb_01M5M28ZCDVCR37BX1884JGSPN",
+                # `PROD-11-AR-V1-V2-REMOVAL-01`: the control runs under the v1 machinery's reference
+                # profile (the executor no longer runs АР for an unrouted run), the same prompt and
+                # recording as before.
+                analysis_profile_id=str(V1_REFERENCE_PROFILE.analysis_profile_id),
+                prompt_bundle_id=str(V1_REFERENCE_PROFILE.prompt_bundle.prompt_bundle_id),
                 provider_mode="recorded", idempotency_key=IdempotencyKey("prod11a-control-v1"),
             )
         v1_error = None
         try:
             run_to_terminal(factory, started.run_id, blob_store=store,
-                            adapter=RecordedAdapter(V1_RECORDINGS), provider_config=config)
+                            adapter=RecordedAdapter(V1_RECORDINGS), provider_config=config,
+                            text_profiles=resolve_reference_profile)
         except Exception as exc:  # a reading, not a swallowed fault
             v1_error = f"{type(exc).__name__}: {exc}"
 

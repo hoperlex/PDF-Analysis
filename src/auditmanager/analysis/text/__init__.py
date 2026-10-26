@@ -58,7 +58,7 @@ from auditmanager.analysis.text.binding import CallBinding
 from auditmanager.analysis.text.cost import CostMeter
 from auditmanager.analysis.text.live import LiveAdapter
 from auditmanager.analysis.text.lock import STAGE_ID, ModelPin, ProviderLock, provider_lock
-from auditmanager.analysis.text.profile import AR_TEXT_PROFILE, AnalysisProfile, resolve_profile
+from auditmanager.analysis.text.profile import AnalysisProfile
 from auditmanager.analysis.text.prompt import AR_TEXT_PROMPT_BUNDLE, CATEGORIES, PromptBundle
 from auditmanager.analysis.text.provenance import ModelCallRecord, assert_consistent_mode
 from auditmanager.analysis.text.proxy import ProxyAdapter, ProxySettings
@@ -77,7 +77,6 @@ __all__ = [
     "CallBinding",
     "ARTIFACT_ROLE",
     "ARTIFACT_VERSION",
-    "AR_TEXT_PROFILE",
     "AR_TEXT_PROMPT_BUNDLE",
     "CATEGORIES",
     "DEFAULT_RUN_COST_CEILING_USD",
@@ -120,6 +119,5 @@ __all__ = [
     "load_text_layer",
     "provider_lock",
     "recording_document",
-    "resolve_profile",
     "run_text_analysis",
 ]

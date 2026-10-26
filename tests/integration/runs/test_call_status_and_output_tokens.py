@@ -46,6 +46,7 @@ from auditmanager.analysis.text.provenance import (
 from auditmanager.runs import execute_run, start_audit_run
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import ModelCallId
+from tests.support.v1_reference_profile import resolve_reference_profile
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 TRUNCATED_RECORDING = (
@@ -122,6 +123,7 @@ def test_a_truncated_call_is_persisted_as_truncated(
         blob_store=blob_store,
         adapter=variant_adapter("truncated"),
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
 
     rows = _calls(session, started.run_id)
@@ -156,6 +158,7 @@ def test_a_truncated_row_carries_a_response_and_no_catalog_error_code(
         blob_store=blob_store,
         adapter=variant_adapter("truncated"),
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
 
     row = _calls(session, started.run_id)[0]
@@ -187,6 +190,7 @@ def test_the_database_refuses_a_truncated_row_that_claims_an_error_code(
         blob_store=blob_store,
         adapter=variant_adapter("truncated"),
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
     row = _calls(session, started.run_id)[0]
 
@@ -221,6 +225,7 @@ def test_the_database_refuses_a_truncated_row_with_no_response(
         blob_store=blob_store,
         adapter=variant_adapter("truncated"),
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
     row = _calls(session, started.run_id)[0]
 
@@ -254,6 +259,7 @@ def test_a_clean_call_is_still_persisted_as_succeeded(
         blob_store=blob_store,
         adapter=recorded_adapter,
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
     row = _calls(session, started.run_id)[0]
     assert row["status"] == "succeeded"
@@ -294,6 +300,7 @@ def test_the_output_token_count_is_the_providers_figure_not_a_recomputation(
         blob_store=blob_store,
         adapter=variant_adapter("truncated"),
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
     row = _calls(session, started.run_id)[0]
 
@@ -322,6 +329,7 @@ def test_the_stage_emits_the_output_token_count_beside_the_finding_count(
         blob_store=blob_store,
         adapter=variant_adapter("truncated"),
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
     metrics = session.execute(
         text(
@@ -369,6 +377,7 @@ def test_the_ledger_reads_a_pre_migration_truncated_row_as_truncated(
         blob_store=blob_store,
         adapter=variant_adapter("truncated"),
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
     modern = _calls(session, started.run_id)[0]
     assert modern["status"] == "truncated"

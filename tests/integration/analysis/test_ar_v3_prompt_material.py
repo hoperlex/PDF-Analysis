@@ -8,8 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from auditmanager.analysis.profiles.ar_shared.content import reviewed_sections
-from auditmanager.analysis.profiles.ar_v2.prompt_material import material_sha256
+from auditmanager.analysis.profiles.ar_shared.content import reviewed_content_sha256, reviewed_sections
 from auditmanager.analysis.profiles.ar_shared.recognised_context import RecognisedContext
 from auditmanager.analysis.profiles.ar_v3.prompt_material import (
     V3PromptRefused,
@@ -117,8 +116,11 @@ def test_v3_reuses_common_ar_sections_without_v2_only_policy():
     assert "при недостающем\nпроектном факте воздержись" in system
     assert "без склейки" in system
     assert "не превращай условие в безусловный минимум" in system
-    assert material_sha256() == (
-        "01bee01f8c7f1c59227ff6c17398f1034f5094c9c3b8e26fc66ab5130a4ca610"
+    # `PROD-11-AR-V1-V2-REMOVAL-01`: this pinned the removed v2 material fingerprint, which hashed
+    # the reviewed corpus together with v2's own rules and schema. What survives of it, and what
+    # v3 reuses, is the corpus: its fingerprint is the value the v2 one was built from.
+    assert reviewed_content_sha256() == (
+        "0b560e485a07f96af511e3879740d1db0a0fc3f15fc013ab63507d609e3870ee"
     )
     assert prepare_v3_prompt(_layer(), _input()) == prepare_v3_prompt(_layer(), _input())
 

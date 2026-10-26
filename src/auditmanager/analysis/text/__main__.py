@@ -5,14 +5,18 @@ journal owned by :mod:`auditmanager.runs.executor`. This standalone module has n
 so it deliberately refuses ``AUDITMANAGER_PROVIDER_MODE=live`` before constructing a
 provider adapter. Public alpha acceptance exercises the durable Run path instead.
 
-    # replay - the default, and what every suite does
+    # replay - the default, and what every suite does; the section names the profile
     PYTHONPATH=src .venv/bin/python -m auditmanager.analysis.text \\
-        fixtures/recorded/text_analysis/inputs/ar_baseline_text_layer.json
+        fixtures/recorded/text_analysis/inputs/ar_baseline_text_layer.json --section PB
 
     # optionally write a normalized copy of the replayed exchange
     PYTHONPATH=src .venv/bin/python -m auditmanager.analysis.text \\
-        fixtures/recorded/text_analysis/inputs/ar_baseline_text_layer.json \\
+        fixtures/recorded/text_analysis/inputs/ar_baseline_text_layer.json --section PB \\
         --capture /tmp/auditmanager-recorded-capture
+
+``--section`` is required (`PROD-11-AR-V1-V2-REMOVAL-01`): the runner used to analyse under the
+АР profile without being told, and АР is no longer a text profile. The code must be one that the
+registry holds; an unregistered one (АР among them) is refused, never replaced.
 
 ``--capture`` writes the response through
 :func:`auditmanager.analysis.text.recorded.recording_document`, which is the only
@@ -32,6 +36,7 @@ from typing import Any
 
 from auditmanager.analysis.text.adapter import ModelRequest, ModelResponse
 from auditmanager.analysis.text.config import ProviderMode, load_provider_config
+from auditmanager.analysis.text.profile_registry import load_text_profile_registry
 from auditmanager.analysis.text.recorded import RecordedAdapter, recording_document
 from auditmanager.analysis.text.stage import run_text_analysis
 from auditmanager.shared.errors import DomainError, ErrorCode
@@ -75,6 +80,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="auditmanager.analysis.text", description=__doc__)
     parser.add_argument("text_layer", type=Path, help="a prepared.text_layer JSON document")
     parser.add_argument(
+        "--section",
+        required=True,
+        metavar="CODE",
+        help="the section whose registered text profile analyses the document (for example PB)",
+    )
+    parser.add_argument(
         "--capture",
         type=Path,
         default=None,
@@ -84,6 +95,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     config = load_provider_config()
+    entry = load_text_profile_registry().entries.get(args.section.upper())
+    if entry is None:
+        raise DomainError(
+            ErrorCode.SECTION_PROFILE_UNAVAILABLE,
+            message="the section has no registered text profile",
+        )
     document = json.loads(args.text_layer.read_text(encoding="utf-8"))
     adapter = _Capturing(_build_adapter(config))
 
@@ -92,6 +109,7 @@ def main(argv: list[str] | None = None) -> int:
         text_layer_document=document,
         adapter=adapter,
         config=config,
+        profile=entry.profile,
     )
 
     report: dict[str, Any] = {

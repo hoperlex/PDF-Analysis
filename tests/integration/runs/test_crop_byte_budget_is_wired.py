@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from auditmanager.runs import execute_run, executor, start_audit_run
 from auditmanager.runs.crop_budget import MAX_CROP_BYTES, CropByteBudget
 from auditmanager.storage.public import DurablePublicationStore
+from tests.support.v1_reference_profile import resolve_reference_profile
 
 
 def test_each_deterministic_stage_is_handed_the_crop_byte_budget(
@@ -46,6 +47,7 @@ def test_each_deterministic_stage_is_handed_the_crop_byte_budget(
         adapter=recorded_adapter,
         provider_config=provider_config,
         sleep=lambda _seconds: None,
+        text_profiles=resolve_reference_profile,
     )
 
     stages = [stage_id for stage_id, _store in handed]

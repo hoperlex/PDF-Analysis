@@ -26,6 +26,7 @@ from auditmanager.runs import execute_run
 from auditmanager.runs.repository import RunRepository
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import AuditEventId, ModelCallId, NormsSnapshotId, RunId
+from tests.support.v1_reference_profile import resolve_reference_profile
 
 
 def _run(session, seeded, *, snapshot=None, terminal=False):
@@ -429,6 +430,7 @@ def test_running_run_without_job_refuses_before_new_authority_or_provider(
         execute_run(
             session, run_id, blob_store=blob_store, adapter=adapter,
             provider_config=provider_config,
+            text_profiles=resolve_reference_profile,
         )
     assert refusal.value.code is ErrorCode.STATE_TRANSITION_NOT_ALLOWED
     assert refusal.value.detail_fields == {
@@ -477,6 +479,7 @@ def test_persisted_zero_cost_unmeasured_call_keeps_resumed_basis_estimated(
     result = execute_run(
         session, run_id, blob_store=blob_store, adapter=adapter,
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
     assert result.terminal_state == "published" and adapter.calls == 1
     stage = next(row for row in RunRepository().stage_results(session, run_id)
@@ -495,6 +498,7 @@ def test_persisted_prior_spend_exhausts_run_ceiling_before_another_call(
     result = execute_run(
         session, run_id, blob_store=blob_store, adapter=adapter,
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
     assert result.terminal_state == "failed" and adapter.calls == 0
     stage = next(row for row in RunRepository().stage_results(session, run_id)

@@ -13,11 +13,6 @@ import pytest
 from sqlalchemy import text
 
 import auditmanager.runs.executor as executor
-from auditmanager.analysis.public import (
-    AR_V2_RECORDED_BUNDLE_ID,
-    AR_V2_RECORDED_PROFILE_ID,
-    RecordedGenerationSettings,
-)
 from auditmanager.analysis.recognised.markdown import read_blocks
 from auditmanager.documents.public import (
     MANIFEST_ROLE_MARKDOWN,
@@ -35,9 +30,7 @@ from auditmanager.storage import sha256_of
 from auditmanager.storage.blob_repository import BlobMetadataRepository
 from auditmanager.storage.models import VerifiedBlob, parse_blob_role
 from tests.integration.analysis.recognised.recognised_support import members
-
-
-SETTINGS = RecordedGenerationSettings(4096, "high", {"type": "adaptive"})
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE, resolve_reference_profile
 
 
 class _TextInspected(Exception):
@@ -118,8 +111,8 @@ def test_current_attempt_reads_saved_pdf_text_but_never_ocr(
     started = start_audit_run(
         session,
         version_uid=version_uid,
-        analysis_profile_id=str(AR_V2_RECORDED_PROFILE_ID),
-        prompt_bundle_id=str(AR_V2_RECORDED_BUNDLE_ID),
+        analysis_profile_id=str(V1_REFERENCE_PROFILE.analysis_profile_id),
+        prompt_bundle_id=str(V1_REFERENCE_PROFILE.prompt_bundle.prompt_bundle_id),
         provider_mode="recorded",
         idempotency_key=new_key("w57b-text-db-s3-accept"),
     )
@@ -199,8 +192,7 @@ def test_current_attempt_reads_saved_pdf_text_but_never_ocr(
             blob_store=blob_store,
             adapter=recorded_adapter,
             provider_config=provider_config,
-            recorded_fixture_model_id="fixture/ar-v2-recorded",
-            recorded_generation_settings=SETTINGS,
+            text_profiles=resolve_reference_profile,
         )
     assert len(seen) == 1
     assert RunRepository().get(session, run_id).state == "running"

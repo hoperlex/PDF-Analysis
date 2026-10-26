@@ -73,6 +73,7 @@ from sqlalchemy.orm import Session
 import auditmanager
 from auditmanager.runs import execute_run, start_audit_run
 from auditmanager.shared.identity import ModelCallId
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE, resolve_reference_profile
 
 
 def _ledger_report() -> ModuleType:
@@ -105,7 +106,7 @@ def truncated_run(journey_harness, session_factory, blob_store, variant_adapter,
         started = start_audit_run(
             session,
             version_uid=seed["version_uid"],
-            analysis_profile_id=str(h.AR_TEXT_PROFILE.analysis_profile_id),
+            analysis_profile_id=str(h.V1_REFERENCE_PROFILE.analysis_profile_id),
             prompt_bundle_id=str(h.AR_TEXT_PROMPT_BUNDLE.prompt_bundle_id),
             provider_mode="recorded",
             idempotency_key=h.new_key("trunc-run"),
@@ -117,6 +118,7 @@ def truncated_run(journey_harness, session_factory, blob_store, variant_adapter,
             blob_store=blob_store,
             adapter=variant_adapter("truncated"),
             provider_config=provider_config,
+            text_profiles=resolve_reference_profile,
         )
         session.commit()
         yield {**seed, "run_id": str(started.run_id)}

@@ -17,7 +17,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from auditmanager.analysis.stages.extraction import extract_document
-from auditmanager.analysis.text import AR_TEXT_PROFILE, build_request, load_text_layer
+from auditmanager.analysis.text import build_request, load_text_layer
 from auditmanager.exports import export_run_csv
 from auditmanager.findings import published_finding_count, published_findings
 from auditmanager.runs import (
@@ -26,6 +26,7 @@ from auditmanager.runs import (
     execute_run,
     start_audit_run,
 )
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE, resolve_reference_profile
 
 RECORDED_MODEL_ID = "claude-opus-5"
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -59,7 +60,7 @@ def test_the_pinned_extractor_reproduces_the_recorded_request():
 
     request = build_request(
         model_id=RECORDED_MODEL_ID,
-        bundle=AR_TEXT_PROFILE.prompt_bundle,
+        bundle=V1_REFERENCE_PROFILE.prompt_bundle,
         text_layer=load_text_layer(committed),
     )
     recording = RECORDINGS / f"{request.request_sha256}.json"
@@ -89,6 +90,7 @@ def test_a_full_run_over_the_corpus_reaches_a_terminal_and_publishes_findings(
         blob_store=blob_store,
         adapter=recorded_adapter,
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
 
     assert result.terminal_state == "published", (
@@ -134,6 +136,7 @@ def test_the_csv_row_count_is_one_per_evidence_item(
         blob_store=blob_store,
         adapter=recorded_adapter,
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
 
     evidence_total = int(
@@ -189,6 +192,7 @@ def test_the_frozen_input_digest_is_recorded_before_execution(
         blob_store=blob_store,
         adapter=recorded_adapter,
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
     after = helpers.audit_run_row(session, started.run_id)
 
@@ -222,6 +226,7 @@ def test_model_call_provenance_records_the_adapter_that_answered(
         blob_store=blob_store,
         adapter=recorded_adapter,
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
 
     rows = (
@@ -262,6 +267,7 @@ def test_every_published_finding_resolves_to_the_seeded_version(
         blob_store=blob_store,
         adapter=recorded_adapter,
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
 
     rows = (

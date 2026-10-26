@@ -75,6 +75,7 @@ from sqlalchemy.orm import Session
 from auditmanager.analysis.text import CostMeter, ProviderMode
 from auditmanager.runs import execute_run, start_audit_run
 from auditmanager.shared.errors import DomainError, ErrorCode
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE, resolve_reference_profile
 
 #: The keys ``W2-PROV`` puts into the text stage's metrics, and the keys ``W2-RUN`` puts
 #: there. Declared as data rather than spelled inline in each assertion so that a key
@@ -153,7 +154,7 @@ def _run(
     started = start_audit_run(
         session,
         version_uid=seed["version_uid"],
-        analysis_profile_id=str(harness.AR_TEXT_PROFILE.analysis_profile_id),
+        analysis_profile_id=str(harness.V1_REFERENCE_PROFILE.analysis_profile_id),
         prompt_bundle_id=str(harness.AR_TEXT_PROMPT_BUNDLE.prompt_bundle_id),
         provider_mode="recorded",
         idempotency_key=harness.new_key(label),
@@ -167,6 +168,7 @@ def _run(
         provider_config=provider_config,
         cost_meter=cost_meter,
         sleep=_no_wait,
+        text_profiles=resolve_reference_profile,
     )
     session.commit()
     return str(started.run_id)

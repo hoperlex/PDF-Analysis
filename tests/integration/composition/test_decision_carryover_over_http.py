@@ -133,7 +133,8 @@ def world() -> dict[str, Any]:
             f"/projects/{project_uid}/documents/{world['document_uid']}"
             f"/versions/{version_uid}/classification",
             headers=_json(world),
-            content=json.dumps({"project_stage": "P", "section_code": "AR"}).encode("utf-8"),
+            # `PROD-11-AR-V1-V2-REMOVAL-01`: the served startRun refuses an АР version, so the version that must run is classified ПБ, whose recording carries the corpus run's findings.
+            content=json.dumps({"project_stage": "P", "section_code": "PB"}).encode("utf-8"),
         )
         assert classified.status_code == 200, classified.content
         started = client.post(

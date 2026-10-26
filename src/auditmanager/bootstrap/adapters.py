@@ -836,9 +836,9 @@ class RunAdapter(_SessionHolder):
         adapter: Any,
         provider_config: Any,
         provider_mode: str,
-        analysis_profile_id: str,
-        prompt_bundle_id: str,
         carrier: Any,
+        analysis_profile_id: str | None = None,
+        prompt_bundle_id: str | None = None,
         input_budget_characters: int | None = None,
         section_profiles: Mapping[str, tuple[str, str]] | None = None,
         text_profiles: Any = None,
@@ -862,7 +862,14 @@ class RunAdapter(_SessionHolder):
         # re-audit route through, and the registry resolver the executor runs a run's pinned
         # profile with. The composition root always passes both
         # (``test_the_served_application_routes_by_section``); ``None`` keeps the many tests
-        # that build a bare adapter on the explicit configured pair.
+        # that build a bare adapter on the explicit pair they name. Since
+        # `PROD-11-AR-V1-V2-REMOVAL-01` the pair has no default and the composition root passes
+        # none: an adapter with neither a route table nor a pair is a wiring fault.
+        if section_profiles is None and (analysis_profile_id is None or prompt_bundle_id is None):
+            raise ValueError(
+                "a RunAdapter routes by a section table or names an analysis profile and a "
+                "prompt bundle; it has neither"
+            )
         self._section_profiles = section_profiles
         self._text_profiles = text_profiles
         self._blob_store = blob_store
@@ -1091,8 +1098,9 @@ class RunAdapter(_SessionHolder):
         """The registry resolver the executor runs a pinned profile with, or ``None``."""
         return self._text_profiles
 
-    def current_configuration(self) -> tuple[str, str, str]:
-        """The analysis profile, prompt bundle and provider mode a new run receives.
+    def current_configuration(self) -> tuple[str | None, str | None, str]:
+        """The explicit analysis profile and prompt bundle (``None`` on a routed deployment), and
+        the provider mode a new run receives.
 
         `R-82`. The same three values ``start_run`` stamps, read from the same fields, so
         a re-audit can only ever record the configuration this deployment executes.
@@ -2816,7 +2824,7 @@ class AnalysisProfileAdapter:
 
 
 def _profile_summary(entry: Any) -> models.AnalysisProfileSummary:
-    """One registry entry as the frozen summary. ``source`` is ``None`` for builtin AR."""
+    """One registry entry as the frozen summary. ``source`` is ``None`` for an authored section (``PB``)."""
     profile = entry.profile
     source = entry.source
     return models.AnalysisProfileSummary(

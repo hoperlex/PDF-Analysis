@@ -37,6 +37,7 @@ from auditmanager.analysis.text.provenance import (
 )
 from auditmanager.shared.errors import ErrorCode
 from auditmanager.shared.identity import RunId
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE
 
 RECORDINGS = Path(__file__).resolve().parents[3] / "fixtures/recorded/text_analysis"
 RECORDING_NAME = "6c208358cfa9ae3a7591223084f87250084c9c6f8070f211d8e2fd9e278dbd1d.json"
@@ -83,7 +84,8 @@ def test_the_stage_reports_the_providers_output_token_figure(
     adapter = recorded_adapter if variant is None else variant_adapter(variant)
 
     outcome = run_text_analysis(
-        run_id=RunId.new(), text_layer_document=text_layer_document, adapter=adapter
+        run_id=RunId.new(), text_layer_document=text_layer_document, adapter=adapter,
+        profile=V1_REFERENCE_PROFILE,
     )
     assert outcome.status == expected_stage_status
 
@@ -123,6 +125,7 @@ def test_the_output_token_count_sits_beside_the_finding_count(
         run_id=RunId.new(),
         text_layer_document=text_layer_document,
         adapter=variant_adapter("truncated"),
+        profile=V1_REFERENCE_PROFILE,
     )
     metrics = outcome.metrics
 
@@ -148,6 +151,7 @@ def test_a_budget_overrun_still_reports_what_the_call_produced(
         text_layer_document=text_layer_document,
         adapter=variant_adapter("over_budget"),
         meter=CostMeter(ceiling_usd=0.01),
+        profile=V1_REFERENCE_PROFILE,
     )
 
     assert outcome.status == STATUS_FAILED

@@ -35,6 +35,7 @@ from auditmanager.executors.runtime import DestinationPolicy, KindRuntime
 from auditmanager.runs import RunRepository, execute_run, start_audit_run
 from tests.integration.executors.test_runner_bridge_e2e import Serialised, stand  # noqa: F401  (stand is a fixture)
 from tests.integration.executors.test_runner_channel import admin_call, issue, make_connection
+from tests.support.v1_reference_profile import resolve_reference_profile
 
 _HARNESS_NAME = "b5_run_harness"
 _HARNESS_PATH = Path(__file__).resolve().parents[1] / "runs" / "harness.py"
@@ -174,6 +175,7 @@ def _execute_with_agent_started_at_the_first_wait(
     result = execute_run(
         session, run_id, blob_store=blob_store, adapter=UnboundAdapter(), provider_config=LIVE,
         providers=providers.resolve,
+        text_profiles=resolve_reference_profile,
     )
     return result, started[0]
 

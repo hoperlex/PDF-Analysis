@@ -32,6 +32,7 @@ from auditmanager.runs.repository import RunRepository
 from auditmanager.runs.scope import ABSENT_CAPABILITIES, AGGREGATES_NOT_INSTANTIATED
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import AnalysisProfileId, PromptBundleId, RunId
+from tests.support.v1_reference_profile import resolve_reference_profile
 
 
 def _key() -> str:
@@ -86,6 +87,7 @@ def test_a_pause_between_hint_and_claim_leaves_the_run_queued(
             run_to_terminal(
                 sessions, run_id, blob_store=blob_store, adapter=recorded_adapter,
                 provider_config=provider_config,
+                text_profiles=resolve_reference_profile,
             )
         assert refusal.value.code is ErrorCode.CONFLICT
 
@@ -242,6 +244,7 @@ def test_a_crash_after_a_failed_replay_resumes_instead_of_failing(
             session, run_id, blob_store=blob_store, adapter=_FailingReplay(),
             provider_config=provider_config, sleep=lambda _seconds: None,
             effect_checkpoint=crash_after_the_provider_journal,
+            text_profiles=resolve_reference_profile,
         )
 
     effect_state = session.execute(text(

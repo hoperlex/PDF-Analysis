@@ -41,6 +41,7 @@ from auditmanager.shared.identity import IdempotencyKey
 from auditmanager.workers.__main__ import health
 from auditmanager.workers.public import WorkerRegistry, WorkerService, set_worker_intake
 from auditmanager.workers.service import IDENTITY_FILE
+from tests.support.v1_reference_profile import resolve_reference_profile
 
 pytestmark = pytest.mark.usefixtures("quiet_queue")
 
@@ -165,6 +166,7 @@ def start_worker(
             run_to_terminal(
                 sessions, run_id, blob_store=blob_store, adapter=adapter,
                 provider_config=provider_config, worker_id=worker_id,
+                text_profiles=resolve_reference_profile,
             )
 
         service = WorkerService(
@@ -201,6 +203,7 @@ def test_the_api_role_claims_nothing_and_the_worker_runs_it(
         provider_config=provider_config, provider_mode="recorded",
         analysis_profile_id=seeded.analysis_profile_id,
         prompt_bundle_id=seeded.prompt_bundle_id, carrier=carrier,
+        text_profiles=resolve_reference_profile,
     )
     start_serving_carrier(carrier)
     try:

@@ -5,12 +5,14 @@ registered here; the executor resolves the run's pinned profile through the same
 every v1-style text run executes with its own prompt bundle. A section with no entry is
 refused at run start -- there is no AR fallback.
 
-Two sources, and only two:
+**АР is not registered** (`PROD-11-AR-V1-V2-REMOVAL-01`, `ADR-0024` section 2, `AD-12`): the АР
+analysis path of production is the six-Run v3 group, not a text profile. The AR v1 constants were
+this registry's first entry until that task; they are gone, so ``startRun`` and ``reauditRun`` on
+a version classified АР answer ``section_profile_unavailable`` and ``listAnalysisProfiles`` answers
+``profile: null`` for АР. There is no ``profiles/ar/`` package and one is refused (a package may
+not make АР a text profile again).
 
-* **AR** is registered from the existing v1 constants (:data:`.profile.AR_TEXT_PROFILE`),
-  unchanged: same identities, same prompt, same content hash, so every historical AR run
-  resolves exactly as before. There is no ``profiles/ar/`` package and one would be refused.
-* **Data packages** ``profiles/<code_lower>/{profile.json, system_prompt.md}`` in the format
+One source: the **data packages** ``profiles/<code_lower>/{profile.json, system_prompt.md}`` in the format
   ``text-profile/1`` (integration contract of the task). ``profile.json`` holds exactly the
   keys ``format``, ``section_code``, ``analysis_profile_id`` (``ap_`` ULID),
   ``prompt_bundle_id`` (``pb_`` ULID), ``profile_version``, ``status`` (``draft`` or
@@ -20,8 +22,8 @@ Two sources, and only two:
   trailing ``"\\n"`` is stripped from the prompt file (an editor's final newline), so the
   bundle text has v1's convention of no trailing newline and its hash is deterministic.
 
-A package whose ``section_code`` is outside the fifteen, duplicates another entry (AR
-included), does not match its directory name, or reuses another entry's profile or bundle
+A package whose ``section_code`` is outside the fifteen, is ``AR``, duplicates another entry,
+does not match its directory name, or reuses another entry's profile or bundle
 identity refuses the **whole** load with :class:`TextProfileLoadError`; the composition root
 turns that into a start-up failure rather than serving a partial registry. ``draft`` and
 ``reviewed`` are both executable: a draft profile's status is recorded, not hidden.
@@ -46,7 +48,7 @@ from types import MappingProxyType
 from typing import Any, Final
 
 from auditmanager.analysis.text.lock import STAGE_ID
-from auditmanager.analysis.text.profile import AR_TEXT_PROFILE, AnalysisProfile
+from auditmanager.analysis.text.profile import AnalysisProfile
 from auditmanager.analysis.text.prompt import (
     CATEGORIES,
     EFFORT,
@@ -59,6 +61,7 @@ from auditmanager.shared.identity import AnalysisProfileId, IdentityError, Promp
 
 __all__ = [
     "AUTHORED_SECTIONS",
+    "NOT_A_TEXT_PROFILE",
     "PACKAGE_FORMAT",
     "PACKAGES_ROOT",
     "PROJECT_STRUCTURE_ORDER",
@@ -100,6 +103,9 @@ if len(PROJECT_STRUCTURE_ORDER) != len(SECTION_CODES) or set(PROJECT_STRUCTURE_O
 #: disciplines and fire safety as a section of its own is not among them. A section joins this
 #: set by a code change that a reviewer sees, never by a package declaring itself authored.
 AUTHORED_SECTIONS: Final[frozenset[str]] = frozenset({"PB"})
+
+#: The one section code that no package may claim (see the module note).
+NOT_A_TEXT_PROFILE: Final[str] = "AR"
 
 _PROFILE_KEYS: Final[frozenset[str]] = frozenset(
     {
@@ -156,13 +162,13 @@ class RegisteredTextProfile:
 
     section_code: str
     profile: AnalysisProfile
-    #: ``builtin`` for AR's v1 constants; otherwise the package's ``draft``/``reviewed``.
+    #: The package's ``draft``/``reviewed``.
     status: str
     title_ru: str
-    #: The package directory relative to :data:`PACKAGES_ROOT`, or ``None`` for builtin AR.
-    package: str | None
-    #: The package's validated ``source`` block, or ``None`` for builtin AR (whose prompt
-    #: was written in this repository, not ported). `W59-ANALYSIS-SETTINGS-01` lists it.
+    #: The package directory relative to :data:`PACKAGES_ROOT`.
+    package: str
+    #: The package's validated ``source`` block, or ``None`` for an authored section (``PB``),
+    #: whose prompt was written in this repository, not ported. `W59-ANALYSIS-SETTINGS-01` lists it.
     source: TextProfileSource | None = None
 
     @property
@@ -229,24 +235,14 @@ class TextProfileRegistry:
         return entry.profile
 
 
-def _builtin_ar() -> RegisteredTextProfile:
-    return RegisteredTextProfile(
-        section_code="AR",
-        profile=AR_TEXT_PROFILE,
-        status="builtin",
-        title_ru="Архитектурные решения",
-        package=None,
-    )
-
-
 def load_text_profile_registry(root: Path = PACKAGES_ROOT) -> TextProfileRegistry:
-    """AR from the v1 constants plus every package under ``root``, or refuse the whole load.
+    """Every package under ``root``, or refuse the whole load.
 
-    A missing ``root`` registers AR alone. Entries whose names start with ``_`` or ``.``
+    A missing ``root`` registers nothing. Entries whose names start with ``_`` or ``.``
     (``__pycache__``, a stray dot-file) and plain files are not packages and are ignored;
     every other directory must be a valid package.
     """
-    entries: list[RegisteredTextProfile] = [_builtin_ar()]
+    entries: list[RegisteredTextProfile] = []
     if root.is_dir():
         for directory in sorted(root.iterdir(), key=lambda item: item.name):
             if directory.name.startswith(("_", ".")) or not directory.is_dir():
@@ -272,6 +268,10 @@ def _load_package(directory: Path, root: Path) -> RegisteredTextProfile:
     code = data["section_code"]
     if not isinstance(code, str) or code not in SECTION_CODES:
         raise TextProfileLoadError(f"section_code_unknown: {name}")
+    if code == NOT_A_TEXT_PROFILE:
+        # `PROD-11-AR-V1-V2-REMOVAL-01`: АР is the v3 group's, never a text profile. Without this a
+        # package named ``ar`` would register АР again and ``startRun`` would route to it.
+        raise TextProfileLoadError(f"section_code_not_a_text_profile: {name}")
     if name != code.lower():
         raise TextProfileLoadError(f"package_directory_mismatch: {name} holds {code}")
     authored = code in AUTHORED_SECTIONS

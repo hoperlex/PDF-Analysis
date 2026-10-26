@@ -24,6 +24,7 @@ from auditmanager.analysis.text.config import DEPENDENCY_NAME
 from auditmanager.runs import execute_run, start_audit_run
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import IdempotencyKey
+from tests.support.v1_reference_profile import resolve_reference_profile
 
 
 def _run_against(session, seeded, blob_store, adapter, provider_config) -> str:
@@ -53,6 +54,7 @@ def _run_against(session, seeded, blob_store, adapter, provider_config) -> str:
             adapter=adapter,
             provider_config=provider_config,
             sleep=waits.append,
+            text_profiles=resolve_reference_profile,
         )
     except DomainError:
         pass

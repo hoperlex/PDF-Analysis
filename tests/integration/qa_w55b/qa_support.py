@@ -462,9 +462,11 @@ def create_project(token: str, name: str = "W55B QA project") -> str:
 #: classified (``422 version_classification_required`` since `BETA-CONTRACT-SEAL-01`; a draft
 #: said ``required_norm_unavailable`` with ``details.reference_kind: version_classification``)
 #: and there is no AR fallback. Every probe here runs the AR
-#: corpus, so each version it runs is classified first as a design-stage AR version
+#: corpus, so each version it runs is classified first as a design-stage version
 #: (`W59-SEAL-FOLLOWUP-01`), by the expert that uploaded it. Written out, not imported.
-CLASSIFICATION = {"project_stage": "P", "section_code": "AR"}
+#: `PROD-11-AR-V1-V2-REMOVAL-01`: the section is ПБ, not АР: the served `startRun` refuses an АР
+#: version, and ПБ is the section whose recording replays over the same corpus text.
+CLASSIFICATION = {"project_stage": "P", "section_code": "PB"}
 
 
 def classify(uploaded: Mapping[str, Any], token: str) -> dict[str, Any]:

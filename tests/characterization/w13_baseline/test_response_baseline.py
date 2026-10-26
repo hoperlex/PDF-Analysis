@@ -433,13 +433,14 @@ _PRE_CLASSIFICATION_VERSION_BODIES = {
 }
 
 #: The one property each of the three bodies gained, exactly as a tokenised record spells it:
-#: the classification case 02b asked for (stage ``P``, section ``AR``), the version and the
+#: the classification case 02b asked for (stage ``P``, section ``KJ`` since
+#: `PROD-11-AR-V1-V2-REMOVAL-01`, ``AR`` before), the version and the
 #: confirmer by exact value, ``confirmed_at`` under its declared timestamp name and, since
 #: `CLASSIFICATION-CORRECTION-01`, the ``revision`` (``1``: the original confirmation). It is
 #: written out here and is not read from the journey or from case 02b's record.
 _APPENDED_CLASSIFICATION = (
     ', "classification": {"version_uid": "{{version_uid}}", "project_stage": "P", '
-    '"section_code": "AR", "confirmed_by_user_uid": "{{user_uid}}", "confirmed_at": '
+    '"section_code": "KJ", "confirmed_by_user_uid": "{{user_uid}}", "confirmed_at": '
     '"{{ts_6}}", "revision": 1}'
 )
 
@@ -508,13 +509,56 @@ def test_the_four_classification_records_moved_by_the_revision_and_nothing_else(
         assert '"confirmed_at": "' + stamp + '"' + appended + "}" in text, (
             f"{case}: the revision is not the last property of the classification"
         )
-        restored = text.replace(appended, "")
+        # The digests are of the captures of `CLASSIFICATION-CORRECTION-01`, when the section was
+        # AR; the section move is pinned by the test below, and undone here first.
+        restored = text.replace(appended, "").replace('"section_code": "KJ"', '"section_code": "AR"')
         assert hashlib.sha256(restored.encode("utf-8")).hexdigest() == digest, (
             f"{case} moved by more than its revision"
         )
         assert "D-182" in record["exception"]["debt"], case
         assert "CLASSIFICATION-CORRECTION-01" in record["exception"]["permitted_change"], case
         assert record["exception"]["decided_by"] in ("f290f7b7", "bd08e03c"), case
+
+
+#: `PROD-11-AR-V1-V2-REMOVAL-01`. The SHA-256 of the four classification-bearing records' body text
+#: as committed at ``1c8d29fa``, the base of the task, when the journey's version was classified
+#: ``AR``. Read from the record files at that commit (``git show 1c8d29fa:<record>``), never from the
+#: files now. 32 and 33 share a digest for the reason the earlier ones do.
+_PRE_SECTION_MOVE_BODIES = {
+    "02b-classifyDocumentVersion.success": (
+        "80ac0b36d4a1b056fe0a605eb619d395dee91233d18bf110c759a1adec7319f8"
+    ),
+    "13-getDocumentVersion.success": (
+        "774f3761334e20ab346e59d35139ccd2c0e60d8bcf1bb0d1402414d7b1c5216d"
+    ),
+    "32-listDocuments.success": (
+        "9a592cd68f0d175cbc83747cf95d2ce2320385c538293ac8054827d923da8a5b"
+    ),
+    "33-listVersions.success": (
+        "9a592cd68f0d175cbc83747cf95d2ce2320385c538293ac8054827d923da8a5b"
+    ),
+}
+
+
+def test_the_four_classification_records_moved_by_the_section_and_nothing_else() -> None:
+    """Put `AR` back where the one section code is and each body is the base capture's again.
+
+    The served `startRun` refuses a version classified `AR` (`PROD-11-AR-V1-V2-REMOVAL-01`), so the
+    journey's version is classified `KJ` and the v1 reference profile is registered under `KJ`
+    for this journey (``journey.build_apps``). What is pinned is the *difference*: one
+    ``"section_code": "KJ"`` per body, where ``"AR"`` was, and no other byte. Every run record is
+    unchanged, so none of them is marked.
+    """
+    for case, digest in _PRE_SECTION_MOVE_BODIES.items():
+        record = json.loads((journey.RECORDS / f"{case}.json").read_text(encoding="utf-8"))
+        text = record["response"]["body"]["text"]
+        assert text.count('"section_code": "KJ"') == 1, case
+        assert '"section_code": "AR"' not in text, case
+        restored = text.replace('"section_code": "KJ"', '"section_code": "AR"')
+        assert hashlib.sha256(restored.encode("utf-8")).hexdigest() == digest, (
+            f"{case} moved by more than its section code"
+        )
+        assert "PROD-11-AR-V1-V2-REMOVAL-01" in record["exception"]["permitted_change"], case
 
 
 #: `W59-SEAL-FOLLOWUP-01`, finding F-1. The SHA-256 of records 04-07 and 34's body text as

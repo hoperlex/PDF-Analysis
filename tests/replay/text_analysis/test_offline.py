@@ -14,6 +14,7 @@ import socket
 import pytest
 
 from auditmanager.analysis.text import ProviderMode, RecordedAdapter
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE
 
 
 def test_socket_guard_refuses_a_socket():
@@ -43,7 +44,8 @@ def test_full_replay_runs_with_sockets_refused(text_layer_document, recorded_ada
     from auditmanager.shared.identity import RunId
 
     outcome = run_text_analysis(
-        run_id=RunId.new(), text_layer_document=text_layer_document, adapter=recorded_adapter
+        run_id=RunId.new(), text_layer_document=text_layer_document, adapter=recorded_adapter,
+        profile=V1_REFERENCE_PROFILE,
     )
     assert outcome.status == STATUS_SUCCEEDED
     assert outcome.artifact is not None

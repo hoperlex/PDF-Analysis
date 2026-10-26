@@ -16,13 +16,7 @@ from auditmanager.findings.retrieval_set_input import (
     recheck_verified_retrieval_set_facts,
 )
 from auditmanager.findings.queries import finding_exists, observation_belongs_to_finding
-from auditmanager.findings.recorded_saved_plan import (
-    SavedRecordedPublicationPlan, plan_recorded_saved_publication,
-)
 from auditmanager.findings.terminal import TerminalSelection, select_terminal
-from auditmanager.findings.v2_publication import (
-    V2PublicationContext, V2PublicationResult, publish_v2_merge_plan,
-)
 
 
 _PUBLICATION_ROWS_FOR_RUN = text(
@@ -40,19 +34,14 @@ __all__ = [
     "CitationEvidence",
     "ObservationSet",
     "PublicationResult",
-    "SavedRecordedPublicationPlan",
     "TerminalSelection",
     "TextLayer",
     "RetrievalSetInputRefused",
     "VerifiedRetrievalSetInput",
     "V3PublicationCandidate",
-    "V2PublicationContext",
-    "V2PublicationResult",
     "finding_exists",
     "observation_belongs_to_finding",
     "publish_gate_result",
-    "publish_v2_merge_plan",
-    "plan_recorded_saved_publication",
     "publication_rows_exist",
     "load_verified_retrieval_set",
     "recheck_verified_retrieval_set_facts",

@@ -25,6 +25,7 @@ from auditmanager.runs import RunRepository, execute_run, start_audit_run
 from auditmanager.runs.commands import reaudit_run
 from auditmanager.shared.errors import DomainError
 from auditmanager.shared.identity import ModelCallId
+from tests.support.v1_reference_profile import resolve_reference_profile
 
 _HARNESS_NAME = "b5_run_harness"
 _HARNESS_PATH = Path(__file__).resolve().parents[1] / "runs" / "harness.py"
@@ -84,6 +85,7 @@ def _execute(session: Any, blob_store: Any, run_id: str, providers: Any) -> Any:
     return execute_run(
         session, run_id, blob_store=blob_store, adapter=UnboundAdapter(), provider_config=LIVE,
         providers=providers.resolve,
+        text_profiles=resolve_reference_profile,
     )
 
 
@@ -501,6 +503,7 @@ def test_under_the_environment_source_a_stub_model_fails_closed_and_an_explicit_
             result = execute_run(
                 session, started.run_id, blob_store=blob_store, adapter=adapter,
                 provider_config=LIVE, providers=source.resolve,
+                text_profiles=resolve_reference_profile,
             )
             outcomes[model] = (result.terminal_state, _rows(session, started.run_id),
                                published_finding_count(session, started.run_id))
@@ -529,6 +532,7 @@ def test_the_environment_source_is_unchanged_and_records_no_revision(
     result = execute_run(
         session, started.run_id, blob_store=blob_store, adapter=recorded_adapter,
         provider_config=provider_config, providers=source.resolve,
+        text_profiles=resolve_reference_profile,
     )
     rows = _rows(session, started.run_id)
     assert result.terminal_state == "published"

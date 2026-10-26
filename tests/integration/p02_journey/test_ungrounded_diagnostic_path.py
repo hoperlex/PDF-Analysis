@@ -29,7 +29,8 @@ import json
 import pytest
 from sqlalchemy import text
 
-from auditmanager.analysis.text import AR_TEXT_PROFILE, AR_TEXT_PROMPT_BUNDLE
+from auditmanager.analysis.text import AR_TEXT_PROMPT_BUNDLE
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE
 
 
 @pytest.fixture(scope="module")
@@ -97,7 +98,7 @@ def test_no_grounded_false_row_exists_anywhere(ungrounded_run, session):
     emptying the claim.
     """
     scope = {
-        "ap": str(AR_TEXT_PROFILE.analysis_profile_id),
+        "ap": str(V1_REFERENCE_PROFILE.analysis_profile_id),
         "pb": str(AR_TEXT_PROMPT_BUNDLE.prompt_bundle_id),
     }
     own = session.execute(

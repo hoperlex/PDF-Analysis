@@ -31,10 +31,10 @@ import pytest
 from auditmanager.analysis.text.anchors import ResolvedAnchor
 from auditmanager.analysis.text.artifact import Observation, build_text_observations
 from auditmanager.analysis.text.config import ProviderMode
-from auditmanager.analysis.text.profile import AR_TEXT_PROFILE
 from auditmanager.analysis.text.textlayer import load_text_layer
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import ModelCallId, RunId
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE
 
 #: Pinned literals, matching guard 4's document so the offsets below are hand-checkable.
 PAGE_ONE = "Отчёт за год.\n"   # 14 code points, offsets 0..14
@@ -81,7 +81,7 @@ def _observation(**overrides: Any) -> Observation:
 def _build(**overrides: Any) -> dict[str, Any]:
     kwargs: dict[str, Any] = {
         "run_id": RunId.new(),
-        "profile": AR_TEXT_PROFILE,
+        "profile": V1_REFERENCE_PROFILE,
         "provider_mode": ProviderMode.RECORDED,
         "text_layer": _text_layer(),
         "pages_analysed": [1, 2],

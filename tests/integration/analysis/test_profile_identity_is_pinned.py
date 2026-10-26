@@ -1,16 +1,22 @@
 """``analysis.text.profile``: the immutable profile and prompt-bundle identity.
 
-`W10-ANL` mutation sweep, rows PR-01, PR-02, PR-04, PR-05. Changing the pinned
-`ANALYSIS_PROFILE_ID`, changing `PROFILE_VERSION`, changing `DISCIPLINE` and disabling
-`resolve_profile`'s unknown-identity refusal were all green across
+`PROD-11-AR-V1-V2-REMOVAL-01`: АР is no longer a profile of the product, so ``AR_TEXT_PROFILE`` and
+``resolve_profile`` are gone from ``src`` and with them row PR-02 (the unknown-identity refusal)
+and the two resolution tests (three tests, four cases, deleted). What stays pinned is the **retired
+identity** ``ANALYSIS_PROFILE_ID`` that ``profile.py`` keeps, the prompt-bundle identity, and the
+v1 machinery's reference profile of the tests (``tests/support/v1_reference_profile.py``), whose
+version, discipline, stage and categories the machinery tests are written against.
+
+`W10-ANL` mutation sweep, rows PR-01, PR-04, PR-05. Changing the pinned
+`ANALYSIS_PROFILE_ID`, changing `PROFILE_VERSION` and changing `DISCIPLINE` were all green across
 `tests/integration/analysis_engine`, `tests/integration/analysis_text` and `tests/replay`.
 
 `tests/integration/analysis_text/test_profile_and_artifact.py` has a test named
 `test_the_profile_is_resolved_by_a_pinned_identity`, and it does not pin the identity:
 
-    resolved = resolve_profile(AR_TEXT_PROFILE.analysis_profile_id)
-    assert resolved is AR_TEXT_PROFILE
-    assert str(AR_TEXT_PROFILE.analysis_profile_id).startswith("ap_")
+    resolved = resolve_profile(V1_REFERENCE_PROFILE.analysis_profile_id)
+    assert resolved is V1_REFERENCE_PROFILE
+    assert str(V1_REFERENCE_PROFILE.analysis_profile_id).startswith("ap_")
 
 It feeds the module's own constant back into the module and asserts the result is the
 module's own object, so both sides of the comparison move together under mutation; the
@@ -30,9 +36,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pytest
-
-from auditmanager.analysis.text.profile import AR_TEXT_PROFILE, resolve_profile
+from auditmanager.analysis.text.profile import ANALYSIS_PROFILE_ID as RETIRED_PROFILE_ID
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -46,23 +51,24 @@ CATEGORIES = ("internal_contradiction", "explicit_placeholder")
 
 
 def test_the_profile_identity_is_the_pinned_literal() -> None:
-    """PR-01. The identity is this string and no other."""
-    assert str(AR_TEXT_PROFILE.analysis_profile_id) == ANALYSIS_PROFILE_ID
+    """PR-01. The identity is this string and no other, in ``src`` (retired) and in the reference."""
+    assert str(V1_REFERENCE_PROFILE.analysis_profile_id) == ANALYSIS_PROFILE_ID
+    assert str(RETIRED_PROFILE_ID) == ANALYSIS_PROFILE_ID
 
 
 def test_the_prompt_bundle_identity_is_the_pinned_literal() -> None:
-    assert str(AR_TEXT_PROFILE.prompt_bundle.prompt_bundle_id) == PROMPT_BUNDLE_ID
+    assert str(V1_REFERENCE_PROFILE.prompt_bundle.prompt_bundle_id) == PROMPT_BUNDLE_ID
 
 
 def test_the_profile_declares_the_pinned_version_discipline_and_stage() -> None:
     """PR-04 and PR-05."""
-    assert AR_TEXT_PROFILE.profile_version == PROFILE_VERSION
-    assert AR_TEXT_PROFILE.discipline == DISCIPLINE
-    assert AR_TEXT_PROFILE.stage_id == STAGE_ID
+    assert V1_REFERENCE_PROFILE.profile_version == PROFILE_VERSION
+    assert V1_REFERENCE_PROFILE.discipline == DISCIPLINE
+    assert V1_REFERENCE_PROFILE.stage_id == STAGE_ID
 
 
 def test_the_profile_declares_exactly_the_two_pinned_categories() -> None:
-    assert tuple(AR_TEXT_PROFILE.categories) == CATEGORIES
+    assert tuple(V1_REFERENCE_PROFILE.categories) == CATEGORIES
 
 
 def test_the_pinned_categories_are_the_migration_s_finding_categories() -> None:
@@ -83,27 +89,3 @@ def test_the_pinned_categories_are_the_migration_s_finding_categories() -> None:
         if part.strip()
     )
     assert from_migration == CATEGORIES
-
-
-def test_resolving_the_pinned_literal_returns_the_profile() -> None:
-    """The literal is what resolves — not a value taken back out of the module."""
-    assert resolve_profile(ANALYSIS_PROFILE_ID) is AR_TEXT_PROFILE
-
-
-def test_the_default_resolution_is_the_pinned_literal() -> None:
-    assert str(resolve_profile().analysis_profile_id) == ANALYSIS_PROFILE_ID
-
-
-@pytest.mark.parametrize(
-    "unknown",
-    [
-        "ap_01M25P3TH08VVTTGJRXYBZZ7RQ",  # one character off the pinned identity
-        "ap_00000000000000000000000000",
-        "",
-        "not-an-identity",
-    ],
-)
-def test_an_unregistered_profile_identity_is_refused(unknown: str) -> None:
-    """PR-02. `resolve_profile` refuses rather than returning the one profile anyway."""
-    with pytest.raises(KeyError, match="no analysis profile is registered"):
-        resolve_profile(unknown)

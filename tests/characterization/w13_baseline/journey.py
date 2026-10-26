@@ -495,11 +495,14 @@ EXCEPTION_W59SEAL = {
         "Before bd08e03c no `DocumentVersion` body carried a classification, and none "
         "could: there was no operation to confirm one. Since then `startRun` refuses an "
         "unclassified version, so W59-SEAL-FOLLOWUP-01 added case 02b, which classifies "
-        "case 02's version as project stage `P`, section `AR`, by the account the journey "
+        "case 02's version as project stage `P`, section `KJ` (it was `AR` until "
+        "`PROD-11-AR-V1-V2-REMOVAL-01`; "
+        "`test_the_four_classification_records_moved_by_the_section_and_nothing_else`), by the "
+        "account the journey "
         "presents. Every read that returns that version now ends its body with "
         "`classification`, appended after `display_title` because `document_version_body` "
         "emits it last: an object of five properties -- `version_uid`, `project_stage` "
-        "(`P`), `section_code` (`AR`), `confirmed_by_user_uid` and `confirmed_at` -- holding "
+        "(`P`), `section_code` (`KJ`), `confirmed_by_user_uid` and `confirmed_at` -- holding "
         "the same five values case 02b answered, the version and the confirmer tokenised by "
         "exact value and `confirmed_at` under its declared timestamp name. **No property "
         "was renamed, removed, re-typed "
@@ -551,6 +554,12 @@ EXCEPTION_CCORR = {
         "by digest. `additionalProperties: false` is satisfied because `revision` is a name "
         "the resealed document declares. This is the whole of the permitted change; the record "
         "is compared byte for byte against the new expectation like every other."
+        " `PROD-11-AR-V1-V2-REMOVAL-01` then changed the section this case confirms from `AR` "
+        "to `KJ` (the served `startRun` refuses an АР version, so the journey's version is "
+        "classified as a section that has a text profile): `section_code` is `KJ` in this body "
+        "and in the three version reads, and nothing else moved, which "
+        "`test_the_four_classification_records_moved_by_the_section_and_nothing_else` asserts "
+        "by digest."
     ),
     "everything_else": (
         "Every other difference in this directory is a failure of the wave, whatever "
@@ -578,7 +587,14 @@ ACCOUNT_LABEL = "w13-baseline"
 
 #: `W59-SEAL-FOLLOWUP-01`. The classification case 02b confirms for the AR baseline: a
 #: design-stage (``P``) document of section ``AR``. Written out, not imported.
-CLASSIFICATION_REQUEST = {"project_stage": "P", "section_code": "AR"}
+#:
+#: `PROD-11-AR-V1-V2-REMOVAL-01`: the section is ``KJ`` now. The served ``startRun`` refuses a
+#: version classified ``AR`` (АР has no text profile any more), so a journey that must start and
+#: finish a run classifies its version as a section that has one. ``build_apps`` registers the v1
+#: machinery's reference profile -- the very prompt, pair and recording this corpus was captured
+#: with -- under ``KJ`` for this journey only, so every run record is what it was and only the four
+#: records that carry the classification moved, by the section code and nothing else.
+CLASSIFICATION_REQUEST = {"project_stage": "P", "section_code": "KJ"}
 
 
 _STATIC_TOKEN_CACHE: str | None = None
@@ -953,8 +969,9 @@ def build_apps() -> tuple[Any, Any]:
     """The application, and a second one whose storage credential is wrong.
 
     The second exists only for the D-7 case. It is a *configuration* override through the
-    composition root's own ``environ`` parameter -- nothing under ``src/`` is touched and
-    no module is patched.
+    composition root's own ``environ`` parameter -- nothing under ``src/`` is touched. Since
+    `PROD-11-AR-V1-V2-REMOVAL-01` there is one deliberate substitution while the two apps are
+    built (see below): the section registry the root loads.
     """
     load_env_file()
     for leaked in ("ANTHROPIC_API_KEY", "PROXY_LLM_BASE_URL", "PROXY_LLM_TOKEN"):
@@ -962,6 +979,15 @@ def build_apps() -> tuple[Any, Any]:
             f"{leaked} reached the baseline; a recorded capture must not be able to spend"
         )
     from auditmanager.api.app import create_asgi_app
+    import auditmanager.bootstrap.composition as composition
+    from auditmanager.analysis.text.lock import STAGE_ID
+    from auditmanager.analysis.text.profile import ANALYSIS_PROFILE_ID as RETIRED_PROFILE_ID
+    from auditmanager.analysis.text.profile import AnalysisProfile
+    from auditmanager.analysis.text.profile_registry import (
+        RegisteredTextProfile,
+        TextProfileRegistry,
+    )
+    from auditmanager.analysis.text.prompt import AR_TEXT_PROMPT_BUNDLE, CATEGORIES
 
     environ = dict(os.environ) | {
         "AUDITMANAGER_PROVIDER_MODE": "recorded",
@@ -970,10 +996,30 @@ def build_apps() -> tuple[Any, Any]:
         # read from `.env`, so this capture does not depend on a lane's configuration.
         API_TOKEN_VARIABLE: DEPLOYMENT_SECRET,
     }
-    good = create_asgi_app(environ=environ)
-    refused = create_asgi_app(
-        environ=environ | {"S3_SECRET_ACCESS_KEY": "not-the-configured-secret"}
+    # `PROD-11-AR-V1-V2-REMOVAL-01`. The one thing in this journey that is not the product's own
+    # wiring: the registry the composition root loads holds, for ``KJ``, the v1 machinery's
+    # reference profile (the retired АР v1 identity, prompt and categories, built from the
+    # constants ``analysis.text`` keeps) instead of ``KJ``'s package. Nothing else about the
+    # application is touched, and the substitution is undone as soon as both apps are built.
+    reference = AnalysisProfile(
+        analysis_profile_id=RETIRED_PROFILE_ID, profile_version="1.0.0", stage_id=STAGE_ID,
+        discipline="AR", categories=CATEGORIES, prompt_bundle=AR_TEXT_PROMPT_BUNDLE,
     )
+    registry = TextProfileRegistry([
+        RegisteredTextProfile(
+            section_code="KJ", profile=reference, status="draft",
+            title_ru="Конструктивные решения (ссылочный профиль v1)", package="kj",
+        ),
+    ])
+    real_loader = composition.load_text_profiles
+    composition.load_text_profiles = lambda: registry
+    try:
+        good = create_asgi_app(environ=environ)
+        refused = create_asgi_app(
+            environ=environ | {"S3_SECRET_ACCESS_KEY": "not-the-configured-secret"}
+        )
+    finally:
+        composition.load_text_profiles = real_loader
     return good, refused
 
 
@@ -1269,7 +1315,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
         headers=json_headers,
         body=json.dumps(CLASSIFICATION_REQUEST).encode("utf-8"),
         body_note=(
-            "ClassifyDocumentVersionRequest: project_stage P (design), section_code AR; "
+            "ClassifyDocumentVersionRequest: project_stage P (design), section_code KJ; "
             "no Idempotency-Key, the operation declares none"
         ),
         tokens=t,

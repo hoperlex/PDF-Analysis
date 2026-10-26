@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import text
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE, resolve_reference_profile
 
 ROOT = Path(__file__).resolve().parents[3]
 NEGATIVE = ROOT / "fixtures" / "synthetic" / "ar" / "negative"
@@ -111,13 +112,13 @@ def test_a_corpus_with_no_answer_fails_the_run_without_inventing_a_result(
         seed = h.seed_version_with_contract_manifest(session, blob_store, h.new_key("nodep"))
 
     with session_factory() as session:
-        from auditmanager.analysis.text import AR_TEXT_PROFILE, AR_TEXT_PROMPT_BUNDLE
+        from auditmanager.analysis.text import AR_TEXT_PROMPT_BUNDLE
         from auditmanager.runs import start_audit_run
 
         started = start_audit_run(
             session,
             version_uid=seed["version_uid"],
-            analysis_profile_id=str(AR_TEXT_PROFILE.analysis_profile_id),
+            analysis_profile_id=str(V1_REFERENCE_PROFILE.analysis_profile_id),
             prompt_bundle_id=str(AR_TEXT_PROMPT_BUNDLE.prompt_bundle_id),
             provider_mode="recorded",
             idempotency_key=h.new_key("run"),
@@ -130,7 +131,7 @@ def test_a_corpus_with_no_answer_fails_the_run_without_inventing_a_result(
     with session_factory() as session:
         try:
             execute_run(session, run_id, blob_store=blob_store, adapter=adapter,
-                        provider_config=provider_config)
+                        provider_config=provider_config, text_profiles=resolve_reference_profile)
             session.commit()
         except DomainError:
             session.rollback()

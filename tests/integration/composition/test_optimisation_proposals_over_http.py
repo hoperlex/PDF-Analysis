@@ -42,6 +42,7 @@ from starlette.testclient import TestClient
 
 from auditmanager.api.routers.idempotency import IDEMPOTENCY_HEADER
 from auditmanager.api.security import API_TOKEN_VARIABLE
+from tests.support.published_run import publish_reference_run
 
 DEPLOYMENT_SECRET = "w60-opt-proposals-over-http-token"
 EXPERT = "w60-opt-proposals-expert"
@@ -218,12 +219,13 @@ def world(app_and_client, expert, admin) -> dict[str, Any]:
     refused(ar)
     _price_list(client, expert, project)
     refused(ar)
-    started = client.post(
+    # `PROD-11-AR-V1-V2-REMOVAL-01`: the served startRun refuses an АР version, so the published run the АР reads need is made in-process (tests/support/published_run.py).
+    refused_start = client.post(
         "/runs", headers=expert | _key("run"), json={"version_uid": ar["version_uid"]},
     )
-    assert started.status_code == 202, started.content
-    run_id = started.json()["run_id"]
-    assert app.state.run_carrier.drain(timeout=300), "the run never finished"
+    assert refused_start.status_code == 422, refused_start.content
+    assert refused_start.json()["error_code"] == "section_profile_unavailable"
+    run_id = publish_reference_run(ar["version_uid"], tag="opt-proposals")
     assert client.get(f"/runs/{run_id}", headers=expert).json()["state"] == "published"
     # The lane database persists between runs, and a global vendor list cannot be unset: the
     # last refusal appears only on the first run, while no administrator has kept an AR list.

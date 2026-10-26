@@ -31,6 +31,7 @@ from auditmanager.analysis.text import (
 from auditmanager.analysis.text.config import ENV_COST_CEILING
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import RunId
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE
 
 
 def _pin():
@@ -50,7 +51,8 @@ def test_a_run_inside_the_ceiling_succeeds_and_records_its_spend(
     text_layer_document, recorded_adapter
 ):
     outcome = run_text_analysis(
-        run_id=RunId.new(), text_layer_document=text_layer_document, adapter=recorded_adapter
+        run_id=RunId.new(), text_layer_document=text_layer_document, adapter=recorded_adapter,
+        profile=V1_REFERENCE_PROFILE,
     )
     assert outcome.status == STATUS_SUCCEEDED
     pin = _pin()
@@ -69,6 +71,7 @@ def test_an_expensive_recording_halts_against_the_default_ceiling(
         run_id=RunId.new(),
         text_layer_document=text_layer_document,
         adapter=variant_adapter("over_budget"),
+        profile=V1_REFERENCE_PROFILE,
     )
     assert outcome.status == STATUS_FAILED
     assert outcome.error.code is ErrorCode.COST_BUDGET_EXCEEDED
@@ -90,6 +93,7 @@ def test_an_explicit_low_ceiling_halts_the_ordinary_run(
         text_layer_document=text_layer_document,
         adapter=recorded_adapter,
         config=config,
+        profile=V1_REFERENCE_PROFILE,
     )
     assert outcome.status == STATUS_FAILED
     assert outcome.error.code is ErrorCode.COST_BUDGET_EXCEEDED
@@ -102,6 +106,7 @@ def test_the_halt_never_shortens_the_document(text_layer_document, variant_adapt
         run_id=RunId.new(),
         text_layer_document=text_layer_document,
         adapter=variant_adapter("over_budget"),
+        profile=V1_REFERENCE_PROFILE,
     )
     assert outcome.status == STATUS_FAILED
     assert outcome.artifact is None
@@ -120,6 +125,7 @@ def test_a_meter_already_at_the_ceiling_issues_no_call(
         text_layer_document=text_layer_document,
         adapter=recorded_adapter,
         meter=spent,
+        profile=V1_REFERENCE_PROFILE,
     )
     assert outcome.status == STATUS_FAILED
     assert outcome.error.code is ErrorCode.COST_BUDGET_EXCEEDED

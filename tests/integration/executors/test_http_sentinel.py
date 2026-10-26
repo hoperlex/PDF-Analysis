@@ -32,6 +32,7 @@ from auditmanager.analysis.public import ModelRequest, ProxyDispatchError
 from auditmanager.executors.public import ExecutorRepository, request_probe
 from auditmanager.shared.identity import IdempotencyKey
 from auditmanager.executors.runtime import ProbeRunner, bind_connection
+from tests.support.v1_reference_profile import resolve_reference_profile
 
 _HARNESS_NAME = "b5_run_harness"
 _HARNESS_PATH = Path(__file__).resolve().parents[1] / "runs" / "harness.py"
@@ -169,7 +170,7 @@ def test_a_failed_run_stores_no_key_in_its_stage_error_or_call_rows(
             connection_route=providers.freeze)
         result = execute_run(session, started.run_id, blob_store=blob_store,
                              adapter=UnboundAdapter(), provider_config=config,
-                             providers=providers.resolve)
+                             providers=providers.resolve, text_profiles=resolve_reference_profile)
     finally:
         fake.stop()
     assert result.terminal_state == "failed"

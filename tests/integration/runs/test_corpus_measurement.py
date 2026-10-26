@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from auditmanager.exports import COLUMNS, export_run_csv
 from auditmanager.findings import published_finding_count
 from auditmanager.runs import execute_run, start_audit_run
+from tests.support.v1_reference_profile import resolve_reference_profile
 
 
 def test_report_the_corpus_run_figures(
@@ -40,6 +41,7 @@ def test_report_the_corpus_run_figures(
         blob_store=blob_store,
         adapter=recorded_adapter,
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
 
     findings = published_finding_count(session, started.run_id)

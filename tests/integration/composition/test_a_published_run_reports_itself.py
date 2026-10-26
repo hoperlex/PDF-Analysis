@@ -156,11 +156,11 @@ def published_run() -> dict[str, Any]:
     document_uid = answer.json()["document_uid"]
 
     # `W59-SECTION-SEAL-01`: run start routes from the version's expert classification and
-    # refuses an unclassified version; the AR baseline routes to the v1 AR profile.
+    # refuses an unclassified version. `PROD-11-AR-V1-V2-REMOVAL-01`: the served startRun refuses an АР version, so the version that must run is classified ПБ, whose recording carries the corpus run's findings.
     answer = client.put(
         f"/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification",
         headers=auth | {"Content-Type": "application/json"},
-        content=json.dumps({"project_stage": "R", "section_code": "AR"}).encode("utf-8"),
+        content=json.dumps({"project_stage": "R", "section_code": "PB"}).encode("utf-8"),
     )
     assert answer.status_code == 200, answer.content
 

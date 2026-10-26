@@ -27,6 +27,7 @@ from auditmanager.exports.policy import exportable_states, publishes_result
 from auditmanager.findings import published_finding_count
 from auditmanager.runs import RunRepository, execute_run, start_audit_run
 from auditmanager.shared.errors import DomainError, ErrorCode
+from tests.support.v1_reference_profile import resolve_reference_profile
 
 
 def _start(session: Session, seeded, key):
@@ -48,6 +49,7 @@ def _run_and_export(session, seeded, blob_store, adapter, provider_config, key):
         blob_store=blob_store,
         adapter=adapter,
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
     return started, result, export_run_csv(session, started.run_id)
 

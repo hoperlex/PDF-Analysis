@@ -38,7 +38,6 @@ from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.analysis.text import (
-    AR_TEXT_PROFILE,
     AR_TEXT_PROMPT_BUNDLE,
     ProviderConfig,
     ProviderMode,
@@ -53,6 +52,7 @@ from auditmanager.shared.db.config import DatabaseSettings, parse_database_url
 from auditmanager.shared.db.engine import create_database_engine
 from auditmanager.shared.identity import IdempotencyKey
 from auditmanager.storage import S3BlobStore, S3StorageSettings
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE, resolve_reference_profile
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 CORPUS = REPOSITORY_ROOT / "fixtures" / "synthetic" / "ar"
@@ -351,7 +351,7 @@ def drive_journey(
     started = start_audit_run(
         session,
         version_uid=str(version.version_uid),
-        analysis_profile_id=str(AR_TEXT_PROFILE.analysis_profile_id),
+        analysis_profile_id=str(V1_REFERENCE_PROFILE.analysis_profile_id),
         prompt_bundle_id=str(AR_TEXT_PROMPT_BUNDLE.prompt_bundle_id),
         provider_mode=provider_mode,
         idempotency_key=run_key,
@@ -364,6 +364,7 @@ def drive_journey(
         blob_store=blob_store,
         adapter=adapter,
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
     session.commit()
 
@@ -483,7 +484,7 @@ def run_from_seed(
     started = start_audit_run(
         session,
         version_uid=seed["version_uid"],
-        analysis_profile_id=str(AR_TEXT_PROFILE.analysis_profile_id),
+        analysis_profile_id=str(V1_REFERENCE_PROFILE.analysis_profile_id),
         prompt_bundle_id=str(AR_TEXT_PROMPT_BUNDLE.prompt_bundle_id),
         provider_mode=declared_provider_mode,
         idempotency_key=run_key,
@@ -495,6 +496,7 @@ def run_from_seed(
         blob_store=blob_store,
         adapter=adapter,
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
     session.commit()
     return str(started.run_id)

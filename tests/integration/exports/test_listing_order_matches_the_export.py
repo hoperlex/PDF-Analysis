@@ -30,6 +30,7 @@ from auditmanager.exports import export_rows
 from auditmanager.findings import published_findings
 from auditmanager.runs import execute_run, start_audit_run
 from auditmanager.shared.identity import IdempotencyKey
+from tests.support.v1_reference_profile import resolve_reference_profile
 
 #: Sorts before every real ``fnd_`` ULID: ``0`` is the lowest Crockford base32 digit.
 FIRST_UID = "fnd_" + "0" * 26
@@ -52,6 +53,7 @@ def _published_run(session: Session, seeded, blob_store, adapter, provider_confi
         blob_store=blob_store,
         adapter=adapter,
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
     return str(started.run_id)
 
