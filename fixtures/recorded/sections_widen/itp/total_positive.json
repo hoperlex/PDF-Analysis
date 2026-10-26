@@ -1,0 +1,42 @@
+{
+ "format": "section-widen-specimen/1",
+ "section_code": "ITP",
+ "case": "total_positive",
+ "expect": "finding",
+ "origin": {
+  "kind": "synthetic",
+  "statement": "Text and reply authored by hand for SECTION-WIDEN-G3-01 to show what a widened prompt rule is meant to report or to leave alone, and filed by SECTION-PROMPT-SENTENCE-GUARD-01. No model produced this reply. Not field evidence for any profile's expert review; it says nothing about how a model answers.",
+  "task_id": "SECTION-WIDEN-G3-01",
+  "source_report": "docs/program/SECTION-WIDEN-G3-01.md",
+  "filed_by": "SECTION-PROMPT-SENTENCE-GUARD-01"
+ },
+ "pages": [
+  "Таблица тепловых нагрузок (вымышленный пример для проверки профиля)\nОтопление — 850 кВт\nВентиляция — 180 кВт\nГВС — 420 кВт\nСуммарная тепловая нагрузка — 1500 кВт",
+  "Принципиальная схема ИТП. Схема присоединения — независимая."
+ ],
+ "observations": [
+  {
+   "category": "internal_contradiction",
+   "finding_text": "Синтетический ответ (ИТП), не результат вызова модели: суммарная тепловая нагрузка записана как 1500 кВт, а три нагрузки по контурам дают 1450 кВт.",
+   "recommendation_text": "Согласовать суммарную тепловую нагрузку и нагрузки по контурам.",
+   "evidence": [
+    {
+     "page_number": 1,
+     "quote": "Суммарная тепловая нагрузка — 1500 кВт"
+    },
+    {
+     "page_number": 1,
+     "quote": "Отопление — 850 кВт"
+    },
+    {
+     "page_number": 1,
+     "quote": "Вентиляция — 180 кВт"
+    },
+    {
+     "page_number": 1,
+     "quote": "ГВС — 420 кВт"
+    }
+   ]
+  }
+ ]
+}

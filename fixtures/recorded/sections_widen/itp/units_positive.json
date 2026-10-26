@@ -1,0 +1,34 @@
+{
+ "format": "section-widen-specimen/1",
+ "section_code": "ITP",
+ "case": "units_positive",
+ "expect": "finding",
+ "origin": {
+  "kind": "synthetic",
+  "statement": "Text and reply authored by hand for SECTION-WIDEN-G3-01 to show what a widened prompt rule is meant to report or to leave alone, and filed by SECTION-PROMPT-SENTENCE-GUARD-01. No model produced this reply. Not field evidence for any profile's expert review; it says nothing about how a model answers.",
+  "task_id": "SECTION-WIDEN-G3-01",
+  "source_report": "docs/program/SECTION-WIDEN-G3-01.md",
+  "filed_by": "SECTION-PROMPT-SENTENCE-GUARD-01"
+ },
+ "pages": [
+  "Общие данные (вымышленный пример для проверки профиля). Тепловая нагрузка на отопление здания — 1,2 Гкал/ч.",
+  "Таблица тепловых нагрузок. Тепловая нагрузка на отопление здания — 1,8 МВт."
+ ],
+ "observations": [
+  {
+   "category": "internal_contradiction",
+   "finding_text": "Синтетический ответ (ИТП), не результат вызова модели: тепловая нагрузка на отопление здания записана как 1,2 Гкал/ч (1,396 МВт), а в таблице нагрузок — 1,8 МВт.",
+   "recommendation_text": "Согласовать значение тепловой нагрузки на отопление в общих данных и в таблице нагрузок.",
+   "evidence": [
+    {
+     "page_number": 1,
+     "quote": "Тепловая нагрузка на отопление здания — 1,2 Гкал/ч"
+    },
+    {
+     "page_number": 2,
+     "quote": "Тепловая нагрузка на отопление здания — 1,8 МВт"
+    }
+   ]
+  }
+ ]
+}

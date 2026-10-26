@@ -1,0 +1,70 @@
+{
+ "format": "section-widen-specimen/1",
+ "section_code": "OV",
+ "case": "positive",
+ "expect": "finding",
+ "origin": {
+  "kind": "synthetic",
+  "statement": "Text and reply authored by hand for SECTION-WIDEN-G2-01 to show what a widened prompt rule is meant to report or to leave alone, and filed by SECTION-PROMPT-SENTENCE-GUARD-01. No model produced this reply. Not field evidence for any profile's expert review; it says nothing about how a model answers.",
+  "task_id": "SECTION-WIDEN-G2-01",
+  "source_report": "docs/program/SECTION-WIDEN-G2-01.md",
+  "filed_by": "SECTION-PROMPT-SENTENCE-GUARD-01"
+ },
+ "pages": [
+  "Раздел 5. Отопление, вентиляция и кондиционирование (ОВ)\nОбъект: многоквартирный жилой дом (вымышленный, для проверки)\nСтадия: П\nОбщие данные\nТеплоноситель систем отопления — вода.\n",
+  "Таблица воздухообмена. Система П1 (приток), расход воздуха, м³/ч\n101 Тамбур 300\n102 Лифтовой холл 450\n103 Помещение охраны 200\n104 Электрощитовая 150\nИтого по системе П1 1200\nТаблица тепловых нагрузок, кВт\nОтопление 180,0\nВентиляция 95,5\nГорячее водоснабжение 140,0\nИтого 405,5\n",
+  "Таблица характеристик систем\nСистема П1: расход воздуха установки 1250 м³/ч (с учётом подсосов и потерь).\n"
+ ],
+ "observations": [
+  {
+   "category": "internal_contradiction",
+   "finding_text": "Синтетический ответ (ОВ), не результат вызова модели: итог таблицы воздухообмена по системе П1 записан как 1200 м³/ч, а сумма расходов четырёх помещений этой системы — 1100 м³/ч.",
+   "recommendation_text": "Сверить расходы помещений системы П1 с итогом таблицы воздухообмена.",
+   "evidence": [
+    {
+     "page_number": 2,
+     "quote": "Итого по системе П1 1200"
+    },
+    {
+     "page_number": 2,
+     "quote": "101 Тамбур 300"
+    },
+    {
+     "page_number": 2,
+     "quote": "102 Лифтовой холл 450"
+    },
+    {
+     "page_number": 2,
+     "quote": "103 Помещение охраны 200"
+    },
+    {
+     "page_number": 2,
+     "quote": "104 Электрощитовая 150"
+    }
+   ]
+  },
+  {
+   "category": "internal_contradiction",
+   "finding_text": "Синтетический ответ (ОВ), не результат вызова модели: итог таблицы тепловых нагрузок записан как 405,5 кВт, а сумма трёх её строк — 415,5 кВт.",
+   "recommendation_text": "Сверить строки таблицы тепловых нагрузок с её итогом.",
+   "evidence": [
+    {
+     "page_number": 2,
+     "quote": "Итого 405,5"
+    },
+    {
+     "page_number": 2,
+     "quote": "Отопление 180,0"
+    },
+    {
+     "page_number": 2,
+     "quote": "Вентиляция 95,5"
+    },
+    {
+     "page_number": 2,
+     "quote": "Горячее водоснабжение 140,0"
+    }
+   ]
+  }
+ ]
+}

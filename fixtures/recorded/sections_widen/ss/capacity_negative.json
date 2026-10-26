@@ -1,0 +1,18 @@
+{
+ "format": "section-widen-specimen/1",
+ "section_code": "SS",
+ "case": "capacity_negative",
+ "expect": "none",
+ "origin": {
+  "kind": "synthetic",
+  "statement": "Text and reply authored by hand for SECTION-WIDEN-G3-01 to show what a widened prompt rule is meant to report or to leave alone, and filed by SECTION-PROMPT-SENTENCE-GUARD-01. No model produced this reply. Not field evidence for any profile's expert review; it says nothing about how a model answers.",
+  "task_id": "SECTION-WIDEN-G3-01",
+  "source_report": "docs/program/SECTION-WIDEN-G3-01.md",
+  "filed_by": "SECTION-PROMPT-SENTENCE-GUARD-01"
+ },
+ "pages": [
+  "Пояснительная записка. Система пожарной сигнализации (вымышленный пример для проверки профиля)\nПрибор приёмно-контрольный ППКП-1 рассчитан на 250 адресных устройств. Прибор ППКП-2 рассчитан на 250 адресных устройств при использовании двух шлейфов.",
+  "Спецификация. К прибору ППКП-1 подключено 240 адресных устройств. К прибору ППКП-2 подключено 280 адресных устройств."
+ ],
+ "observations": []
+}
