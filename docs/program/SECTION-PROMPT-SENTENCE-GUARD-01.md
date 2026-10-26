@@ -185,7 +185,7 @@ Read: for a plain-word sentence (M2, M3, M4, M6, M8) the new test is the **only*
 
 ## Proof that forbidden paths are untouched
 
-`git diff --name-only 630658b1..HEAD` prints exactly these 35 paths, all new files, all in the allowed list (`git diff --diff-filter=M --name-only 630658b1..HEAD` prints nothing):
+`git diff --name-only 630658b1..HEAD` prints exactly these 36 paths (2 documents, 30 fixtures, 4 test files), all new files, all in the allowed list (`git diff --diff-filter=M --name-only 630658b1..HEAD` prints nothing):
 
 ```text
 docs/program/SECTION-PROMPT-SENTENCE-GUARD-01.md
