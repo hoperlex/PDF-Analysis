@@ -4,7 +4,7 @@
   "sections": [
     {"code": "AI", "status": "reviewed", "profile_version": "1.1.0"},
     {"code": "PS", "status": "reviewed", "profile_version": "1.1.0"},
-    {"code": "POS", "status": "draft", "profile_version": "1.0.0"},
+    {"code": "POS", "status": "reviewed", "profile_version": "1.1.0"},
     {"code": "TX", "status": "reviewed", "profile_version": "1.1.0"},
     {"code": "KJ", "status": "reviewed", "profile_version": "1.1.0"},
     {"code": "KM", "status": "draft", "profile_version": "1.0.0"},
