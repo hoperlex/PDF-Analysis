@@ -6,7 +6,10 @@
 # Exit 0: the deployed stack is this working tree. Exit 6: it is not. Exit 4: the question
 # could not be answered. Exit 7: the stack is this tree and the certificate it serves is not
 # acceptable (`PROD-01-TLS-ACME-01`, below). Exit 8: the stack is this tree and the published
-# seeded pair (`admin` / `password`) is valid (`PROD-02`, section 5 below). **All failures are failures.** The row this closes is not "the
+# seeded pair (`admin` / `password`) is valid (`PROD-02`, section 5 below). Exit 9: the stack is this tree, the
+# certificate is acceptable, and the answer served on the name lacks the transport hardening the
+# configuration promises -- HSTS, the four security headers, a `Secure` session cookie, no version in
+# the `Server` banner (`HARDEN-01`, `EXPOSURE-REVIEW-02` `F-17`, section 4b below). **All failures are failures.** The row this closes is not "the
 # stack drifted" -- it is that three waves running, nothing noticed, because there was no
 # check to be red. A probe that skips when it is unsure is the same nothing with a nicer
 # face, so there is no path through this script that reports success without having
@@ -84,6 +87,7 @@ DRIFT=6
 UNANSWERABLE=4
 CERTIFICATE=7
 CREDENTIAL=8
+HEADERS=9
 REHEARSAL=no
 
 while [ "$#" -gt 0 ]; do
@@ -489,6 +493,116 @@ if [ -n "$CERT_NAME" ]; then
                 "$(sed 's/^/  /' "$WORK/cert-stderr" | head -5)" \
                 "Is the acme service built (deploy.sh) and the proxy up? Nothing is claimed about the certificate." ;;
     esac
+    echo
+
+    # --- 4b. what the proxy answers on that name (`HARDEN-01`, `EXPOSURE-REVIEW-02` `F-17`) --------------------
+    # The certificate says who answers; this says what the answer promises. `E-2` found HSTS, the `Secure` flag
+    # of the session cookie and the four security headers only in the CONFIGURATION, and the static tests read
+    # the configuration, not the answer: a proxy that lost a header, or a web tier that stopped believing
+    # `X-Forwarded-Proto`, would have stayed green. So one request is sent to the proxy's own TLS listener, with
+    # the name as SNI and as `Host`, by the same one-off container of the ACME image (it has `openssl`; the host
+    # promises none), and the RAW HEADERS that come back are judged here:
+    #
+    #   * `Strict-Transport-Security` with `max-age` of at least 31536000 and neither `includeSubDomains` nor
+    #     `preload` (`ADR-0021`: a year, and no promise about other names);
+    #   * the four security headers of `C-18`, with their values;
+    #   * `Server` without a version (`F-16`: `server_tokens off`);
+    #   * the session cookie with the `Secure` attribute.
+    #
+    # THE COOKIE needs no credential. `GET /bff/v1/me` with a session cookie that is well-formed and names no
+    # session is answered by the web tier with `401` and a CLEARED `am_session` cookie, and that cookie takes its
+    # `Secure` attribute from the same decision (`requestIsSecure`, from `X-Forwarded-Proto`) as the cookie a
+    # sign-in sets -- so this observes the live behaviour of the whole chain (proxy header, web tier) without
+    # signing anybody in and without a password in this script. If the answer is not that (the web tier is down,
+    # the route moved) there is no cookie to judge and the check says so with exit 4: "no finding" must not be
+    # reported for a property that was not observed.
+    echo "-- the headers and the session cookie the proxy serves --"
+    HEADERS_PROBE="$(cat <<'PROBE'
+name=$1; target=$2; session=$3
+printf 'GET /bff/v1/me HTTP/1.1\r\nHost: %s\r\nCookie: am_session=%s\r\nAccept: application/json\r\nConnection: close\r\n\r\n' "$name" "$session" \
+    | timeout 20 openssl s_client -connect "$target" -servername "$name" -quiet -ign_eof 2>/dev/null
+PROBE
+)"
+    # Sixty-four hex digits are the shape of a session identifier (`SESSION_ID_PATTERN`); all zeros names none.
+    STALE_SESSION="$(printf '0%.0s' $(seq 1 64))"
+    HEADERS_STATUS=0
+    HEADERS_RAW="$(docker compose "${CERT_ARGS[@]}" run --rm --no-deps -T \
+        --entrypoint sh acme -c "$HEADERS_PROBE" served-headers-probe "$CERT_NAME" proxy:8443 "$STALE_SESSION" \
+        2>"$WORK/headers-stderr" </dev/null)" || HEADERS_STATUS=$?
+    # The header block only: CRs removed, everything from the first blank line on (the body) dropped.
+    printf '%s\n' "$HEADERS_RAW" | tr -d '\r' | awk 'NR == 1 { print; next } /^$/ { exit } { print }' \
+        > "$WORK/served-headers"
+    HEADERS_FIRST="$(head -n 1 "$WORK/served-headers")"
+    if ! [[ "$HEADERS_FIRST" =~ ^HTTP/[0-9.]+\ [0-9]{3} ]]; then
+        fail "$UNANSWERABLE" "the proxy's answer on $CERT_NAME could not be read (probe exit $HEADERS_STATUS; first line: '${HEADERS_FIRST}')." \
+            "$(sed 's/^/  /' "$WORK/headers-stderr" | head -5)" \
+            "Is the proxy up and serving TLS? Nothing is claimed about its headers or its cookie."
+    fi
+    # The values of every header of one name, case-insensitively, one per line.
+    served_header() {
+        awk -v want="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" '
+            NR > 1 {
+                i = index($0, ":"); if (i == 0) next
+                if (tolower(substr($0, 1, i - 1)) != want) next
+                v = substr($0, i + 1); sub(/^[ \t]+/, "", v); sub(/[ \t]+$/, "", v); print v
+            }' "$WORK/served-headers"
+    }
+    HEADER_PROBLEMS=()
+    # >>> step: served-hsts
+    HSTS="$(served_header Strict-Transport-Security)"
+    HSTS_AGE="$(printf '%s' "$HSTS" | sed -n 's/.*[Mm][Aa][Xx]-[Aa][Gg][Ee]=\([0-9][0-9]*\).*/\1/p' | head -n 1)"
+    if [ -z "$HSTS" ]; then
+        HEADER_PROBLEMS+=("Strict-Transport-Security is absent: a browser that met this name once is not held to HTTPS.")
+    elif [ -z "$HSTS_AGE" ] || [ "$HSTS_AGE" -lt 31536000 ]; then
+        HEADER_PROBLEMS+=("Strict-Transport-Security is '$HSTS': max-age must be at least 31536000 (a year).")
+    elif printf '%s' "$HSTS" | grep -Eiq 'includeSubDomains|preload'; then
+        HEADER_PROBLEMS+=("Strict-Transport-Security is '$HSTS': neither includeSubDomains nor preload is promised for this name (ADR-0021).")
+    fi
+    # <<< step: served-hsts
+    # >>> step: served-security-headers
+    while IFS='|' read -r want_name want_value; do
+        got="$(served_header "$want_name")"
+        if [ -z "$got" ]; then
+            HEADER_PROBLEMS+=("$want_name is absent (expected '$want_value').")
+        elif [ "$got" != "$want_value" ]; then
+            HEADER_PROBLEMS+=("$want_name is '$got' (expected '$want_value').")
+        fi
+    done <<'WANTED'
+X-Content-Type-Options|nosniff
+X-Frame-Options|DENY
+Content-Security-Policy|frame-ancestors 'none'
+Referrer-Policy|same-origin
+WANTED
+    # <<< step: served-security-headers
+    # >>> step: served-no-version
+    SERVER_BANNER="$(served_header Server | head -n 1)"
+    if printf '%s' "$SERVER_BANNER" | grep -q '[0-9]'; then
+        HEADER_PROBLEMS+=("Server is '$SERVER_BANNER': the banner names a version (server_tokens off is not in force).")
+    fi
+    # <<< step: served-no-version
+    # >>> step: served-secure-cookie
+    SESSION_COOKIES="$(served_header Set-Cookie | grep -i '^am_session=' || true)"
+    if [ -z "$SESSION_COOKIES" ]; then
+        fail "$UNANSWERABLE" "the answer on $CERT_NAME carried no am_session cookie to judge ($HEADERS_FIRST)." \
+            "The probe expects 401 and a cleared session cookie for a session that does not exist; whether the" \
+            "cookie is Secure is NOT known, so nothing is claimed about it."
+    fi
+    while IFS= read -r cookie; do
+        [ -n "$cookie" ] || continue
+        if ! printf '%s' "$cookie" | grep -Eiq ';[[:space:]]*Secure[[:space:]]*(;|$)'; then
+            HEADER_PROBLEMS+=("the session cookie is not Secure ('$cookie'): the browser would send it over plain HTTP.")
+        fi
+    done <<<"$SESSION_COOKIES"
+    # <<< step: served-secure-cookie
+    if [ "${#HEADER_PROBLEMS[@]}" -ne 0 ]; then
+        printf '  %s\n' "$HEADERS_FIRST"
+        fail "$HEADERS" "the answer served on $CERT_NAME lacks what the proxy's configuration promises (${#HEADER_PROBLEMS[@]} finding(s))." \
+            "${HEADER_PROBLEMS[@]}" \
+            "The images and the certificate are this tree's; the proxy is not serving this tree's configuration, or the" \
+            "web tier is not told the transport (X-Forwarded-Proto). Run infra/deploy/reload-proxy.sh, then this check again."
+    fi
+    printf '  %s: HSTS max-age=%s, the four security headers, no version in Server, the session cookie is Secure.\n' \
+        "$HEADERS_FIRST" "$HSTS_AGE"
     echo
 fi
 
