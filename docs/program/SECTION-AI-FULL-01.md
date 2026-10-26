@@ -146,7 +146,7 @@ Free disk at the start and at the end of the lane: 1.8 GiB (`df -h /`). No docke
 
 ## Forbidden paths untouched
 
-`git diff --name-only 0e663fd0..HEAD` on the final tree prints exactly these seven paths, all inside the task's allowed paths:
+`git diff --name-only --no-renames 0e663fd0..HEAD` on the final tree prints exactly these seven paths, all inside the task's allowed paths (without `--no-renames` git folds the old recording into a rename and prints six):
 
 ```text
 docs/program/SECTION-AI-FULL-01.md
