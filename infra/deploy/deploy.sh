@@ -38,7 +38,9 @@
 # `infra/acme/compose.acme.yml` (an ACME client and public port 80 for the challenge and a redirect) and, for
 # a deploy that is cleared to publish and has a certificate, `proxy/compose.tls.yml` (public port 443).
 # `lib/proxy-listeners.sh` decides; five guards (`acme-*`, `public-ports-free`) make each way it can go wrong
-# a sentence before the build. `DEPLOYMENT_RUNBOOK.md` section 6 is the procedure.
+# a sentence before the build, and a sixth (`trusted-proxies-empty-with-name`, `D-229` item 4) refuses a
+# trust list left over from the host nginx this stack replaces. `DEPLOYMENT_RUNBOOK.md` section 6 is the
+# procedure.
 #
 # TWO GATES `PROD-02-03-DEPLOY-GATES-01` ADDED, in the order they bite:
 #
