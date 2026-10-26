@@ -488,7 +488,14 @@ Not applicable: documents only, no behaviour changes. A forward revert of the la
 - changed files: `docs/program/SECTION-REVIEW-LEDGER-01.md` (new), `docs/program/tasks/SECTION-REVIEW-LEDGER-01.md` (new), `docs/program/W59-SECTION-PROFILES-01.md` (one note), `fixtures/recorded/sections/README.md` (the ПБ recording section)
 - commands/results:
 
-pending: filled in after the checks have run.
+  - On the committed tree `75404bdb0b5e9c20e3c5436bc25862a02715efff` (the lane's first commit; `git status --short` empty):
+    - check_ledger.py: `rows: 14 in registry order: True`; `decision rows: 149 K/N/X: {'K': 124, 'N': 25, 'X': 0} | quotes checked: 38 | prompt diff regions covered: 30 | assumption items compared: 98`; `PROBLEMS: none`; exit 0.
+    - check_paths.py on the ledger and on this file: 33 and 27 paths checked, 0 and 6 patterns skipped (globs such as `tests/**`), `MISSING: none`; exit 0.
+    - The governance one-liner on this file: `[]`.
+    - `git diff --check` between the base and that commit: no output, exit 0. `git diff --stat`: 4 files changed, 559 insertions(+), 5 deletions(-); `git diff --name-only` names no path outside the four allowed ones.
+    - `tests/contract/program`, `tests/contract/api_v1/test_doc_prose_facts.py` and `tests/contract/api_v1/test_surface_counts_in_prose.py`: 105 passed in 85.89s.
+    - The mutation table above: eight ledger mutations and one path mutation, each red as expected.
+  - The tip of the lane differs from that commit in this results text only (`git diff --stat` between them shows this one file); the checks above were repeated on the tip.
 
 - known limits: the counts treat a decision row as the unit (a question asked in two halves has two rows), so they differ from a report's own sentence when it counts questions; the ledger separates questions, audit rows and cross-section rows for that reason. The assumption lists are copied, not judged; they are the lanes' lists and are all unverified (`A-7`). The ledger does not say whether a reopen trigger has fired.
 - integration notes: (1) stale living statements outside this task's paths, for the integrator: `docs/program/CURRENT_STATE.md` lines 63 to 64 («13 draft legacy-ported profiles and an authored draft for ПБ») and line 95 («Expert review of the draft profiles remains open»), and the row `D-178` of `docs/program/DEBT_REGISTER.md` («are `draft`»); P-12 prints them. `docs/program/SECTION-RECORDINGS-01.md` and `docs/program/PB-PROFILE-01.md` also say `draft` but are records of earlier tasks and stay as they are. (2) The ledger could be linked from `docs/program/CURRENT_STATE.md` next to the `A-7` sentence. (3) `D-224` stays open: the ledger says in its last list that no test reads a lane's sentences.
