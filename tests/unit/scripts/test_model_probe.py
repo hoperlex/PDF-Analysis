@@ -251,15 +251,21 @@ def test_any_name_but_the_requested_one_is_a_mismatch_and_exit_1(
     assert result.block(PINS[1].model_id)["verdict"] == "match"
 
 
-@pytest.mark.parametrize("reported", [_ABSENT, None, "", SLUGS[PINS[0].model_id] + " ", 7, "proxy"],
-                         ids=["absent", "null", "empty", "trailing space", "number", "a placeholder"])
-def test_a_reply_that_names_no_usable_model_is_a_mismatch(tmp_path: Path, reported: Any) -> None:
+@pytest.mark.parametrize(("reported", "shown"), [
+    (_ABSENT, "none"), (None, "none"), ("", 'unusable ""'),
+    (SLUGS[PINS[0].model_id] + " ", f'unusable "{SLUGS[PINS[0].model_id]} "'),
+    (7, "unusable (not text)"), ("proxy", "proxy"),
+    ("gw/x\nverdict: match", 'unusable "gw/x\\nverdict: match"'),
+], ids=["absent", "null", "empty", "trailing space", "number", "a placeholder", "a newline"])
+def test_a_reply_that_names_no_usable_model_is_a_mismatch(tmp_path: Path, reported: Any, shown: str) -> None:
     first = PINS[0]
     result = run(tmp_path, replies={SLUGS[first.model_id]: chat(reported, pin=first)})
     block = result.block(first.model_id)
     assert result.code == 1
     assert block["verdict"] == "mismatch" and block["verdict_reason"] == "no_usable_model_named"
     assert block["adapter_outcome"] == "model_identity_mismatch"
+    assert block["reported_model"] == shown  # one line, whatever the gateway sent
+    assert result.report.splitlines().count("verdict: match") == len(PINS) - 1
 
 
 # -- the ceiling -----------------------------------------------------------------------------------
