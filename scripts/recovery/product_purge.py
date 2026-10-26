@@ -23,8 +23,10 @@ is a decision about that table's fate, taken in two places on purpose.
 WHAT "KEEP ROWS" MEANS IN THE THREE MIXED TABLES (``copy_record.py``'s frozen fingerprint is the
 precedent: it excludes exactly these from the "client" rows):
 
-* ``audit_event``: ``norm_custody.*`` events are the custody ledger's history and stay; the run,
-  job, attempt, provider and execution journal goes. An event type nobody classified stops the tool.
+* ``audit_event``: ``norm_custody.*`` events are the custody ledger's history and ``executor.*``
+  events are the executor configuration's (who set a secret or a route, and when); both stay. The
+  run, job, attempt, provider and execution journal goes. An event type nobody classified stops
+  the tool.
 * ``command_record``: an idempotency receipt of a registration approval is account-side and stays;
   every receipt of a product command goes. A command type nobody classified stops the tool.
 * ``blob``: a row any KEEP table references (a custody admission/binding, a retrieval set) stays,
@@ -121,7 +123,9 @@ PRODUCT_TABLES = frozenset((
     "work_assignment_event", "worker",
 ))
 
-#: ``audit_event.event_type`` families. ``norm_custody.`` is the custody ledger's.
+#: ``audit_event.event_type`` families. ``norm_custody.`` is the custody ledger's, ``executor.``
+#: the append-only trail of who set an executor secret or route and when (`EXEC-SEAL-01`). Both
+#: the keep and the delete predicate of ``audit_event`` are built from this tuple (``_event_keep``).
 KEEP_EVENT_PREFIXES = ("norm_custody.", "executor.")
 PRODUCT_EVENT_PREFIXES = (
     "artifact.", "attempt.", "audit_run.", "execution.", "findings.", "job.", "provider.", "stage.",
@@ -391,7 +395,9 @@ def check_row_classes(connection: Connection) -> None:
 
 # --- digests ----------------------------------------------------------------------------------
 
-_EVENT_KEEP = "starts_with(t.event_type, 'norm_custody.')"
+def _event_keep() -> str:
+    """The keep rows of ``audit_event``: every family of :data:`KEEP_EVENT_PREFIXES`, no other list."""
+    return "(" + " OR ".join(f"starts_with(t.event_type, '{prefix}')" for prefix in KEEP_EVENT_PREFIXES) + ")"
 
 
 def _command_keep() -> str:
@@ -424,7 +430,7 @@ def _predicates(keep_pairs: Sequence[tuple[str, str]]) -> dict[str, tuple[str, s
     """``table -> (keep predicate, product predicate)`` for the three mixed tables."""
     keep_ids = _keep_blob_ids_sql(keep_pairs)
     return {
-        "audit_event": (_EVENT_KEEP, f"NOT {_EVENT_KEEP}"),
+        "audit_event": (_event_keep(), f"NOT {_event_keep()}"),
         "command_record": (_command_keep(), f"NOT ({_command_keep()})"),
         "blob": (f"t.blob_id IN ({keep_ids})", f"t.blob_id NOT IN ({keep_ids})"),
     }
