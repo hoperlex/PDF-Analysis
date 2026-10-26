@@ -582,6 +582,9 @@ def test_the_executor_configuration_is_kept_by_a_product_purge() -> None:
 
     Each of the five tables, the seven command types and the ``executor.`` event family is KEEP,
     and none is PRODUCT: a purge of product data must never delete a sealed secret or a route.
+    The event family is declared in the tuple AND must reach the SQL that decides which rows stay
+    (``DEV-PURGE-EXECUTOR-EVENTS-01``); the purge of real rows is
+    ``test_product_purge_executor_events.py``.
     """
     tables = {"executor_connection", "executor_connection_revision", "executor_probe",
               "executor_route_event", "executor_secret"}
@@ -591,6 +594,7 @@ def test_the_executor_configuration_is_kept_by_a_product_purge() -> None:
                 "generate_executor_ssh_key", "request_executor_probe", "set_executor_route"}
     assert commands <= tool.KEEP_COMMAND_TYPES and not commands & tool.PRODUCT_COMMAND_TYPES
     assert "executor." in tool.KEEP_EVENT_PREFIXES
+    assert "starts_with(t.event_type, 'executor.')" in tool._predicates([])["audit_event"][0]
     assert not any("executor." .startswith(prefix) for prefix in tool.PRODUCT_EVENT_PREFIXES)
 
 
