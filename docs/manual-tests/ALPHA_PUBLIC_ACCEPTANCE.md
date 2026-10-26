@@ -303,7 +303,8 @@ number equals the routes in `tests/e2e/pc01/journey/manifest.json`:
     under «Текущие версии без подтверждённого раздела»;
 20. `/norms`;
 21. `/analysis-settings` — fifteen sections in the project-structure order, read-only: АР
-    «встроенный» (`PROD-11` removes that status), the other fourteen, ПБ among them,
+    «текстовый профиль не используется» (it has no text profile; its analysis is the six checks of
+    АР v3), the other fourteen, ПБ among them,
     «рабочая версия, проверка человеком не проводилась» (reviewed without a human review,
     `R-146ag`); «Подробнее» shows the identities, both hashes and the legacy source;
 22. `/queue`;

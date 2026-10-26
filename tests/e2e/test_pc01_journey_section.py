@@ -382,6 +382,22 @@ def ar_bound_findings(manifest: dict) -> list[str]:
         if step["name"] not in exempt and names_ar(step):
             found.append(f"{step['name']}: names АР but is not listed in write.ar_bound")
 
+    # `PROD-11-AR-V1-V2-REMOVAL-01`: no published АР run can exist, so every listed step is marked
+    # pending, loudly and with a reason, and nothing else is.
+    reason = block.get("pending_v3_activation_reason")
+    if not isinstance(reason, str) or not reason.strip():
+        found.append("ar_bound.pending_v3_activation_reason is missing: a pending step must print why")
+    elif "D-204" not in reason:
+        found.append("ar_bound.pending_v3_activation_reason does not name D-204, the activation debt")
+    for step in steps:
+        if step["name"] in listed and step.get("pending_v3_activation") is not True:
+            found.append(
+                f"{step['name']}: is listed in write.ar_bound.steps and does not carry "
+                "pending_v3_activation: true"
+            )
+        if step["name"] not in listed and "pending_v3_activation" in step:
+            found.append(f"{step['name']}: carries pending_v3_activation but is not in write.ar_bound.steps")
+
     # Where a run starts, and which document a specification or a pass is asked of, follows the
     # classification an earlier step made (a bind renames the alias, as `write.mjs` reads it).
     version_section: dict[str, str] = {}
@@ -421,6 +437,17 @@ def test_only_the_named_steps_may_name_ar_or_run_an_ar_version(manifest: dict) -
     assert not found, "\n".join(found)
 
 
+def test_every_listed_step_is_marked_pending_and_no_other_is(manifest: dict) -> None:
+    marked = [step["name"] for step in write_steps(manifest) if step.get("pending_v3_activation") is True]
+    assert sorted(marked) == sorted(manifest["write"]["ar_bound"]["steps"])
+    assert len(marked) == 33
+    assert not [
+        step["name"] for step in write_steps(manifest)
+        if "pending_v3_activation" in step and step["pending_v3_activation"] is not True
+    ]
+    assert len(write_steps(manifest)) == 112, "no step was deleted to make the list shorter"
+
+
 def test_the_ar_bound_block_is_the_size_it_was_measured_at(manifest: dict) -> None:
     """33 steps may name АР: the three that make the empty-pass set, the 29 of the «Оптимизация»
     span and the Form-7. A longer list is a step that moved there to stop being checked."""
@@ -447,6 +474,22 @@ def test_control_an_ar_pin_or_run_outside_the_named_steps_is_detected(manifest: 
     unbound = copy.deepcopy(manifest)
     del _step(unbound, "optimisation-pass-over-a-set-without-a-table")["bind"]
     assert any("startOptimisationPass is asked of 'document_uid'" in f for f in ar_bound_findings(unbound))
+
+    unmarked = copy.deepcopy(manifest)
+    del _step(unmarked, "price-list-upload")["pending_v3_activation"]
+    assert any(f.startswith("price-list-upload: is listed") for f in ar_bound_findings(unmarked))
+
+    smuggled = copy.deepcopy(manifest)
+    _step(smuggled, "norms-search")["pending_v3_activation"] = True
+    assert any("norms-search: carries pending_v3_activation" in f for f in ar_bound_findings(smuggled))
+
+    silent = copy.deepcopy(manifest)
+    del silent["write"]["ar_bound"]["pending_v3_activation_reason"]
+    assert any("pending_v3_activation_reason is missing" in f for f in ar_bound_findings(silent))
+
+    unattributed = copy.deepcopy(manifest)
+    unattributed["write"]["ar_bound"]["pending_v3_activation_reason"] = "no run"
+    assert any("does not name D-204" in f for f in ar_bound_findings(unattributed))
 
     vendor = copy.deepcopy(manifest)
     _step(vendor, "norms-search").setdefault("expects_present", []).append(
@@ -479,6 +522,70 @@ def test_control_an_ar_pin_or_run_outside_the_named_steps_is_detected(manifest: 
     missing = copy.deepcopy(manifest)
     del missing["write"]["ar_bound"]
     assert ar_bound_findings(missing) == ["write.ar_bound is missing: nothing says which steps may name АР"]
+
+
+# --------------------------------------------------------------------------------------
+# 3b. The driver reports a pending step and never runs it, passes it or hides it.
+# --------------------------------------------------------------------------------------
+
+WRITE_DRIVER = JOURNEY_DIR / "write.mjs"
+JOURNEY_DRIVER = JOURNEY_DIR / "journey.mjs"
+ACCEPTANCE_VERIFIER = JOURNEY_DIR / "verify-acceptance.mjs"
+
+
+def driver_findings(write: str, journey: str, verifier: str) -> list[str]:
+    """What the three scripts must say about `pending_v3_activation` (read as text; nothing runs)."""
+    found: list[str] = []
+    call = "= pendingActivation(step, spec);"
+    check = write.find(call)
+    run = write.find("withColdBrowser(async (page)")
+    if check < 0:
+        found.append("write.mjs does not ask pendingActivation(step, spec) of any step")
+    elif run < 0 or check > run:
+        found.append("write.mjs asks pendingActivation(step, spec) only after the step has started its browser")
+    if "export function pendingActivation" not in write:
+        found.append("write.mjs does not export pendingActivation")
+    if "pending_v3_activation -- NOT RUN:" not in write:
+        found.append("write.mjs does not print the loud PENDING line with the reason")
+    if "record.verdict = 'PENDING'" not in write:
+        found.append("write.mjs does not give a pending step the verdict PENDING")
+    if write.count("pending }") + write.count("pending };") < 3:
+        found.append("write.mjs does not return the pending names from every exit")
+    if "stepsChecked: write.records.length - write.pending.length" not in journey:
+        found.append("journey.mjs counts a pending step as checked")
+    if "stepsPending" not in journey:
+        found.append("journey.mjs does not put stepsPending into the envelope")
+    if "e2e:pc01 OK WITH PENDING" not in journey:
+        found.append("journey.mjs can end a run with pending steps as plain OK")
+    if "stepsPending" not in verifier or "stepsChecked === declaredWriteSteps" not in verifier:
+        found.append("verify-acceptance.mjs does not refuse an envelope with pending steps")
+    return found
+
+
+def test_the_driver_reports_a_pending_step_and_never_runs_it() -> None:
+    found = driver_findings(_read(WRITE_DRIVER), _read(JOURNEY_DRIVER), _read(ACCEPTANCE_VERIFIER))
+    assert not found, "\n".join(found)
+
+
+def test_control_a_driver_that_runs_hides_or_passes_a_pending_step_is_detected() -> None:
+    write, journey, verifier = _read(WRITE_DRIVER), _read(JOURNEY_DRIVER), _read(ACCEPTANCE_VERIFIER)
+    assert driver_findings(write, journey, verifier) == []
+    moved = write.replace("= pendingActivation(step, spec);", "= pendingActivation_(step, spec);", 1)
+    assert any("does not ask pendingActivation" in f for f in driver_findings(moved, journey, verifier))
+    late = write.replace("const pendingReason = pendingActivation(step, spec);", "", 1).replace(
+        "withColdBrowser(async (page) => {", "withColdBrowser(async (page) => { const pendingReason = pendingActivation(step, spec);", 1
+    )
+    assert any("only after the step has started" in f for f in driver_findings(late, journey, verifier))
+    silent = write.replace("pending_v3_activation -- NOT RUN:", "skipped:")
+    assert any("loud PENDING line" in f for f in driver_findings(silent, journey, verifier))
+    unverdicted = write.replace("record.verdict = 'PENDING'", "record.verdict = 'ok'")
+    assert any("verdict PENDING" in f for f in driver_findings(unverdicted, journey, verifier))
+    counted = journey.replace("stepsChecked: write.records.length - write.pending.length", "stepsChecked: write.records.length", 1)
+    assert any("counts a pending step as checked" in f for f in driver_findings(write, counted, verifier))
+    plain = journey.replace("e2e:pc01 OK WITH PENDING", "e2e:pc01 OK")
+    assert any("plain OK" in f for f in driver_findings(write, plain, verifier))
+    lenient = verifier.replace("stepsChecked === declaredWriteSteps", "stepsChecked <= declaredWriteSteps")
+    assert any("verify-acceptance.mjs does not refuse" in f for f in driver_findings(write, journey, lenient))
 
 
 # --------------------------------------------------------------------------------------

@@ -931,17 +931,23 @@
         "here, which cannot: the project's «Оптимизация» tab -- price lists, vendor lists, «Спецификация и цены»,",
         "optimisation passes and proposals -- and the Form-7 of the АР section exist for АР only (a set of another",
         "section is answered `section_not_ar`), and the specification and the passes read the saved page text of",
-        "the newest PUBLISHED run of an АР version. Today that run is an АР v1 run started with «Запустить прогон».",
-        "`PROD-11` removes it: an АР version can then start only the v3 group, which needs an installed reviewed pack",
-        "(`D-204`) and, in recorded mode, a provider binding with a verifiable cost (`D-225` piece 2) before it",
-        "publishes. What feeds these steps afterwards (a v3 group run, or dropping them) is a decision that is not",
-        "this manifest's: until it is taken they stay as they are, are named here, and",
-        "`tests/e2e/test_pc01_journey_section.py` refuses an АР classification, an АР pin or a run start on an АР",
-        "version anywhere else in this half.",
+        "the newest PUBLISHED run of an АР version. That run used to be an АР v1 run started with «Запустить прогон».",
+        "PROD-11-AR-V1-V2-REMOVAL-01 removed it: `startRun` refuses an АР version (`section_profile_unavailable`),",
+        "an АР version can start only the v3 group, and that group needs an installed reviewed pack (`D-204`) and,",
+        "in recorded mode, a provider binding with a verifiable cost (`D-225` piece 2) before it publishes. Until",
+        "a published АР run can exist, every step of `steps` carries `pending_v3_activation: true`: the driver",
+        "(`write.mjs`) does NOT run it, prints `PENDING <step> ... NOT RUN: <reason>` for each, counts it as",
+        "pending and not as checked, and ends `OK WITH PENDING` and never plain `OK`; `verify-acceptance.mjs`",
+        "refuses an envelope with pending steps. Nothing is deleted: removing the mark is how a step is",
+        "reactivated, and `tests/e2e/test_pc01_journey_section.py` refuses an АР classification, an АР pin or a",
+        "run start on an АР version anywhere else in this half, a listed step without the mark and a marked step",
+        "that is not listed.",
         "`steps` is every step that may name АР. `needs_published_run` is the subset that cannot pass without a",
         "published АР run, directly or through the pass it produced (read from the steps' own expectations, not",
-        "measured). `registry_pins` name the АР ROW of the profile registry, whose `builtin` status `PROD-11` removes."
+        "measured). `registry_pins` name the АР ROW of the profile registry, which has no profile now (the row",
+        "reads `data-profile=\"none\"`, `data-profile-absent=\"ar-v3\"`); that step still runs."
       ],
+      "pending_v3_activation_reason": "no published АР run can exist: startRun refuses АР (section_profile_unavailable) and the six-run АР v3 group needs an installed reviewed pack (D-204)",
       "steps": [
         "upload-ar-set-without-a-table",
         "classify-ar-set-without-a-table",
@@ -2137,8 +2143,10 @@
           "no form, no field, no select -- and says so.",
           "",
           "PROD-10B-JOURNEY-REBASE-01. The journey's section (ПБ) is listed with the status the expectations file",
-          "gives it, `reviewed`, and the label that says no person reviewed it (R-146ag). The АР row is still",
-          "`builtin`: it is a `registry_pins` step, and PROD-11 removes that status."
+          "gives it, `reviewed`, and the label that says no person reviewed it (R-146ag).",
+          "PROD-11-AR-V1-V2-REMOVAL-01. The АР row has no profile any more (`builtin` left the contract with the АР v1",
+          "profile): it reads `data-profile=\"none\"` and says that АР has no text profile and is analysed by the six",
+          "checks. It is a `registry_pins` step and it still runs."
         ],
         "expects_api": [
           {
@@ -2168,7 +2176,8 @@
             "min_count": 1
           },
           {
-            "selector": "tr[data-section=\"AR\"][data-profile=\"builtin\"]"
+            "selector": "tr[data-section=\"AR\"][data-profile=\"none\"]",
+            "text_contains": "текстовый профиль не используется"
           },
           {
             "selector": "tr[data-section=\"PB\"][data-profile=\"reviewed\"]",
@@ -3020,6 +3029,7 @@
       },
       {
         "name": "upload-ar-set-without-a-table",
+        "pending_v3_activation": true,
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/features/upload-document/ui/upload-document-form.tsx",
@@ -3093,6 +3103,7 @@
       },
       {
         "name": "classify-ar-set-without-a-table",
+        "pending_v3_activation": true,
         "at": "/projects/{project_uid}/versions/{version_uid}",
         "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
         "control_module": "web/src/features/classify-version/ui/classify-version-form.tsx",
@@ -3148,6 +3159,7 @@
       },
       {
         "name": "start-ar-run-without-a-table",
+        "pending_v3_activation": true,
         "at": "/projects/{project_uid}/versions/{version_uid}",
         "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
         "control_module": "web/src/features/start-run/ui/start-run-control.tsx",
@@ -3206,6 +3218,7 @@
       },
       {
         "name": "upload-specification-set",
+        "pending_v3_activation": true,
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/features/upload-document/ui/upload-document-form.tsx",
@@ -3287,6 +3300,7 @@
       },
       {
         "name": "classify-specification-set",
+        "pending_v3_activation": true,
         "at": "/projects/{project_uid}/versions/{version_uid}",
         "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
         "control_module": "web/src/features/classify-version/ui/classify-version-form.tsx",
@@ -3333,6 +3347,7 @@
       },
       {
         "name": "start-specification-run",
+        "pending_v3_activation": true,
         "at": "/projects/{project_uid}/versions/{version_uid}",
         "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
         "control_module": "web/src/features/start-run/ui/start-run-control.tsx",
@@ -3392,6 +3407,7 @@
       },
       {
         "name": "price-list-is-an-experts-act",
+        "pending_v3_activation": true,
         "as": "admin_only",
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
@@ -3431,6 +3447,7 @@
       },
       {
         "name": "price-list-empty-file-refused",
+        "pending_v3_activation": true,
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/features/upload-price-list/ui/upload-price-list-form.tsx",
@@ -3473,6 +3490,7 @@
       },
       {
         "name": "price-list-without-columns-refused",
+        "pending_v3_activation": true,
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/features/upload-price-list/ui/upload-price-list-form.tsx",
@@ -3523,6 +3541,7 @@
       },
       {
         "name": "specification-needs-a-price-list",
+        "pending_v3_activation": true,
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/widgets/specification-prices/ui/specification-prices-section.tsx",
@@ -3581,6 +3600,7 @@
       },
       {
         "name": "optimisation-pass-needs-a-price-list",
+        "pending_v3_activation": true,
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/features/start-optimisation-pass/ui/start-optimisation-pass.tsx",
@@ -3641,6 +3661,7 @@
       },
       {
         "name": "price-list-upload",
+        "pending_v3_activation": true,
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/features/upload-price-list/ui/upload-price-list-form.tsx",
@@ -3753,6 +3774,7 @@
       },
       {
         "name": "specification-and-prices",
+        "pending_v3_activation": true,
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/widgets/specification-prices/ui/specification-prices-section.tsx",
@@ -3865,6 +3887,7 @@
       },
       {
         "name": "vendor-list-global-is-an-administrators-act",
+        "pending_v3_activation": true,
         "as": "expert_only",
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
@@ -3909,6 +3932,7 @@
       },
       {
         "name": "vendor-list-entry-needs-a-vendor",
+        "pending_v3_activation": true,
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/features/set-vendor-list/ui/vendor-list-editor.tsx",
@@ -3960,6 +3984,7 @@
       },
       {
         "name": "vendor-list-global",
+        "pending_v3_activation": true,
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/features/set-vendor-list/ui/vendor-list-editor.tsx",
@@ -4036,6 +4061,7 @@
       },
       {
         "name": "vendor-list-project",
+        "pending_v3_activation": true,
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/features/set-vendor-list/ui/vendor-list-editor.tsx",
@@ -4099,6 +4125,7 @@
       },
       {
         "name": "optimisation-pass-is-an-experts-act",
+        "pending_v3_activation": true,
         "as": "admin_only",
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
@@ -4131,6 +4158,7 @@
       },
       {
         "name": "optimisation-pass",
+        "pending_v3_activation": true,
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/features/start-optimisation-pass/ui/start-optimisation-pass.tsx",
@@ -4287,6 +4315,7 @@
       },
       {
         "name": "optimisation-pass-over-a-set-without-a-table",
+        "pending_v3_activation": true,
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/features/start-optimisation-pass/ui/start-optimisation-pass.tsx",
@@ -4371,6 +4400,7 @@
       },
       {
         "name": "proposals-csv-of-an-empty-pass",
+        "pending_v3_activation": true,
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/widgets/optimisation-proposals/ui/optimisation-proposals.tsx",
@@ -4432,6 +4462,7 @@
       },
       {
         "name": "proposal-revise-needs-a-comment",
+        "pending_v3_activation": true,
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/features/decide-optimisation-proposal/ui/proposal-decision-form.tsx",
@@ -4536,6 +4567,7 @@
       },
       {
         "name": "proposal-accept",
+        "pending_v3_activation": true,
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/features/decide-optimisation-proposal/ui/proposal-decision-form.tsx",
@@ -4622,6 +4654,7 @@
       },
       {
         "name": "proposal-change-of-mind",
+        "pending_v3_activation": true,
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/features/decide-optimisation-proposal/ui/proposal-decision-form.tsx",
@@ -4717,6 +4750,7 @@
       },
       {
         "name": "proposal-revise",
+        "pending_v3_activation": true,
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/features/decide-optimisation-proposal/ui/proposal-decision-form.tsx",
@@ -4809,6 +4843,7 @@
       },
       {
         "name": "proposal-filter-by-decision",
+        "pending_v3_activation": true,
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/widgets/optimisation-proposals/ui/optimisation-proposals.tsx",
@@ -4875,6 +4910,7 @@
       },
       {
         "name": "proposal-decision-is-an-experts-act",
+        "pending_v3_activation": true,
         "as": "admin_only",
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
@@ -4924,6 +4960,7 @@
       },
       {
         "name": "proposals-csv",
+        "pending_v3_activation": true,
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/widgets/optimisation-proposals/ui/optimisation-proposals.tsx",
@@ -4992,6 +5029,7 @@
       },
       {
         "name": "price-list-hostile-revision",
+        "pending_v3_activation": true,
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/features/upload-price-list/ui/upload-price-list-form.tsx",
@@ -5092,6 +5130,7 @@
       },
       {
         "name": "vendor-list-project-adds-the-formula-vendor",
+        "pending_v3_activation": true,
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/features/set-vendor-list/ui/vendor-list-editor.tsx",
@@ -5159,6 +5198,7 @@
       },
       {
         "name": "optimisation-second-pass",
+        "pending_v3_activation": true,
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/features/start-optimisation-pass/ui/start-optimisation-pass.tsx",
@@ -5247,6 +5287,7 @@
       },
       {
         "name": "proposals-csv-with-a-formula-vendor",
+        "pending_v3_activation": true,
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/widgets/optimisation-proposals/ui/optimisation-proposals.tsx",
@@ -5832,6 +5873,7 @@
       },
       {
         "name": "section-form7",
+        "pending_v3_activation": true,
         "at": "/section-optimisation",
         "page_module": "web/src/app/section-optimisation/page.tsx",
         "control_module": "web/src/widgets/section-specification/ui/section-specification-section.tsx",

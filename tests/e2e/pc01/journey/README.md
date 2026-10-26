@@ -520,12 +520,18 @@ What cannot move is listed in `manifest.json` under `write.ar_bound`: the projec
 lists, vendor lists, «Спецификация и цены», the passes and their proposals) and the АР Form-7 exist for АР only,
 and they read the saved text of a **published АР run**. Three steps (`upload-ar-set-without-a-table`,
 `classify-ar-set-without-a-table`, `start-ar-run-without-a-table`) give the honest-empty-pass steps an АР set of
-their own, since a pass over the journey's own ПБ set is refused `section_not_ar`. After `PROD-11` an АР version
-can start only the v3 group, which needs an installed reviewed pack (`D-204`) and, in recorded mode, a provider
-binding with a verifiable cost (`D-225` piece 2); until an owner decision says what feeds these steps they are
-the part of the journey that does not survive the removal. The conformance test refuses any АР pin, АР
-classification or run start outside that list, and a pass or a specification read asked of a document that no
-earlier step confirmed as АР. `--steps` can walk the rest alone, as a PARTIAL run (exit 3).
+their own, since a pass over the journey's own ПБ set is refused `section_not_ar`. Since
+`PROD-11-AR-V1-V2-REMOVAL-01` an АР version can start only the v3 group (`startRun` refuses it with
+`section_profile_unavailable`), which needs an installed reviewed pack (`D-204`) and, in recorded mode, a provider
+binding with a verifiable cost (`D-225` piece 2). So **every step of `write.ar_bound.steps` carries
+`pending_v3_activation: true`**: the driver does not run it, prints `PENDING <step> pending_v3_activation -- NOT RUN:
+<reason>` for each, reports the count (`write steps checked: 79/112 (33 PENDING ...)`), writes `stepsPending` and the
+names into the envelope, and ends `e2e:pc01 OK WITH PENDING`, never plain `OK`; `verify-acceptance.mjs` refuses such an
+envelope, so the manual acceptance cannot be signed while a step is pending. Nothing is deleted: removing the mark
+is how a step comes back once a published АР run can exist. The conformance test refuses a listed step without the
+mark, a marked step that is not listed, a missing reason, any АР pin, АР classification or run start outside that
+list, and a pass or a specification read asked of a document that no earlier step confirmed as АР. `--steps` can
+walk the rest alone, as a PARTIAL run (exit 3).
 
 ### What the stack needs
 
@@ -595,9 +601,9 @@ produce; a step that was not reached is a finding, never a pass.
   stand-in, not a PDF, so what is asserted is the three reads (`getNormDocument`, `listNormParagraphs`,
   `streamNormDocumentContent`) and the viewer's address, not what the browser's viewer draws.
 * The recorded model answers the baseline's text under the ПБ profile (`fixtures/recorded/sections/pb/`) and
-  under the canonical АР profile (`fixtures/recorded/text_analysis/`, for the АР set in `write.ar_bound`), and
-  the committed specification set's (`fixtures/recorded/sections/ar_specification/`). Other sections'
-  profiles are proven by their own recordings elsewhere.
+  the committed specification set's (`fixtures/recorded/sections/ar_specification/`) -- the latter only
+  for the АР steps of `write.ar_bound`, which are pending. Other sections' profiles are proven by their own
+  recordings elsewhere.
 * A norms catalogue «Excel» is the run export above; the catalogue itself has no workbook.
 * The vendor-list `vendor_list_missing` refusal of a pass is global state (a list, once set for the
   section, stays), so it cannot be asserted repeatably on a lane; `tests/integration/optimisation`

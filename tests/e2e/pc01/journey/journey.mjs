@@ -310,8 +310,15 @@ if (PHASE === 'read') {
   if (write.stopped !== null) {
     failures.push(
       `write: the write half stopped at '${write.stopped}'; ` +
-        `${write.records.length} of ${WRITE_STEPS.length} step(s) were checked, ` +
+        `${write.records.length - write.pending.length} of ${WRITE_STEPS.length} step(s) were checked, ` +
         'and an unfinished write half is not a pass',
+    );
+  }
+  if (write.pending.length > 0) {
+    // `PROD-11-AR-V1-V2-REMOVAL-01`: said once here and once at the end, never as a pass.
+    console.log(
+      `\n${write.pending.length} write step(s) are PENDING pending_v3_activation and were NOT RUN: ` +
+        `${manifest.write.ar_bound?.pending_v3_activation_reason ?? '(no reason in the manifest)'}`,
     );
   }
   console.log('');
@@ -572,7 +579,9 @@ const envelopePath = writeEnvelope(
           : {
               ran: true,
               fixture: write.fixture,
-              stepsChecked: write.records.length,
+              stepsChecked: write.records.length - write.pending.length,
+              stepsPending: write.pending.length,
+              pending: write.pending,
               stepsDeclared: WRITE_STEPS.length,
               stoppedAt: write.stopped,
               captured: write.captured,
@@ -588,7 +597,12 @@ const envelopePath = writeEnvelope(
 
 console.log(`\nenvelope: ${envelopePath}`);
 console.log(
-  `write steps checked: ${write === null ? 'not run' : `${write.records.length}/${WRITE_STEPS.length}`}`,
+  `write steps checked: ${
+    write === null
+      ? 'not run'
+      : `${write.records.length - write.pending.length}/${WRITE_STEPS.length}` +
+        (write.pending.length > 0 ? ` (${write.pending.length} PENDING pending_v3_activation, not run)` : '')
+  }`,
 );
 console.log(
   `routes checked: ${PHASE === 'write' ? 'not run' : `${records.length}/${manifest.routes.length}`}`,
@@ -609,4 +623,13 @@ if (PARTIAL) {
   process.exit(3);
 }
 
-console.log('e2e:pc01 OK');
+if (write !== null && write.pending.length > 0) {
+  // Not a pass of the whole journey: the steps that wait for the АР v3 group were not run.
+  console.log(
+    `e2e:pc01 OK WITH PENDING -- no finding in the ${WRITE_STEPS.length - write.pending.length} step(s) ` +
+      `that ran; ${write.pending.length} step(s) are PENDING pending_v3_activation and were NOT RUN, so ` +
+      'this run is not an acceptance of the journey.',
+  );
+} else {
+  console.log('e2e:pc01 OK');
+}
