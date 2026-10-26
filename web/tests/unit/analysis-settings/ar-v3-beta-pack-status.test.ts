@@ -149,14 +149,36 @@ describe('the pack status classification has exactly three outcomes', () => {
 });
 
 /**
- * The longest stretch of `digest` that appears, unbroken, in `markup`. The rule is a bound on
- * this number, not on a particular attribute: a digest in a `title`, a `data-` attribute, a
- * comment or hidden text is in the DOM for any role whatever it is called.
+ * What may sit between two characters of one printed digest without hiding it from a reader:
+ * white space (a no-break space and a newline included), the separators a digest is grouped with,
+ * and the characters that print nothing — zero-width space, non-joiner, joiner, word joiner, the
+ * byte-order mark and the soft hyphen.
+ */
+const DIGEST_SEPARATOR = '(?:\\s|-|_|:|\\u200b|\\u200c|\\u200d|\\u2060|\\ufeff|\\u00ad)';
+const BETWEEN_HEX = new RegExp(`(?<=[0-9a-f])${DIGEST_SEPARATOR}+(?=[0-9a-f])`, 'g');
+
+/** Lower-case, with the separators between two hex characters taken out. */
+function squeezed(text: string): string {
+  return text.toLowerCase().replace(BETWEEN_HEX, '');
+}
+
+/**
+ * The longest stretch of `digest` that appears in `markup` as a person would read it. The rule is
+ * a bound on this number, not on a particular attribute: a digest in a `title`, a `data-`
+ * attribute, a comment or hidden text is in the DOM for any role whatever it is called.
+ *
+ * Reading, not byte matching: the comparison is case-insensitive, ignores the separators above
+ * between hex characters, and is made twice — over the markup as written (attributes included)
+ * and over its text with the tags taken out (a digest cut into sibling elements). Entity-encoded
+ * characters are not decoded; React writes none for the characters above.
  */
 function longestDigestRun(markup: string, digest: string): number {
-  for (let length = digest.length; length > 0; length -= 1) {
-    for (let start = 0; start + length <= digest.length; start += 1) {
-      if (markup.includes(digest.slice(start, start + length))) return length;
+  const needle = digest.toLowerCase();
+  const views = [squeezed(markup), squeezed(markup.replace(/<[^>]*>/g, ''))];
+  for (let length = needle.length; length > 0; length -= 1) {
+    for (let start = 0; start + length <= needle.length; start += 1) {
+      const piece = needle.slice(start, start + length);
+      if (views.some((view) => view.includes(piece))) return length;
     }
   }
   return 0;
@@ -168,6 +190,51 @@ describe('no more than twelve characters of the pack digest are in the markup', 
     expect(longestDigestRun(`<code data-digest="${REAL_DIGEST}"></code>`, REAL_DIGEST)).toBe(64);
     expect(longestDigestRun('<code>6d53674f688f…</code>', REAL_DIGEST)).toBe(12);
     expect(longestDigestRun('<code>nothing</code>', REAL_DIGEST)).toBeLessThan(3);
+  });
+
+  // `AR-V3-BETA-PACK-STATUS-WEB-FIX-02`, finding 3. The measure used to look for contiguous,
+  // case-sensitive runs only, so a whole digest printed in upper case, or in groups of eight, or
+  // with a zero-width character in it, measured as a few characters and passed the bound.
+  const GROUPS = REAL_DIGEST.match(/.{8}/g) as string[];
+  const upper = (text: string): string => text.toUpperCase();
+
+  it('measures a whole digest in upper case, in groups, or with invisible separators', () => {
+    const printed: ReadonlyArray<readonly [string, string]> = [
+      ['upper case', `<code>${upper(REAL_DIGEST)}</code>`],
+      ['mixed case', `<code>${REAL_DIGEST.slice(0, 20)}${upper(REAL_DIGEST.slice(20))}</code>`],
+      ['groups of eight with spaces', `<code>${GROUPS.join(' ')}</code>`],
+      ['groups of eight with hyphens', `<code>${GROUPS.join('-')}</code>`],
+      ['groups of eight with underscores', `<code>${GROUPS.join('_')}</code>`],
+      ['groups of eight with colons', `<code>${GROUPS.join(':')}</code>`],
+      ['groups of eight with a no-break space', `<code>${GROUPS.join('\u00a0')}</code>`],
+      ['groups of eight in upper case', `<code>${GROUPS.map(upper).join(' ')}</code>`],
+      ['groups of eight with a newline and indentation', `<code>${GROUPS.join('\n    ')}</code>`],
+      ['a zero-width space between groups', `<code>${GROUPS.join('\u200b')}</code>`],
+      ['a zero-width non-joiner between groups', `<code>${GROUPS.join('\u200c')}</code>`],
+      ['a zero-width joiner between groups', `<code>${GROUPS.join('\u200d')}</code>`],
+      ['a word joiner between groups', `<code>${GROUPS.join('\u2060')}</code>`],
+      ['a byte-order mark between groups', `<code>${GROUPS.join('\ufeff')}</code>`],
+      ['a zero-width space after every character', `<code>${REAL_DIGEST.split('').join('\u200b')}</code>`],
+      ['mixed separators', `<code>${GROUPS.map((group, index) => group + ['-', ' ', '_', ':'][index % 4]).join('')}</code>`],
+      ['groups in sibling elements', GROUPS.map((group) => `<span>${group}</span>`).join('')],
+      ['groups in sibling elements with spaces', GROUPS.map((group) => `<span>${group}</span>`).join(' ')],
+      ['upper case, grouped, in a title', `<code title="${upper(GROUPS.join(' '))}">…</code>`],
+      ['grouped in a data attribute', `<code data-digest="${GROUPS.join('-')}"></code>`],
+    ];
+    for (const [name, markup] of printed) {
+      expect(longestDigestRun(markup, REAL_DIGEST), name).toBe(64);
+    }
+  });
+
+  it('still reads the shortened form as twelve, in either case, and invents no run from other text', () => {
+    expect(longestDigestRun('<code>6d53674f688f…</code>', REAL_DIGEST)).toBe(12);
+    expect(longestDigestRun('<code>6D53674F688F…</code>', REAL_DIGEST)).toBe(12);
+    expect(longestDigestRun('<code>6d53 674f 688f…</code>', REAL_DIGEST)).toBe(12);
+    // Words, dates and class names are separated by the same characters; none of them is a digest.
+    const prose =
+      '<li class="am-state am-state--neutral" data-run-id="run_01J9ZQ8K7NHVXW3T2R5M6P4Q8B">' +
+      'Создан 2026-09-10 08:00:00 UTC · decade-old facade: a bad deed</li>';
+    expect(longestDigestRun(prose, REAL_DIGEST)).toBeLessThan(6);
   });
 });
 
