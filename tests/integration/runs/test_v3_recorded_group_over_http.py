@@ -291,10 +291,9 @@ def _build(environ: dict[str, str], recordings: Path) -> BuiltApplication:
             return job
 
     def build_provider(settings: Any, env: Any, *, runtime: Any = None) -> Any:
-        _adapter, config, profile_id, bundle_id, source = real_build_provider(
-            settings, env, runtime=runtime)
+        _adapter, config, source = real_build_provider(settings, env, runtime=runtime)
         seen["replay"] = _GatedReplay(recordings, REPLY)
-        return seen["replay"], config, profile_id, bundle_id, _SwappedSource(source, seen["replay"])
+        return seen["replay"], config, _SwappedSource(source, seen["replay"])
 
     patch.setattr(composition_module, "_build_provider", build_provider)
     patch.setattr(composition_module, "RunAdapter", RunAdapterSpy)
