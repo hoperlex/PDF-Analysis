@@ -160,8 +160,26 @@ def _withdraw(session, pairings, sheet_link_id: str, *, key: str, roles=EXPERT_R
 def _rows(session) -> list[tuple]:
     return list(session.execute(text(
         "SELECT link_revision, event_kind, sheet_link_id, raw_evidence_seal_sha256 "
-        "FROM comparison_sheet_link ORDER BY link_revision"
-    )).all())
+        "FROM comparison_sheet_link WHERE project_uid = :p ORDER BY comparison_id, link_revision"
+    ), {"p": PROJECT}).all())
+
+
+def _receipts(session) -> int:
+    return int(session.execute(text(
+        "SELECT count(*) FROM command_record WHERE command_type LIKE '%sheet_pairing'")).scalar_one())
+
+
+def _comparison_events(session, comparison_id: str | None = None) -> list[tuple]:
+    """The ``comparison.*`` events, of one comparison or (the committed ones of earlier suites
+    included) of all."""
+    statement = (
+        "SELECT event_type, aggregate_type, aggregate_id, payload FROM audit_event "
+        "WHERE event_type LIKE 'comparison.%'"
+    )
+    if comparison_id is not None:
+        return list(session.execute(
+            text(statement + " AND aggregate_id = :c ORDER BY sequence_no"), {"c": comparison_id}).all())
+    return list(session.execute(text(statement + " ORDER BY sequence_no")).all())
 
 
 def _conflict_reason(error: DomainError) -> str:
@@ -189,10 +207,7 @@ def test_an_approval_is_stored_with_digests_actor_seal_and_an_audit_event(seeded
     assert (event.actor_user_uid, event.actor_label) == (EXPERT, "Иванов И. И.")
     assert event.raw_evidence_seal_sha256 and len(event.raw_evidence_seal_sha256) == 64
 
-    audit = seeded.execute(text(
-        "SELECT event_type, aggregate_type, aggregate_id, payload FROM audit_event "
-        "WHERE event_type LIKE 'comparison.%'"
-    )).all()
+    audit = _comparison_events(seeded, event.comparison_id)
     assert [(a[0], a[1], a[2]) for a in audit] == [
         ("comparison.sheet_link_approved", "Comparison", event.comparison_id),
     ]
@@ -314,16 +329,42 @@ def test_the_thirty_third_active_link_is_refused(seeded) -> None:
     assert len(_rows(seeded)) == 32
 
 
+def test_an_earlier_approval_whose_text_changed_blocks_new_approvals_until_it_is_withdrawn(seeded) -> None:
+    comparisons, pairings = _world()
+    first = _approve(seeded, pairings, comparisons, 7, key="pairing-key-21").event
+    # Page 7 of the newer set is redrawn again; the approval no longer describes it.
+    redrawn = TARGET_PAGES | {7: TARGET_PAGES[7].replace("размер 35", "размер 36")}
+    changed, changed_pairings = _world(target=redrawn)
+    with pytest.raises(DomainError) as refused, seeded.begin_nested():
+        _approve(seeded, changed_pairings, changed, 8, key="pairing-key-22")
+    assert _conflict_reason(refused.value) == "approved_text_changed"
+    # Withdrawing the drifted link is always possible, and frees the way.
+    ended = _withdraw(seeded, changed_pairings, first.sheet_link_id, key="pairing-key-23")
+    assert ended.event.event_kind == "withdrawn" and ended.event.raw_evidence_seal_sha256 is None
+    again = _approve(seeded, changed_pairings, changed, 8, key="pairing-key-24")
+    assert again.event.link_revision == 3 and again.event.source_page_number == 8
+
+
+def test_an_approval_beyond_the_bounds_of_the_raw_evidence_is_refused_not_cut(seeded, monkeypatch) -> None:
+    comparisons, pairings = _world()
+    digest = _proposal(seeded, comparisons, 7)
+    monkeypatch.setattr("auditmanager.comparison.raw_text.MAX_TOTAL_CHARACTERS", 10)
+    with pytest.raises(DomainError) as refused, seeded.begin_nested():
+        _approve(seeded, pairings, comparisons, 7, key="pairing-key-25", suggestion_sha256=digest)
+    assert _conflict_reason(refused.value) == "sheet_pair_too_large"
+    assert _rows(seeded) == []
+
+
 def test_an_account_without_the_expert_role_approves_nothing(seeded) -> None:
     comparisons, pairings = _world()
+    events_before, receipts_before = len(_comparison_events(seeded)), _receipts(seeded)
     with pytest.raises(DomainError) as refused:
         _approve(seeded, pairings, comparisons, 7, key="pairing-key-7", roles=frozenset({"admin"}))
     assert refused.value.code is ErrorCode.PERMISSION_DENIED
     assert refused.value.detail_fields["required_capability"] == "role:expert"
     assert _rows(seeded) == []
-    assert seeded.execute(text("SELECT count(*) FROM command_record")).scalar_one() == 0
-    assert seeded.execute(text(
-        "SELECT count(*) FROM audit_event WHERE event_type LIKE 'comparison.%'")).scalar_one() == 0
+    assert _receipts(seeded) == receipts_before
+    assert len(_comparison_events(seeded)) == events_before
 
 
 def test_a_withdrawal_is_a_new_row_and_the_approval_stays(seeded) -> None:
@@ -338,9 +379,7 @@ def test_a_withdrawal_is_a_new_row_and_the_approval_stays(seeded) -> None:
     after = _rows(seeded)
     assert after[:1] == before and len(after) == 2          # the approval row is untouched
     assert comparisons.compare(seeded, _request()).approved_pairs.evidence_state == EVIDENCE_NONE
-    events = [row[0] for row in seeded.execute(text(
-        "SELECT event_type FROM audit_event WHERE event_type LIKE 'comparison.%' "
-        "ORDER BY sequence_no")).all()]
+    events = [row[0] for row in _comparison_events(seeded, first.comparison_id)]
     assert events == ["comparison.sheet_link_approved", "comparison.sheet_link_withdrawn"]
 
     # A withdrawn link cannot be withdrawn again; approving the pages anew is a new link.
@@ -392,15 +431,34 @@ def test_the_row_and_its_audit_event_commit_or_roll_back_together(seeded, monkey
     def broken(*args, **kwargs):
         raise RuntimeError("the audit trail is unavailable")
 
+    events_before, receipts_before = len(_comparison_events(seeded)), _receipts(seeded)
     monkeypatch.setattr("auditmanager.comparison.pairing.record_sheet_link_approved", broken)
     with pytest.raises(RuntimeError):
         with seeded.begin_nested():
             _approve(seeded, pairings, comparisons, 7, key="pairing-key-18",
                      suggestion_sha256=digest)
     assert _rows(seeded) == []
-    assert seeded.execute(text(
-        "SELECT count(*) FROM command_record WHERE command_type = 'approve_sheet_pairing'"
-    )).scalar_one() == 0
+    assert len(_comparison_events(seeded)) == events_before
+    assert _receipts(seeded) == receipts_before
+
+
+def test_a_failure_after_the_audit_event_leaves_neither_the_row_nor_the_event(seeded, monkeypatch) -> None:
+    """The event is written on the caller's transaction, so a later failure takes it away with the row."""
+    from auditmanager.ingest.public import CommandRepository
+
+    comparisons, pairings = _world()
+    digest = _proposal(seeded, comparisons, 7)
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("the receipt cannot be completed")
+
+    events_before = len(_comparison_events(seeded))
+    monkeypatch.setattr(CommandRepository, "succeed", broken)
+    with pytest.raises(RuntimeError):
+        with seeded.begin_nested():
+            _approve(seeded, pairings, comparisons, 7, key="pairing-key-20", suggestion_sha256=digest)
+    assert _rows(seeded) == []
+    assert len(_comparison_events(seeded)) == events_before
 
 
 def test_the_database_refuses_to_update_or_delete_an_approval(seeded) -> None:
