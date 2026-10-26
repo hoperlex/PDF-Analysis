@@ -280,11 +280,16 @@ class TestTheScriptGoesStaleLoudly:
         assert grants.write_blocks(stale) == text
 
 
-def test_the_generated_sql_grants_no_truncate_no_references_and_no_default_privileges() -> None:
-    for kind in ("apply", "check"):
-        sql = grants.render_sql(kind)
-        if kind == "apply":
-            assert not re.search(r"GRANT[^;]*\b(TRUNCATE|REFERENCES|TRIGGER|MAINTAIN)\b", sql), "a grant of a forbidden privilege"
-            assert "ALTER DEFAULT PRIVILEGES" not in sql
-            assert not re.search(r"\bGRANT\s+ALL\b", sql)
-        assert "'TRUNCATE'" in sql or kind == "apply"
+def test_the_generated_apply_sql_grants_no_truncate_no_references_and_no_default_privileges() -> None:
+    sql = grants.render_sql("apply")
+    assert not re.search(r"GRANT[^;]*\b(TRUNCATE|REFERENCES|TRIGGER|MAINTAIN)\b", sql), "a grant of a forbidden privilege"
+    assert "ALTER DEFAULT PRIVILEGES" not in sql
+    assert not re.search(r"\bGRANT\s+ALL\b", sql)
+    assert "REVOKE CREATE ON SCHEMA public FROM PUBLIC" in sql and "REVOKE CREATE ON SCHEMA public FROM :\"app_role\"" in sql
+
+
+def test_the_generated_check_sql_asks_about_every_privilege_postgresql_knows() -> None:
+    sql = grants.render_sql("check")
+    for privilege in grants.ALL_TABLE_PRIVILEGES:
+        assert f"('{privilege}')" in sql, privilege
+    assert not re.search(r"\b(GRANT|REVOKE|CREATE ROLE|ALTER ROLE|DROP)\b", sql), "the verification changes nothing"

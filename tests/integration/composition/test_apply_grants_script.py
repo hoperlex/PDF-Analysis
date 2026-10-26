@@ -46,7 +46,7 @@ import sys
 argv = sys.argv[1:]
 stdin = ""
 is_psql = argv[5:6] == ["exec"] and "psql" in argv
-if is_psql:
+if is_psql and not os.environ.get("STUB_NO_READ"):
     stdin = sys.stdin.read()
 with open(os.environ["STUB_LOG"], "a", encoding="utf-8") as handle:
     handle.write(json.dumps({"argv": argv, "stdin": stdin}) + "\n")
@@ -293,3 +293,32 @@ def test_the_script_is_executable_and_uses_no_python() -> None:
     text = SCRIPT.read_text(encoding="utf-8")
     assert "python" not in re.sub(r"#.*", "", text), "the host is promised bash, docker, curl, sed and git"
     assert text.startswith("#!/usr/bin/env bash\n")
+
+
+def test_a_docker_that_exits_without_reading_its_input_does_not_break_the_script(tmp_path: Path) -> None:
+    """The statements go to `psql` from a file, not a pipe, so a `docker` that refuses before reading (no daemon, no
+    container) cannot hand the script a SIGPIPE in the middle of a write: it is its own exit status, and nothing else."""
+    staged, env_file = _stage(tmp_path)
+    done, calls = _run(staged, env_file, tmp_path=tmp_path, stub={"STUB_NO_READ": "1", "STUB_CHECK_STATUS": "125"})  # unread stdin: the stub cannot tell apply from check
+    assert done.returncode == FAILED and "could not be applied (status 125)" in done.stderr, (done.returncode, done.stderr)
+    done, _ = _run(staged, env_file, tmp_path=tmp_path, stub={"STUB_NO_READ": "1"})
+    assert done.returncode == 0 and "grants-ok" in done.stdout, (done.returncode, done.stdout, done.stderr)
+
+
+def test_a_checkout_installed_apart_names_its_compose_file_explicitly(tmp_path: Path) -> None:
+    """`copy-serve.sh` is installed apart from the checkout, so the script is not beside the compose file there."""
+    apart = tmp_path / "apart"
+    apart.mkdir()
+    staged = apart / "apply-grants.sh"
+    staged.write_text(SCRIPT.read_text(encoding="utf-8"), encoding="utf-8")
+    staged.chmod(0o755)
+    checkout = tmp_path / "checkout/infra/deploy"
+    (checkout / "env").mkdir(parents=True)
+    shutil.copy2(COMPOSE, checkout / "compose.server.yml")
+    env_file = checkout / "env/alpha.env"
+    env_file.write_text(_env_text(), encoding="utf-8")
+    refused, calls = _run(staged, env_file, tmp_path=tmp_path)
+    assert refused.returncode == REFUSED and "compose.server.yml is missing" in refused.stderr and calls == []
+    done, calls = _run(staged, env_file, "--compose-file", str(checkout / "compose.server.yml"), tmp_path=tmp_path)
+    assert done.returncode == 0, (done.stdout, done.stderr)
+    assert all(call["argv"][3:5] == ["--file", str(checkout / "compose.server.yml")] for call in calls), calls

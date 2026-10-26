@@ -527,6 +527,7 @@ _TAMPERING = {
                         "sequence audit_event_sequence_no_seq: the role cannot USAGE it"),
     "CREATE on the schema": ("GRANT CREATE ON SCHEMA public TO {role}", "schema public: the role can CREATE in it"),
     "no USAGE on the schema": ("REVOKE USAGE ON SCHEMA public FROM {role}, PUBLIC", "schema public: the role cannot USAGE it"),
+    "CREATE on the schema through PUBLIC": ("GRANT CREATE ON SCHEMA public TO PUBLIC", "schema public: the role can CREATE in it"),
     "CREATE on the database": ("GRANT CREATE ON DATABASE {database} TO {role}", "the role can CREATE in it"),
     "no CONNECT": ("REVOKE CONNECT ON DATABASE {database} FROM {role}, PUBLIC", "the role cannot CONNECT"),
     "superuser": ("ALTER ROLE {role} SUPERUSER", "role: has an attribute it must not have"),
