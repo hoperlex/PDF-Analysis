@@ -1,5 +1,7 @@
 # W59-SECTION-PROFILES-01 — draft text profiles for 13 non-AR sections
 
+> Superseded in status on 2026-10-26: the 14 profiles are `reviewed` without any human review (`R-146ag`, `A-7`); the open questions below were answered by lanes, see `SECTION-REVIEW-LEDGER-01.md`; the text below is the state at its date.
+
 **Base:** `a1a25ebc` on `integration/night-1020` (the task's frozen `origin/dev`
 base is `9cf21cc0c111c819570927510ef40dec495df5e9`). **Branch:**
 `agent/w59-section-profiles-01`. **Legacy source:** `PDF-proverka` at
