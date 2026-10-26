@@ -12,7 +12,7 @@ import json
 from dataclasses import dataclass
 from typing import Final
 
-from auditmanager.analysis.profiles.ar_v2.recognised_context import RecognisedContext
+from auditmanager.analysis.profiles.ar_shared.recognised_context import RecognisedContext
 from auditmanager.analysis.profiles.ar_v3.prompt_material import (
     V3PromptRefused,
     prepare_v3_prompt,

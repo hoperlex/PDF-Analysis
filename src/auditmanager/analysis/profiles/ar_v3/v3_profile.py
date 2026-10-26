@@ -12,15 +12,15 @@ import json
 from dataclasses import dataclass
 from typing import Final
 
-from auditmanager.analysis.profiles.ar_v2.content import (
+from auditmanager.analysis.profiles.ar_shared.content import (
     ProfileContentError,
     reviewed_content_sha256,
 )
-from auditmanager.analysis.profiles.ar_v2.registered import (
+from auditmanager.analysis.profiles.ar_shared.v2_identities import (
     PROFILE_ID as V2_PROFILE_ID,
     PROMPT_BUNDLE_ID as V2_BUNDLE_ID,
 )
-from auditmanager.analysis.profiles.ar_v2.recognised_context import RecognisedContext
+from auditmanager.analysis.profiles.ar_shared.recognised_context import RecognisedContext
 from auditmanager.analysis.profiles.ar_v3.norm_map.beta_sources import (
     BetaSourcePolicyRefused,
     COMPOSITION_SHA256,

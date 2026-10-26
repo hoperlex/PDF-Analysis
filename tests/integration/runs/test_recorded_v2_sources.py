@@ -16,7 +16,7 @@ from auditmanager.analysis.public import (
     ProviderMode,
     RecordedGenerationSettings,
 )
-from auditmanager.analysis.profiles.ar_v2.registered import PROFILE_ID, PROMPT_BUNDLE_ID
+from auditmanager.analysis.profiles.ar_shared.v2_identities import PROFILE_ID, PROMPT_BUNDLE_ID
 from auditmanager.runs.recorded_v2_sources import load_recorded_v2_input
 from auditmanager.runs.repository import RunRow, StageResultRow
 from auditmanager.shared.errors import DomainError, ErrorCode

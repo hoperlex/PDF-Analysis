@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from auditmanager.analysis.profiles.ar_v2.recognised_context import RecognisedContext
+from auditmanager.analysis.profiles.ar_shared.recognised_context import RecognisedContext
 from auditmanager.analysis.profiles.ar_v2.response import V2ResponseError
 from auditmanager.analysis.profiles.ar_v2.response_pipeline import finish_response
 from auditmanager.analysis.text.adapter import ModelResponse

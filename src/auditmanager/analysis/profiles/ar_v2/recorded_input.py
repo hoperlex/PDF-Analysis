@@ -17,7 +17,7 @@ from auditmanager.analysis.engine.serialization import (
     canonical_bytes,
     sha256_hex,
 )
-from auditmanager.analysis.profiles.ar_v2.recognised_context import (
+from auditmanager.analysis.profiles.ar_shared.recognised_context import (
     RecognisedContext,
     select_context,
 )

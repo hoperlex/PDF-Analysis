@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from auditmanager.analysis.profiles.ar_v2.grounding import resolve_v2_anchor
-from auditmanager.analysis.profiles.ar_v2.recognised_context import RecognisedContext
+from auditmanager.analysis.profiles.ar_shared.grounding import resolve_v2_anchor
+from auditmanager.analysis.profiles.ar_shared.recognised_context import RecognisedContext
 from auditmanager.analysis.profiles.ar_v2.response import ParsedResponse, ProposedObservation
 from auditmanager.analysis.text.anchors import BlockIndex, ResolvedAnchor, UnresolvedAnchor
 from auditmanager.analysis.text.textlayer import TextLayer

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from auditmanager.analysis.profiles.ar_v2 import content
+from auditmanager.analysis.profiles.ar_shared import content
 from auditmanager.analysis.profiles.ar_v2.response_schema import (
     CATEGORIES as AR_V2_CATEGORIES,
 )

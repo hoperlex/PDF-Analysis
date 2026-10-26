@@ -10,11 +10,11 @@ import hashlib
 import json
 from typing import Final
 
-from auditmanager.analysis.profiles.ar_v2.content import (
+from auditmanager.analysis.profiles.ar_shared.content import (
     reviewed_content_sha256,
     reviewed_sections,
 )
-from auditmanager.analysis.profiles.ar_v2.recognised_context import (
+from auditmanager.analysis.profiles.ar_shared.recognised_context import (
     RecognisedContext,
     render_context,
 )

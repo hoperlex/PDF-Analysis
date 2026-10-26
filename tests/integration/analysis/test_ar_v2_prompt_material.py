@@ -6,14 +6,14 @@ import json
 
 import pytest
 
-from auditmanager.analysis.profiles.ar_v2.content import REVIEWED_SOURCES
+from auditmanager.analysis.profiles.ar_shared.content import REVIEWED_SOURCES
 from auditmanager.analysis.profiles.ar_v2.prompt_material import (
     PromptMaterialError,
     material_sha256,
     render_user_prompt,
     system_prompt,
 )
-from auditmanager.analysis.profiles.ar_v2.recognised_context import RecognisedContext
+from auditmanager.analysis.profiles.ar_shared.recognised_context import RecognisedContext
 from auditmanager.analysis.text.profile import AR_TEXT_PROFILE
 from auditmanager.analysis.text.textlayer import Page, TextLayer
 

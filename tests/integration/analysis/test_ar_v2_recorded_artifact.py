@@ -22,7 +22,7 @@ from auditmanager.analysis.profiles.ar_v2.recorded_artifact import (
 from auditmanager.analysis.profiles.ar_v2.recorded_input import prepare_recorded_v2_input
 from auditmanager.analysis.profiles.ar_v2.recorded_request import RecordedGenerationSettings
 from auditmanager.analysis.profiles.ar_v2.recorded_response import replay_recorded_response
-from auditmanager.analysis.profiles.ar_v2.registered import PROFILE_ID, PROMPT_BUNDLE_ID
+from auditmanager.analysis.profiles.ar_shared.v2_identities import PROFILE_ID, PROMPT_BUNDLE_ID
 from auditmanager.analysis.text.anchors import ResolvedAnchor
 from auditmanager.analysis.text.recorded import RecordedAdapter, recording_document
 from auditmanager.findings.artifacts import ObservationSet
