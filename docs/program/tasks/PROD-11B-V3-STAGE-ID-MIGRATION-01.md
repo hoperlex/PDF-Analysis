@@ -22,9 +22,9 @@ Migration `0033_ar_v3_cite_stage_id` replaces the one database CHECK that refuse
 
 ## Enumerator ownership
 
-- enumerated_set_changed: yes (the stage ids `stage_result` stores: nine to ten)
+- enumerated_set_changed: yes
 - enumerator_path: `db/migrations/versions/20261026_0033_ar_v3_cite_stage_id.py`
-- enumerator_owner: this lane, for the migration; the API vocabulary (`StageId`, `ArV3BetaStageId`) and `contracts/analysis/ar_v3_beta/v1/stage.json` are unchanged
+- enumerator_owner: this lane (the set is the stage ids `stage_result` stores, nine to ten), for the migration; the API vocabulary (`StageId`, `ArV3BetaStageId`) and `contracts/analysis/ar_v3_beta/v1/stage.json` are unchanged
 - totality_query: `SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'ck_stage_result_stage_id'` prints the nine registry ids and `ar_v3_citation_review`; `tests/integration/db/test_ar_v3_cite_stage_id_migration.py` compares it with a list written out in the test and ties the migration's restated ids to `0002`'s `STAGE_IDS`, to `StageId` / `ArV3BetaStageId` and to the stage extension contract
 
 ## Captured premise evidence
