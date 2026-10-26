@@ -1,0 +1,42 @@
+{
+ "format": "section-widen-specimen/1",
+ "section_code": "POS",
+ "case": "positive",
+ "expect": "finding",
+ "origin": {
+  "kind": "synthetic",
+  "statement": "Text and reply authored by hand for SECTION-WIDEN-G1-01 to show what a widened prompt rule is meant to report or to leave alone, and filed by SECTION-PROMPT-SENTENCE-GUARD-01. No model produced this reply. Not field evidence for any profile's expert review; it says nothing about how a model answers.",
+  "task_id": "SECTION-WIDEN-G1-01",
+  "source_report": "docs/program/SECTION-WIDEN-G1-01.md",
+  "filed_by": "SECTION-PROMPT-SENTENCE-GUARD-01"
+ },
+ "pages": [
+  "Проект организации строительства (вымышленный пример для проверки профиля)\nРаспределение капитальных вложений по годам строительства, %\nПервый год — 25\nВторой год — 45\nТретий год — 20\nИтого — 100",
+  "Календарный план. Общая продолжительность строительства — 11 месяцев."
+ ],
+ "observations": [
+  {
+   "category": "internal_contradiction",
+   "finding_text": "Синтетический ответ (ПОС), не результат вызова модели: итог распределения капитальных вложений записан как 100, а три строки по годам дают 90.",
+   "recommendation_text": "Согласовать итог распределения и доли по годам строительства.",
+   "evidence": [
+    {
+     "page_number": 1,
+     "quote": "Итого — 100"
+    },
+    {
+     "page_number": 1,
+     "quote": "Первый год — 25"
+    },
+    {
+     "page_number": 1,
+     "quote": "Второй год — 45"
+    },
+    {
+     "page_number": 1,
+     "quote": "Третий год — 20"
+    }
+   ]
+  }
+ ]
+}

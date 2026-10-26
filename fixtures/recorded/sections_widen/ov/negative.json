@@ -1,0 +1,19 @@
+{
+ "format": "section-widen-specimen/1",
+ "section_code": "OV",
+ "case": "negative",
+ "expect": "none",
+ "origin": {
+  "kind": "synthetic",
+  "statement": "Text and reply authored by hand for SECTION-WIDEN-G2-01 to show what a widened prompt rule is meant to report or to leave alone, and filed by SECTION-PROMPT-SENTENCE-GUARD-01. No model produced this reply. Not field evidence for any profile's expert review; it says nothing about how a model answers.",
+  "task_id": "SECTION-WIDEN-G2-01",
+  "source_report": "docs/program/SECTION-WIDEN-G2-01.md",
+  "filed_by": "SECTION-PROMPT-SENTENCE-GUARD-01"
+ },
+ "pages": [
+  "Раздел 5. Отопление, вентиляция и кондиционирование (ОВ)\nОбъект: многоквартирный жилой дом (вымышленный, для проверки)\nСтадия: П\nОбщие данные\nТеплоноситель систем отопления — вода.\n",
+  "Таблица воздухообмена. Система П1 (приток), расход воздуха, м³/ч\n101 Тамбур 300\n102 Лифтовой холл 450\n103 Помещение охраны 200\n104 Электрощитовая 150\nИтого по системе П1 1100\nТаблица тепловых нагрузок, кВт\nОтопление 180,0\nВентиляция 95,5\nГорячее водоснабжение 140,0\nИтого 415,5\n",
+  "Таблица характеристик систем\nСистема П1: расход воздуха установки 1250 м³/ч (с учётом подсосов и потерь).\n"
+ ],
+ "observations": []
+}

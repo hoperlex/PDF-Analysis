@@ -1,0 +1,51 @@
+{
+ "format": "section-widen-specimen/1",
+ "section_code": "KM",
+ "case": "positive",
+ "expect": "finding",
+ "origin": {
+  "kind": "synthetic",
+  "statement": "Text and reply authored by hand for SECTION-WIDEN-G2-01 to show what a widened prompt rule is meant to report or to leave alone, and filed by SECTION-PROMPT-SENTENCE-GUARD-01. No model produced this reply. Not field evidence for any profile's expert review; it says nothing about how a model answers.",
+  "task_id": "SECTION-WIDEN-G2-01",
+  "source_report": "docs/program/SECTION-WIDEN-G2-01.md",
+  "filed_by": "SECTION-PROMPT-SENTENCE-GUARD-01"
+ },
+ "pages": [
+  "Раздел 4. Конструкции металлические (КМ)\nОбъект: многоквартирный жилой дом (вымышленный, для проверки)\nСтадия: П\nОбщие данные\nКонструктивная схема каркаса — рамно-связевая.\nОбщая масса металлоконструкций, прямо указанная в общих данных: 5892,5 кг.\n",
+  "Спецификация металлопроката. Масса марок, кг\nМарка Профиль Количество, шт. Масса марки, кг\nБ1 Двутавр 30Б1 6 1240,5\nБ2 Двутавр 25Б1 4 868,0\nК1 Двутавр 30К1 8 2315,5\nК2 Двутавр 25К1 4 1102,0\nСв1 Уголок 100х8 20 456,5\nИтого 5892,5\nПримечание. Масса в таблице дана без учёта наплавленного металла и метизов.\n",
+  "Пояснительная записка. Масса металлоконструкций с учётом наплавленного металла — 6071,7 кг.\n"
+ ],
+ "observations": [
+  {
+   "category": "internal_contradiction",
+   "finding_text": "Синтетический ответ (КМ), не результат вызова модели: итог столбца масс в спецификации металлопроката записан как 5892,5 кг, а сумма масс пяти марок того же столбца — 5982,5 кг; разность больше погрешности округления, основа массы в таблице названа одна (без наплавленного металла и метизов).",
+   "recommendation_text": "Проверить массы марок и итог спецификации и привести их в соответствие.",
+   "evidence": [
+    {
+     "page_number": 2,
+     "quote": "Итого 5892,5"
+    },
+    {
+     "page_number": 2,
+     "quote": "Б1 Двутавр 30Б1 6 1240,5"
+    },
+    {
+     "page_number": 2,
+     "quote": "Б2 Двутавр 25Б1 4 868,0"
+    },
+    {
+     "page_number": 2,
+     "quote": "К1 Двутавр 30К1 8 2315,5"
+    },
+    {
+     "page_number": 2,
+     "quote": "К2 Двутавр 25К1 4 1102,0"
+    },
+    {
+     "page_number": 2,
+     "quote": "Св1 Уголок 100х8 20 456,5"
+    }
+   ]
+  }
+ ]
+}

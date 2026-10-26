@@ -1,0 +1,18 @@
+{
+ "format": "section-widen-specimen/1",
+ "section_code": "ITP",
+ "case": "total_negative",
+ "expect": "none",
+ "origin": {
+  "kind": "synthetic",
+  "statement": "Text and reply authored by hand for SECTION-WIDEN-G3-01 to show what a widened prompt rule is meant to report or to leave alone, and filed by SECTION-PROMPT-SENTENCE-GUARD-01. No model produced this reply. Not field evidence for any profile's expert review; it says nothing about how a model answers.",
+  "task_id": "SECTION-WIDEN-G3-01",
+  "source_report": "docs/program/SECTION-WIDEN-G3-01.md",
+  "filed_by": "SECTION-PROMPT-SENTENCE-GUARD-01"
+ },
+ "pages": [
+  "Таблица тепловых нагрузок (вымышленный пример для проверки профиля)\nОтопление — 850 кВт\nВентиляция — 180 кВт\nГВС максимальная — 420 кВт\nГВС среднечасовая — 150 кВт\nСуммарная тепловая нагрузка — 1180 кВт",
+  "Принципиальная схема ИТП. Схема присоединения — независимая."
+ ],
+ "observations": []
+}

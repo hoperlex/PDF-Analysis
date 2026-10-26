@@ -1,0 +1,19 @@
+{
+ "format": "section-widen-specimen/1",
+ "section_code": "PT",
+ "case": "negative",
+ "expect": "none",
+ "origin": {
+  "kind": "synthetic",
+  "statement": "Text and reply authored by hand for SECTION-WIDEN-G2-01 to show what a widened prompt rule is meant to report or to leave alone, and filed by SECTION-PROMPT-SENTENCE-GUARD-01. No model produced this reply. Not field evidence for any profile's expert review; it says nothing about how a model answers.",
+  "task_id": "SECTION-WIDEN-G2-01",
+  "source_report": "docs/program/SECTION-WIDEN-G2-01.md",
+  "filed_by": "SECTION-PROMPT-SENTENCE-GUARD-01"
+ },
+ "pages": [
+  "Раздел 7. Противопожарный водопровод (ПТ)\nОбъект: многоквартирный жилой дом (вымышленный, для проверки)\nСтадия: П\nОбщие данные\nПодача основного пожарного насоса — 10 л/с.\nВнутренний противопожарный водопровод: число струй — 2, расход одной струи — 2,6 л/с, расчётный расход ВПВ — 5,2 л/с.\n",
+  "Спецификация оборудования\nНасос пожарный основной: подача 36 м³/ч, напор 55 м\nРасчётный расход АУПТ — 28,0 л/с.\nСуммарный расход ВПВ и АУПТ — 33,2 л/с.\n",
+  "Внутренний противопожарный водопровод паркинга: число струй — 2, расход одной струи — 2,6 л/с, расчётный расход — 6,1 л/с по результатам гидравлического расчёта.\nНапор у диктующего пожарного крана — 45 м; давление у пожарного крана по таблице гидравлического расчёта — 0,43 МПа.\n"
+ ],
+ "observations": []
+}

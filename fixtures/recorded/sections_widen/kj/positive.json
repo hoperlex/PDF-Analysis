@@ -1,0 +1,41 @@
+{
+ "format": "section-widen-specimen/1",
+ "section_code": "KJ",
+ "case": "positive",
+ "expect": "finding",
+ "origin": {
+  "kind": "synthetic",
+  "statement": "Text and reply authored by hand for SECTION-WIDEN-G1-01 to show what a widened prompt rule is meant to report or to leave alone, and filed by SECTION-PROMPT-SENTENCE-GUARD-01. No model produced this reply. Not field evidence for any profile's expert review; it says nothing about how a model answers.",
+  "task_id": "SECTION-WIDEN-G1-01",
+  "source_report": "docs/program/SECTION-WIDEN-G1-01.md",
+  "filed_by": "SECTION-PROMPT-SENTENCE-GUARD-01"
+ },
+ "pages": [
+  "Ведомость расхода стали (вымышленный пример для проверки профиля), кг\nКолонны К1 — 1240\nПлита перекрытия П1 — 3860\nСтены С1 — 2105\nИтого — 7500"
+ ],
+ "observations": [
+  {
+   "category": "internal_contradiction",
+   "finding_text": "Синтетический ответ (КЖ), не результат вызова модели: итог ведомости расхода стали записан как 7500 кг, а три строки по маркам дают 7205 кг.",
+   "recommendation_text": "Согласовать итог ведомости расхода стали со строками по маркам конструкций.",
+   "evidence": [
+    {
+     "page_number": 1,
+     "quote": "Итого — 7500"
+    },
+    {
+     "page_number": 1,
+     "quote": "Колонны К1 — 1240"
+    },
+    {
+     "page_number": 1,
+     "quote": "Плита перекрытия П1 — 3860"
+    },
+    {
+     "page_number": 1,
+     "quote": "Стены С1 — 2105"
+    }
+   ]
+  }
+ ]
+}

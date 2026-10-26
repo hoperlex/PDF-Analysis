@@ -1,0 +1,18 @@
+{
+ "format": "section-widen-specimen/1",
+ "section_code": "TX",
+ "case": "negative",
+ "expect": "none",
+ "origin": {
+  "kind": "synthetic",
+  "statement": "Text and reply authored by hand for SECTION-WIDEN-G1-01 to show what a widened prompt rule is meant to report or to leave alone, and filed by SECTION-PROMPT-SENTENCE-GUARD-01. No model produced this reply. Not field evidence for any profile's expert review; it says nothing about how a model answers.",
+  "task_id": "SECTION-WIDEN-G1-01",
+  "source_report": "docs/program/SECTION-WIDEN-G1-01.md",
+  "filed_by": "SECTION-PROMPT-SENTENCE-GUARD-01"
+ },
+ "pages": [
+  "Таблица технологических нагрузок. Предприятие «Кафе» (вымышленный пример для проверки профиля)\nПечь конвекционная — установленная мощность 12 кВт\nХолодильный шкаф — установленная мощность 1,5 кВт\nПосудомоечная машина — установленная мощность 9 кВт",
+  "Пояснительная записка. Суммарная установленная мощность технологического оборудования предприятия «Кафе» составляет 22,5 кВт, расчётная мощность с учётом коэффициента спроса — 18 кВт."
+ ],
+ "observations": []
+}
