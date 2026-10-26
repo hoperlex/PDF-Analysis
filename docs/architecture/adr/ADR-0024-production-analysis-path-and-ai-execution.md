@@ -210,7 +210,7 @@ Reopen trigger (given with the ruling's application): the first section whose re
 The primary development task until the beta is bringing the other sections to full versions (`R-146l`). The beta is `1.0.0-beta.N` of the roadmap and the production
 release is `1.0.0`; the number `0.1.1` written in `R-146l` is not used (`R-146r`).
 
-`AD-15`, confirmed by `R-146v` (not the recommended option): a section is **full** when an expert has reviewed its profile. Per section, `PROD-14` therefore has
+`AD-15`, confirmed by `R-146v` (not the recommended option): a section is **full** when an expert has reviewed its profile — **narrowed by `R-146ag` (2026-10-26, accepted risk `A-7`): no expert and no owner reviews it; a section is full when a lane has answered every open question of its record in writing and the expectations line says `reviewed`.** Per section, `PROD-14` therefore has
 four steps: the expert's review of the profile; the edit of the prompt with the re-recording of its synthetic case (editing a prompt orphans its recording); the switch
 of `status` from `draft` in the profile package; and the guard test that pins the new state. No field case is required. Who the experts are stays open (`OD-18`).
 
@@ -230,7 +230,7 @@ follows its prerequisite (waves `PW3` and `PW4`); `D-204` proceeds in parallel a
 | 6 | The run ceiling is 1.00 USD | `python3 -I -c "import json;print(json.load(open('docs/program/P02_LOCK.json'))['models']['run_cost_ceiling_usd'])"` prints `1.0`; `readiness.sh` `cost-ceiling` is `OK` | yes | none |
 | 7 | Production is live on the database source | `infra/deploy/readiness.sh \| grep -E 'readiness OK +(provider-mode\|executor-source)'` prints both lines | yes (the command) | `PROD-13` sets the values |
 | 8 | The OpenRouter pin is a probe's reported string | the probe's report names, per pinned model, the requested slug and the reported `model`; `P02_LOCK.json` is written only by that task | no | `PROD-13` |
-| 9 | Every non-АР profile has been reviewed by an expert before the beta (`R-146v`) | `python3 -I -c "import json,glob;print(sorted(json.load(open(f))['status'] for f in glob.glob('src/auditmanager/analysis/text/profiles/*/profile.json')))"` prints fourteen `reviewed` | no (it prints fourteen `draft`) | `PROD-14` |
+| 9 | Every non-АР profile carries the status `reviewed` before the beta (`R-146v` as narrowed by `R-146ag`: **no human review**, `A-7`; the status proves a lane's written decisions, not a verification) | `python3 -I -c "import json,glob;print(sorted(json.load(open(f))['status'] for f in glob.glob('src/auditmanager/analysis/text/profiles/*/profile.json')))"` prints fourteen `reviewed` | no (it prints fourteen `draft`) | `PROD-14` |
 | 10 | The АР v3 pack is installed | `python -m auditmanager.runs.v3_pack_cli verify --manifest infra/deploy/ar-v3-pack/<file>` exits 0, and `startArV3BetaGroup` stops answering `dependency_unavailable` | no | `PROD-12` |
 | 11 | One worker slot | `ADR-0021` row 12 | yes | none |
 
