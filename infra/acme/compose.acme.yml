@@ -14,8 +14,10 @@
 #   * an `acme` service: an ACME client (`infra/acme/Dockerfile`, built on the host like the other
 #     repository-owned images, its base pinned by digest and its client by exact version in
 #     `infra/acme/client.pin`). It publishes NO port, mounts NO Docker socket and holds no application
-#     secret. It is on the stack's own network so it can fetch its probe from the proxy and the
-#     verification script can ask the proxy's TLS listener;
+#     secret. It is on a network of its own, `acme-edge`, shared with the `proxy` and with nothing else
+#     (`D-229` item 3): the only peer it needs is the proxy (its probe on 8081, the verification script on
+#     8443), and a container that can open TCP connections to postgres, s3 and the api is one floating
+#     certbot dependency away from using them. The `proxy` is on both networks and is the only bridge;
 #   * the CHALLENGE LISTENER: the proxy's container port 8081 published as public port 80. It serves the
 #     webroot's `/.well-known/acme-challenge/` and redirects everything else to HTTPS (`proxy/acme-challenge.conf`),
 #     and has no application route at all. Public from the moment ACME is configured, so that issuance and
@@ -44,6 +46,12 @@
 # NAMES THAT COULD CARRY A SECRET: none. `docker compose config` prints substituted values in clear, so
 # every `${...}` below is a host name, a contact address, a yes/no or a port number.
 
+# NOT `internal`: the client has to reach the certificate authority. What it must not reach is the data
+# tier, and that is a matter of which services share the network, not of whether it has a route out.
+networks:
+  acme-edge:
+    name: ${ALPHA_INSTANCE:?ALPHA_INSTANCE is unset.}-acme-net
+
 volumes:
   acme-state:
     name: ${ALPHA_INSTANCE:?ALPHA_INSTANCE is unset.}-acme-state
@@ -58,7 +66,7 @@ services:
       context: ../acme
       dockerfile: Dockerfile
     image: ${ALPHA_INSTANCE:?ALPHA_INSTANCE is unset.}-acme
-    networks: [alpha]
+    networks: [acme-edge]
     restart: unless-stopped
     depends_on:
       proxy:
@@ -84,6 +92,9 @@ services:
       start_period: 30s
 
   proxy:
+    # BOTH names, although the base already lists `alpha`: whether compose merges two lists of networks or
+    # lets the later file's list win, the proxy ends up on the data network AND on the client's.
+    networks: [alpha, acme-edge]
     volumes:
       - acme-webroot:/var/www/acme:ro
       - certs:/etc/nginx/tls:ro

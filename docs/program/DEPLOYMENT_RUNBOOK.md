@@ -120,8 +120,9 @@ The second must fail to connect. On this host it printed `200` before the fix an
 **Applies only if a nginx on the host terminates TLS and passes to the published port**
 (`proxy_pass http://127.0.0.1:<ALPHA_HTTP_PORT>`), which is how the stand is served **until §6 is
 done**. When the stack terminates TLS itself (`ALPHA_CERT_NAME` set) there is no host terminator
-and this section is the thing to **undo**: empty `ALPHA_TRUSTED_PROXY_CIDRS`, because the client
-address then arrives on the connection and a client in the list could name its own bucket. Without this
+and this section is the thing to **undo**: empty `ALPHA_TRUSTED_PROXY_CIDRS` (`deploy.sh` refuses a name together with
+a non-empty list), because the client address then arrives on the connection and a client in the list could name its
+own bucket. Without this
 step the stack is correct and safe, but every per-address throttle — sign-up, the sign-in token
 exchange (`POST /api/v1/auth/token`) and the web tier's guest bucket — is **one bucket for all
 visitors**, because the proxy container sees every connection from the compose network's
@@ -505,6 +506,46 @@ port** (the consequence `R-146s` accepts). A restore never *opens* 443; only a d
 | `ALPHA_ACME_HTTP_PORT`, `ALPHA_HTTPS_PORT` | the published ports; change them only for a rehearsal on a machine whose 80 and 443 are not free | `80`, `443` |
 | `ALPHA_BIND_ADDRESS` | the **plain application** listener. With a name set `deploy.sh` refuses anything but loopback | loopback |
 
+### Before the first deploy of this tree on the live host (`D-229` item 2)
+
+"With `ALPHA_CERT_NAME` empty the stack is byte-for-byte the deployment that was certified before" is true of what is
+built and started and **not** of everything the scripts refuse, print or accept. Three differences are visible on a host
+that has never had a name, and the first one is a deploy that stops. Do this once, **before** the first deploy of a tree
+that contains `PROD-01`, on the host (the live one included):
+
+- [ ] `alpha.env` holds **none** of these keys with a value, unless `ALPHA_CERT_NAME` is also set: `ALPHA_ACME_EMAIL`,
+  `ALPHA_ACME_STAGING` (any non-empty value), `ALPHA_PUBLISH_HTTPS=yes`. Without a name `deploy.sh` now **refuses** them
+  (guard `acme-settings-well-formed`: `REFUSED: ALPHA_ACME_EMAIL, ALPHA_ACME_STAGING or ALPHA_PUBLISH_HTTPS is set in
+  <env> and ALPHA_CERT_NAME is not.`, exit 3, nothing built) instead of ignoring them.
+  ```
+  grep -nE '^[[:space:]]*(export[[:space:]]+)?(ALPHA_ACME_EMAIL|ALPHA_ACME_STAGING|ALPHA_PUBLISH_HTTPS|ALPHA_TLS_DIR)=' \
+    infra/deploy/env/alpha.env
+  ```
+  Expect no output. (`ALPHA_TLS_DIR` is in the list because it no longer exists: it is read by nothing, so a value
+  there is a leftover to delete.)
+- [ ] **Nothing passes `--tls-dir`** to `readiness.sh`, and nothing sets `ALPHA_TLS_DIR`. Both are removed: the `tls` check
+  asks what the proxy *serves* (§9), not a directory, and `readiness.sh --tls-dir <path>` now ends
+  `readiness.sh: unrecognised option: --tls-dir` with the usage text, exit 2. Look in the places a human put a call:
+  the host's crontab and systemd units, any wrapper script, and `.github/workflows/` (the workflow in the repository
+  passes no such option; a copy on the host may differ).
+- [ ] If anything reads the deploy log for the line after the build: it reads `<instance>-api, <instance>-web are built`
+  now, where it used to read `<instance>-api and <instance>-web are built` (and lists `<instance>-acme` as well when a name is
+  set). Nothing in this repository matches that text.
+- [ ] Not a PROD-01 difference but the next thing a first deploy of this tree meets, and it is **not** gated on a name:
+  the default-credential gate (`PROD-02`, §3) refuses the deploy while `admin` still accepts `password`
+  (`[default_credential]`, exit 3). Change the administrator's password through the loopback port first.
+
+**A warning that is not a defect: the rehearsal turns every `deploy-auto` run red, by design.** The deploy workflow runs
+`infra/deploy/verify-deployed.sh` with no arguments and cannot pass `--acme-rehearsal`. As soon as the live host's
+`alpha.env` has a name **and** `ALPHA_ACME_STAGING=yes` — or no `ALPHA_ACME_STAGING` line at all, because the default is
+`yes` (`R-146ac`: a forgotten line must spend the test endpoint's limits, never the real one's) — every automatic deploy
+ends red at `verify-deployed.sh` with **exit 7** (`ALPHA_ACME_STAGING is yes ...: this stack is set to the authority's
+TEST endpoint.`) even though the deploy itself succeeded and the stack is up. That is the intended answer to "you are
+serving a certificate no browser trusts". So: keep the rehearsal (steps 5 to 8) short, do not read a red workflow during
+it as a failed deploy, expect the next green one only after step 9 (`ALPHA_ACME_STAGING=no`), and remember that a push to
+`origin/main` starts that workflow (`AGENTS.md` section 6) — do not publish to `main` during the rehearsal unless the red
+run is acceptable.
+
 ### The procedure (the owner's; every step has the output to expect)
 
 *Lines that a script of this repository prints are exact. Lines that certbot, docker or the operating
@@ -546,7 +587,12 @@ getent hosts <name>
 Expect: the VPS's public address first on the line. (For a name under `sslip.io` the address is in the name.)
 The provider's firewall must let **80 and 443** in. `deploy.sh` checks that nothing else holds the ports on this
 host and says so (guard `public-ports-free`): `deploy.sh: REFUSED: public port 80 is already in use, and not by
-<instance>'s proxy.`
+<instance>'s proxy.` It asks the kernel's table of listening sockets (`/proc/net/tcp`, `/proc/net/tcp6`), so a host
+nginx bound to **one address of the host** (`listen <ip>:80;`) is caught as well as one on loopback or on every
+address (`D-229` item 1: a probe of `127.0.0.1` alone called that port free, and Docker's `0.0.0.0` publish then
+failed on the bind after the build). On a host with no `/proc` it falls back to a connect to `127.0.0.1` and **says
+so** (`deploy.sh: NOTE: no table of listening sockets could be read ...`): then check by hand with
+`ss -ltnp 'sport = :80'`.
 
 **4. The cutover window begins: stop the host's nginx.** From here the public site is down until step 9
 (about ten minutes if nothing goes wrong).
@@ -558,7 +604,10 @@ Expect: `ss` prints only its header line.
 
 **5. The staging rehearsal.** In `alpha.env` set `ALPHA_CERT_NAME=<name>`, `ALPHA_ACME_STAGING=yes`, optionally
 `ALPHA_ACME_EMAIL`, and **remove `ALPHA_TRUSTED_PROXY_CIDRS`** (the host nginx is gone; the client address now
-arrives on the connection). Leave `ALPHA_PUBLISH_HTTPS` unset. Then
+arrives on the connection; `deploy.sh` **refuses** a name together with a non-empty list — guard
+`trusted-proxies-empty-with-name`, `D-229` item 4 — because a peer left in the list could write its own address into the
+guest throttle). Leave `ALPHA_PUBLISH_HTTPS` unset. Until step 9 every automatic deploy ends red at `verify-deployed.sh`
+by design (see "Before the first deploy", above). Then
 ```
 infra/deploy/deploy.sh
 ```
@@ -679,7 +728,8 @@ Expect (shape): `Congratulations, all simulated renewals succeeded`.
 | `deploy.sh` | `REFUSED: ALPHA_CERT_NAME is set and this clone is missing files...` | a partial checkout; nothing was built |
 | `deploy.sh` | `REFUSED: the TLS settings in <env> are not usable.` | the lines under it name each value; a setting without a name is refused, not ignored |
 | `deploy.sh` | `REFUSED: the ACME client is not pinned` | step 1 |
-| `deploy.sh` | `REFUSED: public port N is already in use...` | the host's nginx (or another stack) holds it; step 4 |
+| `deploy.sh` | `REFUSED: public port N is already in use...` | the host's nginx (or another stack) holds it, on any address of this host; step 4 |
+| `deploy.sh` | `REFUSED: ALPHA_TRUSTED_PROXY_CIDRS is set in <env> and ALPHA_CERT_NAME is set too.` | the list is for a nginx in front of this stack and there is none now; remove it (step 5) |
 | `deploy.sh` | `REFUSED: whether the certificate volume holds a pair could not be asked` | the acme image did not answer; nothing was started |
 | `deploy.sh` | `REFUSED: [default_credential] the published admin/password pair is valid` | step 10: change the password; 443 stays closed until then (§3) |
 | `deploy.sh` | `REFUSED: [default_credential_unanswered]` | the gate could not be asked; whether the pair is valid is not known (§3) |

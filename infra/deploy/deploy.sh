@@ -38,7 +38,9 @@
 # `infra/acme/compose.acme.yml` (an ACME client and public port 80 for the challenge and a redirect) and, for
 # a deploy that is cleared to publish and has a certificate, `proxy/compose.tls.yml` (public port 443).
 # `lib/proxy-listeners.sh` decides; five guards (`acme-*`, `public-ports-free`) make each way it can go wrong
-# a sentence before the build. `DEPLOYMENT_RUNBOOK.md` section 6 is the procedure.
+# a sentence before the build, and a sixth (`trusted-proxies-empty-with-name`, `D-229` item 4) refuses a
+# trust list left over from the host nginx this stack replaces. `DEPLOYMENT_RUNBOOK.md` section 6 is the
+# procedure.
 #
 # TWO GATES `PROD-02-03-DEPLOY-GATES-01` ADDED, in the order they bite:
 #
@@ -466,6 +468,41 @@ else
 fi
 # <<< guard: acme-settings-well-formed
 
+# >>> guard: trusted-proxies-empty-with-name
+# `D-229` item 4. `ALPHA_TRUSTED_PROXY_CIDRS` is for a host whose TLS is terminated by ANOTHER nginx in front of
+# this stack (`REAL-IP-EDGE-01`): the proxy then believes the `X-Forwarded-For` of the peers in the list and of
+# nobody else. Once `ALPHA_CERT_NAME` is set THERE IS NO SUCH NGINX -- this stack terminates TLS itself, the
+# client address arrives on the connection -- and a peer left in the list (the compose network's gateway, which
+# every SSH-tunnelled operator and every process on the host also reaches the plain listener through) can write
+# its own address into the guest throttle's bucket. The runbook said "remove it" (section 6, step 5); this is
+# the line that makes the omission a sentence here instead of a setting nobody notices.
+#
+# REFUSED, not warned: the setting has no effect that the operator wants once the name is set (the nginx it was
+# for is the one the cutover stopped), so no live configuration needs it, and it is a one-line edit to remove.
+# It costs the cutover window a minute if forgotten and nothing has been built or stopped by this script.
+#
+# "Non-empty" means what `proxy/trusted-proxies.sh` means by it: at least one entry once commas, tabs and
+# line breaks are read as spaces. A value of separators alone trusts nobody and is not refused. Read again
+# here and not from `TRUSTED_PROXIES` above, so deleting either guard leaves the other whole.
+TRUSTED_WITH_NAME="$(configured ALPHA_TRUSTED_PROXY_CIDRS)"
+if [ -n "$CERT_NAME" ] && [ -n "$TRUSTED_WITH_NAME" ]; then
+    TRUSTED_ENTRIES=""
+    set -f
+    for trusted_entry in $(printf '%s' "$TRUSTED_WITH_NAME" | tr ',\t\r\n' '    '); do
+        TRUSTED_ENTRIES="${TRUSTED_ENTRIES:+$TRUSTED_ENTRIES }$trusted_entry"
+    done
+    set +f
+    if [ -n "$TRUSTED_ENTRIES" ]; then
+        refuse "ALPHA_TRUSTED_PROXY_CIDRS is set in $ENV_FILE and ALPHA_CERT_NAME is set too." \
+               "  trusted peers: $TRUSTED_ENTRIES" \
+               "That list is for a host whose TLS is terminated by another nginx in front of this stack. With a" \
+               "certificate name this stack terminates TLS itself, so a peer in the list could name its own" \
+               "address for the guest throttle. Remove ALPHA_TRUSTED_PROXY_CIDRS from $ENV_FILE" \
+               "(DEPLOYMENT_RUNBOOK.md section 6, step 5), or clear ALPHA_CERT_NAME. Nothing was built."
+    fi
+fi
+# <<< guard: trusted-proxies-empty-with-name
+
 # >>> guard: acme-client-pinned
 # The client is installed by exact package version (`infra/acme/client.pin`), and the lane that wrote that
 # file had no network to resolve one, so it ships the word UNRESOLVED. Building from it would fail late and
@@ -870,24 +907,78 @@ fi
 # owner's act (DEPLOYMENT_RUNBOOK.md section 6) and this is the sentence that says it has not happened yet.
 # Port 80 is checked whenever a name is configured; 443 only when this deploy is to publish it.
 #
+# ANY ADDRESS, NOT ONE (`D-229` item 1). Docker publishes these two ports on `0.0.0.0` unless
+# `ALPHA_PUBLIC_ADDRESS` says otherwise, and the kernel refuses that bind while a socket LISTENS on the same
+# port on ANY single address of the host. A host nginx with `listen <the host's own ip>:80;` is exactly that,
+# and a connect to 127.0.0.1 never reaches it: the first version of this guard called the port free, `up`
+# recreated the `proxy` (the only owner of the loopback port that nginx forwards to), failed on the bind, and
+# the live site was down. So the question is put to the kernel's table of listening sockets
+# (`/proc/net/tcp` and `/proc/net/tcp6`, state `0A`, any local address), which needs no tool the target may
+# not have -- the reason this file does not use `ss` -- and the connect to 127.0.0.1 is kept as a second
+# witness. Where the table cannot be read (a host without /proc, a development machine), the loopback connect
+# is all there is, and the operator is TOLD so: a fallback that did not say it was one would be a guard that
+# silently did less than it claims. The refusal is deliberately wider than strictly necessary when
+# `ALPHA_PUBLIC_ADDRESS` names one interface: a listener elsewhere would not collide, but "something holds
+# this port" is the safer sentence on the host this stack is meant for, and it can be answered with the
+# `ss` line in the message.
+#
 # THE OWN-PROXY CASE, again: a port this instance's proxy already publishes is the idempotent one. It is
 # asked of docker by container port (`docker port <proxy> 8081/tcp`, `8443/tcp`) and not inferred from "a
 # proxy exists", because a proxy that exists WITHOUT the new port is exactly the case where something else
 # may be holding it.
+LISTENER_TABLES="/proc/net/tcp /proc/net/tcp6"
+
+#: `port_is_listened_on <port>`: 0 when some socket of this host listens on that TCP port on any local address,
+#: 1 when none does, 2 when no listener table could be read at all (the caller must say so).
+port_is_listened_on() {
+    local want table readable=no local_address state
+    want="$(printf '%04X' "$1")"
+    for table in $LISTENER_TABLES; do
+        [ -r "$table" ] || continue
+        readable=yes
+        while read -r _ local_address _ state _; do
+            if [ "$state" = 0A ] && [ "${local_address##*:}" = "$want" ]; then
+                return 0
+            fi
+        done < "$table"
+    done
+    [ "$readable" = yes ] || return 2
+    return 1
+}
+
 if [ -n "$CERT_NAME" ]; then
     PUBLIC_CHECKS="$ACME_HTTP_PORT:8081"
     [ "$PUBLISH_HTTPS" != yes ] || PUBLIC_CHECKS="$PUBLIC_CHECKS $HTTPS_PORT:8443"
+    TABLE_UNREADABLE_SAID=no
     for public in $PUBLIC_CHECKS; do
         public_port="${public%%:*}"
         public_inside="${public##*:}"
-        if (exec 3<>"/dev/tcp/127.0.0.1/$public_port") 2>/dev/null; then
+        PUBLIC_HELD=no
+        TABLE_STATUS=0
+        port_is_listened_on "$public_port" || TABLE_STATUS=$?
+        case "$TABLE_STATUS" in
+            0) PUBLIC_HELD=yes ;;
+            2)
+                if [ "$TABLE_UNREADABLE_SAID" = no ]; then
+                    TABLE_UNREADABLE_SAID=yes
+                    printf 'deploy.sh: NOTE: no table of listening sockets could be read (%s), so public port %s was asked of 127.0.0.1 only.\n' \
+                        "$LISTENER_TABLES" "$public_port" >&2
+                    printf '  A listener bound to another address of this host would not be seen here, and docker would fail on the bind\n' >&2
+                    printf '  after the build. Check by hand: ss -ltnp "sport = :%s"\n' "$public_port" >&2
+                fi
+                ;;
+        esac
+        if [ "$PUBLIC_HELD" = no ] && (exec 3<>"/dev/tcp/127.0.0.1/$public_port") 2>/dev/null; then
+            PUBLIC_HELD=yes
+        fi
+        if [ "$PUBLIC_HELD" = yes ]; then
             OURS=no
             if [ -n "$OWN_PROXY" ] && docker port "$OWN_PROXY" "$public_inside/tcp" 2>/dev/null | grep -q ":$public_port\$"; then
                 OURS=yes
             fi
             if [ "$OURS" = no ]; then
                 refuse "public port $public_port is already in use, and not by $INSTANCE's proxy." \
-                       "  something answers on 127.0.0.1:$public_port" \
+                       "  something on this host is listening on port $public_port (on some address; see: ss -ltnp \"sport = :$public_port\")" \
                        "Nothing was built and nothing was started. This stack terminates TLS itself, so the" \
                        "nginx that did it on this host (or anything else on that port) has to be stopped" \
                        "first -- the cutover is DEPLOYMENT_RUNBOOK.md section 6, step 4. For a rehearsal on a" \

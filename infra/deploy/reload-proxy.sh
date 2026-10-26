@@ -193,8 +193,18 @@ if [ -n "$STALE" ]; then
     # the image's own entrypoint, so the start-up hooks a restart would run (the TLS switch
     # among them) run here first.
     IMAGE="$(docker inspect --format '{{.Image}}' "$PROXY")"
+    # THE NETWORK IS THE API'S, NOT "THE PROXY'S FIRST". With a certificate name set the proxy is on two
+    # networks (`infra/acme/compose.acme.yml`: the data network and the ACME client's), `docker inspect` lists
+    # them sorted, and the client's (`<instance>-acme-net`) sorts BEFORE the data network (`<instance>-net`):
+    # the first of the proxy's would put the throwaway container where `api` and `web` do not resolve and
+    # refuse every good configuration as invalid (`D-229` item 3). `api` is on the data network only, so its
+    # network is the one the upstreams live on. With no running `api` the old rule stays: `nginx -t` cannot
+    # resolve `api` then on any network, and says so.
+    API="$(compose ps --quiet api 2>/dev/null | head -1 || true)"
+    NETWORK_OWNER="$PROXY"
+    [ -z "$API" ] || NETWORK_OWNER="$API"
     NETWORK="$(docker inspect --format \
-        '{{range $name, $value := .NetworkSettings.Networks}}{{$name}}{{"\n"}}{{end}}' "$PROXY" \
+        '{{range $name, $value := .NetworkSettings.Networks}}{{$name}}{{"\n"}}{{end}}' "$NETWORK_OWNER" \
         | head -1)"
     CANDIDATE=(docker run --rm)
     [ -z "$NETWORK" ] || CANDIDATE+=(--network "$NETWORK")
