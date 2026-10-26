@@ -34,6 +34,7 @@ SNAPSHOT_ID_PATTERN: Final = re.compile(r"^ns_[0-9A-HJKMNP-TV-Z]{26}$")
 
 
 def require_snapshot_id(value: str) -> str:
-    if not SNAPSHOT_ID_PATTERN.match(value):
+    # `fullmatch`: the pattern ends in `$`, which also matches before one trailing newline.
+    if not SNAPSHOT_ID_PATTERN.fullmatch(value):
         raise ValueError(f"{value!r} is not a norms snapshot id (ns_<ULID>)")
     return value

@@ -74,8 +74,11 @@ def derive_blob_id(*, sha256: str, size: int) -> BlobId:
 
 
 def parse_blob_id(value: str) -> BlobId:
-    """Validate an untrusted string as a ``blob_id``."""
-    if not isinstance(value, str) or not BLOB_ID_PATTERN.match(value):
+    """Validate an untrusted string as a ``blob_id``.
+
+    ``fullmatch``: the pattern ends in ``$``, which also matches before one trailing newline.
+    """
+    if not isinstance(value, str) or not BLOB_ID_PATTERN.fullmatch(value):
         raise InvalidBlobIdError(field="blob_id", constraint=BLOB_ID_PATTERN.pattern)
     return BlobId(value)
 
