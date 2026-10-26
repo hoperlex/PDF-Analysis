@@ -1,9 +1,16 @@
 {
   "$comment": [
+    "PROD-10B-JOURNEY-REBASE-01: the write half gained a `classify-version` step (stage П, section ПБ) between the",
+    "upload and `start-run`, because a run starts only for a version an expert has classified (W59-SECTION-SEAL-01).",
+    "The figures the README documents for this file were measured before that step existed and are NOT re-measured:",
+    "the half still stops at its first deliberate red step, so the new step is not reached there; where it is reached",
+    "(`redden-write-bound`) the step count is one higher than documented. Re-measure on a stand before trusting them.",
+    "",
     "A DELIBERATELY WRONG manifest, for one property only: the bound on the wait for the",
     "run's terminal is a FINDING when it is hit, never a skip and never a pass.",
     "",
-    "Steps 1 and 2 are the real ones and must pass. Step 3 declares a bound of 1 ms, which",
+    "Steps 1 to 3 (project, upload, classify) are the real ones and must pass. The last step, `start-run`,",
+    "declares a bound of 1 ms, which",
     "no real run can meet, and the journey must exit 1 saying so and printing every reading",
     "it took before the bound.",
     "",
@@ -356,6 +363,68 @@
         "forbids_rendered": [
           "[data-upload-failure]",
           "[data-precheck-problem]"
+        ]
+      },
+      {
+        "name": "classify-version",
+        "at": "/projects/{project_uid}/versions/{version_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
+        "control_module": "web/src/features/classify-version/ui/classify-version-form.tsx",
+        "$comment": [
+          "PROD-10B-JOURNEY-REBASE-01. Since W59-SECTION-SEAL-01 a run starts only for a version whose stage and section an",
+          "expert confirmed: an unclassified version is refused (422) before any run exists, so this file, written before",
+          "that, could not reach its run. This is the real manifest's `classify-version` -- stage П and the section ПБ,",
+          "which stays when PROD-11 removes the АР v1 run. Not re-measured against a stand."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "input[data-stage-choice=\"P\"]"
+          },
+          {
+            "do": "click",
+            "selector": "input[data-section-choice=\"PB\"]"
+          },
+          {
+            "do": "click",
+            "selector": "button[data-classification-confirm]",
+            "text": "Подтвердить раздел"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "PUT",
+            "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification",
+            "operationId": "classifyDocumentVersion",
+            "expect_status": 200
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "classifyDocumentVersion",
+            "json_path": "project_stage",
+            "equals": "P"
+          },
+          {
+            "of": "classifyDocumentVersion",
+            "json_path": "section_code",
+            "equals": "PB"
+          }
+        ],
+        "capture": {
+          "kind": "attribute",
+          "$why": "the panel switches to the confirmed classification, which carries the version's document identity",
+          "selector": "[data-classified-document]",
+          "attribute": "data-classified-document",
+          "as": [
+            "document_uid"
+          ],
+          "matches": "^(doc_%ID%)$",
+          "bound_ms": 30000
+        },
+        "forbids_rendered": [
+          "[data-classification-failure]",
+          "[data-classification-conflict]"
         ]
       },
       {

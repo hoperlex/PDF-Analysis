@@ -890,7 +890,7 @@
       "",
       "`D-5` was `POST /api/v1/runs` -> 500, twice, through a browser, on 2026-09-16. The",
       "read walk above would not have caught it: it makes no POST. These three steps do what",
-      "a user does -- name a project and press Create, choose the AR portal bundle (a ZIP) and press Upload,",
+      "a user does -- name a project and press Create, choose the portal bundle (a ZIP) and press Upload,",
       "press Start run -- through the app's own controls, on the public origin.",
       "",
       "Read by the same two checkers as `routes`. At RUN TIME `write.mjs` presses these",
@@ -925,6 +925,79 @@
       "produce; a step that was not reached is a finding, never a pass."
     ],
     "fixture": "fixtures/synthetic/ar/bundles/ar_baseline.zip",
+    "ar_bound": {
+      "$comment": [
+        "PROD-10B-JOURNEY-REBASE-01. This half runs on section ПБ (see `classify-version`) EXCEPT the steps named",
+        "here, which cannot: the project's «Оптимизация» tab -- price lists, vendor lists, «Спецификация и цены»,",
+        "optimisation passes and proposals -- and the Form-7 of the АР section exist for АР only (a set of another",
+        "section is answered `section_not_ar`), and the specification and the passes read the saved page text of",
+        "the newest PUBLISHED run of an АР version. Today that run is an АР v1 run started with «Запустить прогон».",
+        "`PROD-11` removes it: an АР version can then start only the v3 group, which needs an installed reviewed pack",
+        "(`D-204`) and, in recorded mode, a provider binding with a verifiable cost (`D-225` piece 2) before it",
+        "publishes. What feeds these steps afterwards (a v3 group run, or dropping them) is a decision that is not",
+        "this manifest's: until it is taken they stay as they are, are named here, and",
+        "`tests/e2e/test_pc01_journey_section.py` refuses an АР classification, an АР pin or a run start on an АР",
+        "version anywhere else in this half.",
+        "`steps` is every step that may name АР. `needs_published_run` is the subset that cannot pass without a",
+        "published АР run, directly or through the pass it produced (read from the steps' own expectations, not",
+        "measured). `registry_pins` name the АР ROW of the profile registry, whose `builtin` status `PROD-11` removes."
+      ],
+      "steps": [
+        "upload-ar-set-without-a-table",
+        "classify-ar-set-without-a-table",
+        "start-ar-run-without-a-table",
+        "upload-specification-set",
+        "classify-specification-set",
+        "start-specification-run",
+        "price-list-is-an-experts-act",
+        "price-list-empty-file-refused",
+        "price-list-without-columns-refused",
+        "specification-needs-a-price-list",
+        "optimisation-pass-needs-a-price-list",
+        "price-list-upload",
+        "specification-and-prices",
+        "vendor-list-global-is-an-administrators-act",
+        "vendor-list-entry-needs-a-vendor",
+        "vendor-list-global",
+        "vendor-list-project",
+        "optimisation-pass-is-an-experts-act",
+        "optimisation-pass",
+        "optimisation-pass-over-a-set-without-a-table",
+        "proposals-csv-of-an-empty-pass",
+        "proposal-revise-needs-a-comment",
+        "proposal-accept",
+        "proposal-change-of-mind",
+        "proposal-revise",
+        "proposal-filter-by-decision",
+        "proposal-decision-is-an-experts-act",
+        "proposals-csv",
+        "price-list-hostile-revision",
+        "vendor-list-project-adds-the-formula-vendor",
+        "optimisation-second-pass",
+        "proposals-csv-with-a-formula-vendor",
+        "section-form7"
+      ],
+      "needs_published_run": [
+        "start-ar-run-without-a-table",
+        "start-specification-run",
+        "specification-and-prices",
+        "optimisation-pass",
+        "optimisation-pass-over-a-set-without-a-table",
+        "proposals-csv-of-an-empty-pass",
+        "proposal-revise-needs-a-comment",
+        "proposal-accept",
+        "proposal-change-of-mind",
+        "proposal-revise",
+        "proposal-filter-by-decision",
+        "proposal-decision-is-an-experts-act",
+        "proposals-csv",
+        "optimisation-second-pass",
+        "proposals-csv-with-a-formula-vendor"
+      ],
+      "registry_pins": [
+        "analysis-settings-lists-the-profiles"
+      ]
+    },
     "steps": [
       {
         "name": "queue-dispatch-is-open",
@@ -1085,8 +1158,16 @@
           "expert-confirmed stage and section, and an unclassified version is refused with",
           "422 required_norm_unavailable (reference_kind: version_classification) before any run",
           "exists. So the journey confirms one, the way a user does: on the version screen it has",
-          "just landed on, it chooses the stage П (design documentation) and the section АР -- the",
-          "fixture is the AR baseline bundle -- and presses the panel's own confirm button.",
+          "just landed on, it chooses the stage П (design documentation) and the section ПБ -- the",
+          "fixture is the synthetic baseline bundle, whose text carries three seeded defects -- and",
+          "presses the panel's own confirm button.",
+          "",
+          "PROD-10B-JOURNEY-REBASE-01. The section was АР, whose v1 run PROD-11 removes. ПБ stays, and it",
+          "has a synthetic recording over this very text layer (fixtures/recorded/sections/pb/) whose",
+          "findings are the АР baseline recording's, category for category and quotation for quotation:",
+          "the runs below publish three findings on five pieces of evidence, on pages 2, 6, 3, 7 and 8,",
+          "as they did. tests/e2e/test_pc01_journey_section.py proves that equality without a stand, and",
+          "that every classification step of this journey names this one code.",
           "",
           "The capture is the confirmed panel's document identity, which the PUT's path needs and",
           "no earlier write step captured; the response must echo the stage and section chosen."
@@ -1098,7 +1179,7 @@
           },
           {
             "do": "click",
-            "selector": "input[data-section-choice=\"AR\"]"
+            "selector": "input[data-section-choice=\"PB\"]"
           },
           {
             "do": "click",
@@ -1128,7 +1209,7 @@
           {
             "of": "classifyDocumentVersion",
             "json_path": "section_code",
-            "equals": "AR"
+            "equals": "PB"
           }
         ],
         "capture": {
@@ -1485,7 +1566,7 @@
           },
           {
             "do": "click",
-            "selector": "input[data-section-choice=\"AR\"]"
+            "selector": "input[data-section-choice=\"PB\"]"
           },
           {
             "do": "click",
@@ -1517,7 +1598,7 @@
           {
             "of": "classifyDocumentVersion",
             "json_path": "section_code",
-            "equals": "AR"
+            "equals": "PB"
           }
         ],
         "expects_present": [
@@ -1846,7 +1927,7 @@
           "run_id": "third_run_id"
         },
         "$comment": [
-          "Stage Р, section АР: the working-documentation successor of the design (П) set."
+          "Stage Р, section ПБ: the working-documentation successor of the design (П) set."
         ],
         "actions": [
           {
@@ -1855,7 +1936,7 @@
           },
           {
             "do": "click",
-            "selector": "input[data-section-choice=\"AR\"]"
+            "selector": "input[data-section-choice=\"PB\"]"
           },
           {
             "do": "click",
@@ -1880,7 +1961,7 @@
           {
             "of": "classifyDocumentVersion",
             "json_path": "section_code",
-            "equals": "AR"
+            "equals": "PB"
           }
         ],
         "expects_present": [
@@ -2053,7 +2134,11 @@
         "$comment": [
           "W59-ANALYSIS-SETTINGS-01. The profile registry, read only: fifteen sections, the profile",
           "each runs with, and the sections that have none. The screen offers nothing to change --",
-          "no form, no field, no select -- and says so."
+          "no form, no field, no select -- and says so.",
+          "",
+          "PROD-10B-JOURNEY-REBASE-01. The journey's section (ПБ) is listed with the status the expectations file",
+          "gives it, `reviewed`, and the label that says no person reviewed it (R-146ag). The АР row is still",
+          "`builtin`: it is a `registry_pins` step, and PROD-11 removes that status."
         ],
         "expects_api": [
           {
@@ -2084,6 +2169,10 @@
           },
           {
             "selector": "tr[data-section=\"AR\"][data-profile=\"builtin\"]"
+          },
+          {
+            "selector": "tr[data-section=\"PB\"][data-profile=\"reviewed\"]",
+            "text_contains": "рабочая версия, проверка человеком не проводилась"
           },
           {
             "selector": "tr[data-profile=\"reviewed\"]",
@@ -2173,7 +2262,7 @@
           {
             "do": "fill",
             "selector": "form[data-create-assignment]",
-            "value": "Проверить разделы АР %STAMP%",
+            "value": "Проверить разделы ПБ %STAMP%",
             "label": "Комментарий (необязательно)",
             "tag": "textarea"
           },
@@ -2549,7 +2638,7 @@
           {
             "do": "fill",
             "selector": "form[data-create-assignment]",
-            "value": "Раздел АР: работа, которую вернут %STAMP%",
+            "value": "Раздел ПБ: работа, которую вернут %STAMP%",
             "label": "Комментарий (необязательно)",
             "tag": "textarea"
           },
@@ -2930,6 +3019,192 @@
         "case": "refused"
       },
       {
+        "name": "upload-ar-set-without-a-table",
+        "at": "/projects/{project_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/page.tsx",
+        "control_module": "web/src/features/upload-document/ui/upload-document-form.tsx",
+        "$comment": [
+          "PROD-10B-JOURNEY-REBASE-01, first of three steps that belong to `write.ar_bound`. The «Оптимизация» tab reads",
+          "АР sets only, and the journey's own set is confirmed ПБ now, so the honest-empty-pass steps below need an АР",
+          "set of their own. It is the same synthetic baseline bundle again, as a new DOCUMENT (the way the document no run",
+          "has read is uploaded above), to be confirmed АР and run: its text has no specification table. It comes BEFORE",
+          "the specification set on purpose, for the reason given at `blocks-upload-a-document-no-run-has-read`: the",
+          "specification set stays the newest document and has a run."
+        ],
+        "actions": [
+          {
+            "do": "attach_file",
+            "selector": "#upload-file",
+            "fixture": true
+          },
+          {
+            "do": "fill",
+            "selector": "#upload-title",
+            "value": "Набор АР без таблицы %STAMP%"
+          },
+          {
+            "do": "click",
+            "selector": "form button[type=\"submit\"]",
+            "text": "Загрузить"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/documents",
+            "operationId": "uploadDocument",
+            "expect_status": 201
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "uploadDocument",
+            "json_path": "version_uid",
+            "matches": "^ver_%ID%$"
+          }
+        ],
+        "capture": {
+          "kind": "location",
+          "pattern": "^/projects/(prj_%ID%)/versions/(ver_%ID%)$",
+          "as": [
+            "project_uid",
+            "ar_version_uid"
+          ],
+          "bound_ms": 30000
+        },
+        "captures": [
+          {
+            "kind": "response",
+            "of": "uploadDocument",
+            "json_path": "document_uid",
+            "as": [
+              "ar_document_uid"
+            ],
+            "matches": "^(doc_%ID%)$",
+            "bound_ms": 30000
+          }
+        ],
+        "forbids_rendered": [
+          "[data-upload-failure]",
+          "[data-precheck-problem]"
+        ],
+        "screen": "version-upload",
+        "case": "action"
+      },
+      {
+        "name": "classify-ar-set-without-a-table",
+        "at": "/projects/{project_uid}/versions/{version_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
+        "control_module": "web/src/features/classify-version/ui/classify-version-form.tsx",
+        "bind": {
+          "version_uid": "ar_version_uid",
+          "document_uid": "ar_document_uid"
+        },
+        "$comment": [
+          "The set is confirmed as АР (stage П), so «Оптимизация» offers it. One of the `write.ar_bound` steps: the",
+          "classification is the one the journey made at `classify-version` before PROD-10B, with the section АР."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "input[data-stage-choice=\"P\"]"
+          },
+          {
+            "do": "click",
+            "selector": "input[data-section-choice=\"AR\"]"
+          },
+          {
+            "do": "click",
+            "selector": "button[data-classification-confirm]",
+            "text": "Подтвердить раздел"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "PUT",
+            "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification",
+            "operationId": "classifyDocumentVersion",
+            "expect_status": 200
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "classifyDocumentVersion",
+            "json_path": "section_code",
+            "equals": "AR"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-classification-state=\"confirmed\"]"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-classification-failure]",
+          "[data-classification-conflict]"
+        ],
+        "screen": "version-classification",
+        "case": "action"
+      },
+      {
+        "name": "start-ar-run-without-a-table",
+        "at": "/projects/{project_uid}/versions/{version_uid}",
+        "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
+        "control_module": "web/src/features/start-run/ui/start-run-control.tsx",
+        "bind": {
+          "version_uid": "ar_version_uid",
+          "document_uid": "ar_document_uid"
+        },
+        "$comment": [
+          "A run over the АР set without a table: the canonical АР recording answers it, as it answered the journey's own",
+          "first set before PROD-10B. The run publishes, and its saved text is what the pass over this set reads. One of",
+          "the `write.ar_bound` steps that need a published АР run, and the one that `PROD-11` makes impossible."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "button",
+            "text": "Запустить прогон"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/runs",
+            "operationId": "startRun",
+            "expect_status": 202
+          }
+        ],
+        "capture": {
+          "kind": "location",
+          "pattern": "^/projects/(prj_%ID%)/runs/(run_%ID%)$",
+          "as": [
+            "project_uid",
+            "ar_run_id"
+          ],
+          "bound_ms": 30000
+        },
+        "await_terminal": {
+          "outcome_selector": "[data-run-outcome]",
+          "outcome_attribute": "data-run-outcome",
+          "non_terminal_value": "in_flight",
+          "accept": [
+            "published",
+            "partial"
+          ],
+          "activity_selector": "[data-run-activity]",
+          "activity_attribute": "data-run-activity",
+          "activity_when_final": "stopped",
+          "bound_ms": 150000,
+          "poll_ms": 500
+        },
+        "forbids_rendered": [
+          "[data-run-failure]"
+        ],
+        "screen": "version-run",
+        "case": "action"
+      },
+      {
         "name": "upload-specification-set",
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
@@ -2937,7 +3212,8 @@
         "$comment": [
           "A second АР set in the project: the committed synthetic bundle `fixtures/synthetic/ar_specification/",
           "ar_specification.zip` (`SPEC-TABLE-RECORDING-01`), whose PDF carries a seven-row Form-7 specification over",
-          "two sheets. The first set has no table, so a pass over it honestly holds no proposal; this one can."
+          "two sheets. The АР set without a table, uploaded just before, has none, so a pass over it honestly holds",
+          "no proposal; this one can."
         ],
         "actions": [
           {
@@ -4014,9 +4290,16 @@
         "at": "/projects/{project_uid}",
         "page_module": "web/src/app/projects/[project_uid]/page.tsx",
         "control_module": "web/src/features/start-optimisation-pass/ui/start-optimisation-pass.tsx",
+        "bind": {
+          "document_uid": "ar_document_uid"
+        },
         "$comment": [
-          "The honest empty answer: a pass over the first set, whose text has no specification table, reads zero rows",
-          "and stores a pass with no proposal. The screen says so and draws no card."
+          "The honest empty answer: a pass over the АР set whose text has no specification table reads zero rows",
+          "and stores a pass with no proposal. The screen says so and draws no card.",
+          "",
+          "PROD-10B-JOURNEY-REBASE-01. This was the journey's own first set. That set is confirmed ПБ now, and a pass",
+          "over a set of another section is refused (`409`, `conflict_reason` `section_not_ar`), so the step is bound",
+          "to the АР set that `upload-ar-set-without-a-table` and the two steps after it create."
         ],
         "actions": [
           {
@@ -5636,7 +5919,11 @@
         "control_module": "web/src/widgets/dashboard/ui/sections-panel.tsx",
         "$comment": [
           "The dashboard's section panel counts the sets by the section an expert CONFIRMED for the current",
-          "version (D-180). The journey's set is confirmed АР, so АР counts at least one."
+          "version (D-180). The journey's set is confirmed ПБ, so ПБ counts at least one.",
+          "",
+          "PROD-10B-JOURNEY-REBASE-01. This step asserted АР. The АР sets of the project belong to `write.ar_bound`",
+          "and are not what this panel's step is about, so the count it asserts is the one of the section the",
+          "journey's own set is in."
         ],
         "expects_api": [
           {
@@ -5648,7 +5935,7 @@
         ],
         "expects_present": [
           {
-            "selector": "[data-panel=\"per-section-breakdown\"] li[data-section=\"AR\"] strong",
+            "selector": "[data-panel=\"per-section-breakdown\"] li[data-section=\"PB\"] strong",
             "text_matches": "^[1-9][0-9]*$"
           }
         ],
@@ -5902,7 +6189,7 @@
         "control_module": "web/src/widgets/version-classification/ui/version-classification.tsx",
         "$comment": [
           "PC01-JOURNEY-GAPS-01. A role the screen refuses. The first version's classification is confirmed (stage П,",
-          "section АР). An administrator without `expert` reads it and its history and is offered no «Исправить»: the API",
+          "section ПБ). An administrator without `expert` reads it and its history and is offered no «Исправить»: the API",
           "refuses a correction to `admin` alone, and the panel draws no control for it."
         ],
         "expects_api": [
@@ -6036,12 +6323,12 @@
         "control_module": "web/src/features/correct-version-classification/ui/correct-version-classification-form.tsx",
         "$comment": [
           "`correctVersionClassification`. The expert corrects the first version's stage from П to Р, keeping the section",
-          "АР, with a reason, pressing the button twice: one request, based on revision 1, and revision 2 is stored. The",
+          "ПБ, with a reason, pressing the button twice: one request, based on revision 1, and revision 2 is stored. The",
           "panel closes the form and says the classification was corrected, and the history keeps the original",
           "confirmation beside the correction with its reason.",
           "",
           "Only the stage changes, and only on the first version: a change of section would move the project out of the",
-          "АР figures the steps before it counted, and a later version's stage is what the comparisons read."
+          "ПБ figures the steps before it counted, and a later version's stage is what the comparisons read."
         ],
         "actions": [
           {
@@ -6079,7 +6366,7 @@
             "content_type_starts_with": "application/json",
             "body_contains": [
               "\"project_stage\":\"R\"",
-              "\"section_code\":\"AR\"",
+              "\"section_code\":\"PB\"",
               "\"expected_revision\":1",
               "Стадия выпуска уточнена"
             ]
@@ -6099,7 +6386,7 @@
           {
             "of": "correctVersionClassification",
             "json_path": "section_code",
-            "equals": "AR"
+            "equals": "PB"
           }
         ],
         "expects_present": [
