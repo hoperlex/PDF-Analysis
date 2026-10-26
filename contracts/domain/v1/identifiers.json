@@ -1,9 +1,9 @@
 {
   "contract": "auditmanager.domain.identifiers",
-  "contract_version": "1.6.0",
-  "supersedes": "1.5.0",
-  "candidate_revision": 24,
-  "revision_note": "Candidate revision 24 by EXEC-PAR-START-01: additive executor choice on startRun and read-only executor on RunStatus, and family 1.6.0 seal.",
+  "contract_version": "1.7.0",
+  "supersedes": "1.6.0",
+  "candidate_revision": 25,
+  "revision_note": "Candidate revision 25 by PROD-11-AR-V1-V2-REMOVAL-01: the enum member AnalysisProfileStatus.builtin is removed from the API document and its prose corrected, and family 1.7.0 seal.",
   "status": "frozen",
   "frozen": true,
   "format": "<prefix>_<ULID>",

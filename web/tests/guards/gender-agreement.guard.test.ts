@@ -268,7 +268,7 @@ function contractErrorCodes(): readonly string[] {
 
 function envelope(code: ErrorCode): ApiError {
   const body: ErrorEnvelope = {
-    contract_version: '1.6.0',
+    contract_version: '1.7.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -309,7 +309,7 @@ function executorRefusalSentences(): readonly { readonly where: string; readonly
   const refusal = (
     code: ErrorCode, details: Record<string, string>, message: string,
   ): ApiError => new ApiError(code === 'validation_failed' ? 422 : 503, {
-    contract_version: '1.6.0', error_code: code, message, correlation_id: 'cid-gender',
+    contract_version: '1.7.0', error_code: code, message, correlation_id: 'cid-gender',
     retryable: code !== 'validation_failed', details,
   }, 'cid-gender');
   const unavailable = ['archived', 'kind_not_served', 'not_probed', 'no_revision', null].map((reason) => ({

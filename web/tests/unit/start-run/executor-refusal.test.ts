@@ -45,7 +45,7 @@ function apiError(
   message = 'A caller-safe sentence.',
 ): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.6.0', error_code: code, message, correlation_id: 'cid-exec', retryable, details,
+    contract_version: '1.7.0', error_code: code, message, correlation_id: 'cid-exec', retryable, details,
   };
   return new ApiError(status, envelope, 'cid-exec');
 }
