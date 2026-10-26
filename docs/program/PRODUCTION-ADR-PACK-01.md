@@ -83,18 +83,18 @@ Plus `PROD-19`: keep the source-built MinIO or qualify another S3 implementation
 
 All run on the committed tree of branch `agent/production-adr-pack-01` (venv: the shared runtime venv plus its `bootstrap` site-packages for `jsonschema`).
 
-1. **Existence check** (kept outside git, in the session scratchpad: a script and its command registry): every inline-code token of the nine files is classified and verified against the tree,
+1. **Existence check** (kept outside git, in the session scratchpad: a script and its command registry): every inline-code token of the ten files is classified and verified against the tree,
    `contracts/api/v1/openapi.json`, `DEBT_REGISTER.md` and `OWNER_RULINGS_2026-09-17.md`: paths and patterns, operationIds, rulings (a lettered ruling must be a defined row), debt ids, ADR, migration, test-function, table,
    error-code, guard and image names, the `AD-` and `PROD-` ids against their definitions, the surface triple, the version, the contract version and the head against the real ones. Proposed things (paths, events, flags, the `0033` revision) are
    checked to be absent, so "new" is true. Commands that state a figure are run and compared; a figure command that is not registered is a failure, so an edited command cannot drop out silently. Last line:
 
    ```text
-   1592 checked, 0 missing, 0 unclassified; 23 commands run here, 90 commands need a stand or a lane (their path/operationId/module parts were checked, the commands were not run); 318 further token occurrences accepted by class as literals, not verified
+   2267 checked, 0 missing, 0 unclassified; 32 commands run here, 108 commands need a stand or a lane (their path/operationId/module parts were checked, the commands were not run); 358 further token occurrences accepted by class as literals, not verified
    ```
 
-   The 90 commands that need a stand, a database or a lane were not run; their path, operationId and module parts were checked, the 23 that can run here were run and compared. Every unclassifiable token is a failure. The 318 token
+   The 108 commands that need a stand, a database or a lane were not run; their path, operationId and module parts were checked, the 32 that can run here were run and compared. Every unclassifiable token is a failure. The 358 token
    occurrences accepted as literals (section codes, status words, risk and criterion labels, external tool names, the proposed vocabulary of the new tools) fall in nine classes, each with a printed reason, and are not verified.
-2. **Mutation proof of the checker** (on scratch copies, the real files untouched; "red" is a new `MISSING` or `UNCLASSIFIED` line): 14 of 14 mutations turned it red.
+2. **Mutation proof of the checker** (on scratch copies, the real files untouched; "red" is a new `MISSING` or `UNCLASSIFIED` line): 16 of 16 mutations turned it red.
 
    | mutation | result |
    | --- | --- |
@@ -111,14 +111,16 @@ All run on the committed tree of branch `agent/production-adr-pack-01` (venv: th
    | a table name misspelt | red: MISSING identifier |
    | a quoted header value altered | red: UNCLASSIFIED |
    | an error code misspelt | red: MISSING identifier |
+   | a copy-serve.sh verb misspelt | red: MISSING copy-serve-verb |
+   | a wave id with no row in the plan (PW9) | red: MISSING wave-id |
    | the head stated as 0031_executor_pull_channel | red: MISSING figure-head |
 3. **Governance of the task file:** the one-liner of the task prints `[]`.
-4. **`git diff --check 4d7b7c38..HEAD`:** exit 0, no output.
-5. **`pytest -q -p no:cacheprovider tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py`:** 105 passed in 19.80 s, exit 0.
+4. **`git diff --check 1a7f6f65 HEAD`:** exit 0, no output.
+5. **`pytest -q -p no:cacheprovider tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py`:** 105 passed in 19.9 s, exit 0, on the merged tree.
 6. **The ADR-index tests.** `tests/contract/test_validate_bootstrap.py` and `tests/contract/test_cp00_candidate.py` already fail in this environment on the base tree `4d7b7c38` (191 failures and errors, among them
    `tests/contract/test_cp00_candidate.py::ArchitectureCoverageTests::test_adr_files_index_and_review_agree`, which has been red since `ADR-0019` and `ADR-0020`). Run on the base tree and on this branch, the sets of failing test ids are identical (a `comm` of the two sorted lists
    prints nothing in either direction), so the pack adds and removes none. `scripts/validate_bootstrap.py` on the branch differs from the base only in two count lines (adrs 20 to 24, markdown_files 1736 to 1743); it reports no ADR or index error.
-7. **Scope of the change:** `git diff --name-only 4d7b7c38..HEAD` lists the nine files of the table above and no other; `git status --short` is empty.
+7. **Scope of the change:** `git diff --name-only 1a7f6f65 HEAD` lists the ten files of the table above and no other; `git status --short` is empty.
 
 
 ## Round 2 — the independent judge's findings and the owner's second poll round
@@ -152,7 +154,7 @@ The owner's answers `R-146o`…`R-146v` are applied as follows: `R-146o` in `ADR
 ## Known limits
 
 - Nothing here was executed against a stand, a container or a database. A check marked "no" in the ADR tables does not exist yet; a check marked "yes" was run here or is an existing test whose name was verified, not run.
-- The existence check classifies every inline-code token and verifies it, but NOT_RUN_COUNT commands in the documents need a stand or a lane and were not run; their path, operationId and module parts were checked.
+- The existence check classifies every inline-code token and verifies it, but 108 commands in the documents need a stand or a lane and were not run; their path, operationId and module parts were checked.
 - Thirteen `AD-` decisions are unconfirmed; `AD-01` is read as confirmed by `R-146p` as to the name only; the plan's sizes are counted from greps, not from lane experience; the only date given is the `PROD-01` deadline.
 - The local tracking refs `origin/dev` and `origin/main` were not fetched.
 - The `pytest` run covers `tests/contract/program` and the two prose tests named by the task; the whole contract battery, the web battery and the gate were not run (`R-135`).
