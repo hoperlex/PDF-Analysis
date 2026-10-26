@@ -127,7 +127,7 @@ The set is the marked guard blocks of `deploy.sh`: 22 before, 27 after (`acme-fi
 - command: `git show 0e663fd0:docs/program/DEBT_REGISTER.md | sed -n 's/^\(| \*\*D-191\*\* | [^|]*\)|.*/\1/p'; git grep -n -E '^### E-[237] ' 0e663fd0 -- docs/program/EXPOSURE-REVIEW-01.md`
 - captured_output:
   ```text
-  | **D-191** | `EXPOSURE-REVIEW-01.md` E-2/E-3/E-7: the live TLS terminator is a host nginx outside the repository; the container nginx overwrites `X-Forwarded-Proto` (`nginx.conf:257`) so the session cookie is issued without `Secure` and no HSTS header appears, and the guest throttles key on the proxy's peer address, the same for every client behind the terminator; certificate renewal (expires 2026-12-30) is unverifiable from the tree 
+  | **D-191** | `EXPOSURE-REVIEW-01.md` E-2/E-3/E-7: the live TLS terminator is a host nginx outside the repository; the container nginx overwrites `X-Forwarded-Proto` (`nginx.conf:257`) so the session cookie is issued without `Secure` and no HSTS header appears, and the guest throttles key on the proxy's peer address, the same for every client behind the terminator; certificate renewal (expires 2026-12-30) is unverifiable from the tree
   0e663fd0:docs/program/EXPOSURE-REVIEW-01.md:46:### E-2 MEDIUM: session cookie is issued without `Secure`, and the live origin sends no HSTS (measured)
   0e663fd0:docs/program/EXPOSURE-REVIEW-01.md:67:### E-3 MEDIUM (inference, unmeasured): every caller shares one throttle bucket behind the terminator
   0e663fd0:docs/program/EXPOSURE-REVIEW-01.md:107:### E-7 LOW: the TLS terminator and the firewall are not in the repository
@@ -139,12 +139,12 @@ The set is the marked guard blocks of `deploy.sh`: 22 before, 27 after (`acme-fi
 - command: `git show 0e663fd0:docs/architecture/adr/ADR-0021-production-topology-and-operations.md | awk -F'|' 'NR>=306 && NR<=311 { print $2 "|" $3 }'`
 - captured_output:
   ```text
-   1 | Only the proxy publishes a port 
-   2 | TLS answers on the public name with a trusted chain 
-   3 | HSTS on every TLS answer (`R-146a`) 
-   4 | The session cookie is `Secure` (`R-146a`) 
-   5 | The certificate is renewed before it expires 
-   6 | A deployment is not successful while `admin`/`password` is valid (`R-146i`, `R-146s`, `R-146z`) 
+   1 | Only the proxy publishes a port
+   2 | TLS answers on the public name with a trusted chain
+   3 | HSTS on every TLS answer (`R-146a`)
+   4 | The session cookie is `Secure` (`R-146a`)
+   5 | The certificate is renewed before it expires
+   6 | A deployment is not successful while `admin`/`password` is valid (`R-146i`, `R-146s`, `R-146z`)
   ```
 - interpretation: The six rows this lane's mutation table answers (report, section 3). Rows 2 to 5 are claims about bytes a client receives; the tree can hold the facts that make them true, not the bytes.
 
@@ -153,8 +153,8 @@ The set is the marked guard blocks of `deploy.sh`: 22 before, 27 after (`acme-fi
 - command: `git show 0e663fd0:docs/program/OWNER_RULINGS_2026-09-17.md | awk -F'|' '/^\| .R-146a[ac]. /{ print $2 "|" $3 }'`
 - captured_output:
   ```text
-   `R-146aa` | **`AD-01`, the ACME mechanism.** Chosen: «Принять механизм как написан» (recommended). An ACME client as a service of the same compose project, HTTP-01 through public port 80 (challenge and redirect only), the pair in a named volume read by the `proxy` on a timer, no Docker socket, a rehearsal on the ACME staging endpoint before the first real issuance, and `verify-deployed.sh` failing on a certificate with fewer than 14 days left, are confirmed as written in `ADR-0021` at commit `749e2efc`. DNS and inbound ports 80 and 443 on the VPS are the owner's actions. 
-   `R-146ac` | **The server name** (supersedes `R-146ab`). The owner named `https://audit.135.106.164.147.sslip.io/login`, i.e. the host name `audit.135.106.164.147.sslip.io`, which is already the public name of the live stand in `.github/workflows/deploy-auto.yml` and `docs/manual-tests/ALPHA_PUBLIC_ACCEPTANCE.md`. `PROD-01` is released: the certificate name is a deploy variable set to this value on the host. **Risk recorded, not decided:** `sslip.io` is a shared zone, so Let's Encrypt rate limits are shared with other users of it; the rehearsal on the ACME staging endpoint comes first, and if the real issuance is refused for a limit the owner decides on a name of their own. 
+   `R-146aa` | **`AD-01`, the ACME mechanism.** Chosen: «Принять механизм как написан» (recommended). An ACME client as a service of the same compose project, HTTP-01 through public port 80 (challenge and redirect only), the pair in a named volume read by the `proxy` on a timer, no Docker socket, a rehearsal on the ACME staging endpoint before the first real issuance, and `verify-deployed.sh` failing on a certificate with fewer than 14 days left, are confirmed as written in `ADR-0021` at commit `749e2efc`. DNS and inbound ports 80 and 443 on the VPS are the owner's actions.
+   `R-146ac` | **The server name** (supersedes `R-146ab`). The owner named `https://audit.135.106.164.147.sslip.io/login`, i.e. the host name `audit.135.106.164.147.sslip.io`, which is already the public name of the live stand in `.github/workflows/deploy-auto.yml` and `docs/manual-tests/ALPHA_PUBLIC_ACCEPTANCE.md`. `PROD-01` is released: the certificate name is a deploy variable set to this value on the host. **Risk recorded, not decided:** `sslip.io` is a shared zone, so Let's Encrypt rate limits are shared with other users of it; the rehearsal on the ACME staging endpoint comes first, and if the real issuance is refused for a limit the owner decides on a name of their own.
   ```
 - interpretation: R-146aa confirms the mechanism as ADR-0021 wrote it; R-146ac names the live stand's name and records the shared-zone rate-limit risk. Neither name is put in any default of this lane: the certificate name is a deploy variable with a reserved placeholder.
 

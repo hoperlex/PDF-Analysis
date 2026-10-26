@@ -149,4 +149,4 @@ Doc guards, after the last commit: see section 9.
 
 ## 10. Doc guards
 
-(filled in after the last commit)
+Run on the committed tree (`git status --short` empty): `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py` -> **105 passed**. The governance one-liner on `docs/program/tasks/PROD-01-TLS-ACME-01.md` prints `[]`. `git diff --check 0e663fd0` is clean (the captured premise output had trailing spaces from the source rows; they were stripped, which changes no word).
