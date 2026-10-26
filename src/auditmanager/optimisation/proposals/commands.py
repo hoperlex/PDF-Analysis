@@ -10,8 +10,9 @@ key (``validation_failed``); the key -- a key already claimed with the same payl
 the stored pass, with another payload ``idempotency_key_reuse``; the specification read
 (:func:`~auditmanager.optimisation.project_match.read_specification_prices`) must be
 ``ready``, else ``conflict`` with its state as ``conflict_reason`` (an unknown project or a
-set of another project is ``not_found``); the effective AR vendor list must exist, else
-``conflict`` (``vendor_list_missing``); then, under the version's advisory lock, a pass with
+set of another project is ``not_found``); the effective vendor list **of the version's own
+section** (the section the read answered: any of the fifteen) must exist, else ``conflict``
+(``vendor_list_missing``); then, under the version's advisory lock, a pass with
 exactly these inputs (version, run, price list, vendor list, the three algorithm versions)
 is answered as it is stored -- an exact repeat under a new key creates nothing -- or the
 generator runs and the pass and every proposal are inserted in this transaction.
@@ -45,7 +46,6 @@ from ..matching import MATCH_ALGORITHM
 from ..policy import SOURCE_NONE
 from ..project_match import (
     MAX_ROW_PAGE,
-    SECTION_AR,
     STATE_READY,
     SavedTextReader,
     read_specification_prices,
@@ -156,7 +156,7 @@ def start_optimisation_pass(
     repository: ProposalRepository | None = None,
     commands: CommandRepository | None = None,
 ) -> PassStart:
-    """Start (or answer) the optimisation pass of a document set's current AR version."""
+    """Start (or answer) the optimisation pass of a document set's current version, in any section."""
     roles = frozenset(actor_roles)
     require_expert(roles, aggregate_type=AGGREGATE_OPTIMISATION_PASS, act="start an optimisation pass")
     try:
@@ -209,6 +209,10 @@ def start_optimisation_pass(
         and prices.extraction is not None
         and prices.matching is not None
     )
+    # A ready read has a classification, so it has the version's own section; the pass pins the
+    # vendor list of that section (the database holds the same equality: migration 0034).
+    section = prices.section_code
+    assert section is not None
     effective = next(
         entry
         for entry in get_effective_vendor_lists(
@@ -218,7 +222,7 @@ def start_optimisation_pass(
             documents=documents,
             repository=price_lists,
         )
-        if entry.section_code == SECTION_AR
+        if entry.section_code == section
     )
     if effective.source == SOURCE_NONE or effective.effective is None:
         raise _refused(REFUSAL_VENDOR_LIST_MISSING)

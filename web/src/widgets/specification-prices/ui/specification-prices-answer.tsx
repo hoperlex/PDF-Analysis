@@ -2,7 +2,7 @@
  * One answer of `getSpecificationPrices`, rendered (`W60-OPT-MATCH-01`). Pure: the container
  * (`specification-prices-section.tsx`) owns the queries, this owns the reading.
  *
- * **A state is said, never shown as an empty table.** An unclassified or non-AR version, a
+ * **A state is said, never shown as an empty table.** An unclassified version, a
  * project without a price list, a version without a published run or saved text, a
  * specification over the bound — each is one sentence saying what is missing and where it is
  * done, with the facts the server read before it stopped.

@@ -42,6 +42,13 @@ describe('a refused start', () => {
     expect(message.correlationId).toBe('0f0e9d8c-7b6a-4948-b726-150413021100');
   });
 
+  it('does not tell the expert that proposals exist for АР only, or that the list is the АР one', () => {
+    for (const sentence of Object.values(PASS_REFUSAL_TEXT)) {
+      expect(sentence).not.toMatch(/только для АР|раздела АР|раздел АР/);
+    }
+    expect(PASS_REFUSAL_TEXT['vendor_list_missing']).toMatch(/раздела этого комплекта/);
+  });
+
   it('falls back to the catalog’s Russian for a reason it does not know, a reused key and a transport failure', () => {
     const unknown = startPassFailureMessage(
       optimisationApiError(409, 'conflict', { conflict_reason: 'something_new' }),

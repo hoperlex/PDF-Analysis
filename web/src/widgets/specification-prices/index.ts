@@ -13,5 +13,5 @@ export type {
 export {
   SpecificationPricesChooser,
   SpecificationPricesSection,
-  arDocumentSets,
+  classifiedDocumentSets,
 } from './ui/specification-prices-section';

@@ -98,9 +98,11 @@ def build_optimisation_proposal_routes(
             ),
         },
         description=(
-            "Start the optimisation pass of the document set's current AR version. The pass "
+            "Start the optimisation pass of the document set's current version, classified by "
+            "an expert in any of the fifteen sections. The pass "
             "pins the version, its newest published run and that run's saved text layer, the "
-            "project's current price-list revision and the effective AR vendor list (the "
+            "project's current price-list revision and the effective vendor list of the "
+            "version's own section (the "
             "project's own, else the administrator's), reads the specification, matches it "
             "against the price list and stores the deterministic proposals `cheaper_analog`: "
             "for a row matched to exactly one position, another position of the same "
@@ -109,9 +111,12 @@ def build_optimisation_proposal_routes(
             "`(current − proposed) × quantity` and is absent when the row's quantity is not a "
             "plain number. `expert` is required (`admin` alone is `permission_denied`). A "
             "precondition that is not met is `409 conflict` with `conflict_reason` "
-            "`version_unclassified`, `section_not_ar`, `price_list_missing`, "
+            "`version_unclassified`, `price_list_missing`, "
             "`analysis_missing`, `text_unavailable`, `specification_too_large` or "
-            "`vendor_list_missing` and nothing is written, not even the key; an unknown "
+            "`vendor_list_missing` (neither the project nor the administrator keeps a vendor "
+            "list for the version's section) and nothing is written, not even the key; "
+            "`section_not_ar` stays among the registered reasons and is no longer produced for "
+            "a confirmed section; an unknown "
             "project or a set of another project is `404`. An exact repeat of the "
             "`Idempotency-Key` answers the stored pass, the same key for another set or "
             "caller is `409 idempotency_key_reuse`, and a new key over exactly the same "

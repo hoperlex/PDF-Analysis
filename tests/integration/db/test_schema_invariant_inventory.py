@@ -31,6 +31,14 @@ from collections.abc import Iterable
 from sqlalchemy import Engine, text
 
 
+#: Resealed by `OPT-PROJECT-ALL-SECTIONS-01` for ``0034_pass_scope_all_sections``, measured, not
+#: predicted: one fresh database upgraded to ``0033`` (whose inventory equalled the 0033 seal below
+#: in every family) and then to ``0034`` had all eleven families recomputed. One family moved and by
+#: exactly the migration's DDL: ``functions`` keeps its 32 rows and ``am_check_optimisation_pass_scope``
+#: is redefined (same row) -- the version's classification no longer has to be ``AR`` and the vendor
+#: list's section equals the version's -- so only its digest changed. Columns, relations,
+#: constraints, indexes, triggers, views, extensions, sequences, policies and the state topology are
+#: identical to the 0033 seal.
 #: Resealed by `PROD-11B-V3-STAGE-ID-MIGRATION-01` for ``0033_ar_v3_cite_stage_id``, measured, not
 #: predicted: two fresh databases on the lane's PostgreSQL 17 stack, one upgraded to ``0032`` and one
 #: to ``0033``, had the columns, relations, constraints, indexes and triggers diffed row by row.
@@ -236,7 +244,7 @@ EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
     "constraints": (814, "61200aa0b25e778172d50dfd20ab2f2857a5ff49ee0a71626fba0c78254ee300"),
     "indexes": (184, "f446c62baa74bcdae4304197c77546c7db769767727ba3d0601c48464cc5c47a"),
     "triggers": (86, "691154ca1227ef801cf6c85adcbc3a56d7f195a5f58fb8bc17ddc30147aff40e"),
-    "functions": (32, "38aa2359517b7c52db5a3565cbfaf57f42ac18ef40b9e4322d514b5c47e767ab"),
+    "functions": (32, "da49fd307be920a22c7a48a12dc1381f4a46ed953bfb327ec4a43bb102a86bef"),
     "views": (5, "c41ad974669882ee5d818591ee1d485b70455ddd4e51d236cc83892d18d11b93"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),
     "sequences": (7, "6d533fe16349a92b16b5ca89d51fcb083f1ecdf4f252bc276667a92361bf1656"),

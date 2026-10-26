@@ -1,14 +1,16 @@
 'use client';
 
 /**
- * «Спецификация и цены» — a document set's AR specification priced from the project's price
- * list (`W60-OPT-MATCH-01`), for the project's «Оптимизация» tab.
+ * «Спецификация и цены» — a document set's specification priced from the project's price
+ * list (`W60-OPT-MATCH-01`; any section since `OPT-PROJECT-ALL-SECTIONS-01`), for the
+ * project's «Оптимизация» tab.
  *
  * **Which set.** The project's documents come from `listDocuments` (the same cache entry the
  * project's structure reads); the sets offered are those whose **current** version an expert
- * confirmed as section АР. The first is chosen; the expert may pick another. A project with
- * no such set says so and where a section is confirmed — the server is not asked about a set
- * it would only answer `section_not_ar` for.
+ * confirmed in a section, whichever it is. The first is chosen; the expert may pick another.
+ * A project with no such set says so and where a section is confirmed — the server is not
+ * asked about a version nobody classified, which it would only answer `version_unclassified`
+ * for.
  *
  * **What is shown** is `getSpecificationPrices` for the chosen set, one page of rows at a
  * time (`SpecificationPricesAnswer`): its state, or the rows with their match, the totals per
@@ -21,6 +23,7 @@ import type { DocumentUid, DocumentVersion, ProjectUid } from '@/shared/api';
 import { failureMessage } from '@/shared/api/failure-message';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import { useDocumentList } from '@/entities/document-version';
+import { projectSectionOf } from '@/entities/project';
 import { useSpecificationPrices } from '@/entities/specification-price';
 
 import { SpecificationPricesAnswer } from './specification-prices-answer';
@@ -30,14 +33,16 @@ export interface SpecificationPricesSectionProps {
   readonly projectUid: ProjectUid;
 }
 
-/** The sets whose current version is confirmed as section АР, in the order listed. */
-export function arDocumentSets(items: readonly DocumentVersion[]): readonly DocumentVersion[] {
-  return items.filter((version) => version.classification?.section_code === 'AR');
+/** The sets whose current version an expert confirmed in some section, in the order listed. */
+export function classifiedDocumentSets(items: readonly DocumentVersion[]): readonly DocumentVersion[] {
+  return items.filter((version) => (version.classification ?? null) !== null);
 }
 
 function setLabel(version: DocumentVersion): string {
   const title = version.display_title ?? version.source_filename ?? 'Комплект без названия';
-  return `${title} — версия ${version.version_ordinal}`;
+  const code = version.classification?.section_code;
+  const section = code === undefined ? '' : `, раздел ${projectSectionOf(code).abbr}`;
+  return `${title} — версия ${version.version_ordinal}${section}`;
 }
 
 export interface SpecificationPricesChooserProps {
@@ -53,15 +58,15 @@ export function SpecificationPricesChooser({ sets, selected, onSelect, partial }
   if (sets.length === 0) {
     return (
       <EmptyState
-        title="В проекте нет комплектов раздела АР"
-        detail="Спецификация и цены строятся для комплекта, текущую версию которого эксперт подтвердил как раздел АР. Подтвердите раздел на экране версии."
+        title="В проекте нет комплектов с подтверждённым разделом"
+        detail="Спецификация и цены строятся для комплекта, текущую версию которого эксперт отнёс к одному из разделов. Подтвердите раздел на экране версии."
       />
     );
   }
   return (
     <div className={styles.chooser}>
       <label>
-        Комплект АР{' '}
+        Комплект{' '}
         <select
           value={selected ?? ''}
           onChange={(event) => onSelect(event.target.value as DocumentUid)}
@@ -83,7 +88,7 @@ export function SpecificationPricesChooser({ sets, selected, onSelect, partial }
 
 export function SpecificationPricesSection({ projectUid }: SpecificationPricesSectionProps) {
   const documents = useDocumentList(projectUid);
-  const sets = arDocumentSets(documents.data?.items ?? []);
+  const sets = classifiedDocumentSets(documents.data?.items ?? []);
   const [chosen, setChosen] = useState<DocumentUid | null>(null);
   const [offset, setOffset] = useState(0);
   const selected = chosen ?? sets[0]?.document_uid ?? null;
@@ -105,8 +110,9 @@ export function SpecificationPricesSection({ projectUid }: SpecificationPricesSe
         </button>
       </div>
       <p className={styles.rule}>
-        Строки спецификации текущей версии комплекта АР, прочитанные из сохранённого текста
-        последнего опубликованного прогона, сопоставлены с действующим прайс-листом проекта. Цена и
+        Строки спецификации текущей версии комплекта (раздел подтверждён экспертом), прочитанные из
+        сохранённого текста последнего опубликованного прогона, сопоставлены с действующим
+        прайс-листом проекта. Цена и
         сумма показаны только для строки, однозначно сопоставленной с позицией в той же единице
         измерения и с числовым количеством; итоги считаются по валютам только по таким строкам.
       </p>

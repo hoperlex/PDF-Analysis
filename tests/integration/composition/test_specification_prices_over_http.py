@@ -10,8 +10,9 @@ published. The saved text layer is read from MinIO by the shipped adapter, held 
 digest its stage row recorded. The baseline document has no specification table, so the
 ready answer is the honest empty one: no table, no row, no total, nothing excluded.
 
-A second set classified ``KJ`` is ``section_not_ar``; a set of another project is ``404``;
-malformed paging is ``422``. The matching itself is proved in
+A second set classified ``KJ`` (`OPT-PROJECT-ALL-SECTIONS-01`; it used to be ``section_not_ar``) is
+read like any other: ``analysis_missing`` until a run of its own section publishes, then ``ready`` from
+that run's saved text layer; a set of another project is ``404``; malformed paging is ``422``. The matching itself is proved in
 ``tests/integration/optimisation/test_project_match.py`` and the unit suites.
 """
 
@@ -19,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 import uuid
 from pathlib import Path
 from typing import Any
@@ -205,10 +207,69 @@ def test_every_state_appears_as_its_input_does(world) -> None:
     assert body["rows"] == {"offset": 0, "limit": 50, "total": 0, "next_offset": None, "items": []}
 
 
-def test_a_set_of_another_section_is_not_priced(world) -> None:
-    _classify(world, world["kj"], "KJ")
-    body = _read(world, world["kj"]["document_uid"]).json()
-    assert (body["state"], body["section_code"], body["rows"]) == ("section_not_ar", "KJ", None)
+def test_a_set_of_another_section_is_read_like_any_other(world) -> None:
+    """Was ``section_not_ar``. The run is a real ``KJ`` section run (in-process, recorded); its
+    baseline text has no specification table, so the ready answer is the honest empty one."""
+    kj = world["kj"]
+    _classify(world, kj, "KJ")
+    price_list_id = _upload_price_list(world["project_uid"], world["tag"])  # idempotent by its key
+    waiting = _read(world, kj["document_uid"]).json()
+    assert (waiting["state"], waiting["section_code"], waiting["rows"]) == ("analysis_missing", "KJ", None)
+    assert waiting["price_list"]["price_list_id"] == price_list_id
+
+    run_id = _publish_section_run(kj["version_uid"], tag="spec-prices-kj")
+    state = world["client"].get(f"/runs/{run_id}", headers=world["auth"]).json()["state"]
+    assert state == "published", state
+
+    ready = _read(world, kj["document_uid"])
+    assert ready.status_code == 200, ready.content
+    body = ready.json()
+    assert (body["state"], body["section_code"], body["project_stage"]) == ("ready", "KJ", "R")
+    assert body["run_id"] == run_id and len(body["text_layer_sha256"]) == 64
+    assert (body["extraction"]["table_count"], body["extraction"]["row_count"]) == (0, 0)
+    assert body["rows"] == {"offset": 0, "limit": 50, "total": 0, "next_offset": None, "items": []}
+
+
+def _publish_section_run(version_uid: str, *, tag: str) -> str:
+    """Start and execute a run of the version under the profile of its **confirmed section**.
+
+    Like ``tests/support/published_run.publish_reference_run`` but with the shipped section
+    registry (the route table ``startRun`` uses) and the recorded section replies, so the run is
+    what a ``KJ`` or ``ПБ`` version gets in the product, started in-process. It spends nothing.
+    """
+    from sqlalchemy.orm import Session as _Session
+
+    from auditmanager.analysis.text import ProviderConfig, ProviderMode, RecordedAdapter
+    from auditmanager.analysis.text.profile_registry import load_text_profile_registry
+    from auditmanager.runs import execute_run, start_audit_run
+    from auditmanager.shared.db.config import DatabaseSettings, parse_database_url
+    from auditmanager.shared.db.engine import create_database_engine
+    from auditmanager.shared.identity import IdempotencyKey
+    from auditmanager.storage import S3BlobStore, S3StorageSettings
+
+    registry = load_text_profile_registry()
+    engine = create_database_engine(DatabaseSettings(url=parse_database_url(os.environ["DATABASE_URL"])))
+    store = S3BlobStore(S3StorageSettings.from_env())
+    config = ProviderConfig(
+        mode=ProviderMode.RECORDED, model_id="claude-opus-5", run_cost_ceiling_usd=1.0,
+        api_key=None, ceiling_is_explicit=False,
+    )
+    try:
+        with _Session(engine, expire_on_commit=False) as session:
+            started = start_audit_run(
+                session, version_uid=version_uid, provider_mode="recorded",
+                idempotency_key=IdempotencyKey(f"section-run-{tag}-{secrets.token_hex(6)}"),
+                section_profiles=registry.section_profiles(),
+            )
+            session.commit()
+            execute_run(
+                session, started.run_id, blob_store=store, adapter=RecordedAdapter(),
+                provider_config=config, text_profiles=registry.resolve,
+            )
+            session.commit()
+            return str(started.run_id)
+    finally:
+        engine.dispose()
 
 
 def test_a_set_of_another_project_is_404(world) -> None:

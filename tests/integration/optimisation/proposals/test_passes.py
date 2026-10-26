@@ -176,11 +176,47 @@ def test_an_unclassified_version_is_refused(unit, factory, store, cast, world) -
     _refused_pass(unit, factory, cast, world, "version_unclassified")
 
 
-def test_a_version_of_another_section_is_refused(unit, factory, store, cast, world) -> None:
-    classify(unit, cast, world, "KJ")
+@pytest.mark.parametrize("section", ["PB", "OV", "KJ", "EOM"])
+def test_a_version_of_another_section_takes_a_pass_with_that_sections_vendor_list(
+    unit, factory, store, cast, world, section: str
+) -> None:
+    """Was ``section_not_ar``. The pass pins the vendor list of the version's own section; the
+    database accepts it (migration ``0034``) and the proposals are the AR ones for the same inputs."""
+    classify(unit, cast, world, section)
     upload(store, factory, cast, PRICE_LIST, "prices-1")
-    global_vendors(unit, cast)
-    _refused_pass(unit, factory, cast, world, "section_not_ar")
+    vendor_list = global_vendors(unit, cast, section=section)
+    started = _start(unit, cast, world)
+    record = started.optimisation_pass
+    assert (started.created, record.vendor_list_id, record.vendor_list_source) == (
+        True, vendor_list.vendor_list_id, "global",
+    )
+    assert (record.specification_row_count, record.matched_row_count) == (6, 4)
+    assert (record.proposed_row_count, record.proposal_count) == (4, 4)
+    assert [item.proposed_vendor for item in _proposals(unit, cast, record.optimisation_pass_id).items] == [
+        "Кнауф Гипс", "Кнауф Гипс", HOSTILE_VENDOR, "Кнауф Гипс",
+    ]
+
+
+def test_the_vendor_list_of_another_section_does_not_apply_to_the_versions_section(
+    unit, factory, store, cast, world
+) -> None:
+    classify(unit, cast, world, "PB")
+    upload(store, factory, cast, PRICE_LIST, "prices-1")
+    global_vendors(unit, cast, section="AR")  # a list exists, but not for ПБ
+    _refused_pass(unit, factory, cast, world, "vendor_list_missing")
+
+
+def test_a_project_override_of_the_versions_section_is_the_list_used(
+    unit, factory, store, cast, world
+) -> None:
+    classify(unit, cast, world, "PB")
+    upload(store, factory, cast, PRICE_LIST, "prices-1")
+    global_vendors(unit, cast, section="PB")
+    override = project_vendors(unit, cast, "list", [{"vendor": "Кнауф Гипс"}], section="PB")
+    project_vendors(unit, cast, "list", [{"vendor": "Промет"}], section="AR")  # another section's override
+    record = _start(unit, cast, world).optimisation_pass
+    assert (record.vendor_list_source, record.vendor_list_id) == ("project", override.vendor_list_id)
+    assert record.proposal_count == 3
 
 
 def test_no_price_list_is_refused(unit, factory, cast, world) -> None:
