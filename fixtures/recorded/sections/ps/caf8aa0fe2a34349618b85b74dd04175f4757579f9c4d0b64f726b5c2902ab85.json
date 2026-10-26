@@ -5,9 +5,9 @@
   "origin": {
     "analysis_profile_id": "ap_01M5AXG1K22R027A33VTKZ468P",
     "kind": "synthetic",
-    "profile_status": "draft",
+    "profile_status": "reviewed",
     "prompt_bundle_id": "pb_01M5AXG1K2JQQH7R4ACTBW8974",
-    "prompt_bundle_sha256": "10f055fa9ffea2dba8f58fe19199f65664013e5cf19d75d01b522dc5dee31931",
+    "prompt_bundle_sha256": "6a34bb49728f40572d16f7e507ab5e998b2db796351a5c466cddd1da8c1a7ca7",
     "section_code": "PS",
     "statement": "Synthetic: authored by hand for W59-ANALYSIS-SETTINGS-01 to prove section routing in recorded mode. No model produced this reply and no provider call was made. Not field evidence for the profile's review.",
     "task_id": "W59-ANALYSIS-SETTINGS-01",
@@ -15,7 +15,7 @@
   },
   "output_text": "{\"observations\": [{\"category\": \"internal_contradiction\", \"finding_text\": \"Синтетический ответ (ПЗ), не результат вызова модели: степень огнестойкости здания указана как II в общих данных и как III в противопожарных мероприятиях.\", \"recommendation_text\": \"Привести степень огнестойкости здания к одному значению во всех частях документа.\", \"evidence\": [{\"page_number\": 2, \"quote\": \"Степень огнестойкости здания — II.\"}, {\"page_number\": 6, \"quote\": \"Степень огнестойкости здания — III.\"}]}]}",
   "recording_version": "1.0.0",
-  "request_sha256": "5dad5c5fdc7dfda6713e38aa056f833e5497e07f7d1b83a444c604617f2411f3",
+  "request_sha256": "caf8aa0fe2a34349618b85b74dd04175f4757579f9c4d0b64f726b5c2902ab85",
   "stop_reason": "end_turn",
   "usage": {
     "input_tokens": 2290,
