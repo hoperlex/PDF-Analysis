@@ -284,6 +284,7 @@ Prefix for every command: `env $(grep -v '^#' .env | grep -v '^$' | xargs) PYTHO
 | `tests/integration/runs` (shared lane database, same tree) | 859 passed, 1 failed: `test_durable_effect_boundaries.py::test_provider_effect_settlement_is_bounded_and_resumable`, which asserts the **global** set of unresolved provider effects of the database; at that moment it held three that were not the test's own: two committed by the lane's mutation experiment M44 (settled by the lane afterwards) and one created at 21:13 UTC, before the lane's first edit (not attributable to the lane; already settled when inspected). The file was not re-run on the shared database, see section 9 |
 | the neighbouring suites of section 4 | 207 passed; `tests/unit/{jobs,workers,runs,analysis}` 320 passed |
 | `tests/integration/qa_w55b/test_p3_input_budget.py` (outside the lane) | 3 passed, 2 failed, predicted and explained in section 9 |
+| `tests/contract` without the three `D-220` files (`test_cp00_candidate.py`, `test_validate_bootstrap.py`, `test_cp00_final_state.py`, which fail for their own reasons: 44 + 126 errors, 21 and 3 failures, none in a file this lane touches) | 1175 passed |
 | mutations (section 5) | 45 of 45 red, tree clean after each |
 | `pytest tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py`; `git diff --check` | 105 passed; `git diff --check` exit 0 |
 | governance one-liner on the task file | `[]` |
