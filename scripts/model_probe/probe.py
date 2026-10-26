@@ -237,7 +237,12 @@ def _decimal(value: Any) -> Decimal | None:
         number = Decimal(str(value))
     except (InvalidOperation, ValueError):
         return None
-    return number if number.is_finite() and number >= 0 else None
+    if not (number.is_finite() and number >= 0):
+        return None
+    # `+number` rounds to the context's precision, which every later sum does anyway. A cost whose
+    # rounding overflows ("9.9999999999999999999999999995e999999") raises *here*, inside the
+    # assessment that `call_once` guards, and not later in the running total, which nothing guards.
+    return +number
 
 
 def _display_reported(reported: Any) -> str | None:
@@ -299,8 +304,25 @@ def assess(
         result.counted_cost, result.cost_basis = planned.worst_case, "bound"
 
 
+def _assessment_failed(planned: _Planned, adapter_outcome: str, error: Exception) -> ModelResult:
+    """The result for a call whose answer the assessment could not read (`JUDGE-FIXES-F1-01`).
+
+    Built fresh, so nothing ``assess`` had already filled in before it raised (an identity, a
+    cost) survives into a block whose verdict is ``no_verdict``. The failure is named in
+    ``verdict_reason`` by the exception's type only: its message is never printed, so nothing a
+    gateway sent can reach the report through it. An assessment can only fail on an answer body, so
+    the call was answered and paid for: it is counted at its worst case (``bound``), which is also
+    what the ceiling is held against."""
+    return ModelResult(
+        pin_id=planned.pin.model_id, requested_slug=planned.slug, verdict="no_verdict",
+        reason="assessment_failed_" + type(error).__name__, adapter_outcome=adapter_outcome,
+        counted_cost=planned.worst_case, cost_basis="bound",
+    )
+
+
 def call_once(planned: _Planned, run_id: str) -> ModelResult:
-    """One call, no retry. Nothing here raises: every failure is a verdict in the result."""
+    """One call, no retry. Nothing here raises an ``Exception``: every failure, the adapter's and
+    the assessment's alike, is a verdict in the result (a ``KeyboardInterrupt`` still stops the run)."""
     result = ModelResult(pin_id=planned.pin.model_id, requested_slug=planned.slug)
     request = ModelRequest(
         model_id=planned.slug,
@@ -318,7 +340,12 @@ def call_once(planned: _Planned, run_id: str) -> ModelResult:
         outcome, dispatch_class = getattr(error.code, "value", str(error.code)), "outcome_unknown"
     except Exception as error:  # noqa: BLE001 - reported by type name only: no message can leak
         outcome, dispatch_class = "unexpected_" + type(error).__name__, "outcome_unknown"
-    assess(result, planned, planned.capture.document(), outcome, dispatch_class)
+    try:
+        assess(result, planned, planned.capture.document(), outcome, dispatch_class)
+    except Exception as error:  # noqa: BLE001 - reported by type name only: no message can leak
+        # A paid answer whose body defeats the assessment (a `usage.cost` of "1e1000000" overflows
+        # `Decimal`) must not abort the run before its cost is counted and its block is written.
+        return _assessment_failed(planned, outcome, error)
     return result
 
 

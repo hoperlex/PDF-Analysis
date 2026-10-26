@@ -356,6 +356,99 @@ def test_an_unexpected_exception_is_reported_by_type_only(tmp_path: Path) -> Non
     assert TOKEN not in result.report + result.out + result.err
 
 
+# -- a paid answer the assessment cannot hold (JUDGE-FIXES-F1-01, finding 7) ----------------------------
+
+#: A 200 answer whose ``usage.cost`` is a string no ``Decimal`` operation can hold: constructing it
+#: is fine, the first subtraction (``rate_check``'s ``reported - expected``) raises
+#: ``decimal.Overflow``. The product adapter accepts the answer (``adapter_outcome: answered``); the
+#: tool's own ``assess`` is what used to raise, outside every ``try``, after the call was paid for.
+OVERFLOWING_COST = "1e1000000"
+#: The narrower variant, found while fixing the first: 29 significant digits at the largest
+#: exponent. ``rate_check``'s subtraction rounds it *down* and succeeds; the running total's
+#: ``spent += cost`` rounds it *up* to ``1e1000000`` and overflowed in ``run_calls``, outside
+#: ``assess``. The cost is therefore made to pass through the context's rounding inside ``assess``.
+ROUNDS_UP_TO_OVERFLOW_COST = "9.9999999999999999999999999995e999999"
+
+
+@pytest.mark.parametrize("cost", [OVERFLOWING_COST, ROUNDS_UP_TO_OVERFLOW_COST],
+                         ids=["overflows at once", "overflows only when added to the total"])
+def test_an_answer_the_assessment_cannot_hold_is_a_failed_assessment_not_a_traceback(
+    tmp_path: Path, cost: str
+) -> None:
+    first, second = PINS[0], PINS[1]
+    result = run(tmp_path, replies={
+        SLUGS[first.model_id]: chat(SLUGS[first.model_id], pin=first, cost=cost)})
+    one, two = result.block(first.model_id), result.block(second.model_id)
+    assert result.code == 1  # not a traceback, and not "everything matched"
+    assert one["verdict"] == "no_verdict"
+    assert one["verdict_reason"] == "assessment_failed_Overflow"  # the block says what failed
+    assert one["adapter_outcome"] == "answered"  # ... and what the adapter said is kept
+    # nothing half-assessed survives into the block: not the identity, not the absurd cost
+    assert one["reported_model"] == "none" and one["verdict"] != "match"
+    assert one["reported_cost_usd"] == "not_reported" and one["rate_check"] == "not_reported"
+    assert one["input_tokens"] == one["output_tokens"] == "not_reported"
+    # the paid call is counted at its worst case, and the run goes on
+    assert one["cost_basis"] == "bound"
+    assert Decimal(one["counted_cost_usd"]) == probe.worst_case_usd(first)
+    assert len(result.gateway.calls) == len(PINS)
+    assert two["verdict"] == "match"
+    expected_spend = probe.worst_case_usd(first) + sum(
+        Decimal(str(fair_cost(pin))) for pin in PINS[1:])
+    assert Decimal(result.summary()["spent_usd_counted"]) == expected_spend
+    assert result.summary()["lock_candidate"] == "no" and result.summary()["all_identities_match"] == "no"
+    assert result.summary()["exit_code"] == "1" and "complete: yes" in result.report
+    assert cost not in result.report + result.out + result.err
+
+
+def test_the_worst_case_of_a_failed_assessment_counts_against_the_ceiling(tmp_path: Path) -> None:
+    # The cost the failed call is counted at is the one the ceiling is held against: a ceiling
+    # that the worst case alone passes stops the run after that call (exit 3), where counting
+    # the call as free would have let every later model be called.
+    first = PINS[0]
+    ceiling = probe.worst_case_usd(first) + probe.worst_case_usd(PINS[1]) - Decimal("0.000001")
+    assert ceiling > probe.worst_case_usd(first)
+    result = run(tmp_path, "--max-usd", str(ceiling), replies={
+        SLUGS[first.model_id]: chat(SLUGS[first.model_id], pin=first, cost=OVERFLOWING_COST)})
+    assert result.code == 3
+    assert len(result.gateway.calls) == 1  # the second call's projection passes the ceiling
+    assert result.block(first.model_id)["cost_basis"] == "bound"
+    assert result.block(PINS[1].model_id)["verdict"] == "not_called"
+    assert result.summary()["stopped"] == "projected_over_ceiling"
+
+
+def test_a_failed_assessment_names_the_exception_type_only_and_never_the_credential(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first = PINS[0]
+
+    def hostile(*args: Any, **kwargs: Any) -> str:
+        raise RuntimeError(f"boom {TOKEN}")
+
+    monkeypatch.setattr(probe, "rate_check", hostile)
+    result = run(tmp_path)
+    assert result.code == 1
+    for pin in PINS:  # every assessed model hits it; each says so, by type, and is counted
+        block = result.block(pin.model_id)
+        assert block["verdict"] == "no_verdict" and block["verdict_reason"] == "assessment_failed_RuntimeError"
+        assert block["cost_basis"] == "bound" and block["adapter_outcome"] == "answered"
+    assert len(result.gateway.calls) == len(PINS)  # no retry
+    assert TOKEN not in result.report + result.out + result.err
+    assert "boom" not in result.report + result.out + result.err
+    assert result.summary()["credential_guard"] == "clean"
+    assert first.model_id in result.report
+
+
+def test_an_interrupt_in_the_assessment_is_not_swallowed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def interrupted(*args: Any, **kwargs: Any) -> str:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(probe, "rate_check", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        run(tmp_path)
+
+
 def test_the_report_is_on_disk_after_each_model(tmp_path: Path) -> None:
     second = PINS[1]
     gateway = Gateway({SLUGS[second.model_id]: KeyboardInterrupt()})
