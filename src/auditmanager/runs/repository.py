@@ -83,6 +83,18 @@ _INSERT_RUN = text(
 
 _SELECT_RUN = text(f"SELECT {_RUN_COLUMNS} FROM audit_run WHERE run_id = :run_id")
 
+#: `EXEC-PAR-START-01`. A run whose executor was **named** by the caller (or by the repeat of
+#: such a run) carries exactly one of these events, written in the transaction that created it.
+#: The run row holds only the frozen revision, which a routed run has as well, so the event is
+#: what tells an explicit choice from a route: ``reaudit_run`` reads it to keep the executor.
+EXECUTOR_CHOSEN_EVENT: Final[str] = "audit_run.executor_chosen"
+
+_SELECT_CHOSEN_EXECUTOR = text(
+    "SELECT payload ->> 'connection_id' FROM audit_event "
+    "WHERE aggregate_type = 'AuditRun' AND aggregate_id = :run_id "
+    "AND event_type = :event_type ORDER BY sequence_no LIMIT 1"
+)
+
 #: `W17VIEW-2`. **`now()` is `transaction_timestamp()`** - one value for the whole
 #: transaction, however long it runs. `start_run` creates the run *and* executes it inside
 #: a single `self._write(...)`, so `created_at` (a `DEFAULT now()`), every `updated_at`
@@ -435,6 +447,14 @@ class RunRepository:
         row = session.execute(_SELECT_RUN, {"run_id": run_id}).first()
         return None if row is None else _run_row(row)
 
+    def chosen_executor_connection(self, session: Session, run_id: str) -> str | None:
+        """The connection a caller named for this run (`EXEC-PAR-START-01`), or ``None`` when
+        the run followed the route. Read from the run's ``audit_run.executor_chosen`` event."""
+        found = session.execute(
+            _SELECT_CHOSEN_EXECUTOR, {"run_id": run_id, "event_type": EXECUTOR_CHOSEN_EVENT}
+        ).scalar_one_or_none()
+        return None if found is None else str(found)
+
     def list_for_version(
         self, session: Session, version_uid: str
     ) -> tuple[RunRow, ...]:
@@ -663,6 +683,7 @@ class RunRepository:
 
 
 __all__ = [
+    "EXECUTOR_CHOSEN_EVENT",
     "INITIAL_STATE",
     "PC01_STAGES",
     "RUN_MACHINE",

@@ -21,7 +21,9 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
     "ConnectionDetail",
+    "RunExecutor",
     "connection_detail",
+    "executor_of_revision",
     "list_connection_summaries",
     "list_routes",
     "resolve_route",
@@ -35,6 +37,36 @@ class ConnectionDetail:
     revisions: tuple[RevisionRecord, ...]
     latest_probe_by_revision: dict[str, ProbeRecord]
     probes: tuple[ProbeRecord, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class RunExecutor:
+    """Which executor a run is on, for a run's status (`EXEC-PAR-START-01`): the connection, the
+    name an administrator gave it and the model its revision pins. Nothing else -- no kind, no
+    address, no key, no probe."""
+
+    connection_id: str
+    display_name: str
+    pin_id: str
+
+
+def executor_of_revision(
+    session: Session, revision_id: str, repository: ExecutorRepository | None = None
+) -> RunExecutor | None:
+    """The executor a frozen revision belongs to, or ``None`` when the revision (or its
+    connection) is not there. The revision is the run's frozen one, so an archived connection
+    still answers: the run was on it."""
+    store = repository or ExecutorRepository()
+    revision = store.get_revision(session, revision_id)
+    if revision is None:
+        return None
+    connection = store.get_connection(session, revision.connection_id)
+    if connection is None:
+        return None
+    return RunExecutor(
+        connection_id=connection.connection_id, display_name=connection.display_name,
+        pin_id=revision.settings.pin_id,
+    )
 
 
 def sweep(session: Session, repository: ExecutorRepository | None = None) -> int:

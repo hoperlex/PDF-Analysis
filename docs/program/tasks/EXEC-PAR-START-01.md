@@ -80,6 +80,37 @@ its reason in the report, as the recipe's report did.
   `tests/integration/api/**`, `tests/contract/**`
 - `docs/program/tasks/EXEC-PAR-START-01.md`, `docs/program/EXEC-PAR-START-01.md`
 
+### Derived additions (found by the lane, each with its measured reason)
+
+The exact set came from the tree: the seal and prose guards were run, every path that had to
+move was listed, and a path was kept only if reverting it turned a guard red (or the code could
+not work without it). Full reasons and the red guard per path are in
+[`../EXEC-PAR-START-01.md`](../EXEC-PAR-START-01.md).
+
+- `src/auditmanager/bootstrap/adapters.py` — the one place that joins runs and executors:
+  `RunAdapter.start_run` passes the choice, `_run_status_view` fills `executor`. Not
+  `composition.py`.
+- `src/auditmanager/runs/provider.py`, `src/auditmanager/runs/repository.py` — the freeze seam's
+  types (`FrozenRoute.chosen_connection_id`, `RouteFreezer`) and the reader of the run's choice
+  event (`RunRepository.chosen_executor_connection`); run-start files under `runs/`.
+- `src/auditmanager/api/routers/ports.py`, `src/auditmanager/api/schemas/models.py`,
+  `src/auditmanager/api/schemas/runs.py` — the port, the request/response models and the status
+  view (the `api/**` files that map `StartRunRequest` and `RunStatus`).
+- `src/auditmanager/api/routers/__init__.py`, `src/auditmanager/analysis/engine/result.py`,
+  `src/auditmanager/api/schemas/models.py` (`ErrorEnvelope`) — the `CONTRACT_VERSION` constants
+  `test_contract_seal` equates with the sealed version.
+- `src/auditmanager/api/app.py`, `src/auditmanager/api/routers/declarations.py`,
+  `docs/program/ALPHA_ROADMAP.md` — the schema count in prose, read by
+  `test_surface_counts_in_prose` and `test_doc_prose_facts`.
+- `web/src/shared/api/credentialed-forward.ts` — the edge forwarder's own error body carries the
+  version literal `test_contract_seal` reads.
+- `tests/support/expected_facts.json` — the independent surface and version facts.
+- `tests/integration/executors/test_explicit_executor.py` (new, database-backed),
+  `tests/integration/runs/test_w55a_pin_offline.py` (its fake run row gains the
+  `connection_revision_id` a real `RunRow` always has).
+- `web/tests/**` — the 44 files whose error-envelope fixtures say `contract_version: '1.5.0'`
+  (typed against the generated `ErrorEnvelope`, and asserted by the two forwarder tests).
+
 ## Forbidden hotspots
 
 - `src/auditmanager/jobs/**`, `src/auditmanager/workers/**`, `src/auditmanager/bootstrap/composition.py`

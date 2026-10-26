@@ -6,7 +6,9 @@ Two moments, each a small callable the composition root supplies and ``runs`` on
   resolve the ``text_analysis`` route to a connection revision and return it as a
   :class:`FrozenRoute`. The revision is written to the run row, which freezes it; the input budget
   follows that revision's pinned model; a standby chosen instead of the primary is journaled.
-  A refusal is raised here, before any row exists.
+  A refusal is raised here, before any row exists. With ``connection_id`` the freezer freezes
+  *that* connection's current revision instead (`EXEC-PAR-START-01`) and reads neither the route
+  nor the standby; a connection it cannot use is a refusal, never another connection.
 * **bind** (:data:`ProviderResolver`) -- at each Attempt, just before the model stage: build the
   adapter of the run's frozen revision with the connection's *current* key, and say how the call
   must be recorded and held to its model (:class:`ProviderBinding`).
@@ -20,7 +22,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol
 
 from sqlalchemy.orm import Session
 
@@ -39,6 +41,9 @@ class FrozenRoute:
     primary_connection_id: str | None = None
     standby_connection_id: str | None = None
     standby_reason: str | None = None
+    #: `EXEC-PAR-START-01`. Set (to the connection's id) exactly when the freezer was asked for a
+    #: named connection; ``None`` when the route chose. The caller journals the choice from it.
+    chosen_connection_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,5 +56,12 @@ class ProviderBinding:
     call: Any = None
 
 
-RouteFreezer = Callable[[Session], FrozenRoute]
+class RouteFreezer(Protocol):
+    """``freeze(session)`` follows the route; ``freeze(session, connection_id=...)`` freezes the
+    named connection (`EXEC-PAR-START-01`). A freezer is called without the keyword when no
+    connection was named, so one that predates the keyword is called exactly as before."""
+
+    def __call__(self, session: Session, *, connection_id: str | None = None) -> FrozenRoute: ...
+
+
 ProviderResolver = Callable[[Session, Any, AttemptContext], ProviderBinding]

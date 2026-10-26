@@ -1,7 +1,7 @@
 {
   "lock_version": 1,
   "purpose": "Everything a later regeneration needs to prove the committed API client matches its input: the toolchain pins, the exact generator invocation, and the exact OpenAPI bytes the client was generated from. Verified by web/tests/guards/frontend-lock.guard.test.ts, which recomputes every digest here and fails if one has moved.",
-  "owner": "AR-V3-BETA-PACK-STATUS-API-01 reseal",
+  "owner": "EXEC-PAR-START-01 reseal",
   "toolchain": {
     "node": "22.23.1",
     "npm": "10.9.8",
@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "425b17f6f4734dafb7faa1f744aed5f51264955e400fde9d5da8752f6ed83df5",
-    "content_commit": "b02f680e",
-    "content_commit_subject": "Seal AR v3 beta pack status OpenAPI content",
-    "dispatch_named_commit": "0555a1209eff5db2134543c7b48d8d2423625944",
-    "commit_note": "AR-V3-BETA-PACK-STATUS-API-01 adds a read-only installed-pack status endpoint; contract 1.5.0 (92/104/300), migration 0032, no new error code.",
+    "sha256": "664a9069d2d476c84dacbd171cd9f31cb4c51299a4a6f56d89b97552106a25af",
+    "content_commit": "d81a14f3",
+    "content_commit_subject": "Seal executor choice OpenAPI content",
+    "dispatch_named_commit": "a3e83f39cfcb02f4ea5565e6f45f3f2b2f720e97",
+    "commit_note": "EXEC-PAR-START-01 adds an optional executor_connection_id to startRun and a read-only executor to RunStatus; contract 1.6.0 (92/104/301), migration 0032, no new error code.",
     "openapi_version": "3.1.0",
-    "info_version": "1.5.0",
+    "info_version": "1.6.0",
     "paths": 92,
     "operations": 104,
-    "component_schemas": 300,
+    "component_schemas": 301,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "425b17f6f4734dafb7faa1f744aed5f51264955e400fde9d5da8752f6ed83df5",
+    "snapshot_sha256": "664a9069d2d476c84dacbd171cd9f31cb4c51299a4a6f56d89b97552106a25af",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "22f5da421d36fd3e34ab4dd9c93c80c49276c7d145e7c7fce1d83cdd2c78637d",
-      "index.ts": "769b89c55903f40abe7041e25ddf2f8076768e4dd6d85905fa705544899faa06",
-      "operations.gen.ts": "f643f97b82925b4f02134264924d3a295ce569ad812625b7f12ff4045ae87845",
-      "types.gen.ts": "c775b694f33f8f3f9a01cf12964321f7e1265a86525421671a7d2c4c3ae0f8c5"
+      "client.gen.ts": "b517b7368a42bfa428a28e8bda2d085cf62b8e1b0a79affd88d7a5600477e69c",
+      "index.ts": "601542b8cbbbf81c4b1d6fdfee173eaa1a23d2674b7932661c333608c750c385",
+      "operations.gen.ts": "6e6cd352d7e662a47c9f16b5fdb8cc8c50d3fe0de3d8d0c67125749f666c6b87",
+      "types.gen.ts": "89239349ad05933b78c2b124ba0ca23542f0964449f9f2232e1900dba760fc99"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

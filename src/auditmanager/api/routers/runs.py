@@ -60,6 +60,7 @@ def build_run_routes(router: APIRouter, runs: RunPort) -> None:
             version_uid=body.version_uid,
             provider_mode=body.provider_mode.value if body.provider_mode else None,
             idempotency_key=idempotency_key,
+            executor_connection_id=body.executor_connection_id,
         )
         # 202, and the same 202 for a replay under the same key and payload: the run
         # exists either way, and the frozen document gives both the one status.

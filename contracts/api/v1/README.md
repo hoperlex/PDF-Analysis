@@ -11,7 +11,23 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Version `1.5.0`
+## Version `1.6.0`
+
+`EXEC-PAR-START-01` lets a run name its executor. `startRun` accepts an optional
+`executor_connection_id`; absent, the run follows the global route exactly as before. Present,
+the run freezes that connection's current revision when this release serves its kind, the
+connection's current key has a passing probe and it is not archived; otherwise the start is
+refused before any run exists (`validation_failed` on `executor_connection_id` for an unknown
+or malformed id, `dependency_unavailable` with `dependency: executor_connection` for a
+connection that cannot serve now). A named connection never falls back to the route's standby
+or to another connection, and the same idempotency key with another connection is
+`idempotency_key_reuse`. `reauditRun` keeps the original run's named executor. `RunStatus`
+gains a read-only, optional and nullable `executor` (`RunExecutor`: `connection_id`,
+`display_name`, `pin_id`); a run that froze no connection omits it, and nothing about a
+connection's kind, address, key or probe is exposed. The surface is 92 paths, 104 operations
+and 301 schemas. No error code or migration was added.
+
+## Version `1.5.0` (historical)
 
 `AR-V3-BETA-PACK-STATUS-API-01` adds the authenticated, read-only
 `getArV3BetaPackStatus` operation. It reports whether a reviewed AR v3 beta pack is
