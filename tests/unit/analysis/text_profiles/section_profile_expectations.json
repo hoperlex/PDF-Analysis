@@ -3,7 +3,7 @@
   "about": "One line per non-AR section package under src/auditmanager/analysis/text/profiles/: the status and profile_version its profile.json must declare. Read by the registry, package and HTTP tests and by web/tests/unit/analysis-settings. Moving a section out of draft changes that section's profile.json AND this one line, nothing else here. AR has no package (builtin) and no line. Guarded by test_section_profile_expectations.py.",
   "sections": [
     {"code": "AI", "status": "draft", "profile_version": "1.0.0"},
-    {"code": "PS", "status": "draft", "profile_version": "1.0.0"},
+    {"code": "PS", "status": "reviewed", "profile_version": "1.1.0"},
     {"code": "POS", "status": "draft", "profile_version": "1.0.0"},
     {"code": "TX", "status": "draft", "profile_version": "1.0.0"},
     {"code": "KJ", "status": "draft", "profile_version": "1.0.0"},
