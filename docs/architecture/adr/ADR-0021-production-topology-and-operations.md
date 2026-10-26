@@ -1,6 +1,6 @@
 # ADR-0021: Production topology and operations: one VPS, TLS in `infra/`, manual copies
 
-- Status: accepted for production by the repository owner (`R-146a`, `R-146b`, `R-146h`, `R-146j`, `R-146k`, `R-146n`, `R-146p`, `R-146s`, `R-146t`); `AD-01` is confirmed by `R-146p` as to the server name only (its ACME mechanism is not) and `AD-03` by `R-146t`; `AD-02`, `AD-04`, `AD-05`, `AD-16`, `AD-17` and `AD-18` are the architect's, proposed and not yet confirmed
+- Status: accepted for production by the repository owner (`R-146a`, `R-146b`, `R-146h`, `R-146j`, `R-146k`, `R-146n`, `R-146p`, `R-146s`, `R-146t`); `AD-01` is confirmed by `R-146p` as to the server name only (its ACME mechanism is not), `AD-03` by `R-146t`, `AD-02`, `AD-05` and `AD-16` by `R-146w` and `AD-17` by `R-146x`; `AD-04` (limits from a VPS measurement) and the ACME mechanism of `AD-01` were not polled and stay the architect's, proposed and not yet confirmed; `AD-18` is settled by `R-146y` as to what stands until the measurement and its later choice is open; `AD-19` is settled by `R-146z`
 - Date: 2026-10-26
 - Owners: repository owner / `PRODUCTION-ADR-PACK-01`
 - Supersedes: the reading of `R-1` that no host exists yet (`R-146a`); no earlier ADR is replaced
@@ -81,8 +81,9 @@ from terminating TLS in the stack, because the `$scheme` the proxy forwards is t
 `AD-01`, confirmed by `R-146p` as to the server name: **the certificate name is a deploy variable** (a
 setting of `alpha.env`, whose name `PROD-01` chooses) and the owner names it before `PROD-01` starts.
 This ADR names no host and no DNS provider, and decides nothing about one. The mechanism below is what
-`PROD-01` builds around that variable; `R-146p` confirms the name rule, and the mechanism is stated as
-the design the lane follows (the report lists this reading so that it can be corrected):
+`PROD-01` builds around that variable. `R-146p` confirms the name rule only: **the ACME mechanism below was not polled and
+stays the architect's, proposed and not confirmed** (the commitments that `R-146a` and `R-146s` make, TLS in the stack, HSTS, a
+`Secure` cookie, the conditional public listener, stand regardless):
 
 - An ACME client runs as a service of the same compose project, from a digest-pinned image built
   or pulled like every other image, using the HTTP-01 challenge through a webroot the `proxy`
@@ -117,11 +118,11 @@ ends by running the same check and, on exit `1`, recreates the `proxy` without t
 site is unreachable from outside until an administrator changes the password: the consequence `R-146s`
 accepts. The decision logic lives in one function of `infra/deploy/lib/` used by the three scripts; the
 copy key's script is installed apart from the checkout (`DEPLOYMENT_RUNBOOK.md` section 13), so the owner
-repeats that install after the change. Which accounts make the check fail is `AD-19` (`ADR-0023`).
+repeats that install after the change. Which accounts make the check fail is settled by `R-146z` (`ADR-0023` section 3): only the published seeded pair.
 
 ### 3. Database roles (`R-146n` item 1)
 
-`AD-02` (to be confirmed): the existing owner role (`POSTGRES_USER`) becomes the **migrator**: it
+`AD-02`, confirmed by `R-146w` as written at commit `83600aed`: the existing owner role (`POSTGRES_USER`) becomes the **migrator**: it
 owns every object, runs `migrate` and `release-notes`, and is the role the operator tools that need
 ownership connect as. A new **application** role is used by `api` and `worker`: it can log in, is not a
 superuser, cannot create objects or roles, owns nothing, holds `USAGE` on schema `public`, `SELECT`,
@@ -151,7 +152,7 @@ network without TLS, as today.
 
 ### 4. Memory and log limits (`R-146n` item 2, `D-166`)
 
-`AD-04` (to be confirmed): every long-running service gets a memory limit and the `json-file` log
+`AD-04` (not polled; the architect's, to be confirmed): every long-running service gets a memory limit and the `json-file` log
 driver with `max-size` and `max-file`. **This ADR fixes no number**: the VPS size is not known
 (open), and a limit set below the footprint of a large analysis would kill the worker mid-run (the
 capacity envelope itself is `AD-18`, `ADR-0024` section 5). The owner measures on the VPS with
@@ -187,10 +188,9 @@ production release (`PROD-03`). The dump covers PostgreSQL only; the S3 bucket i
 for a rollback. The copy directory keeps only the latest copy (`dump-db` removes older stamps) and refuses to
 start without room (`copy-dir-has-room`).
 
-`AD-17` (new, to be confirmed): **keep the `R-93` attestation (fetch to the development host, restore test)
-for every release after 1.0, or relax the gate to the receipt only?** Until the owner answers, the attestation
-stays required, as `R-93` says. Relaxing it removes the only routine restore test and, with it, the only copy of
-client data that ever leaves the host (section 9).
+`AD-17`, confirmed by `R-146x`: **the full `R-93` attestation stays after 1.0** (dump, fetch to the development host, trial restore,
+attestation) for every migrating publication, and the receipt check of `R-146t` sits on top of it. This is also why the latest
+pre-migration copy keeps leaving the host for the restore test (section 9).
 
 ### 6. Deploy, verification and rollback
 
@@ -235,7 +235,7 @@ names, deletes the rest by hand, and records the free space of the filesystem be
 (`capacity-probe.sh --path dumps=<ALPHA_DUMP_ROOT>`). A dump that holds client data is deleted by the same hand
 as soon as the release it guarded is accepted, and an erase (`ADR-0022`) is followed by the same pruning.
 
-`AD-05` (to be confirmed): the helper is `scripts/release/manual_scan.sh`. It prints an inventory (the
+`AD-05`, confirmed by `R-146w` as written at commit `83600aed`: the helper is `scripts/release/manual_scan.sh`. It prints an inventory (the
 resolved Python packages of `uv.lock`, the npm packages of `web/package-lock.json`, the image
 digests named in `compose.server.yml`) and runs whichever of `pip-audit`, `npm audit` and an image
 scanner the operator has installed, and it never prints a pass when a scanner is missing or the
@@ -268,7 +268,7 @@ service-level objective; a second operator; a firewall policy beyond the publish
 Docker-published port bypasses `ufw`: `compose.server.yml`, `D-49`). Three copies do leave the host, and
 none is a backup of the live service: the offline copy of the key ring (`R-146n` item 7), the latest
 pre-migration copy that `pull-copy.sh` fetches to the development host for the `R-93` restore test (only while
-`AD-17` keeps that test), and the corpus bundle kept on the development host (`R-88`). The bucket is not
+`R-146x` keeps that test), and the corpus bundle kept on the development host (`R-88`). The bucket is not
 among them.
 
 Object store. The MinIO image is built from source at upstream's final release and upstream is archived
@@ -280,17 +280,17 @@ decision whether to keep the source build or qualify another S3 implementation i
 
 - **A-1 (`R-146b`).** Client data can be lost back to the last manual copy. A disk loss on the one host
   loses the copies as well, because they sit on the same disk; the exception is the latest pre-migration copy
-  that `pull-copy.sh` fetches to the development host, which exists only while `AD-17` keeps the restore test
+  that `pull-copy.sh` fetches to the development host, which exists because `R-146x` keeps the restore test
   and is not a scheduled backup. Reopen on the first real client upload that the owner cannot afford to lose
   (`R-146b`).
 - **A-3 (`R-146h`).** No machine checks a push and no scan runs unless a person runs it before a release. A
-  vulnerable dependency or image can reach the host. `D-122` stays open. Proposed reopen trigger
-  (`AD-16`, the architect's, to be confirmed): before the first release that follows a published advisory for a
+  vulnerable dependency or image can reach the host. `D-122` stays open. Reopen trigger
+  (`AD-16`, confirmed by `R-146w`): before the first release that follows a published advisory for a
   component in `uv.lock`, `web/package-lock.json` or the pinned images, or before any release to users
   outside the owner's organisation.
 - **A-4 (architect's consequence of `R-146a` and `R-146b`).** One host, no failover, no maintained copy of
   the database or the bucket off that host. A host loss, a provider loss of the VPS, an operator error or a
-  ransomware event ends the service and may end the data. Proposed reopen trigger (`AD-16`): the same as A-1,
+  ransomware event ends the service and may end the data. Reopen trigger (`AD-16`, confirmed by `R-146w`): the same as A-1,
   and any decision to promise a recovery time or recovery point to a client.
 
 ## Commitments and their mechanical checks
@@ -309,7 +309,7 @@ into a program that prints names only, and its raw output is never shown or past
 | 3 | HSTS on every TLS answer (`R-146a`) | `curl -sSI https://<name>/login \| grep -i '^strict-transport-security: max-age=31536000'` exits 0; in the tree `tests/integration/composition/test_proxy_tls_path.py::test_hsts_is_sent_by_the_tls_block_and_never_by_the_plain_one` | yes | `PROD-01` extends it to the live name |
 | 4 | The session cookie is `Secure` (`R-146a`) | `curl -sS -D - -o /dev/null -H "Cookie: am_session=$(openssl rand -hex 16)" https://<name>/bff/v1/projects \| grep -i '^set-cookie: am_session=;.*Secure'` exits 0 (an inert cookie draws `401` and a clearing `Set-Cookie` from the BFF route handler, the method of `EXPOSURE-REVIEW-01.md` E-2) | command yes | `PROD-01` |
 | 5 | The certificate is renewed before it expires | `echo \| openssl s_client -connect <name>:443 -servername <name> 2>/dev/null \| openssl x509 -noout -checkend 1209600` exits 0 (valid for 14 more days) | command yes | `PROD-01` puts it in `verify-deployed.sh` |
-| 6 | A deployment is not successful while `admin`/`password` is valid (`R-146i`, `R-146s`) | `$DC run --rm --no-deps -T --entrypoint python api -m auditmanager.access.check` exits `0` (`1` means a default credential); while it exits `1`, `$DC port proxy 8443` exits non-zero (443 is not published) and `curl -sS --connect-timeout 5 -o /dev/null https://<name>/login` cannot connect; after the password change and a deploy, `$DC port proxy 8443` prints a mapping | the first command yes; the rest no | `PROD-01`, `PROD-02` |
+| 6 | A deployment is not successful while `admin`/`password` is valid (`R-146i`, `R-146s`, `R-146z`) | `$DC run --rm --no-deps -T --entrypoint python api -m auditmanager.access.check` exits `0` (`1` means a must-change account; stricter than the gate, which `R-146z` narrows to the published pair); while it exits `1`, `$DC port proxy 8443` exits non-zero (443 is not published) and `curl -sS --connect-timeout 5 -o /dev/null https://<name>/login` cannot connect; after the password change and a deploy, `$DC port proxy 8443` prints a mapping | the first command yes; the rest no | `PROD-01`, `PROD-02` |
 | 7 | The application connects with a role that cannot change the schema, before and after a restore (`R-146n` item 1) | `$DC exec -T postgres psql -U <migrator> -d <db> -Atc "select rolsuper, has_schema_privilege(rolname,'public','CREATE'), has_table_privilege(rolname,'public.audit_event','DELETE'), has_table_privilege(rolname,'public.audit_event','INSERT') from pg_roles where rolname='<application role>'"` prints `f\|f\|f\|t`; the same query is repeated after a `restore-db` rehearsal | no | `PROD-04` |
 | 8 | Memory and log limits on every long-running service (`R-146n` item 2) | `$DC config --no-env-resolution --format json \| python3 -I -c "import json,sys;c=json.load(sys.stdin)['services'];print(sorted(k for k,v in c.items() if k not in ('migrate','release-notes','s3-init') and not ((v.get('mem_limit') or v.get('deploy',{}).get('resources',{}).get('limits',{}).get('memory')) and v.get('logging',{}).get('options',{}).get('max-size'))))"` prints `[]` | no | `PROD-05` |
 | 9 | A migrating deploy follows a fresh copy receipt (`R-146n` item 3, `R-146t`) | `infra/deploy/deploy.sh` on a checkout with a newer revision, the `real_data` marker present and a record older than 24 hours (or none) ends with `REFUSED [stand-copy-fresh]` and exit `3` before any build; the guard is shown to fail by deleting its marked block, as `tests/integration/composition/test_deploy_script_refusals.py` does for the others | no | `PROD-03` |

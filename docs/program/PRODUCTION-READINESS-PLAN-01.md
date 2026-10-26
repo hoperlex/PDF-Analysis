@@ -7,8 +7,9 @@ It plans; it builds nothing, claims no approval and changes no state of the stan
 [`ADR-0022`](../architecture/adr/ADR-0022-production-data-governance.md),
 [`ADR-0023`](../architecture/adr/ADR-0023-production-identity-and-access.md) and
 [`ADR-0024`](../architecture/adr/ADR-0024-production-analysis-path-and-ai-execution.md). Every `AD-nn` named below is the architect's
-implementation decision within `R-146`. `AD-01`, `AD-03`, `AD-06`, `AD-11`, `AD-14` and `AD-15` are confirmed by `R-146p` (`AD-01` as to the server name only; its ACME mechanism is not confirmed), `R-146t`, `R-146o`, `R-146s`, `R-146u` and `R-146v`;
-`AD-02`, `AD-04`, `AD-05`, `AD-07`, `AD-08`, `AD-09`, `AD-10`, `AD-12`, `AD-13`, `AD-16`, `AD-17`, `AD-18` and `AD-19` are proposed and not yet confirmed (`PROD-00`).
+implementation decision within `R-146`. After the polls (`R-146o`…`R-146z`) every one is confirmed except two: `AD-04` (memory and log limits from a VPS measurement) and the ACME mechanism of `AD-01`, which were not polled. The rest are confirmed as follows:
+`AD-01` as to the server name only (`R-146p`), `AD-03` (`R-146t`), `AD-06` (`R-146o`), `AD-11` (`R-146s`), `AD-14` (`R-146u`), `AD-15` (`R-146v`), `AD-17` (`R-146x`), `AD-19` (`R-146z`), and `AD-02`, `AD-05`, `AD-07`, `AD-08`, `AD-09`, `AD-10`, `AD-12`, `AD-13`, `AD-16` by `R-146w` as written
+at commit `83600aed` (the poll showed a one-line summary of each; the mechanisms are the ADRs). `AD-18` is settled by `R-146y` as to what stands until the measurement; the choice it leaves is open.
 
 **Baseline.** The tree of `integration/ar-close-1026` including its commit `1a7f6f65` (`R-146o`…`R-146v`): `VERSION` `0.8.1`, shared contract `1.5.0`, 92 paths / 104 operations / 300 schemas,
 migration head `0032_ar_v3_run_group`, 27 error codes. No item below adds a migration, so the head does not move. The local tracking refs `origin/dev` and `origin/main` were not fetched for this plan.
@@ -30,31 +31,31 @@ No complete `make gate` can run on the development host (`D-205`).
 
 ## 2. Work items
 
-### PROD-00 — The owner confirms or changes the architect's remaining decisions
-- **Result:** a ruling record (its number assigned by the integrator) that, for each of `AD-02`, `AD-04`, `AD-05`, `AD-07`, `AD-08`, `AD-09`, `AD-10`, `AD-12`, `AD-13`, `AD-16`, `AD-17`, `AD-18`, `AD-19` and each open question of section 7, says
-  confirmed, changed, or refused. No item below is dispatched on an unconfirmed `AD-` that it depends on.
+### PROD-00 — The owner decides what the polls left open
+- **Result:** a ruling record (its number assigned by the integrator) on the items of section 7: `AD-04`, the ACME mechanism of `AD-01`, the `AD-18` choice after `PROD-20`'s measurement, `PROD-19`, and the VPS size. No item below is dispatched on an undecided point that it depends on:
+  `PROD-05` waits for `AD-04`, `PROD-01` for the ACME mechanism, `PROD-20`'s implementation for the `AD-18` choice.
 - **depends_on:** — · **Hotspots:** `docs/program/OWNER_RULINGS_*.md` (integrator) · **Size:** S (one document) · **Executor:** owner (by direct poll), integrator records.
-- **Check (documentation check only: it proves the answer is recorded):** `grep -n "PRODUCTION-ADR-PACK-01" docs/program/OWNER_RULINGS_2026-09-17.md` finds the ruling that answers the poll and names each `AD-` id.
+- **Check (documentation check only: it proves the answer is recorded):** `grep -n "PRODUCTION-ADR-PACK-01" docs/program/OWNER_RULINGS_2026-09-17.md` finds the ruling that answers the poll and names each of those points.
 
 ### PROD-01 — The TLS terminator and certificate renewal in `infra/` (`R-146a`, `R-146p`, `R-146s`, `AD-01`)
 - **Result:** the stack answers on the production name over a trusted chain with HSTS and a `Secure` session cookie; renewal runs inside the stack; the three listeners of `ADR-0021` section 2 exist (loopback application, public 80 for the challenge and a redirect only,
   public 443 published only when the default-credential check is clean); `verify-deployed.sh` fails on a certificate with fewer than 14 days left; `readiness.sh` `tls` and `plain-http` describe the new layout. `D-191` closes.
 - **Deadline:** deployed, with the first real issuance, by **2026-12-16**, fourteen days before the live certificate expires on 2026-12-30 (`D-191`); the date is the architect's and uses the same margin as the expiry check. If it cannot be met, `PROD-21` covers the live stand.
-- **depends_on:** the owner names the server name (a deploy variable) before the lane starts (`R-146p`); PROD-00 is not required for it · **Hotspots:** `infra/**` owner of its wave, `DEPLOYMENT_RUNBOOK.md` · **Size:** L: `compose.server.yml`, five files under `infra/deploy/proxy/`,
+- **depends_on:** the owner names the server name (a deploy variable) before the lane starts (`R-146p`); the ACME mechanism of `AD-01` was not polled, so the lane confirms it with the owner (PROD-00) before building it · **Hotspots:** `infra/**` owner of its wave, `DEPLOYMENT_RUNBOOK.md` · **Size:** L: `compose.server.yml`, five files under `infra/deploy/proxy/`,
   a new `infra/acme/`, `deploy.sh`, `verify-deployed.sh`, `readiness.sh`, `reset.sh`, `copy-serve.sh` (the shared listener function), `infra/deploy/env/alpha.env.example`, the runbook, and the TLS, readiness and refusal composition tests.
 - **Executor:** Sonnet lane, then owner (DNS record, inbound 80 and 443, the first issuance against the staging endpoint and then the real one).
 - **Check:** `ADR-0021` rows 1 to 6; `pytest -q tests/integration/composition/test_proxy_tls_path.py tests/contract/test_proxy_security_headers.py tests/integration/composition/test_deploy_script_refusals.py tests/integration/composition/test_readiness_command.py`.
 
-### PROD-02 — A deployment fails, and the application port stays shut, while `admin`/`password` is valid (`R-146i`, `R-146s`, `AD-11`, `AD-19`)
-- **Result:** `verify-deployed.sh` and `deploy.sh` run `python -m auditmanager.access.check` in the `api` image, end non-zero naming the logins and do not publish 443; `reset.sh --restore` and `copy-serve.sh restore-db` end with the same check and
-  recreate the `proxy` without the 443 overlay on a finding; `copy-serve.sh restore-db` also raises every `token_epoch`, as `reset.sh --restore` does (`R-52`); `readiness.sh` keeps `R-46` for its other checks. Which accounts count is `AD-19`.
-- **depends_on:** PROD-01 (same files and the shared listener function) · **Hotspots:** `infra/**` · **Size:** M: `deploy.sh`, `verify-deployed.sh`, `readiness.sh`, `reset.sh`, `copy-serve.sh`, the library function, three composition tests, the runbook; the owner repeats the copy key's install (`DEPLOYMENT_RUNBOOK.md` section 13) afterwards.
+### PROD-02 — A deployment fails, and the application port stays shut, while `admin`/`password` is valid (`R-146i`, `R-146s`, `R-146z`, `AD-11`, `AD-19`)
+- **Result:** `verify-deployed.sh` and `deploy.sh` run the gate check in the `api` image, end non-zero naming the login and do not publish 443; `reset.sh --restore` and `copy-serve.sh restore-db` end with the same check and
+  recreate the `proxy` without the 443 overlay on a finding; `copy-serve.sh restore-db` also raises every `token_epoch`, as `reset.sh --restore` does (`R-52`); `readiness.sh` keeps `R-46` for its other checks. **Only the published seeded pair fails the gate (`R-146z`)**: the gate is a narrower mode of `src/auditmanager/access/check.py` (the seeded `admin` still verifies against the published password), and temporary passwords an administrator issued stay a warning line; the lane edits `check.py` and its tests, not `repository.py`, which `PROD-06` edits in the same wave.
+- **depends_on:** PROD-01 (same files and the shared listener function) · **Hotspots:** `infra/**` · **Size:** M: `deploy.sh`, `verify-deployed.sh`, `readiness.sh`, `reset.sh`, `copy-serve.sh`, the library function, `check.py`, four tests, the runbook; the owner repeats the copy key's install (`DEPLOYMENT_RUNBOOK.md` section 13) afterwards.
 - **Executor:** Sonnet lane.
-- **Check:** `ADR-0023` row 1 and `ADR-0021` row 6; the new tests drive a database with the seeded account and show the exit non-zero and `$DC port proxy 8443` failing, and a mutation (the marked block deleted) turns the refusal off.
+- **Check:** `ADR-0023` row 1 and `ADR-0021` row 6; the new tests drive a database with the seeded account and show the exit non-zero and `$DC port proxy 8443` failing, and a mutation (the marked block deleted) turns the refusal off; a test with a temporary password issued by an administrator shows a warning line and exit `0` (`R-146z`).
 
 ### PROD-03 — A fresh copy receipt before every migrating deploy (`R-146t`, `AD-03`, `AD-17`; `R-93` continues to bind)
 - **Result:** `deploy.sh` has the guard `stand-copy-fresh` of `ADR-0021` section 5: with the `real_data` marker present and a migration pending, it refuses unless the copy record is open, has its dump, is attested for this commit and was quiesced at most 24 hours ago. **No new dump script**: the receipt is the record `copy-serve.sh dump-db`
-  writes. The owner installs the copy key (`DEPLOYMENT_RUNBOOK.md` section 13), which `R-110` deferred, before the production release. Whether the attestation (fetch and restore test) is kept after 1.0 is `AD-17`.
+  writes. The owner installs the copy key (`DEPLOYMENT_RUNBOOK.md` section 13), which `R-110` deferred, before the production release. `R-146x` keeps the full `R-93` attestation (dump, fetch, trial restore, attestation) for every migrating publication after 1.0; the receipt check sits on top of it.
 - **depends_on:** PROD-02 (same file `deploy.sh`) · **Hotspots:** `infra/**` · **Size:** M: `deploy.sh`, `test_deploy_script_refusals.py`, the runbook; plus the owner's installation.
 - **Executor:** Sonnet lane; the owner installs the key and takes the first real copy.
 - **Check:** `pytest -q tests/integration/composition/test_deploy_script_refusals.py -k stand_copy_fresh` (new tests: no record, a record older than 24 hours, an unattested record, another commit's record, and the guard deleted); `ADR-0021` row 9.
@@ -62,7 +63,7 @@ No complete `make gate` can run on the development host (`D-205`).
 ### PROD-04 — Database roles: migrator and application, grants as an idempotent step (`R-146n` item 1, `AD-02`)
 - **Result:** `api` and `worker` connect as a role that cannot change the schema or truncate; the migrator keeps ownership; the grants are re-applied by one idempotent step after every `migrate` and every restore, so `--no-privileges` dumps cannot leave the application without rights; the
   integration directories of the contexts pass as the application role. **No migration is added**; the head stays `0032_ar_v3_run_group`.
-- **depends_on:** PROD-03 (infra files), a ruling on `AD-02` · **Hotspots:** `infra/**` (no migration head) · **Size:** L: a new `infra/deploy/apply-grants.sh`, `compose.server.yml`, `deploy.sh`, `alpha.env.example`, **`reset.sh`** (`--restore`), **`copy-serve.sh`** (`restore-db`, which drops and recreates `public`),
+- **depends_on:** PROD-03 (infra files); `AD-02` is confirmed by `R-146w` · **Hotspots:** `infra/**` (no migration head) · **Size:** L: a new `infra/deploy/apply-grants.sh`, `compose.server.yml`, `deploy.sh`, `alpha.env.example`, **`reset.sh`** (`--restore`), **`copy-serve.sh`** (`restore-db`, which drops and recreates `public`),
   **`purge-product-data.sh`** (its `api_python` runs `product_purge` with the api's restricted `DATABASE_URL`, so the `owner-may-write` guard would refuse; it passes the migrator URL), a grant-classification guard test, a restored-from-`--no-privileges`-dump test, and the application-role run of the integration suites.
   `scripts/recovery/product_purge.py` changes only if the guard's message needs it.
 - **Executor:** Sonnet lane; the owner supplies the second password on the host and repeats the copy key's install.
@@ -85,7 +86,7 @@ No complete `make gate` can run on the development host (`D-205`).
 
 ### PROD-07 — The operator project erase (`R-146c`, `R-146o`, `AD-06`, `AD-07`)
 - **Result:** `infra/deploy/erase-project.sh` and `scripts/recovery/project_erase.py` as `ADR-0022` section 3 defines them: findings and expert decisions removed with everything else of the project, dry run by default, a plan SHA-256, journalled, idempotent, resumable; erased `blob` rows are deleted and a manifest is written; **a byte-identical upload after an erase succeeds** (test).
-- **depends_on:** PROD-06 (same file `product_purge.py`), PROD-04 (the owner role and the wrapper's migrator URL), PROD-00 (`AD-07`) · **Hotspots:** `infra/**` (one new file), `scripts/recovery/**`, `DEPLOYMENT_RUNBOOK.md` · **Size:** L by the new-tool rule: a module of the order of `product_purge.py` (1024 lines, 27 guard blocks), a wrapper of the order of
+- **depends_on:** PROD-06 (same file `product_purge.py`), PROD-04 (the owner role and the wrapper's migrator URL) · **Hotspots:** `infra/**` (one new file), `scripts/recovery/**`, `DEPLOYMENT_RUNBOOK.md` · **Size:** L by the new-tool rule: a module of the order of `product_purge.py` (1024 lines, 27 guard blocks), a wrapper of the order of
   `purge-product-data.sh` (16 guard blocks), the classification declaration, and tests with a mutation proof per guard, resume and re-upload cases, modelled on the purge's six test files.
 - **Executor:** Sonnet lane.
 - **Check:** the verification list of `ADR-0022`; its two rest-state queries print `0`.
@@ -130,7 +131,7 @@ No complete `make gate` can run on the development host (`D-205`).
 ### PROD-13 — The OpenRouter production connection and the model pin (`R-146e`, `R-146u`, `AD-13`, `AD-14`)
 - **Result:** the connection is configured (`PROXY_LLM_*` in `provider.env`, source `database`, mode `live`), probed `ok` and selected; a probe records the requested slug and the reported `model` for each pinned model in its own report file;
   `P02_LOCK.json` is written only by this task and only if the strings and rates match; `allow_client_documents` is set true on the connection by an administrator as a recorded revision. **No code enforces the flag and no item builds a refusal** (`R-146u`).
-- **depends_on:** PROD-00 (`AD-13`) · **Hotspots:** `docs/program/P02_LOCK.json` (sole writer, as `W56A-MODEL-PIN-01` was); it edits **no** runbook (its report is its own file; the runbook cross-reference is added by the infra-chain lane) · **Size:** M: a probe tool and report, the lock.
+- **depends_on:** — (`AD-13` is confirmed by `R-146w`) · **Hotspots:** `docs/program/P02_LOCK.json` (sole writer, as `W56A-MODEL-PIN-01` was); it edits **no** runbook (its report is its own file; the runbook cross-reference is added by the infra-chain lane) · **Size:** M: a probe tool and report, the lock.
 - **Executor:** owner (credential, approval; paid calls above roughly $5 per wave stop for the owner, `R-29`), Sonnet lane for the probe tool. `W56A-MODEL-PIN-01` stays stopped with its evidence.
 - **Check:** `infra/deploy/readiness.sh | grep -E 'readiness OK +(provider-mode|executor-source)'` prints both lines; the probe report carries one `reported_model:` line per pinned model (a documentation check: it proves the probe ran, not that the strings match).
 
@@ -181,9 +182,9 @@ Definition (`AD-15`, confirmed by `R-146v`, **not the recommended option**): a s
 - **Check (documentation check only):** `grep -n "D-119\|D-123" docs/program/RELEASE_PROCESS.md` finds the decision in the release record once it is made; the inventory is `copy-serve.sh capacity` run on the stand.
 
 ### PROD-20 — The capacity envelope and the 900-second watchdog (`D-171`, `D-175`, `AD-18`)
-- **Result:** the owner has the measurements (pages per minute by document kind, the duration of each stage, on the VPS) and decides between raising the watchdog and refusing above a page limit with `analysis_input_budget_exceeded`; the decision is implemented before the first real upload.
-- **depends_on:** PROD-05a (the VPS measurement), PROD-00 (`AD-18`) · **Hotspots:** `src/auditmanager/jobs/lease.py` or the ingest limits; the contract only if the limit becomes a new field (it need not) · **Size:** M · **Executor:** owner (measurement, decision), Sonnet lane (change and test).
-- **Check:** a test that an attempt of the decided length is not failed by the watchdog, or that an input above the page limit is refused with `analysis_input_budget_exceeded` before any Job exists; today `python3 -I -c "import re;print(re.search(r'ATTEMPT_WATCHDOG_SECONDS = (\d+)',open('src/auditmanager/jobs/lease.py').read()).group(1))"` prints `900`.
+- **Result:** the owner has the measurements (pages per minute by document kind, the duration of each stage, on the VPS) (`R-146y`). Until the owner then chooses between raising the watchdog and a page limit, the watchdog stays 900 s and an input above the budget gets the typed refusal `analysis_input_budget_exceeded`; **that choice is an open decision after the measurement**, and its implementation is a follow-up lane.
+- **depends_on:** PROD-05a (the VPS measurement); the implementation also waits for the owner's choice (PROD-00) · **Hotspots:** `src/auditmanager/jobs/lease.py` or the ingest limits; the contract only if the limit becomes a new field (it need not) · **Size:** M · **Executor:** owner (measurement, decision), Sonnet lane (change and test).
+- **Check:** the measurement is recorded; after the owner's choice, a test that an attempt of the decided length is not failed by the watchdog, or that an input above the page limit is refused with `analysis_input_budget_exceeded` before any Job exists; today `python3 -I -c "import re;print(re.search(r'ATTEMPT_WATCHDOG_SECONDS = (\d+)',open('src/auditmanager/jobs/lease.py').read()).group(1))"` prints `900`.
 
 ### PROD-21 — Interim: renew the live stand's certificate before 2026-12-30 (`D-191`; owner action)
 - **Result:** until `PROD-01` replaces the host terminator, the owner renews the certificate of the host nginx by its existing means so that it is valid for at least fourteen days beyond 2026-12-16. The tree cannot show how that nginx obtains its certificate.
@@ -221,46 +222,47 @@ Rules: no lane starts in a wave that names its hotspot for another lane; no wave
 
 ## 5. The accepted-risk register
 
-`A-1` to `A-3` and `A-5` are the owner's (`R-146b`, `R-146f`, `R-146h`, `R-146v`); `A-4` is the architect's consequence of `R-146a` and `R-146b`. The reopen triggers of `A-2`, `A-3` and `A-4` are proposed and unconfirmed (`AD-16`); the trigger of `A-5` is given with `R-146v`'s application.
+`A-1` to `A-3` and `A-5` are the owner's (`R-146b`, `R-146f`, `R-146h`, `R-146v`); `A-4` is the architect's consequence of `R-146a` and `R-146b`. The reopen triggers of `A-2`, `A-3` and `A-4` are confirmed by `R-146w` (`AD-16`); the trigger of `A-5` is given with `R-146v`'s application.
 
 | Id | Risk, stated plainly | Owner's words | Reopen trigger |
 | --- | --- | --- | --- |
 | A-1 | Client data can be lost back to the last manual copy; a disk loss on the one host loses the copies too (the one exception is the latest pre-migration copy fetched to the development host for the `R-93` restore test, which is not a scheduled backup). No recovery point or time is committed. Compensation: a fresh copy receipt before every migrating deploy. | `R-146b` | the first real client upload that the owner cannot afford to lose (`R-146b`) |
-| A-2 | The tree holds no provider terms, data-processing agreement, consent or data-handling policy; document text goes to OpenRouter and onward to whichever provider it routes to, which may retain or train on it; no ban on substitution (caught after the fact by `R-133`). | `R-146f`, `R-146n` item 4 not accepted | proposed: a client asks for data-handling terms; a contract promises confidentiality; the owner accepts `R-146n` item 4 |
-| A-3 | No machine checks a push and no scan runs unless a person runs it before a release; `D-122` stays open, and nothing scans the source-built MinIO image (`D-119`). | `R-146h` | proposed: a published advisory for a component in `uv.lock`, `web/package-lock.json` or a pinned image; any release to users outside the owner's organisation |
-| A-4 | One host, no failover, no maintained copy of the database or the bucket off that host; a host loss ends the service and may end the data. | consequence of `R-146a`, `R-146b` | proposed: as `A-1`, and any promise of a recovery time or point to a client |
+| A-2 | The tree holds no provider terms, data-processing agreement, consent or data-handling policy; document text goes to OpenRouter and onward to whichever provider it routes to, which may retain or train on it; no ban on substitution (caught after the fact by `R-133`). | `R-146f`, `R-146n` item 4 not accepted | confirmed (`R-146w`): a client asks for data-handling terms; a contract promises confidentiality; the owner accepts `R-146n` item 4 |
+| A-3 | No machine checks a push and no scan runs unless a person runs it before a release; `D-122` stays open, and nothing scans the source-built MinIO image (`D-119`). | `R-146h` | confirmed (`R-146w`): a published advisory for a component in `uv.lock`, `web/package-lock.json` or a pinned image; any release to users outside the owner's organisation |
+| A-4 | One host, no failover, no maintained copy of the database or the bucket off that host; a host loss ends the service and may end the data. | consequence of `R-146a`, `R-146b` | confirmed (`R-146w`): as `A-1`, and any promise of a recovery time or point to a client |
 | A-5 | When the 14 sections become full, the quality of their output on real text is unmeasured: a section leaves `draft` when an expert has reviewed its profile, no non-synthetic field case is required, recorded cases stay synthetic. | `R-146v` (not the recommended option) | the first section whose real-text output an expert rejects, or the first client complaint |
 
 Not accepted and therefore not a risk register entry: `R-146n` item 4 (no restriction of routing or substitution); it is the cause of `A-2`.
 
-## 6. What stays open
+## 6. What the polls settled
 
-- The legal-hold authority and the classification labels (`ADR-0014`).
-- The licensing review before any external corpus-backed release (`NORM-Q04`).
-- Whether beta users are internal or external (`D-4.1`).
-- The measured size of the VPS (`PROD-05`, `AD-04`).
-- Off-host custody of anything (dumps, key ring, bucket): not asked.
-- A second person to run the stand.
-- Who the section experts are (`OD-18`).
+| Ruling | Settles |
+| --- | --- |
+| `R-146o` | `AD-06`: the erase removes findings, quotes, comments and expert decisions |
+| `R-146p` | `AD-01` as to the server name: a deploy variable the owner names before `PROD-01` |
+| `R-146q`, `R-146r` | beta criteria `B3`, `B5`, `B10` remain; the beta is `1.0.0-beta.N`, production `1.0.0` |
+| `R-146s` | `AD-11`: the deploy ends non-zero and the public listener stays shut |
+| `R-146t` | `AD-03`: a fresh receipt before `migrate` |
+| `R-146u` | `AD-14`: `allow_client_documents` true, a label only |
+| `R-146v` | `AD-15`: a section is full when an expert has reviewed its profile; `A-5` |
+| `R-146w` | `AD-02`, `AD-05`, `AD-07`, `AD-08`, `AD-09`, `AD-10`, `AD-12`, `AD-13`, `AD-16`, as written at commit `83600aed` |
+| `R-146x` | `AD-17`: the full `R-93` attestation stays after 1.0 |
+| `R-146y` | `AD-18`: measure first (`PROD-20`); the watchdog stays 900 s and the typed refusal applies until the owner chooses |
+| `R-146z` | `AD-19`: only the published seeded pair fails the deploy |
 
-## 7. Decisions still needed from the owner (poll package)
+## 7. Decisions still open
 
-Settled by the second round and removed from this list: the server name rule (`R-146p`), the erase scope (`R-146o`), the beta criteria (`R-146q`), the beta identity (`R-146r`), the default-credential behaviour (`R-146s`), the dump receipt (`R-146t`), the flag (`R-146u`) and what «full» means (`R-146v`).
-
-1. `AD-02`: keep the owner role as the migrator and add one restricted application role, grants by an idempotent step.
-2. `AD-04`: memory and log limits from a VPS measurement, no number fixed now; and the VPS size.
-3. `AD-05`: the manual-scan helper and the eight-line checklist.
-4. `AD-07`: the erase tool's design (dry run, plan SHA-256, reason codes, the manifest, deleting erased `blob` rows, the four phases), and whether the identity-only run journal of the erased project stays.
-5. `AD-08`: the offline copy of the key ring.
-6. `AD-09`: the whole-product purge at 1.0 after a rehearsal, then the account review.
-7. `AD-10`: the six `access.*` events, no IP address, a failed sign-in journalled only when it starts a cooling-off.
-8. `AD-12`: the removal order (extract, re-base the journey, remove and reseal) and that the finding categories stay.
-9. `AD-13`: the pin is the exact string OpenRouter reports, no alias list.
-10. `AD-16`: the reopen triggers proposed for `A-2` to `A-4`.
-11. `AD-17`: keep the `R-93` attestation (fetch and restore test) for every release after 1.0, or relax the gate to the receipt only?
-12. `AD-18`: raise the 900-second watchdog or refuse above a page limit below the 500-page ceiling?
-13. `AD-19`: does the default-credential gate count every must-change account (the existing check) or only the published seeded pair?
-14. `PROD-19`: keep the source-built MinIO or qualify another S3 implementation.
+1. `AD-04`: memory and log limits from a VPS measurement, no number fixed now (not polled).
+2. The ACME mechanism of `AD-01` (not polled): the ACME client container, the three listeners, the 14-day expiry check.
+3. The `AD-18` choice after `PROD-20`'s measurement: raise the 900-second watchdog or a page limit.
+4. `PROD-19`: the MinIO lifecycle (keep the source-built image or qualify another S3 implementation, `D-119`, `D-123`).
+5. The legal-hold authority and the classification labels (`ADR-0014`).
+6. The licensing review before any external corpus-backed release (`NORM-Q04`).
+7. Whether beta users are internal or external (`D-4.1`).
+8. The measured size of the VPS (`PROD-05`).
+9. Off-host custody of anything (dumps, key ring, bucket): not asked.
+10. A second person to run the stand.
+11. Who the section experts are (`OD-18`).
 
 ## 8. What this plan does not establish
 

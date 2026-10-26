@@ -1,7 +1,7 @@
 # Task PRODUCTION-ADR-PACK-01 — the architecture decisions of the production version, as four ADRs and a readiness plan
 
 task_id: PRODUCTION-ADR-PACK-01
-status: completed in a development candidate (documents only); round 2 applied (the judge's findings and `R-146o`…`R-146v`)
+status: completed in a development candidate (documents only); rounds 2 and 3 applied (the judge's findings and `R-146o`…`R-146z`)
 
 ## Outcome
 
@@ -14,14 +14,14 @@ mechanically against the tree.
 ## Depends on
 
 - `BETA-STATIC-MATRIX-02` — completed (the static B1–B12 matrix whose facts the ADRs build on; it stays as written).
-- `R-146` as recorded by commit `4d7b7c38` (`docs(program): R-146 records the owner's production architecture decisions, accepted risks and refusals`), and round 2 of the same section, `R-146o`…`R-146v`, recorded by commit `1a7f6f65`.
+- `R-146` as recorded by commit `4d7b7c38` (`docs(program): R-146 records the owner's production architecture decisions, accepted risks and refusals`), round 2 of the same section, `R-146o`…`R-146v`, recorded by commit `1a7f6f65`, and round 3, `R-146w`…`R-146z`, recorded by commit `2e9ef46e`.
 
 ## Frozen inputs
 
 - base: `integration/ar-close-1026` at `4d7b7c38dc8239df6831b2587b71c0d74e8b1ec0`;
 - migration head `0032_ar_v3_run_group`; API 92 paths / 104 operations / 300 schemas; 27 error codes; shared contract `1.5.0`; `VERSION` `0.8.1`;
   this task changes no contract and adds no migration;
-- rulings: `R-146a`…`R-146v` (the only source of owner decisions in this pack), `R-135` (no complete gate in a code-first lane), `R-141c` (closed beta on test data).
+- rulings: `R-146a`…`R-146z` (the only source of owner decisions in this pack), `R-135` (no complete gate in a code-first lane), `R-141c` (closed beta on test data).
 
 ## Enumerator ownership
 
@@ -32,7 +32,7 @@ mechanically against the tree.
 
 ## Captured premise evidence
 
-- premise: the surface and version figures, the 22 rulings, and the facts the design depends on (no dump in `deploy.sh`, no `access.check` call in the deploy scripts, v3 importing v2, an unread `allow_client_documents`, exact model comparison, no access audit writer, the copy record as receipt, the two restore formats, the must-change flag, the 900-second watchdog)
+- premise: the surface and version figures, the 26 rulings, and the facts the design depends on (no dump in `deploy.sh`, no `access.check` call in the deploy scripts, v3 importing v2, an unread `allow_client_documents`, exact model comparison, no access audit writer, the copy record as receipt, the two restore formats, the must-change flag, the 900-second watchdog)
 
 ### P-01 — the surface, the version and the contract version
 
@@ -54,15 +54,15 @@ mechanically against the tree.
   ```
 - interpretation: the head is `0032_ar_v3_run_group`; the pack proposes the next revision (`0033`) and writes none.
 
-### P-03 — the twenty-two rulings the pack quotes
+### P-03 — the twenty-six rulings the pack quotes
 
 - captured_at: 2026-10-26
-- command: `grep -o '^| .R-146[a-v]' docs/program/OWNER_RULINGS_2026-09-17.md | grep -o 'R-146[a-v]' | tr '\n' ' '`
+- command: `grep -o '^| .R-146[a-z]' docs/program/OWNER_RULINGS_2026-09-17.md | grep -o 'R-146[a-z]' | tr '\n' ' '`
 - captured_output:
   ```text
-  R-146a R-146b R-146c R-146d R-146e R-146f R-146g R-146h R-146i R-146j R-146k R-146l R-146m R-146n R-146o R-146p R-146q R-146r R-146s R-146t R-146u R-146v
+  R-146a R-146b R-146c R-146d R-146e R-146f R-146g R-146h R-146i R-146j R-146k R-146l R-146m R-146n R-146o R-146p R-146q R-146r R-146s R-146t R-146u R-146v R-146w R-146x R-146y R-146z
   ```
-- interpretation: `R-146a` to `R-146v` exist as table rows of section 3.46 (`R-146o` to `R-146v` are the second poll round, merged in round 2). Every statement the pack attributes to the owner is a paraphrase of one of them.
+- interpretation: `R-146a` to `R-146z` exist as table rows of section 3.46 (`R-146o` to `R-146v` are the second poll round, merged in round 2; `R-146w` to `R-146z` the third, merged in round 3). Every statement the pack attributes to the owner is a paraphrase of one of them.
 
 ### P-04 — `deploy.sh` takes no dump
 
@@ -289,5 +289,6 @@ Forward revert of the nine files. Behaviour is unchanged.
 - changed files: the ten files of the allowed paths, on branch `agent/production-adr-pack-01` from base `4d7b7c38dc8239df6831b2587b71c0d74e8b1ec0`, merged with `integration/ar-close-1026` at `1a7f6f65` in round 2; nothing else (`git diff --name-only 1a7f6f65 HEAD` lists exactly them).
 - commands/results (2026-10-26, lane worktree production-adr-pack-01, on the committed tree): see the report's Checks section for the existence check (the final line), its 14 mutations, the governance one-liner (`[]`), `git diff --check` (exit 0), the 105 passed tests and the unchanged failing set of the two ADR-index test files.
 - round 2: the report's "Round 2" section gives, per judge finding 1-13 and gap G1-G3, `fixed` with the document and section, or `refuted` with the evidence, and applies `R-146o`…`R-146v`. New decisions `AD-17`, `AD-18`, `AD-19`; new items `PROD-19`…`PROD-22`; new accepted risk `A-5`; no migration is proposed any more.
-- known limits: nothing was executed against a stand, a container or a database; a check marked "no" in an ADR table does not exist yet; thirteen `AD-` decisions are unconfirmed; the sizes in the plan are counted, not experienced; the local tracking refs were not fetched; the whole contract battery, the web battery and the gate were not run (`R-135`).
+- round 3: the statuses of the `AD-` decisions follow `R-146w`…`R-146z`; only `AD-04` and the ACME mechanism of `AD-01` were not polled, and the `AD-18` choice after the `PROD-20` measurement stays open.
+- known limits: nothing was executed against a stand, a container or a database; a check marked "no" in an ADR table does not exist yet; `AD-04` and the ACME mechanism are unconfirmed; the sizes in the plan are counted, not experienced; the local tracking refs were not fetched; the whole contract battery, the web battery and the gate were not run (`R-135`).
 - integration notes: see the integration contract above and the report's "Instruction to the integrator".

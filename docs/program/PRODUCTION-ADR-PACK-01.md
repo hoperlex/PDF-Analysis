@@ -28,38 +28,32 @@ the accepted-risk register `A-1`…`A-5`, the open decisions and what the plan d
 | `docs/program/tasks/PRODUCTION-ADR-PACK-01.md` | new |
 | `docs/program/PRODUCTION-ADR-PACK-01.md` | this report |
 
-## The architect's implementation decisions: confirmed and still awaiting the owner
+## The architect's implementation decisions: confirmed, settled and still open
 
-`R-146` is the only source of owner decisions in the pack. Everything labelled `AD-nn` in the ADRs is the architect's choice within it. After the second poll round (`R-146o`…`R-146v`):
+`R-146` is the only source of owner decisions in the pack. Everything labelled `AD-nn` in the ADRs is the architect's choice within it. After the third poll round (`R-146o`…`R-146z`) every one is confirmed except the two that were not polled:
 
-**Confirmed (the ADR status lines say "confirmed by" and the ruling id)**
+**Confirmed or settled by the owner (the ADR status lines name the ruling)**
 
 | Id | Ruling | What it settled |
 | --- | --- | --- |
-| `AD-01` | `R-146p` | the server name is a deploy variable the owner names before `PROD-01`; no provider or name is decided. The ACME-in-compose mechanism and the 14-day expiry check stay as written in `ADR-0021` section 2; `R-146p` reads as confirming the name rule only, and the mechanism is the design the lane follows (if the coordinator reads `R-146p` as narrower, re-poll the mechanism) |
+| `AD-01` | `R-146p`, narrowed at `83600aed` | the server name is a deploy variable the owner names before `PROD-01`; no provider or name is decided. **The ACME mechanism (container, three listeners, 14-day check) was not polled and stays proposed** |
+| `AD-02`, `AD-05`, `AD-07`, `AD-08`, `AD-09`, `AD-10`, `AD-12`, `AD-13`, `AD-16` | `R-146w` | confirmed **as written in `ADR-0021`…`ADR-0024` at commit `83600aed`**; the poll showed a one-line summary of each, and the mechanisms are those documents. The identity-only run journal of an erased project stays (`AD-07`) |
 | `AD-03` | `R-146t` | `deploy.sh` refuses `migrate` without a fresh receipt (file, SHA-256, time); the limit 24 hours is set in `ADR-0021` |
 | `AD-06` | `R-146o` | the erase removes findings, quotes, comments and expert decisions and keeps the record of the erasure; a deliberate exception to `ADR-0012` |
 | `AD-11` | `R-146s` | the deploy ends non-zero and the public listener stays shut until the password is changed |
 | `AD-14` | `R-146u` | `allow_client_documents` set true on the OpenRouter connection at the release; the flag stays a label |
 | `AD-15` | `R-146v` | a section is full when an expert has reviewed its profile; no field case; accepted risk `A-5` |
+| `AD-17` | `R-146x` | the full `R-93` attestation (dump, fetch, trial restore, attestation) stays after 1.0; the receipt check sits on top of it |
+| `AD-18` | `R-146y` | measure on the VPS first (`PROD-20`); the watchdog stays 900 s and an over-budget input gets the typed refusal until the owner chooses; **that choice stays open** |
+| `AD-19` | `R-146z` | only the published seeded pair fails the deploy and keeps the listener closed; temporary reset passwords stay a warning |
 
-**Still unconfirmed, as questions for the owner (the poll package)**
+**Still open (not polled or deliberately left open)**
 
 | Id | Where | Question |
 | --- | --- | --- |
-| `AD-02` | `ADR-0021` section 3 | Keep the current owner role as the migrator and add one restricted application role, with the grants applied by an idempotent step after every `migrate` and every restore (no migration)? |
 | `AD-04` | `ADR-0021` section 4 | Take memory and log limits from a VPS measurement, fixing no number now? What is the VPS size? |
-| `AD-05` | `ADR-0021` section 7 | A manual-scan helper that prints an inventory, runs the scanners that are installed and never prints a pass when one is missing, plus the eight-line release checklist and a manual pruning rule? |
-| `AD-07` | `ADR-0022` section 3 | The erase tool: dry run by default, a plan SHA-256, a closed list of reason codes, the `era_` identity, `erasure.requested` and `erasure.completed`, four phases with a resume, erased `blob` rows deleted and a manifest file whose digest is in the event, and does the identity-only run journal of the erased project stay? |
-| `AD-08` | `ADR-0022` section 6 | The key ring: one encrypted off-VPS copy verified by the SHA-256 of the ring line on a second machine, redone after every rotation? |
-| `AD-09` | `ADR-0022` section 4 | At 1.0, run the existing whole-product purge (it has no v1/v2 selector) after a rehearsal on a restored copy, then review and archive the test accounts? |
-| `AD-10` | `ADR-0023` section 4 | Six `access.*` events, no IP address, a failed sign-in journalled only when it starts a cooling-off, and `access.role_revoked` added beside the owner's "role grant"? |
-| `AD-12` | `ADR-0024` section 2 | Remove АР v1/v2 in the order extract what v3 needs (three modules, six data files, two constants, `registered.py` split), re-base the live journey, then remove and reseal; `startRun` on АР gives `section_profile_unavailable`; the `FindingCategory` list stays? |
-| `AD-13` | `ADR-0024` section 3 | Pin the exact string OpenRouter reports, add no alias list to the run path, and replace `W56A-MODEL-PIN-01` by a paid probe task under `R-29`? |
-| `AD-16` | `ADR-0021` section 10, `ADR-0022` section 5 | The reopen triggers proposed for `A-2` (a client asks for terms), `A-3` (an advisory, or any release outside the owner's organisation) and `A-4` (as `A-1`, and any promise of a recovery time)? |
-| `AD-17` (new) | `ADR-0021` section 5 | Keep the `R-93` attestation (fetch to the development host and restore test) for every release after 1.0, or relax the gate to the receipt only? |
-| `AD-18` (new) | `ADR-0024` section 5 | Before the first real upload, raise the 900-second attempt watchdog (overall or per stage) or refuse above a page limit below the 500-page ceiling with `analysis_input_budget_exceeded`? |
-| `AD-19` (new) | `ADR-0023` section 3 | Does the default-credential gate count every must-change account (the existing check also lists accounts whose password an administrator reset), or only the published seeded pair? |
+| `AD-01` (mechanism) | `ADR-0021` section 2 | An ACME client container in the compose project (HTTP-01), public port 80 for the challenge and a redirect only, the plain listener on loopback, 443 published only when the gate is clean, and a 14-day certificate-expiry failure in `verify-deployed.sh`? |
+| `AD-18` (the choice) | `ADR-0024` section 5 | After the `PROD-20` measurement: raise the 900-second watchdog (overall or per stage), or set a page limit below the 500-page ceiling? |
 
 Plus `PROD-19`: keep the source-built MinIO or qualify another S3 implementation (`D-119`, `D-123`). Still open after `R-146` and not asked: the legal-hold authority and classification labels
 (`ADR-0014`), corpus licensing (`NORM-Q04`), internal or external beta users (`D-4.1`), off-host custody, a second operator, who the section experts are (`OD-18`), the VPS size and the server name.
@@ -89,10 +83,10 @@ All run on the committed tree of branch `agent/production-adr-pack-01` (venv: th
    checked to be absent, so "new" is true. Commands that state a figure are run and compared; a figure command that is not registered is a failure, so an edited command cannot drop out silently. Last line:
 
    ```text
-   2267 checked, 0 missing, 0 unclassified; 32 commands run here, 108 commands need a stand or a lane (their path/operationId/module parts were checked, the commands were not run); 358 further token occurrences accepted by class as literals, not verified
+   2414 checked, 0 missing, 0 unclassified; 32 commands run here, 108 commands need a stand or a lane (their path/operationId/module parts were checked, the commands were not run); 362 further token occurrences accepted by class as literals, not verified
    ```
 
-   The 108 commands that need a stand, a database or a lane were not run; their path, operationId and module parts were checked, the 32 that can run here were run and compared. Every unclassifiable token is a failure. The 358 token
+   The 108 commands that need a stand, a database or a lane were not run; their path, operationId and module parts were checked, the 32 that can run here were run and compared. Every unclassifiable token is a failure. The 362 token
    occurrences accepted as literals (section codes, status words, risk and criterion labels, external tool names, the proposed vocabulary of the new tools) fall in nine classes, each with a printed reason, and are not verified.
 2. **Mutation proof of the checker** (on scratch copies, the real files untouched; "red" is a new `MISSING` or `UNCLASSIFIED` line): 16 of 16 mutations turned it red.
 
@@ -151,18 +145,28 @@ Every finding was re-opened in the tree first. `fixed in` names the document and
 The owner's answers `R-146o`…`R-146v` are applied as follows: `R-146o` in `ADR-0022` section 3, the `ADR-0012` addendum, `ADR-0022`'s "Amends" line and `PROD-22`; `R-146p` in `ADR-0021` section 2 (no provider or name is mentioned); `R-146q` and `R-146r` in `ADR-0024` sections 6 and 7 and out of the plan's open list;
 `R-146s` in `ADR-0021` section 2 and `ADR-0023` section 3; `R-146t` in `ADR-0021` section 5 and `PROD-03`; `R-146u` in `ADR-0024` section 4 (no refusal is built); `R-146v` and the new `A-5` in `ADR-0024` sections 6 and 7 and `PROD-14`.
 
+## Round 3 — the third poll round (`R-146w`…`R-146z`)
+
+Merged `integration/ar-close-1026` at `2e9ef46e` (fast-forward; it brings `83600aed`, which narrows the `AD-01` wording to the server name, and the four rulings). That wording is kept. What changed:
+
+- Every `AD-` status line, the four index rows and the plan's intro now carry the true state: confirmed by `R-146w` "as written at commit `83600aed`" (said plainly in each ADR), `R-146x`, `R-146y` (partly), `R-146z`; `AD-04` and the ACME mechanism of `AD-01` stay proposed, and nothing the owner did not decide is called confirmed.
+- `AD-17` is confirmed: `ADR-0021` section 5 says the full `R-93` attestation stays and the receipt sits on top of it; the "only while `AD-17` keeps that test" clauses became "because `R-146x` keeps the restore test".
+- `AD-18` is settled in part: `ADR-0024` section 5 and `PROD-20` say the watchdog stays 900 s, an over-budget input gets `analysis_input_budget_exceeded`, and the choice after the measurement is an open decision.
+- `AD-19` is settled the way the owner chose, which differs from the existing check: `ADR-0023` section 3 and `PROD-02` make the gate a narrower mode of `src/auditmanager/access/check.py` (only the seeded `admin` verifying against the published password fails; temporary reset passwords warn). One new row (9) in the `ADR-0023` table and a new test case in `PROD-02`.
+- The plan's open-decisions list (section 7) is now exactly: `AD-04`, the `AD-01` mechanism, the `AD-18` choice after `PROD-20`, MinIO (`PROD-19`), legal-hold authority, classification labels, `NORM-Q04`, `D-4.1`, host size, off-host custody, a second operator, experts (`OD-18`); the settled ones moved to section 6. The `A-2`…`A-4` triggers are marked confirmed (`R-146w`).
+
 ## Known limits
 
 - Nothing here was executed against a stand, a container or a database. A check marked "no" in the ADR tables does not exist yet; a check marked "yes" was run here or is an existing test whose name was verified, not run.
 - The existence check classifies every inline-code token and verifies it, but 108 commands in the documents need a stand or a lane and were not run; their path, operationId and module parts were checked.
-- Thirteen `AD-` decisions are unconfirmed; `AD-01` is read as confirmed by `R-146p` as to the name only; the plan's sizes are counted from greps, not from lane experience; the only date given is the `PROD-01` deadline.
+- Two points are unconfirmed (`AD-04` and the ACME mechanism of `AD-01`), and the `AD-18` choice is open by `R-146y`; the plan's sizes are counted from greps, not from lane experience; the only date given is the `PROD-01` deadline.
 - The local tracking refs `origin/dev` and `origin/main` were not fetched.
 - The `pytest` run covers `tests/contract/program` and the two prose tests named by the task; the whole contract battery, the web battery and the gate were not run (`R-135`).
 
 ## Instruction to the integrator
 
 1. Merge the ten files (they touch no hotspot; the only shared files are `docs/architecture/ADR_INDEX.md` and `docs/architecture/adr/ADR-0012-expert-decision-ledger-and-kb-projection.md`).
-2. Put the unconfirmed `AD-` questions (the table above) and the open questions to the owner as one package (`PROD-00`) and record the answers as a ruling.
+2. Put the open points (the second table above, plus `PROD-19`) to the owner and record the answers as a ruling (`PROD-00`).
 3. Enter the proposed rows below into `DEBT_REGISTER.md` with their ids, and record `A-4` and `A-5` beside `A-1`…`A-3`.
 4. Dispatch no `PROD-` item that depends on an unconfirmed `AD-` decision. `PROD-14.0`, `PROD-09`, `PROD-12` (owner and expert work), `PROD-19`, `PROD-21` and `PROD-13`'s preflight do not depend on one. `PROD-01` waits for the server name (`R-146p`) and has a deadline of 2026-12-16.
 5. `ADR-0002`'s stale paragraph and the `D-203` documents are `PROD-16`; this lane did not edit them (not in its allowed paths).
@@ -178,9 +182,9 @@ For the integrator to enter (ids to be assigned; the register's own rule is that
 
 | Proposed id | Row | Needs |
 | --- | --- | --- |
-| **PROD-00** | thirteen architect's `AD-` decisions and the plan's open questions are unconfirmed | the owner, as one poll package; check (documentation check only): `grep -n "PRODUCTION-ADR-PACK-01" docs/program/OWNER_RULINGS_2026-09-17.md` finds the ruling that answers them |
+| **PROD-00** | `AD-04`, the ACME mechanism of `AD-01`, the `AD-18` choice and `PROD-19` are undecided | the owner, as one poll; check (documentation check only): `grep -n "PRODUCTION-ADR-PACK-01" docs/program/OWNER_RULINGS_2026-09-17.md` finds the ruling that answers them |
 | **PROD-01** | the production TLS terminator, its renewal, HSTS, the `Secure` cookie and the conditional 443 listener are outside the repository (`D-191`); the live certificate expires on 2026-12-30 | a Sonnet infra lane and the owner (server name, DNS, ports, first issuance), deployed by 2026-12-16; check: `curl -sS -o /dev/null -w '%{http_code} %{ssl_verify_result}\n' https://<name>/login` prints `200 0`, `echo \| openssl s_client -connect <name>:443 -servername <name> 2>/dev/null \| openssl x509 -noout -checkend 1209600` exits 0, and `pytest -q tests/integration/composition/test_proxy_tls_path.py` passes |
-| **PROD-02** | a deployment does not fail, and 443 is not kept shut, while `admin`/`password` is valid; `copy-serve.sh restore-db` does not revoke credentials (`R-146i`, `R-146s`) | a Sonnet infra lane; check: on a database with the seeded account `infra/deploy/verify-deployed.sh` exits non-zero and `$DC port proxy 8443` exits non-zero, and after the password change both succeed |
+| **PROD-02** | a deployment does not fail, and 443 is not kept shut, while the published pair `admin`/`password` is valid; temporary reset passwords must only warn; `copy-serve.sh restore-db` does not revoke credentials (`R-146i`, `R-146s`, `R-146z`) | a Sonnet infra lane; check: on a database with the seeded account `infra/deploy/verify-deployed.sh` exits non-zero and `$DC port proxy 8443` exits non-zero, after the password change both succeed, and a database whose only must-change account was reset by an administrator gives a warning and exit `0` |
 | **PROD-03** | `deploy.sh` does not refuse `migrate` without a fresh copy receipt once real data exists (`R-146t`; `R-93` binds meanwhile) | a Sonnet infra lane and the owner (copy key, first copy); check: `pytest -q tests/integration/composition/test_deploy_script_refusals.py -k stand_copy_fresh` passes with the guard present and the guard-deleted copy no longer refuses |
 | **PROD-04** | the application connects as the database owner, a superuser by the image's behaviour; every restore loses grants because dumps use `--no-privileges` (`R-146n` item 1) | a Sonnet infra lane; check: the role query of `ADR-0021` row 7 prints `f\|f\|f\|t` before and after a `restore-db` rehearsal |
 | **PROD-05** | no container has a memory or log-size limit (`D-166`, `R-146n` item 2) | the owner's measurement on the VPS, then a Sonnet lane; check: the command of `ADR-0021` row 8 prints `[]` |
@@ -198,7 +202,7 @@ For the integrator to enter (ids to be assigned; the register's own rule is that
 | **PROD-17** | no release rehearsal, restore drill at the released head or purge rehearsal has been run for the production release (`D-216`) | the owner and the integrator; check: `ADR-0021` rows 1 to 6 on the live name, and the drill record carries `head:` and `result: pass` lines (row 15, documentation check only) |
 | **PROD-18** | a complete gate cannot run on the development host (`D-205`) | the owner (environment) and the integrator; check: `make gate-preflight` passes and the gate log ends with `GATE OK` |
 | **PROD-19** | the source-built MinIO has an archived upstream (`D-119`) and an uninventoried volume (`D-123`) and no scan covers it (`A-3`) | the owner's decision; check (documentation check only): the decision is in the release record; the inventory is `copy-serve.sh capacity` on the stand |
-| **PROD-20** | an attempt is failed at 900 s, a large real document can exhaust its attempts (`D-171`, `D-175`) | the owner's measurement and decision, then a Sonnet lane; check: `python3 -I -c "import re;print(re.search(r'ATTEMPT_WATCHDOG_SECONDS = (\d+)',open('src/auditmanager/jobs/lease.py').read()).group(1))"` prints the decided value, or an input above the page limit is refused with `analysis_input_budget_exceeded` (test) |
+| **PROD-20** | an attempt is failed at 900 s, a large real document can exhaust its attempts (`D-171`, `D-175`); the watchdog stays 900 s and the typed refusal applies until the owner's choice after the measurement (`R-146y`) | the owner's measurement and choice, then a Sonnet lane; check: `python3 -I -c "import re;print(re.search(r'ATTEMPT_WATCHDOG_SECONDS = (\d+)',open('src/auditmanager/jobs/lease.py').read()).group(1))"` prints the decided value, or an input above the page limit is refused with `analysis_input_budget_exceeded` (test) |
 | **PROD-21** | the live certificate expires on 2026-12-30 and its renewal is not in the tree (`D-191`) | the owner, before 2026-12-16; check: `echo \| openssl s_client -connect <name>:443 -servername <name> 2>/dev/null \| openssl x509 -noout -checkend 1209600` exits 0 |
 | **PROD-22** | the frozen domain-contract sentence "never deletes decision, finding or audit history" contradicts the erase exception (`R-146o`) | the contract owner's slot; check: the sentence in `contracts/domain/v1/state-machines.json` names the exception and `pytest -q tests/contract` stays green |
 | **PROD-D1** | the v3 prompt and schema solicit seven non-normative categories that the review artifact drops, so the model's output for them is paid for and never shown (`src/auditmanager/analysis/profiles/ar_v3/response_schema.py`, `src/auditmanager/analysis/profiles/ar_v3/prompt_material.py`, `src/auditmanager/runs/v3_review_artifact.py`) | a later prompt decision (not an item of this plan); check (documentation check only): `grep -n "internal_contradiction" src/auditmanager/analysis/profiles/ar_v3/response_schema.py` stays a hit until the prompt changes |

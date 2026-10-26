@@ -1,6 +1,6 @@
 # ADR-0022: Production data governance: what is kept, how a project is erased, what leaves the host
 
-- Status: accepted for production by the repository owner (`R-146b`, `R-146c`, `R-146f`, `R-146m`, `R-146n`, `R-146o`); `AD-06` is confirmed by `R-146o`; `AD-07`, `AD-08`, `AD-09` and `AD-16` are the architect's, proposed and not yet confirmed
+- Status: accepted for production by the repository owner (`R-146b`, `R-146c`, `R-146f`, `R-146m`, `R-146n`, `R-146o`); `AD-06` is confirmed by `R-146o`; `AD-07`, `AD-08`, `AD-09` and `AD-16` are confirmed by `R-146w` as written at commit `83600aed` (the poll showed a one-line summary of each; the mechanism is this document); nothing in this ADR is still proposed
 - Date: 2026-10-26
 - Owners: repository owner / `PRODUCTION-ADR-PACK-01`
 - Amends: `ADR-0012` (erase exception, `R-146o`; the addendum is in that ADR); supersedes nothing. It fills the retention and erasure half that `ADR-0014` left open and that `contracts/domain/v1/identifiers.json` (`OPEN-RETENTION`, `U-04`) reserves
@@ -90,7 +90,7 @@ erasing a project that is subject to a hold. Data classification labels are open
 
 `AD-06`, confirmed by `R-146o` in full: the erase of one project removes its documents, pages, files, extracted
 text, crops, findings, evidence quotes, comments and expert decisions, and what stays is the record of the erasure
-itself (who, when, what, hashes). `AD-07` (the tool's design below) is the architect's and is to be confirmed.
+itself (who, when, what, hashes). `AD-07` (the tool's design below, including that the identity-only run journal stays) is confirmed by `R-146w` as written at commit `83600aed`.
 
 **Entry points.** A new `infra/deploy/erase-project.sh` (guards, dry run by default, runs inside the
 `api` image like `purge-product-data.sh`) and a new `scripts/recovery/project_erase.py` modelled on
@@ -120,7 +120,7 @@ table (`D-213`).
 - **The project's run journal**, the `audit_event` rows whose payloads are identities and classifiers only:
   "an audit entry that a cascade could delete is not an audit trail" (the comment on `audit_event.aggregate_id`),
   and they hold no client content. `R-146o` says only the record of the erasure stays; whether it also means the
-  identity-only journal is part of `AD-07` (a one-line change in the tool if the owner says delete it).
+  identity-only journal is part of `AD-07`, and `R-146w` confirms that it stays.
 - A Blob still referenced elsewhere, with its object. A shared Blob loses only this project's bindings.
 
 **The exception to the ledger and to the frozen sentence (`R-146o`).** `ADR-0012` makes expert decisions
@@ -185,7 +185,7 @@ keys, identities, counts and digests only: `project_uid`, `actor_uid`, `reason_c
 
 ### 4. The purge of the closed beta's data at the release (`R-146m`)
 
-`AD-09` (to be confirmed). At the 1.0 release the operator runs `infra/deploy/purge-product-data.sh`.
+`AD-09`, confirmed by `R-146w` as written at commit `83600aed`. At the 1.0 release the operator runs `infra/deploy/purge-product-data.sh`.
 The tool has no selector for the removed AR v1 and v2 paths: it removes **all** product data, which is
 the stated intent ("the production stand starts clean"), including the v3 beta runs and every other
 section's test runs. It keeps accounts, the norm corpus, executor configuration and release notes, so
@@ -213,7 +213,7 @@ restriction, no ban on retention or training, and no ban on model substitution (
 after the fact by `R-133`, which turns a different reported model into a typed failure, but the text
 has already been sent). Document text therefore reaches OpenRouter and whichever provider it routes to,
 which may retain or train on it. The owner bears this risk; it is not mitigated by anything in the
-product. Proposed reopen trigger (`AD-16`, the architect's, to be confirmed): the first client who asks for
+product. Reopen trigger (`AD-16`, confirmed by `R-146w`): the first client who asks for
 data-handling terms, any contract that promises confidentiality, or the owner's decision to accept
 `R-146n` item 4.
 
@@ -223,7 +223,7 @@ The ring is the only thing that lets the worker open a sealed connection secret 
 under the `database` source). A restore of the database onto another host brings the connections back
 as `secret_unreadable` until the ring is installed.
 
-`AD-08` (to be confirmed): after the ring is generated, the operator makes one encrypted copy of
+`AD-08`, confirmed by `R-146w` as written at commit `83600aed`: after the ring is generated, the operator makes one encrypted copy of
 `provider.env` on a medium that is neither the VPS, nor the repository, nor the dump directory; the tool
 for the encryption is the operator's, and the passphrase or recipient key is held by a different
 means than the copy. The release record carries the date, the key ids and the SHA-256 of the ring line.

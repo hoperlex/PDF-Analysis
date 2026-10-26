@@ -22,10 +22,10 @@
 | [ADR-0018-checkpoint-versioning](adr/ADR-0018-checkpoint-versioning.md) | accepted bootstrap | Checkpoint version = tag + frozen contracts + automated + manual evidence |
 | [ADR-0019-decision-code-navigation](adr/ADR-0019-decision-code-navigation.md) | proposed prototype extension | Rebuildable decision ↔ code/contracts/tests navigation for humans and AI agents |
 | [ADR-0020-normative-corpus-alpha-runtime](adr/ADR-0020-normative-corpus-alpha-runtime.md) | accepted alpha | PostgreSQL canonical norms + in-database pgvector; source bytes in private S3 |
-| [ADR-0021-production-topology-and-operations](adr/ADR-0021-production-topology-and-operations.md) | accepted production (R-146) | One VPS; TLS terminator and ACME renewal in `infra/`; manual copies as accepted risk A-1; mechanisms are unconfirmed AD-s except AD-01, AD-03 |
-| [ADR-0022-production-data-governance](adr/ADR-0022-production-data-governance.md) | accepted production (R-146) | No automatic retention; journalled operator project erase (an exception to ADR-0012, R-146o); purge of beta data at 1.0; egress to the model provider; mechanisms are unconfirmed AD-s except AD-06 |
-| [ADR-0023-production-identity-and-access](adr/ADR-0023-production-identity-and-access.md) | accepted production (R-146) | One organisation, local accounts; seeded administrator closed by the deploy and the public listener (R-146s); audited access changes; mechanisms are unconfirmed AD-s except AD-11 |
-| [ADR-0024-production-analysis-path-and-ai-execution](adr/ADR-0024-production-analysis-path-and-ai-execution.md) | accepted production (R-146) | АР is v3 only; АР v1/v2 removed; OpenRouter base connection; other sections to full versions first (expert-reviewed, A-5); mechanisms are unconfirmed AD-s except AD-14, AD-15 |
+| [ADR-0021-production-topology-and-operations](adr/ADR-0021-production-topology-and-operations.md) | accepted production (R-146) | One VPS; TLS terminator and ACME renewal in `infra/`; manual copies as accepted risk A-1; confirmed AD-s: AD-02, AD-03, AD-05, AD-16, AD-17, AD-01 (server name only); not confirmed: AD-04 and the ACME mechanism of AD-01 |
+| [ADR-0022-production-data-governance](adr/ADR-0022-production-data-governance.md) | accepted production (R-146) | No automatic retention; journalled operator project erase (an exception to ADR-0012, R-146o); purge of beta data at 1.0; egress to the model provider; all its AD-s are confirmed (AD-06 by R-146o, AD-07/08/09/16 by R-146w) |
+| [ADR-0023-production-identity-and-access](adr/ADR-0023-production-identity-and-access.md) | accepted production (R-146) | One organisation, local accounts; seeded administrator closed by the deploy and the public listener (R-146s); audited access changes; all its AD-s are confirmed (AD-10 by R-146w, AD-11 by R-146s, AD-19 by R-146z) |
+| [ADR-0024-production-analysis-path-and-ai-execution](adr/ADR-0024-production-analysis-path-and-ai-execution.md) | accepted production (R-146) | АР is v3 only; АР v1/v2 removed; OpenRouter base connection; other sections to full versions first (expert-reviewed, A-5); AD-12/13/14/15 confirmed; open: the AD-18 choice after the PROD-20 measurement |
 
 ## CP-00 disposition
 
@@ -44,7 +44,7 @@ or distributed vector service is introduced.
 ADR-0021 to ADR-0024 are post-CP-00 production decisions recorded under owner ruling `R-146`
 (`OWNER_RULINGS_2026-09-17.md` section 3.46, 2026-10-26). They do not rewrite the historical CP-00
 disposition. The `AD-` decisions inside them are the architect's implementation choices within
-`R-146` and stay proposed until the owner confirms them. ADR-0014 keeps its CP-00 `defer`
+`R-146`; the owner has confirmed all of them by `R-146o`…`R-146z` except `AD-04` (limits from a VPS measurement) and the ACME mechanism of `AD-01`, which were not polled, and the choice `AD-18` leaves open after its measurement. ADR-0014 keeps its CP-00 `defer`
 disposition and gains a dated addendum for the points `R-146` decided.
 
 State after the repository owner recorded `PD-01`–`PD-04` on 2026-09-01:

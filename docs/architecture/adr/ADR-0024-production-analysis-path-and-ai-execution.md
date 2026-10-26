@@ -1,6 +1,6 @@
 # ADR-0024: Production analysis path and AI execution: АР is v3 only, the other sections come first
 
-- Status: accepted for production by the repository owner (`R-146e`, `R-146f`, `R-146g`, `R-146j`, `R-146l`, `R-146m`, `R-146q`, `R-146r`, `R-146u`, `R-146v`); `AD-14` is confirmed by `R-146u` and `AD-15` by `R-146v`; `AD-12`, `AD-13` and the new `AD-18` are the architect's, proposed and not yet confirmed
+- Status: accepted for production by the repository owner (`R-146e`, `R-146f`, `R-146g`, `R-146j`, `R-146l`, `R-146m`, `R-146q`, `R-146r`, `R-146u`, `R-146v`, `R-146w`, `R-146y`); `AD-14` is confirmed by `R-146u`, `AD-15` by `R-146v`, `AD-12` and `AD-13` by `R-146w` as written at commit `83600aed`; `AD-18` is settled by `R-146y` as to what stands until the measurement, and the choice it leaves is open
 - Date: 2026-10-26
 - Owners: repository owner / `PRODUCTION-ADR-PACK-01`
 - Supersedes: nothing; it narrows the served АР paths of `BETA-STATIC-MATRIX-02.md` (B3) to one and states the model path `ADR-0011` left to the deployment
@@ -87,7 +87,7 @@ the source PDF, and the pack status in «Настройки анализа». Wh
 
 ### 2. Removal of АР v1 and v2 (`R-146l`, `R-146m`)
 
-`AD-12` (architect's implementation decision within `R-146l`, to be confirmed). Scope, derived from the greps above:
+`AD-12`, confirmed by `R-146w` as written at commit `83600aed` (an implementation decision within `R-146l`). Scope, derived from the greps above:
 
 **What goes.**
 
@@ -146,7 +146,7 @@ Production runs with `AUDITMANAGER_PROVIDER_MODE=live`, `AUDITMANAGER_PROVIDER_S
 imported from `PROXY_LLM_*` in `provider.env` and selected in «Назначения»; `readiness.sh` `provider-mode` and
 `executor-source` report the first two.
 
-`AD-13` (to be confirmed): **the pin is the exact string OpenRouter reports.** The connection revision's gateway model
+`AD-13`, confirmed by `R-146w` as written at commit `83600aed`: **the pin is the exact string OpenRouter reports.** The connection revision's gateway model
 name is set to the `model` string observed in a reply for that model, not to the slug that was requested. No alias list is added
 to the run path (it would change the executors settings and the contract; `ProxySettings.model_aliases` stays unused). If
 OpenRouter reports a dated or provider-specific variant that changes over time, runs fail closed with `model_identity_mismatch` and cost
@@ -186,9 +186,9 @@ the page figure is arithmetic on the measured rate). `R-146f` allows real client
 set can fail every attempt, and an attempt that fails after the model call may have been paid for. The earlier sentence of this ADR that a 500-page analysis
 holds the slot "for the better part of an hour" was wrong: it is failed at fifteen minutes.
 
-`AD-18` (new, to be confirmed): before the first real upload, the owner measures the envelope on the VPS (`PROD-20`: pages per minute by document
-kind, the duration of each stage) and decides between **raising the watchdog** (overall or per stage) and **refusing above a page limit below the
-500-page ceiling** with the existing typed refusal `analysis_input_budget_exceeded`. Until that decision the release has neither.
+`AD-18`, settled by `R-146y`: **measure on the VPS first, then decide.** `PROD-20` measures the envelope (pages per minute by document kind, the duration of each
+stage). Until the owner then chooses between **raising the watchdog** (overall or per stage) and **a page limit below the 500-page ceiling**, the watchdog stays 900 s
+and an input above the budget gets the typed refusal `analysis_input_budget_exceeded`. That choice is not made by `R-146y`; it stays an open decision after the measurement.
 
 ### 6. The quality bar (`R-146f`, `R-146q`, `R-146v`)
 
@@ -248,7 +248,7 @@ follows its prerequisite (waves `PW3` and `PW4`); `D-204` proceeds in parallel a
 - The product stops detecting internal contradictions and empty placeholders in АР documents.
 - The removal touches the contract, `src/auditmanager/runs/executor.py`, 65 test files and the web, and the live journey must change first.
 - A strict `model_identity_mismatch` on a provider that reports variant names fails runs after payment.
-- A single worker makes the product slow under any concurrent use, with no promise, and a large document can exhaust its attempts at the 900-second limit until `AD-18` is decided.
+- A single worker makes the product slow under any concurrent use, with no promise, and a large document can exhaust its attempts at the 900-second limit until the owner's choice after the `PROD-20` measurement (`R-146y`).
 - `A-5`: the reviewed sections are reviewed on prompts and synthetic cases, not on real text.
 
 ## Alternatives considered

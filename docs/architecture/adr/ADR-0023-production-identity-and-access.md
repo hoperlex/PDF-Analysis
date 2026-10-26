@@ -1,6 +1,6 @@
 # ADR-0023: Production identity and access: one organisation, local accounts, audited access changes
 
-- Status: accepted for production by the repository owner (`R-146d`, `R-146i`, `R-146n`, `R-146s`); `AD-11` is confirmed by `R-146s`; `AD-10` and the new `AD-19` are the architect's, proposed and not yet confirmed
+- Status: accepted for production by the repository owner (`R-146d`, `R-146i`, `R-146n`, `R-146s`); `AD-11` is confirmed by `R-146s`, `AD-10` by `R-146w` as written at commit `83600aed`, and `AD-19` is settled by `R-146z`; nothing in this ADR is still proposed
 - Date: 2026-10-26
 - Owners: repository owner / `PRODUCTION-ADR-PACK-01`
 - Supersedes: nothing; it settles `U-04` for 1.0 except the legal-hold authority (`R-146d`) and partly accepts `ADR-0014`
@@ -101,17 +101,20 @@ public listener is not opened** until the password is changed; the stack stays o
   `token_epoch`, and `copy-serve.sh restore-db` is changed to do the same, `PROD-02`). Both restore paths end with the check
   and, on a finding, recreate the `proxy` without the 443 overlay. The accepted consequence (`R-146s`): after a restore that
   brings `admin`/`password` back, the site is unreachable from outside until an administrator changes it through loopback.
-- **Which accounts count (`AD-19`, new, to be confirmed).** `access.check` exits `1` for every account with
+- **Which accounts count (`AD-19`, settled by `R-146z`).** Only the published seeded pair, `admin`/`password` (`R-146i`, `R-146s`),
+  fails the deploy and keeps the public listener closed. The existing `access.check` exits `1` for every account with
   `is_default_credential`, and that flag is set not only by the seeded account but by `resetUserPassword`
-  (`src/auditmanager/access/accounts.py`: an administrator's temporary password marks the account must-change).
-  Read literally, a deploy while any account has not yet changed a temporary password would close the public listener.
-  The question for the owner: keep the literal behaviour of the existing check (`R-146i` says to run it), or gate only on the
-  published pair (a narrower check that verifies the stored hash of the seeded `admin` against the published password, so a
-  temporary password an administrator chose does not close the site)?
+  (`src/auditmanager/access/accounts.py`: an administrator's temporary password marks the account must-change); taken literally it
+  would close the site for a pending temporary password. `R-146z` rules that those stay a warning in the output (`R-46`). So the
+  gate is a narrower check than the one `readiness.sh` runs today: it fails only when the seeded `admin` account is active and its
+  stored credential still verifies against the published password (`SHIPPED_DEFAULT_PASSWORD` in `src/auditmanager/access/policy.py`),
+  and every other must-change account is listed as a `WARNING` line without moving the status. `PROD-02` builds it inside
+  `src/auditmanager/access/check.py` (a mode or a second status; the lane picks the form and keeps the existing sentinels for
+  `readiness.sh`), without touching `repository.py`, which `PROD-06` edits in the same wave.
 
 ### 4. Audit events for access changes (`R-146n` item 6)
 
-`AD-10` (architect's implementation decision within `R-146n` item 6, to be confirmed).
+`AD-10`, confirmed by `R-146w` as written at commit `83600aed` (an implementation decision within `R-146n` item 6).
 
 A writer local to the `access` context appends to `audit_event`, modelled on `src/auditmanager/jobs/events.py`, with
 its own allow-list of payload keys. Identities, controlled classifiers and counts only; **never** a
@@ -166,6 +169,7 @@ Retention: forever; `audit_event` is append-only and the 1.0 purge keeps these e
 | 6 | No event payload carries a secret or a name | a test that every key an `access.*` event writes is in the writer's allow-list and every value is a scalar | no | `PROD-06` |
 | 7 | The session cookie is `Secure` on TLS | `ADR-0021` row 4 | command yes | `PROD-01` |
 | 8 | No MFA, IdP or tenant code exists | `rg -il "totp\|saml\|tenant_id\|organisation_id" src db web/src` prints nothing | yes (today it does; the OIDC mentions in `security.py` are comments about the seam) | none |
+| 9 | Only the published pair closes the deploy; a temporary password issued by an administrator only warns (`R-146z`) | a test per case: a database with the seeded `admin` still on `password` gives the gate's non-zero status and `$DC port proxy 8443` fails; a database whose only must-change account is an administrator-reset one gives a `WARNING` line and the status `0`; each guard shown failing by deleting its marked block | no | `PROD-02` |
 
 ## Consequences
 
@@ -182,8 +186,8 @@ Retention: forever; `audit_event` is append-only and the 1.0 purge keeps these e
 - Every expert sees every project. A client who cannot accept that cannot be served by this version.
 - A password-only product with a one-hour token and a lockout; a stolen password is a full account
   until the person or an administrator changes it.
-- Every deploy and restore with a must-change account closes the outside door (`AD-19`); the only way back in is
-  loopback, and the operator must be able to reach the host over SSH.
+- Every deploy and restore that finds the published pair valid closes the outside door; the only way back in is
+  loopback, and the operator must be able to reach the host over SSH. A temporary password an administrator issued only warns (`R-146z`).
 - Failed sign-ins on unknown logins and on accounts below the lockout threshold are not recorded.
 
 ## Alternatives considered
@@ -198,7 +202,7 @@ Retention: forever; `audit_event` is append-only and the 1.0 purge keeps these e
 
 ## Verification
 
-- automated check/test: the eight rows above; `tests/integration/composition/test_readiness_command.py` pins that
+- automated check/test: the rows above; `tests/integration/composition/test_readiness_command.py` pins that
   `readiness.sh` reports (`R-46`), which `PROD-02` changes for one check and must keep for the others
 - manual/operational evidence: the release rehearsal (`PROD-17`) starts from a database in which the
   default credential is valid and shows `verify-deployed.sh` failing with the application port unpublished, then passing and published after the change;
