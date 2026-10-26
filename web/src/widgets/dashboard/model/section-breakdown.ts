@@ -1,8 +1,8 @@
 /**
  * Per-section document counts, computed over `getDashboardSummary`'s `section_breakdown`.
  *
- * `R-40`/`D-56`: the server counts published documents per section, fifteen codes
- * plus an unclassified bucket, zeros included (`SectionDocumentCount`'s own doc comment in
+ * `R-40`/`D-56`: the server counts published documents for each of the fifteen
+ * sections plus an unclassified bucket, zeros included (`SectionDocumentCount`'s own doc comment in
  * `shared/api/generated/types.gen.ts`: "Every one of the fifteen current codes is present
  * even at `document_count: 0`").
  *
