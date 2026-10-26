@@ -18,6 +18,7 @@ import asyncio
 import threading
 import time
 from collections.abc import Callable
+from pathlib import Path
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -230,6 +231,28 @@ def test_the_shipped_shares_state_the_reserve() -> None:
     assert POOL_THREADS - runner_module.MAX_WAITING_CLAIMS_TOTAL >= RESERVE
     assert runner_module.RESERVED_SYNC_THREADS == (
         POOL_THREADS - runner_module.MAX_WAITING_CLAIMS_TOTAL)
+
+
+def test_the_pool_figure_is_the_one_anyio_really_has() -> None:
+    """The share is stated against 40 threads; this is what the installed anyio gives a
+    synchronous handler."""
+    import anyio
+    import anyio.to_thread
+
+    async def measured() -> float:
+        return anyio.to_thread.current_default_thread_limiter().total_tokens
+
+    assert anyio.run(measured) == runner_module.SYNC_POOL_THREADS
+
+
+def test_nothing_in_the_application_resizes_the_pool() -> None:
+    """If a later slice sets the limiter, the constant above no longer describes the pool: this
+    fails so that the share is restated with it (and `RESERVED_SYNC_THREADS` with it)."""
+    root = Path(runner_module.__file__).resolve().parents[1]
+    hits = [str(path.relative_to(root)) for path in sorted(root.rglob("*.py"))
+            if any(word in path.read_text(encoding="utf-8")
+                   for word in ("total_tokens", "CapacityLimiter", "set_default_thread_limiter"))]
+    assert hits == [], f"a thread limiter is configured in {hits}"
 
 
 def test_the_process_state_is_empty_after_the_claims_end() -> None:
