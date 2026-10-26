@@ -3,8 +3,8 @@
   "section_code": "TX",
   "analysis_profile_id": "ap_01M5AXG1K6MGZGFCBG75M9ZR9D",
   "prompt_bundle_id": "pb_01M5AXG1K6E7TR87P0RGP6QBZM",
-  "profile_version": "1.0.0",
-  "status": "draft",
+  "profile_version": "1.1.0",
+  "status": "reviewed",
   "title_ru": "Технологические решения",
   "source": {
     "repository": "PDF-proverka",
