@@ -2485,8 +2485,12 @@ class VersionComparison(_Object):
     sheets: Annotated[list[SheetPairing], Field(max_length=1000)]
     sheet_diffs: SheetDiffPage | None
     findings: FindingComparison | None
-    #: `COMPARE-PERSISTED-SUMMARY-01`. Null for a refused comparison.
-    approved_pairs: ApprovedSheetPairs | None
+    #: `COMPARE-PERSISTED-SUMMARY-01`. Optional and nullable like ``RunStatus.executor``: a client or a
+    #: fixture that predates it still validates, and the server always sends it (null for a refused
+    #: comparison).
+    approved_pairs: ApprovedSheetPairs | None = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
 
 
 class ApproveSheetPairingRequest(_Object):

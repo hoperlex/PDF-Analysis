@@ -9500,8 +9500,7 @@
           "comparison_sha256",
           "sheets",
           "sheet_diffs",
-          "findings",
-          "approved_pairs"
+          "findings"
         ],
         "title": "VersionComparison",
         "description": "Two versions of one set compared, or the explicit reason they are not."
