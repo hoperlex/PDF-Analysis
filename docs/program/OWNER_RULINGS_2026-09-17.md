@@ -1746,7 +1746,7 @@ did not see the polls' own text and records the rows as the publishing session r
 ## 3.46 — `R-146`, architecture decisions of the production version (owner, 2026-10-26)
 
 The owner decided these points by direct poll (`AskUserQuestion`) in session `pdf-analysis-e2 [11d8eb]`
-in four rounds between about 11:40 and 12:05 +05, in two more rounds ending at about 13:21 +05 (`R-146o`…`R-146v`) and in a third round answered by about 13:57 +05 (`R-146w`…`R-146z`) on 2026-10-26, after the owner wrote «очень нужны архитектурные
+in four rounds between about 11:40 and 12:05 +05, in two more rounds ending at about 13:21 +05 (`R-146o`…`R-146v`) in a third round answered by about 13:57 +05 (`R-146w`…`R-146z`) and in a fourth round answered by about 14:45 +05 (`R-146aa`, `R-146ab`) on 2026-10-26, after the owner wrote «очень нужны архитектурные
 решения боевой версии» and «Все что нужно от меня можешь получить прямым опросом». The polls stated the
 facts of the tree (the fact sheets are summarised in `ADR-0021`…`ADR-0024`) and offered options with a
 recommendation marked first. **Where the owner chose against the recommendation, that is recorded as an
@@ -1782,6 +1782,8 @@ separate direct instruction naming the exact SHA.
 | `R-146x` | **`AD-17`, the `R-93` attestation after 1.0.** Chosen: «Держать полную заверенную копию» (recommended). `R-93` keeps binding after the production release: every migrating publication is preceded by a dump, its fetch, a trial restore and an attestation; `R-146t`'s receipt check sits on top of it. |
 | `R-146y` | **`AD-18`, the 900 s attempt watchdog.** Chosen: «Сначала измерить на VPS, потом решить» (recommended). `PROD-20` measures pages per minute by document kind on the host; until the owner then chooses between raising the watchdog and a page limit, the watchdog stays 900 s and an input above the budget gets the typed refusal. |
 | `R-146z` | **`AD-19`, which accounts close the deploy.** Chosen: «Только опубликованную пару admin/password» (recommended). Only the published seeded pair (`R-146i`, `R-146s`) fails the deploy and keeps the public listener closed; temporary passwords an administrator issued at a reset stay a warning in the output (`R-46`). |
+| `R-146aa` | **`AD-01`, the ACME mechanism.** Chosen: «Принять механизм как написан» (recommended). An ACME client as a service of the same compose project, HTTP-01 through public port 80 (challenge and redirect only), the pair in a named volume read by the `proxy` on a timer, no Docker socket, a rehearsal on the ACME staging endpoint before the first real issuance, and `verify-deployed.sh` failing on a certificate with fewer than 14 days left, are confirmed as written in `ADR-0021` at commit `749e2efc`. DNS and inbound ports 80 and 443 on the VPS are the owner's actions. |
+| `R-146ab` | **The server name.** Asked again for `PROD-01` (wave `PW1`); chosen: «Пока не назову, PROD-01 подождёт». No name is decided; `PROD-01` does not start until the owner gives it (a deploy variable, `R-146p`). The deadline 2026-12-16 stands, and `PROD-21` covers the live certificate if it slips. |
 
 Not asked and still open after `R-146`: the legal-hold authority and data classification labels
 (`ADR-0014`); the licensing review before any external corpus-backed release (`NORM-Q04`); whether

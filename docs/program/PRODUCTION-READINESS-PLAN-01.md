@@ -7,7 +7,7 @@ It plans; it builds nothing, claims no approval and changes no state of the stan
 [`ADR-0022`](../architecture/adr/ADR-0022-production-data-governance.md),
 [`ADR-0023`](../architecture/adr/ADR-0023-production-identity-and-access.md) and
 [`ADR-0024`](../architecture/adr/ADR-0024-production-analysis-path-and-ai-execution.md). Every `AD-nn` named below is the architect's
-implementation decision within `R-146`. After the polls (`R-146o`…`R-146z`) every one is confirmed except two: `AD-04` (memory and log limits from a VPS measurement) and the ACME mechanism of `AD-01`, which were not polled. The rest are confirmed as follows:
+implementation decision within `R-146`. After the polls (`R-146o`…`R-146z`) every one is confirmed except `AD-04` (memory and log limits from a VPS measurement), which was not polled; the ACME mechanism of `AD-01` is confirmed by `R-146aa`. The rest are confirmed as follows:
 `AD-01` as to the server name only (`R-146p`), `AD-03` (`R-146t`), `AD-06` (`R-146o`), `AD-11` (`R-146s`), `AD-14` (`R-146u`), `AD-15` (`R-146v`), `AD-17` (`R-146x`), `AD-19` (`R-146z`), and `AD-02`, `AD-05`, `AD-07`, `AD-08`, `AD-09`, `AD-10`, `AD-12`, `AD-13`, `AD-16` by `R-146w` as written
 at commit `83600aed` (the poll showed a one-line summary of each; the mechanisms are the ADRs). `AD-18` is settled by `R-146y` as to what stands until the measurement; the choice it leaves is open.
 
@@ -32,8 +32,8 @@ No complete `make gate` can run on the development host (`D-205`).
 ## 2. Work items
 
 ### PROD-00 — The owner decides what the polls left open
-- **Result:** a ruling record (its number assigned by the integrator) on the items of section 7: `AD-04`, the ACME mechanism of `AD-01`, the `AD-18` choice after `PROD-20`'s measurement, `PROD-19`, and the VPS size. No item below is dispatched on an undecided point that it depends on:
-  `PROD-05` waits for `AD-04`, `PROD-01` for the ACME mechanism, `PROD-20`'s implementation for the `AD-18` choice.
+- **Result:** a ruling record (its number assigned by the integrator) on the items of section 7: `AD-04`, the `AD-18` choice after `PROD-20`'s measurement, `PROD-19`, and the VPS size. No item below is dispatched on an undecided point that it depends on:
+  `PROD-05` waits for `AD-04`, `PROD-01` for the server name (`R-146ab`), `PROD-20`'s implementation for the `AD-18` choice.
 - **depends_on:** — · **Hotspots:** `docs/program/OWNER_RULINGS_*.md` (integrator) · **Size:** S (one document) · **Executor:** owner (by direct poll), integrator records.
 - **Check (documentation check only: it proves the answer is recorded):** `grep -n "PRODUCTION-ADR-PACK-01" docs/program/OWNER_RULINGS_2026-09-17.md` finds the ruling that answers the poll and names each of those points.
 
@@ -41,7 +41,7 @@ No complete `make gate` can run on the development host (`D-205`).
 - **Result:** the stack answers on the production name over a trusted chain with HSTS and a `Secure` session cookie; renewal runs inside the stack; the three listeners of `ADR-0021` section 2 exist (loopback application, public 80 for the challenge and a redirect only,
   public 443 published only when the default-credential check is clean); `verify-deployed.sh` fails on a certificate with fewer than 14 days left; `readiness.sh` `tls` and `plain-http` describe the new layout. `D-191` closes.
 - **Deadline:** deployed, with the first real issuance, by **2026-12-16**, fourteen days before the live certificate expires on 2026-12-30 (`D-191`); the date is the architect's and uses the same margin as the expiry check. If it cannot be met, `PROD-21` covers the live stand.
-- **depends_on:** the owner names the server name (a deploy variable) before the lane starts (`R-146p`); the ACME mechanism of `AD-01` was not polled, so the lane confirms it with the owner (PROD-00) before building it · **Hotspots:** `infra/**` owner of its wave, `DEPLOYMENT_RUNBOOK.md` · **Size:** L: `compose.server.yml`, five files under `infra/deploy/proxy/`,
+- **depends_on:** the owner names the server name (a deploy variable) before the lane starts (`R-146p`); the ACME mechanism of `AD-01` is confirmed (`R-146aa`); the server name was asked and **not given** (`R-146ab`), so this lane does not start yet · **Hotspots:** `infra/**` owner of its wave, `DEPLOYMENT_RUNBOOK.md` · **Size:** L: `compose.server.yml`, five files under `infra/deploy/proxy/`,
   a new `infra/acme/`, `deploy.sh`, `verify-deployed.sh`, `readiness.sh`, `reset.sh`, `copy-serve.sh` (the shared listener function), `infra/deploy/env/alpha.env.example`, the runbook, and the TLS, readiness and refusal composition tests.
 - **Executor:** Sonnet lane, then owner (DNS record, inbound 80 and 443, the first issuance against the staging endpoint and then the real one).
 - **Check:** `ADR-0021` rows 1 to 6; `pytest -q tests/integration/composition/test_proxy_tls_path.py tests/contract/test_proxy_security_headers.py tests/integration/composition/test_deploy_script_refusals.py tests/integration/composition/test_readiness_command.py`.
@@ -253,7 +253,7 @@ Not accepted and therefore not a risk register entry: `R-146n` item 4 (no restri
 ## 7. Decisions still open
 
 1. `AD-04`: memory and log limits from a VPS measurement, no number fixed now (not polled).
-2. The ACME mechanism of `AD-01` (not polled): the ACME client container, the three listeners, the 14-day expiry check.
+2. The ACME mechanism of `AD-01` is confirmed by `R-146aa` (the ACME client container, the three listeners, the 14-day expiry check); what remains for `PROD-01` is the server name (`R-146ab`).
 3. The `AD-18` choice after `PROD-20`'s measurement: raise the 900-second watchdog or a page limit.
 4. `PROD-19`: the MinIO lifecycle (keep the source-built image or qualify another S3 implementation, `D-119`, `D-123`).
 5. The legal-hold authority and the classification labels (`ADR-0014`).

@@ -44,7 +44,7 @@ or distributed vector service is introduced.
 ADR-0021 to ADR-0024 are post-CP-00 production decisions recorded under owner ruling `R-146`
 (`OWNER_RULINGS_2026-09-17.md` section 3.46, 2026-10-26). They do not rewrite the historical CP-00
 disposition. The `AD-` decisions inside them are the architect's implementation choices within
-`R-146`; the owner has confirmed all of them by `R-146o`…`R-146z` except `AD-04` (limits from a VPS measurement) and the ACME mechanism of `AD-01`, which were not polled, and the choice `AD-18` leaves open after its measurement. ADR-0014 keeps its CP-00 `defer`
+`R-146`; the owner has confirmed all of them by `R-146o`…`R-146z` except `AD-04` (limits from a VPS measurement), which was not polled, and the choice `AD-18` leaves open after its measurement; the ACME mechanism of `AD-01` is confirmed by `R-146aa`. ADR-0014 keeps its CP-00 `defer`
 disposition and gains a dated addendum for the points `R-146` decided.
 
 State after the repository owner recorded `PD-01`–`PD-04` on 2026-09-01:

@@ -1,6 +1,6 @@
 # ADR-0021: Production topology and operations: one VPS, TLS in `infra/`, manual copies
 
-- Status: accepted for production by the repository owner (`R-146a`, `R-146b`, `R-146h`, `R-146j`, `R-146k`, `R-146n`, `R-146p`, `R-146s`, `R-146t`); `AD-01` is confirmed by `R-146p` as to the server name only (its ACME mechanism is not), `AD-03` by `R-146t`, `AD-02`, `AD-05` and `AD-16` by `R-146w` and `AD-17` by `R-146x`; `AD-04` (limits from a VPS measurement) and the ACME mechanism of `AD-01` were not polled and stay the architect's, proposed and not yet confirmed; `AD-18` is settled by `R-146y` as to what stands until the measurement and its later choice is open; `AD-19` is settled by `R-146z`
+- Status: accepted for production by the repository owner (`R-146a`, `R-146b`, `R-146h`, `R-146j`, `R-146k`, `R-146n`, `R-146p`, `R-146s`, `R-146t`); `AD-01` is confirmed by `R-146p` as to the server name and by `R-146aa` as to the ACME mechanism, `AD-03` by `R-146t`, `AD-02`, `AD-05` and `AD-16` by `R-146w` and `AD-17` by `R-146x`; `AD-04` (limits from a VPS measurement) was not polled and stays the architect's, proposed and not yet confirmed, and the ACME mechanism of `AD-01` is confirmed by `R-146aa`; `AD-18` is settled by `R-146y` as to what stands until the measurement and its later choice is open; `AD-19` is settled by `R-146z`
 - Date: 2026-10-26
 - Owners: repository owner / `PRODUCTION-ADR-PACK-01`
 - Supersedes: the reading of `R-1` that no host exists yet (`R-146a`); no earlier ADR is replaced
@@ -81,8 +81,7 @@ from terminating TLS in the stack, because the `$scheme` the proxy forwards is t
 `AD-01`, confirmed by `R-146p` as to the server name: **the certificate name is a deploy variable** (a
 setting of `alpha.env`, whose name `PROD-01` chooses) and the owner names it before `PROD-01` starts.
 This ADR names no host and no DNS provider, and decides nothing about one. The mechanism below is what
-`PROD-01` builds around that variable. `R-146p` confirms the name rule only: **the ACME mechanism below was not polled and
-stays the architect's, proposed and not confirmed** (the commitments that `R-146a` and `R-146s` make, TLS in the stack, HSTS, a
+`PROD-01` builds around that variable. `R-146p` confirms the name rule; **the ACME mechanism below is confirmed by `R-146aa`** (the commitments that `R-146a` and `R-146s` make, TLS in the stack, HSTS, a
 `Secure` cookie, the conditional public listener, stand regardless):
 
 - An ACME client runs as a service of the same compose project, from a digest-pinned image built
