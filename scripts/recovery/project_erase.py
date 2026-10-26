@@ -50,6 +50,19 @@ GUARDS ARE DELIMITED BY ``# >>> guard: <name>`` / ``# <<< guard: <name>`` marker
 from a copy of this file and shows the copy no longer refuses. Do not remove a marker without
 removing its test.
 
+USAGE (``DATABASE_URL`` is the owner role's -- the migrator's; ``S3_*`` as the application's; no ``PG*`` variable):
+
+    python -m scripts.recovery.project_erase --database D --bucket B --project prj_...            # dry run
+    python -m scripts.recovery.project_erase --database D --bucket B --project prj_... --apply \
+        --plan-sha256 <digest the dry run printed> --actor <admin login> --reason client_request \
+        --owner-permission-ref "<where the owner's permission is recorded>" --dump-dir DIR
+    python -m scripts.recovery.project_erase --database D --bucket B --resume era_... \
+        --actor <admin login> --owner-permission-ref "<...>" --dump-dir DIR
+
+The dry run needs no permission reference: it is how the operator obtains the plan to show the owner.
+``DIR/<era_id>/plan.json`` and ``manifest.json`` are written before the commit that makes them the only
+record; the operator keeps them with the release record (the database holds only their digests).
+
 Exit codes: 0 done (or nothing to do), 2 usage, 3 REFUSED (nothing was changed), 4 FAILED.
 """
 

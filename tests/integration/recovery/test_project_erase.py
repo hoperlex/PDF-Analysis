@@ -843,6 +843,53 @@ def test_the_isolation_assertions_see_a_leak_that_the_tool_did_not_catch(
         assert_isolation(stand, erased)
 
 
+@pytest.mark.parametrize("what, statement, switch", [
+    ("a custody event of the corpus", "DELETE FROM public.audit_event WHERE event_type = 'norm_custody.bound'",
+     ("audit_event", "trg_audit_event_append_only")),
+    ("a run-journal event of another project", "DELETE FROM public.audit_event WHERE event_type = 'audit_run.created'",
+     ("audit_event", "trg_audit_event_append_only")),
+    ("a Blob row that no project owns", "", None),
+])
+def test_the_verification_sees_a_journal_event_or_a_blob_the_delete_took_by_mistake(
+    stand: Stand, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, what: str, statement: str,
+    switch: tuple[str, str] | None
+) -> None:
+    """Mutation of the delete: it also removes ``what``; the real module refuses to commit, the copy without
+    ``keep-unchanged`` commits and the row is gone (the test's own count shows it)."""
+    if switch is None:  # a Blob outside the erase: an unreferenced one (a referenced one is protected by its foreign key)
+        statement = f"DELETE FROM public.blob WHERE blob_id = '{orphan_blob(stand)}'"
+        count_before = count(stand, "blob")
+    else:
+        count_before = count(stand, "audit_event")
+
+    def leaking(module: types.ModuleType) -> None:
+        real = module.delete_scope
+
+        def wrapper(connection: Any, closure: Any, scope: Any) -> Any:
+            deleted = real(connection, closure, scope)
+            if switch:
+                connection.execute(text(f"ALTER TABLE public.{switch[0]} DISABLE TRIGGER {switch[1]}"))
+            connection.execute(text(statement))
+            if switch:
+                connection.execute(text(f"ALTER TABLE public.{switch[0]} ENABLE TRIGGER {switch[1]}"))
+            return deleted
+
+        monkeypatch.setattr(module, "delete_scope", wrapper)
+
+    h = Harness(stand, tmp_path, monkeypatch, "Пустой")
+    leaking(tool)
+    h.checkpoint()
+    code, out, err = h.plan_apply(tool)
+    assert code == tool.EXIT_REFUSED and "would have changed data outside the project" in err, (what, err)
+    assert state_of(stand) == h.before
+    broken = mutant("keep-unchanged")
+    leaking(broken)
+    code, out, err = h.plan_apply(broken)
+    assert code == 0, (out, err)
+    after = count(stand, "blob") if switch is None else count(stand, "audit_event") - 2  # minus our two events
+    assert after < count_before, what
+
+
 # --- the owner, the permission, the actor ------------------------------------------------------------
 
 
@@ -1092,8 +1139,8 @@ def _reference_pending_blob(s: Stand, h: Harness) -> None:
         v=version, b=blob)
 
 
-def _mark_innocent_pending(s: Stand, h: Harness) -> None:
-    """An unreferenced Blob, with its object, that something else moved to erasure_pending (not this erase's)."""
+def orphan_blob(s: Stand, *, last_state: str = "available") -> str:
+    """An unreferenced Blob row, with its object, that no project owns."""
     body = b"an orphan blob that no row references and no erase owns"
     digest = hashlib.sha256(body).hexdigest()
     blob_id = "blob_" + "7ZZZZZZZZZZZZZZZZZZZZZZZZ9"
@@ -1101,11 +1148,18 @@ def _mark_innocent_pending(s: Stand, h: Harness) -> None:
            "VALUES (:b, 'temporary', :h, :n, 'application/pdf')", b=blob_id, h=digest, n=len(body))
     for state in ("verifying", "available", "erasure_pending"):
         sql(s, "UPDATE blob SET state = :s WHERE blob_id = :b", s=state, b=blob_id)
+        if state == last_state:
+            break
     s.client.put_object(Bucket=s.bucket, Key=canonical_object_key_for_recovery(blob_id), Body=body,
                         ContentType="application/pdf", Metadata={
                             "blob-id": blob_id, "blob-role": "source_document", "content-sha256": digest,
                             "content-size": str(len(body))})
-    h.notes["innocent"] = blob_id
+    return blob_id
+
+
+def _mark_innocent_pending(s: Stand, h: Harness) -> None:
+    """An unreferenced Blob, with its object, that something else moved to erasure_pending (not this erase's)."""
+    h.notes["innocent"] = orphan_blob(s, last_state="erasure_pending")
 
 
 def act_objects_still_referenced(m: types.ModuleType, h: Harness) -> tuple[int, str, str]:
