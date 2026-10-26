@@ -68,8 +68,9 @@ serialise on `PDFIUM_LOCK` at least where PDFium is called.
 
 One owner per shared slot (`AGENTS.md` §3). In this order:
 
-1. `EXEC-PAR-ADR-01`: the decision record. It names the supersession of `R-146j` (slots), the
-   per-connection limit and the no-fallback rule for an explicit choice. Documentation only.
+1. `EXEC-PAR-DECISION-01`: the decision record (`docs/program/EXEC-PAR-DECISION-01.md`, done with this
+   plan). It names the supersession of `R-146j` (slots), the per-connection limit and the
+   no-fallback rule for an explicit choice. Documentation only.
 2. `EXEC-PAR-START-01`: the optional field, `freeze_connection` for a named connection, the
    start command and its journal event. **Owns the contract slot.** The product purge and the
    event registry classify the new event (`scripts/recovery/product_purge.py` stops on an
@@ -92,7 +93,12 @@ connections on one stand, two documents, two runs in progress at once) is an ope
 - A drain waits for every run in flight (at most 270 s per run today).
 - A pull agent answers one task at a time by default, so the limit `L = 1` matches it.
 
-## For the owner to decide
+## Owner answers (poll, 2026-10-26)
+
+4 worker slots (default stays 1), one run at a time per executor, implement the slices. See
+`docs/program/EXEC-PAR-DECISION-01.md`.
+
+## Still open for the owner
 
 - **How many runs at once** (the slot count), and that this supersedes `R-146j`.
 - **The per-executor limit `L`.** The plan proposes `1`.
