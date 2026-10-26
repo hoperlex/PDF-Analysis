@@ -236,9 +236,9 @@ def _origin_of(exc: BaseException) -> str:
 def _answer_for(exc: BaseException) -> WireResponse:
     """Classify, leave the line when the answer is ``internal_error``, and render the envelope.
 
-    The one place the three paths that can end in ``internal_error`` (the registered
-    ``DomainError`` handler, :func:`on_unhandled` and :class:`FailureEnvelopeMiddleware`) share,
-    so none of them can be a way back to a silent 500. Every other code is the caller's doing
+    The one place that the ways to end in ``internal_error`` (the registered ``DomainError``
+    handler, :func:`on_unhandled` and :class:`FailureEnvelopeMiddleware`) share, so none of
+    them can be a way back to a silent 500. Every other code is the caller's doing
     and is not an incident: it leaves no line.
     """
     correlation_id = current_correlation_id()
