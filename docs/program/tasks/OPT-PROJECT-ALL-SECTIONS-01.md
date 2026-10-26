@@ -1,13 +1,13 @@
 # Task OPT-PROJECT-ALL-SECTIONS-01 — «Спецификация и цены» and «Предложения» for a version confirmed in any of the fifteen sections
 
 task_id: OPT-PROJECT-ALL-SECTIONS-01
-status: STOPPED at the premise (2026-10-27): the write half needs a migration; nothing was built (see P-05, P-06 and the report)
+status: completed in development candidate (2026-10-27). First session STOPPED at the premise (P-05, P-06: the pass trigger pins AR in the database); the integrator granted the migration slot (option A of the stop report) and the lane built it. See the report.
 
 ## Outcome
 
 «Спецификация и цены» (`getSpecificationPrices`) and «Предложения» (`startOptimisationPass` and the passes' screens) accept a version whose current classification is any of the 15 sections, instead of `AR` only: the guard `src/auditmanager/optimisation/project_match.py:281` is replaced by the version's own section, the effective vendor list is read for that section, the two web filters go, the stale `uploadDocument` text and the 409 reason list are repaired in the same contract reseal, and `section_not_ar` stays in the enum, documented as «no longer produced for a confirmed section».
 
-Result of this session: the premise was captured and **differs from the brief on one point that the brief itself says to stop on** — the database trigger `am_check_optimisation_pass_scope` refuses any pass over a non-AR version (P-05, P-06). The lane did not start building.
+History. The premise (P-01..P-10) was captured first and **differed from the brief on one point that the brief itself says to stop on**: the database trigger `am_check_optimisation_pass_scope` refuses any pass over a non-AR version (P-05, P-06). The lane stopped and reported. The integrator then decided **option A** and gave this lane, for this wave, the migration slot (`0034`), the head pins, the domain catalogue prose, the web copy files named below and the dashboard sentence (`getDashboardSummary` said «fourteen» sections); everything else of PW4 section 4 stays as written. P-11 and P-12 were captured for the migration after the grant.
 
 ## Depends on
 
@@ -17,22 +17,22 @@ Result of this session: the premise was captured and **differs from the brief on
 
 ## Frozen inputs
 
-- domain contract: `contracts/domain/v1/error-codes.json` names `section_not_ar` in prose (line 189); not edited
-- API contract: `contracts/api/v1/openapi.json` 1.7.0 (92 paths, 104 operations, 301 schemas); not edited
+- domain contract: `contracts/domain/v1/error-codes.json` names `section_not_ar` in prose (line 189); prose edited, nothing else
+- API contract: `contracts/api/v1/openapi.json` 1.7.0 (92 paths, 104 operations, 301 schemas); prose edited, version stays 1.7.0
 - analysis/comparison/event contract: not_applicable
-- migration head: `0033_ar_v3_cite_stage_id`
+- migration head: `0033_ar_v3_cite_stage_id` at the base; this task moves it to `0034_pass_scope_all_sections` (granted by the integrator)
 - base commit: `6075df889beef40084d337f03d2a072349fc9620` (`integration/ar-close-1026`)
 
 ## Enumerator ownership
 
-- enumerated_set_changed: no
-- enumerator_path: not_applicable
-- enumerator_owner: not_applicable
-- totality_query: not_applicable
+- enumerated_set_changed: yes
+- enumerator_path: tests/support/expected_facts.json
+- enumerator_owner: OPT-PROJECT-ALL-SECTIONS-01 (the only task that touches the migration head in PW4 until lane B, which the integrator sequences after it)
+- totality_query: `PYTHONPATH=src:$BS .venv/bin/python -c "from auditmanager.shared.db.migrations import head_revision, revision_walk; print(head_revision()); print(revision_walk()[-3:])"`
 
 ## Captured premise evidence
 
-- premise: the guard, the callers, the vendor-list keying, the section-blindness of the matcher and the contract places are as the brief says; one fact is not: a database trigger pins a pass to AR (P-05, P-06), so «Предложения» for another section needs a migration.
+- premise: the guard, the callers, the vendor-list keying, the section-blindness of the matcher and the contract places are as the brief says; one fact is not: a database trigger pins a pass to AR (P-05, P-06), so «Предложения» for another section needs a migration (granted, P-11, P-12). Blocks P-01..P-10 are the base-tree output captured before any change; they are not re-run.
 
 ### P-01 — the guard and every caller of `SECTION_AR` / `section_not_ar`
 - captured_at: 2026-10-27
@@ -259,6 +259,35 @@ Result of this session: the premise was captured and **differs from the brief on
   ```
 - interpretation: The static journey manifest binds 33 steps to an АР set as `pending_v3_activation` precisely because «a set of another section is answered `section_not_ar`». Once the optimisation tab accepts every section those steps could run on the journey's ПБ set. That is a follow-up in `tests/e2e/**`, outside this lane's allowed paths.
 
+### P-11 — the style of the last migration, read before writing 0034
+- captured_at: 2026-10-27
+- command: `sed -n 1,3p db/migrations/versions/20261026_0033_ar_v3_cite_stage_id.py; grep -nE "^revision|^down_revision|^def (upgrade|downgrade)|raise RuntimeError|0033 downgrade refused" db/migrations/versions/20261026_0033_ar_v3_cite_stage_id.py`
+- captured_output:
+  ```text
+  """Admit the AR v3 citation-review stage id in ``stage_result``.
+
+  Revision ID: 0033_ar_v3_cite_stage_id
+  52:revision: str = "0033_ar_v3_cite_stage_id"
+  53:down_revision: str | None = "0032_ar_v3_run_group"
+  87:def upgrade() -> None:
+  91:def downgrade() -> None:
+  97:        raise RuntimeError(
+  98:            "0033 downgrade refused: a stage_result row carries ar_v3_citation_review; "
+  ```
+- interpretation: the pattern 0034 follows: a module docstring with the revision ids, the reason and what it leaves alone; `upgrade()` one statement; `downgrade()` reads the data first and raises `RuntimeError("00NN downgrade refused: …")` while a row would be orphaned, otherwise restores the previous text exactly; a test file per migration (`tests/integration/db/test_ar_v3_cite_stage_id_migration.py`) and a unit text test.
+
+### P-12 — the revision id cannot be the 40 characters the grant named
+- captured_at: 2026-10-27
+- command: `env $(grep -v '^#' .env | grep -v '^$' | xargs) PYTHONPATH=src:$BS .venv/bin/python -c "import os;from sqlalchemy import create_engine,text;e=create_engine(os.environ['DATABASE_URL']);print(e.connect().execute(text(\"select table_name, column_name, character_maximum_length, data_type from information_schema.columns where table_name='alembic_version'\")).all())"; awk -F'"' '/^revision/ {print length($2), $2}' db/migrations/versions/*.py | sort -rn | head -3`
+- captured_output:
+  ```text
+  [('alembic_version', 'version_num', 32, 'character varying')]
+  32 0015_accounts_roles_registration
+  31 0028_classification_corrections
+  29 0014_durable_analysis_effects
+  ```
+- interpretation: `alembic_version.version_num` is `varchar(32)` and the longest existing revision id is exactly 32 characters. The id the integrator named, `0034_optimisation_pass_scope_all_sections`, is 40 and could not be stored (the stamp after the upgrade would fail). The revision is `0034_pass_scope_all_sections` (28), the file `20261027_0034_pass_scope_all_sections.py`; `tests/unit/sections/test_pass_scope_migration_text.py` holds `len(revision) <= 32`.
+
 ## Historical evidence
 
 - correction_mode: none
@@ -272,21 +301,36 @@ Result of this session: the premise was captured and **differs from the brief on
 
 ## Allowed paths
 
+- `db/migrations/versions/20261027_0034_pass_scope_all_sections.py`
+- `scripts/recovery/schema_coverage.py`
+- `tests/support/expected_facts.json`
 - `src/auditmanager/optimisation/**`
 - `src/auditmanager/api/routers/specification_prices.py`
 - `src/auditmanager/api/routers/optimisation_proposals.py`
-- `src/auditmanager/api/routers/handlers.py`
 - `src/auditmanager/api/schemas/models.py`
 - `contracts/api/v1/openapi.json`
+- `contracts/domain/v1/error-codes.json`
 - `web/openapi/openapi.json`
 - `web/src/shared/api/generated/**`
 - `web/FRONTEND_LOCK.json`
 - `web/src/widgets/specification-prices/**`
 - `web/src/widgets/optimisation-proposals/**`
+- `web/src/entities/specification-price/**`
+- `web/src/entities/optimisation-proposal/**`
+- `web/src/features/start-optimisation-pass/**`
+- `web/tests/unit/specification-prices/**`
+- `web/tests/unit/optimisation-proposals/**`
 - `tests/unit/optimisation/**`
+- `tests/unit/sections/test_pass_scope_migration_text.py`
 - `tests/integration/optimisation/**`
-- `tests/contract/api_v1/**`
-- `tests/support/expected_facts.json`
+- `tests/integration/composition/test_specification_prices_over_http.py`
+- `tests/integration/composition/test_optimisation_proposals_over_http.py`
+- `tests/integration/db/test_pass_scope_migration.py`
+- `tests/integration/db/test_downgrade_chain_round_trip.py`
+- `tests/integration/db/test_schema_invariant_inventory.py`
+- `tests/integration/runs/test_section_run_text_layer_is_what_optimisation_reads.py`
+- `docs/program/CURRENT_STATE.md`
+- `docs/manual-tests/PC-01_prototype.md`
 - `docs/program/tasks/OPT-PROJECT-ALL-SECTIONS-01.md`
 - `docs/program/OPT-PROJECT-ALL-SECTIONS-01.md`
 
@@ -296,21 +340,23 @@ The lane stack is the integrator's (`ar-close-1026/.env`, copied untracked); dat
 
 ## Forbidden hotspots
 
-- migrations (`db/migrations/**`) and the migration head: **this lane found that it needs one**; the slot is the integrator's
+- any migration other than `0034` and any schema, enum or column change
 - `bootstrap/**`, `analysis/**`, `runs/**`, `comparison/**`
-- other web areas, the root lock files
-- `DEBT_REGISTER.md`, `CURRENT_STATE.md`, the rulings, the ADRs
+- `web/src/entities/project/**`, `web/src/widgets/dashboard/**`, the other web areas, the root lock files
+- `tests/e2e/**` (the 33 journey steps `pending_v3_activation` stay as they are), `fixtures/recorded/sections/**`, `tests/support/**` other than `expected_facts.json`
+- `DEBT_REGISTER.md`, the rulings, the ADRs (`CURRENT_STATE.md` only for the migration head sentence, as granted)
 
 ## Non-goals
 
 - no new category, state, enum member or schema shape; no removal of `section_not_ar` from the enum
-- no section-specific reading of a specification table (decision rule 2 of the brief)
-- no model call, no norm, no change of the AR v3 path
+- no section-specific reading of a specification table (decision rule 2 of the brief); the extraction of a real section run's Form-7 table is **not** measured and is listed as a limit
+- no recording under `fixtures/recorded/sections/**`; no model call, no norm, no change of the AR v3 path
 
 ## Deliverables
 
-- this task file with the captured premise (done) and `docs/program/OPT-PROJECT-ALL-SECTIONS-01.md` as the stop report (done)
-- not delivered because of the stop: the code, the tests, the contract reseal, the web change
+- migration `0034` with its unit and database tests and the moved head pins
+- the server change, the contract prose and its regenerated client and lock, the web copy and filters, and the tests of each
+- this task file and `docs/program/OPT-PROJECT-ALL-SECTIONS-01.md` (files, mutation table, before/after of modified tests, commands with counts, limits)
 
 ## Required tests
 
@@ -319,19 +365,19 @@ The lane stack is the integrator's (`ar-close-1026/.env`, copied untracked); dat
 
 ## Integration contract
 
-None delivered. The integrator decides between the two ways forward in the report (a migration slot for the trigger, or a split that ships the read half only) and re-dispatches.
+Provider: `getSpecificationPrices` and `startOptimisationPass` accept a version an expert confirmed in any of the fifteen sections; a pass pins the effective vendor list of that section and the database holds the same equality (`0034`). `section_not_ar` is never produced and stays in the enum. Contract 1.7.0, prose only. Consumer: the web screens offer every classified set. Migration head `0034_pass_scope_all_sections`; lane B (`0034` reserved in PW4 section 8) becomes `0035`.
 
 ## Failure/idempotency/security cases
 
-- a pass over a non-AR version must not be written by a path that bypasses the trigger; the trigger is the backstop that the application guard mirrors, so the guard and the trigger must change together (or neither)
+- a pass whose version and vendor list are of different sections must be refused by the database even if the application is wrong (`tests/integration/db/test_pass_scope_migration.py`); the downgrade must refuse while a non-AR pass exists; a stored pass is never revalidated
 
 ## Rollback / feature flag
 
-Not applicable: nothing changed.
+No feature flag. Rollback of the code is a revert; `alembic downgrade 0033_ar_v3_cite_stage_id` restores `0028`'s function byte for byte and **refuses** while a pass pins a vendor list of a section other than AR (restore a backup instead).
 
 ## Handoff
 
-- changed files: `docs/program/tasks/OPT-PROJECT-ALL-SECTIONS-01.md`, `docs/program/OPT-PROJECT-ALL-SECTIONS-01.md`
+- changed files: see `git diff --name-only 6075df88..HEAD` in the report
 - commands/results: see the report
-- known limits: the premise items P-07 (a driven section Run's saved text) and the extraction on a ПБ/ОВ Form-7 were not measured, because the lane stopped before building
+- known limits: extraction of a real section run's Form-7 table is not measured (no recorded section fixture contains a table); the 33 journey steps stay pending
 - integration notes: see the report
