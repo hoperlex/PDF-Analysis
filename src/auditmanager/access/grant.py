@@ -17,6 +17,11 @@ A grant that changes the set raises the account's ``token_epoch`` in the same tr
 every credential it holds is refused on its next request, and it meets the new role after
 signing in again. A role already held changes nothing and revokes nothing.
 
+`PROD-06` (ADR-0023 section 4): the same transaction appends one ``access.role_granted`` event
+to ``audit_event`` -- ``source`` ``host_cli``, no ``actor_uid`` (nobody signed in to run this),
+the account's ``usr_`` id, never its login. A role already held writes no event. The event and
+the grant commit together or not at all, because both ride the one ``session.commit()`` below.
+
 Exit status
 -----------
 ``0`` when the account holds the role afterwards (``GRANTED`` or ``UNCHANGED``), ``1`` when

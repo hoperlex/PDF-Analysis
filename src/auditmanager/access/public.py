@@ -14,6 +14,11 @@ from auditmanager.access.accounts import (
     AccountInvariantViolation,
     AccountRepository,
 )
+from auditmanager.access.audit import (
+    bind_correlation_id,
+    correlation_scope,
+    reset_correlation_id,
+)
 from auditmanager.access.models import (
     EMAIL_LOGIN_PATTERN,
     MAX_EMAIL_LENGTH,
@@ -79,8 +84,11 @@ __all__ = [
     "UserRecord",
     "UserRepository",
     "UserUid",
+    "bind_correlation_id",
+    "correlation_scope",
     "name_label",
     "normalize_email",
     "normalize_login",
     "normalize_person_name",
+    "reset_correlation_id",
 ]
