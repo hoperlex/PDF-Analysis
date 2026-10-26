@@ -472,6 +472,9 @@ def test_a_version_within_the_one_call_budget_makes_one_call_and_publishes_what_
         shapes.append((
             metrics["request_sha256"], metrics["observations_emitted"],
             sorted(f.finding_text for f in findings),
-            [(e.page_number, e.char_start, e.char_end) for e in published_finding_evidence(session, started.run_id)],
+            sorted(
+                (e.page_number, e.char_start, e.char_end)
+                for e in published_finding_evidence(session, started.run_id)
+            ),
         ))
     assert shapes[0] == shapes[1], "a count at the budget publishes exactly what no count publishes"
