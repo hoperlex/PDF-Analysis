@@ -93,7 +93,7 @@ No existing test was modified or deleted in either file (`git diff b0644fd3..HEA
 | `tests/integration/access tests/unit/access` | 367 passed (the new file is 6 of them) |
 | `tests/integration/auth/test_sign_in_throttle.py tests/integration/db/test_app_user_repository.py` | 68 passed |
 | `tests/integration/api/test_registration_flow.py tests/integration/api/qa_w49/test_qa_w49_status_read.py tests/integration/auth/test_the_exchange_over_real_users.py` | 39 passed |
-| `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py`, governance one-liner, `git diff --check` | see the lane's final message |
+| `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py`, governance one-liner, `git diff --check` | 105 passed; governance one-liner prints `[]`; `git diff --check` clean |
 
 Red-on-base runs: concurrency file 2 failed / 4 passed (T1 x2; T2-T4 are guards that pass on the base by design); probe file 3 failed / 54 passed for the first version of P1-P3, and the 29-digit variant of P1 red separately at `probe.py:365`.
 
