@@ -108,7 +108,7 @@ One pytest at a time; `PYTHONPATH=src:<bootstrap site-packages>`; the database t
 | Command | Result |
 | --- | --- |
 | `tests/unit tests/replay` (final tree, no stack) | 2202 passed, 3 skipped, **5 failed**: `test_ssh_forced_command.py`, the same 5 fail on the untouched base |
-| `tests/contract` minus the three `D-220` files, on the clean committed tree (includes `tests/contract/program`, `test_doc_prose_facts`, `test_surface_counts_in_prose`, `test_contract_seal`, `analysis_packages`, `architecture`) | 1175 passed, 19283 subtests {{CONTRACT_FINAL}} |
+| `tests/contract` minus the three `D-220` files, on the clean committed tree (includes `tests/contract/program`, `test_doc_prose_facts`, `test_surface_counts_in_prose`, `test_contract_seal`, `analysis_packages`, `architecture`) | 1175 passed, 19283 subtests (the final committed tree, report included) |
 | `tests/e2e` (static: conformance, the new section and pending checks) | 225 passed, 5 skipped |
 | `node --test write.test.mjs navigation-retry.test.mjs` | 13 passed |
 | `prove_the_guard_can_fail.py` | 126 RED, 1 GREEN (the same vacuous mutation as at the base) |
