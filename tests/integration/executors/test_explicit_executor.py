@@ -46,6 +46,7 @@ else:
     _spec.loader.exec_module(harness)
 engine = harness.engine
 session = harness.session
+blob_store = harness.blob_store
 seeded = harness.seeded
 new_key = harness.new_key
 
@@ -228,7 +229,7 @@ def test_a_repeat_of_a_named_run_keeps_the_executor_and_is_refused_once_it_canno
 
         def repeat(label: str) -> Any:
             return reaudit_run(
-                session, source_run_id=source.run_id, roles=ADMIN, idempotency_key=new_key(label),
+                session, source_run_id=source.run_id, roles=ADMIN, idempotency_key=new_key(label).value,
                 provider_mode="live", connection_route=providers.freeze,
                 analysis_profile_id=seeded.analysis_profile_id,
                 prompt_bundle_id=seeded.prompt_bundle_id, input_budget_characters=10**9,
@@ -263,7 +264,7 @@ def test_a_repeat_of_a_run_that_followed_the_route_follows_todays_route(
         _terminal(session, source.run_id)
         route_two = support.seed_connection(session, rings, fake.base_url("/r2"), name="route two")
         again = reaudit_run(
-            session, source_run_id=source.run_id, roles=ADMIN, idempotency_key=new_key("routed-repeat"),
+            session, source_run_id=source.run_id, roles=ADMIN, idempotency_key=new_key("routed-repeat").value,
             provider_mode="live", connection_route=providers.freeze,
             analysis_profile_id=seeded.analysis_profile_id,
             prompt_bundle_id=seeded.prompt_bundle_id, input_budget_characters=10**9,
