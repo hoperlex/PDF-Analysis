@@ -174,11 +174,26 @@ Free disk at the start of the lane 1.8 GiB, at the end 1.9 GiB (`df -h /`). No d
 `git diff --name-only --no-renames 8a032ded..HEAD` on the final tree prints exactly these seven paths, all inside the task's allowed paths (without `--no-renames` git folds the old recording into a rename and prints six):
 
 ```text
-PLACEHOLDER-DIFF-LIST
+docs/program/SECTION-KM-FULL-01.md
+docs/program/tasks/SECTION-KM-FULL-01.md
+fixtures/recorded/sections/km/3d3fb6f065173cd5372fdb3c5e9131feb015bcd89a82b9b8612a1de2ccdd9458.json
+fixtures/recorded/sections/km/bf6a3d2c60ccf49e287659da9ed480abc0271b487ac21cbc3ba4360877d87cfd.json
+src/auditmanager/analysis/text/profiles/km/profile.json
+src/auditmanager/analysis/text/profiles/km/system_prompt.md
+tests/unit/analysis/text_profiles/section_profile_expectations.json
 ```
 
 No other section's files, no `W59-SECTION-PROFILES-01.md`, registry, `P02_LOCK.json`, `contracts/**`, migration, `web/**` or `infra/**` appears; `build_fixtures.py` is unchanged. The legacy repository was only read (`git status --short` there: 0 lines before and after).
 
 ## Final checks
 
-PLACEHOLDER-FINAL
+On the committed tree (`git status --short` empty), the last commit before this paragraph being `d3e631bd`:
+
+| Command | Result |
+|---|---|
+| `pytest tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py` | `105 passed` |
+| governance one-liner on `docs/program/tasks/SECTION-KM-FULL-01.md` | `[]` |
+| `git diff --check 8a032ded..HEAD` | rc 0 |
+| section set, `build_fixtures.py --check`, HTTP test (lane `.env`), `vitest` analysis-settings | `211 passed`; `fixtures match` rc 0; `4 passed`; `95 passed` |
+
+This paragraph and the list above are the only text added after `d3e631bd`; the contract run above was repeated on the tree that contains them (see the lane's final message for the tip SHA).
