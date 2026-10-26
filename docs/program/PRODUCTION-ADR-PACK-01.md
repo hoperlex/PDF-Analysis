@@ -71,7 +71,43 @@ Open questions that are not `AD-` decisions (plan section 7): whether `R-146f` a
 
 All run on the committed tree of branch `agent/production-adr-pack-01` (venv: the shared runtime venv plus its `bootstrap` site-packages for `jsonschema`).
 
-CHECKS_PLACEHOLDER
+1. **Existence check** (kept outside git, `<scratchpad>/pa/check_docs.py`, with its command registry `runnables.txt`): every inline-code token of the nine files is classified and verified against the tree,
+   `contracts/api/v1/openapi.json`, `DEBT_REGISTER.md` and `OWNER_RULINGS_2026-09-17.md`: paths and patterns, operationIds, rulings (a lettered `R-146x` must be a defined row), debt ids, ADR, migration, test-function, table,
+   error-code, guard and image names, the `AD-` and `PROD-` ids against their definitions, the surface triple, the version, the contract version and the head against the real ones. Proposed things (paths, events, flags, the `0033` revision) are
+   checked to be absent, so "new" is true. Commands that state a figure are run and compared; a figure command that is not registered is a failure, so an edited command cannot drop out silently. Last line:
+
+   ```text
+   CHK_LINE
+   ```
+
+   The commands that need a stand, a database or a lane (NOT_RUN_COUNT) were not run; their path, operationId and module parts were checked. Every unclassifiable token is a failure; the 10 vocabulary classes the checker accepts as literals
+   (external tool names, docker vocabulary, proposed vocabulary of the new tool, and so on) each carry a printed reason.
+2. **Mutation proof of the checker** (on scratch copies, the real files untouched; "red" is a new `MISSING` or `UNCLASSIFIED` line): 14 of 14 mutations turned it red.
+
+   | mutation | result |
+   | --- | --- |
+   | a script path misspelt (`verify-deploy.sh`) | red: `MISSING path` |
+   | an operationId lengthened by one letter | red: `MISSING operationId` |
+   | `R-146i` changed to `R-146z` | red: `MISSING ruling` |
+   | `D-215` changed to `D-9215` | red: `MISSING debt` |
+   | a test function name lengthened | red: `MISSING test-name` |
+   | the surface triple altered to 105 operations | red: `MISSING figure-surface` |
+   | a figure command edited (`src` to `srcs`) | red: `MISSING figure-command-registered` |
+   | a reference to `PROD-99` | red: `MISSING prod-id` |
+   | a reference to `AD-77` | red: `MISSING ad-id` |
+   | a migration name misspelt | red: `MISSING migration` |
+   | a table name misspelt | red: `MISSING identifier` |
+   | a quoted header value altered | red: `UNCLASSIFIED` |
+   | an error code misspelt | red: `MISSING identifier` |
+   | the head stated as `0031_executor_pull_channel` | red: `MISSING figure-head` |
+3. **Governance of the task file:** the one-liner of the task prints `[]`.
+4. **`git diff --check 4d7b7c38..HEAD`:** exit 0, no output.
+5. **`pytest -q -p no:cacheprovider tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py`:** PYTEST_LINE
+6. **The ADR-index tests.** `tests/contract/test_validate_bootstrap.py` and `tests/contract/test_cp00_candidate.py` already fail in this environment on the base tree `4d7b7c38` (191 failures and errors, among them
+   `ArchitectureCoverageTests::test_adr_files_index_and_review_agree`, which has been red since `ADR-0019` and `ADR-0020`). Run on the base tree and on this branch, the sets of failing test ids are identical (a `comm` of the two sorted lists
+   prints nothing in either direction), so the pack adds and removes none. `scripts/validate_bootstrap.py` on the branch differs from the base only in two count lines (`adrs=20` to `adrs=24`, `markdown_files=1736` to `markdown_files=1740`); it reports no ADR or index error.
+7. **Scope of the change:** `git diff --name-only 4d7b7c38..HEAD` lists the nine files of the table above and no other; `git status --short` is empty.
+
 
 ## Known limits
 
