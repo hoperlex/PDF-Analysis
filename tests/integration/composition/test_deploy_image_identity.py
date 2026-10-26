@@ -227,6 +227,10 @@ if argv[:1] == ["compose"]:
         if "auditmanager.shared.db.check" in joined:
             sys.stdout.write("FOUNDATION-CHECK OK check-db\n")
             sys.exit(0)
+        if "auditmanager.access.check" in joined:
+            # `PROD-02`: the credential gate, clean. This suite is about image identity.
+            sys.stdout.write("access-check GATE OK no published credential\n")
+            sys.exit(0)
         if "openapi_conformance.py" in joined:
             sys.stdin.buffer.read()
             sys.stdout.write("differences: 0\n")
@@ -332,6 +336,11 @@ def _stage(tmp_path: Path, *, script: Path | None = None) -> Path:
     (deploy / "env/alpha.env.example").write_text(
         "\n".join(f"{n}={v}" for n, v in sorted(EXAMPLE_SECRETS.items())) + "\n",
         encoding="utf-8",
+    )
+    # `PROD-02`: the library every deploy sources (the credential gate is asked of every stack).
+    (deploy / "lib").mkdir(exist_ok=True)
+    (deploy / "lib/proxy-listeners.sh").write_text(
+        (ROOT / "infra/deploy/lib/proxy-listeners.sh").read_text(encoding="utf-8"), encoding="utf-8"
     )
     reload_proxy = deploy / "reload-proxy.sh"
     reload_proxy.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")

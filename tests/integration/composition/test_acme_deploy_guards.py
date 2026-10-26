@@ -158,6 +158,11 @@ if argv[:1] == ["compose"]:
         if "auditmanager.shared.db.check" in joined:
             sys.stdout.write("FOUNDATION-CHECK OK check-db\n")
             sys.exit(0)
+        if "auditmanager.access.check" in joined:
+            # `PROD-02`: the credential gate, clean unless a case says otherwise. The cases about the gate
+            # itself are in `test_default_credential_gate.py`.
+            sys.stdout.write(setting("STUB_GATE_OUTPUT", "access-check GATE OK no published credential") + "\n")
+            sys.exit(int(setting("STUB_GATE_STATUS", "0")))
         if "openapi_conformance.py" in joined:
             sys.stdin.buffer.read()
             sys.stdout.write("differences: 0\n")
@@ -560,9 +565,15 @@ class TestPublicPortsFree:
 
 
 def _up_line(log: Path) -> str:
-    ups = _compose_calls(log, "up")
+    """The ONE full `up` of a deploy. Since `PROD-02` the proxy may be brought up a second time, alone
+    (`up -d --no-deps proxy`), by `default-credential-gate`; that call is `_proxy_up_lines`."""
+    ups = [line for line in _compose_calls(log, "up") if "--no-deps proxy" not in line]
     assert len(ups) == 1, ups
     return ups[0]
+
+
+def _proxy_up_lines(log: Path) -> list[str]:
+    return [line for line in _compose_calls(log, "up") if line.endswith("up -d --no-deps proxy")]
 
 
 class TestAcmePairAnswerable:
@@ -634,14 +645,25 @@ class TestTheListenersADeployHas:
         completed, log = self._deploy(tmp_path, serving, publish="no", pair="pair-present")
         assert completed.returncode == 0, (completed.stdout, completed.stderr)
         assert "compose.tls.yml" not in _up_line(log)
+        assert _proxy_up_lines(log) == [], "the proxy was recreated although 443 was not to change"
         assert "credential gate is not satisfied" in completed.stdout
 
     def test_cleared_and_a_pair_publishes_443_after_the_acme_overlay(self, tmp_path: Path, serving: int) -> None:
+        """BEFORE `PROD-02` this asserted that the ONE `up` carried the acme overlay and then the 443 overlay.
+        NOW the full `up` never opens 443 on a proxy that does not already publish it (the credential gate has
+        not been asked yet: the database does not exist before `up`); 443 is opened by the proxy-only `up`
+        that `default-credential-gate` issues after a clean gate, with the same two overlays in the same order."""
         completed, log = self._deploy(tmp_path, serving, publish="yes", pair="pair-present")
         assert completed.returncode == 0, (completed.stdout, completed.stderr)
-        up = _up_line(log)
-        assert re.search(r"compose\.server\.yml --file \S+compose\.acme\.yml --file \S+compose\.tls\.yml up", up), up
-        assert "application listener (TLS) : public port" in completed.stdout and "-- published" in completed.stdout
+        full = _up_line(log)
+        assert "compose.acme.yml" in full and "compose.tls.yml" not in full, full
+        proxy_ups = _proxy_up_lines(log)
+        assert len(proxy_ups) == 1, proxy_ups
+        assert re.search(
+            r"compose\.server\.yml --file \S+compose\.acme\.yml --file \S+compose\.tls\.yml up -d --no-deps proxy$",
+            proxy_ups[0],
+        ), proxy_ups[0]
+        assert "published on port" in completed.stdout and "(the credential gate is clean)" in completed.stdout
 
     def test_the_build_sees_the_acme_service_and_only_the_acme_overlay(self, tmp_path: Path, serving: int) -> None:
         completed, log = self._deploy(tmp_path, serving, publish="yes", pair="pair-present")

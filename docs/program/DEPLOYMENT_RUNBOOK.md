@@ -364,6 +364,28 @@ upstream answers 502/503/504 — and **a 200 there is a refusal**, in `deploy.sh
 
 A second run against an unchanged tree replaces **no container at all** (`W24-IDEM`).
 
+**Two refusals that are about the data and not about the build (`PROD-02-03-DEPLOY-GATES-01`).** Both exit **3**
+like every other refusal, and both carry a typed word that deploy-auto's log shows:
+
+| Word | When it speaks | What it means | What to do |
+|---|---|---|---|
+| `stand_copy_fresh` | **before the build**, only when the `real_data` marker exists *and* this checkout carries a migration the database does not have | `R-146t`: a migrating deploy on a stand that holds real data needs a fresh copy receipt (§13) | take the copy and deploy within 24 hours of the dump (§13, "A migrating deploy needs a fresh receipt") |
+| `default_credential` | **after `migrations-at-head`** (the database must exist) | `R-146i`, `R-146s`: the **published seeded pair** `admin` / `password` is valid. The deploy ends non-zero **naming the login**, public port 443 is **not published**, and every service keeps running on loopback | sign in through an SSH tunnel to the loopback port, change the password, deploy again |
+| `default_credential_unanswered` | same place | the check could not be run or printed neither of its two sentinels: whether the pair is valid is **not known**, so nothing is claimed | read what it printed (it is shown above the refusal); fix the stack; deploy again |
+
+**The gate asks one question: is the published pair valid?** Only an *active* account with the login `admin` whose stored
+credential verifies against `password` fails it (`R-146z`). A temporary password an administrator issued with
+`resetUserPassword` marks the account must-change too, but it prints a `GATE WARNING temporary password` line and
+**never fails** the deploy; `readiness.sh` keeps asking the wider question and reports both (§9). The check is
+`python -m auditmanager.access.check --gate` inside the `api` image; run by hand it prints
+`access-check GATE OK no published credential` (exit 0) or `access-check GATE DEFAULT CREDENTIAL: login=admin ...` (exit 1).
+
+**A fresh host's first deploy ends non-zero, on purpose.** The stack comes up, the services are healthy, the application
+answers on `127.0.0.1:<ALPHA_HTTP_PORT>` — and the deploy refuses with `[default_credential]` because the database was
+just migrated and still holds the seeded pair. That is `R-146s`: the public door never opens on a pair anyone can read in
+this repository. Change the password (§6 step 10) and deploy again; the second run publishes 443 if you asked for it
+and a certificate exists.
+
 **What a redeploy no longer costs, since `R-51`: the reviewers stay signed in.** `deploy.sh`
 recreates the `web` container on every run that changes it, and until wave 47 that container
 held every open session in its own memory, so **every deploy signed every reviewer out** —
@@ -387,7 +409,9 @@ infra/deploy/verify-deployed.sh
 ```
 
 **0** the stack is this working tree, **6** it is not, **4** the question could not be
-answered — and only the first is a success. Run it after every deploy. Its first live
+answered, **7** it is this tree and the certificate it serves is not acceptable (§6), **8** it is this tree and
+the published `admin` / `password` pair is **valid** (it names the login, and says loudly if 443 is published
+meanwhile; `PROD-02`) — and only the first is a success. Run it after every deploy. Its first live
 execution found a deployed web image eleven minutes older than the commit a brief claimed
 was running.
 
@@ -453,11 +477,19 @@ stack is byte-for-byte the deployment that was certified before — which is als
 
 So on a host that has never been published the stack comes up on loopback with port 80 answering the
 challenge; you reach the loopback port through an SSH tunnel and change the administrator's password; the
-next deploy publishes 443. **Today "cleared to publish" is one setting you write yourself,
-`ALPHA_PUBLISH_HTTPS=yes`; `PROD-02` replaces it by the result of the default-credential check**, and
-makes `reset.sh --restore` and `copy-serve.sh restore-db` close 443 again after a restore that brings the
-seeded password back. **Until `PROD-02` lands neither restore path touches the listeners**: after any restore,
-set `ALPHA_PUBLISH_HTTPS=no` (or remove the line) and deploy before you decide the password is changed.
+next deploy publishes 443. **"Cleared to publish" is two things since `PROD-02`: the setting you write yourself,
+`ALPHA_PUBLISH_HTTPS=yes`, AND a clean credential gate** (`python -m auditmanager.access.check --gate`: the
+published `admin` / `password` pair is not valid; §3). The setting alone opens nothing. A deploy decides it in two
+steps because the gate needs the database: the full `up` never opens 443 on a proxy that does not already publish it
+(it keeps an already published one only if the setting still says `yes` and a pair exists), and the gate step after
+`migrations-at-head` then opens it, or withdraws it by recreating **only the proxy** without the 443 overlay.
+
+**A restore can bring the seeded pair back, and both restore paths now say so and close the door** (`R-52`,
+`R-146s`): `reset.sh --restore` (§7) and `copy-serve.sh restore-db` (§13) end by asking the same gate. On a finding
+— or on an answer they could not get, which after a restore is not "fine" — they recreate the proxy without the 443
+overlay, so **the site is unreachable from outside until an administrator changes the password through the loopback
+port** (the consequence `R-146s` accepts). A restore never *opens* 443; only a deploy does, after a clean gate.
+`restore-db` also raises every account's `token_epoch` now, as `reset.sh --restore` always did.
 
 ### What goes in `alpha.env`
 
@@ -468,7 +500,7 @@ set `ALPHA_PUBLISH_HTTPS=no` (or remove the line) and deploy before you decide t
 | `ALPHA_CERT_NAME` | the public DNS name of this host; lower case, at least two labels, no wildcard, no port. A placeholder or reserved name is refused by `deploy.sh`. **The live name belongs here, on the host, and in no default anywhere in the repository** | empty: no terminator |
 | `ALPHA_ACME_EMAIL` | contact address for the authority; optional | none |
 | `ALPHA_ACME_STAGING` | `yes`: the authority's TEST endpoint (certificates no browser trusts, loose limits). `no`: the real issuance | **`yes`** — a forgotten line spends the test endpoint's limits and never the real one's |
-| `ALPHA_PUBLISH_HTTPS` | `yes` publishes 443 for a deploy that has a certificate | `no` |
+| `ALPHA_PUBLISH_HTTPS` | `yes` asks for 443 for a deploy that has a certificate — **necessary, never sufficient**: the credential gate must also be clean (`PROD-02`) | `no` |
 | `ALPHA_PUBLIC_ADDRESS` | the interface 80 and 443 bind | all interfaces |
 | `ALPHA_ACME_HTTP_PORT`, `ALPHA_HTTPS_PORT` | the published ports; change them only for a rehearsal on a machine whose 80 and 443 are not free | `80`, `443` |
 | `ALPHA_BIND_ADDRESS` | the **plain application** listener. With a name set `deploy.sh` refuses anything but loopback | loopback |
@@ -534,7 +566,7 @@ Expect, among the usual lines (exact):
 ```
 deploy.sh: tls name   <name> (ACME: STAGING, rehearsal only)
 ...
--- the listeners this deploy has --
+-- the listeners this deploy has (provisional: the credential gate is asked after the migrations) --
   plain application listener : 127.0.0.1:<ALPHA_HTTP_PORT> (always)
   challenge listener         : public port 80 (the ACME webroot and a redirect; no application route)
   application listener (TLS) : NOT published -- the credential gate is not satisfied (ALPHA_PUBLISH_HTTPS is not yes), so 443 stays closed
@@ -599,12 +631,16 @@ valid-for-at-least-days=14` and `the deployed stack IS this tree`.
 
 **10. Close the cutover: the administrator's password, then 443.** Reach the loopback port by tunnel
 (`ssh -L 31500:127.0.0.1:31500 <host>`, `http://127.0.0.1:31500`), sign in as the seeded administrator and **change
-the password**. Only then set `ALPHA_PUBLISH_HTTPS=yes` and run `infra/deploy/deploy.sh`. Expect (exact):
-`application listener (TLS) : public port 443 -- published` and
+the password**. Only then set `ALPHA_PUBLISH_HTTPS=yes` and run `infra/deploy/deploy.sh`. Expect (exact), after the
+`-- the published default credential is not valid --` block (`no account accepts the published password; ...`):
+`public port 443 is now published (ALPHA_PUBLISH_HTTPS=yes, a pair exists, the gate is clean).` and
 `deploy.sh: TLS for <name>: the challenge listener is public on port 80; the application over TLS is` /
-`deploy.sh: published on port 443.` On the first publication the deploy that issued the certificate and the deploy
-that publishes it are two runs; if they were one, the deploy prints `no certificate pair exists yet ...` and
-`run this script again`.
+`deploy.sh: published on port 443 (the credential gate is clean).` On the first publication the deploy that issued the
+certificate and the deploy that publishes it are two runs; if they were one, the deploy prints `no certificate pair
+exists yet ...` and `run this script again`. **If you forgot to change the password**, the same deploy ends
+`REFUSED: [default_credential] the published admin/password pair is valid: admin still accepts the published
+password.`, prints `public port 443 is NOT published: the proxy was recreated without the 443 overlay` if it had been
+published, and `docker compose ... port proxy 8443` exits non-zero (`ADR-0021` row 6).
 
 **11. The public probes** (`ADR-0021` rows 2 to 5), from a machine outside the host:
 ```
@@ -616,7 +652,7 @@ echo | openssl s_client -connect <name>:443 -servername <name> 2>/dev/null | ope
 Expect: `200 0`; the HSTS header line (exit 0); the clearing `Set-Cookie` line carrying `Secure` (exit 0 — an inert
 cookie draws `401` and a clearing cookie from the BFF route, the method of `EXPOSURE-REVIEW-01.md` `E-2`);
 `Certificate will not expire` (exit 0). On the host: `docker compose ... port proxy 8443` prints the mapping
-(`0.0.0.0:443`); with `ALPHA_PUBLISH_HTTPS=no` it does not (row 6). **HSTS is a promise about the name for a
+(`0.0.0.0:443`); with `ALPHA_PUBLISH_HTTPS=no`, or while the published pair is valid, it does not (row 6). **HSTS is a promise about the name for a
 year (`max-age=31536000`, no `includeSubDomains`, no `preload`); turning TLS off again does not withdraw it.**
 
 **12. Run the readiness command.** `infra/deploy/readiness.sh` — expect `readiness OK      tls` and
@@ -645,6 +681,10 @@ Expect (shape): `Congratulations, all simulated renewals succeeded`.
 | `deploy.sh` | `REFUSED: the ACME client is not pinned` | step 1 |
 | `deploy.sh` | `REFUSED: public port N is already in use...` | the host's nginx (or another stack) holds it; step 4 |
 | `deploy.sh` | `REFUSED: whether the certificate volume holds a pair could not be asked` | the acme image did not answer; nothing was started |
+| `deploy.sh` | `REFUSED: [default_credential] the published admin/password pair is valid` | step 10: change the password; 443 stays closed until then (§3) |
+| `deploy.sh` | `REFUSED: [default_credential_unanswered]` | the gate could not be asked; whether the pair is valid is not known (§3) |
+| `deploy.sh` | `REFUSED: the proxy could not be recreated to withdraw public port 443` | the gate found the pair valid and docker would not recreate the proxy; close it by hand with the command printed |
+| `verify-deployed.sh` | exit 8, `the published admin/password pair is valid` | the same finding, asked of the running stack; `PUBLIC PORT 443 IS PUBLISHED while the pair is valid` means withdraw it now |
 | `verify-deployed.sh` | exit 7, `served-certificate: NOT SERVED` | no TLS answer from `proxy:8443`: the pair is not exported yet, or the proxy has not loaded it |
 | `verify-deployed.sh` | exit 7, `STAGING CERTIFICATE` / `NOT TRUSTED` / `EXPIRING` | the kind, the chain or the margin; the line says which |
 | `enable-tls` | `TLS IS OFF.` | no usable pair on the volume; `docker compose logs acme` says why |
@@ -668,7 +708,8 @@ terminate TLS. The volumes `<instance>-acme-state` (the account key and the line
 * it has **not been run**: no certificate authority was contacted, no image was built, no host was touched;
 * it does not resolve `infra/acme/client.pin` (step 1) or choose between a name under `sslip.io` and one of the
   owner's own (step 9) — both are the owner's;
-* it does not wire the restore paths to the listener decision (`PROD-02`);
+* it does not run the restore paths for you: `reset.sh --restore` and `copy-serve.sh restore-db` close 443 after a
+  restore that brings the seeded pair back (above), and what they print is §7's and §13's;
 * it does not restart anything on a renewal: the proxy reloads on its own timer, so a renewal needs no right to
   touch another service.
 
@@ -808,6 +849,13 @@ password does not expire at all.
    its default password**, and tells you what to do about it: sign in as that login and
    change the password. A default credential reaches the sign-in and the change and nothing
    else (`R-50`), so that is the only thing it can do and it is enough.
+3. **since `PROD-02`, it asks the deploy's own gate and closes the door** — the narrower question,
+   `access.check --gate`, *is the published `admin` / `password` pair valid again?* (`R-146i`, `R-146s`). If it is, or
+   if that could not be told, it recreates **only the proxy** without the 443 overlay and says so; every service keeps
+   running on loopback, and the site is unreachable from outside until an administrator changes the password through
+   the loopback port. A restore never opens 443; the next deploy does, after a clean gate. Its exit status stays `0`
+   for a completed restore — **except `5`: the restore completed and public port 443 could not be withdrawn**; close it
+   with the `docker compose ... up -d --force-recreate --no-deps proxy` line the screen prints.
 
 **It reports; it does not refuse**, and that is the owner's explicit choice rather than an
 oversight. A restore is run **after a failure**, which is the moment when a script that
@@ -961,7 +1009,7 @@ Six checks, none of them re-deriving a question this tree already answers elsewh
 
 | check | what it asks | reuses |
 |---|---|---|
-| `default-credential` | step 5 — is any account still on the password this system seeded it with? | `src/auditmanager/access/check.py`'s own stable sentinels, run inside the deployed api image the way `deploy.sh`'s `migrations-at-head` guard runs `shared.db.check` |
+| `default-credential` | step 5 — is any account still on the password this system seeded it with? **The wider question** (default mode, no `--gate`): it also lists an administrator's temporary password, which the deploy's gate (§3) only warns about | `src/auditmanager/access/check.py`'s own stable sentinels, run inside the deployed api image the way `deploy.sh`'s `migrations-at-head` guard runs `shared.db.check` |
 | `tls` | what certificate does the proxy's TLS listener serve, and is it production, trusted, for this name and good for 14 more days? (`PROD-01-TLS-ACME-01`; it used to ask whether a pair was on disk) | `infra/acme/check-served.sh`, run in a one-off container of the acme image against `proxy:8443` — the same question `verify-deployed.sh` enforces; no name set, or the test endpoint selected, are findings |
 | `plain-http` | is the plain application port off this host, and, with a name, does port 80 answer an application path with a redirect to HTTPS and nothing else? | `ALPHA_BIND_ADDRESS` (`D-49`); with a name, a `curl` of the challenge listener (`R-146s`); without one, the old reading: nothing in this tree closes plain HTTP once it is published |
 | `provider-mode` | is `AUDITMANAGER_PROVIDER_MODE` a real provider, and does it have the credential it needs? | `auditmanager.bootstrap.settings.load()` — the composition root's own validation, the thing that actually decides whether `api` starts |
@@ -1220,18 +1268,24 @@ a stand whose checkout is still the older, deployed tree (`W54-PLAN.md` §3.10, 
    install -d -m 700 -o <account> /srv/auditmanager-copy
    ```
 
-2. Extract the three files from the candidate's git objects (not from a working tree), and
+2. Extract the **four** files from the candidate's git objects (not from a working tree), and
    compare each SHA-256 with the gate record of that candidate:
 
    ```
    install -d -m 755 /srv/auditmanager/copy-serve/lib
    git -C /srv/auditmanager fetch origin
-   for f in copy-serve.sh capacity-probe.sh lib/forced-command.sh; do
+   for f in copy-serve.sh capacity-probe.sh lib/forced-command.sh lib/proxy-listeners.sh; do
        git -C /srv/auditmanager show "<candidate sha>:infra/deploy/$f" > "/srv/auditmanager/copy-serve/$f"
        sha256sum "/srv/auditmanager/copy-serve/$f"
    done
    chmod 755 /srv/auditmanager/copy-serve/copy-serve.sh /srv/auditmanager/copy-serve/capacity-probe.sh
    ```
+
+   **The fourth file is new (`PROD-02`).** `restore-db` ends by asking the credential gate and closing public port
+   443 if the seeded pair came back (below); that rule is written once, in `lib/proxy-listeners.sh`, and shared with
+   `deploy.sh`. Without it `restore-db` refuses (`listeners-library-present`) **before it stops or restores
+   anything**; every other verb is unaffected, and `status` prints `listeners: absent`. **A copy key installed before
+   `PROD-02` must repeat this step**, as it must after any change to `copy-serve.sh`.
 
    `/srv/auditmanager/copy-serve/` is inside the checkout's directory, but every file there is
    untracked: add `copy-serve/` to the checkout's `.git/info/exclude`, or deploy-auto refuses
@@ -1248,7 +1302,7 @@ a stand whose checkout is still the older, deployed tree (`W54-PLAN.md` §3.10, 
    `STAND_COPY_MARGIN_BYTES` (default 2 GiB beyond the database's size) and
    `STAND_COPY_WINDOW_SECONDS` (default 43200, the importer's 12 h).
 
-4. Check it with `status`: it prints the installed script's, library's and probe's SHA-256 and
+4. Check it with `status`: it prints the installed script's, library's, probe's and listeners' SHA-256 and
    the deployed checkout's `HEAD`. A later publication that changes `copy-serve.sh` asks the
    owner to repeat step 2.
 
@@ -1269,7 +1323,7 @@ Every verb is `ssh -i <copy key> -o IdentitiesOnly=yes <user@stand> <verb ...>`.
 | `attest <STAMP> <dump-sha256> <restore-report-sha256> publish <sha>\|import` | binds the dump's and the restore report's digests and a purpose. The dump is re-hashed. A first attestation, and an import attestation, also needs the writers still stopped and the copy younger than 12 h. Re-attesting a publication rebinds it to another SHA (a forward fix). An import record is never rebound to a publication. **The first attestation of a full copy writes the `real_data` marker** |
 | `attest --test-data` | `R-110`: no copy. Stops the writers, takes the fingerprint and opens a `test_data_waiver` (an import record) that expires in 12 h. **Refused once the `real_data` marker exists** |
 | `verify-objects <N> [<seed>]` | reads back a seeded sample of N `available` Blobs through the api image's storage adapter and compares each with its recorded size and SHA-256. P1's read-back at P2 is a technical MinIO check (`R-109`) |
-| `restore-db <STAMP> <sha256>` | the owner's way back: checks the digest against the record and the file, stops every writer running again, reopens the record, restores the dump into a recreated `public` schema, compares the fingerprint, and leaves the writers stopped |
+| `restore-db <STAMP> <sha256>` | the owner's way back: checks the digest against the record and the file, stops every writer running again, reopens the record, restores the dump into a recreated `public` schema, compares the fingerprint, **then (`PROD-02`) raises every account's `token_epoch` (`R-52`, as `reset.sh --restore` does) and asks the credential gate: if the published `admin`/`password` pair is valid again — or that cannot be told — it recreates only the proxy without the 443 overlay**; it leaves the writers stopped and prints `token_epoch:`, `credential_gate:` and `https_443:` lines |
 | `resume <STAMP>` | starts the writers the record stopped (those the deployed file still declares) and closes the record. Refused while the importer holds its lock |
 | `status` | read-only: the record and its age, the marker, the import lock, the installed SHA-256s |
 
@@ -1289,6 +1343,53 @@ ssh … resume <STAMP>
 ssh … verify-objects 50
 ```
 
+### A migrating deploy needs a fresh receipt (`PROD-03`, `R-146t`, `AD-03`, `AD-17`; `ADR-0021` section 5)
+
+`R-93` binds as before: a one-off copy (dump, inventory, fetch, restore test, attestation) precedes every migrating
+publication whenever the stand holds real client data (`R-146x` keeps the full attestation after 1.0 as well).
+`R-146t` adds one **mechanical refusal on top of it** — `deploy.sh`'s guard `stand-copy-fresh`. There is **no new dump
+script and no second artefact**: the receipt is the record `dump-db` writes.
+
+| `deploy.sh` refuses `[stand_copy_fresh]` unless… | where it reads it |
+|---|---|
+| **no** `real_data` marker exists, or the database is already at this checkout's head — then it asks nothing | the marker beside the record; `alembic_version` against `db/migrations/versions` |
+| the record is **open** | `state` |
+| it **has its dump** (`dump` with a SHA-256) and the attestation **binds that SHA-256** | `dump`, `attestation.dump_sha256` |
+| it is attested for **this commit** (`purpose` `publish`, `target_sha` = the checkout's `HEAD`) | `purpose`, `target_sha` |
+| it was quiesced **at most 24 hours ago** | `quiesced_at` |
+
+"Pending" means the checkout's head revision differs from `alembic_version`, read **before** `migrate`. If the marker
+exists and the database cannot be read, the deploy refuses and names the way out
+(`docker compose ... up -d postgres`, then run it again): an unverifiable receipt is not a verified one. The three
+conditions `R-93` already enforces (unattested, attested for another commit, an import record) keep refusing **first**,
+in their own words (table below); this guard repeats the first two so that they hold even if one of them is ever
+removed, and adds the rest. A deploy with no pending migration needs no receipt, and before the marker exists
+(`R-110`, test data only) nothing changes.
+
+**The order on deploy day** (the dump is the clock: deploy within 24 hours of `dump-db`):
+
+```
+ssh … dump-db                                   # prints <STAMP>; writers stopped; quiesced_at starts the 24 hours
+ssh … inventory-s3 <STAMP>
+infra/deploy/pull-copy.sh …                     # to the development host
+scripts/stand-copy/restore-test.sh …            # the trial restore
+ssh … attest <STAMP> <dump-sha256> <report-sha256> publish <candidate sha>
+# the push; the workflow's deploy.sh now finds: marker present, migration pending, record open + dump + attested for
+# this commit + quiesced < 24 h ago -- and prints "deploy.sh: migrating <from> -> <to> under the copy <STAMP> (...)"
+ssh … resume <STAMP>
+```
+
+A slow restore test that runs past 24 hours costs a new `dump-db`, not a debate: `resume`, then start again.
+
+**Owner steps, recorded here and not done by the lane that built the guard:**
+
+1. install the copy key (the numbered steps above, **including the fourth file**), which `R-110` deferred until the
+   first real upload and which the production release now requires;
+2. take the first real copy — `dump-db`, `inventory-s3`, `pull-copy.sh`, `restore-test.sh`, then `attest … publish
+   <sha>`. **The first attestation of a full copy writes the `real_data` marker**; from that moment `attest
+   --test-data` is refused and every migrating deploy needs the receipt;
+3. repeat step 2 of the install whenever `copy-serve.sh` or either library changes.
+
 P4 (the corpus import): `capacity`; the inbound key's `receive` and `status`; then
 `dump-db` → `inventory-s3` → pull → restore test → `attest <STAMP> … import`; the inbound key's
 `import` and `report`; `resume <STAMP>`; `verify-objects`.
@@ -1296,7 +1397,11 @@ P4 (the corpus import): `capacity`; the inbound key's `receive` and `status`; th
 **On failure after the push:** a forward fix (re-attest `publish <fix sha>`, push), or the
 owner-ordered `restore-db <STAMP> <dump-sha256>`, then a reviewed revert under
 `MAIN_AUTODEPLOY_POLICY.md` (re-attest `publish <revert sha>` first), then `resume`. A revert
-alone would fail `migrations-at-head`.
+alone would fail `migrations-at-head`. **`restore-db` can bring the published `admin`/`password` pair back** (a dump
+taken before the password was changed): it raises every `token_epoch`, asks the credential gate and, on a finding,
+recreates the proxy without the 443 overlay — so check its `credential_gate:` and `https_443:` lines before `resume`,
+and expect the site to be unreachable from outside until an administrator changes the password through the
+loopback port (`R-146s`). A revert deployed afterwards is itself refused `[default_credential]` until that is done.
 
 ### The order — test data only (now, `R-110`)
 
@@ -1327,6 +1432,7 @@ refuses with exit 3 and a typed word that deploy-auto's log shows:
 | `stand_import_open` | the open record is an import record or a waiver | finish the import, then `resume <STAMP>` |
 | `stand_copy_unattested` | a copy is open and not attested | finish the copy and `attest … publish <sha>`, or `resume` it |
 | `stand_copy_other_target` | the open publication record binds another SHA (or the checkout's `HEAD` cannot be read) | re-attest for this SHA, or deploy the SHA it names |
+| `stand_copy_fresh` | the `real_data` marker exists, a migration is pending, and the record is not a fresh receipt (the lines under it say which condition fails) — or the migration state could not be read | take the copy and deploy within 24 hours of the dump (above) |
 
 An open publication record attested for exactly this checkout's `HEAD` is accepted, and the
 deploy prints `under the open copy <STAMP>, attested for this commit <sha>`.
@@ -1354,6 +1460,9 @@ the stand's message on and removes whatever it fetched for that stamp.
 | `real-data-absent` | the `real_data` marker exists: no more waivers; take a copy |
 | `objects-match` | a sampled object did not read back as recorded (or nothing was sampled). The output lists each one |
 | `fingerprint-restored` | after `restore-db`, the database does not match the copy. The writers stay stopped. The owner decides |
+| `listeners-library-present` | `restore-db` was asked and `lib/proxy-listeners.sh` is not installed beside `copy-serve.sh`. Nothing was stopped. Install step 2 |
+| `credentials-revoked` | after the restore, `access.revoke --everyone` could not reach the database. The writers stay stopped and the record open; run the printed command, then `resume` |
+| `https-withheld` | after the restore the credential gate said finding (or could not be answered) and public port 443 could not be withdrawn. The writers stay stopped; close it by hand with the printed command, then `resume` |
 
 ### Heavy steps and their floor
 

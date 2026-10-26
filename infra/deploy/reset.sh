@@ -229,6 +229,18 @@ if [ -n "$RESTORE" ]; then
     if [ -d "$RESTORE" ]; then
         RESTORE="$(cd "$RESTORE" && pwd)"
     fi
+    # `PROD-02`. A restore ends by asking whether the published admin/password pair came back and, if it did,
+    # by closing public port 443 (`R-146s`); the rule is written once, in the library every script shares.
+    LISTENERS_LIB="$HERE/lib/proxy-listeners.sh"
+# >>> guard: listeners-library-present
+    if [ ! -r "$LISTENERS_LIB" ]; then
+        refuse "$LISTENERS_LIB is missing or unreadable." \
+               "A restore ends by asking whether the published admin/password pair came back, and by closing" \
+               "public port 443 if it did (R-146s); that rule is written there, once. Nothing has been changed."
+    fi
+# <<< guard: listeners-library-present
+    # shellcheck source=lib/proxy-listeners.sh
+    . "$LISTENERS_LIB"
 # >>> guard: restore-complete
     # Both halves or neither. A restore that put the rows back and left the bytes behind
     # would leave an instance that lists a document and cannot serve it, which is worse
@@ -388,9 +400,46 @@ if [ -n "$RESTORE" ]; then
         echo "reset.sh: !!     -m auditmanager.access.check"
     fi
 
+    # --- `PROD-02` (`R-146i`, `R-146s`, `ADR-0021` section 2, `ADR-0023` section 3): THE SAME GATE AS A DEPLOY'S.
+    #
+    # The report above names every account on a temporary password. This is the narrower question a deployment
+    # is refused over: is the PUBLISHED pair (admin / password) valid again? If it is -- or if that cannot be
+    # told, because after a restore "I could not look" is not "it is fine" -- the proxy is recreated WITHOUT
+    # the 443 overlay, so the site is unreachable from outside until an administrator changes the password
+    # through the loopback port. That is the consequence `R-146s` accepts. Nothing is stopped: only the
+    # published mapping goes. A restore NEVER opens 443; only a deploy does, after a clean gate.
+    #
+    # THE EXIT STATUS STAYS 0 for a completed restore, finding or not (`R-52`: the restore happened, and the
+    # report above is what an operator needs) -- except when the door could not be shut, which is 5: a restore
+    # that left a public sign-in open to the published pair is not one to report as plain success.
+    echo
+    echo "reset.sh: is the PUBLISHED pair (admin/password) valid again? -- the gate a deploy is refused over (R-146s)"
+    listeners_gate_run compose
+    printf '%s\n' "$LISTENERS_GATE_OUTPUT" | sed 's/^/reset.sh:   /'
+    DOOR_STATUS=0
+    case "$LISTENERS_GATE_VERDICT" in
+        clean)
+            echo "reset.sh: no. Public port 443 is left as it was (a restore never opens it; the next deploy decides)." ;;
+        *)
+            if [ "$LISTENERS_GATE_VERDICT" = finding ]; then
+                echo "reset.sh: !! YES: $(listeners_gate_logins "$LISTENERS_GATE_OUTPUT" | paste -sd, -) accepts the published password again."
+            else
+                echo "reset.sh: !! THE GATE COULD NOT BE ANSWERED (status $LISTENERS_GATE_STATUS) -- after a restore that is treated as a finding."
+            fi
+            if listeners_withhold_https compose "$HERE" "$ENV_FILE" "$(configured ALPHA_CERT_NAME)"; then
+                echo "reset.sh: !! Public port 443 is NOT published (the proxy is recreated without the 443 overlay if it was)."
+                echo "reset.sh: !! Every service keeps running on loopback. Sign in through an SSH tunnel to the loopback port,"
+                echo "reset.sh: !! change the password, then deploy: the deploy publishes 443 again when the gate is clean."
+            else
+                DOOR_STATUS=5
+                echo "reset.sh: !! PUBLIC PORT 443 COULD NOT BE WITHDRAWN. Close it by hand, now:"
+                echo "reset.sh: !!   docker compose --env-file $ENV_FILE --file $COMPOSE_FILE up -d --force-recreate --no-deps proxy"
+            fi ;;
+    esac
+
     echo
     echo "reset.sh: restored. Verify with a read of one document version through the API."
-    exit 0
+    exit "$DOOR_STATUS"
 fi
 
 # THE ROW COUNTS ARE COUNTED, NOT ESTIMATED -- `D-24`, and it is the screen an operator
