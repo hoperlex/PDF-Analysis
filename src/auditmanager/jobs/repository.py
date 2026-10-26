@@ -67,24 +67,33 @@ _CONNECTION_HAS_OTHER_ACTIVE_RUN = text(
     f"AND other_job.state IN {_ACTIVE_JOB_STATES})"
 )
 #: The dispatcher's hint. ``:submitted`` is the Runs this process has already handed to a slot:
-#: they are not offered again, and they count as active for the connection test, because a slot
-#: that has not claimed yet has not written its Job state. The hint is advisory -- the claim
-#: re-checks under the lock -- but it is what keeps a slot from being spent on a Run whose
-#: connection is busy: the next Job for a free connection is the one returned.
+#: they are not offered again, and their connections count as held, because a slot that has not
+#: claimed yet has not written its Job state. The hint is advisory -- the claim re-checks under the
+#: lock -- but it is what keeps a slot from being spent on a Run whose connection is busy: the next
+#: Job for a free connection is the one returned.
+#:
+#: ``held`` is built from the few active Jobs (the ``ix_job_dispatch`` prefix on ``state``) and the
+#: few submitted Runs, never from the history of a connection's Runs: written as a correlated
+#: ``NOT EXISTS`` over ``audit_run`` the planner enumerated every Run ever frozen to the connection
+#: (5703 buffers against 10, 13.9 ms against 0.1 ms on 20 000 Runs), and that grows with the history.
 _NEXT_JOB = text(
+    "WITH held AS ("
+    "SELECT rev.connection_id FROM job active_job "
+    "JOIN audit_run active_run ON active_run.run_id = active_job.run_id "
+    "JOIN executor_connection_revision rev ON rev.revision_id = active_run.connection_revision_id "
+    f"WHERE active_job.state IN {_ACTIVE_JOB_STATES} "
+    "UNION "
+    "SELECT rev.connection_id FROM audit_run submitted_run "
+    "JOIN executor_connection_revision rev ON rev.revision_id = submitted_run.connection_revision_id "
+    "WHERE submitted_run.run_id = ANY (CAST(:submitted AS text[]))) "
     "SELECT j.run_id FROM job j JOIN audit_run r ON r.run_id = j.run_id "
     "WHERE j.state = 'queued' AND r.state IN ('queued', 'running') "
     "AND j.available_at <= statement_timestamp() "
     "AND NOT EXISTS (SELECT 1 FROM execution_control WHERE singleton AND paused) "
     "AND j.run_id <> ALL (CAST(:submitted AS text[])) "
-    "AND NOT EXISTS ("
-    "SELECT 1 FROM executor_connection_revision mine "
-    "JOIN executor_connection_revision peer ON peer.connection_id = mine.connection_id "
-    "JOIN audit_run other ON other.connection_revision_id = peer.revision_id "
-    "JOIN job other_job ON other_job.run_id = other.run_id "
-    "WHERE mine.revision_id = r.connection_revision_id AND other.run_id <> r.run_id "
-    f"AND (other_job.state IN {_ACTIVE_JOB_STATES} "
-    "OR other.run_id = ANY (CAST(:submitted AS text[])))) "
+    "AND NOT EXISTS (SELECT 1 FROM executor_connection_revision mine "
+    "JOIN held ON held.connection_id = mine.connection_id "
+    "WHERE mine.revision_id = r.connection_revision_id) "
     "ORDER BY j.priority DESC, j.created_at, j.job_id LIMIT 1 "
     "FOR UPDATE OF r SKIP LOCKED"
 )
