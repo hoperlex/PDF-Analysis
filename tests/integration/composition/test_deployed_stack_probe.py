@@ -114,6 +114,12 @@ if "sha256sum" in line:
         print("%s  %s" % (digest, path))
     sys.exit(0)
 
+if "auditmanager.access.check" in line:
+    # `PROD-02`: the credential gate. Clean unless a case says otherwise (the cases about it are in
+    # `test_default_credential_gate.py`, which builds on this harness).
+    sys.stdout.write(os.environ.get("STUB_GATE_OUTPUT", "access-check GATE OK no published credential") + "\n")
+    sys.exit(int(os.environ.get("STUB_GATE_STATUS", "0")))
+
 if "find" in line:
     root = line.split("find '", 1)[1].split("'", 1)[0]
     staged = inside(root)
@@ -205,6 +211,11 @@ def world(tmp_path: Path):
     (deploy / "verify-deployed.sh").write_text(PROBE.read_text(encoding="utf-8"), "utf-8")
     (deploy / "reload-proxy.sh").write_text(RELOAD.read_text(encoding="utf-8"), "utf-8")
     (deploy / "compose.server.yml").write_text("# stub\n", encoding="utf-8")
+    # `PROD-02`: the probe sources the shared library for its credential-gate section, as every real clone has it.
+    _write(
+        deploy / "lib/proxy-listeners.sh",
+        (PROBE.parent / "lib/proxy-listeners.sh").read_text(encoding="utf-8"),
+    )
     (deploy / "Dockerfile.api").write_text(FAKE_DOCKERFILE_API, encoding="utf-8")
     (deploy / "Dockerfile.web").write_text(FAKE_DOCKERFILE_WEB, encoding="utf-8")
     _write(deploy / "env/alpha.env", ENV_FILE)

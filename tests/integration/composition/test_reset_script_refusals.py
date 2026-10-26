@@ -141,8 +141,9 @@ def _run(
     return completed, log
 
 
-def _mutant(directory: Path, guard: str, *, with_compose: bool = True) -> Path:
-    """A copy of reset.sh with exactly one guard block deleted."""
+def _mutant(directory: Path, guard: str, *, with_compose: bool = True, with_listeners: bool = True) -> Path:
+    """A copy of reset.sh with exactly one guard block deleted. Since `PROD-02` it sits beside the shared
+    library, as the real script does; a case about the library's own guard says `with_listeners=False`."""
     source = RESET.read_text(encoding="utf-8")
     block = re.compile(
         rf"^# >>> guard: {re.escape(guard)}\n.*?^# <<< guard: {re.escape(guard)}\n",
@@ -157,6 +158,11 @@ def _mutant(directory: Path, guard: str, *, with_compose: bool = True) -> Path:
         (directory / "compose.server.yml").write_text("# stub\n", encoding="utf-8")
     target = directory / "reset.sh"
     target.write_text(mutated, encoding="utf-8")
+    if with_listeners:
+        (directory / "lib").mkdir(exist_ok=True)
+        (directory / "lib/proxy-listeners.sh").write_text(
+            (RESET.parent / "lib/proxy-listeners.sh").read_text(encoding="utf-8"), encoding="utf-8"
+        )
     return target
 
 
@@ -279,11 +285,7 @@ class TestTheTwoGuardsThatNeedTheirOwnStaging:
         and refuses to serve it, which is worse than an empty one because it looks
         recovered. Measured against the running stack before this guard was written.
         """
-        staged = tmp_path / "staged"
-        staged.mkdir()
-        (staged / "compose.server.yml").write_text("# stub\n", encoding="utf-8")
-        script = staged / "reset.sh"
-        script.write_text(RESET.read_text(encoding="utf-8"), encoding="utf-8")
+        script = _staged(tmp_path)
         half = tmp_path / "half-a-dump"
         half.mkdir()
         (half / "database.dump").write_bytes(b"PGDMP")  # the objects half is absent
@@ -511,8 +513,11 @@ def test_every_guard_in_the_script_has_a_case_here() -> None:
     """
     markers = re.findall(r"^# >>> guard: ([a-z-]+)$", RESET.read_text(encoding="utf-8"), re.M)
     assert len(markers) == len(set(markers)), markers
-    assert len(markers) == 13, markers
+    assert len(markers) == 14, markers
     covered = {guard for guard, _, _ in CASES} | {
+        # `PROD-02`: a restore sources the shared library before anything is changed;
+        # `TestTheRestoreEndsWithTheCredentialGate` refuses its absence and shows the refusal able to fail.
+        "listeners-library-present",
         "env-file-present",
         "instance-configured",
         "compose-file-present",
@@ -584,6 +589,29 @@ elif "json stat --recursive" in line:
 elif "auditmanager.access.revoke" in line:
     sys.stdout.write("access-revoke REVOKED login=admin\\n")
     sys.exit(int(os.environ.get("STUB_REVOKE_STATUS", "0")))
+elif "auditmanager.access.check" in line and "--gate" in line:
+    # `PROD-02`: the credential gate, the narrower mode. 0 clean (the default), 1 the published pair is valid,
+    # anything else is "could not be answered" (no sentinel at all).
+    gate = int(os.environ.get("STUB_GATE_STATUS", "0"))
+    if gate == 0:
+        sys.stdout.write("access-check GATE OK no published credential\\n")
+    elif gate == 1:
+        sys.stdout.write("access-check GATE DEFAULT CREDENTIAL: login=admin user_uid=usr_x\\n")
+    sys.exit(gate)
+elif "ps --quiet proxy" in line:
+    # `listeners_https_published` asks for the proxy container first; absent unless a case says it is there.
+    if os.environ.get("STUB_PROXY", "0") == "1":
+        sys.stdout.write("container-of-proxy\\n")
+elif "up -d --no-deps proxy" in line:
+    # The proxy is recreated: from then on it publishes nothing on 8443 (a recreate without the 443 overlay).
+    if int(os.environ.get("STUB_PROXY_UP_STATUS", "0")) == 0:
+        open(os.environ["STUB_LOG"] + ".proxy-recreated", "w").write("1")
+    sys.exit(int(os.environ.get("STUB_PROXY_UP_STATUS", "0")))
+elif argv[:1] == ["port"]:
+    recreated = os.path.exists(os.environ["STUB_LOG"] + ".proxy-recreated")
+    out = "" if recreated else os.environ.get("STUB_PORT_OUT", "")
+    sys.stdout.write(out)
+    sys.exit(0 if out else 1)
 elif "auditmanager.access.check" in line:
     status = int(os.environ.get("STUB_CHECK_STATUS", "0"))
     if status == 1:
@@ -647,6 +675,11 @@ def _staged(tmp_path: Path) -> Path:
     (staged / "compose.server.yml").write_text("# stub\n", encoding="utf-8")
     script = staged / "reset.sh"
     script.write_text(RESET.read_text(encoding="utf-8"), encoding="utf-8")
+    # `PROD-02`: a restore sources the shared library (the credential gate and the withdrawal of 443).
+    (staged / "lib").mkdir(exist_ok=True)
+    (staged / "lib/proxy-listeners.sh").write_text(
+        (RESET.parent / "lib/proxy-listeners.sh").read_text(encoding="utf-8"), encoding="utf-8"
+    )
     return script
 
 
@@ -874,6 +907,147 @@ class TestARestoreTakesBackTheCredentialsItPutsBack:
         assert completed.returncode == 0
         assert "CAME BACK ON ITS SHIPPED DEFAULT PASSWORD" not in completed.stdout
         assert "restored. Verify with a read" in completed.stdout
+
+
+class TestTheRestoreEndsWithTheCredentialGate:
+    """`PROD-02` (`R-146i`, `R-146s`, `ADR-0021` section 2, `ADR-0023` section 3).
+
+    A restore can bring the published `admin`/`password` pair back (a dump taken before the forced password
+    change), so it ends by asking the SAME gate a deploy is refused over and, unless the gate is clean, recreates
+    the proxy WITHOUT the 443 overlay. The exit status stays 0 for a completed restore (`R-52`: it reports and
+    does not refuse -- the cases above assert that), except when the door could not be shut: 5.
+    """
+
+    NAME = "rehearsal-host.sslip.io"
+    PUBLISHED = "0.0.0.0:443->8443/tcp\n"
+
+    def _restore(
+        self, tmp_path: Path, env_file: Path, statuses: dict[str, str] | None = None, *, named: bool = True
+    ) -> tuple[subprocess.CompletedProcess[str], str]:
+        dump = tmp_path / "dump"
+        dump.mkdir(parents=True, exist_ok=True)
+        (dump / "database.dump").write_bytes(b"PGDMP")
+        (dump / "objects.attrs").write_text(_sidecar(1), encoding="utf-8")
+        (dump / "objects").mkdir(exist_ok=True)
+        script = _staged(tmp_path)
+        # The ACME overlay `listeners_overlay_files` resolves relative to `infra/deploy`: `<staged>/../acme`.
+        (tmp_path / "acme").mkdir(exist_ok=True)
+        (tmp_path / "acme/compose.acme.yml").write_text("# stub\n", encoding="utf-8")
+        if named:
+            env_file.write_text(env_file.read_text(encoding="utf-8") + f"ALPHA_CERT_NAME={self.NAME}\n", encoding="utf-8")
+        return _run_through_the_dump(
+            script, tmp_path=tmp_path, env_file=env_file, attrs=_sidecar(1), statuses=statuses,
+            mode=("--restore", str(dump)),
+        )
+
+    @staticmethod
+    def _proxy_ups(calls: str) -> list[str]:
+        return [line for line in calls.splitlines() if line.endswith("up -d --no-deps proxy")]
+
+    def test_the_gate_is_asked_inside_the_api_image_after_the_credentials_are_revoked(
+        self, tmp_path: Path, env_file: Path
+    ) -> None:
+        completed, calls = self._restore(tmp_path, env_file)
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        lines = calls.splitlines()
+        revoked = next(i for i, line in enumerate(lines) if "auditmanager.access.revoke" in line)
+        gate = next(i for i, line in enumerate(lines) if "auditmanager.access.check" in line and "--gate" in line)
+        assert revoked < gate, lines
+        assert "--entrypoint python api" in lines[gate], lines[gate]
+        assert "PUBLISHED pair (admin/password) valid again" in completed.stdout, completed.stdout
+
+    def test_a_clean_gate_changes_nothing_about_443(self, tmp_path: Path, env_file: Path) -> None:
+        """A restore NEVER opens 443; only a deploy does, after a clean gate."""
+        completed, calls = self._restore(
+            tmp_path, env_file, statuses={"STUB_PROXY": "1", "STUB_PORT_OUT": self.PUBLISHED}
+        )
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        assert self._proxy_ups(calls) == [], calls
+        assert "left as it was" in completed.stdout, completed.stdout
+
+    def test_the_published_pair_back_recreates_the_proxy_without_the_443_overlay(
+        self, tmp_path: Path, env_file: Path
+    ) -> None:
+        completed, calls = self._restore(
+            tmp_path, env_file,
+            statuses={"STUB_GATE_STATUS": "1", "STUB_PROXY": "1", "STUB_PORT_OUT": self.PUBLISHED},
+        )
+        assert completed.returncode == 0, (
+            "R-52: a completed restore reports; the exit status is the restore's", completed.stdout, completed.stderr
+        )
+        ups = self._proxy_ups(calls)
+        assert len(ups) == 1, calls
+        assert re.search(r"--file \S+compose\.server\.yml --file \S+acme/compose\.acme\.yml up -d --no-deps proxy$", ups[0]), ups[0]
+        assert "compose.tls.yml" not in ups[0], ups[0]
+        assert "YES: admin accepts the published password again" in completed.stdout, completed.stdout
+        assert "Public port 443 is NOT published" in completed.stdout, completed.stdout
+        assert "restored. Verify with a read" in completed.stdout
+
+    def test_an_unanswerable_gate_after_a_restore_is_treated_as_a_finding(
+        self, tmp_path: Path, env_file: Path
+    ) -> None:
+        completed, calls = self._restore(
+            tmp_path, env_file,
+            statuses={"STUB_GATE_STATUS": "2", "STUB_PROXY": "1", "STUB_PORT_OUT": self.PUBLISHED},
+        )
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        assert len(self._proxy_ups(calls)) == 1, calls
+        assert "THE GATE COULD NOT BE ANSWERED" in completed.stdout, completed.stdout
+
+    def test_a_door_that_cannot_be_shut_is_exit_5_and_says_the_command(self, tmp_path: Path, env_file: Path) -> None:
+        completed, _ = self._restore(
+            tmp_path, env_file,
+            statuses={"STUB_GATE_STATUS": "1", "STUB_PROXY": "1", "STUB_PORT_OUT": self.PUBLISHED,
+                      "STUB_PROXY_UP_STATUS": "1"},
+        )
+        assert completed.returncode == 5, (completed.stdout, completed.stderr)
+        assert "PUBLIC PORT 443 COULD NOT BE WITHDRAWN" in completed.stdout, completed.stdout
+        assert "up -d --force-recreate --no-deps proxy" in completed.stdout
+
+    def test_a_finding_with_443_never_published_recreates_nothing(self, tmp_path: Path, env_file: Path) -> None:
+        completed, calls = self._restore(tmp_path, env_file, statuses={"STUB_GATE_STATUS": "1"})
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        assert self._proxy_ups(calls) == [], calls
+        assert "Public port 443 is NOT published" in completed.stdout
+
+    def test_a_stack_with_no_certificate_name_has_no_443_overlay_to_remove(self, tmp_path: Path, env_file: Path) -> None:
+        completed, calls = self._restore(
+            tmp_path, env_file,
+            statuses={"STUB_GATE_STATUS": "1", "STUB_PROXY": "1", "STUB_PORT_OUT": self.PUBLISHED},
+            named=False,
+        )
+        # Nothing the stack builds publishes 8443 without a name; if something does, it cannot be withdrawn
+        # by dropping an overlay that is not there, and the restore says so instead of claiming success.
+        assert self._proxy_ups(calls) == [], calls
+        assert completed.returncode == 5, (completed.stdout, completed.stderr)
+
+    def test_a_missing_library_refuses_before_anything_is_changed(self, tmp_path: Path, env_file: Path) -> None:
+        dump = tmp_path / "dump"
+        dump.mkdir()
+        (dump / "database.dump").write_bytes(b"PGDMP")
+        (dump / "objects.attrs").write_text(_sidecar(1), encoding="utf-8")
+        (dump / "objects").mkdir()
+        script = _staged(tmp_path)
+        (script.parent / "lib/proxy-listeners.sh").unlink()
+        completed, calls = _run_through_the_dump(
+            script, tmp_path=tmp_path, env_file=env_file, attrs=_sidecar(1), mode=("--restore", str(dump)),
+        )
+        assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
+        assert "proxy-listeners.sh is missing or unreadable" in completed.stderr, completed.stderr
+        assert "pg_restore" not in calls and ":/dump:ro" not in calls, calls
+
+    def test_that_guard_is_shown_able_to_fail(self, tmp_path: Path, env_file: Path) -> None:
+        dump = tmp_path / "dump"
+        dump.mkdir()
+        (dump / "database.dump").write_bytes(b"PGDMP")
+        (dump / "objects.attrs").write_text(_sidecar(1), encoding="utf-8")
+        (dump / "objects").mkdir()
+        mutant = _mutant(tmp_path / "mutant", "listeners-library-present", with_listeners=False)
+        completed, _ = _run_through_the_dump(
+            mutant, tmp_path=tmp_path, env_file=env_file, attrs=_sidecar(1), mode=("--restore", str(dump)),
+        )
+        assert "proxy-listeners.sh is missing or unreadable" not in completed.stderr, completed.stderr
+        assert completed.returncode != REFUSED, (completed.stdout, completed.stderr)
 
 
 class TestTheWipeClearsTheSessionRegister:

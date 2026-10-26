@@ -208,6 +208,11 @@ if argv[:1] == ["compose"]:
         if "auditmanager.shared.db.check" in joined:
             sys.stdout.write(setting("STUB_CHECK_OUTPUT", "FOUNDATION-CHECK OK check-db") + "\n")
             sys.exit(0)
+        if "auditmanager.access.check" in joined:
+            # `PROD-02`: the credential gate. Clean unless a case says otherwise; the cases that are
+            # ABOUT the gate live in `test_default_credential_gate.py` with their own stub.
+            sys.stdout.write(setting("STUB_GATE_OUTPUT", "access-check GATE OK no published credential") + "\n")
+            sys.exit(int(setting("STUB_GATE_STATUS", "0")))
         if "openapi_conformance.py" in joined:
             # The served document arrives on STDIN, not as a mount -- see the comment on
             # this guard in deploy.sh. Copying it out here is what lets a case prove that
@@ -301,6 +306,7 @@ def _stage(
     with_example: bool = True,
     dockerfiles: bool = True,
     with_trust_script: bool = False,
+    with_listeners: bool = True,
 ) -> Path:
     """A clone-shaped directory: `<repo>/infra/deploy/deploy.sh` and what it reads.
 
@@ -334,6 +340,13 @@ def _stage(
         # and only for a non-empty `ALPHA_TRUSTED_PROXY_CIDRS`; no other case sets one.
         (deploy / "proxy").mkdir(exist_ok=True)
         shutil.copy2(DEPLOY.parent / "proxy/trusted-proxies.sh", deploy / "proxy/trusted-proxies.sh")
+
+    if with_listeners:
+        # `PROD-02`: the library is sourced for every deploy (the credential gate is asked of every stack), so a
+        # clone-shaped staging carries it, as every real clone does. `listeners-library-present` is shown to
+        # refuse its absence in `test_default_credential_gate.py`.
+        (deploy / "lib").mkdir(exist_ok=True)
+        shutil.copy2(DEPLOY.parent / "lib/proxy-listeners.sh", deploy / "lib/proxy-listeners.sh")
 
     # `D-38`: it exits 0 as before AND leaves a mark, because the thing that went wrong
     # was an ORDER -- the guard that names the cause ran after this script and therefore
@@ -1203,6 +1216,14 @@ ACME_GUARDS = (
     "acme-pair-answerable",
 )
 
+#: The three guards `PROD-02-03-DEPLOY-GATES-01` added: `stand-copy-fresh` (`test_stand_copy_fresh.py`),
+#: `default-credential-gate` and `listeners-library-present` (`test_default_credential_gate.py`).
+DEPLOY_GATE_GUARDS = (
+    "stand-copy-fresh",
+    "default-credential-gate",
+    "listeners-library-present",
+)
+
 
 def test_every_guard_in_the_script_has_a_case_here() -> None:
     """A guard added without a test is caught here rather than in a deployment.
@@ -1218,11 +1239,14 @@ def test_every_guard_in_the_script_has_a_case_here() -> None:
     there too, and 22 since `REAL-IP-EDGE-01` added `trusted-proxies-well-formed`, covered above
     and in :class:`TestTheTrustListIsCheckedBeforeAnythingIsBuilt`, and 27 since
     `PROD-01-TLS-ACME-01` added the five TLS-terminator guards, whose cases live in
-    `test_acme_deploy_guards.py` beside this file and are named in the set below.
+    `test_acme_deploy_guards.py` beside this file and are named in the set below, and 30 since
+    `PROD-02-03-DEPLOY-GATES-01` added `stand-copy-fresh` (cases in `test_stand_copy_fresh.py`),
+    `default-credential-gate` and `listeners-library-present` (cases in
+    `test_default_credential_gate.py`), named in the set below as well.
     """
     markers = re.findall(r"^# >>> guard: ([a-z-]+)$", DEPLOY.read_text(encoding="utf-8"), re.M)
     assert len(markers) == len(set(markers)), markers
-    assert len(markers) == 27, markers
+    assert len(markers) == 30, markers
     covered = set(BEFORE_DOCKER) | set(STAND_GUARDS) | {
         "port-not-foreign",
         "images-built",
@@ -1238,12 +1262,20 @@ def test_every_guard_in_the_script_has_a_case_here() -> None:
         # `PROD-01-TLS-ACME-01`, and their cases are in the file beside this one:
         # `test_acme_deploy_guards.py`. Named here for the reason `identity-policy-known` is.
         *ACME_GUARDS,
+        # `PROD-02-03-DEPLOY-GATES-01`: cases in the two files beside this one.
+        *DEPLOY_GATE_GUARDS,
     }
     assert set(markers) == covered, set(markers) ^ covered
     identity_suite = ROOT / "tests/integration/composition/test_deploy_image_identity.py"
     assert "identity-policy-known" in identity_suite.read_text(encoding="utf-8"), (
         "identity-policy-known is excused here against a file that no longer names it"
     )
+    gate_suites = "".join(
+        (ROOT / f"tests/integration/composition/{name}").read_text(encoding="utf-8")
+        for name in ("test_stand_copy_fresh.py", "test_default_credential_gate.py")
+    )
+    for guard in DEPLOY_GATE_GUARDS:
+        assert guard in gate_suites, f"{guard} is excused here against files that no longer name it"
     acme_suite = (ROOT / "tests/integration/composition/test_acme_deploy_guards.py").read_text(encoding="utf-8")
     for guard in ACME_GUARDS:
         assert guard in acme_suite, f"{guard} is excused here against a file that no longer names it"
