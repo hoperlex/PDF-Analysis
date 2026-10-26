@@ -208,12 +208,12 @@ the published ports (a Docker-published port bypasses `ufw`: `compose.server.yml
   that the owner cannot afford to lose (`R-146b`).
 - **A-3 (`R-146h`).** No machine checks a push and no scan runs unless a person runs it before a release. A
   vulnerable dependency or image can reach the host. `D-122` stays open. Proposed reopen trigger
-  (architect's, to be confirmed): before the first release that follows a published advisory for a
+  (`AD-16`, the architect's, to be confirmed): before the first release that follows a published advisory for a
   component in `uv.lock`, `web/package-lock.json` or the pinned images, or before any release to users
   outside the owner's organisation.
 - **A-4 (architect's consequence of `R-146a` and `R-146b`).** One host, no failover, no copy of
   anything held off that host. A host loss, a provider loss of the VPS, an operator error or a
-  ransomware event ends the service and may end the data. Proposed reopen trigger: the same as A-1,
+  ransomware event ends the service and may end the data. Proposed reopen trigger (`AD-16`): the same as A-1,
   and any decision to promise a recovery time or recovery point to a client.
 
 ## Commitments and their mechanical checks

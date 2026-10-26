@@ -204,7 +204,7 @@ restriction, no ban on retention or training, and no ban on model substitution (
 after the fact by `R-133`, which turns a different reported model into a typed failure, but the text
 has already been sent). Document text therefore reaches OpenRouter and whichever provider it routes to,
 which may retain or train on it. The owner bears this risk; it is not mitigated by anything in the
-product. Proposed reopen trigger (architect's, to be confirmed): the first client who asks for
+product. Proposed reopen trigger (`AD-16`, the architect's, to be confirmed): the first client who asks for
 data-handling terms, any contract that promises confidentiality, or the owner's decision to accept
 `R-146n` item 4.
 
