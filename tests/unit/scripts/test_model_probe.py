@@ -442,7 +442,9 @@ def test_every_probed_model_needs_an_explicit_real_slug(tmp_path: Path) -> None:
 def test_the_report_is_created_exclusively_and_privately(tmp_path: Path) -> None:
     existing = tmp_path / "taken.txt"
     existing.write_text("precious", encoding="utf-8")
-    refused(run(tmp_path, report="taken.txt"))
+    taken = run(tmp_path, report="taken.txt")
+    refused(taken)
+    assert "never overwrites" in taken.err
     assert existing.read_text(encoding="utf-8") == "precious"
     refused(run(tmp_path, report="no-such-dir/report.txt"))
     result = run(tmp_path, report="private.txt")
