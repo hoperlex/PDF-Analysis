@@ -168,14 +168,17 @@ def test_a_submitted_run_is_not_offered_again_and_holds_its_connection(
     handed_to_a_slot = support.queue_run(sessions, revision)
     behind_it = support.queue_run(sessions, revision)
     elsewhere = support.queue_run(sessions, other_revision)
+    unlimited = support.queue_run(sessions, None)
     try:
         # Nothing is claimed yet, so the database alone would offer the first run again.
         assert _hint(sessions) == handed_to_a_slot
         # Handed to a slot: not offered again, and the run behind it waits for the connection.
         assert _hint(sessions, submitted=[handed_to_a_slot]) == elsewhere
-        assert _hint(sessions, submitted=[handed_to_a_slot, elsewhere]) is None
+        assert _hint(sessions, submitted=[handed_to_a_slot, elsewhere]) == unlimited
+        # A run with no connection is held by nothing but its own hand-over.
+        assert _hint(sessions, submitted=[handed_to_a_slot, elsewhere, unlimited]) is None
     finally:
-        for run_id in (handed_to_a_slot, behind_it, elsewhere):
+        for run_id in (handed_to_a_slot, behind_it, elsewhere, unlimited):
             support.cancel(sessions, run_id)
 
 
