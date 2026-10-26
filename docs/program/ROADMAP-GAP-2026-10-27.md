@@ -313,3 +313,76 @@ Not a recommendation. Sizes follow the plan's rule (`docs/program/PRODUCTION-REA
 | P8 | recognised (OCR) text as marked context for the section prompts (`H-7`) | executor input, the preamble, 14 prompts, recordings | none | L by file count; sends more client text to the provider (`A-2`), so the owner's go-ahead |
 
 Reading the list. P1 and P2 are the only options with no contract change and no migration; both widen what a section reports, and `R-146ag` allowed the lanes only to narrow. P4 to P7 are contract slots. P3 is the АР path again and is held by data, not by code.
+
+## 5. What cannot be finished without a human or a host
+
+One list. «Held by» is the debt row, ruling or plan item that carries it. An item that needs the owner's choice is marked **(choice)**; the owner's rule is that a choice goes to a direct poll (`AskUserQuestion`), framed in the concrete case.
+
+**Data, experts and documents**
+
+1. The activation data of АР v3: the include, revise or exclude decision for each of C01–C22, the missing official pages D1–D5, the C15 correction page and the D6 law text, BGE-M3 query vectors with reproducible provenance (the weights are not on the development host), the reviewer's attestation, six reviewed maps and six verified sets. Held by `D-204`, `PROD-12`, `docs/program/AR-V3-BETA-ACTIVATION-RUNBOOK-01.md`.
+2. Real documents: real АР sets and real volumes of the 14 sections, without which no section's quality is measured and no profile leaves «unmeasured». Held by `OD-17`, `A-5`, `D-178`, `D-183`, `D-167`, `D-168`.
+3. Named experts and their slots: the rehearsal, the smoke sessions (B10), and any human review of a profile. Held by `OD-18`, `A-7`, `R-146ag`.
+4. The seeded cases per section: a section's seeded defects are written by someone who knows the discipline. Held by item 5 of the wave table (the generator is АР-shaped) and `A-5`.
+
+**A live model and its terms**
+
+5. The credential and the paid identity probe: `PROD-13`, `R-146e`, `R-146af`; the model pin `W56A-MODEL-PIN-01`; `D-197`, `D-199`.
+6. A live run to measure the token constant and the cost: `D-162`; any paid call above about 5 USD per wave stops for the owner (`R-29`).
+7. Provider terms, retention and routing for client text: accepted risk `A-2` (`R-146f`, `R-146n` item 4); a client asking for terms reopens it.
+
+**The stand and the host**
+
+8. The norms import and the designation of the snapshot `ns_01M59N8QNBVN91ACA2HCE6VE74`: `D-203`, `D-188`, `docs/program/STAND-NORMS-IMPORT-RUNBOOK-01.md`.
+9. TLS: DNS, inbound ports 80 and 443, the staging rehearsal, the first real issuance, the resolution of `ACME_CLIENT_APK_VERSION`, the host nginx cutover that stops another application; deadline 2026-12-16 with `PROD-21` as the interim. Held by `D-227`, `D-191`, `PROD-01`.
+10. The database roles: the second password, `DATABASE_URL` and `MIGRATOR_DATABASE_URL`, the copy key reinstalled. Held by `D-235`, `D-230`.
+11. The deploy gates' owner actions: confirm the seeded `admin` password was changed, install the copy key, take the first real copy, keep the ACME variables out of the live `alpha.env`. Held by `D-230`, `R-146s`, `R-146t`.
+12. Capacity on the 4 GiB VPS: the memory and log limits, pages per minute by document kind, the watchdog. Held by `PROD-05`, `PROD-20`, `D-166`, `D-171`, `D-174`, `D-175`, `R-146ad`.
+13. The backup and restore drill at the current head, the offline copy of the key ring, the inventory of the MinIO volume. Held by `D-216`, `PROD-08`, `PROD-17`, `A-1`, `A-6`, `D-123`.
+14. The live journey on a test-data stand: `D-186`; the live acceptance of what the journey re-based onto ПБ left as «verify live» (`docs/program/PROD-10B-JOURNEY-REBASE-01.md`); the human A13–A20 pass `D-137`.
+15. A complete `make gate` with the literal `GATE OK` on one exact tree in an environment with the disk the preflight needs (this lane measured 2.1 GiB free on the lane filesystem against the 6144 MiB the preflight requires). Held by `D-205`, `PROD-18`, `D-138`, `D-139`, `D-140`.
+16. Release: the host verification and the `v0.7.0` tag owed, the truthful version history, the purge of test data at 1.0, and the push to `origin/main` only on a separate direct instruction naming the exact SHA. Held by `D-203`, `D-156`, `R-146m`, `AGENTS.md` section 6.
+17. The owner stops of the exposure review: `F-01`, `F-08`, `F-09`, `F-19` change who can reach the system. Held by `D-234`, `D-217`.
+18. The vision stage's preconditions: the owner's budget for drawing analysis and the host's model. Held by `G-3` of `docs/program/dispatch/ROADMAP-TO-BETA.md` and items 16 and 17 of the wave table.
+
+**Choices of the owner (each a direct poll)**
+
+19. **(choice)** Whether АР gets findings an expert can decide, by serving the grounded publisher (`src/auditmanager/findings/citation_publication.py:230`) and a decision on a provisional citation, or stays review-only (`R-146g`). Decides items 8, 9, 12, 15 of the workflow and B3.
+20. **(choice)** What `getRunNormVerification` is: implemented behind choice 19, or removed from the frozen surface (a contract change). Today it refuses every call.
+21. **(choice)** Whether the section profiles may be widened: the total-against-rows check, the same quantity in two units, the omission pair, a proposed severity (options P1, P2). `R-146ag` allowed only narrowing.
+22. **(choice)** Whether OCR text may reach the section prompts as marked context (option P8, `H-7`), which sends more client text to the provider (`A-2`) and changes all 14 prompts.
+23. **(choice)** Whether executor routes plus the run's connection satisfy `A-8` (presets), or presets are built (item 22 of the wave table).
+24. **(choice)** Whether a critic stage (`H-10`) is wanted for sections or v3; it was decided for the removed v2.
+25. **(choice)** The contract version line: `1.7.0` or `2.0.0` for the removal of `AnalysisProfileStatus.builtin` (`D-233` item 1), and whether the additive line satisfies B9.
+26. **(choice)** After the capacity measurement: raise the 900-second watchdog or add a page limit. Held by `R-146y`, `PROD-20`.
+27. **(choice)** The run CSV's formula prefixes (`F-11` of `docs/program/EXPOSURE-REVIEW-02.md`; the CSV bytes are `OD-11`), the `п.м` against `м` rule and model-assisted optimisation (`D-184`, `D-185`, `U-06`).
+28. **(choice)** The vendor-list and price semantics of «Оптимизация проекта» for sections other than АР (whose positions count as «the same kind of product» outside the АР vocabulary of `cheaper_analog`) — needed before lane `OPT-PROJECT-ALL-SECTIONS-01` is read as finished, not before it starts.
+
+## 6. Recommended dispatch order for the remaining code work
+
+Only lanes that need no human decision and no host to be built and proved in recorded mode. The host here is the constraint: `df -h` on this lane's filesystem printed 2.1 GiB available (99 % used), `D-205` measures MinIO refusing writes below about 1.2 GiB, and `CODE-FIRST-TO-BETA.md` section 2.2 limits parallel lanes while the host cannot hold two stands. «Container-free» means the check runs with no database or object store; the other checks need a lane stack and the disk above 1.5 GiB. Sizes follow the plan's rule (files touched counted from the tree, hotspot files make a lane at least M).
+
+| Lane | Result | Allowed hotspots | Size (files) | Depends on | Check that would prove it |
+| --- | --- | --- | --- | --- | --- |
+| `SECTION-PROMPT-SENTENCE-GUARD-01` | the 25 narrowing sentences of `SECTION-REVIEW-LEDGER-01.md` (and each section's «adds» / «removes» fragment) are read by a test, so a later prompt edit with a consistent recording rebuild cannot silently drop one (`D-224` residual) | none: `tests/unit/analysis/text_profiles/**` only | S (2: the test and its fragment table) | none | container-free: `pytest -q tests/unit/analysis/text_profiles`; mutation: delete one fragment from a temp copy of one package and see the new test red |
+| `WEB-SECTION-COPY-01` | the dashboard sections panel stops blaming the upload form for «Без раздела», and `PROJECT_SECTIONS.analysed` says what is true after W59 and `PROD-11` (14 text profiles; АР by the six-Run path) | none: `web/src/widgets/dashboard/**`, `web/src/entities/project/model/section.ts` and the tests that pin that copy | S (about 5) | none | `npm --prefix web test -- --run tests/unit/widgets/dashboard.test.ts tests/unit/projects/section-catalogue.test.ts tests/guards/rendered-language.guard.test.ts`; web lint and typecheck |
+| `OPT-PROJECT-ALL-SECTIONS-01` | «Спецификация и цены» and «Предложения» accept a version confirmed in any section: the guard at `src/auditmanager/optimisation/project_match.py:281` is replaced by the version's own section, the vendor list is read for that section, the two screen filters go; the stale text of `uploadDocument` in the contract is repaired in the same reseal; the `section_not_ar` value is kept and documented as no longer produced for a confirmed section | **contract** (sole owner for its wave: `contracts/api/v1/openapi.json`, `web/openapi/openapi.json`, the generated client, `web/FRONTEND_LOCK.json`); `src/auditmanager/optimisation/**`; two web widgets; no migration | L (about 25) | choice 28 only for the meaning of «same kind of product» outside АР; code can start with the existing rule | `pytest -q tests/unit/optimisation tests/integration/optimisation tests/contract/api_v1` (the integration part needs a lane stack); `npm --prefix web run api:verify`; a new case: a ПБ version with a price list gets a pass |
+| `SECTION-CHUNKED-ANALYSIS-01` | a section run analyses a volume above the one-call budget in whole-page windows, each window one call under one run ceiling with its own effect journal and resume; a run states in its summary that windows are independent; `analysis_input_budget_exceeded` becomes «more than N windows»; quotes keep document-global offsets | **composition root** (`src/auditmanager/bootstrap/providers.py`, the budget wiring); `src/auditmanager/runs/executor.py`; `src/auditmanager/analysis/text/**`; `src/auditmanager/jobs/**` for the per-window journal; **not** the contract (prose that mentions the budget goes to the contract owner of the wave) | L (about 20 to 30) | none | `pytest -q tests/unit/analysis tests/integration/analysis_text tests/integration/runs/test_input_budget.py` plus new cases on a lane stack: a three-window recorded text, a kill between windows resumes without a second paid call, the cost ceiling counts all windows, a volume of N+1 windows is refused with both figures |
+| `COMPARE-PERSISTED-SUMMARY-01` | an expert's approval of a sheet pairing is stored (append-only); the AI summary is generated over approved pairs only, in recorded mode first, never alters the raw differences, and is shown beside them | **contract and migration head** (`0034`), composition root (`src/auditmanager/bootstrap/adapters.py`); `src/auditmanager/comparison/**`; the version-comparison widget | L (about 30) | the contract slot of `OPT-PROJECT-ALL-SECTIONS-01` is released first | `pytest -q tests/integration/comparison tests/integration/db tests/contract/api_v1` on a lane stack; the migration upgrade on an isolated database; `npm --prefix web run api:verify`; a live summary call is out of scope (`R-29`) |
+
+**Order and parallel plan.** Wave A: `OPT-PROJECT-ALL-SECTIONS-01` (owns the contract), `SECTION-CHUNKED-ANALYSIS-01` (owns the composition root and the executor), `SECTION-PROMPT-SENTENCE-GUARD-01` and `WEB-SECTION-COPY-01`. Their hotspots are disjoint, so all four may run together on a host that holds them; on the host as measured, pair one heavy lane with one light lane (the sentence guard and the web copy are container-free or web-only) and start the second heavy lane when disk allows. Wave B: `COMPARE-PERSISTED-SUMMARY-01` after the contract slot of wave A is released and merged, because both change `contracts/api/v1/openapi.json`. Two branches already built wait for the integrator, not for a lane: `agent/harden-01` (tip `48f74b5b`, finding fixes of `EXPOSURE-REVIEW-02`) and `agent/erase-wrap-01` (tip `b8fccf77`, `PROD-07` wrapper, `PROD-08`, the logging half of `PROD-05b`); the rest of the production items keep the order of `docs/program/PRODUCTION-READINESS-PLAN-01.md` section 4.
+
+**Not lanes, and why.** The widening of section checks (options P1, P2, P8) is an owner choice (items 21 and 22 above). A critic, presets, block analysis and region evidence wait for a choice or for the vision budget. The АР findings and `getRunNormVerification` wait for choice 19. `D-233` item 2 (stale `1.6.0` in `docs/program/ALPHA_ROADMAP.md` and `docs/program/P02_SEAMS.md`) needs no lane: `grep -n '1\.6\.0' docs/program/ALPHA_ROADMAP.md docs/program/P02_SEAMS.md` prints nothing on this tree, so that part of the row is stale (the same class of staleness as `D-206`).
+
+## 7. What this report does not establish
+
+- **Quality.** Nothing about what any of the 14 profiles finds or misses on a real document. The recordings are synthetic and authored over the АР corpus; the status `reviewed` carries no human review (`R-146ag`, `A-7`); the added narrowing sentences are measured by nothing.
+- **Live behaviour.** Nothing ran on a stand, a browser or a real model. «Works» in section 3 means code and a pinning test exist; this lane ran only the 149 container-free tests named in section 2.1 (all passed) and the checker below. It did not run the integration suites, the web suite or any journey.
+- **The state of the stand.** Which commit is deployed, whether the live `admin` password was changed, whether a norms snapshot is designated, how much data it holds.
+- **That the complete gate would pass.** None was run and none can run on this host (`D-205`).
+- **The reading of the 158 excluded items.** The buckets in section 2.3 are the lane's reading of each item's stated reason (decided by the lane); another reader may place a mixed item (for example item 5 of АИ, which is both a required presence and an omission pair) in another bucket. The bullet counts (141, 158, 62) are counted from the record and reproducible with the command of the task file.
+- **Sizes.** File counts of the lanes are estimates from greps on this tree; the options of section 4.3 and the lanes of section 6 were not prototyped.
+- **A calendar.** None is given; the tree holds no calibrated estimate for these lanes.
+- **Items the register may already have closed.** `D-206` says rows go stale; this lane re-measured only the rows it cites and found `D-233` item 2 already done. The other open rows of `D-141`…`D-177` were not re-measured.
+
+**Checker.** Every backticked token of this document and of its task file was extracted and checked against the tree, `contracts/api/v1/openapi.json`, `docs/program/DEBT_REGISTER.md` and `docs/program/OWNER_RULINGS_2026-09-17.md` by a script kept outside git: CHECKER_LINE
