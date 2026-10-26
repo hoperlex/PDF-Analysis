@@ -563,7 +563,9 @@ def _widen_stage_check(session: Session) -> None:
     name = session.execute(text("SELECT current_database()")).scalar_one()
     _require_probe_database(name)
     admitted = re.findall(r"'([a-z0-9_]+)'::text", _stage_check(session))
-    assert CITE_STAGE not in admitted and len(admitted) == 9, admitted
+    if CITE_STAGE in admitted:
+        return  # a migration has since admitted it: fact 1 turns red, there is nothing to widen
+    assert len(admitted) == 9, admitted
     listed = ", ".join(f"'{stage}'::text" for stage in (*admitted, CITE_STAGE))
     session.execute(text(f"ALTER TABLE stage_result DROP CONSTRAINT {STAGE_CHECK}"))
     session.execute(text(
