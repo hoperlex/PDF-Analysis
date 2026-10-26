@@ -96,7 +96,7 @@ No section, package, route, error code or migration is added or removed. The fra
       }
       assert directories == {code.lower() for code in RECORDED_SECTIONS} | {"ar_specification"}
   ```
-- interpretation: the adapter and the test both enumerate `fixtures/recorded/sections` only; `fixtures/recorded/sections_widen` is a sibling of it, not a child, so neither reads it. A directory filed under `sections/` instead is refused by the test (mutation M-J5 of the report). No other code or test enumerates `fixtures/recorded` as a whole (`rg` over `src tests tools scripts infra` for `fixtures/recorded` outside the two named subdirectories finds only the strings in P-06).
+- interpretation: the adapter and the test both enumerate `fixtures/recorded/sections` only; `fixtures/recorded/sections_widen` is a sibling of it, not a child, so neither reads it. A directory filed under `sections/` instead is refused by the test (mutation M16 of the report). No other code or test enumerates `fixtures/recorded` as a whole (`rg` over `src tests tools scripts infra` for `fixtures/recorded` outside the two named subdirectories finds only the strings in P-06).
 
 ### P-06 — `fixtures/recorded/` is copied into the API image and hashed into the build identity
 - captured_at: 2026-10-27
