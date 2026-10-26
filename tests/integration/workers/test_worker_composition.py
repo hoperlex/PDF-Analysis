@@ -25,6 +25,7 @@ from auditmanager.bootstrap.public import (
 from auditmanager.bootstrap.settings import (
     API_TOKEN_ENV,
     EXECUTION_ROLE_ENV,
+    WORKER_SLOTS_ENV,
     WORKER_STATE_DIR_ENV,
     load,
 )
@@ -246,7 +247,10 @@ class TestTheComposeService:
         assert API_TOKEN_ENV in api
         assert API_TOKEN_ENV not in worker
         assert API_TOKEN_ENV not in self.blocks["worker"]
-        assert worker - {WORKER_STATE_DIR_ENV} == api - {API_TOKEN_ENV}
+        # The two worker-only names: where the worker writes its identity, and how many runs it
+        # executes at once (`EXEC-PAR-QUEUE-01`; the `api` never reads it).
+        assert worker - {WORKER_STATE_DIR_ENV, WORKER_SLOTS_ENV} == api - {API_TOKEN_ENV}
+        assert WORKER_SLOTS_ENV in worker and WORKER_SLOTS_ENV not in api
 
     def test_the_worker_runs_the_api_image_as_the_worker_command(self) -> None:
         worker = self.blocks["worker"]
