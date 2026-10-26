@@ -139,6 +139,10 @@ def seen(destination):
 if argv[:1] == ["compose"]:
     if "ps" in argv and "--quiet" in argv:
         print("container-" + argv[-1])
+    if "auditmanager.access.check" in line:
+        # `PROD-02`: `verify-deployed.sh` ends by asking the credential gate. These cases are about the proxy's
+        # configuration, so the published pair is not valid here.
+        print("access-check GATE OK no published credential")
     sys.exit(0)
 
 if argv[:1] == ["inspect"]:
@@ -241,7 +245,7 @@ class _Host:
 
         _write(self.repo / "src/app.py", "the application\n")
         _write(self.repo / "web/package.json", '{"name": "web"}\n')
-        for name in ("verify-deployed.sh", "reload-proxy.sh"):
+        for name in ("verify-deployed.sh", "reload-proxy.sh", "lib/proxy-listeners.sh"):
             _write(self.deploy / name, (DEPLOY_DIR / name).read_text(encoding="utf-8"))
         _write(self.deploy / "compose.server.yml", "# stub\n")
         _write(self.deploy / "Dockerfile.api", FAKE_DOCKERFILE_API)
@@ -563,9 +567,9 @@ server {
 }
 """
 
-#: NOT AN APPLICATION. `deploy.sh` asks the api image two things -- the database check and
-#: the conformance check -- and there is no application here to answer them. This answers
-#: both with their success lines so the drive reaches the proxy step; nothing about the
+#: NOT AN APPLICATION. `deploy.sh` asks the api image three things -- the database check,
+#: the credential gate (`PROD-02`) and the conformance check -- and there is no application here to answer
+#: them. This answers all three with their success lines so the drive reaches the proxy step; nothing about the
 #: application is claimed by a stand run. It never reads its standard input: `deploy.sh`
 #: pipes nothing into the conformance check since `R-31`, and a read would wait forever on
 #: whatever stdin the drive was started with.
@@ -573,6 +577,7 @@ STAND_PYTHON = """\
 #!/bin/sh
 case "$*" in
     *auditmanager.shared.db.check*) echo "FOUNDATION-CHECK OK check-db" ;;
+    *auditmanager.access.check*) echo "access-check GATE OK no published credential" ;;
     *) echo "differences: 0 (stand-in: there is no application here)" ;;
 esac
 """
@@ -631,6 +636,9 @@ class Stand:
         _write(self.repo / "tests/contract/api_v1/openapi_conformance.py", "# stand\n")
         for name in ("deploy.sh", "reload-proxy.sh"):
             _write(self.deploy / name, (self.scripts / name).read_text(encoding="utf-8"))
+        # `PROD-02`: both scripts source the shared library (the credential gate). The scripts "as they were
+        # before the repair" predate it and simply never read it.
+        _write(self.deploy / "lib/proxy-listeners.sh", (DEPLOY_DIR / "lib/proxy-listeners.sh").read_text(encoding="utf-8"))
         _write(self.deploy / "verify-deployed.sh", self.probe.read_text(encoding="utf-8"))
         for name in ("deploy.sh", "reload-proxy.sh", "verify-deployed.sh"):
             (self.deploy / name).chmod(0o755)
