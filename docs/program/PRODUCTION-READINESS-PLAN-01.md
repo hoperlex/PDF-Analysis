@@ -228,7 +228,7 @@ Rules: no lane starts in a wave that names its hotspot for another lane; no wave
 
 ## 5. The accepted-risk register
 
-`A-1` to `A-3`, `A-5`, `A-6` and `A-7` are the owner's (`R-146b`, `R-146f`, `R-146h`, `R-146v`, `R-146ae`, `R-146ag`); `A-4` is the architect's consequence of `R-146a` and `R-146b`. The reopen triggers of `A-2`, `A-3` and `A-4` are confirmed by `R-146w` (`AD-16`); the trigger of `A-5` is given with `R-146v`'s application.
+`A-1` to `A-3`, `A-5`, `A-6`, `A-7` and `A-8` are the owner's (`R-146b`, `R-146f`, `R-146h`, `R-146v`, `R-146ae`, `R-146ag`, `R-146am`); `A-4` is the architect's consequence of `R-146a` and `R-146b`. The reopen triggers of `A-2`, `A-3` and `A-4` are confirmed by `R-146w` (`AD-16`); the trigger of `A-5` is given with `R-146v`'s application.
 
 | Id | Risk, stated plainly | Owner's words | Reopen trigger |
 | --- | --- | --- | --- |
@@ -240,6 +240,7 @@ Rules: no lane starts in a wave that names its hotspot for another lane; no wave
 
 | A-6 | The MinIO in the stack is built from source with an archived upstream and its volume is not inventoried; no scan covers it. | `R-146ae` (not the recommended option) | a published advisory against MinIO, any loss of objects, or a client asking for a storage statement |
 | A-7 | The status `reviewed` on the 14 section profiles carries no human review (neither an expert nor the owner); it is the outcome of a lane's written decisions on the open questions of each record and a judge's read. | `R-146ag` (not the recommended option) | the first section whose real-text output a human rejects, any client-facing statement that calls these profiles verified, or the owner naming experts (`OD-18`) |
+| A-8 | One person can raise and restore the stand; when that person is unavailable nobody can. | `R-146am` | a second person being available, or the first period of real use ending with an incident that the single operator could not close |
 
 Not accepted and therefore not a risk register entry: `R-146n` item 4 (no restriction of routing or substitution); it is the cause of `A-2`.
 
@@ -265,6 +266,10 @@ Not accepted and therefore not a risk register entry: `R-146n` item 4 (no restri
 | `R-146ag` | `AD-15` narrowed: a section is full without any human review; `A-7` |
 | `R-146ah` | no database migration for the sections |
 | `R-146ai` | at most four section lanes at a time |
+| `R-146aj` | legal hold is a rule of procedure: no erase without the owner's permission |
+| `R-146ak` | classification labels: not introduced, not fixed |
+| `R-146al` | users are the organisation's employees; `NORM-Q04` does not block |
+| `R-146am` | one operator; `A-8` |
 
 ## 7. Decisions still open
 
@@ -272,12 +277,12 @@ Not accepted and therefore not a risk register entry: `R-146n` item 4 (no restri
 2. Nothing: the ACME mechanism is confirmed (`R-146aa`) and the server name is given (`R-146ac`); `PROD-01` is released.
 3. The `AD-18` choice after `PROD-20`'s measurement: raise the 900-second watchdog or a page limit.
 4. `PROD-19`: settled as an accepted risk (`R-146ae`, `A-6`); it reopens on its trigger.
-5. The legal-hold authority and the classification labels (`ADR-0014`).
-6. The licensing review before any external corpus-backed release (`NORM-Q04`).
-7. Whether beta users are internal or external (`D-4.1`).
+5. The legal-hold authority is settled as a rule of procedure (`R-146aj`); the classification labels are left open on purpose (`R-146ak`).
+6. Nothing for 1.0: `NORM-Q04` does not block (`R-146al`); it reopens before any outside access.
+7. Nothing: the users are the organisation's employees (`R-146al`).
 8. Nothing: the VPS has 4 GB RAM (`R-146ad`); disk and vCPU were not given.
 9. Off-host custody of anything (dumps, key ring, bucket): not asked.
-10. A second person to run the stand.
+10. Nothing: one operator, accepted (`R-146am`, `A-8`).
 11. Who the section experts are (`OD-18`): not needed while `R-146ag` stands.
 
 ## 8. What this plan does not establish
