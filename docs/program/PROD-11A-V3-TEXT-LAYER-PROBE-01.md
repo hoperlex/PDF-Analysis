@@ -99,7 +99,7 @@ M14 is the proof that a later fix turns this module red on purpose, and an indep
 | Command | Result |
 | --- | --- |
 | the module (above) | 15 passed, about 13 s |
-| `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py` (clean committed tree) | see the lane answer for the count |
+| `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py` (clean committed tree) | 105 passed, about 25 s |
 | governance one-liner on the task file | `[]` |
 | `git diff --check 0e663fd0..HEAD` | exit 0 |
 
