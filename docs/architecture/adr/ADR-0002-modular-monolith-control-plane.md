@@ -65,3 +65,5 @@ connections and `R-133` on the run path. `EXEC-PULL-01` adds the runner API and 
 of `runs/scope.py`. `EXEC-AGENT-01`, `EXEC-SSH-01` and `EXEC-VPN-01` add the unattended agent, the
 SSH kinds and the WireGuard runbook. Until a slice merges, W54 behaviour stands. This addendum
 itself changes no runtime behaviour.
+
+> **Note 2026-10-27 (`PROD-16`, superseding the closing paragraph above).** That paragraph was written before the slices. `EXEC-SEAL-01`, `EXEC-HTTP-01`, `EXEC-PULL-01`, `EXEC-AGENT-01`, `EXEC-SSH-01` and `EXEC-VPN-01` have merged (`git log --oneline --grep=EXEC-` lists them; `docs/program/CURRENT_STATE.md` and the `EXEC-*` task files describe what each serves), so «Nothing above exists in the tree yet» and «Until a slice merges, W54 behaviour stands» are no longer true. The paragraph is kept as the historical statement of the plan; the tree and `CURRENT_STATE.md` are the record.
