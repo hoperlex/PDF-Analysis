@@ -143,7 +143,7 @@ From `/root/projects/PDF-Analysis/.local/worktrees/section-gp-full-01`, shared v
 | `npx vitest run tests/unit/analysis-settings` in `web/` (`node_modules` linked from `gate-night`, untracked) | not run | `7 files, 95 passed` |
 | governance one-liner on the task file | not run | `[]` |
 
-The final contract run, `git diff --check` and the path proof are under «Final checks» at the end.
+The final contract run, `git diff --check` and the path proof are under «Final checks» below.
 
 Free disk (`df -h /`): 1.9 GiB at the start. No docker command, no push, no model call, no process killed.
 
@@ -166,4 +166,27 @@ Free disk (`df -h /`): 1.9 GiB at the start. No docker command, no push, no mode
 
 ## Forbidden paths untouched
 
-See «Final checks».
+`git diff --name-only --no-renames 3c80af0e62c71f04d1e5b1178e0afbe7db6f7d6c..HEAD` on the tip of the branch prints exactly these seven paths, all inside the task's allowed paths (without `--no-renames` git folds the old recording into a rename and prints six):
+
+```text
+docs/program/SECTION-GP-FULL-01.md
+docs/program/tasks/SECTION-GP-FULL-01.md
+fixtures/recorded/sections/gp/9dbe139a3b025683b91448992b6890a0a7bd54750e95969a3a396c60b7a8b959.json
+fixtures/recorded/sections/gp/d6e106170da12a9a764a218a5bdb7207a355b02563d25e759663e2fcc2f7466e.json
+src/auditmanager/analysis/text/profiles/gp/profile.json
+src/auditmanager/analysis/text/profiles/gp/system_prompt.md
+tests/unit/analysis/text_profiles/section_profile_expectations.json
+```
+
+No other section's files, no `W59-SECTION-PROFILES-01.md`, registry, `P02_LOCK.json`, `contracts/**`, migration, `web/**`, `infra/**` or test file appears; `build_fixtures.py` is unchanged. The legacy repository was only read (`git -C /root/projects/PDF-proverka status --short | wc -l` prints `0` before and after).
+
+## Final checks
+
+On the committed tree (`git status --short` empty), at the commit before this paragraph:
+
+| Command | Result |
+|---|---|
+| `pytest tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py` | `105 passed` |
+| governance one-liner on `docs/program/tasks/SECTION-GP-FULL-01.md` | `[]` |
+| `git diff --check 3c80af0e..HEAD` | rc 0 |
+| section set, `build_fixtures.py --check`, HTTP test, web test | `211 passed`; `fixtures match`; `4 passed`; `95 passed` |
