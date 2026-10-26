@@ -32,11 +32,13 @@ from typing import Any
 import pytest
 from sqlalchemy import Engine, text
 
+from auditmanager.access import audit as access_audit
 from auditmanager.access.public import UserRepository
 from auditmanager.ingest import IngestService
 from auditmanager.shared.db.engine import create_database_engine
 from auditmanager.shared.db.migrations import head_revision
 from auditmanager.shared.db.session import create_session_factory
+from auditmanager.shared.identity import AuditEventId, RunId
 from auditmanager.storage import S3BlobStore, S3StorageSettings
 from scripts.recovery import product_purge as tool
 from scripts.recovery.schema_coverage import EXEMPT_FROM_FINGERPRINT, TABLES
@@ -104,7 +106,12 @@ def test_a_dry_run_prints_the_classification_with_exact_counts_and_changes_nothi
         assert re.search(rf"^  {table}  \({before['tables'][table][0]} rows\)$", out, re.MULTILINE), table
     assert f"  project  ({before['tables']['project'][0]} rows)" in out
     assert "-- PRODUCT tables: every row goes (TRUNCATE) --" in out and "-- KEEP tables: never written --" in out
-    assert "  audit_event  (delete 24 rows, keep 3 rows)" in out
+    # `PROD-06`: 3 `norm_custody.*` (the custody ledger) + 4 `access.*` that the seed journals
+    # through the real writer: three role grants (`synthetic_drill_seed`, host-style) and the
+    # administrator's changed password. The keep side was 3 rows before the access events existed.
+    assert digest_of(stand.engine, "audit_event", "starts_with(event_type, 'norm_custody.')")[0] == 3
+    assert digest_of(stand.engine, "audit_event", "starts_with(event_type, 'access.')")[0] == 4
+    assert "  audit_event  (delete 24 rows, keep 7 rows)" in out
     assert "  command_record  (delete 10 rows, keep 1 rows)" in out
     assert "norm-owned objects (the custody ledger's, never touched): 2" in out
     assert "other objects (named by no row; never touched): 1 (blobs/ 1)" in out
@@ -118,7 +125,12 @@ def test_the_purge_removes_every_product_row_and_object_and_keeps_the_rest_byte_
 ) -> None:
     before = state_of(stand)
     keep_tables = sorted(tool.KEEP_TABLES)
-    audit_keep = digest_of(stand.engine, "audit_event", "starts_with(event_type, 'norm_custody.')")
+    custody_keep = digest_of(stand.engine, "audit_event", "starts_with(event_type, 'norm_custody.')")
+    # `PROD-06`: the account side's journal is kept as well; the test's own predicate, not the tool's.
+    access_keep = digest_of(stand.engine, "audit_event", "starts_with(event_type, 'access.')")
+    audit_keep = digest_of(
+        stand.engine, "audit_event",
+        "starts_with(event_type, 'norm_custody.') OR starts_with(event_type, 'access.')")
     command_keep = digest_of(stand.engine, "command_record", "command_type = 'approve_registration'")
     blob_keep = digest_of(stand.engine, "blob", "blob_id IN (SELECT blob_id FROM norm_custody_binding "
                           "UNION SELECT set_blob_id FROM norm_retrieval_set "
@@ -147,7 +159,10 @@ def test_the_purge_removes_every_product_row_and_object_and_keeps_the_rest_byte_
     assert before["tables"]["alembic_version"] == after["tables"]["alembic_version"]
     assert digest_of(stand.engine, "app_user")[0] == before["tables"]["app_user"][0] >= 4
     # the mixed tables hold exactly their keep rows
-    assert digest_of(stand.engine, "audit_event") == audit_keep and audit_keep[0] == 3
+    assert digest_of(stand.engine, "audit_event") == audit_keep and audit_keep[0] == 7
+    assert custody_keep[0] == 3 and access_keep[0] == 4
+    assert digest_of(stand.engine, "audit_event", "starts_with(event_type, 'norm_custody.')") == custody_keep
+    assert digest_of(stand.engine, "audit_event", "starts_with(event_type, 'access.')") == access_keep
     assert digest_of(stand.engine, "command_record") == command_keep and command_keep[0] == 1
     assert digest_of(stand.engine, "blob") == blob_keep and blob_keep[0] == 2
     # objects: product gone, the custody ledger's and the stray untouched, byte for byte
@@ -596,6 +611,66 @@ def test_the_executor_configuration_is_kept_by_a_product_purge() -> None:
     assert "executor." in tool.KEEP_EVENT_PREFIXES
     assert "starts_with(t.event_type, 'executor.')" in tool._predicates([])["audit_event"][0]
     assert not any("executor." .startswith(prefix) for prefix in tool.PRODUCT_EVENT_PREFIXES)
+
+
+def test_the_access_journal_is_kept_by_a_product_purge() -> None:
+    """`PROD-06`, ADR-0023 section 4: "the 1.0 purge keeps these events" -- the six ``access.*`` types.
+
+    No database: the family is in the tuple, every type the writer can append starts with a keep
+    prefix and with no product prefix, and the prefix reaches the SQL that decides which rows stay
+    (the real-rows half is ``test_a_purge_keeps_each_of_the_six_access_event_types``). The tool's
+    ``event-types-classified`` guard stops on a type nobody classified, so an unclassified seventh
+    type would be a refusal on the stand; this is the early way.
+    """
+    assert "access." in tool.KEEP_EVENT_PREFIXES
+    assert len(access_audit.ACCESS_EVENT_TYPES) == 6
+    for event_type in access_audit.ACCESS_EVENT_TYPES:
+        assert event_type.startswith(tool.KEEP_EVENT_PREFIXES), event_type
+        assert not event_type.startswith(tool.PRODUCT_EVENT_PREFIXES), event_type
+    keep, delete = tool._predicates([])["audit_event"]
+    assert "starts_with(t.event_type, 'access.')" in keep and delete == f"NOT {keep}"
+
+
+def test_a_purge_keeps_each_of_the_six_access_event_types(stand: Stand, tmp_path: Path) -> None:
+    """One event of each of the six types, written by the real writer, survives the whole purge.
+
+    Beside them a product event (``audit_run.created``) that must go, so the keep is shown to be
+    a classification and not "nothing was deleted". The surviving rows are compared with the
+    test's own digest, before and after, by identity.
+    """
+    with stand.engine.connect() as connection:
+        subject = connection.execute(text("SELECT user_uid FROM app_user WHERE login = 'admin'")).scalar_one()
+        actor = connection.execute(text(
+            "SELECT user_uid FROM app_user WHERE login <> 'admin' ORDER BY login LIMIT 1")).scalar_one()
+    with create_session_factory(stand.engine).begin() as session:
+        access_audit.record_sign_in_succeeded(session, subject_uid=subject, default_credential=False)
+        access_audit.record_sign_in_blocked(session, subject_uid=subject, failures=5)
+        access_audit.record_role_granted(
+            session, subject_uid=subject, role="expert", actor_uid=None, source=access_audit.SOURCE_HOST_CLI)
+        access_audit.record_role_revoked(session, subject_uid=subject, role="expert", actor_uid=actor)
+        access_audit.record_password_changed(session, subject_uid=subject)
+        access_audit.record_password_reset(session, subject_uid=subject, actor_uid=actor)
+        session.execute(text(
+            "INSERT INTO audit_event (audit_event_id, event_type, aggregate_type, aggregate_id, payload) "
+            "VALUES (:e, 'audit_run.created', 'AuditRun', :a, CAST('{}' AS jsonb))"),
+            {"e": str(AuditEventId.new()), "a": str(RunId.new())})
+    where = "starts_with(event_type, 'access.')"
+    with stand.engine.connect() as connection:
+        types_before = set(connection.execute(text(
+            f"SELECT DISTINCT event_type FROM audit_event WHERE {where}")).scalars())
+    assert types_before == set(access_audit.ACCESS_EVENT_TYPES)
+    before = digest_of(stand.engine, "audit_event", where)
+    assert before[0] == 4 + 6  # the seed's four, and ours
+
+    steps = full_purge(tool, stand, tmp_path / "dump")
+
+    assert steps["apply"][0] == 0 and steps["delete"][0] == 0, steps
+    assert digest_of(stand.engine, "audit_event", where) == before
+    with stand.engine.connect() as connection:
+        assert set(connection.execute(text(
+            f"SELECT DISTINCT event_type FROM audit_event WHERE {where}")).scalars()) == types_before
+        assert connection.execute(text(
+            "SELECT count(*) FROM audit_event WHERE event_type = 'audit_run.created'")).scalar_one() == 0
 
 
 def test_the_runner_tokens_are_kept_and_the_tasks_are_purged_with_the_product() -> None:

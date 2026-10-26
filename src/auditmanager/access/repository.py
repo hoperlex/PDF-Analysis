@@ -83,6 +83,14 @@ runtime half of the visibility the seeded ``admin`` account needs; the database 
 the column itself, and ``python -m auditmanager.access.check`` reports it without
 anybody having to log in. The warning is not rate-limited and not suppressible: an
 operator who is tired of reading it changes the password, which is the point.
+
+**Three of the writes here are journalled** (`PROD-06`, ADR-0023 section 4): an accepted
+password (``access.sign_in_succeeded``), the one refused attempt that starts a cooling-off
+period (``access.sign_in_blocked``), and a password change (``access.password_changed``). The
+rows go into ``audit_event`` through :mod:`auditmanager.access.audit` on the caller's own
+session, so they commit and roll back with the change they describe. Every other refused
+attempt, and every attempt on a login that is not an account, writes nothing to the journal --
+that is what keeps the append-only table from being grown by guessing.
 """
 
 from __future__ import annotations
@@ -94,6 +102,11 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
+from auditmanager.access.audit import (
+    record_password_changed,
+    record_sign_in_blocked,
+    record_sign_in_succeeded,
+)
 from auditmanager.access.models import (
     CredentialStanding,
     UserRecord,
@@ -635,6 +648,13 @@ class UserRepository:
         if row is None:  # pragma: no cover - the row was read microseconds ago
             return None
         record = _record(row)
+        # `PROD-06` (ADR-0023 section 4): the acceptance is journalled in the transaction that
+        # clears the counters, so a sign-in without its event cannot commit. Not on a refusal.
+        record_sign_in_succeeded(
+            session,
+            subject_uid=str(record.user_uid),
+            default_credential=record.is_default_credential,
+        )
         if record.is_default_credential:
             _log.warning(
                 "%s: user %r signed in with the password this system was seeded with. "
@@ -676,6 +696,14 @@ class UserRepository:
         # Non-NULL here means *this attempt shut it*: a live block is refused before this
         # statement runs, and a spent one is set to NULL by it. So there is exactly one of
         # these per cooling-off period, however hard anybody knocks.
+        #
+        # `PROD-06`: that is also why this is the one failed attempt the journal records. An
+        # attacker guessing cannot grow the table: at most one row per account per cooling-off
+        # period. Both callers (the sign-in and the password change's proof of the current
+        # password, C-10) move this one brake, so both are journalled here and nowhere else.
+        record_sign_in_blocked(
+            session, subject_uid=str(record.user_uid), failures=record.failed_sign_ins
+        )
         _log.warning(
             "%s: %r has been refused %d times in a row and is now shut until %s. No "
             "password is consulted until then, including the right one. Credentials "
@@ -849,6 +877,8 @@ class UserRepository:
         if row is None:  # pragma: no cover - the row was read microseconds ago
             return None
         record = _record(row)
+        # `PROD-06`: in the transaction of the UPDATE above; the actor is the account itself.
+        record_password_changed(session, subject_uid=str(record.user_uid))
         _log.warning(
             "%s: user %r changed their password; every credential minted for them before "
             "this moment is refused from now on (token_epoch is now %d).",

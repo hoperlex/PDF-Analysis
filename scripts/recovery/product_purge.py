@@ -23,10 +23,11 @@ is a decision about that table's fate, taken in two places on purpose.
 WHAT "KEEP ROWS" MEANS IN THE THREE MIXED TABLES (``copy_record.py``'s frozen fingerprint is the
 precedent: it excludes exactly these from the "client" rows):
 
-* ``audit_event``: ``norm_custody.*`` events are the custody ledger's history and ``executor.*``
-  events are the executor configuration's (who set a secret or a route, and when); both stay. The
-  run, job, attempt, provider and execution journal goes. An event type nobody classified stops
-  the tool.
+* ``audit_event``: ``norm_custody.*`` events are the custody ledger's history, ``executor.*``
+  events are the executor configuration's (who set a secret or a route, and when) and ``access.*``
+  events are the account side's (who signed in, who was given or lost a role, whose password
+  changed -- `PROD-06`, ADR-0023 section 4); all three stay. The run, job, attempt, provider and
+  execution journal goes. An event type nobody classified stops the tool.
 * ``command_record``: an idempotency receipt of a registration approval is account-side and stays;
   every receipt of a product command goes. A command type nobody classified stops the tool.
 * ``blob``: a row any KEEP table references (a custody admission/binding, a retrieval set) stays,
@@ -124,9 +125,11 @@ PRODUCT_TABLES = frozenset((
 ))
 
 #: ``audit_event.event_type`` families. ``norm_custody.`` is the custody ledger's, ``executor.``
-#: the append-only trail of who set an executor secret or route and when (`EXEC-SEAL-01`). Both
-#: the keep and the delete predicate of ``audit_event`` are built from this tuple (``_event_keep``).
-KEEP_EVENT_PREFIXES = ("norm_custody.", "executor.")
+#: the append-only trail of who set an executor secret or route and when (`EXEC-SEAL-01`),
+#: ``access.`` the account side's: sign-in, role grant and revoke, password change and reset
+#: (`PROD-06`; kept "forever", ADR-0023 section 4). Both the keep and the delete predicate of
+#: ``audit_event`` are built from this tuple (``_event_keep``).
+KEEP_EVENT_PREFIXES = ("norm_custody.", "executor.", "access.")
 PRODUCT_EVENT_PREFIXES = (
     "artifact.", "attempt.", "audit_run.", "execution.", "findings.", "job.", "provider.", "stage.",
 )

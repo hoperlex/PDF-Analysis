@@ -63,6 +63,7 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from auditmanager.access.accounts import login_taken
+from auditmanager.access.audit import SOURCE_API, record_role_granted
 from auditmanager.access.models import (
     RegistrationId,
     UserRecord,
@@ -454,6 +455,12 @@ class RegistrationRepository:
             raise
         for role in sorted(chosen):
             session.execute(_GRANT_ON_APPROVAL, {"user_uid": user_uid, "role": role, "by": actor_uid})
+            # `PROD-06` (ADR-0023 section 4): each role the approval grants is journalled in
+            # this transaction -- the account, its roles, the decision and the events commit
+            # or roll back together.
+            record_role_granted(
+                session, subject_uid=user_uid, role=role, actor_uid=actor_uid, source=SOURCE_API
+            )
         decided = _registration(
             session.execute(
                 _APPROVE,
