@@ -88,7 +88,9 @@ The carry step is gone: `_drive` no longer calls `submit_existing`. The module s
 | `Q` `composition/test_the_run_leaves_the_request_thread.py`, `runs/test_input_budget_over_http.py`, `composition/test_v3_pack_install.py`, `composition/test_v3_worker_registry.py` (ordinary `start_run`, the carrier and the v3 composition) | 46 passed, 24.8 s |
 | `Q` `composition/test_a_published_run_reports_itself.py`, `runs/test_w59_section_routing_over_http.py`, `composition/test_the_served_application_routes_by_section.py`, `composition/test_the_served_application_always_passes_a_budget.py`, `db/test_ar_v3_run_group.py`, `recovery/test_product_purge_run_group.py` | 49 passed, 22.4 s |
 | `Q` `composition/test_every_port_implementation_is_whole.py` (slow; `bootstrap/` changed) | 32 passed, 640.75 s |
-| docs guards, governance one-liner, `git diff --check` | see the end of this file |
+| `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py` (clean committed tree) | 105 passed, 20 s |
+| governance one-liner on the task file | `[]` |
+| `git diff --check 23d7e8ac..HEAD` | exit 0 |
 
 Free disk stayed between 2.1 and 2.3 GiB (above the 1.5 GiB line). No full gate and no whole `tests/integration` (`R-135`), no browser, no network. The only database found beyond this lane's own was `prod11_removal_951704a8`, which belongs to the parallel removal lane and was not touched.
 
@@ -108,4 +110,13 @@ Free disk stayed between 2.1 and 2.3 GiB (above the 1.5 GiB line). No full gate 
 
 ## Forbidden paths untouched
 
-Recorded in the last section of this file after the final commit (`git diff --name-only 23d7e8ac..HEAD`).
+```text
+$ git diff --name-only 23d7e8ac..HEAD
+docs/program/PROD-11D-V3-GROUP-QUEUE-01.md
+docs/program/tasks/PROD-11D-V3-GROUP-QUEUE-01.md
+src/auditmanager/bootstrap/adapters.py
+tests/integration/runs/test_v3_group_start_queues_the_runs.py
+tests/integration/runs/test_v3_recorded_group_over_http.py
+```
+
+`src/auditmanager/runs/v3_group.py`, `contracts/**`, `db/migrations/**`, `infra/**`, `web/**`, root dependency and lock files, the probe and every other existing test, `DEBT_REGISTER.md`, `CURRENT_STATE.md`, the plan, the rulings and the ADRs are untouched; the only `src` change is inside `RunAdapter.start_ar_v3_group`.
