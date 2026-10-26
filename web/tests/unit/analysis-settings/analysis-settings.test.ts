@@ -267,7 +267,7 @@ describe('what each row says', () => {
   });
 
   it('labels a reviewed profile and shows its own version', () => {
-    expect(row(table(withProfile('POS', { status: 'reviewed' })), 'POS')).toContain('проверен экспертом');
+    expect(row(table(withProfile('POS', { status: 'reviewed' })), 'POS')).toContain('проверка человеком не проводилась');
     expect(row(table(withProfile('TX', { profile_version: '1.2.0' })), 'TX')).toContain('версия 1.2.0');
   });
 

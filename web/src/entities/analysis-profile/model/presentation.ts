@@ -4,7 +4,9 @@
  * The status is the contract's closed `AnalysisProfileStatus`; each value gets one Russian
  * label, and a value this build does not know is reported as such rather than guessed. A
  * draft is said to need an expert's review in so many words, because a draft profile is
- * executable and a reviewer reading its findings must know it was never reviewed.
+ * executable and a reviewer reading its findings must know it was never reviewed. A `reviewed`
+ * profile is NOT said to be expert-verified: under `R-146ag` (accepted risk `A-7`) the status means
+ * a lane answered the record's open questions and no person reviewed it, and the label says so.
  */
 
 import type { AnalysisProfileStatus } from '@/shared/api';
@@ -13,7 +15,7 @@ import { ANALYSIS_PROFILE_STATUS_VALUES } from '@/shared/api';
 export const ANALYSIS_PROFILE_STATUS_LABELS: Readonly<Record<AnalysisProfileStatus, string>> = {
   builtin: 'встроенный',
   draft: 'черновик, требует экспертной проверки',
-  reviewed: 'проверен экспертом',
+  reviewed: 'рабочая версия, проверка человеком не проводилась',
 };
 
 /** What a section with no registered profile shows instead of one. */
