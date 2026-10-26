@@ -5,9 +5,9 @@
   "origin": {
     "analysis_profile_id": "ap_01M5AXG1KHY5S7A1AFVND7FPS9",
     "kind": "synthetic",
-    "profile_status": "draft",
+    "profile_status": "reviewed",
     "prompt_bundle_id": "pb_01M5AXG1KH4JG7TMH93XACNF6H",
-    "prompt_bundle_sha256": "5e921520587dc1893871b97c11e87f5067359f3d1e1e3500fbb3dbf438ff37a5",
+    "prompt_bundle_sha256": "1d943079d7a4d0c283595b9f4409b8ff0d738bddcd12647cd49ed1b44f16f2a8",
     "section_code": "PT",
     "statement": "Synthetic: authored by hand for SECTION-RECORDINGS-01 to prove section routing in recorded mode. No model produced this reply and no provider call was made. Not field evidence for the profile's review.",
     "task_id": "SECTION-RECORDINGS-01",
@@ -15,7 +15,7 @@
   },
   "output_text": "{\"observations\": [{\"category\": \"internal_contradiction\", \"finding_text\": \"Синтетический ответ (ПТ), не результат вызова модели: степень огнестойкости здания, по которой назначается противопожарный водопровод, дана как II и как III.\", \"recommendation_text\": \"Привести степень огнестойкости здания к одному значению.\", \"evidence\": [{\"page_number\": 2, \"quote\": \"Степень огнестойкости здания — II.\"}, {\"page_number\": 6, \"quote\": \"Степень огнестойкости здания — III.\"}]}, {\"category\": \"explicit_placeholder\", \"finding_text\": \"Синтетический ответ (ПТ), не результат вызова модели: тип заполнения оконных проёмов не принят — оставлено «уточнить».\", \"recommendation_text\": \"Принять тип заполнения оконных проёмов.\", \"evidence\": [{\"page_number\": 8, \"quote\": \"Тип заполнения оконных проёмов — уточнить.\"}]}]}",
   "recording_version": "1.0.0",
-  "request_sha256": "2fa06c3940faae012574f49a2659e077ba190614b9001c82eaaa3f8efac70f28",
+  "request_sha256": "3fadac5b0a48465caa3b35b7c3eb9ca81ad0fabca56f3c7dd09ff20ffb037c7d",
   "stop_reason": "end_turn",
   "usage": {
     "input_tokens": 2410,
