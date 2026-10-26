@@ -58,7 +58,7 @@ The unit-conversion factors of rule 4 are used once, in the ITP rule; `EOM`, `SS
 
 ## The prompt change in words
 
-For each of `EOM`, `SS`, `ITP`, `GP`: (1) a new paragraph between condition 5 and the exclusion paragraph. It says the only addition the model may do is adding the rows of a table whose total the text writes; names the scope (a sentence per section); says to report `internal_contradiction` only when six things hold (same units, object and column and no per-unit or computed value; only the parts of the total, no «в том числе» lines and no subtotal added to its own rows; every row visible; no different stated basis; the difference exceeds the rounding of the written values; the rows were added twice with the same sum); says to add nothing when the text writes no total; says conditions 1 to 4 still apply; and asks for the quote of the total and of the rows as evidence, with the written total, the sum and the number of rows in `finding_text`. (2) The exclusion paragraph keeps its sentence but now says the ban on recalculation holds «кроме сложения строк по правилу выше» (ITP: «кроме сложения строк и перевода единиц по правилам выше»), and that what is compared is the written values and the sum of rows added by the rule (ITP: and the conversion). Nothing else moved in `EOM`, `GP` and `SS` beyond the points below: with the paragraph and the clauses removed, the whitespace-normalised prompt equals the base prompt (checked), and v1's question, categories, conditions headings and output contract are held by the package test.
+For each of `EOM`, `SS`, `ITP`, `GP`: (1) a new paragraph between condition 5 and the exclusion paragraph. It says the only addition the model may do is adding the rows of a table whose total the text writes; names the scope (a sentence per section); says to report `internal_contradiction` only when six things hold (same units, object and column and no per-unit or computed value; only the parts of the total, no «в том числе» lines and no subtotal added to its own rows; every row visible; no different stated basis; the difference exceeds the rounding of the written values; the rows were added twice with the same sum); says to add nothing when the text writes no total; says conditions 1 to 4 still apply; and asks for the quote of the total and of the rows as evidence, with the written total, the sum and the number of rows in `finding_text`. (2) The exclusion paragraph keeps its sentence but now says the ban on recalculation holds «кроме сложения строк по правилу выше» (ITP: «кроме сложения строк и перевода единиц по правилам выше»), and that what is compared is the written values and the sum of rows added by the rule (ITP: and the conversion). Nothing else moved: with the inserted paragraph(s), the exclusion clauses and (in ITP) the replaced bullet sentence reverted, the whitespace-normalised prompt equals the base prompt in all four sections (checked), and v1's question, categories, conditions headings and output contract are held by the package test.
 
 | Section | What is specific | Prompt size |
 |---|---|---|
@@ -382,5 +382,422 @@ For each of EOM, SS, ITP, GP the new file differs from the old in `origin.prompt
 | ITP | `b9b9d6a8…953b` | `c3e8bd56…f203` | `352c5a07` to `09e21dad` |
 | GP | `9dbe139a…b959` | `414d336d…5165` | `fab79a6b` to `1d63b742` |
 
-@@TAIL@@
+## Specimens
+
+One or more positive and negative texts per widened rule, with the hand-authored reply a model would give: `EOM` one positive and one negative; `SS` a positive and a negative for the cable-journal total and for the capacity rule; `ITP` a positive and a negative for the unit rule and for the loads total; `GP` a positive for the areas and one for the shares, and two negatives (an area of another boundary beside the table; shares with no written total). They were replayed through the real stage (`run_text_analysis`) with the section's own profile and a throw-away recorded directory in the session scratchpad; they are **not** committed as fixtures (premise P-07, integrator decision (b)). Every positive reply opens its `finding_text` with «Синтетический ответ (<раздел>), не результат вызова модели», as the existing recordings do. Every negative text holds a trap that the intended answer leaves alone: a reserve or fire-mode receiver and a design power with a coefficient (EOM); a total «с запасом» (SS); a capacity on a condition and a connected count below the capacity (SS); the same load in 1,2 Гкал/ч and 1396 кВт (ITP, equal after conversion); both hot-water loads written and a total on the hourly-average one (ITP); an area of the improvement boundary beside a consistent table, and shares with no total (GP).
+
+| Section | Case | Proposed | Emitted | Evidence unresolved |
+|---|---|---|---|---|
+| EOM | positive (15,0 kW against 13,7 kW) | 1 | 1 | 0 |
+| EOM | negative (a fire-mode pump outside the total; a design power with a coefficient) | 0 | 0 | 0 |
+| EOM | positive with one altered quote | 1 | 1 | 1 |
+| SS | cable journal, positive (460 m against 445 m) | 1 | 1 | 0 |
+| SS | cable journal, negative (a total «с запасом») | 0 | 0 | 0 |
+| SS | cable journal, positive with one altered quote | 1 | 1 | 1 |
+| SS | capacity, positive (250 against 280 connected) | 1 | 1 | 0 |
+| SS | capacity, negative (240 connected; a capacity on a condition) | 0 | 0 | 0 |
+| SS | capacity, positive with one altered quote | 1 | 1 | 1 |
+| ITP | units, positive (1,2 Гкал/ч against 1,8 МВт) | 1 | 1 | 0 |
+| ITP | units, negative (1,2 Гкал/ч and 1396 кВт) | 0 | 0 | 0 |
+| ITP | units, positive with one altered quote | 1 | 1 | 1 |
+| ITP | total, positive (1500 kW against 1450 kW) | 1 | 1 | 0 |
+| ITP | total, negative (both hot-water loads written) | 0 | 0 | 0 |
+| ITP | total, positive with one altered quote | 1 | 1 | 1 |
+| GP | areas, positive (12000 against 11800) | 1 | 1 | 0 |
+| GP | areas, positive with one altered quote | 1 | 1 | 1 |
+| GP | shares, positive (100,0 against 98,4) | 1 | 1 | 0 |
+| GP | shares, positive with one altered quote | 1 | 1 | 1 |
+| GP | negative (an area of another boundary beside a consistent table) | 0 | 0 | 0 |
+| GP | negative (shares with no written total) | 0 | 0 | 0 |
+
+The altered-quote rows are the mutation of this check: a quote that is not verbatim leaves the evidence unresolved, and the grounding gate would then refuse the finding. What these rows do **not** show: that a model gives these answers, or that a model leaves the traps alone. The negatives prove only that an empty reply is accepted by the stage.
+
+```json
+{
+ "EOM": {
+  "positive": {
+   "pages": [
+    "Щит ЩР-1. Таблица нагрузок (вымышленный пример для проверки профиля)\nОсвещение — установленная мощность 4,2 кВт\nРозеточная сеть — установленная мощность 6,0 кВт\nВентиляция — установленная мощность 3,5 кВт\nИтого по щиту ЩР-1 — установленная мощность 15,0 кВт",
+    "Общие данные. Категория надёжности электроснабжения — третья."
+   ],
+   "observations": [
+    {
+     "category": "internal_contradiction",
+     "finding_text": "Синтетический ответ (ЭОМ), не результат вызова модели: итог установленной мощности щита ЩР-1 записан как 15,0 кВт, а три строки таблицы нагрузок дают 13,7 кВт.",
+     "recommendation_text": "Свести итог установленной мощности щита ЩР-1 и строки таблицы нагрузок к одному значению.",
+     "evidence": [
+      {
+       "page_number": 1,
+       "quote": "Итого по щиту ЩР-1 — установленная мощность 15,0 кВт"
+      },
+      {
+       "page_number": 1,
+       "quote": "Освещение — установленная мощность 4,2 кВт"
+      },
+      {
+       "page_number": 1,
+       "quote": "Розеточная сеть — установленная мощность 6,0 кВт"
+      },
+      {
+       "page_number": 1,
+       "quote": "Вентиляция — установленная мощность 3,5 кВт"
+      }
+     ]
+    }
+   ]
+  },
+  "negative": {
+   "pages": [
+    "Щит ЩР-1. Таблица нагрузок (вымышленный пример для проверки профиля)\nОсвещение — установленная мощность 4,2 кВт\nРозеточная сеть — установленная мощность 6,0 кВт\nВентиляция — установленная мощность 3,5 кВт\nНасос пожаротушения (противопожарный режим) — установленная мощность 11,0 кВт\nИтого по щиту ЩР-1 в нормальном режиме — установленная мощность 13,7 кВт\nРасчётная мощность щита с коэффициентом спроса — 9,6 кВт",
+    "Общие данные. Категория надёжности электроснабжения — третья."
+   ],
+   "observations": []
+  }
+ },
+ "SS": {
+  "journal_positive": {
+   "pages": [
+    "Кабельный журнал системы СКУД (вымышленный пример для проверки профиля)\nЛиния Л1 — длина 120 м\nЛиния Л2 — длина 85 м\nЛиния Л3 — длина 240 м\nИтого длина кабеля — 460 м",
+    "Общие указания. Кабель — витая пара, категория 6."
+   ],
+   "observations": [
+    {
+     "category": "internal_contradiction",
+     "finding_text": "Синтетический ответ (СС), не результат вызова модели: итог кабельного журнала записан как 460 м, а три строки линий дают 445 м.",
+     "recommendation_text": "Согласовать итоговую длину кабеля и длины линий кабельного журнала.",
+     "evidence": [
+      {
+       "page_number": 1,
+       "quote": "Итого длина кабеля — 460 м"
+      },
+      {
+       "page_number": 1,
+       "quote": "Линия Л1 — длина 120 м"
+      },
+      {
+       "page_number": 1,
+       "quote": "Линия Л2 — длина 85 м"
+      },
+      {
+       "page_number": 1,
+       "quote": "Линия Л3 — длина 240 м"
+      }
+     ]
+    }
+   ]
+  },
+  "journal_negative": {
+   "pages": [
+    "Кабельный журнал системы СКУД (вымышленный пример для проверки профиля)\nЛиния Л1 — длина 120 м\nЛиния Л2 — длина 85 м\nЛиния Л3 — длина 240 м\nИтого длина кабеля с запасом — 490 м",
+    "Общие указания. Кабель — витая пара, категория 6."
+   ],
+   "observations": []
+  },
+  "capacity_positive": {
+   "pages": [
+    "Пояснительная записка. Система пожарной сигнализации (вымышленный пример для проверки профиля)\nПрибор приёмно-контрольный ППКП-1 рассчитан на 250 адресных устройств.",
+    "Спецификация. К прибору ППКП-1 подключено 280 адресных устройств."
+   ],
+   "observations": [
+    {
+     "category": "internal_contradiction",
+     "finding_text": "Синтетический ответ (СС), не результат вызова модели: ёмкость прибора ППКП-1 записана как 250 адресных устройств, а число подключённых к нему адресных устройств — 280.",
+     "recommendation_text": "Согласовать число адресных устройств, подключённых к ППКП-1, и его ёмкость.",
+     "evidence": [
+      {
+       "page_number": 1,
+       "quote": "рассчитан на 250 адресных устройств"
+      },
+      {
+       "page_number": 2,
+       "quote": "подключено 280 адресных устройств"
+      }
+     ]
+    }
+   ]
+  },
+  "capacity_negative": {
+   "pages": [
+    "Пояснительная записка. Система пожарной сигнализации (вымышленный пример для проверки профиля)\nПрибор приёмно-контрольный ППКП-1 рассчитан на 250 адресных устройств. Прибор ППКП-2 рассчитан на 250 адресных устройств при использовании двух шлейфов.",
+    "Спецификация. К прибору ППКП-1 подключено 240 адресных устройств. К прибору ППКП-2 подключено 280 адресных устройств."
+   ],
+   "observations": []
+  }
+ },
+ "ITP": {
+  "units_positive": {
+   "pages": [
+    "Общие данные (вымышленный пример для проверки профиля). Тепловая нагрузка на отопление здания — 1,2 Гкал/ч.",
+    "Таблица тепловых нагрузок. Тепловая нагрузка на отопление здания — 1,8 МВт."
+   ],
+   "observations": [
+    {
+     "category": "internal_contradiction",
+     "finding_text": "Синтетический ответ (ИТП), не результат вызова модели: тепловая нагрузка на отопление здания записана как 1,2 Гкал/ч (1,396 МВт), а в таблице нагрузок — 1,8 МВт.",
+     "recommendation_text": "Согласовать значение тепловой нагрузки на отопление в общих данных и в таблице нагрузок.",
+     "evidence": [
+      {
+       "page_number": 1,
+       "quote": "Тепловая нагрузка на отопление здания — 1,2 Гкал/ч"
+      },
+      {
+       "page_number": 2,
+       "quote": "Тепловая нагрузка на отопление здания — 1,8 МВт"
+      }
+     ]
+    }
+   ]
+  },
+  "units_negative": {
+   "pages": [
+    "Общие данные (вымышленный пример для проверки профиля). Тепловая нагрузка на отопление здания — 1,2 Гкал/ч.",
+    "Таблица тепловых нагрузок. Тепловая нагрузка на отопление здания — 1396 кВт."
+   ],
+   "observations": []
+  },
+  "total_positive": {
+   "pages": [
+    "Таблица тепловых нагрузок (вымышленный пример для проверки профиля)\nОтопление — 850 кВт\nВентиляция — 180 кВт\nГВС — 420 кВт\nСуммарная тепловая нагрузка — 1500 кВт",
+    "Принципиальная схема ИТП. Схема присоединения — независимая."
+   ],
+   "observations": [
+    {
+     "category": "internal_contradiction",
+     "finding_text": "Синтетический ответ (ИТП), не результат вызова модели: суммарная тепловая нагрузка записана как 1500 кВт, а три нагрузки по контурам дают 1450 кВт.",
+     "recommendation_text": "Согласовать суммарную тепловую нагрузку и нагрузки по контурам.",
+     "evidence": [
+      {
+       "page_number": 1,
+       "quote": "Суммарная тепловая нагрузка — 1500 кВт"
+      },
+      {
+       "page_number": 1,
+       "quote": "Отопление — 850 кВт"
+      },
+      {
+       "page_number": 1,
+       "quote": "Вентиляция — 180 кВт"
+      },
+      {
+       "page_number": 1,
+       "quote": "ГВС — 420 кВт"
+      }
+     ]
+    }
+   ]
+  },
+  "total_negative": {
+   "pages": [
+    "Таблица тепловых нагрузок (вымышленный пример для проверки профиля)\nОтопление — 850 кВт\nВентиляция — 180 кВт\nГВС максимальная — 420 кВт\nГВС среднечасовая — 150 кВт\nСуммарная тепловая нагрузка — 1180 кВт",
+    "Принципиальная схема ИТП. Схема присоединения — независимая."
+   ],
+   "observations": []
+  }
+ },
+ "GP": {
+  "areas_positive": {
+   "pages": [
+    "Баланс территории (вымышленный пример для проверки профиля), м²\nЗастройка — 3200\nТвёрдые покрытия — 4100\nОзеленение — 4500\nИтого — площадь участка 12000",
+    "Пояснительная записка. Участок расположен в границах кадастрового квартала."
+   ],
+   "observations": [
+    {
+     "category": "internal_contradiction",
+     "finding_text": "Синтетический ответ (ГП), не результат вызова модели: площадь участка в итоговой строке баланса территории записана как 12000 м², а три позиции баланса дают 11800 м².",
+     "recommendation_text": "Согласовать итоговую площадь участка и площади позиций баланса территории.",
+     "evidence": [
+      {
+       "page_number": 1,
+       "quote": "Итого — площадь участка 12000"
+      },
+      {
+       "page_number": 1,
+       "quote": "Застройка — 3200"
+      },
+      {
+       "page_number": 1,
+       "quote": "Твёрдые покрытия — 4100"
+      },
+      {
+       "page_number": 1,
+       "quote": "Озеленение — 4500"
+      }
+     ]
+    }
+   ]
+  },
+  "shares_positive": {
+   "pages": [
+    "Баланс территории (вымышленный пример для проверки профиля), %\nЗастройка — 26,7\nТвёрдые покрытия — 34,2\nОзеленение — 37,5\nИтого — 100,0",
+    "Пояснительная записка. Участок расположен в границах кадастрового квартала."
+   ],
+   "observations": [
+    {
+     "category": "internal_contradiction",
+     "finding_text": "Синтетический ответ (ГП), не результат вызова модели: итог долей баланса территории записан как 100,0 %, а три позиции дают 98,4 %.",
+     "recommendation_text": "Согласовать итог долей и доли позиций баланса территории.",
+     "evidence": [
+      {
+       "page_number": 1,
+       "quote": "Итого — 100,0"
+      },
+      {
+       "page_number": 1,
+       "quote": "Застройка — 26,7"
+      },
+      {
+       "page_number": 1,
+       "quote": "Твёрдые покрытия — 34,2"
+      },
+      {
+       "page_number": 1,
+       "quote": "Озеленение — 37,5"
+      }
+     ]
+    }
+   ]
+  },
+  "boundary_negative": {
+   "pages": [
+    "Баланс территории (вымышленный пример для проверки профиля), м²\nЗастройка — 3200\nТвёрдые покрытия — 4100\nОзеленение — 4700\nИтого — площадь участка 12000",
+    "Пояснительная записка. Площадь в границах благоустройства — 13500 м²."
+   ],
+   "observations": []
+  },
+  "nototal_negative": {
+   "pages": [
+    "Баланс территории (вымышленный пример для проверки профиля), %\nЗастройка — 30,0\nТвёрдые покрытия — 30,0\nОзеленение — 30,0",
+    "Пояснительная записка. Участок расположен в границах кадастрового квартала."
+   ],
+   "observations": []
+  }
+ }
+}
+```
+
+The replay (the throw-away script of the lane, identical to lane G1's; it needs `PYTHONPATH=src:$BS` and the repository root as the working directory):
+
+```python
+import json, tempfile
+from pathlib import Path
+from auditmanager.analysis.text import run_text_analysis
+from auditmanager.analysis.text.adapter import build_request
+from auditmanager.analysis.text.config import ProviderConfig, ProviderMode
+from auditmanager.analysis.text.profile_registry import load_text_profile_registry
+from auditmanager.analysis.text.recorded import RecordedAdapter, recording_document
+from auditmanager.analysis.text.textlayer import load_text_layer
+from auditmanager.shared.identity import RunId
+
+BASE = json.loads(Path("fixtures/recorded/text_analysis/inputs/ar_baseline_text_layer.json").read_text("utf-8"))
+
+def layer(pages):  # pages are concatenated with no separator, as the extractor's layer is
+    out, start = [], 0
+    for number, text in enumerate(pages, 1):
+        out.append({"char_start": start, "char_end": start + len(text), "page_number": number, "text": text})
+        start += len(text)
+    return {**{k: v for k, v in BASE.items() if k != "pages"}, "pages": out, "total_char_count": start}
+
+def replay(code, pages, observations):  # observations: the "observations" list of the specimen
+    profile = load_text_profile_registry().entries[code].profile
+    doc = layer(pages)
+    request = build_request(model_id="claude-opus-5", bundle=profile.prompt_bundle, text_layer=load_text_layer(doc))
+    recording = recording_document(request=request, output_text=json.dumps({"observations": observations}, ensure_ascii=False),
+                                   stop_reason="end_turn", input_tokens=3000, output_tokens=300, latency_ms=9000, note="specimen")
+    with tempfile.TemporaryDirectory() as tmp:
+        (Path(tmp) / f"{request.request_sha256}.json").write_text(json.dumps(recording, ensure_ascii=False), "utf-8")
+        config = ProviderConfig(mode=ProviderMode.RECORDED, model_id="claude-opus-5", run_cost_ceiling_usd=1.00,
+                                api_key=None, ceiling_is_explicit=True)
+        outcome = run_text_analysis(run_id=RunId.new(), text_layer_document=doc, adapter=RecordedAdapter(Path(tmp)),
+                                    profile=profile, config=config)
+    return outcome.status, outcome.metrics  # observations_proposed, observations_emitted, evidence_unresolved
+```
+
+## Mutation table
+
+One change at a time on the committed tree; the section set is `test_text_profile_registry.py`, `tests/unit/analysis/text_profiles`, `test_section_recordings.py` and `tests/contract/analysis_packages` (328 cases; the unmutated tree: `328 passed`). After each restore the SHA-256 over the profile, fixture, `text_profiles` test and report files equalled the one taken before (`restored=True`, `git status --short` empty).
+
+| # | Mutation | Result | First red cases |
+|---|---|---|---|
+| M1 | `profile.json` version `1.2.0` back to `1.1.0`, once each for EOM, SS, ITP, GP (expectations kept) | 3 failed, 325 passed, each time | registry `test_the_tree_registers_without_error_and_without_an_ar_entry_or_package`; guard `test_every_line_agrees_with_its_package_profile_json`; packages `test_every_profile_manifest_has_the_text_profile_1_shape` |
+| M2 | the expectations line back to `1.1.0`, once each for EOM, SS, ITP, GP (`profile.json` kept) | 3 failed, 325 passed, each time | the same three |
+| M2b | the ITP line back to `1.1.0`, on the lane stack and in the web test | HTTP 1 failed, 3 passed; web 1 failed, 95 passed | `test_every_row_is_the_registry_entry_the_application_routes_by`; `has a line for exactly the packages that exist, with the status and version each declares` |
+| M3 | the EOM paragraph deleted (the exclusion clauses kept), recording kept | 7 failed, 321 passed | `test_each_section_has_one_synthetic_recording_keyed_to_its_own_request[EOM]`, `test_the_builder_reports_no_drift`, `test_the_served_adapter_answers_each_recorded_section_and_the_canonical_alone_does_not[EOM]` |
+| M4 | the SS recording replaced by the base file | 5 failed, 323 passed | the same recordings cases for SS |
+| M5 | the GP paragraph and both exclusion clauses deleted **and** the recordings rebuilt consistently (the `D-224` residual case) | **328 passed**: no existing test notices; the fragment check prints `MISSING` for 14 of the 59 pairs, all GP | the fragment check is the only red |
+| M5b | a temp copy of the SS prompt without the capacity paragraph | fragment check: `MISSING W-CAP-SS-G3 SS`, 1 of 59 | the fragment check |
+| M5c | a temp copy of the ITP prompt with the replaced ITP-1 sentence put back | fragment check: `MISSING W-UNITS-REF-ITP-G3 ITP`, 1 of 59 | the fragment check |
+| M6 | EOM paragraph: the word «десяти» replaced by the numeral `77` | 5 failed, 110 passed (the guard file, 115 cases) | `test_every_designation_is_in_the_pinned_source_in_v1_or_the_allowlist[EOM]`, `test_inserting_an_invented_designation_turns_the_audit_red[…-EOM]` |
+| M6b | the same with the numeral `10` | **115 passed**: the guard stays green, because the whole token `10` is in the pinned EOM source (the RCD example «ванные 10 мА»); the guard checks that a token occurs, not what it means (its own Limits) | none |
+| M7 | SS paragraph: a norm number «СП 999» added | 4 failed, 111 passed | `…[SS]` and the insertion cases for cable marking and class designation |
+| M8 | ITP paragraph: a class designation «класс Г9» added | 6 failed, 109 passed | `…[ITP]` |
+| M9 | the allowlist line for `1,163`, for `1163` and for `МВт` removed, one at a time | 6 failed, 107 passed, each time | `…[ITP]` and `test_removing_an_allowlist_entry_turns_the_audit_red[ITP-…]` of the other two tokens |
+| M10 | this report no longer mentions `МВт` (and, separately, `1163`) | 1 failed, 114 passed, each time | `test_every_entry_names_a_report_that_contains_its_token` |
+| M10c | `disclosed_by` of the ITP entries names `SECTION-WIDEN-G9-01.md`, which does not exist | 1 failed, 114 passed | `test_every_entry_names_a_report_that_contains_its_token` |
+| M11 | one quote altered by one character in each of the seven positive specimens | `evidence_unresolved` 1 instead of 0, seven times | the stage metrics (see «Specimens») |
+
+## Commands and results
+
+From `/root/projects/PDF-Analysis/.local/worktrees/section-widen-g3-01`, shared venv (`.venv` is an untracked symlink), one pytest at a time; `$BS` is `/root/projects/PDF-Analysis/.venv/bootstrap/lib/python3.12/site-packages`.
+
+| Command | Result |
+|---|---|
+| section set (above), base tree | `322 passed` |
+| section set, after the change | `328 passed`: no test was added or edited; the six extra cases are the guard's per-entry tests `test_no_allowlist_entry_is_already_sourced` and `test_removing_an_allowlist_entry_turns_the_audit_red` for the three new allowlist lines |
+| `PYTHONPATH=src python3 -I fixtures/recorded/sections/build_fixtures.py`, then `--check` | four recordings replaced (`removed …` and `wrote …` for EOM, SS, ITP, GP; the other ten byte-identical); `--check`: `fixtures match`, rc 0 |
+| `tests/unit/analysis/text_profiles/test_prompt_token_guard.py` | `115 passed`, none skipped |
+| `tests/integration/composition/test_analysis_profiles_over_http.py`, lane `.env` exported | `4 passed` |
+| `npx vitest run tests/unit/analysis-settings` in `web/` (`node_modules` symlinked to the `gate-night` worktree's) | `7 passed` files, `96 passed` |
+| fragment check (above) | `23 fragments; missing []` |
+| governance one-liner on the task file | `[]` |
+| `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py`, `git diff --check d1400994..HEAD` | run after the last commit (next row) |
+
+Free disk: 1.9 GiB at the start, 1.9 GiB at the end. No docker command, no push, no tag, no model call, no network, no process killed, no database created.
+
+## Integration notes
+
+1. **Merge.** The expectations file changes four lines (`EOM SS ITP GP`: `1.2.0`); on a conflict regenerate each line from its `profile.json`. Recordings: four keys changed, the other ten are byte-identical after the builder runs. The allowlist gained three entries **appended at the end**; lane G2 may append at the same place, so a textual conflict is possible: keep every entry of both sides and the JSON commas (the guard's shape test reads the file).
+2. **The recordings test blocks the specimens (P-07).** As in lane G1's note 2: either relax line 97 of `tests/integration/sections/test_section_recordings.py` and extend `build_fixtures.py` once for all lanes, or add a sibling directory (for example `fixtures/recorded/sections_widen/<code>/`, which the served adapter does not search) with a test that replays the specimens above through the stage. The 14 specimen texts in this report (7 positive, 7 negative) are ready for either.
+3. **For `SECTION-PROMPT-SENTENCE-GUARD-01`.** (a) The fragment table of this report has 23 fragments and 59 pairs; seven ids are byte-identical to lane G1's (`W-HEAD`, `W-TRIGGER`, `W-B4`, `W-B6`, `W-NOTOTAL`, `W-NORMS-1`, `W-NORMS-2`), every id with the suffix `-G3` is this lane's own, so the two tables can be read as one namespace without a conflict (checked). (b) The ITP row ITP-1 (N) of the ledger names a sentence that **no longer stands** in the ITP prompt; the guard must read it as superseded (table «The ledger fragment this lane supersedes»), not as a loss.
+4. **Two variants of one paragraph.** Lane G1 wrote the sum-of-rows paragraph for `PS POS TX KJ` in a longer wording (+2,701 to +2,834 characters); this lane wrote a compact reading with the same six conditions (about 435 characters shorter in the shared part), because the budget term does not count a section prompt (note 5). The two readings differ in wording only (conditions, tolerance, evidence). The integrator may keep both, or harmonise `PS POS TX KJ` and `KM OV VK PT` (lane G2) to one reading later; nothing in the tests depends on it.
+5. **The input budget does not count a section's prompt** (P-10; lane G1's note 5). `budget.py` subtracts the АР bundle's prompt (about 3,000 characters); the four prompts are now 7,456 to 9,298 characters. The additions are 2,394 to 2,827 characters, under 2 % of the 152,361-character figure for the pinned model at a ceiling of 1.00. `budget.py` is not changed here; lane `SECTION-CHUNKED-ANALYSIS-01` owns it.
+6. **Windows.** `W-B3-G3` tells the model not to report a table that is cut off at the last page it was given, so a total in one window and its rows in the next are not compared; the capacity rule has the same property (a capacity in one window and the count in the next are not compared, because the model cannot see both). A run of independent windows should say so in its summary (the CH lane's task).
+7. **A stored run keeps the old profile hash** (as in lane G1's note 7): a run made with `1.1.0` carries the old `analysis_profile_sha256` and `prompt_bundle_sha256`; the registry resolves by the identity pair and serves the new text. Development stand only, no migration.
+8. **Debt.** The refusal of the omission topic (EOM-4, SS-5, ITP-5), the refusal of the requested-against-selected comparison (ITP-4), the unmeasured model arithmetic, the superseded ledger row, the two paragraph variants, the specimens that no test reads and the budget term are the limits for a debt row; the lane did not edit `DEBT_REGISTER.md`.
+
+## Limits
+
+- No test reads the new sentences (`D-224` residual; M5 shows it). The fragment table above is the stand-in until `SECTION-PROMPT-SENTENCE-GUARD-01` reads it.
+- No model was called. The effect of the paragraph, of the capacity rule and of the unit rule on a real model (false findings from mis-added tables or a wrong conversion, missed findings from the strict conditions) is unknown.
+- The specimens are hand-authored and not filed as fixtures.
+- The unit factor and the tolerance are the integrator's rule and the lane's reading; no pinned file states either (P-12).
+- The lane did not change `W59-SECTION-PROFILES-01.md`, the ledger or the web label; the record still says the questions it asked, and the ledger still lists K or N for the topics this lane now answers W (EOM q2, SS q5, ITP q1 and q5, GP q1).
+
+## Proof that forbidden paths are untouched
+
+`git diff --name-only --no-renames d1400994..HEAD` on the final tree prints exactly these 20 paths, all inside the task's allowed paths (without `--no-renames` git folds each replaced recording into a rename):
+
+```text
+docs/program/SECTION-WIDEN-G3-01.md
+docs/program/tasks/SECTION-WIDEN-G3-01.md
+fixtures/recorded/sections/eom/22dee8720e48cace823f348412adae9884023a8507823f5798db105b17b5f1d2.json
+fixtures/recorded/sections/eom/966f4f6fd773c064d26b8e27a798967a919be2aa1d0c04ba80497829637d8098.json
+fixtures/recorded/sections/gp/414d336dca6967b36431ba3282f198d1f770d5d0b2fcd6293ff8c3611df05165.json
+fixtures/recorded/sections/gp/9dbe139a3b025683b91448992b6890a0a7bd54750e95969a3a396c60b7a8b959.json
+fixtures/recorded/sections/itp/b9b9d6a8dc98d75291fd0ad13bf1d532204a25270691511d4e6522f61279953b.json
+fixtures/recorded/sections/itp/c3e8bd56d8c4cf6f66efd6b4f9058069822eba53abf9fb1e4b26bd36a7daf203.json
+fixtures/recorded/sections/ss/dd6ccee83f95994a6bff7ae3c088fbc56e29d8b4908178c44bea313b89cc70fa.json
+fixtures/recorded/sections/ss/f032738f038457c6c4e39a55f3ec08f6e91bc73213a5c2f03390a1aa33e1712e.json
+src/auditmanager/analysis/text/profiles/eom/profile.json
+src/auditmanager/analysis/text/profiles/eom/system_prompt.md
+src/auditmanager/analysis/text/profiles/gp/profile.json
+src/auditmanager/analysis/text/profiles/gp/system_prompt.md
+src/auditmanager/analysis/text/profiles/itp/profile.json
+src/auditmanager/analysis/text/profiles/itp/system_prompt.md
+src/auditmanager/analysis/text/profiles/ss/profile.json
+src/auditmanager/analysis/text/profiles/ss/system_prompt.md
+tests/unit/analysis/text_profiles/prompt_token_allowlist.json
+tests/unit/analysis/text_profiles/section_profile_expectations.json
+```
+
+No other section's files, no `W59-SECTION-PROFILES-01.md`, ledger, registry, `P02_LOCK.json`, `contracts/**`, migration, `web/**`, `infra/**`, `tests/integration/sections/**`, `test_prompt_token_guard.py`, `build_fixtures.py`, `budget.py` or `DEBT_REGISTER.md` appears. `/root/projects/PDF-proverka` was only read: its `HEAD` is the pinned `16ba8e5d…` and `git status --short` there prints nothing.
 
