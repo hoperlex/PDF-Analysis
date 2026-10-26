@@ -190,4 +190,13 @@ No other section's files, no `W59-SECTION-PROFILES-01.md`, registry, `P02_LOCK.j
 
 ## Final checks
 
-See the lane's final message for the tip SHA and the results of the last run of the contract battery, the governance one-liner, `git diff --check` and the section tests on the committed tree.
+On the committed tree (`git status --short` empty), the last commit before this paragraph being `452e2424`:
+
+| Command | Result |
+|---|---|
+| `pytest tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py` | `105 passed` |
+| governance one-liner on `docs/program/tasks/SECTION-OV-FULL-01.md` | `[]` |
+| `git diff --check 8a032ded..HEAD` | rc 0 |
+| section set, `build_fixtures.py --check`, HTTP test (lane `.env`), `vitest` analysis-settings | `211 passed`; `fixtures match` rc 0; `4 passed`; `95 passed` |
+
+This paragraph is the only text added after `452e2424`; the contract run above was repeated on the tree that contains it (see the lane's final message for the tip SHA).
