@@ -51,7 +51,7 @@ from the tree at `4d7b7c38` on 2026-10-26:
   folding): `src/auditmanager/analysis/text/stage.py::_identity_refusal` for the text stage and `src/auditmanager/runs/v3_provider_call.py` for v3.
   `ProxySettings.model_aliases` exists but no configuration reader in `src/` ever sets it. The refusal is
   `model_identity_mismatch`, `outcome_unknown` and not retry-safe, so a mismatch is paid for and nothing is
-  published. `W56A-MODEL-PIN-01` stopped: the stand's proxy gateway ignored the requested model and answered with another
+  published. `W56A-MODEL-PIN-01` stopped: the stand's proxy gateway answered a request for one model with another
   (`W56A-MODEL-PIN-01.md`). Pinned identities and the rate table are in `P02_LOCK.json` (`claude-opus-5`, `claude-sonnet-5`,
   `gpt-6-sol`; `run_cost_ceiling_usd` 1.0, overridable by `AUDITMANAGER_RUN_COST_CEILING_USD`).
 - **`allow_client_documents`.** Each executor connection revision carries this boolean; the imported OpenRouter
@@ -77,7 +77,8 @@ the source PDF, and the pack status in «Настройки анализа». Wh
 - no check for internal contradictions and no check for empty placeholders in АР documents (those are v1's two categories and
   v3 finds neither);
 - no numerical conclusion about a norm until an expert decision and an edition check exist;
-- no canonical АР finding list, no verdict entry for АР findings and no CSV or Excel export of АР findings;
+- no canonical АР finding: a v3 Run ends with only its grounded review artifact (`src/auditmanager/runs/v3_review_terminal.py`),
+  so there is nothing to decide in the findings ledger and nothing for the CSV or Excel export to carry;
 - nothing at all until `D-204` is done: before a reviewed pack is installed every group start refuses with
   `dependency_unavailable`. `D-204` is on the critical path of 1.0 for АР (`R-146g`).
 
@@ -187,8 +188,9 @@ measurable meaning, per section: (a) the profile is reviewed by a named expert a
 (`D-178`); (b) at least one positive and one negative case run on a document that is not synthetic and not a client document
 (`R-141c` binds the closed beta), recorded and replayable (`D-183`); (c) an expert accepts the outputs of those runs. Whether "full" also means
 more categories or norm checks of the kind v3 adds is the owner's question; this ADR does not assume it. How the owner's «бета 0.1.1» maps to the
-roadmap's `1.0.0-beta.N` tags is not stated in `R-146l` and is for the integrator to reconcile. The order of the plan: section work and the
-removal of v1/v2 first, in parallel with the infrastructure items; `D-204` proceeds in parallel as owner and expert work and does not use code lanes.
+roadmap's `1.0.0-beta.N` tags is not stated in `R-146l` and is for the integrator to reconcile. The order of the plan
+(`PRODUCTION-READINESS-PLAN-01.md` section 4): section work starts in the first code wave and runs through the others; the removal of v1/v2
+follows its prerequisite (waves `PW3` and `PW4`); `D-204` proceeds in parallel as owner and expert work and does not use code lanes.
 
 ## Commitments and their mechanical checks
 
