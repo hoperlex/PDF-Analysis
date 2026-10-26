@@ -327,7 +327,7 @@ def test_the_allowlist_has_the_documented_shape() -> None:
             f"{identity}: an entry is exactly one whole token"
         )
         assert len(entry["reason"].strip()) >= MIN_TEXT, f"{identity}: the reason is empty or a shrug"
-        assert re.fullmatch(r"SECTION-[A-Z]+-FULL-01\.md", entry["disclosed_by"]), identity
+        assert re.fullmatch(r"SECTION-(?:[A-Z]+-FULL|WIDEN-G[0-9]+)-01\.md", entry["disclosed_by"]), identity
 
 
 def test_every_entry_names_a_report_that_contains_its_token() -> None:
