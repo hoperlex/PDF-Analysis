@@ -193,7 +193,42 @@ Forward revert of the two files. Behaviour is unchanged.
 
 ## Handoff
 
-- changed files: `docs/program/BETA-STATIC-MATRIX-02.md`, `docs/program/tasks/BETA-STATIC-MATRIX-02.md`.
-- commands/results: filled after the final run (see the lane's hand-back).
-- known limits: no test was run, only collected; stand state is unreadable from the tree.
-- integration notes: none beyond the integration contract above.
+- changed files: `docs/program/BETA-STATIC-MATRIX-02.md`, `docs/program/tasks/BETA-STATIC-MATRIX-02.md` (nothing else; the base is `0dbbfc68f7a764708f40fe1fdf90017b47956569`).
+- commands/results (2026-10-26, lane worktree `.local/worktrees/beta-static-matrix-02`):
+  1. governance one-liner on this file: prints `[]`.
+  2. `git diff --cached --check` over the two files: exit 0, no output.
+  3. existence check on the matrix, `python3 -I <scratchpad>/m1/verify_matrix.py . docs/program/BETA-STATIC-MATRIX-02.md`: `1237 checked, 0 missing`, exit 0
+     (it checks paths, operationIds, routes, migrations, screens, journey step names, debt ids and their open or closed state, test functions, python
+     modules, task and ruling ids, one status word per row, the 14 in-menu addresses, the 27 operations no manifest field names, every
+     recovery tool and test file, and the recorded figures).
+  4. `pytest --collect-only -q -p no:cacheprovider` over the 84 Python test files the matrix names: exit 0, `1540 tests collected`; all 62 cited
+     file-and-function ids are among the collected ones. No test was run.
+  5. `pytest -q -p no:cacheprovider tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py`:
+     `105 passed in 17.81s` (`tests/contract/program` alone read 28 passed before the lane's files were added).
+  6. the static stub scan (P-02): `problems: 0`, `RoutePlaceholder` referenced outside `web/src/shared/ui` by 0 files.
+- mutation proofs: each check was shown to fail on a copy of the matrix (the real file untouched), then the copy discarded. A "red" is exit 1 and a
+  `MISSING` line.
+
+  | mutation | result |
+  | --- | --- |
+  | an operationId misspelt (a trailing X on the group read) | red: `MISSING operation` |
+  | a test function name lengthened by one letter | red: `MISSING test-def` for that file and name |
+  | a closed debt written without its closed mark (D-150) | red: `MISSING debt-state: D-150 (open) register says closed` |
+  | an open debt given a closed mark (D-137) | red: `MISSING debt-state: D-137 (closed) register says open` |
+  | a source path misspelt (v3_groups.py) | red: `MISSING path` |
+  | an in-menu address renamed in the B12 text (a suffix added to the blocks address) | red: `MISSING screen` and `MISSING menu-listed` for it |
+  | the B2 status word replaced by PASS | red: `MISSING status-word: B2 words=[]` |
+  | a recovery test file renamed in the text | red: `MISSING path` and `MISSING recovery-test` |
+  | "1143 passed" changed to "1144 passed" | red: `MISSING figure-use: 1144 passed not a recorded figure` |
+  | a migration name misspelt (0032_ar_v3_run_groups) | red: `MISSING migration` |
+  | a journey step name misspelt (a trailing x) | red: `MISSING step-name` |
+  | one operation removed from the B12 list of unnamed operations | red: `MISSING unnamed-ops: 26 listed vs 27 derived`, absent: setExecutorRoute |
+  | stub scan, scratch registry with an extra in-menu row for a fictitious address and no route file | red: `PROBLEM no route file`, `problems: 1`, exit 1 |
+  | stub scan, scratch source file outside `web/src/shared/ui` that imports `RoutePlaceholder` | red: `referenced outside web/src/shared/ui: 1`, exit 1 |
+- known limits: no test was run, only collected, so a row says a test exists and not that it passes; the figures are `CURRENT_STATE.md`'s, for the tree it names;
+  the stub inventory reads source, not a browser; stand, main and tag state are unreadable from the tree; the register was read, not re-measured (`D-206`).
+  Judgement calls reported to the integrator: B9 is `code present` with the `1.5.0` against `1.0.0` reading left to the owner; B12 is `code present` for the
+  code-property part with live acceptance and the undefined "full АР function matrix" left open; B3 and B5 are `code partial`.
+- integration notes: the matrix reads `CURRENT_STATE.md` and `DEBT_REGISTER.md` and writes neither. If a lane that merges later changes a debt row's state,
+  re-run the existence check (its debt-state check names the row). The lane found no stale statement of its own in the documents it may not edit;
+  `D-203` already records the `CURRENT_STATE.md` sentence that names `0.7.0` on `origin/main` and the `RELEASES.md` rows that are behind the tree.
