@@ -85,6 +85,25 @@ def test_the_model_the_router_validates_with_accepts_and_refuses_the_same_ids() 
             models.StartRunRequest.model_validate(refused)
 
 
+@pytest.mark.parametrize("bad,constraint", [("exc_not-a-ulid", "pattern"), (None, "type"), (7, "type")])
+def test_a_malformed_id_reaches_the_client_as_validation_failed_on_the_field(
+    bad: Any, constraint: str,
+) -> None:
+    """The handler that renders the framework's report names the field, so the refusal the task
+    promises (`validation_failed`, `field: executor_connection_id`) is what a client reads."""
+    from pydantic import ValidationError
+
+    from auditmanager.api.routers import handlers
+    from auditmanager.shared.errors import ErrorCode
+
+    with pytest.raises(ValidationError) as caught:
+        models.StartRunRequest.model_validate({**START, "executor_connection_id": bad})
+    errors = [{**error, "loc": ("body", *error["loc"])} for error in caught.value.errors()]
+    refusal = handlers._refusal(errors[0], "startRun", False)
+    assert refusal.code is ErrorCode.VALIDATION_FAILED
+    assert dict(refusal.detail_fields) == {"field": "executor_connection_id", "constraint": constraint}
+
+
 def test_the_request_schema_declares_the_field_optional_and_by_reference(openapi_document: dict[str, Any]) -> None:
     schema = openapi_document["components"]["schemas"]["StartRunRequest"]
     assert schema["required"] == ["version_uid"]
