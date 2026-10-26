@@ -5,9 +5,9 @@
   "origin": {
     "analysis_profile_id": "ap_01M5AXG1KKCKB70088QWAR8WD4",
     "kind": "synthetic",
-    "profile_status": "draft",
+    "profile_status": "reviewed",
     "prompt_bundle_id": "pb_01M5AXG1KKNVF7G99H0BB166TW",
-    "prompt_bundle_sha256": "b775619f13b093cc94b1093d79c4153caa0d5aa362fda52fdb17f34f077d26d1",
+    "prompt_bundle_sha256": "5bd110609c0befb5f4d438d1c21753e95158a6c3f1401e90295625710994124a",
     "section_code": "EOM",
     "statement": "Synthetic: authored by hand for SECTION-RECORDINGS-01 to prove section routing in recorded mode. No model produced this reply and no provider call was made. Not field evidence for the profile's review.",
     "task_id": "SECTION-RECORDINGS-01",
@@ -15,7 +15,7 @@
   },
   "output_text": "{\"observations\": [{\"category\": \"internal_contradiction\", \"finding_text\": \"Синтетический ответ (ЭОМ), не результат вызова модели: количество эвакуационных выходов, для которых проектируется аварийное освещение, указано как два и как три.\", \"recommendation_text\": \"Уточнить число эвакуационных выходов в исходных данных освещения.\", \"evidence\": [{\"page_number\": 3, \"quote\": \"Из надземной части здания предусмотрено два эвакуационных выхода.\"}, {\"page_number\": 7, \"quote\": \"Из надземной части здания предусмотрено три эвакуационных выхода.\"}]}]}",
   "recording_version": "1.0.0",
-  "request_sha256": "71e5232e87603a99d0f8dd688b8a2457e229824163bcee3e60959d3199964be1",
+  "request_sha256": "966f4f6fd773c064d26b8e27a798967a919be2aa1d0c04ba80497829637d8098",
   "stop_reason": "end_turn",
   "usage": {
     "input_tokens": 2420,

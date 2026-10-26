@@ -11,7 +11,7 @@
     {"code": "OV", "status": "draft", "profile_version": "1.0.0"},
     {"code": "VK", "status": "draft", "profile_version": "1.0.0"},
     {"code": "PT", "status": "draft", "profile_version": "1.0.0"},
-    {"code": "EOM", "status": "draft", "profile_version": "1.0.0"},
+    {"code": "EOM", "status": "reviewed", "profile_version": "1.1.0"},
     {"code": "SS", "status": "draft", "profile_version": "1.0.0"},
     {"code": "ITP", "status": "draft", "profile_version": "1.0.0"},
     {"code": "GP", "status": "reviewed", "profile_version": "1.1.0"},
