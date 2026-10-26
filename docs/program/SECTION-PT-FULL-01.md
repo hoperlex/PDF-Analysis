@@ -195,4 +195,14 @@ No other section's files, no `W59-SECTION-PROFILES-01.md`, registry, `P02_LOCK.j
 
 ## Final checks
 
-To be filled from the committed tree.
+On the committed tree (`git status --short` empty), the last commit before this paragraph being `0281d4d7`:
+
+| Command | Result |
+| --- | --- |
+| `pytest tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py` | `105 passed` |
+| governance one-liner on `docs/program/tasks/SECTION-PT-FULL-01.md` | `[]` |
+| `git diff --check ae751f23..HEAD` | rc 0 |
+| section set, `build_fixtures.py --check`, HTTP test (lane `.env`), `vitest` analysis-settings | `211 passed`; `fixtures match` rc 0; `4 passed`; `95 passed` |
+| `git diff --name-only --no-renames ae751f23..HEAD` | the seven paths listed above |
+
+Free disk at the end of the lane (`df -h /`): 1.7 GiB. This paragraph is the only text added after `0281d4d7`; the contract run above was repeated on the tree that contains it (see the lane's final message for the tip SHA).
