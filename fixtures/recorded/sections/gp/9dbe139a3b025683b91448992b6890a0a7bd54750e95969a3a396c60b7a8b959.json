@@ -5,9 +5,9 @@
   "origin": {
     "analysis_profile_id": "ap_01M5AXG1KSSZM53N2CBV6XX83E",
     "kind": "synthetic",
-    "profile_status": "draft",
+    "profile_status": "reviewed",
     "prompt_bundle_id": "pb_01M5AXG1KSRDEWMP2WT3KNGWJ2",
-    "prompt_bundle_sha256": "b17d6129ebe3bc5cf18e35b8da3e442db3034bd9f56578562bdfcc47555f91dd",
+    "prompt_bundle_sha256": "fab79a6b3fdc2dd62faef6cf1b03011733e788b29db2d32cdff66b70d58f00be",
     "section_code": "GP",
     "statement": "Synthetic: authored by hand for SECTION-RECORDINGS-01 to prove section routing in recorded mode. No model produced this reply and no provider call was made. Not field evidence for the profile's review.",
     "task_id": "SECTION-RECORDINGS-01",
@@ -15,7 +15,7 @@
   },
   "output_text": "{\"observations\": [{\"category\": \"internal_contradiction\", \"finding_text\": \"Синтетический ответ (ГП), не результат вызова модели: число эвакуационных выходов из надземной части здания указано как два и как три.\", \"recommendation_text\": \"Согласовать число выходов с решениями по подъездам и площадкам.\", \"evidence\": [{\"page_number\": 3, \"quote\": \"Из надземной части здания предусмотрено два эвакуационных выхода.\"}, {\"page_number\": 7, \"quote\": \"Из надземной части здания предусмотрено три эвакуационных выхода.\"}]}, {\"category\": \"internal_contradiction\", \"finding_text\": \"Синтетический ответ (ГП), не результат вызова модели: степень огнестойкости здания, от которой зависят противопожарные разрывы, записана как II и как III.\", \"recommendation_text\": \"Установить одну степень огнестойкости здания для расчёта разрывов.\", \"evidence\": [{\"page_number\": 2, \"quote\": \"Степень огнестойкости здания — II.\"}, {\"page_number\": 6, \"quote\": \"Степень огнестойкости здания — III.\"}]}]}",
   "recording_version": "1.0.0",
-  "request_sha256": "d6e106170da12a9a764a218a5bdb7207a355b02563d25e759663e2fcc2f7466e",
+  "request_sha256": "9dbe139a3b025683b91448992b6890a0a7bd54750e95969a3a396c60b7a8b959",
   "stop_reason": "end_turn",
   "usage": {
     "input_tokens": 2450,
