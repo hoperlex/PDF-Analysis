@@ -54,6 +54,7 @@ import { describe, expect, it } from 'vitest';
 import { ApiError } from '@/shared/api';
 import type { ErrorCode, ErrorEnvelope } from '@/shared/api';
 import { classifyListingFailure } from '@/shared/lib';
+import { classifyRunFailure } from '@/entities/audit-run';
 
 import { CONTRACT_PATH, REPO_ROOT, readJson, readText, repoRelative, walkFiles } from './lib/repo';
 import { join } from 'node:path';
@@ -298,6 +299,38 @@ function listingSentences(): readonly { readonly where: string; readonly text: s
 }
 
 /**
+ * Every sentence a refused executor choice can put on the start-run control
+ * (`EXEC-PAR-WEB-01`): each reason the stand names for a connection that cannot serve, none, and
+ * each rejection of the identifier. They are written in `entities/audit-run/model/executor-refusal.ts`
+ * and a cold route render never reaches them (a refusal exists only after a settled mutation), so
+ * they are classified here through the same function the control calls.
+ */
+function executorRefusalSentences(): readonly { readonly where: string; readonly text: string }[] {
+  const refusal = (
+    code: ErrorCode, details: Record<string, string>, message: string,
+  ): ApiError => new ApiError(code === 'validation_failed' ? 422 : 503, {
+    contract_version: '1.6.0', error_code: code, message, correlation_id: 'cid-gender',
+    retryable: code !== 'validation_failed', details,
+  }, 'cid-gender');
+  const unavailable = ['archived', 'kind_not_served', 'not_probed', 'no_revision', null].map((reason) => ({
+    where: `executor refusal ${reason ?? 'no reason'}`,
+    error: refusal('dependency_unavailable', { dependency: 'executor_connection' },
+      reason === null ? 'cannot serve' : `the chosen executor connection cannot serve a run now (${reason})`),
+  }));
+  const rejected = ['unknown_connection', 'pattern', 'kind_not_routable', 'unlisted'].map((constraint) => ({
+    where: `executor identifier ${constraint}`,
+    error: refusal('validation_failed', { field: 'executor_connection_id', constraint }, 'rejected'),
+  }));
+  return [...unavailable, ...rejected].flatMap(({ where, error }) => {
+    const failure = classifyRunFailure(error);
+    return [
+      { where: `${where} title`, text: failure.title },
+      { where: `${where} detail`, text: failure.detail },
+    ];
+  });
+}
+
+/**
  * The prose on every screen the route tree offers, in its cold state and in its refusals.
  *
  * ## Why this renders its own pass instead of importing `renderedScreens()`
@@ -375,6 +408,18 @@ describe('D-95: every sentence a reviewer can read agrees with itself', () => {
         'reviewer reads Russian that is well-formed word by word and wrong as a sentence. ' +
         '`D-95`.',
     ).toEqual([]);
+  });
+
+  it('finds no disagreement in anything a refused executor choice says', () => {
+    const sentences = executorRefusalSentences();
+    // Non-vacuous: the sentences exist, and at least one of them has a pair the rule judges.
+    expect(sentences.length).toBe(18);
+    expect(sentences.filter(({ text }) => disagreements(text).length === 0 && /(такого|этого)\s/i.test(text)).length)
+      .toBeGreaterThan(0);
+    const offences = sentences
+      .flatMap(({ where, text }) => disagreements(text).map((d) => `«${d.phrase}»  (${where})  ${text}`))
+      .sort();
+    expect(offences, 'a refusal of the chosen executor disagrees with itself').toEqual([]);
   });
 
   it('finds no disagreement on any rendered screen', () => {

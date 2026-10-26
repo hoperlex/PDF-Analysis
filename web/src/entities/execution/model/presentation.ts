@@ -47,6 +47,8 @@ export function queueAgeLabel(createdAt: string, asOf: number | null): string {
 const EVENT_LABELS: Readonly<Record<string, string>> = {
   'audit_run.created': 'Прогон создан',
   'audit_run.transition': 'Состояние прогона',
+  // `EXEC-PAR-WEB-01`: written once when a start names its executor (`EXEC-PAR-START-01`).
+  'audit_run.executor_chosen': 'Выбран исполнитель',
   'job.created': 'Задача создана',
   'job.transition': 'Состояние задачи',
   'job.priority_changed': 'Приоритет изменён',

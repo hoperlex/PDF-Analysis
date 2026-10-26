@@ -96,7 +96,15 @@ describe('the start-run control', () => {
   it('offers one button and no provider-mode selector', () => {
     const markup = control();
     expect(markup).toContain('>Запустить прогон</button>');
-    expect(markup).not.toContain('<select');
+    expect(markup.match(/<button\b/g)).toHaveLength(1);
+    // `EXEC-PAR-WEB-01`: the one select is the executor's. It names no provider mode, and nothing
+    // else on the control is a choice.
+    expect(markup.match(/<select\b/g)).toHaveLength(1);
+    expect(markup).toContain('data-executor-select');
+    expect(markup).toContain('>Исполнитель</label>');
+    for (const mode of ['live', 'recorded', 'proxy']) {
+      expect(markup, mode).not.toContain(`value="${mode}"`);
+    }
     expect(markup).not.toContain('type="radio"');
     expect(markup).not.toContain('recorded mode instead');
   });

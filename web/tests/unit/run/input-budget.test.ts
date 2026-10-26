@@ -8,6 +8,7 @@
  * over a settled refusal, which is where a reader sees it.
  */
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -143,10 +144,16 @@ describe('the re-audit classifier prints the same figures', () => {
 describe('the start-run control shows the refusal with its figures and no retry', () => {
   function control(error: unknown): string {
     settled.error = error;
-    return renderToStaticMarkup(createElement(StartRunControl, {
-      projectUid: 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
-      versionUid: 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
-    }));
+    // `EXEC-PAR-WEB-01`: the control reads the connections for its «Исполнитель» select, so it needs
+    // a client; nothing is seeded, the list stays loading, and the select draws no button of its own.
+    return renderToStaticMarkup(createElement(
+      QueryClientProvider,
+      { client: new QueryClient() },
+      createElement(StartRunControl, {
+        projectUid: 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
+        versionUid: 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
+      }),
+    ));
   }
 
   it('renders the warning state with both figures, the correlation id and one button only', () => {

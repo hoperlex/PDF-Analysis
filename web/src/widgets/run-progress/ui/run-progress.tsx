@@ -45,6 +45,12 @@
  *   and on tab return, never on the poll, to name the worker whose `current_run_ids` lists
  *   the run (`W54-WORKERS-WEB`). In any other state no worker holds it and nothing is read.
  *
+ *   **The executor is named only when the reading carries one.** `EXEC-PAR-WEB-01`: a run that
+ *   froze a connection shows its name and pinned model in the run's facts, and a run in the queue
+ *   says it is waiting for that executor. A run with none — every run on the environment source
+ *   — shows no row and no placeholder, because a screen that cannot say which executor does not
+ *   say one.
+ *
  *   **A cost is never shown without the count it sums.** `D-15` is open: the total spans
  *   retry attempts. `runCost` returns `unreadable` rather than print a figure whose span
  *   the reader cannot see.
@@ -84,9 +90,12 @@ import {
   isRunAnimating,
   providerModeCaption,
   runCost,
+  runExecutorLine,
+  runExecutorValue,
   runHasPublishedResult,
   runOutcome,
   runProviderMode,
+  runWaitingSentence,
   stageRows,
   terminalReasonNote,
   useRunStatus,
@@ -332,6 +341,8 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
       : PROVIDER_MODE_LABELS[mode];
   const animating = isRunAnimating(status);
   const interrupted = interruptedReason(status);
+  const executor = runExecutorLine(status);
+  const waiting = executor === null ? null : runWaitingSentence(executor);
 
   return (
     <div data-run-id={status.run_id}>
@@ -352,6 +363,12 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
         <dd>
           <code>{status.version_uid}</code>
         </dd>
+        {executor === null ? null : (
+          <>
+            <dt>Исполнитель</dt>
+            <dd data-run-executor>{runExecutorValue(executor)}</dd>
+          </>
+        )}
         <dt>Создан</dt>
         <dd>{formatInstant(status.created_at)}</dd>
         <dt>Завершён</dt>
@@ -361,6 +378,8 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
           {formatElapsed(elapsedMs(status.created_at, status.terminal_at))}
         </dd>
       </dl>
+
+      {waiting === null ? null : <p data-run-executor-waiting>{waiting}</p>}
 
       {runHoldsLease(status.state) ? <RunHolder runId={status.run_id} /> : null}
 

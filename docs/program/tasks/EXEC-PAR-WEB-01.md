@@ -144,3 +144,11 @@ Omit the selector's value: the request is today's. Revert the lane's commits to 
 changed files with reasons; commands and results; the mutation table; what was not run (the browser
 journey — the frontend battery cannot see it; say so); the instruction to the integrator; proof the
 forbidden hotspots are untouched.
+
+## Result (recorded by the lane)
+
+Done on branch `agent/exec-par-web-01`; report: [`../EXEC-PAR-WEB-01.md`](../EXEC-PAR-WEB-01.md). Every path the
+lane touched is inside the allowed list above; the report names each with its reason. Two judgement calls differ
+from the wording of this file and are stated there: a connection that cannot serve is listed disabled with its
+reason (archived ones are not listed), and a retry is drawn exactly when the envelope says the failure is
+retryable, so a rejected identifier (`validation_failed`) carries none.

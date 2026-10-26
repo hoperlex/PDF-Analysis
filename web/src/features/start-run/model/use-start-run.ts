@@ -10,6 +10,11 @@
  * exactly the substitution that makes a replayed run look like evidence of a real
  * provider call. The mode this run actually used is read back from the reading and shown.
  *
+ * **`executor_connection_id` is sent only when the person chose a connection** (`EXEC-PAR-WEB-01`,
+ * `./start-run-intent.ts`). «По умолчанию (маршрут)» is the absence of the field, which is the
+ * start this command always made; a chosen connection is never replaced by the stand, so a
+ * refusal of it is shown as itself and not retried on another.
+ *
  * The 202 body is a full `RunStatus`, so it seeds `queryKeys.runs.detail(run_id)`: the
  * run screen opens on the run's real first state instead of on a loading state for a
  * reading it was already handed.
@@ -27,21 +32,20 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import type { RunStatus, VersionUid } from '@/shared/api';
+import type { RunStatus } from '@/shared/api';
 import { queryKeys, startRun } from '@/shared/api';
 
-export interface StartRunCommand {
-  readonly versionUid: VersionUid;
-  /** Minted once per intent by the caller and reused on every retry. */
-  readonly idempotencyKey: string;
-}
+import type { StartRunCommand } from './start-run-intent';
+import { startRunBody } from './start-run-intent';
+
+export type { StartRunCommand };
 
 export function useStartRun() {
   const queryClient = useQueryClient();
 
   return useMutation<RunStatus, unknown, StartRunCommand>({
-    mutationFn: async ({ versionUid, idempotencyKey }) => {
-      const response = await startRun({ body: { version_uid: versionUid }, idempotencyKey });
+    mutationFn: async (command) => {
+      const response = await startRun({ body: startRunBody(command), idempotencyKey: command.idempotencyKey });
       return response.data;
     },
     onSuccess: (run) => {
