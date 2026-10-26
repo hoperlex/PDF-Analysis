@@ -127,9 +127,10 @@ PRODUCT_TABLES = frozenset((
 #: ``audit_event.event_type`` families. ``norm_custody.`` is the custody ledger's, ``executor.``
 #: the append-only trail of who set an executor secret or route and when (`EXEC-SEAL-01`),
 #: ``access.`` the account side's: sign-in, role grant and revoke, password change and reset
-#: (`PROD-06`; kept "forever", ADR-0023 section 4). Both the keep and the delete predicate of
-#: ``audit_event`` are built from this tuple (``_event_keep``).
-KEEP_EVENT_PREFIXES = ("norm_custody.", "executor.", "access.")
+#: (`PROD-06`; kept "forever", ADR-0023 section 4), ``erasure.`` the record of a project erase
+#: (`PROD-07a`, ADR-0022 section 3: who, when, what, hashes). Both the keep and the delete
+#: predicate of ``audit_event`` are built from this tuple (``_event_keep``).
+KEEP_EVENT_PREFIXES = ("norm_custody.", "executor.", "access.", "erasure.")
 PRODUCT_EVENT_PREFIXES = (
     "artifact.", "attempt.", "audit_run.", "execution.", "findings.", "job.", "provider.", "stage.",
 )
