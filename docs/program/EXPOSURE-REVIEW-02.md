@@ -171,8 +171,8 @@ Findings: `F-03`, `F-05`, `F-12`, `F-13`, `F-21`.
 
 **Outbound-capable code, enumerated** (`rg -l "urllib.request|import httpx|http.client|socket.create_connection|smtplib" src` and the compose files): the model adapters and probes under `src/auditmanager/executors/`
 and `src/auditmanager/analysis/text/proxy.py` (the `worker`), the SSH transport (`executors/ssh_transport.py`, `ssh_tunnel_adapter.py`; the `worker`), `src/auditmanager/norms/__main__.py` (an operator command),
-and the `acme` container (certbot to the certificate authority). Nothing in `web/src` calls a third-party origin (`rg "https?://" web/src` finds none outside comments, tests and schema URIs; `NEXT_TELEMETRY_DISABLED=1`,
-`infra/deploy/Dockerfile.web:32,46`); no CDN font, script or analytics. The `api` makes no outbound call. There is no mail, no webhook, no error-reporting client.
+and the `acme` container (certbot to the certificate authority). Nothing in `web/src` calls a third-party origin (`rg -n "https?://[A-Za-z0-9]" web/src` finds, outside comments and tests, one input placeholder, `features/manage-executor-connection/ui/settings-fields.tsx:92`, and two `server-env.ts` messages; `NEXT_TELEMETRY_DISABLED=1`,
+`infra/deploy/Dockerfile.web:32,46`); no CDN font, script or analytics. By the role split the `api` opens no outbound connection of its own (probes run on the worker, `executors/probes.py` module note; `rg` finds the outbound-capable modules above and no other). There is no mail, no webhook, no error-reporting client.
 
 **What a model call carries.** `Authorization: Bearer <connection key>`, `Content-Type`, a random `X-Request-Id` and `X-Idempotency-Key` (`analysis/text/proxy.py:243-253`); the body is the frozen prompt and the page text of
 one version, rendered by `analysis/text/prompt.py` (`render_document`, from `TextLayer`): **no file name, project name, display title, login or user id is put into a prompt** (`rg "source_filename|display_title|project_uid|login" src/auditmanager/analysis/text/*.py` finds none in prompt construction).
