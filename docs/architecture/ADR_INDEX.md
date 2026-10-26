@@ -22,10 +22,10 @@
 | [ADR-0018-checkpoint-versioning](adr/ADR-0018-checkpoint-versioning.md) | accepted bootstrap | Checkpoint version = tag + frozen contracts + automated + manual evidence |
 | [ADR-0019-decision-code-navigation](adr/ADR-0019-decision-code-navigation.md) | proposed prototype extension | Rebuildable decision ↔ code/contracts/tests navigation for humans and AI agents |
 | [ADR-0020-normative-corpus-alpha-runtime](adr/ADR-0020-normative-corpus-alpha-runtime.md) | accepted alpha | PostgreSQL canonical norms + in-database pgvector; source bytes in private S3 |
-| [ADR-0021-production-topology-and-operations](adr/ADR-0021-production-topology-and-operations.md) | accepted production (R-146) | One VPS; TLS terminator and ACME renewal in `infra/`; manual copies as accepted risk A-1 |
-| [ADR-0022-production-data-governance](adr/ADR-0022-production-data-governance.md) | accepted production (R-146) | No automatic retention; journalled operator project erase; purge of beta data at 1.0; egress to the model provider |
-| [ADR-0023-production-identity-and-access](adr/ADR-0023-production-identity-and-access.md) | accepted production (R-146) | One organisation, local accounts; seeded administrator closed by the deploy; audited access changes |
-| [ADR-0024-production-analysis-path-and-ai-execution](adr/ADR-0024-production-analysis-path-and-ai-execution.md) | accepted production (R-146) | АР is v3 only; АР v1/v2 removed; OpenRouter base connection; other sections to full versions first |
+| [ADR-0021-production-topology-and-operations](adr/ADR-0021-production-topology-and-operations.md) | accepted production (R-146) | One VPS; TLS terminator and ACME renewal in `infra/`; manual copies as accepted risk A-1; mechanisms are unconfirmed AD-s except AD-01, AD-03 |
+| [ADR-0022-production-data-governance](adr/ADR-0022-production-data-governance.md) | accepted production (R-146) | No automatic retention; journalled operator project erase (an exception to ADR-0012, R-146o); purge of beta data at 1.0; egress to the model provider; mechanisms are unconfirmed AD-s except AD-06 |
+| [ADR-0023-production-identity-and-access](adr/ADR-0023-production-identity-and-access.md) | accepted production (R-146) | One organisation, local accounts; seeded administrator closed by the deploy and the public listener (R-146s); audited access changes; mechanisms are unconfirmed AD-s except AD-11 |
+| [ADR-0024-production-analysis-path-and-ai-execution](adr/ADR-0024-production-analysis-path-and-ai-execution.md) | accepted production (R-146) | АР is v3 only; АР v1/v2 removed; OpenRouter base connection; other sections to full versions first (expert-reviewed, A-5); mechanisms are unconfirmed AD-s except AD-14, AD-15 |
 
 ## CP-00 disposition
 

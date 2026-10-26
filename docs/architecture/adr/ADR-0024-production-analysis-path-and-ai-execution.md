@@ -1,6 +1,6 @@
 # ADR-0024: Production analysis path and AI execution: АР is v3 only, the other sections come first
 
-- Status: accepted for production by the repository owner (`R-146e`, `R-146f`, `R-146g`, `R-146j`, `R-146l`, `R-146m`); the implementation choices marked `AD-` are the architect's, proposed and not yet confirmed
+- Status: accepted for production by the repository owner (`R-146e`, `R-146f`, `R-146g`, `R-146j`, `R-146l`, `R-146m`, `R-146q`, `R-146r`, `R-146u`, `R-146v`); `AD-14` is confirmed by `R-146u` and `AD-15` by `R-146v`; `AD-12`, `AD-13` and the new `AD-18` are the architect's, proposed and not yet confirmed
 - Date: 2026-10-26
 - Owners: repository owner / `PRODUCTION-ADR-PACK-01`
 - Supersedes: nothing; it narrows the served АР paths of `BETA-STATIC-MATRIX-02.md` (B3) to one and states the model path `ADR-0011` left to the deployment
@@ -64,7 +64,7 @@ from the tree at `4d7b7c38` on 2026-10-26:
   elements costs about 3.8 s a page (`D-175`).
 - **What no one has done.** No real client document has been analysed (`R-141c`, `R-142a`); the recorded cases are
   synthetic (`D-183`); `B3`, `B5`, `B10` and `B11` of the beta criteria were deferred with their text unweakened
-  (`R-141c`).
+  (`R-141c`), and `R-146q` keeps `B3`, `B5` and `B10` as beta criteria.
 
 ## Decision
 
@@ -74,8 +74,11 @@ What the user gets: a start control that creates one group of six Runs of an А�
 `S2`), a group review of six scope outcomes with provisional quotations marked as needing an expert's check, each linked to
 the source PDF, and the pack status in «Настройки анализа». What the user does **not** get, stated plainly:
 
-- no check for internal contradictions and no check for empty placeholders in АР documents (those are v1's two categories and
-  v3 finds neither);
+- no internal-contradiction or empty-placeholder item in the АР review. Those are v1's two categories, and v3 is still *asked*
+  for them: its response schema lists all seven non-normative categories (`src/auditmanager/analysis/profiles/ar_v3/response_schema.py`)
+  and its prompt solicits them (`prompt_material.py`), but the review artifact drops every proposal that carries no norm citation
+  (`src/auditmanager/runs/v3_review_artifact.py`). The output claim holds; the product pays for proposals it then drops, which is
+  recorded as a proposed debt row;
 - no numerical conclusion about a norm until an expert decision and an edition check exist;
 - no canonical АР finding: a v3 Run ends with only its grounded review artifact (`src/auditmanager/runs/v3_review_terminal.py`),
   so there is nothing to decide in the findings ledger and nothing for the CSV or Excel export to carry;
@@ -107,10 +110,18 @@ the source PDF, and the pack status in «Настройки анализа». Wh
 - The v1 **machinery**: `src/auditmanager/analysis/text/prompt.py`, `stage.py`, `budget.py`, `proxy.py`, `profile_registry.py`, the
   nine stage ids and the packages under `src/auditmanager/analysis/text/profiles/<code>/`. The 14 other sections run on it.
 - The closed `FindingCategory` list and its database `CHECK`s, **unchanged** (`AD-12`): narrowing the list needs a
-  migration and a reseal and buys nothing, because the old rows are purged at the release. Five v2 categories remain declared
-  and no registered profile emits them; that is recorded as a debt row, not removed.
-- The shared v2 modules that v3 imports (`recognised_context`, `content`, `grounding`, `registered`): they **move first**, under
-  the v3 package or a neutral one, in a lane of their own before any deletion.
+  migration and a reseal and buys nothing, because the old rows are purged at the release. The seven non-normative categories stay
+  declared, and v3's schema still solicits all of them; the text profiles of the other sections emit only v1's two.
+- **What v3 needs from v2 (moves first, in a lane of its own before any deletion).** The direct imports are `content`
+  (`reviewed_sections`, `reviewed_content_sha256`, `ProfileContentError`), `recognised_context`, `grounding`
+  (`resolve_v2_anchor`) and the two identity constants of `registered` (`PROFILE_ID`, `PROMPT_BUNDLE_ID`, used by
+  `v3_profile.py` only to assert that v3's identities differ from v1's and v2's). `content.py` reads **six data files** in
+  `src/auditmanager/analysis/profiles/ar_v2/` (`role.md`, `finding_categories.md`, `checklist.md`, `drawing_types.md`,
+  `project_params.md`, `ar_checklist.md`), so they move with it. `registered.py` cannot move as it is: it also holds
+  `resolve_recorded_profile` and imports `ar_v2.prompt_material` and `ar_v2.response_schema`, and `prompt_material.py` imports `content`,
+  `recognised_context` and `response_schema`. The transitive closure of the whole `registered` is six modules plus the six data files;
+  the extraction therefore **splits `registered.py`**: the two constants go with v3, `resolve_recorded_profile` stays in v2 and is deleted
+  with it, and what moves is three modules (`content`, `recognised_context`, `grounding`), six data files and two constants.
 - Migrations: history is immutable (`0022_findings_v2`, `0023_norm_citations` stay).
 - АР project optimisation, norm search and the specification reads: they import nothing from v1 or v2 (the importers
   are listed above) and are not part of the АР analysis path.
@@ -158,39 +169,54 @@ refused up front (`analysis_input_budget_exceeded`) and a run whose meter passes
 `estimated` from the rate table otherwise. A v3 group is six Runs, each under the ceiling. Proposed owner action (assumption: the provider's console supports it,
 which the tree cannot show): a spending limit on the OpenRouter key itself, so that a defect in the ceiling cannot spend without bound.
 
-`AD-14` (to be confirmed): at the release an administrator sets `allow_client_documents` to true on the OpenRouter connection, as a recorded
-revision, because `R-146f` permits client documents and the screen must not say otherwise. The flag is not enforced anywhere; whether it
-should become a refusal is a separate decision, not taken here.
+`AD-14`, confirmed by `R-146u`: at the release an administrator sets `allow_client_documents` to true on the OpenRouter connection as a recorded
+revision, and the flag **stays a label that nothing enforces**. No code is written for it; no plan item builds a refusal. This is consistent with `A-2`.
 
-### 5. One worker, one queue (`R-146j`)
+### 5. One worker, one queue, and the 900-second attempt (`R-146j`)
 
 The worker has one slot and there is no service-level objective. Jobs are served by priority, then in arrival order, one at
-a time; a 500-page analysis occupies the slot for the better part of an hour in the worst measured case (`D-171`, `D-175`), and a v3 group
-is six jobs in a row. Everyone else waits. The levers that exist are administrator operations: `setJobPriority`, `setExecutionPaused`,
-`setWorkerIntake`, `cancelRun`. A killed worker is recovered by lease expiry and the retry budget; an attempt past the 900-second
-watchdog is failed. Nothing is promised about waiting time, and the queue screen «Очередь» is the only visibility.
+a time; a v3 group is six jobs in a row and everyone else waits. The levers that exist are administrator operations:
+`setJobPriority`, `setExecutionPaused`, `setWorkerIntake`, `cancelRun`. A killed worker is recovered by lease expiry and the retry
+budget (3 attempts); nothing is promised about waiting time, and the queue screen «Очередь» is the only visibility.
 
-### 6. The quality bar (`R-146f`)
+**The attempt has a hard limit.** `ATTEMPT_WATCHDOG_SECONDS` is 900 (`src/auditmanager/jobs/lease.py`); an attempt that runs longer is failed.
+The two deterministic stages alone of a 500-page drawing set took 307 s plus 415 s, 722 s, about 80 % of that limit before any model call (`D-171`),
+and a PDF with no drawing elements costs about 3.8 s a page in the worker's pdfplumber, which reaches 900 s at about 237 pages (`D-175`, open;
+the page figure is arithmetic on the measured rate). `R-146f` allows real client documents of up to the 500-page upload ceiling, so a large
+set can fail every attempt, and an attempt that fails after the model call may have been paid for. The earlier sentence of this ADR that a 500-page analysis
+holds the slot "for the better part of an hour" was wrong: it is failed at fifteen minutes.
 
-Expert acceptance and provider terms are **not** preconditions of the production release (`R-146f`). The evidence the release has: the contract and
-guard tests, synthetic recorded cases for every profile (`D-183`), the v3 pack's sealed manifest and the reviewer's attestation recorded in it (a record, not a
-signature: `D-212`), and whatever the owner and the experts review before they decide. The evidence it does not have: any real client document analysed, any measured
-precision or recall, any expert smoke session (`B3`, `B5`, `B10` unmet, `B11` open). The risk, stated plainly: the product may
-publish findings and provisional citations that are wrong or incomplete on real documents, and the first people to find out will
-be the users. Mitigations that exist: every v3 quotation is marked as needing an expert's check; every finding of the other
-sections is a proposal the expert accepts or rejects (`ADR-0012`); a draft profile's status is shown in «Настройки анализа». Whether `R-146f` also waives
-`B3`, `B5` and `B10` as beta criteria is not stated in the ruling and is listed as open in the plan.
+`AD-18` (new, to be confirmed): before the first real upload, the owner measures the envelope on the VPS (`PROD-20`: pages per minute by document
+kind, the duration of each stage) and decides between **raising the watchdog** (overall or per stage) and **refusing above a page limit below the
+500-page ceiling** with the existing typed refusal `analysis_input_budget_exceeded`. Until that decision the release has neither.
 
-### 7. Priority (`R-146l`)
+### 6. The quality bar (`R-146f`, `R-146q`, `R-146v`)
 
-The primary development task until the beta is bringing the other sections to full versions. `AD-15` (to be confirmed) gives the term a
-measurable meaning, per section: (a) the profile is reviewed by a named expert and its status becomes `reviewed` in the registry
-(`D-178`); (b) at least one positive and one negative case run on a document that is not synthetic and not a client document
-(`R-141c` binds the closed beta), recorded and replayable (`D-183`); (c) an expert accepts the outputs of those runs. Whether "full" also means
-more categories or norm checks of the kind v3 adds is the owner's question; this ADR does not assume it. How the owner's «бета 0.1.1» maps to the
-roadmap's `1.0.0-beta.N` tags is not stated in `R-146l` and is for the integrator to reconcile. The order of the plan
-(`PRODUCTION-READINESS-PLAN-01.md` section 4): section work starts in the first code wave and runs through the others; the removal of v1/v2
-follows its prerequisite (waves `PW3` and `PW4`); `D-204` proceeds in parallel as owner and expert work and does not use code lanes.
+`R-146f` waives only the condition that an expert has accepted the product: expert acceptance and provider terms are **not** preconditions of the
+production release. `R-146q` keeps `B3`, `B5` and `B10` of `BETA-STATIC-MATRIX-02.md` as **beta** criteria; they are not waived for the beta. The evidence
+the release has: the contract and guard tests, synthetic recorded cases for every profile (`D-183`), the v3 pack's sealed manifest and the reviewer's attestation
+recorded in it (a record, not a signature: `D-212`), and whatever the owner and the experts review before they decide. The evidence it does not have: any real
+client document analysed, any measured precision or recall, any expert smoke session. The risk, stated plainly: the product may publish findings and provisional
+citations that are wrong or incomplete on real documents, and the first people to find out will be the users. Mitigations that exist: every v3 quotation is marked as
+needing an expert's check; every finding of the other sections is a proposal the expert accepts or rejects (`ADR-0012`); a draft profile's status is shown in
+«Настройки анализа».
+
+**Accepted risk A-5 (`R-146v`).** When the 14 sections become «full», the quality of their output on real text is unmeasured: a section leaves `draft` when an expert
+has reviewed its profile, no non-synthetic field case is required, and the recorded cases stay synthetic. The owner chose this against the recommended option.
+Reopen trigger (given with the ruling's application): the first section whose real-text output an expert rejects, or the first client complaint.
+
+### 7. Priority and what «full» means (`R-146l`, `R-146r`, `R-146v`)
+
+The primary development task until the beta is bringing the other sections to full versions (`R-146l`). The beta is `1.0.0-beta.N` of the roadmap and the production
+release is `1.0.0`; the number `0.1.1` written in `R-146l` is not used (`R-146r`).
+
+`AD-15`, confirmed by `R-146v` (not the recommended option): a section is **full** when an expert has reviewed its profile. Per section, `PROD-14` therefore has
+four steps: the expert's review of the profile; the edit of the prompt with the re-recording of its synthetic case (editing a prompt orphans its recording); the switch
+of `status` from `draft` in the profile package; and the guard test that pins the new state. No field case is required. Who the experts are stays open (`OD-18`).
+
+The order of the plan (`PRODUCTION-READINESS-PLAN-01.md` section 4): section work starts in the first code wave and runs through the others; the removal of v1/v2
+follows its prerequisite (waves `PW3` and `PW4`); `D-204` proceeds in parallel as owner and expert work and does not use code lanes. Because `R-146q` keeps `B3`, `B5` and
+`B10`, the beta also needs the АР v3 pack (`PROD-12`) and the production connection (`PROD-13`); "sections first" orders the development lanes, not the beta's gates.
 
 ## Commitments and their mechanical checks
 
@@ -204,7 +230,7 @@ follows its prerequisite (waves `PW3` and `PW4`); `D-204` proceeds in parallel a
 | 6 | The run ceiling is 1.00 USD | `python3 -I -c "import json;print(json.load(open('docs/program/P02_LOCK.json'))['models']['run_cost_ceiling_usd'])"` prints `1.0`; `readiness.sh` `cost-ceiling` is `OK` | yes | none |
 | 7 | Production is live on the database source | `infra/deploy/readiness.sh \| grep -E 'readiness OK +(provider-mode\|executor-source)'` prints both lines | yes (the command) | `PROD-13` sets the values |
 | 8 | The OpenRouter pin is a probe's reported string | the probe's report names, per pinned model, the requested slug and the reported `model`; `P02_LOCK.json` is written only by that task | no | `PROD-13` |
-| 9 | Every non-АР profile is reviewed before the beta | `python3 -I -c "import json,glob;print(sorted(json.load(open(f))['status'] for f in glob.glob('src/auditmanager/analysis/text/profiles/*/profile.json')))"` prints fourteen `reviewed` | no (it prints fourteen `draft`) | `PROD-14` |
+| 9 | Every non-АР profile has been reviewed by an expert before the beta (`R-146v`) | `python3 -I -c "import json,glob;print(sorted(json.load(open(f))['status'] for f in glob.glob('src/auditmanager/analysis/text/profiles/*/profile.json')))"` prints fourteen `reviewed` | no (it prints fourteen `draft`) | `PROD-14` |
 | 10 | The АР v3 pack is installed | `python -m auditmanager.runs.v3_pack_cli verify --manifest infra/deploy/ar-v3-pack/<file>` exits 0, and `startArV3BetaGroup` stops answering `dependency_unavailable` | no | `PROD-12` |
 | 11 | One worker slot | `ADR-0021` row 12 | yes | none |
 
@@ -213,7 +239,7 @@ follows its prerequisite (waves `PW3` and `PW4`); `D-204` proceeds in parallel a
 ### Positive
 
 - One АР path to reason about, test and explain; the recorded v2 code, which nothing can start, stops costing review time.
-- The 14 other sections become the product's reviewed core before the beta, and a profile's status says the truth.
+- The 14 other sections become the product's reviewed core before the beta, and a profile's status says the truth (with `A-5` as the stated limit of that truth).
 - The model identity check keeps one rule for every connection kind.
 
 ### Negative / cost
@@ -222,7 +248,8 @@ follows its prerequisite (waves `PW3` and `PW4`); `D-204` proceeds in parallel a
 - The product stops detecting internal contradictions and empty placeholders in АР documents.
 - The removal touches the contract, `src/auditmanager/runs/executor.py`, 65 test files and the web, and the live journey must change first.
 - A strict `model_identity_mismatch` on a provider that reports variant names fails runs after payment.
-- A single worker makes the product slow under any concurrent use, with no promise.
+- A single worker makes the product slow under any concurrent use, with no promise, and a large document can exhaust its attempts at the 900-second limit until `AD-18` is decided.
+- `A-5`: the reviewed sections are reviewed on prompts and synthetic cases, not on real text.
 
 ## Alternatives considered
 
@@ -230,7 +257,7 @@ follows its prerequisite (waves `PW3` and `PW4`); `D-204` proceeds in parallel a
 2. **Keep the recorded v2 code as the foundation for later live use.** Rejected by `R-146l`; `git` history keeps it.
 3. **Narrow the finding categories in the same reseal.** Rejected (`AD-12`): a migration and a contract change for a list that no registered profile exercises.
 4. **An alias list on the run path for OpenRouter's variant names.** Rejected (`AD-13`) for now: it changes the executors settings; reopened if the probe shows variants.
-5. **Enforce `allow_client_documents`.** Not decided here (`AD-14`).
+5. **Enforce `allow_client_documents`.** Declined by `R-146u`: the flag stays a label.
 
 ## Verification
 
@@ -242,4 +269,4 @@ follows its prerequisite (waves `PW3` and `PW4`); `D-204` proceeds in parallel a
 
 Replace this ADR when `D-204` completes and the first real АР documents have been reviewed, when an expert decides that the 14 sections need more than the text
 profile, when OpenRouter's reported names make the exact comparison unworkable, when a second worker slot or a service-level objective is wanted, or when the
-owner decides to enforce `allow_client_documents` or to accept `R-146n` item 4.
+owner decides to accept `R-146n` item 4, or when `A-5` reopens.
