@@ -88,7 +88,13 @@ class _SessionHolder:
         self._sessions = session_factory
 
     def _write(self, work: Any) -> Any:
-        with self._sessions() as session:
+        # The request's correlation id rides every write of this call, so an ``access.*`` audit
+        # event (ADR-0023 section 4) can be tied to the server log. The ``access`` context may
+        # not import the transport; this is the one place that holds both.
+        from auditmanager.access.public import correlation_scope
+        from auditmanager.api.routers.correlation import current_correlation_id
+
+        with self._sessions() as session, correlation_scope(current_correlation_id()):
             result = work(session)
             session.commit()
             return result

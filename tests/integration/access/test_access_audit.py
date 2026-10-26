@@ -589,6 +589,43 @@ class TestTheServedApi:
         assert _count(migrated_engine) == baseline
 
 
+class TestTheServedRequestIdReachesTheEvent:
+    """The composition root binds the request's correlation id around every write (``PROD-06``)."""
+
+    def test_a_supplied_correlation_id_is_the_events_column(
+        self, client: TestClient, migrated_engine: Engine
+    ) -> None:
+        supplied = f"cid-prod06-{secrets.token_hex(6)}"
+        answer = client.post(
+            "/auth/token", json={"login": "admin", "password": SEED_PASSWORD},
+            headers={"X-Correlation-Id": supplied})
+        assert answer.status_code == 200, answer.text
+        assert answer.headers["X-Correlation-Id"] == supplied
+        (event,) = _events(migrated_engine, "access.sign_in_succeeded")
+        assert event["correlation_id"] == supplied
+
+    def test_an_id_the_edge_assigned_is_the_events_column_and_the_response_header(
+        self, client: TestClient, migrated_engine: Engine
+    ) -> None:
+        answer = client.post("/auth/token", json={"login": "admin", "password": SEED_PASSWORD})
+        assert answer.status_code == 200, answer.text
+        assigned = answer.headers["X-Correlation-Id"]
+        assert assigned
+        (event,) = _events(migrated_engine, "access.sign_in_succeeded")
+        assert event["correlation_id"] == assigned
+
+    def test_two_requests_never_share_an_id(
+        self, client: TestClient, migrated_engine: Engine
+    ) -> None:
+        first = client.post("/auth/token", json={"login": "admin", "password": SEED_PASSWORD})
+        second = client.post("/auth/token", json={"login": "admin", "password": SEED_PASSWORD})
+        assert first.status_code == second.status_code == 200
+        events = _events(migrated_engine, "access.sign_in_succeeded")
+        assert [e["correlation_id"] for e in events] == [
+            first.headers["X-Correlation-Id"], second.headers["X-Correlation-Id"]]
+        assert events[0]["correlation_id"] != events[1]["correlation_id"]
+
+
 class TestNoSecretAndNoAddressIsEverStored:
     def test_every_stored_row_of_every_access_type_is_clean(
         self, client: TestClient, migrated_engine: Engine

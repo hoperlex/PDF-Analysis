@@ -39,7 +39,10 @@ from tests.integration.recovery.purge_stand import (  # noqa: F401  (the fixture
 )
 
 #: The test's own statement of which events are kept; it does not use the tool's predicate.
-KEPT = "starts_with(event_type, 'norm_custody.') OR starts_with(event_type, 'executor.')"
+KEPT = (
+    "starts_with(event_type, 'norm_custody.') OR starts_with(event_type, 'executor.') "
+    "OR starts_with(event_type, 'access.')"
+)
 
 
 # --- the predicates (no database) --------------------------------------------------------------
@@ -47,7 +50,7 @@ KEPT = "starts_with(event_type, 'norm_custody.') OR starts_with(event_type, 'exe
 
 def test_the_audit_event_predicates_are_built_from_every_keep_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
     keep, delete = tool._predicates([])["audit_event"]
-    assert {"norm_custody.", "executor."} <= set(tool.KEEP_EVENT_PREFIXES)
+    assert {"norm_custody.", "executor.", "access."} <= set(tool.KEEP_EVENT_PREFIXES)
     for prefix in tool.KEEP_EVENT_PREFIXES:
         assert f"starts_with(t.event_type, '{prefix}')" in keep, prefix
     # the delete set is exactly the complement of the keep set, and names no product family as kept
