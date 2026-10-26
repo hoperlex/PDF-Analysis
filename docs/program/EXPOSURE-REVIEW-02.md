@@ -11,11 +11,16 @@ live `admin` password, the firewall) is not observable from here and is listed i
 
 ## 0. Verdict
 
-**Not clean for a production release with client documents: 2 HIGH (both conditional on a fact the tree cannot show), 7 MEDIUM, 10 LOW, 2 INFO.**
-The counts, the three most serious items and the order of fixes are filled in sections 4 and 9 and repeated in the commit message. (This section is
-completed last; if it still says "in progress" below, the lane was interrupted.)
+**Not clean for a production release with client documents: 24 new findings, 2 HIGH (both conditional on a fact the tree cannot show), 7 MEDIUM, 13 LOW, 2 INFO; and of the nine findings of `EXPOSURE-REVIEW-01` two are closed outright (E-4, E-8), three are closed in the tree for the attacker they named but with an unobserved or open residue (E-3, E-5, E-7), two are narrowed (E-1, E-2), one moved to the owner (E-6) and one is unchanged by ruling (E-9).**
+What the tree does well is substantial (section 6): the authorization seam is total over all 104 operations and deny-by-default, exactly three operations answer without a credential, the runner channel is a separate principal with hashed, connection-scoped tokens,
+the TLS terminator, the credential gate, the access journal and the project-erase core exist and are tested, sealed provider keys cannot be read back, and destinations are pinned.
 
-STATUS OF THIS DOCUMENT: in progress (section 1 written first so that an interrupted lane loses nothing).
+The three most serious, in one line each:
+1. **F-01** - the credential gate shuts only the stack's own 443 listener, so until the host nginx is replaced the live stand is exposed exactly as `EXPOSURE-REVIEW-01` found it, and whether `admin`/`password` is still valid there has never been observed.
+2. **F-02 with F-03** - the public web tier runs `next` 15.5.25 (critical advisory on a route the build serves anyway, `D-221`), and that container holds the key that signs every user credential although no web code reads it.
+3. **F-06 / F-08** - one runner token can starve the API's 40 sync threads with long polls, and the runner channel sends complete prompts to a recipient `A-2` does not name, accepted under a premise ("no commercial use") that `R-146f` removes.
+
+Four findings change who can reach the system and stop for the owner (section 5). The order of fixes and the plan items are section 9; the proposed debt rows are section 10; what could not be verified without a host is section 8.
 
 ## 1. Method, scope, and decisions of the lane
 
