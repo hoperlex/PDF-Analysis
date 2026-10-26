@@ -13,7 +13,7 @@
 | [ADR-0009-nextjs-react-typescript-fsd](adr/ADR-0009-nextjs-react-typescript-fsd.md) | accepted bootstrap | Next.js/React/TypeScript strict with FSD vertical slices |
 | [ADR-0010-stable-finding-identity](adr/ADR-0010-stable-finding-identity.md) | accepted bootstrap | Stable Finding identity is separate from run observation |
 | [ADR-0011-llm-reproducibility-and-cost](adr/ADR-0011-llm-reproducibility-and-cost.md) | accepted bootstrap | LLM reproducibility and cost ledger |
-| [ADR-0012-expert-decision-ledger-and-kb-projection](adr/ADR-0012-expert-decision-ledger-and-kb-projection.md) | accepted bootstrap | Expert decisions are append-only; KB is a projection |
+| [ADR-0012-expert-decision-ledger-and-kb-projection](adr/ADR-0012-expert-decision-ledger-and-kb-projection.md) | accepted bootstrap | Expert decisions are append-only; KB is a projection (addendum R-146o: the operator project erase is the one exception) |
 | [ADR-0013-comparison-evidence-layers](adr/ADR-0013-comparison-evidence-layers.md) | accepted bootstrap | Comparison separates approved state, raw evidence and AI synthesis |
 | [ADR-0014-authz-classification-retention](adr/ADR-0014-authz-classification-retention.md) | proposed; partially accepted by R-146 (2026-10-26) | Object authorization and classification/retention policy; tenant model, identity provider and TTL decided for 1.0, legal-hold authority and classification labels open |
 | [ADR-0015-observability-audit-and-redaction](adr/ADR-0015-observability-audit-and-redaction.md) | accepted bootstrap | Diagnostic logs, durable audit and metrics are separate |
