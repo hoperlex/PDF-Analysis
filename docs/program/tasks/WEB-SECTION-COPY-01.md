@@ -1,7 +1,7 @@
 # Task WEB-SECTION-COPY-01 — the dashboard sections panel and the section catalogue say what is true after W59 and PROD-11
 
 task_id: WEB-SECTION-COPY-01
-status: in progress in lane `agent/web-section-copy-01` (wave PW4, lane WC; nothing pushed, merged or tagged)
+status: completed in development candidate (lane `agent/web-section-copy-01`, wave PW4; nothing pushed, merged or tagged)
 
 ## Outcome
 
