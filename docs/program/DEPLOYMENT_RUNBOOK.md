@@ -238,11 +238,15 @@ Two of its values are not free choices:
 
   **Since wave 34 this is the key the API signs reviewer credentials with, not a token
   anyone presents.** Whoever holds it can mint a credential for any subject, so it goes to
-  no reviewer and into no browser — and it goes to **two** processes, not one:
-  `compose.server.yml` gives it to `api`, where it belongs, and to `web`, which forwards it
-  in an `Authorization: Bearer` header on the **sign-in exchange** and on no other forward.
-  Every data forward carries the *reviewer's* own credential instead. The paragraph that
-  used to tell operators to present it as a bearer token is corrected in
+  no reviewer and into no browser — and **since `HARDEN-01` (2026-10-27) it goes to one
+  process, `api`**, where it belongs. It used to go to `web` as well, under the belief that
+  the web tier forwards it on the sign-in exchange; since `C-17` (`W53-CLOSE`) it forwards
+  nothing of the kind (the sign-in exchange carries no `Authorization` header, every data
+  forward carries the *reviewer's* own credential), so `web` held mint-capable key material
+  it never used (`EXPOSURE-REVIEW-02` `F-03`). `compose.server.yml` no longer gives it to
+  `web`; `tests/integration/composition/test_web_service_holds_no_signing_key.py` holds
+  that, and fails the day a `web/src` module starts to read it. The paragraph that used to
+  tell operators to present it as a bearer token is corrected in
   `infra/deploy/README.md` and, since 2026-09-29, in `infra/deploy/env/alpha.env.example`
   — the file you actually edit (`Y6`).
 
@@ -251,15 +255,18 @@ Two of its values are not free choices:
   those three held; the header clause and *"nowhere else"* did not, and this is the paragraph
   written to repair an earlier falsehood of exactly this kind. Read the chain:
   `grep -n 'AUDITMANAGER_API_TOKEN' infra/deploy/compose.server.yml` → `:173` api, `:208`
-  web; `grep -n "headers.set('authorization'" web/src/shared/api/credentialed-forward.ts`.
+  web [now: the `api` line only]; `grep -n "headers.set('authorization'" web/src/shared/api/credentialed-forward.ts`.
   **What it does not expose**, measured by `W47-JUDGE-X` §1.4 rather than argued: the value
   is not itself a usable credential — presented as `Authorization: Bearer` or as `X-API-Key`
   against a protected operation it answers **401**, because the seam signs with
   `HMAC(secret, context)` — and nothing about this reaches a browser. What it **is** is mint-capable
   key material in a second container's environment, which is what an operator deciding where
   this value may go needs to know. Stopping `web` from holding it at all is a decision about
-  who can mint a credential, which `R-29` §2 reserves to the owner; it is not a repair a
-  wave may take.)*
+  who can mint a credential, which `R-29` §2 reserves to the owner; it was not a repair a
+  wave could take. **`HARDEN-01` took it** inside the `PW3` window, whose owner message of
+  2026-10-26 gave the permissions in advance and whose lane H names `F-03`; the change only
+  narrows a credential's reach and exposes nothing that was not exposed, and the integrator
+  confirms it against `R-29` §2.)*
 
   The seam is **fail-closed**: a container started without it exits non-zero rather than
   serving `authentication_required` to **every one of its operations**, which from a browser
@@ -747,6 +754,8 @@ Expect (shape): `Congratulations, all simulated renewals succeeded`.
 | `verify-deployed.sh` | exit 8, `the published admin/password pair is valid` | the same finding, asked of the running stack; `PUBLIC PORT 443 IS PUBLISHED while the pair is valid` means withdraw it now |
 | `verify-deployed.sh` | exit 7, `served-certificate: NOT SERVED` | no TLS answer from `proxy:8443`: the pair is not exported yet, or the proxy has not loaded it |
 | `verify-deployed.sh` | exit 7, `STAGING CERTIFICATE` / `NOT TRUSTED` / `EXPIRING` | the kind, the chain or the margin; the line says which |
+| `verify-deployed.sh` | exit 9, `the answer served on <name> lacks what the proxy's configuration promises` | `HARDEN-01`: HSTS, one of the four security headers, a version in `Server`, or a session cookie without `Secure` on the answer the proxy gives on the name; each finding is a line under it. `infra/deploy/reload-proxy.sh`, then verify again |
+| `verify-deployed.sh` | exit 4, `the proxy's answer on <name> could not be read` / `no am_session cookie to judge` | the one request of the headers check got no HTTP answer, or no `401` with a cleared session cookie (the web tier is down?); nothing is claimed about the headers or the cookie |
 | `enable-tls` | `TLS IS OFF.` | no usable pair on the volume; `docker compose logs acme` says why |
 | `watch-certificate` | `the pair is not the cause` | nginx refused the configuration with and without the TLS block (an upstream restarting, usually); it retries |
 

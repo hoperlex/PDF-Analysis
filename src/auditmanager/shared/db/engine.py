@@ -30,7 +30,10 @@ def create_database_engine(settings: DatabaseSettings) -> Engine:
     exception renders ``[parameters: (...)]`` after the statement, and the sinks that log an
     exception (the run carrier, the worker) would write bound values -- client text, model
     output -- into the container log. The statement text stays in the message; the values do
-    not, in the exception string and in the statement log that ``echo`` turns on.
+    not, in the exception string and in the statement log that ``echo`` turns on. This does
+    **not** remove the database server's own ``DETAIL`` line (``Failing row contains (...)``,
+    ``Key (...)=(...) already exists``), which the driver puts in the same string; that is a
+    separate, open follow-up (``docs/program/HARDEN-01.md``).
     """
     return create_engine(
         settings.url,

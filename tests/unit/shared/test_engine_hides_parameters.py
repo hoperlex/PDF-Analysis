@@ -18,6 +18,15 @@ off by default, which also prints parameters unless they are hidden).
 **The control.** The same statement through an engine built *without* the flag is run first and
 must show the value: a test that only ever saw a clean string would be green whether or not the
 flag did anything.
+
+**What this does not cover, measured on the lane's PostgreSQL (``docs/program/HARDEN-01.md``).**
+``hide_parameters`` removes SQLAlchemy's ``[parameters: ...]``. The *server's own* message still
+travels in the exception string: a CHECK refusal prints ``DETAIL:  Failing row contains (k2,
+forbidden).`` and a unique refusal ``DETAIL:  Key (a)=(k1) already exists.``, so a value that is
+a column of the refused row (``D-225``'s model output in a ``stage_result`` insert) can still reach
+a log line that prints ``str(exc)``. This test does not assert that away and must not be read as
+if it did; the follow-up is named in the report (``connect`` hook setting libpq's error verbosity,
+or scrubbing at the two ``_log.exception`` sinks).
 """
 
 from __future__ import annotations
