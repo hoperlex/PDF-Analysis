@@ -125,7 +125,7 @@ From `/root/projects/PDF-Analysis/.local/worktrees/section-ai-full-01`, shared v
 | `tests/integration/composition/test_analysis_profiles_over_http.py`, lane `.env` exported | rc 0, `4 passed` |
 | `npx vitest run tests/unit/analysis-settings` in `web/` | rc 0, 7 files, `95 passed` |
 | governance one-liner on the task file | `[]` |
-| `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py`, `git diff --check` | see the line at the end of this report |
+| `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py`, `git diff --check` | rc 0, `105 passed` (on the committed, clean tree); `git diff --check 0e663fd0..HEAD` rc 0 |
 
 Free disk at the start and at the end of the lane: 1.8 GiB (`df -h /`). No docker command, no push, no model call, no process killed.
 
@@ -146,4 +146,16 @@ Free disk at the start and at the end of the lane: 1.8 GiB (`df -h /`). No docke
 
 ## Forbidden paths untouched
 
-`git diff --name-only 0e663fd0..HEAD` (last line of this report).
+`git diff --name-only 0e663fd0..HEAD` on the final tree prints exactly these seven paths, all inside the task's allowed paths:
+
+```text
+docs/program/SECTION-AI-FULL-01.md
+docs/program/tasks/SECTION-AI-FULL-01.md
+fixtures/recorded/sections/ai/131994ad9877d623894007365c0923105c1021199d0084731743d06f90471da6.json
+fixtures/recorded/sections/ai/a03cfde3562613cfc7db02912f3ff883afa88f21719528ce87a13d8b0c04bf8f.json
+src/auditmanager/analysis/text/profiles/ai/profile.json
+src/auditmanager/analysis/text/profiles/ai/system_prompt.md
+tests/unit/analysis/text_profiles/section_profile_expectations.json
+```
+
+No other section's files, no `W59-SECTION-PROFILES-01.md`, registry, `P02_LOCK.json`, `contracts/**`, migration, `web/**` or `infra/**` appears; `build_fixtures.py` is unchanged.
