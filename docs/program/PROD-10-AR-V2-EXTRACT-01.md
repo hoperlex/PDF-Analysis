@@ -89,7 +89,8 @@ Run in this worktree on the committed code tree, one pytest at a time; `PYTHONPA
 | `tests/contract/analysis_packages` / `tests/contract/architecture` (ALR-05 boundary, `ar_shared` satisfies it) | 52 / 4 passed |
 | `tests/e2e/test_pc01_journey_conformance.py` (static) | 135 passed |
 | `python -c "import auditmanager.analysis.profiles.ar_v3, ...ar_v3.v3_profile, ...recognised.region_candidate, auditmanager.analysis.public, auditmanager.runs.executor"` | import ok |
-| docs guards `tests/contract/program`, `test_doc_prose_facts.py`, `test_surface_counts_in_prose.py`, `git diff --check`, governance one-liner | see the last section |
+| docs guards `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py` (run on the clean, committed tree) | 105 passed |
+| `git diff --check bfcb8a97..HEAD`; the governance one-liner on the task file | exit 0; `[]` |
 
 **Not run (need a stack), for the integrator:** `tests/integration/runs/test_w59_section_profile_recorded.py` (9 cases, PostgreSQL), `tests/integration/analysis/geometry` and the S3-backed files of `tests/integration/analysis/recognised` (object store), and the rest of `tests/integration/{runs,findings,analysis}` on a lane stack. Every test file that imports a moved name is in `tests/integration` and was run here except through those database fixtures: the 18 modified files are all in the green rows above.
 
@@ -129,7 +130,20 @@ What would be verified live (`npm --prefix web run e2e:pc01 -- --phase all` on a
 
 ```text
 $ git diff --name-only bfcb8a97..HEAD | grep -E '^(contracts/|db/|infra/|web/|fixtures/|tests/e2e/|src/auditmanager/(runs|bootstrap|api|findings|norms|optimisation)/|pyproject|requirements|package)|P02_LOCK|profile\.json|system_prompt\.md|CURRENT_STATE|DEBT_REGISTER|PRODUCTION-READINESS|OWNER_RULINGS|/adr/'
-(no output)
+(no output; grep exit 1)
+$ git diff --stat bfcb8a97..HEAD -- fixtures | wc -l
+0
+$ git diff --name-only bfcb8a97..HEAD, by directory
+ 11 src/auditmanager/analysis/profiles/ar_shared/      (9 moved, 2 new)
+  7 src/auditmanager/analysis/profiles/ar_v2/
+  5 src/auditmanager/analysis/profiles/ar_v3/
+  1 src/auditmanager/analysis/public.py                (not in the lane's allowed list: two import statements, deviation 2)
+  1 src/auditmanager/analysis/recognised/region_candidate.py
+ 16 tests/integration/analysis/
+  1 tests/integration/findings/
+  1 tests/integration/runs/
+  1 tests/unit/analysis/test_ar_v3_independent_of_ar_v2.py
+  2 docs/program/ (this report and the task file)
 ```
 
-The list is in the last section's command output below.
+`runs/executor.py`, the composition roots, `contracts/**`, migrations, `infra/**`, `web/**`, `tests/e2e/**` and every recording are untouched.
