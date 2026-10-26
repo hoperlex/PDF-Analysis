@@ -37,7 +37,12 @@ REFUSED, FAILED, USAGE = 3, 4, 2
 SHA = "a" * 64
 OBJECTS_SHA = "b" * 64
 
-ENV_FILE = f"ALPHA_INSTANCE={INSTANCE}\nPOSTGRES_DB={DATABASE}\nPOSTGRES_USER={USER}\nS3_BUCKET={BUCKET}\n"
+#: The application role's url (`DATABASE_URL`) and the owner's (`MIGRATOR_DATABASE_URL`) are DIFFERENT strings here, so
+#: a test can tell which one the wrapper hands the one-off container (`PROD-04-DB-ROLES-01`).
+APP_URL = f"postgresql+psycopg://the_application_role:an-application-db-password-0001@postgres:5432/{DATABASE}"
+MIGRATOR_URL = f"postgresql+psycopg://{USER}:an-owner-db-password-0002@postgres:5432/{DATABASE}"
+ENV_FILE = (f"ALPHA_INSTANCE={INSTANCE}\nPOSTGRES_DB={DATABASE}\nPOSTGRES_USER={USER}\nS3_BUCKET={BUCKET}\n"
+            f"DATABASE_URL={APP_URL}\nMIGRATOR_DATABASE_URL={MIGRATOR_URL}\n")
 
 COMMON = ("--database", DATABASE, "--bucket", BUCKET)
 
@@ -46,6 +51,9 @@ import json, os, sys
 argv = sys.argv[1:]
 with open(os.environ["STUB_LOG"], "a") as log:
     log.write(" ".join(argv) + "\n")
+# What the one-off container would be given as DATABASE_URL: compose substitutes the environment of THIS process.
+with open(os.environ["STUB_LOG"] + ".env", "a") as seen:
+    seen.write(os.environ.get("DATABASE_URL", "<unset>") + "\t" + " ".join(argv) + "\n")
 config = json.load(open(os.environ["STUB_CONFIG"]))
 rest = argv
 while rest and rest[0] in ("compose", "--env-file", "--file"):
@@ -207,6 +215,60 @@ def test_a_half_configured_instance_is_refused_and_the_guard_can_fail(rig: Rig) 
     broken = rig.mutant("instance-configured")
     broken.env_file.write_text(f"POSTGRES_DB={DATABASE}\n", encoding="utf-8")
     assert "names no ALPHA_INSTANCE" not in broken.run(*COMMON, "--dry-run").stderr
+
+
+@pytest.mark.parametrize("line", [
+    "", "MIGRATOR_DATABASE_URL=\n", "MIGRATOR_DATABASE_URL=postgresql://u:p@postgres:5432/d\n",
+    "MIGRATOR_DATABASE_URL=not a url\n",
+], ids=["absent", "empty", "wrong-scheme", "not-a-url"])
+def test_a_missing_or_malformed_owner_url_is_refused_and_the_guard_can_fail(rig: Rig, line: str) -> None:
+    """`PROD-04`: the purge truncates, so the one-off container is handed the OWNER's url; an environment that has none
+    is refused before any connection, in a sentence, and not by the tool's `owner-may-write` after one."""
+    without = "".join(entry for entry in ENV_FILE.splitlines(keepends=True) if not entry.startswith("MIGRATOR_DATABASE_URL="))
+    rig.env_file.write_text(without + line, encoding="utf-8")
+    completed = rig.run(*COMMON, "--dry-run")
+    assert completed.returncode == REFUSED and "[migrator_url_unset]" in completed.stderr, completed.stderr
+    assert not rig.log.exists(), "the refusal came after docker was touched"
+    cut = rig.mutant("migrator-url-configured")
+    cut.env_file.write_text(without + line, encoding="utf-8")
+    assert "[migrator_url_unset]" not in cut.run(*COMMON, "--dry-run").stderr
+
+
+#: What an operator's shell might have exported: the wrapper's own value must win over it.
+AMBIENT = "postgresql+psycopg://ambient:ambient@elsewhere:5432/ambient"
+
+
+def _seen(rig: Rig) -> list[tuple[str, str]]:
+    path = Path(str(rig.log) + ".env")
+    return [tuple(line.split("\t", 1)) for line in path.read_text(encoding="utf-8").splitlines()]  # type: ignore[misc]
+
+
+def test_the_python_half_is_handed_the_owners_url_at_every_step_and_never_the_applications(rig: Rig) -> None:
+    """`api`'s own `DATABASE_URL` is the application role's; the purge needs the owner's. Every `product_purge` step
+    -- plan, snapshot, apply, delete -- runs with `DATABASE_URL` = `MIGRATOR_DATABASE_URL` in the environment of the
+    `docker compose` process, and no command line carries a url."""
+    assert rig.run(*COMMON, "--yes-purge-product-data", env={"DATABASE_URL": AMBIENT}).returncode == 0
+    steps = [(url, call) for url, call in _seen(rig) if "scripts.recovery.product_purge" in call]
+    assert [call.split("product_purge ")[1].split()[0] for _, call in steps] == [
+        "plan", "snapshot-objects", "apply", "delete-objects"]
+    assert {url for url, _ in steps} == {MIGRATOR_URL}, steps
+    assert APP_URL not in "".join(url for url, _ in _seen(rig))
+    assert not any("postgresql+psycopg://" in call or "an-owner-db-password-0002" in call for call in rig.calls), (
+        "a url (and its password) is on a command line")
+
+
+def test_that_assertion_can_fail_without_the_environment_prefix(rig: Rig, tmp_path: Path) -> None:
+    """The mutation proof of the case above: take the prefix off the two helpers and the one-off container is handed
+    whatever the shell had, so `api` would get that (or the application's url) and the tool would refuse."""
+    source = SCRIPT.read_text(encoding="utf-8")
+    stripped = source.replace('DATABASE_URL="$MIGRATOR_URL" compose run', 'compose run')
+    assert stripped.count("compose run") == source.count("compose run") and stripped != source
+    copy = tmp_path / "no-prefix.sh"
+    copy.write_text(stripped, encoding="utf-8")
+    broken = Rig(tmp_path / "broken", script=copy)
+    assert broken.run(*COMMON, "--yes-purge-product-data", env={"DATABASE_URL": AMBIENT}).returncode == 0
+    seen = {url for url, call in _seen(broken) if "scripts.recovery.product_purge" in call}
+    assert seen == {AMBIENT} and MIGRATOR_URL not in seen
 
 
 def test_a_missing_compose_file_is_refused_and_the_guard_can_fail(tmp_path: Path) -> None:
@@ -426,6 +488,6 @@ def test_every_guard_in_the_script_has_a_case_here() -> None:
     me = Path(__file__).read_text(encoding="utf-8")
     missing = sorted(name for name in markers if f'"{name}"' not in me)
     assert not missing, f"guards with no case: {missing}"
-    assert len(markers) == 15
+    assert len(markers) == 16
     for name in markers:
         assert len(re.findall(rf"^# <<< guard: {re.escape(name)}$", SCRIPT.read_text(encoding="utf-8"), re.MULTILINE)) == 1

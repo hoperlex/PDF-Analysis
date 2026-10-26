@@ -552,6 +552,19 @@ services:
   s3:
     image: {image}
     networks: [alpha]
+  # `PROD-04`: `deploy.sh` runs the owner's one-shots to completion before `up`. The stand has no schema, so they
+  # are stand-ins that succeed; `apply-grants.sh` is a stand-in too (staged below), because this stand's postgres
+  # is an nginx image with no `psql`.
+  migrate:
+    image: {image}
+    networks: [alpha]
+    entrypoint: ["/bin/true"]
+    restart: "no"
+  release-notes:
+    image: {image}
+    networks: [alpha]
+    entrypoint: ["/bin/true"]
+    restart: "no"
   api:
     build:
       context: ../..
@@ -682,7 +695,9 @@ class Stand:
         # before the repair" predate it and simply never read it.
         _write(self.deploy / "lib/proxy-listeners.sh", (DEPLOY_DIR / "lib/proxy-listeners.sh").read_text(encoding="utf-8"))
         _write(self.deploy / "verify-deployed.sh", self.probe.read_text(encoding="utf-8"))
-        for name in ("deploy.sh", "reload-proxy.sh", "verify-deployed.sh"):
+        # `PROD-04`: the stand has no database to grant on, so the step is a stand-in that answers as the real one does.
+        _write(self.deploy / "apply-grants.sh", '#!/bin/sh\n[ "$1" = "--env-file" ] || exit 2\necho "grants-ok: stand"\nexit 0\n')
+        for name in ("deploy.sh", "reload-proxy.sh", "verify-deployed.sh", "apply-grants.sh"):
             (self.deploy / name).chmod(0o755)
         _write(self.deploy / "compose.server.yml", STAND_COMPOSE.format(image=image))
         _write(self.deploy / "Dockerfile.api", STAND_DOCKERFILE_API.format(image=image))
@@ -705,7 +720,10 @@ class Stand:
                     "POSTGRES_USER=stand",
                     "S3_BUCKET=stand",
                     *(f"{name}={value}" for name, value in STAND_SECRETS.items()),
-                    "DATABASE_URL=postgresql+psycopg://stand:"
+                    "ALPHA_APP_DB_USER=stand_app",
+                    "ALPHA_APP_DB_PASSWORD=stand-application-db-password-0001",
+                    "DATABASE_URL=postgresql+psycopg://stand_app:stand-application-db-password-0001@postgres:5432/stand",
+                    "MIGRATOR_DATABASE_URL=postgresql+psycopg://stand:"
                     f"{STAND_SECRETS['POSTGRES_PASSWORD']}@postgres:5432/stand",
                     f"S3_ACCESS_KEY_ID={STAND_SECRETS['MINIO_ROOT_USER']}",
                     f"S3_SECRET_ACCESS_KEY={STAND_SECRETS['MINIO_ROOT_PASSWORD']}",

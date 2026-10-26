@@ -37,6 +37,13 @@
 #      prefix, never a key the norm custody ledger owns;
 #   7. the worker is started again and a report is printed.
 #
+# THE PYTHON HALF CONNECTS AS THE OWNER (`PROD-04-DB-ROLES-01`, `AD-02`). `api` and `worker` run as an application
+# role that cannot truncate and owns nothing, so the `api` image's own `DATABASE_URL` would make the tool's
+# `owner-may-write` guard refuse -- and it should: the purge is the one operator act that needs write-everything. This
+# wrapper hands the one-off container `MIGRATOR_DATABASE_URL` as `DATABASE_URL`, through the environment of the
+# `docker compose` process (compose substitutes it into the `api` service's `environment:` and the password never
+# appears in a command line), for these steps and no others; an environment without that url is `[migrator_url_unset]`.
+#
 # THE TARGET IS ALWAYS THIS STACK. Every step runs through `docker compose -f compose.server.yml`
 # against the project `ALPHA_INSTANCE` names, so an exported `DATABASE_URL` pointing somewhere
 # else cannot be reached from here. The typed names are the other half of that.
@@ -170,6 +177,7 @@ CONFIGURED_DB="$(configured POSTGRES_DB)"
 CONFIGURED_BUCKET="$(configured S3_BUCKET)"
 CONFIGURED_INSTANCE="$(configured ALPHA_INSTANCE)"
 CONFIGURED_USER="$(configured POSTGRES_USER)"
+MIGRATOR_URL="$(configured MIGRATOR_DATABASE_URL)"
 
 # >>> guard: instance-configured
 if [ -z "$CONFIGURED_INSTANCE" ] || [ -z "$CONFIGURED_DB" ] || [ -z "$CONFIGURED_BUCKET" ]; then
@@ -180,6 +188,17 @@ if [ -z "$CONFIGURED_INSTANCE" ] || [ -z "$CONFIGURED_DB" ] || [ -z "$CONFIGURED
            "A half-configured environment is not the alpha instance."
 fi
 # <<< guard: instance-configured
+
+# >>> guard: migrator-url-configured
+# The purge truncates, which only the owner role may do. An environment with no owner url has nothing to hand the tool
+# but the application's, which the tool refuses after the connection is made; say so before any is.
+if [[ ! "$MIGRATOR_URL" =~ ^postgresql\+psycopg://[^:@/]+:[^@/]+@[^:@/]+:[0-9]+/[^?]+$ ]]; then
+    refuse "[migrator_url_unset] MIGRATOR_DATABASE_URL in $ENV_FILE is unset or is not a postgresql+psycopg:// url." \
+           "The purge truncates tables, which only the owner role (POSTGRES_USER) may do; api's DATABASE_URL is the" \
+           "application role's and would be refused. Nothing was read and nothing was touched." \
+           "See env/alpha.env.example."
+fi
+# <<< guard: migrator-url-configured
 
 # >>> guard: database-matches
 if [ "$DATABASE" != "$CONFIGURED_DB" ]; then
@@ -227,13 +246,13 @@ compose() { docker compose --env-file "$ENV_FILE" --file "$COMPOSE_FILE" "$@"; }
 # carries `src/` but not `scripts/`, so the module directory is mounted read-only. `--user root`
 # so it can write into a dump directory the host user owns; it writes nothing else.
 api_python() {
-    compose run --rm --no-deps -T --user root -e PYTHONPATH=/app/src:/purge \
+    DATABASE_URL="$MIGRATOR_URL" compose run --rm --no-deps -T --user root -e PYTHONPATH=/app/src:/purge \
         -v "$MODULE_DIR:/purge/scripts/recovery:ro" \
         --entrypoint python api -m scripts.recovery.product_purge "$@"
 }
 api_python_dump() {
     local dir="$1"; shift
-    compose run --rm --no-deps -T --user root -e PYTHONPATH=/app/src:/purge \
+    DATABASE_URL="$MIGRATOR_URL" compose run --rm --no-deps -T --user root -e PYTHONPATH=/app/src:/purge \
         -v "$MODULE_DIR:/purge/scripts/recovery:ro" -v "$dir:/dump" \
         --entrypoint python api -m scripts.recovery.product_purge "$@"
 }

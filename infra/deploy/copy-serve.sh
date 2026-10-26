@@ -7,8 +7,9 @@
 #     restrict,from="<development host>",command="ALPHA_CHECKOUT=/srv/auditmanager STAND_COPY_DIR=/srv/auditmanager-copy /srv/auditmanager/copy-serve/copy-serve.sh" ssh-ed25519 AAAA... w54-copy
 #
 # INSTALLED APART FROM THE CHECKOUT. The owner extracts this file, `capacity-probe.sh` and
-# `lib/forced-command.sh` and, since `PROD-02`, `lib/proxy-listeners.sh` (the credential gate and the
-# "withdraw 443" step `restore-db` ends with) from the candidate's git objects into
+# `lib/forced-command.sh`, since `PROD-02` `lib/proxy-listeners.sh` (the credential gate and the
+# "withdraw 443" step `restore-db` ends with) and, since `PROD-04`, `apply-grants.sh` (the step that gives the
+# application role its rights back: a `pg_dump --no-owner --no-privileges` restore carries none) from the candidate's git objects into
 # `/srv/auditmanager/copy-serve/` (`DEPLOYMENT_RUNBOOK.md` §13). Everything it acts on comes from `ALPHA_CHECKOUT` -- the
 # deployed checkout's compose file, environment and `git HEAD` -- and never from where this
 # file lies, so the same script serves a stand whose checkout is an older tree.
@@ -38,7 +39,8 @@
 #   restore-db <STAMP> <sha256> the owner's way back: stops the writers again, checks the
 #                               dump's digest, restores it, compares the fingerprint, raises
 #                               every account's `token_epoch` (`R-52`, as `reset.sh --restore`
-#                               does), asks the credential gate (`PROD-02`: is the published
+#                               does), gives the application role its rights back (`PROD-04`,
+#                               `apply-grants.sh`: the dump carries none), asks the credential gate (`PROD-02`: is the published
 #                               `admin`/`password` pair valid again?) and, unless it is clean,
 #                               recreates the `proxy` WITHOUT the 443 overlay; leaves the
 #                               writers stopped and the record open. <STAMP> is
@@ -892,6 +894,26 @@ verb_restore_db() {
     # <<< guard: listeners-library-present
     # shellcheck source=infra/deploy/lib/proxy-listeners.sh
     . "$HERE/lib/proxy-listeners.sh"
+    # `PROD-04`. The dump carries no privileges (`pg_dump --no-owner --no-privileges`) and the restore below drops and
+    # recreates schema `public`, so afterwards the application role has no rights at all -- not even USAGE on the schema.
+    # `apply-grants.sh` gives them back; it is asked about BEFORE anything is stopped, as the library above is, so that a
+    # restore never ends in a database `api` and `worker` cannot read.
+    # >>> guard: grants-script-present
+    if [ ! -r "$HERE/apply-grants.sh" ] || [ ! -x "$HERE/apply-grants.sh" ]; then
+        fc_refuse grants-script-present "$HERE/apply-grants.sh is not installed beside this script, or is not executable." \
+            "restore-db ends by giving the application role its rights back (PROD-04); the owner extracts that file too" \
+            "(DEPLOYMENT_RUNBOOK.md section 13). Nothing was stopped."
+    fi
+    # <<< guard: grants-script-present
+    # >>> guard: app-db-role-configured
+    roles_status=0
+    roles_output="$("$HERE/apply-grants.sh" --env-file "$ENV_FILE" --compose-file "$COMPOSE_FILE" --config-only 2>&1)" || roles_status=$?
+    if [ "$roles_status" -ne 0 ]; then
+        fc_refuse app-db-role-configured "the database roles are not configured (apply-grants.sh --config-only, status $roles_status)." \
+            "$(printf '%s' "${roles_output#apply-grants.sh: REFUSED: }" | tr '\n' ' ' | tr -s ' ')" \
+            "A restore without the second password would leave api and worker with no rights. Nothing was stopped."
+    fi
+    # <<< guard: app-db-role-configured
     # >>> guard: restore-record-present
     if ! record_exists; then
         fc_refuse restore-record-present "there is no copy record, so there is no dump to restore."
@@ -949,6 +971,21 @@ verb_restore_db() {
     compose exec -T postgres pg_restore --no-owner --no-privileges --exit-on-error --single-transaction \
         --username "$PG_USER" --dbname "$PG_DB" < "$COPY_DIR/$stamp/db.dump" >&2
     set_rec restored_at "\"$(fc_now)\""
+
+    # `PROD-04`: the restore brought the schema back without a single privilege. Before anything connects as the
+    # application role -- the credential revocation and the gate below run in the `api` image -- it gets its rights back.
+    # A failure here is a refusal and not a report: the writers are still stopped, so nothing is exposed, and `resume`
+    # must not start `api` and `worker` against a database they cannot read.
+    grants_status=0
+    "$HERE/apply-grants.sh" --env-file "$ENV_FILE" --compose-file "$COMPOSE_FILE" >&2 || grants_status=$?
+    # >>> guard: grants-applied
+    if [ "$grants_status" -ne 0 ]; then
+        fc_refuse grants-applied "the application role's rights could not be restored (apply-grants.sh exited $grants_status)." \
+            "The writers stay stopped and the record open; api and worker cannot read the restored database. Run it yourself," \
+            "then resume $stamp:" \
+            "$HERE/apply-grants.sh --env-file $ENV_FILE --compose-file $COMPOSE_FILE"
+    fi
+    # <<< guard: grants-applied
 
     take_fingerprint
     recorded="$(fc_json_member "$(rec fingerprint)" sha256)"
@@ -1036,10 +1073,11 @@ verb_resume() {
 verb_status() {
     local age=""
     printf 'copy-serve.sh status\n'
-    printf 'script: %s  lib: %s  probe: %s  listeners: %s\n' "$(sha256_of "${BASH_SOURCE[0]}")" \
+    printf 'script: %s  lib: %s  probe: %s  listeners: %s  grants: %s\n' "$(sha256_of "${BASH_SOURCE[0]}")" \
         "$(sha256_of "$HERE/lib/forced-command.sh")" \
         "$( [ -r "$HERE/capacity-probe.sh" ] && sha256_of "$HERE/capacity-probe.sh" || echo absent)" \
-        "$( [ -r "$HERE/lib/proxy-listeners.sh" ] && sha256_of "$HERE/lib/proxy-listeners.sh" || echo absent)"
+        "$( [ -r "$HERE/lib/proxy-listeners.sh" ] && sha256_of "$HERE/lib/proxy-listeners.sh" || echo absent)" \
+        "$( [ -r "$HERE/apply-grants.sh" ] && sha256_of "$HERE/apply-grants.sh" || echo absent)"
     printf 'checkout: %s  deployed_tree: %s\n' "$CHECKOUT" \
         "$(git -C "$CHECKOUT" rev-parse --verify --quiet 'HEAD^{commit}' 2>/dev/null || echo unknown)"
     printf 'copy_dir: %s\n' "$COPY_DIR"

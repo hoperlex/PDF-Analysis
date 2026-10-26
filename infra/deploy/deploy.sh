@@ -53,6 +53,16 @@
 #     and public port 443 is not published (the stack stays up; only the public door stays shut). The decision to
 #     publish 443 is no longer the operator's setting alone: it is `ALPHA_PUBLISH_HTTPS=yes` AND the gate clean.
 #
+# TWO DATABASE ROLES (`PROD-04-DB-ROLES-01`, `R-146n` item 1, `AD-02`, `ADR-0021` section 3). `api` and `worker` connect
+# as an APPLICATION role (`ALPHA_APP_DB_USER`, `DATABASE_URL`) that cannot change the schema, cannot truncate and owns
+# nothing; `migrate`, `release-notes` and the operator tools run as the OWNER (`POSTGRES_USER`,
+# `MIGRATOR_DATABASE_URL`). The application role's rights are not in a migration -- a dump carries none -- but applied
+# by `apply-grants.sh`, which this script runs BETWEEN `migrate` and `up` (`# --- 1c.`), so `api` never starts
+# against a schema its role cannot read. Three guards stand for it, in the order they bite: `grants-script-present`
+# and `app-db-role-configured` before anything is built (the second asks `apply-grants.sh --config-only`: a missing
+# second password is `[app_db_password_unset]`, and there is no fall-back to the owner role), and `owner-migrated`,
+# `release-notes-loaded` and `grants-applied` before `up`.
+#
 # WHAT A SECOND RUN DOES, MEASURED RATHER THAN CLAIMED. This comment said "a second run
 # changes nothing" until `W23-DEPLOY` ran it twice from a clean clone, and that was false.
 # What that drive found, recorded in `docs/program/reviews/W23-DEPLOY.md` and as `D-36`:
@@ -571,7 +581,8 @@ done
 
 # >>> guard: derived-secrets-coherent
 # `D-103`. `alpha.env.example` embeds the four secrets above a SECOND time, inside
-# `DATABASE_URL`, `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY`. `placeholder-secrets`
+# `MIGRATOR_DATABASE_URL` (since `PROD-04` the OWNER's url; `DATABASE_URL` is the application role's and
+# `app-db-role-configured` below judges it), `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY`. `placeholder-secrets`
 # reads exactly the four names it and its own error message list -- rotating only those
 # four passes it clean, builds both images, starts five containers, and fails roughly 93
 # seconds later inside Alembic with a trace that names none of the four: `DATABASE_URL`
@@ -599,16 +610,16 @@ DERIVED_MINIO_PASSWORD="$(configured MINIO_ROOT_PASSWORD)"
 
 DERIVED_MISMATCH=()
 DB_URL_RE='^postgresql\+psycopg://([^:@/]+):([^@/]+)@([^:@/]+):([0-9]+)/([^?]+)$'
-if [[ "$(configured DATABASE_URL)" =~ $DB_URL_RE ]]; then
+if [[ "$(configured MIGRATOR_DATABASE_URL)" =~ $DB_URL_RE ]]; then
     [ "${BASH_REMATCH[1]}" = "$DERIVED_PG_USER" ] || DERIVED_MISMATCH+=(
-        "  DATABASE_URL's user is '${BASH_REMATCH[1]}' but POSTGRES_USER is '$DERIVED_PG_USER'")
+        "  MIGRATOR_DATABASE_URL's user is '${BASH_REMATCH[1]}' but POSTGRES_USER is '$DERIVED_PG_USER'")
     [ "${BASH_REMATCH[2]}" = "$DERIVED_PG_PASSWORD" ] || DERIVED_MISMATCH+=(
-        "  DATABASE_URL's password does not match POSTGRES_PASSWORD")
+        "  MIGRATOR_DATABASE_URL's password does not match POSTGRES_PASSWORD")
     [ "${BASH_REMATCH[5]}" = "$DERIVED_PG_DB" ] || DERIVED_MISMATCH+=(
-        "  DATABASE_URL's database is '${BASH_REMATCH[5]}' but POSTGRES_DB is '$DERIVED_PG_DB'")
+        "  MIGRATOR_DATABASE_URL's database is '${BASH_REMATCH[5]}' but POSTGRES_DB is '$DERIVED_PG_DB'")
 else
     DERIVED_MISMATCH+=(
-        "  DATABASE_URL does not parse as postgresql+psycopg://user:password@host:port/db")
+        "  MIGRATOR_DATABASE_URL is unset or does not parse as postgresql+psycopg://user:password@host:port/db")
 fi
 [ "$DERIVED_S3_KEY" = "$DERIVED_MINIO_USER" ] || DERIVED_MISMATCH+=(
     "  S3_ACCESS_KEY_ID does not match MINIO_ROOT_USER")
@@ -616,16 +627,44 @@ fi
     "  S3_SECRET_ACCESS_KEY does not match MINIO_ROOT_PASSWORD")
 
 if [ "${#DERIVED_MISMATCH[@]}" -gt 0 ]; then
-    refuse "DATABASE_URL, S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY must carry the same" \
+    refuse "MIGRATOR_DATABASE_URL, S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY must carry the same" \
            "secrets as POSTGRES_* and MINIO_ROOT_*, and at least one does not:" \
            "${DERIVED_MISMATCH[@]}" \
            "" \
            "Rotating only POSTGRES_PASSWORD, MINIO_ROOT_USER, MINIO_ROOT_PASSWORD and" \
-           "AUDITMANAGER_API_TOKEN is not enough -- DATABASE_URL, S3_ACCESS_KEY_ID and" \
+           "AUDITMANAGER_API_TOKEN is not enough -- MIGRATOR_DATABASE_URL, S3_ACCESS_KEY_ID and" \
            "S3_SECRET_ACCESS_KEY embed the same values again and must be edited to match." \
            "Nothing was built."
 fi
 # <<< guard: derived-secrets-coherent
+
+# >>> guard: grants-script-present
+# `apply-grants.sh` is run between `migrate` and `up` for every deploy since `PROD-04`; a clone without it must be a
+# sentence here and not a "No such file" after the images are built and the schema has been migrated.
+GRANTS_SCRIPT="$HERE/apply-grants.sh"
+if [ ! -r "$GRANTS_SCRIPT" ] || [ ! -x "$GRANTS_SCRIPT" ]; then
+    refuse "[grants_script_missing] $GRANTS_SCRIPT is missing or not executable." \
+           "It gives the application role its rights after every migrate and every restore; without it api and" \
+           "worker would connect as a role that has none. Nothing was built and nothing was started."
+fi
+# <<< guard: grants-script-present
+
+# >>> guard: app-db-role-configured
+# `R-146n` item 1. api and worker connect as an APPLICATION role, whose password is the owner's SECOND password: the
+# owner writes it on the host, the repository holds no value for it, and an unset one is a refusal and never a quiet
+# use of the owner role for the application. `apply-grants.sh --config-only` judges ALPHA_APP_DB_USER,
+# ALPHA_APP_DB_PASSWORD and that DATABASE_URL (the application's) and MIGRATOR_DATABASE_URL (the owner's) carry them;
+# it is the same function every restore path runs, asked here before anything is built.
+APP_ROLE_STATUS=0
+APP_ROLE_OUTPUT="$("$GRANTS_SCRIPT" --env-file "$ENV_FILE" --config-only 2>&1)" || APP_ROLE_STATUS=$?
+if [ "$APP_ROLE_STATUS" -ne 0 ]; then
+    APP_ROLE_LINES=()
+    while IFS= read -r line; do APP_ROLE_LINES+=("${line#  }"); done <<<"${APP_ROLE_OUTPUT#apply-grants.sh: REFUSED: }"
+    refuse "the database roles are not configured (apply-grants.sh --config-only, status $APP_ROLE_STATUS):" \
+           "${APP_ROLE_LINES[@]}" \
+           "Nothing was built and nothing was started."
+fi
+# <<< guard: app-db-role-configured
 
 # >>> guard: compose-file-present
 if [ ! -r "$COMPOSE_FILE" ]; then
@@ -1246,6 +1285,42 @@ if [ -n "$CERT_NAME" ]; then
     esac
     echo
 fi
+
+# --- 1c. the schema as the OWNER, then the application role's rights (`PROD-04`, `AD-02`) ---------------------
+# `compose up -d` below would run `migrate` too (`api` waits for it), but compose gives this script no point between
+# `migrate` and `api` to run the step that gives the application role its rights -- and `api` must never start against
+# a schema its role cannot read. So the order is made explicit here: the one-shot `migrate` and `release-notes` run to
+# completion as the owner (`MIGRATOR_DATABASE_URL`), `apply-grants.sh` applies and verifies the classification, and only
+# then `up`. `compose run` starts `postgres` as `migrate`'s dependency if it is not up, and leaves every service
+# container as it was (`W24-IDEM`). `up` runs both one-shots again where compose decides to; at the head they are no-ops.
+echo "-- migrating as the owner, then giving the application role its rights --"
+OWNER_MIGRATE_STATUS=0
+compose run --rm -T migrate || OWNER_MIGRATE_STATUS=$?
+# >>> guard: owner-migrated
+if [ "$OWNER_MIGRATE_STATUS" -ne 0 ]; then
+    refuse "[migrate_failed] the migrate service, run as the owner, exited $OWNER_MIGRATE_STATUS." \
+           "The schema is not known to be at the head, so no rights were applied and nothing was started." \
+           "Its output is above. Fix the cause, then deploy again; the previous containers are still serving."
+fi
+# <<< guard: owner-migrated
+OWNER_NOTES_STATUS=0
+compose run --rm --no-deps -T release-notes || OWNER_NOTES_STATUS=$?
+# >>> guard: release-notes-loaded
+if [ "$OWNER_NOTES_STATUS" -ne 0 ]; then
+    refuse "[release_notes_failed] the release-notes service, run as the owner, exited $OWNER_NOTES_STATUS." \
+           "No rights were applied and nothing was started. Its output is above."
+fi
+# <<< guard: release-notes-loaded
+GRANTS_STATUS=0
+"$GRANTS_SCRIPT" --env-file "$ENV_FILE" || GRANTS_STATUS=$?
+# >>> guard: grants-applied
+if [ "$GRANTS_STATUS" -ne 0 ]; then
+    refuse "[grants_not_applied] apply-grants.sh exited $GRANTS_STATUS; the application role may not have its rights." \
+           "Its output is above (3 refused: a relation has no grant classification, or a setting is wrong; 4 failed)." \
+           "api and worker were not started or replaced by this run. Fix the cause and deploy again."
+fi
+# <<< guard: grants-applied
+echo
 
 # --- 2. up. `migrate` runs once here and `api` waits for it --------------------------
 # Migrations are a deploy step and never something a serving process does on start: two

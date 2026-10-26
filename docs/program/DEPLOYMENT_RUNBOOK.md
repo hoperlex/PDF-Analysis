@@ -278,6 +278,11 @@ Two of its values are not free choices:
   published values and refuses, by identity, if you left any of four unchanged. Those
   values are in git and are not secrets.
 
+* **the second database password (`PROD-04`).** `api` and `worker` no longer connect as the database owner:
+  they connect as an application role whose password, `ALPHA_APP_DB_PASSWORD`, is yours to choose on this host.
+  The example ships the name **with no value** and `deploy.sh` refuses an empty one (`[app_db_password_unset]`);
+  nothing falls back to the owner role. Section 16 is the procedure.
+
 **No credential is ever pasted into a chat message** — `OWNER_RULINGS_2026-09-17.md` §3:
 *"the credential goes on that host's disk, by the owner"*. That includes the output of
 `docker compose config`, which prints **every** environment value in clear, the provider
@@ -340,6 +345,11 @@ Run it **from the repository root**; both builds need `src/`, `db/`, `contracts/
 | **0** | the stack is up **and has answered for itself** — see below |
 | **3** | it refused, and said which of **fourteen** guards refused and why |
 | **2** | the arguments were wrong |
+
+**Since `PROD-04` the order is: build; the owner migrates (`migrate` and `release-notes` as `MIGRATOR_DATABASE_URL`);
+`apply-grants.sh` gives the application role its rights and verifies them; only then `up`** — so `api` and `worker`
+never start against a schema their role cannot read, and a table nobody classified (`[grants_unclassified]`) stops the
+deploy before anything is replaced. Section 16.
 
 **Eight** guards answer **before docker is touched at all**, so a refusal costs nothing.
 After the build and the `up`, it asks the running stack four questions it can fail: every
@@ -1318,18 +1328,27 @@ a stand whose checkout is still the older, deployed tree (`W54-PLAN.md` §3.10, 
    install -d -m 700 -o <account> /srv/auditmanager-copy
    ```
 
-2. Extract the **four** files from the candidate's git objects (not from a working tree), and
+2. Extract the **five** files from the candidate's git objects (not from a working tree), and
    compare each SHA-256 with the gate record of that candidate:
 
    ```
    install -d -m 755 /srv/auditmanager/copy-serve/lib
    git -C /srv/auditmanager fetch origin
-   for f in copy-serve.sh capacity-probe.sh lib/forced-command.sh lib/proxy-listeners.sh; do
+   for f in copy-serve.sh capacity-probe.sh apply-grants.sh lib/forced-command.sh lib/proxy-listeners.sh; do
        git -C /srv/auditmanager show "<candidate sha>:infra/deploy/$f" > "/srv/auditmanager/copy-serve/$f"
        sha256sum "/srv/auditmanager/copy-serve/$f"
    done
-   chmod 755 /srv/auditmanager/copy-serve/copy-serve.sh /srv/auditmanager/copy-serve/capacity-probe.sh
+   chmod 755 /srv/auditmanager/copy-serve/copy-serve.sh /srv/auditmanager/copy-serve/capacity-probe.sh \
+             /srv/auditmanager/copy-serve/apply-grants.sh
    ```
+
+   **The fifth file is new (`PROD-04`), and it sits beside `copy-serve.sh`, not in `lib/`.** A dump carries no database
+   privileges (`pg_dump --no-owner --no-privileges`) and `restore-db` drops and recreates schema `public`, so after the
+   restore the application role has no rights at all; `apply-grants.sh` gives them back, right after the restore and
+   before anything connects as that role. Without it, or with the second password unset in the deployed checkout's
+   `alpha.env`, `restore-db` refuses (`grants-script-present`, `app-db-role-configured`) **before it stops or restores
+   anything**. **A copy key installed before `PROD-04` must repeat this step**; `status` prints `grants: <digest>`
+   (or `grants: absent`).
 
    **The fourth file is new (`PROD-02`).** `restore-db` ends by asking the credential gate and closing public port
    443 if the seeded pair came back (below); that rule is written once, in `lib/proxy-listeners.sh`, and shared with
@@ -1352,7 +1371,7 @@ a stand whose checkout is still the older, deployed tree (`W54-PLAN.md` §3.10, 
    `STAND_COPY_MARGIN_BYTES` (default 2 GiB beyond the database's size) and
    `STAND_COPY_WINDOW_SECONDS` (default 43200, the importer's 12 h).
 
-4. Check it with `status`: it prints the installed script's, library's, probe's and listeners' SHA-256 and
+4. Check it with `status`: it prints the installed script's, library's, probe's, listeners' and grants script's SHA-256 and
    the deployed checkout's `HEAD`. A later publication that changes `copy-serve.sh` asks the
    owner to repeat step 2.
 
@@ -1751,3 +1770,107 @@ claimed and the call ends after the revision's answer deadline (capped below the
 60 s) as `dependency_unavailable`, `no_executor_online`; it never moves to another connection
 unless an administrator configured a standby. A task's text and the runner's answer are cleared
 seven days after it ends.
+
+## 16. Database roles — the migrator and the application role (`PROD-04-DB-ROLES-01`; `R-146n` item 1, `AD-02`)
+
+**What it is.** Two PostgreSQL roles, and the processes that use each:
+
+| Role | Name | Url (in `alpha.env`) | Used by | Can |
+|---|---|---|---|---|
+| **migrator** (the owner) | `POSTGRES_USER` | `MIGRATOR_DATABASE_URL` | the one-shot `migrate` and `release-notes`; `apply-grants.sh`; the operator tools that need write-everything (`purge-product-data.sh` hands it to the product purge; the project erase of `PROD-07` will) | everything: it owns every object |
+| **application** | `ALPHA_APP_DB_USER` | `DATABASE_URL` | `api` and `worker` (and the `compose run` one-offs of `reset.sh`, `copy-serve.sh restore-db`, `readiness.sh`, which run application code) | log in; `SELECT` / `INSERT` / `UPDATE` / `DELETE`, `SELECT` + `INSERT`, or `SELECT` per table, as `scripts/recovery/grant_classification.py` says; sequences `USAGE`. **Cannot** create, alter or drop anything, **cannot** `TRUNCATE`, owns nothing, is a member of nothing, is not a superuser. An append-only table (`audit_event`, the ledgers, the immutable evidence) refuses `UPDATE` and `DELETE` by privilege **and** by trigger |
+
+**The decision recorded here (decided by the lane): the migrator stays the bootstrap superuser.** The postgres image's
+`POSTGRES_USER` is a superuser, and `ADR-0021` section 3 makes it the migrator. A plain (non-superuser) owner was
+considered and cannot do the job: migration `0013` runs `CREATE EXTENSION vector`, and the pgvector built into this stack is
+`superuser = true, trusted = false`, so a plain owner cannot migrate a fresh database
+(`test_a_plain_owner_cannot_migrate_a_fresh_database` pins the premise; if it goes red the decision is open again). What
+contains the superuser is that its url reaches **no always-on service**: `compose.server.yml` gives `MIGRATOR_DATABASE_URL`
+to `migrate` and `release-notes` only (`test_the_application_gets_its_url_and_only_the_one_shots_get_the_owners`).
+
+### What the owner does (once per host, and on rotation)
+
+1. **Choose the second password** (20 to 128 characters of `A-Z a-z 0-9 . _ ~ -`; it is written into a URL without quoting;
+   not the owner's):
+
+   ```
+   head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n'; echo
+   ```
+
+2. **Edit `infra/deploy/env/alpha.env`.** Add or change four lines, with the same password in the second and third:
+
+   ```
+   ALPHA_APP_DB_USER=auditmanager_alpha_app
+   ALPHA_APP_DB_PASSWORD=<the password from step 1>
+   DATABASE_URL=postgresql+psycopg://auditmanager_alpha_app:<the password from step 1>@postgres:5432/<POSTGRES_DB>
+   MIGRATOR_DATABASE_URL=postgresql+psycopg://<POSTGRES_USER>:<POSTGRES_PASSWORD>@postgres:5432/<POSTGRES_DB>
+   ```
+
+   **An existing host's `DATABASE_URL` names the owner today; moving the owner's url to `MIGRATOR_DATABASE_URL` and writing
+   the application role's into `DATABASE_URL` is the cutover.** `deploy.sh` refuses the old shape (`[app_db_role_invalid]`
+   or `[database_urls_incoherent]`) before it builds anything. No value is ever pasted into a chat or a commit.
+
+3. **Deploy.** `infra/deploy/deploy.sh`. Expected, in order, after the build:
+
+   ```
+   -- migrating as the owner, then giving the application role its rights --
+   apply-grants.sh: applying the grant classification to <db> for the application role '<role>' (owner: <owner>)
+   grants-ok: <role> on <db> matches the classification
+   -- bringing the stack up --
+   ```
+
+4. **Check it.** Either of these, on the host:
+
+   ```
+   infra/deploy/readiness.sh            # the db-roles line: "api=<role> worker=<role> -- ... (f|f|f|t); apply-grants.sh --check: ..."
+   infra/deploy/apply-grants.sh --check # prints: grants-ok: <role> on <db> matches the classification   (exit 0)
+   docker compose --env-file infra/deploy/env/alpha.env -f infra/deploy/compose.server.yml exec -T postgres \
+     psql -U <POSTGRES_USER> -d <POSTGRES_DB> -Atc "select rolsuper, has_schema_privilege(rolname,'public','CREATE'), has_table_privilege(rolname,'public.audit_event','DELETE'), has_table_privilege(rolname,'public.audit_event','INSERT') from pg_roles where rolname='<ALPHA_APP_DB_USER>'"
+                                         # prints: f|f|f|t   (ADR-0021 row 7)
+   ```
+
+   `readiness.sh` also says **which role `api` and `worker` actually connect as** (read from the running containers'
+   `DATABASE_URL`, user only) and reports a `FINDING` if either is the owner.
+
+5. **Rotation.** Change `ALPHA_APP_DB_PASSWORD` and the password inside `DATABASE_URL`, deploy. The step sets the new
+   password on the role; the old one stops working at once. (`apply-grants.sh` re-salts the stored verifier on every run;
+   nothing else about the role changes.)
+
+### When it runs (every path that makes or replaces the schema)
+
+| Path | Where the step runs | If it cannot |
+|---|---|---|
+| `deploy.sh` | after `migrate` and `release-notes`, before `up` (guards `owner-migrated`, `release-notes-loaded`, `grants-applied`) | refuses `[migrate_failed]`, `[release_notes_failed]`, `[grants_not_applied]`: nothing is started or replaced |
+| `reset.sh` (the wipe) | after the migrations, before the worker and the bucket | exit 4, says the schema is recreated but the role has no rights, the worker stays stopped |
+| `reset.sh --restore` | after `pg_restore` and the migrations, before the worker and the credential revocation | reports (`apply-grants=<status>`), keeps the worker stopped, exit 6 |
+| `copy-serve.sh restore-db` | right after `pg_restore`, before the fingerprint and anything that connects as the role | refuses `grants-applied`: the writers stay stopped, the record stays open |
+
+`reset.sh` (both destructive modes) and `restore-db` ask **before they change anything** that the step can run: the script is
+there (`grants-script-present`) and the second password is set (`app-db-role-configured`). `purge-product-data.sh` passes
+`MIGRATOR_DATABASE_URL` to the product purge for every step (`migrator-url-configured` refuses an environment without it).
+
+### What stops it, in words
+
+| Word (exit 3 unless noted) | Meaning |
+|---|---|
+| `[app_db_password_unset]` | `ALPHA_APP_DB_PASSWORD` is empty or absent. Choose one (step 1). There is no fall-back to the owner |
+| `[app_db_password_shape]`, `[app_db_password_is_owner_password]` | not 20-128 URL-safe characters, or the owner's password |
+| `[app_db_role_invalid]`, `[app_db_role_is_owner]` | `ALPHA_APP_DB_USER` missing or malformed, or equal to `POSTGRES_USER` |
+| `[database_urls_incoherent]` | `DATABASE_URL` / `MIGRATOR_DATABASE_URL` do not carry the roles and passwords the file names |
+| `[grants_script_missing]` | `apply-grants.sh` is not in the clone / not installed beside `copy-serve.sh` / not executable |
+| `[grants_unclassified]` | the schema holds a table, view or sequence `grant_classification.py` does not name. The role was given nothing new and the transaction rolled back. A migration that adds a table needs a classification (and `python -m scripts.recovery.grant_classification --write-script infra/deploy/apply-grants.sh`) |
+| `[grants_drift]` (exit 1 of `--check`, 4 after an apply) | the role's rights differ from the classification; the lines say how (`the role holds TRUNCATE`, `the role lacks SELECT`, `the role owns table ...`) |
+
+### What this does not do
+
+* **No `ALTER DEFAULT PRIVILEGES`.** A table a later migration creates gets **no** rights until it is classified; that is the
+  fail-closed half of the design, and the step refuses rather than guess.
+* **It does not take ownership back.** An object the application role came to own is reported by `--check`
+  (`owner: the role owns ...`), not repaired.
+* **The role keeps the `PUBLIC` defaults** that every role has: it can connect to its database, create session-local
+  temporary tables, and execute the functions an extension installs (pgvector). It cannot create a permanent object.
+* **`UPDATE` on two append-only tables' key column** (`work_assignment.assignment_uid`,
+  `document_version_classification.version_uid`): the code locks those rows with `SELECT ... FOR UPDATE` / `FOR NO KEY
+  UPDATE`, which PostgreSQL grants only with an `UPDATE` privilege on some column. The immutability trigger fires on a row
+  update and not on a lock, so the lock works and every real `UPDATE` is still refused.
+* **The password is in the file**, readable by the account that deploys. `chmod 600 infra/deploy/env/alpha.env`, as always.

@@ -56,6 +56,7 @@ PROBE = DEPLOY_DIR / "capacity-probe.sh"
 PULL = DEPLOY_DIR / "pull-copy.sh"
 LIB = DEPLOY_DIR / "lib/forced-command.sh"
 LISTENERS_LIB = DEPLOY_DIR / "lib/proxy-listeners.sh"
+GRANTS_SCRIPT = DEPLOY_DIR / "apply-grants.sh"
 RESTORE_TEST = ROOT / "scripts/stand-copy/restore-test.sh"
 DEPLOY_SH = DEPLOY_DIR / "deploy.sh"
 RECEIVE = DEPLOY_DIR / "receive-bundle.sh"
@@ -329,9 +330,16 @@ def _compose_without_worker() -> str:
     return "".join(lines[:start] + lines[end:])
 
 
+#: `PROD-04`: `restore-db` ends by giving the application role its rights back, which needs the second password and the
+#: two urls in the deployed checkout's environment.
 ENV_TEXT = (
     "ALPHA_INSTANCE=an-instance\nPOSTGRES_DB=the_db\nPOSTGRES_USER=the_user\n"
     "S3_BUCKET=the-bucket\n"
+    "POSTGRES_PASSWORD=the-owner-password-0123456789\n"
+    "ALPHA_APP_DB_USER=the_application_role\n"
+    "ALPHA_APP_DB_PASSWORD=the-application-password-0123456789\n"
+    "DATABASE_URL=postgresql+psycopg://the_application_role:the-application-password-0123456789@postgres:5432/the_db\n"
+    "MIGRATOR_DATABASE_URL=postgresql+psycopg://the_user:the-owner-password-0123456789@postgres:5432/the_db\n"
 )
 
 
@@ -414,6 +422,7 @@ def _stage(
         ("capacity-probe.sh", PROBE, install / "capacity-probe.sh"),
         ("lib", LIB, install / "lib/forced-command.sh"),
         ("listeners", LISTENERS_LIB, install / "lib/proxy-listeners.sh"),
+        ("grants", GRANTS_SCRIPT, install / "apply-grants.sh"),
     ):
         target.write_text(text_of(name, source), encoding="utf-8")
         target.chmod(0o755)
@@ -576,6 +585,12 @@ def _waiver(stand: Stand) -> str:
     ran = _copy_key(stand, "attest --test-data")
     assert ran.code == 0, (ran.out, ran.err)
     return ran.value("stamp")
+
+
+def _drop_env_line(stand: Stand, name: str) -> None:
+    """Take one setting out of the DEPLOYED checkout's environment (the file `restore-db` reads)."""
+    env = stand.checkout / "infra/deploy/env/alpha.env"
+    env.write_text("".join(line for line in env.read_text().splitlines(keepends=True) if not line.startswith(f"{name}=")))
 
 
 def _resumed(stand: Stand) -> str:
@@ -807,6 +822,17 @@ GUARD_CASES: dict[tuple[str, str], Case] = {
     ("copy-serve.sh", "listeners-library-present"): Case(
         _key("restore-db {stamp} {dump_sha}", prepare=_then(
             _resumed, lambda s: (s.install / "lib/proxy-listeners.sh").unlink()))),
+    # `PROD-04`: the application role's rights come back with the restore; asked about before anything is stopped (the
+    # first two) and run right after the restore, before anything connects as the role (the third).
+    ("copy-serve.sh", "grants-script-present"): Case(
+        _key("restore-db {stamp} {dump_sha}", prepare=_then(
+            _resumed, lambda s: (s.install / "apply-grants.sh").unlink()))),
+    ("copy-serve.sh", "app-db-role-configured"): Case(
+        _key("restore-db {stamp} {dump_sha}", prepare=_then(
+            _resumed, lambda s: _drop_env_line(s, "ALPHA_APP_DB_PASSWORD")))),
+    ("copy-serve.sh", "grants-applied"): Case(
+        _key("restore-db {stamp} {dump_sha}", prepare=_then(
+            _resumed, lambda s: s.set_state(psql_exit=1)))),
     ("copy-serve.sh", "credentials-revoked"): Case(
         _key("restore-db {stamp} {dump_sha}", prepare=_then(
             _resumed, lambda s: s.set_state(revoke_exit=2)))),
@@ -1446,6 +1472,60 @@ def test_a_missing_library_refuses_restore_db_before_anything_is_stopped(tmp_pat
     assert "DEPLOYMENT_RUNBOOK.md section 13" in ran.err
     # The verbs that never need the library are not taken down with it.
     assert _copy_key(stand, "status").code == 0
+
+
+def test_a_missing_grants_script_refuses_restore_db_before_anything_is_stopped(tmp_path: Path) -> None:
+    """`PROD-04`: the dump carries no privileges and the restore recreates schema public, so a restore that cannot give the
+    application role its rights back would end in a database `api` and `worker` cannot read. Refused with nothing touched."""
+    stand = _stage(tmp_path)
+    stamp = _resumed(stand)
+    (stand.install / "apply-grants.sh").unlink()
+    before = len(stand.docker_calls())
+    ran = _copy_key(stand, f"restore-db {stamp} {_dump_sha(stand)}")
+    assert ran.refused("grants-script-present"), (ran.code, ran.out, ran.err)
+    assert len(stand.docker_calls()) == before, "restore-db touched docker before it knew it could restore the rights"
+    assert "DEPLOYMENT_RUNBOOK.md section 13" in ran.err
+    assert _copy_key(stand, "status").code == 0, "the verbs that never need the script are not taken down with it"
+    (stand.install / "apply-grants.sh").write_text("#!/bin/sh\nexit 0\n")  # present but not executable
+    (stand.install / "apply-grants.sh").chmod(0o644)
+    assert _copy_key(stand, f"restore-db {stamp} {_dump_sha(stand)}").refused("grants-script-present")
+
+
+@pytest.mark.parametrize("missing", ["ALPHA_APP_DB_PASSWORD", "ALPHA_APP_DB_USER"])
+def test_an_unconfigured_application_role_refuses_restore_db_before_anything_is_stopped(tmp_path: Path, missing: str) -> None:
+    stand = _stage(tmp_path)
+    stamp = _resumed(stand)
+    _drop_env_line(stand, missing)
+    before = len(stand.docker_calls())
+    ran = _copy_key(stand, f"restore-db {stamp} {_dump_sha(stand)}")
+    assert ran.refused("app-db-role-configured"), (ran.code, ran.out, ran.err)
+    word = "[app_db_password_unset]" if missing.endswith("PASSWORD") else "[app_db_role_invalid]"
+    assert word in ran.err, ran.err
+    assert len(stand.docker_calls()) == before, "restore-db touched docker before it knew the second password was set"
+
+
+def test_the_rights_come_back_right_after_the_restore_and_before_anything_connects_as_the_application_role(tmp_path: Path) -> None:
+    stand = _stage(tmp_path)
+    ran, stamp = _restore_db(stand)
+    assert ran.code == 0, (ran.out, ran.err)
+    calls = stand.docker_calls()
+    psql = [number for number, call in enumerate(calls) if call[:1] == ["compose"] and call[5] == "exec" and "psql" in call]
+    grants = [number for number in psql if any(part.startswith("app_role=") for part in calls[number])]
+    restore = next(number for number, call in enumerate(calls) if "pg_restore" in call)
+    revoke = next(number for number, call in enumerate(calls) if "auditmanager.access.revoke" in call)
+    fingerprint = max(psql)
+    assert len(grants) == 2, "one apply and one verification"
+    assert restore < grants[0] < grants[1] < fingerprint and grants[1] < revoke, calls
+    assert not any("the-application-password-0123456789" in " ".join(call) for call in calls), "a password on a command line"
+
+
+def test_a_failed_grants_step_after_the_restore_is_a_refusal_with_the_writers_stopped_and_the_record_open(tmp_path: Path) -> None:
+    stand = _stage(tmp_path)
+    ran, stamp = _restore_db(stand, psql_exit=1)
+    assert ran.refused("grants-applied"), (ran.code, ran.out, ran.err)
+    assert "api and worker cannot read the restored database" in ran.err
+    assert stand.state()["running"] == [] and stand.rec()["state"] == "open" and stand.rec()["stamp"] == stamp
+    assert not any("auditmanager.access.revoke" in call for call in stand.docker_calls()), "nothing connected as the role"
 
 
 def test_status_prints_the_digest_of_the_installed_library(tmp_path: Path) -> None:

@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -59,11 +60,22 @@ USER = "the_configured_user"
 #: message, because two guards sharing an exit code must still be told apart.
 REFUSED = 3
 
+#: `PROD-04`: the application role (second password) and the two urls. A wipe or a restore asks, before it changes
+#: anything, that `apply-grants.sh` can run; the environments below say so.
+OWNER_PASSWORD = "an-owner-password-for-the-reset-cases"
+APP_ROLE = "the_application_role"
+APP_PASSWORD = "an-edited-application-db-password-0001"
+
 ENV_FILE = f"""\
 ALPHA_INSTANCE={INSTANCE}
 POSTGRES_DB={DATABASE}
 POSTGRES_USER={USER}
+POSTGRES_PASSWORD={OWNER_PASSWORD}
 S3_BUCKET={BUCKET}
+ALPHA_APP_DB_USER={APP_ROLE}
+ALPHA_APP_DB_PASSWORD={APP_PASSWORD}
+DATABASE_URL=postgresql+psycopg://{APP_ROLE}:{APP_PASSWORD}@postgres:5432/{DATABASE}
+MIGRATOR_DATABASE_URL=postgresql+psycopg://{USER}:{OWNER_PASSWORD}@postgres:5432/{DATABASE}
 """
 
 #: One case per guard: the marker name, the arguments, and the words the refusal must say.
@@ -141,7 +153,13 @@ def _run(
     return completed, log
 
 
-def _mutant(directory: Path, guard: str, *, with_compose: bool = True, with_listeners: bool = True) -> Path:
+def _with_grants_script(directory: Path) -> None:
+    """`PROD-04`: the step a wipe or a restore ends with sits beside the script, executable, as in a clone."""
+    shutil.copy2(RESET.parent / "apply-grants.sh", directory / "apply-grants.sh")
+
+
+def _mutant(directory: Path, guard: str, *, with_compose: bool = True, with_listeners: bool = True,
+            with_grants: bool = True) -> Path:
     """A copy of reset.sh with exactly one guard block deleted. Since `PROD-02` it sits beside the shared
     library, as the real script does; a case about the library's own guard says `with_listeners=False`."""
     source = RESET.read_text(encoding="utf-8")
@@ -163,6 +181,8 @@ def _mutant(directory: Path, guard: str, *, with_compose: bool = True, with_list
         (directory / "lib/proxy-listeners.sh").write_text(
             (RESET.parent / "lib/proxy-listeners.sh").read_text(encoding="utf-8"), encoding="utf-8"
         )
+    if with_grants:
+        _with_grants_script(directory)
     return target
 
 
@@ -484,6 +504,7 @@ class TestItDumpsBeforeItDrops:
         (staged / "compose.server.yml").write_text("# stub\n", encoding="utf-8")
         script = staged / "reset.sh"
         script.write_text(RESET.read_text(encoding="utf-8"), encoding="utf-8")
+        _with_grants_script(staged)  # `PROD-04`: a wipe asks, before it dumps, that the step it ends with can run
 
         completed, log = self._destroy(script, tmp_path, env_file)
         assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
@@ -513,8 +534,12 @@ def test_every_guard_in_the_script_has_a_case_here() -> None:
     """
     markers = re.findall(r"^# >>> guard: ([a-z-]+)$", RESET.read_text(encoding="utf-8"), re.M)
     assert len(markers) == len(set(markers)), markers
-    assert len(markers) == 14, markers
+    assert len(markers) == 16, markers
     covered = {guard for guard, _, _ in CASES} | {
+        # `PROD-04`: the application role must be able to get its rights back before anything is changed;
+        # `TestTheApplicationRoleIsGivenItsRightsBack` refuses each and shows each refusal able to fail.
+        "grants-script-present",
+        "app-db-role-configured",
         # `PROD-02`: a restore sources the shared library before anything is changed;
         # `TestTheRestoreEndsWithTheCredentialGate` refuses its absence and shows the refusal able to fail.
         "listeners-library-present",
@@ -669,7 +694,7 @@ def _run_through_the_dump(
     return completed, (log.read_text(encoding="utf-8") if log.exists() else "")
 
 
-def _staged(tmp_path: Path) -> Path:
+def _staged(tmp_path: Path, *, with_grants: bool = True) -> Path:
     staged = tmp_path / "staged"
     staged.mkdir(parents=True, exist_ok=True)
     (staged / "compose.server.yml").write_text("# stub\n", encoding="utf-8")
@@ -680,6 +705,8 @@ def _staged(tmp_path: Path) -> Path:
     (staged / "lib/proxy-listeners.sh").write_text(
         (RESET.parent / "lib/proxy-listeners.sh").read_text(encoding="utf-8"), encoding="utf-8"
     )
+    if with_grants:
+        _with_grants_script(staged)
     return script
 
 
@@ -1283,3 +1310,154 @@ class TestTheWorkerIsStoppedAroundTheDatabase:
         assert completed.returncode == 0, (completed.stdout, completed.stderr)
         assert "DROP SCHEMA" in calls
         assert " worker" not in calls, calls
+
+
+# --- `PROD-04`: the application role gets its rights back --------------------------------------------------
+
+
+def _roles_env(tmp_path: Path, *, drop: tuple[str, ...] = (), **replace: str) -> Path:
+    lines = []
+    for line in ENV_FILE.splitlines():
+        name = line.split("=", 1)[0]
+        if name in replace:
+            lines.append(f"{name}={replace[name]}")
+        elif name not in drop:
+            lines.append(line)
+    path = tmp_path / "roles.env"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+class TestTheApplicationRoleIsGivenItsRightsBack:
+    """A wipe drops schema ``public`` and a restore replaces it (a dump carries no privilege), so afterwards the
+    application role has NO rights until ``apply-grants.sh`` runs. Two guards ask, before anything is changed, that it
+    can; the two paths end by running it, after the migrations and before the worker is started."""
+
+    @pytest.mark.parametrize("mode", [("--yes-destroy-everything",), ("--restore", "@DUMP@")], ids=["wipe", "restore"])
+    def test_a_clone_without_the_step_is_refused_before_docker_for_both_destructive_modes(
+        self, tmp_path: Path, env_file: Path, mode: tuple[str, ...]
+    ) -> None:
+        mode = tuple(str(tmp_path / "dump") if part == "@DUMP@" else part for part in mode)
+        script = _staged(tmp_path / "s", with_grants=False)
+        completed, log = _run(script, ("--database", DATABASE, "--bucket", BUCKET, *mode), tmp_path=tmp_path, env_file=env_file)
+        assert completed.returncode == REFUSED and "[grants_script_missing]" in completed.stderr, completed.stderr
+        assert not log.exists()
+
+    def test_a_dry_run_asks_nothing_about_the_roles(self, tmp_path: Path) -> None:
+        env = _roles_env(tmp_path, drop=("ALPHA_APP_DB_PASSWORD",))
+        completed, _ = _run(RESET, ("--database", DATABASE, "--bucket", BUCKET, "--dry-run"), tmp_path=tmp_path, env_file=env)
+        assert "[app_db_" not in completed.stderr and "database roles are not configured" not in completed.stderr
+
+    @pytest.mark.parametrize(("label", "args", "word"), [
+        ("no second password", {"drop": ("ALPHA_APP_DB_PASSWORD",)}, "[app_db_password_unset]"),
+        ("the application is the owner", {"ALPHA_APP_DB_USER": USER}, "[app_db_role_is_owner]"),
+        ("DATABASE_URL still names the owner", {"DATABASE_URL": f"postgresql+psycopg://{USER}:{OWNER_PASSWORD}@postgres:5432/{DATABASE}"},
+         "[database_urls_incoherent]"),
+        ("no application role named at all", {"drop": ("ALPHA_APP_DB_USER", "ALPHA_APP_DB_PASSWORD")}, "[app_db_role_invalid]"),
+    ])
+    @pytest.mark.parametrize("mode", [("--yes-destroy-everything",), ("--restore", "@DUMP@")], ids=["wipe", "restore"])
+    def test_a_misconfigured_pair_of_roles_is_refused_before_anything_changes(
+        self, tmp_path: Path, label: str, args: dict[str, object], word: str, mode: tuple[str, ...]
+    ) -> None:
+        env = _roles_env(tmp_path, **args)  # type: ignore[arg-type]
+        mode = tuple(str(tmp_path / "dump") if part == "@DUMP@" else part for part in mode)
+        script = _staged(tmp_path / "s")
+        completed, log = _run(script, ("--database", DATABASE, "--bucket", BUCKET, *mode), tmp_path=tmp_path, env_file=env)
+        assert completed.returncode == REFUSED, (label, completed.stdout, completed.stderr)
+        assert "the database roles are not configured" in completed.stderr and word in completed.stderr, completed.stderr
+        assert not log.exists(), f"{label}: refused after docker was touched"
+        cut = _mutant(tmp_path / "cut", "app-db-role-configured")
+        (tmp_path / "cutrun").mkdir()
+        completed, _ = _run(cut, ("--database", DATABASE, "--bucket", BUCKET, *mode), tmp_path=tmp_path / "cutrun", env_file=env)
+        assert "the database roles are not configured" not in completed.stderr, "the guard was deleted and the refusal stayed"
+
+    def test_the_missing_step_guard_is_shown_able_to_fail(self, tmp_path: Path, env_file: Path) -> None:
+        cut = _mutant(tmp_path / "cut", "grants-script-present", with_grants=False)
+        completed, _ = _run(cut, ("--database", DATABASE, "--bucket", BUCKET, "--yes-destroy-everything"),
+                            tmp_path=tmp_path, env_file=env_file)
+        assert "[grants_script_missing]" not in completed.stderr
+
+    # -- the order ----------------------------------------------------------------------------------------------
+
+    def _dump(self, tmp_path: Path) -> Path:
+        dump = tmp_path / "dump"
+        dump.mkdir(parents=True, exist_ok=True)
+        (dump / "database.dump").write_bytes(b"PGDMP")
+        (dump / "objects.attrs").write_text(_sidecar(1), encoding="utf-8")
+        (dump / "objects").mkdir(exist_ok=True)
+        return dump
+
+    def test_the_restore_gives_the_rights_back_after_the_migrations_and_before_anything_connects_as_the_application(
+        self, tmp_path: Path, env_file: Path
+    ) -> None:
+        completed, calls = _run_through_the_dump(
+            _staged_with_worker(tmp_path), tmp_path=tmp_path, env_file=env_file, attrs=_sidecar(1),
+            mode=("--restore", str(self._dump(tmp_path))),
+        )
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        lines = calls.splitlines()
+        grants = [number for number, line in enumerate(lines) if "exec -T postgres psql" in line and "app_role=" in line]
+        assert len(grants) == 2, "one apply and one verification"
+        assert _index(lines, "pg_restore") < _index(lines, "run --rm migrate") < _index(lines, "release-notes") < grants[0]
+        assert grants[1] < _index(lines, "up -d --no-deps worker") < _index(lines, "auditmanager.access.revoke"), lines
+        assert f"app_role={APP_ROLE}" in lines[grants[0]] and f"--username {USER}" in lines[grants[0]]
+        assert APP_PASSWORD not in calls and OWNER_PASSWORD not in calls
+
+    def test_a_restore_whose_rights_could_not_be_given_is_reported_keeps_the_worker_stopped_and_exits_6(
+        self, tmp_path: Path, env_file: Path
+    ) -> None:
+        stub = STAGING_STUB.replace(
+            'elif "pg_dump" in line:',
+            'elif "exec -T postgres psql" in line and "app_role=" in line:\n    sys.exit(int(os.environ.get("STUB_PSQL_STATUS", "0")))\nelif "pg_dump" in line:',
+            1,
+        )
+        assert stub != STAGING_STUB
+        completed, calls = self._through(tmp_path, env_file, stub, {"STUB_PSQL_STATUS": "1"},
+                                         ("--restore", str(self._dump(tmp_path))))
+        assert completed.returncode == 6, (completed.returncode, completed.stdout, completed.stderr)
+        assert "apply-grants=4" in completed.stdout and "api and worker cannot read the restored database" in completed.stdout
+        assert "up -d --no-deps worker" not in calls, "the worker was started against a database it cannot read"
+
+    def test_the_wipe_gives_the_rights_back_after_the_migrations_and_before_the_worker_starts(
+        self, tmp_path: Path, env_file: Path
+    ) -> None:
+        completed, calls = _run_through_the_dump(
+            _staged_with_worker(tmp_path), tmp_path=tmp_path, env_file=env_file, attrs=_sidecar(2),
+        )
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        lines = calls.splitlines()
+        grants = [number for number, line in enumerate(lines) if "exec -T postgres psql" in line and "app_role=" in line]
+        assert len(grants) == 2
+        assert _index(lines, "DROP SCHEMA") < _index(lines, "run --rm migrate") < _index(lines, "release-notes") < grants[0]
+        assert grants[1] < _index(lines, "up -d --no-deps worker"), lines
+        assert "giving the application role its rights again" in completed.stdout
+
+    def test_a_wipe_whose_rights_could_not_be_given_says_so_leaves_the_worker_stopped_and_exits_4(
+        self, tmp_path: Path, env_file: Path
+    ) -> None:
+        stub = STAGING_STUB.replace(
+            'elif "pg_dump" in line:',
+            'elif "exec -T postgres psql" in line and "app_role=" in line:\n    sys.exit(int(os.environ.get("STUB_PSQL_STATUS", "0")))\nelif "pg_dump" in line:',
+            1,
+        )
+        completed, calls = self._through(tmp_path, env_file, stub, {"STUB_PSQL_STATUS": "1"}, ("--yes-destroy-everything",))
+        assert completed.returncode == 4, (completed.returncode, completed.stdout, completed.stderr)
+        assert "THE SCHEMA IS RECREATED BUT THE APPLICATION ROLE HAS NO RIGHTS ON IT" in completed.stdout
+        assert "up -d --no-deps worker" not in calls and "run --rm s3-init" not in calls, calls
+
+    def _through(self, tmp_path: Path, env_file: Path, stub_text: str, statuses: dict[str, str],
+                 mode: tuple[str, ...]) -> tuple[subprocess.CompletedProcess[str], str]:
+        script = _staged_with_worker(tmp_path)
+        binary = tmp_path / "bin"
+        binary.mkdir(exist_ok=True)
+        log = tmp_path / "docker-calls.log"
+        stub = binary / "docker"
+        stub.write_text(stub_text, encoding="utf-8")
+        stub.chmod(0o755)
+        environment = dict(os.environ)
+        environment.update(PATH=f"{binary}{os.pathsep}{environment['PATH']}", ALPHA_ENV_FILE=str(env_file),
+                           ALPHA_DUMP_ROOT=str(tmp_path / "dumps"), STUB_LOG=str(log), STUB_ATTRS=_sidecar(2), STUB_OBJECTS="2")
+        environment.update(statuses)
+        completed = subprocess.run(["bash", str(script), "--database", DATABASE, "--bucket", BUCKET, *mode],
+                                   capture_output=True, text=True, env=environment, timeout=120)
+        return completed, (log.read_text(encoding="utf-8") if log.exists() else "")

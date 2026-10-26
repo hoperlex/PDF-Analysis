@@ -72,6 +72,10 @@ BUCKET = "the-configured-bucket"
 #: `D-103`'s `derived-secrets-coherent` reads this one too, so every fixture below needs a
 #: value for it or the new guard would refuse every case that predates it.
 PG_USER = "the_configured_user"
+#: `PROD-04`: the application role (`api`, `worker`) is not the owner, and its password -- the second one -- is the
+#: owner's to write on the host; `app-db-role-configured` refuses an environment without it.
+APP_ROLE = "the_application_role"
+APP_PASSWORD = "an-edited-application-db-password-0001"
 
 #: The placeholder values the staged `alpha.env.example` ships, and which
 #: `placeholder-secrets` refuses by identity. They are this file's own literals for the
@@ -99,22 +103,29 @@ def _env_text(
     port: int,
     coherent: bool = True,
 ) -> str:
-    """`coherent=True` (the default) derives `DATABASE_URL`, `S3_ACCESS_KEY_ID` and
+    """`coherent=True` (the default) derives `MIGRATOR_DATABASE_URL`, `S3_ACCESS_KEY_ID` and
     `S3_SECRET_ACCESS_KEY` FROM `secrets`, so every existing case that is not specifically
     about `derived-secrets-coherent` stays coherent no matter which secrets dict it is
-    handed -- exactly the property `D-103`'s own guard now requires before any build."""
+    handed -- exactly the property `D-103`'s own guard now requires before any build.
+
+    Since `PROD-04` the environment also names the APPLICATION role (`ALPHA_APP_DB_USER`,
+    `ALPHA_APP_DB_PASSWORD`) and `DATABASE_URL` is that role's, not the owner's; the owner's url is
+    `MIGRATOR_DATABASE_URL`. `app-db-role-configured` refuses an environment without them."""
     lines = [
         f"ALPHA_HTTP_PORT={port}",
         f"POSTGRES_DB={DATABASE}",
         f"POSTGRES_USER={PG_USER}",
         f"S3_BUCKET={BUCKET}",
+        f"ALPHA_APP_DB_USER={APP_ROLE}",
+        f"ALPHA_APP_DB_PASSWORD={APP_PASSWORD}",
+        f"DATABASE_URL=postgresql+psycopg://{APP_ROLE}:{APP_PASSWORD}@postgres:5432/{DATABASE}",
     ]
     if instance is not None:
         lines.insert(0, f"ALPHA_INSTANCE={instance}")
     lines += [f"{name}={value}" for name, value in sorted(secrets.items())]
     if coherent:
         lines.append(
-            "DATABASE_URL=postgresql+psycopg://"
+            "MIGRATOR_DATABASE_URL=postgresql+psycopg://"
             f"{PG_USER}:{secrets['POSTGRES_PASSWORD']}@postgres:5432/{DATABASE}"
         )
         lines.append(f"S3_ACCESS_KEY_ID={secrets['MINIO_ROOT_USER']}")
@@ -122,9 +133,9 @@ def _env_text(
     return "\n".join(lines) + "\n"
 
 
-def _d103_env_text(port: int) -> str:
+def _d103_env_text(port: int, *, stale_owner_url: bool = True) -> str:
     """`D-103`'s exact reproduction: the four names `placeholder-secrets` names, rotated --
-    and `DATABASE_URL`, `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` left at the example's
+    and `MIGRATOR_DATABASE_URL`, `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` left at the example's
     own placeholder values, which is what an operator following only that guard's advice
     actually produces. Coherent by `placeholder-secrets`' own test (none of the four match
     the example any more); incoherent by this file's new one."""
@@ -134,12 +145,13 @@ def _d103_env_text(port: int) -> str:
         f"POSTGRES_DB={DATABASE}",
         f"POSTGRES_USER={PG_USER}",
         f"S3_BUCKET={BUCKET}",
+        f"ALPHA_APP_DB_USER={APP_ROLE}",
+        f"ALPHA_APP_DB_PASSWORD={APP_PASSWORD}",
+        f"DATABASE_URL=postgresql+psycopg://{APP_ROLE}:{APP_PASSWORD}@postgres:5432/{DATABASE}",
     ]
     lines += [f"{name}={value}" for name, value in sorted(EDITED_SECRETS.items())]
-    lines.append(
-        "DATABASE_URL=postgresql+psycopg://"
-        f"{PG_USER}:{EXAMPLE_SECRETS['POSTGRES_PASSWORD']}@postgres:5432/{DATABASE}"
-    )
+    owner_password = EXAMPLE_SECRETS["POSTGRES_PASSWORD"] if stale_owner_url else EDITED_SECRETS["POSTGRES_PASSWORD"]
+    lines.append(f"MIGRATOR_DATABASE_URL=postgresql+psycopg://{PG_USER}:{owner_password}@postgres:5432/{DATABASE}")
     lines.append(f"S3_ACCESS_KEY_ID={EXAMPLE_SECRETS['MINIO_ROOT_USER']}")
     lines.append(f"S3_SECRET_ACCESS_KEY={EXAMPLE_SECRETS['MINIO_ROOT_PASSWORD']}")
     return "\n".join(lines) + "\n"
@@ -307,6 +319,7 @@ def _stage(
     dockerfiles: bool = True,
     with_trust_script: bool = False,
     with_listeners: bool = True,
+    with_grants: bool = True,
 ) -> Path:
     """A clone-shaped directory: `<repo>/infra/deploy/deploy.sh` and what it reads.
 
@@ -347,6 +360,12 @@ def _stage(
         # refuse its absence in `test_default_credential_gate.py`.
         (deploy / "lib").mkdir(exist_ok=True)
         shutil.copy2(DEPLOY.parent / "lib/proxy-listeners.sh", deploy / "lib/proxy-listeners.sh")
+
+    if with_grants:
+        # `PROD-04`: `apply-grants.sh` is asked about the settings before the build and run between `migrate`
+        # and `up`, so a clone-shaped staging carries it, executable, as every real clone does.
+        # `grants-script-present` is shown to refuse its absence in `test_db_roles_deploy_guards.py`.
+        shutil.copy2(DEPLOY.parent / "apply-grants.sh", deploy / "apply-grants.sh")
 
     # `D-38`: it exits 0 as before AND leaves a mark, because the thing that went wrong
     # was an ORDER -- the guard that names the cause ran after this script and therefore
@@ -626,7 +645,7 @@ class TestD103TheThreeDerivedValues:
         completed, log = _run(script, tmp_path=tmp_path, env_file=env_file)
         assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
         # The three derived values, named -- not the four rotated ones, which are fine.
-        assert "DATABASE_URL's password does not match POSTGRES_PASSWORD" in completed.stderr, (
+        assert "MIGRATOR_DATABASE_URL's password does not match POSTGRES_PASSWORD" in completed.stderr, (
             completed.stderr
         )
         assert "S3_ACCESS_KEY_ID does not match MINIO_ROOT_USER" in completed.stderr, (
@@ -654,17 +673,35 @@ class TestD103TheThreeDerivedValues:
         assert "must carry the same" not in completed.stderr, completed.stderr
 
     def test_the_guard_is_shown_able_to_fail(self, tmp_path: Path, free_port: int) -> None:
-        """Delete `derived-secrets-coherent` and D-103's exact reproduction sails through
-        to the build -- which is the defect this guard exists to close."""
+        """Delete `derived-secrets-coherent` and D-103's reproduction sails through to the build -- which is the
+        defect this guard exists to close. Since `PROD-04` the owner's url is `MIGRATOR_DATABASE_URL` and
+        `app-db-role-configured` also reads it (see the next case), so the reproduction that isolates THIS guard
+        leaves the owner's url coherent and the two S3 values stale."""
         cut = _mutant(tmp_path, "derived-secrets-coherent")
         script = _stage(tmp_path / "mutant-d103", script=cut)
         env_file = tmp_path / "d103.env"
-        env_file.write_text(_d103_env_text(free_port), encoding="utf-8")
+        env_file.write_text(_d103_env_text(free_port, stale_owner_url=False), encoding="utf-8")
         completed, log = _run(script, tmp_path=tmp_path, env_file=env_file)
         assert "must carry the same" not in completed.stderr
         assert "build" in log.read_text(encoding="utf-8"), (
             "the mutant never reached the build, so this case was not testing this guard"
         )
+
+    def test_a_stale_owner_url_is_still_refused_before_any_build_with_that_guard_deleted(
+        self, tmp_path: Path, free_port: int
+    ) -> None:
+        """`PROD-04`: defence in depth, stated rather than left to chance. `apply-grants.sh --config-only`, which
+        `app-db-role-configured` asks, reads `MIGRATOR_DATABASE_URL` against `POSTGRES_*` as well, so D-103's
+        owner-url half is refused twice."""
+        cut = _mutant(tmp_path, "derived-secrets-coherent")
+        script = _stage(tmp_path / "mutant-d103-owner", script=cut)
+        env_file = tmp_path / "d103.env"
+        env_file.write_text(_d103_env_text(free_port), encoding="utf-8")
+        completed, log = _run(script, tmp_path=tmp_path, env_file=env_file)
+        assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
+        assert "[database_urls_incoherent]" in completed.stderr, completed.stderr
+        assert "MIGRATOR_DATABASE_URL's password does not match POSTGRES_PASSWORD" in completed.stderr
+        assert not log.exists()
 
 
 class TestTheParseThatFoundNothingIsNotACompleteClone:
@@ -1225,6 +1262,16 @@ DEPLOY_GATE_GUARDS = (
 )
 
 
+#: The five guards `PROD-04-DB-ROLES-01` added: the application role's settings before the build and the
+#: owner-migrate / release-notes / grants steps before `up`. Their cases are in `test_db_roles_deploy_guards.py`.
+DB_ROLE_GUARDS = (
+    "grants-script-present",
+    "app-db-role-configured",
+    "owner-migrated",
+    "release-notes-loaded",
+    "grants-applied",
+)
+
 #: The guard `JUDGE-FIXES-F2-01` added for `D-229` item 4: a certificate name AND a trust list. Its cases are in
 #: `test_acme_deploy_guards.py`, class `TestTrustedProxiesEmptyWithName`.
 JUDGE_FIX_GUARDS = ("trusted-proxies-empty-with-name",)
@@ -1249,11 +1296,12 @@ def test_every_guard_in_the_script_has_a_case_here() -> None:
     `default-credential-gate` and `listeners-library-present` (cases in
     `test_default_credential_gate.py`), named in the set below as well, and 31 since
     `JUDGE-FIXES-F2-01` added `trusted-proxies-empty-with-name` (`D-229` item 4; cases in
-    `test_acme_deploy_guards.py`).
+    `test_acme_deploy_guards.py`), and 36 since `PROD-04-DB-ROLES-01` added the five database-role guards
+    (cases in `test_db_roles_deploy_guards.py`).
     """
     markers = re.findall(r"^# >>> guard: ([a-z-]+)$", DEPLOY.read_text(encoding="utf-8"), re.M)
     assert len(markers) == len(set(markers)), markers
-    assert len(markers) == 31, markers
+    assert len(markers) == 36, markers
     covered = set(BEFORE_DOCKER) | set(STAND_GUARDS) | {
         "port-not-foreign",
         "images-built",
@@ -1273,6 +1321,8 @@ def test_every_guard_in_the_script_has_a_case_here() -> None:
         *DEPLOY_GATE_GUARDS,
         # `JUDGE-FIXES-F2-01`: its cases are in `test_acme_deploy_guards.py`, checked below.
         *JUDGE_FIX_GUARDS,
+        # `PROD-04-DB-ROLES-01`: cases in `test_db_roles_deploy_guards.py`, checked below.
+        *DB_ROLE_GUARDS,
     }
     assert set(markers) == covered, set(markers) ^ covered
     identity_suite = ROOT / "tests/integration/composition/test_deploy_image_identity.py"
@@ -1285,6 +1335,9 @@ def test_every_guard_in_the_script_has_a_case_here() -> None:
     )
     for guard in DEPLOY_GATE_GUARDS:
         assert guard in gate_suites, f"{guard} is excused here against files that no longer name it"
+    roles_suite = (ROOT / "tests/integration/composition/test_db_roles_deploy_guards.py").read_text(encoding="utf-8")
+    for guard in DB_ROLE_GUARDS:
+        assert guard in roles_suite, f"{guard} is excused here against a file that no longer names it"
     acme_suite = (ROOT / "tests/integration/composition/test_acme_deploy_guards.py").read_text(encoding="utf-8")
     for guard in (*ACME_GUARDS, *JUDGE_FIX_GUARDS):
         assert guard in acme_suite, f"{guard} is excused here against a file that no longer names it"

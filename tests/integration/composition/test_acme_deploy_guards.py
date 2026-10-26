@@ -60,6 +60,8 @@ INSTANCE = "an-instance"
 DATABASE = "the_configured_database"
 BUCKET = "the-configured-bucket"
 PG_USER = "the_configured_user"
+APP_ROLE = "the_application_role"
+APP_PASSWORD = "an-edited-application-db-password-0001"
 EDITED = {
     "POSTGRES_PASSWORD": "an-edited-postgres-password",
     "MINIO_ROOT_USER": "an-edited-minio-root",
@@ -312,7 +314,11 @@ def _env(tmp_path: Path, http_port: int, **settings: str) -> Path:
         f"POSTGRES_USER={PG_USER}",
         f"S3_BUCKET={BUCKET}",
         *(f"{key}={value}" for key, value in sorted(EDITED.items())),
-        f"DATABASE_URL=postgresql+psycopg://{PG_USER}:{EDITED['POSTGRES_PASSWORD']}@postgres:5432/{DATABASE}",
+        # `PROD-04`: the application role (second password) and its url; the owner's url is MIGRATOR_DATABASE_URL.
+        f"ALPHA_APP_DB_USER={APP_ROLE}",
+        f"ALPHA_APP_DB_PASSWORD={APP_PASSWORD}",
+        f"DATABASE_URL=postgresql+psycopg://{APP_ROLE}:{APP_PASSWORD}@postgres:5432/{DATABASE}",
+        f"MIGRATOR_DATABASE_URL=postgresql+psycopg://{PG_USER}:{EDITED['POSTGRES_PASSWORD']}@postgres:5432/{DATABASE}",
         f"S3_ACCESS_KEY_ID={EDITED['MINIO_ROOT_USER']}",
         f"S3_SECRET_ACCESS_KEY={EDITED['MINIO_ROOT_PASSWORD']}",
         *(f"{key}={value}" for key, value in settings.items()),

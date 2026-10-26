@@ -26,7 +26,8 @@ down`. This is the deployed stack.
 | `Dockerfile.api` | the 104 operations under uvicorn, plus `T-3`'s health plane |
 | `Dockerfile.web` | `npm run build`, then `next start` |
 | `serve.py` | the entry point: **one built application, two ports** |
-| `compose.server.yml` | the stack: PostgreSQL, MinIO, migrate, release-notes, api, worker, web, one proxy |
+| `compose.server.yml` | the stack: PostgreSQL, MinIO, migrate, release-notes, api, worker, web, one proxy. Two database urls (`PROD-04`): `DATABASE_URL`, the application role's, reaches `api` and `worker`; `MIGRATOR_DATABASE_URL`, the owner's, reaches `migrate` and `release-notes` only |
+| `apply-grants.sh` | `PROD-04-DB-ROLES-01` — the one idempotent step that gives the application role (`ALPHA_APP_DB_USER`) exactly the rights `scripts/recovery/grant_classification.py` says, and nothing that changes the schema; `--check` verifies, `--config-only` judges the settings. Run by `deploy.sh` between `migrate` and `up`, and by `reset.sh` and `copy-serve.sh restore-db` after a restore (a `--no-privileges` dump carries none). Runbook §16 |
 | `proxy/nginx.conf` | `T-2` — the web app at `/`, the API at `/api/v1`, one origin |
 | `proxy/tls-server.conf` | the TLS server block. **nginx never loads it unless a certificate is there** |
 | `proxy/enable-tls.sh` | the switch: the image runs it before nginx starts, and it asks one question |
@@ -39,7 +40,7 @@ down`. This is the deployed stack.
 | `lib/proxy-listeners.sh` | `PROD-01-TLS-ACME-01`, `PROD-02` — the one place that decides which of the proxy's three listeners a deploy has, and the one place that asks the default-credential gate (`deploy.sh`, `verify-deployed.sh`, `reset.sh --restore` and `copy-serve.sh restore-db` all call it) |
 | `deploy.sh` | `PA-01` criterion 1 — bring this clone up, and refuse to call it deployed until the stack has answered |
 | `reset.sh` | `T-5` — the guarded wipe, and the restore of its own dump |
-| `purge-product-data.sh` | `STAND-PURGE-TOOL-01` — delete the stand's product data (projects, documents, runs, findings, decisions, price lists, their objects) and **keep the accounts and the norm corpus**; dumps and verifies first. `docs/program/STAND-PURGE-TOOL-01.md` |
+| `purge-product-data.sh` | `STAND-PURGE-TOOL-01` — delete the stand's product data (projects, documents, runs, findings, decisions, price lists, their objects) and **keep the accounts and the norm corpus**; dumps and verifies first. Since `PROD-04` it runs the python half as the owner (`MIGRATOR_DATABASE_URL`). `docs/program/STAND-PURGE-TOOL-01.md` |
 | `verify-deployed.sh` | `D-27` — is the stack in front of you this tree? |
 | `reload-proxy.sh` | `D-27` — the step after a rebuild that everyone forgets |
 | `object_attrs.py` | the third part of a dump: each object's S3 attributes |

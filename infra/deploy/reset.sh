@@ -174,6 +174,33 @@ if [ ! -r "$COMPOSE_FILE" ]; then
 fi
 # <<< guard: compose-file-present
 
+# `PROD-04-DB-ROLES-01` (`R-146n` item 1, `AD-02`). A wipe drops schema `public` and a restore replaces it, and a dump carries
+# no privileges (`pg_dump --no-owner --no-privileges`): either way the application role has NO rights afterwards, until
+# `apply-grants.sh` gives them back. So both destructive modes ask, BEFORE anything is changed, that the step can run -- the
+# script is here and the second password is set -- and end by running it, between the migrations and the first service that
+# connects as the application. A dry run changes nothing and asks nothing.
+GRANTS_SCRIPT="$HERE/apply-grants.sh"
+# >>> guard: grants-script-present
+if [ "$DRY_RUN" = no ] && { [ ! -r "$GRANTS_SCRIPT" ] || [ ! -x "$GRANTS_SCRIPT" ]; }; then
+    refuse "[grants_script_missing] $GRANTS_SCRIPT is missing or not executable." \
+           "A wipe or a restore leaves the application role with no rights; this step gives them back. Nothing has been changed."
+fi
+# <<< guard: grants-script-present
+# >>> guard: app-db-role-configured
+if [ "$DRY_RUN" = no ]; then
+    ROLES_STATUS=0
+    ROLES_OUTPUT="$("$GRANTS_SCRIPT" --env-file "$ENV_FILE" --config-only 2>&1)" || ROLES_STATUS=$?
+    if [ "$ROLES_STATUS" -ne 0 ]; then
+        ROLES_LINES=()
+        while IFS= read -r line; do ROLES_LINES+=("${line#  }"); done <<<"${ROLES_OUTPUT#apply-grants.sh: REFUSED: }"
+        refuse "the database roles are not configured (apply-grants.sh --config-only, status $ROLES_STATUS):" \
+               "${ROLES_LINES[@]}" \
+               "Nothing has been changed: a wipe or a restore without the second password would leave api and worker" \
+               "with no database rights."
+    fi
+fi
+# <<< guard: app-db-role-configured
+
 compose() { docker compose --env-file "$ENV_FILE" --file "$COMPOSE_FILE" "$@"; }
 
 mc_run() {
@@ -307,9 +334,20 @@ if [ -n "$RESTORE" ]; then
     if [ "$RESTORE_MIGRATE_STATUS" -eq 0 ]; then
         compose run --rm --no-deps release-notes || RESTORE_NOTES_STATUS=$?
     fi
-    if [ "$RESTORE_MIGRATE_STATUS" -ne 0 ] || [ "$RESTORE_NOTES_STATUS" -ne 0 ]; then
-        echo "reset.sh: !! restored rows, but migration or release-note load needs operator review."
-        echo "reset.sh: !! migrate=$RESTORE_MIGRATE_STATUS release-notes=$RESTORE_NOTES_STATUS"
+    # `PROD-04`: the dump carried no privileges, so the application role has none. Its rights are applied here --
+    # after the migrations (the schema is at the head) and before the worker, or anything else that connects as it,
+    # starts. A restore that cannot do it is reported like a migration that could not, never reversed.
+    RESTORE_GRANTS_STATUS=0
+    if [ "$RESTORE_MIGRATE_STATUS" -eq 0 ] && [ "$RESTORE_NOTES_STATUS" -eq 0 ]; then
+        "$GRANTS_SCRIPT" --env-file "$ENV_FILE" || RESTORE_GRANTS_STATUS=$?
+    fi
+    if [ "$RESTORE_MIGRATE_STATUS" -ne 0 ] || [ "$RESTORE_NOTES_STATUS" -ne 0 ] || [ "$RESTORE_GRANTS_STATUS" -ne 0 ]; then
+        echo "reset.sh: !! restored rows, but migration, release-note load or the application role's rights need operator review."
+        echo "reset.sh: !! migrate=$RESTORE_MIGRATE_STATUS release-notes=$RESTORE_NOTES_STATUS apply-grants=$RESTORE_GRANTS_STATUS"
+        if [ "$RESTORE_GRANTS_STATUS" -ne 0 ]; then
+            echo "reset.sh: !! api and worker cannot read the restored database until this runs and exits 0:"
+            echo "reset.sh: !!   $GRANTS_SCRIPT --env-file $ENV_FILE"
+        fi
         if [ "$WORKER_DECLARED" = yes ]; then
             echo "reset.sh: !! the worker service was left stopped; start it once the schema is at head:"
             echo "reset.sh: !!   docker compose --env-file $ENV_FILE --file $COMPOSE_FILE up -d --no-deps worker"
@@ -437,6 +475,11 @@ if [ -n "$RESTORE" ]; then
             fi ;;
     esac
 
+    # `PROD-04`: a restore whose application role has no rights is not one to report as plain success. 5 (the public
+    # door could not be shut) outranks it: that one is an exposure, this one is an outage.
+    if [ "$DOOR_STATUS" -eq 0 ] && [ "$RESTORE_GRANTS_STATUS" -ne 0 ]; then
+        DOOR_STATUS=6
+    fi
     echo
     echo "reset.sh: restored. Verify with a read of one document version through the API."
     exit "$DOOR_STATUS"
@@ -739,6 +782,19 @@ echo "reset.sh: re-running migrations to head"
 compose run --rm migrate >/dev/null
 echo "reset.sh: re-loading release notes"
 compose run --rm --no-deps release-notes >/dev/null
+# `PROD-04`: the schema was just recreated by the owner, so the application role has no rights on it. Give them back
+# before the worker (or anything else that connects as it) is started. The wipe has happened, so a failure here is
+# said loudly and is a non-zero exit, not a refusal.
+echo "reset.sh: giving the application role its rights again"
+WIPE_GRANTS_STATUS=0
+"$GRANTS_SCRIPT" --env-file "$ENV_FILE" || WIPE_GRANTS_STATUS=$?
+if [ "$WIPE_GRANTS_STATUS" -ne 0 ]; then
+    echo "reset.sh: !! THE SCHEMA IS RECREATED BUT THE APPLICATION ROLE HAS NO RIGHTS ON IT (apply-grants.sh exited $WIPE_GRANTS_STATUS)."
+    echo "reset.sh: !! api and worker cannot read the database until this runs and exits 0:"
+    echo "reset.sh: !!   $GRANTS_SCRIPT --env-file $ENV_FILE"
+    echo "reset.sh: !! The worker was left stopped. The dump is at $DUMP_DIR"
+    exit 4
+fi
 
 echo "reset.sh: purging and re-initialising bucket $BUCKET"
 mc_run s3-init -c "$MC_ALIAS; mc --quiet rm --recursive --force \"local/$BUCKET\" >/dev/null 2>&1 || true" >/dev/null
