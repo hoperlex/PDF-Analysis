@@ -212,3 +212,67 @@ def test_a_lost_attempt_with_an_answer_received_but_not_completed_is_still_ambig
           request_sha=SHA_A, response_sha=SHA_B, complete=False)
     _lose(session, jobs, authority)
     assert _state(session, run_id)[0] == "failed"
+
+
+# -- every arm of the call/effect agreement -----------------------------------------------------------------
+
+
+def _valid_row(authority) -> dict[str, Any]:
+    return {
+        "model_call_id": "mc_01M2545JSD15ETSNNV904X991J", "provider": "anthropic", "model_identity": MODEL,
+        "provider_mode": "live", "call_parameters": _window_parameters("a" * 64, 0),
+        "request_sha256": SHA_A, "response_sha256": SHA_B, "input_tokens": 100, "output_tokens": 10,
+        "latency_ms": 5, "cost_micros": 10_000, "cost_basis": "measured", "status": "succeeded",
+        "call_error": None, "job_id": authority.job_id, "attempt_id": authority.attempt_id,
+        "effect_stage": "text_analysis", "effect_provider": "anthropic", "effect_model": MODEL,
+        "effect_mode": "live", "effect_request": SHA_A, "effect_response": SHA_B,
+        "effect_state": "completed", "effect_error": None,
+        "final_model_call_id": "mc_01M2545JSD15ETSNNV904X991J", "run_mode": "live",
+    }
+
+
+def test_the_reader_accepts_the_valid_row_it_will_be_mutated_from() -> None:
+    from auditmanager.jobs.public import AttemptAuthority
+
+    authority = AttemptAuthority(
+        "run_01M2545JSD15ETSNNV904X991J", "job_01M2545JSD15ETSNNV904X991J",
+        "att_01M2545JSD15ETSNNV904X991J", "lease_01M2545JSD15ETSNNV904X991J", "t",
+    )
+    call = JobRepository()._window_call_of(_valid_row(authority), authority)
+    assert call.key == "a" * 64 and call.window_count == 3
+
+
+@pytest.mark.parametrize("field,value", [
+    ("job_id", "job_01M2545JSD15ETSNNV904X991K"),        # another Job's call
+    ("effect_stage", "page_geometry_extraction"),
+    ("effect_state", "response_received"),
+    ("final_model_call_id", "mc_01M2545JSD15ETSNNV904X991K"),
+    ("call_error", "analysis_failed"),
+    ("effect_error", "analysis_failed"),
+    ("status", "failed"),
+    ("provider_mode", "mock"),
+    ("effect_mode", "recorded"),
+    ("run_mode", "recorded"),
+    ("effect_provider", "another"),
+    ("effect_model", "another-model"),
+    ("effect_request", "9" * 64),
+    ("effect_response", "9" * 64),
+    ("response_sha256", "short"),
+    ("input_tokens", -1),
+    ("latency_ms", "5"),
+    ("cost_basis", "guess"),
+    ("cost_micros", -5),
+    ("call_parameters", None),
+])
+def test_a_row_where_call_and_effect_disagree_is_refused(field: str, value: Any) -> None:
+    from auditmanager.jobs.public import AttemptAuthority
+
+    authority = AttemptAuthority(
+        "run_01M2545JSD15ETSNNV904X991J", "job_01M2545JSD15ETSNNV904X991J",
+        "att_01M2545JSD15ETSNNV904X991J", "lease_01M2545JSD15ETSNNV904X991J", "t",
+    )
+    row = _valid_row(authority)
+    row[field] = value
+    with pytest.raises(DomainError) as refused:
+        JobRepository()._window_call_of(row, authority)
+    assert refused.value.detail_fields["reason"] == "window_call_pair_invalid", field

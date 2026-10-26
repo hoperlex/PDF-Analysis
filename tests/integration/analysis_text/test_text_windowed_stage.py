@@ -17,6 +17,7 @@ from typing import Any
 import pytest
 
 from auditmanager.analysis.text import (
+    CallBinding,
     CostMeter,
     ModelResponse,
     ProviderConfig,
@@ -505,3 +506,27 @@ def test_a_failed_provider_call_is_journaled_and_carries_the_transport_facts_unc
     assert outcome.status == STATUS_FAILED and outcome.error is error
     assert outcome.provider_effect_uncertain is True and outcome.provider_retry_allowed is False
     assert [kind for kind, _ in world.events] == ["prepare", "outcome_unknown"]
+
+
+def test_the_model_identity_is_held_on_every_live_window() -> None:
+    """`R-133`: a live reply must name the model asked for; the first window that does not stops the run."""
+    binding = CallBinding(expected_model="claude-opus-5", check_identity=True)
+
+    def named(model: str | None):
+        return lambda pages: ModelResponse(
+            output_text=json.dumps({"observations": [observation(pages[0])]}, ensure_ascii=False),
+            stop_reason="end_turn", input_tokens=10, output_tokens=2, latency_ms=3,
+            reported_cost_usd=0.1, model=model,
+        )
+
+    good = Scripted(ProviderMode.LIVE, overrides={1: named("claude-opus-5"), 4: named("claude-opus-5"),
+                                                   7: named("claude-opus-5")})
+    outcome, _ = run(good, call=binding)
+    assert outcome.status == STATUS_SUCCEEDED and good.calls == 3
+
+    drift = Scripted(ProviderMode.LIVE, overrides={1: named("claude-opus-5"), 4: named("claude-sonnet-5")})
+    refused, world = run(drift, call=binding)
+    assert refused.status == STATUS_FAILED and refused.artifact is None
+    assert refused.error.code is ErrorCode.MODEL_IDENTITY_MISMATCH
+    assert drift.calls == 2, "the run stops at the window whose reply named another model"
+    assert refused.provider_effect_uncertain is True
