@@ -775,7 +775,7 @@ if [ -n "$CERT_NAME" ]; then
                        "  something answers on 127.0.0.1:$public_port" \
                        "Nothing was built and nothing was started. This stack terminates TLS itself, so the" \
                        "nginx that did it on this host (or anything else on that port) has to be stopped" \
-                       "first -- the cutover is DEPLOYMENT_RUNBOOK.md section 6, step 3. For a rehearsal on a" \
+                       "first -- the cutover is DEPLOYMENT_RUNBOOK.md section 6, step 4. For a rehearsal on a" \
                        "development machine, ALPHA_ACME_HTTP_PORT and ALPHA_HTTPS_PORT name other ports."
             fi
         fi
