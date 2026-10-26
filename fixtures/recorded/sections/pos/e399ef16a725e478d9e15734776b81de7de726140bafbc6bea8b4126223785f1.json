@@ -5,9 +5,9 @@
   "origin": {
     "analysis_profile_id": "ap_01M5AXG1K4V1JCGK60TZRM9B96",
     "kind": "synthetic",
-    "profile_status": "draft",
+    "profile_status": "reviewed",
     "prompt_bundle_id": "pb_01M5AXG1K4QP84XW1DNYM72HN6",
-    "prompt_bundle_sha256": "8f91b1d51cb4114926228317e068c224d3c7f70913afc30aa6c6ea4b4fee3c05",
+    "prompt_bundle_sha256": "30c5af141fb4747879ce21b0e3f800fb6c6edf4b0e7af1ee0868e28a5dce0c4c",
     "section_code": "POS",
     "statement": "Synthetic: authored by hand for W59-ANALYSIS-SETTINGS-01 to prove section routing in recorded mode. No model produced this reply and no provider call was made. Not field evidence for the profile's review.",
     "task_id": "W59-ANALYSIS-SETTINGS-01",
@@ -15,7 +15,7 @@
   },
   "output_text": "{\"observations\": [{\"category\": \"internal_contradiction\", \"finding_text\": \"Синтетический ответ (ПОС), не результат вызова модели: количество эвакуационных выходов из надземной части здания указано как два и как три в разных разделах.\", \"recommendation_text\": \"Согласовать количество эвакуационных выходов из надземной части здания.\", \"evidence\": [{\"page_number\": 3, \"quote\": \"Из надземной части здания предусмотрено два эвакуационных выхода.\"}, {\"page_number\": 7, \"quote\": \"Из надземной части здания предусмотрено три эвакуационных выхода.\"}]}]}",
   "recording_version": "1.0.0",
-  "request_sha256": "9fd7995188bd781df195e8aa285573d4f5dae8165d95e07c665dc11b93d2ea15",
+  "request_sha256": "e399ef16a725e478d9e15734776b81de7de726140bafbc6bea8b4126223785f1",
   "stop_reason": "end_turn",
   "usage": {
     "input_tokens": 2330,
