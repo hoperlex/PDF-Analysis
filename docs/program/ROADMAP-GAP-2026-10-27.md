@@ -259,4 +259,57 @@ Scope words: **all 15** (every section code, АР included), **14** (the section
 3. **Gap 3 — the comparison is a read, not a record.** Steps 11 and 13. The owner's `C-2` is «sheet pairing, deterministic text differences as evidence, AI classification and summary on top; AI never alters the raw differences». The first and second exist as proposals; approval of a pairing is not stored, and `src/auditmanager/comparison/summary_input.py` prepares a bounded input for a summary that nothing generates. It needs a table for approved links (migration), an operation (contract) and a model call (recorded first; a live call is an `R-29` matter).
 4. **Gap 4 — АР has no decidable finding** (steps 8, 9, 12, 15). A decision, not a lane (section 5): `R-146g` chose the review-only path.
 5. **Stale statements, web and contract prose** (steps 1 and 16, small): listed so that nobody acts on them.
-6. **Not code but worth knowing:** the section path never sends OCR text to the model (item 4), so a scanned page of a portal bundle (11 of 30 pages of the one real set, `ROADMAP-TO-BETA.md` risk `R-2`) is invisible to every section analysis; adding recognised text as marked context changes all 14 prompts and sends more client text to the provider (`A-2`), so it is an owner decision (section 5).
+6. **Not code but worth knowing:** the section path never sends OCR text to the model (item 4), so a scanned page of a portal bundle (11 of 30 pages of the one real set, risk R-2 of `docs/program/dispatch/ROADMAP-TO-BETA.md`) is invisible to every section analysis; adding recognised text as marked context changes all 14 prompts and sends more client text to the provider (`A-2`), so it is an owner decision (section 5).
+
+## 4. Prompts and the response schema
+
+### 4.1 What the 14 profiles ask for and what they return
+
+One request per run: the section's system prompt, the user preamble («Текстовый слой документа, N стр. …»), the text layer page by page under `=== Страница N ===` banners, `max_output_tokens` 16,000, effort `high`, adaptive thinking (`src/auditmanager/analysis/text/prompt.py`). One reply, a closed JSON object (`RESPONSE_SCHEMA`, `additionalProperties: false`):
+
+```text
+observations[]: category (internal_contradiction | explicit_placeholder),
+                finding_text, recommendation_text (Russian prose, no verdict, no norm),
+                evidence[] (page_number, quote)   -- one quote per diverging value, or the placeholder
+```
+
+There is no severity, no norm citation, no required or stated value, no block or region. A reply that does not parse element by element is dropped and counted; a truncated reply keeps its complete elements (`src/auditmanager/analysis/text/response.py`). An observation whose quote is not found verbatim on its page is stored as ungrounded and creates no finding (`src/auditmanager/findings/publication.py`, the `grounded` branch). The model's output is never the expert's decision.
+
+### 4.2 The closed `FindingCategory` list and who uses each value
+
+The contract list is the schema `FindingCategory` in `contracts/api/v1/openapi.json` (`src/auditmanager/api/schemas/models.py:627`): 12 values. The database allows exactly the same 12 (`ck_finding_category` and `ck_finding_observation_category`, set by `0022_findings_v2` and widened by `0023_norm_citations`); the five normative values additionally require citations by a deferred check of `0023_norm_citations`. The web (`web/src/entities/expert-decision/model/category-labels.ts`) and the XLSX (`src/auditmanager/exports/xlsx/labels.py:53`) carry a Russian label for each.
+
+| Value | Section profiles (14) | Solicited by `ar_v3` | Reaches a reviewer |
+| --- | --- | --- | --- |
+| `internal_contradiction` | yes | yes (non-normative) | sections: yes. АР: no, dropped |
+| `explicit_placeholder` | yes | yes (non-normative) | sections: yes. АР: no, dropped |
+| `dimensions` | no | yes | no (dropped) |
+| `layout` | no | yes | no (dropped) |
+| `facade` | no | yes | no (dropped) |
+| `roof` | no | yes | no (dropped) |
+| `documentation` | no | yes | no (dropped) |
+| `evacuation` | no | yes (normative, with citations) | as a provisional citation in `getArV3BetaGroupReview`, never as a finding |
+| `fire_safety` | no | yes (normative) | as above |
+| `accessibility` | no | yes (normative) | as above |
+| `insulation` | no | yes (normative) | as above |
+| `sound` | no | yes (normative) | as above |
+
+So of the 12: **2** are used by the section profiles; **5** more (`dimensions`, `layout`, `facade`, `roof`, `documentation`) are solicited by `ar_v3` and dropped; **5** are normative and live only inside the review artifact. The drop is explicit: `src/auditmanager/runs/v3_review_artifact.py:101` skips every accepted proposal without norm citations, which is all seven non-normative values, the two shared with the sections included. The v3 request asks for `proposed_severity` (`critical`, `economic`, `operational`, `recommendation`, `check_adjacent`) on every proposal (`src/auditmanager/analysis/profiles/ar_v3/response_schema.py:29`) and for `norm_citations`, `required_value`, `stated_value` on the normative ones; one call per Run with 4,096 output tokens (`src/auditmanager/runs/v3_worker.py:25`).
+
+### 4.3 What it would take to let a section profile emit more: a sized option list
+
+Not a recommendation. Sizes follow the plan's rule (`docs/program/PRODUCTION-READINESS-PLAN-01.md` section 1: S up to 5 files, M 6 to 15, L more than 15 or a contract reseal or a hotspot), with the files counted from the tree. Layers that every option has to pass: the **response schema** and its parser, the **prompt text** (14 `system_prompt.md`, which must keep the v1 skeleton that `tests/unit/analysis/text_profiles/test_text_profile_packages.py` reads), **stage validation** (`src/auditmanager/analysis/text/artifact.py:84` already checks the observation's category against the profile's `categories`, which today is the single constant), **finding merge** (none is written any more, so nothing to change), **UI labels** (all 12 exist), the **contract**, and the **database CHECKs**.
+
+| Option | Result | Changes | Contract / migration | Size |
+| --- | --- | --- | --- | --- |
+| P0 | keep two categories | none | none | — |
+| P1 | sections may emit the existing `documentation` value for a same-document mismatch between a scheme and its specification, a schedule and a plan (the omission pair) | per-profile categories and schema instead of the module constants (`src/auditmanager/analysis/text/prompt.py`, `profile_registry.py`, `response.py`, `adapter.py`, `stage.py`: 5 to 6 files; a `text-profile/2` key set or a code constant per section); 14 prompts and 14 `profile.json` (version `1.2.0`); 14 rebuilt recordings (`fixtures/recorded/sections/build_fixtures.py`); the expectations file and about 8 tests that read the skeleton | none: the value is in the contract and in both CHECKs; the web and XLSX labels exist | L by file count (about 55), no hotspot; widening, so the owner's go-ahead (`R-146ag` allowed only narrowing) |
+| P2 | sections propose a severity (`H-3`) | the field in the schema and parser, `artifact.py`, the insert at `src/auditmanager/findings/publication.py:49`, the severity vocabulary in 14 prompts, recordings, tests; read side, XLSX column and badge already exist | none: `FindingObservation.proposed_severity` and its column exist | L by file count, no hotspot; owner's go-ahead |
+| P3 | sections check norms (the АР v3 path per section) | per section: a reviewed clause map, pinned retrieval sets, a profile family with citations, a CITE-like stage, the corpus holding the norms (no `СП 2.13130`, no insolation norm: `K-2`); closed categories fit АР, not ЭОМ or ВК | contract (categories for non-АР norms) and migration for CHECKs and the citation partition | L+ per section; needs experts and corpus data (`D-204` is the measure for one section) |
+| P4 | new category values (`calculation`, `normative_refs`, `omission`, `coordination` …) | P1's profile-side changes plus: `src/auditmanager/api/schemas/models.py`, `src/auditmanager/api/routers/handlers.py` (category description), `src/auditmanager/findings/citation_reader.py:144`, `src/auditmanager/exports/xlsx/labels.py`; web `category-labels.ts`, `web/src/_pages/knowledge-base/ui/knowledge-base-page.tsx`, the generated client, `web/tests/guards/rendered-language.guard.test.ts`; 12 test files name the list (`grep -rl fire_safety tests`) | contract minor version and the four-artifact reseal (`contracts/api/v1/openapi.json`, `web/openapi/openapi.json`, the generated client, `web/FRONTEND_LOCK.json`); migration `0034` replacing the two CHECKs | L, contract and migration hotspots |
+| P5 | a topic facet per section (the 10 to 23 legacy topics) | a field on observation and finding, a filter in the knowledge base, prompts, recordings | contract and migration | L |
+| P6 | findings grounded in a drawing region (E4) | the vision stage and image policy (`StageId.BLOCK_ANALYSIS`, `getExecutorTaskImage`), wiring of `src/auditmanager/runs/recognised_region_input.py` and `src/auditmanager/runs/geometry_crop_item_input.py`, an evidence kind that is not a quotation, grounding of a region | contract (`Evidence` is quote-only) and migration (`finding_evidence` quote and offsets); owner's vision budget (`G-3`) | L+ |
+| P7 | cross-volume coordination (E6) | a run kind over two versions of two sections, a finding that cites both, UI | contract and migration | L+ |
+| P8 | recognised (OCR) text as marked context for the section prompts (`H-7`) | executor input, the preamble, 14 prompts, recordings | none | L by file count; sends more client text to the provider (`A-2`), so the owner's go-ahead |
+
+Reading the list. P1 and P2 are the only options with no contract change and no migration; both widen what a section reports, and `R-146ag` allowed the lanes only to narrow. P4 to P7 are contract slots. P3 is the АР path again and is held by data, not by code.
