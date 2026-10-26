@@ -740,6 +740,21 @@ class TestPublicPortsFree:
         assert completed.returncode == 0, (completed.stdout, completed.stderr)
         assert "already in use" not in completed.stderr and "NOTE" not in completed.stderr, completed.stderr
 
+    def test_a_connected_socket_on_that_port_is_not_a_listener(self, tmp_path: Path, serving: int) -> None:
+        """The table also lists connections. One whose LOCAL port is the challenge port does not stop Docker
+        binding it (a bind is refused only by a socket in the LISTEN state), so it must not stop the deploy."""
+        with socket.socket() as server:
+            server.bind(("127.0.0.1", 0))
+            server.listen(1)
+            with socket.socket() as client:
+                client.bind(("127.0.0.1", 0))
+                client.connect(server.getsockname())
+                port = client.getsockname()[1]
+                script = _stage(tmp_path)
+                completed, _ = _run(script, _env(tmp_path, serving, **_acme_settings(http_port=port)), tmp_path)
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        assert "already in use" not in completed.stderr, completed.stderr
+
     # --- the fallback: a host whose listener table cannot be read ---------------------------------------------
 
     @staticmethod
