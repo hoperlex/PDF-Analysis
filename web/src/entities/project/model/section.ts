@@ -9,42 +9,42 @@
  * order. The Russian names are this application's own, because legacy carries the codes
  * and not their expansions.
  *
- * **What a section is here, updated at `W46-WIRE` (`F-3`).** A reseal landed after this
+ * **History: `W46-WIRE` (`F-3`).** A reseal landed after this
  * module was first written and made two of its claims false: `document.section` is now a
  * real, stored, checked field (a document's version carries an optional `section`, and the
  * upload refuses a malformed one with a `422`), and the dashboard now counts published
  * documents per section, server-side (`getDashboardSummary`'s `section_breakdown`,
- * `widgets/dashboard`). Neither claim below survives as it was written:
+ * `widgets/dashboard`). Neither earlier claim survives as it was written:
  *
  *   - it is **not true** any more that "the contract has no section field anywhere" —
  *     it does, and it round-trips;
  *   - it is **not true** any more that "nothing checks a document's section" — the
  *     `422 validation_failed` on an unrecognised or blank value is exactly a check.
  *
- * **What is still true, and is the reason a section still reads as navigation here.** This
- * product's own upload form (`widgets/upload-panel`, `features/upload-document`) offers a
- * file and a display title and nothing else — no screen in this product lets a reviewer
- * name a section for a document, so every document this product has ever accepted is
- * unclassified at the storage layer that now exists to record one. `analysed` below still
- * means **"this is the section the analysis is built for"**, a rule about intake and not a
- * claim about membership: the `AR` restriction lives in the analysis prompt
- * (`src/auditmanager/analysis/text/prompt.py`) and in fixture names, not in what a document
- * is uploaded carrying. A screen built from this module still never claims a document
- * belongs to a section — that claim would now be checkable in principle, and is simply not
- * one this product's own flow ever makes true.
+ * **What a section is here now (`WEB-SECTION-COPY-01`).** A section is the value an expert
+ * confirmed for a document's current version, on the version screen (`W59-SECTION-UI-01`,
+ * `classifyDocumentVersion`). The product's upload form still names no section and needs none,
+ * so a freshly uploaded document is unclassified only until an expert confirms it. The
+ * dashboard counts documents by that confirmation, and a document whose current version is not
+ * confirmed stands in its row «Без раздела». The earlier statements that a section "reads as
+ * navigation" and that every document the product accepts is unclassified do not survive
+ * `W59-SECTION-UI-01`.
  *
  * **`W59-SECTION-SEAL-01`: fifteen, not fourteen.** The contract's `ProjectSection` gained
  * `PS` (the explanatory note, «Пояснительная записка»), distinct from `PB` (fire safety).
  * Legacy's fourteen keep their order and `PS` follows them, exactly as the backend's
- * `dashboard.repository.PROJECT_SECTIONS` does. A version now also carries an
- * expert-confirmed `classification` (stage and section) that run start routes on; whether a
- * section can run is the API's `SectionReviewOption.executable`, not the `analysed` flag
- * below, which still describes the original AR-only text prompt.
+ * `dashboard.repository.PROJECT_SECTIONS` does. A version also carries an expert-confirmed
+ * `classification` (stage and section) that run start routes on.
  *
- * Counting per section is no longer absent: `getDashboardSummary` counts published
- * documents, per section, including the unclassified bucket every product upload falls
- * into today. A section *picker* on the upload form — the only way a reviewer could change
- * that bucket — is a feature and remains out of scope (`D-107`).
+ * **How a section is analysed ({@link SectionAnalysis}).** Every one of the fifteen sections
+ * has an analysis, by one of two routes. Fourteen are analysed by the text profile the server
+ * registers for the section (`W59-SECTION-SEAL-01`: one package per code under
+ * `src/auditmanager/analysis/text/profiles/`, every code but АР). АР has no text profile and is
+ * analysed by the group of six AR v3 checks (`PROD-11-AR-V1-V2-REMOVAL-01`, `ADR-0024`); the
+ * server refuses an ordinary run for it. `analysedBy` records the route and nothing more:
+ * whether a particular version can start a run now is the API's answer
+ * (`SectionReviewOption.executable`, and for АР the status of the checked pack), not this
+ * registry's. A unit test holds the fourteen to the packages on disk.
  *
  * **`W59-SECTION-UI-01`: names and order are the owner's, not this module's.** The names are
  * the legacy ones the owner chose in poll answer `S-3` and that the backend's suggestion
@@ -76,6 +76,12 @@ export type ProjectSectionCode =
   | 'POS'
   | 'PS';
 
+/**
+ * The route that analyses a section: the section's own text profile (fourteen sections), or the
+ * group of six AR v3 checks (АР only). See this module's header. A machine value, never shown.
+ */
+export type SectionAnalysis = 'text_profile' | 'six_run_group';
+
 export interface ProjectSection {
   /**
    * The machine value: the legacy code. It is carried in `data-section` so an instrument
@@ -88,33 +94,38 @@ export interface ProjectSection {
   /** The section's name in the words a reviewer uses. */
   readonly name: string;
   /**
-   * Whether this programme's analysis is built for this section's text.
-   *
-   * True for exactly one section today. It is a statement about the analysis, not about
-   * any file: see this module's header.
+   * The route that analyses this section (see this module's header): its own text profile, or,
+   * for АР only, the group of six AR v3 checks. A statement about the analysis, not about any
+   * file or any version. It is never shown as a code; the dashboard carries it in
+   * `data-analysed-by` so an instrument can address it.
    */
-  readonly analysed: boolean;
+  readonly analysedBy: SectionAnalysis;
 }
 
-/** The section the analysis is written for, and the one the upload rule names. */
+/**
+ * The section a section picker starts on: the first of the catalogue, АР. It is a default
+ * choice and not a statement that only this section is analysed (every section is, see
+ * {@link ProjectSection.analysedBy}). The name is kept because `widgets/section-specification`
+ * imports it.
+ */
 export const ANALYSED_SECTION_CODE: ProjectSectionCode = 'AR';
 
 export const PROJECT_SECTIONS: readonly ProjectSection[] = [
-  { code: 'AR', abbr: 'АР', name: 'Архитектурные решения', analysed: true },
-  { code: 'AI', abbr: 'АИ', name: 'Архитектурные решения (интерьер)', analysed: false },
-  { code: 'KM', abbr: 'КМ', name: 'Конструкции металлические', analysed: false },
-  { code: 'KJ', abbr: 'КЖ', name: 'Конструкции железобетонные', analysed: false },
-  { code: 'OV', abbr: 'ОВ', name: 'Отопление, вентиляция и кондиционирование', analysed: false },
-  { code: 'EOM', abbr: 'ЭОМ', name: 'Электроснабжение и электрооборудование', analysed: false },
-  { code: 'VK', abbr: 'ВК', name: 'Водоснабжение и канализация', analysed: false },
-  { code: 'PT', abbr: 'ПТ', name: 'Противопожарный водопровод', analysed: false },
-  { code: 'PB', abbr: 'ПБ', name: 'Пожарная безопасность', analysed: false },
-  { code: 'SS', abbr: 'СС', name: 'Слаботочные системы', analysed: false },
-  { code: 'ITP', abbr: 'ИТП', name: 'Индивидуальный тепловой пункт', analysed: false },
-  { code: 'GP', abbr: 'ГП', name: 'Генеральный план', analysed: false },
-  { code: 'TX', abbr: 'ТХ', name: 'Технологические решения', analysed: false },
-  { code: 'POS', abbr: 'ПОС', name: 'Проект организации строительства', analysed: false },
-  { code: 'PS', abbr: 'ПЗ', name: 'Пояснительная записка', analysed: false },
+  { code: 'AR', abbr: 'АР', name: 'Архитектурные решения', analysedBy: 'six_run_group' },
+  { code: 'AI', abbr: 'АИ', name: 'Архитектурные решения (интерьер)', analysedBy: 'text_profile' },
+  { code: 'KM', abbr: 'КМ', name: 'Конструкции металлические', analysedBy: 'text_profile' },
+  { code: 'KJ', abbr: 'КЖ', name: 'Конструкции железобетонные', analysedBy: 'text_profile' },
+  { code: 'OV', abbr: 'ОВ', name: 'Отопление, вентиляция и кондиционирование', analysedBy: 'text_profile' },
+  { code: 'EOM', abbr: 'ЭОМ', name: 'Электроснабжение и электрооборудование', analysedBy: 'text_profile' },
+  { code: 'VK', abbr: 'ВК', name: 'Водоснабжение и канализация', analysedBy: 'text_profile' },
+  { code: 'PT', abbr: 'ПТ', name: 'Противопожарный водопровод', analysedBy: 'text_profile' },
+  { code: 'PB', abbr: 'ПБ', name: 'Пожарная безопасность', analysedBy: 'text_profile' },
+  { code: 'SS', abbr: 'СС', name: 'Слаботочные системы', analysedBy: 'text_profile' },
+  { code: 'ITP', abbr: 'ИТП', name: 'Индивидуальный тепловой пункт', analysedBy: 'text_profile' },
+  { code: 'GP', abbr: 'ГП', name: 'Генеральный план', analysedBy: 'text_profile' },
+  { code: 'TX', abbr: 'ТХ', name: 'Технологические решения', analysedBy: 'text_profile' },
+  { code: 'POS', abbr: 'ПОС', name: 'Проект организации строительства', analysedBy: 'text_profile' },
+  { code: 'PS', abbr: 'ПЗ', name: 'Пояснительная записка', analysedBy: 'text_profile' },
 ];
 
 /**
