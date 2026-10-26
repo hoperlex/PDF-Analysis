@@ -203,7 +203,7 @@ export function optimisationApiError(status: number, code: ErrorCode, details?: 
   return new ApiError(
     status,
     {
-      contract_version: '1.5.0',
+      contract_version: '1.6.0',
       error_code: code,
       message: 'Сообщение об отказе.',
       correlation_id: CORRELATION,
