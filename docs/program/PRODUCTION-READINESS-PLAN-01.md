@@ -12,7 +12,7 @@ implementation decision within `R-146`. After the polls (`R-146o`…`R-146z`) ev
 at commit `83600aed` (the poll showed a one-line summary of each; the mechanisms are the ADRs). `AD-18` is settled by `R-146y` as to what stands until the measurement; the choice it leaves is open.
 
 **Baseline.** The tree of `integration/ar-close-1026` including its commit `1a7f6f65` (`R-146o`…`R-146v`): `VERSION` `0.8.1`, shared contract `1.5.0`, 92 paths / 104 operations / 300 schemas,
-migration head `0032_ar_v3_run_group`, 27 error codes. No item below adds a migration, so the head does not move. The local tracking refs `origin/dev` and `origin/main` were not fetched for this plan.
+migration head `0033_ar_v3_cite_stage_id` (moved from `0032` by `D-225` after this plan was first written), 27 error codes. No item below adds a migration, so the head does not move again. The local tracking refs `origin/dev` and `origin/main` were not fetched for this plan.
 No complete `make gate` can run on the development host (`D-205`).
 
 ## 1. How to read the items
@@ -62,7 +62,7 @@ No complete `make gate` can run on the development host (`D-205`).
 
 ### PROD-04 — Database roles: migrator and application, grants as an idempotent step (`R-146n` item 1, `AD-02`)
 - **Result:** `api` and `worker` connect as a role that cannot change the schema or truncate; the migrator keeps ownership; the grants are re-applied by one idempotent step after every `migrate` and every restore, so `--no-privileges` dumps cannot leave the application without rights; the
-  integration directories of the contexts pass as the application role. **No migration is added**; the head stays `0032_ar_v3_run_group`.
+  integration directories of the contexts pass as the application role. **No migration is added**; the head stays at its present value (`0033_ar_v3_cite_stage_id`).
 - **depends_on:** PROD-03 (infra files); `AD-02` is confirmed by `R-146w` · **Hotspots:** `infra/**` (no migration head) · **Size:** L: a new `infra/deploy/apply-grants.sh`, `compose.server.yml`, `deploy.sh`, `alpha.env.example`, **`reset.sh`** (`--restore`), **`copy-serve.sh`** (`restore-db`, which drops and recreates `public`),
   **`purge-product-data.sh`** (its `api_python` runs `product_purge` with the api's restricted `DATABASE_URL`, so the `owner-may-write` guard would refuse; it passes the migrator URL), a grant-classification guard test, a restored-from-`--no-privileges`-dump test, and the application-role run of the integration suites.
   `scripts/recovery/product_purge.py` changes only if the guard's message needs it.

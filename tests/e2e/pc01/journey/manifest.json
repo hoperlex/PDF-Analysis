@@ -2086,8 +2086,8 @@
             "selector": "tr[data-section=\"AR\"][data-profile=\"builtin\"]"
           },
           {
-            "selector": "tr[data-profile=\"draft\"]",
-            "text_contains": "черновик, требует экспертной проверки"
+            "selector": "tr[data-profile=\"reviewed\"]",
+            "text_contains": "рабочая версия, проверка человеком не проводилась"
           }
         ],
         "forbids_rendered": [
