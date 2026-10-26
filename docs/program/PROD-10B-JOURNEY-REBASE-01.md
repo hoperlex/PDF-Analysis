@@ -105,7 +105,8 @@ The tests need a database for `static_token()` and for reading a stored version.
 | `prove_the_guard_can_fail.py` | 126 RED, 1 GREEN (same at base) |
 | JSON validity of the manifest and the six fixtures | ok |
 | `git diff --check` | exit 0 |
-| docs guards `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py` | see "Guards" below |
+| docs guards `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py`, on the clean committed tree | 105 passed |
+| `tests/contract/tools/test_pin_sweep.py` (names the manifest path) | 7 passed |
 
 ## Verify live (not done: no browser, no stand, no database in this lane)
 
