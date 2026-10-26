@@ -2993,11 +2993,13 @@ class SpecificationRowPage(_Object):
 
 
 class SpecificationPrices(_Object):
-    """The priced specification of a set's current AR version, or the state that stops it.
+    """The priced specification of a set's current version, or the state that stops it.
 
     The states are checked in order -- ``version_unclassified``, ``section_not_ar``,
     ``price_list_missing``, ``analysis_missing``, ``text_unavailable``,
     ``specification_too_large`` -- and each answer carries the facts read before it stopped.
+    ``section_not_ar`` is kept so that no value is removed, but it is no longer produced: a version
+    confirmed in any of the fifteen sections is read.
     """
 
     project_uid: ProjectUid

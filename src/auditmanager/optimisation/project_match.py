@@ -1,13 +1,17 @@
-"""«Спецификация и цены»: one document set's AR specification priced from the project's list.
+"""«Спецификация и цены»: one document set's specification priced from the project's list.
 
-`W60-OPT-MATCH-01`. One read, in the caller's session, composes:
+`W60-OPT-MATCH-01`; opened to every section by `OPT-PROJECT-ALL-SECTIONS-01`. One read, in the
+caller's session, composes:
 
 1. the **document set's current version**, addressed through its project (an unknown project
    is ``not_found`` ``Project``; a set of another project, or none, ``not_found``
    ``Document``);
 2. its **persisted classification** (``documents``, `W59-SECTION-SEAL-01`): the version must
-   be confirmed as section ``AR`` -- never inferred from a file name, a suggestion or the
-   set's legacy section;
+   be confirmed by an expert in one of the fifteen sections -- never inferred from a file
+   name, a suggestion or the set's legacy section. The section is carried on the answer and
+   changes nothing in how the rows are read or priced (the extraction, the matcher and the
+   price list know no section); ``section_not_ar`` is no longer produced -- the member stays
+   in :data:`STATES` because the wire enum keeps it (removing a value is a breaking change);
 3. the project's **current price-list revision** (the highest ``revision_number``) and all
    of its positions;
 4. the version's **newest published run** and that run's verified saved
@@ -49,7 +53,6 @@ __all__ = [
     "DEFAULT_ROW_PAGE",
     "MAX_ROW_PAGE",
     "RUN_STATE_PUBLISHED",
-    "SECTION_AR",
     "STATES",
     "STATE_ANALYSIS_MISSING",
     "STATE_PRICE_LIST_MISSING",
@@ -66,18 +69,19 @@ __all__ = [
     "read_specification_prices",
 ]
 
-SECTION_AR: Final[str] = "AR"
 #: The success terminal of ``audit_run`` (there is no ``succeeded`` run state).
 RUN_STATE_PUBLISHED: Final[str] = "published"
 
 STATE_READY: Final[str] = "ready"
 STATE_VERSION_UNCLASSIFIED: Final[str] = "version_unclassified"
+#: No longer produced by any read: a version confirmed in any section is read. The member stays
+#: because the wire enum (``SpecificationPrices.state``) and the pass refusal reasons keep it.
 STATE_SECTION_NOT_AR: Final[str] = "section_not_ar"
 STATE_PRICE_LIST_MISSING: Final[str] = "price_list_missing"
 STATE_ANALYSIS_MISSING: Final[str] = "analysis_missing"
 STATE_TEXT_UNAVAILABLE: Final[str] = "text_unavailable"
 STATE_SPECIFICATION_TOO_LARGE: Final[str] = "specification_too_large"
-#: In the order the preconditions are checked.
+#: In the order the preconditions are checked (``section_not_ar`` is never reached any more).
 STATES: Final[tuple[str, ...]] = (
     STATE_READY,
     STATE_VERSION_UNCLASSIFIED,
@@ -242,7 +246,7 @@ def read_specification_prices(
     documents: DocumentRepository | None = None,
     repository: OptimisationRepository | None = None,
 ) -> SpecificationPrices:
-    """The specification of the set's current AR version, priced; or its explicit state."""
+    """The specification of the set's current version, priced; or its explicit state."""
     require_reader(frozenset(actor_roles), aggregate_type=AGGREGATE_PRICE_LIST)
     try:
         project = ProjectUid.parse(project_uid)
@@ -278,8 +282,6 @@ def read_specification_prices(
     )
     if classification is None:
         return replace(answer, state=STATE_VERSION_UNCLASSIFIED)
-    if classification.section_code != SECTION_AR:
-        return replace(answer, state=STATE_SECTION_NOT_AR)
 
     revisions = repository.list_price_lists(session, str(project))
     if not revisions:

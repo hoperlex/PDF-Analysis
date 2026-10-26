@@ -2,16 +2,17 @@
 
 «Спецификация и цены»: one read addressed through the document set and its project,
 ``/projects/{project_uid}/documents/{document_uid}/specification-prices``. The server takes
-the set's **current** version, requires the expert's persisted classification to be section
-``AR``, reads the project's current price-list revision and the version's newest
-**published** run's saved text, extracts the specification rows deterministically and matches
+the set's **current** version, requires an expert's persisted classification (any of the fifteen
+sections; the section is reported and changes nothing in how the rows are read or priced), reads
+the project's current price-list revision and the version's newest **published** run's saved text, extracts the specification rows deterministically and matches
 each to the price list as ``matched``, ``ambiguous`` or ``unmatched`` with its reason.
 
 **The path is proved first**: an unknown project, or a set of another project, is
 ``404 not_found`` (`D-67`). **Then a precondition that does not hold is an answer, not an
-error**: ``200`` with one ``state`` -- ``version_unclassified``, ``section_not_ar``,
-``price_list_missing``, ``analysis_missing``, ``text_unavailable``,
-``specification_too_large`` -- and the facts read before it stopped, never an empty table.
+error**: ``200`` with one ``state`` -- ``version_unclassified``, ``price_list_missing``,
+``analysis_missing``, ``text_unavailable``, ``specification_too_large`` (``section_not_ar`` stays
+in the enum and is no longer produced) -- and the facts read before it stopped, never an empty
+table.
 A malformed identity or paging value is ``422``; a stored fact that contradicts its own
 constraints is ``500``.
 
@@ -68,10 +69,14 @@ def build_specification_price_routes(
             "layer, each matched to the project's current price-list revision as `matched`, "
             "`ambiguous` or `unmatched` with its reason (code or mark first, then the "
             "normalised name, in the same unit; never a fuzzy guess). The version must be "
-            "classified as section `AR`. A precondition that does not hold is `state` "
-            "(`version_unclassified`, `section_not_ar`, `price_list_missing`, "
-            "`analysis_missing`, `text_unavailable`, `specification_too_large`) with the "
-            "facts read so far; a path naming no such set is `404`. A price and an amount "
+            "classified by an expert in one of the fifteen sections; the section is reported "
+            "in the answer and does not change how the rows are read or priced. A "
+            "precondition that does not hold is `state` (`version_unclassified`, "
+            "`price_list_missing`, `analysis_missing`, `text_unavailable`, "
+            "`specification_too_large`) with the facts read so far; the value "
+            "`section_not_ar` stays in the enum so that no value is removed, and is no longer "
+            "produced for a confirmed section; a path naming no such set is `404`. A price "
+            "and an amount "
             "appear only on a matched row with a numeric quantity; totals are per currency "
             "over those rows only, with every other row counted by its reason. Rows are "
             "paged (`offset`, `limit`, `next_offset`); counts and totals cover every row. "

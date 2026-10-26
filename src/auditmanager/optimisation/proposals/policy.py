@@ -19,7 +19,9 @@ here, and nothing in the generator, ever writes a decision: a verdict is what an
 precondition (:data:`PASS_REFUSAL_REASONS`, in the order they are checked): the specification
 read's own states (``version_unclassified``, ``section_not_ar``, ``price_list_missing``,
 ``analysis_missing``, ``text_unavailable``, ``specification_too_large``), then
-``vendor_list_missing`` -- the AR section has neither a project list nor a global one.
+``vendor_list_missing`` -- the version's own section has neither a project list nor a global one.
+``section_not_ar`` stays in the list because the wire vocabulary keeps it, but no read produces it
+any more: a version confirmed in any section is read.
 """
 
 from __future__ import annotations

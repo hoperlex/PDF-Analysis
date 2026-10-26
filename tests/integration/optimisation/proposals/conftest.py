@@ -262,11 +262,11 @@ def global_vendors(unit: Callable[..., Any], cast: Any, entries=GLOBAL_VENDORS, 
     ).revision
 
 
-def project_vendors(unit: Callable[..., Any], cast: Any, mode: str, entries=()):
+def project_vendors(unit: Callable[..., Any], cast: Any, mode: str, entries=(), section: str = "AR"):
     return unit(
         set_project_vendor_list,
         project_uid=cast.project,
-        section_code="AR",
+        section_code=section,
         mode=mode,
         entries=list(entries),
         actor_uid=cast.expert,
