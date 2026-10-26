@@ -83,7 +83,7 @@ No assertion was removed or loosened: every refusal that still exists (`version_
 | `npx vitest run tests/guards tests/unit/styles` | 27 files, 364 passed |
 | `npx tsc --noEmit`; `npx eslint --quiet <changed files>`; `git diff --check` | exit 0; exit 0; exit 0 |
 
-The final contract run on the committed tree is in the hand-back (the last section of this file records it).
+On the final committed tree (clean `git status`): `pytest tests/contract/program tests/contract/api_v1` **394 passed** in 38.8 s; `npm --prefix web run api:verify` OK; the governance one-liner on the task file prints `[]`. Private databases: one (`optall_*`, migrated to head, 15 MB) created for the writing suites and dropped; `list` afterwards `[]`. The suites' own throw-away clones were dropped by their fixtures. Observation, not mine: ten stale `a1_tpl_*` template databases (about 120 MB, last written 2026-10-26 01:43 to 19:03 UTC, no connections) belong to earlier runs and were left alone. Free disk stayed at 1.8 to 2.0 GiB.
 
 ## Integration notes
 
@@ -103,4 +103,4 @@ The final contract run on the committed tree is in the hand-back (the last secti
 
 ## Forbidden paths untouched
 
-`git diff --name-only 6075df88..HEAD` (see the hand-back for the final list): no `bootstrap/**`, `analysis/**`, `runs/**`, `comparison/**`, `infra/**`, `fixtures/recorded/sections/**`, `tests/e2e/**`, `tests/support/**` other than `expected_facts.json`, `web/src/entities/project/**`, `web/src/widgets/dashboard/**`, root lock files, `DEBT_REGISTER.md`, rulings or ADRs; one migration only.
+`git diff --name-only 6075df88..HEAD` lists 48 paths, every one in the task file's allowed list (contract, migration, server, tests, web, docs): no `bootstrap/**`, `analysis/**`, `runs/**`, `comparison/**`, `infra/**`, `fixtures/recorded/sections/**`, `tests/e2e/**`, `tests/support/**` other than `expected_facts.json`, `web/src/entities/project/**`, `web/src/widgets/dashboard/**`, root lock files, `DEBT_REGISTER.md`, rulings or ADRs; one migration only.
