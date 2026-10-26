@@ -57,14 +57,14 @@ MIN_TEXT = 40  # characters of a reason / justification that are more than a shr
 
 # --- the tokenizer ------------------------------------------------------------------------
 
-HYPHENS = "-‐‑"
+HYPHENS = "-\u2010\u2011"  # hyphen-minus, hyphen, non-breaking hyphen
 #: A maximal run of letters and digits; an underscore is a separator (``___`` is no token).
 _RUN = r"[^\W_]+"
 #: A decimal comma or point between two digits stays inside the token (``0,000``, ``Е0,5``).
 _WORD = rf"{_RUN}(?:(?<=\d)[.,](?=\d){_RUN})*"
 TOKEN = re.compile(rf"{_WORD}(?:[{HYPHENS}]{_WORD})*")
 HYPHEN_SPLIT = re.compile(f"[{HYPHENS}]")
-CYRILLIC = re.compile(r"[Ѐ-ӿ]")
+CYRILLIC = re.compile(r"[\u0400-\u04ff]")
 #: A part of a hyphenated token that is an ordinary word: optional capital, then lower case.
 ORDINARY_WORD = re.compile(r"[А-ЯЁ]?[а-яё]{2,}")
 
