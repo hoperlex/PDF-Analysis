@@ -106,13 +106,14 @@ variable.
 
 | Command (from the worktree, `nice -n 19`) | Result |
 | --- | --- |
-| `python -m pytest -q -p no:cacheprovider tests/unit/jobs tests/unit/workers tests/contract` with the gate's three `--ignore=` | see "Final run" below |
+| `python -m pytest -q -p no:cacheprovider tests/unit/jobs tests/unit/workers tests/contract` with the gate's three `--ignore=` | 1212 passed, 19283 subtests passed in 90.7 s (final tree `efdb975b` plus this report; docs prose guards included) |
 | `… tests/integration/jobs/test_connection_limit_claim.py` | 10 passed (6 repeated runs, all green, host load average 15) |
 | `… tests/integration/workers/test_worker_slots.py` | 4 passed (3 runs, ~21–25 s each) |
 | `… tests/integration/jobs` | 64 passed, 29 errors — **all 29 are the missing object store** (`blob_store` fixture: `S3_ENDPOINT_URL` required), 0 failed |
 | `… tests/integration/workers` | 33 passed, 11 errors — all 11 the missing object store, 0 failed |
 | `… tests/integration/composition/test_settings_defaults.py test_api_token_channel.py` with dummy `S3_*` | 44 passed (without `S3_*` set in the shell, 21 tests in those two files fail with `S3_ENDPOINT_URL is unset`: environment, not the change; six other composition files that read the compose file or the env example passed without it) |
-| `git diff --check` | exit 0 |
+| `… tests/integration/jobs/test_connection_limit_claim.py tests/integration/workers/test_worker_slots.py tests/integration/workers/test_worker_composition.py tests/unit/workers` (final tree) | 73 passed in 23.8 s |
+| `git diff --check` and `git diff --check a3e83f39 HEAD` | exit 0 |
 | `docker compose --env-file infra/deploy/env/alpha.env.example -f infra/deploy/compose.server.yml config` | worker gets `AUDITMANAGER_WORKER_SLOTS: "1"`; `AUDITMANAGER_WORKER_SLOTS=4` in the shell gives `"4"` |
 
 **Not run** (needs MinIO, which the lane may not start): the pre-existing MinIO-backed tests of
@@ -193,7 +194,7 @@ Each row: the code was changed as shown, the named tests ran, the file was resto
 
 ## Instruction for the integrator
 
-1. Merge `agent/exec-par-queue-01` (7 commits on `a3e83f39`); no rebase was done. Order against
+1. Merge `agent/exec-par-queue-01` (the commits of `git log a3e83f39..HEAD` on `a3e83f39`); no rebase was done. Order against
    `EXEC-PAR-START-01` does not matter for files: this lane touches none of its paths.
 2. The change touches the composition root and `infra/**`, which `AGENTS.md` §8 case 3 lists for a
    full gate; under `R-135` that gate is deferred to the series' final candidate. Run
