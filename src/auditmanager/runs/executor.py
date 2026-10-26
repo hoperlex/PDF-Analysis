@@ -103,6 +103,8 @@ from auditmanager.analysis.public import (
     TextAnalysisOutcome,
     load_provider_config,
     run_text_analysis,
+    run_text_analysis_windows,
+    text_window_policy,
 )
 from auditmanager.analysis.public import TEXT_STAGE_VERSION
 from auditmanager.documents.public import DocumentRepository
@@ -138,6 +140,7 @@ from auditmanager.runs.retry import (
     not_attempted,
 )
 from auditmanager.runs.v3_group import TrustedPackRegistry
+from auditmanager.runs.window_reply_custody import WindowReplyCustody
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import (
     ModelCallId,
@@ -473,11 +476,19 @@ def _run_text_analysis_stage(
     call_journal: ModelCallJournal,
     profile: Any,
     call: Any = None,
+    text_character_count: int | None = None,
+    window_custody: Any = None,
 ) -> tuple[StageResult, Mapping[str, Any] | None, AttemptSummary]:
     """Run ``text_analysis``, retrying transport failures, and publish its artifact.
 
     ``profile`` is the run's pinned text profile, resolved before any effect
     (`W59-SECTION-SEAL-01`): its prompt bundle is the one every attempt sends.
+
+    ``text_character_count`` (`SECTION-CHUNKED-ANALYSIS-01`) is the version's recorded count. A count
+    above the one-call budget of the connection's model and the run's ceiling analyses the text in
+    whole-page windows (``run_text_analysis_windows``, with ``window_custody``); no count, or a count not
+    above the budget, is the one call it always was, through the same ``run_text_analysis``. The retry
+    ladder below is the same for both: a re-invoked windowed stage recovers the windows it finished.
 
     Returns the stage result, the observations document, and the attempt tally.
 
@@ -530,6 +541,14 @@ def _run_text_analysis_stage(
             blob_store, parse_blob_id(block_ref.blob_id), expected_role=ROLE_BLOCK_INDEX
         )
 
+    # Decided once, before the first attempt: the predicate is the old refusal's (a count above the
+    # per-call budget), so every run the budget used to admit goes through `run_text_analysis` untouched.
+    window_policy = text_window_policy(
+        text_character_count=text_character_count,
+        model_id=provider_config.model_id,
+        ceiling_usd=provider_config.run_cost_ceiling_usd,
+    )
+
     while True:
         attempt = ledger.attempts + 1
         # The wait belongs to the attempt that is about to run, and is taken before it
@@ -540,21 +559,38 @@ def _run_text_analysis_stage(
         if waited:
             sleep(waited)
 
-        outcome = run_text_analysis(
-            run_id=RunId.parse(run_id),
-            text_layer_document=text_layer_document,
-            adapter=adapter,
-            config=provider_config,
-            document_graph=graph_document,
-            block_index_document=block_index_document,
-            profile=profile,
-            # One meter for the whole run, supplied by the caller above. Building it here
-            # would give every attempt a fresh USD 1.00, which is precisely the reading of
-            # OD-03 that a retry must not be able to buy.
-            meter=cost_meter,
-            call_journal=call_journal,
-            call=call,
-        )
+        if window_policy is None:
+            outcome = run_text_analysis(
+                run_id=RunId.parse(run_id),
+                text_layer_document=text_layer_document,
+                adapter=adapter,
+                config=provider_config,
+                document_graph=graph_document,
+                block_index_document=block_index_document,
+                profile=profile,
+                # One meter for the whole run, supplied by the caller above. Building it here
+                # would give every attempt a fresh USD 1.00, which is precisely the reading of
+                # OD-03 that a retry must not be able to buy.
+                meter=cost_meter,
+                call_journal=call_journal,
+                call=call,
+            )
+        else:
+            outcome = run_text_analysis_windows(
+                run_id=RunId.parse(run_id),
+                text_layer_document=text_layer_document,
+                adapter=adapter,
+                config=provider_config,
+                document_graph=graph_document,
+                block_index_document=block_index_document,
+                profile=profile,
+                # The same one meter: the ceiling binds across every window of every attempt.
+                meter=cost_meter,
+                call_journal=call_journal,
+                call=call,
+                policy=window_policy,
+                custody=window_custody,
+            )
 
         # Complete responses were committed by ``call_journal`` before parsing reached
         # this point. A live transport exception leaves an explicit outcome-unknown
@@ -1068,6 +1104,12 @@ def _execute_run_body(
                 ),
                 profile=text_profile,
                 call=binding.call,
+                text_character_count=version.text_character_count,
+                window_custody=None if version.text_character_count is None else WindowReplyCustody(
+                    session=session, jobs=job_repo, authority=authority, store=text_store,
+                    mode=binding.adapter.provider_mode,
+                    provider="anthropic" if binding.call is None else binding.call.provider_label,
+                ),
             )
         _persist_and_bind(
             session,

@@ -61,6 +61,13 @@ replays the run that key created (or answers ``idempotency_key_reuse`` or ``..._
 A client retrying an accepted start must be told what happened, not that the version it
 already started has become too large for today's configuration.
 
+**Windows (`SECTION-CHUNKED-ANALYSIS-01`).** ``input_budget_characters`` is the budget of **one model
+call**. A section run above it is analysed in whole-page windows of at most that size, so these two
+commands (not the AR v3 group, which keeps the one-call refusal) refuse a count above
+``MAX_ANALYSIS_WINDOWS`` windows' worth, ``input_budget_characters * MAX_ANALYSIS_WINDOWS``, and the
+refusal's ``budget_characters`` is that figure. A count not above the one-call budget is the run it always
+was. The stage refuses, before any call, a text that packs into more windows than the limit.
+
 ``input_budget_characters`` is a keyword that defaults to ``None`` so the many callers that
 predate the budget stay untouched. ``None`` means *no configuration* and is reachable only
 from tests: the served application derives the budget once at start-up and always passes it
@@ -108,6 +115,7 @@ from typing import Any, Callable, Final, Mapping
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
+from auditmanager.analysis.public import MAX_ANALYSIS_WINDOWS, windowed_budget_characters
 from auditmanager.documents.public import DocumentRepository
 from auditmanager.norms.public import current_snapshot
 from auditmanager.jobs.public import JobRepository, append_execution_event
@@ -432,6 +440,28 @@ def _refuse_over_budget(
         )
 
 
+def _refuse_over_window_budget(
+    character_count: int | None, input_budget_characters: int | None
+) -> None:
+    """``analysis_input_budget_exceeded`` when the version's text is above ``MAX_ANALYSIS_WINDOWS`` windows.
+
+    The section runs' counterpart of :func:`_refuse_over_budget`: ``input_budget_characters`` is the
+    budget of one call, a window is never larger, and the limit is that many windows. Strictly above is
+    refused (a count exactly at the limit is accepted); ``None`` on either side is accepted, as there.
+    ``budget_characters`` in the refusal is the limit, so the two integers the client sees are the version's
+    count and the most a run takes.
+    """
+    if input_budget_characters is None or character_count is None:
+        return
+    limit = windowed_budget_characters(input_budget_characters, MAX_ANALYSIS_WINDOWS)
+    if character_count > limit:
+        raise DomainError(
+            ErrorCode.ANALYSIS_INPUT_BUDGET_EXCEEDED,
+            character_count=int(character_count),
+            budget_characters=int(limit),
+        )
+
+
 def _chosen_executor_unserved() -> DomainError:
     """A named executor and no freezer to honour it (the ``environment`` source, or a bare
     wiring): refused, because running the work on the process's own adapter instead would be the
@@ -572,7 +602,7 @@ def start_audit_run(
         frozen = _freeze_for(session, connection_route, executor_connection_id)
         budget = frozen.input_budget_characters
     if budget is not None and known is None:
-        _refuse_over_budget(_version.text_character_count, budget)
+        _refuse_over_window_budget(_version.text_character_count, budget)
 
     basis = input_basis_digest(
         version_uid=str(resolved_version),
@@ -821,7 +851,7 @@ def reaudit_run(
             frozen = _freeze_for(session, connection_route, chosen_connection_id)
             budget = frozen.input_budget_characters
         if budget is not None:
-            _refuse_over_budget(source_version.text_character_count, budget)
+            _refuse_over_window_budget(source_version.text_character_count, budget)
     claimed = ledger.begin(
         session, command_type="reaudit_run",
         idempotency_key=IdempotencyKey(idempotency_key),
