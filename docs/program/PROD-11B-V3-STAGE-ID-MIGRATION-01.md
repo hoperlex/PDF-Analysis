@@ -100,7 +100,7 @@ The what-if group, its third source version and its `ALTER TABLE` (`_widen_stage
 | `tests/integration/runs/test_v3_saved_text_layer_probe.py` | 13 passed (15 before) |
 | `tests/integration/db/test_ar_v3_cite_stage_id_migration.py` | 8 passed |
 | `tests/contract/analysis_packages` | 52 passed |
-| `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py` (clean committed tree) | see the next section |
+| `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py` (clean committed tree) | 104 passed, 1 failed: `test_the_scanned_docs_state_the_migration_head_this_tree_has` (the two documents below; before the migration the same run was 103 passed with the two stale heads and the task-file declaration fixed since) |
 | governance one-liner on the task file | `[]` |
 | `git diff --check 3f36f664..HEAD` | exit 0 |
 
