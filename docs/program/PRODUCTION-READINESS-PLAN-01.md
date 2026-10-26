@@ -142,7 +142,7 @@ No complete `make gate` can run on the development host (`D-205`).
 - **Check:** `infra/deploy/readiness.sh | grep -E 'readiness OK +(provider-mode|executor-source)'` prints both lines; the probe report carries one `reported_model:` line per pinned model (a documentation check: it proves the probe ran, not that the strings match).
 
 ### PROD-14 — The other 14 sections to full versions (`R-146l`, `R-146v`): the primary development task until the beta
-Definition (`AD-15`, confirmed by `R-146v`, **not the recommended option**): a section is full when an expert has reviewed its profile and it has left `draft`. **No non-synthetic field case is required and the recorded cases stay synthetic.** The accepted risk is `A-5`.
+Definition (`AD-15`, confirmed by `R-146v` and **narrowed by `R-146ag`**, both not the recommended option): a section is full when a lane has answered every open question of its record with a written decision, rebuilt its recording and moved its expectations line to `reviewed`; **no human reviews it** (`A-7`). The sentence that follows is the original wording of `R-146v`, kept for the record: a section is full when an expert has reviewed its profile and it has left `draft`. **No non-synthetic field case is required and the recorded cases stay synthetic.** The accepted risk is `A-5`.
 
 - **PROD-14.0 (Sonnet lane, first):** make the status and version pins data-driven. Four shared files assert them: `tests/unit/analysis/test_text_profile_registry.py` (`draft` for named sections), `tests/unit/analysis/text_profiles/test_text_profile_packages.py` (**lines 173-174 and 197 assert
   `profile_version == "1.0.0"` and `status == "draft"` for every package, PB included**), `tests/integration/composition/test_analysis_profiles_over_http.py`, and `web/tests/unit/analysis-settings/analysis-settings.test.ts`. One lane makes them read an expectations file with one line per section (code, status, version), so a section lane changes one line of one file and its own
@@ -228,7 +228,7 @@ Rules: no lane starts in a wave that names its hotspot for another lane; no wave
 
 ## 5. The accepted-risk register
 
-`A-1` to `A-3` and `A-5` are the owner's (`R-146b`, `R-146f`, `R-146h`, `R-146v`); `A-4` is the architect's consequence of `R-146a` and `R-146b`. The reopen triggers of `A-2`, `A-3` and `A-4` are confirmed by `R-146w` (`AD-16`); the trigger of `A-5` is given with `R-146v`'s application.
+`A-1` to `A-3`, `A-5`, `A-6` and `A-7` are the owner's (`R-146b`, `R-146f`, `R-146h`, `R-146v`, `R-146ae`, `R-146ag`); `A-4` is the architect's consequence of `R-146a` and `R-146b`. The reopen triggers of `A-2`, `A-3` and `A-4` are confirmed by `R-146w` (`AD-16`); the trigger of `A-5` is given with `R-146v`'s application.
 
 | Id | Risk, stated plainly | Owner's words | Reopen trigger |
 | --- | --- | --- | --- |
@@ -237,6 +237,9 @@ Rules: no lane starts in a wave that names its hotspot for another lane; no wave
 | A-3 | No machine checks a push and no scan runs unless a person runs it before a release; `D-122` stays open, and nothing scans the source-built MinIO image (`D-119`). | `R-146h` | confirmed (`R-146w`): a published advisory for a component in `uv.lock`, `web/package-lock.json` or a pinned image; any release to users outside the owner's organisation |
 | A-4 | One host, no failover, no maintained copy of the database or the bucket off that host; a host loss ends the service and may end the data. | consequence of `R-146a`, `R-146b` | confirmed (`R-146w`): as `A-1`, and any promise of a recovery time or point to a client |
 | A-5 | When the 14 sections become full, the quality of their output on real text is unmeasured: a section leaves `draft` when an expert has reviewed its profile, no non-synthetic field case is required, recorded cases stay synthetic. | `R-146v` (not the recommended option) | the first section whose real-text output an expert rejects, or the first client complaint |
+
+| A-6 | The MinIO in the stack is built from source with an archived upstream and its volume is not inventoried; no scan covers it. | `R-146ae` (not the recommended option) | a published advisory against MinIO, any loss of objects, or a client asking for a storage statement |
+| A-7 | The status `reviewed` on the 14 section profiles carries no human review (neither an expert nor the owner); it is the outcome of a lane's written decisions on the open questions of each record and a judge's read. | `R-146ag` (not the recommended option) | the first section whose real-text output a human rejects, any client-facing statement that calls these profiles verified, or the owner naming experts (`OD-18`) |
 
 Not accepted and therefore not a risk register entry: `R-146n` item 4 (no restriction of routing or substitution); it is the cause of `A-2`.
 
@@ -255,20 +258,27 @@ Not accepted and therefore not a risk register entry: `R-146n` item 4 (no restri
 | `R-146x` | `AD-17`: the full `R-93` attestation stays after 1.0 |
 | `R-146y` | `AD-18`: measure first (`PROD-20`); the watchdog stays 900 s and the typed refusal applies until the owner chooses |
 | `R-146z` | `AD-19`: only the published seeded pair fails the deploy |
+| `R-146ac` | the server name is `audit.135.106.164.147.sslip.io` (the live stand's name); `PROD-01` is released; the shared-zone rate-limit risk is recorded |
+| `R-146ad` | the VPS has 4 GB RAM; `AD-04` is measured within it |
+| `R-146ae` | `PROD-19`: MinIO stays without inventory; `A-6` |
+| `R-146af` | `PROD-13`: the integrator runs the model-identity probe locally via a Sonnet subagent at minimum cost, credential from the environment only |
+| `R-146ag` | `AD-15` narrowed: a section is full without any human review; `A-7` |
+| `R-146ah` | no database migration for the sections |
+| `R-146ai` | at most four section lanes at a time |
 
 ## 7. Decisions still open
 
-1. `AD-04`: memory and log limits from a VPS measurement, no number fixed now (not polled).
-2. The ACME mechanism of `AD-01` is confirmed by `R-146aa` (the ACME client container, the three listeners, the 14-day expiry check); what remains for `PROD-01` is the server name (`R-146ab`).
+1. `AD-04`: memory and log limits from a measurement within the 4 GiB host (`R-146ad`); the numbers come from `PROD-05a`.
+2. Nothing: the ACME mechanism is confirmed (`R-146aa`) and the server name is given (`R-146ac`); `PROD-01` is released.
 3. The `AD-18` choice after `PROD-20`'s measurement: raise the 900-second watchdog or a page limit.
-4. `PROD-19`: the MinIO lifecycle (keep the source-built image or qualify another S3 implementation, `D-119`, `D-123`).
+4. `PROD-19`: settled as an accepted risk (`R-146ae`, `A-6`); it reopens on its trigger.
 5. The legal-hold authority and the classification labels (`ADR-0014`).
 6. The licensing review before any external corpus-backed release (`NORM-Q04`).
 7. Whether beta users are internal or external (`D-4.1`).
-8. The measured size of the VPS (`PROD-05`).
+8. Nothing: the VPS has 4 GB RAM (`R-146ad`); disk and vCPU were not given.
 9. Off-host custody of anything (dumps, key ring, bucket): not asked.
 10. A second person to run the stand.
-11. Who the section experts are (`OD-18`).
+11. Who the section experts are (`OD-18`): not needed while `R-146ag` stands.
 
 ## 8. What this plan does not establish
 
