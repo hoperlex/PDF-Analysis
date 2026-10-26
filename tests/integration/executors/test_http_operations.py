@@ -88,7 +88,7 @@ def _refusal(call: Any) -> DomainError:
 
 def test_only_a_revision_probed_ok_on_its_current_key_can_be_routed(session, fake) -> None:  # type: ignore[no-untyped-def]
     rings = support.make_rings()
-    connection = support.seed_connection(session, rings, fake.base_url(), probe=None, routed=False)
+    connection = support.seed_connection(session, rings, fake.vpn_url(), probe=None, routed=False)
     refused = _refusal(lambda: support.route(session, connection.connection_id))
     assert refused.code.value == "conflict"
     assert refused.detail_fields == {"conflict_reason": "connection_not_probed"}
@@ -106,7 +106,7 @@ def test_only_a_revision_probed_ok_on_its_current_key_can_be_routed(session, fak
     assert not is_probed_ok(session, store, record, revision)
     support.mark_probe(session, connection.connection_id)
     assert is_probed_ok(session, store, record, revision)
-    new_revision = support.revise(session, connection.connection_id, fake.base_url("/v2"))
+    new_revision = support.revise(session, connection.connection_id, fake.vpn_url("/v2"))
     assert new_revision != connection.revision_id
     assert freeze_connection_error(session) == "executor_route_missing"
 
@@ -164,10 +164,10 @@ def test_a_key_opens_only_for_the_destination_of_the_revision_it_is_bound_for(
     from auditmanager.executors.public import SecretUnreadableError
 
     rings = support.make_rings()
-    connection = support.seed_connection(session, rings, fake.base_url())
-    same_origin = support.revise(session, connection.connection_id, fake.base_url("/v2"))
+    connection = support.seed_connection(session, rings, fake.vpn_url())
+    same_origin = support.revise(session, connection.connection_id, fake.vpn_url("/v2"))
     moved = support.revise(session, connection.connection_id,
-                           fake.base_url().replace("gateway.example.test", "other.example.test"))
+                           fake.vpn_url().replace("10.8.0.2", "10.8.0.3"))
     for revision_id in (connection.revision_id, same_origin):
         bind_connection(session, revision_id, ring=rings.private, policy=fake.policy(), context=None)
     with pytest.raises(SecretUnreadableError):
@@ -177,8 +177,30 @@ def test_a_key_opens_only_for_the_destination_of_the_revision_it_is_bound_for(
 # -- import-env ----------------------------------------------------------------------------------
 
 
+class _LoopbackAllowed(DestinationPolicy):
+    """The harness' own server listens on loopback. ``import_env`` always names ``transport:
+    direct`` and `F-15` admits plain ``http://`` there for a loopback name alone, so this suite
+    names the server by its loopback address and lets the destination rules treat that one
+    class as public. Every other class (private, link-local, the compose network) still refuses."""
+
+    def classify(self, address: Any) -> str:
+        found = super().classify(address)
+        return "public" if found == "loopback" else found
+
+
+def _loopback_policy(fake: Any) -> DestinationPolicy:
+    inner = fake.policy()
+    return _LoopbackAllowed(
+        allowed_hosts=inner.allowed_hosts, resolver=inner.resolver, dial=inner.dial,
+        networks=inner.networks)
+
+
+def _loopback_url(fake: Any) -> str:
+    return f"http://127.0.0.1:{fake.port}/agent/v1"
+
+
 def _environ(fake: Any, **changes: str) -> dict[str, str]:
-    values = {"PROXY_LLM_BASE_URL": fake.base_url(), "PROXY_LLM_TOKEN": support.KEY,
+    values = {"PROXY_LLM_BASE_URL": _loopback_url(fake), "PROXY_LLM_TOKEN": support.KEY,
               "PROXY_LLM_MODEL": support.GATEWAY_MODEL}
     values.update(changes)
     return values
@@ -188,7 +210,7 @@ def test_import_env_makes_the_first_connection_probes_routes_and_is_idempotent(
     session, fake  # type: ignore[no-untyped-def]
 ) -> None:
     rings = support.make_rings()
-    first = import_env(_factory(session), _environ(fake), ring=rings.private, policy=fake.policy())
+    first = import_env(_factory(session), _environ(fake), ring=rings.private, policy=_loopback_policy(fake))
     assert first.created and first.probe_outcome == "ok" and first.routed
     store = ExecutorRepository()
     connection = store.get_connection(session, first.connection_id)
@@ -196,16 +218,16 @@ def test_import_env_makes_the_first_connection_probes_routes_and_is_idempotent(
     route = resolve_route(session, "text_analysis")
     assert route.route.primary_connection_id == first.connection_id
     assert route.primary.settings.gateway_model == support.GATEWAY_MODEL
-    assert route.primary.settings.base_url == fake.base_url()
+    assert route.primary.settings.base_url == _loopback_url(fake)
     # The key is sealed, and the worker opens it for the revision's address.
     bound = bind_connection(session, route.primary.revision_id, ring=rings.private,
-                            policy=fake.policy(), context=None)
+                            policy=_loopback_policy(fake), context=None)
     bound.adapter.complete(ModelRequest(model_id=support.PIN.model_id, body={
         "max_tokens": 4, "messages": [{"role": "user", "content": "x"}]}))
     assert fake.requests[-1]["authorization"] == f"Bearer {support.KEY}"
     # A second run is a no-op that names the existing connection.
     count = session.execute(text("SELECT count(*) FROM executor_connection")).scalar_one()
-    second = import_env(_factory(session), _environ(fake), ring=rings.private, policy=fake.policy())
+    second = import_env(_factory(session), _environ(fake), ring=rings.private, policy=_loopback_policy(fake))
     assert (second.created, second.connection_id) == (False, first.connection_id)
     assert session.execute(text("SELECT count(*) FROM executor_connection")).scalar_one() == count
 
@@ -218,9 +240,9 @@ def test_worker_bootstrap_lists_openrouter_and_preserves_codex_route_with_image_
     # The suite rolls each test back, but a committed connection of another suite (the dump
     # tests commit theirs) stays in the shared database: count what this test adds, not the table.
     before = len(store.list_connections(session))
-    codex = support.seed_connection(session, rings, fake.base_url(), name="Codex")
+    codex = support.seed_connection(session, rings, fake.vpn_url(), name="Codex")
     first = import_env(
-        _factory(session), _environ(fake), ring=rings.private, policy=fake.policy(),
+        _factory(session), _environ(fake), ring=rings.private, policy=_loopback_policy(fake),
         queue_only=True,
     )
     assert first.created and first.probe_outcome is None and not first.routed
@@ -236,7 +258,7 @@ def test_worker_bootstrap_lists_openrouter_and_preserves_codex_route_with_image_
                                rate_check="not_reported")
     assert is_probed_ok(session, store, connection, revision)
     second = import_env(
-        _factory(session), _environ(fake), ring=rings.private, policy=fake.policy(),
+        _factory(session), _environ(fake), ring=rings.private, policy=_loopback_policy(fake),
         queue_only=True,
     )
     assert not second.created and second.connection_id == first.connection_id
@@ -250,7 +272,7 @@ def test_worker_bootstrap_lists_openrouter_and_preserves_codex_route_with_image_
                   "portal_block_id": "blk_" + "a" * 32, "sha256": digest,
                   "size_bytes": len(png), "media_type": "image/png"}
     bound = bind_connection(session, revision.revision_id, ring=rings.private,
-                            policy=fake.policy(), context=None)
+                            policy=_loopback_policy(fake), context=None)
     bound.adapter.complete(ModelRequest(model_id=support.PIN.model_id, body={
         "max_tokens": 4, "messages": [{"role": "user", "content": "view"}],
         "images": [descriptor],
@@ -267,10 +289,10 @@ def test_import_env_refuses_a_stub_model_and_does_not_route_a_refused_probe(sess
     try:
         assert "gateway stub" in str(_refusal_op(lambda: import_env(
             _factory(session), _environ(html, PROXY_LLM_MODEL="proxy"), ring=rings.private,
-            policy=html.policy())))
+            policy=_loopback_policy(html))))
         assert "AUDITMANAGER_SECRETS_KEYS" in str(_refusal_op(lambda: import_env(
-            _factory(session), _environ(html), ring=None, policy=html.policy())))
-        report = import_env(_factory(session), _environ(html), ring=rings.private, policy=html.policy())
+            _factory(session), _environ(html), ring=None, policy=_loopback_policy(html))))
+        report = import_env(_factory(session), _environ(html), ring=rings.private, policy=_loopback_policy(html))
     finally:
         html.stop()
     assert (report.created, report.probe_outcome, report.routed) == (True, "ip_refused", False)
@@ -290,7 +312,7 @@ def test_rewrap_reseals_to_the_active_key_keeps_the_destination_and_the_call_sti
     session, fake  # type: ignore[no-untyped-def]
 ) -> None:
     old, new = support.make_rings("k1"), support.make_rings("k2")
-    connection = support.seed_connection(session, old, fake.base_url())
+    connection = support.seed_connection(session, old, fake.vpn_url())
     both = load_private_ring(f"k1:{old.private_text},k2:{new.private_text}", "k2")
     store = ExecutorRepository()
     before = store.current_secrets(session, [connection.connection_id])[connection.connection_id][0]
@@ -324,7 +346,7 @@ def test_rewrap_names_a_secret_whose_key_id_is_not_in_the_ring_and_never_skips_i
     session, fake  # type: ignore[no-untyped-def]
 ) -> None:
     lost, active = support.make_rings("k0"), support.make_rings("k2")
-    connection = support.seed_connection(session, lost, fake.base_url())
+    connection = support.seed_connection(session, lost, fake.vpn_url())
     report = rewrap(_factory(session), ring=load_private_ring(f"k2:{active.private_text}", "k2"))
     secret = ExecutorRepository().current_secrets(
         session, [connection.connection_id])[connection.connection_id][0]

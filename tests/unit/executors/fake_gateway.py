@@ -21,6 +21,9 @@ from auditmanager.executors.destinations import DestinationPolicy
 #: A public address (not a documentation range, which ``ipaddress`` treats as non-global).
 PUBLIC_ADDRESS = "93.184.216.34"
 HOST = "gateway.example.test"
+#: A private address on a ``vpn`` route: what a plain ``http://`` connection may name
+#: (`SEC-RUNNER-CAP-01`, `F-15`). :meth:`FakeGateway.policy` dials any address as the server.
+VPN_HOST = "10.8.0.2"
 
 OBSERVATIONS = json.dumps({"observations": []})
 
@@ -148,6 +151,11 @@ class FakeGateway:
     def base_url(self, path: str = "/agent/v1", scheme: str = "http") -> str:
         """The address a connection names; it is never the loopback address the server has."""
         return f"{scheme}://{HOST}:{self.port}{path}"
+
+    def vpn_url(self, path: str = "/agent/v1") -> str:
+        """The address a revision may name for this server over plain ``http://``: a private
+        literal, which ``validate_settings`` admits for ``transport: vpn`` only."""
+        return f"http://{VPN_HOST}:{self.port}{path}"
 
     def policy(self, **overrides: Any) -> DestinationPolicy:
         """A policy under which ``HOST`` resolves to a public address that is dialled as this

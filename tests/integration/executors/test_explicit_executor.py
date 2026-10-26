@@ -114,8 +114,8 @@ def test_a_named_start_freezes_that_connection_not_the_route_and_the_status_says
     rings = support.make_rings()
     fake = FakeGateway().start()
     try:
-        routed = support.seed_connection(session, rings, fake.base_url(), name="Маршрут")
-        named = support.seed_connection(session, rings, fake.base_url("/b"), name="Выбранный", routed=False)
+        routed = support.seed_connection(session, rings, fake.vpn_url(), name="Маршрут")
+        named = support.seed_connection(session, rings, fake.vpn_url("/b"), name="Выбранный", routed=False)
         providers = _providers(rings)
 
         chosen = _start(session, seeded, new_key("named"), providers,
@@ -144,8 +144,8 @@ def test_a_named_start_takes_the_current_revision_not_the_one_the_route_was_prob
     rings = support.make_rings()
     fake = FakeGateway().start()
     try:
-        named = support.seed_connection(session, rings, fake.base_url(), routed=False)
-        later = support.revise(session, named.connection_id, fake.base_url("/moved"))
+        named = support.seed_connection(session, rings, fake.vpn_url(), routed=False)
+        later = support.revise(session, named.connection_id, fake.vpn_url("/moved"))
         support.mark_probe(session, named.connection_id)
         started = _start(session, seeded, new_key("current"), _providers(rings),
                          executor_connection_id=named.connection_id)
@@ -162,19 +162,19 @@ def test_a_connection_that_cannot_serve_refuses_the_start_and_writes_nothing(
     fake = FakeGateway().start()
     try:
         # A usable primary and standby, so a fallback would have somewhere to go.
-        primary = support.seed_connection(session, rings, fake.base_url(), name="primary")
-        standby = support.seed_connection(session, rings, fake.base_url("/s"), name="standby", routed=False)
+        primary = support.seed_connection(session, rings, fake.vpn_url(), name="primary")
+        standby = support.seed_connection(session, rings, fake.vpn_url("/s"), name="standby", routed=False)
         support.route(session, primary.connection_id, standby.connection_id)
         providers = _providers(rings)
         if how == "unknown":
             target, expected = "exc_01M2545JSD15ETSNNV904X991N", ErrorCode.VALIDATION_FAILED
         else:
             seeded_connection = support.seed_connection(
-                session, rings, fake.base_url("/x"), name=how, routed=False,
+                session, rings, fake.vpn_url("/x"), name=how, routed=False,
                 probe=None if how == "unprobed" else ("credential_refused" if how == "probe_failed" else "ok"))
             target, expected = seeded_connection.connection_id, ErrorCode.DEPENDENCY_UNAVAILABLE
             if how == "revised_unprobed":
-                support.revise(session, target, fake.base_url("/y"))
+                support.revise(session, target, fake.vpn_url("/y"))
             if how == "archived":
                 archive_connection(session, connection_id=target, roles=support.ADMIN_ROLES,
                                    idempotency_key=support.unique(), actor_uid=support.ACTOR)
@@ -193,8 +193,8 @@ def test_the_same_key_with_another_executor_is_a_conflict_and_with_the_same_one_
     rings = support.make_rings()
     fake = FakeGateway().start()
     try:
-        first = support.seed_connection(session, rings, fake.base_url(), name="first")
-        second = support.seed_connection(session, rings, fake.base_url("/2"), name="second", routed=False)
+        first = support.seed_connection(session, rings, fake.vpn_url(), name="first")
+        second = support.seed_connection(session, rings, fake.vpn_url("/2"), name="second", routed=False)
         providers = _providers(rings)
         key = new_key("idempotent")
         started = _start(session, seeded, key, providers, executor_connection_id=first.connection_id)
@@ -218,14 +218,14 @@ def test_a_repeat_of_a_named_run_keeps_the_executor_and_is_refused_once_it_canno
     rings = support.make_rings()
     fake = FakeGateway().start()
     try:
-        route_one = support.seed_connection(session, rings, fake.base_url(), name="route one")
-        named = support.seed_connection(session, rings, fake.base_url("/n"), name="named", routed=False)
+        route_one = support.seed_connection(session, rings, fake.vpn_url(), name="route one")
+        named = support.seed_connection(session, rings, fake.vpn_url("/n"), name="named", routed=False)
         providers = _providers(rings)
         source = _start(session, seeded, new_key("source"), providers,
                         executor_connection_id=named.connection_id)
         _terminal(session, source.run_id)
         # The route moves on: today's route is no longer the named connection (nor the first).
-        route_two = support.seed_connection(session, rings, fake.base_url("/r2"), name="route two")
+        route_two = support.seed_connection(session, rings, fake.vpn_url("/r2"), name="route two")
 
         def repeat(label: str) -> Any:
             return reaudit_run(
@@ -241,7 +241,7 @@ def test_a_repeat_of_a_named_run_keeps_the_executor_and_is_refused_once_it_canno
         assert event["connection_id"] == named.connection_id, "so the repeat's own repeat keeps it"
 
         # The named connection loses its probe (a new revision): the repeat is refused.
-        support.revise(session, named.connection_id, fake.base_url("/n2"))
+        support.revise(session, named.connection_id, fake.vpn_url("/n2"))
         before = _counts(session)
         with pytest.raises(DomainError) as refused:
             repeat("repeat-2")
@@ -258,11 +258,11 @@ def test_a_repeat_of_a_run_that_followed_the_route_follows_todays_route(
     rings = support.make_rings()
     fake = FakeGateway().start()
     try:
-        support.seed_connection(session, rings, fake.base_url(), name="route one")
+        support.seed_connection(session, rings, fake.vpn_url(), name="route one")
         providers = _providers(rings)
         source = _start(session, seeded, new_key("routed-source"), providers)
         _terminal(session, source.run_id)
-        route_two = support.seed_connection(session, rings, fake.base_url("/r2"), name="route two")
+        route_two = support.seed_connection(session, rings, fake.vpn_url("/r2"), name="route two")
         again = reaudit_run(
             session, source_run_id=source.run_id, roles=ADMIN, idempotency_key=new_key("routed-repeat").value,
             provider_mode="live", connection_route=providers.freeze,

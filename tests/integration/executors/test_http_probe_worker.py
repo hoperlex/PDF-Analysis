@@ -84,7 +84,7 @@ def _run_probe(session: Any, rings: Any, connection_id: str, policy: Destination
 
 def _seed(session: Any, rings: Any, gateway: Any, **changes: Any) -> Any:
     return support.seed_connection(
-        session, rings, gateway.base_url(), probe=None, routed=False, **changes)
+        session, rings, gateway.vpn_url(), probe=None, routed=False, **changes)
 
 
 def test_a_good_gateway_is_ok_and_the_row_carries_what_the_screen_shows(session, gateway) -> None:  # type: ignore[no-untyped-def]
@@ -126,13 +126,13 @@ def test_a_connection_without_a_key_or_with_a_key_for_another_address_is_secret_
     bare = create_connection(
         session, kind="http_api", display_name="no key", roles=support.ADMIN_ROLES,
         idempotency_key=support.unique(), actor_uid=support.ACTOR)
-    support.revise(session, bare.connection_id, fake.base_url())
+    support.revise(session, bare.connection_id, fake.vpn_url())
     assert _run_probe(session, rings, bare.connection_id, fake.policy())["outcome"] == "secret_unreadable"
     # A key entered for one address does not open for the next revision's.
     moved = _seed(session, rings, fake, name="moved")
     # (A new path on the same origin keeps the key readable; another host unbinds it.)
     support.revise(session, moved.connection_id,
-                   fake.base_url().replace("gateway.example.test", "other.example.test"))
+                   fake.vpn_url().replace("10.8.0.2", "10.8.0.3"))
     row = _run_probe(session, rings, moved.connection_id, fake.policy())
     assert row["outcome"] == "secret_unreadable" and fake.requests == []
     # ... and a worker without the ring opens nothing.

@@ -31,8 +31,13 @@ POLICY = DestinationPolicy(resolver=lambda host, port: ["93.184.216.34"], networ
 MODEL = "anthropic/claude-opus-5"
 
 
-def revision(gateway: Any, flavour: str = "openai_chat", host_key: str | None = "pin") -> RevisionRecord:
-    base = gateway.base_url("/api/v1" if flavour == "openai_chat" else "")
+def revision(gateway: Any, flavour: str = "openai_chat", host_key: str | None = "pin", *,
+             plain_loopback: bool = False) -> RevisionRecord:
+    path = "/api/v1" if flavour == "openai_chat" else ""
+    # `F-15`: a tunnel carries plain http only to the remote host's own loopback. The tests that
+    # go through `destination_for` (the resolver, the probe worker) name it; the ones that call
+    # the adapter itself keep the public name the remote host would be told to dial.
+    base = f"http://localhost:{gateway.port}{path}" if plain_loopback else gateway.base_url(path)
     return RevisionRecord("excr_1", "exc_1", 1, NOW, "usr_1", RevisionSettings(
         pin_id="claude-opus-5", gateway_model=MODEL, billing="not_metered",
         allow_client_documents=True, timeout_seconds=60, api_flavour=flavour,
@@ -177,7 +182,7 @@ def test_probe_before_either_current_secret_is_not_routable(gateway_factory: Any
 
 def test_resolver_opens_both_bound_secrets(gateway_factory: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     gateway = gateway_factory()
-    saved = revision(gateway)
+    saved = revision(gateway, plain_loopback=True)
     opened = []
 
     def fake_open(session, ring, *, secret_id, destination, repository):
@@ -195,7 +200,7 @@ def test_resolver_opens_both_bound_secrets(gateway_factory: Any, monkeypatch: py
 def test_resolver_refuses_a_tunnel_without_current_ssh_key(gateway_factory: Any,
                                                            monkeypatch: pytest.MonkeyPatch) -> None:
     gateway = gateway_factory()
-    saved = revision(gateway)
+    saved = revision(gateway, plain_loopback=True)
     monkeypatch.setattr("auditmanager.executors.resolver.open_secret",
                         lambda *args, **kwargs: "http-key")
     with pytest.raises(SecretUnreadableError):
@@ -205,7 +210,7 @@ def test_resolver_refuses_a_tunnel_without_current_ssh_key(gateway_factory: Any,
 
 def test_worker_probe_opens_both_secrets(gateway_factory: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     gateway = gateway_factory()
-    saved = revision(gateway)
+    saved = revision(gateway, plain_loopback=True)
     store = Store(saved, [secret("api_key"), secret("ssh_private_key")], probe())
     opened = []
     delivered = []
