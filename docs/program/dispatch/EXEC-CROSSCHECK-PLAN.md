@@ -85,20 +85,42 @@ One owner per shared slot (`AGENTS.md` §3). Order, each after the one before:
 3. `EXEC-CROSS-CALL-01`: the concurrent calls and the answer rows, behind a feature flag that
    defaults off. Composition root slot (`bootstrap/providers.py`).
 4. `EXEC-CROSS-COMPARE-01`: the deterministic comparison record and its read operation.
-5. `EXEC-CROSS-WEB-01`: the multi-select in «Назначения» and the difference view in the review.
+5. `EXEC-CROSS-V3-01`: the same fan-out at the AR v3 provider stage (see "AR v3" below). It
+   follows `EXEC-CROSS-CALL-01` and reuses its answer rows and comparison; it adds no table.
+6. `EXEC-CROSS-WEB-01`: the multi-select in «Назначения» and the difference view in the review,
+   for both kinds of run.
 
 Each slice's checks include a mutation proof that its guard can fail, and the real-executor
 journey (two connections on one stand) is an operator check, not a unit test.
 
-## Open questions for the owner
+## Owner answers (poll, 2026-10-26)
 
-- **Who is canonical?** The plan keeps the primary's answer as the run's answer. The other
-  reading is that a disagreement blocks the stage until the expert chooses.
+- **Who is canonical?** The primary's answer. Secondary answers are stored beside it and their
+  differences are shown to the expert; a disagreement does not block the stage and the pipeline
+  downstream does not change.
+- **Which runs?** `text_analysis` **and** the six checks of AR v3.
+
+## AR v3 (scope chosen above)
+
+The six checks run as an atomic group of six Runs with their own identity and immutable pins
+(`runs/v3_group.py`), and the provider stage has its own call site (`runs/v3_provider_call.py:240`).
+Four constraints follow, to be checked in `EXEC-CROSS-ADR-01` before `EXEC-CROSS-V3-01` is frozen:
+
+1. **The pinned model is the run's identity.** A secondary may answer on a different pinned model
+   (`claude-opus-5`, `claude-sonnet-5`, `gpt-6-sol` are the pins today), but its answer is a
+   non-canonical record and never the model identity the group's pins name.
+2. **Six runs, K secondaries each.** Up to `6 x (K + 1)` calls per group; the cost ceiling and the
+   one-slot worker (`R-146j`) bound it, so the group's wall time grows with the slowest executor.
+3. **Review-only stays review-only.** The comparison is shown beside the provisional citations; it
+   adds no numerical conclusion and nothing the expert must act on.
+4. **The lease is released during the provider call** in the current code, so concurrent calls
+   there must not hold a lease lock. This is the main reason it is its own slice.
+
+## Still open for the owner
+
 - **How many executors?** `K` secondaries per route; the plan proposes 3.
-- **Is a cross-check run all the time or per run?** The plan proposes per route (always on while
-  the set is non-empty), with the flag as the rollback.
-- **Which runs?** `text_analysis` only, or also the AR v3 provider stage
-  (`runs/v3_provider_call.py:240`), which has its own call site and group identity.
+- **Always on, or per run?** The plan proposes per route (on while the set is non-empty), with the
+  feature flag as the rollback.
 
 ## Non-goals
 
