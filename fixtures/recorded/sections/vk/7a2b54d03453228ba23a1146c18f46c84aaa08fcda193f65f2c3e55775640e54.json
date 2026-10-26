@@ -5,9 +5,9 @@
   "origin": {
     "analysis_profile_id": "ap_01M5AXG1KF7NGNYMEFN97BW9ZN",
     "kind": "synthetic",
-    "profile_status": "draft",
+    "profile_status": "reviewed",
     "prompt_bundle_id": "pb_01M5AXG1KFMA8QCKP6YM1K5M5W",
-    "prompt_bundle_sha256": "5a0ac9e08c2966ca0c09a6089705b4195c18bdcd87940a143fce93ce3c61713b",
+    "prompt_bundle_sha256": "d80dc1229ec4278dc151d41ec5cd68eb8244649ea532da6bc974fbae27f64c16",
     "section_code": "VK",
     "statement": "Synthetic: authored by hand for SECTION-RECORDINGS-01 to prove section routing in recorded mode. No model produced this reply and no provider call was made. Not field evidence for the profile's review.",
     "task_id": "SECTION-RECORDINGS-01",
@@ -15,7 +15,7 @@
   },
   "output_text": "{\"observations\": [{\"category\": \"explicit_placeholder\", \"finding_text\": \"Синтетический ответ (ВК), не результат вызова модели: тип заполнения оконных проёмов не определён: стоит отметка «уточнить».\", \"recommendation_text\": \"Определить заполнение оконных проёмов в ведомости.\", \"evidence\": [{\"page_number\": 8, \"quote\": \"Тип заполнения оконных проёмов — уточнить.\"}]}]}",
   "recording_version": "1.0.0",
-  "request_sha256": "de50151c9fb7a1a31f36e74829aaa4dce7729bed4507653413b340352990378a",
+  "request_sha256": "7a2b54d03453228ba23a1146c18f46c84aaa08fcda193f65f2c3e55775640e54",
   "stop_reason": "end_turn",
   "usage": {
     "input_tokens": 2400,
