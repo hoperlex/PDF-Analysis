@@ -9,6 +9,7 @@ its inputs moves it) are checked here; the stage over scripted adapters is
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Any
 
 import pytest
@@ -267,6 +268,43 @@ def test_the_key_moves_with_the_window_the_text_the_profile_the_model_and_the_re
         WindowPolicy(3 * len(nine_pages()[0]) + 5, 12),
     )
     assert _key(other_version, other_version.windows[0]) != base, "another version"
+
+
+@pytest.mark.parametrize("part,delta", [
+    ("index", 1), ("first_page", 1), ("last_page", 1), ("char_start", 1), ("char_end", 1),
+])
+def test_the_key_moves_with_each_part_of_the_window_s_range_alone(part: str, delta: int) -> None:
+    """The request and the profile held fixed, so only the named part can move the key."""
+    plan = three_window_plan()
+    window = plan.windows[0]
+    request = build_window_request(
+        model_id=MODEL, bundle=V1_REFERENCE_PROFILE.prompt_bundle, plan=plan, window=window
+    )
+    base = window_key(
+        plan=plan, window=window, profile_sha256=V1_REFERENCE_PROFILE.content_sha256,
+        model_id=MODEL, request_sha256=request.request_sha256,
+    )
+    moved = window_key(
+        plan=plan, window=dataclasses.replace(window, **{part: getattr(window, part) + delta}),
+        profile_sha256=V1_REFERENCE_PROFILE.content_sha256, model_id=MODEL,
+        request_sha256=request.request_sha256,
+    )
+    assert moved != base, part
+
+
+def test_the_key_moves_with_the_number_of_windows() -> None:
+    plan = three_window_plan()
+    window = plan.windows[0]
+    request = build_window_request(
+        model_id=MODEL, bundle=V1_REFERENCE_PROFILE.prompt_bundle, plan=plan, window=window
+    )
+    arguments: dict[str, Any] = {
+        "window": window, "profile_sha256": V1_REFERENCE_PROFILE.content_sha256,
+        "model_id": MODEL, "request_sha256": request.request_sha256,
+    }
+    base = window_key(plan=plan, **arguments)
+    fewer = dataclasses.replace(plan, windows=plan.windows[:2])
+    assert window_key(plan=fewer, **arguments) != base
 
 
 # -- the two spellings of the saved window's parameters --------------------------------
