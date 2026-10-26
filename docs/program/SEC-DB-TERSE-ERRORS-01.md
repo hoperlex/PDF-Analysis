@@ -71,10 +71,21 @@ All with `BS=$(ls -d /root/projects/PDF-Analysis/.venv/bootstrap/lib/python3*/si
 3. `tests/integration/db` whole: **709 passed** in 7 min 39 s (it includes the 14 new tests; it builds a migrated template and drops it).
 4. Neighbours: `tests/unit/shared tests/unit/api/test_errors_module_uses_the_database_boundary.py tests/contract/architecture tests/integration/shared_kernel tests/integration/foundation/test_negative_paths.py tests/integration/workers`: **119 passed, 244 subtests passed** in 43 s.
 5. Mutations: section 5 (ten runs of three files, about 1.2 s each).
-6. Docs guards, after the last commit: see the final lines of this section (filled in by the lane at the end).
+6. Docs guards on a clean tree after the code and docs commit: `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py`: **105 passed** in 20 s; the governance one-liner on the task file prints `[]`; `git diff --check a1d3f348..HEAD` is silent.
 7. The measurements of section 3 are from scratch scripts that create a private database on the lane PostgreSQL, build one engine through `create_database_engine` and one plain engine with `hide_parameters=True`, run the statements and drop the database in a `finally`; they are not committed (the committed tests assert the same facts).
 
-Governance one-liner for the task file and `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py`: recorded at the end of this section.
+Forbidden paths untouched: `git diff --name-only a1d3f348..HEAD` lists exactly
+
+```text
+docs/program/SEC-DB-TERSE-ERRORS-01.md
+docs/program/tasks/SEC-DB-TERSE-ERRORS-01.md
+src/auditmanager/shared/db/engine.py
+tests/integration/db/test_database_errors_are_terse.py
+tests/unit/shared/test_engine_hides_parameters.py
+tests/unit/shared/test_engine_terse_hook.py
+```
+
+all inside the allowed paths; `contracts/**`, `db/migrations/**`, `infra/**`, `web/**`, the lock files, `runs/carrier.py` and `workers/service.py` do not appear.
 
 ## 7. Integration notes
 
