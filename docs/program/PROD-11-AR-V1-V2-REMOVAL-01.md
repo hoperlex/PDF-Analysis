@@ -25,7 +25,7 @@ What the product does now. `startRun` and `reauditRun` on a version classified �
 
 ## Files
 
-Counts from `git diff --stat 1c8d29fa..HEAD` (before this report): {{FILES}}.
+Counts from `git diff --stat 1c8d29fa..HEAD` (before this report): 284 files changed, 2535 insertions(+), 10774 deletions(-); `src` +141/-3802, `tests` +1385/-6162, `web` +376/-145; 56 files deleted (23 in `src`, 30 tests, 3 tools), 5 added, 3 renamed.
 
 | Group | What |
 | --- | --- |
@@ -105,7 +105,20 @@ Stage 5: J1 a listed step loses its mark → 3 red; J2 the loud line becomes sil
 
 One pytest at a time; `PYTHONPATH=src:<bootstrap site-packages>`; the database tests on a **private** database `prod11_removal_*` created on the lane server, migrated to `0033`, and dropped at the end; the shared lane database was not touched. Free disk stayed at or above 1.7 GiB.
 
-{{COUNTS}}
+| Command | Result |
+| --- | --- |
+| `tests/unit tests/replay` (final tree, no stack) | 2202 passed, 3 skipped, **5 failed**: `test_ssh_forced_command.py`, the same 5 fail on the untouched base |
+| `tests/contract` minus the three `D-220` files, on the clean committed tree (includes `tests/contract/program`, `test_doc_prose_facts`, `test_surface_counts_in_prose`, `test_contract_seal`, `analysis_packages`, `architecture`) | 1175 passed, 19283 subtests {{CONTRACT_FINAL}} |
+| `tests/e2e` (static: conformance, the new section and pending checks) | 225 passed, 5 skipped |
+| `node --test write.test.mjs navigation-retry.test.mjs` | 13 passed |
+| `prove_the_guard_can_fail.py` | 126 RED, 1 GREEN (the same vacuous mutation as at the base) |
+| web `vitest run` / `eslint .` / `tsc --noEmit` / `api:verify` | 200 files, 3040 tests passed / exit 0 / exit 0 / `OK - 104 operations`, contract sha256 `f98c4704…` |
+| removal guard `tests/unit/analysis/test_ar_v1_v2_removal.py` | 25 passed (14 s) |
+| Database suites on the private database, **before the version bump** (stage 2a state, after the fixes): `findings` 146, `analysis` 792 (+6 skipped), `analysis_text` 343, `sections` 178, `executors` 157 (+16 skipped), `workers` 44, `jobs` 76, `optimisation` 102, `qa_w55b` 78, `recovery` 320, `api` 666, `ingest` 738, `db` 603, `analysis_engine` 47, `comparison` 150, `execution` 7, `qa_w52` 2, `qa_w53` 7, `dashboard` 8, `decisions` 89, `dispatch` 46, `documents` 43, `releases` 59 | all passed |
+| `composition`, whole, before the bump | first run 6 failed + 16 errors (all in 8 files that started an АР run through `POST /runs`); after the repointing those 8 files and `test_analysis_profiles_over_http` ran 56 passed; the rest of the directory (1254 passed) was not re-run in full (17 minutes; the edits touched only those files) |
+| `characterization` | 54 passed, 16 failed: the 16 stale refusal records, the same 16 as at the base (53 passed, 16 failed there; +1 is the new digest test) |
+| Database suites **after** the bump: `runs` 779 passed; `p02_journey` 60; `exports` 148 (+2 skipped); the 12 files that name the contract version (`api`, `auth`, `composition`, `qa_w52`, `runs`, `analysis`) | 220 passed |
+| Not re-run after the bump (they passed before it and the bump changed only version literals): `api`, `composition`, `recovery`, `executors`, `analysis`, `optimisation`, `qa_w55b`, `sections`, `findings`, `ingest`, `db` | stopped on purpose: free disk fell to 1.57 GiB (floor 1.5), and a first sweep was killed from outside at 86 % of `api` |
 
 ## Integration notes
 
