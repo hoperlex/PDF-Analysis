@@ -88,7 +88,7 @@ All with `PYTHONPATH=src:$BS`, `-c pyproject.toml --rootdir=. -q -p no:cacheprov
 | web: `npx tsc --noEmit`; `npx eslint` on the three touched web files | no output, exit 0; exit 0 |
 | `bash -n` and `shellcheck -S warning infra/deploy/verify-deployed.sh` | clean |
 | `nginx -t` on the two changed proxy files (host nginx 1.24, upstreams and `http2 on;` rewritten, throw-away pair) | `syntax is ok`, `test is successful` |
-| `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py`, `git diff --check` | CONTRACT_PENDING |
+| `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py`, `git diff --check` | 105 passed (the first run failed once: a docstring of this lane said "three paths", which `test_surface_counts_in_prose.py` reads as a count of API paths; reworded, then green) |
 
 The governance one-liner for `tasks/HARDEN-01.md` prints `[]`.
 
