@@ -1777,7 +1777,7 @@ seven days after it ends.
 
 | Role | Name | Url (in `alpha.env`) | Used by | Can |
 |---|---|---|---|---|
-| **migrator** (the owner) | `POSTGRES_USER` | `MIGRATOR_DATABASE_URL` | the one-shot `migrate` and `release-notes`; `apply-grants.sh`; the operator tools that need write-everything (`purge-product-data.sh` hands it to the product purge; the project erase of `PROD-07` will) | everything: it owns every object |
+| **migrator** (the owner) | `POSTGRES_USER` | `MIGRATOR_DATABASE_URL` | the one-shot `migrate` and `release-notes`; `apply-grants.sh`; the operator tools that need write-everything (`purge-product-data.sh` hands it to the product purge; `erase-project.sh`, section 17, to the project erase) | everything: it owns every object |
 | **application** | `ALPHA_APP_DB_USER` | `DATABASE_URL` | `api` and `worker` (and the `compose run` one-offs of `reset.sh`, `copy-serve.sh restore-db`, `readiness.sh`, which run application code) | log in; `SELECT` / `INSERT` / `UPDATE` / `DELETE`, `SELECT` + `INSERT`, or `SELECT` per table, as `scripts/recovery/grant_classification.py` says; sequences `USAGE`. **Cannot** create, alter or drop anything, **cannot** `TRUNCATE`, owns nothing, is a member of nothing, is not a superuser. An append-only table (`audit_event`, the ledgers, the immutable evidence) refuses `UPDATE` and `DELETE` by privilege **and** by trigger |
 
 **The decision recorded here (decided by the lane): the migrator stays the bootstrap superuser.** The postgres image's
@@ -1846,8 +1846,8 @@ to `migrate` and `release-notes` only (`test_the_application_gets_its_url_and_on
 | `copy-serve.sh restore-db` | right after `pg_restore`, before the fingerprint and anything that connects as the role | refuses `grants-applied`: the writers stay stopped, the record stays open |
 
 `reset.sh` (both destructive modes) and `restore-db` ask **before they change anything** that the step can run: the script is
-there (`grants-script-present`) and the second password is set (`app-db-role-configured`). `purge-product-data.sh` passes
-`MIGRATOR_DATABASE_URL` to the product purge for every step (`migrator-url-configured` refuses an environment without it).
+there (`grants-script-present`) and the second password is set (`app-db-role-configured`). `purge-product-data.sh` and `erase-project.sh` pass
+`MIGRATOR_DATABASE_URL` to their python half for every step (`migrator-url-configured` refuses an environment without it).
 
 ### What stops it, in words
 
@@ -1874,3 +1874,369 @@ there (`grants-script-present`) and the second password is set (`app-db-role-con
   UPDATE`, which PostgreSQL grants only with an `UPDATE` privilege on some column. The immutability trigger fires on a row
   update and not on a lock, so the lock works and every real `UPDATE` is still refused.
 * **The password is in the file**, readable by the account that deploys. `chmod 600 infra/deploy/env/alpha.env`, as always.
+
+## 17. Erasing one project (`ERASE-WRAP-01` for `PROD-07`; `ADR-0022` section 3; `R-146c`, `R-146o`, `R-146aj`)
+
+**What it is for.** A client asks for their project to go, or an engagement ends. `infra/deploy/erase-project.sh` removes **one
+project**: its documents, pages, extracted text, crops, findings, evidence quotes, comments and expert decisions, the idempotency
+receipts of those rows, and every stored object that no other project and no part of the norm corpus references. What stays is
+the record of the erasure (two journal events and a manifest file), the project's identity-only run journal, every other project,
+the accounts and the norm corpus. The design is `ADR-0022` section 3 and the module `scripts/recovery/project_erase.py`
+(`PROD-07A-PROJECT-ERASE-CORE-01`); this script is the operator's door to it, in the shape of `purge-product-data.sh`.
+
+**It is not the purge.** `purge-product-data.sh` removes the product data of the whole stand and takes a verified dump first so
+that it can be put back. **The erase takes no dump and no mirror**, because a dump would keep the very data it was asked to
+remove. The consequence is the last step of the procedure and is the operator's: every copy that already exists still holds the
+project.
+
+### Before you start
+
+1. **The owner's permission, in writing, first (`R-146aj`).** An operator never erases a project without it. Nothing can verify it:
+   the script requires `--owner-permission-ref "<one line saying where it is recorded>"` (at most 200 characters, for example
+   `owner mail of 2026-11-02, filed under the release record`) and writes that line into both journal events. The product has no
+   legal-hold concept and the erase does not check one; whether the project is subject to a hold is the operator's question to the
+   owner.
+2. **An administrator's login** for `--actor`. The journal records the account's `usr_` identity, never the login. An expert
+   cannot erase.
+3. **The stack is up** (`postgres` and `s3`), and **no run, job, attempt or executor task of the project is in flight** (a claimed
+   remote task counts). The tool refuses otherwise and says what; let the work finish or cancel it.
+4. **Decide about the copies now**, not after: the erase reaches none of them (step 6 lists them).
+5. `infra/deploy/env/alpha.env` has `MIGRATOR_DATABASE_URL` (section 16). The script hands the tool the owner's url; the
+   application role cannot switch the immutability triggers off and the tool refuses it.
+
+### The procedure (every step has the output to expect)
+
+All commands run from the repository root on the host, as the operator who will keep the record.
+
+1. **The dry run.** It is what you get with no mode option, and it changes nothing:
+
+   ```
+   infra/deploy/erase-project.sh --database <POSTGRES_DB> --bucket <S3_BUCKET> --project prj_<26 characters>
+   ```
+
+   Expected: three lines (`instance`, `database`, `bucket`), then the plan: rows of the project by table with a total, the
+   Blobs only this project references and their bytes, the Blobs shared with another project or the corpus (they stay), the
+   object keys to delete, what stays, then `plan-sha256: <64 hex>`, and the script's closing text
+   `dry run. NOTHING ABOVE WAS CHANGED` with the options an apply needs. Exit 0. A project that is not in this database is a
+   refusal (exit 3). A project that was erased already says `nothing to do` (exit 0).
+
+2. **Show the plan to the owner**, get the permission for **that** plan, and record its `plan-sha256` with the permission. A plan
+   is the project as it is now: a document uploaded or a run finished after the dry run changes the digest.
+
+3. **Apply.**
+
+   ```
+   infra/deploy/erase-project.sh --database <POSTGRES_DB> --bucket <S3_BUCKET> --project prj_<26 characters> --apply \
+       --actor <admin login> --reason <client_request|end_of_engagement|test_data|other> \
+       --owner-permission-ref "<where the permission is recorded>" --plan-sha256 <the digest from step 1>
+   ```
+
+   `--reason` is one of the four words: free text is refused, because it would be written into an append-only table.
+   Expected: the plan is printed again; the script compares its digest with the one you passed (a different digest is a refusal:
+   read the new plan and start from step 2); then
+
+   ```
+   erase-project.sh: THIS ERASES THE PROJECT ABOVE. It cannot be undone, and NO DUMP is taken first.
+   erase-project.sh: retype the project id to go on:
+   erase-project.sh: retype the plan digest to go on:
+   ```
+
+   **Type both yourself.** A value that was pasted into the command line is a value nobody looked at; an end of input is not an
+   answer. Then `erasing (one transaction, then the objects, then the final record)`, `erase-id: era_<26 characters>` (keep it),
+   `objects-deleted: <n>`, the tool's summary (`manifest-sha256`, `manifest`, `plan-sha256`, `rows-deleted`), the list of what an
+   erase does not reach, and the script's `done. prj_... was erased as era_...`. Exit 0.
+
+   `--stop-worker` stops the `worker` service for the apply and starts it again afterwards, whatever the result. Use it when the
+   tool refuses with `could not lock the tables`: the worker's heartbeat is the usual writer. If it still cannot lock, the script
+   prints the two commands that stop and start `api` and `web` around the run.
+
+4. **Check the rest state.** The script prints three commands; run them. `ADR-0022` asks for the first two:
+
+   ```
+   $DC exec -T postgres psql -U <POSTGRES_USER> -d <POSTGRES_DB> -Atc "select count(*) from blob where state = 'erasure_pending'"   # 0
+   $DC exec -T postgres psql -U <POSTGRES_USER> -d <POSTGRES_DB> -Atc "select count(*) from project where project_uid = 'prj_...'"  # 0
+   $DC exec -T postgres psql -U <POSTGRES_USER> -d <POSTGRES_DB> -Atc "select count(*) from audit_event where event_type = 'erasure.completed' and aggregate_id = 'era_...'"   # 1
+   ```
+
+   (`DC` is `docker compose --env-file <alpha.env> --file <compose.server.yml>`, spelled out in the script's output.)
+
+5. **Keep the record.** `infra/deploy/dumps/erasures/<era_id>/plan.json` and `manifest.json` (mode 0600 in a directory 0700, owned
+   by you; the container ran as your uid for that reason). The database holds only their digests. **The manifest is the only
+   proof that a known document was erased**: it lists every erased Blob (`blob_id`, SHA-256, size, media type). The script has
+   already hashed it and compared the digest with the one in both journal events (`manifest-sha256 ... (verified against the
+   file)`); if it could not, it ends non-zero with `THE ERASE COMPLETED but the manifest on disk is not the one the database
+   holds` and you **discard nothing**. Put both files with the release record, off this host.
+
+6. **The copies the erase did not reach.** Remove or age them by hand, and write in the release record that you did:
+   `infra/deploy/dumps/` (every `*-purge-*` directory, every `reset.sh` dump), the copy directory of the copy key (section 13),
+   the copy fetched to the development host for an `R-93` restore test, the VPS provider's snapshots, and any copy outside the
+   host. Also outside this host's control: what the model provider received for past analyses (accepted risk `A-2`), the local
+   copies of a remote executor, the disk blocks of a deleted object (there is no secure wipe), container logs, and exports a user
+   already downloaded.
+
+### When it stops
+
+| What you read (exit) | What it means | What to do |
+|---|---|---|
+| `REFUSED: --owner-permission-ref is required` (3) | `R-146aj`: no statement of where the permission is recorded | get the permission; run again |
+| `REFUSED: ... --project must be a project identity (prj_ and 26 characters), never a name` (3) | an identity is required, not a name | take it from the project's page or the plan of the purge's dry run |
+| `REFUSED: [migrator_url_unset]` (3) | `alpha.env` has no owner url | section 16 |
+| `REFUSED: the plan the project has now is not the plan you approved` (3) | the project changed after the dry run | read the new plan; get the owner's permission for it; run again with its digest |
+| `REFUSED: what was retyped is not the project and the plan above` (3) | a wrong or missing answer | nothing changed; run again and type both |
+| tool: `work of this project is not terminal` (3) | a run, job, attempt or claimed executor task is in flight | let it finish or cancel it |
+| tool: `could not lock the tables` (3) | something is still writing | run again with `--stop-worker`; then the `api`/`web` commands the script prints |
+| tool: `Blob(s) only this project references are not 'available'` (3) | a failed or abandoned upload cannot enter the erase | not an operator step: report it (`PROD-07A` D5; the register keeps the open question) |
+| tool: `a row of the project references a row that belongs to another project` (3) | a re-audit of another project's run | not an operator step: report it; erasing would take another project's data |
+| `REFUSED: an earlier erase of this project did not finish` (3) | an erase committed and stopped | run the `--resume` command the script prints |
+| `FAILED: THE DATABASE PART OF THE ERASE IS COMMITTED (era_...)` (**4**) | the database part is done; the objects or the final record are not | run the command printed under `Finish it`; it is safe to repeat; the plan and manifest are already on disk |
+| `FAILED: THE ERASE COMPLETED but the manifest on disk is not the one the database holds` (4) | the file does not hash to the journalled digest | discard nothing; the digest is in both events; report |
+
+A refusal after the commit is still exit **4**, never 3: 3 promises that nothing was changed. The finishing command is
+`infra/deploy/erase-project.sh --database ... --bucket ... --resume era_... --actor <login> --owner-permission-ref "..."`
+(the same dump root: set `ALPHA_DUMP_ROOT` as before, if you set it). It reads `plan.json` and `manifest.json` from the dump
+directory and checks them against the journal; it needs no plan digest and asks nothing.
+
+### What the script's guards are
+
+Twenty-three marked guards, each shown failing by `tests/integration/composition/test_erase_project_script.py`: the option
+shapes (`known-options`, `one-mode`, `stop-worker-needs-a-write-mode`, `options-match-the-mode`, `names-required`,
+`project-identity-shape`, `erase-identity-shape`,
+`actor-required`, `reason-closed-list`, `owner-permission-ref`, `plan-digest-shape`), the instance (`env-file-present`,
+`instance-configured`, `migrator-url-configured`, `database-matches`, `bucket-matches`, `compose-file-present`,
+`modules-present`, `dump-dir-writable`), and the sequence (`preflight-ran`, `plan-approved`, `retyped-confirmation`,
+`manifest-verified`). The tool behind it has 44 more.
+
+### Why this script is not in the copy key's file list (section 13)
+
+Section 13 installs five files for the copy key, whose forced command can run unattended. The erase is the opposite kind of act:
+interactive, by an administrator, with the owner's permission recorded and two answers typed by a person. It is not a verb of
+`copy-serve.sh`, it needs nothing the copy key has, and an unattended key must not be able to reach it. The list stays five
+files (`test_the_copy_key_file_list_does_not_gain_this_script` pins it).
+
+### What this does not do
+
+* **It has not run against a live stack.** The wrapper's tests run with a stub in place of `docker`; the tool's tests run
+  against PostgreSQL and a bucket. Their meeting (the mounts, the operator's uid inside the `api` image, the owner's url) is
+  first exercised by the rehearsal on a restored copy (`PROD-17`), which must precede the first real erase.
+* No dump, no mirror, no reach into manual copies (above). No secure wipe. No legal-hold check.
+* A bucket with versioning enabled is refused, not handled. A project whose Blobs include a non-`available` one is refused.
+* `--resume` finishes an erase that this tool started; it is not a way to erase a second project.
+
+## 18. The offline copy of the key ring (`ERASE-WRAP-01` for `PROD-08`; `ADR-0022` section 6, `AD-08`; `R-146n` item 7)
+
+**What it protects.** The key ring (`AUDITMANAGER_SECRETS_KEYS` in `infra/deploy/env/provider.env`, section 14) is the only thing
+that lets the worker open a sealed connection secret. It is not in PostgreSQL, S3, a dump or the repository, **by design**, so
+losing the host loses it: a restore onto another host then brings every connection back as `secret_unreadable` until the ring is
+installed, or until an administrator pastes each key again. This section makes one encrypted copy that survives the host.
+
+**What the copy must satisfy** (`ADR-0022` section 6):
+
+1. it is on a medium that is **neither the VPS, nor the repository, nor the dump directory** (`infra/deploy/dumps/`);
+2. the passphrase or recipient key that opens it is held **by different means** than the copy (not on the same medium, not in
+   the same place);
+3. it is **verified on a second machine** by decrypting it and comparing the SHA-256 of the ring line there and on the VPS;
+4. it is **redone after every rotation** (section 14, "Rotation");
+5. the ring is **never** put in a dump, in the repository, in a message, or in the output of `docker compose config`.
+
+The tool that encrypts is the operator's choice; the commands below use `gpg` with a passphrase because it is on most hosts and
+its output is checkable. Any tool that authenticates what it encrypts and uses a secret you hold separately will do. **The lane
+that wrote this section did not make the copy**: it is the owner's, and the first one is not made until it is.
+
+`provider.env` holds more than the ring (the model provider's credential, `AUDITMANAGER_EXECUTOR_ALLOWED_HOSTS`). The copy is of
+the whole file, so it protects that too and the rules above are not negotiable.
+
+### The procedure (the owner's; every step has the output to expect)
+
+Steps 1, 2 and 4 run on the VPS from the repository root, step 6 on a second machine.
+
+1. **There is exactly one ring line.**
+
+   ```
+   grep -c '^AUDITMANAGER_SECRETS_KEYS=' infra/deploy/env/provider.env
+   ```
+
+   Expected: `1`. `0`: this stand has no ring yet (section 14, "The key ring"), so there is nothing to copy. `2` or more: fix the
+   file first.
+
+2. **The digest and the key ids, to be written down.** *Never* run the `sed` without the pipe that follows it: alone it prints
+   the private key.
+
+   ```
+   sed -n 's/^AUDITMANAGER_SECRETS_KEYS=//p' infra/deploy/env/provider.env | sha256sum
+   sed -n 's/^AUDITMANAGER_SECRETS_KEYS=//p' infra/deploy/env/provider.env | tr ',' '\n' | cut -d: -f1
+   ```
+
+   Expected: one line `<64 hex>  -`, then the key ids, one per line, nothing else (for a ring `k1:...,k2:...` the ids `k1` and
+   `k2`). Write both down; they go into the release record (step 7).
+
+3. **Choose the medium and the secret.** A medium that is not this host (an encrypted external disk, another machine's disk, a
+   vault on another account), and a passphrase that is **not** stored with it. Decide who else can reach each and write the
+   decision in the release record by role, not by value.
+
+4. **Encrypt on the VPS**, into a private temporary directory outside the checkout and outside `dumps/`:
+
+   ```
+   work="$(umask 077; mktemp -d)"
+   gpg --symmetric --cipher-algo AES256 --output "$work/provider.env.gpg" infra/deploy/env/provider.env
+   ls -l "$work/provider.env.gpg"
+   file "$work/provider.env.gpg"
+   ```
+
+   Expected: the passphrase is asked twice; `ls` shows a non-empty file (a few hundred bytes for a small `provider.env`); `file`
+   says `PGP symmetric key encrypted data - AES with 256-bit key salted & iterated - SHA512 .` `provider.env` itself is unchanged.
+   (Without a terminal, `gpg` needs `--pinentry-mode loopback`; use a terminal.)
+
+5. **Move the ciphertext off the host, then remove it from it.** From the second machine:
+
+   ```
+   scp <user>@<vps>:<the $work path>/provider.env.gpg .
+   ```
+
+   Expected: a file of the same size as step 4's. Put it on the medium of step 3. Then on the VPS:
+
+   ```
+   shred -u "$work/provider.env.gpg" && rmdir "$work"
+   ```
+
+   Expected: no output. (`shred` is a courtesy on a journalling filesystem; the ciphertext opens only with the passphrase.)
+
+6. **Verify on the second machine**, which did not make the copy and does not hold the VPS's file:
+
+   ```
+   gpg --decrypt provider.env.gpg | sed -n 's/^AUDITMANAGER_SECRETS_KEYS=//p' | sha256sum
+   gpg --decrypt provider.env.gpg | sed -n 's/^AUDITMANAGER_SECRETS_KEYS=//p' | tr ',' '\n' | cut -d: -f1
+   ```
+
+   Expected: the passphrase is asked each time; the digest is **exactly the one written down in step 2**; the key ids are the
+   same. Anything else means **the copy is not usable**: do not record it, delete it, and redo from step 4. The pipeline writes
+   no plaintext to disk; if you decrypted to a file, delete it now.
+
+7. **Record it in the release record:** the date, the key ids, and the SHA-256 of the ring line (step 2). Not the passphrase, not
+   the ring.
+
+8. **Redo it after every rotation.** Section 14 ("Rotation") adds a pair, changes `AUDITMANAGER_SECRETS_ACTIVE_KID`, runs `rewrap`
+   and removes the old pair: after the old pair is removed, repeat steps 1 to 7, keep the previous copy until the new one is
+   verified, then destroy the previous one (it holds a private key that is no longer in use, and that is a liability, not a backup).
+
+### Using the copy (a host was lost)
+
+Decrypt on a machine you trust, put the single `AUDITMANAGER_SECRETS_KEYS=` line into the new host's
+`infra/deploy/env/provider.env` (`chmod 600`), keep the public half in `alpha.env` as it was, and start the `worker`. The
+connections stop reading `secret_unreadable` (section 14); the check is the digest of step 2 computed on the new host. **This
+restore has not been rehearsed**: the rehearsal on a restored copy (`PROD-17`) is where it is first run.
+
+### What this does not do
+
+* It does not make the copy, choose the tool, the medium or the passphrase, or verify that the second machine is another machine.
+* It protects the ring, not the data: a database dump still holds every document and every password hash and is not encrypted
+  (section 7 and `ADR-0022` section 7).
+* The check of `PROD-08` is the digest equality of step 6, which only the owner can run.
+
+## 19. Log rotation and memory limits (`ERASE-WRAP-01` for `PROD-05b`; `ADR-0021` section 4, `AD-04`; `R-146n` item 2, `D-166`)
+
+**What `compose.server.yml` now does.** Each of the six long-running services (`postgres`, `s3`, `api`, `worker`, `web`, `proxy`)
+rotates its container log and reads a memory limit from the environment. The three one-shot services (`s3-init`, `migrate`,
+`release-notes`) carry neither: a limit on a migration is a migration killed for the wrong reason.
+
+| Service | Variable in `alpha.env` | Log (every service) |
+|---|---|---|
+| `postgres` | `ALPHA_MEM_LIMIT_POSTGRES` | `json-file`, `max-size` 10m, `max-file` 5 |
+| `s3` | `ALPHA_MEM_LIMIT_S3` | the same |
+| `api` | `ALPHA_MEM_LIMIT_API` | the same |
+| `worker` | `ALPHA_MEM_LIMIT_WORKER` | the same |
+| `web` | `ALPHA_MEM_LIMIT_WEB` | the same |
+| `proxy` | `ALPHA_MEM_LIMIT_PROXY` | the same |
+
+That is at most 50 MB of log per service and 300 MB for the stack (decided by the lane; the numbers are literals in the file, so a
+change is a reviewed change). **There is no memory number, on purpose.** Each variable ships empty, an empty or absent variable
+renders `mem_limit: 0`, and Docker reads `0` as *no limit*: the stack behaves as it did before. The measurement the numbers need
+(`PROD-05a`, on the 4 GB host, `R-146ad`) has not been taken, and a limit set under the worker's footprint kills it in the middle
+of a run. **`ADR-0021` row 8 is closed by the owner's values, not by this mechanism.** Its check reads the rendered configuration
+(`docker compose config`); the file declares a `mem_limit:` and a `max-size` for every long-running service, but while a variable is
+empty the rendered limit is `0`, and Compose may leave a zero out of its output, in which case the check names that service. That
+is the honest answer: `[]` means a limit is in force on every service, and it is true once the six values below are set.
+
+### What a deploy does about it
+
+`docker compose up -d` recreates a service whose configuration changed, so **the first deploy of this tree recreates all six
+containers, including `postgres` and `s3`** (their data is on named volumes and survives). Plan for it as for any deploy. The log
+files of the old containers go with them: the log of the time before the first deploy is not kept. Later deploys recreate only
+what changed.
+
+### Measuring, then setting (the owner's; `PROD-05a`)
+
+1. **Baseline of the host**, with the stack down, then up and idle:
+
+   ```
+   infra/deploy/capacity-probe.sh --path root=/
+   ```
+
+   Expected, one fact per line: `path root: / filesystem=... avail_bytes=... size_bytes=...`, `ram_available_bytes: <n>`,
+   `swap_total_bytes: <n>`, `swap_free_bytes: <n>`, `load: <1 min> <5 min> <15 min>`. It is read-only and never calls docker.
+   The difference in `ram_available_bytes` between stack down and stack up idle is what the stack costs before any work.
+
+2. **Idle readings** per container:
+
+   ```
+   docker stats --no-stream --format 'table {{.Name}}\t{{.MemUsage}}\t{{.MemPerc}}'
+   ```
+
+3. **Peak readings during the real work** (`ADR-0021` section 4: a 500-page analysis). Start the analysis, then in a second
+   terminal, until it finishes:
+
+   ```
+   while sleep 10; do date -u +%FT%TZ; docker stats --no-stream --format '{{.Name}} {{.MemUsage}}'; done | tee stats.log
+   ```
+
+   For each container take the largest `MemUsage` in `stats.log`. The `worker` is the one that matters: it holds the document in
+   memory. Repeat for the other loads you expect (several reviewers, an export), because the sum matters.
+
+4. **Choose each value** above its measured peak by a margin **you write down** (in the release record, with the readings), and
+   keep the sum of the six below the host's RAM minus what runs outside the containers (the operating system, `dockerd`, the
+   `acme` service). A value is what `docker run --memory` takes: whole bytes or a whole number with `b`, `k`, `m` or `g`
+   (`1536m`, `2g`). Edit `infra/deploy/env/alpha.env` (never the compose file).
+
+5. **Render before deploying:**
+
+   ```
+   docker compose --env-file infra/deploy/env/alpha.env --file infra/deploy/compose.server.yml config | grep mem_limit
+   ```
+
+   Expected: a line per service you gave a value, as a number of bytes (a service you left unset shows `0` or no line at all:
+   Compose may omit a zero). A value Docker cannot read as a size should stop here, with an error naming it, before anything is
+   recreated; if it does not, the `docker inspect` of step 6 is the proof. With all six set, `ADR-0021` row 8's command prints `[]`.
+
+6. **Deploy,** then confirm the limit is in force:
+
+   ```
+   docker inspect -f '{{.HostConfig.Memory}}' "$(docker compose --env-file infra/deploy/env/alpha.env --file infra/deploy/compose.server.yml ps -q worker)"
+   docker inspect -f '{{json .HostConfig.LogConfig}}' "$(docker compose --env-file infra/deploy/env/alpha.env --file infra/deploy/compose.server.yml ps -q worker)"
+   ```
+
+   Expected: the number of bytes (`0` means no limit), then `{"Type":"json-file","Config":{"max-file":"5","max-size":"10m"}}`.
+
+### When a container is killed for memory
+
+```
+docker inspect -f '{{.Name}} oom={{.State.OOMKilled}} restarts={{.RestartCount}}' "$(docker compose ... ps -q <service>)"
+```
+
+`oom=true` means the limit was too low (or the work grew). For the **worker** the system recovers by itself: the lease of the run
+expires and the run is retried (`ADR-0007`), at the price of the attempt that was in flight and its cost, so the fix is a higher
+limit measured again, not a lower one elsewhere. A `postgres` kill is worse: it restarts and recovers from its log, and every
+client sees an outage. Do not set `postgres` or `s3` tight.
+
+### Roll back
+
+Empty the variable (or delete the line) and deploy: the service reads `mem_limit: 0` again. The log blocks have no switch; they
+leave with a revert of the compose file.
+
+### What this does not do
+
+* No number is set (above). No CPU, process-count or filesystem limit (`EXPOSURE-REVIEW-02` F-21, outside this item).
+* **The `acme` service of the TLS overlay (`infra/acme/compose.acme.yml`) is long-running and is not covered**: it is in another
+  directory, outside the file this item owns. It keeps Docker's default unrotated log until the owner of `infra/acme/` adds the
+  same block; the proxy's 443 overlay (`infra/deploy/proxy/compose.tls.yml`) adds a port to `proxy`, which is covered.
+* Nothing here was run against Docker. The mechanism is checked by `tests/integration/composition/test_compose_log_and_memory_limits.py`
+  (the file read by indentation, `docker compose`'s variable rules reimplemented and tested against their documentation);
+  the first `docker compose config` on a real host is step 5.
