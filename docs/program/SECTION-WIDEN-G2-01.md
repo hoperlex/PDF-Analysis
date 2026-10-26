@@ -753,7 +753,7 @@ All with `BS=$(ls -d /root/projects/PDF-Analysis/.venv/bootstrap/lib/python3*/si
 | `fixtures/recorded/sections/build_fixtures.py --check` (last, `PYTHONPATH=src python3 -I`) | `fixtures match` |
 | `tests/integration/composition/test_analysis_profiles_over_http.py` on the integrator's lane stack, once, with the lane's copy of its `.env` | 4 passed (run at `b91e2022`; the packages and the expectations file it reads are unchanged since) |
 | `npx vitest run tests/unit/analysis-settings` in `web/` (`node_modules` symlinked, no `npm ci`) | 7 files, 96 passed |
-| `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py` on the committed tree | pending |
+| `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py` on the committed tree | 105 passed (`tests/contract/program` and the two prose guards, run on the committed tree) |
 | `git diff --check` | exit 0, no output |
 | the governance one-liner on the task file | `[]` |
 
