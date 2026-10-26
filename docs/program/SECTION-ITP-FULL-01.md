@@ -217,4 +217,12 @@ No other section's files, no `W59-SECTION-PROFILES-01.md`, registry, `P02_LOCK.j
 
 ## Final checks
 
-See the commit that follows this one: it records the results of the contract run, `git diff --check` and the path proof on the committed tree.
+On the committed tree (`git status --short` empty), at the commit before this paragraph (`5f4b0525`):
+
+| Command | Result |
+|---|---|
+| `pytest tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py` | `105 passed` |
+| governance one-liner on `docs/program/tasks/SECTION-ITP-FULL-01.md` | `[]` |
+| `git diff --check 23e30b4c..HEAD` | rc 0 |
+| section set, `build_fixtures.py --check` | `211 passed`; `fixtures match` (the HTTP test, `4 passed`, and the web test, `95 passed`, were run on the product commit; the commits after it change only the two docs) |
+| `git diff --name-only --no-renames 23e30b4c17a3c930469f3f94733c6d8c16eff1ed..HEAD` | the seven paths listed above |
