@@ -23,6 +23,18 @@ works, never beyond the task's ``deadline_at``; a lapsed lease returns the task 
 next time anyone claims. A claim joins the Attempt that waits for the task: a task whose Attempt
 is no longer the current live one is never served.
 
+Long poll
+---------
+:func:`claim_task` waits by sleeping in the thread that serves the request, and the API serves
+synchronous handlers from a pool of 40 threads (anyio's default). So the wait is a shared
+resource: :class:`LongPollSlots` lets one token park **one** claim and all tokens together
+:data:`MAX_WAITING_CLAIMS_TOTAL`, leaving :data:`RESERVED_SYNC_THREADS` threads to every other
+request (`SEC-RUNNER-CAP-01`, `F-06`). A claim over either bound is not refused: it looks once at
+the rows, as ``wait_seconds: 0`` does, and answers a task if one is open or the contract's
+empty ``204``. The state is the process's, as is the pool it protects; with several API
+processes each bounds its own pool and a token can park one claim per process, never more
+threads than one process has.
+
 The functions here run in the caller's transaction and never commit. A refusal raises before any
 write, so a refused answer (``422``) leaves the claim exactly as it was.
 
@@ -36,6 +48,7 @@ import hmac
 import re
 import secrets
 import string
+import threading
 import time
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
@@ -66,11 +79,16 @@ from auditmanager.shared.identity import IdempotencyKey
 __all__ = [
     "CLAIM_LEASE_SECONDS",
     "DEFAULT_TOKEN_DAYS",
+    "MAX_WAITING_CLAIMS_PER_TOKEN",
+    "MAX_WAITING_CLAIMS_TOTAL",
     "MAX_WAIT_SECONDS",
     "PAYLOAD_RETENTION_DAYS",
+    "RESERVED_SYNC_THREADS",
+    "SYNC_POOL_THREADS",
     "TOKEN_PREFIX_LENGTH",
     "ClaimedTask",
     "IssuedToken",
+    "LongPollSlots",
     "RunnerPrincipal",
     "TaskAck",
     "authenticate_runner",
@@ -81,6 +99,7 @@ __all__ = [
     "hash_token",
     "issue_runner_token",
     "claimed_image",
+    "long_polls_waiting",
     "open_task_count",
     "revoke_runner_token",
     "runner_tokens_of",
@@ -93,6 +112,15 @@ _AGGREGATE = "ExecutorConnection"
 CLAIM_LEASE_SECONDS: Final[int] = 120
 #: ``wait_seconds`` is 0..25: the long poll stays under every proxy's read timeout.
 MAX_WAIT_SECONDS: Final[int] = 25
+#: The API's synchronous handlers run in anyio's default pool: 40 threads (measured in
+#: `EXPOSURE-REVIEW-02`; nothing in ``src`` resizes it). A test pins the figure beside the share.
+SYNC_POOL_THREADS: Final[int] = 40
+#: How many of those threads long polls may hold, all tokens together.
+MAX_WAITING_CLAIMS_TOTAL: Final[int] = 16
+#: What is left to every other request while long polls wait: sign-in, reads, uploads.
+RESERVED_SYNC_THREADS: Final[int] = SYNC_POOL_THREADS - MAX_WAITING_CLAIMS_TOTAL
+#: How many claims one token may have waiting at once. A runner polls one claim at a time.
+MAX_WAITING_CLAIMS_PER_TOKEN: Final[int] = 1
 DEFAULT_TOKEN_DAYS: Final[int] = 30
 MAX_TOKEN_DAYS: Final[int] = 365
 #: The payload (the stand's documents) and the answer are cleared this long after a task ends.
@@ -105,6 +133,60 @@ _POLL_SECONDS: Final[float] = 1.0
 #: The most of a failure reason that is kept.
 _REASON_LIMIT: Final[int] = 512
 _CONTROL: Final[re.Pattern[str]] = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
+
+
+class LongPollSlots:
+    """Who may sleep in a thread of the API's pool: at most ``per_token`` waiting claims for one
+    token and ``total`` for all of them. A counter under a lock, held by the process.
+
+    :meth:`try_acquire` never blocks and never waits for a slot: a claim that cannot have one
+    does not sleep. Every acquire is paired with a :meth:`release` in a ``finally``."""
+
+    __slots__ = ("_per_token", "_total", "_held", "_count", "_lock")
+
+    def __init__(self, *, per_token: int, total: int) -> None:
+        if per_token < 1 or total < per_token:
+            raise ValueError("a token needs one slot at least and the total cannot be smaller")
+        self._per_token = per_token
+        self._total = total
+        self._held: dict[str, int] = {}
+        self._count = 0
+        self._lock = threading.Lock()
+
+    @property
+    def waiting(self) -> int:
+        with self._lock:
+            return self._count
+
+    def try_acquire(self, token_id: str) -> bool:
+        with self._lock:
+            held = self._held.get(token_id, 0)
+            if self._count >= self._total or held >= self._per_token:
+                return False
+            self._held[token_id] = held + 1
+            self._count += 1
+            return True
+
+    def release(self, token_id: str) -> None:
+        with self._lock:
+            held = self._held.get(token_id, 0)
+            if held < 1:
+                raise RuntimeError("a long-poll slot was released that was not held")
+            if held == 1:
+                del self._held[token_id]
+            else:
+                self._held[token_id] = held - 1
+            self._count -= 1
+
+
+#: The process's slots. Production uses this one; a test passes its own to ``claim_task``.
+_LONG_POLLS: Final[LongPollSlots] = LongPollSlots(
+    per_token=MAX_WAITING_CLAIMS_PER_TOKEN, total=MAX_WAITING_CLAIMS_TOTAL)
+
+
+def long_polls_waiting() -> int:
+    """Claims of this process that hold a thread asleep right now (a test and a probe read it)."""
+    return _LONG_POLLS.waiting
 
 
 @dataclass(frozen=True, slots=True)
@@ -353,6 +435,7 @@ def claim_task(
     executors: ExecutorRepository | None = None, repository: RunnerRepository | None = None,
     sleep: Callable[[float], None] = time.sleep,
     monotonic: Callable[[], float] = time.monotonic,
+    slots: LongPollSlots | None = None,
 ) -> ClaimedTask | None:
     """Long poll: the connection's oldest open task, now claimed by this token, or ``None``
     after ``wait_seconds``. Each attempt is its own short transaction, so a waiting runner
@@ -360,10 +443,32 @@ def claim_task(
 
     A token holds at most the connection's current ``max_claimed_tasks`` claims at once, and a
     token whose limit is one and that already holds its claim is **given that same task again**,
-    lease refreshed, so a lost response or a restarted runner does not strand it."""
+    lease refreshed, so a lost response or a restarted runner does not strand it.
+
+    The sleep holds a thread of the API's pool, so it needs a slot of ``slots`` (the process's
+    by default): one waiting claim per token and :data:`MAX_WAITING_CLAIMS_TOTAL` in all. A
+    claim that cannot have one looks once, as ``wait_seconds: 0`` does -- it still receives a
+    task that is open and still redelivers its own -- and answers ``None`` (the ``204``)
+    without sleeping. The runner's protocol is unchanged."""
+    pool = _LONG_POLLS if slots is None else slots
+    wait = max(0, min(int(wait_seconds), MAX_WAIT_SECONDS))
+    holds_slot = wait > 0 and pool.try_acquire(principal.token_id)
+    try:
+        return _poll(
+            session_factory, principal, wait=wait if holds_slot else 0, executors=executors,
+            repository=repository, sleep=sleep, monotonic=monotonic)
+    finally:
+        if holds_slot:
+            pool.release(principal.token_id)
+
+
+def _poll(
+    session_factory: Callable[[], Session], principal: RunnerPrincipal, *, wait: int,
+    executors: ExecutorRepository | None, repository: RunnerRepository | None,
+    sleep: Callable[[float], None], monotonic: Callable[[], float],
+) -> ClaimedTask | None:
     store = repository or RunnerRepository()
     revisions = executors or ExecutorRepository()
-    wait = max(0, min(int(wait_seconds), MAX_WAIT_SECONDS))
     stop = monotonic() + wait
     first = True
     while True:
