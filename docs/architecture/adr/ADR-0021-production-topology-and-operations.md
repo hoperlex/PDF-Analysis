@@ -130,9 +130,8 @@ a trigger declares append-only or immutable (`schema_coverage.TRIGGERS`, trigger
 `am_append_only` and `am_immutable_row`) get `SELECT` and `INSERT` only, so the database refuses
 `UPDATE` and `DELETE` for the application twice, by privilege and by trigger.
 
-**Grants are an idempotent step, not a migration.** The dump tools run `pg_dump --no-owner
---no-privileges` (`reset.sh`, `purge-product-data.sh`, `copy-serve.sh`) and restore with `--no-owner`;
-`copy-serve.sh restore-db` first runs `DROP SCHEMA public CASCADE; CREATE SCHEMA public`. Privileges
+**Grants are an idempotent step, not a migration.** The dump tools run `pg_dump --no-owner --no-privileges` (`reset.sh`, `purge-product-data.sh`, `copy-serve.sh`) and restore with `--no-owner`;
+`copy-serve.sh restore-db` first runs `DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public`. Privileges
 granted by a revision would therefore be lost by every restore, and the `migrate` that follows applies
 nothing because the head is unchanged: the application would answer "permission denied". A new
 `infra/deploy/apply-grants.sh` (name chosen by the lane) creates the role if it is absent (a password

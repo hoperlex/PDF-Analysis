@@ -1,7 +1,7 @@
 # Task PRODUCTION-ADR-PACK-01 — the architecture decisions of the production version, as four ADRs and a readiness plan
 
 task_id: PRODUCTION-ADR-PACK-01
-status: completed in a development candidate (documents only)
+status: completed in a development candidate (documents only); round 2 applied (the judge's findings and `R-146o`…`R-146v`)
 
 ## Outcome
 
@@ -14,14 +14,14 @@ mechanically against the tree.
 ## Depends on
 
 - `BETA-STATIC-MATRIX-02` — completed (the static B1–B12 matrix whose facts the ADRs build on; it stays as written).
-- `R-146` as recorded by commit `4d7b7c38` (`docs(program): R-146 records the owner's production architecture decisions, accepted risks and refusals`).
+- `R-146` as recorded by commit `4d7b7c38` (`docs(program): R-146 records the owner's production architecture decisions, accepted risks and refusals`), and round 2 of the same section, `R-146o`…`R-146v`, recorded by commit `1a7f6f65`.
 
 ## Frozen inputs
 
 - base: `integration/ar-close-1026` at `4d7b7c38dc8239df6831b2587b71c0d74e8b1ec0`;
 - migration head `0032_ar_v3_run_group`; API 92 paths / 104 operations / 300 schemas; 27 error codes; shared contract `1.5.0`; `VERSION` `0.8.1`;
   this task changes no contract and adds no migration;
-- rulings: `R-146a`…`R-146n` (the only source of owner decisions in this pack), `R-135` (no complete gate in a code-first lane), `R-141c` (closed beta on test data).
+- rulings: `R-146a`…`R-146v` (the only source of owner decisions in this pack), `R-135` (no complete gate in a code-first lane), `R-141c` (closed beta on test data).
 
 ## Enumerator ownership
 
@@ -185,6 +185,7 @@ mechanically against the tree.
 - `docs/architecture/adr/ADR-0023-production-identity-and-access.md`
 - `docs/architecture/adr/ADR-0024-production-analysis-path-and-ai-execution.md`
 - `docs/architecture/adr/ADR-0014-authz-classification-retention.md`
+- `docs/architecture/adr/ADR-0012-expert-decision-ledger-and-kb-projection.md` (an addendum only, round 2)
 - `docs/architecture/ADR_INDEX.md`
 - `docs/program/PRODUCTION-READINESS-PLAN-01.md`
 - `docs/program/tasks/PRODUCTION-ADR-PACK-01.md`
@@ -198,13 +199,13 @@ refs, tags, `origin/main` and any stand.
 
 ## Non-goals
 
-No code, test, contract, migration, script, workflow or compose change; no stand, container, battery, gate, live journey or paid call; no decision attributed to the owner that `R-146` does not
+No code, test, contract (the frozen domain-contract sentence the erase exception names is left to `PROD-22`), migration, script, workflow or compose change; no stand, container, battery, gate, live journey or paid call; no decision attributed to the owner that `R-146` does not
 contain; no `PASS` for any criterion; no change to the register, to `CURRENT_STATE.md` or to the ruling record; no push, tag or `origin/main` update.
 
 ## Deliverables
 
 - the four ADRs, with a table of commitments and mechanical checks in `ADR-0021`, `ADR-0023` and `ADR-0024`;
-- the `ADR-0014` addendum and the index rows;
+- the `ADR-0014` and `ADR-0012` addenda and the index rows;
 - `docs/program/PRODUCTION-READINESS-PLAN-01.md`;
 - `docs/program/PRODUCTION-ADR-PACK-01.md`, whose last section proposes the debt-register rows;
 - this task file.
@@ -238,15 +239,8 @@ Forward revert of the nine files. Behaviour is unchanged.
 
 ## Handoff
 
-- changed files: the nine files of the allowed paths, on branch `agent/production-adr-pack-01` from base `4d7b7c38dc8239df6831b2587b71c0d74e8b1ec0`; nothing else (`git diff --name-only 4d7b7c38..HEAD` lists exactly them).
-- commands/results (2026-10-26, lane worktree production-adr-pack-01, on the committed tree):
-  1. governance one-liner on this file: prints `[]`.
-  2. `git diff --check 4d7b7c38..HEAD`: exit 0, no output.
-  3. the existence check over the nine files: 1592 checked, 0 missing, 0 unclassified; 23 commands run here and compared, 90 commands that need a stand or a lane not run (their path, operationId and
-     module parts checked); 318 token occurrences accepted by class as literals and not verified. Its own mutation proof: 14 of 14 mutations turn it red (table in the report).
-  4. `pytest -q -p no:cacheprovider tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py`: 105 passed.
-  5. ADR-index tests: `tests/contract/test_validate_bootstrap.py` and `tests/contract/test_cp00_candidate.py` fail identically on the base tree and on this branch (191 failures and errors, none added, none removed);
-     `scripts/validate_bootstrap.py` differs from its base output only in two count lines (adrs 20 to 24, markdown_files 1736 to 1743).
-- known limits: nothing was executed against a stand, a container or a database; a check marked "no" in an ADR table does not exist yet; the `AD-` decisions are unconfirmed; the sizes in the plan are counted, not
-  experienced; the local tracking refs were not fetched; the whole contract battery, the web battery and the gate were not run (`R-135`).
+- changed files: the ten files of the allowed paths, on branch `agent/production-adr-pack-01` from base `4d7b7c38dc8239df6831b2587b71c0d74e8b1ec0`, merged with `integration/ar-close-1026` at `1a7f6f65` in round 2; nothing else (`git diff --name-only 1a7f6f65 HEAD` lists exactly them).
+- commands/results (2026-10-26, lane worktree production-adr-pack-01, on the committed tree): see the report's Checks section for the existence check (the final line), its 14 mutations, the governance one-liner (`[]`), `git diff --check` (exit 0), the 105 passed tests and the unchanged failing set of the two ADR-index test files.
+- round 2: the report's "Round 2" section gives, per judge finding 1-13 and gap G1-G3, `fixed` with the document and section, or `refuted` with the evidence, and applies `R-146o`…`R-146v`. New decisions `AD-17`, `AD-18`, `AD-19`; new items `PROD-19`…`PROD-22`; new accepted risk `A-5`; no migration is proposed any more.
+- known limits: nothing was executed against a stand, a container or a database; a check marked "no" in an ADR table does not exist yet; thirteen `AD-` decisions are unconfirmed; the sizes in the plan are counted, not experienced; the local tracking refs were not fetched; the whole contract battery, the web battery and the gate were not run (`R-135`).
 - integration notes: see the integration contract above and the report's "Instruction to the integrator".

@@ -103,7 +103,7 @@ No complete `make gate` can run on the development host (`D-205`).
 
 ### PROD-10 — Preparation for removing АР v1 and v2 (`AD-12`)
 - **Result:** the live journey, `tests/e2e/pc01/` and the manual protocol run on a section that stays; what v3 needs from `ar_v2` has moved out of it and `registered.py` is split (`ADR-0024` section 2): three modules (`content`, `recognised_context`, `grounding`), the six `.md` data files `content.py` reads, and the two identity constants; nothing else changes. The first task of the lane is the import closure, because the
-  string search under-counts (`findings/recorded_saved_plan.py`, `findings/merge_publication_plan.py` and `analysis/stages/finding_merge.py` do not carry the name).
+  string search under-counts (`src/auditmanager/findings/recorded_saved_plan.py`, `src/auditmanager/findings/merge_publication_plan.py` and `src/auditmanager/analysis/stages/finding_merge.py` do not carry the name).
 - **depends_on:** — (every non-АР section already has a synthetic recording over the same text layer: `SECTION-RECORDINGS-01.md`) · **Hotspots:** none of the four (it edits `src/auditmanager/analysis/profiles/ar_v3/*`, `src/auditmanager/analysis/recognised/`, `fixtures/`, `tests/e2e/`) ·
   **Size:** L: five `ar_v3` importers, one `recognised` importer, the three moved modules and six data files, the split `registered.py`, the journey (`journey.mjs`, `manifest.json`, fixtures), the manual protocol and about 15 test files that import the moved modules.
 - **Executor:** Sonnet lane.
