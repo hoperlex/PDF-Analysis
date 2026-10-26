@@ -167,7 +167,7 @@ No section, package or route is added or removed. Each section directory under `
       bundle = AR_TEXT_PROMPT_BUNDLE
       return len(bundle.system_prompt) + len(canonical_json(bundle.response_schema))
   ```
-- interpretation: the budget subtracts the AR bundle's prompt, so a section prompt's extra characters are outside the budget's arithmetic; this is a property of `budget.py` (lane `SECTION-CHUNKED-ANALYSIS-01` owns it), not changed here. This lane keeps its addition compact: 2,394 to 2,837 characters per prompt, none above the 2,834 of lane G1's largest (ITP 2,837 is 3 above it).
+- interpretation: the budget subtracts the AR bundle's prompt, so a section prompt's extra characters are outside the budget's arithmetic; this is a property of `budget.py` (lane `SECTION-CHUNKED-ANALYSIS-01` owns it), not changed here. This lane keeps its addition compact: 2,394 to 2,827 characters per prompt (lane G1's were 2,701 to 2,834).
 
 ### P-11 — where condition 5, the exclusion paragraph and the ITP heat-load sentence sit in the four prompts at the base commit
 - captured_at: 2026-10-27
@@ -259,7 +259,7 @@ The other groups' files (`AI PS POS TX KJ KM OV VK PT PB`), `docs/program/W59-SE
 ## Required tests
 
 - command: `PYTHONPATH=src:$BS .venv/bin/python -m pytest -c pyproject.toml --rootdir=. -q -p no:cacheprovider tests/unit/analysis/test_text_profile_registry.py tests/unit/analysis/text_profiles tests/integration/sections/test_section_recordings.py tests/contract/analysis_packages`
-- expected: 322 passed (the same count as the base: no test is added or edited).
+- expected: 328 passed (the base's 322 plus six token-guard cases, two per new allowlist line; no test is added or edited).
 - command: with the lane stack, `tests/integration/composition/test_analysis_profiles_over_http.py` — expected 4 passed; in `web/`, `npx vitest run tests/unit/analysis-settings` — expected 96 passed.
 - command: `PYTHONPATH=src python3 -I fixtures/recorded/sections/build_fixtures.py --check` — expected `fixtures match`, rc 0.
 - mutations: revert one profile version only; revert one expectations line only; delete the paragraph from one prompt (recording kept, then recording rebuilt consistently, where only the fragment check of the report is red: the `D-224` residual); put a numeral, a norm number or a class designation into the paragraph; remove an allowlist entry; make the report forget a token.
