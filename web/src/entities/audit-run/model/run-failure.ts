@@ -8,6 +8,10 @@
  * evidence of a provider call that never happened, which is the exact confusion
  * `provider_mode` exists to prevent.
  *
+ * `EXEC-PAR-WEB-01`: the same holds for an executor the person chose. A refusal naming it
+ * (`./executor-refusal.ts`) is rendered as itself, with a retry only when the envelope says it
+ * is retryable, and never with another executor or the route in its place.
+ *
  * `analysis_input_invalid` is kept distinct from `validation_failed`: the first says the
  * declared analysis inputs are not acceptable, the second says the request was malformed,
  * and collapsing them would hide which one the operator has to fix.
@@ -30,6 +34,8 @@ import {
   catalogMessage,
 } from '@/shared/api';
 
+import { executorRefusal } from './executor-refusal';
+import type { ExecutorRefusalKind } from './executor-refusal';
 import { inputBudgetSentence } from './input-budget';
 import {
   SECTION_PROFILE_UNAVAILABLE_REFUSAL,
@@ -43,6 +49,7 @@ export type RunFailureKind =
   | 'input_budget_exceeded'
   | 'version_unclassified'
   | 'section_profile_unavailable'
+  | ExecutorRefusalKind
   | 'reference_unavailable'
   | 'provider_unavailable'
   | 'not_found'
@@ -107,6 +114,11 @@ function fromApiError(error: ApiError): RunFailure {
     retryable: error.retryable,
     errorCode: error.errorCode,
   };
+
+  // `EXEC-PAR-WEB-01`: a refusal of the executor the person chose is said as itself, before the
+  // generic provider sentence, which would print the dependency's raw name and speak of a mode.
+  const chosen = executorRefusal(error);
+  if (chosen !== null) return { ...base, ...chosen };
 
   switch (error.errorCode) {
     case 'dependency_unavailable':

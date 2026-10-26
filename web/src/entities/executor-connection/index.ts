@@ -25,6 +25,10 @@ export {
   requiredPurposes, routeBlocker, secretIsUnreadable, secretOfPurpose,
 } from './model/readiness';
 export type { RouteBlocker } from './model/readiness';
+export type { ChoiceBlocker, ExecutorChoice } from './model/start-choice';
+export {
+  CHOICE_BLOCKER_SENTENCES, choiceCanServe, executorChoiceLabel, executorChoices,
+} from './model/start-choice';
 export {
   RUNNER_ONLINE_WINDOW_MS, RUNNER_TOKEN_STATE_LABELS, connectionRunnerIsOnline,
   hasLiveRunnerToken, runnerTokenIsLive, runnerTokenIsOnline, runnerTokenState, sortedRunnerTokens,
