@@ -6,8 +6,10 @@ MinIO, driven with a real expert credential. What is held:
 * the answer is the registry the application routes runs through, not a copy: fifteen rows in
   the project-structure order (``PROJECT_STRUCTURE_ORDER``), named from the reviewed section
   catalogue; every registered section carries exactly its registry entry's identities,
-  version, status and content hashes; AR is ``builtin`` with no source; every package is
-  ``draft`` with the source its ``profile.json`` declares; ``PB`` (`PB-PROFILE-01`) is the
+  version, status and content hashes; AR is ``builtin`` with no source; every package carries
+  the status and version its line of ``section_profile_expectations.json`` names (`draft` at
+  ``1.0.0`` until a section's review moves its line) and the source its ``profile.json``
+  declares; ``PB`` (`PB-PROFILE-01`) is the
   fifteenth profile, an authored one that declares ``source: null``, so no row carries
   ``profile: null`` any more;
 * every object carries exactly its frozen schema's properties;
@@ -37,6 +39,17 @@ from auditmanager.sections.public import section_names
 DEPLOYMENT_SECRET = "w59-analysis-settings-over-http-token"
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 CONTRACT = REPOSITORY_ROOT / "contracts" / "api" / "v1" / "openapi.json"
+#: One line per non-AR package: the status and version it must be served with
+#: (`PROD-14-0-EXPECTATIONS-01`). A section lane edits its own line, not this suite.
+EXPECTATIONS = (
+    REPOSITORY_ROOT / "tests" / "unit" / "analysis" / "text_profiles" / "section_profile_expectations.json"
+)
+
+
+def _expected_sections() -> dict[str, tuple[str, str]]:
+    """``code -> (status, profile_version)`` for every non-AR package of this tree."""
+    rows = json.loads(EXPECTATIONS.read_text(encoding="utf-8"))["sections"]
+    return {row["code"]: (row["status"], row["profile_version"]) for row in rows}
 
 
 @pytest.fixture(scope="module")
@@ -78,10 +91,14 @@ def test_every_row_is_the_registry_entry_the_application_routes_by(
     listing: dict[str, Any],
 ) -> None:
     registry = load_text_profile_registry()
+    expected = _expected_sections()
     by_code = {item["section_code"]: item["profile"] for item in listing["items"]}
     assert {code for code, profile in by_code.items() if profile is None} == set()
     assert set(registry.entries) == {code for code, profile in by_code.items() if profile}
     assert len(registry.entries) == len(by_code) == 15
+    packages = set(registry.entries) - {"AR"}
+    assert packages - set(expected) == set(), "a served package has no line in the expectations file"
+    assert set(expected) - packages == set(), "a line of the expectations file has no served package"
 
     for code, entry in registry.entries.items():
         profile = by_code[code]
@@ -95,14 +112,16 @@ def test_every_row_is_the_registry_entry_the_application_routes_by(
             assert profile["source"] is None
             assert profile["analysis_profile_id"] == str(AR_TEXT_PROFILE.analysis_profile_id)
             continue
-        assert profile["status"] == "draft"
+        assert (profile["status"], profile["profile_version"]) == expected[code], (
+            f"{code}: the served (status, profile_version) is not the expectations file's"
+        )
         declared = json.loads(
             (PACKAGES_ROOT / code.lower() / "profile.json").read_text(encoding="utf-8")
         )
         assert profile["source"] == declared["source"]
 
     pb = by_code["PB"]
-    assert pb["status"] == "draft", "no expert review exists for the authored profile"
+    assert (pb["status"], pb["profile_version"]) == expected["PB"], "the authored profile is served as expected"
     assert pb["source"] is None, "PB has no legacy source and says so"
     assert pb["analysis_profile_id"] == registry.entries["PB"].analysis_profile_id
 
