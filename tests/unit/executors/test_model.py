@@ -44,6 +44,12 @@ def test_the_pins_are_the_lock_s_three_models() -> None:
     assert PINS == {"claude-opus-5", "claude-sonnet-5", "gpt-6-sol"}
 
 
+def test_claude_subscription_can_be_a_not_metered_pull_revision() -> None:
+    settings = replace(PULL, pin_id="claude-opus-5", gateway_model="claude-opus-5",
+                       billing="not_metered", pull_client="agent")
+    assert validate_settings("pull", settings, pinned_model_ids=PINS) == settings
+
+
 def test_codex_subscription_can_be_a_not_metered_pull_revision() -> None:
     settings = replace(PULL, pin_id="gpt-6-sol", gateway_model="gpt-6-sol",
                        billing="not_metered", pull_client="agent")

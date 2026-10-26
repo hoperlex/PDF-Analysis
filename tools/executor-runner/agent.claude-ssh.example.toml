@@ -1,0 +1,23 @@
+# Copy outside the repository and set the tunnel port to the one you opened locally.
+# The local SSH forward carries this HTTP hop to the stand's loopback-only proxy.
+# Runner token: PDF_ANALYSIS_RUNNER_TOKEN in the agent's environment, never here.
+
+[runner]
+origin = "http://127.0.0.1:31501"
+token_env = "PDF_ANALYSIS_RUNNER_TOKEN"
+wait_seconds = 25
+concurrency = 1
+drain_seconds = 60
+
+[model]
+declared = "claude-opus-5"
+
+[executor]
+mode = "command"
+
+[command]
+# Replace both absolute paths: this repository on this machine, and the Claude Code binary
+# (`command -v claude`; the VSCode extension ships one under
+# ~/.vscode-server/extensions/anthropic.claude-code-*/resources/native-binary/claude).
+argv = ["/usr/bin/python3", "/path/to/PDF-Analysis/tools/executor-runner/claude_answer.py", "--claude", "/path/to/claude"]
+timeout_seconds = 540
