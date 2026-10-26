@@ -11,6 +11,7 @@
  * used to apply to everything.
  */
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -46,8 +47,14 @@ const noProfile = () => apiError(422, 'section_profile_unavailable');
 
 function control(error: unknown): string {
   settled.error = error;
+  // `EXEC-PAR-WEB-01`: the control reads the connections for its «Исполнитель» select, so it needs a
+  // client; nothing is seeded, the list stays loading, and the select draws no button or link.
   return renderToStaticMarkup(
-    createElement(StartRunControl, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
+    createElement(
+      QueryClientProvider,
+      { client: new QueryClient() },
+      createElement(StartRunControl, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
+    ),
   );
 }
 

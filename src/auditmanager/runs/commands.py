@@ -118,7 +118,7 @@ from auditmanager.ingest.public import (
     payload_fingerprint,
 )
 from auditmanager.runs.provider import FrozenRoute, RouteFreezer
-from auditmanager.runs.repository import RunRepository, RunRow
+from auditmanager.runs.repository import EXECUTOR_CHOSEN_EVENT, RunRepository, RunRow
 from auditmanager.sections.public import route_classified_version
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import (
@@ -284,6 +284,7 @@ def start_run_fingerprint(
     prompt_bundle_id: str,
     provider_mode: str,
     input_basis_digest_value: str,
+    executor_connection_id: str | None = None,
 ) -> PayloadFingerprint:
     """The comparison value that distinguishes a repeat from a same-key conflict.
 
@@ -299,16 +300,23 @@ def start_run_fingerprint(
     recorded under the key ``frozen_input_digest`` -- the name it has carried since
     before W55, when the basis *was* the stored digest -- so every key accepted then
     still produces the fingerprint its ``command_record`` holds.
+
+    ``executor_connection_id`` (`EXEC-PAR-START-01`) is the executor the caller **named**. It is
+    part of the request, so the same key with another executor is a different payload
+    (``idempotency_key_reuse``), not a replay. It is added to the document only when named: an
+    absent choice leaves the fingerprint byte-for-byte what it was, so every key accepted before
+    this field existed still replays.
     """
-    return payload_fingerprint(
-        {
-            "analysis_profile_id": analysis_profile_id,
-            "frozen_input_digest": input_basis_digest_value,
-            "prompt_bundle_id": prompt_bundle_id,
-            "provider_mode": provider_mode,
-            "version_uid": version_uid,
-        }
-    )
+    document: dict[str, Any] = {
+        "analysis_profile_id": analysis_profile_id,
+        "frozen_input_digest": input_basis_digest_value,
+        "prompt_bundle_id": prompt_bundle_id,
+        "provider_mode": provider_mode,
+        "version_uid": version_uid,
+    }
+    if executor_connection_id is not None:
+        document["executor_connection_id"] = executor_connection_id
+    return payload_fingerprint(document)
 
 
 #: The sealed section → ``(analysis_profile_id, prompt_bundle_id)`` table run start routes
@@ -424,6 +432,31 @@ def _refuse_over_budget(
         )
 
 
+def _chosen_executor_unserved() -> DomainError:
+    """A named executor and no freezer to honour it (the ``environment`` source, or a bare
+    wiring): refused, because running the work on the process's own adapter instead would be the
+    silent fallback an explicit choice forbids."""
+    return DomainError(
+        ErrorCode.DEPENDENCY_UNAVAILABLE,
+        message="this deployment does not serve a chosen executor connection",
+        dependency="executor_connection",
+    )
+
+
+def _freeze_for(
+    session: Session, connection_route: RouteFreezer, connection_id: str | None
+) -> FrozenRoute:
+    """Freeze through the seam: the route when no connection was named (called exactly as it
+    always was), else the named connection. A freezer that answers any other connection than the
+    one asked for is a wiring fault and nothing is written."""
+    if connection_id is None:
+        return connection_route(session)
+    frozen = connection_route(session, connection_id=connection_id)
+    if frozen.chosen_connection_id != connection_id:
+        raise ValueError("the route freezer did not freeze the connection that was named")
+    return frozen
+
+
 def start_audit_run(
     session: Session,
     *,
@@ -439,6 +472,7 @@ def start_audit_run(
     input_budget_characters: int | None = None,
     section_profiles: SectionProfiles | None = None,
     connection_route: RouteFreezer | None = None,
+    executor_connection_id: str | None = None,
 ) -> StartedRun:
     """Create one durable ``AuditRun``, or answer what already happened under this key.
 
@@ -473,6 +507,13 @@ def start_audit_run(
     A route with nothing usable is refused here as ``dependency_unavailable``
     (``executor_route_missing``) before the key is claimed, so nothing is written. A standby chosen
     in place of the primary is journaled once the run exists.
+
+    ``executor_connection_id`` (`EXEC-PAR-START-01`): the connection the caller **named**. The
+    freezer then freezes that connection's current revision instead of the route's, and the start
+    is refused -- before the key is claimed, so nothing is written -- when the connection is
+    unknown, archived, not served, or not probed ``ok``; it never becomes the standby or another
+    connection. The choice is part of the idempotency fingerprint and is journaled once the run
+    exists (``audit_run.executor_chosen``). Absent, the start is what it always was.
     """
     _explicit_or_routed(analysis_profile_id, prompt_bundle_id, section_profiles)
     command_repo = commands or CommandRepository()
@@ -496,6 +537,7 @@ def start_audit_run(
     known = (
         command_repo.find(session, command_type=COMMAND_TYPE_START_RUN, idempotency_key=key)
         if budget is not None or section_profiles is not None or connection_route is not None
+        or executor_connection_id is not None
         else None
     )
     if section_profiles is not None:
@@ -524,8 +566,10 @@ def start_audit_run(
     # fresh start. A key the ledger already knows is not refused here -- it is answered below,
     # as a replay, whatever today's budget is.
     frozen: FrozenRoute | None = None
+    if executor_connection_id is not None and connection_route is None and known is None:
+        raise _chosen_executor_unserved()
     if connection_route is not None and known is None:
-        frozen = connection_route(session)
+        frozen = _freeze_for(session, connection_route, executor_connection_id)
         budget = frozen.input_budget_characters
     if budget is not None and known is None:
         _refuse_over_budget(_version.text_character_count, budget)
@@ -547,6 +591,7 @@ def start_audit_run(
         prompt_bundle_id=prompt_bundle_id,
         provider_mode=provider_mode,
         input_basis_digest_value=basis,
+        executor_connection_id=executor_connection_id,
     )
 
     claimed = command_repo.begin(
@@ -592,6 +637,7 @@ def start_audit_run(
         connection_revision_id=None if frozen is None else frozen.revision_id,
     )
     _journal_standby(session, run_id, frozen)
+    _journal_executor_choice(session, run_id, frozen)
     command_repo.succeed(session, claimed.command_id, {"run_id": run_id})
     return StartedRun(
         run_id=run_id, command_id=str(claimed.command_id), replayed=False
@@ -611,6 +657,22 @@ def _journal_standby(session: Session, run_id: str, frozen: FrozenRoute | None) 
             "primary_connection_id": frozen.primary_connection_id,
             "standby_connection_id": frozen.standby_connection_id,
             "reason": frozen.standby_reason,
+        },
+    )
+
+
+def _journal_executor_choice(session: Session, run_id: str, frozen: FrozenRoute | None) -> None:
+    """A connection the caller named is an event of the run, beside its frozen revision: the run
+    row alone cannot tell a named executor from a routed one, and a repeat must keep the former
+    (`EXEC-PAR-START-01`). Identities only; the connection's name, address and key never enter."""
+    if frozen is None or frozen.chosen_connection_id is None:
+        return
+    append_execution_event(
+        session, event_type=EXECUTOR_CHOSEN_EVENT, aggregate_type="AuditRun",
+        aggregate_id=run_id, run_id=run_id,
+        payload={
+            "connection_id": frozen.chosen_connection_id,
+            "revision_id": frozen.revision_id,
         },
     )
 
@@ -701,6 +763,12 @@ def reaudit_run(
     ``connection_route`` (`EXEC-HTTP-01`) freezes the connection revision of the new run exactly
     as ``start_audit_run`` does, on today's route, for a new key only.
 
+    `EXEC-PAR-START-01`: a source whose executor was **named** at its start (it carries an
+    ``audit_run.executor_chosen`` event) is repeated on that same connection -- its current
+    revision -- and not on today's route. If that connection can no longer serve, the repeat is
+    refused before the key is claimed; it is never redirected to the route, the standby or another
+    connection. The new run journals the same choice, so its own repeat keeps it too.
+
     `R-82`: a re-audit is the same document version analysed on the **current** analysis
     profile, prompt bundle and provider mode. The caller passes the configuration the
     deployment executes (the same values ``start_run`` stamps); the new run records
@@ -746,8 +814,11 @@ def reaudit_run(
             routed = route_classified_version(source_version, section_profiles)
             analysis_profile_id = routed.analysis_profile_id
             prompt_bundle_id = routed.prompt_bundle_id
+        chosen_connection_id = repository.chosen_executor_connection(session, source_run_id)
+        if chosen_connection_id is not None and connection_route is None:
+            raise _chosen_executor_unserved()
         if connection_route is not None:
-            frozen = connection_route(session)
+            frozen = _freeze_for(session, connection_route, chosen_connection_id)
             budget = frozen.input_budget_characters
         if budget is not None:
             _refuse_over_budget(source_version.text_character_count, budget)
@@ -816,6 +887,7 @@ def reaudit_run(
         connection_revision_id=None if frozen is None else frozen.revision_id,
     )
     _journal_standby(session, new_id, frozen)
+    _journal_executor_choice(session, new_id, frozen)
     repository.advance(session, run_id=new_id, from_state="created", to_state="queued")
     (jobs or JobRepository()).enqueue(session, run_id=new_id)
     ledger.succeed(session, claimed.command_id, {"run_id": new_id})

@@ -21,7 +21,13 @@ from typing import Any, Mapping
 from auditmanager.api.schemas.common import timestamp
 from auditmanager.shared.errors import ErrorCode, screen_details
 
-__all__ = ["RunStatusView", "StageStateView", "run_status_body", "stage_state_body"]
+__all__ = [
+    "RunExecutorView",
+    "RunStatusView",
+    "StageStateView",
+    "run_status_body",
+    "stage_state_body",
+]
 
 @dataclass(frozen=True, slots=True)
 class StageStateView:
@@ -33,6 +39,15 @@ class StageStateView:
     error_code: str | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class RunExecutorView:
+    """Exactly the frozen ``RunExecutor`` (`EXEC-PAR-START-01`): which executor a run is on."""
+
+    connection_id: str
+    display_name: str
+    pin_id: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +94,9 @@ class RunStatusView:
     norms_snapshot_id: str | None = None
     #: 0023's frozen verified retrieval set; absent on v1/v2 runs.
     norm_retrieval_set_id: str | None = None
+    #: `EXEC-PAR-START-01`. The executor the run froze at start; ``None`` for a run that froze
+    #: none (the ``environment`` source), rendered only when present.
+    executor: RunExecutorView | None = None
 
 
 def stage_state_body(view: StageStateView) -> dict[str, Any]:
@@ -159,4 +177,10 @@ def run_status_body(view: RunStatusView) -> dict[str, Any]:
         body["model_call_count"] = view.model_call_count
     if view.terminal_at is not None:
         body["terminal_at"] = timestamp(view.terminal_at)
+    if view.executor is not None:
+        body["executor"] = {
+            "connection_id": view.executor.connection_id,
+            "display_name": view.executor.display_name,
+            "pin_id": view.executor.pin_id,
+        }
     return body

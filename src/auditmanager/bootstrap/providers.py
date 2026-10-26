@@ -18,7 +18,6 @@ Nothing here falls back: a source that cannot serve a run says so with a typed e
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Callable
 from typing import Any, Final
 
 from sqlalchemy import Connection
@@ -34,7 +33,7 @@ from auditmanager.executors.runtime import (
     freeze_connection,
     route_missing,
 )
-from auditmanager.runs import FrozenRoute, ProviderBinding
+from auditmanager.runs import FrozenRoute, ProviderBinding, RouteFreezer
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
@@ -74,7 +73,7 @@ class ProviderSource:
     """What the composition root hands the run path: ``resolve`` always, ``freeze`` for the
     ``database`` source only."""
 
-    freeze: Callable[[Session], FrozenRoute] | None = None
+    freeze: RouteFreezer | None = None
 
     def resolve(self, session: Session, run: Any, context: Any) -> ProviderBinding:  # pragma: no cover
         raise NotImplementedError
@@ -119,8 +118,13 @@ class DatabaseProviders(ProviderSource):
             session_factory=sessionmaker(bind=bind), engine=None if isinstance(bind, Connection) else bind,
         )
 
-    def _freeze(self, session: Session) -> FrozenRoute:
-        frozen = freeze_connection(session, WORK_KIND)
+    def _freeze(self, session: Session, *, connection_id: str | None = None) -> FrozenRoute:
+        """The route's revision, or -- when the caller named a connection (`EXEC-PAR-START-01`) --
+        that connection's current revision. No ``connection_id`` is the call it always was."""
+        frozen = (
+            freeze_connection(session, WORK_KIND) if connection_id is None
+            else freeze_connection(session, WORK_KIND, connection_id=connection_id)
+        )
         return FrozenRoute(
             revision_id=frozen.revision_id,
             # The budget follows the revision's pinned model, not the model the process
@@ -129,6 +133,7 @@ class DatabaseProviders(ProviderSource):
             primary_connection_id=frozen.primary_connection_id if frozen.used_standby else None,
             standby_connection_id=frozen.standby_connection_id if frozen.used_standby else None,
             standby_reason=frozen.reason,
+            chosen_connection_id=frozen.connection_id if frozen.explicit else None,
         )
 
     def resolve(self, session: Session, run: Any, context: Any) -> ProviderBinding:

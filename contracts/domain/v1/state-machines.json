@@ -1,9 +1,9 @@
 {
   "contract": "auditmanager.domain.state-machines",
-  "contract_version": "1.5.0",
-  "supersedes": "1.4.0",
-  "candidate_revision": 23,
-  "revision_note": "Candidate revision 23 by AR-V3-BETA-PACK-STATUS-API-01: additive reviewed-pack status read API and family 1.5.0 seal.",
+  "contract_version": "1.6.0",
+  "supersedes": "1.5.0",
+  "candidate_revision": 24,
+  "revision_note": "Candidate revision 24 by EXEC-PAR-START-01: additive executor choice on startRun and read-only executor on RunStatus, and family 1.6.0 seal.",
   "status": "frozen",
   "frozen": true,
   "rules": [

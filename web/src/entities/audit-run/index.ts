@@ -57,6 +57,14 @@ export { looksLikeRunId } from './model/address';
 export type { RunFailure, RunFailureKind } from './model/run-failure';
 export { classifyRunFailure } from './model/run-failure';
 
+export type { ExecutorRefusal, ExecutorRefusalKind } from './model/executor-refusal';
+export { EXECUTOR_DEPENDENCY, EXECUTOR_FIELD, executorRefusal } from './model/executor-refusal';
+
+export type { RunExecutorLine } from './model/run-executor';
+export {
+  runExecutorLine, runExecutorSentence, runExecutorValue, runWaitingSentence,
+} from './model/run-executor';
+
 export type { RoutingRefusal, RoutingRefusalKind } from './model/routing-refusal';
 export {
   SECTION_PROFILE_UNAVAILABLE_REFUSAL,

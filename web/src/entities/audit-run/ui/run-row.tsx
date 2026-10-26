@@ -9,6 +9,10 @@
  * inline, so a run is already terminal when `startRun` answers and no client can observe
  * a `running` one. A row that animated towards a state nothing can report would be a
  * promise this system cannot keep.
+ *
+ * `EXEC-PAR-WEB-01`: a run that froze an executor names it, with its pinned model; a run in the
+ * queue says it is waiting for that executor. A run with none (the environment source) draws
+ * no line at all.
  */
 
 import Link from 'next/link';
@@ -17,6 +21,8 @@ import type { RunStatus } from '@/shared/api';
 import { RunStateBadge } from '@/shared/ui';
 import { formatInstant } from '@/shared/lib';
 
+import { runExecutorLine, runExecutorSentence } from '../model/run-executor';
+
 export interface RunRowProps {
   readonly run: RunStatus;
   /** Where this row opens. Built by the screen, never by the row. */
@@ -24,6 +30,7 @@ export interface RunRowProps {
 }
 
 export function RunRow({ run, href }: RunRowProps) {
+  const executor = runExecutorLine(run);
   return (
     <li className="am-state" style={{ marginBottom: '0.5rem' }} data-run-id={run.run_id}>
       <p className="am-state__title">
@@ -39,6 +46,7 @@ export function RunRow({ run, href }: RunRowProps) {
             ? ''
             : ` · завершён ${formatInstant(run.terminal_at)}`}
         </p>
+        {executor === null ? null : <p data-run-executor>{runExecutorSentence(executor)}</p>}
         <p>
           Находок{' '}
           {run.published_finding_count === undefined ? '—' : run.published_finding_count} ·

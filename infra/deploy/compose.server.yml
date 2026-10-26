@@ -296,6 +296,11 @@ services:
       # The identity and heartbeat files the health check reads. On the tmpfs below, so a
       # restarted container registers as a new worker and leaves no stale identity.
       AUDITMANAGER_WORKER_STATE_DIR: /run/auditmanager
+      # `EXEC-PAR-QUEUE-01`. How many runs this worker executes at once: a whole number from 1 to
+      # 16. The default is 1, one run at a time, which is also the rollback; anything else stops
+      # the worker at start. Whatever it is, one executor connection has at most one active run.
+      # The `api` never reads it.
+      AUDITMANAGER_WORKER_SLOTS: ${AUDITMANAGER_WORKER_SLOTS:-1}
     # The provider credential, the private key ring and the optional destination allowlist
     # (`AUDITMANAGER_EXECUTOR_ALLOWED_HOSTS`): a separate file the owner writes on the host,
     # never passed to --env-file, so it stays out of compose substitution and therefore out

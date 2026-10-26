@@ -518,12 +518,18 @@ class RunPort(Protocol):
         version_uid: str,
         provider_mode: str | None,
         idempotency_key: str,
+        executor_connection_id: str | None = None,
     ) -> RunStatusView:
         """Start a run, or return the existing one for this key and payload.
 
         A new key over a terminal run creates a new run and leaves the terminal one
         exactly as it was: a terminal run is never reopened. The same key with a
         different payload is ``idempotency_key_reuse`` and creates nothing.
+
+        ``executor_connection_id`` (`EXEC-PAR-START-01`) names the connection the run must be
+        on. ``None`` is the global route, as before. A connection that cannot serve now
+        refuses the start; it is never replaced by the standby or another connection, and the
+        id is part of the payload the key is compared by.
         """
 
     def get_run_status(self, *, run_id: str) -> RunStatusView:

@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.5.0 (OpenAPI 3.1.0)
- *   sha256 425b17f6f4734dafb7faa1f744aed5f51264955e400fde9d5da8752f6ed83df5
+ *   AuditManager PC-01 API 1.6.0 (OpenAPI 3.1.0)
+ *   sha256 664a9069d2d476c84dacbd171cd9f31cb4c51299a4a6f56d89b97552106a25af
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.5.0';
+export const CONTRACT_VERSION = '1.6.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '425b17f6f4734dafb7faa1f744aed5f51264955e400fde9d5da8752f6ed83df5';
+export const CONTRACT_DIGEST = '664a9069d2d476c84dacbd171cd9f31cb4c51299a4a6f56d89b97552106a25af';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -245,6 +245,7 @@ export const SCHEMA_NAMES = [
   'Role',
   'RunActivity',
   'RunActivitySpend',
+  'RunExecutor',
   'RunId',
   'RunNormReferences',
   'RunState',
@@ -980,7 +981,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The single externally visible failure shape, mirroring urn:auditmanager:domain:error-envelope:v1. `retryable` is pinned to the catalog value for the reported code; a caller never infers it from the HTTP status or the message. */
 export type ErrorEnvelope = {
-  contract_version: "1.5.0";
+  contract_version: "1.6.0";
   correlation_id: CorrelationId;
   /** Safe scalar classifiers only, restricted to the safe_detail_keys the catalog declares for the reported code. The catalog's forbidden key set is rejected. */
   details?: {
@@ -2572,6 +2573,13 @@ export type RunActivitySpend = {
   model_call_count: number;
 };
 
+/** EXEC-PAR-START-01: which executor a run is on. Identity, display name and pinned model only; never a secret, an address or a probe. */
+export type RunExecutor = {
+  connection_id: ExecutorConnectionId;
+  display_name: string;
+  pin_id: string;
+};
+
 export type RunId = string;
 
 /** The contract pattern for `RunId`. Anchored; use with `new RegExp()`. */
@@ -2624,6 +2632,8 @@ export type RunStatus = {
   degradation_set?: Array<(StageId | ArV3BetaStageId)>;
   /** Ungrounded model items rejected by the grounding gate. They are not findings and appear in no finding list. */
   diagnostic_observation_count?: number;
+  /** EXEC-PAR-START-01: the executor the run froze at start, read-only: the connection, the name an administrator gave it and the model its frozen revision pins. Null (and omitted) for a run that froze no connection. Nothing about the connection's kind, address, key or probe. */
+  executor?: RunExecutor | null;
   /** OD-10: a run left `running` by a crash is reconciled to `failed` with an explicit interrupted reason. There is no `interrupted` state. */
   interrupted_reason?: string | null;
   /** How many provider calls `cost_micros` sums. Published rather than left to be inferred: a reader who cannot see it cannot tell a run answered first time from one that was retried, and the two spent differently. Present exactly when `cost_micros` is. */
@@ -3164,6 +3174,8 @@ export type StartArV3BetaGroupRequest = {
 };
 
 export type StartRunRequest = {
+  /** EXEC-PAR-START-01: the executor connection this run must be on. Absent: the run follows the global route exactly as before. Present: that connection's current revision is frozen when this release serves it, its current key has a passing probe and it is not archived; otherwise the start is refused and no run exists. Never replaced by the route's standby or by another connection. Part of the payload the idempotency key is compared by. */
+  executor_connection_id?: ExecutorConnectionId;
   /** Defaults to the server's configured mode. A client asking for `live` is asking to spend money against the OD-03 ceiling. */
   provider_mode?: ProviderMode;
   version_uid: VersionUid;
