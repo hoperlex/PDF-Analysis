@@ -124,7 +124,7 @@ the source PDF, and the pack status in «Настройки анализа». Wh
   with it, and what moves is three modules (`content`, `recognised_context`, `grounding`), six data files and two constants.
 - Migrations: history is immutable (`0022_findings_v2`, `0023_norm_citations` stay).
 - АР project optimisation, norm search and the specification reads: they import nothing from v1 or v2 (the importers
-  are listed above) and are not part of the АР analysis path.
+  are listed above). **Correction of 2026-10-26 (`PROD-10-AR-V2-EXTRACT-01`, finding 2):** they are not independent of the АР analysis path. `optimisation/project_match.py` (`_newest_published`) and `optimisation/section_specification.py` (`_read_source`) read the saved page text of the newest **published** Run of the version and answer `analysis_missing` when there is none. After `PROD-11` an АР version can start only the v3 group, so whether a v3 Run is published and persists a text layer decides whether the АР specification, comparison-to-price-list and dashboard steps keep their input. That is not established; `D-222` and `PROD-11a` carry it.
 
 **Order (`AD-12`).** (1) Re-base the live journey `journey.mjs`, `tests/e2e/pc01/` and the manual protocol onto a section that
 stays; otherwise the complete gate goes red on a run the removal makes impossible (the frontend battery cannot see a broken
