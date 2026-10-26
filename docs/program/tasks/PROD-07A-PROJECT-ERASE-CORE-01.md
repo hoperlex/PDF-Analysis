@@ -63,7 +63,7 @@ The set is the `audit_event.event_type` families the purge tool has classified. 
 - captured_output:
   ```text
   ## Addendum — amended by R-146o for the operator project erase only (2026-10-26)
-  
+
   Recorded by `PRODUCTION-ADR-PACK-01` under owner ruling `R-146o` (`OWNER_RULINGS_2026-09-17.md` section 3.46). The text above
   stays as written and stays true for every path of the product: a verdict change creates a new immutable event, and no API
   operation, screen or job deletes or rewrites an expert decision event.
