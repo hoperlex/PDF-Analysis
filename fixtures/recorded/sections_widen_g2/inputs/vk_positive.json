@@ -1,0 +1,29 @@
+{
+  "artifact_role": "prepared.text_layer",
+  "artifact_version": "1.0.0",
+  "extractor": {
+    "name": "hand-authored",
+    "options_sha256": "",
+    "version": "synthetic"
+  },
+  "normalization": {
+    "description": "Unicode NFC. Authored by hand; no extractor ran.",
+    "id": "nfc_v1"
+  },
+  "pages": [
+    {
+      "char_end": 175,
+      "char_start": 0,
+      "page_number": 1,
+      "text": "Раздел 6. Водоснабжение и канализация (ВК)\nОбъект: многоквартирный жилой дом (вымышленный, для проверки)\nСтадия: П\nОбщие данные\nИсточник водоснабжения — городской водопровод.\n"
+    },
+    {
+      "char_end": 438,
+      "char_start": 175,
+      "page_number": 2,
+      "text": "Таблица расчётных расходов воды\nСуточное водопотребление здания, м³/сут: всего 121,4, в том числе:\nжилая часть 96,2\nвстроенные помещения 14,6\nполив территории 7,6\nМаксимальный секундный расход, л/с: общий 4,20, в том числе холодной воды 3,10 и горячей воды 2,00.\n"
+    }
+  ],
+  "total_char_count": 438,
+  "version_uid": "ver_R60FMPVNXQSBJ7G5AXTW0ZE6M9"
+}

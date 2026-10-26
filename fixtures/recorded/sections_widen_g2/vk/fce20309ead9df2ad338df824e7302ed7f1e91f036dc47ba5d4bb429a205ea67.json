@@ -1,0 +1,26 @@
+{
+  "latency_ms": 6100,
+  "model_id": "claude-opus-5",
+  "note": "Synthetic negative case for VK: invented text, reply authored by hand. Token counts and latency are authored, not measured.",
+  "origin": {
+    "analysis_profile_id": "ap_01M5AXG1KF7NGNYMEFN97BW9ZN",
+    "case": "negative",
+    "kind": "synthetic",
+    "profile_status": "reviewed",
+    "profile_version": "1.2.0",
+    "prompt_bundle_id": "pb_01M5AXG1KFMA8QCKP6YM1K5M5W",
+    "prompt_bundle_sha256": "9b7c2f9ae0c8658e967657897ea0e1cb271f4102038686ca85b1de7ec5d8672a",
+    "section_code": "VK",
+    "statement": "Synthetic: authored by hand for SECTION-WIDEN-G2-01 to show how a total that differs from its rows (or a flow in two units) is cited, and that a consistent text yields no observation. No model produced this reply and no provider call was made. Not field evidence for the profile's review.",
+    "task_id": "SECTION-WIDEN-G2-01",
+    "text_layer": "fixtures/recorded/sections_widen_g2/inputs/vk_negative.json"
+  },
+  "output_text": "{\"observations\": []}",
+  "recording_version": "1.0.0",
+  "request_sha256": "fce20309ead9df2ad338df824e7302ed7f1e91f036dc47ba5d4bb429a205ea67",
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 2850,
+    "output_tokens": 90
+  }
+}

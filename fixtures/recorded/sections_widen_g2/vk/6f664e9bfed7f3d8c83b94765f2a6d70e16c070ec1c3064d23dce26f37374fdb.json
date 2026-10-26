@@ -1,0 +1,26 @@
+{
+  "latency_ms": 11500,
+  "model_id": "claude-opus-5",
+  "note": "Synthetic positive case for VK: invented text, reply authored by hand. Token counts and latency are authored, not measured.",
+  "origin": {
+    "analysis_profile_id": "ap_01M5AXG1KF7NGNYMEFN97BW9ZN",
+    "case": "positive",
+    "kind": "synthetic",
+    "profile_status": "reviewed",
+    "profile_version": "1.2.0",
+    "prompt_bundle_id": "pb_01M5AXG1KFMA8QCKP6YM1K5M5W",
+    "prompt_bundle_sha256": "9b7c2f9ae0c8658e967657897ea0e1cb271f4102038686ca85b1de7ec5d8672a",
+    "section_code": "VK",
+    "statement": "Synthetic: authored by hand for SECTION-WIDEN-G2-01 to show how a total that differs from its rows (or a flow in two units) is cited, and that a consistent text yields no observation. No model produced this reply and no provider call was made. Not field evidence for the profile's review.",
+    "task_id": "SECTION-WIDEN-G2-01",
+    "text_layer": "fixtures/recorded/sections_widen_g2/inputs/vk_positive.json"
+  },
+  "output_text": "{\"observations\": [{\"category\": \"internal_contradiction\", \"finding_text\": \"Синтетический ответ (ВК), не результат вызова модели: суточное водопотребление здания записано как 121,4 м³/сут, а сумма трёх частей, названных в тексте частями этого итога, — 118,4 м³/сут.\", \"recommendation_text\": \"Сверить части суточного водопотребления с итогом по зданию.\", \"evidence\": [{\"page_number\": 2, \"quote\": \"всего 121,4\"}, {\"page_number\": 2, \"quote\": \"жилая часть 96,2\"}, {\"page_number\": 2, \"quote\": \"встроенные помещения 14,6\"}, {\"page_number\": 2, \"quote\": \"полив территории 7,6\"}]}]}",
+  "recording_version": "1.0.0",
+  "request_sha256": "6f664e9bfed7f3d8c83b94765f2a6d70e16c070ec1c3064d23dce26f37374fdb",
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 2860,
+    "output_tokens": 500
+  }
+}

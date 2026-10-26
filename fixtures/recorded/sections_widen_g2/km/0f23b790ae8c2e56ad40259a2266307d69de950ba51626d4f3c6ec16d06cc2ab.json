@@ -1,0 +1,26 @@
+{
+  "latency_ms": 6200,
+  "model_id": "claude-opus-5",
+  "note": "Synthetic negative case for KM: invented text, reply authored by hand. Token counts and latency are authored, not measured.",
+  "origin": {
+    "analysis_profile_id": "ap_01M5AXG1KB71SHN23H775AP551",
+    "case": "negative",
+    "kind": "synthetic",
+    "profile_status": "reviewed",
+    "profile_version": "1.2.0",
+    "prompt_bundle_id": "pb_01M5AXG1KB45S6A5TZ0ZTWRVHS",
+    "prompt_bundle_sha256": "70fb237a3234c1bc8878bfcbe699d8d127f404062232254918aa8c19b72f06a0",
+    "section_code": "KM",
+    "statement": "Synthetic: authored by hand for SECTION-WIDEN-G2-01 to show how a total that differs from its rows (or a flow in two units) is cited, and that a consistent text yields no observation. No model produced this reply and no provider call was made. Not field evidence for the profile's review.",
+    "task_id": "SECTION-WIDEN-G2-01",
+    "text_layer": "fixtures/recorded/sections_widen_g2/inputs/km_negative.json"
+  },
+  "output_text": "{\"observations\": []}",
+  "recording_version": "1.0.0",
+  "request_sha256": "0f23b790ae8c2e56ad40259a2266307d69de950ba51626d4f3c6ec16d06cc2ab",
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 2840,
+    "output_tokens": 90
+  }
+}

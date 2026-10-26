@@ -1,0 +1,26 @@
+{
+  "latency_ms": 14800,
+  "model_id": "claude-opus-5",
+  "note": "Synthetic positive case for PT: invented text, reply authored by hand. Token counts and latency are authored, not measured.",
+  "origin": {
+    "analysis_profile_id": "ap_01M5AXG1KHY5S7A1AFVND7FPS9",
+    "case": "positive",
+    "kind": "synthetic",
+    "profile_status": "reviewed",
+    "profile_version": "1.2.0",
+    "prompt_bundle_id": "pb_01M5AXG1KH4JG7TMH93XACNF6H",
+    "prompt_bundle_sha256": "1dd9243b0925aa876ea2c0d4b37a89e427825e06f48a025de8ababe28c58de04",
+    "section_code": "PT",
+    "statement": "Synthetic: authored by hand for SECTION-WIDEN-G2-01 to show how a total that differs from its rows (or a flow in two units) is cited, and that a consistent text yields no observation. No model produced this reply and no provider call was made. Not field evidence for the profile's review.",
+    "task_id": "SECTION-WIDEN-G2-01",
+    "text_layer": "fixtures/recorded/sections_widen_g2/inputs/pt_positive.json"
+  },
+  "output_text": "{\"observations\": [{\"category\": \"internal_contradiction\", \"finding_text\": \"Синтетический ответ (ПТ), не результат вызова модели: подача основного пожарного насоса записана как 10 л/с, что при равенстве 1 л/с = 3,6 м³/ч составляет 36 м³/ч, и как 40 м³/ч в спецификации; разность больше погрешности округления.\", \"recommendation_text\": \"Привести подачу основного пожарного насоса к одному значению.\", \"evidence\": [{\"page_number\": 1, \"quote\": \"Подача основного пожарного насоса — 10 л/с.\"}, {\"page_number\": 2, \"quote\": \"Насос пожарный основной: подача 40 м³/ч, напор 55 м\"}]}, {\"category\": \"internal_contradiction\", \"finding_text\": \"Синтетический ответ (ПТ), не результат вызова модели: расчётный расход ВПВ записан как 4,8 л/с, а число струй 2, умноженное на расход одной струи 2,6 л/с, даёт 5,2 л/с; текст не говорит, что расчётный расход определён иначе.\", \"recommendation_text\": \"Согласовать расчётный расход ВПВ с числом струй и расходом одной струи.\", \"evidence\": [{\"page_number\": 1, \"quote\": \"число струй — 2, расход одной струи — 2,6 л/с, расчётный расход ВПВ — 4,8 л/с\"}]}, {\"category\": \"internal_contradiction\", \"finding_text\": \"Синтетический ответ (ПТ), не результат вызова модели: суммарный расход ВПВ и АУПТ записан как 34,0 л/с, а сумма записанных расходов ВПВ (4,8 л/с) и АУПТ (28,0 л/с) — 32,8 л/с.\", \"recommendation_text\": \"Сверить суммарный расход с расходами ВПВ и АУПТ.\", \"evidence\": [{\"page_number\": 2, \"quote\": \"Суммарный расход ВПВ и АУПТ — 34,0 л/с.\"}, {\"page_number\": 1, \"quote\": \"расчётный расход ВПВ — 4,8 л/с\"}, {\"page_number\": 2, \"quote\": \"Расчётный расход АУПТ — 28,0 л/с.\"}]}]}",
+  "recording_version": "1.0.0",
+  "request_sha256": "2b1668defc71509fbb2953519202aaf7bf1e000233a355caa79e8fce0d2a0214",
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 2910,
+    "output_tokens": 940
+  }
+}

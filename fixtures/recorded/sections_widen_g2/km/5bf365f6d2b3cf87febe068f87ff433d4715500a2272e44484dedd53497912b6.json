@@ -1,0 +1,26 @@
+{
+  "latency_ms": 11800,
+  "model_id": "claude-opus-5",
+  "note": "Synthetic positive case for KM: invented text, reply authored by hand. Token counts and latency are authored, not measured.",
+  "origin": {
+    "analysis_profile_id": "ap_01M5AXG1KB71SHN23H775AP551",
+    "case": "positive",
+    "kind": "synthetic",
+    "profile_status": "reviewed",
+    "profile_version": "1.2.0",
+    "prompt_bundle_id": "pb_01M5AXG1KB45S6A5TZ0ZTWRVHS",
+    "prompt_bundle_sha256": "70fb237a3234c1bc8878bfcbe699d8d127f404062232254918aa8c19b72f06a0",
+    "section_code": "KM",
+    "statement": "Synthetic: authored by hand for SECTION-WIDEN-G2-01 to show how a total that differs from its rows (or a flow in two units) is cited, and that a consistent text yields no observation. No model produced this reply and no provider call was made. Not field evidence for the profile's review.",
+    "task_id": "SECTION-WIDEN-G2-01",
+    "text_layer": "fixtures/recorded/sections_widen_g2/inputs/km_positive.json"
+  },
+  "output_text": "{\"observations\": [{\"category\": \"internal_contradiction\", \"finding_text\": \"Синтетический ответ (КМ), не результат вызова модели: итог столбца масс в спецификации металлопроката записан как 5892,5 кг, а сумма масс пяти марок того же столбца — 5982,5 кг; разность больше погрешности округления, основа массы в таблице названа одна (без наплавленного металла и метизов).\", \"recommendation_text\": \"Проверить массы марок и итог спецификации и привести их в соответствие.\", \"evidence\": [{\"page_number\": 2, \"quote\": \"Итого 5892,5\"}, {\"page_number\": 2, \"quote\": \"Б1 Двутавр 30Б1 6 1240,5\"}, {\"page_number\": 2, \"quote\": \"Б2 Двутавр 25Б1 4 868,0\"}, {\"page_number\": 2, \"quote\": \"К1 Двутавр 30К1 8 2315,5\"}, {\"page_number\": 2, \"quote\": \"К2 Двутавр 25К1 4 1102,0\"}, {\"page_number\": 2, \"quote\": \"Св1 Уголок 100х8 20 456,5\"}]}]}",
+  "recording_version": "1.0.0",
+  "request_sha256": "5bf365f6d2b3cf87febe068f87ff433d4715500a2272e44484dedd53497912b6",
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 2850,
+    "output_tokens": 520
+  }
+}
