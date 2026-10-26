@@ -10,7 +10,7 @@
     "manifest": "web/package.json",
     "lockfile": "web/package-lock.json",
     "lockfileVersion": 3,
-    "lockfile_sha256": "98691bc83549225d6d94ec53c1fc810a58b12cf74487786638fd007d57fd3b77",
+    "lockfile_sha256": "fb24292ef0fa9a93c5628f58cc1d7908206757c6637766dffd5f453e361c468f",
     "install_command": "npm --prefix web ci",
     "no_floating_versions": "Every dependency, devDependency, engines entry and packageManager value is an exact version. `save-exact=true` and `engine-strict=true` in web/.npmrc keep a later `npm install` from reintroducing a range. Enforced by web/tests/guards/pinned-versions.guard.test.ts."
   },
