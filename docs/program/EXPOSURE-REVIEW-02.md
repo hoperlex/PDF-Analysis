@@ -161,3 +161,75 @@ Findings: `F-16` (cipher list and banner), `F-17` (no live assertion of the head
 the API writes uvicorn access lines and warnings that contain **logins and `usr_` ids** (`access/accounts.py:522-529,557,608-613,653-660,703`); the web tier logs paths only (`store.ts:246-311,349`). What can still carry client text or a secret into a log line: `F-12`. What leaves no log line at all: `F-13`.
 
 Findings: `F-03`, `F-05`, `F-12`, `F-13`, `F-21`.
+
+### 3.4 Data egress: what leaves the host
+
+**Outbound-capable code, enumerated** (`rg -l "urllib.request|import httpx|http.client|socket.create_connection|smtplib" src` and the compose files): the model adapters and probes under `src/auditmanager/executors/`
+and `src/auditmanager/analysis/text/proxy.py` (the `worker`), the SSH transport (`executors/ssh_transport.py`, `ssh_tunnel_adapter.py`; the `worker`), `src/auditmanager/norms/__main__.py` (an operator command),
+and the `acme` container (certbot to the certificate authority). Nothing in `web/src` calls a third-party origin (`rg "https?://" web/src` finds none outside comments, tests and schema URIs; `NEXT_TELEMETRY_DISABLED=1`,
+`infra/deploy/Dockerfile.web:32,46`); no CDN font, script or analytics. The `api` makes no outbound call. There is no mail, no webhook, no error-reporting client.
+
+**What a model call carries.** `Authorization: Bearer <connection key>`, `Content-Type`, a random `X-Request-Id` and `X-Idempotency-Key` (`analysis/text/proxy.py:243-253`); the body is the frozen prompt and the page text of
+one version, rendered by `analysis/text/prompt.py` (`render_document`, from `TextLayer`): **no file name, project name, display title, login or user id is put into a prompt** (`rg "source_filename|display_title|project_uid|login" src/auditmanager/analysis/text/*.py` finds none in prompt construction).
+No OpenRouter routing field (`provider.data_collection`, `zdr`, `order`, `only`) is sent: that is `R-146n` item 4, not accepted, which is the cause of `A-2` and is cited, not repeated. The probe sends a fixed 16-token prompt and no client data (`executors/probes.py:136-162`).
+The provider's reply is parsed; its error body is read to at most 4096 bytes and discarded (`proxy.py:86,262`).
+
+**The destination guard is strong and was read in full** (`executors/destinations.py`, `http_adapter.py:16-18`, `:260-285`): the name is resolved, every address classified (loopback, link-local and metadata, unspecified, multicast, compose service names, the compose network are refused whatever is configured; RFC 1918 only for `transport: vpn`),
+the socket is made to the validated address (no second resolution), no redirect is followed, no proxy from the environment is used. A revision that changes the address leaves the sealed key unreadable until it is entered again (`executors/commands.py:176-179`), so an administrator
+cannot repoint an existing key at a host of their choosing. SSH calls use `StrictHostKeyChecking=yes` against a pin and refuse an unpinned or changed key (`ssh_transport.py:17-20,283-290`).
+
+**What goes beyond what `A-2` accepts.**
+* `F-08` (MED, owner): the **runner channel** is a second egress path with a different recipient. `claimExecutorTask` hands the runner the complete prompt (`system`, `user_text`, `output_schema`, and image references; `executors/runner.py:130-141,320-327`); the runner is
+  "a Claude Code session behind the stdio bridge, or an unattended agent" (`routers/runner.py` docstring), i.e. whoever holds the token and whatever service that session talks to. `R-143f` accepted this for the owner's own subscription session
+  "without restriction, `allow_client_documents` included" **because "no commercial use of the application is foreseen"** (`OWNER_RULINGS_2026-09-17.md` line 1704); `R-146f` then lets real client documents into the production version, and `R-146u` leaves
+  `allow_client_documents` a label nothing enforces. `A-2` names OpenRouter only. Nothing in the tree stops a `pull` connection from being routed in production, and nothing records the runner's own terms.
+* `F-15` (LOW, admin): **a plain `http://` destination is accepted for a public host**: `executors/model.py:163-176` accepts `http://` or `https://` and `destinations.py` classifies addresses only, so an administrator (or a stolen administrator session) can route prompts and the bearer key in clear text.
+  The production connection is OpenRouter over HTTPS; the gap is that nothing says so.
+* `F-22` (INFO, wording): `A-2` says "document text goes to OpenRouter". The adapters (`image_input.py`, `OpenAIImageAdapter`, `AnthropicMessagesAdapter`) and the runner (`getExecutorTaskImage`) can also carry one verified PNG crop of a page; per the docstring of `image_input.py` "only a future image stage may select a crop",
+  so no shipped stage does today. When one does, `A-2` should say "text and page crops".
+* Not outbound but adjacent: `A-1`'s fetched pre-migration copy on the development host, and dumps in `infra/deploy/dumps/`, are off-host or off-stack copies of client data; `F-24` (LOW) records that the project erase cannot reach them (the tool prints that itself).
+
+### 3.5 The upload path and the blob path
+
+* **Types and limits.** `uploadDocument` accepts a portal bundle (a ZIP, decided by magic bytes, not by the label: `routers/documents.py:50-57`) or a bare PDF; at most 250 MiB (`ingest/envelope.py:153`), 1 to 500 pages (`:156`, `MIN_PAGES`), source file name at most 255 characters (`:163`) and sanitised (`ingest/bundle_members.py:115`).
+  The bundle reader is the repository's own (`ingest/bundle_archive.py`): at most 8 entries and a compression ratio of 100 (`:119-120`), member size bounded by `MAX_BYTES`, central-directory size bounded (`:463`). PNG crops are checked for signature, digest and size (at most 16 MiB; `executors/image_input.py:18-45`) and for geometry
+  (`ingest/crop_geometry.py`: at most 4 000 000 pixels). The price-list upload parses `.xlsx`/CSV with member, part and column ceilings and **refuses a DOCTYPE or entity declaration before parsing** (`optimisation/parsing/xlsx_source.py:12-16`).
+* **Parser exposure.** PDFium runs as a program of its own: `python -I -B pdf_reader.py`, the PDF as an inherited descriptor, a bare environment `{"PATH": os.defpath}`, `RLIMIT_AS`, `RLIMIT_CPU` and a zero core limit, a wall clock in the parent
+  (`ingest/envelope.py:212-214,470-477`, `ingest/pdf_reader.py:64-68`). A hostile PDF can cost it time and address space, not the API's memory. What the boundary does **not** do is separate users or secrets: the child runs as the API's uid, in the API's container, and a same-uid process reads its parent's environment through
+  `/proc/<ppid>/environ`. Measured with the same call shape on this host (`subprocess.run([sys.executable, "-I", "-c", ...], env={})` reading `/proc/<ppid>/environ`): the sentinel set in the parent's environment at start is readable by the child. The `api` container's environment holds `DATABASE_URL` (bootstrap superuser),
+  the MinIO root keys and `AUDITMANAGER_API_TOKEN` (`compose.server.yml:203-224`). So the one thing standing between a PDFium memory-safety bug and those secrets is that bug not existing: `F-04`. (The provider key is not in the `api`; it is in the `worker`, which does not parse uploads.)
+* **Blob access.** The bucket is private (`mc anonymous set none`, `infra/local/bucket-init.sh:75`), MinIO publishes no port, and the API streams bytes itself: "There is no redirect and no presigned link" (`routers/documents.py:9`; `storage/port.py:5`: the port exposes no delete, overwrite, presign or list). Streaming answers a fixed `application/pdf` /
+  `image/png` (`routers/documents.py:50`, `routers/blocks.py:37`) behind `nosniff` (`nginx.conf:283`); the browser shows a document in its own PDF viewer through an `<object>` on a blob URL (`web/src/widgets/norm-document/ui/norm-document.tsx:142`, `web/src/features/open-evidence/model/use-evidence-document.ts:53`): no application-side PDF script engine (`pdfjs-dist` is not in `web/package-lock.json`).
+  Identity of everything is a ULID-style id; a path or file name is never an identity.
+* **Exports.** `exportRunXlsx` writes every string as an `inlineStr` ("Inline strings are text even when their first character is =, +, - or @", `exports/xlsx/writer.py:134-138`) and the optimisation CSV is formula-escaped (`optimisation/proposals/export.py:6`, `escape_formula`); **`exportRunCsv` is not**:
+  `exports/serializer.py:76-89` (`_cell` returns `str(value)`) and `:97-118` write `finding_text`, `recommendation_text`, `evidence_quote` and `latest_comment` as they are. `evidence_quote` is a verbatim quotation from the client's document: `F-11`.
+* The two upload locations and the slots: `E-5` and `F-10`.
+
+### 3.6 Logging and audit
+
+What is recorded, by event (`rg 'event_type="' src` lists 40 types; the access ones are the six of `access/audit.py:85-110`):
+sign-in **success** (with `default_credential`), the sign-in block that starts a cooling-off (`failures`), role granted/revoked (with the actor, or `host_cli`), password changed, password reset by an administrator, runner token issued/revoked, connection created/revised/archived, secret set/re-wrapped, SSH key generated, route set, probe requested, intake/dispatch pause, job priority, and the run/job/attempt/provider lifecycle.
+Each is appended in the transaction of the change (`access/audit.py` module note); payloads are allow-listed (`:85-110`) and value-checked (`:159-191`). **A secret cannot reach an audit payload by that writer.**
+
+What is **not** recorded: a sign-in attempt that does not start a cooling-off, an attempt on an unknown login, registration reject, archive, restore, purge and unlock of an account (`access/audit.py` module note, "What is not journalled"; they leave a `warning` line, `access/accounts.py:522-529,557,608-613`), any export or download or read of a document (`exports/service.py:1-4`: "No export aggregate ... no `exported_at`"), the destination
+of a revised connection, and a client address anywhere in the journal ("a wrong fact written into an append-only table" behind a terminator, `access/audit.py` note; with the in-stack terminator the address would now be true). The correlation id of a row is caller-chosen when it matches the pattern (`routers/correlation.py`). `F-14`.
+
+What reaches a log line that should not: `F-12` (SQLAlchemy exceptions print `[parameters: ...]`; the engine is built without `hide_parameters`, `shared/db/engine.py:29-38`; verified on an in-memory engine: `IntegrityError ... [SQL: insert into t(a) values (?)] [parameters: ('x',)]`; the sinks are the `_log.exception` calls of the run carrier and the worker, `runs/carrier.py:466,470,521`,
+`workers/service.py:329,388,401,412,424,478`). What does not reach any log: an unhandled exception in the API (`F-13`: `FailureEnvelopeMiddleware` answers `internal_error` and "declines to re-raise", `routers/handlers.py:469-514`, with `to_domain_error` keeping "nothing from the original", `routers/errors.py:77-93`; `rg "_log\.|logging\." src/auditmanager/api` finds one logger, in `app.py`, used for startup lines).
+Container logs are Docker's default `json-file` with no rotation (`rg "logging:|max-size" infra/deploy/compose.server.yml` finds nothing; `PROD-05`, `D-166`).
+
+### 3.7 Denial of service on one 4 GB host with one worker (`R-146j`, `R-146ad`)
+
+The fixed points: one `uvicorn` process, sync handlers run in anyio's default thread pool of **40** (measured with the installed anyio 4.15.1: `anyio.to_thread.current_default_thread_limiter().total_tokens` = 40), a database pool of 5 plus 5 overflow (`shared/db/config.py:40-41`), `MAX_CONCURRENT_UPLOADS = 2` (`multipart.py:76`), one worker slot (`AUDITMANAGER_WORKER_SLOTS` 1, `compose.server.yml:303`), the 900-second attempt watchdog
+(`PROD-20`), seven services and no memory, CPU, process or log limit on any of them (`rg "mem_limit|cpus|pids_limit|deploy:|logging:" infra/deploy/compose.server.yml` finds nothing; `PROD-05`, `D-166`).
+
+| Surface | Position | Bound today | Gap | Finding |
+| --- | --- | --- | --- | --- |
+| PBKDF2 per request (`issueToken`, `submitRegistration`, `readRegistrationStatus`; the BFF sign-in and registration doors) | anonymous, many addresses | nginx: 6 r/m, burst 10 per address on the API paths (`nginx.conf:123,150`); web: 10 + 1 per 6 s per address, in memory, 10 000 tracked clients (`guest-throttle.ts:44-47`); 600 000 iterations (`0006` `SEED_ITERATIONS`) | `location /` (the BFF doors) has no `limit_req`; every limit is per address, so a few hundred sources hold the 40 threads in hashing | `F-18` |
+| Account brake aimed at one account | anonymous, one address | 5 failures per 900 s, then 300 s shut (`access/repository.py:191,200`); edge 6 r/m per address | five wrong passwords every five minutes keep `admin` shut from one address; recovery is the host command (`access.unlock`), i.e. `A-8` | `F-09` (`D-75`) |
+| Registration queue | anonymous | 100 pending (`registrations.py:111`) | one address fills it in about a quarter of an hour (`nginx.conf:103-111`); an administrator must clear it | `F-19` |
+| Upload bodies | any account | 260 MiB per upload at nginx (spooled to disk), 251 MiB in the API, two slots | liveness-only pre-check; no `limit_conn`; nginx's temporary copy, Starlette's spool and the envelope's `TemporaryFile` (`envelope.py:398`) are three disk copies of one body | `F-10` |
+| Run queue and spend | expert | per-run cost ceiling 1.00 USD default (`bootstrap/settings.py:331`) | no cap on the number of Runs or groups an account may start (`rg "already_running|run_in_progress|ux_audit_run"` finds none); one worker means one expert's queue delays everybody's | `F-07` |
+| Runner long poll | runner token | 60 r/m burst 30 per token, 300 r/m burst 120 per address | each claim holds a pool thread for up to 25 s (`executors/runner.py:351-393`, `time.sleep`) and polls the database once a second; nothing limits concurrency | `F-06` |
+| Memory, CPU, disk, logs | any of the above | none (no limits; unrotated logs) | the OOM killer chooses; PostgreSQL is a candidate | `PROD-05` (`D-166`), carried |
+| Slow queries | expert | only `searchNorms` runs under a `statement_timeout` (`norms/search/service.py:21,100`) | no role-level timeout (a `PROD-04` option) | folded into `F-05` |
