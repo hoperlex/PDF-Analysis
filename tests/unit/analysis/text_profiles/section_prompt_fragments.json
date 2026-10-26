@@ -1,0 +1,1219 @@
+{
+ "format": "section-prompt-fragments/1",
+ "about": "Sentences of the 14 section prompts that a test must see stand or stay gone (SECTION-PROMPT-SENTENCE-GUARD-01, D-224 residual). kind present: the whitespace-normalised text occurs in the prompt of every listed section. kind absent: it does not. kind superseded: a ledger sentence a later lane replaced; it must not occur and every id in superseded_by must be a present entry of the same section. Generated from the documents named in sources by tests/unit/analysis/text_profiles/build_section_prompt_fragments.py; do not edit by hand.",
+ "normalisation": "every run of whitespace, line breaks included, replaced by one space, on both sides",
+ "sources": {
+  "SECTION-REVIEW-LEDGER-01": "docs/program/SECTION-REVIEW-LEDGER-01.md",
+  "SECTION-WIDEN-G1-01": "docs/program/SECTION-WIDEN-G1-01.md",
+  "SECTION-WIDEN-G2-01": "docs/program/SECTION-WIDEN-G2-01.md",
+  "SECTION-WIDEN-G3-01": "docs/program/SECTION-WIDEN-G3-01.md"
+ },
+ "fragments": [
+  {
+   "id": "LEDGER:AI:1:removes:1",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "absent",
+   "sections": [
+    "AI"
+   ],
+   "role": "Hint bullet on room name and area (question 4): removes",
+   "text": "с одним и тем же номером"
+  },
+  {
+   "id": "LEDGER:AI:1:adds:1",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "present",
+   "sections": [
+    "AI"
+   ],
+   "role": "Hint bullet on room name and area (question 4): adds",
+   "text": "одинаковый номер сам по себе не делает два упоминания одним помещением"
+  },
+  {
+   "id": "LEDGER:AI:2:removes:1",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "absent",
+   "sections": [
+    "AI"
+   ],
+   "role": "Condition 2 (designation audit): removes",
+   "text": "(Г1–Г4)"
+  },
+  {
+   "id": "LEDGER:PS:1:adds:1",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "present",
+   "sections": [
+    "PS"
+   ],
+   "role": "Condition 2 (questions PS-2 and PS-5): adds",
+   "text": "предельное значение показателя, приведённое из ГПЗУ или технических условий, и проектное значение того же показателя"
+  },
+  {
+   "id": "LEDGER:PS:1:adds:2",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "present",
+   "sections": [
+    "PS"
+   ],
+   "role": "Condition 2 (questions PS-2 and PS-5): adds",
+   "text": "расчётные температуры наружного воздуха для разных систем или разной обеспеченности"
+  },
+  {
+   "id": "LEDGER:PS:1:adds:3",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "present",
+   "sections": [
+    "PS"
+   ],
+   "role": "Condition 2 (questions PS-2 and PS-5): adds",
+   "text": "архитектурная и пожарно-техническая высота здания"
+  },
+  {
+   "id": "LEDGER:POS:1:adds:1",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "present",
+   "sections": [
+    "POS"
+   ],
+   "role": "Durations bullet (question 3): adds",
+   "text": "значение, прочитанное из текстового слоя диаграммы календарного плана, сравнивай, только если текст прямо указывает, к какому этапу или периоду оно относится"
+  },
+  {
+   "id": "LEDGER:POS:2:adds:1",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "present",
+   "sections": [
+    "POS"
+   ],
+   "role": "Headcount bullet (question 3): adds",
+   "text": "значение, прочитанное из текстового слоя графика потребности в кадрах, сравнивай, только если текст прямо указывает, к чему оно относится"
+  },
+  {
+   "id": "LEDGER:POS:3:adds:1",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "present",
+   "sections": [
+    "POS"
+   ],
+   "role": "Condition 2 (question 4): adds",
+   "text": "максимальная численность работающих и их численность в наиболее многочисленную смену"
+  },
+  {
+   "id": "LEDGER:TX:1:adds:1",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "present",
+   "sections": [
+    "TX"
+   ],
+   "role": "Condition 1 (question 2): adds",
+   "text": "Номер позиции оборудования сам по себе не делает два упоминания одной и той же позицией"
+  },
+  {
+   "id": "LEDGER:KJ:1:adds:1",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "present",
+   "sections": [
+    "KJ"
+   ],
+   "role": "Concrete-cover bullet (question 5c): adds",
+   "text": "а также отдельно для поверхностей, соприкасающихся с грунтом, и наружных поверхностей"
+  },
+  {
+   "id": "LEDGER:KJ:1:adds:2",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "present",
+   "sections": [
+    "KJ"
+   ],
+   "role": "Concrete-cover bullet (question 5c): adds",
+   "text": "значения, отнесённые в тексте к разным условиям, не противоречат друг другу"
+  },
+  {
+   "id": "LEDGER:KJ:2:adds:1",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "present",
+   "sections": [
+    "KJ"
+   ],
+   "role": "Anchorage and lap bullet (question 5c): adds",
+   "text": "значения, отнесённые в тексте к разным условиям (верхняя или нижняя арматура, растянутая или сжатая зона, разные классы бетона), не противоречат друг другу"
+  },
+  {
+   "id": "LEDGER:KJ:3:adds:1",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "present",
+   "sections": [
+    "KJ"
+   ],
+   "role": "Deviation-register bullet (question 3): adds",
+   "text": "реестр по своему назначению приводит для одного признака два значения — проектной и рабочей документации, — и их различие внутри самого реестра не противоречие"
+  },
+  {
+   "id": "LEDGER:KM:1:adds:1",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "present",
+   "sections": [
+    "KM"
+   ],
+   "role": "Condition 1 (question 4): adds",
+   "text": "Марка элемента сама по себе не делает два упоминания одним и тем же объектом"
+  },
+  {
+   "id": "LEDGER:OV:1:adds:1",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "present",
+   "sections": [
+    "OV"
+   ],
+   "role": "Duct fire-resistance bullet (question 3): adds",
+   "text": "воздуховоды одной системы могут иметь разные пределы огнестойкости на разных участках"
+  },
+  {
+   "id": "LEDGER:OV:1:adds:2",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "present",
+   "sections": [
+    "OV"
+   ],
+   "role": "Duct fire-resistance bullet (question 3): adds",
+   "text": "если в тексте не названо, к какому участку или ко всей системе относится значение, разные значения противоречием не считай"
+  },
+  {
+   "id": "LEDGER:OV:2:adds:1",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "present",
+   "sections": [
+    "OV"
+   ],
+   "role": "Condition 2 (question 2): adds",
+   "text": "и потерь (даже если оба значения стоят в таблице характеристик систем или в спецификации)"
+  },
+  {
+   "id": "LEDGER:OV:3:removes:1",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "absent",
+   "sections": [
+    "OV"
+   ],
+   "role": "Air-flow bullet (designation audit): removes",
+   "text": "(П1, В1, ВД1, ПД1 и т. п.)"
+  },
+  {
+   "id": "LEDGER:OV:3:adds:1",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "present",
+   "sections": [
+    "OV"
+   ],
+   "role": "Air-flow bullet (designation audit): adds",
+   "text": "(П1, П2, В1, В2 и т. п.)"
+  },
+  {
+   "id": "LEDGER:VK:1:adds:1",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "present",
+   "sections": [
+    "VK"
+   ],
+   "role": "Temperature bullet (question VK-3): adds",
+   "text": "температуры, которые текст относит к разным точкам (на выходе из водонагревателя или теплообменника, у водоразборных приборов, в циркуляционном трубопроводе), не противоречат друг другу, а значение с названной точкой и значение без неё не сравнивай"
+  },
+  {
+   "id": "LEDGER:VK:2:removes:1",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "absent",
+   "sections": [
+    "VK"
+   ],
+   "role": "Three bullets (designation audit): removes",
+   "text": "(Ст В1-1, Ст К1-2, выпуск К1-1 и т. п.)"
+  },
+  {
+   "id": "LEDGER:VK:2:removes:2",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "absent",
+   "sections": [
+    "VK"
+   ],
+   "role": "Three bullets (designation audit): removes",
+   "text": "(В1, Т3, Т4, К1, К2)"
+  },
+  {
+   "id": "LEDGER:VK:2:removes:3",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "absent",
+   "sections": [
+    "VK"
+   ],
+   "role": "Three bullets (designation audit): removes",
+   "text": "схемах систем Т3 и Т4"
+  },
+  {
+   "id": "LEDGER:VK:2:adds:1",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "present",
+   "sections": [
+    "VK"
+   ],
+   "role": "Three bullets (designation audit): adds",
+   "text": "(по обозначению, записанному в тексте)"
+  },
+  {
+   "id": "LEDGER:VK:2:adds:2",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "present",
+   "sections": [
+    "VK"
+   ],
+   "role": "Three bullets (designation audit): adds",
+   "text": "(ХВС, ГВС, канализации)"
+  },
+  {
+   "id": "LEDGER:VK:2:adds:3",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "present",
+   "sections": [
+    "VK"
+   ],
+   "role": "Three bullets (designation audit): adds",
+   "text": "схемах систем ГВС"
+  },
+  {
+   "id": "LEDGER:PT:1:adds:1",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "present",
+   "sections": [
+    "PT"
+   ],
+   "role": "Head and pressure bullet (question 3): adds",
+   "text": "напор или давление у пожарного крана сопоставляй с другим значением, только если текст прямо относит оба значения к одному и тому же пожарному крану, к одной и той же зоне или к одному и тому же этажу"
+  },
+  {
+   "id": "LEDGER:EOM:1:adds:1",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "present",
+   "sections": [
+    "EOM"
+   ],
+   "role": "Condition 1 (question 4b): adds",
+   "text": "Обозначение группы само по себе не делает два упоминания одной и той же группой"
+  },
+  {
+   "id": "LEDGER:SS:1:adds:1",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "present",
+   "sections": [
+    "SS"
+   ],
+   "role": "Per-apartment count bullet (question 4): adds",
+   "text": "для разных типов квартир это количество может быть разным, поэтому значения, отнесённые в тексте к разным типам или к разным квартирам, не противоречат друг другу"
+  },
+  {
+   "id": "LEDGER:SS:1:adds:2",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "present",
+   "sections": [
+    "SS"
+   ],
+   "role": "Per-apartment count bullet (question 4): adds",
+   "text": "значение, у которого не назван тип квартир и нет указания, что оно относится ко всем квартирам, не даёт основания для противоречия"
+  },
+  {
+   "id": "LEDGER:SS:2:removes:1",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "absent",
+   "sections": [
+    "SS"
+   ],
+   "role": "Cable bullet (designation audit): removes",
+   "text": "(нг(А)-LS, нг(А)-FRLS)"
+  },
+  {
+   "id": "LEDGER:SS:2:adds:1",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "present",
+   "sections": [
+    "SS"
+   ],
+   "role": "Cable bullet (designation audit): adds",
+   "text": "(FRLS/FR)"
+  },
+  {
+   "id": "LEDGER:ITP:1:adds:1",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "superseded",
+   "sections": [
+    "ITP"
+   ],
+   "role": "Load bullet (question ITP-1): adds",
+   "text": "значения одной нагрузки, записанные в разных единицах измерения, между собой не сравнивай: пересчёт единиц и округление при нём — вычисление, которого ты не выполняешь",
+   "superseded_in": "SECTION-WIDEN-G3-01",
+   "superseded_by": [
+    "G3:W-UNITS-ITP-G3",
+    "G3:W-UNITS-REF-ITP-G3"
+   ]
+  },
+  {
+   "id": "LEDGER:ITP:2:removes:1",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "absent",
+   "sections": [
+    "ITP"
+   ],
+   "role": "Condition 2 (designation audit): removes",
+   "text": "пропускная способность Kv"
+  },
+  {
+   "id": "LEDGER:GP:1:adds:1",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "present",
+   "sections": [
+    "GP"
+   ],
+   "role": "Relief-plan label bullet (question GP-4): adds",
+   "text": "отметку или уклон из подписи плана организации рельефа сопоставляй с другими местами, только если сама подпись называет этот проезд, тротуар или путь"
+  },
+  {
+   "id": "LEDGER:GP:2:adds:1",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "present",
+   "sections": [
+    "GP"
+   ],
+   "role": "Condition 2 (question GP-2): adds",
+   "text": "площадь земельного участка и площадь в границах проектирования"
+  },
+  {
+   "id": "LEDGER:PB:1:adds:1",
+   "source": "SECTION-REVIEW-LEDGER-01",
+   "kind": "present",
+   "sections": [
+    "PB"
+   ],
+   "role": "Condition 1 (question 4): adds",
+   "text": "частям здания"
+  },
+  {
+   "id": "G1:W-HEAD",
+   "source": "SECTION-WIDEN-G1-01",
+   "kind": "present",
+   "sections": [
+    "PS",
+    "POS",
+    "TX",
+    "KJ"
+   ],
+   "role": "rule: the only permitted addition",
+   "text": "Единственное сложение, которое тебе разрешено, — сложение строк, из которых текст сам составляет записанный в нём итог."
+  },
+  {
+   "id": "G1:W-SCOPE-PS",
+   "source": "SECTION-WIDEN-G1-01",
+   "kind": "present",
+   "sections": [
+    "PS"
+   ],
+   "role": "scope: which totals may be added",
+   "text": "Здесь это количество квартир и общая площадь квартир: записанный итог («Итого», «Всего» или подобная строка) в таблице ТЭП или в квартирографии и строки по типам квартир, секциям или этажам, из которых он составлен. Коэффициенты застройки и плотности застройки не пересчитывай, другие итоги не складывай."
+  },
+  {
+   "id": "G1:W-SCOPE-POS",
+   "source": "SECTION-WIDEN-G1-01",
+   "kind": "present",
+   "sections": [
+    "POS"
+   ],
+   "role": "scope: which totals may be added",
+   "text": "Здесь это распределение по периодам строительства объёмов работ или капитальных вложений: записанный итог («Итого», «Всего» или подобная строка) и строки периодов, из которых он составлен, — доли (в процентах) или суммы. Продолжительности этапов не складывай: этапы могут выполняться одновременно, и сумма их продолжительностей не обязана равняться общей продолжительности. Другие итоги не складывай."
+  },
+  {
+   "id": "G1:W-SCOPE-TX",
+   "source": "SECTION-WIDEN-G1-01",
+   "kind": "present",
+   "sections": [
+    "TX"
+   ],
+   "role": "scope: which totals may be added",
+   "text": "Здесь это установленная электрическая мощность, расход воды, расход стоков и тепло- и холодовыделение технологического оборудования одного и того же предприятия или помещения: записанный итог в пояснительной записке, в общих данных или в сводной таблице нагрузок и строки (позиции оборудования) таблицы нагрузок, таблицы подключений или спецификации, из которых он составлен. Другие итоги не складывай."
+  },
+  {
+   "id": "G1:W-SCOPE-KJ",
+   "source": "SECTION-WIDEN-G1-01",
+   "kind": "present",
+   "sections": [
+    "KJ"
+   ],
+   "role": "scope: which totals may be added",
+   "text": "Здесь это масса арматуры: записанный итог («Итого», «Всего» или подобная строка) ведомости расхода стали или спецификации арматуры и строки по маркам конструкций, классам арматуры или диаметрам, из которых он составлен. Другие итоги, в том числе объём бетона, не складывай."
+  },
+  {
+   "id": "G1:W-TRIGGER",
+   "source": "SECTION-WIDEN-G1-01",
+   "kind": "present",
+   "sections": [
+    "PS",
+    "POS",
+    "TX",
+    "KJ"
+   ],
+   "role": "category: the existing internal_contradiction",
+   "text": "Если сумма строк расходится с записанным итогом, сообщи internal_contradiction, но только когда выполнено всё перечисленное:"
+  },
+  {
+   "id": "G1:W-B1-PS",
+   "source": "SECTION-WIDEN-G1-01",
+   "kind": "present",
+   "sections": [
+    "PS"
+   ],
+   "role": "conservative rule 2: only written values, one column, no unit values, no products",
+   "text": "итог и каждая складываемая строка записаны в тексте явно и в одних и тех же единицах измерения, и текст относит их к одному и тому же объекту и признаку (к одной таблице, одному перечню, одному зданию или одной секции); складываются значения одного столбца, записанные именно для строки; значение на одну единицу (например, площадь одной квартиры) и значение, которого в строке нет и которое пришлось бы вычислять, в том числе умножением количества на значение единицы, в сумму не входят;"
+  },
+  {
+   "id": "G1:W-B1-POS",
+   "source": "SECTION-WIDEN-G1-01",
+   "kind": "present",
+   "sections": [
+    "POS"
+   ],
+   "role": "conservative rule 2: only written values, one column, no unit values, no products",
+   "text": "итог и каждая складываемая строка записаны в тексте явно и в одних и тех же единицах измерения, и текст относит их к одному и тому же объекту и признаку (к одной таблице, одному перечню, одному зданию или одной очереди строительства); складываются значения одного столбца, записанные именно для строки; значение на одну единицу (например, цена единицы объёма работ) и значение, которого в строке нет и которое пришлось бы вычислять, в том числе умножением количества на значение единицы, в сумму не входят;"
+  },
+  {
+   "id": "G1:W-B1-TX",
+   "source": "SECTION-WIDEN-G1-01",
+   "kind": "present",
+   "sections": [
+    "TX"
+   ],
+   "role": "conservative rule 2: only written values, one column, no unit values, no products",
+   "text": "итог и каждая складываемая строка записаны в тексте явно и в одних и тех же единицах измерения, и текст относит их к одному и тому же объекту и признаку (к одной таблице, одному перечню, одному предприятию или помещению); складываются значения одного столбца, записанные именно для строки; значение на одну единицу (например, мощность одного прибора) и значение, которого в строке нет и которое пришлось бы вычислять, в том числе умножением количества на значение единицы, в сумму не входят;"
+  },
+  {
+   "id": "G1:W-B1-KJ",
+   "source": "SECTION-WIDEN-G1-01",
+   "kind": "present",
+   "sections": [
+    "KJ"
+   ],
+   "role": "conservative rule 2: only written values, one column, no unit values, no products",
+   "text": "итог и каждая складываемая строка записаны в тексте явно и в одних и тех же единицах измерения, и текст относит их к одному и тому же объекту и признаку (к одной ведомости, одной таблице, одной конструкции или одному зданию); складываются значения одного столбца, записанные именно для строки; значение на одну единицу (например, масса одного погонного метра) и значение, которого в строке нет и которое пришлось бы вычислять, в том числе умножением количества на значение единицы, в сумму не входят;"
+  },
+  {
+   "id": "G1:W-B2",
+   "source": "SECTION-WIDEN-G1-01",
+   "kind": "present",
+   "sections": [
+    "PS",
+    "POS",
+    "TX",
+    "KJ"
+   ],
+   "role": "conservative rule 3: parts of the total only; subtotals",
+   "text": "в сумму входят только строки, из которых итог составлен по смыслу таблицы; строки «в том числе», «из них», «справочно» и строки, которые текст относит к другому варианту, в сумму не входят; промежуточный итог не складывай вместе со строками, из которых он сам составлен;"
+  },
+  {
+   "id": "G1:W-B3",
+   "source": "SECTION-WIDEN-G1-01",
+   "kind": "present",
+   "sections": [
+    "PS",
+    "POS",
+    "TX",
+    "KJ"
+   ],
+   "role": "conservative rule 1: all rows visible (also at a window boundary)",
+   "text": "все строки читаются в переданном тексте: если часть строк или значений не видна, оборвана (в том числе на последней переданной странице), оторвана от своих подписей или заменена многоточием либо словами «прочие» и «и другие» без значения, не сообщай;"
+  },
+  {
+   "id": "G1:W-B4",
+   "source": "SECTION-WIDEN-G1-01",
+   "kind": "present",
+   "sections": [
+    "PS",
+    "POS",
+    "TX",
+    "KJ"
+   ],
+   "role": "conservative rule 3: the stated basis",
+   "text": "если в тексте названо основание, на котором записан итог или строка («с учётом», «без учёта», «включая», «за исключением», коэффициент), а итог и строки записаны на разных основаниях, не сообщай;"
+  },
+  {
+   "id": "G1:W-B5",
+   "source": "SECTION-WIDEN-G1-01",
+   "kind": "present",
+   "sections": [
+    "PS",
+    "POS",
+    "TX",
+    "KJ"
+   ],
+   "role": "conservative rule 1: tolerance in words",
+   "text": "расхождение больше погрешности округления: количества (квартир, штук) записаны точно и погрешности не имеют, поэтому любое расхождение — находка; у остальных значений погрешность не больше половины единицы последнего записанного разряда, а погрешность сравнения — сумма таких погрешностей всех слагаемых и итога; расхождение в пределах этой погрешности — согласованность;"
+  },
+  {
+   "id": "G1:W-B6",
+   "source": "SECTION-WIDEN-G1-01",
+   "kind": "present",
+   "sections": [
+    "PS",
+    "POS",
+    "TX",
+    "KJ"
+   ],
+   "role": "double addition",
+   "text": "ты сложил строки дважды, в прямом и в обратном порядке, и получил одну и ту же сумму."
+  },
+  {
+   "id": "G1:W-NOTOTAL",
+   "source": "SECTION-WIDEN-G1-01",
+   "kind": "present",
+   "sections": [
+    "PS",
+    "POS",
+    "TX",
+    "KJ"
+   ],
+   "role": "conservative rule 2: no written total, no check",
+   "text": "Если итог в тексте не записан, ничего не складывай."
+  },
+  {
+   "id": "G1:W-CONDITIONS",
+   "source": "SECTION-WIDEN-G1-01",
+   "kind": "present",
+   "sections": [
+    "PS",
+    "POS",
+    "TX",
+    "KJ"
+   ],
+   "role": "the five conditions still apply",
+   "text": "Условия 1–4 выше применяются и к такому расхождению; условие 5 не мешает, потому что и итог, и строки в тексте есть."
+  },
+  {
+   "id": "G1:W-EVIDENCE",
+   "source": "SECTION-WIDEN-G1-01",
+   "kind": "present",
+   "sections": [
+    "PS",
+    "POS",
+    "TX",
+    "KJ"
+   ],
+   "role": "evidence: the total and the rows",
+   "text": "В evidence приведи цитату итога и цитаты складываемых строк (если строк больше десяти — цитаты итога, первой и последней из них); в finding_text назови записанный итог, полученную сумму и число сложенных строк."
+  },
+  {
+   "id": "G1:W-NORMS-1",
+   "source": "SECTION-WIDEN-G1-01",
+   "kind": "present",
+   "sections": [
+    "PS",
+    "POS",
+    "TX",
+    "KJ"
+   ],
+   "role": "exclusion sentence: calculation ban, one exception",
+   "text": "кроме сложения строк по правилу выше,"
+  },
+  {
+   "id": "G1:W-NORMS-2",
+   "source": "SECTION-WIDEN-G1-01",
+   "kind": "present",
+   "sections": [
+    "PS",
+    "POS",
+    "TX",
+    "KJ"
+   ],
+   "role": "exclusion sentence: what is compared",
+   "text": "и сумма строк, сложенных по правилу выше."
+  },
+  {
+   "id": "G2:W-HEAD",
+   "source": "SECTION-WIDEN-G2-01",
+   "kind": "present",
+   "sections": [
+    "KM",
+    "OV",
+    "VK"
+   ],
+   "role": "rule: the only permitted calculation, an exception to the calculation ban",
+   "text": "Единственное исключение из запрета на расчёты — сверка записанного итога с суммой записанных слагаемых."
+  },
+  {
+   "id": "G2:W-NONUM",
+   "source": "SECTION-WIDEN-G2-01",
+   "kind": "present",
+   "sections": [
+    "KM",
+    "OV",
+    "VK",
+    "PT"
+   ],
+   "role": "conservative rule 2: no drawing, picture or recognised value; nothing restored from other values",
+   "text": "- ни одно число не прочитано с чертежа, рисунка или распознанного изображения и не восстановлено по другим значениям;"
+  },
+  {
+   "id": "G2:W-TOL",
+   "source": "SECTION-WIDEN-G2-01",
+   "kind": "present",
+   "sections": [
+    "KM",
+    "OV",
+    "VK"
+   ],
+   "role": "conservative rule 1: the tolerance in words",
+   "text": "- разницу считай расхождением, только если она больше погрешности округления — суммы половин единицы последнего записанного разряда итога и каждого слагаемого; меньшая разница — это округление."
+  },
+  {
+   "id": "G2:W-VISIBLE",
+   "source": "SECTION-WIDEN-G2-01",
+   "kind": "present",
+   "sections": [
+    "KM",
+    "OV"
+   ],
+   "role": "conservative rule 1: both figures written, same units, all rows visible",
+   "text": "- итог и каждое слагаемое прямо записаны в тексте числами в одних и тех же единицах, а текст показывает, что эти строки составляют именно этот итог; все строки видны в переданном тексте — без пропусков, без «и т. д.» и без обрыва таблицы;"
+  },
+  {
+   "id": "G2:W-CLOSE",
+   "source": "SECTION-WIDEN-G2-01",
+   "kind": "present",
+   "sections": [
+    "OV",
+    "VK"
+   ],
+   "role": "category and evidence: the existing internal_contradiction, the total and every row; no other calculation",
+   "text": "Если хотя бы одно условие не выполнено, итог с суммой не сопоставляй. Находка — только internal_contradiction: в evidence приведи цитату строки с итогом и цитату каждой строки-слагаемого. Других вычислений не выполняй."
+  },
+  {
+   "id": "G2:KM-HINT",
+   "source": "SECTION-WIDEN-G2-01",
+   "kind": "present",
+   "sections": [
+    "KM"
+   ],
+   "role": "hint bullet: where the check applies",
+   "text": "- итог столбца масс и сумма масс строк этого столбца в спецификации металлопроката и в ведомости элементов — только на условиях абзаца об исключении из запрета на расчёты ниже;"
+  },
+  {
+   "id": "G2:KM-SCOPE",
+   "source": "SECTION-WIDEN-G2-01",
+   "kind": "present",
+   "sections": [
+    "KM"
+   ],
+   "role": "scope: which totals may be added",
+   "text": "Для КМ это строка «Итого» («Всего», «Сумма») столбца масс в спецификации металлопроката или в ведомости элементов и сумма масс строк этого же столбца. Сверяй, только если выполнено всё сразу:"
+  },
+  {
+   "id": "G2:KM-BASIS",
+   "source": "SECTION-WIDEN-G2-01",
+   "kind": "present",
+   "sections": [
+    "KM"
+   ],
+   "role": "conservative rule 3: the mass total only when the text states its basis",
+   "text": "- у самой таблицы или в её примечании текст называет основу массы: включены ли в неё наплавленный металл, метизы, огнезащита, запас; основа одна и та же у итога и у всех строк, а между строками и итогом нет подытогов и строк-добавок;"
+  },
+  {
+   "id": "G2:KM-CLOSE",
+   "source": "SECTION-WIDEN-G2-01",
+   "kind": "present",
+   "sections": [
+    "KM"
+   ],
+   "role": "category and evidence; no other calculation, the mass of an element times its count named as refused",
+   "text": "Если хотя бы одно условие не выполнено, итог с суммой не сопоставляй. Находка — только internal_contradiction: в evidence приведи цитату строки с итогом и цитату каждой строки-слагаемого. Других вычислений (например, массу одного элемента, умноженную на количество) не выполняй."
+  },
+  {
+   "id": "G2:OV-HINT",
+   "source": "SECTION-WIDEN-G2-01",
+   "kind": "present",
+   "sections": [
+    "OV"
+   ],
+   "role": "hint bullet: where the check applies",
+   "text": "- итог таблицы воздухообмена по системе и сумма расходов её помещений; итог таблицы тепловых нагрузок и сумма её строк — только на условиях абзаца об исключении из запрета на расчёты ниже;"
+  },
+  {
+   "id": "G2:OV-SCOPE",
+   "source": "SECTION-WIDEN-G2-01",
+   "kind": "present",
+   "sections": [
+    "OV"
+   ],
+   "role": "scope: which totals may be added, supply with supply and exhaust with exhaust, one kind of load",
+   "text": "Для ОВ это строка «Итого» («Всего») таблицы воздухообмена по системе и сумма расходов помещений этой системы того же вида (приток с притоком, вытяжка с вытяжкой), а также строка «Итого» таблицы тепловых нагрузок и сумма её строк того же вида нагрузки."
+  },
+  {
+   "id": "G2:OV-SYSFLOW",
+   "source": "SECTION-WIDEN-G2-01",
+   "kind": "present",
+   "sections": [
+    "OV"
+   ],
+   "role": "conservative rule 3: a system flow with leaks is compared with the rooms only when the text calls it their sum",
+   "text": "Расход системы из таблицы характеристик систем или из спецификации с суммой расходов помещений сопоставляй, только если текст прямо называет его суммой расходов этих помещений: разница на подсосы и потери допустима."
+  },
+  {
+   "id": "G2:OV-NOCROSS",
+   "source": "SECTION-WIDEN-G2-01",
+   "kind": "present",
+   "sections": [
+    "OV"
+   ],
+   "role": "scope: supply is not compared with exhaust, loads of different kinds are not compared",
+   "text": "Приток с вытяжкой и нагрузки разных видов друг с другом не сопоставляй. Сверяй, только если выполнено всё сразу:"
+  },
+  {
+   "id": "G2:OV-PART",
+   "source": "SECTION-WIDEN-G2-01",
+   "kind": "present",
+   "sections": [
+    "OV"
+   ],
+   "role": "conservative rule 3: no subtotals or add-on rows; a stated included or excluded part must be in the rows too",
+   "text": "- между строками и итогом нет подытогов и строк-добавок, а текст не говорит, что итог включает или не включает какую-то часть либо получен иначе (с учётом потерь, коэффициента, резерва); если такое сказано, сверяй, только если эта же часть входит или не входит и в строки;"
+  },
+  {
+   "id": "G2:VK-HINT",
+   "source": "SECTION-WIDEN-G2-01",
+   "kind": "present",
+   "sections": [
+    "VK"
+   ],
+   "role": "hint bullet: where the check applies",
+   "text": "- суточное водопотребление здания и сумма его частей, которые текст сам называет частями этого итога, — только на условиях абзаца об исключении из запрета на расчёты ниже;"
+  },
+  {
+   "id": "G2:VK-SCOPE",
+   "source": "SECTION-WIDEN-G2-01",
+   "kind": "present",
+   "sections": [
+    "VK"
+   ],
+   "role": "scope: the daily consumption only, parts named as parts of the total by the text",
+   "text": "Для ВК это только суточное водопотребление: итог по зданию («Итого», «Всего») и строки по системам или потребителям, которые текст сам называет частями этого итога («в том числе», «из них»)."
+  },
+  {
+   "id": "G2:VK-PEAKS",
+   "source": "SECTION-WIDEN-G2-01",
+   "kind": "present",
+   "sections": [
+    "VK"
+   ],
+   "role": "decision X: hourly and secondly flows of a building are not summed",
+   "text": "Часовые и секундные расходы здания не суммируй: расходы отдельных систем в сумме не обязаны давать расход здания."
+  },
+  {
+   "id": "G2:VK-NODOUBLE",
+   "source": "SECTION-WIDEN-G2-01",
+   "kind": "present",
+   "sections": [
+    "VK"
+   ],
+   "role": "double counting: a row that is itself a total or repeats another is not added",
+   "text": "Строку, которая сама является итогом или повторяет другую строку (например, расход канализации, равный общему расходу воды), в сумму не включай. Сверяй, только если выполнено всё сразу:"
+  },
+  {
+   "id": "G2:VK-VISIBLE",
+   "source": "SECTION-WIDEN-G2-01",
+   "kind": "present",
+   "sections": [
+    "VK"
+   ],
+   "role": "conservative rule 1: both figures written, same units, all parts visible",
+   "text": "- итог и каждое слагаемое прямо записаны в тексте числами в одних и тех же единицах; все части итога видны в переданном тексте — без пропусков, без «и т. д.» и без обрыва таблицы;"
+  },
+  {
+   "id": "G2:VK-PART",
+   "source": "SECTION-WIDEN-G2-01",
+   "kind": "present",
+   "sections": [
+    "VK"
+   ],
+   "role": "conservative rule 3: no subtotals or add-on rows; a stated included or excluded part must be in the rows too",
+   "text": "- между частями и итогом нет подытогов и строк-добавок, а текст не говорит, что итог включает или не включает какую-то часть (полив, потери, резерв); если такое сказано, сверяй, только если эта же часть входит или не входит и в строки;"
+  },
+  {
+   "id": "G2:PT-HINT",
+   "source": "SECTION-WIDEN-G2-01",
+   "kind": "present",
+   "sections": [
+    "PT"
+   ],
+   "role": "hint bullet: where the three checks apply",
+   "text": "- один и тот же расход в разных единицах, расчётный расход ВПВ и произведение числа струй на расход одной струи, итоговый расход и сумма расходов ВПВ и АУПТ — только на условиях абзаца об исключении из запрета на расчёты ниже;"
+  },
+  {
+   "id": "G2:PT-HEAD",
+   "source": "SECTION-WIDEN-G2-01",
+   "kind": "present",
+   "sections": [
+    "PT"
+   ],
+   "role": "rule: the only permitted calculations, three checks of written values",
+   "text": "Единственное исключение из запрета на расчёты — три сверки записанных значений одной и той же системы или одного и того же насоса:"
+  },
+  {
+   "id": "G2:PT-UNITS",
+   "source": "SECTION-WIDEN-G2-01",
+   "kind": "present",
+   "sections": [
+    "PT"
+   ],
+   "role": "rule 4: the one definitional factor, 1 л/с = 3,6 м³/ч (allowlist entry PT 3,6)",
+   "text": "- один и тот же расход (подача одного и того же насоса, расход одной и той же системы), записанный в одном месте в л/с, а в другом в м³/ч: приведи к одним единицам по равенству 1 л/с = 3,6 м³/ч."
+  },
+  {
+   "id": "G2:PT-UNITS-LIMIT",
+   "source": "SECTION-WIDEN-G2-01",
+   "kind": "present",
+   "sections": [
+    "PT"
+   ],
+   "role": "rule 4 and decision N: no other factor, no other pair of units; a head in metres is not compared with a pressure in МПа",
+   "text": "Других коэффициентов и других пар единиц не применяй, а напор, записанный в метрах, и давление, записанное в МПа, между собой не сопоставляй;"
+  },
+  {
+   "id": "G2:PT-PRODUCT",
+   "source": "SECTION-WIDEN-G2-01",
+   "kind": "present",
+   "sections": [
+    "PT"
+   ],
+   "role": "conservative rules 1 to 3: jets x single-jet flow only with all three factors written for one system and no other method stated",
+   "text": "- расчётный расход ВПВ и произведение числа струй на расход одной струи — только если число струй, расход одной струи и расчётный расход записаны в тексте для одной и той же системы, а текст не говорит, что расчётный расход определён иначе (например, по гидравлическому расчёту при другом числе или расходе струй);"
+  },
+  {
+   "id": "G2:PT-SUM",
+   "source": "SECTION-WIDEN-G2-01",
+   "kind": "present",
+   "sections": [
+    "PT"
+   ],
+   "role": "conservative rule 3: the ВПВ + АУПТ total only when every term is written and the text calls the total their sum",
+   "text": "- итоговый расход и сумма расходов ВПВ и АУПТ — только если расход ВПВ, расход АУПТ и итог записаны в тексте и текст прямо называет итог суммой этих расходов; если сказано о большем из двух расходов или об отдельной работе систем, итог с суммой не сопоставляй."
+  },
+  {
+   "id": "G2:PT-GATE",
+   "source": "SECTION-WIDEN-G2-01",
+   "kind": "present",
+   "sections": [
+    "PT"
+   ],
+   "role": "gate: all conditions at once",
+   "text": "Сверяй, только если выполнено всё сразу:"
+  },
+  {
+   "id": "G2:PT-VISIBLE",
+   "source": "SECTION-WIDEN-G2-01",
+   "kind": "present",
+   "sections": [
+    "PT"
+   ],
+   "role": "conservative rule 1: every compared figure written, all addends visible",
+   "text": "- все сравниваемые величины прямо записаны в тексте числами; для суммы все слагаемые видны в переданном тексте — без пропусков, без «и т. д.» и без обрыва таблицы;"
+  },
+  {
+   "id": "G2:PT-PART",
+   "source": "SECTION-WIDEN-G2-01",
+   "kind": "present",
+   "sections": [
+    "PT"
+   ],
+   "role": "conservative rule 3: no subtotals or add-on rows, no other method stated",
+   "text": "- между величинами и итогом нет подытогов и строк-добавок, а текст не говорит, что итог включает или не включает какую-то часть либо получен иначе;"
+  },
+  {
+   "id": "G2:PT-TOL",
+   "source": "SECTION-WIDEN-G2-01",
+   "kind": "present",
+   "sections": [
+    "PT"
+   ],
+   "role": "conservative rule 1: the tolerance in words, with the multiplier or the conversion",
+   "text": "- разницу считай расхождением, только если она больше погрешности округления — суммы половин единицы последнего записанного разряда всех сравниваемых величин, каждой с учётом множителя, на который она умножается или в который пересчитана; меньшая разница — это округление."
+  },
+  {
+   "id": "G2:PT-CLOSE",
+   "source": "SECTION-WIDEN-G2-01",
+   "kind": "present",
+   "sections": [
+    "PT"
+   ],
+   "role": "category and evidence: the existing internal_contradiction, every place and the total; no other calculation",
+   "text": "Если хотя бы одно условие не выполнено, величины не сопоставляй. Находка — только internal_contradiction: в evidence приведи цитату каждого места, где записана сравниваемая величина, и цитату итога. Других вычислений не выполняй."
+  },
+  {
+   "id": "G3:W-HEAD",
+   "source": "SECTION-WIDEN-G3-01",
+   "kind": "present",
+   "sections": [
+    "EOM",
+    "SS",
+    "ITP",
+    "GP"
+   ],
+   "role": "rule: the only permitted addition",
+   "text": "Единственное сложение, которое тебе разрешено, — сложение строк, из которых текст сам составляет записанный в нём итог."
+  },
+  {
+   "id": "G3:W-SCOPE-EOM-G3",
+   "source": "SECTION-WIDEN-G3-01",
+   "kind": "present",
+   "sections": [
+    "EOM"
+   ],
+   "role": "scope: which totals may be added",
+   "text": "Здесь это установленная мощность: записанный итог («Итого», «Всего» или подобная строка) таблицы нагрузок и строки электроприёмников, групп или линий, из которых он составлен. Приёмники, помеченные как резервные или как относящиеся к другому режиму работы (например, противопожарному), в сумму не входят. Расчётную мощность, ток и значения с коэффициентом спроса или одновременности не складывай, другие итоги не складывай."
+  },
+  {
+   "id": "G3:W-TRIGGER",
+   "source": "SECTION-WIDEN-G3-01",
+   "kind": "present",
+   "sections": [
+    "EOM",
+    "SS",
+    "ITP",
+    "GP"
+   ],
+   "role": "category: the existing internal_contradiction",
+   "text": "Если сумма строк расходится с записанным итогом, сообщи internal_contradiction, но только когда выполнено всё перечисленное:"
+  },
+  {
+   "id": "G3:W-B1-G3",
+   "source": "SECTION-WIDEN-G3-01",
+   "kind": "present",
+   "sections": [
+    "EOM",
+    "SS",
+    "ITP",
+    "GP"
+   ],
+   "role": "conservative rule 2: only written values, one column, no unit values, no products",
+   "text": "итог и каждая складываемая строка записаны в тексте явно, в одних единицах измерения, для одного объекта и признака; складываются значения одного столбца, записанные именно для строки; значение на единицу и значение, которого в строке нет и которое пришлось бы вычислять (в том числе умножением количества на значение единицы), в сумму не входят;"
+  },
+  {
+   "id": "G3:W-B2-G3",
+   "source": "SECTION-WIDEN-G3-01",
+   "kind": "present",
+   "sections": [
+    "EOM",
+    "SS",
+    "ITP",
+    "GP"
+   ],
+   "role": "conservative rule 3: parts of the total only; subtotals",
+   "text": "в сумму входят только строки, из которых итог составлен по смыслу таблицы; строки «в том числе», «из них», «справочно» и строки другого варианта в сумму не входят; промежуточный итог не складывай со своими строками;"
+  },
+  {
+   "id": "G3:W-B3-G3",
+   "source": "SECTION-WIDEN-G3-01",
+   "kind": "present",
+   "sections": [
+    "EOM",
+    "SS",
+    "ITP",
+    "GP"
+   ],
+   "role": "conservative rule 1: all rows visible (also at a window boundary)",
+   "text": "все строки читаются в переданном тексте: если часть строк оборвана (в том числе на последней переданной странице), оторвана от подписей или заменена многоточием либо словами «прочие» и «и другие» без значения, не сообщай;"
+  },
+  {
+   "id": "G3:W-B4",
+   "source": "SECTION-WIDEN-G3-01",
+   "kind": "present",
+   "sections": [
+    "EOM",
+    "ITP",
+    "GP"
+   ],
+   "role": "conservative rule 3: the stated basis",
+   "text": "если в тексте названо основание, на котором записан итог или строка («с учётом», «без учёта», «включая», «за исключением», коэффициент), а итог и строки записаны на разных основаниях, не сообщай;"
+  },
+  {
+   "id": "G3:W-B5-G3",
+   "source": "SECTION-WIDEN-G3-01",
+   "kind": "present",
+   "sections": [
+    "EOM",
+    "SS",
+    "ITP",
+    "GP"
+   ],
+   "role": "conservative rule 1: tolerance in words",
+   "text": "расхождение больше погрешности округления: количества записаны точно, любое расхождение в них — находка; у остальных значений погрешность — половина единицы последнего записанного разряда, погрешность сравнения — сумма таких погрешностей слагаемых и итога;"
+  },
+  {
+   "id": "G3:W-B6",
+   "source": "SECTION-WIDEN-G3-01",
+   "kind": "present",
+   "sections": [
+    "EOM",
+    "SS",
+    "ITP",
+    "GP"
+   ],
+   "role": "double addition",
+   "text": "ты сложил строки дважды, в прямом и в обратном порядке, и получил одну и ту же сумму."
+  },
+  {
+   "id": "G3:W-NOTOTAL",
+   "source": "SECTION-WIDEN-G3-01",
+   "kind": "present",
+   "sections": [
+    "EOM",
+    "SS",
+    "ITP",
+    "GP"
+   ],
+   "role": "conservative rule 2: no written total, no check",
+   "text": "Если итог в тексте не записан, ничего не складывай."
+  },
+  {
+   "id": "G3:W-CONDITIONS-G3",
+   "source": "SECTION-WIDEN-G3-01",
+   "kind": "present",
+   "sections": [
+    "EOM",
+    "SS",
+    "ITP",
+    "GP"
+   ],
+   "role": "the existing conditions still apply",
+   "text": "Условия 1–4 выше применяются и к такому расхождению."
+  },
+  {
+   "id": "G3:W-EVIDENCE-G3",
+   "source": "SECTION-WIDEN-G3-01",
+   "kind": "present",
+   "sections": [
+    "EOM",
+    "SS",
+    "ITP",
+    "GP"
+   ],
+   "role": "evidence: the total and the rows",
+   "text": "В evidence приведи цитату итога и цитаты складываемых строк (при числе строк больше десяти — итога, первой и последней); в finding_text назови записанный итог, сумму и число строк."
+  },
+  {
+   "id": "G3:W-NORMS-1",
+   "source": "SECTION-WIDEN-G3-01",
+   "kind": "present",
+   "sections": [
+    "EOM",
+    "SS",
+    "GP"
+   ],
+   "role": "exclusion sentence: calculation ban, one exception",
+   "text": "кроме сложения строк по правилу выше,"
+  },
+  {
+   "id": "G3:W-NORMS-2",
+   "source": "SECTION-WIDEN-G3-01",
+   "kind": "present",
+   "sections": [
+    "EOM",
+    "SS",
+    "GP"
+   ],
+   "role": "exclusion sentence: what is compared",
+   "text": "и сумма строк, сложенных по правилу выше."
+  },
+  {
+   "id": "G3:W-SCOPE-SS-G3",
+   "source": "SECTION-WIDEN-G3-01",
+   "kind": "present",
+   "sections": [
+    "SS"
+   ],
+   "role": "scope: which totals may be added",
+   "text": "Здесь это записанный итог кабельного журнала или спецификации (общая длина кабеля, общее количество устройств одного вида) и строки (линии, марки, позиции), из которых он составлен. Другие итоги не складывай."
+  },
+  {
+   "id": "G3:W-B4-SS-G3",
+   "source": "SECTION-WIDEN-G3-01",
+   "kind": "present",
+   "sections": [
+    "SS"
+   ],
+   "role": "conservative rule 3: the stated basis (cable reserve added)",
+   "text": "если в тексте названо основание, на котором записан итог или строка («с учётом», «без учёта», «включая», «за исключением», «с запасом», коэффициент), а итог и строки записаны на разных основаниях, не сообщай;"
+  },
+  {
+   "id": "G3:W-CAP-SS-G3",
+   "source": "SECTION-WIDEN-G3-01",
+   "kind": "present",
+   "sections": [
+    "SS"
+   ],
+   "role": "SS: capacity against the written count of connected addressable devices (one direction)",
+   "text": "Единственное исключение из условия 2: если текст явно записывает ёмкость приёмно-контрольного прибора или шлейфа (число адресных устройств, на которое он рассчитан) и явно записывает число адресных устройств, подключённых к тому же прибору или шлейфу, и это число больше ёмкости, сообщи internal_contradiction, приведя цитаты обоих чисел. Число не больше ёмкости — запас, а не расхождение. Устройства по позициям не считай, число шлейфов на ёмкость шлейфа не умножай; если ёмкость записана на условии («с резервом», «при использовании») или неясно, что оба числа относятся к одному прибору или шлейфу, не сообщай."
+  },
+  {
+   "id": "G3:W-SCOPE-ITP-G3",
+   "source": "SECTION-WIDEN-G3-01",
+   "kind": "present",
+   "sections": [
+    "ITP"
+   ],
+   "role": "scope: which totals may be added",
+   "text": "Здесь это тепловые нагрузки: записанная суммарная нагрузка и нагрузки по контурам (отопление, вентиляция, ГВС), из которых она составлена. Если для ГВС записаны максимальная и среднечасовая нагрузки, а текст не называет, какая входит в суммарную, не сообщай. Другие итоги не складывай."
+  },
+  {
+   "id": "G3:W-UNITS-REF-ITP-G3",
+   "source": "SECTION-WIDEN-G3-01",
+   "kind": "present",
+   "sections": [
+    "ITP"
+   ],
+   "role": "ITP: the heat-load bullet defers to the unit rule",
+   "text": "значения одной нагрузки, записанные в разных единицах измерения, сравнивай только по правилу о единицах ниже;"
+  },
+  {
+   "id": "G3:W-UNITS-ITP-G3",
+   "source": "SECTION-WIDEN-G3-01",
+   "kind": "present",
+   "sections": [
+    "ITP"
+   ],
+   "role": "ITP: the same load in Гкал/ч, кВт, МВт, converted by the definition",
+   "text": "Единственный разрешённый перевод единиц — для тепловой нагрузки одного объекта, записанной в двух местах в Гкал/ч, кВт или МВт: переведи обе записи в одну единицу по определению 1 Гкал/ч = 1,163 МВт = 1163 кВт; проверь обратным пересчётом. Сообщай internal_contradiction, только когда оба значения записаны явно с единицей, текст относит их к одной нагрузке (условия 1–4 выше применяются), а разность после перевода больше суммы погрешностей округления обоих значений (половина единицы последнего записанного разряда каждого, в той же единице). Значения в других единицах не сравнивай."
+  },
+  {
+   "id": "G3:W-NORMS-1-ITP-G3",
+   "source": "SECTION-WIDEN-G3-01",
+   "kind": "present",
+   "sections": [
+    "ITP"
+   ],
+   "role": "exclusion sentence: calculation ban, two exceptions",
+   "text": "кроме сложения строк и перевода единиц по правилам выше,"
+  },
+  {
+   "id": "G3:W-NORMS-2-ITP-G3",
+   "source": "SECTION-WIDEN-G3-01",
+   "kind": "present",
+   "sections": [
+    "ITP"
+   ],
+   "role": "exclusion sentence: what is compared",
+   "text": "а также сумма строк и перевод единиц, выполненные по правилам выше."
+  },
+  {
+   "id": "G3:W-SCOPE-GP-G3",
+   "source": "SECTION-WIDEN-G3-01",
+   "kind": "present",
+   "sections": [
+    "GP"
+   ],
+   "role": "scope: which totals may be added",
+   "text": "Здесь это баланс территории: записанный итог («Итого», «Всего» или строка площади участка в конце той же таблицы) и строки позиций (застройка, твёрдые покрытия, озеленение и подобные), из которых он составлен, — площади или доли в процентах. Площади сравнивай с итогом площадей, доли — с записанным итогом долей; итог, которого в таблице нет, не подставляй. Площадь, которую текст относит к другим границам (благоустройства, проектирования), с итогом не сравнивай; строки разных очередей не смешивай. Другие итоги не складывай."
+  }
+ ]
+}
