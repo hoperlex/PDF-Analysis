@@ -10,7 +10,11 @@ report does, and each rule is shown failing on a database made to break it:
   not attributed when no file explains it;
 * the report refuses a database whose set of blob-referencing columns is not the closed set (a new
   reference would otherwise make a referenced Blob look orphaned) and one whose head is not pinned;
-* it executes only SELECT statements.
+* it executes only SELECT statements;
+* and the whole sequence a comparison upload will run -- declared Blob row, token, parts, completion with the
+  ``before_publish`` checkpoint, ``available`` -- on the real MinIO and the real database, with the process
+  "killed" before ``blob_id`` is written (the report names the file) and after (the report is empty and the
+  reference audit passes).
 
 The database comes from the lane's PostgreSQL (``DATABASE_URL``, read from the process environment or
 the repository-root ``.env`` exactly as ``conftest.py`` reads the S3 names). Like the rest of this
@@ -33,10 +37,19 @@ from sqlalchemy.orm import Session
 from auditmanager.shared.db.config import DatabaseSettings, parse_database_url
 from auditmanager.shared.db.engine import create_database_engine
 from auditmanager.shared.identity import ProjectUid, new_ulid
-from auditmanager.storage.public import derive_blob_id
+from auditmanager.storage import ROLE_SOURCE_DOCUMENT, S3BlobStore
+from auditmanager.storage.public import (
+    BlobMetadataRepository,
+    UploadedPart,
+    declare_blob,
+    derive_blob_id,
+    new_multipart_token,
+    sha256_of,
+)
 from scripts.recovery import blob_reference_audit as audit
 from scripts.recovery.blob_reference_audit import (
     BlobReferenceAuditRefused,
+    audit_blob_references,
     report_unreferenced_comparison_blobs,
 )
 
@@ -359,3 +372,111 @@ class TestItOnlyReads:
         before = session.execute(text("SELECT count(*), max(updated_at) FROM blob")).one()
         report_unreferenced_comparison_blobs(session)
         assert session.execute(text("SELECT count(*), max(updated_at) FROM blob")).one() == before
+
+
+class TestTheSequenceAComparisonUploadWillRun:
+    """The storage lane's whole contract with ``CMP-INGEST-01``, on real services."""
+
+    MIB = 1024 * 1024
+    FIRST = b"1" * (5 * MIB)
+    LAST = b"%%EOF-tail\n" * 100
+    WHOLE = FIRST + LAST
+
+    def _sequence(self, store: S3BlobStore, session: Session, blobs: list) -> dict[str, Any]:
+        repo = BlobMetadataRepository()
+        sha, size = sha256_of(self.WHOLE), len(self.WHOLE)
+        declared = declare_blob(
+            sha256=sha, size=size, role=ROLE_SOURCE_DOCUMENT, media_type="application/pdf"
+        )
+        # 1. The first part: the declared Blob row and the token are committed before any byte moves.
+        repo.record_declared(session, declared)
+        _, upload = _upload(session)
+        token = new_multipart_token()
+        file = f"cuf_{new_ulid()}"
+        session.execute(
+            text("INSERT INTO comparison_upload_file (comparison_upload_file_id, comparison_upload_id, "
+                 "display_name, declared_size_bytes, declared_sha256, multipart_token) "
+                 "VALUES (:f, :u, 'a.pdf', :n, :s, :t)"),
+            {"f": file, "u": upload, "n": size, "s": sha, "t": token},
+        )
+        session.execute(
+            text("UPDATE comparison_upload_file SET state = 'uploading' "
+                 "WHERE comparison_upload_file_id = :f"), {"f": file},
+        )
+        session.commit()
+        # 2. The parts: a row before the bytes, the receipt recorded after.
+        store.begin_multipart(token)
+        receipts: list[UploadedPart] = []
+        for number, body in enumerate((self.FIRST, self.LAST), start=1):
+            session.execute(
+                text("INSERT INTO comparison_upload_part (comparison_upload_file_id, part_number) "
+                     "VALUES (:f, :n)"), {"f": file, "n": number},
+            )
+            receipt = store.upload_part(token, number, body)
+            session.execute(
+                text("UPDATE comparison_upload_part SET state = 'staged', size_bytes = :z, "
+                     "sha256 = :h, etag = :e WHERE comparison_upload_file_id = :f AND part_number = :n"),
+                {"z": receipt.size_bytes, "h": receipt.sha256, "e": receipt.etag, "f": file, "n": number},
+            )
+            receipts.append(receipt)
+        session.commit()
+        # 3. The completion, with the checkpoint the durable store has: `verifying` before publication.
+        published = store.complete_multipart(
+            token, receipts,
+            declared_sha256=sha, declared_size=size, role=ROLE_SOURCE_DOCUMENT,
+            media_type="application/pdf",
+            before_publish=lambda verified: (repo.record_verified(session, verified), session.commit()),
+        )
+        blobs.append(published.blob_id)
+        repo.mark_available(session, published.blob_id)
+        session.commit()
+        return {"file": file, "published": published, "token": token}
+
+    def test_a_kill_before_blob_id_is_written_is_visible_and_the_end_state_audits_clean(
+        self, store: S3BlobStore, session: Session, blobs: list
+    ) -> None:
+        done = self._sequence(store, session, blobs)
+        file, published = done["file"], done["published"]
+        assert published.blob_id == derive_blob_id(sha256=sha256_of(self.WHOLE), size=len(self.WHOLE))
+
+        # The process died here: the object is canonical and `available`, `blob_id` is still NULL.
+        report = report_unreferenced_comparison_blobs(session)
+        assert [(b.blob_id, b.comparison_upload_file_ids) for b in report.attributed] == [
+            (published.blob_id, (file,))
+        ]
+        assert report.unattributed == ()
+
+        # The completion finishes: the file is verified with its Blob and the parts are completed.
+        session.execute(
+            text("UPDATE comparison_upload_file SET state = 'verified', blob_id = :b "
+                 "WHERE comparison_upload_file_id = :f"), {"b": published.blob_id, "f": file},
+        )
+        session.execute(
+            text("UPDATE comparison_upload_part SET state = 'completed' "
+                 "WHERE comparison_upload_file_id = :f"), {"f": file},
+        )
+        session.commit()
+
+        after = report_unreferenced_comparison_blobs(session)
+        assert (after.attributed, after.unattributed) == ((), ())
+        counts = dict(audit_blob_references(session).source_counts)
+        assert counts["comparison_upload_file"] == 1
+
+    def test_the_retry_after_the_kill_publishes_nothing_twice(
+        self, store: S3BlobStore, session: Session, blobs: list, bucket_keys: Any
+    ) -> None:
+        """Completing a file whose bytes are already published reuses the Blob (idempotent by content)."""
+        first = self._sequence(store, session, blobs)
+        token = new_multipart_token()
+        store.begin_multipart(token)
+        receipts = [
+            store.upload_part(token, 1, self.FIRST),
+            store.upload_part(token, 2, self.LAST),
+        ]
+        again = store.complete_multipart(
+            token, receipts,
+            declared_sha256=sha256_of(self.WHOLE), declared_size=len(self.WHOLE),
+            role=ROLE_SOURCE_DOCUMENT, media_type="application/pdf",
+        )
+        assert again.blob_id == first["published"].blob_id
+        assert [k for k in bucket_keys() if k.startswith("temporary/")] == []
