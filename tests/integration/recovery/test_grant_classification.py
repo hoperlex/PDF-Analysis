@@ -158,9 +158,11 @@ def test_a_sealed_table_that_the_code_now_writes_leaves_the_set() -> None:
     assert sorted(set(seen) & grants.SEALED_NOT_YET_WRITTEN) == []
 
 
-def test_that_check_fails_when_a_statement_names_a_sealed_table(tmp_path: Path) -> None:
-    """Mutation: a repository that inserts into ``comparison_work`` is seen by the scan, so the set above
-    can go red."""
+def test_that_check_fails_when_a_statement_names_a_sealed_table(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Mutation: a repository that inserts into a table the set names is seen by the scan, so the set above
+    can go red. The set is given ``comparison_work`` here, whatever the lanes have removed from the real
+    one (`CMP-WORK-01` removed it when its queue began to write the table)."""
+    monkeypatch.setattr(grants, "SEALED_NOT_YET_WRITTEN", frozenset({"comparison_work"}))
     root = tmp_path / "src"
     (root / "pkg").mkdir(parents=True)
     (root / "pkg/repo.py").write_text(

@@ -107,8 +107,71 @@ from auditmanager.comparison.service import (
 from auditmanager.comparison.sheet_links import ApprovedLinkReader, LinkEvent, SheetLinkRepository
 from auditmanager.comparison.version_reader import VersionFacts
 from auditmanager.comparison.version_section_pair import SuppliedVersionClassification
+from auditmanager.comparison.work.errors import (
+    HandlerRegistryError,
+    UnhandledKindError,
+    WorkQueueError,
+)
+from auditmanager.comparison.work.gates import ClaimGates, default_gates
+from auditmanager.comparison.work.model import (
+    Completed,
+    Failed,
+    HandlerFactory,
+    ItemAuthority,
+    Outcome,
+    SpendSettler,
+    WorkDependencies,
+    WorkHandler,
+    WorkItem,
+    Yielded,
+)
+from auditmanager.comparison.work.registry import HandlerRegistry
+from auditmanager.comparison.work.repository import (
+    CANCEL_REQUESTED,
+    CancelResult,
+    ComparisonWorkRepository,
+    Enqueued,
+    WorkRecord,
+)
+from auditmanager.comparison.work.runner import ComparisonWorkRunner
+
+#: `CMP-WORK-01` (ADR-0025 decision 4). One tuple of handler factories, each
+#: ``Callable[[WorkDependencies], WorkHandler]``: ``build_worker_runtime`` builds one dependency
+#: bundle and applies every factory to it, and refuses to start on a duplicate ``kind``. A slice
+#: adds its handler by appending its factory here (plan section 4.0 rule 2). None is registered yet.
+HANDLER_FACTORIES: tuple[HandlerFactory, ...] = ()
+
+#: `CMP-WORK-01`. Called inside the reclaim transaction for each attempt whose lease was lost:
+#: ``settle(session, attempt_id) -> bool`` marks the attempt's unfinished model calls ``unknown`` and
+#: answers ``True`` if there were any, which ends the item ``spend_unknown`` instead of re-queueing
+#: it (ADR-0025 decision 5). ``CMP-SPEND-01`` appends its settler here. None is registered yet.
+SPEND_SETTLERS: tuple[SpendSettler, ...] = ()
 
 __all__ = [
+    "CANCEL_REQUESTED",
+    "CancelResult",
+    "ClaimGates",
+    "Completed",
+    "ComparisonWorkRepository",
+    "ComparisonWorkRunner",
+    "Enqueued",
+    "Failed",
+    "HANDLER_FACTORIES",
+    "HandlerFactory",
+    "HandlerRegistry",
+    "HandlerRegistryError",
+    "ItemAuthority",
+    "Outcome",
+    "SPEND_SETTLERS",
+    "SpendSettler",
+    "UnhandledKindError",
+    "WorkDependencies",
+    "WorkHandler",
+    "WorkItem",
+    "WorkQueueError",
+    "WorkRecord",
+    "Yielded",
+    "default_gates",
     "COMPARISON_MODULES_ENV",
     "DEFAULT_MODULES",
     "MODULE_SETS",
