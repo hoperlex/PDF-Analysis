@@ -117,7 +117,7 @@ section runs is byte-for-byte what it was. ADR-0025 decision 18.
 No flag. Nothing creates a multi-image task until a comparison stage does, so reverting this slice changes no behaviour for the section runs.
 
 ## Handoff
-- changed files: see `docs/program/CMP-EXEC-IMAGES-01.md`
-- commands/results: see the report
-- known limits: see the report
-- integration notes: see the report
+- changed files: 40 against `cc3dd36b` (12 source files, 7 tool files, the runner and executor tests, this task file and the report); no contract, migration, dependency, composition-root or web file
+- commands/results: `tests/unit/executors` + `tests/unit/executor_runner` 897 passed; `tests/integration/executors` on the lane database 248 passed, 16 skipped (opt-in sshd); `tests/contract` minus the three `D-220` files 1307 passed; 38 quoted mutations all red; `git diff --check` clean; details and commands in `docs/program/CMP-EXEC-IMAGES-01.md` sections 7 and 8
+- known limits: no real Codex or runner call (the `-` before `--image` is tested against a fake only); MCP result-size limit for many crops; no early signal when no runner can serve a wide task (`no_executor_online` after the answer window); transfer time of 32 MiB unmeasured; see section 9 of the report
+- integration notes: merge after `CMP-SPEND-01`; hunks outside the explicit own paths are the claim path of `claimExecutorTask` (section 10 of the report); no stub-enumerator row to remove; comparison callers use `attach_images` from `auditmanager.executors.public` (section 2 of the report)
