@@ -2,10 +2,11 @@
 
 /**
  * «Запустить проход» on the project's «Оптимизация» tab (`W60-OPT-PROPOSALS-01`): an expert
- * asks for the deterministic proposals of the chosen document set's current АР version.
+ * asks for the deterministic proposals of the chosen document set's current version, in
+ * whichever section an expert confirmed it (`OPT-PROJECT-ALL-SECTIONS-01`).
  *
- * The server checks every precondition (the section, the price list, a published run and its
- * saved text, a vendor list) and names the first one that is unmet; this control only says
+ * The server checks every precondition (the classification, the price list, a published run and
+ * its saved text, the vendor list of the version's section) and names the first one that is unmet; this control only says
  * that in Russian. It offers nothing to anyone but an expert.
  */
 
@@ -47,9 +48,9 @@ export function StartOptimisationPassView({
         Запустить проход
       </button>
       <p className="am-form__hint">
-        Проход читает текущую версию комплекта АР, последний опубликованный прогон, действующий
-        прайс-лист и вендор-лист раздела АР и сохраняет предложения «более дешёвый аналог». Тот же
-        набор исходных данных второй раз не создаёт нового прохода.
+        Проход читает текущую версию выбранного комплекта, последний опубликованный прогон,
+        действующий прайс-лист и вендор-лист раздела этого комплекта и сохраняет предложения
+        «более дешёвый аналог». Тот же набор исходных данных второй раз не создаёт нового прохода.
       </p>
       {pending ? <LoadingState what="предложений" /> : null}
       {failure !== null ? (

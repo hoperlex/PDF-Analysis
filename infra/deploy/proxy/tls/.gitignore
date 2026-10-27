@@ -1,16 +1,11 @@
-# THE CERTIFICATE AND ITS PRIVATE KEY GO HERE, ON THE HOST, PLACED BY THE OWNER.
+# NOTHING MOUNTS THIS DIRECTORY ANY MORE (`PROD-01-TLS-ACME-01`, `R-146a`). The certificate pair the proxy
+# serves is the one the ACME client exports into the `certs` named volume
+# (`infra/acme/compose.acme.yml`); a pair placed here by hand is read by nobody.
 #
-#   fullchain.pem   the certificate and its chain
-#   privkey.pem     the private key, mode 600
-#
-# NOTHING IN THIS DIRECTORY IS EVER COMMITTED. The two lines below ignore every file in it
-# except this one, so `git status` cannot tempt anybody and `git add -A` cannot take a key
-# by accident. `tests/integration/composition/test_proxy_tls_path.py` asks
-# `git check-ignore` about both names rather than trusting this comment.
-#
-# THE DIRECTORY ITSELF IS TRACKED -- that is what this file is for. `D-37`: a `-v` source
-# the daemon cannot resolve becomes an INVENTED EMPTY DIRECTORY, not a refusal, so a clean
-# clone that already contains this directory is one fewer way for the mount to be a
-# surprise.
+# THE DIRECTORY AND ITS IGNORE RULE STAY, as a net and not as a mechanism: a key that somebody drops here out
+# of habit (the old runbook told the owner to) still cannot be committed. The two lines below ignore every
+# file in it except this one, so `git status` cannot tempt anybody and `git add -A` cannot take a key by
+# accident. `tests/integration/composition/test_proxy_tls_path.py` asks `git check-ignore` about the names
+# rather than trusting this comment.
 *
 !.gitignore

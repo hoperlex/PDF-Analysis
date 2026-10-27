@@ -14,20 +14,21 @@ from __future__ import annotations
 from typing import Any
 
 from auditmanager.analysis.text import (
-    AR_TEXT_PROFILE,
     STATUS_SUCCEEDED,
     build_request,
     load_text_layer,
     run_text_analysis,
 )
 from auditmanager.shared.identity import RunId
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE
 
 MODEL_ID = "claude-opus-5"
 
 
 def _run(text_layer_document: dict[str, Any], adapter: Any) -> Any:
     return run_text_analysis(
-        run_id=RunId.new(), text_layer_document=text_layer_document, adapter=adapter
+        run_id=RunId.new(), text_layer_document=text_layer_document, adapter=adapter,
+        profile=V1_REFERENCE_PROFILE,
     )
 
 
@@ -44,10 +45,10 @@ def _observations_without_identity(artifact: dict[str, Any]) -> list[dict[str, A
 def test_request_checksum_is_stable_across_builds(text_layer_document):
     text_layer = load_text_layer(text_layer_document)
     first = build_request(
-        model_id=MODEL_ID, bundle=AR_TEXT_PROFILE.prompt_bundle, text_layer=text_layer
+        model_id=MODEL_ID, bundle=V1_REFERENCE_PROFILE.prompt_bundle, text_layer=text_layer
     )
     second = build_request(
-        model_id=MODEL_ID, bundle=AR_TEXT_PROFILE.prompt_bundle, text_layer=text_layer
+        model_id=MODEL_ID, bundle=V1_REFERENCE_PROFILE.prompt_bundle, text_layer=text_layer
     )
     assert first.request_sha256 == second.request_sha256
     # Nothing time-varying, random or identity-bearing may enter the body. A run id or

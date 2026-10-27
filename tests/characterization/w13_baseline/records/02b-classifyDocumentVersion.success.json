@@ -13,7 +13,7 @@
     "decided_by": "f290f7b7",
     "decided_by_subject": "docs(tasks): freeze CLASSIFICATION-CORRECTION-01 and NORM-REFS-RUN-01 (phase A static now)",
     "decided_on": "2026-10-21",
-    "permitted_change": "`CLASSIFICATION-CORRECTION-01` (migration `0028_classification_corrections`) lets an expert correct a version's classification by appending numbered revisions, and `VersionClassification` gained the required property `revision`: 1 is the original confirmation this case makes, 2 and later are corrections. This record's body therefore ends its `classification` object with `revision` (`1`), appended after `confirmed_at` because the model emits it last. **No property was renamed, removed, re-typed or reordered and no status or header moved**; removing that one property restores the previous body byte for byte, which `test_the_four_classification_records_moved_by_the_revision_and_nothing_else` asserts by digest. `additionalProperties: false` is satisfied because `revision` is a name the resealed document declares. This is the whole of the permitted change; the record is compared byte for byte against the new expectation like every other.",
+    "permitted_change": "`CLASSIFICATION-CORRECTION-01` (migration `0028_classification_corrections`) lets an expert correct a version's classification by appending numbered revisions, and `VersionClassification` gained the required property `revision`: 1 is the original confirmation this case makes, 2 and later are corrections. This record's body therefore ends its `classification` object with `revision` (`1`), appended after `confirmed_at` because the model emits it last. **No property was renamed, removed, re-typed or reordered and no status or header moved**; removing that one property restores the previous body byte for byte, which `test_the_four_classification_records_moved_by_the_revision_and_nothing_else` asserts by digest. `additionalProperties: false` is satisfied because `revision` is a name the resealed document declares. This is the whole of the permitted change; the record is compared byte for byte against the new expectation like every other. `PROD-11-AR-V1-V2-REMOVAL-01` then changed the section this case confirms from `AR` to `KJ` (the served `startRun` refuses an АР version, so the journey's version is classified as a section that has a text profile): `section_code` is `KJ` in this body and in the three version reads, and nothing else moved, which `test_the_four_classification_records_moved_by_the_section_and_nothing_else` asserts by digest.",
     "everything_else": "Every other difference in this directory is a failure of the wave, whatever argument accompanies it."
   },
   "unordered": null,
@@ -31,7 +31,7 @@
       ]
     ],
     "body_length": 44,
-    "body_note": "ClassifyDocumentVersionRequest: project_stage P (design), section_code AR; no Idempotency-Key, the operation declares none"
+    "body_note": "ClassifyDocumentVersionRequest: project_stage P (design), section_code KJ; no Idempotency-Key, the operation declares none"
   },
   "response": {
     "status": 200,
@@ -52,7 +52,7 @@
     "body": {
       "kind": "text",
       "length": 199,
-      "text": "{\"version_uid\": \"{{version_uid}}\", \"project_stage\": \"P\", \"section_code\": \"AR\", \"confirmed_by_user_uid\": \"{{user_uid}}\", \"confirmed_at\": \"{{ts_5}}\", \"revision\": 1}",
+      "text": "{\"version_uid\": \"{{version_uid}}\", \"project_stage\": \"P\", \"section_code\": \"KJ\", \"confirmed_by_user_uid\": \"{{user_uid}}\", \"confirmed_at\": \"{{ts_5}}\", \"revision\": 1}",
       "note": ""
     }
   },

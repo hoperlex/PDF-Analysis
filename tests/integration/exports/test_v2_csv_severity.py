@@ -16,6 +16,7 @@ from auditmanager.exports.serializer import COLUMNS, render_csv
 from auditmanager.findings import published_findings
 from auditmanager.runs import execute_run, start_audit_run
 from auditmanager.shared.identity import FindingObservationId
+from tests.support.v1_reference_profile import resolve_reference_profile
 
 
 def _rows(content: bytes) -> list[dict[str, str]]:
@@ -70,6 +71,7 @@ def test_csv_uses_canonical_proposal_and_current_expert_decision(
         blob_store=blob_store,
         adapter=recorded_adapter,
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
     finding = published_findings(session, started.run_id)[0]
     original = str(finding.finding_observation_id)

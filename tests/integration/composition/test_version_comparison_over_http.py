@@ -141,7 +141,8 @@ def _classify(world: dict[str, Any], version_uid: str, stage: str = "P") -> None
         f"/projects/{world['project_uid']}/documents/{world['document_uid']}"
         f"/versions/{version_uid}/classification",
         headers=world["auth"] | {"Content-Type": "application/json"},
-        content=json.dumps({"project_stage": stage, "section_code": "AR"}).encode("utf-8"),
+        # `PROD-11-AR-V1-V2-REMOVAL-01`: the served startRun refuses an АР version, so the version that must run is classified ПБ, whose recording carries the corpus run's findings.
+        content=json.dumps({"project_stage": stage, "section_code": "PB"}).encode("utf-8"),
     )
     assert answer.status_code == 200, answer.content
 
@@ -173,7 +174,7 @@ def test_the_comparison_refuses_then_compares_as_its_inputs_appear(world) -> Non
     unanalysed = _compare(world, source=world["v1"], target=world["v2"]).json()
     assert unanalysed["refusal"] == {"reason": "analysis_missing", "side": "source"}
     assert unanalysed["source"]["project_stage"] == "P"
-    assert unanalysed["source"]["section_code"] == "AR"
+    assert unanalysed["source"]["section_code"] == "PB"
 
     source_run, target_run = _run(world, world["v1"]), _run(world, world["v2"])
     assert world["app"].state.run_carrier.drain(timeout=300), "the runs never finished"

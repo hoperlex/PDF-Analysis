@@ -20,6 +20,7 @@ from typing import Any
 
 from auditmanager.analysis.text import STATUS_SUCCEEDED, load_text_layer, run_text_analysis
 from auditmanager.shared.identity import RunId
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE
 
 
 def _span_of(text_layer: Any, page_number: int, quotation: str) -> tuple[int, int]:
@@ -47,7 +48,8 @@ def test_recorded_run_surfaces_every_seeded_issue(
     text_layer_document, recorded_adapter, expected_issues
 ):
     outcome = run_text_analysis(
-        run_id=RunId.new(), text_layer_document=text_layer_document, adapter=recorded_adapter
+        run_id=RunId.new(), text_layer_document=text_layer_document, adapter=recorded_adapter,
+        profile=V1_REFERENCE_PROFILE,
     )
     assert outcome.status == STATUS_SUCCEEDED
     text_layer = load_text_layer(text_layer_document)
@@ -78,7 +80,8 @@ def test_recorded_run_flags_none_of_the_controls(
     text_layer_document, recorded_adapter, expected_issues
 ):
     outcome = run_text_analysis(
-        run_id=RunId.new(), text_layer_document=text_layer_document, adapter=recorded_adapter
+        run_id=RunId.new(), text_layer_document=text_layer_document, adapter=recorded_adapter,
+        profile=V1_REFERENCE_PROFILE,
     )
     text_layer = load_text_layer(text_layer_document)
     emitted = _emitted_spans(outcome.artifact)
@@ -102,7 +105,8 @@ def test_the_run_emits_exactly_the_three_seeded_observations(
 ):
     """Counts, stated plainly, so a regression shows up as a number and not a diff."""
     outcome = run_text_analysis(
-        run_id=RunId.new(), text_layer_document=text_layer_document, adapter=recorded_adapter
+        run_id=RunId.new(), text_layer_document=text_layer_document, adapter=recorded_adapter,
+        profile=V1_REFERENCE_PROFILE,
     )
     categories = [obs["category"] for obs in outcome.artifact["observations"]]
     assert len(categories) == 3

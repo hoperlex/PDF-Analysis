@@ -21,6 +21,7 @@ from auditmanager.decisions import current_verdict, record_decision
 from auditmanager.exports import BOM, export_run_csv
 from auditmanager.findings import published_findings
 from auditmanager.runs import execute_run, start_audit_run
+from tests.support.v1_reference_profile import resolve_reference_profile
 
 
 def _rows(content: bytes) -> list[dict[str, str]]:
@@ -45,6 +46,7 @@ def _published_run(session, seeded, blob_store, recorded_adapter, provider_confi
         blob_store=blob_store,
         adapter=recorded_adapter,
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
     return started.run_id
 

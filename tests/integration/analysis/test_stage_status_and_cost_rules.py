@@ -40,6 +40,7 @@ from auditmanager.analysis.text.stage import (
 )
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import RunId
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE
 
 #: Pinned literals. `claude-opus-5` and its rates are `docs/program/P02_LOCK.json`, checked
 #: against that document in `test_provider_lock_refusals.py`.
@@ -133,6 +134,7 @@ def _run(response: ModelResponse, **overrides: Any) -> Any:
         "text_layer_document": _text_layer_document(),
         "adapter": _ScriptedAdapter(response),
         "config": _config(),
+        "profile": V1_REFERENCE_PROFILE,
     }
     kwargs.update(overrides)
     return run_text_analysis(**kwargs)
@@ -310,6 +312,7 @@ def test_cost_basis_is_in_the_stage_metrics_on_the_success_path_and_the_overrun_
         ),
         config=_config(),
         meter=CostMeter(ceiling_usd=0.01),
+        profile=V1_REFERENCE_PROFILE,
     )
     assert overrun.status == STATUS_FAILED
     assert overrun.error.code is ErrorCode.COST_BUDGET_EXCEEDED
@@ -371,6 +374,7 @@ def test_a_meter_already_at_the_ceiling_issues_no_call() -> None:
         adapter=adapter,
         config=_config(),
         meter=CostMeter(ceiling_usd=0.10, spent_usd=0.10),
+        profile=V1_REFERENCE_PROFILE,
     )
     assert outcome.status == STATUS_FAILED
     assert outcome.error.code is ErrorCode.COST_BUDGET_EXCEEDED
@@ -473,6 +477,7 @@ def test_the_overrun_path_records_the_basis_of_the_figure_it_actually_recorded()
         ),
         config=_config(),
         meter=CostMeter(ceiling_usd=0.01),
+        profile=V1_REFERENCE_PROFILE,
     )
     assert overrun.status == STATUS_FAILED
     assert overrun.error.code is ErrorCode.COST_BUDGET_EXCEEDED

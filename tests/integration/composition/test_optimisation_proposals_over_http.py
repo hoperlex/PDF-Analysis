@@ -4,9 +4,11 @@ The composed ASGI application (``create_asgi_app``) with the recorded provider, 
 lane's own PostgreSQL and MinIO, driven with real credentials -- an expert, and an
 administrator who is not an expert. One portal bundle is uploaded; then, in the order the
 operation checks them, every refusal of ``startOptimisationPass`` appears as its input does:
-``version_unclassified``, ``section_not_ar`` (a second set), ``price_list_missing``,
-``analysis_missing`` (before the recorded run publishes), ``vendor_list_missing``. Each is
-``409 conflict`` with its ``conflict_reason`` and leaves nothing behind.
+``version_unclassified``, ``price_list_missing`` (the second set, classified ``KJ``, and the AR
+one: since `OPT-PROJECT-ALL-SECTIONS-01` a set of another section is not refused for its section),
+``analysis_missing`` (both sets, before a recorded run publishes), ``vendor_list_missing``. Each is
+``409 conflict`` with its ``conflict_reason`` and leaves nothing behind. The ``KJ`` set then gets a
+run of its own section, the administrator's ``KJ`` vendor list, and a pass that pins that list.
 
 The shipped adapter reads the run's saved text from MinIO, held to the digest its stage row
 recorded; the baseline document has no specification table, so the saved page text of the
@@ -42,6 +44,7 @@ from starlette.testclient import TestClient
 
 from auditmanager.api.routers.idempotency import IDEMPOTENCY_HEADER
 from auditmanager.api.security import API_TOKEN_VARIABLE
+from tests.support.published_run import publish_reference_run
 
 DEPLOYMENT_SECRET = "w60-opt-proposals-over-http-token"
 EXPERT = "w60-opt-proposals-expert"
@@ -80,6 +83,48 @@ def _schema(name: str) -> dict[str, Any]:
 
 def _exact_keys(body: dict[str, Any], schema: str) -> None:
     assert set(body) == set(_schema(schema)["properties"]), schema
+
+
+def _publish_section_run(version_uid: str, *, tag: str) -> str:
+    """Start and execute a run of the version under the profile of its **confirmed section**.
+
+    Like ``tests/support/published_run.publish_reference_run`` but with the shipped section
+    registry (the route table ``startRun`` uses) and the recorded section replies, so the run is
+    what a ``KJ`` or ``ПБ`` version gets in the product, started in-process. It spends nothing.
+    """
+    from sqlalchemy.orm import Session as _Session
+
+    from auditmanager.analysis.text import ProviderConfig, ProviderMode, RecordedAdapter
+    from auditmanager.analysis.text.profile_registry import load_text_profile_registry
+    from auditmanager.runs import execute_run, start_audit_run
+    from auditmanager.shared.db.config import DatabaseSettings, parse_database_url
+    from auditmanager.shared.db.engine import create_database_engine
+    from auditmanager.shared.identity import IdempotencyKey
+    from auditmanager.storage import S3BlobStore, S3StorageSettings
+
+    registry = load_text_profile_registry()
+    engine = create_database_engine(DatabaseSettings(url=parse_database_url(os.environ["DATABASE_URL"])))
+    store = S3BlobStore(S3StorageSettings.from_env())
+    config = ProviderConfig(
+        mode=ProviderMode.RECORDED, model_id="claude-opus-5", run_cost_ceiling_usd=1.0,
+        api_key=None, ceiling_is_explicit=False,
+    )
+    try:
+        with _Session(engine, expire_on_commit=False) as session:
+            started = start_audit_run(
+                session, version_uid=version_uid, provider_mode="recorded",
+                idempotency_key=IdempotencyKey(f"section-run-{tag}-{secrets.token_hex(6)}"),
+                section_profiles=registry.section_profiles(),
+            )
+            session.commit()
+            execute_run(
+                session, started.run_id, blob_store=store, adapter=RecordedAdapter(),
+                provider_config=config, text_profiles=registry.resolve,
+            )
+            session.commit()
+            return str(started.run_id)
+    finally:
+        engine.dispose()
 
 
 @pytest.fixture(scope="module")
@@ -213,17 +258,19 @@ def world(app_and_client, expert, admin) -> dict[str, Any]:
 
     refused(ar)
     _classify(client, expert, project, kj, "KJ")
-    refused(kj)
+    refused(kj)  # was section_not_ar: the section no longer stops it, the missing price list does
     _classify(client, expert, project, ar, "AR")
     refused(ar)
     _price_list(client, expert, project)
+    refused(kj)
     refused(ar)
-    started = client.post(
+    # `PROD-11-AR-V1-V2-REMOVAL-01`: the served startRun refuses an АР version, so the published run the АР reads need is made in-process (tests/support/published_run.py).
+    refused_start = client.post(
         "/runs", headers=expert | _key("run"), json={"version_uid": ar["version_uid"]},
     )
-    assert started.status_code == 202, started.content
-    run_id = started.json()["run_id"]
-    assert app.state.run_carrier.drain(timeout=300), "the run never finished"
+    assert refused_start.status_code == 422, refused_start.content
+    assert refused_start.json()["error_code"] == "section_profile_unavailable"
+    run_id = publish_reference_run(ar["version_uid"], tag="opt-proposals")
     assert client.get(f"/runs/{run_id}", headers=expert).json()["state"] == "published"
     # The lane database persists between runs, and a global vendor list cannot be unset: the
     # last refusal appears only on the first run, while no administrator has kept an AR list.
@@ -264,14 +311,50 @@ def world(app_and_client, expert, admin) -> dict[str, Any]:
 
 def test_every_refusal_names_the_first_unmet_precondition_in_order(world) -> None:
     expected = [
-        "version_unclassified",
-        "section_not_ar",
-        "price_list_missing",
-        "analysis_missing",
-        "vendor_list_missing",
+        "version_unclassified",  # the AR set, nobody classified it
+        "price_list_missing",  # the KJ set: was section_not_ar
+        "price_list_missing",  # the AR set
+        "analysis_missing",  # the KJ set, now that the project has a price list
+        "analysis_missing",  # the AR set
+        "vendor_list_missing",  # the AR set, once its run published
     ]
     assert [reason for reason, _ in world["reasons"]] == expected[: len(world["reasons"])]
-    assert len(world["reasons"]) >= 4  # the fifth only while no AR vendor list was ever kept
+    assert "section_not_ar" not in [reason for reason, _ in world["reasons"]]
+    assert len(world["reasons"]) >= 5  # the sixth only while no AR vendor list was ever kept
+
+
+@pytest.fixture(scope="module")
+def kj_started(world, expert, admin) -> dict[str, Any]:
+    """A pass over the ``KJ`` set: a run of its own section, the administrator's ``KJ`` list."""
+    client, project, kj = world["client"], world["project"], world["kj"]
+    run_id = _publish_section_run(kj["version_uid"], tag="opt-proposals-kj")
+    assert client.get(f"/runs/{run_id}", headers=expert).json()["state"] == "published"
+    current = client.get(f"/projects/{project}/vendor-lists", headers=admin).json()["items"]
+    global_kj = next(item for item in current if item["section_code"] == "KJ")["global_revision"]
+    set_list = client.put(
+        "/vendor-lists/KJ",
+        json={"entries": VENDORS,
+              "expected_vendor_list_id": None if global_kj is None else global_kj["vendor_list_id"]},
+        headers=admin,
+    )
+    assert set_list.status_code == 200, set_list.content
+    key = f"w60p-kj-started-{world['tag']}"
+    answer = _start(client, expert, project, kj["document_uid"], key)
+    return {"answer": answer, "run_id": run_id, "vendor_list_id": set_list.json()["vendor_list_id"]}
+
+
+def test_a_pass_over_a_set_of_another_section_pins_that_sections_vendor_list(world, kj_started) -> None:
+    """Was ``section_not_ar``. Through the database trigger as well: migration ``0034``."""
+    answer = kj_started["answer"]
+    assert answer.status_code == 201, answer.content
+    body = answer.json()
+    _exact_keys(body, "OptimisationPass")
+    assert body["document_uid"] == world["kj"]["document_uid"]
+    assert body["version_uid"] == world["kj"]["version_uid"] and body["run_id"] == kj_started["run_id"]
+    assert body["vendor_list_id"] == kj_started["vendor_list_id"] != world["vendor_list_id"]
+    assert body["vendor_list_source"] == "global"
+    assert (body["specification_row_count"], body["matched_row_count"]) == (3, 3)
+    assert (body["proposed_row_count"], body["proposal_count"]) == (3, 3)
 
 
 @pytest.fixture(scope="module")

@@ -39,6 +39,7 @@ import http.server
 import json
 import os
 import re
+import shutil
 import subprocess
 import threading
 from collections.abc import Iterator
@@ -227,6 +228,10 @@ if argv[:1] == ["compose"]:
         if "auditmanager.shared.db.check" in joined:
             sys.stdout.write("FOUNDATION-CHECK OK check-db\n")
             sys.exit(0)
+        if "auditmanager.access.check" in joined:
+            # `PROD-02`: the credential gate, clean. This suite is about image identity.
+            sys.stdout.write("access-check GATE OK no published credential\n")
+            sys.exit(0)
         if "openapi_conformance.py" in joined:
             sys.stdin.buffer.read()
             sys.stdout.write("differences: 0\n")
@@ -278,22 +283,26 @@ def serving() -> Iterator[int]:
 
 
 def _env_text(port: int, *, secrets: dict[str, str] = EDITED_SECRETS, policy: str | None = None) -> str:
-    """`D-103`: `DATABASE_URL`, `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` are derived
+    """`D-103`: `MIGRATOR_DATABASE_URL`, `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` are derived
     from `secrets` so this stays coherent under `derived-secrets-coherent` -- this suite is
     about `identity-policy-known` and the retag mechanism, not about that guard, and must
-    reach past it the same way every other case here does."""
+    reach past it the same way every other case here does. Since `PROD-04` it also names the
+    application role (`ALPHA_APP_DB_*`, `DATABASE_URL`) that `app-db-role-configured` demands."""
     lines = [
         f"ALPHA_INSTANCE={INSTANCE}",
         f"ALPHA_HTTP_PORT={port}",
         f"POSTGRES_DB={DATABASE}",
         f"POSTGRES_USER={PG_USER}",
         f"S3_BUCKET={BUCKET}",
+        "ALPHA_APP_DB_USER=the_application_role",
+        "ALPHA_APP_DB_PASSWORD=an-edited-application-db-password-0001",
+        f"DATABASE_URL=postgresql+psycopg://the_application_role:an-edited-application-db-password-0001@postgres:5432/{DATABASE}",
     ]
     if policy is not None:
         lines.append(f"ALPHA_PRESERVE_IMAGE_IDENTITY={policy}")
     lines += [f"{name}={value}" for name, value in sorted(secrets.items())]
     lines.append(
-        "DATABASE_URL=postgresql+psycopg://"
+        "MIGRATOR_DATABASE_URL=postgresql+psycopg://"
         f"{PG_USER}:{secrets['POSTGRES_PASSWORD']}@postgres:5432/{DATABASE}"
     )
     lines.append(f"S3_ACCESS_KEY_ID={secrets['MINIO_ROOT_USER']}")
@@ -333,6 +342,13 @@ def _stage(tmp_path: Path, *, script: Path | None = None) -> Path:
         "\n".join(f"{n}={v}" for n, v in sorted(EXAMPLE_SECRETS.items())) + "\n",
         encoding="utf-8",
     )
+    # `PROD-02`: the library every deploy sources (the credential gate is asked of every stack).
+    (deploy / "lib").mkdir(exist_ok=True)
+    (deploy / "lib/proxy-listeners.sh").write_text(
+        (ROOT / "infra/deploy/lib/proxy-listeners.sh").read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    # `PROD-04`: the step deploy.sh runs between `migrate` and `up`, and asks about before the build.
+    shutil.copy2(ROOT / "infra/deploy/apply-grants.sh", deploy / "apply-grants.sh")
     reload_proxy = deploy / "reload-proxy.sh"
     reload_proxy.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     reload_proxy.chmod(0o755)

@@ -174,6 +174,33 @@ if [ ! -r "$COMPOSE_FILE" ]; then
 fi
 # <<< guard: compose-file-present
 
+# `PROD-04-DB-ROLES-01` (`R-146n` item 1, `AD-02`). A wipe drops schema `public` and a restore replaces it, and a dump carries
+# no privileges (`pg_dump --no-owner --no-privileges`): either way the application role has NO rights afterwards, until
+# `apply-grants.sh` gives them back. So both destructive modes ask, BEFORE anything is changed, that the step can run -- the
+# script is here and the second password is set -- and end by running it, between the migrations and the first service that
+# connects as the application. A dry run changes nothing and asks nothing.
+GRANTS_SCRIPT="$HERE/apply-grants.sh"
+# >>> guard: grants-script-present
+if [ "$DRY_RUN" = no ] && { [ ! -r "$GRANTS_SCRIPT" ] || [ ! -x "$GRANTS_SCRIPT" ]; }; then
+    refuse "[grants_script_missing] $GRANTS_SCRIPT is missing or not executable." \
+           "A wipe or a restore leaves the application role with no rights; this step gives them back. Nothing has been changed."
+fi
+# <<< guard: grants-script-present
+# >>> guard: app-db-role-configured
+if [ "$DRY_RUN" = no ]; then
+    ROLES_STATUS=0
+    ROLES_OUTPUT="$("$GRANTS_SCRIPT" --env-file "$ENV_FILE" --config-only 2>&1)" || ROLES_STATUS=$?
+    if [ "$ROLES_STATUS" -ne 0 ]; then
+        ROLES_LINES=()
+        while IFS= read -r line; do ROLES_LINES+=("${line#  }"); done <<<"${ROLES_OUTPUT#apply-grants.sh: REFUSED: }"
+        refuse "the database roles are not configured (apply-grants.sh --config-only, status $ROLES_STATUS):" \
+               "${ROLES_LINES[@]}" \
+               "Nothing has been changed: a wipe or a restore without the second password would leave api and worker" \
+               "with no database rights."
+    fi
+fi
+# <<< guard: app-db-role-configured
+
 compose() { docker compose --env-file "$ENV_FILE" --file "$COMPOSE_FILE" "$@"; }
 
 mc_run() {
@@ -229,6 +256,18 @@ if [ -n "$RESTORE" ]; then
     if [ -d "$RESTORE" ]; then
         RESTORE="$(cd "$RESTORE" && pwd)"
     fi
+    # `PROD-02`. A restore ends by asking whether the published admin/password pair came back and, if it did,
+    # by closing public port 443 (`R-146s`); the rule is written once, in the library every script shares.
+    LISTENERS_LIB="$HERE/lib/proxy-listeners.sh"
+# >>> guard: listeners-library-present
+    if [ ! -r "$LISTENERS_LIB" ]; then
+        refuse "$LISTENERS_LIB is missing or unreadable." \
+               "A restore ends by asking whether the published admin/password pair came back, and by closing" \
+               "public port 443 if it did (R-146s); that rule is written there, once. Nothing has been changed."
+    fi
+# <<< guard: listeners-library-present
+    # shellcheck source=lib/proxy-listeners.sh
+    . "$LISTENERS_LIB"
 # >>> guard: restore-complete
     # Both halves or neither. A restore that put the rows back and left the bytes behind
     # would leave an instance that lists a document and cannot serve it, which is worse
@@ -295,9 +334,20 @@ if [ -n "$RESTORE" ]; then
     if [ "$RESTORE_MIGRATE_STATUS" -eq 0 ]; then
         compose run --rm --no-deps release-notes || RESTORE_NOTES_STATUS=$?
     fi
-    if [ "$RESTORE_MIGRATE_STATUS" -ne 0 ] || [ "$RESTORE_NOTES_STATUS" -ne 0 ]; then
-        echo "reset.sh: !! restored rows, but migration or release-note load needs operator review."
-        echo "reset.sh: !! migrate=$RESTORE_MIGRATE_STATUS release-notes=$RESTORE_NOTES_STATUS"
+    # `PROD-04`: the dump carried no privileges, so the application role has none. Its rights are applied here --
+    # after the migrations (the schema is at the head) and before the worker, or anything else that connects as it,
+    # starts. A restore that cannot do it is reported like a migration that could not, never reversed.
+    RESTORE_GRANTS_STATUS=0
+    if [ "$RESTORE_MIGRATE_STATUS" -eq 0 ] && [ "$RESTORE_NOTES_STATUS" -eq 0 ]; then
+        "$GRANTS_SCRIPT" --env-file "$ENV_FILE" || RESTORE_GRANTS_STATUS=$?
+    fi
+    if [ "$RESTORE_MIGRATE_STATUS" -ne 0 ] || [ "$RESTORE_NOTES_STATUS" -ne 0 ] || [ "$RESTORE_GRANTS_STATUS" -ne 0 ]; then
+        echo "reset.sh: !! restored rows, but migration, release-note load or the application role's rights need operator review."
+        echo "reset.sh: !! migrate=$RESTORE_MIGRATE_STATUS release-notes=$RESTORE_NOTES_STATUS apply-grants=$RESTORE_GRANTS_STATUS"
+        if [ "$RESTORE_GRANTS_STATUS" -ne 0 ]; then
+            echo "reset.sh: !! api and worker cannot read the restored database until this runs and exits 0:"
+            echo "reset.sh: !!   $GRANTS_SCRIPT --env-file $ENV_FILE"
+        fi
         if [ "$WORKER_DECLARED" = yes ]; then
             echo "reset.sh: !! the worker service was left stopped; start it once the schema is at head:"
             echo "reset.sh: !!   docker compose --env-file $ENV_FILE --file $COMPOSE_FILE up -d --no-deps worker"
@@ -388,9 +438,51 @@ if [ -n "$RESTORE" ]; then
         echo "reset.sh: !!     -m auditmanager.access.check"
     fi
 
+    # --- `PROD-02` (`R-146i`, `R-146s`, `ADR-0021` section 2, `ADR-0023` section 3): THE SAME GATE AS A DEPLOY'S.
+    #
+    # The report above names every account on a temporary password. This is the narrower question a deployment
+    # is refused over: is the PUBLISHED pair (admin / password) valid again? If it is -- or if that cannot be
+    # told, because after a restore "I could not look" is not "it is fine" -- the proxy is recreated WITHOUT
+    # the 443 overlay, so the site is unreachable from outside until an administrator changes the password
+    # through the loopback port. That is the consequence `R-146s` accepts. Nothing is stopped: only the
+    # published mapping goes. A restore NEVER opens 443; only a deploy does, after a clean gate.
+    #
+    # THE EXIT STATUS STAYS 0 for a completed restore, finding or not (`R-52`: the restore happened, and the
+    # report above is what an operator needs) -- except when the door could not be shut, which is 5: a restore
+    # that left a public sign-in open to the published pair is not one to report as plain success.
+    echo
+    echo "reset.sh: is the PUBLISHED pair (admin/password) valid again? -- the gate a deploy is refused over (R-146s)"
+    listeners_gate_run compose
+    printf '%s\n' "$LISTENERS_GATE_OUTPUT" | sed 's/^/reset.sh:   /'
+    DOOR_STATUS=0
+    case "$LISTENERS_GATE_VERDICT" in
+        clean)
+            echo "reset.sh: no. Public port 443 is left as it was (a restore never opens it; the next deploy decides)." ;;
+        *)
+            if [ "$LISTENERS_GATE_VERDICT" = finding ]; then
+                echo "reset.sh: !! YES: $(listeners_gate_logins "$LISTENERS_GATE_OUTPUT" | paste -sd, -) accepts the published password again."
+            else
+                echo "reset.sh: !! THE GATE COULD NOT BE ANSWERED (status $LISTENERS_GATE_STATUS) -- after a restore that is treated as a finding."
+            fi
+            if listeners_withhold_https compose "$HERE" "$ENV_FILE" "$(configured ALPHA_CERT_NAME)"; then
+                echo "reset.sh: !! Public port 443 is NOT published (the proxy is recreated without the 443 overlay if it was)."
+                echo "reset.sh: !! Every service keeps running on loopback. Sign in through an SSH tunnel to the loopback port,"
+                echo "reset.sh: !! change the password, then deploy: the deploy publishes 443 again when the gate is clean."
+            else
+                DOOR_STATUS=5
+                echo "reset.sh: !! PUBLIC PORT 443 COULD NOT BE WITHDRAWN. Close it by hand, now:"
+                echo "reset.sh: !!   docker compose --env-file $ENV_FILE --file $COMPOSE_FILE up -d --force-recreate --no-deps proxy"
+            fi ;;
+    esac
+
+    # `PROD-04`: a restore whose application role has no rights is not one to report as plain success. 5 (the public
+    # door could not be shut) outranks it: that one is an exposure, this one is an outage.
+    if [ "$DOOR_STATUS" -eq 0 ] && [ "$RESTORE_GRANTS_STATUS" -ne 0 ]; then
+        DOOR_STATUS=6
+    fi
     echo
     echo "reset.sh: restored. Verify with a read of one document version through the API."
-    exit 0
+    exit "$DOOR_STATUS"
 fi
 
 # THE ROW COUNTS ARE COUNTED, NOT ESTIMATED -- `D-24`, and it is the screen an operator
@@ -690,6 +782,19 @@ echo "reset.sh: re-running migrations to head"
 compose run --rm migrate >/dev/null
 echo "reset.sh: re-loading release notes"
 compose run --rm --no-deps release-notes >/dev/null
+# `PROD-04`: the schema was just recreated by the owner, so the application role has no rights on it. Give them back
+# before the worker (or anything else that connects as it) is started. The wipe has happened, so a failure here is
+# said loudly and is a non-zero exit, not a refusal.
+echo "reset.sh: giving the application role its rights again"
+WIPE_GRANTS_STATUS=0
+"$GRANTS_SCRIPT" --env-file "$ENV_FILE" || WIPE_GRANTS_STATUS=$?
+if [ "$WIPE_GRANTS_STATUS" -ne 0 ]; then
+    echo "reset.sh: !! THE SCHEMA IS RECREATED BUT THE APPLICATION ROLE HAS NO RIGHTS ON IT (apply-grants.sh exited $WIPE_GRANTS_STATUS)."
+    echo "reset.sh: !! api and worker cannot read the database until this runs and exits 0:"
+    echo "reset.sh: !!   $GRANTS_SCRIPT --env-file $ENV_FILE"
+    echo "reset.sh: !! The worker was left stopped. The dump is at $DUMP_DIR"
+    exit 4
+fi
 
 echo "reset.sh: purging and re-initialising bucket $BUCKET"
 mc_run s3-init -c "$MC_ALIAS; mc --quiet rm --recursive --force \"local/$BUCKET\" >/dev/null 2>&1 || true" >/dev/null

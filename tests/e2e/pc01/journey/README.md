@@ -7,9 +7,11 @@ E2E_PC01_LOGIN=<login> E2E_PC01_PASSWORD=<password> \
 
 A sign-in, two phases, one instrument, one envelope, one exit code.
 
-**The write half** creates a project, uploads the AR portal bundle (a ZIP), confirms the uploaded
-version's stage and section (П, АР) and starts a run — through the app's own controls, on the public
-origin — then waits for the run's terminal by reading what the run screen's own poller renders.
+**The write half** creates a project, uploads the synthetic portal bundle (a ZIP), confirms the uploaded
+version's stage and section (П, ПБ) and starts a run — through the app's own controls, on the public
+origin — then waits for the run's terminal by reading what the run screen's own poller renders. The
+section is ПБ, not АР, since `PROD-10B-JOURNEY-REBASE-01`: see "The journey's section, and the steps
+that stay on АР" below.
 
 **The read walk** then visits every route declared in `manifest.json`, each in a cold browser, discovering every
 identifier by following links the pages render.
@@ -96,7 +98,7 @@ Four steps, declared in `manifest.json` under `write`:
 |---|---|---|---|
 | `create-project` | `/projects` | types a name, presses **Create** | `POST /projects` → `201`, `project_uid` matches the identifier pattern, the screen states what it created, no alert |
 | `upload-document` | `/projects/{project_uid}` | chooses `fixtures/synthetic/ar/bundles/ar_baseline.zip`, presses **Upload** | `POST /projects/{uid}/documents` → `201`, sent as `multipart/form-data` with `name="file"`, `ar_baseline.zip` and `application/zip` on the wire, the screen navigates to the published version |
-| `classify-version` | `/projects/{project_uid}/versions/{version_uid}` | in «Стадия и раздел», chooses **П — проектная** and **АР**, presses **Подтвердить раздел** | `PUT /projects/{uid}/documents/{uid}/versions/{uid}/classification` → `200` echoing `project_stage: "P"` and `section_code: "AR"`, the panel switches to the confirmed classification and names the version's document (captured for the `PUT`'s path), no refusal and no conflict note |
+| `classify-version` | `/projects/{project_uid}/versions/{version_uid}` | in «Стадия и раздел», chooses **П — проектная** and **ПБ**, presses **Подтвердить раздел** | `PUT /projects/{uid}/documents/{uid}/versions/{uid}/classification` → `200` echoing `project_stage: "P"` and `section_code: "PB"`, the panel switches to the confirmed classification and names the version's document (captured for the `PUT`'s path), no refusal and no conflict note |
 | `start-run` | `/projects/{project_uid}/versions/{version_uid}` | presses **Start run** | `POST /runs` → **`202`** with `state: "queued"`, the screen navigates to run progress, and the run reaches a terminal |
 
 Nothing is typed into a URL and no identifier is handed in: each step's address is built
@@ -351,6 +353,14 @@ took attached. The other three catch the `202` declared as `200` and `state` dec
 The fixtures are not read by the conformance guard, so their deliberate wrongs never redden
 `make gate`.
 
+**`PROD-10B-JOURNEY-REBASE-01` put a `classify-version` step (stage П, section ПБ) into both write
+fixtures and into the four `fixtures/w28-live/` manifests**, because a run starts only for a classified
+version (`W59-SECTION-SEAL-01`) and none of them could reach its run since then. The figures above
+(*checked 1/3*, *six findings*, *four findings*) were measured before the step existed and are **not
+re-measured**: `redden-write` still stops at its first red step, so the step is never reached there and
+the tally should read `1/4` (derived, not measured); in `redden-write-bound` the three real steps now pass before the bounded one.
+Re-measure both with the two commands above on a stand before quoting a figure.
+
 **And that is also why three of them stopped proving anything.** `W44-JOURNEY` found the
 two write fixtures pressing controls labelled `Create`, `Upload` and `Start run` — the
 application says `Создать`, `Загрузить` and `Запустить прогон` — so each died at its first
@@ -478,7 +488,7 @@ night screen has both, or says why it has no refusal (`no_negative_case`).
 
 | screen | action | refused |
 |---|---|---|
-| stage and section | confirm АР/П, pressed twice: one `PUT` | admin-only sees a sentence and no form; a stage without a section is a disabled button |
+| stage and section | confirm ПБ/П, pressed twice: one `PUT` | admin-only sees a sentence and no form; a stage without a section is a disabled button |
 | next version | upload a bundle as version 2 and 3 | a bare PDF is refused by the browser, nothing sent |
 | comparison, П→Р, carried decision | compare, carry a verdict (confirmation pressed twice: one `POST`) | admin-only gets the read-only sentence; П against Р is refused without the switch; a carried row offers nothing again |
 | «Настройки анализа» | the fifteen sections and their profiles | no form, no field, no select |
@@ -487,12 +497,41 @@ night screen has both, or says why it has no refusal (`no_negative_case`).
 | vendor lists | the global list (administrator), the project list | an expert is offered no global button; a row with no vendor |
 | «Спецификация и цены» | the committed set's seven rows read, five matched, four counted (RUB 464278), three left out with their reasons | `price_list_missing` before any list |
 | «Предложения» | a pass (twice) with the oracle's four proposals; accept; accept then reject; revise with a `=`-comment; history; the decision filter; two CSVs (BOM, 42 columns, 4 and 5 data rows, no formula cell) | a pass with no price list is refused `409 conflict`; admin-only starts nothing and decides nothing; «На доработку» needs a comment; a pass over the set with no table holds no proposal and its CSV is the header alone |
-| «Оптимизация разделов», dashboard | the АР section across projects; the section panel | a section with no members |
+| «Оптимизация разделов», dashboard | the АР section across projects (an `ar_bound` step); the section panel counts the journey's own section, ПБ | a section with no members |
 | «Нормы» | designate a snapshot, search, catalogue + filter | an unqualified snapshot has no button; an expert has no designation; an empty query |
 | exports | a run's CSV and Excel (the saved file is read) | admin-only is refused `permission_denied` |
 | «Очередь», «Исполнители» | pause, a waiting run, priority, cancel, re-audit, resume; worker intake off and on | an expert has no priority or pause; 500 is out of range |
 | account | profile, password change, sign-out, version history | a surname is required; mismatch and wrong current password; the old pass is refused after a change |
 | «Пользователи» | archive, restore, reset password | a repeat that differs |
+
+### The journey's section, and the steps that stay on АР (`PROD-10B-JOURNEY-REBASE-01`)
+
+`PROD-11` removes the АР v1 run, so the journey stopped confirming its sets as АР. The main flow (the three
+runs, the decision, the comparisons and the carried decision, the exports, the blocks, the queue, the
+dashboard, the correction of a classification) confirms **ПБ**. ПБ was chosen because its synthetic recording
+over the same text layer (`fixtures/recorded/sections/pb/`) carries the АР baseline recording's findings —
+the same three categories, the same five quotations on pages 2, 6, 3, 7 and 8 — so every figure measured on
+the АР run holds for it. `tests/e2e/test_pc01_journey_section.py` compares the two recordings, reads the
+section from `tests/e2e/pc01/driver.py` (`JOURNEY_SECTION`, which `test_acceptance.py` uses too) and refuses a
+classification step that names another. **That proves the recorded answer, not that a ПБ run publishes on a
+stand and not what a live model finds under the ПБ profile: both are measured by the first live run.**
+
+What cannot move is listed in `manifest.json` under `write.ar_bound`: the project's «Оптимизация» tab (price
+lists, vendor lists, «Спецификация и цены», the passes and their proposals) and the АР Form-7 exist for АР only,
+and they read the saved text of a **published АР run**. Three steps (`upload-ar-set-without-a-table`,
+`classify-ar-set-without-a-table`, `start-ar-run-without-a-table`) give the honest-empty-pass steps an АР set of
+their own, since a pass over the journey's own ПБ set is refused `section_not_ar`. Since
+`PROD-11-AR-V1-V2-REMOVAL-01` an АР version can start only the v3 group (`startRun` refuses it with
+`section_profile_unavailable`), which needs an installed reviewed pack (`D-204`) and, in recorded mode, a provider
+binding with a verifiable cost (`D-225` piece 2). So **every step of `write.ar_bound.steps` carries
+`pending_v3_activation: true`**: the driver does not run it, prints `PENDING <step> pending_v3_activation -- NOT RUN:
+<reason>` for each, reports the count (`write steps checked: 79/112 (33 PENDING ...)`), writes `stepsPending` and the
+names into the envelope, and ends `e2e:pc01 OK WITH PENDING`, never plain `OK`; `verify-acceptance.mjs` refuses such an
+envelope, so the manual acceptance cannot be signed while a step is pending. Nothing is deleted: removing the mark
+is how a step comes back once a published АР run can exist. The conformance test refuses a listed step without the
+mark, a marked step that is not listed, a missing reason, any АР pin, АР classification or run start outside that
+list, and a pass or a specification read asked of a document that no earlier step confirmed as АР. `--steps` can
+walk the rest alone, as a PARTIAL run (exit 3).
 
 ### What the stack needs
 
@@ -561,8 +600,10 @@ produce; a step that was not reached is a finding, never a pass.
   the bytes its bindings name (see above), and the steps `norms-document-*` open the view. The bytes are a
   stand-in, not a PDF, so what is asserted is the three reads (`getNormDocument`, `listNormParagraphs`,
   `streamNormDocumentContent`) and the viewer's address, not what the browser's viewer draws.
-* The recorded model answers the baseline's text and the committed specification set's. Other sections'
-  profiles are proven by their own recordings elsewhere.
+* The recorded model answers the baseline's text under the ПБ profile (`fixtures/recorded/sections/pb/`) and
+  the committed specification set's (`fixtures/recorded/sections/ar_specification/`) -- the latter only
+  for the АР steps of `write.ar_bound`, which are pending. Other sections' profiles are proven by their own
+  recordings elsewhere.
 * A norms catalogue «Excel» is the run export above; the catalogue itself has no workbook.
 * The vendor-list `vendor_list_missing` refusal of a pass is global state (a list, once set for the
   section, stays), so it cannot be asserted repeatably on a lane; `tests/integration/optimisation`

@@ -12,7 +12,7 @@ implementation decision within `R-146`. After the polls (`R-146o`…`R-146z`) ev
 at commit `83600aed` (the poll showed a one-line summary of each; the mechanisms are the ADRs). `AD-18` is settled by `R-146y` as to what stands until the measurement; the choice it leaves is open.
 
 **Baseline.** The tree of `integration/ar-close-1026` including its commit `1a7f6f65` (`R-146o`…`R-146v`): `VERSION` `0.8.1`, shared contract `1.5.0`, 92 paths / 104 operations / 300 schemas,
-migration head `0032_ar_v3_run_group`, 27 error codes. No item below adds a migration, so the head does not move. The local tracking refs `origin/dev` and `origin/main` were not fetched for this plan.
+migration head `0033_ar_v3_cite_stage_id` (moved from `0032` by `D-225` after this plan was first written), 27 error codes. No item below adds a migration, so the head does not move again. The local tracking refs `origin/dev` and `origin/main` were not fetched for this plan.
 No complete `make gate` can run on the development host (`D-205`).
 
 ## 1. How to read the items
@@ -62,7 +62,7 @@ No complete `make gate` can run on the development host (`D-205`).
 
 ### PROD-04 — Database roles: migrator and application, grants as an idempotent step (`R-146n` item 1, `AD-02`)
 - **Result:** `api` and `worker` connect as a role that cannot change the schema or truncate; the migrator keeps ownership; the grants are re-applied by one idempotent step after every `migrate` and every restore, so `--no-privileges` dumps cannot leave the application without rights; the
-  integration directories of the contexts pass as the application role. **No migration is added**; the head stays `0032_ar_v3_run_group`.
+  integration directories of the contexts pass as the application role. **No migration is added**; the head stays at its present value (`0033_ar_v3_cite_stage_id`).
 - **depends_on:** PROD-03 (infra files); `AD-02` is confirmed by `R-146w` · **Hotspots:** `infra/**` (no migration head) · **Size:** L: a new `infra/deploy/apply-grants.sh`, `compose.server.yml`, `deploy.sh`, `alpha.env.example`, **`reset.sh`** (`--restore`), **`copy-serve.sh`** (`restore-db`, which drops and recreates `public`),
   **`purge-product-data.sh`** (its `api_python` runs `product_purge` with the api's restricted `DATABASE_URL`, so the `owner-may-write` guard would refuse; it passes the migrator URL), a grant-classification guard test, a restored-from-`--no-privileges`-dump test, and the application-role run of the integration suites.
   `scripts/recovery/product_purge.py` changes only if the guard's message needs it.
@@ -236,7 +236,7 @@ Rules: no lane starts in a wave that names its hotspot for another lane; no wave
 | A-2 | The tree holds no provider terms, data-processing agreement, consent or data-handling policy; document text goes to OpenRouter and onward to whichever provider it routes to, which may retain or train on it; no ban on substitution (caught after the fact by `R-133`). | `R-146f`, `R-146n` item 4 not accepted | confirmed (`R-146w`): a client asks for data-handling terms; a contract promises confidentiality; the owner accepts `R-146n` item 4 |
 | A-3 | No machine checks a push and no scan runs unless a person runs it before a release; `D-122` stays open, and nothing scans the source-built MinIO image (`D-119`). | `R-146h` | confirmed (`R-146w`): a published advisory for a component in `uv.lock`, `web/package-lock.json` or a pinned image; any release to users outside the owner's organisation |
 | A-4 | One host, no failover, no maintained copy of the database or the bucket off that host; a host loss ends the service and may end the data. | consequence of `R-146a`, `R-146b` | confirmed (`R-146w`): as `A-1`, and any promise of a recovery time or point to a client |
-| A-5 | When the 14 sections become full, the quality of their output on real text is unmeasured: a section leaves `draft` when an expert has reviewed its profile, no non-synthetic field case is required, recorded cases stay synthetic. | `R-146v` (not the recommended option) | the first section whose real-text output an expert rejects, or the first client complaint |
+| A-5 | When the 14 sections become full, the quality of their output on real text is unmeasured (`R-146v`, as narrowed by `R-146ag`: a section leaves `draft` with no expert and no owner review, see `A-7`), no non-synthetic field case is required, recorded cases stay synthetic. | `R-146v` (not the recommended option) | the first section whose real-text output an expert rejects, or the first client complaint |
 
 | A-6 | The MinIO in the stack is built from source with an archived upstream and its volume is not inventoried; no scan covers it. | `R-146ae` (not the recommended option) | a published advisory against MinIO, any loss of objects, or a client asking for a storage statement |
 | A-7 | The status `reviewed` on the 14 section profiles carries no human review (neither an expert nor the owner); it is the outcome of a lane's written decisions on the open questions of each record and a judge's read. | `R-146ag` (not the recommended option) | the first section whose real-text output a human rejects, any client-facing statement that calls these profiles verified, or the owner naming experts (`OD-18`) |

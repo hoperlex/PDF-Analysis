@@ -32,6 +32,7 @@ from auditmanager.runs import (
 from auditmanager.shared.db import SQLSTATE_UNDECLARED_TRANSITION
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import IdempotencyKey
+from tests.support.v1_reference_profile import resolve_reference_profile
 
 NON_INITIAL_STATES = ("queued", "running", "validating")
 
@@ -86,6 +87,7 @@ def test_a_repeat_returns_the_existing_run_even_after_it_reached_a_terminal(
         blob_store=blob_store,
         adapter=recorded_adapter,
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
     assert helpers.run_state_of(session, first.run_id) == "published"
     before = helpers.count_runs(session)
@@ -129,6 +131,7 @@ def test_a_new_key_over_a_terminal_run_creates_a_new_run_and_leaves_the_old_row_
         blob_store=blob_store,
         adapter=recorded_adapter,
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
     original = helpers.audit_run_row(session, first.run_id)
 
@@ -203,6 +206,7 @@ def test_a_terminal_run_cannot_be_moved_back_by_the_guard(
         blob_store=blob_store,
         adapter=recorded_adapter,
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
 
     with pytest.raises(DomainError) as raised:
@@ -230,6 +234,7 @@ def test_a_terminal_run_cannot_be_moved_back_by_the_database_either(
         blob_store=blob_store,
         adapter=recorded_adapter,
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
     assert (
         session.execute(

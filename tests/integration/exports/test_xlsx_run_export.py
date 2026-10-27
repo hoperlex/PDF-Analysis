@@ -30,6 +30,7 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.storage import sha256_of
 from auditmanager.storage.blob_repository import BlobMetadataRepository
 from auditmanager.storage.models import VerifiedBlob, parse_blob_id, parse_blob_role
+from tests.support.v1_reference_profile import resolve_reference_profile
 
 MAIN = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
 #: The seeded baseline PDF's page count (``harness.seed_version``).
@@ -56,6 +57,7 @@ def _run(session, seeded, blob_store, adapter, provider_config, key) -> str:
     execute_run(
         session, started.run_id, blob_store=blob_store, adapter=adapter,
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
     return str(started.run_id)
 

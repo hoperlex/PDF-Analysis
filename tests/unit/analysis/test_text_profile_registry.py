@@ -13,9 +13,9 @@ from typing import Any
 
 import pytest
 
-from auditmanager.analysis.text.profile import AR_TEXT_PROFILE, resolve_profile
 from auditmanager.analysis.text.profile_registry import (
     AUTHORED_SECTIONS,
+    NOT_A_TEXT_PROFILE,
     PACKAGE_FORMAT,
     PACKAGES_ROOT,
     SECTION_CODES,
@@ -28,6 +28,10 @@ from auditmanager.analysis.text.prompt import (
     MAX_OUTPUT_TOKENS,
     RESPONSE_SCHEMA,
 )
+from tests.support.v1_reference_profile import (
+    EXPECTED_CONTENT_SHA256,
+    V1_REFERENCE_PROFILE,
+)
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 PROMPT = "Ты — инструмент проверки синтетического раздела.\nОтвечай по схеме."
@@ -38,7 +42,7 @@ EXPECTATIONS = Path(__file__).resolve().parent / "text_profiles" / "section_prof
 
 
 def _expected_sections() -> dict[str, tuple[str, str]]:
-    """``code -> (status, profile_version)`` for every non-AR package of this tree."""
+    """``code -> (status, profile_version)`` for every package of this tree (АР has none)."""
     rows = json.loads(EXPECTATIONS.read_text(encoding="utf-8"))["sections"]
     return {row["code"]: (row["status"], row["profile_version"]) for row in rows}
 
@@ -79,15 +83,17 @@ def test_section_codes_are_the_fifteen_of_the_contract_and_the_catalogue() -> No
     assert SECTION_CODES == frozenset(entry["code"] for entry in catalogue["sections"])
 
 
-def test_an_empty_root_registers_ar_from_the_v1_constants_alone(tmp_path: Path) -> None:
+def test_an_empty_root_registers_nothing_not_even_ar(tmp_path: Path) -> None:
+    """`PROD-11-AR-V1-V2-REMOVAL-01`: АР used to be registered from the v1 constants alone."""
     registry = load_text_profile_registry(tmp_path)
-    assert set(registry.entries) == {"AR"}
-    assert registry.entries["AR"].profile is AR_TEXT_PROFILE
-    assert registry.entries["AR"].status == "builtin"
-    assert dict(registry.section_profiles()) == {
-        "AR": (str(AR_TEXT_PROFILE.analysis_profile_id), str(AR_TEXT_PROFILE.prompt_bundle.prompt_bundle_id))
-    }
-    assert load_text_profile_registry(tmp_path / "absent").executable_sections() == {"AR"}
+    assert set(registry.entries) == set()
+    assert dict(registry.section_profiles()) == {}
+    assert load_text_profile_registry(tmp_path / "absent").executable_sections() == frozenset()
+
+
+def test_the_reference_profile_of_the_tests_is_the_removed_ar_constant_byte_for_byte() -> None:
+    """The v1 machinery tests keep their assertions because their vehicle did not change."""
+    assert V1_REFERENCE_PROFILE.content_sha256 == EXPECTED_CONTENT_SHA256
 
 
 def test_a_package_keeps_v1_contract_and_replaces_only_the_system_prompt(tmp_path: Path) -> None:
@@ -98,10 +104,10 @@ def test_a_package_keeps_v1_contract_and_replaces_only_the_system_prompt(tmp_pat
     assert bundle.system_prompt == PROMPT, "exactly one trailing newline is stripped"
     assert bundle.response_schema == RESPONSE_SCHEMA and bundle.max_output_tokens == MAX_OUTPUT_TOKENS
     assert entry.profile.categories == CATEGORIES and entry.profile.discipline == "KJ"
-    assert entry.profile.stage_id == AR_TEXT_PROFILE.stage_id
+    assert entry.profile.stage_id == V1_REFERENCE_PROFILE.stage_id
     assert entry.status == "draft" and entry.package == "kj"
     assert registry.resolve("ap_01M5AXG1K82P9BCJ1NRYSTC2NA", "pb_01M5AXG1K8EDTH597XY32Z696A") is entry.profile
-    assert bundle.content_sha256 != AR_TEXT_PROFILE.prompt_bundle.content_sha256
+    assert bundle.content_sha256 != V1_REFERENCE_PROFILE.prompt_bundle.content_sha256
 
 
 def test_only_one_trailing_newline_is_stripped(tmp_path: Path) -> None:
@@ -109,15 +115,17 @@ def test_only_one_trailing_newline_is_stripped(tmp_path: Path) -> None:
     assert load_text_profile_registry(tmp_path).entries["KJ"].profile.prompt_bundle.system_prompt == PROMPT + "\n"
 
 
-def test_resolve_needs_the_exact_pair_and_keeps_historical_ar(tmp_path: Path) -> None:
+def test_resolve_needs_the_exact_pair_and_no_longer_knows_the_retired_ar_pair(tmp_path: Path) -> None:
     _package(tmp_path, "kj", _profile("KJ"))
     registry = load_text_profile_registry(tmp_path)
-    ar_profile, ar_bundle = registry.section_profiles()["AR"]
-    assert registry.resolve(ar_profile, ar_bundle) is AR_TEXT_PROFILE
-    assert resolve_profile(ar_profile) is AR_TEXT_PROFILE
+    ar_profile = str(V1_REFERENCE_PROFILE.analysis_profile_id)
+    ar_bundle = str(V1_REFERENCE_PROFILE.prompt_bundle.prompt_bundle_id)
+    kj_profile, kj_bundle = registry.section_profiles()["KJ"]
+    assert registry.resolve(kj_profile, kj_bundle) is registry.entries["KJ"].profile
     for pair in (
-        (ar_profile, "pb_01M5AXG1K8EDTH597XY32Z696A"),
-        ("ap_01M5AXG1K82P9BCJ1NRYSTC2NA", ar_bundle),
+        (ar_profile, ar_bundle),
+        (ar_profile, kj_bundle),
+        (kj_profile, ar_bundle),
         ("ap_01M5AXG1K82P9BCJ1NRYSTC2NZ", "pb_01M5AXG1K8EDTH597XY32Z696Z"),
     ):
         with pytest.raises(TextProfileUnavailable):
@@ -130,7 +138,8 @@ def test_resolve_needs_the_exact_pair_and_keeps_historical_ar(tmp_path: Path) ->
         ("zz", _profile("ZZ"), "section_code_unknown"),
         ("kj", _profile("kj"), "section_code_unknown"),
         ("ov", _profile("KJ"), "package_directory_mismatch"),
-        ("ar", _profile("AR"), "section_code_duplicate"),
+        ("ar", _profile("AR"), "section_code_not_a_text_profile"),
+        ("kj", _profile("AR"), "section_code_not_a_text_profile"),
         ("kj", _profile("KJ", format="text-profile/2"), "format_invalid"),
         ("kj", _profile("KJ", status="approved"), "status_invalid"),
         ("kj", _profile("KJ", profile_version="1.0"), "profile_version_invalid"),
@@ -180,21 +189,20 @@ def test_an_empty_prompt_or_a_stray_file_refuses(tmp_path: Path) -> None:
 def test_private_entries_are_not_packages(tmp_path: Path) -> None:
     (tmp_path / "__pycache__").mkdir()
     (tmp_path / "README.md").write_text("not a package", encoding="utf-8")
-    assert set(load_text_profile_registry(tmp_path).entries) == {"AR"}
+    assert set(load_text_profile_registry(tmp_path).entries) == set()
 
 
-def test_the_tree_registers_without_error_and_without_an_ar_package() -> None:
-    """The real root: whatever packages the tree holds load, and AR stays the v1 constants."""
+def test_the_tree_registers_without_error_and_without_an_ar_entry_or_package() -> None:
+    """The real root: whatever packages the tree holds load, and АР is not among them."""
     registry = load_text_profile_registry()
     expected = _expected_sections()
-    assert registry.entries["AR"].profile is AR_TEXT_PROFILE
+    assert NOT_A_TEXT_PROFILE not in registry.entries
+    assert NOT_A_TEXT_PROFILE not in registry.section_profiles()
     assert not (PACKAGES_ROOT / "ar").exists()
-    packages = set(registry.entries) - {"AR"}
+    packages = set(registry.entries)
     assert packages - set(expected) == set(), "a registered package has no line in the expectations file"
     assert set(expected) - packages == set(), "a line of the expectations file has no registered package"
     for code, entry in registry.entries.items():
-        if code == "AR":
-            continue
         assert entry.package == code.lower() and entry.status in {"draft", "reviewed"}
         assert (entry.status, entry.profile.profile_version) == expected[code], (
             f"{code}: the registry and the expectations file disagree on (status, profile_version)"
@@ -203,11 +211,13 @@ def test_the_tree_registers_without_error_and_without_an_ar_package() -> None:
         assert entry.profile.prompt_bundle.system_prompt == text.removesuffix("\n")
 
 
-def test_the_tree_registers_all_fifteen_sections_pb_included() -> None:
-    """`PB-PROFILE-01`: fire safety is routed to a profile of its own, not refused."""
+def test_the_tree_registers_the_fourteen_other_sections_pb_included_and_not_ar() -> None:
+    """`PB-PROFILE-01`: fire safety is routed to a profile of its own, not refused.
+    `PROD-11-AR-V1-V2-REMOVAL-01`: АР is the one of the fifteen codes with no text profile."""
     registry = load_text_profile_registry()
-    assert set(registry.entries) == SECTION_CODES and len(registry.entries) == 15
-    assert registry.executable_sections() == SECTION_CODES
+    others = SECTION_CODES - {"AR"}
+    assert set(registry.entries) == others and len(registry.entries) == 14
+    assert registry.executable_sections() == others
     entry = registry.entries["PB"]
     status, version = _expected_sections()["PB"]
     assert entry.status == status, "PB's status is the one the expectations file names"
@@ -266,7 +276,7 @@ def test_an_authored_package_with_a_null_source_and_its_questions_loads(tmp_path
     entry = registry.entries["PB"]
     assert entry.source is None and entry.status == "draft" and entry.package == "pb"
     assert entry.profile.discipline == "PB" and entry.profile.prompt_bundle.system_prompt == PROMPT
-    assert registry.executable_sections() == {"AR", "PB"}
+    assert registry.executable_sections() == {"PB"}
     assert registry.resolve("ap_01M5AXG1K82P9BCJ1NRYSTC2NB", "pb_01M5AXG1K8EDTH597XY32Z696B") is entry.profile
 
 

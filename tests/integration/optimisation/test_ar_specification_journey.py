@@ -7,8 +7,14 @@ credential, over the committed synthetic fixtures and nothing else:
 1. upload ``fixtures/synthetic/ar_specification/ar_specification.zip`` (a portal bundle whose PDF
    carries a seven-position specification over two sheets);
 2. classify the version (stage ``П``, section ``AR``);
-3. start a run: the recorded answer ``fixtures/recorded/sections/ar_specification/<key>.json``
-   is found by the key of the request over the PDF's text layer, and the run publishes;
+3. a published run of the version: the recorded answer
+   ``fixtures/recorded/sections/ar_specification/<key>.json`` is found by the key of the request
+   over the PDF's text layer, and the run publishes. Since `PROD-11-AR-V1-V2-REMOVAL-01` the served
+   ``startRun`` refuses an АР version (``section_profile_unavailable``), so this step is driven
+   in-process through the executor with the v1 machinery's reference profile
+   (``tests/support/published_run.py``): the run, its saved text layer and everything the
+   specification and optimisation reads do with them are what they were. Where an АР version gets its
+   published run in production (the v3 group, `PROD-11a`) is not exercised here;
 4. upload ``ar_specification_prices.csv`` as the project's price list;
 5. set the project's AR vendor list;
 6. start an optimisation pass.
@@ -43,6 +49,7 @@ from starlette.testclient import TestClient
 
 from auditmanager.api.routers.idempotency import IDEMPOTENCY_HEADER
 from auditmanager.api.security import API_TOKEN_VARIABLE
+from tests.support.published_run import publish_reference_run
 
 DEPLOYMENT_SECRET = "spec-table-recording-token"
 EXPERT = "spec-table-recording-expert"
@@ -138,10 +145,10 @@ def journey(client: TestClient, expert: dict[str, str]) -> dict[str, Any]:
     )
     assert classified.status_code == 200, classified.content
 
-    started = client.post("/runs", headers=expert | _key("run"), json={"version_uid": version})
-    assert started.status_code == 202, started.content
-    run_id = started.json()["run_id"]
-    assert client.app.state.run_carrier.drain(timeout=300), "the run never finished"
+    refused = client.post("/runs", headers=expert | _key("run"), json={"version_uid": version})
+    assert refused.status_code == 422, refused.content
+    assert refused.json()["error_code"] == "section_profile_unavailable", refused.content
+    run_id = publish_reference_run(version, tag="spec-table")
     run = client.get(f"/runs/{run_id}", headers=expert)
     assert run.status_code == 200, run.content
 
@@ -225,9 +232,9 @@ def test_the_served_adapter_answers_the_request_over_the_committed_pdf() -> None
     """Container-free: the key of the request the run will send is the recording's key."""
     from auditmanager.analysis.stages.extraction import extract_document
     from auditmanager.analysis.text.adapter import build_request
-    from auditmanager.analysis.text.profile import AR_TEXT_PROFILE
     from auditmanager.analysis.text.recorded import RecordedAdapter
     from auditmanager.analysis.text.textlayer import load_text_layer
+    from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE
 
     pages, cursor = [], 0
     for page in extract_document((FIXTURES / "ar_specification.pdf").read_bytes()).pages:
@@ -242,7 +249,7 @@ def test_the_served_adapter_answers_the_request_over_the_committed_pdf() -> None
         "total_char_count": cursor, "pages": pages,
     })
     request = build_request(
-        model_id="claude-opus-5", bundle=AR_TEXT_PROFILE.prompt_bundle, text_layer=layer
+        model_id="claude-opus-5", bundle=V1_REFERENCE_PROFILE.prompt_bundle, text_layer=layer
     )
     (path,) = sorted(RECORDINGS.glob("*.json"))
     assert request.request_sha256 == path.stem

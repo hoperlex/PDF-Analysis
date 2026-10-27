@@ -1,0 +1,24 @@
+{
+  "latency_ms": 8900,
+  "model_id": "claude-opus-5",
+  "note": "Synthetic ВК (VK) reply over the AR baseline corpus text layer, authored by hand. Token counts and latency are authored, not measured.",
+  "origin": {
+    "analysis_profile_id": "ap_01M5AXG1KF7NGNYMEFN97BW9ZN",
+    "kind": "synthetic",
+    "profile_status": "reviewed",
+    "prompt_bundle_id": "pb_01M5AXG1KFMA8QCKP6YM1K5M5W",
+    "prompt_bundle_sha256": "9b7c2f9ae0c8658e967657897ea0e1cb271f4102038686ca85b1de7ec5d8672a",
+    "section_code": "VK",
+    "statement": "Synthetic: authored by hand for SECTION-RECORDINGS-01 to prove section routing in recorded mode. No model produced this reply and no provider call was made. Not field evidence for the profile's review.",
+    "task_id": "SECTION-RECORDINGS-01",
+    "text_layer": "fixtures/recorded/text_analysis/inputs/ar_baseline_text_layer.json"
+  },
+  "output_text": "{\"observations\": [{\"category\": \"explicit_placeholder\", \"finding_text\": \"Синтетический ответ (ВК), не результат вызова модели: тип заполнения оконных проёмов не определён: стоит отметка «уточнить».\", \"recommendation_text\": \"Определить заполнение оконных проёмов в ведомости.\", \"evidence\": [{\"page_number\": 8, \"quote\": \"Тип заполнения оконных проёмов — уточнить.\"}]}]}",
+  "recording_version": "1.0.0",
+  "request_sha256": "9b542f7ad51a8574406f716c98585ad9b55e3b21532f6d0ee18f797a76a4a748",
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 2400,
+    "output_tokens": 410
+  }
+}

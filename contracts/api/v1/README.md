@@ -11,7 +11,23 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Version `1.6.0`
+## Version `1.7.0`
+
+`PROD-11-AR-V1-V2-REMOVAL-01` removes АР v1 and v2 from the server (`ADR-0024` section 2, `AD-12`).
+`startRun` and `reauditRun` on a version classified АР answer the existing `422
+section_profile_unavailable`: АР is analysed only by the six-Run group (`startArV3BetaGroup`) and has no
+text profile, and the error catalogue keeps its 27 codes. `listAnalysisProfiles` returns `profile: null`
+for АР (the property was already nullable). The enum `AnalysisProfileStatus` loses its member `builtin`,
+which only the АР v1 profile carried, and keeps `draft` and `reviewed`; the description of `reviewed` is
+corrected to what the status is, a package whose open questions a lane answered in writing with no human
+review (`R-146ag`, `D-223`). `FindingCategory` is unchanged. The version rule
+(`docs/program/VERSIONING_AND_FREEZE_POLICY.md`) reads this as a **minor**: no field, path or operation
+disappears, a response that carried `builtin` never will, and the narrowing for АР is announced by an
+existing error code. The strict reading of «remove» is a major; the task file records both and the
+integrator confirms the number. The surface is 92 paths, 104 operations and 301 schemas. No error code or
+migration was added.
+
+## Version `1.6.0` (historical)
 
 `EXEC-PAR-START-01` lets a run name its executor. `startRun` accepts an optional
 `executor_connection_id`; absent, the run follows the global route exactly as before. Present,

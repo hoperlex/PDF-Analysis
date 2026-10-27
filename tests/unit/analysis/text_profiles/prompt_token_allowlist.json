@@ -1,0 +1,94 @@
+{
+  "format": "prompt-token-allowlist/1",
+  "task": "SECTION-PROMPT-TOKEN-GUARD-01",
+  "entries": [
+    {
+      "section": "AI",
+      "token": "КМ",
+      "reason": "Abbreviation of the fire-hazard class of finishing materials, in the hint bullet on classes and in condition 2. The five pinned files hold it only inside КМ0–КМ5, КМ1 and КМ2, never as a whole token: the lane report counted it as sourced because its audit matched substrings.",
+      "disclosed_by": "SECTION-AI-FULL-01.md",
+      "class": "a",
+      "justification": "It names the family of classes, not a class value, a threshold or a norm number, and it stands in a pair that tells the model not to compare it with the combustibility group; the real class range (Г1–Г4) was removed by the same lane."
+    },
+    {
+      "section": "EOM",
+      "token": "PE-проводника",
+      "reason": "Compound in the near-miss pair of condition 2. The pinned files hold «PE-шины» and the token PE, not this compound; the lane report disclosed it among the vocabulary of the earlier drafting that the source lacks.",
+      "disclosed_by": "SECTION-EOM-FULL-01.md",
+      "class": "a",
+      "justification": "It names the protective conductor in a sentence that tells the model not to compare a conductor with a bus; it carries no conductor mark, cross-section, norm or value, and the token PE alone is in the source."
+    },
+    {
+      "section": "GP",
+      "token": "0,000",
+      "reason": "Notation of the zero mark of a building in the second hint bullet. The pinned files do not hold it; the lane report disclosed it as the one token kept without a source (an audit that split at the comma saw it as 000).",
+      "disclosed_by": "SECTION-GP-FULL-01.md",
+      "class": "a",
+      "justification": "It is the conventional label of the zero mark, not a norm number, a threshold or a class designation, and it states no value for the model to compare; removing it would change the bullet with no stated false-positive source."
+    },
+    {
+      "section": "PB",
+      "token": "123-ФЗ",
+      "reason": "Number of the federal fire-safety law, named only inside the sentence that tells the model what it must NOT check against. PB has no pinned legacy source; the number comes from the PB record (W57-PLAN corpus list), as the lane report states.",
+      "disclosed_by": "SECTION-PB-FULL-01.md",
+      "class": "a",
+      "justification": "A norm number that is allowed only as a family excluded from the model's check; tests/unit/analysis/text_profiles/test_text_profile_packages.py also pins that it occurs once and only in that sentence. An expert may want it struck (report assumption 7)."
+    },
+    {
+      "section": "PB",
+      "token": "13130",
+      "reason": "Series number of the fire-protection sets of rules, named only inside the sentence that tells the model what it must NOT check against. PB has no pinned legacy source; the number comes from the PB record (W57-PLAN corpus list), as the lane report states.",
+      "disclosed_by": "SECTION-PB-FULL-01.md",
+      "class": "a",
+      "justification": "A norm series number that is allowed only as a family excluded from the model's check; tests/unit/analysis/text_profiles/test_text_profile_packages.py also pins that it occurs once and only in that sentence. An expert may want it struck (report assumption 7)."
+    },
+    {
+      "section": "PB",
+      "token": "ПБ",
+      "reason": "Abbreviation of the section's own name (Пожарная безопасность) in the opening sentence and in the hint heading. v1 does not contain it and PB has no pinned source; the lane report's audit accounted for every capital-letter token against v1 or the PB record, where it is the heading of open_questions.md. The report does not list this token by name.",
+      "disclosed_by": "SECTION-PB-FULL-01.md"
+    },
+    {
+      "section": "POS",
+      "token": "ИТР",
+      "reason": "Abbreviation of a staff category in the headcount hint bullet. None of the five pinned files holds it; the lane report disclosed it among the terms of the earlier drafting that the source lacks (assumption 5).",
+      "disclosed_by": "SECTION-POS-FULL-01.md"
+    },
+    {
+      "section": "PS",
+      "token": "ГПЗУ",
+      "reason": "Abbreviation of the urban-planning plan of a land plot, in the placeholder bullet and in the near-miss pair added by the lane. None of the five pinned files holds it; the lane report disclosed it among the vocabulary already in the draft prompt that the source lacks (assumption 5).",
+      "disclosed_by": "SECTION-PS-FULL-01.md"
+    },
+    {
+      "section": "PT",
+      "token": "3,6",
+      "reason": "Factor of the equality 1 л/с = 3,6 м³/ч in the unit-equivalence rule that SECTION-WIDEN-G2-01 added to the PT prompt (PRODUCTION-WAVE-PW4 section 6, rule 4). One litre per second is 3600 litres per hour, that is 3,6 cubic metres per hour: a definition of the two units. The pinned PT files write the same flow in л/с (project_params.md) and in м³/ч (checklist.md) but hold no factor.",
+      "disclosed_by": "SECTION-WIDEN-G2-01.md",
+      "class": "a",
+      "justification": "A physical unit-conversion factor that follows from the definitions of the litre, the cubic metre and the hour (1000 litres per cubic metre, 3600 seconds per hour), not a norm number, a threshold or a class designation. It is the only conversion the prompt allows: the same sentence forbids every other factor and every other pair of units, and a head in metres is never compared with a pressure in МПа."
+    },
+    {
+      "section": "ITP",
+      "token": "1,163",
+      "reason": "Factor of the ITP unit rule «1 Гкал/ч = 1,163 МВт = 1163 кВт»: megawatts per gigacalorie per hour. A definition of units, not a norm. None of the five pinned ITP files holds a conversion factor or the units Гкал/ч and МВт; the lane report SECTION-WIDEN-G3-01 discloses it (rule 4 of the wave brief).",
+      "disclosed_by": "SECTION-WIDEN-G3-01.md",
+      "class": "a",
+      "justification": "It is the unit-conversion definition that rule 4 of PRODUCTION-WAVE-PW4 section 6 allows and the integrator's decision (c) confirms, not a norm, a threshold or a class designation; it stands only in the one rule that converts a heat load written in two of the three units, and the same rule forbids converting anything else."
+    },
+    {
+      "section": "ITP",
+      "token": "1163",
+      "reason": "Factor of the ITP unit rule «1 Гкал/ч = 1,163 МВт = 1163 кВт»: kilowatts per gigacalorie per hour. A definition of units, not a norm. None of the five pinned ITP files holds a conversion factor; the pinned project_params.md writes loads in kW only. The lane report SECTION-WIDEN-G3-01 discloses it (rule 4 of the wave brief).",
+      "disclosed_by": "SECTION-WIDEN-G3-01.md",
+      "class": "a",
+      "justification": "It is the unit-conversion definition that rule 4 of PRODUCTION-WAVE-PW4 section 6 allows and the integrator's decision (c) confirms, not a norm, a threshold or a class designation; it stands only in the one rule that converts a heat load written in two of the three units, and the same rule forbids converting anything else."
+    },
+    {
+      "section": "ITP",
+      "token": "МВт",
+      "reason": "Abbreviation of the megawatt in the ITP unit rule (Гкал/ч, кВт, МВт). The five pinned files hold кВт but not МВт; the lane report SECTION-WIDEN-G3-01 discloses it as one of the three units the rule converts between (rule 4 of the wave brief).",
+      "disclosed_by": "SECTION-WIDEN-G3-01.md"
+    }
+  ]
+}

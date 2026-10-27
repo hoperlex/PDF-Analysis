@@ -1,0 +1,24 @@
+{
+  "latency_ms": 9700,
+  "model_id": "claude-opus-5",
+  "note": "Synthetic ПОС (POS) reply over the AR baseline corpus text layer, authored by hand. Token counts and latency are authored, not measured.",
+  "origin": {
+    "analysis_profile_id": "ap_01M5AXG1K4V1JCGK60TZRM9B96",
+    "kind": "synthetic",
+    "profile_status": "reviewed",
+    "prompt_bundle_id": "pb_01M5AXG1K4QP84XW1DNYM72HN6",
+    "prompt_bundle_sha256": "f37abd4cb2d93434f9b20c9581895492371337b22c88994c71ba424708838afc",
+    "section_code": "POS",
+    "statement": "Synthetic: authored by hand for W59-ANALYSIS-SETTINGS-01 to prove section routing in recorded mode. No model produced this reply and no provider call was made. Not field evidence for the profile's review.",
+    "task_id": "W59-ANALYSIS-SETTINGS-01",
+    "text_layer": "fixtures/recorded/text_analysis/inputs/ar_baseline_text_layer.json"
+  },
+  "output_text": "{\"observations\": [{\"category\": \"internal_contradiction\", \"finding_text\": \"Синтетический ответ (ПОС), не результат вызова модели: количество эвакуационных выходов из надземной части здания указано как два и как три в разных разделах.\", \"recommendation_text\": \"Согласовать количество эвакуационных выходов из надземной части здания.\", \"evidence\": [{\"page_number\": 3, \"quote\": \"Из надземной части здания предусмотрено два эвакуационных выхода.\"}, {\"page_number\": 7, \"quote\": \"Из надземной части здания предусмотрено три эвакуационных выхода.\"}]}]}",
+  "recording_version": "1.0.0",
+  "request_sha256": "2ab0587db7b2d22212cabbc7238f45d567361d25699a5c1bc7c3b709292b08ae",
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 2330,
+    "output_tokens": 480
+  }
+}

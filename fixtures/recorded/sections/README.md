@@ -60,9 +60,10 @@ Editing a section's `system_prompt.md` (or anything in
 `auditmanager.analysis.text.prompt`) changes its key and orphans its recording; re-run
 the builder.
 
-## The ПБ recording is for a draft profile
+## The ПБ recording is synthetic: the profile is `reviewed` without a human review
 
-`pb/` answers the request of the **authored, draft** ПБ profile (`PB-PROFILE-01`: no legacy source, no
-expert review). Its reply says only that the three defects seeded in the AR corpus (two fire-resistance
-degrees, two exit counts, one unfilled window type) are reported in fire-safety vocabulary; it is not
-evidence that the ПБ profile finds anything in a real fire-safety volume.
+`pb/` answers the request of the **authored** ПБ profile (`PB-PROFILE-01`: no legacy source), which is
+`reviewed` without any human review (`R-146ag`, `A-7`): a lane answered its open questions and no expert
+or owner read them. Its reply says only that the three defects seeded in the AR corpus (two fire-resistance
+degrees, two exit counts, one unfilled window type) are reported in fire-safety vocabulary; it is synthetic,
+not field evidence, and not evidence that the ПБ profile finds anything in a real fire-safety volume.

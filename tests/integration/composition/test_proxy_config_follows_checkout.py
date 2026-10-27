@@ -139,6 +139,10 @@ def seen(destination):
 if argv[:1] == ["compose"]:
     if "ps" in argv and "--quiet" in argv:
         print("container-" + argv[-1])
+    if "auditmanager.access.check" in line:
+        # `PROD-02`: `verify-deployed.sh` ends by asking the credential gate. These cases are about the proxy's
+        # configuration, so the published pair is not valid here.
+        print("access-check GATE OK no published credential")
     sys.exit(0)
 
 if argv[:1] == ["inspect"]:
@@ -147,7 +151,12 @@ if argv[:1] == ["inspect"]:
         for source, destination in proxy["mounts"]:
             print("%s\t%s" % (source, destination))
     elif ".Networks" in fmt:
-        print("an-instance-net")
+        # One network, as before -- unless a case says the proxy is on several (`D-229` item 3: the ACME
+        # overlay puts it on the client's network as well). `docker inspect` prints a map's keys sorted.
+        if argv[-1] == "container-proxy" and os.environ.get("STUB_PROXY_NETWORKS"):
+            print("\n".join(sorted(os.environ["STUB_PROXY_NETWORKS"].split(","))))
+        else:
+            print("an-instance-net")
     elif ".Image" in fmt:
         print("sha256:the-pinned-nginx")
     sys.exit(0)
@@ -241,7 +250,7 @@ class _Host:
 
         _write(self.repo / "src/app.py", "the application\n")
         _write(self.repo / "web/package.json", '{"name": "web"}\n')
-        for name in ("verify-deployed.sh", "reload-proxy.sh"):
+        for name in ("verify-deployed.sh", "reload-proxy.sh", "lib/proxy-listeners.sh"):
             _write(self.deploy / name, (DEPLOY_DIR / name).read_text(encoding="utf-8"))
         _write(self.deploy / "compose.server.yml", "# stub\n")
         _write(self.deploy / "Dockerfile.api", FAKE_DOCKERFILE_API)
@@ -294,9 +303,12 @@ class _Host:
     def proxy(self) -> dict:
         return json.loads((self.state / "proxy.json").read_text(encoding="utf-8"))
 
-    def run(self, script: str) -> tuple[subprocess.CompletedProcess[str], str]:
+    def run(
+        self, script: str, extra_environment: dict[str, str] | None = None
+    ) -> tuple[subprocess.CompletedProcess[str], str]:
         """One script, and the docker calls it made (only its own, not earlier ones)."""
         environment = dict(os.environ)
+        environment.update(extra_environment or {})
         environment["PATH"] = f"{self.bin}{os.pathsep}{environment['PATH']}"
         environment["STUB_LOG"] = str(self.log)
         environment["STUB_STATE"] = str(self.state)
@@ -430,6 +442,40 @@ class TestAnUnchangedConfigurationRestartsNothing:
         assert "restart" not in _verbs(calls), calls
 
 
+class TestTheThrowawayContainerJoinsTheNetworkTheUpstreamsLiveOn:
+    """`D-229` item 3 put the proxy on a second network (`<instance>-acme-net`, shared with the ACME client).
+    `reload-proxy.sh` used to take the FIRST network the proxy lists for its throwaway `nginx -t` container,
+    and `docker inspect` prints a map's keys sorted: `an-instance-acme-net` sorts before `an-instance-net`,
+    so the test container would have landed where `api` and `web` do not resolve, and every stale-config
+    repair would have been refused as an invalid configuration (exit 5) on a host with a certificate name."""
+
+    NETWORKS = {"STUB_PROXY_NETWORKS": "an-instance-net,an-instance-acme-net"}
+
+    def test_the_throwaway_container_is_on_the_network_of_the_api(self, host: _Host) -> None:
+        host.checkout(host.commit_b)
+        completed, calls = host.run("reload-proxy.sh", self.NETWORKS)
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        throwaway = [line for line in calls.splitlines() if line.startswith("run ")]
+        assert len(throwaway) == 1, calls
+        assert "--network an-instance-net " in throwaway[0] + " ", throwaway[0]
+        assert "acme-net" not in throwaway[0], throwaway[0]
+        assert host.proxy_reads() == CONF_B
+
+    def test_the_network_is_asked_of_the_api_container_and_not_taken_from_the_proxys_list(self, host: _Host) -> None:
+        host.checkout(host.commit_b)
+        _, calls = host.run("reload-proxy.sh", self.NETWORKS)
+        asked = [line for line in calls.splitlines() if line.startswith("inspect ") and ".Networks" in line]
+        assert [line.split()[-1] for line in asked] == ["container-api"], asked
+
+    def test_a_proxy_on_one_network_is_unchanged(self, host: _Host) -> None:
+        host.checkout(host.commit_b)
+        completed, calls = host.run("reload-proxy.sh")
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        assert "--network an-instance-net " in "\n".join(
+            line + " " for line in calls.splitlines() if line.startswith("run ")
+        )
+
+
 class TestABrokenConfigurationIsNeverRestartedInto:
     """A reload with a broken file was refused by nginx and the old workers kept serving.
     A restart has no such safety, so the checkout's configuration is tested first, in a
@@ -506,6 +552,19 @@ services:
   s3:
     image: {image}
     networks: [alpha]
+  # `PROD-04`: `deploy.sh` runs the owner's one-shots to completion before `up`. The stand has no schema, so they
+  # are stand-ins that succeed; `apply-grants.sh` is a stand-in too (staged below), because this stand's postgres
+  # is an nginx image with no `psql`.
+  migrate:
+    image: {image}
+    networks: [alpha]
+    entrypoint: ["/bin/true"]
+    restart: "no"
+  release-notes:
+    image: {image}
+    networks: [alpha]
+    entrypoint: ["/bin/true"]
+    restart: "no"
   api:
     build:
       context: ../..
@@ -563,9 +622,9 @@ server {
 }
 """
 
-#: NOT AN APPLICATION. `deploy.sh` asks the api image two things -- the database check and
-#: the conformance check -- and there is no application here to answer them. This answers
-#: both with their success lines so the drive reaches the proxy step; nothing about the
+#: NOT AN APPLICATION. `deploy.sh` asks the api image three things -- the database check,
+#: the credential gate (`PROD-02`) and the conformance check -- and there is no application here to answer
+#: them. This answers all three with their success lines so the drive reaches the proxy step; nothing about the
 #: application is claimed by a stand run. It never reads its standard input: `deploy.sh`
 #: pipes nothing into the conformance check since `R-31`, and a read would wait forever on
 #: whatever stdin the drive was started with.
@@ -573,6 +632,7 @@ STAND_PYTHON = """\
 #!/bin/sh
 case "$*" in
     *auditmanager.shared.db.check*) echo "FOUNDATION-CHECK OK check-db" ;;
+    *auditmanager.access.check*) echo "access-check GATE OK no published credential" ;;
     *) echo "differences: 0 (stand-in: there is no application here)" ;;
 esac
 """
@@ -631,8 +691,13 @@ class Stand:
         _write(self.repo / "tests/contract/api_v1/openapi_conformance.py", "# stand\n")
         for name in ("deploy.sh", "reload-proxy.sh"):
             _write(self.deploy / name, (self.scripts / name).read_text(encoding="utf-8"))
+        # `PROD-02`: both scripts source the shared library (the credential gate). The scripts "as they were
+        # before the repair" predate it and simply never read it.
+        _write(self.deploy / "lib/proxy-listeners.sh", (DEPLOY_DIR / "lib/proxy-listeners.sh").read_text(encoding="utf-8"))
         _write(self.deploy / "verify-deployed.sh", self.probe.read_text(encoding="utf-8"))
-        for name in ("deploy.sh", "reload-proxy.sh", "verify-deployed.sh"):
+        # `PROD-04`: the stand has no database to grant on, so the step is a stand-in that answers as the real one does.
+        _write(self.deploy / "apply-grants.sh", '#!/bin/sh\n[ "$1" = "--env-file" ] || exit 2\necho "grants-ok: stand"\nexit 0\n')
+        for name in ("deploy.sh", "reload-proxy.sh", "verify-deployed.sh", "apply-grants.sh"):
             (self.deploy / name).chmod(0o755)
         _write(self.deploy / "compose.server.yml", STAND_COMPOSE.format(image=image))
         _write(self.deploy / "Dockerfile.api", STAND_DOCKERFILE_API.format(image=image))
@@ -655,7 +720,10 @@ class Stand:
                     "POSTGRES_USER=stand",
                     "S3_BUCKET=stand",
                     *(f"{name}={value}" for name, value in STAND_SECRETS.items()),
-                    "DATABASE_URL=postgresql+psycopg://stand:"
+                    "ALPHA_APP_DB_USER=stand_app",
+                    "ALPHA_APP_DB_PASSWORD=stand-application-db-password-0001",
+                    "DATABASE_URL=postgresql+psycopg://stand_app:stand-application-db-password-0001@postgres:5432/stand",
+                    "MIGRATOR_DATABASE_URL=postgresql+psycopg://stand:"
                     f"{STAND_SECRETS['POSTGRES_PASSWORD']}@postgres:5432/stand",
                     f"S3_ACCESS_KEY_ID={STAND_SECRETS['MINIO_ROOT_USER']}",
                     f"S3_SECRET_ACCESS_KEY={STAND_SECRETS['MINIO_ROOT_PASSWORD']}",

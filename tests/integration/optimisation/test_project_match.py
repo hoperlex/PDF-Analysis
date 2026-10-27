@@ -241,12 +241,14 @@ def test_an_unclassified_version_is_an_explicit_state_and_reads_nothing_further(
     assert reader.asked_runs == [] and reader.asked_texts == []
 
 
-def test_a_version_classified_as_another_section_is_not_priced(session: Session, cast, world) -> None:
+def test_a_version_classified_in_another_section_goes_on_to_the_price_list(session: Session, cast, world) -> None:
+    """Was ``section_not_ar``: the section is reported and no longer stops the read."""
     _classify(session, cast, world, "KJ")
     reader = _published_reader()
     result = _read(session, cast, world, reader)
-    assert (result.state, result.project_stage, result.section_code) == (STATE_SECTION_NOT_AR, "R", "KJ")
-    assert result.rows is None and reader.asked_runs == []
+    assert (result.state, result.project_stage, result.section_code) == (STATE_PRICE_LIST_MISSING, "R", "KJ")
+    assert result.state != STATE_SECTION_NOT_AR
+    assert result.rows is None and result.price_list is None and reader.asked_runs == []
 
 
 def test_an_ar_version_without_a_price_list_says_so(session: Session, cast, world) -> None:
@@ -255,6 +257,41 @@ def test_an_ar_version_without_a_price_list_says_so(session: Session, cast, worl
     result = _read(session, cast, world, reader)
     assert (result.state, result.section_code, result.price_list) == (STATE_PRICE_LIST_MISSING, "AR", None)
     assert reader.asked_runs == []
+
+
+@pytest.mark.parametrize("section", ["PB", "OV", "KJ"])
+def test_a_version_of_another_section_is_priced_exactly_like_an_ar_one_of_the_same_text(
+    session: Session, store, factory, cast, world, section: str
+) -> None:
+    """The fake reader's Form-7 pages are the АР tests' own: a real run of this section is not measured."""
+    _classify(session, cast, world, section)
+    second_document, second_version = _publish_version(session, store, cast.project, "АР-2")
+    session.commit()
+    ar = {"document": second_document, "version": second_version}
+    _classify(session, cast, ar, "AR")
+    _upload(store, factory, cast, PRICE_LIST, "prices-1")
+
+    other = _read(session, cast, world, _published_reader(), limit=200)
+    reference = _read(session, cast, ar, _published_reader(), limit=200, document_uid=second_document)
+
+    assert (other.state, other.section_code) == (STATE_READY, section)
+    assert (reference.state, reference.section_code) == (STATE_READY, "AR")
+    assert other.rows is not None and reference.rows is not None
+    assert len(other.rows.items) == 8  # not vacuous: the whole specification was read
+
+    def shape(result: SpecificationPrices) -> list[Any]:
+        assert result.rows is not None
+        return [
+            (m.row.page_number, m.row.position, m.row.name, m.row.quantity, m.status, m.basis,
+             m.reason, m.excluded_reason, m.amount)
+            for m in result.rows.items
+        ]
+
+    assert shape(other) == shape(reference)
+    assert [(t.currency, t.amount, t.row_count) for t in other.totals] == [
+        (t.currency, t.amount, t.row_count) for t in reference.totals
+    ]
+    assert other.totals and dict(other.matching.excluded_by_reason) == dict(reference.matching.excluded_by_reason)
 
 
 def test_no_published_run_is_analysis_missing_with_the_price_list_named(

@@ -1,0 +1,46 @@
+{
+ "format": "section-widen-specimen/1",
+ "section_code": "PS",
+ "case": "positive",
+ "expect": "finding",
+ "origin": {
+  "kind": "synthetic",
+  "statement": "Text and reply authored by hand for SECTION-WIDEN-G1-01 to show what a widened prompt rule is meant to report or to leave alone, and filed by SECTION-PROMPT-SENTENCE-GUARD-01. No model produced this reply. Not field evidence for any profile's expert review; it says nothing about how a model answers.",
+  "task_id": "SECTION-WIDEN-G1-01",
+  "source_report": "docs/program/SECTION-WIDEN-G1-01.md",
+  "filed_by": "SECTION-PROMPT-SENTENCE-GUARD-01"
+ },
+ "pages": [
+  "Пояснительная записка (вымышленный пример для проверки профиля)\nТаблица ТЭП. Количество квартир по типам:\nСтудии — 20\nОднокомнатные — 40\nДвухкомнатные — 36\nТрёхкомнатные — 20\nИтого квартир — 120",
+  "Раздел «Объёмно-планировочные решения»\nЗдание секционное, жилые этажи со второго по девятый."
+ ],
+ "observations": [
+  {
+   "category": "internal_contradiction",
+   "finding_text": "Синтетический ответ (ПЗ), не результат вызова модели: общее количество квартир в таблице ТЭП записано как 120, а четыре строки по типам квартир дают 116.",
+   "recommendation_text": "Свести итог и строки по типам квартир к одному значению.",
+   "evidence": [
+    {
+     "page_number": 1,
+     "quote": "Итого квартир — 120"
+    },
+    {
+     "page_number": 1,
+     "quote": "Студии — 20"
+    },
+    {
+     "page_number": 1,
+     "quote": "Однокомнатные — 40"
+    },
+    {
+     "page_number": 1,
+     "quote": "Двухкомнатные — 36"
+    },
+    {
+     "page_number": 1,
+     "quote": "Трёхкомнатные — 20"
+    }
+   ]
+  }
+ ]
+}

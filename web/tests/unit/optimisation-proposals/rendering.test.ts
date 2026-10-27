@@ -8,17 +8,10 @@ import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
 import { OPTIMISATION_MOVED_TO, OptimisationPage } from '@/_pages/optimisation';
-import { arDocumentSets } from '@/widgets/optimisation-proposals';
+import { classifiedDocumentSets } from '@/widgets/optimisation-proposals';
 
 import { newClient, renderScreen } from '../screens/harness';
-import { arVersion, otherSectionVersion, proposalShapes } from './fixtures';
-
-/** A set no expert has classified: the `classification` key is absent, not `undefined`. */
-function unclassified() {
-  const version: Record<string, unknown> = { ...arVersion() };
-  delete version['classification'];
-  return version as unknown as ReturnType<typeof arVersion>;
-}
+import { arVersion, otherSectionVersion, proposalShapes, unclassifiedVersion } from './fixtures';
 
 function rendered(name: string): string {
   const shape = proposalShapes().find((entry) => entry.name === name);
@@ -29,16 +22,26 @@ function rendered(name: string): string {
 }
 
 describe('the sets', () => {
-  it('offers only the sets whose current version an expert confirmed as АР', () => {
-    expect(arDocumentSets([arVersion(), otherSectionVersion(), unclassified()])).toEqual([
+  it('offers every set whose current version an expert confirmed, whatever the section', () => {
+    expect(classifiedDocumentSets([arVersion(), otherSectionVersion(), unclassifiedVersion()])).toEqual([
       arVersion(),
+      otherSectionVersion(),
     ]);
   });
 
+  it('names the section of each set it offers', () => {
+    const markup = rendered('proposals-set-chooser');
+    expect(markup).toContain('Комплект АР — версия 2, раздел АР');
+    expect(markup).toContain('Комплект АР, корпус 2 — версия 2, раздел АР');
+    const loaded = rendered('proposals-loaded');
+    expect(loaded).toContain('Комплект КЖ — версия 2, раздел КЖ');
+  });
+
   it('says where a section is confirmed when there is none, and that the list is partial', () => {
-    const markup = rendered('proposals-no-ar-sets');
-    expect(markup).toContain('В проекте нет комплектов раздела АР');
+    const markup = rendered('proposals-no-classified-sets');
+    expect(markup).toContain('В проекте нет комплектов с подтверждённым разделом');
     expect(markup).toContain('Подтвердите раздел на экране версии');
+    expect(markup).not.toContain('раздела АР');
     expect(rendered('proposals-set-chooser')).toContain('Предложены комплекты первой страницы');
     expect(rendered('proposals-set-chooser')).toContain('Комплект АР, корпус 2 — версия 2');
   });

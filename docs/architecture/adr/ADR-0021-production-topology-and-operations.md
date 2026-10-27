@@ -41,7 +41,7 @@ is marked "assumption".
   the official PostgreSQL image that bootstrap user is a superuser (assumption: the image's
   documented behaviour; the check is the query of row 7 below). Pool 5 plus 5 overflow
   (`src/auditmanager/shared/db/config.py`). Migrations run only through the one-shot `migrate`
-  service; the head is `0032_ar_v3_run_group`. The S3 bucket is private; `bucket-init.sh` and the
+  service; the head is `0033_ar_v3_cite_stage_id` (it was `0032_ar_v3_run_group` when this ADR was written). The S3 bucket is private; `bucket-init.sh` and the
   adapter configure no versioning, lifecycle or encryption at rest (a search found none).
 - **Copies.** No scheduled backup exists. A verified dump is taken by `reset.sh` and
   `purge-product-data.sh`, both of which then destroy data, and by the owner's forced-command key
@@ -139,7 +139,7 @@ cannot live in an Alembic revision), then derives every grant from the catalog (
 classification above, sequences, `ALTER DEFAULT PRIVILEGES` for later tables) and can be run any number of
 times. `deploy.sh` runs it after `migrate` and before `api` and `worker` start; `reset.sh --restore` and
 `copy-serve.sh restore-db` run it after the restore. **No Alembic revision is added**, so the migration
-head `0032_ar_v3_run_group` is unchanged and none of the files that pin the head changes. The proof that the
+head `0033_ar_v3_cite_stage_id` is not moved by this ADR's work (migration `0033` came from `D-225`, not from here) and none of the files that pin the head changes for it. The proof that the
 grants are enough is the `tests/integration` directories of the contexts running as the application role,
 plus a test that a database restored from a `--no-privileges` dump is readable by the application role after
 the step. Connection: `DATABASE_URL` stays the application's; the migrator's URL is a second variable that

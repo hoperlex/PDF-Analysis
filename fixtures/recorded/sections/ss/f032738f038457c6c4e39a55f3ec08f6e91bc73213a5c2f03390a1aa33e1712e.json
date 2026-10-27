@@ -1,0 +1,24 @@
+{
+  "latency_ms": 8800,
+  "model_id": "claude-opus-5",
+  "note": "Synthetic СС (SS) reply over the AR baseline corpus text layer, authored by hand. Token counts and latency are authored, not measured.",
+  "origin": {
+    "analysis_profile_id": "ap_01M5AXG1KN9C7BDD3CCHMFTMX3",
+    "kind": "synthetic",
+    "profile_status": "reviewed",
+    "prompt_bundle_id": "pb_01M5AXG1KNQRT6DYJWYC5X0C5J",
+    "prompt_bundle_sha256": "46cc1ef7157cc2ccf93821b26b07a21ae6587b485e0f12026523e312f29d5877",
+    "section_code": "SS",
+    "statement": "Synthetic: authored by hand for SECTION-RECORDINGS-01 to prove section routing in recorded mode. No model produced this reply and no provider call was made. Not field evidence for the profile's review.",
+    "task_id": "SECTION-RECORDINGS-01",
+    "text_layer": "fixtures/recorded/text_analysis/inputs/ar_baseline_text_layer.json"
+  },
+  "output_text": "{\"observations\": [{\"category\": \"explicit_placeholder\", \"finding_text\": \"Синтетический ответ (СС), не результат вызова модели: в ведомости заполнения проёмов вместо типа оконного заполнения оставлено «уточнить».\", \"recommendation_text\": \"Заполнить тип оконного заполнения в ведомости.\", \"evidence\": [{\"page_number\": 8, \"quote\": \"Тип заполнения оконных проёмов — уточнить.\"}]}]}",
+  "recording_version": "1.0.0",
+  "request_sha256": "f032738f038457c6c4e39a55f3ec08f6e91bc73213a5c2f03390a1aa33e1712e",
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 2430,
+    "output_tokens": 400
+  }
+}

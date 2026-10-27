@@ -172,6 +172,18 @@ Open the project, choose `ar_baseline.zip`, enter a synthetic title, and click
 after a full reload; `version_uid` has the form `ver_<ULID>`; no
 `data-upload-failure` or `data-precheck-problem` message appears.
 
+### A03a — confirm the stage and section
+
+`W59-SECTION-SEAL-01`: a run starts only for a version whose stage and section an expert has
+confirmed; an unconfirmed version is refused with HTTP 422 before any run exists. On the version
+screen, in «Стадия и раздел», choose «П — проектная» (design documentation) and section ПБ, and
+click «Подтвердить раздел» (Confirm section). This protocol runs on ПБ, not АР
+(`PROD-10B-JOURNEY-REBASE-01`): the АР v1 run is what `PROD-11` removes, and ПБ stays.
+
+**PASS:** `PUT .../classification` → `200` echoing `project_stage: "P"` and `section_code: "PB"`; the
+panel switches to the confirmed classification; no `data-classification-failure` or
+`data-classification-conflict` marker appears.
+
 ### A04 — run and four stages
 
 Click «Запустить прогон» (Start run). In Network expect `POST /api/v1/runs` →
@@ -198,12 +210,23 @@ contains:
 2. `SI-02`: two evacuation exits on page 3 and three on page 7;
 3. `SI-03`: the literal fixture placeholder «уточнить» (clarify) on page 8.
 
-**PASS for a live provider:** at least two of the three issues are found;
-every quotation occurs literally on its declared PDF page; none of the six
-near-miss controls in `fixtures/synthetic/ar/expected_issues.json` is
-published as a finding. A general finding without a verifiable quotation and
-page is **FAIL**. Record the found `SI-*` issues and any false positives; do
-not substitute model prose for expert judgment.
+The run is read under the ПБ profile (A03a). `SI-01` and `SI-02` are fire-safety facts of the
+document and `SI-03` is a generic placeholder; the synthetic ПБ recording used in recorded mode reports
+exactly these three (`fixtures/recorded/sections/pb/`), but it is authored, not a model's answer.
+
+**PASS for a live provider:** every quotation occurs literally on its declared
+PDF page; none of the six near-miss controls in
+`fixtures/synthetic/ar/expected_issues.json` is published as a finding. A
+general finding without a verifiable quotation and page is **FAIL**. Record
+the found `SI-*` issues and any false positives; do not substitute model
+prose for expert judgment.
+
+**Not yet measured under ПБ:** the earlier threshold "at least two of the three
+issues are found" was measured under the АР profile and has not been measured
+under this one, so it is not a PASS condition here. Report how many of the
+three a live ПБ run found; the first such run sets the baseline, and the
+threshold returns as a condition only after someone has recorded that a live
+ПБ run reaches it (`PROD-10B-JOURNEY-REBASE-01`).
 
 ### A06 — expert decision and journal
 
@@ -280,8 +303,10 @@ number equals the routes in `tests/e2e/pc01/journey/manifest.json`:
     under «Текущие версии без подтверждённого раздела»;
 20. `/norms`;
 21. `/analysis-settings` — fifteen sections in the project-structure order, read-only: АР
-    «встроенный», the drafts «черновик, требует экспертной проверки», ПБ «профиль не создан»;
-    «Подробнее» shows the identities, both hashes and the legacy source;
+    «текстовый профиль не используется» (it has no text profile; its analysis is the six checks of
+    АР v3), the other fourteen, ПБ among them,
+    «рабочая версия, проверка человеком не проводилась» (reviewed without a human review,
+    `R-146ag`); «Подробнее» shows the identities, both hashes and the legacy source;
 22. `/queue`;
 23. `/register` in a separate private window;
 24. `/register/submitted` after submitting a test registration;

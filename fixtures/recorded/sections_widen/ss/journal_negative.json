@@ -1,0 +1,18 @@
+{
+ "format": "section-widen-specimen/1",
+ "section_code": "SS",
+ "case": "journal_negative",
+ "expect": "none",
+ "origin": {
+  "kind": "synthetic",
+  "statement": "Text and reply authored by hand for SECTION-WIDEN-G3-01 to show what a widened prompt rule is meant to report or to leave alone, and filed by SECTION-PROMPT-SENTENCE-GUARD-01. No model produced this reply. Not field evidence for any profile's expert review; it says nothing about how a model answers.",
+  "task_id": "SECTION-WIDEN-G3-01",
+  "source_report": "docs/program/SECTION-WIDEN-G3-01.md",
+  "filed_by": "SECTION-PROMPT-SENTENCE-GUARD-01"
+ },
+ "pages": [
+  "Кабельный журнал системы СКУД (вымышленный пример для проверки профиля)\nЛиния Л1 — длина 120 м\nЛиния Л2 — длина 85 м\nЛиния Л3 — длина 240 м\nИтого длина кабеля с запасом — 490 м",
+  "Общие указания. Кабель — витая пара, категория 6."
+ ],
+ "observations": []
+}

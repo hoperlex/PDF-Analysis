@@ -35,6 +35,7 @@ from auditmanager.analysis.text.anchors import (
     resolve_anchor,
 )
 from auditmanager.shared.identity import RunId
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE
 
 CONTRADICTION_QUOTE = "Степень огнестойкости здания — II."
 
@@ -70,7 +71,8 @@ def test_emitted_anchors_slice_back_to_their_own_quotation(
     text_layer_document, recorded_adapter
 ):
     outcome = run_text_analysis(
-        run_id=RunId.new(), text_layer_document=text_layer_document, adapter=recorded_adapter
+        run_id=RunId.new(), text_layer_document=text_layer_document, adapter=recorded_adapter,
+        profile=V1_REFERENCE_PROFILE,
     )
     assert outcome.status == STATUS_SUCCEEDED
     text_layer = load_text_layer(text_layer_document)
@@ -89,7 +91,8 @@ def test_emitted_anchors_slice_back_to_their_own_quotation(
 
 def test_ordinals_are_positions_and_not_identities(text_layer_document, recorded_adapter):
     outcome = run_text_analysis(
-        run_id=RunId.new(), text_layer_document=text_layer_document, adapter=recorded_adapter
+        run_id=RunId.new(), text_layer_document=text_layer_document, adapter=recorded_adapter,
+        profile=V1_REFERENCE_PROFILE,
     )
     for expected, observation in enumerate(outcome.artifact["observations"]):
         assert observation["observation_ordinal"] == expected
@@ -209,6 +212,7 @@ def test_unresolvable_evidence_is_dropped_and_counted(
         run_id=RunId.new(),
         text_layer_document=text_layer_document,
         adapter=variant_adapter("ungrounded_quotation"),
+        profile=V1_REFERENCE_PROFILE,
     )
     assert outcome.status == STATUS_SUCCEEDED
     assert outcome.metrics["observations_proposed"] == 2
@@ -232,6 +236,7 @@ def test_an_artifact_never_carries_an_evidence_free_observation(
         run_id=RunId.new(),
         text_layer_document=text_layer_document,
         adapter=variant_adapter("ungrounded_quotation"),
+        profile=V1_REFERENCE_PROFILE,
     )
     for observation in outcome.artifact["observations"]:
         assert len(observation["evidence"]) >= 1
@@ -240,7 +245,8 @@ def test_an_artifact_never_carries_an_evidence_free_observation(
 def test_the_stage_writes_no_verdict(text_layer_document, recorded_adapter):
     """Bible P-17: model output is never an expert verdict."""
     outcome = run_text_analysis(
-        run_id=RunId.new(), text_layer_document=text_layer_document, adapter=recorded_adapter
+        run_id=RunId.new(), text_layer_document=text_layer_document, adapter=recorded_adapter,
+        profile=V1_REFERENCE_PROFILE,
     )
     rendered = json.dumps(outcome.artifact, ensure_ascii=False)
     for forbidden in ("verdict", "decision", "accepted", "rejected", "grounded", "published"):

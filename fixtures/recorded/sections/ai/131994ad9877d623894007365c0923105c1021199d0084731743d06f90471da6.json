@@ -1,0 +1,24 @@
+{
+  "latency_ms": 9100,
+  "model_id": "claude-opus-5",
+  "note": "Synthetic АИ (AI) reply over the AR baseline corpus text layer, authored by hand. Token counts and latency are authored, not measured.",
+  "origin": {
+    "analysis_profile_id": "ap_01M5AXG1K03864N3KSY4AM9P10",
+    "kind": "synthetic",
+    "profile_status": "reviewed",
+    "prompt_bundle_id": "pb_01M5AXG1K095VZEZ6BHYM6W9QV",
+    "prompt_bundle_sha256": "641ba209831af2486c09a31854359bd02ead20f14a5cf289d202da6226033098",
+    "section_code": "AI",
+    "statement": "Synthetic: authored by hand for W59-ANALYSIS-SETTINGS-01 to prove section routing in recorded mode. No model produced this reply and no provider call was made. Not field evidence for the profile's review.",
+    "task_id": "W59-ANALYSIS-SETTINGS-01",
+    "text_layer": "fixtures/recorded/text_analysis/inputs/ar_baseline_text_layer.json"
+  },
+  "output_text": "{\"observations\": [{\"category\": \"explicit_placeholder\", \"finding_text\": \"Синтетический ответ (АИ), не результат вызова модели: тип заполнения оконных проёмов не определён — оставлено указание «уточнить».\", \"recommendation_text\": \"Определить тип заполнения оконных проёмов в ведомости заполнения проёмов.\", \"evidence\": [{\"page_number\": 8, \"quote\": \"Тип заполнения оконных проёмов — уточнить.\"}]}]}",
+  "recording_version": "1.0.0",
+  "request_sha256": "131994ad9877d623894007365c0923105c1021199d0084731743d06f90471da6",
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 2310,
+    "output_tokens": 420
+  }
+}

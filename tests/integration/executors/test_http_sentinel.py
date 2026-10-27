@@ -32,6 +32,7 @@ from auditmanager.analysis.public import ModelRequest, ProxyDispatchError
 from auditmanager.executors.public import ExecutorRepository, request_probe
 from auditmanager.shared.identity import IdempotencyKey
 from auditmanager.executors.runtime import ProbeRunner, bind_connection
+from tests.support.v1_reference_profile import resolve_reference_profile
 
 _HARNESS_NAME = "b5_run_harness"
 _HARNESS_PATH = Path(__file__).resolve().parents[1] / "runs" / "harness.py"
@@ -98,7 +99,7 @@ def test_the_sentinel_never_leaves_the_probe_and_the_call_even_when_the_gateway_
     fake = FakeGateway(behaviour="echo401").start()
     try:
         seeded = support.seed_connection(
-            session, rings, fake.base_url(), key=SENTINEL, probe=None, routed=False)
+            session, rings, fake.vpn_url(), key=SENTINEL, probe=None, routed=False)
         probe = request_probe(
             session, connection_id=seeded.connection_id, roles=support.ADMIN_ROLES,
             idempotency_key=support.unique(), actor_uid=support.ACTOR)
@@ -134,7 +135,7 @@ def test_the_sentinel_never_leaves_the_probe_and_the_call_even_when_the_gateway_
 def test_the_row_scan_can_fail(session) -> None:  # type: ignore[no-untyped-def]
     """A sentinel planted in a stored probe detail is found by the very scan above."""
     rings = support.make_rings()
-    seeded = support.seed_connection(session, rings, "http://gateway.example.test/v1", probe=None,
+    seeded = support.seed_connection(session, rings, "http://10.8.0.2/v1", probe=None,
                                      routed=False)
     probe = request_probe(
         session, connection_id=seeded.connection_id, roles=support.ADMIN_ROLES,
@@ -159,7 +160,7 @@ def test_a_failed_run_stores_no_key_in_its_stage_error_or_call_rows(
     config = ProviderConfig(mode=ProviderMode.LIVE, model_id=support.PIN.model_id,
                             run_cost_ceiling_usd=1.0, api_key=None, ceiling_is_explicit=True)
     try:
-        support.seed_connection(session, rings, fake.base_url(), key=SENTINEL)
+        support.seed_connection(session, rings, fake.vpn_url(), key=SENTINEL)
         providers = DatabaseProviders(ring=rings.private, policy=fake.policy(), base_config=config,
                                       ceiling_usd=1.0)
         started = start_audit_run(
@@ -169,7 +170,7 @@ def test_a_failed_run_stores_no_key_in_its_stage_error_or_call_rows(
             connection_route=providers.freeze)
         result = execute_run(session, started.run_id, blob_store=blob_store,
                              adapter=UnboundAdapter(), provider_config=config,
-                             providers=providers.resolve)
+                             providers=providers.resolve, text_profiles=resolve_reference_profile)
     finally:
         fake.stop()
     assert result.terminal_state == "failed"
@@ -195,7 +196,7 @@ def test_a_dump_after_a_probe_against_an_echoing_gateway_carries_no_key(engine) 
     try:
         with factory() as work:
             seeded = support.seed_connection(
-                work, rings, fake.base_url(), key=SENTINEL, probe=None, routed=False,
+                work, rings, fake.vpn_url(), key=SENTINEL, probe=None, routed=False,
                 name="dump-sentinel-http")
             probe = request_probe(
                 work, connection_id=seeded.connection_id, roles=support.ADMIN_ROLES,

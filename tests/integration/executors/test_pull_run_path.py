@@ -37,6 +37,7 @@ from auditmanager.shared.errors import DomainError
 from tests.integration.executors.test_runner_channel import (  # noqa: F401  (surface is a fixture)
     admin_call, claim, issue, make_connection, runner_call, surface,
 )
+from tests.support.v1_reference_profile import resolve_reference_profile
 
 _HARNESS_NAME = "b5_run_harness"
 _HARNESS_PATH = Path(__file__).resolve().parents[1] / "runs" / "harness.py"
@@ -104,6 +105,7 @@ def _execute(session: Any, blob_store: Any, run_id: str, providers: Any) -> Any:
     return execute_run(
         session, run_id, blob_store=blob_store, adapter=UnboundAdapter(), provider_config=LIVE,
         providers=providers.resolve,
+        text_profiles=resolve_reference_profile,
     )
 
 

@@ -38,6 +38,7 @@ from auditmanager.analysis.text.recorded import RECORDING_VERSION
 from auditmanager.runs import RETRYABLE_STAGE_ERRORS
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import RunId
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE
 
 
 def test_socket_guard_refuses_a_socket():
@@ -85,6 +86,7 @@ def test_configuration_cannot_relabel_a_replay(text_layer_document, recorded_ada
         text_layer_document=text_layer_document,
         adapter=recorded_adapter,
         config=config,
+        profile=V1_REFERENCE_PROFILE,
     )
     assert outcome.status == STATUS_SUCCEEDED
     assert outcome.artifact["provider_mode"] == "recorded"
@@ -105,6 +107,7 @@ def test_a_live_call_without_a_durable_journal_is_refused_before_dispatch(
         run_id=RunId.new(),
         text_layer_document=text_layer_document,
         adapter=LiveNeverCalled(),
+        profile=V1_REFERENCE_PROFILE,
     )
 
     assert outcome.status == STATUS_FAILED
@@ -132,7 +135,9 @@ def test_standalone_runner_is_truthfully_replay_only(monkeypatch) -> None:
     )
 
     with pytest.raises(DomainError) as refused:
-        runner.main([str(input_path), "--capture", "/tmp/never-created-by-live-refusal"])
+        runner.main([
+            str(input_path), "--section", "PB", "--capture", "/tmp/never-created-by-live-refusal",
+        ])
 
     assert refused.value.code is ErrorCode.ANALYSIS_INPUT_INVALID
     assert refused.value.detail_fields["reason"] == "durable_call_journal_required"
@@ -173,6 +178,7 @@ def test_a_forged_mode_field_in_a_recording_changes_nothing(
         run_id=RunId.new(),
         text_layer_document=text_layer_document,
         adapter=RecordedAdapter(forged_dir),
+        profile=V1_REFERENCE_PROFILE,
     )
     assert outcome.status == STATUS_SUCCEEDED
     assert outcome.artifact["provider_mode"] == "recorded"
@@ -185,7 +191,8 @@ def test_publishing_refuses_a_mode_that_disagrees_with_its_calls(
     text_layer_document, recorded_adapter
 ):
     outcome = run_text_analysis(
-        run_id=RunId.new(), text_layer_document=text_layer_document, adapter=recorded_adapter
+        run_id=RunId.new(), text_layer_document=text_layer_document, adapter=recorded_adapter,
+        profile=V1_REFERENCE_PROFILE,
     )
     with pytest.raises(DomainError) as raised:
         assert_consistent_mode(ProviderMode.LIVE, outcome.model_calls)
@@ -210,6 +217,7 @@ def test_missing_recording_is_not_a_transport_failure_and_never_a_live_call(
         run_id=RunId.new(),
         text_layer_document=text_layer_document,
         adapter=RecordedAdapter(empty_recording_dir),
+        profile=V1_REFERENCE_PROFILE,
     )
     assert outcome.status == STATUS_FAILED
     assert outcome.artifact is None
@@ -236,7 +244,7 @@ def test_every_way_the_corpus_fails_to_answer_takes_the_same_non_retryable_code(
     any of them. The test enumerates the adapter's own `recording_*` reason vocabulary
     so that a new member added on a retryable code fails here.
     """
-    from auditmanager.analysis.text import AR_TEXT_PROFILE, build_request, load_text_layer
+    from auditmanager.analysis.text import build_request, load_text_layer
 
     document = json.loads(
         (
@@ -245,7 +253,7 @@ def test_every_way_the_corpus_fails_to_answer_takes_the_same_non_retryable_code(
     )
     request = build_request(
         model_id="claude-opus-5",
-        bundle=AR_TEXT_PROFILE.prompt_bundle,
+        bundle=V1_REFERENCE_PROFILE.prompt_bundle,
         text_layer=load_text_layer(document),
     )
 
@@ -300,7 +308,7 @@ def test_every_way_the_corpus_fails_to_answer_takes_the_same_non_retryable_code(
 
 def test_missing_recording_envelope_leaks_no_path_or_payload(empty_recording_dir):
     """The envelope screen has to accept the message this path produces."""
-    from auditmanager.analysis.text import AR_TEXT_PROFILE, build_request, load_text_layer
+    from auditmanager.analysis.text import build_request, load_text_layer
 
     document = json.loads(
         (
@@ -309,7 +317,7 @@ def test_missing_recording_envelope_leaks_no_path_or_payload(empty_recording_dir
     )
     request = build_request(
         model_id="claude-opus-5",
-        bundle=AR_TEXT_PROFILE.prompt_bundle,
+        bundle=V1_REFERENCE_PROFILE.prompt_bundle,
         text_layer=load_text_layer(document),
     )
     with pytest.raises(DomainError) as raised:

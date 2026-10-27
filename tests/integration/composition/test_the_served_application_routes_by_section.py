@@ -112,9 +112,11 @@ def test_start_run_passes_the_section_table_and_no_profile(served: Any) -> None:
     kwargs = seen.value.kwargs
     assert "analysis_profile_id" not in kwargs and "prompt_bundle_id" not in kwargs
     assert dict(kwargs["section_profiles"]) == _registry_table()
-    # `PB-PROFILE-01`: fire safety has a draft profile of its own, so the table covers all fifteen
-    # sections and PB's pair is its own, not another section's.
-    assert set(kwargs["section_profiles"]) == SECTION_CODES
+    # `PB-PROFILE-01`: fire safety has a draft profile of its own and PB's pair is its own, not
+    # another section's. `PROD-11-AR-V1-V2-REMOVAL-01`: the table covers the fourteen sections that
+    # have a text profile; АР, the fifteenth code, is the one with none.
+    assert set(kwargs["section_profiles"]) == SECTION_CODES - {"AR"}
+    assert "AR" not in kwargs["section_profiles"]
     pb_entry = load_text_profile_registry().entries["PB"]
     pb = tuple(kwargs["section_profiles"]["PB"])
     assert pb == (pb_entry.analysis_profile_id, pb_entry.prompt_bundle_id)

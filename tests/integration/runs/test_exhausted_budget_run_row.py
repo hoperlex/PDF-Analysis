@@ -67,6 +67,7 @@ from auditmanager.runs import (
 )
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import IdempotencyKey
+from tests.support.v1_reference_profile import resolve_reference_profile
 
 STAGE = "text_analysis"
 
@@ -179,6 +180,7 @@ def test_the_recorded_adapter_over_an_empty_directory_is_asked_exactly_once(
         adapter=adapter,
         provider_config=provider_config,
         sleep=waits.append,
+        text_profiles=resolve_reference_profile,
     )
 
     assert adapter.calls == 1, (
@@ -238,6 +240,7 @@ def test_an_exhausted_budget_names_the_transport_failure_on_the_run_row(
         adapter=adapter,
         provider_config=provider_config,
         sleep=waits.append,
+        text_profiles=resolve_reference_profile,
     )
 
     # The precondition. Without it the assertion below could pass on a run that failed

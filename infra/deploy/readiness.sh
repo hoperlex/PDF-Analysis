@@ -41,10 +41,17 @@
 #     re-implementing "is AUDITMANAGER_PROVIDER_MODE one of the three declared modes" or
 #     "does live/proxy mode have the credential it needs" in bash a second time.
 #
-# `tls`, `plain-http` and `off-host-backup` have no existing module to consult: nothing in
-# this tree validates a certificate pair, a bind address, or an off-host destination today,
-# so those three are read directly against the files and values `docs/program/
-# DEPLOYMENT_RUNBOOK.md` §1 and §6 and `infra/deploy/proxy/enable-tls.sh` already document.
+# `off-host-backup` has no existing module to consult: nothing in this tree names an off-host
+# destination, so it is read against the values `docs/program/DEPLOYMENT_RUNBOOK.md` §1 and §5
+# already document.
+#
+# `tls` and `plain-http` were rewritten by `PROD-01-TLS-ACME-01` for the layout in which this stack
+# terminates TLS itself (`ADR-0021` section 2). `tls` asks the proxy's own TLS listener what certificate
+# it serves, through `infra/acme/check-served.sh` in a one-off container of the ACME image (the same
+# question `verify-deployed.sh` asks, reported here and not enforced); `plain-http` asks the challenge
+# listener on public port 80 whether it is what `R-146s` says it is -- a redirect and nothing else.
+# Both are about a stack with `ALPHA_CERT_NAME` set; without one, `tls` reports that no terminator is
+# part of the stack and `plain-http` keeps the bind-address reading it always had.
 #
 # THE HOST NEEDS NO PYTHON FOR FOUR OF THE SIX. `DEPLOYMENT_RUNBOOK.md` §1 promises this
 # host only bash, docker, curl, sed and git. `default-credential` runs python inside the api
@@ -59,21 +66,16 @@ REPO="$(cd "$HERE/../.." && pwd)"
 COMPOSE_FILE="$HERE/compose.server.yml"
 ENV_FILE="${ALPHA_ENV_FILE:-$HERE/env/alpha.env}"
 PROVIDER_ENV_FILE="${ALPHA_PROVIDER_ENV_FILE:-$HERE/env/provider.env}"
-#: Overridable the same way, for the same reason: `tests/integration/composition/
-#: test_readiness_command.py` drives the `tls` check to both answers without ever writing
-#: into this clone's own `proxy/tls/`.
-TLS_DIR="${ALPHA_TLS_DIR:-$HERE/proxy/tls}"
 PYTHON="$REPO/.venv/bin/python"
 
 usage() {
     cat >&2 <<'USAGE'
-usage: readiness.sh [--env-file <path>] [--provider-env-file <path>] [--tls-dir <path>]
+usage: readiness.sh [--env-file <path>] [--provider-env-file <path>]
 
   --env-file <path>           default: infra/deploy/env/alpha.env
   --provider-env-file <path>  default: infra/deploy/env/provider.env
-  --tls-dir <path>            default: infra/deploy/proxy/tls
 
-Reports on seven publication-readiness questions and registers each finding. Refuses nothing
+Reports on eight publication-readiness questions and registers each finding. Refuses nothing
 and blocks no deploy (R-46). Exit 0: every check answered clean. Exit 1: at least one
 finding. Exit 2: at least one check could not be answered (missing tooling, missing file --
 never read as clean).
@@ -85,7 +87,6 @@ while [ "$#" -gt 0 ]; do
     case "$1" in
         --env-file) ENV_FILE="${2:-}"; shift 2 ;;
         --provider-env-file) PROVIDER_ENV_FILE="${2:-}"; shift 2 ;;
-        --tls-dir) TLS_DIR="${2:-}"; shift 2 ;;
         -h|--help) usage ;;
         *) printf 'readiness.sh: unrecognised option: %s\n' "$1" >&2; usage ;;
     esac
@@ -151,46 +152,156 @@ fi
 echo
 # <<< check: default-credential
 
-# >>> check: tls
-# Step 4's software half. `infra/deploy/proxy/enable-tls.sh` installs the TLS server block
-# only when both files are present AND non-empty (`[ -s "$CERT" ]`); this asks the same
-# question the same way, from the host, before anything is brought up. The domain and the
-# certificate itself are the owner's -- GO_PATH row 4 -- this only reports whether the pair
-# that would activate TLS is on disk.
-CERT="$TLS_DIR/fullchain.pem"
-KEY="$TLS_DIR/privkey.pem"
-if [ -s "$CERT" ] && [ -s "$KEY" ]; then
-    ok tls "a certificate pair is present at $TLS_DIR; enable-tls.sh installs the TLS server block on next start."
+# >>> check: db-roles
+# `PROD-04-DB-ROLES-01`, `R-146n` item 1, `ADR-0021` section 3 and row 7. Which database role do `api` and `worker`
+# connect as, and is it the restricted application role -- one that cannot change the schema, cannot truncate and owns
+# nothing -- and not the owner (a superuser)? Three questions, each asked of the thing that knows:
+#
+#   1. the RUNNING `api` and `worker` containers, for the user of the `DATABASE_URL` they were started with (only the
+#      user is read and printed; the password never leaves the container);
+#   2. the database, for the facts `ADR-0021` row 7 names: not a superuser, no CREATE on schema public, no DELETE and
+#      an INSERT on audit_event -- `f|f|f|t`;
+#   3. `apply-grants.sh --check`, which compares every table, view and sequence with the grant classification.
+#
+# Reported, not enforced (`R-46`): `deploy.sh` is what refuses a stack whose roles are not configured.
+DB_ROLE="$(configured ALPHA_APP_DB_USER)"
+DB_OWNER="$(configured POSTGRES_USER)"
+DB_NAME="$(configured POSTGRES_DB)"
+if [ ! -r "$ENV_FILE" ]; then
+    unknown db-roles "no $ENV_FILE to read the roles from."
+elif ! command -v docker >/dev/null 2>&1; then
+    unknown db-roles "no docker on PATH; the roles are asked of the running containers and of the database."
+elif [[ ! "$DB_ROLE" =~ ^[a-z_][a-z0-9_]{2,62}$ ]]; then
+    finding db-roles "ALPHA_APP_DB_USER is '${DB_ROLE:-<unset>}' in $ENV_FILE: no application role is configured, so api and worker can only be connecting as the owner (PROD-04). Set it, choose the second password and deploy (DEPLOYMENT_RUNBOOK.md section 16)."
 else
-    finding tls "no usable certificate pair at $TLS_DIR ($CERT / $KEY missing or empty). The domain and certificate are the owner's (GO_PATH row 4); until they are there, enable-tls.sh installs nothing and the stack serves plain HTTP only."
+    ROLES_ARGS=(--env-file "$ENV_FILE" --file "$COMPOSE_FILE")
+    ROLES_FINDINGS=()
+    ROLES_UNKNOWNS=()
+    ROLES_SEEN=()
+    for service in api worker; do
+        SERVICE_URL="$(docker compose "${ROLES_ARGS[@]}" exec -T "$service" sh -c 'printf %s "$DATABASE_URL"' 2>/dev/null || true)"
+        SERVICE_USER="$(printf '%s' "$SERVICE_URL" | sed -n 's#^[A-Za-z0-9+]*://\([^:@/]*\):.*#\1#p')"
+        if [ -z "$SERVICE_USER" ]; then
+            ROLES_UNKNOWNS+=("$service is not running or has no DATABASE_URL, so the role it connects as is unknown")
+        elif [ "$SERVICE_USER" = "$DB_OWNER" ]; then
+            ROLES_FINDINGS+=("$service connects as the OWNER role '$SERVICE_USER' (a superuser that owns every object): its DATABASE_URL is still the pre-PROD-04 one")
+        elif [ "$SERVICE_USER" != "$DB_ROLE" ]; then
+            ROLES_FINDINGS+=("$service connects as '$SERVICE_USER', not as ALPHA_APP_DB_USER '$DB_ROLE'")
+        else
+            ROLES_SEEN+=("$service=$SERVICE_USER")
+        fi
+    done
+    ROLE_FACTS="$(docker compose "${ROLES_ARGS[@]}" exec -T postgres psql --no-psqlrc --username "$DB_OWNER" --dbname "$DB_NAME" -Atc \
+        "select rolsuper, has_schema_privilege(rolname,'public','CREATE'), has_table_privilege(rolname,'public.audit_event','DELETE'), has_table_privilege(rolname,'public.audit_event','INSERT') from pg_roles where rolname='$DB_ROLE'" 2>/dev/null </dev/null || true)"
+    case "$ROLE_FACTS" in
+        "f|f|f|t") ;;
+        "") ROLES_FINDINGS+=("the database has no role '$DB_ROLE' (or could not be asked): nothing has run apply-grants.sh") ;;
+        *) ROLES_FINDINGS+=("the role '$DB_ROLE' is (superuser|CREATE on public|DELETE on audit_event|INSERT on audit_event) = $ROLE_FACTS, not f|f|f|t") ;;
+    esac
+    GRANTS_STATUS=0
+    GRANTS_OUTPUT="$("$HERE/apply-grants.sh" --env-file "$ENV_FILE" --check 2>&1 </dev/null)" || GRANTS_STATUS=$?
+    case "$GRANTS_STATUS" in
+        0) ;;
+        1) ROLES_FINDINGS+=("apply-grants.sh --check: the rights differ from the classification (run it, or deploy): $(printf '%s\n' "$GRANTS_OUTPUT" | sed -n '2,4p' | tr -s ' \n' ' ')") ;;
+        *) ROLES_UNKNOWNS+=("apply-grants.sh --check could not be run (status $GRANTS_STATUS): $(printf '%s\n' "$GRANTS_OUTPUT" | head -2 | tr -s ' \n' ' ')") ;;
+    esac
+    if [ "${#ROLES_FINDINGS[@]}" -gt 0 ]; then
+        finding db-roles "${ROLES_FINDINGS[0]}$([ "${#ROLES_FINDINGS[@]}" -gt 1 ] && printf ' (+%s more: %s)' "$((${#ROLES_FINDINGS[@]} - 1))" "$(printf '%s; ' "${ROLES_FINDINGS[@]:1}")")"
+    elif [ "${#ROLES_UNKNOWNS[@]}" -gt 0 ]; then
+        unknown db-roles "${ROLES_UNKNOWNS[0]}$([ "${#ROLES_UNKNOWNS[@]}" -gt 1 ] && printf ' (+%s more: %s)' "$((${#ROLES_UNKNOWNS[@]} - 1))" "$(printf '%s; ' "${ROLES_UNKNOWNS[@]:1}")")"
+    else
+        ok db-roles "${ROLES_SEEN[*]} -- the application role '$DB_ROLE' is not a superuser, cannot create in schema public, cannot delete from audit_event and can insert into it ($ROLE_FACTS); apply-grants.sh --check: its rights match the classification."
+    fi
+fi
+echo
+# <<< check: db-roles
+
+# >>> check: tls
+# `PROD-01-TLS-ACME-01`. Is the certificate the proxy SERVES one a client can use? Asked of the proxy's own
+# TLS listener (`proxy:8443`, on the compose network) by `infra/acme/check-served.sh` in a one-off container
+# of the ACME image, so it needs docker and nothing else on the host, and it is about what is served and not
+# about whether a file exists somewhere: a pair on a volume that nginx has not loaded serves nothing.
+#
+# Reported, not enforced (`R-46`): `verify-deployed.sh` is the command that fails a deploy on the same
+# facts. Four answers: no `ALPHA_CERT_NAME` (no terminator is part of this stack, which is a finding for a
+# deployment meant to be published); a name that is not usable; the TEST endpoint selected; or the served
+# certificate judged by `check-served.sh` -- production kind, chain and name verified, at least 14 days left.
+CERT_NAME="$(configured ALPHA_CERT_NAME)"
+CERT_STAGING="$(configured ALPHA_ACME_STAGING)"
+[ -n "$CERT_STAGING" ] || CERT_STAGING=yes
+LISTENERS_LIB="$HERE/lib/proxy-listeners.sh"
+if [ -z "$CERT_NAME" ]; then
+    finding tls "ALPHA_CERT_NAME is not set in $ENV_FILE, so this stack obtains and serves no certificate: TLS, if there is any, is a terminator outside this repository whose configuration and renewal nothing here can read (D-191). Set the name to move the terminator into the stack (DEPLOYMENT_RUNBOOK.md section 6)."
+elif [ ! -r "$LISTENERS_LIB" ]; then
+    unknown tls "no $LISTENERS_LIB to judge ALPHA_CERT_NAME with."
+elif ! CERT_WHY="$(. "$LISTENERS_LIB" && listeners_name_problem "$CERT_NAME")"; then
+    finding tls "ALPHA_CERT_NAME '$CERT_NAME' in $ENV_FILE is not a usable name: $CERT_WHY."
+elif [ "$CERT_STAGING" != yes ] && [ "$CERT_STAGING" != no ]; then
+    finding tls "ALPHA_ACME_STAGING in $ENV_FILE is '$CERT_STAGING', which is neither yes nor no."
+elif [ "$CERT_STAGING" = yes ]; then
+    finding tls "ALPHA_ACME_STAGING is yes: $CERT_NAME gets the authority's TEST certificate, which no browser trusts. It is the setting for the rehearsal; production is ALPHA_ACME_STAGING=no (DEPLOYMENT_RUNBOOK.md section 6)."
+elif ! command -v docker >/dev/null 2>&1; then
+    unknown tls "no docker on PATH; the served certificate is asked of the acme image."
+else
+    CERT_ARGS=(--env-file "$ENV_FILE" --file "$COMPOSE_FILE")
+    while IFS= read -r overlay; do
+        [ -z "$overlay" ] || CERT_ARGS+=(--file "$overlay")
+    done < <(. "$LISTENERS_LIB" && listeners_overlay_files "$HERE" "$CERT_NAME" no no)
+    CERT_STATUS=0
+    CERT_OUTPUT="$(docker compose "${CERT_ARGS[@]}" run --rm --no-deps -T \
+        --entrypoint /usr/local/bin/check-served.sh acme "$CERT_NAME" proxy:8443 14 production 2>&1)" || CERT_STATUS=$?
+    case "$CERT_STATUS" in
+        0) ok tls "$(printf '%s\n' "$CERT_OUTPUT" | grep '^served-certificate:' | tail -1)" ;;
+        10|11|12|13)
+            finding tls "the certificate served for $CERT_NAME is not acceptable (exit $CERT_STATUS). check-served.sh's own line:"
+            printf '%s\n' "$CERT_OUTPUT" | grep '^served-certificate:' | sed 's/^/    /' ;;
+        *)
+            unknown tls "the served certificate could not be asked (exit $CERT_STATUS); raw output:"
+            printf '%s\n' "$CERT_OUTPUT" | sed 's/^/    /' ;;
+    esac
 fi
 echo
 # <<< check: tls
 
 # >>> check: plain-http
-# Step 4's other half, "close plain HTTP" -- and the honest answer this repository can give.
-# `ALPHA_BIND_ADDRESS` (`D-49`) is what makes the published port reachable off this host at
-# all; its safe default is loopback. Publishing it is checkable; CLOSING plain HTTP once
-# published is not something anything in this tree can do -- `DEPLOYMENT_RUNBOOK.md` §6
-# says so in its own words: "there is deliberately no redirect ... the plain port keeps
-# serving in both cases", because `deploy.sh`'s own `proxy-answers` guard requires **401**
-# on that port and a redirect's `301` is not 401. So this reports the one thing that is
-# true either way, rather than a "closed" this codebase cannot produce.
+# `R-146s`: three listeners, and the one that must never carry the application in clear text is public.
+# `ALPHA_BIND_ADDRESS` (`D-49`) governs the plain APPLICATION listener and its safe default is loopback;
+# publishing it is checkable from the env file.
 #
-# `Y2`: this line said **200** until 2026-09-29, and it is the one assertion in this file
-# about another file's behaviour rather than a reading of the tree. `R-31` closed the four
-# documentation routes behind a credential and moved the guard with them; a 200 there is
-# now a refusal in `deploy.sh`'s own words. The conclusion survived its false premise -- a
-# 301 is not 401 either -- so the operator was misled about the number and not into a
-# wrong action. Read it off the guard: `sed -n '751,772p' infra/deploy/deploy.sh`.
+# With a certificate name the second question is the challenge listener on public port 80: it must answer
+# with a redirect to HTTPS and with nothing from the application. The probe asks it for an application path;
+# `301` to an `https://` address is the right answer, `401` (the application's own answer, which
+# `deploy.sh`'s `proxy-answers` guard looks for on the LOOPBACK port) means port 80 reaches the application,
+# and nothing answering means this command cannot say. Without a name there is no challenge listener, and the
+# reading is the one this check always had: whether the published port is off this host, and the honest
+# statement that nothing here closes plain HTTP once it is published (`nginx.conf` carries no redirect, and the
+# `proxy-answers` guard wants `401` on that port).
 BIND="$(configured ALPHA_BIND_ADDRESS)"
 [ -n "$BIND" ] || BIND=127.0.0.1
 case "$BIND" in
-    127.0.0.1|::1|localhost)
-        ok plain-http "ALPHA_BIND_ADDRESS is $BIND; plain HTTP is not reachable off this host, so there is nothing published to close." ;;
-    *)
-        finding plain-http "ALPHA_BIND_ADDRESS is $BIND, publishing plain HTTP off this host. No mechanism in this repository closes it once published -- nginx.conf carries no redirect, and deploy.sh's own proxy-answers guard requires 401 on this exact port and refuses a 200 there (DEPLOYMENT_RUNBOOK.md section 6). 'Close plain HTTP' cannot be satisfied by configuration alone; publish only behind a firewall you have verified reaches Docker's chains (D-49), serving TLS." ;;
+    127.0.0.1|::1|localhost) BIND_PUBLIC=no ;;
+    *) BIND_PUBLIC=yes ;;
 esac
+CHALLENGE_PORT="$(configured ALPHA_ACME_HTTP_PORT)"
+[ -n "$CHALLENGE_PORT" ] || CHALLENGE_PORT=80
+if [ "$BIND_PUBLIC" = yes ]; then
+    finding plain-http "ALPHA_BIND_ADDRESS is $BIND, publishing the plain APPLICATION listener off this host. With a certificate name deploy.sh refuses this; without one, nothing in this repository closes plain HTTP once published -- publish only behind a firewall you have verified reaches Docker's chains (D-49), serving TLS."
+elif [ -z "$CERT_NAME" ]; then
+    ok plain-http "ALPHA_BIND_ADDRESS is $BIND; plain HTTP is not reachable off this host, so there is nothing published to close."
+elif ! command -v curl >/dev/null 2>&1; then
+    unknown plain-http "no curl on PATH; the challenge listener cannot be asked."
+else
+    CHALLENGE_ANSWER="$(curl -s -o /dev/null -m 10 -w '%{http_code} %{redirect_url}' \
+        "http://127.0.0.1:$CHALLENGE_PORT/api/v1/openapi.json" || true)"
+    case "$CHALLENGE_ANSWER" in
+        "301 https://"*)
+            ok plain-http "ALPHA_BIND_ADDRESS is $BIND, and the challenge listener on port $CHALLENGE_PORT answers an application path with a redirect to HTTPS ($CHALLENGE_ANSWER)." ;;
+        "000"*|"")
+            unknown plain-http "nothing answered on 127.0.0.1:$CHALLENGE_PORT, the challenge listener; is the stack up with its ACME overlay? It cannot be judged." ;;
+        *)
+            finding plain-http "the challenge listener on port $CHALLENGE_PORT answered an application path with '$CHALLENGE_ANSWER', not a redirect to HTTPS. Port 80 must serve the ACME webroot and a redirect and reach no application route (R-146s)." ;;
+    esac
+fi
 echo
 # <<< check: plain-http
 
@@ -380,7 +491,7 @@ finding off-host-backup "no destination exists in this repository. reset.sh's du
 echo
 # <<< check: off-host-backup
 
-echo "readiness.sh: $FINDINGS finding(s), $UNKNOWNS unknown, 7 checks."
+echo "readiness.sh: $FINDINGS finding(s), $UNKNOWNS unknown, 8 checks."
 echo "readiness.sh: this is a report, not a gate (R-46). Each finding is a register row for the owner's ruling."
 
 if [ "$UNKNOWNS" -gt 0 ]; then

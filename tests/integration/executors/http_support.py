@@ -92,6 +92,8 @@ def settings(base_url: str, **changes: Any) -> RevisionSettings:
         allow_client_documents=False, timeout_seconds=5, api_flavour="openai_chat",
         base_url=base_url, transport="direct",
     )
+    if base_url.startswith("http://"):
+        values["transport"] = "vpn"  # plain http is admitted on a vpn route or to a loopback name
     values.update(changes)
     return RevisionSettings(**values)
 

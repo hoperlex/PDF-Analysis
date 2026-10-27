@@ -1,0 +1,24 @@
+{
+  "latency_ms": 12600,
+  "model_id": "claude-opus-5",
+  "note": "Synthetic ПБ (PB) reply over the AR baseline corpus text layer, authored by hand. Token counts and latency are authored, not measured.",
+  "origin": {
+    "analysis_profile_id": "ap_01M5G4NZVKNZJYH722M0SXXP3X",
+    "kind": "synthetic",
+    "profile_status": "reviewed",
+    "prompt_bundle_id": "pb_01M5G4NZVKHM9GP4EH22JACW2X",
+    "prompt_bundle_sha256": "5f7e5b5c51e431a39a16967fdecc20abc6ba4cd6e2af8cd19b94ccf8e9fbfd34",
+    "section_code": "PB",
+    "statement": "Synthetic: authored by hand for SECTION-RECORDINGS-01 to prove section routing in recorded mode. No model produced this reply and no provider call was made. Not field evidence for the profile's review.",
+    "task_id": "SECTION-RECORDINGS-01",
+    "text_layer": "fixtures/recorded/text_analysis/inputs/ar_baseline_text_layer.json"
+  },
+  "output_text": "{\"observations\": [{\"category\": \"internal_contradiction\", \"finding_text\": \"Синтетический ответ (ПБ), не результат вызова модели: степень огнестойкости здания указана как II в общих данных и как III в противопожарных мероприятиях.\", \"recommendation_text\": \"Привести степень огнестойкости здания к одному значению во всех частях документа.\", \"evidence\": [{\"page_number\": 2, \"quote\": \"Степень огнестойкости здания — II.\"}, {\"page_number\": 6, \"quote\": \"Степень огнестойкости здания — III.\"}]}, {\"category\": \"internal_contradiction\", \"finding_text\": \"Синтетический ответ (ПБ), не результат вызова модели: число эвакуационных выходов из надземной части здания названо два и три.\", \"recommendation_text\": \"Согласовать число эвакуационных выходов из надземной части здания.\", \"evidence\": [{\"page_number\": 3, \"quote\": \"Из надземной части здания предусмотрено два эвакуационных выхода.\"}, {\"page_number\": 7, \"quote\": \"Из надземной части здания предусмотрено три эвакуационных выхода.\"}]}, {\"category\": \"explicit_placeholder\", \"finding_text\": \"Синтетический ответ (ПБ), не результат вызова модели: тип заполнения оконных проёмов не определён — оставлено указание «уточнить».\", \"recommendation_text\": \"Определить тип заполнения оконных проёмов в ведомости заполнения проёмов.\", \"evidence\": [{\"page_number\": 8, \"quote\": \"Тип заполнения оконных проёмов — уточнить.\"}]}]}",
+  "recording_version": "1.0.0",
+  "request_sha256": "eb53a861df61d016fcb7280b723e04c32aed367b70c47cc18863f292c9e60775",
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 2460,
+    "output_tokens": 980
+  }
+}

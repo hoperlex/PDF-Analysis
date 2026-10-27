@@ -11,7 +11,6 @@ import json
 
 import pytest
 
-from auditmanager.analysis.profiles.ar_v2.response_schema import response_schema as ar_v2
 from auditmanager.analysis.profiles.ar_v3.response_schema import response_schema as ar_v3
 from auditmanager.analysis.text.prompt import RESPONSE_SCHEMA
 from auditmanager.executors.answers import (
@@ -25,7 +24,7 @@ from auditmanager.executors.answers import (
 SENTINEL = "SENTINEL-DOCUMENT-TEXT-0451"
 
 
-@pytest.mark.parametrize("schema", [RESPONSE_SCHEMA, ar_v2(), ar_v3()], ids=["v1", "ar_v2", "ar_v3"])
+@pytest.mark.parametrize("schema", [RESPONSE_SCHEMA, ar_v3()], ids=["v1", "ar_v3"])
 def test_every_response_schema_the_stage_sends_is_judgeable(schema) -> None:
     check_supported(schema)
 

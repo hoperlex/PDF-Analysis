@@ -63,10 +63,14 @@ One optional extra: §2 suggests `python3` for one line that generates a token.
 * **one published port** for the stack, `ALPHA_HTTP_PORT` — the proxy's, and nothing else
   leaves the host. PostgreSQL, MinIO, the API and the web app are reachable only on the
   compose network and publish nothing;
-* **one more if TLS is turned on**, `ALPHA_HTTPS_PORT`, default `443` (§6).
+* **two more if the stack terminates TLS itself** (`ALPHA_CERT_NAME` is set, §6): public port
+  `80`, which serves the ACME challenge and a redirect to HTTPS and **reaches no part of the
+  application**, and public port `443` (`ALPHA_HTTPS_PORT`), which exists only for a deploy that is
+  cleared to publish and has a certificate (`R-146s`). Both are the proxy's, and the proxy is still
+  the only service that publishes anything.
 
-**Both are bound to `127.0.0.1` unless you say otherwise, and you reach the stand over an SSH
-tunnel.** Ruled by the owner 2026-09-22, closing `D-49`:
+**The application's own port is bound to `127.0.0.1` unless you say otherwise, and you reach the
+stand over an SSH tunnel.** Ruled by the owner 2026-09-22, closing `D-49`:
 
 ```
 ssh -L 31500:127.0.0.1:31500 <host>        # then open http://127.0.0.1:31500 locally
@@ -95,11 +99,12 @@ iptables -t nat -L DOCKER -n | grep 31500
 **Do not read a green `ufw status` as evidence about a published container port.** It is
 evidence about traffic ufw sees, and this traffic does not reach it.
 
-**`ALPHA_BIND_ADDRESS` is how a host that genuinely should publish says so** — one behind a
-firewall you have *verified against the chains above*, serving TLS under `R-1`. It governs
-both ports, so a host is published or not published rather than published on one by accident.
-`R-4` puts real client documents on the pilot server, and this is the line that decides who
-can reach them.
+**`ALPHA_BIND_ADDRESS` is how a host that genuinely should publish the plain application port
+says so** — one behind a firewall you have *verified against the chains above*. Since
+`PROD-01-TLS-ACME-01` it governs **only that plain listener**: the public ports 80 and 443 follow
+`ALPHA_PUBLIC_ADDRESS`, and once `ALPHA_CERT_NAME` is set `deploy.sh` refuses a non-loopback value
+here, because the application is then public only over TLS. `R-4` puts real client documents on
+the pilot server, and these are the lines that decide who can reach them.
 
 Check, after any deploy:
 
@@ -113,7 +118,11 @@ The second must fail to connect. On this host it printed `200` before the fix an
 ### Behind a host nginx — the client address (`REAL-IP-EDGE-01`)
 
 **Applies only if a nginx on the host terminates TLS and passes to the published port**
-(`proxy_pass http://127.0.0.1:<ALPHA_HTTP_PORT>`), which is how the stand is served. Without this
+(`proxy_pass http://127.0.0.1:<ALPHA_HTTP_PORT>`), which is how the stand is served **until §6 is
+done**. When the stack terminates TLS itself (`ALPHA_CERT_NAME` set) there is no host terminator
+and this section is the thing to **undo**: empty `ALPHA_TRUSTED_PROXY_CIDRS` (`deploy.sh` refuses a name together with
+a non-empty list), because the client address then arrives on the connection and a client in the list could name its
+own bucket. Without this
 step the stack is correct and safe, but every per-address throttle — sign-up, the sign-in token
 exchange (`POST /api/v1/auth/token`) and the web tier's guest bucket — is **one bucket for all
 visitors**, because the proxy container sees every connection from the compose network's
@@ -229,11 +238,15 @@ Two of its values are not free choices:
 
   **Since wave 34 this is the key the API signs reviewer credentials with, not a token
   anyone presents.** Whoever holds it can mint a credential for any subject, so it goes to
-  no reviewer and into no browser — and it goes to **two** processes, not one:
-  `compose.server.yml` gives it to `api`, where it belongs, and to `web`, which forwards it
-  in an `Authorization: Bearer` header on the **sign-in exchange** and on no other forward.
-  Every data forward carries the *reviewer's* own credential instead. The paragraph that
-  used to tell operators to present it as a bearer token is corrected in
+  no reviewer and into no browser — and **since `HARDEN-01` (2026-10-27) it goes to one
+  process, `api`**, where it belongs. It used to go to `web` as well, under the belief that
+  the web tier forwards it on the sign-in exchange; since `C-17` (`W53-CLOSE`) it forwards
+  nothing of the kind (the sign-in exchange carries no `Authorization` header, every data
+  forward carries the *reviewer's* own credential), so `web` held mint-capable key material
+  it never used (`EXPOSURE-REVIEW-02` `F-03`). `compose.server.yml` no longer gives it to
+  `web`; `tests/integration/composition/test_web_service_holds_no_signing_key.py` holds
+  that, and fails the day a `web/src` module starts to read it. The paragraph that used to
+  tell operators to present it as a bearer token is corrected in
   `infra/deploy/README.md` and, since 2026-09-29, in `infra/deploy/env/alpha.env.example`
   — the file you actually edit (`Y6`).
 
@@ -242,15 +255,18 @@ Two of its values are not free choices:
   those three held; the header clause and *"nowhere else"* did not, and this is the paragraph
   written to repair an earlier falsehood of exactly this kind. Read the chain:
   `grep -n 'AUDITMANAGER_API_TOKEN' infra/deploy/compose.server.yml` → `:173` api, `:208`
-  web; `grep -n "headers.set('authorization'" web/src/shared/api/credentialed-forward.ts`.
+  web [now: the `api` line only]; `grep -n "headers.set('authorization'" web/src/shared/api/credentialed-forward.ts`.
   **What it does not expose**, measured by `W47-JUDGE-X` §1.4 rather than argued: the value
   is not itself a usable credential — presented as `Authorization: Bearer` or as `X-API-Key`
   against a protected operation it answers **401**, because the seam signs with
   `HMAC(secret, context)` — and nothing about this reaches a browser. What it **is** is mint-capable
   key material in a second container's environment, which is what an operator deciding where
   this value may go needs to know. Stopping `web` from holding it at all is a decision about
-  who can mint a credential, which `R-29` §2 reserves to the owner; it is not a repair a
-  wave may take.)*
+  who can mint a credential, which `R-29` §2 reserves to the owner; it was not a repair a
+  wave could take. **`HARDEN-01` took it** inside the `PW3` window, whose owner message of
+  2026-10-26 gave the permissions in advance and whose lane H names `F-03`; the change only
+  narrows a credential's reach and exposes nothing that was not exposed, and the integrator
+  confirms it against `R-29` §2.)*
 
   The seam is **fail-closed**: a container started without it exits non-zero rather than
   serving `authentication_required` to **every one of its operations**, which from a browser
@@ -268,6 +284,11 @@ Two of its values are not free choices:
 * **the passwords.** `deploy.sh` compares what you wrote against the example file's own
   published values and refuses, by identity, if you left any of four unchanged. Those
   values are in git and are not secrets.
+
+* **the second database password (`PROD-04`).** `api` and `worker` no longer connect as the database owner:
+  they connect as an application role whose password, `ALPHA_APP_DB_PASSWORD`, is yours to choose on this host.
+  The example ships the name **with no value** and `deploy.sh` refuses an empty one (`[app_db_password_unset]`);
+  nothing falls back to the owner role. Section 16 is the procedure.
 
 **No credential is ever pasted into a chat message** — `OWNER_RULINGS_2026-09-17.md` §3:
 *"the credential goes on that host's disk, by the owner"*. That includes the output of
@@ -332,6 +353,11 @@ Run it **from the repository root**; both builds need `src/`, `db/`, `contracts/
 | **3** | it refused, and said which of **fourteen** guards refused and why |
 | **2** | the arguments were wrong |
 
+**Since `PROD-04` the order is: build; the owner migrates (`migrate` and `release-notes` as `MIGRATOR_DATABASE_URL`);
+`apply-grants.sh` gives the application role its rights and verifies them; only then `up`** — so `api` and `worker`
+never start against a schema their role cannot read, and a table nobody classified (`[grants_unclassified]`) stops the
+deploy before anything is replaced. Section 16.
+
 **Eight** guards answer **before docker is touched at all**, so a refusal costs nothing.
 After the build and the `up`, it asks the running stack four questions it can fail: every
 service healthy; the database at the head this code expects; **the published port answering
@@ -356,6 +382,28 @@ upstream answers 502/503/504 — and **a 200 there is a refusal**, in `deploy.sh
 
 A second run against an unchanged tree replaces **no container at all** (`W24-IDEM`).
 
+**Two refusals that are about the data and not about the build (`PROD-02-03-DEPLOY-GATES-01`).** Both exit **3**
+like every other refusal, and both carry a typed word that deploy-auto's log shows:
+
+| Word | When it speaks | What it means | What to do |
+|---|---|---|---|
+| `stand_copy_fresh` | **before the build**, only when the `real_data` marker exists *and* this checkout carries a migration the database does not have | `R-146t`: a migrating deploy on a stand that holds real data needs a fresh copy receipt (§13) | take the copy and deploy within 24 hours of the dump (§13, "A migrating deploy needs a fresh receipt") |
+| `default_credential` | **after `migrations-at-head`** (the database must exist) | `R-146i`, `R-146s`: the **published seeded pair** `admin` / `password` is valid. The deploy ends non-zero **naming the login**, public port 443 is **not published**, and every service keeps running on loopback | sign in through an SSH tunnel to the loopback port, change the password, deploy again |
+| `default_credential_unanswered` | same place | the check could not be run or printed neither of its two sentinels: whether the pair is valid is **not known**, so nothing is claimed | read what it printed (it is shown above the refusal); fix the stack; deploy again |
+
+**The gate asks one question: is the published pair valid?** Only an *active* account with the login `admin` whose stored
+credential verifies against `password` fails it (`R-146z`). A temporary password an administrator issued with
+`resetUserPassword` marks the account must-change too, but it prints a `GATE WARNING temporary password` line and
+**never fails** the deploy; `readiness.sh` keeps asking the wider question and reports both (§9). The check is
+`python -m auditmanager.access.check --gate` inside the `api` image; run by hand it prints
+`access-check GATE OK no published credential` (exit 0) or `access-check GATE DEFAULT CREDENTIAL: login=admin ...` (exit 1).
+
+**A fresh host's first deploy ends non-zero, on purpose.** The stack comes up, the services are healthy, the application
+answers on `127.0.0.1:<ALPHA_HTTP_PORT>` — and the deploy refuses with `[default_credential]` because the database was
+just migrated and still holds the seeded pair. That is `R-146s`: the public door never opens on a pair anyone can read in
+this repository. Change the password (§6 step 10) and deploy again; the second run publishes 443 if you asked for it
+and a certificate exists.
+
 **What a redeploy no longer costs, since `R-51`: the reviewers stay signed in.** `deploy.sh`
 recreates the `web` container on every run that changes it, and until wave 47 that container
 held every open session in its own memory, so **every deploy signed every reviewer out** —
@@ -379,7 +427,9 @@ infra/deploy/verify-deployed.sh
 ```
 
 **0** the stack is this working tree, **6** it is not, **4** the question could not be
-answered — and only the first is a success. Run it after every deploy. Its first live
+answered, **7** it is this tree and the certificate it serves is not acceptable (§6), **8** it is this tree and
+the published `admin` / `password` pair is **valid** (it names the login, and says loudly if 443 is published
+meanwhile; `PROD-02`) — and only the first is a success. Run it after every deploy. Its first live
 execution found a deployed web image eleven minutes older than the commit a brief claimed
 was running.
 
@@ -407,9 +457,9 @@ address back — so *"the last rebuild was fine"* is not evidence about the next
 * **anything needing a second machine** — no blue/green, no failover, no off-host backup
   target. `reset.sh`'s dumps land on this host's disk and getting them off it is not
   automated here;
-* **certificate renewal.** §6 activates a certificate; nothing here renews one. Whatever
-  renews it must drop the new pair into the same directory and restart the proxy
-  container — one `docker compose ... restart proxy`, which re-runs the switch.
+* **certificate renewal on a host whose terminator is not this stack.** With `ALPHA_CERT_NAME` set the
+  stack renews its own certificate (§6). Without it nothing here obtains or renews one, and the host's
+  nginx, outside this repository, is whatever it was (`D-191`).
 
 **And one thing it will not stop you doing, so it says it here.** `docker compose ... down`
 leaves all three named volumes alone. **`docker compose ... down --volumes` removes them —
@@ -421,78 +471,316 @@ before it drops. **`down --volumes` dumps nothing.**
 
 ---
 
-## 6. TLS — activating it, verifying it, turning it off
+## 6. TLS — the stack's own terminator, the staging rehearsal, the cutover, turning it off
 
-**Nothing about TLS is in `compose.server.yml`, and nothing in `proxy/nginx.conf` mentions
-a certificate.** With no certificate on this host, the TLS path is not merely disabled; it
-is **not loaded** — proved, both halves, in `docs/program/reviews/W26-HOST.md` §2.
+**`PROD-01-TLS-ACME-01` (`ADR-0021` section 2, `R-146a`, `R-146aa`, `R-146ac`, `R-146s`) rewrote this section.**
+Until then it said the owner puts a certificate pair into a directory by hand. Now the stack **obtains and
+renews its own certificate**: an ACME client runs as a service of the same compose project, proves control
+of the name over HTTP-01 through port 80, and writes the pair to a named volume that the `proxy` reads
+read-only. **Nothing in this section has been run against a certificate authority, and nothing in it has run
+on the host**: the lane that built it had no network and no docker, and its tests drive the scripts against
+stand-ins (`tests/integration/composition/test_acme_*.py`). The procedure below is therefore a **rehearsal
+plan with the expected output of each step**, and the first run of it is the owner's.
 
-### Turning it on
+**Nothing about it is on by default.** With `ALPHA_CERT_NAME` empty or absent, none of this exists and the
+stack is byte-for-byte the deployment that was certified before — which is also the rollback.
 
-1. put the pair on the host, in the clone, **by hand, by whoever holds root**:
+### The three listeners (`R-146s`)
 
-   ```
-   infra/deploy/proxy/tls/fullchain.pem      # the certificate and its chain
-   infra/deploy/proxy/tls/privkey.pem        # the private key
-   chmod 600 infra/deploy/proxy/tls/privkey.pem
-   ```
+| listener | where | serves | when it exists |
+|---|---|---|---|
+| plain application | `127.0.0.1:${ALPHA_HTTP_PORT}` | the whole application, as before (`deploy.sh`'s `proxy-answers` guard wants `401` on it) | always |
+| challenge | public port **80** | the ACME webroot and a **redirect to HTTPS**; **no route to the application at all** | whenever `ALPHA_CERT_NAME` is set — so issuance and renewal work while the seeded password is still the seeded one |
+| application over TLS | public port **443** | the application, with HSTS | only for a deploy that is cleared to publish **and** whose certificate pair exists |
 
-   That directory is tracked and its contents are ignored **whole** — `git check-ignore`
-   is asked about both names by a test, not trusted to a comment. **A key is never
-   committed, never pasted into a message and never leaves that host.**
+So on a host that has never been published the stack comes up on loopback with port 80 answering the
+challenge; you reach the loopback port through an SSH tunnel and change the administrator's password; the
+next deploy publishes 443. **"Cleared to publish" is two things since `PROD-02`: the setting you write yourself,
+`ALPHA_PUBLISH_HTTPS=yes`, AND a clean credential gate** (`python -m auditmanager.access.check --gate`: the
+published `admin` / `password` pair is not valid; §3). The setting alone opens nothing. A deploy decides it in two
+steps because the gate needs the database: the full `up` never opens 443 on a proxy that does not already publish it
+(it keeps an already published one only if the setting still says `yes` and a pair exists), and the gate step after
+`migrations-at-head` then opens it, or withdraws it by recreating **only the proxy** without the 443 overlay.
 
-2. bring the stack up with the overlay beside the compose file:
+**A restore can bring the seeded pair back, and both restore paths now say so and close the door** (`R-52`,
+`R-146s`): `reset.sh --restore` (§7) and `copy-serve.sh restore-db` (§13) end by asking the same gate. On a finding
+— or on an answer they could not get, which after a restore is not "fine" — they recreate the proxy without the 443
+overlay, so **the site is unreachable from outside until an administrator changes the password through the loopback
+port** (the consequence `R-146s` accepts). A restore never *opens* 443; only a deploy does, after a clean gate.
+`restore-db` also raises every account's `token_epoch` now, as `reset.sh --restore` always did.
 
-   ```
-   docker compose --env-file infra/deploy/env/alpha.env \
-     -f infra/deploy/compose.server.yml \
-     -f infra/deploy/proxy/compose.tls.yml up -d
-   infra/deploy/reload-proxy.sh
-   ```
+### What goes in `alpha.env`
 
-   Set `ALPHA_HTTPS_PORT` in `alpha.env` if `443` is not the port to publish.
+`infra/deploy/env/alpha.env.example` has the commented block ("the TLS terminator"); the values:
 
-### Reading whether it took
+| setting | meaning | default |
+|---|---|---|
+| `ALPHA_CERT_NAME` | the public DNS name of this host; lower case, at least two labels, no wildcard, no port. A placeholder or reserved name is refused by `deploy.sh`. **The live name belongs here, on the host, and in no default anywhere in the repository** | empty: no terminator |
+| `ALPHA_ACME_EMAIL` | contact address for the authority; optional | none |
+| `ALPHA_ACME_STAGING` | `yes`: the authority's TEST endpoint (certificates no browser trusts, loose limits). `no`: the real issuance | **`yes`** — a forgotten line spends the test endpoint's limits and never the real one's |
+| `ALPHA_PUBLISH_HTTPS` | `yes` asks for 443 for a deploy that has a certificate — **necessary, never sufficient**: the credential gate must also be clean (`PROD-02`) | `no` |
+| `ALPHA_PUBLIC_ADDRESS` | the interface 80 and 443 bind | all interfaces |
+| `ALPHA_ACME_HTTP_PORT`, `ALPHA_HTTPS_PORT` | the published ports; change them only for a rehearsal on a machine whose 80 and 443 are not free | `80`, `443` |
+| `ALPHA_BIND_ADDRESS` | the **plain application** listener. With a name set `deploy.sh` refuses anything but loopback | loopback |
 
-The switch says which branch it took, every start, on the container log:
+### Before the first deploy of this tree on the live host (`D-229` item 2)
+
+"With `ALPHA_CERT_NAME` empty the stack is byte-for-byte the deployment that was certified before" is true of what is
+built and started and **not** of everything the scripts refuse, print or accept. Three differences are visible on a host
+that has never had a name, and the first one is a deploy that stops. Do this once, **before** the first deploy of a tree
+that contains `PROD-01`, on the host (the live one included):
+
+- [ ] `alpha.env` holds **none** of these keys with a value, unless `ALPHA_CERT_NAME` is also set: `ALPHA_ACME_EMAIL`,
+  `ALPHA_ACME_STAGING` (any non-empty value), `ALPHA_PUBLISH_HTTPS=yes`. Without a name `deploy.sh` now **refuses** them
+  (guard `acme-settings-well-formed`: `REFUSED: ALPHA_ACME_EMAIL, ALPHA_ACME_STAGING or ALPHA_PUBLISH_HTTPS is set in
+  <env> and ALPHA_CERT_NAME is not.`, exit 3, nothing built) instead of ignoring them.
+  ```
+  grep -nE '^[[:space:]]*(export[[:space:]]+)?(ALPHA_ACME_EMAIL|ALPHA_ACME_STAGING|ALPHA_PUBLISH_HTTPS|ALPHA_TLS_DIR)=' \
+    infra/deploy/env/alpha.env
+  ```
+  Expect no output. (`ALPHA_TLS_DIR` is in the list because it no longer exists: it is read by nothing, so a value
+  there is a leftover to delete.)
+- [ ] **Nothing passes `--tls-dir`** to `readiness.sh`, and nothing sets `ALPHA_TLS_DIR`. Both are removed: the `tls` check
+  asks what the proxy *serves* (§9), not a directory, and `readiness.sh --tls-dir <path>` now ends
+  `readiness.sh: unrecognised option: --tls-dir` with the usage text, exit 2. Look in the places a human put a call:
+  the host's crontab and systemd units, any wrapper script, and `.github/workflows/` (the workflow in the repository
+  passes no such option; a copy on the host may differ).
+- [ ] If anything reads the deploy log for the line after the build: it reads `<instance>-api, <instance>-web are built`
+  now, where it used to read `<instance>-api and <instance>-web are built` (and lists `<instance>-acme` as well when a name is
+  set). Nothing in this repository matches that text.
+- [ ] Not a PROD-01 difference but the next thing a first deploy of this tree meets, and it is **not** gated on a name:
+  the default-credential gate (`PROD-02`, §3) refuses the deploy while `admin` still accepts `password`
+  (`[default_credential]`, exit 3). Change the administrator's password through the loopback port first.
+
+**A warning that is not a defect: the rehearsal turns every `deploy-auto` run red, by design.** The deploy workflow runs
+`infra/deploy/verify-deployed.sh` with no arguments and cannot pass `--acme-rehearsal`. As soon as the live host's
+`alpha.env` has a name **and** `ALPHA_ACME_STAGING=yes` — or no `ALPHA_ACME_STAGING` line at all, because the default is
+`yes` (`R-146ac`: a forgotten line must spend the test endpoint's limits, never the real one's) — every automatic deploy
+ends red at `verify-deployed.sh` with **exit 7** (`ALPHA_ACME_STAGING is yes ...: this stack is set to the authority's
+TEST endpoint.`) even though the deploy itself succeeded and the stack is up. That is the intended answer to "you are
+serving a certificate no browser trusts". So: keep the rehearsal (steps 5 to 8) short, do not read a red workflow during
+it as a failed deploy, expect the next green one only after step 9 (`ALPHA_ACME_STAGING=no`), and remember that a push to
+`origin/main` starts that workflow (`AGENTS.md` section 6) — do not publish to `main` during the rehearsal unless the red
+run is acceptable.
+
+### The procedure (the owner's; every step has the output to expect)
+
+*Lines that a script of this repository prints are exact. Lines that certbot, docker or the operating
+system print are given by shape and are marked "shape": they were not observed by the lane that wrote this,
+and a difference in wording is not a failure — a difference in meaning is.*
+
+**0. Know the deadline.** `PROD-01` is deployed, with its first real issuance, by **2026-12-16**; the live
+certificate (the host nginx's) ends 2026-12-30 (`D-191`). `PROD-21` is the owner's interim renewal of that
+certificate if this slips.
 
 ```
-docker compose --env-file infra/deploy/env/alpha.env \
-  -f infra/deploy/compose.server.yml logs proxy | grep enable-tls
+echo | openssl s_client -connect <name>:443 -servername <name> 2>/dev/null | openssl x509 -noout -enddate
 ```
+Expect (shape): `notAfter=Dec 30 ... 2026 GMT`.
 
-* `enable-tls: TLS IS ON.` — the block was installed and nginx has it;
-* `enable-tls: TLS IS OFF.` — followed by the **two paths it looked at**. If you meant to
-  turn TLS on, compare those paths with where you put the files. This is the line that
-  tells a mis-resolved mount apart from a missing certificate, and `D-37` is why it prints
-  the path rather than a verdict: a bind source the **daemon** cannot see becomes an
-  invented empty directory, not a refusal.
-
-Then ask the port, not the log:
+**1. Resolve the client pin once, from any machine with docker and network.** The image installs `certbot`
+by exact package version from `infra/acme/client.pin`, which ships saying `UNRESOLVED`; `deploy.sh` refuses to
+deploy a host with a name set until it is resolved (guard `acme-client-pinned`), and so does the image build.
 
 ```
-curl -sS -o /dev/null -w '%{http_code} %{http_version} verify=%{ssl_verify_result}\n' \
-  https://<the host name>/
+docker run --rm alpine:3.22.1@sha256:4bcff63911fcb4448bd4fdacec207030997caf25e9bea4045fa6c8c44de311d1 \
+  sh -c 'apk update >/dev/null && apk policy certbot'
 ```
+Expect (shape): a first line `certbot policy:` and under it one or more lines `  <version>-r<n>:` each with the
+repository that serves it. Write the highest one that the `community` repository serves into
+`infra/acme/client.pin` as `ACME_CLIENT_APK_VERSION=<version>-r<n>`, commit it, and deploy that commit. **The
+packages certbot depends on float within Alpine 3.22's repository at build time**; the image is identified by
+its base digest and this version, not by a lock of its dependencies.
 
-`verify=0` is a certificate the client trusts. Any other value is the certificate's
-problem, not the proxy's.
+**2. Decide about the other application on this host.** `EXPOSURE-REVIEW-01.md` `E-6`: the host's nginx also
+serves a different application on this machine. **Stopping that nginx in step 4 takes that application down
+too.** If that is not acceptable, stop here: this stack cannot hold ports 80 and 443 beside another
+terminator, and the layout needs a decision from the architect, not a workaround.
 
-### Turning it off, and what is lost
+**3. Check the name and the ports.**
+```
+getent hosts <name>
+```
+Expect: the VPS's public address first on the line. (For a name under `sslip.io` the address is in the name.)
+The provider's firewall must let **80 and 443** in. `deploy.sh` checks that nothing else holds the ports on this
+host and says so (guard `public-ports-free`): `deploy.sh: REFUSED: public port 80 is already in use, and not by
+<instance>'s proxy.` It asks the kernel's table of listening sockets (`/proc/net/tcp`, `/proc/net/tcp6`), so a host
+nginx bound to **one address of the host** (`listen <ip>:80;`) is caught as well as one on loopback or on every
+address (`D-229` item 1: a probe of `127.0.0.1` alone called that port free, and Docker's `0.0.0.0` publish then
+failed on the bind after the build). On a host with no `/proc` it falls back to a connect to `127.0.0.1` and **says
+so** (`deploy.sh: NOTE: no table of listening sockets could be read ...`): then check by hand with
+`ss -ltnp 'sport = :80'`.
 
-**Drop the second `-f`** and bring the stack up again. Nothing has to be un-edited; the
-deployment is byte-for-byte the one without TLS. Removing the certificate pair and
-restarting the proxy does the same thing one layer in — the switch **un-installs** the
-block it wrote earlier, which matters because a restarted container keeps its writable
-layer and would otherwise try to load a certificate that is no longer there.
+**4. The cutover window begins: stop the host's nginx.** From here the public site is down until step 9
+(about ten minutes if nothing goes wrong).
+```
+sudo systemctl stop nginx
+ss -ltn '( sport = :80 or sport = :443 )'
+```
+Expect: `ss` prints only its header line.
 
-What is lost is exactly the TLS listener. **The plain port keeps serving in both cases** —
-there is deliberately no redirect from it, because `deploy.sh`'s `proxy-answers` guard
-requires **401** on `/api/v1/openapi.json` there, and a `301` is not 401, so a redirect
-would turn every successful deploy into a refusal. *(`Y3`: this said 200. The conclusion
-survives — a 301 was never the answer the guard wants — and the number was wrong. The guard
-is at `infra/deploy/deploy.sh:751-772`; `readiness.sh` printed the same false number at the
-operator and is corrected with it.)*
+**5. The staging rehearsal.** In `alpha.env` set `ALPHA_CERT_NAME=<name>`, `ALPHA_ACME_STAGING=yes`, optionally
+`ALPHA_ACME_EMAIL`, and **remove `ALPHA_TRUSTED_PROXY_CIDRS`** (the host nginx is gone; the client address now
+arrives on the connection; `deploy.sh` **refuses** a name together with a non-empty list — guard
+`trusted-proxies-empty-with-name`, `D-229` item 4 — because a peer left in the list could write its own address into the
+guest throttle). Leave `ALPHA_PUBLISH_HTTPS` unset. Until step 9 every automatic deploy ends red at `verify-deployed.sh`
+by design (see "Before the first deploy", above). Then
+```
+infra/deploy/deploy.sh
+```
+Expect, among the usual lines (exact):
+```
+deploy.sh: tls name   <name> (ACME: STAGING, rehearsal only)
+...
+-- the listeners this deploy has (provisional: the credential gate is asked after the migrations) --
+  plain application listener : 127.0.0.1:<ALPHA_HTTP_PORT> (always)
+  challenge listener         : public port 80 (the ACME webroot and a redirect; no application route)
+  application listener (TLS) : NOT published -- the credential gate is not satisfied (ALPHA_PUBLISH_HTTPS is not yes), so 443 stays closed
+...
+  acme      running/healthy
+...
+deploy.sh: ALPHA_ACME_STAGING is yes: the certificate is the authority's TEST one, trusted by no browser.
+```
+If `deploy.sh` refuses with `the 'acme' service of <instance> is running/starting`, issuance is slower than the
+two minutes the deploy waits: read step 6 and run `deploy.sh` again.
+
+**6. Read the issuance.**
+```
+docker compose --env-file infra/deploy/env/alpha.env -f infra/deploy/compose.server.yml \
+  -f infra/acme/compose.acme.yml logs acme
+```
+Expect (exact, from our scripts): `acme: STAGING: certificates come from the authority's test endpoint...`,
+`acme: name <name>, lineage <name>-staging.`, then certbot's own output (shape: it ends in a success line and
+`Certificate is saved at: /etc/letsencrypt/live/<name>-staging/fullchain.pem`), then
+`export-pair: exported the pair of /etc/letsencrypt/live/<name>-staging to /export; the proxy picks it up on its next tick.`
+and `acme: the certificate for <name> is in place and exported; next pass in 43200s.`
+A failed attempt prints `acme: no certificate yet (attempt N)...` and the delay (60 s, 300 s, 900 s, then an
+hour). **A failure here is the rehearsal doing its job**: read certbot's reason (DNS, port 80 not reaching the
+proxy, the firewall) and fix it before step 8.
+
+**7. The proxy applies it, within a minute.**
+```
+docker compose --env-file infra/deploy/env/alpha.env -f infra/deploy/compose.server.yml \
+  -f infra/acme/compose.acme.yml logs proxy | grep -E 'watch-certificate|enable-tls'
+```
+Expect (exact): `watch-certificate: the certificate pair changed; applying it.`, `enable-tls: TLS IS ON.`,
+`watch-certificate: nginx reloaded; the proxy serves the pair that is on the volume now.` A pair nginx refuses
+prints `watch-certificate: REFUSED: nginx does not accept this pair...` with nginx's own words and is not
+applied.
+
+**8. Verify the rehearsal, and see that the production check refuses it.**
+```
+infra/deploy/verify-deployed.sh --acme-rehearsal
+infra/deploy/verify-deployed.sh
+```
+Expect for the first (exact except the dates and issuer): `served-certificate: OK name=<name> mode=staging
+notAfter="..." issuer="... (STAGING) ..." valid-for-at-least-days=14` and `the deployed stack IS this tree`.
+Expect for the second: exit **7**, `ALPHA_ACME_STAGING is yes ...: this stack is set to the authority's TEST
+endpoint.` The port-80 listener, from outside the host:
+```
+curl -sI http://<name>/api/v1/openapi.json
+```
+Expect: `HTTP/1.1 301 Moved Permanently` and `Location: https://<name>/api/v1/openapi.json` — and **not** `401`:
+a `401` would mean port 80 reaches the application (`readiness.sh`'s `plain-http` check asks the same).
+
+**9. The real issuance.** Set `ALPHA_ACME_STAGING=no` in `alpha.env` and run `infra/deploy/deploy.sh`. Expect
+`(ACME: production)` on the `tls name` line, and in the log `acme: PRODUCTION: ...` and
+`acme: name <name>, lineage <name>`. The production pair replaces the staging pair on the volume (the reverse is
+refused: `export-pair: REFUSED: the exported certificate is a production one...`). **If the authority refuses for a
+rate limit** — `R-146ac` recorded that a name under `sslip.io` shares its limits with every other user of that zone —
+**stop**; the owner decides on a name of their own. Then:
+```
+infra/deploy/verify-deployed.sh
+```
+Expect (exact except dates and issuer): `served-certificate: OK name=<name> mode=production ...
+valid-for-at-least-days=14` and `the deployed stack IS this tree`.
+
+**10. Close the cutover: the administrator's password, then 443.** Reach the loopback port by tunnel
+(`ssh -L 31500:127.0.0.1:31500 <host>`, `http://127.0.0.1:31500`), sign in as the seeded administrator and **change
+the password**. Only then set `ALPHA_PUBLISH_HTTPS=yes` and run `infra/deploy/deploy.sh`. Expect (exact), after the
+`-- the published default credential is not valid --` block (`no account accepts the published password; ...`):
+`public port 443 is now published (ALPHA_PUBLISH_HTTPS=yes, a pair exists, the gate is clean).` and
+`deploy.sh: TLS for <name>: the challenge listener is public on port 80; the application over TLS is` /
+`deploy.sh: published on port 443 (the credential gate is clean).` On the first publication the deploy that issued the
+certificate and the deploy that publishes it are two runs; if they were one, the deploy prints `no certificate pair
+exists yet ...` and `run this script again`. **If you forgot to change the password**, the same deploy ends
+`REFUSED: [default_credential] the published admin/password pair is valid: admin still accepts the published
+password.`, prints `public port 443 is NOT published: the proxy was recreated without the 443 overlay` if it had been
+published, and `docker compose ... port proxy 8443` exits non-zero (`ADR-0021` row 6).
+
+**11. The public probes** (`ADR-0021` rows 2 to 5), from a machine outside the host:
+```
+curl -sS -o /dev/null -w '%{http_code} %{ssl_verify_result}\n' https://<name>/login
+curl -sSI https://<name>/login | grep -i '^strict-transport-security: max-age=31536000'
+curl -sS -D - -o /dev/null -H "Cookie: am_session=$(openssl rand -hex 16)" https://<name>/bff/v1/projects | grep -i '^set-cookie: am_session=;.*Secure'
+echo | openssl s_client -connect <name>:443 -servername <name> 2>/dev/null | openssl x509 -noout -checkend 1209600
+```
+Expect: `200 0`; the HSTS header line (exit 0); the clearing `Set-Cookie` line carrying `Secure` (exit 0 — an inert
+cookie draws `401` and a clearing cookie from the BFF route, the method of `EXPOSURE-REVIEW-01.md` `E-2`);
+`Certificate will not expire` (exit 0). On the host: `docker compose ... port proxy 8443` prints the mapping
+(`0.0.0.0:443`); with `ALPHA_PUBLISH_HTTPS=no`, or while the published pair is valid, it does not (row 6). **HSTS is a promise about the name for a
+year (`max-age=31536000`, no `includeSubDomains`, no `preload`); turning TLS off again does not withdraw it.**
+
+**12. Run the readiness command.** `infra/deploy/readiness.sh` — expect `readiness OK      tls` and
+`readiness OK      plain-http` (§9).
+
+### Renewal, and how it fails
+
+The ACME service asks again every twelve hours (`certbot certonly --keep-until-expiring`): it renews when the
+certificate is within thirty days of its end, and does nothing otherwise. The proxy picks up the new pair
+within a minute, with no restart. **A failed renewal does not alert anyone** (`R-146k`): it is found by the check
+that runs when somebody deploys or verifies — `verify-deployed.sh` exits 7 with `served-certificate: EXPIRING`
+when fewer than **14 days** remain (the 14 is the architect's number; renewal starts at 30, so reaching 14 means
+two weeks of failed renewals). To rehearse a renewal without spending the real endpoint's limits:
+```
+docker compose --env-file infra/deploy/env/alpha.env -f infra/deploy/compose.server.yml \
+  -f infra/acme/compose.acme.yml exec acme certbot renew --dry-run --cert-name <name>
+```
+Expect (shape): `Congratulations, all simulated renewals succeeded`.
+
+### The messages, and what each means
+
+| from | line | meaning |
+|---|---|---|
+| `deploy.sh` | `REFUSED: ALPHA_CERT_NAME is set and this clone is missing files...` | a partial checkout; nothing was built |
+| `deploy.sh` | `REFUSED: the TLS settings in <env> are not usable.` | the lines under it name each value; a setting without a name is refused, not ignored |
+| `deploy.sh` | `REFUSED: the ACME client is not pinned` | step 1 |
+| `deploy.sh` | `REFUSED: public port N is already in use...` | the host's nginx (or another stack) holds it, on any address of this host; step 4 |
+| `deploy.sh` | `REFUSED: ALPHA_TRUSTED_PROXY_CIDRS is set in <env> and ALPHA_CERT_NAME is set too.` | the list is for a nginx in front of this stack and there is none now; remove it (step 5) |
+| `deploy.sh` | `REFUSED: whether the certificate volume holds a pair could not be asked` | the acme image did not answer; nothing was started |
+| `deploy.sh` | `REFUSED: [default_credential] the published admin/password pair is valid` | step 10: change the password; 443 stays closed until then (§3) |
+| `deploy.sh` | `REFUSED: [default_credential_unanswered]` | the gate could not be asked; whether the pair is valid is not known (§3) |
+| `deploy.sh` | `REFUSED: the proxy could not be recreated to withdraw public port 443` | the gate found the pair valid and docker would not recreate the proxy; close it by hand with the command printed |
+| `verify-deployed.sh` | exit 8, `the published admin/password pair is valid` | the same finding, asked of the running stack; `PUBLIC PORT 443 IS PUBLISHED while the pair is valid` means withdraw it now |
+| `verify-deployed.sh` | exit 7, `served-certificate: NOT SERVED` | no TLS answer from `proxy:8443`: the pair is not exported yet, or the proxy has not loaded it |
+| `verify-deployed.sh` | exit 7, `STAGING CERTIFICATE` / `NOT TRUSTED` / `EXPIRING` | the kind, the chain or the margin; the line says which |
+| `verify-deployed.sh` | exit 9, `the answer served on <name> lacks what the proxy's configuration promises` | `HARDEN-01`: HSTS, one of the four security headers, a version in `Server`, or a session cookie without `Secure` on the answer the proxy gives on the name; each finding is a line under it. `infra/deploy/reload-proxy.sh`, then verify again |
+| `verify-deployed.sh` | exit 4, `the proxy's answer on <name> could not be read` / `no am_session cookie to judge` | the one request of the headers check got no HTTP answer, or no `401` with a cleared session cookie (the web tier is down?); nothing is claimed about the headers or the cookie |
+| `enable-tls` | `TLS IS OFF.` | no usable pair on the volume; `docker compose logs acme` says why |
+| `watch-certificate` | `the pair is not the cause` | nginx refused the configuration with and without the TLS block (an upstream restarting, usually); it retries |
+
+### Turning it off, and what stays
+
+Empty `ALPHA_CERT_NAME` **and remove the other TLS settings** (`deploy.sh` refuses them without a name), run
+`infra/deploy/deploy.sh`, then remove the client that deploy leaves behind (the file list no longer names it, so
+compose treats it as an orphan and leaves it running):
+```
+docker compose --env-file infra/deploy/env/alpha.env -f infra/deploy/compose.server.yml \
+  -f infra/acme/compose.acme.yml rm -sf acme
+```
+Expect (shape): `Container <instance>-acme-1  Stopped` then `Removed`. Start the host's nginx again if it is to
+terminate TLS. The volumes `<instance>-acme-state` (the account key and the lineages), `<instance>-certs` and
+`<instance>-acme-webroot` stay; `down` never removes them, and `down --volumes` would — the account key with them.
+
+### What this section does not do
+
+* it has **not been run**: no certificate authority was contacted, no image was built, no host was touched;
+* it does not resolve `infra/acme/client.pin` (step 1) or choose between a name under `sslip.io` and one of the
+  owner's own (step 9) — both are the owner's;
+* it does not run the restore paths for you: `reset.sh --restore` and `copy-serve.sh restore-db` close 443 after a
+  restore that brings the seeded pair back (above), and what they print is §7's and §13's;
+* it does not restart anything on a renewal: the proxy reloads on its own timer, so a renewal needs no right to
+  touch another service.
 
 ---
 
@@ -630,6 +918,13 @@ password does not expire at all.
    its default password**, and tells you what to do about it: sign in as that login and
    change the password. A default credential reaches the sign-in and the change and nothing
    else (`R-50`), so that is the only thing it can do and it is enough.
+3. **since `PROD-02`, it asks the deploy's own gate and closes the door** — the narrower question,
+   `access.check --gate`, *is the published `admin` / `password` pair valid again?* (`R-146i`, `R-146s`). If it is, or
+   if that could not be told, it recreates **only the proxy** without the 443 overlay and says so; every service keeps
+   running on loopback, and the site is unreachable from outside until an administrator changes the password through
+   the loopback port. A restore never opens 443; the next deploy does, after a clean gate. Its exit status stays `0`
+   for a completed restore — **except `5`: the restore completed and public port 443 could not be withdrawn**; close it
+   with the `docker compose ... up -d --force-recreate --no-deps proxy` line the screen prints.
 
 **It reports; it does not refuse**, and that is the owner's explicit choice rather than an
 oversight. A restore is run **after a failure**, which is the moment when a script that
@@ -752,8 +1047,8 @@ Criterion 2's **second** clause is driven and holds today.
 
 **Nothing in this repository is the reason they stay open.** Criterion 1 needs a machine.
 Criterion 2 needs a certificate, and §6 is the whole of what this repository can do about
-it in advance: put the certificate in that directory, add one `-f`, and the browser reaches
-the app over TLS.
+it in advance: set the host's name, rehearse against the authority's test endpoint, and the
+stack obtains the certificate itself and the browser reaches the app over TLS.
 
 ---
 
@@ -783,9 +1078,9 @@ Six checks, none of them re-deriving a question this tree already answers elsewh
 
 | check | what it asks | reuses |
 |---|---|---|
-| `default-credential` | step 5 — is any account still on the password this system seeded it with? | `src/auditmanager/access/check.py`'s own stable sentinels, run inside the deployed api image the way `deploy.sh`'s `migrations-at-head` guard runs `shared.db.check` |
-| `tls` | is a certificate pair on disk at `proxy/tls/`? | `enable-tls.sh`'s own test (`[ -s "$CERT" ]`, not merely present) |
-| `plain-http` | is the plain port published off this host, with no way in this tree to close it once it is? | `ALPHA_BIND_ADDRESS` (`D-49`) and §6's own words: *"there is deliberately no redirect ... the plain port keeps serving in both cases"* |
+| `default-credential` | step 5 — is any account still on the password this system seeded it with? **The wider question** (default mode, no `--gate`): it also lists an administrator's temporary password, which the deploy's gate (§3) only warns about | `src/auditmanager/access/check.py`'s own stable sentinels, run inside the deployed api image the way `deploy.sh`'s `migrations-at-head` guard runs `shared.db.check` |
+| `tls` | what certificate does the proxy's TLS listener serve, and is it production, trusted, for this name and good for 14 more days? (`PROD-01-TLS-ACME-01`; it used to ask whether a pair was on disk) | `infra/acme/check-served.sh`, run in a one-off container of the acme image against `proxy:8443` — the same question `verify-deployed.sh` enforces; no name set, or the test endpoint selected, are findings |
+| `plain-http` | is the plain application port off this host, and, with a name, does port 80 answer an application path with a redirect to HTTPS and nothing else? | `ALPHA_BIND_ADDRESS` (`D-49`); with a name, a `curl` of the challenge listener (`R-146s`); without one, the old reading: nothing in this tree closes plain HTTP once it is published |
 | `provider-mode` | is `AUDITMANAGER_PROVIDER_MODE` a real provider, and does it have the credential it needs? | `auditmanager.bootstrap.settings.load()` — the composition root's own validation, the thing that actually decides whether `api` starts |
 | `cost-ceiling` | what does `AUDITMANAGER_RUN_COST_CEILING_USD` resolve to? | the same `load()` call |
 | `off-host-backup` | is there a destination off this host for `reset.sh`'s dumps? | nothing — §5 above already says this is not automated anywhere in this tree, so this check always finds it open, honestly, rather than inventing a name for a mechanism that does not exist |
@@ -1042,18 +1337,33 @@ a stand whose checkout is still the older, deployed tree (`W54-PLAN.md` §3.10, 
    install -d -m 700 -o <account> /srv/auditmanager-copy
    ```
 
-2. Extract the three files from the candidate's git objects (not from a working tree), and
+2. Extract the **five** files from the candidate's git objects (not from a working tree), and
    compare each SHA-256 with the gate record of that candidate:
 
    ```
    install -d -m 755 /srv/auditmanager/copy-serve/lib
    git -C /srv/auditmanager fetch origin
-   for f in copy-serve.sh capacity-probe.sh lib/forced-command.sh; do
+   for f in copy-serve.sh capacity-probe.sh apply-grants.sh lib/forced-command.sh lib/proxy-listeners.sh; do
        git -C /srv/auditmanager show "<candidate sha>:infra/deploy/$f" > "/srv/auditmanager/copy-serve/$f"
        sha256sum "/srv/auditmanager/copy-serve/$f"
    done
-   chmod 755 /srv/auditmanager/copy-serve/copy-serve.sh /srv/auditmanager/copy-serve/capacity-probe.sh
+   chmod 755 /srv/auditmanager/copy-serve/copy-serve.sh /srv/auditmanager/copy-serve/capacity-probe.sh \
+             /srv/auditmanager/copy-serve/apply-grants.sh
    ```
+
+   **The fifth file is new (`PROD-04`), and it sits beside `copy-serve.sh`, not in `lib/`.** A dump carries no database
+   privileges (`pg_dump --no-owner --no-privileges`) and `restore-db` drops and recreates schema `public`, so after the
+   restore the application role has no rights at all; `apply-grants.sh` gives them back, right after the restore and
+   before anything connects as that role. Without it, or with the second password unset in the deployed checkout's
+   `alpha.env`, `restore-db` refuses (`grants-script-present`, `app-db-role-configured`) **before it stops or restores
+   anything**. **A copy key installed before `PROD-04` must repeat this step**; `status` prints `grants: <digest>`
+   (or `grants: absent`).
+
+   **The fourth file is new (`PROD-02`).** `restore-db` ends by asking the credential gate and closing public port
+   443 if the seeded pair came back (below); that rule is written once, in `lib/proxy-listeners.sh`, and shared with
+   `deploy.sh`. Without it `restore-db` refuses (`listeners-library-present`) **before it stops or restores
+   anything**; every other verb is unaffected, and `status` prints `listeners: absent`. **A copy key installed before
+   `PROD-02` must repeat this step**, as it must after any change to `copy-serve.sh`.
 
    `/srv/auditmanager/copy-serve/` is inside the checkout's directory, but every file there is
    untracked: add `copy-serve/` to the checkout's `.git/info/exclude`, or deploy-auto refuses
@@ -1070,7 +1380,7 @@ a stand whose checkout is still the older, deployed tree (`W54-PLAN.md` §3.10, 
    `STAND_COPY_MARGIN_BYTES` (default 2 GiB beyond the database's size) and
    `STAND_COPY_WINDOW_SECONDS` (default 43200, the importer's 12 h).
 
-4. Check it with `status`: it prints the installed script's, library's and probe's SHA-256 and
+4. Check it with `status`: it prints the installed script's, library's, probe's, listeners' and grants script's SHA-256 and
    the deployed checkout's `HEAD`. A later publication that changes `copy-serve.sh` asks the
    owner to repeat step 2.
 
@@ -1091,7 +1401,7 @@ Every verb is `ssh -i <copy key> -o IdentitiesOnly=yes <user@stand> <verb ...>`.
 | `attest <STAMP> <dump-sha256> <restore-report-sha256> publish <sha>\|import` | binds the dump's and the restore report's digests and a purpose. The dump is re-hashed. A first attestation, and an import attestation, also needs the writers still stopped and the copy younger than 12 h. Re-attesting a publication rebinds it to another SHA (a forward fix). An import record is never rebound to a publication. **The first attestation of a full copy writes the `real_data` marker** |
 | `attest --test-data` | `R-110`: no copy. Stops the writers, takes the fingerprint and opens a `test_data_waiver` (an import record) that expires in 12 h. **Refused once the `real_data` marker exists** |
 | `verify-objects <N> [<seed>]` | reads back a seeded sample of N `available` Blobs through the api image's storage adapter and compares each with its recorded size and SHA-256. P1's read-back at P2 is a technical MinIO check (`R-109`) |
-| `restore-db <STAMP> <sha256>` | the owner's way back: checks the digest against the record and the file, stops every writer running again, reopens the record, restores the dump into a recreated `public` schema, compares the fingerprint, and leaves the writers stopped |
+| `restore-db <STAMP> <sha256>` | the owner's way back: checks the digest against the record and the file, stops every writer running again, reopens the record, restores the dump into a recreated `public` schema, compares the fingerprint, **then (`PROD-02`) raises every account's `token_epoch` (`R-52`, as `reset.sh --restore` does) and asks the credential gate: if the published `admin`/`password` pair is valid again — or that cannot be told — it recreates only the proxy without the 443 overlay**; it leaves the writers stopped and prints `token_epoch:`, `credential_gate:` and `https_443:` lines |
 | `resume <STAMP>` | starts the writers the record stopped (those the deployed file still declares) and closes the record. Refused while the importer holds its lock |
 | `status` | read-only: the record and its age, the marker, the import lock, the installed SHA-256s |
 
@@ -1111,6 +1421,53 @@ ssh … resume <STAMP>
 ssh … verify-objects 50
 ```
 
+### A migrating deploy needs a fresh receipt (`PROD-03`, `R-146t`, `AD-03`, `AD-17`; `ADR-0021` section 5)
+
+`R-93` binds as before: a one-off copy (dump, inventory, fetch, restore test, attestation) precedes every migrating
+publication whenever the stand holds real client data (`R-146x` keeps the full attestation after 1.0 as well).
+`R-146t` adds one **mechanical refusal on top of it** — `deploy.sh`'s guard `stand-copy-fresh`. There is **no new dump
+script and no second artefact**: the receipt is the record `dump-db` writes.
+
+| `deploy.sh` refuses `[stand_copy_fresh]` unless… | where it reads it |
+|---|---|
+| **no** `real_data` marker exists, or the database is already at this checkout's head — then it asks nothing | the marker beside the record; `alembic_version` against `db/migrations/versions` |
+| the record is **open** | `state` |
+| it **has its dump** (`dump` with a SHA-256) and the attestation **binds that SHA-256** | `dump`, `attestation.dump_sha256` |
+| it is attested for **this commit** (`purpose` `publish`, `target_sha` = the checkout's `HEAD`) | `purpose`, `target_sha` |
+| it was quiesced **at most 24 hours ago** | `quiesced_at` |
+
+"Pending" means the checkout's head revision differs from `alembic_version`, read **before** `migrate`. If the marker
+exists and the database cannot be read, the deploy refuses and names the way out
+(`docker compose ... up -d postgres`, then run it again): an unverifiable receipt is not a verified one. The three
+conditions `R-93` already enforces (unattested, attested for another commit, an import record) keep refusing **first**,
+in their own words (table below); this guard repeats the first two so that they hold even if one of them is ever
+removed, and adds the rest. A deploy with no pending migration needs no receipt, and before the marker exists
+(`R-110`, test data only) nothing changes.
+
+**The order on deploy day** (the dump is the clock: deploy within 24 hours of `dump-db`):
+
+```
+ssh … dump-db                                   # prints <STAMP>; writers stopped; quiesced_at starts the 24 hours
+ssh … inventory-s3 <STAMP>
+infra/deploy/pull-copy.sh …                     # to the development host
+scripts/stand-copy/restore-test.sh …            # the trial restore
+ssh … attest <STAMP> <dump-sha256> <report-sha256> publish <candidate sha>
+# the push; the workflow's deploy.sh now finds: marker present, migration pending, record open + dump + attested for
+# this commit + quiesced < 24 h ago -- and prints "deploy.sh: migrating <from> -> <to> under the copy <STAMP> (...)"
+ssh … resume <STAMP>
+```
+
+A slow restore test that runs past 24 hours costs a new `dump-db`, not a debate: `resume`, then start again.
+
+**Owner steps, recorded here and not done by the lane that built the guard:**
+
+1. install the copy key (the numbered steps above, **including the fourth file**), which `R-110` deferred until the
+   first real upload and which the production release now requires;
+2. take the first real copy — `dump-db`, `inventory-s3`, `pull-copy.sh`, `restore-test.sh`, then `attest … publish
+   <sha>`. **The first attestation of a full copy writes the `real_data` marker**; from that moment `attest
+   --test-data` is refused and every migrating deploy needs the receipt;
+3. repeat step 2 of the install whenever `copy-serve.sh` or either library changes.
+
 P4 (the corpus import): `capacity`; the inbound key's `receive` and `status`; then
 `dump-db` → `inventory-s3` → pull → restore test → `attest <STAMP> … import`; the inbound key's
 `import` and `report`; `resume <STAMP>`; `verify-objects`.
@@ -1118,7 +1475,11 @@ P4 (the corpus import): `capacity`; the inbound key's `receive` and `status`; th
 **On failure after the push:** a forward fix (re-attest `publish <fix sha>`, push), or the
 owner-ordered `restore-db <STAMP> <dump-sha256>`, then a reviewed revert under
 `MAIN_AUTODEPLOY_POLICY.md` (re-attest `publish <revert sha>` first), then `resume`. A revert
-alone would fail `migrations-at-head`.
+alone would fail `migrations-at-head`. **`restore-db` can bring the published `admin`/`password` pair back** (a dump
+taken before the password was changed): it raises every `token_epoch`, asks the credential gate and, on a finding,
+recreates the proxy without the 443 overlay — so check its `credential_gate:` and `https_443:` lines before `resume`,
+and expect the site to be unreachable from outside until an administrator changes the password through the
+loopback port (`R-146s`). A revert deployed afterwards is itself refused `[default_credential]` until that is done.
 
 ### The order — test data only (now, `R-110`)
 
@@ -1149,6 +1510,7 @@ refuses with exit 3 and a typed word that deploy-auto's log shows:
 | `stand_import_open` | the open record is an import record or a waiver | finish the import, then `resume <STAMP>` |
 | `stand_copy_unattested` | a copy is open and not attested | finish the copy and `attest … publish <sha>`, or `resume` it |
 | `stand_copy_other_target` | the open publication record binds another SHA (or the checkout's `HEAD` cannot be read) | re-attest for this SHA, or deploy the SHA it names |
+| `stand_copy_fresh` | the `real_data` marker exists, a migration is pending, and the record is not a fresh receipt (the lines under it say which condition fails) — or the migration state could not be read | take the copy and deploy within 24 hours of the dump (above) |
 
 An open publication record attested for exactly this checkout's `HEAD` is accepted, and the
 deploy prints `under the open copy <STAMP>, attested for this commit <sha>`.
@@ -1176,6 +1538,9 @@ the stand's message on and removes whatever it fetched for that stamp.
 | `real-data-absent` | the `real_data` marker exists: no more waivers; take a copy |
 | `objects-match` | a sampled object did not read back as recorded (or nothing was sampled). The output lists each one |
 | `fingerprint-restored` | after `restore-db`, the database does not match the copy. The writers stay stopped. The owner decides |
+| `listeners-library-present` | `restore-db` was asked and `lib/proxy-listeners.sh` is not installed beside `copy-serve.sh`. Nothing was stopped. Install step 2 |
+| `credentials-revoked` | after the restore, `access.revoke --everyone` could not reach the database. The writers stay stopped and the record open; run the printed command, then `resume` |
+| `https-withheld` | after the restore the credential gate said finding (or could not be answered) and public port 443 could not be withdrawn. The writers stay stopped; close it by hand with the printed command, then `resume` |
 
 ### Heavy steps and their floor
 
@@ -1414,3 +1779,473 @@ claimed and the call ends after the revision's answer deadline (capped below the
 60 s) as `dependency_unavailable`, `no_executor_online`; it never moves to another connection
 unless an administrator configured a standby. A task's text and the runner's answer are cleared
 seven days after it ends.
+
+## 16. Database roles — the migrator and the application role (`PROD-04-DB-ROLES-01`; `R-146n` item 1, `AD-02`)
+
+**What it is.** Two PostgreSQL roles, and the processes that use each:
+
+| Role | Name | Url (in `alpha.env`) | Used by | Can |
+|---|---|---|---|---|
+| **migrator** (the owner) | `POSTGRES_USER` | `MIGRATOR_DATABASE_URL` | the one-shot `migrate` and `release-notes`; `apply-grants.sh`; the operator tools that need write-everything (`purge-product-data.sh` hands it to the product purge; `erase-project.sh`, section 17, to the project erase) | everything: it owns every object |
+| **application** | `ALPHA_APP_DB_USER` | `DATABASE_URL` | `api` and `worker` (and the `compose run` one-offs of `reset.sh`, `copy-serve.sh restore-db`, `readiness.sh`, which run application code) | log in; `SELECT` / `INSERT` / `UPDATE` / `DELETE`, `SELECT` + `INSERT`, or `SELECT` per table, as `scripts/recovery/grant_classification.py` says; sequences `USAGE`. **Cannot** create, alter or drop anything, **cannot** `TRUNCATE`, owns nothing, is a member of nothing, is not a superuser. An append-only table (`audit_event`, the ledgers, the immutable evidence) refuses `UPDATE` and `DELETE` by privilege **and** by trigger |
+
+**The decision recorded here (decided by the lane): the migrator stays the bootstrap superuser.** The postgres image's
+`POSTGRES_USER` is a superuser, and `ADR-0021` section 3 makes it the migrator. A plain (non-superuser) owner was
+considered and cannot do the job: migration `0013` runs `CREATE EXTENSION vector`, and the pgvector built into this stack is
+`superuser = true, trusted = false`, so a plain owner cannot migrate a fresh database
+(`test_a_plain_owner_cannot_migrate_a_fresh_database` pins the premise; if it goes red the decision is open again). What
+contains the superuser is that its url reaches **no always-on service**: `compose.server.yml` gives `MIGRATOR_DATABASE_URL`
+to `migrate` and `release-notes` only (`test_the_application_gets_its_url_and_only_the_one_shots_get_the_owners`).
+
+### What the owner does (once per host, and on rotation)
+
+1. **Choose the second password** (20 to 128 characters of `A-Z a-z 0-9 . _ ~ -`; it is written into a URL without quoting;
+   not the owner's):
+
+   ```
+   head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n'; echo
+   ```
+
+2. **Edit `infra/deploy/env/alpha.env`.** Add or change four lines, with the same password in the second and third:
+
+   ```
+   ALPHA_APP_DB_USER=auditmanager_alpha_app
+   ALPHA_APP_DB_PASSWORD=<the password from step 1>
+   DATABASE_URL=postgresql+psycopg://auditmanager_alpha_app:<the password from step 1>@postgres:5432/<POSTGRES_DB>
+   MIGRATOR_DATABASE_URL=postgresql+psycopg://<POSTGRES_USER>:<POSTGRES_PASSWORD>@postgres:5432/<POSTGRES_DB>
+   ```
+
+   **An existing host's `DATABASE_URL` names the owner today; moving the owner's url to `MIGRATOR_DATABASE_URL` and writing
+   the application role's into `DATABASE_URL` is the cutover.** `deploy.sh` refuses the old shape (`[app_db_role_invalid]`
+   or `[database_urls_incoherent]`) before it builds anything. No value is ever pasted into a chat or a commit.
+
+3. **Deploy.** `infra/deploy/deploy.sh`. Expected, in order, after the build:
+
+   ```
+   -- migrating as the owner, then giving the application role its rights --
+   apply-grants.sh: applying the grant classification to <db> for the application role '<role>' (owner: <owner>)
+   grants-ok: <role> on <db> matches the classification
+   -- bringing the stack up --
+   ```
+
+4. **Check it.** Either of these, on the host:
+
+   ```
+   infra/deploy/readiness.sh            # the db-roles line: "api=<role> worker=<role> -- ... (f|f|f|t); apply-grants.sh --check: ..."
+   infra/deploy/apply-grants.sh --check # prints: grants-ok: <role> on <db> matches the classification   (exit 0)
+   docker compose --env-file infra/deploy/env/alpha.env -f infra/deploy/compose.server.yml exec -T postgres \
+     psql -U <POSTGRES_USER> -d <POSTGRES_DB> -Atc "select rolsuper, has_schema_privilege(rolname,'public','CREATE'), has_table_privilege(rolname,'public.audit_event','DELETE'), has_table_privilege(rolname,'public.audit_event','INSERT') from pg_roles where rolname='<ALPHA_APP_DB_USER>'"
+                                         # prints: f|f|f|t   (ADR-0021 row 7)
+   ```
+
+   `readiness.sh` also says **which role `api` and `worker` actually connect as** (read from the running containers'
+   `DATABASE_URL`, user only) and reports a `FINDING` if either is the owner.
+
+5. **Rotation.** Change `ALPHA_APP_DB_PASSWORD` and the password inside `DATABASE_URL`, deploy. The step sets the new
+   password on the role; the old one stops working at once. (`apply-grants.sh` re-salts the stored verifier on every run;
+   nothing else about the role changes.)
+
+### When it runs (every path that makes or replaces the schema)
+
+| Path | Where the step runs | If it cannot |
+|---|---|---|
+| `deploy.sh` | after `migrate` and `release-notes`, before `up` (guards `owner-migrated`, `release-notes-loaded`, `grants-applied`) | refuses `[migrate_failed]`, `[release_notes_failed]`, `[grants_not_applied]`: nothing is started or replaced |
+| `reset.sh` (the wipe) | after the migrations, before the worker and the bucket | exit 4, says the schema is recreated but the role has no rights, the worker stays stopped |
+| `reset.sh --restore` | after `pg_restore` and the migrations, before the worker and the credential revocation | reports (`apply-grants=<status>`), keeps the worker stopped, exit 6 |
+| `copy-serve.sh restore-db` | right after `pg_restore`, before the fingerprint and anything that connects as the role | refuses `grants-applied`: the writers stay stopped, the record stays open |
+
+`reset.sh` (both destructive modes) and `restore-db` ask **before they change anything** that the step can run: the script is
+there (`grants-script-present`) and the second password is set (`app-db-role-configured`). `purge-product-data.sh` and `erase-project.sh` pass
+`MIGRATOR_DATABASE_URL` to their python half for every step (`migrator-url-configured` refuses an environment without it).
+
+### What stops it, in words
+
+| Word (exit 3 unless noted) | Meaning |
+|---|---|
+| `[app_db_password_unset]` | `ALPHA_APP_DB_PASSWORD` is empty or absent. Choose one (step 1). There is no fall-back to the owner |
+| `[app_db_password_shape]`, `[app_db_password_is_owner_password]` | not 20-128 URL-safe characters, or the owner's password |
+| `[app_db_role_invalid]`, `[app_db_role_is_owner]` | `ALPHA_APP_DB_USER` missing or malformed, or equal to `POSTGRES_USER` |
+| `[database_urls_incoherent]` | `DATABASE_URL` / `MIGRATOR_DATABASE_URL` do not carry the roles and passwords the file names |
+| `[grants_script_missing]` | `apply-grants.sh` is not in the clone / not installed beside `copy-serve.sh` / not executable |
+| `[grants_unclassified]` | the schema holds a table, view or sequence `grant_classification.py` does not name. The role was given nothing new and the transaction rolled back. A migration that adds a table needs a classification (and `python -m scripts.recovery.grant_classification --write-script infra/deploy/apply-grants.sh`) |
+| `[grants_drift]` (exit 1 of `--check`, 4 after an apply) | the role's rights differ from the classification; the lines say how (`the role holds TRUNCATE`, `the role lacks SELECT`, `the role owns table ...`) |
+
+### What this does not do
+
+* **No `ALTER DEFAULT PRIVILEGES`.** A table a later migration creates gets **no** rights until it is classified; that is the
+  fail-closed half of the design, and the step refuses rather than guess.
+* **It does not take ownership back.** An object the application role came to own is reported by `--check`
+  (`owner: the role owns ...`), not repaired.
+* **The role keeps the `PUBLIC` defaults** that every role has: it can connect to its database, create session-local
+  temporary tables, and execute the functions an extension installs (pgvector). It cannot create a permanent object.
+* **`UPDATE` on two append-only tables' key column** (`work_assignment.assignment_uid`,
+  `document_version_classification.version_uid`): the code locks those rows with `SELECT ... FOR UPDATE` / `FOR NO KEY
+  UPDATE`, which PostgreSQL grants only with an `UPDATE` privilege on some column. The immutability trigger fires on a row
+  update and not on a lock, so the lock works and every real `UPDATE` is still refused.
+* **The password is in the file**, readable by the account that deploys. `chmod 600 infra/deploy/env/alpha.env`, as always.
+
+## 17. Erasing one project (`ERASE-WRAP-01` for `PROD-07`; `ADR-0022` section 3; `R-146c`, `R-146o`, `R-146aj`)
+
+**What it is for.** A client asks for their project to go, or an engagement ends. `infra/deploy/erase-project.sh` removes **one
+project**: its documents, pages, extracted text, crops, findings, evidence quotes, comments and expert decisions, the idempotency
+receipts of those rows, and every stored object that no other project and no part of the norm corpus references. What stays is
+the record of the erasure (two journal events and a manifest file), the project's identity-only run journal, every other project,
+the accounts and the norm corpus. The design is `ADR-0022` section 3 and the module `scripts/recovery/project_erase.py`
+(`PROD-07A-PROJECT-ERASE-CORE-01`); this script is the operator's door to it, in the shape of `purge-product-data.sh`.
+
+**It is not the purge.** `purge-product-data.sh` removes the product data of the whole stand and takes a verified dump first so
+that it can be put back. **The erase takes no dump and no mirror**, because a dump would keep the very data it was asked to
+remove. The consequence is the last step of the procedure and is the operator's: every copy that already exists still holds the
+project.
+
+### Before you start
+
+1. **The owner's permission, in writing, first (`R-146aj`).** An operator never erases a project without it. Nothing can verify it:
+   the script requires `--owner-permission-ref "<one line saying where it is recorded>"` (at most 200 characters, for example
+   `owner mail of 2026-11-02, filed under the release record`) and writes that line into both journal events. The product has no
+   legal-hold concept and the erase does not check one; whether the project is subject to a hold is the operator's question to the
+   owner.
+2. **An administrator's login** for `--actor`. The journal records the account's `usr_` identity, never the login. An expert
+   cannot erase.
+3. **The stack is up** (`postgres` and `s3`), and **no run, job, attempt or executor task of the project is in flight** (a claimed
+   remote task counts). The tool refuses otherwise and says what; let the work finish or cancel it.
+4. **Decide about the copies now**, not after: the erase reaches none of them (step 6 lists them).
+5. `infra/deploy/env/alpha.env` has `MIGRATOR_DATABASE_URL` (section 16). The script hands the tool the owner's url; the
+   application role cannot switch the immutability triggers off and the tool refuses it.
+
+### The procedure (every step has the output to expect)
+
+All commands run from the repository root on the host, as the operator who will keep the record.
+
+1. **The dry run.** It is what you get with no mode option, and it changes nothing:
+
+   ```
+   infra/deploy/erase-project.sh --database <POSTGRES_DB> --bucket <S3_BUCKET> --project prj_<26 characters>
+   ```
+
+   Expected: three lines (`instance`, `database`, `bucket`), then the plan: rows of the project by table with a total, the
+   Blobs only this project references and their bytes, the Blobs shared with another project or the corpus (they stay), the
+   object keys to delete, what stays, then `plan-sha256: <64 hex>`, and the script's closing text
+   `dry run. NOTHING ABOVE WAS CHANGED` with the options an apply needs. Exit 0. A project that is not in this database is a
+   refusal (exit 3). A project that was erased already says `nothing to do` (exit 0).
+
+2. **Show the plan to the owner**, get the permission for **that** plan, and record its `plan-sha256` with the permission. A plan
+   is the project as it is now: a document uploaded or a run finished after the dry run changes the digest.
+
+3. **Apply.**
+
+   ```
+   infra/deploy/erase-project.sh --database <POSTGRES_DB> --bucket <S3_BUCKET> --project prj_<26 characters> --apply \
+       --actor <admin login> --reason <client_request|end_of_engagement|test_data|other> \
+       --owner-permission-ref "<where the permission is recorded>" --plan-sha256 <the digest from step 1>
+   ```
+
+   `--reason` is one of the four words: free text is refused, because it would be written into an append-only table.
+   Expected: the plan is printed again; the script compares its digest with the one you passed (a different digest is a refusal:
+   read the new plan and start from step 2); then
+
+   ```
+   erase-project.sh: THIS ERASES THE PROJECT ABOVE. It cannot be undone, and NO DUMP is taken first.
+   erase-project.sh: retype the project id to go on:
+   erase-project.sh: retype the plan digest to go on:
+   ```
+
+   **Type both yourself.** A value that was pasted into the command line is a value nobody looked at; an end of input is not an
+   answer. Then `erasing (one transaction, then the objects, then the final record)`, `erase-id: era_<26 characters>` (keep it),
+   `objects-deleted: <n>`, the tool's summary (`manifest-sha256`, `manifest`, `plan-sha256`, `rows-deleted`), the list of what an
+   erase does not reach, and the script's `done. prj_... was erased as era_...`. Exit 0.
+
+   `--stop-worker` stops the `worker` service for the apply and starts it again afterwards, whatever the result. Use it when the
+   tool refuses with `could not lock the tables`: the worker's heartbeat is the usual writer. If it still cannot lock, the script
+   prints the two commands that stop and start `api` and `web` around the run.
+
+4. **Check the rest state.** The script prints three commands; run them. `ADR-0022` asks for the first two:
+
+   ```
+   $DC exec -T postgres psql -U <POSTGRES_USER> -d <POSTGRES_DB> -Atc "select count(*) from blob where state = 'erasure_pending'"   # 0
+   $DC exec -T postgres psql -U <POSTGRES_USER> -d <POSTGRES_DB> -Atc "select count(*) from project where project_uid = 'prj_...'"  # 0
+   $DC exec -T postgres psql -U <POSTGRES_USER> -d <POSTGRES_DB> -Atc "select count(*) from audit_event where event_type = 'erasure.completed' and aggregate_id = 'era_...'"   # 1
+   ```
+
+   (`DC` is `docker compose --env-file <alpha.env> --file <compose.server.yml>`, spelled out in the script's output.)
+
+5. **Keep the record.** `infra/deploy/dumps/erasures/<era_id>/plan.json` and `manifest.json` (mode 0600 in a directory 0700, owned
+   by you; the container ran as your uid for that reason). The database holds only their digests. **The manifest is the only
+   proof that a known document was erased**: it lists every erased Blob (`blob_id`, SHA-256, size, media type). The script has
+   already hashed it and compared the digest with the one in both journal events (`manifest-sha256 ... (verified against the
+   file)`); if it could not, it ends non-zero with `THE ERASE COMPLETED but the manifest on disk is not the one the database
+   holds` and you **discard nothing**. Put both files with the release record, off this host.
+
+6. **The copies the erase did not reach.** Remove or age them by hand, and write in the release record that you did:
+   `infra/deploy/dumps/` (every `*-purge-*` directory, every `reset.sh` dump), the copy directory of the copy key (section 13),
+   the copy fetched to the development host for an `R-93` restore test, the VPS provider's snapshots, and any copy outside the
+   host. Also outside this host's control: what the model provider received for past analyses (accepted risk `A-2`), the local
+   copies of a remote executor, the disk blocks of a deleted object (there is no secure wipe), container logs, and exports a user
+   already downloaded.
+
+### When it stops
+
+| What you read (exit) | What it means | What to do |
+|---|---|---|
+| `REFUSED: --owner-permission-ref is required` (3) | `R-146aj`: no statement of where the permission is recorded | get the permission; run again |
+| `REFUSED: ... --project must be a project identity (prj_ and 26 characters), never a name` (3) | an identity is required, not a name | take it from the project's page or the plan of the purge's dry run |
+| `REFUSED: [migrator_url_unset]` (3) | `alpha.env` has no owner url | section 16 |
+| `REFUSED: the plan the project has now is not the plan you approved` (3) | the project changed after the dry run | read the new plan; get the owner's permission for it; run again with its digest |
+| `REFUSED: what was retyped is not the project and the plan above` (3) | a wrong or missing answer | nothing changed; run again and type both |
+| tool: `work of this project is not terminal` (3) | a run, job, attempt or claimed executor task is in flight | let it finish or cancel it |
+| tool: `could not lock the tables` (3) | something is still writing | run again with `--stop-worker`; then the `api`/`web` commands the script prints |
+| tool: `Blob(s) only this project references are not 'available'` (3) | a failed or abandoned upload cannot enter the erase | not an operator step: report it (`PROD-07A` D5; the register keeps the open question) |
+| tool: `a row of the project references a row that belongs to another project` (3) | a re-audit of another project's run | not an operator step: report it; erasing would take another project's data |
+| `REFUSED: an earlier erase of this project did not finish` (3) | an erase committed and stopped | run the `--resume` command the script prints |
+| `FAILED: THE DATABASE PART OF THE ERASE IS COMMITTED (era_...)` (**4**) | the database part is done; the objects or the final record are not | run the command printed under `Finish it`; it is safe to repeat; the plan and manifest are already on disk |
+| `FAILED: THE ERASE COMPLETED but the manifest on disk is not the one the database holds` (4) | the file does not hash to the journalled digest | discard nothing; the digest is in both events; report |
+
+A refusal after the commit is still exit **4**, never 3: 3 promises that nothing was changed. The finishing command is
+`infra/deploy/erase-project.sh --database ... --bucket ... --resume era_... --actor <login> --owner-permission-ref "..."`
+(the same dump root: set `ALPHA_DUMP_ROOT` as before, if you set it). It reads `plan.json` and `manifest.json` from the dump
+directory and checks them against the journal; it needs no plan digest and asks nothing.
+
+### What the script's guards are
+
+Twenty-three marked guards, each shown failing by `tests/integration/composition/test_erase_project_script.py`: the option
+shapes (`known-options`, `one-mode`, `stop-worker-needs-a-write-mode`, `options-match-the-mode`, `names-required`,
+`project-identity-shape`, `erase-identity-shape`,
+`actor-required`, `reason-closed-list`, `owner-permission-ref`, `plan-digest-shape`), the instance (`env-file-present`,
+`instance-configured`, `migrator-url-configured`, `database-matches`, `bucket-matches`, `compose-file-present`,
+`modules-present`, `dump-dir-writable`), and the sequence (`preflight-ran`, `plan-approved`, `retyped-confirmation`,
+`manifest-verified`). The tool behind it has 44 more.
+
+### Why this script is not in the copy key's file list (section 13)
+
+Section 13 installs five files for the copy key, whose forced command can run unattended. The erase is the opposite kind of act:
+interactive, by an administrator, with the owner's permission recorded and two answers typed by a person. It is not a verb of
+`copy-serve.sh`, it needs nothing the copy key has, and an unattended key must not be able to reach it. The list stays five
+files (`test_the_copy_key_file_list_does_not_gain_this_script` pins it).
+
+### What this does not do
+
+* **It has not run against a live stack.** The wrapper's tests run with a stub in place of `docker`; the tool's tests run
+  against PostgreSQL and a bucket. Their meeting (the mounts, the operator's uid inside the `api` image, the owner's url) is
+  first exercised by the rehearsal on a restored copy (`PROD-17`), which must precede the first real erase.
+* No dump, no mirror, no reach into manual copies (above). No secure wipe. No legal-hold check.
+* A bucket with versioning enabled is refused, not handled. A project whose Blobs include a non-`available` one is refused.
+* `--resume` finishes an erase that this tool started; it is not a way to erase a second project.
+
+## 18. The offline copy of the key ring (`ERASE-WRAP-01` for `PROD-08`; `ADR-0022` section 6, `AD-08`; `R-146n` item 7)
+
+**What it protects.** The key ring (`AUDITMANAGER_SECRETS_KEYS` in `infra/deploy/env/provider.env`, section 14) is the only thing
+that lets the worker open a sealed connection secret. It is not in PostgreSQL, S3, a dump or the repository, **by design**, so
+losing the host loses it: a restore onto another host then brings every connection back as `secret_unreadable` until the ring is
+installed, or until an administrator pastes each key again. This section makes one encrypted copy that survives the host.
+
+**What the copy must satisfy** (`ADR-0022` section 6):
+
+1. it is on a medium that is **neither the VPS, nor the repository, nor the dump directory** (`infra/deploy/dumps/`);
+2. the passphrase or recipient key that opens it is held **by different means** than the copy (not on the same medium, not in
+   the same place);
+3. it is **verified on a second machine** by decrypting it and comparing the SHA-256 of the ring line there and on the VPS;
+4. it is **redone after every rotation** (section 14, "Rotation");
+5. the ring is **never** put in a dump, in the repository, in a message, or in the output of `docker compose config`.
+
+The tool that encrypts is the operator's choice; the commands below use `gpg` with a passphrase because it is on most hosts and
+its output is checkable. Any tool that authenticates what it encrypts and uses a secret you hold separately will do. **The lane
+that wrote this section did not make the copy**: it is the owner's, and the first one is not made until it is.
+
+`provider.env` holds more than the ring (the model provider's credential, `AUDITMANAGER_EXECUTOR_ALLOWED_HOSTS`). The copy is of
+the whole file, so it protects that too and the rules above are not negotiable.
+
+### The procedure (the owner's; every step has the output to expect)
+
+Steps 1, 2 and 4 run on the VPS from the repository root, step 6 on a second machine.
+
+1. **There is exactly one ring line.**
+
+   ```
+   grep -c '^AUDITMANAGER_SECRETS_KEYS=' infra/deploy/env/provider.env
+   ```
+
+   Expected: `1`. `0`: this stand has no ring yet (section 14, "The key ring"), so there is nothing to copy. `2` or more: fix the
+   file first.
+
+2. **The digest and the key ids, to be written down.** *Never* run the `sed` without the pipe that follows it: alone it prints
+   the private key.
+
+   ```
+   sed -n 's/^AUDITMANAGER_SECRETS_KEYS=//p' infra/deploy/env/provider.env | sha256sum
+   sed -n 's/^AUDITMANAGER_SECRETS_KEYS=//p' infra/deploy/env/provider.env | tr ',' '\n' | cut -d: -f1
+   ```
+
+   Expected: one line `<64 hex>  -`, then the key ids, one per line, nothing else (for a ring `k1:...,k2:...` the ids `k1` and
+   `k2`). Write both down; they go into the release record (step 7).
+
+3. **Choose the medium and the secret.** A medium that is not this host (an encrypted external disk, another machine's disk, a
+   vault on another account), and a passphrase that is **not** stored with it. Decide who else can reach each and write the
+   decision in the release record by role, not by value.
+
+4. **Encrypt on the VPS**, into a private temporary directory outside the checkout and outside `dumps/`:
+
+   ```
+   work="$(umask 077; mktemp -d)"
+   gpg --symmetric --cipher-algo AES256 --output "$work/provider.env.gpg" infra/deploy/env/provider.env
+   ls -l "$work/provider.env.gpg"
+   file "$work/provider.env.gpg"
+   ```
+
+   Expected: the passphrase is asked twice; `ls` shows a non-empty file (a few hundred bytes for a small `provider.env`); `file`
+   says `PGP symmetric key encrypted data - AES with 256-bit key salted & iterated - SHA512 .` `provider.env` itself is unchanged.
+   (Without a terminal, `gpg` needs `--pinentry-mode loopback`; use a terminal.)
+
+5. **Move the ciphertext off the host, then remove it from it.** From the second machine:
+
+   ```
+   scp <user>@<vps>:<the $work path>/provider.env.gpg .
+   ```
+
+   Expected: a file of the same size as step 4's. Put it on the medium of step 3. Then on the VPS:
+
+   ```
+   shred -u "$work/provider.env.gpg" && rmdir "$work"
+   ```
+
+   Expected: no output. (`shred` is a courtesy on a journalling filesystem; the ciphertext opens only with the passphrase.)
+
+6. **Verify on the second machine**, which did not make the copy and does not hold the VPS's file:
+
+   ```
+   gpg --decrypt provider.env.gpg | sed -n 's/^AUDITMANAGER_SECRETS_KEYS=//p' | sha256sum
+   gpg --decrypt provider.env.gpg | sed -n 's/^AUDITMANAGER_SECRETS_KEYS=//p' | tr ',' '\n' | cut -d: -f1
+   ```
+
+   Expected: the passphrase is asked each time; the digest is **exactly the one written down in step 2**; the key ids are the
+   same. Anything else means **the copy is not usable**: do not record it, delete it, and redo from step 4. The pipeline writes
+   no plaintext to disk; if you decrypted to a file, delete it now.
+
+7. **Record it in the release record:** the date, the key ids, and the SHA-256 of the ring line (step 2). Not the passphrase, not
+   the ring.
+
+8. **Redo it after every rotation.** Section 14 ("Rotation") adds a pair, changes `AUDITMANAGER_SECRETS_ACTIVE_KID`, runs `rewrap`
+   and removes the old pair: after the old pair is removed, repeat steps 1 to 7, keep the previous copy until the new one is
+   verified, then destroy the previous one (it holds a private key that is no longer in use, and that is a liability, not a backup).
+
+### Using the copy (a host was lost)
+
+Decrypt on a machine you trust, put the single `AUDITMANAGER_SECRETS_KEYS=` line into the new host's
+`infra/deploy/env/provider.env` (`chmod 600`), keep the public half in `alpha.env` as it was, and start the `worker`. The
+connections stop reading `secret_unreadable` (section 14); the check is the digest of step 2 computed on the new host. **This
+restore has not been rehearsed**: the rehearsal on a restored copy (`PROD-17`) is where it is first run.
+
+### What this does not do
+
+* It does not make the copy, choose the tool, the medium or the passphrase, or verify that the second machine is another machine.
+* It protects the ring, not the data: a database dump still holds every document and every password hash and is not encrypted
+  (section 7 and `ADR-0022` section 7).
+* The check of `PROD-08` is the digest equality of step 6, which only the owner can run.
+
+## 19. Log rotation and memory limits (`ERASE-WRAP-01` for `PROD-05b`; `ADR-0021` section 4, `AD-04`; `R-146n` item 2, `D-166`)
+
+**What `compose.server.yml` now does.** Each of the six long-running services (`postgres`, `s3`, `api`, `worker`, `web`, `proxy`)
+rotates its container log and reads a memory limit from the environment. The three one-shot services (`s3-init`, `migrate`,
+`release-notes`) carry neither: a limit on a migration is a migration killed for the wrong reason.
+
+| Service | Variable in `alpha.env` | Log (every service) |
+|---|---|---|
+| `postgres` | `ALPHA_MEM_LIMIT_POSTGRES` | `json-file`, `max-size` 10m, `max-file` 5 |
+| `s3` | `ALPHA_MEM_LIMIT_S3` | the same |
+| `api` | `ALPHA_MEM_LIMIT_API` | the same |
+| `worker` | `ALPHA_MEM_LIMIT_WORKER` | the same |
+| `web` | `ALPHA_MEM_LIMIT_WEB` | the same |
+| `proxy` | `ALPHA_MEM_LIMIT_PROXY` | the same |
+
+That is at most 50 MB of log per service and 300 MB for the stack (decided by the lane; the numbers are literals in the file, so a
+change is a reviewed change). **There is no memory number, on purpose.** Each variable ships empty, an empty or absent variable
+renders `mem_limit: 0`, and Docker reads `0` as *no limit*: the stack behaves as it did before. The measurement the numbers need
+(`PROD-05a`, on the 4 GB host, `R-146ad`) has not been taken, and a limit set under the worker's footprint kills it in the middle
+of a run. **`ADR-0021` row 8 is closed by the owner's values, not by this mechanism.** Its check reads the rendered configuration
+(`docker compose config`); the file declares a `mem_limit:` and a `max-size` for every long-running service, but while a variable is
+empty the rendered limit is `0`, and Compose may leave a zero out of its output, in which case the check names that service. That
+is the honest answer: `[]` means a limit is in force on every service, and it is true once the six values below are set.
+
+### What a deploy does about it
+
+`docker compose up -d` recreates a service whose configuration changed, so **the first deploy of this tree recreates all six
+containers, including `postgres` and `s3`** (their data is on named volumes and survives). Plan for it as for any deploy. The log
+files of the old containers go with them: the log of the time before the first deploy is not kept. Later deploys recreate only
+what changed.
+
+### Measuring, then setting (the owner's; `PROD-05a`)
+
+1. **Baseline of the host**, with the stack down, then up and idle:
+
+   ```
+   infra/deploy/capacity-probe.sh --path root=/
+   ```
+
+   Expected, one fact per line: `path root: / filesystem=... avail_bytes=... size_bytes=...`, `ram_available_bytes: <n>`,
+   `swap_total_bytes: <n>`, `swap_free_bytes: <n>`, `load: <1 min> <5 min> <15 min>`. It is read-only and never calls docker.
+   The difference in `ram_available_bytes` between stack down and stack up idle is what the stack costs before any work.
+
+2. **Idle readings** per container:
+
+   ```
+   docker stats --no-stream --format 'table {{.Name}}\t{{.MemUsage}}\t{{.MemPerc}}'
+   ```
+
+3. **Peak readings during the real work** (`ADR-0021` section 4: a 500-page analysis). Start the analysis, then in a second
+   terminal, until it finishes:
+
+   ```
+   while sleep 10; do date -u +%FT%TZ; docker stats --no-stream --format '{{.Name}} {{.MemUsage}}'; done | tee stats.log
+   ```
+
+   For each container take the largest `MemUsage` in `stats.log`. The `worker` is the one that matters: it holds the document in
+   memory. Repeat for the other loads you expect (several reviewers, an export), because the sum matters.
+
+4. **Choose each value** above its measured peak by a margin **you write down** (in the release record, with the readings), and
+   keep the sum of the six below the host's RAM minus what runs outside the containers (the operating system, `dockerd`, the
+   `acme` service). A value is what `docker run --memory` takes: whole bytes or a whole number with `b`, `k`, `m` or `g`
+   (`1536m`, `2g`). Edit `infra/deploy/env/alpha.env` (never the compose file).
+
+5. **Render before deploying:**
+
+   ```
+   docker compose --env-file infra/deploy/env/alpha.env --file infra/deploy/compose.server.yml config | grep mem_limit
+   ```
+
+   Expected: a line per service you gave a value, as a number of bytes (a service you left unset shows `0` or no line at all:
+   Compose may omit a zero). A value Docker cannot read as a size should stop here, with an error naming it, before anything is
+   recreated; if it does not, the `docker inspect` of step 6 is the proof. With all six set, `ADR-0021` row 8's command prints `[]`.
+
+6. **Deploy,** then confirm the limit is in force:
+
+   ```
+   docker inspect -f '{{.HostConfig.Memory}}' "$(docker compose --env-file infra/deploy/env/alpha.env --file infra/deploy/compose.server.yml ps -q worker)"
+   docker inspect -f '{{json .HostConfig.LogConfig}}' "$(docker compose --env-file infra/deploy/env/alpha.env --file infra/deploy/compose.server.yml ps -q worker)"
+   ```
+
+   Expected: the number of bytes (`0` means no limit), then `{"Type":"json-file","Config":{"max-file":"5","max-size":"10m"}}`.
+
+### When a container is killed for memory
+
+```
+docker inspect -f '{{.Name}} oom={{.State.OOMKilled}} restarts={{.RestartCount}}' "$(docker compose ... ps -q <service>)"
+```
+
+`oom=true` means the limit was too low (or the work grew). For the **worker** the system recovers by itself: the lease of the run
+expires and the run is retried (`ADR-0007`), at the price of the attempt that was in flight and its cost, so the fix is a higher
+limit measured again, not a lower one elsewhere. A `postgres` kill is worse: it restarts and recovers from its log, and every
+client sees an outage. Do not set `postgres` or `s3` tight.
+
+### Roll back
+
+Empty the variable (or delete the line) and deploy: the service reads `mem_limit: 0` again. The log blocks have no switch; they
+leave with a revert of the compose file.
+
+### What this does not do
+
+* No number is set (above). No CPU, process-count or filesystem limit (`EXPOSURE-REVIEW-02` F-21, outside this item).
+* **The `acme` service of the TLS overlay (`infra/acme/compose.acme.yml`) is long-running and is not covered**: it is in another
+  directory, outside the file this item owns. It keeps Docker's default unrotated log until the owner of `infra/acme/` adds the
+  same block; the proxy's 443 overlay (`infra/deploy/proxy/compose.tls.yml`) adds a port to `proxy`, which is covered.
+* Nothing here was run against Docker. The mechanism is checked by `tests/integration/composition/test_compose_log_and_memory_limits.py`
+  (the file read by indentation, `docker compose`'s variable rules reimplemented and tested against their documentation);
+  the first `docker compose config` on a real host is step 5.

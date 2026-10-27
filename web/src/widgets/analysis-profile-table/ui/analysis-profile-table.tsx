@@ -5,7 +5,8 @@
  * section with a profile shows its version, its status and the prompt-bundle hash; the
  * details hold the identities, both hashes in full and where the prompt came from — the
  * legacy repository, commit and files with their hashes, or that the profile was written in
- * this application. A section without one says «профиль не создан» and what follows from it.
+ * this application. A section without one says «профиль не создан» and what follows from it;
+ * АР says instead that it is analysed by the six-check group and has no text profile.
  *
  * Read-only by construction: no control here writes anything, and the contract has no
  * operation that edits a profile or its status.
@@ -13,6 +14,8 @@
 
 import type { AnalysisProfileListItem, AnalysisProfileSummary } from '@/shared/api';
 import {
+  AR_NO_TEXT_PROFILE_CONSEQUENCE,
+  AR_NO_TEXT_PROFILE_LABEL,
   NO_PROFILE_CONSEQUENCE,
   NO_PROFILE_LABEL,
   analysisProfileStatusLabel,
@@ -42,7 +45,7 @@ function ProfileDetails({ profile }: { readonly profile: AnalysisProfileSummary 
         <dd><code>{profile.content_sha256}</code></dd>
         <dt>Источник</dt>
         {source === null ? (
-          <dd data-profile-source="builtin">Написан в этом приложении, не перенесён из прежней системы.</dd>
+          <dd data-profile-source="authored">Написан в этом приложении, не перенесён из прежней системы.</dd>
         ) : (
           <dd data-profile-source="ported">
             <p>Перенесён из прежней системы: репозиторий <code>{source.repository}</code>, коммит <code>{source.commit}</code>.</p>
@@ -70,8 +73,16 @@ function SectionRow({ item }: { readonly item: AnalysisProfileListItem }) {
         <strong>{section.abbr}</strong> <span>{item.section_name}</span>
       </th>
       {profile === null ? (
-        <td className={styles.cell} colSpan={4}>
-          <strong>{NO_PROFILE_LABEL}</strong>. {NO_PROFILE_CONSEQUENCE}
+        <td className={styles.cell} colSpan={4} data-profile-absent={item.section_code === 'AR' ? 'ar-v3' : 'unregistered'}>
+          {item.section_code === 'AR' ? (
+            <>
+              <strong>{AR_NO_TEXT_PROFILE_LABEL}</strong>. {AR_NO_TEXT_PROFILE_CONSEQUENCE}
+            </>
+          ) : (
+            <>
+              <strong>{NO_PROFILE_LABEL}</strong>. {NO_PROFILE_CONSEQUENCE}
+            </>
+          )}
         </td>
       ) : (
         <>

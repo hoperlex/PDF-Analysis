@@ -3,8 +3,8 @@
   "section_code": "POS",
   "analysis_profile_id": "ap_01M5AXG1K4V1JCGK60TZRM9B96",
   "prompt_bundle_id": "pb_01M5AXG1K4QP84XW1DNYM72HN6",
-  "profile_version": "1.0.0",
-  "status": "draft",
+  "profile_version": "1.2.0",
+  "status": "reviewed",
   "title_ru": "Проект организации строительства",
   "source": {
     "repository": "PDF-proverka",

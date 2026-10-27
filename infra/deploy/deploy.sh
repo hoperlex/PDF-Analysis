@@ -33,6 +33,36 @@
 #      succeed against a stack that is missing a container, and the message it fails with
 #      names `nginx.conf`, a file that is fine. See `# --- 3.` below.
 #
+# THE TLS TERMINATOR (`PROD-01-TLS-ACME-01`, `ADR-0021` section 2). `ALPHA_CERT_NAME` empty is everything
+# above, unchanged -- one compose file, every call as it was. Set, the compose files are a LIST: the base,
+# `infra/acme/compose.acme.yml` (an ACME client and public port 80 for the challenge and a redirect) and, for
+# a deploy that is cleared to publish and has a certificate, `proxy/compose.tls.yml` (public port 443).
+# `lib/proxy-listeners.sh` decides; five guards (`acme-*`, `public-ports-free`) make each way it can go wrong
+# a sentence before the build, and a sixth (`trusted-proxies-empty-with-name`, `D-229` item 4) refuses a
+# trust list left over from the host nginx this stack replaces. `DEPLOYMENT_RUNBOOK.md` section 6 is the
+# procedure.
+#
+# TWO GATES `PROD-02-03-DEPLOY-GATES-01` ADDED, in the order they bite:
+#
+#   * `stand-copy-fresh` (`R-146t`, `ADR-0021` section 5), before the build: with the `real_data` marker present
+#     and a migration pending, the deploy is refused unless the copy record is open, has its dump, is attested
+#     for this commit and was quiesced at most 24 hours ago. The receipt is the record `copy-serve.sh dump-db`
+#     writes -- no second artefact -- and the guard sits on top of the `R-93` guards above it;
+#   * `default-credential-gate` (`R-146i`, `R-146s`, `R-146z`, `ADR-0023` section 3), after `migrations-at-head`:
+#     while the PUBLISHED seeded pair (`admin` / `password`) is valid the deploy ends non-zero naming the login
+#     and public port 443 is not published (the stack stays up; only the public door stays shut). The decision to
+#     publish 443 is no longer the operator's setting alone: it is `ALPHA_PUBLISH_HTTPS=yes` AND the gate clean.
+#
+# TWO DATABASE ROLES (`PROD-04-DB-ROLES-01`, `R-146n` item 1, `AD-02`, `ADR-0021` section 3). `api` and `worker` connect
+# as an APPLICATION role (`ALPHA_APP_DB_USER`, `DATABASE_URL`) that cannot change the schema, cannot truncate and owns
+# nothing; `migrate`, `release-notes` and the operator tools run as the OWNER (`POSTGRES_USER`,
+# `MIGRATOR_DATABASE_URL`). The application role's rights are not in a migration -- a dump carries none -- but applied
+# by `apply-grants.sh`, which this script runs BETWEEN `migrate` and `up` (`# --- 1c.`), so `api` never starts
+# against a schema its role cannot read. Three guards stand for it, in the order they bite: `grants-script-present`
+# and `app-db-role-configured` before anything is built (the second asks `apply-grants.sh --config-only`: a missing
+# second password is `[app_db_password_unset]`, and there is no fall-back to the owner role), and `owner-migrated`,
+# `release-notes-loaded` and `grants-applied` before `up`.
+#
 # WHAT A SECOND RUN DOES, MEASURED RATHER THAN CLAIMED. This comment said "a second run
 # changes nothing" until `W23-DEPLOY` ran it twice from a clean clone, and that was false.
 # What that drive found, recorded in `docs/program/reviews/W23-DEPLOY.md` and as `D-36`:
@@ -352,6 +382,169 @@ if [ -n "$TRUSTED_PROXIES" ]; then
 fi
 # <<< guard: trusted-proxies-well-formed
 
+# --- the TLS terminator and the certificate (`PROD-01-TLS-ACME-01`, `ADR-0021` section 2) ----------
+# `ALPHA_CERT_NAME` is the one switch. EMPTY (the default) is the stack as it was before this block
+# existed: no ACME client, no public listener, nothing below this comment changes a byte of what is built
+# or started. SET, the stack terminates TLS itself -- an ACME client as a service of the same project, the
+# challenge listener on public port 80, the pair in a volume the proxy reads -- and the three guards below
+# make every way that can go wrong a sentence here, before docker is touched.
+#
+# Read as DATA, like every other value in this file. `PUBLISH_HTTPS` is the operator's half of the decision to
+# publish 443 (`R-146s`); since `PROD-02` the other half is the credential gate (`default-credential-gate`
+# below), and 443 is published only when BOTH say yes (`listeners_https_wanted`). The setting alone opens nothing.
+CERT_NAME="$(configured ALPHA_CERT_NAME)"
+ACME_EMAIL="$(configured ALPHA_ACME_EMAIL)"
+ACME_STAGING="$(configured ALPHA_ACME_STAGING)"
+PUBLISH_HTTPS="$(configured ALPHA_PUBLISH_HTTPS)"
+BIND_ADDRESS="$(configured ALPHA_BIND_ADDRESS)"
+ACME_HTTP_PORT="$(configured ALPHA_ACME_HTTP_PORT)"
+HTTPS_PORT="$(configured ALPHA_HTTPS_PORT)"
+[ -n "$ACME_HTTP_PORT" ] || ACME_HTTP_PORT=80
+[ -n "$HTTPS_PORT" ] || HTTPS_PORT=443
+ACME_DIR="$HERE/../acme"
+LISTENERS_LIB="$HERE/lib/proxy-listeners.sh"
+
+# >>> guard: acme-files-present
+# Asked FIRST, because everything after it reads these files. A clone that lacks one -- a partial copy, a
+# sparse checkout, a branch from before this lane -- must not produce a shorter list of compose files that
+# looks like a working deploy and has no TLS. Only when a name is configured: without one none of them is
+# used and a clone without them is the stack it always was.
+if [ -n "$CERT_NAME" ]; then
+    ACME_MISSING=""
+    for needed in "$LISTENERS_LIB" "$ACME_DIR/compose.acme.yml" "$ACME_DIR/Dockerfile" "$ACME_DIR/client.pin" \
+        "$ACME_DIR/entrypoint.sh" "$ACME_DIR/export-pair.sh" "$ACME_DIR/check-served.sh" \
+        "$HERE/proxy/acme-challenge.conf" "$HERE/proxy/tls-server.conf" "$HERE/proxy/enable-tls.sh" \
+        "$HERE/proxy/watch-certificate.sh" "$HERE/proxy/compose.tls.yml"; do
+        [ -f "$needed" ] || ACME_MISSING="$ACME_MISSING $needed"
+    done
+    if [ -n "$ACME_MISSING" ]; then
+        refuse "ALPHA_CERT_NAME is set and this clone is missing files the TLS terminator is built from." \
+               " $ACME_MISSING" \
+               "Nothing was built. Clear ALPHA_CERT_NAME in $ENV_FILE to deploy without a terminator," \
+               "or deploy a clone that has infra/acme/ and infra/deploy/proxy/ whole."
+    fi
+fi
+# <<< guard: acme-files-present
+
+# >>> guard: acme-settings-well-formed
+# Every value below ends up on a command line, in a redirect or in a published port, so each one is
+# validated here and not trusted. The name is judged by `listeners_name_problem` (one definition, shared with
+# the rest of the stack); a placeholder or a reserved name is refused by the same function.
+#
+# A setting that does nothing without a name is refused when there is no name, rather than ignored: an
+# operator who wrote `ALPHA_PUBLISH_HTTPS=yes` and no name would otherwise believe 443 was open.
+#
+# `ALPHA_BIND_ADDRESS` must be loopback (or absent) when a name is set. The plain APPLICATION listener is
+# one of the three (`R-146s`) and it is the one that must never be public: the public ports are 80, which
+# serves the challenge and a redirect, and 443, which serves the application over TLS. The old setting that
+# could publish plain HTTP stops being a way to do that the moment this stack terminates TLS itself.
+if [ -z "$CERT_NAME" ]; then
+    if [ -n "$ACME_EMAIL" ] || [ -n "$ACME_STAGING" ] || [ "$PUBLISH_HTTPS" = yes ]; then
+        refuse "ALPHA_ACME_EMAIL, ALPHA_ACME_STAGING or ALPHA_PUBLISH_HTTPS is set in $ENV_FILE and ALPHA_CERT_NAME is not." \
+               "Those settings only act on a stack that terminates TLS, and there is no name for it to" \
+               "obtain a certificate for. Set ALPHA_CERT_NAME, or remove them. Nothing was built."
+    fi
+else
+    # shellcheck source=lib/proxy-listeners.sh
+    . "$LISTENERS_LIB"
+    [ -n "$ACME_STAGING" ] || ACME_STAGING=yes
+    [ -n "$PUBLISH_HTTPS" ] || PUBLISH_HTTPS=no
+    ACME_PROBLEMS=()
+    if ! NAME_WHY="$(listeners_name_problem "$CERT_NAME")"; then
+        ACME_PROBLEMS+=("  ALPHA_CERT_NAME '$CERT_NAME': $NAME_WHY")
+    fi
+    case "$ACME_STAGING" in yes|no) ;; *) ACME_PROBLEMS+=("  ALPHA_ACME_STAGING is '$ACME_STAGING', which is neither yes nor no") ;; esac
+    case "$PUBLISH_HTTPS" in yes|no) ;; *) ACME_PROBLEMS+=("  ALPHA_PUBLISH_HTTPS is '$PUBLISH_HTTPS', which is neither yes nor no") ;; esac
+    if [ -n "$ACME_EMAIL" ] && ! [[ "$ACME_EMAIL" =~ ^[A-Za-z0-9._+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; then
+        ACME_PROBLEMS+=("  ALPHA_ACME_EMAIL is not an address (letters, digits and . _ + - around one @)")
+    fi
+    case "$BIND_ADDRESS" in
+        ''|127.0.0.1|::1|localhost) ;;
+        *) ACME_PROBLEMS+=("  ALPHA_BIND_ADDRESS is '$BIND_ADDRESS': with a certificate name set the plain application listener must stay on loopback (the public ports are 80 and 443)") ;;
+    esac
+    for port_setting in "ALPHA_ACME_HTTP_PORT=$ACME_HTTP_PORT" "ALPHA_HTTPS_PORT=$HTTPS_PORT"; do
+        port_value="${port_setting#*=}"
+        if ! [[ "$port_value" =~ ^[0-9]{1,5}$ ]] || [ "$port_value" -lt 1 ] || [ "$port_value" -gt 65535 ]; then
+            ACME_PROBLEMS+=("  ${port_setting%%=*} is '$port_value', not a port number")
+        elif [ "$port_value" = "$HTTP_PORT" ]; then
+            ACME_PROBLEMS+=("  ${port_setting%%=*} is the same port as ALPHA_HTTP_PORT ($HTTP_PORT)")
+        fi
+    done
+    if [ "${#ACME_PROBLEMS[@]}" -gt 0 ]; then
+        refuse "the TLS settings in $ENV_FILE are not usable." \
+               "${ACME_PROBLEMS[@]}" \
+               "Nothing was built. See infra/deploy/env/alpha.env.example, \"the TLS terminator\"."
+    fi
+fi
+# <<< guard: acme-settings-well-formed
+
+# >>> guard: trusted-proxies-empty-with-name
+# `D-229` item 4. `ALPHA_TRUSTED_PROXY_CIDRS` is for a host whose TLS is terminated by ANOTHER nginx in front of
+# this stack (`REAL-IP-EDGE-01`): the proxy then believes the `X-Forwarded-For` of the peers in the list and of
+# nobody else. Once `ALPHA_CERT_NAME` is set THERE IS NO SUCH NGINX -- this stack terminates TLS itself, the
+# client address arrives on the connection -- and a peer left in the list (the compose network's gateway, which
+# every SSH-tunnelled operator and every process on the host also reaches the plain listener through) can write
+# its own address into the guest throttle's bucket. The runbook said "remove it" (section 6, step 5); this is
+# the line that makes the omission a sentence here instead of a setting nobody notices.
+#
+# REFUSED, not warned: the setting has no effect that the operator wants once the name is set (the nginx it was
+# for is the one the cutover stopped), so no live configuration needs it, and it is a one-line edit to remove.
+# It costs the cutover window a minute if forgotten and nothing has been built or stopped by this script.
+#
+# "Non-empty" means what `proxy/trusted-proxies.sh` means by it: at least one entry once commas, tabs and
+# line breaks are read as spaces. A value of separators alone trusts nobody and is not refused. Read again
+# here and not from `TRUSTED_PROXIES` above, so deleting either guard leaves the other whole.
+TRUSTED_WITH_NAME="$(configured ALPHA_TRUSTED_PROXY_CIDRS)"
+if [ -n "$CERT_NAME" ] && [ -n "$TRUSTED_WITH_NAME" ]; then
+    TRUSTED_ENTRIES=""
+    set -f
+    for trusted_entry in $(printf '%s' "$TRUSTED_WITH_NAME" | tr ',\t\r\n' '    '); do
+        TRUSTED_ENTRIES="${TRUSTED_ENTRIES:+$TRUSTED_ENTRIES }$trusted_entry"
+    done
+    set +f
+    if [ -n "$TRUSTED_ENTRIES" ]; then
+        refuse "ALPHA_TRUSTED_PROXY_CIDRS is set in $ENV_FILE and ALPHA_CERT_NAME is set too." \
+               "  trusted peers: $TRUSTED_ENTRIES" \
+               "That list is for a host whose TLS is terminated by another nginx in front of this stack. With a" \
+               "certificate name this stack terminates TLS itself, so a peer in the list could name its own" \
+               "address for the guest throttle. Remove ALPHA_TRUSTED_PROXY_CIDRS from $ENV_FILE" \
+               "(DEPLOYMENT_RUNBOOK.md section 6, step 5), or clear ALPHA_CERT_NAME. Nothing was built."
+    fi
+fi
+# <<< guard: trusted-proxies-empty-with-name
+
+# >>> guard: acme-client-pinned
+# The client is installed by exact package version (`infra/acme/client.pin`), and the lane that wrote that
+# file had no network to resolve one, so it ships the word UNRESOLVED. Building from it would fail late and
+# in apk's words; this fails first, in ours, naming the one step that fixes it.
+if [ -n "$CERT_NAME" ]; then
+    ACME_PIN="$(sed -n 's/^ACME_CLIENT_APK_VERSION=//p' "$ACME_DIR/client.pin" | tail -1)"
+    if [ -z "$ACME_PIN" ] || [ "$ACME_PIN" = UNRESOLVED ]; then
+        refuse "the ACME client is not pinned: $ACME_DIR/client.pin says ACME_CLIENT_APK_VERSION=${ACME_PIN:-<absent>}." \
+               "The image installs certbot by exact package version and refuses to build without one." \
+               "Resolve it once, from a machine with docker and network (DEPLOYMENT_RUNBOOK.md section 6," \
+               "step 1), commit infra/acme/client.pin, and deploy that commit. Nothing was built."
+    fi
+    if ! printf '%s\n' "$ACME_PIN" | grep -Eq '^[0-9][0-9A-Za-z._+~]*-r[0-9]+$'; then
+        refuse "ACME_CLIENT_APK_VERSION in $ACME_DIR/client.pin is '$ACME_PIN', which is not an apk package version." \
+               "Expected <upstream version>-r<release>, as 'apk policy certbot' prints it. Nothing was built."
+    fi
+fi
+# <<< guard: acme-client-pinned
+
+# >>> guard: listeners-library-present
+# `lib/proxy-listeners.sh` is sourced for every deploy since `PROD-02`, not only for one with a certificate name:
+# the credential gate below is asked of every stack. A clone without it must be a sentence here and not a
+# "command not found" after the images are built and the stack is up.
+if [ ! -r "$LISTENERS_LIB" ]; then
+    refuse "$LISTENERS_LIB is missing or unreadable." \
+           "The credential gate and the listener decision are written there, once, for every script that" \
+           "applies them. Nothing was built and nothing was started."
+fi
+# <<< guard: listeners-library-present
+# shellcheck source=lib/proxy-listeners.sh
+. "$LISTENERS_LIB"
+
 # >>> guard: placeholder-secrets
 # THE EXAMPLE FILE'S OWN VALUES, REFUSED BY IDENTITY RATHER THAN BY PATTERN. `cp` the
 # example and forget to edit it and you get a reachable stack whose database password is in
@@ -388,7 +581,8 @@ done
 
 # >>> guard: derived-secrets-coherent
 # `D-103`. `alpha.env.example` embeds the four secrets above a SECOND time, inside
-# `DATABASE_URL`, `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY`. `placeholder-secrets`
+# `MIGRATOR_DATABASE_URL` (since `PROD-04` the OWNER's url; `DATABASE_URL` is the application role's and
+# `app-db-role-configured` below judges it), `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY`. `placeholder-secrets`
 # reads exactly the four names it and its own error message list -- rotating only those
 # four passes it clean, builds both images, starts five containers, and fails roughly 93
 # seconds later inside Alembic with a trace that names none of the four: `DATABASE_URL`
@@ -416,16 +610,16 @@ DERIVED_MINIO_PASSWORD="$(configured MINIO_ROOT_PASSWORD)"
 
 DERIVED_MISMATCH=()
 DB_URL_RE='^postgresql\+psycopg://([^:@/]+):([^@/]+)@([^:@/]+):([0-9]+)/([^?]+)$'
-if [[ "$(configured DATABASE_URL)" =~ $DB_URL_RE ]]; then
+if [[ "$(configured MIGRATOR_DATABASE_URL)" =~ $DB_URL_RE ]]; then
     [ "${BASH_REMATCH[1]}" = "$DERIVED_PG_USER" ] || DERIVED_MISMATCH+=(
-        "  DATABASE_URL's user is '${BASH_REMATCH[1]}' but POSTGRES_USER is '$DERIVED_PG_USER'")
+        "  MIGRATOR_DATABASE_URL's user is '${BASH_REMATCH[1]}' but POSTGRES_USER is '$DERIVED_PG_USER'")
     [ "${BASH_REMATCH[2]}" = "$DERIVED_PG_PASSWORD" ] || DERIVED_MISMATCH+=(
-        "  DATABASE_URL's password does not match POSTGRES_PASSWORD")
+        "  MIGRATOR_DATABASE_URL's password does not match POSTGRES_PASSWORD")
     [ "${BASH_REMATCH[5]}" = "$DERIVED_PG_DB" ] || DERIVED_MISMATCH+=(
-        "  DATABASE_URL's database is '${BASH_REMATCH[5]}' but POSTGRES_DB is '$DERIVED_PG_DB'")
+        "  MIGRATOR_DATABASE_URL's database is '${BASH_REMATCH[5]}' but POSTGRES_DB is '$DERIVED_PG_DB'")
 else
     DERIVED_MISMATCH+=(
-        "  DATABASE_URL does not parse as postgresql+psycopg://user:password@host:port/db")
+        "  MIGRATOR_DATABASE_URL is unset or does not parse as postgresql+psycopg://user:password@host:port/db")
 fi
 [ "$DERIVED_S3_KEY" = "$DERIVED_MINIO_USER" ] || DERIVED_MISMATCH+=(
     "  S3_ACCESS_KEY_ID does not match MINIO_ROOT_USER")
@@ -433,16 +627,44 @@ fi
     "  S3_SECRET_ACCESS_KEY does not match MINIO_ROOT_PASSWORD")
 
 if [ "${#DERIVED_MISMATCH[@]}" -gt 0 ]; then
-    refuse "DATABASE_URL, S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY must carry the same" \
+    refuse "MIGRATOR_DATABASE_URL, S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY must carry the same" \
            "secrets as POSTGRES_* and MINIO_ROOT_*, and at least one does not:" \
            "${DERIVED_MISMATCH[@]}" \
            "" \
            "Rotating only POSTGRES_PASSWORD, MINIO_ROOT_USER, MINIO_ROOT_PASSWORD and" \
-           "AUDITMANAGER_API_TOKEN is not enough -- DATABASE_URL, S3_ACCESS_KEY_ID and" \
+           "AUDITMANAGER_API_TOKEN is not enough -- MIGRATOR_DATABASE_URL, S3_ACCESS_KEY_ID and" \
            "S3_SECRET_ACCESS_KEY embed the same values again and must be edited to match." \
            "Nothing was built."
 fi
 # <<< guard: derived-secrets-coherent
+
+# >>> guard: grants-script-present
+# `apply-grants.sh` is run between `migrate` and `up` for every deploy since `PROD-04`; a clone without it must be a
+# sentence here and not a "No such file" after the images are built and the schema has been migrated.
+GRANTS_SCRIPT="$HERE/apply-grants.sh"
+if [ ! -r "$GRANTS_SCRIPT" ] || [ ! -x "$GRANTS_SCRIPT" ]; then
+    refuse "[grants_script_missing] $GRANTS_SCRIPT is missing or not executable." \
+           "It gives the application role its rights after every migrate and every restore; without it api and" \
+           "worker would connect as a role that has none. Nothing was built and nothing was started."
+fi
+# <<< guard: grants-script-present
+
+# >>> guard: app-db-role-configured
+# `R-146n` item 1. api and worker connect as an APPLICATION role, whose password is the owner's SECOND password: the
+# owner writes it on the host, the repository holds no value for it, and an unset one is a refusal and never a quiet
+# use of the owner role for the application. `apply-grants.sh --config-only` judges ALPHA_APP_DB_USER,
+# ALPHA_APP_DB_PASSWORD and that DATABASE_URL (the application's) and MIGRATOR_DATABASE_URL (the owner's) carry them;
+# it is the same function every restore path runs, asked here before anything is built.
+APP_ROLE_STATUS=0
+APP_ROLE_OUTPUT="$("$GRANTS_SCRIPT" --env-file "$ENV_FILE" --config-only 2>&1)" || APP_ROLE_STATUS=$?
+if [ "$APP_ROLE_STATUS" -ne 0 ]; then
+    APP_ROLE_LINES=()
+    while IFS= read -r line; do APP_ROLE_LINES+=("${line#  }"); done <<<"${APP_ROLE_OUTPUT#apply-grants.sh: REFUSED: }"
+    refuse "the database roles are not configured (apply-grants.sh --config-only, status $APP_ROLE_STATUS):" \
+           "${APP_ROLE_LINES[@]}" \
+           "Nothing was built and nothing was started."
+fi
+# <<< guard: app-db-role-configured
 
 # >>> guard: compose-file-present
 if [ ! -r "$COMPOSE_FILE" ]; then
@@ -566,14 +788,125 @@ if [ -n "$MISSING" ]; then
 fi
 # <<< guard: build-context-complete
 
-compose() { docker compose --env-file "$ENV_FILE" --file "$COMPOSE_FILE" "$@"; }
+# THE COMPOSE FILES ARE A LIST, and `compose.server.yml` is always its first member. With no certificate name
+# the list has that one member and every call below is byte-for-byte the call it was before
+# `PROD-01-TLS-ACME-01` (`docker compose --env-file E --file F ...`). With a name the ACME overlay is added
+# here, so the build, the pair check and `up` all see the acme service; the 443 overlay is added later, once,
+# by the listener decision just before `up`.
+COMPOSE_FILES=("$COMPOSE_FILE")
+if [ -n "$CERT_NAME" ]; then
+    while IFS= read -r overlay; do
+        [ -z "$overlay" ] || COMPOSE_FILES+=("$overlay")
+    done < <(listeners_overlay_files "$HERE" "$CERT_NAME" no no)
+fi
+compose() {
+    local args=(--env-file "$ENV_FILE") file
+    for file in "${COMPOSE_FILES[@]}"; do
+        args+=(--file "$file")
+    done
+    docker compose "${args[@]}" "$@"
+}
 
 echo "deploy.sh: instance   $INSTANCE"
 echo "deploy.sh: repository $REPO"
 echo "deploy.sh: port       $HTTP_PORT"
 echo "deploy.sh: database   $DATABASE"
 echo "deploy.sh: bucket     $BUCKET"
+if [ -n "$CERT_NAME" ]; then
+    echo "deploy.sh: tls name   $CERT_NAME (ACME: $([ "$ACME_STAGING" = yes ] && echo 'STAGING, rehearsal only' || echo production))"
+fi
 echo
+
+# --- the fresh copy receipt before a migrating deploy (`PROD-03`, `R-146t`, `AD-03`, `AD-17`) -------------------
+# `ADR-0021` section 5. `R-93` already refuses a deploy under an open copy that is unattested or attested for
+# another commit (above). `R-146t` adds the refusal that sits on top of it: when the stand holds real client
+# data (the `real_data` marker, written by the first attestation of a full copy) and THIS checkout carries a
+# migration the database does not have yet, the deploy is refused unless the copy record is the receipt of a
+# dump taken at most 24 hours ago. A deploy with no pending migration needs no receipt, and before the marker
+# exists (`R-110`, test data only) nothing here changes.
+#
+# THE RECEIPT IS THE RECORD `copy-serve.sh dump-db` WRITES, not a second artefact: `dump` (file, size, SHA-256),
+# `quiesced_at`, and the attestation that binds the dump's SHA-256 to a purpose and a commit. The dump FILE is
+# not stat'ed: it sits in a 0700 directory of the copy key's account that the deploy account may be unable to
+# search, and the attestation of that very digest is what proves the dump was read. "Pending" is the checkout's
+# highest revision(s) differing from `alembic_version`, read BEFORE `migrate`; a database that cannot be read
+# while the marker exists is a refusal (an unverifiable receipt is not a verified one), with the way out named.
+STAND_MARKER="${STAND_COPY_RECORD%/*}/real_data"
+STAND_FRESH_SECONDS=86400
+
+# The checkout's migration head(s): every revision no other revision names as its `down_revision`, one per line,
+# sorted. Read out of the files, because the image is not built yet.
+checkout_heads() {
+    local versions="$REPO/db/migrations/versions" file revisions="" downs=""
+    for file in "$versions"/*.py; do
+        [ -f "$file" ] || continue
+        revisions="$revisions$(LC_ALL=C sed -n 's/^revision\(: str\)\{0,1\} = "\([^"]*\)".*$/\2/p' "$file")"$'\n'
+        downs="$downs$(LC_ALL=C sed -n 's/^down_revision\(: [^=]*\)\{0,1\} = \(.*\)$/\2/p' "$file" | grep -o '"[^"]*"' | tr -d '"' || true)"$'\n'
+    done
+    LC_ALL=C comm -23 \
+        <(printf '%s\n' "$revisions" | grep -v '^$' | LC_ALL=C sort -u) \
+        <(printf '%s\n' "$downs" | grep -v '^$' | LC_ALL=C sort -u)
+}
+
+# >>> guard: stand-copy-fresh
+if [ -e "$STAND_MARKER" ] || [ -L "$STAND_MARKER" ]; then
+    FRESH_HEADS="$(checkout_heads)"
+    if [ -z "$FRESH_HEADS" ]; then
+        refuse "[stand_copy_fresh] the real_data marker exists and this checkout's migration head could not be read." \
+               "$REPO/db/migrations/versions names no revision, so whether a migration is pending cannot be told." \
+               "Nothing was built or started (guard stand-copy-fresh, ADR-0021 section 5)."
+    fi
+    FRESH_APPLIED="$(compose exec -T postgres psql --quiet --no-align --tuples-only --no-psqlrc \
+        --set ON_ERROR_STOP=1 --username "$DERIVED_PG_USER" --dbname "$DATABASE" \
+        --command 'SELECT version_num FROM alembic_version ORDER BY version_num' </dev/null 2>/dev/null \
+        | LC_ALL=C sort || true)"
+    if [ -z "$FRESH_APPLIED" ] || printf '%s\n' "$FRESH_APPLIED" | grep -qv '^[A-Za-z0-9_]\{1,100\}$'; then
+        refuse "[stand_copy_fresh] the real_data marker exists and the database's migration state could not be read." \
+               "Whether this deploy migrates cannot be told, and a migrating deploy needs a fresh copy receipt, so" \
+               "nothing was built or started. Bring the database up without migrating it and run this again:" \
+               "    docker compose --env-file $ENV_FILE --file $COMPOSE_FILE up -d postgres"
+    fi
+    if [ "$FRESH_APPLIED" != "$FRESH_HEADS" ]; then
+        FRESH_PROBLEMS=()
+        [ "$STAND_PRESENT" = yes ] || FRESH_PROBLEMS+=("there is no copy record at $STAND_COPY_RECORD")
+        if [ "$STAND_PRESENT" = yes ]; then
+            [ "$STAND_STATE" = '"open"' ] || FRESH_PROBLEMS+=("the copy record ${STAND_STAMP:-<unnamed>} is not open (state ${STAND_STATE:-<unreadable>}): a closed copy is not the receipt of this deploy")
+            FRESH_DUMP_SHA="$(stand_record dump 2>/dev/null | sed -n 's/.*"sha256": "\([0-9a-f]\{64\}\)".*/\1/p' || true)"
+            FRESH_ATTESTED_SHA="$(stand_record attestation 2>/dev/null | sed -n 's/.*"dump_sha256": "\([0-9a-f]\{64\}\)".*/\1/p' || true)"
+            [ -n "$FRESH_DUMP_SHA" ] || FRESH_PROBLEMS+=("the copy record has no dump (its 'dump' member is null or has no SHA-256): dump-db has not completed")
+            if [ "$STAND_ATTESTATION" = null ] || [ -z "$STAND_ATTESTATION" ]; then
+                FRESH_PROBLEMS+=("the copy record is not attested (R-93: dump-db, inventory-s3, fetch, the restore test, then attest)")
+            elif [ -z "$FRESH_ATTESTED_SHA" ] || [ "$FRESH_ATTESTED_SHA" != "$FRESH_DUMP_SHA" ]; then
+                FRESH_PROBLEMS+=("the attestation does not bind this dump's SHA-256")
+            fi
+            FRESH_HEAD="$(git -C "$REPO" rev-parse --verify --quiet 'HEAD^{commit}' 2>/dev/null || true)"
+            if [ "$STAND_PURPOSE" != '"publish"' ] || [ -z "$FRESH_HEAD" ] || [ "$STAND_TARGET" != "\"$FRESH_HEAD\"" ]; then
+                FRESH_PROBLEMS+=("the copy is attested for ${STAND_TARGET//\"/}, not this checkout's ${FRESH_HEAD:-<unknown HEAD>}")
+            fi
+            FRESH_QUIESCED="$(stand_record quiesced_at 2>/dev/null | tr -d '"' || true)"
+            if [ -z "$FRESH_QUIESCED" ] || [ "$FRESH_QUIESCED" = null ]; then
+                FRESH_PROBLEMS+=("the copy record has no quiesced_at: it does not say when the dump was taken")
+            elif ! FRESH_QUIESCED_AT="$(date -u -d "$FRESH_QUIESCED" +%s 2>/dev/null)"; then
+                FRESH_PROBLEMS+=("quiesced_at '$FRESH_QUIESCED' is not a time")
+            else
+                FRESH_AGE=$(( $(date -u +%s) - FRESH_QUIESCED_AT ))
+                if [ "$FRESH_AGE" -gt "$STAND_FRESH_SECONDS" ]; then
+                    FRESH_PROBLEMS+=("the dump was quiesced at $FRESH_QUIESCED, $((FRESH_AGE / 3600)) hours ago: more than 24 hours")
+                elif [ "$FRESH_AGE" -lt -300 ]; then
+                    FRESH_PROBLEMS+=("quiesced_at $FRESH_QUIESCED is in the future")
+                fi
+            fi
+        fi
+        if [ "${#FRESH_PROBLEMS[@]}" -gt 0 ]; then
+            refuse "[stand_copy_fresh] this deploy migrates the database (checkout ${FRESH_HEADS//$'\n'/,}, database ${FRESH_APPLIED//$'\n'/,}) and the stand holds real data, and there is no fresh copy receipt." \
+                   "${FRESH_PROBLEMS[@]/#/  - }" \
+                   "R-146t / R-93: take the copy through the copy key (dump-db, inventory-s3, fetch, the restore test," \
+                   "attest ... publish <sha>), then deploy within 24 hours of the dump. Nothing was built or started."
+        fi
+        echo "deploy.sh: migrating ${FRESH_APPLIED//$'\n'/,} -> ${FRESH_HEADS//$'\n'/,} under the copy ${STAND_STAMP//\"/} (dump quiesced at ${FRESH_QUIESCED:-?})"
+    fi
+fi
+# <<< guard: stand-copy-fresh
 
 # >>> guard: port-not-foreign
 # `ALPHA_HTTP_PORT` is the one published port, and on a host that already runs an instance
@@ -605,6 +938,95 @@ if [ "$PORT_HELD" = yes ] && [ -z "$OWN_PROXY" ]; then
            "ALPHA_HTTP_PORT in $ENV_FILE, or stop the other stack on purpose."
 fi
 # <<< guard: port-not-foreign
+
+# >>> guard: public-ports-free
+# THE SAME QUESTION AS ABOVE FOR THE TWO PUBLIC PORTS, and the likeliest answer to it is the nginx on the
+# host that terminates TLS today (`D-191`): while it holds port 80 or 443, `docker compose up` fails on the
+# bind -- after the build, and in a message about a port allocation. The cutover from that nginx is the
+# owner's act (DEPLOYMENT_RUNBOOK.md section 6) and this is the sentence that says it has not happened yet.
+# Port 80 is checked whenever a name is configured; 443 only when this deploy is to publish it.
+#
+# ANY ADDRESS, NOT ONE (`D-229` item 1). Docker publishes these two ports on `0.0.0.0` unless
+# `ALPHA_PUBLIC_ADDRESS` says otherwise, and the kernel refuses that bind while a socket LISTENS on the same
+# port on ANY single address of the host. A host nginx with `listen <the host's own ip>:80;` is exactly that,
+# and a connect to 127.0.0.1 never reaches it: the first version of this guard called the port free, `up`
+# recreated the `proxy` (the only owner of the loopback port that nginx forwards to), failed on the bind, and
+# the live site was down. So the question is put to the kernel's table of listening sockets
+# (`/proc/net/tcp` and `/proc/net/tcp6`, state `0A`, any local address), which needs no tool the target may
+# not have -- the reason this file does not use `ss` -- and the connect to 127.0.0.1 is kept as a second
+# witness. Where the table cannot be read (a host without /proc, a development machine), the loopback connect
+# is all there is, and the operator is TOLD so: a fallback that did not say it was one would be a guard that
+# silently did less than it claims. The refusal is deliberately wider than strictly necessary when
+# `ALPHA_PUBLIC_ADDRESS` names one interface: a listener elsewhere would not collide, but "something holds
+# this port" is the safer sentence on the host this stack is meant for, and it can be answered with the
+# `ss` line in the message.
+#
+# THE OWN-PROXY CASE, again: a port this instance's proxy already publishes is the idempotent one. It is
+# asked of docker by container port (`docker port <proxy> 8081/tcp`, `8443/tcp`) and not inferred from "a
+# proxy exists", because a proxy that exists WITHOUT the new port is exactly the case where something else
+# may be holding it.
+LISTENER_TABLES="/proc/net/tcp /proc/net/tcp6"
+
+#: `port_is_listened_on <port>`: 0 when some socket of this host listens on that TCP port on any local address,
+#: 1 when none does, 2 when no listener table could be read at all (the caller must say so).
+port_is_listened_on() {
+    local want table readable=no local_address state
+    want="$(printf '%04X' "$1")"
+    for table in $LISTENER_TABLES; do
+        [ -r "$table" ] || continue
+        readable=yes
+        while read -r _ local_address _ state _; do
+            if [ "$state" = 0A ] && [ "${local_address##*:}" = "$want" ]; then
+                return 0
+            fi
+        done < "$table"
+    done
+    [ "$readable" = yes ] || return 2
+    return 1
+}
+
+if [ -n "$CERT_NAME" ]; then
+    PUBLIC_CHECKS="$ACME_HTTP_PORT:8081"
+    [ "$PUBLISH_HTTPS" != yes ] || PUBLIC_CHECKS="$PUBLIC_CHECKS $HTTPS_PORT:8443"
+    TABLE_UNREADABLE_SAID=no
+    for public in $PUBLIC_CHECKS; do
+        public_port="${public%%:*}"
+        public_inside="${public##*:}"
+        PUBLIC_HELD=no
+        TABLE_STATUS=0
+        port_is_listened_on "$public_port" || TABLE_STATUS=$?
+        case "$TABLE_STATUS" in
+            0) PUBLIC_HELD=yes ;;
+            2)
+                if [ "$TABLE_UNREADABLE_SAID" = no ]; then
+                    TABLE_UNREADABLE_SAID=yes
+                    printf 'deploy.sh: NOTE: no table of listening sockets could be read (%s), so public port %s was asked of 127.0.0.1 only.\n' \
+                        "$LISTENER_TABLES" "$public_port" >&2
+                    printf '  A listener bound to another address of this host would not be seen here, and docker would fail on the bind\n' >&2
+                    printf '  after the build. Check by hand: ss -ltnp "sport = :%s"\n' "$public_port" >&2
+                fi
+                ;;
+        esac
+        if [ "$PUBLIC_HELD" = no ] && (exec 3<>"/dev/tcp/127.0.0.1/$public_port") 2>/dev/null; then
+            PUBLIC_HELD=yes
+        fi
+        if [ "$PUBLIC_HELD" = yes ]; then
+            OURS=no
+            if [ -n "$OWN_PROXY" ] && docker port "$OWN_PROXY" "$public_inside/tcp" 2>/dev/null | grep -q ":$public_port\$"; then
+                OURS=yes
+            fi
+            if [ "$OURS" = no ]; then
+                refuse "public port $public_port is already in use, and not by $INSTANCE's proxy." \
+                       "  something on this host is listening on port $public_port (on some address; see: ss -ltnp \"sport = :$public_port\")" \
+                       "Nothing was built and nothing was started. This stack terminates TLS itself, so the" \
+                       "nginx that did it on this host (or anything else on that port) has to be stopped" \
+                       "first -- the cutover is DEPLOYMENT_RUNBOOK.md section 6, step 4. For a rehearsal on a" \
+                       "development machine, ALPHA_ACME_HTTP_PORT and ALPHA_HTTPS_PORT name other ports."
+            fi
+        fi
+    done
+fi
+# <<< guard: public-ports-free
 
 # --- 1. build, and ONLY then bring up ------------------------------------------------
 # WHAT THE TWO IMAGE NAMES POINT AT BEFORE THE BUILD, and A SECOND TAG SO THAT IMAGE IS
@@ -682,15 +1104,17 @@ if [ "$BUILD_STATUS" -ne 0 ]; then
            "before this run is still serving it, because images are built before anything" \
            "is brought up and this run never got past the build."
 fi
-for image in "$INSTANCE-api" "$INSTANCE-web"; do
+BUILT_IMAGES="$INSTANCE-api $INSTANCE-web"
+[ -z "$CERT_NAME" ] || BUILT_IMAGES="$BUILT_IMAGES $INSTANCE-acme"
+for image in $BUILT_IMAGES; do
     if ! docker image inspect "$image" >/dev/null 2>&1; then
         refuse "the build reported success and there is no image called $image." \
-               "  expected: $INSTANCE-api and $INSTANCE-web" \
+               "  expected: $BUILT_IMAGES" \
                "NOTHING WAS STARTED OR REPLACED. A zero exit that built nothing is the" \
                "one build failure that would otherwise reach the containers."
     fi
 done
-echo "  $INSTANCE-api and $INSTANCE-web are built"
+echo "  ${BUILT_IMAGES// /, } are built"
 echo
 # <<< guard: images-built
 
@@ -800,6 +1224,104 @@ else
 fi
 echo
 
+# --- 1b. which listeners this deploy has (`R-146s`) -----------------------------------------------
+# Decided here, after the build and before `up`, because the decision needs the acme image (it is the tool
+# that looks into the certificate volume) and `up` needs the answer. Nothing below runs without a name.
+#
+# The sentence printed is the verdict of `listeners_https_verdict`, and `withheld` is not a failure: it is the
+# state of a host that has never been published, which serves the challenge port and the loopback
+# application port and waits.
+PAIR_PRESENT=no
+PAIR_STATUS=0
+PAIR_OUTPUT=""
+# >>> guard: acme-pair-answerable
+# Whether a pair exists is asked of the volume itself, through the acme image, with a sentinel on stdout
+# and NOT by an exit status: a `run` that could not start (no image, no daemon, no volume) exits non-zero
+# too, and "nothing could be asked" must not read as "there is no pair" -- that would silently withhold
+# 443 on a host that has a certificate, or the reverse. Anything but one of the two sentinels refuses.
+if [ -n "$CERT_NAME" ]; then
+    PAIR_OUTPUT="$(compose run --rm --no-deps -T --entrypoint sh acme -c \
+        'if [ -s /export/fullchain.pem ] && [ -s /export/privkey.pem ]; then echo pair-present; else echo pair-absent; fi' \
+        2>/dev/null)" || PAIR_STATUS=$?
+    PAIR_PRESENT=unknown
+    if [ "$PAIR_STATUS" -eq 0 ]; then
+        case "$PAIR_OUTPUT" in
+            pair-present) PAIR_PRESENT=yes ;;
+            pair-absent) PAIR_PRESENT=no ;;
+        esac
+    fi
+    if [ "$PAIR_PRESENT" = unknown ]; then
+        refuse "whether the certificate volume holds a pair could not be asked (status $PAIR_STATUS)." \
+               "  answer: ${PAIR_OUTPUT:-<none>}" \
+               "The acme image was built and a one-off container from it did not answer. Nothing was started." \
+               "A listener decision made without this fact would either open 443 on no certificate or" \
+               "keep it shut on a host that has one."
+    fi
+fi
+# <<< guard: acme-pair-answerable
+HTTPS_VERDICT=""
+# THE DECISION IS MADE IN TWO STEPS (`PROD-02`), because the credential gate needs a database and a database needs
+# `up`. This is the PROVISIONAL step, before `up`: 443 is not opened here -- the gate has not been asked -- and
+# it is not closed either, so a published host does not flap on every deploy: it stays published only when it
+# already is, the operator still asks for it and a pair exists. The FINAL step is `default-credential-gate`
+# below, after `migrations-at-head`: it opens 443 when the setting, the pair and a clean gate agree, and it
+# withdraws it, recreating only the proxy, when the gate finds the published pair valid.
+HTTPS_PUBLISHED_NOW=no
+if [ -n "$CERT_NAME" ]; then
+    if listeners_https_published compose; then HTTPS_PUBLISHED_NOW=yes; fi
+    HTTPS_PROVISIONAL=no
+    [ "$HTTPS_PUBLISHED_NOW" != yes ] || HTTPS_PROVISIONAL="$PUBLISH_HTTPS"
+    echo "-- the listeners this deploy has (provisional: the credential gate is asked after the migrations) --"
+    COMPOSE_FILES=("$COMPOSE_FILE")
+    while IFS= read -r overlay; do
+        [ -z "$overlay" ] || COMPOSE_FILES+=("$overlay")
+    done < <(listeners_overlay_files "$HERE" "$CERT_NAME" "$HTTPS_PROVISIONAL" "$PAIR_PRESENT")
+    HTTPS_VERDICT="$(listeners_https_verdict "$CERT_NAME" "$HTTPS_PROVISIONAL" "$PAIR_PRESENT")"
+    echo "  plain application listener : 127.0.0.1:$HTTP_PORT (always)"
+    echo "  challenge listener         : public port $ACME_HTTP_PORT (the ACME webroot and a redirect; no application route)"
+    case "$HTTPS_VERDICT" in
+        published) echo "  application listener (TLS) : public port $HTTPS_PORT -- stays published until the gate has been asked" ;;
+        *) echo "  application listener (TLS) : NOT published -- ${HTTPS_VERDICT#withheld: }" ;;
+    esac
+    echo
+fi
+
+# --- 1c. the schema as the OWNER, then the application role's rights (`PROD-04`, `AD-02`) ---------------------
+# `compose up -d` below would run `migrate` too (`api` waits for it), but compose gives this script no point between
+# `migrate` and `api` to run the step that gives the application role its rights -- and `api` must never start against
+# a schema its role cannot read. So the order is made explicit here: the one-shot `migrate` and `release-notes` run to
+# completion as the owner (`MIGRATOR_DATABASE_URL`), `apply-grants.sh` applies and verifies the classification, and only
+# then `up`. `compose run` starts `postgres` as `migrate`'s dependency if it is not up, and leaves every service
+# container as it was (`W24-IDEM`). `up` runs both one-shots again where compose decides to; at the head they are no-ops.
+echo "-- migrating as the owner, then giving the application role its rights --"
+OWNER_MIGRATE_STATUS=0
+compose run --rm -T migrate || OWNER_MIGRATE_STATUS=$?
+# >>> guard: owner-migrated
+if [ "$OWNER_MIGRATE_STATUS" -ne 0 ]; then
+    refuse "[migrate_failed] the migrate service, run as the owner, exited $OWNER_MIGRATE_STATUS." \
+           "The schema is not known to be at the head, so no rights were applied and nothing was started." \
+           "Its output is above. Fix the cause, then deploy again; the previous containers are still serving."
+fi
+# <<< guard: owner-migrated
+OWNER_NOTES_STATUS=0
+compose run --rm --no-deps -T release-notes || OWNER_NOTES_STATUS=$?
+# >>> guard: release-notes-loaded
+if [ "$OWNER_NOTES_STATUS" -ne 0 ]; then
+    refuse "[release_notes_failed] the release-notes service, run as the owner, exited $OWNER_NOTES_STATUS." \
+           "No rights were applied and nothing was started. Its output is above."
+fi
+# <<< guard: release-notes-loaded
+GRANTS_STATUS=0
+"$GRANTS_SCRIPT" --env-file "$ENV_FILE" || GRANTS_STATUS=$?
+# >>> guard: grants-applied
+if [ "$GRANTS_STATUS" -ne 0 ]; then
+    refuse "[grants_not_applied] apply-grants.sh exited $GRANTS_STATUS; the application role may not have its rights." \
+           "Its output is above (3 refused: a relation has no grant classification, or a setting is wrong; 4 failed)." \
+           "api and worker were not started or replaced by this run. Fix the cause and deploy again."
+fi
+# <<< guard: grants-applied
+echo
+
 # --- 2. up. `migrate` runs once here and `api` waits for it --------------------------
 # Migrations are a deploy step and never something a serving process does on start: two
 # replicas starting together would race the same upgrade. `compose.server.yml` says so and
@@ -898,6 +1420,9 @@ LONG_RUNNING="postgres s3 api web proxy"
 # one. Nothing depends on it, so `up -d` does not wait for its first health check; a
 # `starting` state is given up to two minutes here before it is judged.
 [ "$WORKER_ROLE" = no-service ] || LONG_RUNNING="postgres s3 api worker web proxy"
+# The ACME client is a long-running service when a name is configured. It is healthy once a pair has been
+# exported, so a deploy whose certificate has not been issued is refused here by name, with its log to read.
+[ -z "$CERT_NAME" ] || LONG_RUNNING="$LONG_RUNNING acme"
 for service in $LONG_RUNNING; do
     cid="$(compose ps --quiet "$service" 2>/dev/null | head -1 || true)"
     if [ -z "$cid" ]; then
@@ -973,6 +1498,68 @@ if ! printf '%s\n' "$CHECK_OUTPUT" | grep -q '^FOUNDATION-CHECK OK check-db$'; t
 fi
 echo
 # <<< guard: migrations-at-head
+
+# --- the published default credential (`PROD-02`, `R-146i`, `R-146s`, `R-146z`; ADR-0023 section 3) --------------
+# Asked here, after `migrations-at-head`, because it needs the database and the schema this code expects.
+# `python -m auditmanager.access.check --gate` runs in the api image and answers ONE question: is the published
+# seeded pair (`admin` / `password`) valid? A temporary password an administrator issued is a WARNING line in
+# its output and never a refusal (`R-146z`); `readiness.sh` keeps asking the wider question and reports it.
+#
+# THREE ANSWERS, and only two are answers: `clean`, `finding`, and `unknown` (the check could not run or printed
+# neither sentinel), which refuses by itself -- "nothing could be asked" is not "no finding".
+#
+# WHAT A FINDING DOES: the proxy is recreated WITHOUT the 443 overlay when it publishes it, so the public door
+# is shut while every service keeps running on loopback (the consequence `R-146s` accepts), the logins are
+# named, and the deploy ends non-zero (exit 3, like every refusal here) so the workflow's verify step does not
+# run and the release is not recorded as done. WHAT CLEAN DOES: 443 is published when the operator asked for it
+# (`ALPHA_PUBLISH_HTTPS=yes`) and a pair exists -- the one place a deploy opens it.
+echo "-- the published default credential is not valid --"
+# >>> guard: default-credential-gate
+listeners_gate_run compose
+printf '%s\n' "$LISTENERS_GATE_OUTPUT" | sed 's/^/  /'
+GATE_VERDICT="$LISTENERS_GATE_VERDICT"
+if [ "$GATE_VERDICT" = unknown ]; then
+    refuse "[default_credential_unanswered] the credential gate could not be answered (access.check --gate exited $LISTENERS_GATE_STATUS and printed neither sentinel)." \
+           "What it printed is above. Whether the published admin/password pair is valid is NOT known, so no" \
+           "claim is made about this deployment and 443 was not opened by this run."
+fi
+if [ -n "$CERT_NAME" ]; then
+    HTTPS_FINAL="$(listeners_https_wanted "$PUBLISH_HTTPS" "$GATE_VERDICT")"
+    HTTPS_SHOULD=no
+    if [ "$HTTPS_FINAL" = yes ] && [ "$PAIR_PRESENT" = yes ]; then HTTPS_SHOULD=yes; fi
+    HTTPS_IS=no
+    if listeners_https_published compose; then HTTPS_IS=yes; fi
+    if [ "$HTTPS_IS" != "$HTTPS_SHOULD" ]; then
+        COMPOSE_FILES=("$COMPOSE_FILE")
+        while IFS= read -r overlay; do
+            [ -z "$overlay" ] || COMPOSE_FILES+=("$overlay")
+        done < <(listeners_overlay_files "$HERE" "$CERT_NAME" "$HTTPS_FINAL" "$PAIR_PRESENT")
+        if ! listeners_apply_https "$HERE" "$ENV_FILE" "$CERT_NAME" "$HTTPS_FINAL" "$PAIR_PRESENT"; then
+            refuse "the proxy could not be recreated to $([ "$HTTPS_SHOULD" = yes ] && echo publish || echo withdraw) public port $HTTPS_PORT." \
+                   "The credential gate said: $GATE_VERDICT. Public port 443 may be in the wrong state; look at:" \
+                   "    docker compose --env-file $ENV_FILE --file $COMPOSE_FILE ps proxy"
+        fi
+        if [ "$HTTPS_SHOULD" = yes ]; then
+            echo "  public port $HTTPS_PORT is now published (ALPHA_PUBLISH_HTTPS=yes, a pair exists, the gate is clean)."
+        else
+            echo "  public port $HTTPS_PORT is NOT published: the proxy was recreated without the 443 overlay."
+        fi
+    fi
+    if listeners_https_published compose; then HTTPS_IS=yes; else HTTPS_IS=no; fi
+    if [ "$GATE_VERDICT" = finding ] && [ "$HTTPS_IS" = yes ]; then
+        refuse "the published admin/password pair is valid AND public port 443 is still published after the proxy was recreated." \
+               "Close it by hand now:  docker compose --env-file $ENV_FILE --file $COMPOSE_FILE up -d --force-recreate --no-deps proxy"
+    fi
+    HTTPS_VERDICT="$(listeners_https_verdict "$CERT_NAME" "$HTTPS_FINAL" "$PAIR_PRESENT")"
+fi
+if [ "$GATE_VERDICT" = finding ]; then
+    refuse "[default_credential] the published admin/password pair is valid: $(listeners_gate_logins "$LISTENERS_GATE_OUTPUT" | paste -sd, -) still accepts the published password." \
+           "Public port 443 is NOT published${CERT_NAME:+ ($CERT_NAME)}; every service is running and the application answers on 127.0.0.1:$HTTP_PORT." \
+           "Sign in through an SSH tunnel to that port, change the password, and deploy again (ADR-0023 section 3)."
+fi
+# <<< guard: default-credential-gate
+echo "  no account accepts the published password; temporary passwords, if any, are warned about above."
+echo
 
 echo "-- the published port answers --"
 # The one published port, asked the way a browser would ask. `T-2` puts the API at
@@ -1149,6 +1736,19 @@ else
     echo "deploy.sh: running it again is safe -- no layer rebuilds and no data is touched,"
     echo "deploy.sh: but api, web and migrate are recreated, because"
     echo "deploy.sh: ALPHA_PRESERVE_IMAGE_IDENTITY is no. See the note at the top."
+fi
+if [ -n "$CERT_NAME" ]; then
+    echo "deploy.sh: TLS for $CERT_NAME: the challenge listener is public on port $ACME_HTTP_PORT; the application over TLS is"
+    case "$HTTPS_VERDICT" in
+        published) echo "deploy.sh: published on port $HTTPS_PORT (the credential gate is clean)." ;;
+        *)
+            echo "deploy.sh: ${HTTPS_VERDICT}."
+            if [ "$PUBLISH_HTTPS" = yes ] && [ "$PAIR_PRESENT" != yes ]; then
+                echo "deploy.sh: the acme service is healthy only once a pair is exported, and this deploy found it healthy,"
+                echo "deploy.sh: so run this script again: the next deploy sees the pair and publishes port $HTTPS_PORT."
+            fi ;;
+    esac
+    [ "$ACME_STAGING" != yes ] || echo "deploy.sh: ALPHA_ACME_STAGING is yes: the certificate is the authority's TEST one, trusted by no browser."
 fi
 echo "deploy.sh: then ask the other question --"
 echo "  infra/deploy/verify-deployed.sh --env-file $ENV_FILE"

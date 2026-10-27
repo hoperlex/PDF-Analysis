@@ -102,14 +102,6 @@ def _runs_of(version_uid: str, token: str) -> list[str]:
     return [r["run_id"] for r in answer.json()["items"]]
 
 
-def _assert_refused(answer, count: int, budget: int) -> None:
-    assert answer.status == 422, answer
-    body = answer.json()
-    assert body["error_code"] == "analysis_input_budget_exceeded"
-    assert body["retryable"] is False
-    assert body["details"] == {"character_count": count, "budget_characters": budget}
-
-
 def test_the_stored_count_is_the_unit_the_budget_compares(world, engine) -> None:
     """Expected: the version's ``text_character_count`` is the independent pypdfium2 count of
     the uploaded PDF -- the same figure the refusals below must carry."""
@@ -119,37 +111,33 @@ def test_the_stored_count_is_the_unit_the_budget_compares(world, engine) -> None
     assert stored == world["count"]
 
 
-def test_at_a_low_ceiling_a_start_and_a_reaudit_over_the_budget_are_refused_with_both_figures(
-    world, api_control, engine
+def test_at_a_low_ceiling_a_start_and_a_reaudit_over_one_call_are_accepted_as_windowed_runs(
+    world, api_control
 ) -> None:
-    """Expected at ``AUDITMANAGER_RUN_COST_CEILING_USD=0.80``: ``startRun`` on the text-rich
-    version is ``422 analysis_input_budget_exceeded``, not retryable, ``details`` exactly the
-    version's count and the budget derived at start-up (96 361 for the default model); so is
-    ``reauditRun`` of the run that version had at $1.00; neither creates a run, a job or a
-    command record; the same key, retried after the operator raises the ceiling, is a fresh
-    start (``202``)."""
+    """Expected at ``AUDITMANAGER_RUN_COST_CEILING_USD=0.80`` (after `SECTION-CHUNKED-ANALYSIS-01`):
+    the budget derived at start-up (96 361 for the default model) is the budget of ONE model call,
+    and a section run above it is analysed in whole-page windows. So ``startRun`` on the text-rich
+    version (count above one call, far below ``budget x MAX_ANALYSIS_WINDOWS``) is ``202``, so is
+    ``reauditRun`` of the run that version had at $1.00, and each creates its run. The refusal with
+    both figures now needs a count above ``budget x MAX_ANALYSIS_WINDOWS`` (1.12 million characters
+    at the lowest ceiling the application starts with, which this probe's 40-page bundle is not): it is
+    pinned at that limit by ``tests/integration/runs/test_input_budget_over_http.py`` (start, re-audit,
+    both figures, no run, no command record, the same key fresh after the ceiling is raised). What
+    state a windowed run reaches under the served child's recorded provider is not asserted here."""
     api_control.ensure(LOW_CEILING)
-    token, count, budget = world["token"], world["count"], _budget(LOW_CEILING)
-    assert budget == 96_361
+    token, budget = world["token"], _budget(LOW_CEILING)
+    assert budget == 96_361 and world["count"] > budget
     runs_before = _runs_of(world["rich"], token)
-    jobs = scalar(engine, "SELECT count(*) FROM job")
-    commands = scalar(engine, "SELECT count(*) FROM command_record")
-    key = new_key("budget-start")
 
-    _assert_refused(start_run(world["rich"], token, key=key), count, budget)
-    _assert_refused(
-        call("POST", f"/runs/{world['rich_source']}/reaudit", token=token, key=new_key("budget-reaudit")),
-        count,
-        budget,
-    )
-    assert _runs_of(world["rich"], token) == runs_before
-    assert scalar(engine, "SELECT count(*) FROM job") == jobs
-    assert scalar(engine, "SELECT count(*) FROM command_record") == commands
-
+    started = start_run(world["rich"], token, key=new_key("budget-start"))
+    assert started.status == 202, started
+    reaudit = call("POST", f"/runs/{world['rich_source']}/reaudit", token=token, key=new_key("budget-reaudit"))
+    assert reaudit.status == 202, reaudit
+    created = set(_runs_of(world["rich"], token)) - set(runs_before)
+    assert {started.json()["run_id"], reaudit.json()["run_id"]} <= created
+    for run in (started, reaudit):
+        wait_terminal(run.json()["run_id"], token)
     api_control.ensure(None)
-    again = start_run(world["rich"], token, key=key)
-    assert again.status == 202, again
-    wait_terminal(again.json()["run_id"], token)
 
 
 def test_at_a_low_ceiling_a_document_under_the_budget_starts_and_reaudits(world, api_control) -> None:
@@ -165,13 +153,17 @@ def test_at_a_low_ceiling_a_document_under_the_budget_starts_and_reaudits(world,
     assert wait_terminal(reaudit.json()["run_id"], token)["state"] == "published"
 
 
-def test_a_document_exactly_at_the_budget_starts_and_one_character_less_refuses(world, api_control) -> None:
-    """Expected: at a ceiling whose derived budget equals the version's count, ``startRun`` is
-    ``202`` (at the budget is accepted); at a ceiling whose budget is one character less it
-    is ``422`` with ``budget_characters`` = count - 1."""
+def test_a_document_at_the_budget_and_one_character_over_it_both_start(world, api_control) -> None:
+    """Expected: at a ceiling whose derived one-call budget equals the version's count, ``startRun``
+    is ``202`` (at the budget is one call); at a ceiling whose budget is one character less the version
+    is above one call and is accepted as a windowed run, ``202`` too (before
+    `SECTION-CHUNKED-ANALYSIS-01` it was ``422`` with ``budget_characters`` = count - 1; the refusal
+    is now at ``budget x MAX_ANALYSIS_WINDOWS``, see the unit-level HTTP test)."""
     token, count = world["token"], world["count"]
     api_control.ensure(_ceiling_for(count - 1))
-    _assert_refused(start_run(world["rich"], token), count, count - 1)
+    over = start_run(world["rich"], token)
+    assert over.status == 202, over
+    wait_terminal(over.json()["run_id"], token)
     api_control.ensure(_ceiling_for(count))
     accepted = start_run(world["rich"], token)
     assert accepted.status == 202, accepted

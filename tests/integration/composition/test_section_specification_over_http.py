@@ -35,6 +35,7 @@ from starlette.testclient import TestClient
 
 from auditmanager.api.routers.idempotency import IDEMPOTENCY_HEADER
 from auditmanager.api.security import API_TOKEN_VARIABLE
+from tests.support.published_run import publish_reference_run
 
 DEPLOYMENT_SECRET = "w63-section-form7-over-http-token"
 ACCOUNT = "w63-section-form7"
@@ -220,7 +221,8 @@ def test_each_projects_price_state_and_sources_are_its_own(world) -> None:
 
 def test_a_published_run_makes_its_set_ready_with_the_saved_text_read(world) -> None:
     projects, uploads, auth = world["projects"], world["uploads"], world["auth"]
-    started = world["client"].post(
+    # `PROD-11-AR-V1-V2-REMOVAL-01`: the served startRun refuses an АР version, so the published run the АР reads need is made in-process (tests/support/published_run.py).
+    refused = world["client"].post(
         "/runs",
         headers=auth | {
             IDEMPOTENCY_HEADER: f"w63sec-{world['tag']}-run",
@@ -228,9 +230,9 @@ def test_a_published_run_makes_its_set_ready_with_the_saved_text_read(world) -> 
         },
         content=json.dumps({"version_uid": uploads["priced"]["version_uid"]}).encode("utf-8"),
     )
-    assert started.status_code == 202, started.content
-    run_id = started.json()["run_id"]
-    assert world["app"].state.run_carrier.drain(timeout=300), "the run never finished"
+    assert refused.status_code == 422, refused.content
+    assert refused.json()["error_code"] == "section_profile_unavailable"
+    run_id = publish_reference_run(uploads["priced"]["version_uid"], tag="sec-spec")
     state = world["client"].get(f"/runs/{run_id}", headers=auth).json()["state"]
     assert state == "published", state
 

@@ -1,0 +1,18 @@
+{
+ "format": "section-widen-specimen/1",
+ "section_code": "VK",
+ "case": "negative",
+ "expect": "none",
+ "origin": {
+  "kind": "synthetic",
+  "statement": "Text and reply authored by hand for SECTION-WIDEN-G2-01 to show what a widened prompt rule is meant to report or to leave alone, and filed by SECTION-PROMPT-SENTENCE-GUARD-01. No model produced this reply. Not field evidence for any profile's expert review; it says nothing about how a model answers.",
+  "task_id": "SECTION-WIDEN-G2-01",
+  "source_report": "docs/program/SECTION-WIDEN-G2-01.md",
+  "filed_by": "SECTION-PROMPT-SENTENCE-GUARD-01"
+ },
+ "pages": [
+  "Раздел 6. Водоснабжение и канализация (ВК)\nОбъект: многоквартирный жилой дом (вымышленный, для проверки)\nСтадия: П\nОбщие данные\nИсточник водоснабжения — городской водопровод.\n",
+  "Таблица расчётных расходов воды\nСуточное водопотребление здания, м³/сут: всего 118,4, в том числе:\nжилая часть 96,2\nвстроенные помещения 14,6\nполив территории 7,6\nМаксимальный секундный расход, л/с: общий 4,20, в том числе холодной воды 3,10 и горячей воды 2,00.\n"
+ ],
+ "observations": []
+}

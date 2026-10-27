@@ -3,7 +3,7 @@ recorded adapter finds them.
 
 Container-free. What is held here:
 
-* every section with a registered profile but AR -- АИ, ПЗ, ПОС, ТХ, КЖ, КМ, ОВ, ВК, ПТ, ЭОМ, СС,
+* every section with a registered profile -- АИ, ПЗ, ПОС, ТХ, КЖ, КМ, ОВ, ВК, ПТ, ЭОМ, СС,
   ИТП, ГП and ПБ, fourteen -- has exactly one recording, filed under the key of the request its own
   profile sends over the committed AR corpus text layer, labelled synthetic in its ``origin`` and
   carrying no provider mode; the builder reports no drift; a profile added to the registry without
@@ -20,8 +20,8 @@ Container-free. What is held here:
 * every section's recording replays through the real stage with that section's own profile and
   publishes exactly the observations it holds, grounded in the corpus text;
 * one key in two searched directories is refused, never answered by directory order;
-* the registry keeps each package's ``source`` block (AR, written here, and an authored package
-  such as ПБ's have none).
+* the registry keeps each package's ``source`` block (an authored package such as ПБ's has none;
+  АР is not registered since `PROD-11-AR-V1-V2-REMOVAL-01`).
 """
 
 from __future__ import annotations
@@ -43,7 +43,6 @@ from auditmanager.analysis.text import (
 from auditmanager.analysis.text import recorded as recorded_module
 from auditmanager.analysis.text.config import ProviderConfig, ProviderMode
 from auditmanager.analysis.text.adapter import ModelRequest, build_request
-from auditmanager.analysis.text.profile import AR_TEXT_PROFILE
 from auditmanager.analysis.text.profile_registry import (
     AUTHORED_SECTIONS,
     PACKAGES_ROOT,
@@ -55,6 +54,7 @@ from auditmanager.analysis.text.recorded import RecordedAdapter, recording_docum
 from auditmanager.analysis.text.textlayer import load_text_layer
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import RunId
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 CANONICAL = REPOSITORY_ROOT / "fixtures" / "recorded" / "text_analysis"
@@ -75,7 +75,7 @@ REGISTRY = load_text_profile_registry()
 
 def _request(code: str) -> ModelRequest:
     bundle = (
-        AR_TEXT_PROFILE.prompt_bundle if code == "AR"
+        V1_REFERENCE_PROFILE.prompt_bundle if code == "AR"
         else REGISTRY.entries[code].profile.prompt_bundle
     )
     layer = load_text_layer(json.loads(TEXT_LAYER.read_text(encoding="utf-8")))
@@ -189,7 +189,9 @@ def test_the_served_adapter_answers_each_recorded_section_and_the_canonical_alon
 
 def test_every_registered_section_has_a_recording_and_nothing_else_does() -> None:
     """A profile added to the registry without a recording (or the reverse) fails here."""
-    assert set(REGISTRY.entries) == {"AR", *RECORDED_SECTIONS}
+    # `PROD-11-AR-V1-V2-REMOVAL-01`: АР is no longer registered; it was the fifteenth entry.
+    assert set(REGISTRY.entries) == set(RECORDED_SECTIONS)
+    assert "AR" not in REGISTRY.entries
     assert len(RECORDED_SECTIONS) == 14 == len(set(RECORDED_SECTIONS))
     directories = {
         item.name for item in SECTIONS.iterdir()
@@ -357,11 +359,9 @@ def test_a_recording_origin_cannot_carry_a_provider_mode() -> None:
 
 
 def test_the_registry_keeps_each_packages_source_block() -> None:
-    assert REGISTRY.entries["AR"].source is None
+    assert "AR" not in REGISTRY.entries
     authored = set()
     for code, entry in REGISTRY.entries.items():
-        if code == "AR":
-            continue
         declared = json.loads((PACKAGES_ROOT / code.lower() / "profile.json").read_text(encoding="utf-8"))
         if declared["source"] is None:
             # An authored package (`PB-PROFILE-01`) declares no legacy source and the registry keeps none.

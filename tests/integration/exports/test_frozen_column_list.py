@@ -37,6 +37,7 @@ from sqlalchemy.orm import Session
 
 from auditmanager.exports import BOM, COLUMNS, SORT_KEY, export_run_csv
 from auditmanager.exports.query import export_rows
+from tests.support.v1_reference_profile import resolve_reference_profile
 
 _REPO = Path(__file__).resolve().parents[3]
 _SEAMS = _REPO / "docs" / "program" / "P02_SEAMS.md"
@@ -132,6 +133,7 @@ class TestTheColumnListIsPinnedToSomethingOutsideTheModule:
             blob_store=blob_store,
             adapter=recorded_adapter,
             provider_config=provider_config,
+            text_profiles=resolve_reference_profile,
         )
         content = export_run_csv(session, started.run_id).content
 
@@ -187,6 +189,7 @@ class TestTheSortKeyConstantDescribesTheOrderTheQueryActuallyProduces:
             blob_store=blob_store,
             adapter=recorded_adapter,
             provider_config=provider_config,
+            text_profiles=resolve_reference_profile,
         )
         rows = export_rows(session, started.run_id)
         assert rows, "the run published nothing; there is no order to check"

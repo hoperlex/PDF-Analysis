@@ -9,10 +9,10 @@ import { getSpecificationPrices, queryKeys } from '@/shared/api';
 export const SPECIFICATION_ROW_LIMIT = 50;
 
 /**
- * `getSpecificationPrices` (`W60-OPT-MATCH-01`): one page of a document set's AR specification
+ * `getSpecificationPrices` (`W60-OPT-MATCH-01`): one page of a document set's specification
  * priced from the project's current price list, or the state that stops it.
  *
- * The answer is always a `SpecificationPrices`: an unclassified or non-AR version, a project
+ * The answer is always a `SpecificationPrices`: an unclassified version, a project
  * without a price list, a version without a published run or saved text is its `state`, not
  * a failure. A failure is what the transport refuses (`404` for a set outside the project).
  */

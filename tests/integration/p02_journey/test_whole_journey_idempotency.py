@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import pytest
 from sqlalchemy import text
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE, resolve_reference_profile
 
 
 def test_the_table_list_this_suite_counts_is_complete(session, journey_harness):
@@ -22,7 +23,7 @@ def test_the_table_list_this_suite_counts_is_complete(session, journey_harness):
 def test_repeating_the_sequence_under_one_key_adds_no_row_anywhere(
     session_factory, blob_store, recorded_adapter, provider_config, journey_harness
 ):
-    from auditmanager.analysis.text import AR_TEXT_PROFILE, AR_TEXT_PROMPT_BUNDLE
+    from auditmanager.analysis.text import AR_TEXT_PROMPT_BUNDLE
     from auditmanager.runs import execute_run, start_audit_run
     from auditmanager.shared.errors import DomainError
 
@@ -37,7 +38,7 @@ def test_repeating_the_sequence_under_one_key_adds_no_row_anywhere(
             started = start_audit_run(
                 session,
                 version_uid=seed["version_uid"],
-                analysis_profile_id=str(AR_TEXT_PROFILE.analysis_profile_id),
+                analysis_profile_id=str(V1_REFERENCE_PROFILE.analysis_profile_id),
                 prompt_bundle_id=str(AR_TEXT_PROMPT_BUNDLE.prompt_bundle_id),
                 provider_mode="recorded",
                 idempotency_key=run_key,
@@ -49,7 +50,7 @@ def test_repeating_the_sequence_under_one_key_adds_no_row_anywhere(
     assert first_replayed is False, "a fresh key must not report a replay"
     with session_factory() as session:
         execute_run(session, first_run, blob_store=blob_store, adapter=recorded_adapter,
-                    provider_config=provider_config)
+                    provider_config=provider_config, text_profiles=resolve_reference_profile)
         session.commit()
 
     with session_factory() as session:
@@ -67,7 +68,7 @@ def test_repeating_the_sequence_under_one_key_adds_no_row_anywhere(
     with session_factory() as session:
         with pytest.raises(DomainError) as refusal:
             execute_run(session, second_run, blob_store=blob_store, adapter=recorded_adapter,
-                        provider_config=provider_config)
+                        provider_config=provider_config, text_profiles=resolve_reference_profile)
         session.rollback()
     assert "transition" in str(refusal.value).lower()
 

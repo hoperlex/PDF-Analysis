@@ -3,8 +3,8 @@
  * profiles, read-only.
  *
  * Rendered, not read from source (`D-53`): every assertion is on markup a reviewer would see.
- * The fixture is the shape `listAnalysisProfiles` answers for this tree — AR builtin with no
- * source, and every other section with the status and version its line of
+ * The fixture is the shape `listAnalysisProfiles` answers for this tree — АР with no profile
+ * (`PROD-11-AR-V1-V2-REMOVAL-01`), and every other section with the status and version its line of
  * `section_profile_expectations.json` names (`PROD-14-0-EXPECTATIONS-01`), ПБ with no source.
  * That file is the one a section lane edits when its profile leaves `draft`; the fixture
  * mirrors the packages, and a case below fails when the file and a `profile.json` disagree.
@@ -24,6 +24,7 @@ import type { AnalysisProfileListItem, AnalysisProfileStatus } from '@/shared/ap
 import { ApiError, queryKeys } from '@/shared/api';
 import {
   ANALYSIS_PROFILE_STATUS_LABELS,
+  AR_NO_TEXT_PROFILE_LABEL,
   NO_PROFILE_LABEL,
   UNKNOWN_STATUS_LABEL,
   analysisProfileStatusLabel,
@@ -97,12 +98,9 @@ function disagreements(
 
 const EXPECTED = expectedPackages();
 
-/** AR is built in and has no package: no line, no assertion reads this version. */
-const AR_FIXTURE_VERSION = '0.0.0';
-
-/** The status of a real package line; `builtin` belongs to AR alone, so it is refused here. */
+/** The status of a real package line: one of the contract's two (`builtin` left the contract with АР's profile). */
 function packageStatus(code: string, value: string): AnalysisProfileStatus {
-  if (value === 'builtin' || !isKnownAnalysisProfileStatus(value)) {
+  if (!isKnownAnalysisProfileStatus(value)) {
     throw new Error(`expectations file: ${code} has status ${value}, not a package status`);
   }
   return value;
@@ -117,18 +115,20 @@ function expectedOf(code: string): PackageProfile {
 function item(code: (typeof PROJECT_STRUCTURE_ORDER)[number], index: number): AnalysisProfileListItem {
   const section = projectSectionOf(code);
   const digit = (index % 10).toString();
-  const line = code === 'AR' ? null : expectedOf(code);
+  // `PROD-11-AR-V1-V2-REMOVAL-01`: АР has no text profile, so its row carries none.
+  if (code === 'AR') return { section_code: code, section_name: section.name, profile: null };
+  const line = expectedOf(code);
   return {
     section_code: code,
     section_name: section.name,
     profile: {
       analysis_profile_id: `ap_01M5AXG1K22R027A33VTKZ468${digit}`,
       prompt_bundle_id: `pb_01M5AXG1K2JQQH7R4ACTBW897${digit}`,
-      profile_version: line === null ? AR_FIXTURE_VERSION : line.profile_version,
-      status: line === null ? 'builtin' : packageStatus(code, line.status),
+      profile_version: line.profile_version,
+      status: packageStatus(code, line.status),
       prompt_bundle_sha256: digit.repeat(64),
       content_sha256: 'e'.repeat(63) + digit,
-      source: code === 'AR' || code === 'PB' ? null : {
+      source: code === 'PB' ? null : {
         repository: 'PDF-proverka',
         commit: LEGACY_COMMIT,
         files: [
@@ -226,7 +226,7 @@ describe('the fixture mirrors the section packages of this tree', () => {
     const pb = row(table(), 'PB');
     expect(pb).toContain(`data-profile="${line.status}"`);
     expect(pb).toContain(analysisProfileStatusLabel(line.status));
-    expect(pb).toContain('data-profile-source="builtin"');
+    expect(pb).toContain('data-profile-source="authored"');
     expect(pb).toContain(`версия ${line.profile_version}`);
     expect(pb).not.toContain(NO_PROFILE_LABEL);
   });
@@ -244,7 +244,7 @@ describe('what each row says', () => {
     const pb = row(table(withProfile('PB', { status: 'draft', profile_version: '7.3.1' })), 'PB');
     expect(pb).toContain('data-profile="draft"');
     expect(pb).toContain('черновик, требует экспертной проверки');
-    expect(pb).toContain('data-profile-source="builtin"');
+    expect(pb).toContain('data-profile-source="authored"');
     expect(pb).toContain('версия 7.3.1');
     expect(pb).not.toContain(NO_PROFILE_LABEL);
   });
@@ -259,15 +259,27 @@ describe('what each row says', () => {
     expect(gp).not.toContain('<details');
   });
 
-  it('shows the builtin AR profile as written here, with no legacy source', () => {
+  it('shows АР without a profile: no text profile, analysed by the six-check group', () => {
     const ar = row(table(), 'AR');
-    expect(ar).toContain('встроенный');
-    expect(ar).toContain('data-profile-source="builtin"');
+    expect(ar).toContain('data-profile="none"');
+    expect(ar).toContain('data-profile-absent="ar-v3"');
+    expect(ar).toContain(AR_NO_TEXT_PROFILE_LABEL);
+    expect(ar).toContain('группой из шести проверок АР v3');
+    expect(ar).not.toContain(NO_PROFILE_LABEL);
+    expect(ar).not.toContain('встроенный');
+    expect(ar).not.toContain('<details');
     expect(ar).not.toContain('PDF-proverka');
   });
 
+  it('keeps the generic wording for any other section the server leaves without a profile', () => {
+    const items = ITEMS.map((entry) => entry.section_code === 'GP' ? { ...entry, profile: null } : entry);
+    const gp = row(table(items), 'GP');
+    expect(gp).toContain('data-profile-absent="unregistered"');
+    expect(gp).not.toContain(AR_NO_TEXT_PROFILE_LABEL);
+  });
+
   it('labels a reviewed profile and shows its own version', () => {
-    expect(row(table(withProfile('POS', { status: 'reviewed' })), 'POS')).toContain('проверен экспертом');
+    expect(row(table(withProfile('POS', { status: 'reviewed' })), 'POS')).toContain('проверка человеком не проводилась');
     expect(row(table(withProfile('TX', { profile_version: '1.2.0' })), 'TX')).toContain('версия 1.2.0');
   });
 
@@ -293,7 +305,8 @@ describe('what each row says', () => {
   });
 
   it('labels every contract status, and an unknown one as unknown rather than a guess', () => {
-    expect(Object.keys(ANALYSIS_PROFILE_STATUS_LABELS).sort()).toEqual(['builtin', 'draft', 'reviewed']);
+    expect(Object.keys(ANALYSIS_PROFILE_STATUS_LABELS).sort()).toEqual(['draft', 'reviewed']);
+    expect(analysisProfileStatusLabel('builtin')).toBe(UNKNOWN_STATUS_LABEL);
     expect(analysisProfileStatusLabel('draft')).toBe('черновик, требует экспертной проверки');
     expect(analysisProfileStatusLabel('retired')).toBe(UNKNOWN_STATUS_LABEL);
   });
@@ -332,7 +345,7 @@ describe('the page', () => {
   it('renders a refusal in Russian with its correlation id, and no table', () => {
     const client = newClient();
     seedError(client, queryKeys.analysis.profiles(), new ApiError(403, {
-      contract_version: '1.6.0', error_code: 'permission_denied',
+      contract_version: '1.7.0', error_code: 'permission_denied',
       message: 'permission denied', correlation_id: 'cid-analysis-settings-1', retryable: false,
     }, null));
     const markup = renderScreen(client, createElement(AnalysisSettingsPage));

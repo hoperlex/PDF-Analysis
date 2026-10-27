@@ -1,5 +1,5 @@
 /**
- * The PC-01 journey's **write half**: create a project, upload the AR PDF, start a run --
+ * The PC-01 journey's **write half**: create a project, upload the portal bundle, start a run --
  * through the browser, pressing the application's own controls, on the public origin.
  *
  * **Why this file exists.** `D-5` was `POST /api/v1/runs` -> 500, twice, through a browser,
@@ -152,6 +152,23 @@ export function nightWindowMayRun({ providerMode, allowSpend }) {
   return allowSpend === true || providerMode === 'recorded';
 }
 
+/**
+ * `PROD-11-AR-V1-V2-REMOVAL-01`. Why a step is not run, or `null` when it is.
+ *
+ * A step the manifest marks `pending_v3_activation: true` needs a published АР run, and none can exist
+ * until the six-run АР v3 group is activated (`D-204`): `startRun` refuses an АР version. The driver
+ * does not run such a step, does not count it as checked and does not call it a pass -- it reports it,
+ * with this reason, and the run ends `OK WITH PENDING` at best. Removing the mark is how a step is
+ * reactivated; deleting it is not allowed (`tests/e2e/test_pc01_journey_section.py`).
+ */
+export function pendingActivation(step, spec) {
+  if (step.pending_v3_activation !== true) return null;
+  const reason = spec.ar_bound?.pending_v3_activation_reason;
+  return typeof reason === 'string' && reason.trim() !== ''
+    ? reason
+    : 'pending_v3_activation, and the manifest gives no reason';
+}
+
 /** `a.b.c` over a decoded JSON body. Absent is `undefined`, which is never a match. */
 function atJsonPath(value, path) {
   let here = value;
@@ -279,6 +296,7 @@ export async function runWritePhase({
 
   const failures = [];
   const records = [];
+  const pending = [];
   const captured = { ...seed };
   // A password the journey typed (`secrets`) must reach neither a finding nor the envelope: a
   // message that quotes what a control read back, or a body the browser sent, is scrubbed here.
@@ -293,7 +311,7 @@ export async function runWritePhase({
     // Not a skip. A write half with no document to upload proves nothing, and saying so
     // and continuing would be the vacuous pass this instrument exists to rule out.
     fail('write', `the fixture ${spec.fixture} is not on disk at ${fixture}; nothing could be uploaded`);
-    return { records, failures, captured, fixture: null, stopped: 'missing-fixture' };
+    return { records, failures, captured, fixture: null, stopped: 'missing-fixture', pending };
   }
   const fixtureBytes = readFileSync(fixture).length;
 
@@ -323,6 +341,16 @@ export async function runWritePhase({
       timingsMs: {},
     };
     records.push(record);
+
+    // ---- a step that waits for the АР v3 group is reported, not run, not passed --------
+    const pendingReason = pendingActivation(step, spec);
+    if (pendingReason !== null) {
+      record.verdict = 'PENDING';
+      record.pendingV3Activation = pendingReason;
+      pending.push(step.name);
+      console.log(`PENDING ${step.name.padEnd(28)} pending_v3_activation -- NOT RUN: ${pendingReason}`);
+      continue;
+    }
 
     // ---- a step whose inputs no earlier step produced is not reached, not passed ------
     const missing = namesNeededBy(step).filter((name) => captured[name] === undefined);
@@ -1264,10 +1292,10 @@ export async function runWritePhase({
           `\ne2e:pc01: stopping the write half at '${step.name}'. ` +
             `The steps after it were NOT checked.`,
         );
-        return { records, failures, captured, fixture, stopped: step.name };
+        return { records, failures, captured, fixture, stopped: step.name, pending };
       }
     }
   }
 
-  return { records, failures, captured, fixture, stopped };
+  return { records, failures, captured, fixture, stopped, pending };
 }

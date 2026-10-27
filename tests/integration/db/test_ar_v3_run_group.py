@@ -26,6 +26,7 @@ from auditmanager.shared.identity import (
 from auditmanager.shared.identity.ids import UserUid
 from auditmanager.storage.models import derive_blob_id
 from auditmanager.shared.db.engine import create_database_engine
+from tests.support.expected_facts import FACTS
 
 SNAPSHOT = "ns_01M59N8QNBVN91ACA2HCE6VE74"
 CHUNKING = "characters-v2:1200"
@@ -356,7 +357,7 @@ def test_upgrade_from_0031_preserves_old_runs(empty_database, foundation_command
         with engine.connect() as connection:
             assert connection.execute(text("SELECT state FROM audit_run WHERE run_id = :run"),
                                       {"run": run}).scalar_one() == "created"
-            assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "0032_ar_v3_run_group"
+            assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == FACTS.migration_head
             assert connection.execute(text("SELECT count(*) FROM ar_v3_run_group")).scalar_one() == 0
     finally:
         engine.dispose()

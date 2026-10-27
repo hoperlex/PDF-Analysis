@@ -27,6 +27,7 @@ from auditmanager.runs.repository import RunRepository
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import IdempotencyKey
 from auditmanager.storage import BlobNotFoundError, parse_blob_id
+from tests.support.v1_reference_profile import resolve_reference_profile
 
 
 class ProcessExit(BaseException):
@@ -347,6 +348,7 @@ def test_provider_crash_boundaries_are_visible_from_a_new_transaction(
                 adapter=adapter,
                 provider_config=_live_config(),
                 effect_checkpoint=crash_after,
+                text_profiles=resolve_reference_profile,
             )
     finally:
         session.close()
@@ -429,6 +431,7 @@ def test_live_response_lost_before_checkpoint_is_diagnosable_and_never_replayed(
                 blob_store=blob_store,
                 adapter=adapter,
                 provider_config=_live_config(),
+                text_profiles=resolve_reference_profile,
             )
     finally:
         session.close()
@@ -502,6 +505,7 @@ def test_provider_effect_settlement_is_bounded_and_resumable(
                     adapter=CountingLiveAdapter(recorded_adapter),
                     provider_config=_live_config(),
                     effect_checkpoint=stop_after_intent,
+                    text_profiles=resolve_reference_profile,
                 )
         finally:
             session.close()
@@ -559,6 +563,7 @@ def test_an_ambiguous_live_failure_is_journalled_once_and_not_retried(
             adapter=adapter,
             provider_config=_live_config(),
             sleep=lambda _seconds: None,
+            text_profiles=resolve_reference_profile,
         )
         session.commit()
 
@@ -635,6 +640,7 @@ def test_artifact_crash_boundaries_leave_enumerable_breadcrumbs(
                 adapter=recorded_adapter,
                 provider_config=provider_config,
                 effect_checkpoint=crash_after,
+                text_profiles=resolve_reference_profile,
             )
     finally:
         session.close()
@@ -701,6 +707,7 @@ def test_process_loss_after_temporary_verification_keeps_a_pre_upload_breadcrumb
                 blob_store=killing_store,
                 adapter=recorded_adapter,
                 provider_config=provider_config,
+                text_profiles=resolve_reference_profile,
             )
     finally:
         session.close()
@@ -826,6 +833,7 @@ def test_a_stale_terminal_analysis_publication_is_refused_and_a_rerun_publishes_
             blob_store=blob_store,
             adapter=recorded_adapter,
             provider_config=provider_config,
+            text_profiles=resolve_reference_profile,
         )
         session.commit()
     assert result.terminal_state == "published"
@@ -916,6 +924,7 @@ def test_d142_a_crashed_publication_is_settled_and_the_report_is_clean_after_a_r
             blob_store=blob_store,
             adapter=recorded_adapter,
             provider_config=provider_config,
+            text_profiles=resolve_reference_profile,
         )
         session.commit()
     assert result.terminal_state == "published"
@@ -1059,6 +1068,7 @@ def test_supersession_before_the_first_effect_publishes_nothing(
                 adapter=recorded_adapter,
                 provider_config=provider_config,
                 checkpoint=supersede_current_attempt,
+                text_profiles=resolve_reference_profile,
             )
         assert refused.value.code is ErrorCode.STALE_ATTEMPT
     finally:
@@ -1092,6 +1102,7 @@ def test_bound_analysis_artifacts_are_not_detached_and_missing_bytes_are_named(
             blob_store=blob_store,
             adapter=recorded_adapter,
             provider_config=provider_config,
+            text_profiles=resolve_reference_profile,
         )
         session.commit()
         assert result.terminal_state == "published"
@@ -1159,6 +1170,7 @@ def _interrupted_publication(factory, helpers, blob_store, recorded_adapter, pro
                 blob_store=killing_store,
                 adapter=recorded_adapter,
                 provider_config=provider_config,
+                text_profiles=resolve_reference_profile,
             )
     finally:
         session.close()
@@ -1240,6 +1252,7 @@ def _prepared_provider_effect(factory, helpers, blob_store, recorded_adapter):
                 adapter=CountingLiveAdapter(recorded_adapter),
                 provider_config=_live_config(),
                 effect_checkpoint=stop_after_intent,
+                text_profiles=resolve_reference_profile,
             )
     finally:
         session.close()

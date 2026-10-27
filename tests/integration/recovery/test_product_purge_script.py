@@ -63,8 +63,11 @@ class Operator:
         shutil.copy(SCRIPT, self.deploy / "purge-product-data.sh")
         (self.deploy / "compose.server.yml").write_text("services:\n  worker:\n    image: x\n", encoding="utf-8")
         user = stand.settings.url.username
+        # `PROD-04`: the wrapper hands the python half the OWNER's url (`MIGRATOR_DATABASE_URL`); the docker shim below
+        # ignores it and uses the lane's own url, which is the owner here, so the value only has to be well formed.
         (tmp / "alpha.env").write_text(
-            f"ALPHA_INSTANCE=an-instance\nPOSTGRES_DB={stand.database}\nPOSTGRES_USER={user}\nS3_BUCKET={stand.bucket}\n",
+            f"ALPHA_INSTANCE=an-instance\nPOSTGRES_DB={stand.database}\nPOSTGRES_USER={user}\nS3_BUCKET={stand.bucket}\n"
+            f"MIGRATOR_DATABASE_URL=postgresql+psycopg://{user}:owner-password@postgres:5432/{stand.database}\n",
             encoding="utf-8")
         (tmp / "lane.env").write_text("".join(f"{k}={v}\n" for k, v in stand.values.items()), encoding="utf-8")
         self.bin = tmp / "bin"

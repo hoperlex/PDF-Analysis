@@ -26,16 +26,21 @@ down`. This is the deployed stack.
 | `Dockerfile.api` | the 104 operations under uvicorn, plus `T-3`'s health plane |
 | `Dockerfile.web` | `npm run build`, then `next start` |
 | `serve.py` | the entry point: **one built application, two ports** |
-| `compose.server.yml` | the stack: PostgreSQL, MinIO, migrate, release-notes, api, worker, web, one proxy |
+| `compose.server.yml` | the stack: PostgreSQL, MinIO, migrate, release-notes, api, worker, web, one proxy. Two database urls (`PROD-04`): `DATABASE_URL`, the application role's, reaches `api` and `worker`; `MIGRATOR_DATABASE_URL`, the owner's, reaches `migrate` and `release-notes` only |
+| `apply-grants.sh` | `PROD-04-DB-ROLES-01` — the one idempotent step that gives the application role (`ALPHA_APP_DB_USER`) exactly the rights `scripts/recovery/grant_classification.py` says, and nothing that changes the schema; `--check` verifies, `--config-only` judges the settings. Run by `deploy.sh` between `migrate` and `up`, and by `reset.sh` and `copy-serve.sh restore-db` after a restore (a `--no-privileges` dump carries none). Runbook §16 |
 | `proxy/nginx.conf` | `T-2` — the web app at `/`, the API at `/api/v1`, one origin |
 | `proxy/tls-server.conf` | the TLS server block. **nginx never loads it unless a certificate is there** |
 | `proxy/enable-tls.sh` | the switch: the image runs it before nginx starts, and it asks one question |
 | `proxy/trusted-proxies.sh` | `REAL-IP-EDGE-01` — the other start-up hook: turns `ALPHA_TRUSTED_PROXY_CIDRS` into the proxy's `set_real_ip_from` lines, or into none |
-| `proxy/compose.tls.yml` | the overlay that mounts those two and publishes the TLS port |
-| `proxy/tls/` | where the certificate and its private key go **on the host**. Contents ignored whole |
+| `proxy/compose.tls.yml` | `PROD-01-TLS-ACME-01` — the 443 overlay: it publishes container port 8443 as public 443 and does nothing else; `deploy.sh` passes it only for a deploy that has `ALPHA_PUBLISH_HTTPS=yes`, a certificate **and a clean credential gate** (`PROD-02`) |
+| `proxy/acme-challenge.conf` | `PROD-01-TLS-ACME-01` — the challenge listener (public port 80): the ACME webroot and a redirect to HTTPS, **no route to any other tier** |
+| `proxy/watch-certificate.sh` | `PROD-01-TLS-ACME-01` — the proxy's timer: when the pair on the volume changes it re-runs the switch, tests the configuration and reloads nginx |
+| `proxy/tls/` | no longer mounted by anything; kept, with its ignore rule, so a key dropped there out of habit still cannot be committed |
+| `../acme/` | `PROD-01-TLS-ACME-01` — the ACME client as a service of the same project: `Dockerfile`, `client.pin` (the exact client version), `entrypoint.sh`, `export-pair.sh`, `check-served.sh`, and `compose.acme.yml`, the overlay passed whenever `ALPHA_CERT_NAME` is set (it also declares the client's own network, `acme-edge`, shared only with the proxy) |
+| `lib/proxy-listeners.sh` | `PROD-01-TLS-ACME-01`, `PROD-02` — the one place that decides which of the proxy's three listeners a deploy has, and the one place that asks the default-credential gate (`deploy.sh`, `verify-deployed.sh`, `reset.sh --restore` and `copy-serve.sh restore-db` all call it) |
 | `deploy.sh` | `PA-01` criterion 1 — bring this clone up, and refuse to call it deployed until the stack has answered |
 | `reset.sh` | `T-5` — the guarded wipe, and the restore of its own dump |
-| `purge-product-data.sh` | `STAND-PURGE-TOOL-01` — delete the stand's product data (projects, documents, runs, findings, decisions, price lists, their objects) and **keep the accounts and the norm corpus**; dumps and verifies first. `docs/program/STAND-PURGE-TOOL-01.md` |
+| `purge-product-data.sh` | `STAND-PURGE-TOOL-01` — delete the stand's product data (projects, documents, runs, findings, decisions, price lists, their objects) and **keep the accounts and the norm corpus**; dumps and verifies first. Since `PROD-04` it runs the python half as the owner (`MIGRATOR_DATABASE_URL`). `docs/program/STAND-PURGE-TOOL-01.md` |
 | `verify-deployed.sh` | `D-27` — is the stack in front of you this tree? |
 | `reload-proxy.sh` | `D-27` — the step after a rebuild that everyone forgets |
 | `object_attrs.py` | the third part of a dump: each object's S3 attributes |
@@ -164,7 +169,7 @@ the running proxy what it reads: for every single-file mount it compares the SHA
 host file with the SHA-256 inside the container. When they differ it tests the checkout's
 configuration in a throwaway container (same image, network and mounts, read-only), and
 only if that passes it **restarts** the proxy — a restart re-resolves every mount and keeps
-the container, its ports and any overlay mounts such as `proxy/compose.tls.yml`'s — and asks
+the container, its ports and any overlay mounts such as `infra/acme/compose.acme.yml`'s — and asks
 again. A broken configuration is refused (exit 5) with the running proxy untouched; a proxy
 that still reads other bytes, or was created from another checkout, is refused (exit 6) and
 named. When nothing differs it only reloads, so a second `deploy.sh` of the same tree
@@ -379,21 +384,52 @@ while the identical bind from `/root` delivered the file. This is `reset.sh`'s r
 finding in a second costume — **a `-v` source is resolved by the daemon, not by the shell
 that typed it** — and both fail by producing something plausible.
 
-## TLS — `R-15`, and it is off until a certificate exists
+## TLS — `R-15`, then `PROD-01-TLS-ACME-01`: the stack obtains its own certificate
 
-**`compose.server.yml` is not changed and `nginx.conf` names no certificate.** TLS is one
-overlay and one file that nginx loads conditionally:
+**Since `PROD-01-TLS-ACME-01` (`ADR-0021` section 2, `R-146a`) the stack terminates TLS itself and
+obtains and renews its own certificate.** `compose.server.yml` is still not changed and `nginx.conf` still
+names no certificate. `ALPHA_CERT_NAME` in `alpha.env` is the one switch: empty, nothing below exists and
+the stack is what it was; set, `deploy.sh` adds the ACME overlay (`infra/acme/compose.acme.yml`: an ACME
+client, the challenge listener on public port 80, the volumes, a network of its own) and, for a deploy that
+may publish 443, `proxy/compose.tls.yml` (public port 443). Three listeners, and `lib/proxy-listeners.sh`
+decides which exist:
 
-```
-docker compose --env-file infra/deploy/env/alpha.env \
-  -f infra/deploy/compose.server.yml \
-  -f infra/deploy/proxy/compose.tls.yml up -d
-infra/deploy/reload-proxy.sh
-```
+| listener | where | serves | exists when |
+|---|---|---|---|
+| application, plain | `127.0.0.1:${ALPHA_HTTP_PORT}` | the whole application | always, on loopback; with a name set `deploy.sh` refuses any other `ALPHA_BIND_ADDRESS` |
+| challenge | public port 80 (`ALPHA_PUBLIC_ADDRESS`, `ALPHA_ACME_HTTP_PORT`) | the ACME webroot and a redirect to HTTPS; **no application route** | whenever `ALPHA_CERT_NAME` is set, so issuance works while the seeded password is still the seeded one |
+| application, TLS | public port 443 (`ALPHA_PUBLIC_ADDRESS`, `ALPHA_HTTPS_PORT`) | the application over TLS with HSTS | only when **all three** hold: `ALPHA_PUBLISH_HTTPS=yes` (the operator's half), a certificate pair exists on the `certs` volume, **and the default-credential gate is clean** (`PROD-02`, `R-146s`) |
 
-The operator's steps are in `docs/program/DEPLOYMENT_RUNBOOK.md` section 6. What belongs
-here is **why the switch cannot be in the configuration**, which is nginx's behaviour and
-not a preference:
+**Who decides 443, and when.** The gate is `python -m auditmanager.access.check --gate` run in the `api` image: it
+asks whether the published seeded pair (`admin` / `password`) is still valid. It needs the database, so a deploy decides
+443 in two steps: the full `up` never *opens* 443 (it keeps an already published one only while the setting still says
+`yes` and a pair exists), and the gate step after `migrations-at-head` then opens it, or withdraws it by recreating
+**only the proxy** without the 443 overlay. The restore paths (`reset.sh --restore`, `copy-serve.sh restore-db`) end by
+asking the same gate and withdraw 443 on a finding, or on an answer they could not get; they never open it.
+`verify-deployed.sh` exits 8 on the pair and says loudly if 443 is published meanwhile. The decision functions
+(`listeners_https_wanted`, `listeners_apply_https`, `listeners_withhold_https`) are in `lib/proxy-listeners.sh`.
+
+**Networks.** Every service of `compose.server.yml` is on the data network `<instance>-net`. The ACME client is on
+`<instance>-acme-net`, shared with the `proxy` and with nothing else (`D-229` item 3): it needs only the proxy (its probe
+on 8081, `check-served.sh` on 8443) and the way out to the authority, and it holds no route to postgres, s3 or the api.
+The `proxy` is on both networks. `reload-proxy.sh` therefore takes the network of its throwaway `nginx -t` container from
+the `api` container and not from "the proxy's first", which would sort to the client's network.
+
+**What `deploy.sh` refuses before it builds, for a stack with a name** (each guard is a marked block with a test that
+deletes it): the clone lacks a terminator file (`acme-files-present`); a setting is unusable, or one of the TLS settings
+is set with no name (`acme-settings-well-formed`); the client is not pinned (`acme-client-pinned`); a socket of this host
+listens on port 80, or on 443 when this deploy would publish it, **on any address** — the kernel's table of listeners is
+read, because a host nginx bound to the host's own address is invisible to a connect to `127.0.0.1` and collides with
+Docker's `0.0.0.0` publish (`public-ports-free`, `D-229` item 1); a non-empty `ALPHA_TRUSTED_PROXY_CIDRS` is left over
+from the host nginx this stack replaces (`trusted-proxies-empty-with-name`, `D-229` item 4); the certificate volume
+cannot be asked (`acme-pair-answerable`).
+
+The operator's procedure — the staging rehearsal that comes before the first real issuance, the cutover
+from the host's nginx, the expected output of every step — is `docs/program/DEPLOYMENT_RUNBOOK.md` section 6.
+The rest of this section is the part that did not change: **why the switch cannot be in the
+configuration**, which is nginx's behaviour and not a preference (the original `R-15` text follows, with the
+paths updated where the layout moved).
+
 
 * **`ssl_certificate` is read when the configuration is parsed**, not when a connection
   arrives. Driven, with this very block placed straight into `conf.d/` and no certificate
@@ -426,18 +462,22 @@ staying out of `conf.d`, the switch staying executable in git, the un-install, t
 server bodies not drifting, and `git check-ignore` refusing to let a private key be
 committed.
 
-**The key.** It is placed by the owner, by hand, in `infra/deploy/proxy/tls/`, mode 600,
-read-only in the container, and never committed. It is also the one secret around this
-stack that **`docker compose config` cannot print** — the overlay reaches it through a bind
-mount, so the output carries the path and not a byte of the file, measured with a sentinel.
-That is the opposite of what the same command does with `env_file:`; see
-`env/provider.env.example`.
+**The key.** It is written by the ACME client into the `certs` named volume — the account key stays in a
+volume of its own that the proxy never mounts — and the proxy mounts the pair **read-only**. No file in this
+repository or on the host's checkout holds it, and no variable carries it, so **`docker compose config` cannot
+print it**: the output names a volume and not a byte of the key. That is the opposite of what the same command
+does with `env_file:`; see `env/provider.env.example`. `proxy/tls/` is not mounted by anything now; it stays,
+with its ignore rule, as a net.
 
-**Turning it off** is dropping the second `-f`, and what is lost is the TLS listener and
-nothing else. There is deliberately **no redirect** from the plain port: `deploy.sh`'s
-`proxy-answers` guard requires **401** on `/api/v1/openapi.json` there, and a `301` is not
-401, so it would turn a successful deploy into a refusal. The conclusion is unchanged and
-the number was wrong (`Y3`).
+**Turning it off** is emptying `ALPHA_CERT_NAME` and deploying: the overlays are no longer passed and the proxy
+is recreated without them. What is lost is the challenge listener, the TLS listener and the renewal; the volumes
+stay (`down` never removes them), so the account and the certificate are still there if the name comes back.
+`deploy.sh` does not remove the `acme` container the earlier deploy left (it is no longer in the file list, so
+compose treats it as an orphan and leaves it); the runbook, section 6, gives the one command that does.
+Between those two states the plain port keeps serving, and there is deliberately **no redirect** from it:
+`deploy.sh`'s `proxy-answers` guard requires **401** on `/api/v1/openapi.json` there, and a `301` is not 401, so
+it would turn a successful deploy into a refusal. The redirect lives on the challenge listener (port 80), which
+is a different listener (`Y3`: the number in that guard was once 200 here and was wrong).
 
 ## The client address — `REAL-IP-EDGE-01`, and what a host nginx in front must send
 

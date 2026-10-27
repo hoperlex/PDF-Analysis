@@ -390,14 +390,36 @@ _NEXT_FAILED_SIGN_INS: Final[str] = (
 #: Every assignment in a ``SET`` sees the row's values *before* the statement, so the two
 #: occurrences cannot disagree.
 #:
-#: This statement is never reached for an account that is blocked right now --
+#: This statement is not reached for an account that is blocked *when the caller looked* --
 #: :meth:`UserRepository.authenticate` and :meth:`UserRepository.change_password` refuse
-#: before they get here -- which is what makes
-#: knocking on a shut door free of charge to the account behind it and is why
-#: ``sign_in_blocked_until`` being non-NULL in the returned row means *this attempt shut
-#: it*, rather than *it was already shut*.
+#: before they get here -- which is what makes knocking on a shut door free of charge to the
+#: account behind it. **That is a check made earlier, in another statement, and it does not
+#: hold when attempts overlap.** Two attempts that are in flight while the account is still
+#: open both pass it; the second ``UPDATE`` waits for the first one's row lock, then runs on the
+#: row the first one wrote, finds ``failed_sign_ins + 1 >= allowance`` again, extends the block
+#: and returns a non-NULL ``sign_in_blocked_until`` exactly as the first did. So a non-NULL
+#: ``sign_in_blocked_until`` in the returned row does **not** mean *this attempt shut it*.
+#:
+#: What does mean it is the value the row held **before** this statement: the account was open
+#: (NULL) or its block was spent (``<= now()``). That value is read by the ``previous`` CTE, which
+#: locks the row with ``FOR UPDATE``; under READ COMMITTED a locker that waited for a concurrent
+#: writer is handed the row *as that writer committed it*, so ``previous`` is the true "before" for
+#: this statement even when another attempt got there first, and the ``UPDATE`` of the same
+#: statement is then applied to that same latest version. ``MATERIALIZED`` keeps the locking
+#: ``SELECT`` a step of its own. The last returned column is the answer, computed by the database
+#: against the same ``now()`` the rest of the statement uses:
+#: :meth:`UserRepository._note_a_failed_sign_in` journals when it is true and the returned block
+#: is set -- the one attempt per cooling-off period that found the account open and shut it.
+#: (PostgreSQL has no ``OLD`` in ``RETURNING`` before 18; the CTE is the portable spelling.)
 _NOTE_A_FAILED_SIGN_IN = text(
     f"""
+    WITH previous AS MATERIALIZED (
+        SELECT user_uid AS previous_user_uid,
+               sign_in_blocked_until AS previous_blocked_until
+        FROM app_user
+        WHERE login = :login AND {_ACTIVE}
+        FOR UPDATE
+    )
     UPDATE app_user SET
         failed_sign_ins = {_NEXT_FAILED_SIGN_INS},
         last_failed_sign_in_at = now(),
@@ -408,8 +430,11 @@ _NOTE_A_FAILED_SIGN_IN = text(
                 THEN NULL
             ELSE sign_in_blocked_until
         END
-    WHERE login = :login AND {_ACTIVE}
-    RETURNING {_PUBLIC_COLUMNS}
+    FROM previous
+    WHERE app_user.user_uid = previous.previous_user_uid
+      AND login = :login AND {_ACTIVE}
+    RETURNING {_PUBLIC_COLUMNS},
+        (previous.previous_blocked_until IS NULL OR previous.previous_blocked_until <= now())
     """
 )
 
@@ -675,9 +700,10 @@ class UserRepository:
         password change's proof of the current password -- and a port method called "note a
         failure" is a port method somebody eventually calls for a reason of their own.
 
-        The row is never read first. Everything the decision needs is computed inside the
-        statement, from the row as the write finds it -- see
-        :data:`_NEXT_FAILED_SIGN_INS`.
+        The row is never read in a statement of its own first. Everything the decision needs
+        is computed inside the one statement, from the row as the write finds it -- see
+        :data:`_NEXT_FAILED_SIGN_INS` -- and so is the one fact the journal needs, whether the
+        account was open before this attempt (see :data:`_NOTE_A_FAILED_SIGN_IN`).
         """
         row = session.execute(
             _NOTE_A_FAILED_SIGN_IN,
@@ -690,12 +716,22 @@ class UserRepository:
         ).first()
         if row is None:  # pragma: no cover - the row was read microseconds ago
             return
-        record = _record(row)
-        if record.sign_in_blocked_until is None:
+        *columns, found_the_account_open = row
+        record = _record(columns)
+        if record.sign_in_blocked_until is None or not found_the_account_open:
             return
-        # Non-NULL here means *this attempt shut it*: a live block is refused before this
-        # statement runs, and a spent one is set to NULL by it. So there is exactly one of
-        # these per cooling-off period, however hard anybody knocks.
+        # Both conditions, and the second is the one that counts the period. A non-NULL block
+        # in the returned row says the account is shut now; it does not say *this attempt* shut
+        # it, because an attempt that overlapped the one that did also returns a non-NULL block
+        # (see :data:`_NOTE_A_FAILED_SIGN_IN`). What says it is the value the row held before
+        # this statement: NULL, or spent. At most one attempt per cooling-off period finds the
+        # account in that state -- the next finds the block the first wrote -- so there is at
+        # most one of these per period, however attempts overlap. An attempt that did not shut
+        # it neither journals nor logs "now shut": the one that did has.
+        #
+        # The event is written in this session, so in the transaction of the change: when the
+        # attempt that shut the account rolls back, the block and its event go together and the
+        # next attempt that finds the account open is the one that journals.
         #
         # `PROD-06`: that is also why this is the one failed attempt the journal records. An
         # attacker guessing cannot grow the table: at most one row per account per cooling-off

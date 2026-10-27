@@ -1,7 +1,7 @@
 {
   "lock_version": 1,
   "purpose": "Everything a later regeneration needs to prove the committed API client matches its input: the toolchain pins, the exact generator invocation, and the exact OpenAPI bytes the client was generated from. Verified by web/tests/guards/frontend-lock.guard.test.ts, which recomputes every digest here and fails if one has moved.",
-  "owner": "EXEC-PAR-START-01 reseal",
+  "owner": "OPT-PROJECT-ALL-SECTIONS-01 reseal",
   "toolchain": {
     "node": "22.23.1",
     "npm": "10.9.8",
@@ -10,24 +10,24 @@
     "manifest": "web/package.json",
     "lockfile": "web/package-lock.json",
     "lockfileVersion": 3,
-    "lockfile_sha256": "98691bc83549225d6d94ec53c1fc810a58b12cf74487786638fd007d57fd3b77",
+    "lockfile_sha256": "fb24292ef0fa9a93c5628f58cc1d7908206757c6637766dffd5f453e361c468f",
     "install_command": "npm --prefix web ci",
     "no_floating_versions": "Every dependency, devDependency, engines entry and packageManager value is an exact version. `save-exact=true` and `engine-strict=true` in web/.npmrc keep a later `npm install` from reintroducing a range. Enforced by web/tests/guards/pinned-versions.guard.test.ts."
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "664a9069d2d476c84dacbd171cd9f31cb4c51299a4a6f56d89b97552106a25af",
-    "content_commit": "d81a14f3",
-    "content_commit_subject": "Seal executor choice OpenAPI content",
+    "sha256": "14375c443fb530324592bdb3dfb1f40dbe10e45ad82785e9797331ecbfd9357a",
+    "content_commit": "19f4781d",
+    "content_commit_subject": "docs(contract): section_not_ar is no longer produced; uploadDocument and the dashboard say what is true",
     "dispatch_named_commit": "a3e83f39cfcb02f4ea5565e6f45f3f2b2f720e97",
-    "commit_note": "EXEC-PAR-START-01 adds an optional executor_connection_id to startRun and a read-only executor to RunStatus; contract 1.6.0 (92/104/301), migration 0032, no new error code.",
+    "commit_note": "OPT-PROJECT-ALL-SECTIONS-01 repairs prose only: getSpecificationPrices and startOptimisationPass accept a version of any section (section_not_ar stays in the enum, no longer produced), uploadDocument says what routes an analysis, getDashboardSummary says fifteen sections, one reseal paragraph in info.description; contract 1.7.0 (92/104/301), migration 0034, no new error code.",
     "openapi_version": "3.1.0",
-    "info_version": "1.6.0",
+    "info_version": "1.7.0",
     "paths": 92,
     "operations": 104,
     "component_schemas": 301,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "664a9069d2d476c84dacbd171cd9f31cb4c51299a4a6f56d89b97552106a25af",
+    "snapshot_sha256": "14375c443fb530324592bdb3dfb1f40dbe10e45ad82785e9797331ecbfd9357a",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "b517b7368a42bfa428a28e8bda2d085cf62b8e1b0a79affd88d7a5600477e69c",
-      "index.ts": "601542b8cbbbf81c4b1d6fdfee173eaa1a23d2674b7932661c333608c750c385",
-      "operations.gen.ts": "6e6cd352d7e662a47c9f16b5fdb8cc8c50d3fe0de3d8d0c67125749f666c6b87",
-      "types.gen.ts": "89239349ad05933b78c2b124ba0ca23542f0964449f9f2232e1900dba760fc99"
+      "client.gen.ts": "e905afb72af12f2d9867752371e50f15083ae7315ca96ec19340477c0a29702a",
+      "index.ts": "c1adb3a7a351c302c31dc70b871d8bbb744b90be38e67dfdae2b8e48a2e5582e",
+      "operations.gen.ts": "16f110bba9f614e7062e7a24e3f62a7eddfec71787da94027af41c77cf75e066",
+      "types.gen.ts": "77f90291913f03deb265917f1ed5ef749cfb601762041b34006683afdc3ffe68"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

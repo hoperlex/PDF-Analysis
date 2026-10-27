@@ -1,0 +1,42 @@
+{
+ "format": "section-widen-specimen/1",
+ "section_code": "GP",
+ "case": "shares_positive",
+ "expect": "finding",
+ "origin": {
+  "kind": "synthetic",
+  "statement": "Text and reply authored by hand for SECTION-WIDEN-G3-01 to show what a widened prompt rule is meant to report or to leave alone, and filed by SECTION-PROMPT-SENTENCE-GUARD-01. No model produced this reply. Not field evidence for any profile's expert review; it says nothing about how a model answers.",
+  "task_id": "SECTION-WIDEN-G3-01",
+  "source_report": "docs/program/SECTION-WIDEN-G3-01.md",
+  "filed_by": "SECTION-PROMPT-SENTENCE-GUARD-01"
+ },
+ "pages": [
+  "Баланс территории (вымышленный пример для проверки профиля), %\nЗастройка — 26,7\nТвёрдые покрытия — 34,2\nОзеленение — 37,5\nИтого — 100,0",
+  "Пояснительная записка. Участок расположен в границах кадастрового квартала."
+ ],
+ "observations": [
+  {
+   "category": "internal_contradiction",
+   "finding_text": "Синтетический ответ (ГП), не результат вызова модели: итог долей баланса территории записан как 100,0 %, а три позиции дают 98,4 %.",
+   "recommendation_text": "Согласовать итог долей и доли позиций баланса территории.",
+   "evidence": [
+    {
+     "page_number": 1,
+     "quote": "Итого — 100,0"
+    },
+    {
+     "page_number": 1,
+     "quote": "Застройка — 26,7"
+    },
+    {
+     "page_number": 1,
+     "quote": "Твёрдые покрытия — 34,2"
+    },
+    {
+     "page_number": 1,
+     "quote": "Озеленение — 37,5"
+    }
+   ]
+  }
+ ]
+}

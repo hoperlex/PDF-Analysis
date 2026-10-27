@@ -81,6 +81,7 @@ from auditmanager.analysis.text import ProviderConfig
 from auditmanager.shared.db.config import DatabaseSettings, parse_database_url
 from auditmanager.shared.db.engine import create_database_engine
 from auditmanager.storage import S3BlobStore, S3StorageSettings
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE, resolve_reference_profile
 
 _HARNESS_NAME = "b5_run_harness"
 _HARNESS_PATH = Path(__file__).resolve().parents[1] / "runs" / "harness.py"
@@ -269,6 +270,7 @@ def _client(
         provider_mode="recorded",
         analysis_profile_id=str(_PROFILE.analysis_profile_id),
         prompt_bundle_id=str(_PROFILE.prompt_bundle.prompt_bundle_id),
+        text_profiles=resolve_reference_profile,
         carrier=carrier,
     )
     if isinstance(carrier, DurableCarrier):
@@ -300,13 +302,8 @@ def _client(
     yield TestClient(app, raise_server_exceptions=False)
 
 
-def _resolve_profile() -> Any:
-    from auditmanager.analysis.text import resolve_profile
+_PROFILE = V1_REFERENCE_PROFILE
 
-    return resolve_profile()
-
-
-_PROFILE = _resolve_profile()
 
 def _auth() -> dict[str, str]:
     """The header every request here carries. A function, because the credential is now lazy."""

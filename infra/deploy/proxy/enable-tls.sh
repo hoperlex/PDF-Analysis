@@ -1,5 +1,6 @@
 #!/bin/sh
-# THE SWITCH. Mounted by `compose.tls.yml` at `/docker-entrypoint.d/25-enable-tls.sh`,
+# THE SWITCH. Mounted by `infra/acme/compose.acme.yml` at `/docker-entrypoint.d/25-enable-tls.sh`
+# (`PROD-01-TLS-ACME-01`; it was `compose.tls.yml` until then, which now only publishes 443),
 # where the official nginx image's entrypoint runs every executable `*.sh` -- `find
 # /docker-entrypoint.d/ -follow -type f | sort -V` -- BEFORE the master process starts and
 # therefore before the parse that would refuse a missing certificate.
@@ -8,7 +9,9 @@
 # `/etc/nginx/tls/privkey.pem` both there and non-empty?
 #
 #   yes -> copy `/etc/nginx/tls-server.conf` to `/etc/nginx/conf.d/tls.conf`. nginx loads
-#          it, the container listens on 8443, and `compose.tls.yml` publishes it as 443.
+#          it and the container listens on 8443. Whether 8443 is PUBLISHED as 443 is a separate
+#          decision, `compose.tls.yml`, taken per deploy (`R-146s`). `/etc/nginx/tls` is the
+#          `certs` volume the ACME client writes and this container mounts READ-ONLY.
 #   no  -> install nothing, REMOVE any `conf.d/tls.conf` left from an earlier start, and
 #          say so on the container log. nginx serves the plain port exactly as it does
 #          without this file, and the stack stays up.
@@ -27,7 +30,13 @@
 # directory rather than refusing. So a mis-resolved certificate mount does not fail loudly;
 # it arrives as an empty `/etc/nginx/tls`, which is exactly the `no` branch -- the stack
 # stays up on the plain port and the log names the directory it found empty. That is the
-# behaviour this script was shaped around rather than one it happens to have.
+# behaviour this script was shaped around rather than one it happens to have. (The pair is a
+# named volume now, which docker does not invent: an empty `/etc/nginx/tls` means the ACME
+# client has not exported a pair yet, and `docker compose logs acme` says why.)
+#
+# THE SAME SWITCH RUNS AGAIN LATER. `watch-certificate.sh` calls this script when the pair on the
+# volume changes while nginx is running, so it must stay idempotent: installing what is already
+# installed and removing what is already gone are both no-ops.
 #
 # POSIX `sh`, because the pinned image is `nginx:1.27-alpine` and there is no bash in it.
 
@@ -47,6 +56,7 @@ off() {
     say "  certificate: $CERT"
     say "  private key: $KEY"
     say "TLS IS OFF. The stack serves plain HTTP on the published port and nothing else."
+    say "If ALPHA_CERT_NAME is set, the ACME client has not exported a pair yet: docker compose logs acme."
     say "See docs/program/DEPLOYMENT_RUNBOOK.md section 6."
     exit 0
 }

@@ -141,7 +141,7 @@ function withRouter(element: ReactElement): string {
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.6.0',
+    contract_version: '1.7.0',
     error_code: code,
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-contrast-1',
@@ -637,8 +637,9 @@ export function screens(): Screen[] {
     workerOf: () => ({ kind: 'held' as const, workerId: 'wrk_01J9ZQ8K7NHVXW3T2R5M6P4Q8A' }),
     onCancel: noop, onReaudit: noop, onPriority: noop, onNext: null, onPrevious: null,
   })));
-  // `W59-ANALYSIS-SETTINGS-01`: «Настройки анализа» — a builtin profile, a draft with its
-  // legacy source, and a section with no profile, so every row shape is censused.
+  // `W59-ANALYSIS-SETTINGS-01`: «Настройки анализа» — a section with no profile (АР), a draft with
+  // its legacy source, an authored draft with none and a section the server left unprofiled, so
+  // every row shape is censused.
   // `W60-OPT-MATCH-01`: «Спецификация и цены» — a row of each status (three badge tones), a
   // counted amount beside dashes, the totals panel on its tint, and a state that stops it.
   {
@@ -741,13 +742,7 @@ export function screens(): Screen[] {
   })));
   add('AnalysisProfileTable loaded', render(createElement(AnalysisProfileTable, {
     items: [
-      {
-        section_code: 'AR', section_name: 'Архитектурные решения',
-        profile: {
-          analysis_profile_id: 'ap_01M25P3TH08VVTTGJRXYBZZ7RP', prompt_bundle_id: 'pb_01M25P3TH0PDQYVKTRQFEM0CYS',
-          profile_version: '1.0.0', status: 'builtin', prompt_bundle_sha256: SHA, content_sha256: SHA, source: null,
-        },
-      },
+      { section_code: 'AR', section_name: 'Архитектурные решения', profile: null },
       {
         section_code: 'PS', section_name: 'Пояснительная записка',
         profile: {
@@ -760,7 +755,7 @@ export function screens(): Screen[] {
         },
       },
       {
-        // `PB-PROFILE-01`: an authored draft profile, with no legacy source (like AR's, which has none).
+        // `PB-PROFILE-01`: an authored draft profile, with no legacy source.
         section_code: 'PB', section_name: 'Пожарная безопасность',
         profile: {
           analysis_profile_id: 'ap_01M5G4NZVKNZJYH722M0SXXP3X', prompt_bundle_id: 'pb_01M5G4NZVKHM9GP4EH22JACW2X',
@@ -769,8 +764,9 @@ export function screens(): Screen[] {
       },
     ],
   })));
-  // The contract still allows a section with no registered profile (`profile: null`); no section
-  // is one in the shipped registry any more, so the state is rendered for the imagined `UNPROFILED`.
+  // The contract allows a section with no registered profile (`profile: null`). АР is the one in the
+  // shipped registry and has wording of its own (`PROD-11-AR-V1-V2-REMOVAL-01`, rendered above); the
+  // generic state is rendered for the imagined `UNPROFILED`.
   add('AnalysisProfileTable one section without a profile', render(createElement(AnalysisProfileTable, {
     items: [{ section_code: UNPROFILED, section_name: 'Генеральный план', profile: null }],
   })));

@@ -266,7 +266,10 @@ if (journey !== null) {
   );
   expect(
     journey.write?.stepsChecked === declaredWriteSteps,
-    `write phase did not check ${declaredWriteSteps}/${declaredWriteSteps} steps`,
+    `write phase did not check ${declaredWriteSteps}/${declaredWriteSteps} steps` +
+      ((journey.write?.stepsPending ?? 0) > 0
+        ? ` (${journey.write.stepsPending} are PENDING pending_v3_activation: they need a published АР run)`
+        : ''),
   );
   expect(journey.write?.stoppedAt === null, 'write phase stopped before completion');
   expect(
@@ -378,6 +381,7 @@ const phases = {
     write: {
       outcome: writeComplete ? 'PASS' : 'FAIL',
       checked: journey?.write?.stepsChecked ?? 0,
+      pending: journey?.write?.stepsPending ?? 0,
       declared: journey?.write?.stepsDeclared ?? 0,
     },
     coldRoutes: {

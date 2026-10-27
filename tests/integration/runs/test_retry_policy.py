@@ -65,6 +65,7 @@ from auditmanager.runs import (
     start_audit_run,
 )
 from auditmanager.shared.errors import DomainError, ErrorCode
+from tests.support.v1_reference_profile import resolve_reference_profile
 
 STAGE = "text_analysis"
 
@@ -225,6 +226,7 @@ def test_an_unreachable_provider_is_retried_and_the_run_still_publishes(
         adapter=adapter,
         provider_config=provider_config,
         sleep=waits.append,
+        text_profiles=resolve_reference_profile,
     )
 
     assert adapter.calls == 2, (
@@ -283,6 +285,7 @@ def test_the_model_answering_badly_is_never_retried(
         adapter=adapter,
         provider_config=provider_config,
         sleep=waits.append,
+        text_profiles=resolve_reference_profile,
     )
 
     assert adapter.calls == 1, (
@@ -327,6 +330,7 @@ def test_the_budget_is_finite_and_its_exhaustion_reaches_a_terminal(
         adapter=adapter,
         provider_config=provider_config,
         sleep=waits.append,
+        text_profiles=resolve_reference_profile,
     )
 
     assert adapter.calls == ATTEMPT_BUDGET, (
@@ -392,6 +396,7 @@ def test_the_cost_ceiling_binds_across_attempts_not_per_attempt(
         provider_config=provider_config,
         cost_meter=meter,
         sleep=lambda _seconds: None,
+        text_profiles=resolve_reference_profile,
     )
 
     assert spent_adapter.calls == 2
@@ -419,6 +424,7 @@ def test_the_cost_ceiling_binds_across_attempts_not_per_attempt(
         provider_config=provider_config,
         cost_meter=CostMeter(ceiling_usd=1.00),
         sleep=lambda _seconds: None,
+        text_profiles=resolve_reference_profile,
     )
     assert fresh_adapter.calls == 2
     assert fresh_result.terminal_state == "published", (
@@ -456,6 +462,7 @@ def test_a_persisted_sum_that_spans_unpriced_spend_is_not_called_measured(
         provider_config=provider_config,
         cost_meter=CostMeter(ceiling_usd=2.00),
         sleep=lambda _seconds: None,
+        text_profiles=resolve_reference_profile,
     )
     fresh_stage = _stage_row(session, fresh_run)
     assert fresh_stage.status == "succeeded"
@@ -475,6 +482,7 @@ def test_a_persisted_sum_that_spans_unpriced_spend_is_not_called_measured(
         provider_config=provider_config,
         cost_meter=CostMeter(ceiling_usd=2.00, spent_usd=0.90),
         sleep=lambda _seconds: None,
+        text_profiles=resolve_reference_profile,
     )
     carried_stage = _stage_row(session, carried_run)
     assert carried_stage.status == "succeeded"
@@ -507,6 +515,7 @@ def test_a_later_reader_can_tell_a_first_try_success_from_a_retried_one(
         adapter=_ScriptedProvider(recorded_adapter, outages=0),
         provider_config=provider_config,
         sleep=lambda _seconds: None,
+        text_profiles=resolve_reference_profile,
     )
     retried_run = _start(session, seeded, new_key, "headline-retried")
     execute_run(
@@ -516,6 +525,7 @@ def test_a_later_reader_can_tell_a_first_try_success_from_a_retried_one(
         adapter=_ScriptedProvider(recorded_adapter, outages=1),
         provider_config=provider_config,
         sleep=lambda _seconds: None,
+        text_profiles=resolve_reference_profile,
     )
 
     rows = session.execute(
@@ -571,6 +581,7 @@ def test_a_success_on_the_last_allowed_attempt_did_not_exhaust_the_budget(
         adapter=adapter,
         provider_config=provider_config,
         sleep=waits.append,
+        text_profiles=resolve_reference_profile,
     )
 
     # -- the precondition: this run really did use its whole budget and still publish.

@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.bootstrap.adapters import BlockAdapter
 from auditmanager.runs import execute_run, start_audit_run
+from tests.support.v1_reference_profile import resolve_reference_profile
 
 
 def _block_adapter(session: Session, blob_store) -> BlockAdapter:
@@ -50,6 +51,7 @@ def test_a_published_run_s_block_index_answers_produced_with_real_geometry(
         blob_store=blob_store,
         adapter=recorded_adapter,
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
     assert result.terminal_state == "published", (
         f"the run did not reach the success terminal: {dict(result.stage_statuses)}"
@@ -106,6 +108,7 @@ def test_the_view_carries_no_crops_field_at_all(
         blob_store=blob_store,
         adapter=recorded_adapter,
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
     view = _block_adapter(session, blob_store).get_block_index(
         version_uid=seeded.version_uid

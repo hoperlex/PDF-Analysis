@@ -1,10 +1,9 @@
-"""The two opaque identities of the recorded AR v2 profile.
+"""The two opaque identities of the **retired** recorded AR v2 profile.
 
-``ar_v3.v3_profile`` asserts that its own identities differ from v1's and v2's, so it needs
-these two values without importing the recorded v2 registration (which also holds
-``resolve_recorded_profile`` and imports the v2 prompt material and response schema).
-``ar_v2.registered`` reads them from here; the values are unchanged since the
-registration (``PROD-10``, ``ADR-0024`` section 2).
+The recorded v2 package is gone (``PROD-11-AR-V1-V2-REMOVAL-01``, ``ADR-0024`` section 2) and nothing
+resolves these values. They stay because ``ar_v3.v3_profile`` asserts that its own identities
+differ from v1's and v2's: a persisted row may still carry a retired pair, and the v3 beta pair
+must never be mistaken for one. The values are unchanged since the registration.
 """
 
 from __future__ import annotations

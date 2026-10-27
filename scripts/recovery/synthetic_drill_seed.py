@@ -41,12 +41,15 @@ from sqlalchemy.orm import Session  # noqa: E402
 
 from auditmanager.access.public import AccountRepository, UserRepository  # noqa: E402
 from auditmanager.analysis.text import (  # noqa: E402
-    AR_TEXT_PROFILE,
     AR_TEXT_PROMPT_BUNDLE,
+    CATEGORIES,
+    STAGE_ID,
+    AnalysisProfile,
     ProviderConfig,
     ProviderMode,
     RecordedAdapter,
 )
+from auditmanager.analysis.text.profile import ANALYSIS_PROFILE_ID  # noqa: E402
 from auditmanager.decisions import record_decision  # noqa: E402
 from auditmanager.dispatch.public import assign_work, transition_assignment  # noqa: E402
 from auditmanager.findings import published_findings  # noqa: E402
@@ -78,6 +81,26 @@ _REPO = Path(__file__).resolve().parents[2]
 _CORPUS = _REPO / "fixtures" / "synthetic" / "ar"
 _BUNDLES = _CORPUS / "bundles"
 _RECORDINGS = _REPO / "fixtures" / "recorded" / "text_analysis"
+
+#: `PROD-11-AR-V1-V2-REMOVAL-01`. АР is no longer a text profile of the product, so no served path
+#: can start or execute a v1 АР run. The drill still wants a dataset shaped like the beta's data,
+#: which holds finished v1 runs with findings and decisions, so the seed executes one under the
+#: retired v1 profile, built here from the constants ``analysis.text`` keeps (the same objects the
+#: removed ``AR_TEXT_PROFILE`` was made of) and passed to the executor explicitly.
+_HISTORICAL_V1 = AnalysisProfile(
+    analysis_profile_id=ANALYSIS_PROFILE_ID, profile_version="1.0.0", stage_id=STAGE_ID,
+    discipline="AR", categories=CATEGORIES, prompt_bundle=AR_TEXT_PROMPT_BUNDLE,
+)
+
+
+def _resolve_historical_v1(analysis_profile_id: str, prompt_bundle_id: str) -> AnalysisProfile:
+    if (str(analysis_profile_id), str(prompt_bundle_id)) != (
+        str(_HISTORICAL_V1.analysis_profile_id), str(AR_TEXT_PROMPT_BUNDLE.prompt_bundle_id),
+    ):
+        raise LookupError("the seed executes the historical v1 pair only")
+    return _HISTORICAL_V1
+
+
 _NAMES = frozenset({
     "FOUNDATION_INSTANCE", "POSTGRES_DB", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_PORT",
     "DATABASE_URL", "MINIO_ROOT_USER", "MINIO_ROOT_PASSWORD", "S3_ENDPOINT_URL", "S3_API_PORT",
@@ -245,12 +268,12 @@ def seed_source_lane(values: Mapping[str, str]) -> dict[str, Any]:
                             run_cost_ceiling_usd=1.0, api_key=None, ceiling_is_explicit=False)
     with Session(engine) as session:
         started = start_audit_run(
-            session, version_uid=version_2, analysis_profile_id=str(AR_TEXT_PROFILE.analysis_profile_id),
+            session, version_uid=version_2, analysis_profile_id=str(_HISTORICAL_V1.analysis_profile_id),
             prompt_bundle_id=str(AR_TEXT_PROMPT_BUNDLE.prompt_bundle_id), provider_mode="recorded",
             idempotency_key=key("run"))
         session.commit()
         execute_run(session, started.run_id, blob_store=store, adapter=RecordedAdapter(_RECORDINGS),
-                    provider_config=config)
+                    provider_config=config, text_profiles=_resolve_historical_v1)
         session.commit()
         run_id = str(started.run_id)
         state = session.execute(text("SELECT state FROM audit_run WHERE run_id = :r"),

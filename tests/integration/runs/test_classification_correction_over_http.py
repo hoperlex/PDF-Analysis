@@ -33,7 +33,6 @@ from starlette.testclient import TestClient
 
 from auditmanager.access.accounts import AccountRepository as AccountAccessRepository
 from auditmanager.access.repository import UserRepository as UserAccessRepository
-from auditmanager.analysis.text.profile import AR_TEXT_PROFILE
 from auditmanager.analysis.text.profile_registry import (
     TextProfileRegistry,
     load_text_profile_registry,
@@ -195,8 +194,7 @@ def _client(
     carrier = _Carrier()
     run_adapter = RunAdapter(
         sessions, blob_store=None, adapter=None, provider_config=None, provider_mode="recorded",
-        analysis_profile_id=str(AR_TEXT_PROFILE.analysis_profile_id),
-        prompt_bundle_id=str(AR_TEXT_PROFILE.prompt_bundle.prompt_bundle_id), carrier=carrier,
+        carrier=carrier,
         section_profiles=registry.section_profiles(), text_profiles=registry.resolve,
     )
     signer = build_signer({API_TOKEN_VARIABLE: SECRET})
@@ -429,24 +427,27 @@ class TestRuns:
     ) -> None:
         client, carrier = _client(sessions, blob_store)
         token, _ = _expert()
+        # `PROD-11-AR-V1-V2-REMOVAL-01`: the first section used to be АР (pinning the v1 pair), which
+        # no longer starts a run; it is КЖ now and the correction goes to ТХ. Every claim is the same.
         path = _version_path(world, world.ar)
-        _classify(client, token, path, "P", "AR")
+        _classify(client, token, path, "P", "KJ")
         first_key = _key()
         first = _start(client, token, world.ar, first_key)
         assert first.status_code == 202, first.content
-        assert first.json()["analysis_profile_id"] == str(AR_TEXT_PROFILE.analysis_profile_id)
-        assert _correct(client, token, path, "P", "KJ", REASON, 1).status_code == 201
         kj_profile, kj_bundle = REGISTRY.section_profiles()["KJ"]
+        assert (first.json()["analysis_profile_id"], first.json()["prompt_bundle_id"]) == (kj_profile, kj_bundle)
+        assert _correct(client, token, path, "P", "TX", REASON, 1).status_code == 201
+        tx_profile, tx_bundle = REGISTRY.section_profiles()["TX"]
         second = _start(client, token, world.ar, _key())
         assert second.status_code == 202, second.content
-        assert (second.json()["analysis_profile_id"], second.json()["prompt_bundle_id"]) == (kj_profile, kj_bundle)
+        assert (second.json()["analysis_profile_id"], second.json()["prompt_bundle_id"]) == (tx_profile, tx_bundle)
         assert second.json()["run_id"] != first.json()["run_id"]
         replay = _start(client, token, world.ar, first_key)
         assert replay.status_code == 202 and replay.json()["run_id"] == first.json()["run_id"]
-        assert replay.json()["analysis_profile_id"] == str(AR_TEXT_PROFILE.analysis_profile_id)
+        assert replay.json()["analysis_profile_id"] == kj_profile
         with sessions() as session:
             pinned = RunRepository().get(session, first.json()["run_id"])
-        assert pinned.analysis_profile_id == str(AR_TEXT_PROFILE.analysis_profile_id)
+        assert pinned.analysis_profile_id == kj_profile
         assert len(carrier.submitted) == 2
 
     def test_a_correction_to_a_section_without_a_profile_refuses_the_next_start(

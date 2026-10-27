@@ -1,0 +1,18 @@
+{
+ "format": "section-widen-specimen/1",
+ "section_code": "POS",
+ "case": "negative",
+ "expect": "none",
+ "origin": {
+  "kind": "synthetic",
+  "statement": "Text and reply authored by hand for SECTION-WIDEN-G1-01 to show what a widened prompt rule is meant to report or to leave alone, and filed by SECTION-PROMPT-SENTENCE-GUARD-01. No model produced this reply. Not field evidence for any profile's expert review; it says nothing about how a model answers.",
+  "task_id": "SECTION-WIDEN-G1-01",
+  "source_report": "docs/program/SECTION-WIDEN-G1-01.md",
+  "filed_by": "SECTION-PROMPT-SENTENCE-GUARD-01"
+ },
+ "pages": [
+  "Проект организации строительства (вымышленный пример для проверки профиля)\nРаспределение капитальных вложений по годам строительства, %\nПервый год — 25\nВторой год — 45\nТретий год — 30\nИтого — 100",
+  "Календарный план. Подготовительный период — 3 месяца, основной период — 9 месяцев. Общая продолжительность строительства — 11 месяцев."
+ ],
+ "observations": []
+}

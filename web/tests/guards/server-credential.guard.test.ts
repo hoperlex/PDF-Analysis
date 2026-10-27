@@ -1,11 +1,18 @@
 /**
- * Guard: `T-6`'s credential is not in the browser bundle, and cannot get there by accident.
+ * Guard: the deployment's signing key (`AUDITMANAGER_API_TOKEN`) is not in the browser
+ * bundle, and cannot get there by accident.
  *
  * `web/src/shared/config/env.ts` states the hazard in its own comment — "`NEXT_PUBLIC_*`
  * values are compiled into the browser bundle, so anything placed here is public by
- * construction" — and `W15-AUTH` is the wave that had to put a real secret in the web tier
- * anyway. The secret is safe only because of a structural property, and a structural
- * property that nothing checks is a comment.
+ * construction". `W15-AUTH` put a real secret in the web tier and this guard was written
+ * for that arrangement: the secret was safe only because of a structural property, and a
+ * structural property that nothing checks is a comment.
+ *
+ * **That arrangement is over** (`HARDEN-01`, `EXPOSURE-REVIEW-02` `F-03`). The key signs every
+ * user credential and no web module ever forwarded it; the compose file no longer gives it to
+ * the web container, so the guard's reason is now defence in depth (a developer's `web/.env`
+ * may set it for `next dev`) plus one new rule: no module may call the readers of a key the
+ * deployed container does not have.
  *
  * This is the static half and it runs in milliseconds. The dynamic half — `npm run build`
  * followed by a grep of `.next/static` for the token bytes — is a measurement recorded
@@ -101,6 +108,7 @@ describe('the credential is out of the browser bundle by construction', () => {
       'credential-read-outside-reader',
       'credential-reader-reexported',
       'credential-reader-imported-outside-bff',
+      'signing-key-reader-called',
     ]);
   });
 });
@@ -149,6 +157,21 @@ describe('the scanner goes red on each way the credential could leak', () => {
         text: "import { getApiToken } from '@/shared/config/server-env';\n",
       },
     },
+    {
+      // `HARDEN-01`: the one place a call would be allowed by every other rule.
+      rule: 'signing-key-reader-called',
+      file: {
+        path: 'web/src/app/bff/v1/[...path]/route.ts',
+        text: "const token = getApiToken();\n",
+      },
+    },
+    {
+      rule: 'signing-key-reader-called',
+      file: {
+        path: 'web/src/app/bff/session/store.ts',
+        text: 'if (hasServerCredential ()) { forward(); }\n',
+      },
+    },
   ];
 
   for (const { rule, file } of cases) {
@@ -174,6 +197,18 @@ describe('the scanner goes red on each way the credential could leak', () => {
       text: "import { getApiToken } from '@/shared/config/server-env';\n",
     };
     expect(scanCredentialExposure([allowed])).toEqual([]);
+  });
+
+  it('does not take a mention of the readers in prose, or their definition, for a call', () => {
+    const prose: ScannedFile = {
+      path: 'web/src/app/bff/v1/[...path]/route.ts',
+      text: '// getApiToken is not called here; hasServerCredential neither.\n',
+    };
+    const definition: ScannedFile = {
+      path: CREDENTIAL_READER,
+      text: 'export function getApiToken(): string { return ""; }\n',
+    };
+    expect(scanCredentialExposure([prose, definition])).toEqual([]);
   });
 
   it('does not fire on the two public names that carry nothing secret', () => {

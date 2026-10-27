@@ -31,6 +31,7 @@ from auditmanager.analysis.text import ProviderMode
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.runs import execute_run, start_audit_run
 from auditmanager.shared.identity import IdempotencyKey
+from tests.support.v1_reference_profile import resolve_reference_profile
 
 
 class _AdapterClaiming:
@@ -89,6 +90,7 @@ def test_the_case_really_does_discriminate(
         blob_store=blob_store,
         adapter=agreeing,
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
 
     assert result.terminal_state == "published", result.terminal_state
@@ -108,6 +110,7 @@ def test_an_adapter_claiming_live_is_refused_under_a_recorded_run(
             blob_store=blob_store,
             adapter=lying,
             provider_config=provider_config,
+            text_profiles=resolve_reference_profile,
         )
 
     assert raised.value.code is ErrorCode.ANALYSIS_INPUT_INVALID, raised.value.code
@@ -132,6 +135,7 @@ def test_nothing_is_written_under_the_mode_the_adapter_does_not_provide(
             blob_store=blob_store,
             adapter=lying,
             provider_config=provider_config,
+            text_profiles=resolve_reference_profile,
         )
 
     assert _run_state(session, run_id) == "created", (

@@ -31,7 +31,7 @@ function refusal(
   options: { details?: Record<string, string | number | boolean | null>; retryable?: boolean } = {},
 ): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.6.0',
+    contract_version: '1.7.0',
     error_code: code,
     message: 'A caller-safe sentence.',
     correlation_id: 'cid-group',

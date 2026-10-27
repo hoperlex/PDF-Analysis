@@ -3,8 +3,8 @@
   "section_code": "AI",
   "analysis_profile_id": "ap_01M5AXG1K03864N3KSY4AM9P10",
   "prompt_bundle_id": "pb_01M5AXG1K095VZEZ6BHYM6W9QV",
-  "profile_version": "1.0.0",
-  "status": "draft",
+  "profile_version": "1.1.0",
+  "status": "reviewed",
   "title_ru": "Архитектурные решения (интерьер)",
   "source": {
     "repository": "PDF-proverka",

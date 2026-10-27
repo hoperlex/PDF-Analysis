@@ -3,8 +3,8 @@
   "section_code": "SS",
   "analysis_profile_id": "ap_01M5AXG1KN9C7BDD3CCHMFTMX3",
   "prompt_bundle_id": "pb_01M5AXG1KNQRT6DYJWYC5X0C5J",
-  "profile_version": "1.0.0",
-  "status": "draft",
+  "profile_version": "1.2.0",
+  "status": "reviewed",
   "title_ru": "Слаботочные системы",
   "source": {
     "repository": "PDF-proverka",

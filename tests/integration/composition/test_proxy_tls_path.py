@@ -42,13 +42,17 @@ PLAIN = PROXY / "nginx.conf"
 TLS_BLOCK = PROXY / "tls-server.conf"
 SWITCH = PROXY / "enable-tls.sh"
 OVERLAY = PROXY / "compose.tls.yml"
+#: `PROD-01-TLS-ACME-01`: the mounts that used to be `compose.tls.yml`'s moved to the ACME overlay (they are
+#: needed whenever a certificate name is configured, and `compose.tls.yml` now only publishes 443).
+ACME_OVERLAY = ROOT / "infra/acme/compose.acme.yml"
 BASE_COMPOSE = ROOT / "infra/deploy/compose.server.yml"
 
-#: Where the overlay must put each file inside the container, and why the path matters.
+#: Where the ACME overlay must put each file inside the container, and why the path matters.
 #: `tls-server.conf` is deliberately NOT under `/etc/nginx/conf.d/`, which the image's own
-#: `include /etc/nginx/conf.d/*.conf;` is the only thing that reads.
+#: `include /etc/nginx/conf.d/*.conf;` is the only thing that reads. The certificate directory is no
+#: longer a bind mount of `./proxy/tls` but the `certs` named volume the ACME client writes.
 MOUNTS = {
-    "./proxy/tls": "/etc/nginx/tls",
+    "certs": "/etc/nginx/tls",
     "./proxy/tls-server.conf": "/etc/nginx/tls-server.conf",
     "./proxy/enable-tls.sh": "/docker-entrypoint.d/25-enable-tls.sh",
 }
@@ -121,12 +125,21 @@ def test_the_tls_block_is_mounted_outside_conf_d() -> None:
     arrives, so a TLS block under `conf.d/` is loaded whether or not the certificate is
     there -- and on a host that has none, the master refuses to start and the one published
     port goes dark. Driven, exit 1: `W26-HOST.md` §2.3.
+
+    `PROD-01-TLS-ACME-01`: the mounts are the ACME overlay's now. The one thing that DOES go into
+    `conf.d/` is the challenge block, which needs no certificate; the TLS block never does, and
+    `compose.tls.yml` mounts nothing at all.
     """
-    overlay = OVERLAY.read_text()
+    overlay = ACME_OVERLAY.read_text()
     assert f"{TLS_BLOCK.name}:/etc/nginx/conf.d" not in overlay
     for source, target in MOUNTS.items():
-        assert f"{source}:{target}:ro" in overlay, f"{source} is not mounted read-only at {target}"
-    assert "/etc/nginx/conf.d" not in overlay
+        assert f"- {source}:{target}:ro" in overlay, f"{source} is not mounted read-only at {target}"
+    conf_d_mounts = re.findall(r"^\s*- (\S+):/etc/nginx/conf\.d/(\S+):ro$", overlay, re.MULTILINE)
+    assert conf_d_mounts == [("./proxy/acme-challenge.conf", "acme-challenge.conf")], conf_d_mounts
+    assert "tls-server.conf" not in "".join(target for _, target in conf_d_mounts)
+    publication = _without_comments(OVERLAY.read_text())
+    assert "volumes:" not in publication, "compose.tls.yml must only publish a port"
+    assert '${ALPHA_HTTPS_PORT:-443}:8443"' in publication
 
 
 def test_the_switch_is_executable_in_git() -> None:
@@ -213,25 +226,42 @@ def test_the_overlay_introduces_no_name_that_could_hold_a_secret() -> None:
 
     The certificate reaches the container as a PATH on a read-only mount, exactly as the
     provider credential reaches it through `env_file:` -- so neither ever enters compose
-    substitution. The only variable this overlay adds is a port number.
+    substitution. The variables an overlay adds are a port number, an interface, a host name,
+    a contact address and a yes/no.
+
+    `PROD-01-TLS-ACME-01` split the one overlay into two. BEFORE: `compose.tls.yml` was asserted to
+    substitute exactly `{ALPHA_HTTPS_PORT, ALPHA_BIND_ADDRESS}` and to default the port to 443.
+    AFTER: each of the two files has its own exact set, reasoned below, `compose.tls.yml` keeps the
+    `443` default, and a name that looks like a credential fails in either.
     """
-    used = set(re.findall(r"\$\{([A-Za-z_][A-Za-z0-9_]*)", OVERLAY.read_text()))
-    # `ALPHA_BIND_ADDRESS` joined `ALPHA_HTTPS_PORT` on 2026-09-22, closing `D-49`: both
-    # published ports bind `127.0.0.1` unless a host deliberately says otherwise, and the
-    # overlay must carry the same rule as the base or a host would be published on one port
-    # and not the other.
-    #
     # THIS GUARD DID ITS JOB AND IS NOT BEING WEAKENED. It is here because `docker compose
     # config` prints substituted values in clear -- `D-42` measured that the provider
-    # credential appears there -- so every name this overlay substitutes has to be one that
+    # credential appears there -- so every name an overlay substitutes has to be one that
     # is safe to print. An interface address is: it is where the port listens, it is visible
     # in `docker port` and in `ss -ltn` to anyone on the host already, and it names no
-    # endpoint, host, bucket or key. The set stays exhaustive and each member is reasoned.
-    assert used == {"ALPHA_HTTPS_PORT", "ALPHA_BIND_ADDRESS"}, (
-        f"the TLS overlay substitutes {sorted(used)}. Every name here is printed in clear by "
-        "`docker compose config`, so a new one is only admissible if it cannot carry a "
-        "secret -- and admitting it means saying so here, in this list."
-    )
+    # endpoint, host, bucket or key. The sets stay exhaustive and each member is reasoned.
+    expected = {
+        OVERLAY: {
+            "ALPHA_HTTPS_PORT",  # a port number
+            "ALPHA_PUBLIC_ADDRESS",  # an interface address, as `ALPHA_BIND_ADDRESS` was
+        },
+        ACME_OVERLAY: {
+            "ALPHA_INSTANCE",  # the project's name, already substituted everywhere in the base file
+            "ALPHA_CERT_NAME",  # a public DNS name
+            "ALPHA_ACME_EMAIL",  # a contact address; not a secret
+            "ALPHA_ACME_STAGING",  # yes or no
+            "ALPHA_PUBLIC_ADDRESS",  # an interface address
+            "ALPHA_ACME_HTTP_PORT",  # a port number
+        },
+    }
+    for path, names in expected.items():
+        used = set(re.findall(r"\$\{([A-Za-z_][A-Za-z0-9_]*)", path.read_text()))
+        assert used == names, (
+            f"{path.name} substitutes {sorted(used)}. Every name here is printed in clear by "
+            "`docker compose config`, so a new one is only admissible if it cannot carry a "
+            "secret -- and admitting it means saying so here, in this list."
+        )
+        assert not [n for n in used if re.search(r"PASSWORD|TOKEN|SECRET|KEY|CREDENTIAL", n)], used
     assert "${ALPHA_HTTPS_PORT:-443}" in OVERLAY.read_text(), "it must default, or the base deploy breaks"
 
 

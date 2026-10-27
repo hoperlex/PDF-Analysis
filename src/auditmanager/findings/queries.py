@@ -19,7 +19,7 @@ from typing import Sequence
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from auditmanager.analysis.public import AR_V2_RECORDED_PROFILE_ID, AR_V3_BETA_PROFILE_ID
+from auditmanager.analysis.public import AR_V3_BETA_PROFILE_ID
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 _PUBLISHED_FINDINGS = text(
@@ -184,12 +184,12 @@ def group_published_findings(rows: Sequence[FindingRow]) -> tuple[FindingGroupRo
         canonical_id = stored_canonical_id
         # The old v1 publisher still inserts one observation and leaves the
         # post-0022 canonical column null. That exact legacy shape is identifiable
-        # by its single member, absent severity and non-v2/v3 profile.
+        # by its single member, absent severity and a profile that is not AR v3's
+        # (the recorded v2 publisher is removed, `PROD-11-AR-V1-V2-REMOVAL-01`; its
+        # rows always carried a severity and a canonical member).
         if (canonical_id is None and len(members) == 1
                 and head.proposed_severity is None
-                and head.analysis_profile_id not in {
-                    str(AR_V2_RECORDED_PROFILE_ID), str(AR_V3_BETA_PROFILE_ID),
-                }):
+                and head.analysis_profile_id != str(AR_V3_BETA_PROFILE_ID)):
             canonical_id = head.finding_observation_id
         if (canonical_id is None or ids.count(canonical_id) != 1
                 or len(set(ids)) != len(ids)
@@ -320,7 +320,7 @@ _FINDING_BY_UID = text(
       AND (o.finding_observation_id = f.canonical_observation_id
            OR (f.canonical_observation_id IS NULL
                AND o.proposed_severity IS NULL
-               AND o.analysis_profile_id NOT IN (:v2_profile, :v3_profile)
+               AND o.analysis_profile_id <> :v3_profile
                AND NOT EXISTS (
                    SELECT 1 FROM finding_observation sibling
                    WHERE sibling.finding_uid = f.finding_uid
@@ -345,7 +345,6 @@ def finding_by_uid(session: Session, finding_uid: str) -> FindingRow | None:
     """
     row = session.execute(_FINDING_BY_UID, {
         "finding_uid": finding_uid,
-        "v2_profile": str(AR_V2_RECORDED_PROFILE_ID),
         "v3_profile": str(AR_V3_BETA_PROFILE_ID),
     }).mappings().first()
     if row is None:

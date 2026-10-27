@@ -1,0 +1,42 @@
+{
+ "format": "section-widen-specimen/1",
+ "section_code": "EOM",
+ "case": "positive",
+ "expect": "finding",
+ "origin": {
+  "kind": "synthetic",
+  "statement": "Text and reply authored by hand for SECTION-WIDEN-G3-01 to show what a widened prompt rule is meant to report or to leave alone, and filed by SECTION-PROMPT-SENTENCE-GUARD-01. No model produced this reply. Not field evidence for any profile's expert review; it says nothing about how a model answers.",
+  "task_id": "SECTION-WIDEN-G3-01",
+  "source_report": "docs/program/SECTION-WIDEN-G3-01.md",
+  "filed_by": "SECTION-PROMPT-SENTENCE-GUARD-01"
+ },
+ "pages": [
+  "Щит ЩР-1. Таблица нагрузок (вымышленный пример для проверки профиля)\nОсвещение — установленная мощность 4,2 кВт\nРозеточная сеть — установленная мощность 6,0 кВт\nВентиляция — установленная мощность 3,5 кВт\nИтого по щиту ЩР-1 — установленная мощность 15,0 кВт",
+  "Общие данные. Категория надёжности электроснабжения — третья."
+ ],
+ "observations": [
+  {
+   "category": "internal_contradiction",
+   "finding_text": "Синтетический ответ (ЭОМ), не результат вызова модели: итог установленной мощности щита ЩР-1 записан как 15,0 кВт, а три строки таблицы нагрузок дают 13,7 кВт.",
+   "recommendation_text": "Свести итог установленной мощности щита ЩР-1 и строки таблицы нагрузок к одному значению.",
+   "evidence": [
+    {
+     "page_number": 1,
+     "quote": "Итого по щиту ЩР-1 — установленная мощность 15,0 кВт"
+    },
+    {
+     "page_number": 1,
+     "quote": "Освещение — установленная мощность 4,2 кВт"
+    },
+    {
+     "page_number": 1,
+     "quote": "Розеточная сеть — установленная мощность 6,0 кВт"
+    },
+    {
+     "page_number": 1,
+     "quote": "Вентиляция — установленная мощность 3,5 кВт"
+    }
+   ]
+  }
+ ]
+}

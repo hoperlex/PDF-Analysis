@@ -55,6 +55,8 @@ COPY_SERVE = DEPLOY_DIR / "copy-serve.sh"
 PROBE = DEPLOY_DIR / "capacity-probe.sh"
 PULL = DEPLOY_DIR / "pull-copy.sh"
 LIB = DEPLOY_DIR / "lib/forced-command.sh"
+LISTENERS_LIB = DEPLOY_DIR / "lib/proxy-listeners.sh"
+GRANTS_SCRIPT = DEPLOY_DIR / "apply-grants.sh"
 RESTORE_TEST = ROOT / "scripts/stand-copy/restore-test.sh"
 DEPLOY_SH = DEPLOY_DIR / "deploy.sh"
 RECEIVE = DEPLOY_DIR / "receive-bundle.sh"
@@ -136,7 +138,12 @@ def hold(name):
 
 
 if argv[:1] == ["compose"]:
-    sub, rest = argv[5], argv[6:]
+    # `--env-file E` and one `--file F` per member of the compose file list: the sub-command is the first word
+    # after them. Every script before `PROD-02` passed exactly one file; the proxy's recreation passes two.
+    position = 1
+    while position < len(argv) and argv[position] in ("--env-file", "--file"):
+        position += 2
+    sub, rest = argv[position], argv[position + 1:]
     if sub == "ps":
         if state.get("ps_fails"):
             sys.exit(1)
@@ -155,6 +162,12 @@ if argv[:1] == ["compose"]:
                 state["running"].append(service)
         save()
         sys.exit(0)
+    if sub == "up":
+        # `PROD-02`: only the proxy is ever recreated, and from then on it publishes no 8443.
+        if rest[-3:] == ["-d", "--no-deps", "proxy"] and int(state.get("proxy_up_exit", 0)) == 0:
+            state["https_published"] = False
+            save()
+        sys.exit(int(state.get("proxy_up_exit", 0)))
     if sub == "exec":
         service, command = rest[1], rest[2:]
         if service == "postgres" and command[0] == "psql":
@@ -206,6 +219,19 @@ if argv[:1] == ["compose"]:
         if "s3-init" in rest:
             out(state.get("mc_output", ""))
             sys.exit(int(state.get("mc_exit", 0)))
+        if "auditmanager.access.revoke" in rest:
+            # `PROD-02`: `restore-db` raises every account's `token_epoch` (`R-52`) as `reset.sh --restore` does.
+            out("access-revoke REVOKED login=admin\n")
+            sys.exit(int(state.get("revoke_exit", 0)))
+        if "auditmanager.access.check" in rest:
+            # `PROD-02`: the credential gate. `gate_exit` 0 clean (the default), 1 the published pair is valid,
+            # anything else could not be answered (no sentinel).
+            gate = int(state.get("gate_exit", 0))
+            if gate == 0:
+                out("access-check GATE OK no published credential\n")
+            elif gate == 1:
+                out("access-check GATE DEFAULT CREDENTIAL: login=admin user_uid=usr_x\n")
+            sys.exit(gate)
         if "api" in rest:
             with open(os.environ["STUB_LOG"] + ".verify-input", "w", encoding="utf-8") as handle:
                 handle.write(drain())
@@ -214,6 +240,12 @@ if argv[:1] == ["compose"]:
         sys.exit(0)
     sys.exit(0)
 
+if argv[:1] == ["port"]:
+    # `listeners_https_published`: does the proxy container publish 8443?
+    if state.get("https_published"):
+        out("0.0.0.0:443\n")
+        sys.exit(0)
+    sys.exit(1)
 if argv[:1] == ["info"]:
     out(state.get("docker_root", "/") + "\n")
     sys.exit(0)
@@ -298,9 +330,16 @@ def _compose_without_worker() -> str:
     return "".join(lines[:start] + lines[end:])
 
 
+#: `PROD-04`: `restore-db` ends by giving the application role its rights back, which needs the second password and the
+#: two urls in the deployed checkout's environment.
 ENV_TEXT = (
     "ALPHA_INSTANCE=an-instance\nPOSTGRES_DB=the_db\nPOSTGRES_USER=the_user\n"
     "S3_BUCKET=the-bucket\n"
+    "POSTGRES_PASSWORD=the-owner-password-0123456789\n"
+    "ALPHA_APP_DB_USER=the_application_role\n"
+    "ALPHA_APP_DB_PASSWORD=the-application-password-0123456789\n"
+    "DATABASE_URL=postgresql+psycopg://the_application_role:the-application-password-0123456789@postgres:5432/the_db\n"
+    "MIGRATOR_DATABASE_URL=postgresql+psycopg://the_user:the-owner-password-0123456789@postgres:5432/the_db\n"
 )
 
 
@@ -382,6 +421,8 @@ def _stage(
         ("copy-serve.sh", COPY_SERVE, install / "copy-serve.sh"),
         ("capacity-probe.sh", PROBE, install / "capacity-probe.sh"),
         ("lib", LIB, install / "lib/forced-command.sh"),
+        ("listeners", LISTENERS_LIB, install / "lib/proxy-listeners.sh"),
+        ("grants", GRANTS_SCRIPT, install / "apply-grants.sh"),
     ):
         target.write_text(text_of(name, source), encoding="utf-8")
         target.chmod(0o755)
@@ -544,6 +585,12 @@ def _waiver(stand: Stand) -> str:
     ran = _copy_key(stand, "attest --test-data")
     assert ran.code == 0, (ran.out, ran.err)
     return ran.value("stamp")
+
+
+def _drop_env_line(stand: Stand, name: str) -> None:
+    """Take one setting out of the DEPLOYED checkout's environment (the file `restore-db` reads)."""
+    env = stand.checkout / "infra/deploy/env/alpha.env"
+    env.write_text("".join(line for line in env.read_text().splitlines(keepends=True) if not line.startswith(f"{name}=")))
 
 
 def _resumed(stand: Stand) -> str:
@@ -772,6 +819,27 @@ GUARD_CASES: dict[tuple[str, str], Case] = {
     ("copy-serve.sh", "fingerprint-restored"): Case(
         _key("restore-db {stamp} {dump_sha}", prepare=_then(
             _resumed, lambda s: s.set_state(fingerprint_after_restore=OTHER_FINGERPRINT)))),
+    ("copy-serve.sh", "listeners-library-present"): Case(
+        _key("restore-db {stamp} {dump_sha}", prepare=_then(
+            _resumed, lambda s: (s.install / "lib/proxy-listeners.sh").unlink()))),
+    # `PROD-04`: the application role's rights come back with the restore; asked about before anything is stopped (the
+    # first two) and run right after the restore, before anything connects as the role (the third).
+    ("copy-serve.sh", "grants-script-present"): Case(
+        _key("restore-db {stamp} {dump_sha}", prepare=_then(
+            _resumed, lambda s: (s.install / "apply-grants.sh").unlink()))),
+    ("copy-serve.sh", "app-db-role-configured"): Case(
+        _key("restore-db {stamp} {dump_sha}", prepare=_then(
+            _resumed, lambda s: _drop_env_line(s, "ALPHA_APP_DB_PASSWORD")))),
+    ("copy-serve.sh", "grants-applied"): Case(
+        _key("restore-db {stamp} {dump_sha}", prepare=_then(
+            _resumed, lambda s: s.set_state(psql_exit=1)))),
+    ("copy-serve.sh", "credentials-revoked"): Case(
+        _key("restore-db {stamp} {dump_sha}", prepare=_then(
+            _resumed, lambda s: s.set_state(revoke_exit=2)))),
+    ("copy-serve.sh", "https-withheld"): Case(
+        _key("restore-db {stamp} {dump_sha}", prepare=_then(
+            _resumed, lambda s: s.set_state(gate_exit=1, https_published=True, running=["web", "api", "worker", "proxy"],
+                                            proxy_up_exit=1)))),
     ("copy-serve.sh", "writers-resumed"): Case(
         _key("resume {stamp}", prepare=_then(_dump, lambda s: s.set_state(start_fails=["api"])))),
     # capacity-probe.sh
@@ -1295,6 +1363,178 @@ def test_restore_db_quiesces_again_checks_the_digest_and_leaves_the_writers_stop
 
     assert _copy_key(stand, f"resume {stamp}").code == 0
     assert sorted(stand.state()["running"]) == ["api", "web", "worker"]
+
+
+# --- restore-db ends with the credential gate (`PROD-02`, `R-52`, `R-146s`) -----------------------
+
+
+def _published_site(stand: Stand) -> None:
+    """A stack that terminates TLS itself and whose proxy publishes 443: the state a restore can leave open."""
+    (stand.checkout / "infra/acme").mkdir(parents=True, exist_ok=True)
+    (stand.checkout / "infra/acme/compose.acme.yml").write_text("# stub\n", encoding="utf-8")
+    env = stand.checkout / "infra/deploy/env/alpha.env"
+    env.write_text(env.read_text(encoding="utf-8") + "ALPHA_CERT_NAME=rehearsal-host.sslip.io\n", encoding="utf-8")
+    stand.set_state(running=["web", "api", "worker", "proxy"], https_published=True)
+
+
+def _proxy_ups(stand: Stand) -> list[list[str]]:
+    return [
+        call for call in stand.docker_calls()
+        if call[:1] == ["compose"] and call[-4:] == ["up", "-d", "--no-deps", "proxy"]
+    ]
+
+
+def _restore_db(stand: Stand, **state: object) -> tuple[Ran, str]:
+    stamp = _resumed(stand)
+    if state:
+        stand.set_state(**state)
+    return _copy_key(stand, f"restore-db {stamp} {_dump_sha(stand)}"), stamp
+
+
+def test_restore_db_raises_every_epoch_after_the_fingerprint_check_and_asks_the_gate_last(tmp_path: Path) -> None:
+    stand = _stage(tmp_path)
+    _published_site(stand)
+    ran, _ = _restore_db(stand)
+    assert ran.code == 0, (ran.out, ran.err)
+    calls = stand.docker_calls()
+    restore = next(i for i, c in enumerate(calls) if c[:1] == ["compose"] and c[5] == "exec" and "pg_restore" in c and "--list" not in c)
+    fingerprint = max(i for i, c in enumerate(calls) if c[:1] == ["compose"] and c[5] == "exec" and "psql" in c)
+    revoke = next(i for i, c in enumerate(calls) if "auditmanager.access.revoke" in c)
+    gate = next(i for i, c in enumerate(calls) if "auditmanager.access.check" in c)
+    assert restore < fingerprint < revoke < gate, (restore, fingerprint, revoke, gate)
+    assert "--everyone" in calls[revoke] and "--gate" in calls[gate]
+    for index in (revoke, gate):
+        assert calls[index][calls[index].index("--entrypoint") + 1:][:2] == ["python", "api"], calls[index]
+    assert "token_epoch: raised on every account" in ran.out and "credential_gate: clean" in ran.out, ran.out
+
+
+def test_a_clean_gate_after_restore_db_leaves_a_published_443_alone(tmp_path: Path) -> None:
+    """A restore NEVER opens 443 and does not close it when nothing is wrong."""
+    stand = _stage(tmp_path)
+    _published_site(stand)
+    ran, _ = _restore_db(stand)
+    assert ran.code == 0, (ran.out, ran.err)
+    assert _proxy_ups(stand) == [] and stand.state()["https_published"] is True
+    assert "https_443: unchanged" in ran.out, ran.out
+
+
+@pytest.mark.parametrize(("gate_exit", "verdict"), [(1, "finding"), (2, "unknown")])
+def test_the_published_pair_back_recreates_the_proxy_without_the_443_overlay(
+    tmp_path: Path, gate_exit: int, verdict: str
+) -> None:
+    stand = _stage(tmp_path)
+    _published_site(stand)
+    ran, stamp = _restore_db(stand, gate_exit=gate_exit)
+    assert ran.code == 0, (ran.out, ran.err)
+    [up] = _proxy_ups(stand)
+    files = [up[i + 1] for i, word in enumerate(up) if word == "--file"]
+    assert [Path(f).name for f in files] == ["compose.server.yml", "compose.acme.yml"], up
+    assert stand.state()["https_published"] is False
+    assert f"credential_gate: {verdict}" in ran.out and "https_443: not published" in ran.out, ran.out
+    if verdict == "finding":
+        assert "credential_gate: finding (admin)" in ran.out, ran.out
+    # Nothing was started: the writers stay stopped and the record open for the owner (`resume` is theirs).
+    assert stand.state()["running"] == ["proxy"], stand.state()["running"]
+    assert stand.rec()["state"] == "open" and stand.rec()["stamp"] == stamp
+
+
+def test_a_finding_with_443_never_published_recreates_nothing(tmp_path: Path) -> None:
+    stand = _stage(tmp_path)
+    ran, _ = _restore_db(stand, gate_exit=1)
+    assert ran.code == 0, (ran.out, ran.err)
+    assert _proxy_ups(stand) == []
+    assert "credential_gate: finding (admin)" in ran.out and "https_443: not published" in ran.out, ran.out
+
+
+def test_credentials_that_could_not_be_revoked_stop_before_the_gate_and_before_resume(tmp_path: Path) -> None:
+    stand = _stage(tmp_path)
+    ran, stamp = _restore_db(stand, revoke_exit=2)
+    assert ran.refused("credentials-revoked"), (ran.code, ran.out, ran.err)
+    assert not any("--gate" in call for call in stand.docker_calls()), "the gate was asked of a database whose epochs were not raised"
+    assert stand.state()["running"] == [] and stand.rec()["state"] == "open" and stand.rec()["stamp"] == stamp
+
+
+def test_revoke_matching_nothing_is_not_a_failure(tmp_path: Path) -> None:
+    """`access.revoke` exits 1 when it was well-formed and matched nothing (a dump with no accounts)."""
+    stand = _stage(tmp_path)
+    ran, _ = _restore_db(stand, revoke_exit=1)
+    assert ran.code == 0, (ran.out, ran.err)
+
+
+def test_a_missing_library_refuses_restore_db_before_anything_is_stopped(tmp_path: Path) -> None:
+    stand = _stage(tmp_path)
+    stamp = _resumed(stand)
+    (stand.install / "lib/proxy-listeners.sh").unlink()
+    before = len(stand.docker_calls())
+    ran = _copy_key(stand, f"restore-db {stamp} {_dump_sha(stand)}")
+    assert ran.refused("listeners-library-present"), (ran.code, ran.out, ran.err)
+    assert len(stand.docker_calls()) == before, "restore-db touched docker before it knew it could close 443"
+    assert "DEPLOYMENT_RUNBOOK.md section 13" in ran.err
+    # The verbs that never need the library are not taken down with it.
+    assert _copy_key(stand, "status").code == 0
+
+
+def test_a_missing_grants_script_refuses_restore_db_before_anything_is_stopped(tmp_path: Path) -> None:
+    """`PROD-04`: the dump carries no privileges and the restore recreates schema public, so a restore that cannot give the
+    application role its rights back would end in a database `api` and `worker` cannot read. Refused with nothing touched."""
+    stand = _stage(tmp_path)
+    stamp = _resumed(stand)
+    (stand.install / "apply-grants.sh").unlink()
+    before = len(stand.docker_calls())
+    ran = _copy_key(stand, f"restore-db {stamp} {_dump_sha(stand)}")
+    assert ran.refused("grants-script-present"), (ran.code, ran.out, ran.err)
+    assert len(stand.docker_calls()) == before, "restore-db touched docker before it knew it could restore the rights"
+    assert "DEPLOYMENT_RUNBOOK.md section 13" in ran.err
+    assert _copy_key(stand, "status").code == 0, "the verbs that never need the script are not taken down with it"
+    (stand.install / "apply-grants.sh").write_text("#!/bin/sh\nexit 0\n")  # present but not executable
+    (stand.install / "apply-grants.sh").chmod(0o644)
+    assert _copy_key(stand, f"restore-db {stamp} {_dump_sha(stand)}").refused("grants-script-present")
+
+
+@pytest.mark.parametrize("missing", ["ALPHA_APP_DB_PASSWORD", "ALPHA_APP_DB_USER"])
+def test_an_unconfigured_application_role_refuses_restore_db_before_anything_is_stopped(tmp_path: Path, missing: str) -> None:
+    stand = _stage(tmp_path)
+    stamp = _resumed(stand)
+    _drop_env_line(stand, missing)
+    before = len(stand.docker_calls())
+    ran = _copy_key(stand, f"restore-db {stamp} {_dump_sha(stand)}")
+    assert ran.refused("app-db-role-configured"), (ran.code, ran.out, ran.err)
+    word = "[app_db_password_unset]" if missing.endswith("PASSWORD") else "[app_db_role_invalid]"
+    assert word in ran.err, ran.err
+    assert len(stand.docker_calls()) == before, "restore-db touched docker before it knew the second password was set"
+
+
+def test_the_rights_come_back_right_after_the_restore_and_before_anything_connects_as_the_application_role(tmp_path: Path) -> None:
+    stand = _stage(tmp_path)
+    ran, stamp = _restore_db(stand)
+    assert ran.code == 0, (ran.out, ran.err)
+    calls = stand.docker_calls()
+    psql = [number for number, call in enumerate(calls) if call[:1] == ["compose"] and call[5] == "exec" and "psql" in call]
+    grants = [number for number in psql if any(part.startswith("app_role=") for part in calls[number])]
+    restore = next(number for number, call in enumerate(calls) if "pg_restore" in call)
+    revoke = next(number for number, call in enumerate(calls) if "auditmanager.access.revoke" in call)
+    fingerprint = max(psql)
+    assert len(grants) == 2, "one apply and one verification"
+    assert restore < grants[0] < grants[1] < fingerprint and grants[1] < revoke, calls
+    assert not any("the-application-password-0123456789" in " ".join(call) for call in calls), "a password on a command line"
+
+
+def test_a_failed_grants_step_after_the_restore_is_a_refusal_with_the_writers_stopped_and_the_record_open(tmp_path: Path) -> None:
+    stand = _stage(tmp_path)
+    ran, stamp = _restore_db(stand, psql_exit=1)
+    assert ran.refused("grants-applied"), (ran.code, ran.out, ran.err)
+    assert "api and worker cannot read the restored database" in ran.err
+    assert stand.state()["running"] == [] and stand.rec()["state"] == "open" and stand.rec()["stamp"] == stamp
+    assert not any("auditmanager.access.revoke" in call for call in stand.docker_calls()), "nothing connected as the role"
+
+
+def test_status_prints_the_digest_of_the_installed_library(tmp_path: Path) -> None:
+    stand = _stage(tmp_path)
+    ran = _copy_key(stand, "status")
+    digest = hashlib.sha256((stand.install / "lib/proxy-listeners.sh").read_bytes()).hexdigest()
+    assert f"listeners: {digest}" in ran.out, ran.out
+    (stand.install / "lib/proxy-listeners.sh").unlink()
+    assert "listeners: absent" in _copy_key(stand, "status").out
 
 
 def test_resume_starts_only_what_the_deployed_file_still_declares(tmp_path: Path) -> None:

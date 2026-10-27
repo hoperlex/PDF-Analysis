@@ -27,6 +27,7 @@ from auditmanager.analysis.text import (
 )
 from auditmanager.shared.errors import ErrorCode
 from auditmanager.shared.identity import ModelCallId, RunId
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE
 
 ROOT = Path(__file__).resolve().parents[3]
 TEXT_LAYER = json.loads(
@@ -77,6 +78,7 @@ def _run(reported: str | None, call: CallBinding | None, mode: ProviderMode = Pr
         run_id=RunId.new(), text_layer_document=TEXT_LAYER, adapter=_Adapter(reported, mode),
         config=config, meter=CostMeter(ceiling_usd=1.0),
         call_journal=journal if mode is ProviderMode.LIVE else None, call=call,
+        profile=V1_REFERENCE_PROFILE,
     )
     return outcome, journal
 

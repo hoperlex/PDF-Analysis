@@ -44,6 +44,7 @@ from auditmanager.analysis.text.stage import (
 from auditmanager.runs import RETRYABLE_STAGE_ERRORS
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import ModelCallId, RunId
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE
 
 MODEL_ID = "claude-opus-5"
 BASE_URL = "https://proxy.example/agent/v1"
@@ -434,6 +435,7 @@ def _stage(raw: bytes, *, model: str = CONFIGURED) -> tuple[Any, _Journal]:
             api_key=None, ceiling_is_explicit=True,
         ),
         call_journal=journal,
+        profile=V1_REFERENCE_PROFILE,
     )
     return outcome, journal
 
@@ -494,11 +496,11 @@ def test_an_unpinned_placeholder_still_publishes_from_any_model_and_says_so() ->
 def test_the_recorded_adapter_names_no_model_and_the_stage_is_unchanged(
     text_layer_document: dict[str, Any], recorded_adapter: Any
 ) -> None:
-    from auditmanager.analysis.text import AR_TEXT_PROFILE, build_request, load_text_layer
+    from auditmanager.analysis.text import build_request, load_text_layer
 
     request = build_request(
         model_id=MODEL_ID,
-        bundle=AR_TEXT_PROFILE.prompt_bundle,
+        bundle=V1_REFERENCE_PROFILE.prompt_bundle,
         text_layer=load_text_layer(text_layer_document),
     )
     replayed = recorded_adapter.complete(request)
@@ -512,6 +514,7 @@ def test_the_recorded_adapter_names_no_model_and_the_stage_is_unchanged(
             mode=ProviderMode.RECORDED, model_id=MODEL_ID, run_cost_ceiling_usd=1.00,
             api_key=None, ceiling_is_explicit=True,
         ),
+        profile=V1_REFERENCE_PROFILE,
     )
     assert outcome.status == STATUS_SUCCEEDED
     assert outcome.artifact["provider_mode"] == "recorded"

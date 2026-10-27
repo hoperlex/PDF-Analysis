@@ -836,9 +836,9 @@ class RunAdapter(_SessionHolder):
         adapter: Any,
         provider_config: Any,
         provider_mode: str,
-        analysis_profile_id: str,
-        prompt_bundle_id: str,
         carrier: Any,
+        analysis_profile_id: str | None = None,
+        prompt_bundle_id: str | None = None,
         input_budget_characters: int | None = None,
         section_profiles: Mapping[str, tuple[str, str]] | None = None,
         text_profiles: Any = None,
@@ -862,7 +862,14 @@ class RunAdapter(_SessionHolder):
         # re-audit route through, and the registry resolver the executor runs a run's pinned
         # profile with. The composition root always passes both
         # (``test_the_served_application_routes_by_section``); ``None`` keeps the many tests
-        # that build a bare adapter on the explicit configured pair.
+        # that build a bare adapter on the explicit pair they name. Since
+        # `PROD-11-AR-V1-V2-REMOVAL-01` the pair has no default and the composition root passes
+        # none: an adapter with neither a route table nor a pair is a wiring fault.
+        if section_profiles is None and (analysis_profile_id is None or prompt_bundle_id is None):
+            raise ValueError(
+                "a RunAdapter routes by a section table or names an analysis profile and a "
+                "prompt bundle; it has neither"
+            )
         self._section_profiles = section_profiles
         self._text_profiles = text_profiles
         self._blob_store = blob_store
@@ -882,18 +889,52 @@ class RunAdapter(_SessionHolder):
         self._input_budget_characters = input_budget_characters
 
     def start_ar_v3_group(self, *, version_uid: str, idempotency_key: str) -> models.ArV3BetaGroup:
-        from auditmanager.runs.public import start_ar_v3_group
+        """Create the six pinned Runs, queue them, and hand them to the carrier (`PROD-11D`).
 
-        started = self._write(lambda session: start_ar_v3_group(
-            session,
-            version_uid=version_uid,
-            idempotency_key=idempotency_key,
-            provider_mode=self._provider_mode,
-            pack=(None if self._ar_v3_pack_registry is None
-                  else self._ar_v3_pack_registry.select_beta()),
-            input_budget_characters=self._input_budget_characters,
-            connection_route=self._route_freezer,
-        ))
+        The ordinary ``start_run`` does three things after its command and this method did
+        none: it advanced the Run ``created -> queued`` and enqueued its Job in the
+        accepting transaction, and after the commit it submitted the work to the carrier. A
+        group left six ``created`` Runs and no Job, which a served carrier's poller
+        (``JobRepository.next_queued_run``: a queued Job of a queued or running Run) never
+        finds. The same three steps are taken here for each member, with the same ordering and
+        the same replay rule, and the domain command stays free of both Job and carrier.
+        """
+        from dataclasses import replace
+
+        from auditmanager.jobs.public import JobRepository
+        from auditmanager.runs import RunRepository
+        from auditmanager.runs.public import get_ar_v3_group, start_ar_v3_group
+
+        def work(session: Session) -> Any:
+            started = start_ar_v3_group(
+                session,
+                version_uid=version_uid,
+                idempotency_key=idempotency_key,
+                provider_mode=self._provider_mode,
+                pack=(None if self._ar_v3_pack_registry is None
+                      else self._ar_v3_pack_registry.select_beta()),
+                input_budget_characters=self._input_budget_characters,
+                connection_route=self._route_freezer,
+            )
+            if started.replayed:
+                return started
+            # `D-20`, as in `start_run`: `created -> queued` is taken in the transaction that
+            # accepts the Runs, which has just resolved the pack, the profile, the snapshot and
+            # the six verified sets, and the Job shares it, so a process dying after the 202
+            # leaves claimable rows. Member order is scope order, so the Jobs queue F1 .. S2.
+            for member in started.group.members:
+                RunRepository().advance(
+                    session, run_id=member.run_id, from_state="created", to_state="queued",
+                )
+                JobRepository().enqueue(session, run_id=member.run_id)
+            # The answer says what was accepted (`queued`), not the state read before the edge.
+            return replace(started, group=get_ar_v3_group(session, started.group.group_id))
+
+        started = self._write(work)
+        if not started.replayed:
+            # A replay submits nothing: the key's first request already did.
+            for member in started.group.members:
+                self._carrier.submit(self._job(member.run_id))
         return models.ArV3BetaGroup.model_validate(asdict(started.group))
 
     def get_ar_v3_group(self, *, group_id: str) -> models.ArV3BetaGroup:
@@ -1091,8 +1132,9 @@ class RunAdapter(_SessionHolder):
         """The registry resolver the executor runs a pinned profile with, or ``None``."""
         return self._text_profiles
 
-    def current_configuration(self) -> tuple[str, str, str]:
-        """The analysis profile, prompt bundle and provider mode a new run receives.
+    def current_configuration(self) -> tuple[str | None, str | None, str]:
+        """The explicit analysis profile and prompt bundle (``None`` on a routed deployment), and
+        the provider mode a new run receives.
 
         `R-82`. The same three values ``start_run`` stamps, read from the same fields, so
         a re-audit can only ever record the configuration this deployment executes.
@@ -2816,7 +2858,7 @@ class AnalysisProfileAdapter:
 
 
 def _profile_summary(entry: Any) -> models.AnalysisProfileSummary:
-    """One registry entry as the frozen summary. ``source`` is ``None`` for builtin AR."""
+    """One registry entry as the frozen summary. ``source`` is ``None`` for an authored section (``PB``)."""
     profile = entry.profile
     source = entry.source
     return models.AnalysisProfileSummary(

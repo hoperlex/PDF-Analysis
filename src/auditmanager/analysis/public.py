@@ -46,49 +46,7 @@ from auditmanager.analysis.ports.artifacts import (
     read_artifact,
 )
 from auditmanager.analysis.ports.stage import StageContext, StageHandler, StageProduction
-from auditmanager.analysis.profiles.ar_v2.merge_input import MergePreparation, prepare_merge
-from auditmanager.analysis.profiles.ar_v2.proposal_grounding import (
-    ProposalGroundingResult,
-    RejectedProposal,
-)
-from auditmanager.analysis.profiles.ar_v2.response import ProposedObservation
 from auditmanager.analysis.profiles.ar_shared.recognised_context import RecognisedContext
-from auditmanager.analysis.profiles.ar_v2.recorded_input import (
-    RecordedV2Input,
-    prepare_recorded_v2_input,
-)
-from auditmanager.analysis.profiles.ar_v2.recorded_request import RecordedGenerationSettings
-from auditmanager.analysis.profiles.ar_v2.recorded_artifact import (
-    ARTIFACT_ROLE as RECORDED_OBSERVATION_ARTIFACT_ROLE,
-    ARTIFACT_VERSION as RECORDED_OBSERVATION_ARTIFACT_VERSION,
-    BuiltRecordedArtifact,
-    RecordedArtifactError,
-    RecordedMergeInput,
-    build_recorded_observation_artifact,
-    read_recorded_merge_input,
-)
-from auditmanager.analysis.profiles.ar_v2.recorded_call import (
-    RecordedCallFacts,
-    build_recorded_call_facts,
-)
-from auditmanager.analysis.profiles.ar_v2.recorded_response import (
-    RecordedReplayResult,
-    replay_recorded_response,
-)
-from auditmanager.analysis.profiles.ar_v2.recorded_stage_result import (
-    seal_recorded_v2_stage_result,
-)
-from auditmanager.analysis.profiles.ar_shared.v2_identities import (
-    PROFILE_ID as AR_V2_RECORDED_PROFILE_ID,
-    PROMPT_BUNDLE_ID as AR_V2_RECORDED_BUNDLE_ID,
-)
-from auditmanager.analysis.profiles.ar_v2.registered import (
-    RecordedProfileError,
-    resolve_recorded_profile,
-)
-from auditmanager.analysis.profiles.ar_v2.response_pipeline import FinishedV2Response, finish_response
-from auditmanager.analysis.profiles.ar_v2.response_schema import CATEGORIES as AR_V2_CATEGORIES
-from auditmanager.analysis.profiles.ar_v2.response_schema import SEVERITIES as AR_V2_SEVERITIES
 from auditmanager.analysis.profiles.ar_v3.local_evaluation import (
     LocalV3Evaluation,
     SuppliedV3Response,
@@ -123,19 +81,12 @@ from auditmanager.analysis.profiles.ar_v3.set_input import (
     V3SetInputRefused,
     parse_v3_set_input,
 )
-from auditmanager.analysis.stages.finding_merge import (
-    ARTIFACT_ROLE as MERGE_ARTIFACT_ROLE,
-    ARTIFACT_VERSION as MERGE_ARTIFACT_VERSION,
-    MERGE_RULE_VERSION,
-    merge_grounded,
-)
 from auditmanager.analysis.stages.extraction import (
     NORMALIZATION_DESCRIPTION,
     NORMALIZATION_ID,
 )
 from auditmanager.analysis.stages.source_preparation import document_text
 from auditmanager.analysis.text import (
-    AR_TEXT_PROFILE,
     ARTIFACT_ROLE,
     CostMeter,
     ModelAdapter,
@@ -151,7 +102,28 @@ from auditmanager.analysis.text import (
     load_provider_config,
     run_text_analysis,
 )
-from auditmanager.analysis.text.budget import REFERENCE_DOCUMENT_CHARACTERS, input_budget_characters
+from auditmanager.analysis.text.budget import (
+    MAX_ANALYSIS_WINDOWS,
+    REFERENCE_DOCUMENT_CHARACTERS,
+    input_budget_characters,
+    windowed_budget_characters,
+)
+from auditmanager.analysis.text.windowed import run_text_analysis_windows  # SECTION-CHUNKED-ANALYSIS-01
+from auditmanager.analysis.text.windows import (  # SECTION-CHUNKED-ANALYSIS-01
+    PARAM_COUNT as TEXT_WINDOW_PARAM_COUNT,
+    PARAM_FIRST_PAGE as TEXT_WINDOW_PARAM_FIRST_PAGE,
+    PARAM_INDEX as TEXT_WINDOW_PARAM_INDEX,
+    PARAM_KEY as TEXT_WINDOW_PARAM_KEY,
+    PARAM_LAST_PAGE as TEXT_WINDOW_PARAM_LAST_PAGE,
+    PARAM_REPLY_BLOB_ID as TEXT_WINDOW_PARAM_REPLY_BLOB_ID,
+    PARAM_REPLY_BLOB_SHA256 as TEXT_WINDOW_PARAM_REPLY_BLOB_SHA256,
+    PARAM_REPLY_BLOB_SIZE as TEXT_WINDOW_PARAM_REPLY_BLOB_SIZE,
+    RecoveredWindow,
+    WindowCustody,
+    WindowIdentity,
+    WindowPolicy,
+    text_window_policy,
+)
 from auditmanager.analysis.recognised import KIND_PORTAL_DESCRIPTION, KIND_RECOGNISED_TEXT, QUOTE_SOURCE_RECOGNISED  # W55B-RECOGNISED-01
 from auditmanager.analysis.ports.artifacts import ROLE_CROP_IMAGE, ROLE_PORTAL_BLOCKS  # W55B-GEOMETRY-01
 from auditmanager.analysis.geometry.saved_crop_custody import (
@@ -200,15 +172,9 @@ __all__ = [
     "ARTIFACT_MEDIA_TYPE",
     "ARTIFACT_VERSION",
     "ARTIFACT_ROLE",
-    "AR_TEXT_PROFILE",
-    "AR_V2_CATEGORIES",
-    "AR_V2_RECORDED_BUNDLE_ID",
-    "AR_V2_RECORDED_PROFILE_ID",
     "AR_V3_BETA_BUNDLE_ID",
     "AR_V3_BETA_PROFILE_ID",
-    "AR_V2_SEVERITIES",
     "BlockIndex",
-    "BuiltRecordedArtifact",
     "CheckedCropBytes",
     "CheckedCropItem",
     "CheckedRunTextWindowInput",
@@ -219,8 +185,7 @@ __all__ = [
     "NORMALIZATION_DESCRIPTION",
     "NORMALIZATION_ID",
     "QUOTE_SOURCE_RECOGNISED",
-    "RECORDED_OBSERVATION_ARTIFACT_ROLE",
-    "RECORDED_OBSERVATION_ARTIFACT_VERSION",
+    "MAX_ANALYSIS_WINDOWS",
     "REFERENCE_DOCUMENT_CHARACTERS",
     "ROLE_BLOCK_INDEX",
     "ROLE_CROP_IMAGE",
@@ -235,36 +200,22 @@ __all__ = [
     "ROLE_TEXT_LAYER",
     "ArtifactRef",
     "CostMeter",
-    "FinishedV2Response",
     "ModelAdapter",
     "ModelPin",
     "ModelCallJournal",
     "ModelCallRecord",
     "ModelRequest",
     "ModelResponse",
-    "MergePreparation",
     "pinned_models",
-    "MERGE_ARTIFACT_ROLE",
-    "MERGE_ARTIFACT_VERSION",
-    "MERGE_RULE_VERSION",
-    "ProposalGroundingResult",
     "PreparedCropItem",
-    "ProposedObservation",
     "ProviderConfig",
     "ProviderMode",
     "ProxyAdapter",
     "ProxyDispatchError",
     "ProxySettings",
-    "RejectedProposal",
     "RecognisedContext",
-    "RecordedGenerationSettings",
-    "RecordedMergeInput",
     "RecordedAdapter",
-    "RecordedArtifactError",
-    "RecordedCallFacts",
-    "RecordedReplayResult",
-    "RecordedV2Input",
-    "RecordedProfileError",
+    "RecoveredWindow",
     "RecognisedRegionCandidate",
     "RecognisedRegionRefused",
     "ResolvedAnchor",
@@ -275,6 +226,17 @@ __all__ = [
     "SuppliedTextSourceRefused",
     "TextLayer",
     "TEXT_STAGE_VERSION",
+    "TEXT_WINDOW_PARAM_COUNT",
+    "TEXT_WINDOW_PARAM_FIRST_PAGE",
+    "TEXT_WINDOW_PARAM_INDEX",
+    "TEXT_WINDOW_PARAM_KEY",
+    "TEXT_WINDOW_PARAM_LAST_PAGE",
+    "TEXT_WINDOW_PARAM_REPLY_BLOB_ID",
+    "TEXT_WINDOW_PARAM_REPLY_BLOB_SHA256",
+    "TEXT_WINDOW_PARAM_REPLY_BLOB_SIZE",
+    "WindowCustody",
+    "WindowIdentity",
+    "WindowPolicy",
     "StageContext",
     "StageDefinition",
     "StageError",
@@ -293,18 +255,14 @@ __all__ = [
     "V3SetInputRefused",
     "default_registry",
     "document_text",
-    "finish_response",
     "input_budget_characters",
     "load_provider_config",
     "load_beta_source_policy",
     "publish_artifact",
-    "prepare_merge",
     "prepare_v3_request_candidate",
     "prepare_v3_scoped_request_candidate",
     "parse_v3_set_input",
     "evaluate_v3_supplied_response",
-    "build_recorded_call_facts",
-    "build_recorded_observation_artifact",
     "check_saved_crop_bytes",
     "check_saved_crop_item_bytes",
     "check_run_text_window_input",
@@ -312,16 +270,13 @@ __all__ = [
     "bind_recognised_region_candidate",
     "blob_role_for",
     "canonical_bytes",
-    "prepare_recorded_v2_input",
     "read_artifact",
-    "read_recorded_merge_input",
-    "replay_recorded_response",
-    "resolve_recorded_profile",
     "run_stage",
     "run_text_analysis",
-    "seal_recorded_v2_stage_result",
+    "run_text_analysis_windows",
     "select_run_text_layer_ref",
+    "text_window_policy",
+    "windowed_budget_characters",
     "sha256_hex",
-    "merge_grounded",
     "prepare_saved_crop_item",
 ]

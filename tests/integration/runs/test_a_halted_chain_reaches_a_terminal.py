@@ -42,6 +42,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from auditmanager.runs import RunRepository, execute_run, start_audit_run
+from tests.support.v1_reference_profile import resolve_reference_profile
 
 #: The four stages ``PC01_STAGES`` declares, written out rather than imported. A run that
 #: silently stopped requiring one of them would still satisfy an assertion built from the
@@ -135,6 +136,7 @@ def halted_run(session: Session, seeded, blob_store, recorded_adapter, provider_
         adapter=adapter,
         provider_config=provider_config,
         sleep=lambda _seconds: None,
+        text_profiles=resolve_reference_profile,
     )
     assert store.reads_of_the_source >= 1, (
         "the substitution never took effect, so nothing below is about a halted chain"

@@ -74,6 +74,7 @@ from auditmanager.exports import export_rows
 from auditmanager.findings import published_findings
 from auditmanager.runs import execute_run, start_audit_run
 from auditmanager.shared.identity import IdempotencyKey
+from tests.support.v1_reference_profile import resolve_reference_profile
 
 #: Sorts before every real `fnd_` ULID, so the tied block lands first in both orders and a
 #: disagreement inside it cannot be hidden by the surrounding rows.
@@ -119,6 +120,7 @@ def tied_run(session: Session, seeded, blob_store, recorded_adapter, provider_co
         blob_store=blob_store,
         adapter=recorded_adapter,
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
 
     template = session.execute(

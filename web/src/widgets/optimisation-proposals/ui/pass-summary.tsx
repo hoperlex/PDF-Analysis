@@ -40,7 +40,7 @@ export function PassSummary({ pass }: PassSummaryProps) {
         <dd>
           <code>{pass.price_list_id}</code>
         </dd>
-        <dt>Вендор-лист АР</dt>
+        <dt>Вендор-лист раздела</dt>
         <dd>
           {VENDOR_LIST_SCOPE_LABELS[pass.vendor_list_source]}, <code>{pass.vendor_list_id}</code>
         </dd>

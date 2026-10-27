@@ -199,7 +199,11 @@ def live_run(page_texts: tuple[str, ...]) -> dict[str, Any]:
     version = answer.json
 
     # `W59-SECTION-SEAL-01`: run start routes from the expert's classification and refuses
-    # an unclassified version; the AR baseline routes to the v1 AR profile.
+    # an unclassified version. `PROD-10B-JOURNEY-REBASE-01`: the baseline is classified in
+    # `driver.JOURNEY_SECTION` (ПБ), not AR -- the AR v1 profile is what `PROD-11` removes.
+    # NOT YET MEASURED live: every assertion below was last measured against the AR v1
+    # profile; the first run under the ПБ profile is a measurement, and a shortfall in
+    # "seeded issues located" is a result to report, not a regression to explain away.
     answer = client.classify_version(
         project_uid=project["project_uid"],
         document_uid=version["document_uid"],

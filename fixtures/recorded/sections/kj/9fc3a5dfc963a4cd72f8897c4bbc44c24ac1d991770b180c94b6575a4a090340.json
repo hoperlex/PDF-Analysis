@@ -1,0 +1,24 @@
+{
+  "latency_ms": 9300,
+  "model_id": "claude-opus-5",
+  "note": "Synthetic КЖ (KJ) reply over the AR baseline corpus text layer, authored by hand. Token counts and latency are authored, not measured.",
+  "origin": {
+    "analysis_profile_id": "ap_01M5AXG1K82P9BCJ1NRYSTC2NY",
+    "kind": "synthetic",
+    "profile_status": "reviewed",
+    "prompt_bundle_id": "pb_01M5AXG1K8EDTH597XY32Z696Y",
+    "prompt_bundle_sha256": "0e31f979f720c787327f46622527d28b125bee020694fbf0d0984727a2830376",
+    "section_code": "KJ",
+    "statement": "Synthetic: authored by hand for SECTION-RECORDINGS-01 to prove section routing in recorded mode. No model produced this reply and no provider call was made. Not field evidence for the profile's review.",
+    "task_id": "SECTION-RECORDINGS-01",
+    "text_layer": "fixtures/recorded/text_analysis/inputs/ar_baseline_text_layer.json"
+  },
+  "output_text": "{\"observations\": [{\"category\": \"internal_contradiction\", \"finding_text\": \"Синтетический ответ (КЖ), не результат вызова модели: степень огнестойкости здания записана как II и как III, а несущие конструкции рассчитываются по одной из них.\", \"recommendation_text\": \"Согласовать степень огнестойкости здания с принятыми пределами огнестойкости несущих конструкций.\", \"evidence\": [{\"page_number\": 2, \"quote\": \"Степень огнестойкости здания — II.\"}, {\"page_number\": 6, \"quote\": \"Степень огнестойкости здания — III.\"}]}]}",
+  "recording_version": "1.0.0",
+  "request_sha256": "9fc3a5dfc963a4cd72f8897c4bbc44c24ac1d991770b180c94b6575a4a090340",
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 2370,
+    "output_tokens": 430
+  }
+}

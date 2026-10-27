@@ -154,9 +154,47 @@ def input_budget_characters(
     return max(0, characters)
 
 
+#: `SECTION-CHUNKED-ANALYSIS-01`. The most whole-page windows one run may take.
+#:
+#: A volume whose recorded character count is **not above** the one-call figure
+#: (:func:`input_budget_characters`) is analysed exactly as before, in one call. A larger one is analysed
+#: in whole-page windows, each window one call of at most that figure, all of them under the run's one
+#: cost ceiling; ``startRun`` and ``reauditRun`` refuse a volume above ``N`` windows' worth, and the stage
+#: refuses a plan that comes out above ``N`` windows (page packing can need more than the character
+#: count suggests).
+#:
+#: Why twelve. The upload envelope admits 500 pages and the one real set is 3 123 characters a page
+#: (:data:`REFERENCE_DOCUMENT_CHARACTERS` / 30), about 1.56 million characters: 10.2 windows of the primary
+#: model's 152 361, so twelve covers the envelope with slack. Twelve windows are also three Attempts of four
+#: windows at the proxy's 200 second per-call ceiling inside the 900 second watchdog
+#: (``jobs.lease.ATTEMPT_WATCHDOG_SECONDS``, ``R-146y``). The ceiling, not this number, bounds the spend.
+#:
+#: ``1`` restores the one-call behaviour exactly (the start-time limit equals the per-call figure and no
+#: version above it is admitted), which is the rollback of the whole feature.
+MAX_ANALYSIS_WINDOWS: Final[int] = 12
+
+
+def windowed_budget_characters(
+    call_budget_characters: int, max_windows: int = MAX_ANALYSIS_WINDOWS
+) -> int:
+    """The most pypdfium2 characters a version may have for a run to be accepted: ``max_windows`` calls' worth.
+
+    ``call_budget_characters`` is the per-call figure (what ``settings`` and the connection route hand to
+    ``startRun``, :func:`input_budget_characters`); a window is never larger than it. Exact integer
+    arithmetic, monotone in both arguments, and equal to the per-call figure for one window.
+    """
+    if type(call_budget_characters) is not int or call_budget_characters < 0:
+        raise ValueError("call_budget_characters must be a non-negative whole number")
+    if type(max_windows) is not int or max_windows < 1:
+        raise ValueError("max_windows must be a positive whole number")
+    return call_budget_characters * max_windows
+
+
 __all__ = [
     "CHARACTERS_PER_TOKEN",
+    "MAX_ANALYSIS_WINDOWS",
     "PAGE_FRAMING_ALLOWANCE_CHARACTERS",
     "REFERENCE_DOCUMENT_CHARACTERS",
     "input_budget_characters",
+    "windowed_budget_characters",
 ]

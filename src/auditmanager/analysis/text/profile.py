@@ -1,15 +1,15 @@
-"""The fixed AR analysis profile.
+"""The shape of a text-analysis profile, and the retired АР v1 identity.
 
 ``ADR-0011`` requires an immutable analysis profile and prompt bundle, content-hashed
-and resolved by identity at run time. PC-01 has exactly one profile: the AR text-only
-internal-consistency check. There is no profile registry to configure, no per-project
-override and no second discipline - a second profile is a scope change, visible as a
-new constant here rather than as a row somebody inserted.
+and resolved by identity at run time. :class:`AnalysisProfile` is that shape; the profiles the
+product registers are the data packages of the other 14 sections
+(:mod:`auditmanager.analysis.text.profile_registry`).
 
-The identity is a pinned literal, not ``AnalysisProfileId.new()``. Immutable means the
-same identity resolves to the same content on every run and in every process; a fresh
-ULID per run would make the artifact unreproducible and would make "resolved by
-identity" mean nothing.
+**АР is not a profile.** The АР text profile of PC-01 (``AR_TEXT_PROFILE``) was registered from
+this module's constants until ``PROD-11-AR-V1-V2-REMOVAL-01`` (``ADR-0024`` section 2, ``AD-12``):
+the АР analysis path of production is the six-Run v3 group only. :data:`ANALYSIS_PROFILE_ID` stays
+as the **retired identity** of that profile: persisted runs pin it, and the AR v3 beta profile
+asserts that its own identity never equals it (``ar_v3.v3_profile``). Nothing resolves it.
 """
 
 from __future__ import annotations
@@ -18,21 +18,14 @@ import hashlib
 from dataclasses import dataclass
 from typing import Final
 
-from auditmanager.analysis.text.lock import STAGE_ID
-from auditmanager.analysis.text.prompt import (
-    AR_TEXT_PROMPT_BUNDLE,
-    CATEGORIES,
-    PromptBundle,
-    canonical_json,
-)
+from auditmanager.analysis.text.prompt import PromptBundle, canonical_json
 from auditmanager.shared.identity import AnalysisProfileId
 
+#: The retired identity of the АР v1 text profile. Pinned, never generated: a fresh ULID per run
+#: would make "resolved by identity" mean nothing. No registry entry carries it.
 ANALYSIS_PROFILE_ID: Final[AnalysisProfileId] = AnalysisProfileId.parse(
     "ap_01M25P3TH08VVTTGJRXYBZZ7RP"
 )
-
-PROFILE_VERSION: Final[str] = "1.0.0"
-DISCIPLINE: Final[str] = "AR"
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,20 +59,3 @@ class AnalysisProfile:
                 }
             ).encode("utf-8")
         ).hexdigest()
-
-
-AR_TEXT_PROFILE: Final[AnalysisProfile] = AnalysisProfile(
-    analysis_profile_id=ANALYSIS_PROFILE_ID,
-    profile_version=PROFILE_VERSION,
-    stage_id=STAGE_ID,
-    discipline=DISCIPLINE,
-    categories=CATEGORIES,
-    prompt_bundle=AR_TEXT_PROMPT_BUNDLE,
-)
-
-
-def resolve_profile(analysis_profile_id: AnalysisProfileId | str = ANALYSIS_PROFILE_ID) -> AnalysisProfile:
-    """Resolve a profile by identity. PC-01 declares exactly one."""
-    if str(analysis_profile_id) != str(ANALYSIS_PROFILE_ID):
-        raise KeyError("no analysis profile is registered under that identity")
-    return AR_TEXT_PROFILE

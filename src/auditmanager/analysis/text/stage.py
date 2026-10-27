@@ -48,7 +48,7 @@ from auditmanager.analysis.text.binding import CallBinding
 from auditmanager.analysis.text.config import ProviderConfig, ProviderMode, load_provider_config
 from auditmanager.analysis.text.cost import CostMeter
 from auditmanager.analysis.text.lock import STAGE_ID, ProviderLock, provider_lock
-from auditmanager.analysis.text.profile import AR_TEXT_PROFILE, AnalysisProfile
+from auditmanager.analysis.text.profile import AnalysisProfile
 from auditmanager.analysis.text.provenance import (
     CALL_SUCCEEDED,
     CALL_TRUNCATED,
@@ -305,13 +305,17 @@ def run_text_analysis(
     config: ProviderConfig | None = None,
     document_graph: Mapping[str, Any] | None = None,
     block_index_document: Mapping[str, Any] | None = None,
-    profile: AnalysisProfile = AR_TEXT_PROFILE,
+    profile: AnalysisProfile,
     lock: ProviderLock | None = None,
     meter: CostMeter | None = None,
     call_journal: ModelCallJournal | None = None,
     call: CallBinding | None = None,
 ) -> TextAnalysisOutcome:
     """Run the stage over one document version.
+
+    ``profile`` is required (`PROD-11-AR-V1-V2-REMOVAL-01`): the stage used to default to the АР
+    profile, which is no longer a profile of the product, and a default would be a silent
+    fallback (`AGENTS.md` section 4). The caller names the run's pinned profile.
 
     ``call`` (`EXEC-HTTP-01`) says what the connection serving this run requires of the call
     and how it is recorded (:class:`~auditmanager.analysis.text.binding.CallBinding`). ``None``

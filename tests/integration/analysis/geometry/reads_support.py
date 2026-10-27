@@ -23,11 +23,11 @@ from auditmanager.documents.public import (
     MANIFEST_ROLE_STRUCTURED_COMPANION,
 )
 from auditmanager.runs import RunRepository, execute_run, start_audit_run
-from auditmanager.shared.identity import AnalysisProfileId, PromptBundleId
 from auditmanager.storage import sha256_of
 from auditmanager.storage.blob_repository import BlobMetadataRepository
 from auditmanager.storage.models import VerifiedBlob, parse_blob_role
 from tests.integration.analysis.recognised.recognised_support import members
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE, resolve_reference_profile
 
 _HARNESS_NAME = "b5_run_harness"
 _HARNESS_PATH = Path(__file__).resolve().parents[2] / "runs" / "harness.py"
@@ -95,10 +95,10 @@ def seed_bundle_version(session: Session, store: Any, *, markdown: bytes | None 
 
 def run_published(session: Session, version_uid: str, key: Any, store: Any, adapter: Any, config: Any) -> str:
     started = start_audit_run(
-        session, version_uid=version_uid, analysis_profile_id=AnalysisProfileId.new().value,
-        prompt_bundle_id=PromptBundleId.new().value, provider_mode="recorded", idempotency_key=key,
+        session, version_uid=version_uid, analysis_profile_id=str(V1_REFERENCE_PROFILE.analysis_profile_id),
+        prompt_bundle_id=str(V1_REFERENCE_PROFILE.prompt_bundle.prompt_bundle_id), provider_mode="recorded", idempotency_key=key,
     )
-    result = execute_run(session, started.run_id, blob_store=store, adapter=adapter, provider_config=config)
+    result = execute_run(session, started.run_id, blob_store=store, adapter=adapter, provider_config=config, text_profiles=resolve_reference_profile)
     assert result.terminal_state == "published", dict(result.stage_statuses)
     return str(started.run_id)
 

@@ -1,29 +1,29 @@
 /**
  * Per-section document counts, computed over `getDashboardSummary`'s `section_breakdown`.
  *
- * `R-40`/`D-56`: the server counts published documents per section, fourteen frozen codes
- * plus an unclassified bucket, zeros included (`SectionDocumentCount`'s own doc comment in
- * `shared/api/generated/types.gen.ts`: "every one of the fourteen frozen codes is present
+ * `R-40`/`D-56`: the server counts published documents for each of the fifteen
+ * sections plus an unclassified bucket, zeros included (`SectionDocumentCount`'s own doc comment in
+ * `shared/api/generated/types.gen.ts`: "Every one of the fifteen current codes is present
  * even at `document_count: 0`").
  *
- * **This module no longer fills a gap it did not compute.** It used to seed all fourteen
+ * **This module no longer fills a gap it did not compute.** It used to seed all
  * section codes at zero and overwrite from the wire, calling the result "its true zero" — but a
  * row the response omits is the server not saying, not the server saying zero, and
  * defaulting it is exactly the invented number `R-23`'s addendum names and the silent
  * fallback `AGENTS.md` §4 forbids (`docs/program/reviews/W46-JUDGE-Y.md` §5, `Y5-a`;
  * `docs/program/reviews/W46-JUDGE-X.md` §`X2-a`). It also used to drop, with no signal, a
- * row whose section the fourteen frozen codes do not recognise.
+ * row whose section the frozen codes do not recognise.
  *
- * So this function checks the closed vocabulary instead of filling it: fourteen section
+ * So this function checks the closed vocabulary instead of filling it: the fifteen section
  * codes, once each, plus the unclassified bucket, once — anything short of exactly that (a
  * missing member, a repeated one, or one this module does not recognise) is reported as
  * `{ ok: false }`, and it is the caller's job to show that as a fault rather than as a
  * number. Only a response that carries the whole vocabulary, no more and no less, is
  * summarised at all.
  *
- * **The unclassified bucket is never folded into a fourteenth or fifteenth section.** A
+ * **The unclassified bucket is never folded into a section.** A
  * row with no `section` is a document with no section recorded, not a fifteenth code —
- * `entities/project`'s `PROJECT_SECTIONS` stays the frozen fourteen, and this module keeps
+ * `entities/project`'s `PROJECT_SECTIONS` stays the fifteen sections, and this module keeps
  * the unclassified count beside it rather than inside it.
  */
 
@@ -33,7 +33,7 @@ import { PROJECT_SECTIONS } from '@/entities/project';
 
 export interface SectionBreakdownSummary {
   readonly byCode: Readonly<Record<ProjectSectionCode, number>>;
-  /** Documents with no section at all. Never merged into any of the fourteen section codes. */
+  /** Documents with no section at all. Never merged into any of the section codes. */
   readonly unclassifiedCount: number;
 }
 

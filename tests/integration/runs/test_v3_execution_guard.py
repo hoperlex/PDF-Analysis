@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 import pytest
 
 from auditmanager.analysis.public import (
-    AR_TEXT_PROFILE,
     AR_V3_BETA_BUNDLE_ID,
     AR_V3_BETA_PROFILE_ID,
     ProviderConfig,
@@ -19,6 +18,7 @@ from auditmanager.runs.executor import execute_run
 from auditmanager.runs.repository import RunRow
 from auditmanager.runs.v3_group import TrustedPackRegistry
 from auditmanager.shared.errors import DomainError, ErrorCode
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE, resolve_reference_profile
 
 
 RUN_ID = "run_01M25P3TH08VVTTGJRXYBZZ7RP"
@@ -84,13 +84,13 @@ def test_public_pair_is_the_exact_sealed_v3_profile() -> None:
 
 
 @pytest.mark.parametrize("pair", ["exact", "profile_only", "bundle_only"])
-@pytest.mark.parametrize("resolver", [None, lambda *_: AR_TEXT_PROFILE], ids=["no_registry", "v1_registry"])
+@pytest.mark.parametrize("resolver", [None, lambda *_: V1_REFERENCE_PROFILE], ids=["no_registry", "v1_registry"])
 def test_v3_identity_refuses_before_every_effect(pair: str, resolver) -> None:
     row = _run()
     if pair == "profile_only":
-        row = replace(row, prompt_bundle_id=str(AR_TEXT_PROFILE.prompt_bundle.prompt_bundle_id))
+        row = replace(row, prompt_bundle_id=str(V1_REFERENCE_PROFILE.prompt_bundle.prompt_bundle_id))
     elif pair == "bundle_only":
-        row = replace(row, analysis_profile_id=str(AR_TEXT_PROFILE.analysis_profile_id))
+        row = replace(row, analysis_profile_id=str(V1_REFERENCE_PROFILE.analysis_profile_id))
     with pytest.raises(DomainError) as raised:
         execute_run(
             _NoEffects(), RUN_ID,
@@ -112,8 +112,8 @@ class _V1DocumentProbe:
 
 def test_historical_v1_reaches_its_existing_path() -> None:
     row = _run(
-        analysis_profile_id=str(AR_TEXT_PROFILE.analysis_profile_id),
-        prompt_bundle_id=str(AR_TEXT_PROFILE.prompt_bundle.prompt_bundle_id),
+        analysis_profile_id=str(V1_REFERENCE_PROFILE.analysis_profile_id),
+        prompt_bundle_id=str(V1_REFERENCE_PROFILE.prompt_bundle.prompt_bundle_id),
         norms_snapshot_id=None,
         norm_retrieval_set_id=None,
     )
@@ -123,6 +123,7 @@ def test_historical_v1_reaches_its_existing_path() -> None:
             blob_store=_NoEffects(), adapter=_Adapter(), provider_config=CONFIG,
             runs=_Runs(row), documents=_V1DocumentProbe(), jobs=_NoEffects(),
             blob_metadata=_NoEffects(),
+            text_profiles=resolve_reference_profile,
         )
 
 

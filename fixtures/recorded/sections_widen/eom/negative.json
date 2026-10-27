@@ -1,0 +1,18 @@
+{
+ "format": "section-widen-specimen/1",
+ "section_code": "EOM",
+ "case": "negative",
+ "expect": "none",
+ "origin": {
+  "kind": "synthetic",
+  "statement": "Text and reply authored by hand for SECTION-WIDEN-G3-01 to show what a widened prompt rule is meant to report or to leave alone, and filed by SECTION-PROMPT-SENTENCE-GUARD-01. No model produced this reply. Not field evidence for any profile's expert review; it says nothing about how a model answers.",
+  "task_id": "SECTION-WIDEN-G3-01",
+  "source_report": "docs/program/SECTION-WIDEN-G3-01.md",
+  "filed_by": "SECTION-PROMPT-SENTENCE-GUARD-01"
+ },
+ "pages": [
+  "Щит ЩР-1. Таблица нагрузок (вымышленный пример для проверки профиля)\nОсвещение — установленная мощность 4,2 кВт\nРозеточная сеть — установленная мощность 6,0 кВт\nВентиляция — установленная мощность 3,5 кВт\nНасос пожаротушения (противопожарный режим) — установленная мощность 11,0 кВт\nИтого по щиту ЩР-1 в нормальном режиме — установленная мощность 13,7 кВт\nРасчётная мощность щита с коэффициентом спроса — 9,6 кВт",
+  "Общие данные. Категория надёжности электроснабжения — третья."
+ ],
+ "observations": []
+}

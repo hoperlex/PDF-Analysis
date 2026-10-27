@@ -1,0 +1,112 @@
+# THE ACME OVERLAY -- `PROD-01-TLS-ACME-01`, `ADR-0021` section 2, `R-146a`, `R-146aa`, `R-146s`.
+#
+#   docker compose --env-file infra/deploy/env/alpha.env \
+#     -f infra/deploy/compose.server.yml \
+#     -f infra/acme/compose.acme.yml [-f infra/deploy/proxy/compose.tls.yml] up -d
+#
+# `deploy.sh` picks the files (`infra/deploy/lib/proxy-listeners.sh` is the one place that decides); an
+# operator never types the list. This file is passed whenever `ALPHA_CERT_NAME` is set in `alpha.env`, and
+# NEVER otherwise: with the setting empty the stack is byte-for-byte the deployment that was certified
+# before this file existed, which is also the rollback (empty the setting, deploy).
+#
+# WHAT IT ADDS, and the order matters, because each line is a decision `ADR-0021` section 2 made:
+#
+#   * an `acme` service: an ACME client (`infra/acme/Dockerfile`, built on the host like the other
+#     repository-owned images, its base pinned by digest and its client by exact version in
+#     `infra/acme/client.pin`). It publishes NO port, mounts NO Docker socket and holds no application
+#     secret. It is on a network of its own, `acme-edge`, shared with the `proxy` and with nothing else
+#     (`D-229` item 3): the only peer it needs is the proxy (its probe on 8081, the verification script on
+#     8443), and a container that can open TCP connections to postgres, s3 and the api is one floating
+#     certbot dependency away from using them. The `proxy` is on both networks and is the only bridge;
+#   * the CHALLENGE LISTENER: the proxy's container port 8081 published as public port 80. It serves the
+#     webroot's `/.well-known/acme-challenge/` and redirects everything else to HTTPS (`proxy/acme-challenge.conf`),
+#     and has no application route at all. Public from the moment ACME is configured, so that issuance and
+#     renewal work while the seeded password is still the seeded password (`R-146s`);
+#   * three named volumes, none shared wider than it must be:
+#       `acme-state`   certbot's own state, ACCOUNT KEY included. Mounted by `acme` alone;
+#       `acme-webroot` the challenge tokens. `acme` writes, the `proxy` reads;
+#       `certs`        the exported pair, `fullchain.pem` and `privkey.pem` and nothing else. `acme` writes,
+#                      the `proxy` reads, READ-ONLY. The public-facing process therefore never holds the
+#                      account key;
+#   * on the `proxy`: those two read-only mounts, the challenge server block, the TLS server block and its
+#     switch (`enable-tls.sh`), and the certificate watcher (`watch-certificate.sh`) that re-reads the pair on
+#     a timer and reloads nginx, so no service needs the right to restart another.
+#
+# The TLS server block is mounted whenever ACME is configured and nginx LOADS it only once a pair exists
+# (`enable-tls.sh`, unchanged in that respect). Whether container port 8443 is also PUBLISHED as 443 is a
+# separate decision, `proxy/compose.tls.yml`, taken per deploy (`R-146s`): only for a deploy that is cleared
+# to publish and whose pair exists.
+#
+# RELATIVE PATHS BELOW RESOLVE AGAINST `infra/deploy/`, NOT AGAINST THIS FILE: compose resolves them against
+# the project directory, the directory of the FIRST `-f`. That is why `../acme` and `./proxy/...`. Every
+# bind-mounted file on the proxy is under `infra/deploy/proxy/`, which is what `reload-proxy.sh` and
+# `verify-deployed.sh` require of a proxy mount, and `tests/integration/composition/test_acme_overlay.py`
+# pins it.
+#
+# NAMES THAT COULD CARRY A SECRET: none. `docker compose config` prints substituted values in clear, so
+# every `${...}` below is a host name, a contact address, a yes/no or a port number.
+
+# NOT `internal`: the client has to reach the certificate authority. What it must not reach is the data
+# tier, and that is a matter of which services share the network, not of whether it has a route out.
+networks:
+  acme-edge:
+    name: ${ALPHA_INSTANCE:?ALPHA_INSTANCE is unset.}-acme-net
+
+volumes:
+  acme-state:
+    name: ${ALPHA_INSTANCE:?ALPHA_INSTANCE is unset.}-acme-state
+  acme-webroot:
+    name: ${ALPHA_INSTANCE:?ALPHA_INSTANCE is unset.}-acme-webroot
+  certs:
+    name: ${ALPHA_INSTANCE:?ALPHA_INSTANCE is unset.}-certs
+
+services:
+  acme:
+    build:
+      context: ../acme
+      dockerfile: Dockerfile
+    image: ${ALPHA_INSTANCE:?ALPHA_INSTANCE is unset.}-acme
+    networks: [acme-edge]
+    restart: unless-stopped
+    depends_on:
+      proxy:
+        condition: service_started
+    environment:
+      ACME_NAME: ${ALPHA_CERT_NAME:?ALPHA_CERT_NAME is unset. This overlay is passed only when it is set; see infra/deploy/env/alpha.env.example.}
+      ACME_EMAIL: ${ALPHA_ACME_EMAIL:-}
+      # `yes` unless the operator says `no`: a forgotten setting must spend the test endpoint's limits and
+      # not the real one's (`R-146ac` records that the shared `sslip.io` zone makes those limits scarce).
+      ACME_STAGING: ${ALPHA_ACME_STAGING:-yes}
+    volumes:
+      - acme-state:/etc/letsencrypt
+      - acme-webroot:/var/www/acme
+      - certs:/export
+    # Healthy when a pair has been exported. Before the first issuance it is `starting`, and after the
+    # retries it is `unhealthy`, which `deploy.sh`'s `services-healthy` turns into a refusal that names the
+    # service -- a deploy is not successful while the name has no certificate.
+    healthcheck:
+      test: ["CMD", "test", "-s", "/export/fullchain.pem"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
+
+  proxy:
+    # BOTH names, although the base already lists `alpha`: whether compose merges two lists of networks or
+    # lets the later file's list win, the proxy ends up on the data network AND on the client's.
+    networks: [alpha, acme-edge]
+    volumes:
+      - acme-webroot:/var/www/acme:ro
+      - certs:/etc/nginx/tls:ro
+      # The challenge server block goes INTO `conf.d/` (it needs no certificate, so nginx may always load
+      # it); the TLS block stays OUT of it and `enable-tls.sh` installs it only when a pair exists.
+      - ./proxy/acme-challenge.conf:/etc/nginx/conf.d/acme-challenge.conf:ro
+      - ./proxy/tls-server.conf:/etc/nginx/tls-server.conf:ro
+      - ./proxy/enable-tls.sh:/docker-entrypoint.d/25-enable-tls.sh:ro
+      - ./proxy/watch-certificate.sh:/docker-entrypoint.d/27-watch-certificate.sh:ro
+    ports:
+      # THE CHALLENGE LISTENER, public port 80 by default. `ALPHA_PUBLIC_ADDRESS` is the interface (all of
+      # them unless a host with several addresses says one) and `ALPHA_ACME_HTTP_PORT` is for a host
+      # whose port 80 is not free to this stack or a rehearsal on a development machine; the authority
+      # always asks port 80 of the public name.
+      - "${ALPHA_PUBLIC_ADDRESS:-0.0.0.0}:${ALPHA_ACME_HTTP_PORT:-80}:8081"

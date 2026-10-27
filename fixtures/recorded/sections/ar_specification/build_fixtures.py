@@ -43,9 +43,20 @@ sys.path.insert(0, str(_REPO_ROOT / "src"))
 
 from auditmanager.analysis.stages.extraction import extract_document  # noqa: E402
 from auditmanager.analysis.text.adapter import build_request  # noqa: E402
-from auditmanager.analysis.text.profile import AR_TEXT_PROFILE  # noqa: E402
+from auditmanager.analysis.text.lock import STAGE_ID  # noqa: E402
+from auditmanager.analysis.text.profile import ANALYSIS_PROFILE_ID, AnalysisProfile  # noqa: E402
+from auditmanager.analysis.text.prompt import AR_TEXT_PROMPT_BUNDLE, CATEGORIES  # noqa: E402
 from auditmanager.analysis.text.recorded import recording_document  # noqa: E402
 from auditmanager.analysis.text.textlayer import load_text_layer  # noqa: E402
+
+#: `PROD-11-AR-V1-V2-REMOVAL-01`: ``AR_TEXT_PROFILE`` left ``src`` with the АР text profile. This
+#: recording answers the request of the retired v1 prompt bundle, which ``analysis.text`` keeps; the
+#: profile is rebuilt here from the same constants, so the request key and the origin block are
+#: byte for byte what they were (``--check`` proves it).
+AR_TEXT_PROFILE = AnalysisProfile(
+    analysis_profile_id=ANALYSIS_PROFILE_ID, profile_version="1.0.0", stage_id=STAGE_ID,
+    discipline="AR", categories=CATEGORIES, prompt_bundle=AR_TEXT_PROMPT_BUNDLE,
+)
 
 HERE = Path(__file__).resolve().parent
 PDF_PATH = _REPO_ROOT / "fixtures/synthetic/ar_specification/ar_specification.pdf"

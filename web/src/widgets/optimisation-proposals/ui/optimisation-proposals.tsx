@@ -1,12 +1,14 @@
 'use client';
 
 /**
- * «Предложения» — the deterministic optimisation proposals of a document set's АР version
- * (`W60-OPT-PROPOSALS-01`), for the project's «Оптимизация» tab.
+ * «Предложения» — the deterministic optimisation proposals of a document set's current version
+ * (`W60-OPT-PROPOSALS-01`; any section since `OPT-PROJECT-ALL-SECTIONS-01`), for the project's
+ * «Оптимизация» tab.
  *
  * **Which set.** The project's documents come from `listDocuments` (the cache entry the
  * project's structure reads); the sets offered are those whose **current** version an expert
- * confirmed as section АР. A project with none says so and where a section is confirmed.
+ * confirmed in a section, whichever it is. A project with none says so and where a section is
+ * confirmed.
  *
  * **What is shown.** The set's passes, newest first, each pinned to the version, run, price
  * list and vendor list it read; the open pass's counts by decision (the proposals' own, never
@@ -34,6 +36,7 @@ import { failureMessage } from '@/shared/api/failure-message';
 import { formatInstant } from '@/shared/lib';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import { useDocumentList } from '@/entities/document-version';
+import { projectSectionOf } from '@/entities/project';
 import {
   describeCounts,
   useOptimisationPasses,
@@ -52,14 +55,16 @@ export interface OptimisationProposalsProps {
   readonly roles: readonly Role[];
 }
 
-/** The sets whose current version is confirmed as section АР, in the order listed. */
-export function arDocumentSets(items: readonly DocumentVersion[]): readonly DocumentVersion[] {
-  return items.filter((version) => version.classification?.section_code === 'AR');
+/** The sets whose current version an expert confirmed in some section, in the order listed. */
+export function classifiedDocumentSets(items: readonly DocumentVersion[]): readonly DocumentVersion[] {
+  return items.filter((version) => (version.classification ?? null) !== null);
 }
 
 function setLabel(version: DocumentVersion): string {
   const title = version.display_title ?? version.source_filename ?? 'Комплект без названия';
-  return `${title} — версия ${version.version_ordinal}`;
+  const code = version.classification?.section_code;
+  const section = code === undefined ? '' : `, раздел ${projectSectionOf(code).abbr}`;
+  return `${title} — версия ${version.version_ordinal}${section}`;
 }
 
 export interface ProposalSetChooserProps {
@@ -75,15 +80,15 @@ export function ProposalSetChooser({ sets, selected, onSelect, partial }: Propos
   if (sets.length === 0) {
     return (
       <EmptyState
-        title="В проекте нет комплектов раздела АР"
-        detail="Предложения строятся для комплекта, текущую версию которого эксперт подтвердил как раздел АР. Подтвердите раздел на экране версии."
+        title="В проекте нет комплектов с подтверждённым разделом"
+        detail="Предложения строятся для комплекта, текущую версию которого эксперт отнёс к одному из разделов. Подтвердите раздел на экране версии."
       />
     );
   }
   return (
     <div className={styles.chooser}>
       <label>
-        Комплект АР{' '}
+        Комплект{' '}
         <select
           value={selected ?? ''}
           onChange={(event) => onSelect(event.target.value as DocumentUid)}
@@ -215,7 +220,7 @@ function ActivePass({ passId, canDecide }: ActivePassProps) {
 
 export function OptimisationProposals({ projectUid, roles }: OptimisationProposalsProps) {
   const documents = useDocumentList(projectUid);
-  const sets = arDocumentSets(documents.data?.items ?? []);
+  const sets = classifiedDocumentSets(documents.data?.items ?? []);
   const [chosenSet, setChosenSet] = useState<DocumentUid | null>(null);
   const [chosenPass, setChosenPass] = useState<OptimisationPassId | null>(null);
   const selectedSet = chosenSet ?? sets[0]?.document_uid ?? null;
@@ -251,8 +256,8 @@ export function OptimisationProposals({ projectUid, roles }: OptimisationProposa
         Предложение — отдельная сущность рядом с замечаниями, со своими решениями экспертов,
         счётчиками и выгрузкой. Оно появляется, когда строка спецификации однозначно сопоставлена с
         позицией прайс-листа, а в том же прайс-листе есть более дешёвая позиция той же единицы
-        измерения и валюты от поставщика из вендор-листа раздела АР. Цены берутся только из
-        прайс-листа, экономия считается только при числовом количестве.
+        измерения и валюты от поставщика из вендор-листа раздела этого комплекта. Цены берутся
+        только из прайс-листа, экономия считается только при числовом количестве.
       </p>
       {documents.isPending ? <LoadingState what="документов проекта" /> : null}
       {documentsFailure !== null ? (

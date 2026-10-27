@@ -728,7 +728,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.6.0"]
+    contract_version: Literal["1.7.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -2450,12 +2450,13 @@ class CarryOverDecisionResponse(_Object):
 class AnalysisProfileStatus(str, enum.Enum):
     """`W59-ANALYSIS-SETTINGS-01`. Where a registered text profile stands.
 
-    ``builtin``: AR's v1 profile, written in this repository. ``draft``: a package ported from
-    the legacy prompts and not yet reviewed by an expert. ``reviewed``: a package an expert has
-    reviewed. Every status is executable; the status is recorded, never hidden.
+    ``draft``: a package ported from the legacy prompts, or authored in this repository, whose
+    open questions no lane has answered in writing. ``reviewed``: a package whose open questions a
+    lane answered in writing; no human review (`R-146ag`). Every status is executable; the status is
+    recorded, never hidden. АР has no status because it has no text profile
+    (`PROD-11-AR-V1-V2-REMOVAL-01`): its row carries ``profile: null``.
     """
 
-    BUILTIN = "builtin"
     DRAFT = "draft"
     REVIEWED = "reviewed"
 
@@ -2484,7 +2485,7 @@ class AnalysisProfileSummary(_Object):
     status: AnalysisProfileStatus
     prompt_bundle_sha256: Sha256
     content_sha256: Sha256
-    #: ``null`` for the builtin AR profile, whose prompt was written here, not ported.
+    #: ``null`` for an authored profile (ПБ), whose prompt was written here, not ported.
     source: AnalysisProfileSource | None
 
 
@@ -2992,11 +2993,13 @@ class SpecificationRowPage(_Object):
 
 
 class SpecificationPrices(_Object):
-    """The priced specification of a set's current AR version, or the state that stops it.
+    """The priced specification of a set's current version, or the state that stops it.
 
     The states are checked in order -- ``version_unclassified``, ``section_not_ar``,
     ``price_list_missing``, ``analysis_missing``, ``text_unavailable``,
     ``specification_too_large`` -- and each answer carries the facts read before it stopped.
+    ``section_not_ar`` is kept so that no value is removed, but it is no longer produced: a version
+    confirmed in any of the fifteen sections is read.
     """
 
     project_uid: ProjectUid

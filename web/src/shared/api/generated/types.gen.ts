@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.6.0 (OpenAPI 3.1.0)
- *   sha256 664a9069d2d476c84dacbd171cd9f31cb4c51299a4a6f56d89b97552106a25af
+ *   AuditManager PC-01 API 1.7.0 (OpenAPI 3.1.0)
+ *   sha256 14375c443fb530324592bdb3dfb1f40dbe10e45ad82785e9797331ecbfd9357a
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.6.0';
+export const CONTRACT_VERSION = '1.7.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '664a9069d2d476c84dacbd171cd9f31cb4c51299a4a6f56d89b97552106a25af';
+export const CONTRACT_DIGEST = '14375c443fb530324592bdb3dfb1f40dbe10e45ad82785e9797331ecbfd9357a';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -385,12 +385,13 @@ export type AnalysisProfileSourceFile = {
 /**
  * `W59-ANALYSIS-SETTINGS-01`. Where a registered text profile stands.
  *
- * ``builtin``: AR's v1 profile, written in this repository. ``draft``: a package ported from
- * the legacy prompts and not yet reviewed by an expert. ``reviewed``: a package an expert has
- * reviewed. Every status is executable; the status is recorded, never hidden.
+ * ``draft``: a package ported from the legacy prompts, or authored in this repository, whose
+ * open questions no lane has answered in writing. ``reviewed``: a package whose open questions a
+ * lane answered in writing; no human review (`R-146ag`). Every status is executable; the status is
+ * recorded, never hidden. АР has no status because it has no text profile
+ * (`PROD-11-AR-V1-V2-REMOVAL-01`): its row carries ``profile: null``.
  */
 export const ANALYSIS_PROFILE_STATUS_VALUES = [
-  'builtin',
   'draft',
   'reviewed',
 ] as const;
@@ -981,7 +982,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The single externally visible failure shape, mirroring urn:auditmanager:domain:error-envelope:v1. `retryable` is pinned to the catalog value for the reported code; a caller never infers it from the HTTP status or the message. */
 export type ErrorEnvelope = {
-  contract_version: "1.6.0";
+  contract_version: "1.7.0";
   correlation_id: CorrelationId;
   /** Safe scalar classifiers only, restricted to the safe_detail_keys the catalog declares for the reported code. The catalog's forbidden key set is rejected. */
   details?: {
@@ -3068,11 +3069,13 @@ export type SpecificationPriceRow = {
 };
 
 /**
- * The priced specification of a set's current AR version, or the state that stops it.
+ * The priced specification of a set's current version, or the state that stops it.
  *
  * The states are checked in order -- ``version_unclassified``, ``section_not_ar``,
  * ``price_list_missing``, ``analysis_missing``, ``text_unavailable``,
- * ``specification_too_large`` -- and each answer carries the facts read before it stopped.
+ * ``specification_too_large`` -- and each answer carries the facts read before it stopped. ``section_not_ar`` is kept so that no
+ * value is removed, but it is no longer produced: a version confirmed in any of the fifteen
+ * sections is read.
  */
 export type SpecificationPrices = {
   document_uid: DocumentUid;

@@ -3,8 +3,8 @@
   "section_code": "KM",
   "analysis_profile_id": "ap_01M5AXG1KB71SHN23H775AP551",
   "prompt_bundle_id": "pb_01M5AXG1KB45S6A5TZ0ZTWRVHS",
-  "profile_version": "1.0.0",
-  "status": "draft",
+  "profile_version": "1.2.0",
+  "status": "reviewed",
   "title_ru": "Конструкции металлические",
   "source": {
     "repository": "PDF-proverka",

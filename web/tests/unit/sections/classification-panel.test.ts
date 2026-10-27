@@ -33,6 +33,7 @@ import {
   orderSectionOptions,
   stageBadgeText,
 } from '@/entities/document-version';
+import { RUN_PAGE_LIMIT } from '@/entities/audit-run';
 import { ClassifyVersionFormView, createSingleFlight } from '@/features/classify-version';
 import { VersionClassification, VersionClassificationView } from '@/widgets/version-classification';
 import { VersionDetailPage } from '@/_pages/version-detail';
@@ -193,6 +194,20 @@ describe('an expert facing an unconfirmed version gets the form', () => {
     const markup = form({ stage: 'R', section: 'PB', review: reviewWithoutProfile(null) });
     expect(markup).not.toContain('data-chosen-profile="unavailable"');
   });
+
+  it('says for a chosen АР that it has no text profile and is analysed by the six checks, not that a profile will appear', () => {
+    // `PROD-11-AR-V1-V2-REMOVAL-01`: the server marks АР not executable, and it never will be.
+    const markup = form({ stage: 'P', section: 'AR', review: reviewWithoutProfile('AR') });
+    expect(markup).toContain('data-chosen-profile="unavailable"');
+    expect(markup).toContain('data-chosen-section="AR"');
+    expect(markup).toContain('У раздела АР нет текстового профиля');
+    expect(markup).toContain('группой из шести проверок АР v3');
+    expect(markup).not.toContain('пока профиль не появится');
+    // ... while another section without a profile keeps the sentence that promises one.
+    const other = form({ stage: 'R', section: 'GP', review: reviewWithoutProfile('GP') });
+    expect(other).toContain('пока профиль не появится');
+    expect(other).not.toContain('data-chosen-section="AR"');
+  });
 });
 
 describe('anyone who is not an expert reads, and is offered nothing', () => {
@@ -248,6 +263,19 @@ describe('a confirmed version shows its stage and section', () => {
     // The note refuses a substitute, and never names one.
     expect(markup).toContain('Анализ по другому разделу вместо него не запускается.');
     expect(markup).not.toContain('АР');
+  });
+
+  it('words the note of a confirmed АР version as the six-check analysis, not as a missing profile', () => {
+    const markup = view({
+      review: reviewWithoutProfile('AR', {
+        classification: classification({ project_stage: 'P', section_code: 'AR' }),
+      }),
+    });
+    expect(markup).toContain('data-profile-unavailable-note=""');
+    expect(markup).toContain('data-profile-unavailable-section="AR"');
+    expect(markup).toContain('У раздела АР нет текстового профиля');
+    expect(markup).toContain('группой из шести проверок АР v3');
+    expect(markup).not.toContain('пока профиль не появится');
   });
 
   it('adds no note to a confirmed ПБ version: it has a profile now', () => {
@@ -399,6 +427,31 @@ describe('the panel on the version screen', () => {
     );
     expect(admin).toContain('data-classification-state="read-only"');
     expect(admin).not.toContain('data-classification-form=""');
+  });
+
+  it('hands the confirmed section to the run list: АР gets the six checks, any other section the ordinary start', () => {
+    // `PROD-11-AR-V1-V2-REMOVAL-01`.
+    const withSection = (code: 'AR' | 'KJ') => {
+      const client = newClient();
+      client.setQueryData(
+        queryKeys.versions.detail(VERSION_UID),
+        version({ classification: classification({ section_code: code }) }),
+      );
+      client.setQueryData(queryKeys.versions.sectionReview(VERSION_UID), review());
+      client.setQueryData(queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT), {
+        items: [], page: { next_cursor: null },
+      });
+      return renderScreen(
+        client,
+        createElement(VersionDetailPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID, roles: ['expert'] }),
+      );
+    };
+    const ar = withSection('AR');
+    expect(ar).toContain('data-ar-start-note');
+    expect(ar).not.toContain('data-start-run-control');
+    const kj = withSection('KJ');
+    expect(kj).toContain('data-start-run-control');
+    expect(kj).not.toContain('data-ar-start-note');
   });
 
   it('waits for the version before it asks for the review', () => {

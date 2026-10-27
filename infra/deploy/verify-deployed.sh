@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
 # `D-27` -- one command that answers "is the stack in front of me this tree?"
 #
-#   infra/deploy/verify-deployed.sh [--env-file <path>] [--repo <path>]
+#   infra/deploy/verify-deployed.sh [--env-file <path>] [--repo <path>] [--acme-rehearsal]
 #
 # Exit 0: the deployed stack is this working tree. Exit 6: it is not. Exit 4: the question
-# could not be answered. **Both failures are failures.** The row this closes is not "the
+# could not be answered. Exit 7: the stack is this tree and the certificate it serves is not
+# acceptable (`PROD-01-TLS-ACME-01`, below). Exit 8: the stack is this tree and the published
+# seeded pair (`admin` / `password`) is valid (`PROD-02`, section 5 below). Exit 9: the stack is this tree, the
+# certificate is acceptable, and the answer served on the name lacks the transport hardening the
+# configuration promises -- HSTS, the four security headers, a `Secure` session cookie, no version in
+# the `Server` banner (`HARDEN-01`, `EXPOSURE-REVIEW-02` `F-17`, section 4b below). **All failures are failures.** The row this closes is not "the
 # stack drifted" -- it is that three waves running, nothing noticed, because there was no
 # check to be red. A probe that skips when it is unsure is the same nothing with a nicer
 # face, so there is no path through this script that reports success without having
@@ -80,11 +85,16 @@ REPO="$(cd "$HERE/../.." && pwd)"
 
 DRIFT=6
 UNANSWERABLE=4
+CERTIFICATE=7
+CREDENTIAL=8
+HEADERS=9
+REHEARSAL=no
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --env-file) ENV_FILE="${2:-}"; shift 2 ;;
         --repo) REPO="${2:-}"; shift 2 ;;
+        --acme-rehearsal) REHEARSAL=yes; shift ;;
         -h|--help)
             sed -n '2,4p' "${BASH_SOURCE[0]}" >&2
             exit 2 ;;
@@ -310,7 +320,8 @@ echo
 
 # --- 3. what the running proxy reads, against the tree ------------------------------
 # `B-1`. The mounts are read from the container, not from the compose file: the container is
-# what serves, and it may carry an overlay (`proxy/compose.tls.yml`) this script never names.
+# what serves, and it may carry overlays (`infra/acme/compose.acme.yml`, `proxy/compose.tls.yml`) this
+# script's proxy comparison never names.
 # Each bind-mount source must be this checkout's `infra/deploy/proxy/` -- a mount from
 # anywhere else is a proxy that is not serving this tree, whatever its bytes are -- and every
 # tracked file under each source is compared inside the container. `proxy/nginx.conf` is
@@ -413,8 +424,220 @@ if [ "$PROXY_PROBLEMS" -ne 0 ]; then
         "reads it. reload-proxy.sh restarts the proxy when a mounted file changed:" \
         "    infra/deploy/reload-proxy.sh" \
         "A proxy mounted from another checkout has to be recreated from this one, with the" \
-        "same -f files it was created with (add proxy/compose.tls.yml if TLS is on):" \
+        "same -f files it was created with (add infra/acme/compose.acme.yml if ALPHA_CERT_NAME is set, and proxy/compose.tls.yml if 443 is published):" \
         "    docker compose --env-file $ENV_FILE -f $COMPOSE_FILE up -d --force-recreate proxy" \
         "Until then, no claim about this stack is a claim about $HEAD_SHA."
 fi
+# --- 4. the certificate the proxy serves (`PROD-01-TLS-ACME-01`, `ADR-0021` rows 2 and 5) -----------
+# Only on a stack that terminates TLS itself (`ALPHA_CERT_NAME` set); without a name this section does not
+# exist and the script is what it was. The question is asked of the proxy's own TLS listener, on the compose
+# network, by a one-off container of the ACME image (it has `openssl` and the CA bundle; the host promises
+# neither -- `DEPLOYMENT_RUNBOOK.md` section 1), so what is judged is what a client would be served, whether
+# or not port 443 is published yet. Judged, in the script's order of importance:
+#
+#   * a certificate is served at all (a deploy is not successful while the name has none);
+#   * it is the right KIND: a staging certificate on a production name is a failure, and the default for
+#     `ALPHA_ACME_STAGING` is `yes`, so a host that lost its setting is caught here and not by a customer;
+#   * it chains to the CA bundle and names the host (production only);
+#   * it has at least 14 days left. The 14 is the architect's number (`ADR-0021` row 5); renewal starts at 30,
+#     so a certificate this close is a renewal that has been failing for two weeks.
+#
+# `--acme-rehearsal` is the one explicit way to accept a STAGING certificate: the staging rehearsal of the
+# runbook is a deploy that is meant to serve one, and that run states it. Everything else about the check is
+# unchanged by it, and a production certificate is a failure under it.
+CERT_NAME="$(configured ALPHA_CERT_NAME)"
+if [ -n "$CERT_NAME" ]; then
+    echo "-- the certificate the proxy serves --"
+    LISTENERS_LIB="$HERE/lib/proxy-listeners.sh"
+    [ -r "$LISTENERS_LIB" ] || fail "$UNANSWERABLE" "$LISTENERS_LIB is missing, so ALPHA_CERT_NAME cannot be judged."
+    # shellcheck source=lib/proxy-listeners.sh
+    . "$LISTENERS_LIB"
+    if ! NAME_WHY="$(listeners_name_problem "$CERT_NAME")"; then
+        fail "$UNANSWERABLE" "ALPHA_CERT_NAME '$CERT_NAME' in $ENV_FILE is not a usable name: $NAME_WHY."
+    fi
+    CERT_STAGING="$(configured ALPHA_ACME_STAGING)"
+    [ -n "$CERT_STAGING" ] || CERT_STAGING=yes
+    case "$CERT_STAGING" in
+        yes|no) ;;
+        *) fail "$UNANSWERABLE" "ALPHA_ACME_STAGING in $ENV_FILE is '$CERT_STAGING', which is neither yes nor no." ;;
+    esac
+    # >>> step: staging-certificate-is-a-failure
+    if [ "$CERT_STAGING" = yes ] && [ "$REHEARSAL" = no ]; then
+        fail "$CERTIFICATE" "ALPHA_ACME_STAGING is yes in $ENV_FILE: this stack is set to the authority's TEST endpoint." \
+            "A staging certificate is trusted by no browser, so this deployment is not one a user can use." \
+            "For production set ALPHA_ACME_STAGING=no and deploy. For the rehearsal of the runbook, say so:" \
+            "    infra/deploy/verify-deployed.sh --env-file $ENV_FILE --acme-rehearsal"
+    fi
+    # <<< step: staging-certificate-is-a-failure
+    CERT_MODE=production
+    [ "$CERT_STAGING" = no ] || CERT_MODE=staging
+    [ "$REHEARSAL" = no ] || [ "$CERT_STAGING" = yes ] || fail "$CERTIFICATE" \
+        "--acme-rehearsal was given and ALPHA_ACME_STAGING is no: a rehearsal expects the TEST endpoint."
+    CERT_ARGS=(--env-file "$ENV_FILE" --file "$COMPOSE_FILE")
+    while IFS= read -r overlay; do
+        [ -z "$overlay" ] || CERT_ARGS+=(--file "$overlay")
+    done < <(listeners_overlay_files "$HERE" "$CERT_NAME" no no)
+    CERT_STATUS=0
+    CERT_OUTPUT="$(docker compose "${CERT_ARGS[@]}" run --rm --no-deps -T \
+        --entrypoint /usr/local/bin/check-served.sh acme "$CERT_NAME" proxy:8443 14 "$CERT_MODE" \
+        2>"$WORK/cert-stderr")" || CERT_STATUS=$?
+    printf '%s\n' "$CERT_OUTPUT" | sed 's/^/  /'
+    case "$CERT_STATUS" in
+        0) ;;
+        10|11|12|13)
+            fail "$CERTIFICATE" "the certificate this stack serves for $CERT_NAME is not acceptable (check-served.sh exit $CERT_STATUS)." \
+                "What it found is above. The images and the proxy's configuration are this tree's;" \
+                "the public name is not ready to be used." ;;
+        *)
+            fail "$UNANSWERABLE" "the certificate could not be asked (exit $CERT_STATUS)." \
+                "$(sed 's/^/  /' "$WORK/cert-stderr" | head -5)" \
+                "Is the acme service built (deploy.sh) and the proxy up? Nothing is claimed about the certificate." ;;
+    esac
+    echo
+
+    # --- 4b. what the proxy answers on that name (`HARDEN-01`, `EXPOSURE-REVIEW-02` `F-17`) --------------------
+    # The certificate says who answers; this says what the answer promises. `E-2` found HSTS, the `Secure` flag
+    # of the session cookie and the four security headers only in the CONFIGURATION, and the static tests read
+    # the configuration, not the answer: a proxy that lost a header, or a web tier that stopped believing
+    # `X-Forwarded-Proto`, would have stayed green. So one request is sent to the proxy's own TLS listener, with
+    # the name as SNI and as `Host`, by the same one-off container of the ACME image (it has `openssl`; the host
+    # promises none), and the RAW HEADERS that come back are judged here:
+    #
+    #   * `Strict-Transport-Security` with `max-age` of at least 31536000 and neither `includeSubDomains` nor
+    #     `preload` (`ADR-0021`: a year, and no promise about other names);
+    #   * the four security headers of `C-18`, with their values;
+    #   * `Server` without a version (`F-16`: `server_tokens off`);
+    #   * the session cookie with the `Secure` attribute.
+    #
+    # THE COOKIE needs no credential. `GET /bff/v1/me` with a session cookie that is well-formed and names no
+    # session is answered by the web tier with `401` and a CLEARED `am_session` cookie, and that cookie takes its
+    # `Secure` attribute from the same decision (`requestIsSecure`, from `X-Forwarded-Proto`) as the cookie a
+    # sign-in sets -- so this observes the live behaviour of the whole chain (proxy header, web tier) without
+    # signing anybody in and without a password in this script. If the answer is not that (the web tier is down,
+    # the route moved) there is no cookie to judge and the check says so with exit 4: "no finding" must not be
+    # reported for a property that was not observed.
+    echo "-- the headers and the session cookie the proxy serves --"
+    HEADERS_PROBE="$(cat <<'PROBE'
+name=$1; target=$2; session=$3
+printf 'GET /bff/v1/me HTTP/1.1\r\nHost: %s\r\nCookie: am_session=%s\r\nAccept: application/json\r\nConnection: close\r\n\r\n' "$name" "$session" \
+    | timeout 20 openssl s_client -connect "$target" -servername "$name" -quiet -ign_eof 2>/dev/null
+PROBE
+)"
+    # Sixty-four hex digits are the shape of a session identifier (`SESSION_ID_PATTERN`); all zeros names none.
+    STALE_SESSION="$(printf '0%.0s' $(seq 1 64))"
+    HEADERS_STATUS=0
+    HEADERS_RAW="$(docker compose "${CERT_ARGS[@]}" run --rm --no-deps -T \
+        --entrypoint sh acme -c "$HEADERS_PROBE" served-headers-probe "$CERT_NAME" proxy:8443 "$STALE_SESSION" \
+        2>"$WORK/headers-stderr" </dev/null)" || HEADERS_STATUS=$?
+    # The header block only: CRs removed, everything from the first blank line on (the body) dropped.
+    printf '%s\n' "$HEADERS_RAW" | tr -d '\r' | awk 'NR == 1 { print; next } /^$/ { exit } { print }' \
+        > "$WORK/served-headers"
+    HEADERS_FIRST="$(head -n 1 "$WORK/served-headers")"
+    if ! [[ "$HEADERS_FIRST" =~ ^HTTP/[0-9.]+\ [0-9]{3} ]]; then
+        fail "$UNANSWERABLE" "the proxy's answer on $CERT_NAME could not be read (probe exit $HEADERS_STATUS; first line: '${HEADERS_FIRST}')." \
+            "$(sed 's/^/  /' "$WORK/headers-stderr" | head -5)" \
+            "Is the proxy up and serving TLS? Nothing is claimed about its headers or its cookie."
+    fi
+    # The values of every header of one name, case-insensitively, one per line.
+    served_header() {
+        awk -v want="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" '
+            NR > 1 {
+                i = index($0, ":"); if (i == 0) next
+                if (tolower(substr($0, 1, i - 1)) != want) next
+                v = substr($0, i + 1); sub(/^[ \t]+/, "", v); sub(/[ \t]+$/, "", v); print v
+            }' "$WORK/served-headers"
+    }
+    HEADER_PROBLEMS=()
+    # >>> step: served-hsts
+    HSTS="$(served_header Strict-Transport-Security)"
+    HSTS_AGE="$(printf '%s' "$HSTS" | sed -n 's/.*[Mm][Aa][Xx]-[Aa][Gg][Ee]=\([0-9][0-9]*\).*/\1/p' | head -n 1)"
+    if [ -z "$HSTS" ]; then
+        HEADER_PROBLEMS+=("Strict-Transport-Security is absent: a browser that met this name once is not held to HTTPS.")
+    elif [ -z "$HSTS_AGE" ] || [ "$HSTS_AGE" -lt 31536000 ]; then
+        HEADER_PROBLEMS+=("Strict-Transport-Security is '$HSTS': max-age must be at least 31536000 (a year).")
+    elif printf '%s' "$HSTS" | grep -Eiq 'includeSubDomains|preload'; then
+        HEADER_PROBLEMS+=("Strict-Transport-Security is '$HSTS': neither includeSubDomains nor preload is promised for this name (ADR-0021).")
+    fi
+    # <<< step: served-hsts
+    # >>> step: served-security-headers
+    while IFS='|' read -r want_name want_value; do
+        got="$(served_header "$want_name")"
+        if [ -z "$got" ]; then
+            HEADER_PROBLEMS+=("$want_name is absent (expected '$want_value').")
+        elif [ "$got" != "$want_value" ]; then
+            HEADER_PROBLEMS+=("$want_name is '$got' (expected '$want_value').")
+        fi
+    done <<'WANTED'
+X-Content-Type-Options|nosniff
+X-Frame-Options|DENY
+Content-Security-Policy|frame-ancestors 'none'
+Referrer-Policy|same-origin
+WANTED
+    # <<< step: served-security-headers
+    # >>> step: served-no-version
+    SERVER_BANNER="$(served_header Server | head -n 1)"
+    if printf '%s' "$SERVER_BANNER" | grep -q '[0-9]'; then
+        HEADER_PROBLEMS+=("Server is '$SERVER_BANNER': the banner names a version (server_tokens off is not in force).")
+    fi
+    # <<< step: served-no-version
+    # >>> step: served-secure-cookie
+    SESSION_COOKIES="$(served_header Set-Cookie | grep -i '^am_session=' || true)"
+    if [ -z "$SESSION_COOKIES" ]; then
+        fail "$UNANSWERABLE" "the answer on $CERT_NAME carried no am_session cookie to judge ($HEADERS_FIRST)." \
+            "The probe expects 401 and a cleared session cookie for a session that does not exist; whether the" \
+            "cookie is Secure is NOT known, so nothing is claimed about it."
+    fi
+    while IFS= read -r cookie; do
+        [ -n "$cookie" ] || continue
+        if ! printf '%s' "$cookie" | grep -Eiq ';[[:space:]]*Secure[[:space:]]*(;|$)'; then
+            HEADER_PROBLEMS+=("the session cookie is not Secure ('$cookie'): the browser would send it over plain HTTP.")
+        fi
+    done <<<"$SESSION_COOKIES"
+    # <<< step: served-secure-cookie
+    if [ "${#HEADER_PROBLEMS[@]}" -ne 0 ]; then
+        printf '  %s\n' "$HEADERS_FIRST"
+        fail "$HEADERS" "the answer served on $CERT_NAME lacks what the proxy's configuration promises (${#HEADER_PROBLEMS[@]} finding(s))." \
+            "${HEADER_PROBLEMS[@]}" \
+            "The images and the certificate are this tree's; the proxy is not serving this tree's configuration, or the" \
+            "web tier is not told the transport (X-Forwarded-Proto). Run infra/deploy/reload-proxy.sh, then this check again."
+    fi
+    printf '  %s: HSTS max-age=%s, the four security headers, no version in Server, the session cookie is Secure.\n' \
+        "$HEADERS_FIRST" "$HSTS_AGE"
+    echo
+fi
+
+# --- 5. the published default credential (`PROD-02`, `R-146i`, `R-146s`, `R-146z`; ADR-0023 section 3) -----------
+# A deployment is not successful while the PUBLISHED seeded pair (`admin` / `password`) is valid. Asked of the
+# database by `python -m auditmanager.access.check --gate` in the api image (the host has no python), after the
+# stack has been shown to be this tree, so the bytes that answer are the bytes of this checkout. A temporary
+# password an administrator issued is a WARNING line of that output and not a failure (`R-146z`). `unknown` (the
+# check could not run, or printed neither sentinel) is exit 4: it is not an answer, and "no finding" is an answer.
+echo "-- the published default credential is not valid --"
+LISTENERS_LIB="$HERE/lib/proxy-listeners.sh"
+[ -r "$LISTENERS_LIB" ] || fail "$UNANSWERABLE" "$LISTENERS_LIB is missing, so the credential gate cannot be asked."
+# shellcheck source=lib/proxy-listeners.sh
+. "$LISTENERS_LIB"
+# >>> step: default-credential-gate
+listeners_gate_run compose
+printf '%s\n' "$LISTENERS_GATE_OUTPUT" | sed 's/^/  /'
+case "$LISTENERS_GATE_VERDICT" in
+    clean) ;;
+    finding)
+        if listeners_https_published compose; then
+            PUBLISHED_NOTE="PUBLIC PORT 443 IS PUBLISHED while the pair is valid: withdraw it now (deploy.sh does, on its next run)."
+        else
+            PUBLISHED_NOTE="Public port 443 is not published, as it must not be while the pair is valid."
+        fi
+        fail "$CREDENTIAL" "the published admin/password pair is valid: $(listeners_gate_logins "$LISTENERS_GATE_OUTPUT" | paste -sd, -) still accepts the published password." \
+            "$PUBLISHED_NOTE" \
+            "The deployment is not successful (R-146i). Sign in through an SSH tunnel to the loopback port," \
+            "change the password, and deploy again." ;;
+    *)
+        fail "$UNANSWERABLE" "the credential gate could not be answered (access.check --gate exited $LISTENERS_GATE_STATUS and printed neither sentinel)." \
+            "What it printed is above. Whether the published pair is valid is NOT known, so nothing is claimed." ;;
+esac
+# <<< step: default-credential-gate
+echo "  no account accepts the published password; temporary passwords, if any, are warned about above."
+echo
+
 echo "verify-deployed.sh: the deployed stack IS this tree ($HEAD_SHA$DIRTY)."

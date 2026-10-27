@@ -1,8 +1,9 @@
 """The deterministic generator of «более дешёвый аналог» proposals (``cheaper-analog-v1``).
 
 Pure: rows already matched by :func:`~auditmanager.optimisation.matching.match_specification`,
-the positions of the **same** price-list revision and the vendors of the effective AR vendor
-list go in; ordered proposal drafts come out. No clock, no randomness, no I/O, no model.
+the positions of the **same** price-list revision and the vendors of the effective vendor
+list of the version's section go in; ordered proposal drafts come out. No clock, no randomness,
+no I/O, no model.
 
 For each specification row whose match is ``matched`` (exactly one position, in the row's
 unit -- the matcher's own rule), a position of the same revision is a **cheaper analog**
@@ -13,9 +14,9 @@ when all of the following hold:
    row's unit) -- ``п.м`` and ``м`` stay different units;
 3. its currency is the matched position's currency -- nothing is converted;
 4. its unit price is strictly lower than the matched position's;
-5. its vendor is on the effective AR vendor list (:func:`vendor_key`: case, ``ё``, quotes
-   and punctuation and the legal form -- ``ООО``, ``АО``… -- do not count); a position
-   without a vendor never qualifies;
+5. its vendor is on the effective vendor list of the version's section (:func:`vendor_key`:
+   case, ``ё``, quotes and punctuation and the legal form -- ``ООО``, ``АО``… -- do not
+   count); a position without a vendor never qualifies;
 6. it is the **same kind of product**: both names start with the same head word (the first
    word with a letter, abbreviations folded as the matcher folds them), and either
    * ``code_family`` -- both carry a code (else a mark) whose leading letters, at least

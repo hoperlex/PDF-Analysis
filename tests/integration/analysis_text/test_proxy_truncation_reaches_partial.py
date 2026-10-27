@@ -39,6 +39,7 @@ from auditmanager.analysis.text.stage import (
 )
 from auditmanager.shared.errors import ErrorCode
 from auditmanager.shared.identity import ModelCallId, RunId
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE
 
 MODEL_ID = "claude-opus-5"
 PAGE_ONE = "Отчёт за год. Выручка выросла.\n"
@@ -159,6 +160,7 @@ def _run(finish_reason: str) -> Any:
             ceiling_is_explicit=False,
         ),
         call_journal=_BoundaryJournal(),
+        profile=V1_REFERENCE_PROFILE,
     )
 
 

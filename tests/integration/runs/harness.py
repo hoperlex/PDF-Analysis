@@ -43,14 +43,13 @@ import pytest
 from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
-from auditmanager.analysis.text import ProviderConfig, ProviderMode, RecordedAdapter
+from auditmanager.analysis.text import AR_TEXT_PROMPT_BUNDLE, ProviderConfig, ProviderMode, RecordedAdapter
+from auditmanager.analysis.text.profile import ANALYSIS_PROFILE_ID as REFERENCE_PROFILE_ID
 from auditmanager.documents import DocumentRepository, ManifestEntry
 from auditmanager.shared.db.config import DatabaseSettings, parse_database_url
 from auditmanager.shared.db.engine import create_database_engine
 from auditmanager.shared.identity import (
-    AnalysisProfileId,
     IdempotencyKey,
-    PromptBundleId,
     VersionUid,
 )
 from auditmanager.storage import S3BlobStore, S3StorageSettings, StorageError, sha256_of
@@ -314,8 +313,12 @@ def seed_version(session: Session, blob_store: S3BlobStore) -> SeededVersion:
         project_uid=str(project.project_uid),
         document_uid=str(document_uid),
         version_uid=str(version_uid),
-        analysis_profile_id=AnalysisProfileId.new().value,
-        prompt_bundle_id=PromptBundleId.new().value,
+        # `PROD-11-AR-V1-V2-REMOVAL-01`: the executor no longer runs a profile for a run whose pinned
+        # pair it cannot resolve (it ignored a random pair and ran АР). The suites resolve the pair
+        # through `tests/support/v1_reference_profile.resolve_reference_profile`, so the pair a
+        # seeded version pins is the v1 machinery's reference pair (the retired АР identity).
+        analysis_profile_id=str(REFERENCE_PROFILE_ID),
+        prompt_bundle_id=str(AR_TEXT_PROMPT_BUNDLE.prompt_bundle_id),
         source_blob_id=str(published.blob_id),
         sha256=digest,
         byte_size=len(payload),

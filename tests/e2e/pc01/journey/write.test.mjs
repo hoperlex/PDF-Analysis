@@ -8,6 +8,7 @@ import {
   formulaLikeCells,
   namesNeededBy,
   nightWindowMayRun,
+  pendingActivation,
   redactedExchange,
   templateNames,
 } from './write.mjs';
@@ -101,4 +102,15 @@ test('the words that name a row count among what a step needs', () => {
   assert.deepEqual(namesNeededBy(step), ['third_version_uid']);
   const stamped = { at: '/blocks', actions: [{ do: 'click', selector: 'li button', within: { selector: 'li', text_contains: 'name %STAMP%' } }] };
   assert.deepEqual(namesNeededBy(stamped), []);
+});
+
+test('a step marked pending_v3_activation is reported with the manifest reason and is never run', () => {
+  const spec = { ar_bound: { pending_v3_activation_reason: 'no published АР run can exist' } };
+  assert.equal(pendingActivation({ name: 'a', pending_v3_activation: true }, spec), 'no published АР run can exist');
+  for (const step of [{ name: 'b' }, { name: 'c', pending_v3_activation: false }, { name: 'd', pending_v3_activation: 'yes' }]) {
+    assert.equal(pendingActivation(step, spec), null, step.name);
+  }
+  // A mark without a reason still reports, and says the reason is missing, rather than vanishing.
+  assert.match(pendingActivation({ name: 'e', pending_v3_activation: true }, {}), /gives no reason/);
+  assert.match(pendingActivation({ name: 'f', pending_v3_activation: true }, { ar_bound: { pending_v3_activation_reason: ' ' } }), /gives no reason/);
 });

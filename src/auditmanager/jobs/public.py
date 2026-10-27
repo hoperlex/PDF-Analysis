@@ -9,6 +9,7 @@ from auditmanager.jobs.commands import set_execution_paused, set_job_priority
 from auditmanager.jobs.repository import (
     JOB_WAKEUP_CHANNEL,
     AttemptAuthority,
+    CompletedWindowCall,
     ExecutionNotClaimed,
     JobRepository,
     V3CompletedCall,
@@ -43,6 +44,7 @@ __all__ = [
     "JOB_WAKEUP_CHANNEL",
     "AttemptAuthority",
     "AttemptContext",
+    "CompletedWindowCall",
     "ExecutionNotClaimed",
     "JobRepository",
     "V3CompletedCall",

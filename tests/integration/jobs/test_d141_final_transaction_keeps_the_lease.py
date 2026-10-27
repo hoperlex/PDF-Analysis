@@ -63,6 +63,7 @@ from auditmanager.jobs.public import JobRepository
 from auditmanager.runs import execute_run, start_audit_run
 from auditmanager.runs.commands import cancel_audit_run
 from auditmanager.shared.identity import IdempotencyKey
+from tests.support.v1_reference_profile import resolve_reference_profile
 
 GATE_SECONDS = 12.0
 LEASE_SECONDS = 8.0
@@ -182,6 +183,7 @@ def test_a_final_transaction_longer_than_the_lease_is_not_reclaimed(
                     result = execute_run(
                         session, run_id, blob_store=blob_store, adapter=recorded_adapter,
                         provider_config=provider_config,
+                        text_profiles=resolve_reference_profile,
                     )
                     session.commit()
             finally:

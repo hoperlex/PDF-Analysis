@@ -34,6 +34,7 @@ from auditmanager.exports import BOM, export_run_csv
 from auditmanager.findings import published_finding_count
 from auditmanager.runs import execute_run, start_audit_run
 from auditmanager.shared.identity import FindingObservationId
+from tests.support.v1_reference_profile import resolve_reference_profile
 
 UNGROUNDED_QUOTE = "Совершенно вымышленная цитата, которой нет в тексте."
 UNGROUNDED_REASON = "quotation_absent"
@@ -102,6 +103,7 @@ def test_an_ungrounded_observation_with_evidence_reaches_no_csv_row(
         blob_store=blob_store,
         adapter=recorded_adapter,
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
     grounded_rows = _rows(export_run_csv(session, started.run_id).content)
 
@@ -165,6 +167,7 @@ def test_the_exported_bytes_are_unchanged_by_an_ungrounded_observation(
         blob_store=blob_store,
         adapter=recorded_adapter,
         provider_config=provider_config,
+        text_profiles=resolve_reference_profile,
     )
     before = export_run_csv(session, started.run_id).content
 

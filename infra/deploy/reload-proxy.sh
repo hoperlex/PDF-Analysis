@@ -49,10 +49,11 @@
 #
 # WHY A RESTART AND NOT A RECREATE OR A DIRECTORY MOUNT. `docker restart` re-resolves every
 # bind mount by path and keeps everything else about the container: its id, its published
-# ports and every mount it was created with -- including the TLS overlay's
-# (`proxy/compose.tls.yml`), which this script does not know about and must not drop. A
-# `compose up --force-recreate` from here would rebuild the container from
-# `compose.server.yml` alone and silently lose that overlay. A directory mount would need
+# ports and every mount it was created with -- including the ACME overlay's
+# (`infra/acme/compose.acme.yml`: port 80, the certificate volume) and the 443 overlay's
+# (`proxy/compose.tls.yml`), neither of which this script knows about and neither of
+# which it may drop. A `compose up --force-recreate` from here would rebuild the container
+# from `compose.server.yml` alone and silently lose both. A directory mount would need
 # `proxy/**` to change, and the overlay's own single-file mounts would still pin inodes.
 #
 # AN UNCHANGED CONFIGURATION RESTARTS NOTHING. The comparison is the only thing that decides
@@ -151,7 +152,7 @@ if [ -n "$FOREIGN" ]; then
     drifted "the running proxy was not created from this checkout's proxy configuration." \
         "$(printf '%s' "$FOREIGN" | sed 's/^/  /')" \
         "Nothing was reloaded or restarted. Recreate it from this checkout, with the same" \
-        "-f files it was created with (add proxy/compose.tls.yml if TLS is on):" \
+        "-f files it was created with (add infra/acme/compose.acme.yml if ALPHA_CERT_NAME is set, and proxy/compose.tls.yml if 443 is published):" \
         "    docker compose --env-file $ENV_FILE -f $COMPOSE_FILE up -d --force-recreate proxy"
 fi
 
@@ -192,8 +193,18 @@ if [ -n "$STALE" ]; then
     # the image's own entrypoint, so the start-up hooks a restart would run (the TLS switch
     # among them) run here first.
     IMAGE="$(docker inspect --format '{{.Image}}' "$PROXY")"
+    # THE NETWORK IS THE API'S, NOT "THE PROXY'S FIRST". With a certificate name set the proxy is on two
+    # networks (`infra/acme/compose.acme.yml`: the data network and the ACME client's), `docker inspect` lists
+    # them sorted, and the client's (`<instance>-acme-net`) sorts BEFORE the data network (`<instance>-net`):
+    # the first of the proxy's would put the throwaway container where `api` and `web` do not resolve and
+    # refuse every good configuration as invalid (`D-229` item 3). `api` is on the data network only, so its
+    # network is the one the upstreams live on. With no running `api` the old rule stays: `nginx -t` cannot
+    # resolve `api` then on any network, and says so.
+    API="$(compose ps --quiet api 2>/dev/null | head -1 || true)"
+    NETWORK_OWNER="$PROXY"
+    [ -z "$API" ] || NETWORK_OWNER="$API"
     NETWORK="$(docker inspect --format \
-        '{{range $name, $value := .NetworkSettings.Networks}}{{$name}}{{"\n"}}{{end}}' "$PROXY" \
+        '{{range $name, $value := .NetworkSettings.Networks}}{{$name}}{{"\n"}}{{end}}' "$NETWORK_OWNER" \
         | head -1)"
     CANDIDATE=(docker run --rm)
     [ -z "$NETWORK" ] || CANDIDATE+=(--network "$NETWORK")

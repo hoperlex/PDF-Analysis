@@ -6,12 +6,13 @@ MinIO, driven with a real expert credential. What is held:
 * the answer is the registry the application routes runs through, not a copy: fifteen rows in
   the project-structure order (``PROJECT_STRUCTURE_ORDER``), named from the reviewed section
   catalogue; every registered section carries exactly its registry entry's identities,
-  version, status and content hashes; AR is ``builtin`` with no source; every package carries
+  version, status and content hashes; AR carries ``profile: null`` (`PROD-11-AR-V1-V2-REMOVAL-01`:
+  the АР analysis path is the v3 group, not a text profile, and ``startRun`` refuses an АР
+  version for the same reason); every package carries
   the status and version its line of ``section_profile_expectations.json`` names (`draft` at
   ``1.0.0`` until a section's review moves its line) and the source its ``profile.json``
-  declares; ``PB`` (`PB-PROFILE-01`) is the
-  fifteenth profile, an authored one that declares ``source: null``, so no row carries
-  ``profile: null`` any more;
+  declares; ``PB`` (`PB-PROFILE-01`) is an authored profile that declares ``source: null``, and
+  it is the only row with a profile and no source;
 * every object carries exactly its frozen schema's properties;
 * no credential is ``401``; the role decision (any one role) is the role register's, held by
   ``tests/integration/api/test_role_register.py``.
@@ -27,7 +28,6 @@ from typing import Any
 import pytest
 from starlette.testclient import TestClient
 
-from auditmanager.analysis.text.profile import AR_TEXT_PROFILE
 from auditmanager.analysis.text.profile_registry import (
     PACKAGES_ROOT,
     PROJECT_STRUCTURE_ORDER,
@@ -93,10 +93,12 @@ def test_every_row_is_the_registry_entry_the_application_routes_by(
     registry = load_text_profile_registry()
     expected = _expected_sections()
     by_code = {item["section_code"]: item["profile"] for item in listing["items"]}
-    assert {code for code, profile in by_code.items() if profile is None} == set()
+    # `PROD-11-AR-V1-V2-REMOVAL-01`: АР is the one row with no profile.
+    assert {code for code, profile in by_code.items() if profile is None} == {"AR"}
+    assert by_code["AR"] is None
     assert set(registry.entries) == {code for code, profile in by_code.items() if profile}
-    assert len(registry.entries) == len(by_code) == 15
-    packages = set(registry.entries) - {"AR"}
+    assert len(registry.entries) == 14 and len(by_code) == 15
+    packages = set(registry.entries)
     assert packages - set(expected) == set(), "a served package has no line in the expectations file"
     assert set(expected) - packages == set(), "a line of the expectations file has no served package"
 
@@ -107,11 +109,6 @@ def test_every_row_is_the_registry_entry_the_application_routes_by(
         assert profile["profile_version"] == entry.profile.profile_version
         assert profile["prompt_bundle_sha256"] == entry.profile.prompt_bundle.content_sha256
         assert profile["content_sha256"] == entry.profile.content_sha256
-        if code == "AR":
-            assert profile["status"] == "builtin"
-            assert profile["source"] is None
-            assert profile["analysis_profile_id"] == str(AR_TEXT_PROFILE.analysis_profile_id)
-            continue
         assert (profile["status"], profile["profile_version"]) == expected[code], (
             f"{code}: the served (status, profile_version) is not the expectations file's"
         )

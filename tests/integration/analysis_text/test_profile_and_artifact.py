@@ -18,36 +18,29 @@ import json
 from auditmanager.analysis.text import (
     ARTIFACT_ROLE,
     ARTIFACT_VERSION,
-    AR_TEXT_PROFILE,
     AR_TEXT_PROMPT_BUNDLE,
     CATEGORIES,
     STAGE_ID,
     build_request,
     load_text_layer,
     provider_lock,
-    resolve_profile,
     run_text_analysis,
 )
 from auditmanager.analysis.text.prompt import RESPONSE_SCHEMA, SYSTEM_PROMPT
 from auditmanager.shared.identity import RunId
+from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE
 
 
-# --- the profile is immutable and resolved by identity --------------------------
+# --- the profile is immutable -----------------------------------------------------
+# `PROD-11-AR-V1-V2-REMOVAL-01`: `resolve_profile()` and the two tests that resolved the AR profile
+# through it are gone with it (nothing resolves a single profile any more; the registry resolves
+# an exact pair, `tests/unit/analysis/test_text_profile_registry.py`). The reference profile of
+# the tests is the same object the constant was made of, so what is left is asserted on it.
 
 
-def test_the_profile_is_resolved_by_a_pinned_identity():
-    resolved = resolve_profile(AR_TEXT_PROFILE.analysis_profile_id)
-    assert resolved is AR_TEXT_PROFILE
-    assert str(AR_TEXT_PROFILE.analysis_profile_id).startswith("ap_")
+def test_the_profile_carries_prefixed_identities():
+    assert str(V1_REFERENCE_PROFILE.analysis_profile_id).startswith("ap_")
     assert str(AR_TEXT_PROMPT_BUNDLE.prompt_bundle_id).startswith("pb_")
-
-
-def test_the_identities_are_stable_across_resolutions():
-    """Immutable means the same identity every time, not a fresh ULID per run."""
-    first = resolve_profile().analysis_profile_id
-    second = resolve_profile().analysis_profile_id
-    assert first == second
-    assert resolve_profile().content_sha256 == AR_TEXT_PROFILE.content_sha256
 
 
 def test_the_profile_hash_covers_the_bundle_it_binds():
@@ -57,9 +50,9 @@ def test_the_profile_hash_covers_the_bundle_it_binds():
     edited_bundle = dataclasses.replace(
         AR_TEXT_PROMPT_BUNDLE, system_prompt=SYSTEM_PROMPT + "\nЕщё одно правило."
     )
-    edited_profile = dataclasses.replace(AR_TEXT_PROFILE, prompt_bundle=edited_bundle)
+    edited_profile = dataclasses.replace(V1_REFERENCE_PROFILE, prompt_bundle=edited_bundle)
     assert edited_bundle.content_sha256 != AR_TEXT_PROMPT_BUNDLE.content_sha256
-    assert edited_profile.content_sha256 != AR_TEXT_PROFILE.content_sha256
+    assert edited_profile.content_sha256 != V1_REFERENCE_PROFILE.content_sha256
 
 
 def test_a_prompt_edit_changes_the_request_checksum(text_layer_document):
@@ -84,7 +77,7 @@ def test_a_prompt_edit_changes_the_request_checksum(text_layer_document):
 
 def test_exactly_two_categories_everywhere():
     assert CATEGORIES == ("internal_contradiction", "explicit_placeholder")
-    assert AR_TEXT_PROFILE.categories == CATEGORIES
+    assert V1_REFERENCE_PROFILE.categories == CATEGORIES
     enum = RESPONSE_SCHEMA["properties"]["observations"]["items"]["properties"]["category"][
         "enum"
     ]
@@ -160,7 +153,8 @@ def test_the_artifact_root_carries_exactly_the_declared_keys(
     text_layer_document, recorded_adapter
 ):
     outcome = run_text_analysis(
-        run_id=RunId.new(), text_layer_document=text_layer_document, adapter=recorded_adapter
+        run_id=RunId.new(), text_layer_document=text_layer_document, adapter=recorded_adapter,
+        profile=V1_REFERENCE_PROFILE,
     )
     assert set(outcome.artifact) == {
         "artifact_role",
@@ -182,7 +176,8 @@ def test_each_observation_carries_exactly_the_declared_fields(
     text_layer_document, recorded_adapter
 ):
     outcome = run_text_analysis(
-        run_id=RunId.new(), text_layer_document=text_layer_document, adapter=recorded_adapter
+        run_id=RunId.new(), text_layer_document=text_layer_document, adapter=recorded_adapter,
+        profile=V1_REFERENCE_PROFILE,
     )
     for observation in outcome.artifact["observations"]:
         assert set(observation) == {
@@ -211,7 +206,8 @@ def test_the_model_call_record_carries_the_declared_provenance(
     text_layer_document, recorded_adapter
 ):
     outcome = run_text_analysis(
-        run_id=RunId.new(), text_layer_document=text_layer_document, adapter=recorded_adapter
+        run_id=RunId.new(), text_layer_document=text_layer_document, adapter=recorded_adapter,
+        profile=V1_REFERENCE_PROFILE,
     )
     record = outcome.model_calls[0].as_dict()
     # `cost_basis` joined the record when OD-02 was revised to a proxy that reports what a

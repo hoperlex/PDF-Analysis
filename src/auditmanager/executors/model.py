@@ -16,6 +16,7 @@ from __future__ import annotations
 import base64
 import binascii
 import hashlib
+import ipaddress
 import re
 import urllib.parse
 from collections.abc import Collection, Mapping
@@ -23,6 +24,11 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Final
 
+from auditmanager.executors.destinations import (
+    DestinationPolicy,
+    DestinationRefused,
+    DestinationUnresolvable,
+)
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
@@ -52,6 +58,7 @@ __all__ = [
     "destination_for",
     "host_key_fingerprint",
     "normalise_origin",
+    "refuse_plain_http",
     "refuse_purpose",
     "validate_settings",
 ]
@@ -176,6 +183,45 @@ def normalise_origin(base_url: str) -> str:
     return f"{parts.scheme}://{shown.lower()}:{port}"
 
 
+def _never_resolves(host: str, port: int) -> list[str]:
+    raise DestinationUnresolvable()
+
+
+#: The destination rules, asked about a name or a literal address and never about the network:
+#: this module is pure, so a name that is not a loopback name is not classified here.
+_LITERAL_POLICY: Final[DestinationPolicy] = DestinationPolicy(
+    resolver=_never_resolves, networks=lambda: ())
+
+
+def refuse_plain_http(base_url: str, transport: str | None) -> None:
+    """Refuse ``http://`` unless the key's route is not the open internet (`F-15`).
+
+    An ``https://`` URL is always accepted here. A plain ``http://`` URL is accepted only when
+    :mod:`~auditmanager.executors.destinations` itself classifies its host as one the key may
+    cross unencrypted: a loopback name or address (for ``ssh_tunnel`` that is the remote
+    host's own ``localhost``), or -- for ``transport: vpn`` alone, the one transport that module
+    admits a private range for -- a private address. A public address, any other transport's
+    private address, a link-local or reserved one and a name that is not a loopback name (it
+    cannot be classified without resolving it, which this module never does) are refused with
+    ``base_url_invalid``. Pure: nothing is resolved and nothing is sent."""
+    if not base_url.startswith("http://"):
+        return
+    host = urllib.parse.urlsplit(base_url).hostname
+    if not host:
+        raise _refuse("base_url", "base_url_invalid")
+    try:
+        addresses = _LITERAL_POLICY.check(host, 80, transport=transport or "direct")
+    except DestinationRefused as refused:
+        if refused.category == "loopback":
+            return
+        raise _refuse("base_url", "base_url_invalid") from None
+    except DestinationUnresolvable:
+        raise _refuse("base_url", "base_url_invalid") from None
+    if any(_LITERAL_POLICY.classify(ipaddress.ip_address(item)) != "private_range"
+           for item in addresses):
+        raise _refuse("base_url", "base_url_invalid")
+
+
 def _ssh_endpoint(settings: RevisionSettings) -> str:
     assert settings.ssh_host is not None and settings.ssh_port is not None
     return f"{settings.ssh_host.lower()}:{settings.ssh_port}"
@@ -196,6 +242,7 @@ def destination_for(kind: str, settings: RevisionSettings, purpose: str) -> str:
     if purpose == "api_key" and kind == "http_api":
         assert settings.base_url is not None and settings.transport is not None
         origin = normalise_origin(settings.base_url)
+        refuse_plain_http(settings.base_url, settings.transport)
         if settings.transport == "ssh_tunnel":
             return f"ssh_tunnel|{_ssh_endpoint(settings)}|{origin}"
         return f"{settings.transport}||{origin}"
@@ -246,6 +293,7 @@ def validate_settings(
             raise _refuse(name, "field_not_for_kind")
     if settings.base_url is not None:
         normalise_origin(settings.base_url)
+        refuse_plain_http(settings.base_url, settings.transport)
     if settings.transport is not None and settings.transport not in TRANSPORTS:
         raise _refuse("transport", "enum")
     if settings.ssh_host is not None and not _HOST.fullmatch(settings.ssh_host):

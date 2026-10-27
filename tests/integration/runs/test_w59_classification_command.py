@@ -195,7 +195,11 @@ class TestRouting:
                 route_classified_version(classified, without_kj)
             assert unavailable.value.code is ErrorCode.SECTION_PROFILE_UNAVAILABLE
             assert unavailable.value.detail_fields == {}
-            assert "AR" in without_kj, "the refusal must hold while AR stays registered"
+            # `PROD-11-AR-V1-V2-REMOVAL-01`: the refusal used to be shown to hold while АР stayed
+            # registered; АР is not, so the other sections are the ones that must not be substituted.
+            assert "AR" not in without_kj and {"PB", "TX"} <= set(without_kj), (
+                "the refusal must hold while other sections stay registered"
+            )
             route = route_classified_version(classified, profiles)
             assert (route.analysis_profile_id, route.prompt_bundle_id) == profiles["KJ"]
             session.rollback()

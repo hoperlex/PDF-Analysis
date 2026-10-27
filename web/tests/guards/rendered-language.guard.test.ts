@@ -1012,7 +1012,7 @@ const record = (over: Partial<DecisionRecord> = {}): DecisionRecord => ({
 
 function apiError(status: number, code: ErrorCode): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.6.0',
+    contract_version: '1.7.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1024,7 +1024,7 @@ function apiError(status: number, code: ErrorCode): ApiError {
 /** A norms refusal with the one classifier the seal registered for it (`W55A-WEB-NORMS`). */
 function normsRefusal(code: ErrorCode, details: Readonly<Record<string, string>>): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.6.0',
+    contract_version: '1.7.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1085,13 +1085,15 @@ function dashboardSummary(over: Partial<DashboardSummary> = {}): DashboardSummar
 }
 
 /**
- * `W59-ANALYSIS-SETTINGS-01`: the registry «Настройки анализа» lists. AR builtin with no
- * source, ПБ as an authored draft, and the other profiles with their status and legacy
- * sources — server data, seeded Cyrillic so that anything Latin left is chrome.
+ * `W59-ANALYSIS-SETTINGS-01`: the registry «Настройки анализа» lists. АР with no profile
+ * (`PROD-11-AR-V1-V2-REMOVAL-01`: it is analysed by the six-check group), ПБ as an authored
+ * draft, and the other profiles with their status and legacy sources — server data, seeded
+ * Cyrillic so that anything Latin left is chrome.
  */
 const ANALYSIS_PROFILES: readonly AnalysisProfileListItem[] = PROJECT_STRUCTURE_ORDER.map((code, index) => {
   const digit = (index % 10).toString();
   const section = projectSectionOf(code);
+  if (code === 'AR') return { section_code: code, section_name: section.name, profile: null };
   return {
     section_code: code,
     section_name: section.name,
@@ -1099,10 +1101,10 @@ const ANALYSIS_PROFILES: readonly AnalysisProfileListItem[] = PROJECT_STRUCTURE_
       analysis_profile_id: `ap_01J9ZQ8K7NHVXW3T2R5M6P4Q8${digit}`,
       prompt_bundle_id: `pb_01J9ZQ8K7NHVXW3T2R5M6P4Q8${digit}`,
       profile_version: '1.0.0',
-      status: code === 'AR' ? 'builtin' : code === 'PS' ? 'reviewed' : 'draft',
+      status: code === 'PS' ? 'reviewed' : 'draft',
       prompt_bundle_sha256: digit.repeat(64),
       content_sha256: 'a'.repeat(63) + digit,
-      source: code === 'AR' || code === 'PB' ? null : {
+      source: code === 'PB' ? null : {
         repository: 'прежняя-система',
         commit: 'b'.repeat(40),
         files: [{ path: `prompts/disciplines/${code}/role.md`, sha256: 'c'.repeat(64) }],
@@ -1832,7 +1834,7 @@ function startRefusal(
   details?: Record<string, string | number | boolean | null>,
 ): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.6.0',
+    contract_version: '1.7.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -2028,7 +2030,7 @@ function startRunExecutorShapes(): ReactElement {
     code: ErrorCode, status: number, retryable: boolean,
     details: Readonly<Record<string, string>>, message = 'Сообщение об отказе.',
   ): ApiError => new ApiError(status, {
-    contract_version: '1.6.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
+    contract_version: '1.7.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
     retryable, details,
   }, '0f0e9d8c-7b6a-4948-b726-150413021100');
   const cannotServe = (reason: string) =>
@@ -3536,7 +3538,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           422,
           {
-            contract_version: '1.6.0',
+            contract_version: '1.7.0',
             error_code: 'validation_failed',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -3558,7 +3560,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           503,
           {
-            contract_version: '1.6.0',
+            contract_version: '1.7.0',
             error_code: 'dependency_unavailable',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
