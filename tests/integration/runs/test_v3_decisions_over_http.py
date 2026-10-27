@@ -96,6 +96,8 @@ class World:
     snapshot_id: str = ""
     version_uid: str = ""
     provider_requests: int = 0
+    finding_of: dict[str, str] = field(default_factory=dict)
+    observation_of: dict[str, str] = field(default_factory=dict)
 
 
 def report_path(run_id: str) -> str:
@@ -152,6 +154,62 @@ def _drive(url: str, blob_store: Any, recordings: Path, manifest_dir: Path) -> W
             x[f"findings_{scope}"] = wire.call("GET", f"/runs/{out.run_of[scope]}/findings", token=tokens["expert"])
             x[f"status_{scope}"] = wire.call("GET", f"/runs/{out.run_of[scope]}", token=tokens["expert"])
         x["review_after"] = wire.call("GET", f"{accept.GROUPS}/{out.group_id}/review", token=tokens["expert"])
+        out.db["frozen_before"] = accept._rows(factory, """
+            SELECT o.finding_observation_id, o.finding_text, o.proposed_severity, o.required_value, o.stated_value,
+                   (SELECT count(*) FROM finding_evidence e WHERE e.finding_observation_id = o.finding_observation_id),
+                   (SELECT count(*) FROM finding_observation_norm_citation c WHERE c.finding_observation_id = o.finding_observation_id)
+              FROM finding_observation o ORDER BY 1""")
+        # -- piece 3: the verdict path, on the findings the terminals published ------------------
+        found = {scope: x[f"findings_{scope}"].data["items"][0] for scope in PROVISIONAL_SCOPES}
+        out.finding_of = {scope: item["finding_uid"] for scope, item in found.items()}
+        out.observation_of = {scope: item["observation"]["finding_observation_id"] for scope, item in found.items()}
+        f1, f2, a1 = (out.finding_of[k] for k in PROVISIONAL_SCOPES)
+        o1, o2, oa = (out.observation_of[k] for k in PROVISIONAL_SCOPES)
+        decisions = lambda uid: f"/findings/{uid}/decisions"  # noqa: E731
+        x["before_report_F1"] = x["report_F1"]
+        x["before_review"] = x["review_after"]
+        x["accept"] = wire.call("POST", decisions(f1), token=tokens["expert"], key="verdict-accept",
+                                body={"event_type": "accept", "finding_observation_id": o1, "severity": "economic"})
+        x["accept_again"] = wire.call("POST", decisions(f1), token=tokens["expert"], key="verdict-accept",
+                                      body={"event_type": "accept", "finding_observation_id": o1, "severity": "economic"})
+        x["accept_other_body"] = wire.call("POST", decisions(f1), token=tokens["expert"], key="verdict-accept",
+                                           body={"event_type": "reject", "finding_observation_id": o1})
+        x["reject"] = wire.call("POST", decisions(f2), token=tokens["expert"], key="verdict-reject",
+                                body={"event_type": "reject", "finding_observation_id": o2, "comment": "Норма не применима."})
+        x["comment"] = wire.call("POST", decisions(a1), token=tokens["expert"], key="verdict-comment",
+                                 body={"event_type": "comment", "finding_observation_id": oa, "comment": "Нужна проверка редакции."})
+        x["admin_verdict"] = wire.call("POST", decisions(a1), token=tokens["admin"], key="verdict-admin",
+                                       body={"event_type": "accept", "finding_observation_id": oa})
+        x["suspended_verdict"] = wire.call("POST", decisions(a1), token=tokens["suspended"], key="verdict-susp",
+                                           body={"event_type": "accept", "finding_observation_id": oa})
+        x["anonymous_verdict"] = wire.call("POST", decisions(a1), key="verdict-anon",
+                                           body={"event_type": "accept", "finding_observation_id": oa})
+        x["keyless_verdict"] = wire.call("POST", decisions(a1), token=tokens["expert"],
+                                         body={"event_type": "accept", "finding_observation_id": oa})
+        x["foreign_observation"] = wire.call("POST", decisions(a1), token=tokens["expert"], key="verdict-foreign",
+                                             body={"event_type": "accept", "finding_observation_id": o1})
+        x["absent_finding"] = wire.call("POST", decisions("fnd_" + "0" * 26), token=tokens["expert"], key="verdict-absent",
+                                        body={"event_type": "accept", "finding_observation_id": o1})
+        x["severity_on_reject"] = wire.call("POST", decisions(a1), token=tokens["expert"], key="verdict-sev",
+                                            body={"event_type": "reject", "finding_observation_id": oa, "severity": "critical"})
+        for scope in PROVISIONAL_SCOPES:
+            uid = out.finding_of[scope]
+            x[f"finding_{scope}_decided"] = wire.call("GET", f"/findings/{uid}", token=tokens["expert"])
+            x[f"history_{scope}"] = wire.call("GET", decisions(uid), token=tokens["expert"])
+        for scope in SCOPES:
+            x[f"findings_{scope}_decided"] = wire.call("GET", f"/runs/{out.run_of[scope]}/findings", token=tokens["expert"])
+        x["csv_F1"] = wire.call("GET", f"/runs/{out.run_of['F1']}/export.csv", token=tokens["expert"])
+        x["journal"] = wire.call("GET", "/decisions", token=tokens["expert"])
+        x["report_F1_decided"] = wire.call("GET", report_path(out.run_of["F1"]), token=tokens["expert"])
+        x["review_decided"] = wire.call("GET", f"{accept.GROUPS}/{out.group_id}/review", token=tokens["expert"])
+        out.db["events"] = accept._rows(factory, """
+            SELECT finding_uid, event_type, verdict, severity, author_label, author_user_uid IS NOT NULL
+              FROM expert_decision_event ORDER BY sequence_no""")
+        out.db["frozen_after"] = accept._rows(factory, """
+            SELECT o.finding_observation_id, o.finding_text, o.proposed_severity, o.required_value, o.stated_value,
+                   (SELECT count(*) FROM finding_evidence e WHERE e.finding_observation_id = o.finding_observation_id),
+                   (SELECT count(*) FROM finding_observation_norm_citation c WHERE c.finding_observation_id = o.finding_observation_id)
+              FROM finding_observation o ORDER BY 1""")
         run_f1 = out.run_of["F1"]
         x["report_suspended"] = wire.call("GET", report_path(run_f1), token=tokens["suspended"])
         x["report_anonymous"] = wire.call("GET", report_path(run_f1))
@@ -357,3 +415,117 @@ def test_the_report_refuses_a_suspended_account_an_anonymous_caller_and_an_absen
         world.x["report_suspended"], "permission_denied", {"required_capability": "role:admin|expert"})
     accept.check_typed_refusal(world.x["report_anonymous"], "authentication_required", None)
     accept.check_typed_refusal(world.x["report_absent"], "not_found", {"aggregate_type": "AuditRun"})
+
+
+# --- the verdict path (piece 3) -----------------------------------------------------------------
+
+
+def test_an_expert_records_accept_reject_and_comment_on_published_findings(world: World) -> None:
+    for name, event_type, verdict in (("accept", "accept", "accepted"), ("reject", "reject", "rejected"),
+                                      ("comment", "comment", None)):
+        answer = world.x[name]
+        assert answer.status == 201, answer.text
+        assert answer.data["event"]["event_type"] == event_type
+        assert answer.data["event"].get("verdict") == verdict
+    assert world.x["accept"].data["current_verdict"] == "accepted"
+    assert world.x["accept"].data["event"]["severity"] == "economic"
+    assert world.x["comment"].data["current_verdict"] == "pending"  # a comment is not a judgement
+
+
+def test_the_author_is_the_verified_subject_never_a_field_of_the_request(world: World) -> None:
+    labels = {row[4] for row in world.db["events"]}
+    assert labels == {"Сьютова Е."} and all(row[5] for row in world.db["events"])  # an account is recorded
+    assert len(world.db["events"]) == 3  # replays, refusals and the keyless call appended nothing
+
+
+def test_the_same_key_and_body_replays_the_first_event_and_appends_nothing(world: World) -> None:
+    assert world.x["accept_again"].status == 201
+    assert world.x["accept_again"].data["event"]["decision_id"] == world.x["accept"].data["event"]["decision_id"]
+
+
+def test_the_same_key_with_another_body_is_a_reused_key_and_appends_nothing(world: World) -> None:
+    accept.check_typed_refusal(world.x["accept_other_body"], "idempotency_key_reuse",
+                               world.x["accept_other_body"].data.get("details"))
+
+
+@pytest.mark.parametrize("name", ["admin_verdict", "suspended_verdict"])
+def test_only_an_expert_may_record_a_verdict(world: World, name: str) -> None:
+    accept.check_typed_refusal(world.x[name], "permission_denied", {"required_capability": "role:expert"})
+
+
+def test_an_anonymous_verdict_is_refused(world: World) -> None:
+    accept.check_typed_refusal(world.x["anonymous_verdict"], "authentication_required", None)
+
+
+def test_a_verdict_without_an_idempotency_key_is_refused(world: World) -> None:
+    answer = world.x["keyless_verdict"]
+    assert 400 <= answer.status < 500 and answer.data["error_code"] in {"validation_failed", "idempotency_key_required"}
+
+
+def test_a_verdict_needs_the_observation_of_that_finding(world: World) -> None:
+    assert world.x["foreign_observation"].status == 404
+    assert world.x["foreign_observation"].data["error_code"] == "not_found"
+
+
+def test_a_proposal_without_a_finding_has_nothing_to_decide(world: World) -> None:
+    """Withheld, rejected and non-normative proposals are not findings, so no uid names them."""
+    assert world.x["absent_finding"].status == 404 and world.x["absent_finding"].data["error_code"] == "not_found"
+    for scope in WITHHELD_SCOPES:
+        assert world.x[f"findings_{scope}_decided"].data["items"] == []
+
+
+def test_a_severity_is_refused_on_anything_but_an_accept(world: World) -> None:
+    assert world.x["severity_on_reject"].status == 422
+
+
+def test_the_verdict_and_the_decided_severity_follow_from_the_ledger_not_from_the_model(world: World) -> None:
+    f1 = world.x["finding_F1_decided"].data
+    assert (f1["current_verdict"], f1["decided_severity"], f1["decision_event_count"]) == ("accepted", "economic", 1)
+    assert f1["observation"]["proposed_severity"] == "operational"  # the model's proposal is not overwritten
+    f2 = world.x["finding_F2_decided"].data
+    assert (f2["current_verdict"], f2["latest_comment"]) == ("rejected", "Норма не применима.")
+    assert "decided_severity" not in f2
+    a1 = world.x["finding_A1_decided"].data
+    assert (a1["current_verdict"], a1["decision_event_count"], a1["latest_comment"]) == (
+        "pending", 1, "Нужна проверка редакции.")
+    for scope in PROVISIONAL_SCOPES:
+        (item,) = world.x[f"findings_{scope}_decided"].data["items"]
+        assert item["current_verdict"] == world.x[f"finding_{scope}_decided"].data["current_verdict"]
+
+
+def test_history_and_journal_list_the_events_in_the_order_they_were_taken(world: World) -> None:
+    for scope, expected in (("F1", 1), ("F2", 1), ("A1", 1)):
+        assert len(world.x[f"history_{scope}"].data["items"]) == expected
+    journal = world.x["journal"].data["items"]
+    assert {entry["finding_uid"] for entry in journal} == set(world.finding_of.values())
+
+
+def test_a_verdict_changes_no_evidence_no_citation_and_no_sentence_of_the_model(world: World) -> None:
+    """The raw grounded evidence and the model's text are byte-for-byte what was published."""
+    assert world.db["frozen_after"] == world.db["frozen_before"]
+    assert len(world.db["frozen_before"]) == len(PROVISIONAL_SCOPES) and all(row[5] == 1 and row[6] == 1 for row in world.db["frozen_before"])
+
+
+def test_the_report_and_the_sealed_group_review_are_identical_after_the_verdicts(world: World) -> None:
+    assert world.x["report_F1_decided"].body == world.x["before_report_F1"].body
+    assert world.x["review_decided"].body == world.x["before_review"].body
+
+
+def test_the_finding_read_carries_the_certified_citation_and_no_number(world: World) -> None:
+    for scope in PROVISIONAL_SCOPES:
+        answer = world.x[f"finding_{scope}_decided"]
+        (citation,) = answer.data["norm_citations"]
+        assert citation["quote"] == accept.NORM_QUOTE and citation["state"] == "verified"
+        assert citation["designation"] and citation["title"] and citation["page_label"] >= 1
+        assert answer.data["observation"]["norm_citations"] == answer.data["norm_citations"]
+        assert not {"required_value", "stated_value"} & _keys(answer.data)
+
+
+def test_the_run_csv_lists_the_published_finding_with_its_verdict_and_no_number_column(world: World) -> None:
+    """The CSV export (not this lane's code) reads the same rows; it must not become a back door."""
+    answer = world.x["csv_F1"]
+    assert answer.status == 200
+    header, *rows = answer.text.lstrip("\ufeff").splitlines()
+    columns = header.split(",")
+    assert "required_value" not in columns and "stated_value" not in columns
+    assert len(rows) == 1 and world.finding_of["F1"] in rows[0] and "accepted" in rows[0]
