@@ -16,8 +16,8 @@ section runs is byte-for-byte what it was. ADR-0025 decision 18.
 - API contract: `contracts/api/v1/openapi.json` `1.9.0`, 115 paths / 130 operations / 351 schemas (not edited)
 - analysis/comparison/event contract: ADR-0025 decision 18 (8 images, 16 MiB each, 32 MiB in all, opaque crop reference,
   server-side gating, absent = 1, `image_input_unsupported`, never a subset answer)
-- migration head: `0038_comparison_foundation` (not edited)
-- base commit: `cc3dd36b` on `integration/compare-modules`
+- migration head: `0038_comparison_foundation` (not edited); the base commit is the tip of `integration/compare-modules` after the wave brief
+- base commit: `cc3dd36b5b05b28ed0232107c8d0a437e304f07b`
 
 ## Enumerator ownership
 - enumerated_set_changed: no
