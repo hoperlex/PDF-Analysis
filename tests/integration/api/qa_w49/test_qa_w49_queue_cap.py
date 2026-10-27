@@ -15,6 +15,7 @@ from sqlalchemy import Engine, text
 
 from auditmanager.access.passwords import hash_password
 from auditmanager.access.queue_lock import QUEUE_LOCK_KEY
+from auditmanager.access.registrations import MAX_REQUESTS_PER_DAY
 from auditmanager.shared.identity.ids import RegistrationRequestId
 
 from .qa_kit import (
@@ -32,15 +33,21 @@ from .qa_kit import (
 )
 
 
-def _fill(engine: Engine, count: int) -> None:
+def _fill(engine: Engine, count: int, *, age: str = "3 days") -> None:
+    """``count`` pending rows written directly, ``age`` old.
+
+    Three days old by default: the day cap of `R-146ay` counts requests accepted in the last
+    24 hours, and the tests that fill the queue to 100 are about the pending cap alone."""
     stored = hash_password("qa49-direct-row-passphrase")
     with engine.begin() as connection:
         for index in range(count):
             connection.execute(
                 text(
                     "INSERT INTO registration_request (request_id, login, last_name, first_name, "
-                    "password_algorithm, password_iterations, password_salt, password_hash) "
-                    "VALUES (:rid, :login, 'Очередная', 'Ева', :alg, :it, :salt, :digest)"
+                    "password_algorithm, password_iterations, password_salt, password_hash, "
+                    "submitted_at) "
+                    "VALUES (:rid, :login, 'Очередная', 'Ева', :alg, :it, :salt, :digest, "
+                    "now() - CAST(:age AS interval))"
                 ),
                 {
                     "rid": str(RegistrationRequestId.new()),
@@ -49,6 +56,7 @@ def _fill(engine: Engine, count: int) -> None:
                     "it": stored.iterations,
                     "salt": stored.salt,
                     "digest": stored.digest,
+                    "age": age,
                 },
             )
 
@@ -134,3 +142,46 @@ def test_two_applications_racing_for_the_last_place_get_one(migrated_engine: Eng
         "conflict_reason": "queue_full"
     }, report
     assert _pending(migrated_engine) == 100
+
+
+def test_the_forty_first_application_of_a_day_is_queue_full_over_http(
+    migrated_engine: Engine,
+) -> None:
+    """`R-146ay`: the day cap, through the served ``submitRegistration``. The answer is the
+    queue's own: ``409``, ``conflict``, ``queue_full`` -- no new code, no new field."""
+    factory = committed_factory(migrated_engine)
+    surface = identity_surface(factory)
+    _fill(migrated_engine, MAX_REQUESTS_PER_DAY - 1, age="1 hour")
+
+    assert submit(surface, fresh_login("day40")).status == 201
+    refused = submit(surface, fresh_login("day41"), correlation="qa49-day-cap")
+    assert refused.status == 409, refused.body
+    body = envelope(refused)
+    assert body["error_code"] == "conflict", body
+    assert body.get("details") == {"conflict_reason": "queue_full"}, body
+    # The queue is nowhere near its own cap: it is the day that is spent.
+    assert _pending(migrated_engine) == MAX_REQUESTS_PER_DAY < 100
+
+
+def test_two_applications_racing_for_the_last_place_of_the_day_get_one(
+    migrated_engine: Engine,
+) -> None:
+    """The day count is read under the queue lock, so two submissions cannot both take the
+    fortieth place (the same forced interleaving as the pending cap's race above)."""
+    factory = committed_factory(migrated_engine)
+    _fill(migrated_engine, MAX_REQUESTS_PER_DAY - 1, age="1 hour")
+    left, right = identity_surface(factory), identity_surface(factory)
+    first, second = fresh_login("day-last-a"), fresh_login("day-last-b")
+
+    answers, _forced = race(
+        migrated_engine,
+        hold="SELECT pg_advisory_xact_lock(:key)",
+        params={"key": QUEUE_LOCK_KEY},
+        calls=[lambda: submit(left, first), lambda: submit(right, second)],
+    )
+    report = [(answer.status, answer.body) for answer in answers]
+    assert sorted(answer.status for answer in answers) == [201, 409], report
+    assert envelope(next(a for a in answers if a.status == 409)).get("details") == {
+        "conflict_reason": "queue_full"
+    }, report
+    assert _pending(migrated_engine) == MAX_REQUESTS_PER_DAY
