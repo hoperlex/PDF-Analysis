@@ -95,6 +95,8 @@ import {
   runExecutorValue,
   runHasPublishedResult,
   runOutcome,
+  runPresetLine,
+  runPresetValue,
   runProviderMode,
   runWaitingSentence,
   stageRows,
@@ -367,6 +369,7 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
   const animating = isRunAnimating(status);
   const interrupted = interruptedReason(status);
   const executor = runExecutorLine(status);
+  const preset = runPresetLine(status);
   const waiting = executor === null ? null : runWaitingSentence(executor);
 
   return (
@@ -392,6 +395,12 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
           <>
             <dt>Исполнитель</dt>
             <dd data-run-executor>{runExecutorValue(executor)}</dd>
+          </>
+        )}
+        {preset === null ? null : (
+          <>
+            <dt>Пресет</dt>
+            <dd data-run-preset>{runPresetValue(preset)}</dd>
           </>
         )}
         <dt>Создан</dt>

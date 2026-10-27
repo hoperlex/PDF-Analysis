@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.8.0 (OpenAPI 3.1.0)
- *   sha256 43f6232677c024d17d04e2370399928dcfcae53ddf3f8995893aada88b2ff7df
+ *   sha256 b215912031f940b4cb20da7a80ad66b6ff2deec4274cba6cf2e0c72a29489be3
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,6 +17,8 @@
 import type {
   Account,
   AccountPage,
+  AnalysisPreset,
+  AnalysisPresetList,
   AnalysisProfileList,
   AppendDecisionRequest,
   AppendDecisionResponse,
@@ -102,6 +104,7 @@ import type {
   OptimisationProposalPage,
   PortalBlockId,
   PortalBlockPage,
+  PresetId,
   PriceListId,
   PriceListPositionPage,
   PriceListRevision,
@@ -129,6 +132,7 @@ import type {
   RunStatusPage,
   RunnerImageBlobId,
   RunnerTokenMetadata,
+  SaveAnalysisPresetRequest,
   SectionReview,
   SectionSpecification,
   SectionVendorList,
@@ -169,6 +173,7 @@ export const OPERATION_IDS = [
   'appendDecision',
   'approveRegistration',
   'approveSheetPairing',
+  'archiveAnalysisPreset',
   'archiveExecutorConnection',
   'archiveUser',
   'cancelRun',
@@ -178,6 +183,7 @@ export const OPERATION_IDS = [
   'classifyDocumentVersion',
   'compareDocumentVersions',
   'correctVersionClassification',
+  'createAnalysisPreset',
   'createAssignment',
   'createExecutorConnection',
   'createProject',
@@ -212,6 +218,7 @@ export const OPERATION_IDS = [
   'getVersionSectionReview',
   'issueRunnerToken',
   'issueToken',
+  'listAnalysisPresets',
   'listAnalysisProfiles',
   'listAssignments',
   'listDecisionHistory',
@@ -247,6 +254,7 @@ export const OPERATION_IDS = [
   'requestExecutorProbe',
   'resetUserPassword',
   'restoreUser',
+  'reviseAnalysisPreset',
   'reviseExecutorConnection',
   'revokeRunnerToken',
   'searchNorms',
@@ -371,6 +379,34 @@ export type ApproveSheetPairingInput = {
 
 /** Success body of `approveSheetPairing` (`application/json`, HTTP 201). */
 export type ApproveSheetPairingResult = SheetPairingEvent;
+
+// ------------------------------------------------------------------------------------
+// archiveAnalysisPreset - POST /analysis/presets/{preset_id}/archive
+// ------------------------------------------------------------------------------------
+
+/**
+ * Archive an analysis preset.
+ *
+ * Append the archived revision, which repeats the previous name and connection. One-way: nothing follows an archive, and the name is free again. An administrator's act (`role:admin`). Refusals: `403`, `404` for an unknown preset, `409 conflict` (`preset_archived`) for one already archived.
+ */
+export type ArchiveAnalysisPresetInput = {
+  /** Path parameters, substituted into `/analysis/presets/{preset_id}/archive`. */
+  path: {
+    preset_id: PresetId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `archiveAnalysisPreset` (`application/json`, HTTP 200). */
+export type ArchiveAnalysisPresetResult = AnalysisPreset;
 
 // ------------------------------------------------------------------------------------
 // archiveExecutorConnection - POST /executor-connections/{connection_id}/archive
@@ -614,6 +650,32 @@ export type CorrectVersionClassificationInput = {
 
 /** Success body of `correctVersionClassification` (`application/json`, HTTP 201). */
 export type CorrectVersionClassificationResult = VersionClassification;
+
+// ------------------------------------------------------------------------------------
+// createAnalysisPreset - POST /analysis/presets
+// ------------------------------------------------------------------------------------
+
+/**
+ * Save an analysis preset.
+ *
+ * Save a preset: a name and an executor connection. An administrator's act, like every executor write (`role:admin`; the command re-reads the role set in its own transaction). The name is trimmed, 1 to 120 characters without control characters, and unique among active presets without regard to case. The connection must exist and must not be archived. At most 100 presets exist. The change and its audit event commit together. Refusals: `403`, `422 validation_failed` (`name`: `required`, `max_length`, `printable`; `executor_connection_id`: `unknown_connection`), `409 conflict` (`preset_name_in_use`, `preset_limit_reached`, `connection_archived`).
+ */
+export type CreateAnalysisPresetInput = {
+  /** Request body, sent as `application/json`. */
+  body: SaveAnalysisPresetRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `createAnalysisPreset` (`application/json`, HTTP 201). */
+export type CreateAnalysisPresetResult = AnalysisPreset;
 
 // ------------------------------------------------------------------------------------
 // createAssignment - POST /assignments
@@ -1397,6 +1459,25 @@ export type IssueTokenInput = {
 
 /** Success body of `issueToken` (`application/json`, HTTP 200). */
 export type IssueTokenResult = IssueTokenResponse;
+
+// ------------------------------------------------------------------------------------
+// listAnalysisPresets - GET /analysis/presets
+// ------------------------------------------------------------------------------------
+
+/**
+ * List the analysis presets.
+ *
+ * The named presets of how a run starts (`R-146av`, `ANALYSIS-PRESETS-01`). A run start selects exactly one setting per run, the executor connection, so a preset is a name plus that connection; the cost ceiling is a process-wide setting and no threshold is an input of a start, so a preset holds neither. Each item is the preset's current revision; every earlier revision is kept and a run records the revision it started with. Archived presets are listed after the active ones. Any one role, `role:admin|expert`.
+ */
+export type ListAnalysisPresetsInput = {
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listAnalysisPresets` (`application/json`, HTTP 200). */
+export type ListAnalysisPresetsResult = AnalysisPresetList;
 
 // ------------------------------------------------------------------------------------
 // listAnalysisProfiles - GET /analysis/profiles
@@ -2313,6 +2394,36 @@ export type RestoreUserInput = {
 export type RestoreUserResult = Account;
 
 // ------------------------------------------------------------------------------------
+// reviseAnalysisPreset - POST /analysis/presets/{preset_id}/revisions
+// ------------------------------------------------------------------------------------
+
+/**
+ * Revise an analysis preset.
+ *
+ * Append a revision with the full settings, never a patch; the earlier revision is kept as it was and runs that used it keep pointing at it. An administrator's act (`role:admin`). Refusals: `403`, `404` for an unknown preset, `422 validation_failed` as for creation and `differs_from_current` on `name` when nothing would change, `409 conflict` (`preset_archived`, `preset_name_in_use`, `connection_archived`).
+ */
+export type ReviseAnalysisPresetInput = {
+  /** Path parameters, substituted into `/analysis/presets/{preset_id}/revisions`. */
+  path: {
+    preset_id: PresetId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: SaveAnalysisPresetRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `reviseAnalysisPreset` (`application/json`, HTTP 201). */
+export type ReviseAnalysisPresetResult = AnalysisPreset;
+
+// ------------------------------------------------------------------------------------
 // reviseExecutorConnection - POST /executor-connections/{connection_id}/revisions
 // ------------------------------------------------------------------------------------
 
@@ -2651,6 +2762,8 @@ export type StartOptimisationPassResult = OptimisationPass;
  * `W59-SECTION-SEAL-01`: the run's analysis profile is routed from the version's persisted classification through the section-keyed profile registry -- never from a file name, a suggestion or the document's legacy `section`, and never by an AR fallback. A version with no classification is refused with `422 version_classification_required`; a confirmed section with no registered text profile is refused with `422 section_profile_unavailable` (`BETA-CONTRACT-SEAL-01`, `D-179`: both used to be `required_norm_unavailable` told apart by `details.reference_kind`). Neither carries details, and both refusals precede the key's claim, so nothing is written. An existing run keeps the profile it pinned.
  *
  * `EXEC-PAR-START-01`: the optional `executor_connection_id` names the connection the run must be on. Absent, the run follows the global route (and its standby rule) exactly as before. Present, the run freezes that connection's current revision if this release serves it, its current key has a passing probe and it is not archived; otherwise the start is refused before the key is claimed, so no run, command record or event exists: `422 validation_failed` with `details.field` `executor_connection_id` for an unknown or malformed id, `503 dependency_unavailable` with `details.dependency` `executor_connection` for a connection that cannot serve now. A named connection never falls back to the route's standby or to another connection. The choice is part of the payload the idempotency key is compared by: the same key with another connection is `idempotency_key_reuse`.
+ *
+ * `ANALYSIS-PRESETS-01`: the optional `preset_id` names a saved preset instead of a connection. Its current revision is read in the start's transaction and its executor connection is applied exactly as if `executor_connection_id` had named it, so every refusal of that field applies unchanged; the run records the preset revision and `RunStatus.preset` shows it. `422 validation_failed` with `details.field` `preset_id` refuses an unknown preset (`unknown_preset`) and a preset together with `executor_connection_id` (`conflicts_with_executor_connection_id`); `409 conflict` with `details.conflict_reason` `preset_archived` refuses an archived one. All three precede the key's claim, so nothing is written. The preset, not the connection it resolved to, is part of the payload the idempotency key is compared by: a retry after an administrator revised the preset replays the run that exists, and the same key with a hand-chosen connection is `idempotency_key_reuse`. `reauditRun` records no preset.
  */
 export type StartRunInput = {
   /** Request body, sent as `application/json`. */
@@ -3049,6 +3162,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['documents'],
   },
+  archiveAnalysisPreset: {
+    operationId: 'archiveAnalysisPreset',
+    method: 'POST',
+    path: '/analysis/presets/{preset_id}/archive',
+    pathParams: ['preset_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['analysis'],
+  },
   archiveExecutorConnection: {
     operationId: 'archiveExecutorConnection',
     method: 'POST',
@@ -3174,6 +3301,20 @@ export const OPERATIONS = {
     successStatuses: [201],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['documents'],
+  },
+  createAnalysisPreset: {
+    operationId: 'createAnalysisPreset',
+    method: 'POST',
+    path: '/analysis/presets',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 409, 422, 500, 503],
+    tags: ['analysis'],
   },
   createAssignment: {
     operationId: 'createAssignment',
@@ -3650,6 +3791,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 422, 500, 503],
     tags: ['auth'],
+  },
+  listAnalysisPresets: {
+    operationId: 'listAnalysisPresets',
+    method: 'GET',
+    path: '/analysis/presets',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 500, 503],
+    tags: ['analysis'],
   },
   listAnalysisProfiles: {
     operationId: 'listAnalysisProfiles',
@@ -4140,6 +4295,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 500, 503],
     tags: ['users'],
+  },
+  reviseAnalysisPreset: {
+    operationId: 'reviseAnalysisPreset',
+    method: 'POST',
+    path: '/analysis/presets/{preset_id}/revisions',
+    pathParams: ['preset_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['analysis'],
   },
   reviseExecutorConnection: {
     operationId: 'reviseExecutorConnection',

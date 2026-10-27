@@ -36,6 +36,8 @@ import {
 
 import { executorRefusal } from './executor-refusal';
 import type { ExecutorRefusalKind } from './executor-refusal';
+import { presetRefusal } from './preset-refusal';
+import type { PresetRefusalKind } from './preset-refusal';
 import { inputBudgetSentence } from './input-budget';
 import {
   SECTION_PROFILE_UNAVAILABLE_REFUSAL,
@@ -50,6 +52,7 @@ export type RunFailureKind =
   | 'version_unclassified'
   | 'section_profile_unavailable'
   | ExecutorRefusalKind
+  | PresetRefusalKind
   | 'reference_unavailable'
   | 'provider_unavailable'
   | 'not_found'
@@ -119,6 +122,10 @@ function fromApiError(error: ApiError): RunFailure {
   // generic provider sentence, which would print the dependency's raw name and speak of a mode.
   const chosen = executorRefusal(error);
   if (chosen !== null) return { ...base, ...chosen };
+
+  // `ANALYSIS-PRESETS-01`: a refusal of the preset the person chose is said as itself.
+  const preset = presetRefusal(error);
+  if (preset !== null) return { ...base, ...preset };
 
   switch (error.errorCode) {
     case 'dependency_unavailable':

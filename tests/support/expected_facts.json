@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 95,
+    "path_count": 98,
     "operations": [
       [
         "POST",
@@ -537,6 +537,26 @@
         "GET",
         "/ar-v3-beta/pack",
         "getArV3BetaPackStatus"
+      ],
+      [
+        "GET",
+        "/analysis/presets",
+        "listAnalysisPresets"
+      ],
+      [
+        "POST",
+        "/analysis/presets",
+        "createAnalysisPreset"
+      ],
+      [
+        "POST",
+        "/analysis/presets/{preset_id}/revisions",
+        "reviseAnalysisPreset"
+      ],
+      [
+        "POST",
+        "/analysis/presets/{preset_id}/archive",
+        "archiveAnalysisPreset"
       ]
     ],
     "schema_names": [
@@ -853,13 +873,20 @@
       "ArV3BetaVisibleReview",
       "ArV3BetaVisibleTopic",
       "ArV3BetaPackReview",
-      "ArV3BetaPackStatus"
+      "ArV3BetaPackStatus",
+      "PresetId",
+      "PresetRevisionId",
+      "AnalysisPresetState",
+      "AnalysisPreset",
+      "AnalysisPresetList",
+      "SaveAnalysisPresetRequest",
+      "RunPreset"
     ]
   },
   "error_catalog": {
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0036_cite_partition_v3",
+  "migration_head": "0037_analysis_presets",
   "contract_version": "1.8.0"
 }

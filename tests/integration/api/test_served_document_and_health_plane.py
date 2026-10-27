@@ -198,6 +198,10 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "generateExecutorSshKey",
             "requestExecutorProbe",
             "setExecutorRoute",
+            # `ANALYSIS-PRESETS-01`: the three writes take a body, a path identity or both.
+            "createAnalysisPreset",
+            "reviseAnalysisPreset",
+            "archiveAnalysisPreset",
             # `EXEC-PULL-01`: the pull channel's six operations take a path identity, a body or both.
             "issueRunnerToken",
             "revokeRunnerToken",

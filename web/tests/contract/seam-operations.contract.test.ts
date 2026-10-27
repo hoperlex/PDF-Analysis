@@ -110,10 +110,14 @@ describe('the seam operations', () => {
       // EXEC candidate 1 (additive executor operations): the executor connection writes below are keyed like
       // every other create or command on this surface; the descriptor table is generated from
       // the contract, so this list follows it and does not lead it.
+      'archiveAnalysisPreset',
       'archiveExecutorConnection',
       'cancelRun',
       // `W59-DECISION-CARRYOVER-01`: the carryover appends a decision, keyed like `appendDecision`.
       'carryOverDecision',
+      // `ANALYSIS-PRESETS-01`: saving, revising and archiving a preset each append a revision, keyed
+      // like the executor writes (a preset is executor configuration).
+      'createAnalysisPreset',
       'createExecutorConnection',
       'createProject',
       // `W60-OPT-PROPOSALS-01`: a decision on a proposal is appended, keyed like `appendDecision`.
@@ -127,6 +131,7 @@ describe('the seam operations', () => {
       'issueRunnerToken',
       'reauditRun',
       'requestExecutorProbe',
+      'reviseAnalysisPreset',
       'reviseExecutorConnection',
       'revokeRunnerToken',
       'setExecutionPaused',

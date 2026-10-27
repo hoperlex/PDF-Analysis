@@ -123,7 +123,9 @@ REQUIRED_QUERY: dict[str, str] = {
 # ``listExecutorRoutes`` (collections) and `AR-V3-BETA-PACK-STATUS-API-01`'s
 # ``getArV3BetaPackStatus`` (a server singleton, see :data:`SERVER_STATUS_OPERATIONS`).
 # With all three, the unaddressed half is twenty.
-EXPECTED_UNADDRESSED = 20
+# `ANALYSIS-PRESETS-01`'s ``listAnalysisPresets`` is a collection like ``listExecutorConnections``
+# (every preset, no parent), so the unaddressed half is twenty-one.
+EXPECTED_UNADDRESSED = 21
 
 #: Unaddressed `GET` operations that are not collections and are exempt from
 #: ``test_a_collection_that_names_no_parent_answers_a_page``'s page-shape assertion.
@@ -227,6 +229,9 @@ _CATALOG_KEY: dict[str, str] = {
     "group_id": "ar_v3_run_group_id",
     "connection_id": "executor_connection_id",
     "task_id": "executor_task_id",
+    # `ANALYSIS-PRESETS-01`: a preset is identified by the audit event written with its first
+    # revision (``evt_``), so its path parameter takes that catalogue key.
+    "preset_id": "audit_event_id",
 }
 
 

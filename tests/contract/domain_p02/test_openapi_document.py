@@ -194,6 +194,12 @@ REQUIRED_OPERATIONS = {
     "requestExecutorProbe",
     "listExecutorRoutes",
     "setExecutorRoute",
+    # `ANALYSIS-PRESETS-01` (R-146av). The named presets of how a run starts: any role reads them,
+    # an administrator saves, revises and archives them.
+    "listAnalysisPresets",
+    "createAnalysisPreset",
+    "reviseAnalysisPreset",
+    "archiveAnalysisPreset",
     # `EXEC-PULL-01` (R-143). The pull channel: an administrator issues and revokes a runner
     # token (shown once), and a runner calls four operations with one.
     "issueRunnerToken",
@@ -267,6 +273,10 @@ WRITE_OPERATIONS = {
     "generateExecutorSshKey",
     "requestExecutorProbe",
     "setExecutorRoute",
+    # `ANALYSIS-PRESETS-01`. Each appends a revision of the preset history, so all three are keyed.
+    "createAnalysisPreset",
+    "reviseAnalysisPreset",
+    "archiveAnalysisPreset",
     # `EXEC-PULL-01`. The two administrator operations on runner tokens are keyed. The four a
     # runner calls are not: each is idempotent on the task's identity (a repeat of an accepted
     # answer is accepted, a different one is a conflict).
@@ -615,8 +625,10 @@ INPUT_LESS_OPERATIONS: frozenset[str] = frozenset(
     # `EXEC-SEAL-01` adds the two executor lists: a connection list and a route list take no input.
     # `AR-V3-BETA-PACK-STATUS-API-01` adds ``getArV3BetaPackStatus``: it reads the server's own
     # installed pack and addresses no identity.
+    # `ANALYSIS-PRESETS-01` adds ``listAnalysisPresets``: the list takes no input.
     {"getDashboardSummary", "getMe", "getProductVersion", "listReleases", "listAnalysisProfiles",
-     "listExecutorConnections", "listExecutorRoutes", "getArV3BetaPackStatus"}
+     "listExecutorConnections", "listExecutorRoutes", "getArV3BetaPackStatus",
+     "listAnalysisPresets"}
 )
 
 

@@ -834,7 +834,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-107 operations, sealed. `A5` generates the typed client from this document; `B6`
+111 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -890,6 +890,13 @@ operation that calls a model about a comparison (an expert asks once; the sealed
 lines are the whole input; the reply is checked against them; the summary is stored append-only beside
 the differences, which it never alters, with a fixed label saying no human reviewed it); only a recorded
 implementation exists, and a process in another mode answers `dependency_unavailable`.
+`ANALYSIS-PRESETS-01` added `listAnalysisPresets` (any one role), `createAnalysisPreset`,
+`reviseAnalysisPreset` and `archiveAnalysisPreset` (`admin`, keyed) on 2026-10-27: a named preset of
+how a run starts is a name and the one setting a run start can take, the executor connection, stored as
+rows of an append-only history (`analysis_preset_revision`, migration `0037_analysis_presets`); a
+revision and an archive are new rows, and each write has one audit event in its transaction.
+`startRun` gains the optional `preset_id` (exclusive with `executor_connection_id`: the preset's
+connection is applied as if the caller had named it) and `RunStatus` the read-only `preset`.
 `W57B-NORMS-CATALOGUE-XLSX-01` added `listNormDocuments` and `exportRunXlsx` on 2026-10-20:
 the current norms snapshot's documents as a catalogue with display names derived from the
 stored file names (any one role), and the run's W57b Excel workbook with `exportRunCsv`'s
@@ -1083,6 +1090,10 @@ could.
 | `requestExecutorProbe` | `POST /executor-connections/{connection_id}/probes` |
 | `listExecutorRoutes` | `GET /executor-routes` |
 | `setExecutorRoute` | `PUT /executor-routes` |
+| `listAnalysisPresets` | `GET /analysis/presets` |
+| `createAnalysisPreset` | `POST /analysis/presets` |
+| `reviseAnalysisPreset` | `POST /analysis/presets/{preset_id}/revisions` |
+| `archiveAnalysisPreset` | `POST /analysis/presets/{preset_id}/archive` |
 | `issueRunnerToken` | `POST /executor-connections/{connection_id}/runner-tokens` |
 | `revokeRunnerToken` | `POST /executor-connections/{connection_id}/runner-tokens/{token_id}/revoke` |
 | `claimExecutorTask` | `POST /runner/tasks/claim` |
@@ -1100,7 +1111,8 @@ Rules that hold across the whole surface:
   `approveSheetPairing`, `withdrawSheetPairing`, `generateComparisonSummary`, `uploadPriceList`, `startOptimisationPass`, `decideOptimisationProposal`,
   `createExecutorConnection`, `reviseExecutorConnection`, `archiveExecutorConnection`,
   `setExecutorSecret`, `generateExecutorSshKey`, `requestExecutorProbe`,
-  `setExecutorRoute`, `issueRunnerToken` and `revokeRunnerToken`, and no others. A repeat of the decision carryover under another key
+  `setExecutorRoute`, `createAnalysisPreset`, `reviseAnalysisPreset`, `archiveAnalysisPreset`,
+  `issueRunnerToken` and `revokeRunnerToken`, and no others. A repeat of the decision carryover under another key
   that names the same pair and decision answers the event already carried (`replayed: true`)
   and appends nothing.
   `setGlobalVendorList` and `setProjectVendorList` take no key: a repeat of the latest

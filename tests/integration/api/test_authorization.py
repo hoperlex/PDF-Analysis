@@ -326,6 +326,11 @@ GUARDED = (
     ),
     ("listExecutorRoutes", "GET", "/executor-routes"),
     ("setExecutorRoute", "PUT", "/executor-routes"),
+    # `ANALYSIS-PRESETS-01`. The presets: behind the seam before any port answers.
+    ("listAnalysisPresets", "GET", "/analysis/presets"),
+    ("createAnalysisPreset", "POST", "/analysis/presets"),
+    ("reviseAnalysisPreset", "POST", "/analysis/presets/evt_01M2545JSD15ETSNNV904X991K/revisions"),
+    ("archiveAnalysisPreset", "POST", "/analysis/presets/evt_01M2545JSD15ETSNNV904X991K/archive"),
     # `EXEC-PULL-01`. The administrator's two token operations are behind the seam like the rest.
     (
         "issueRunnerToken", "POST",
