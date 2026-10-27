@@ -248,12 +248,14 @@ def test_a_hint_never_carries_a_character_a_screen_or_a_log_would_act_on(char: s
 def test_a_hint_is_cut_and_a_base_name_never_blank() -> None:
     extra = unicode_path(b"x.pdf", "d/" + "n" * 5000 + ".pdf")
     long = entry("x.pdf", PDF_HEADER, local_extra=extra, central_extra=extra)
-    blank = entry("ㅤㅤ.pdf", PDF_HEADER)
+    folder_only = unicode_path(b"y.pdf", "only/a/folder/")
+    blank = entry("y.pdf", PDF_HEADER, local_extra=folder_only, central_extra=folder_only)
     with accept(build(long, blank)) as found:
         first, second = found.members
         assert len(first.display_name) == MAX_HINT
         assert len(first.base_name) <= 255
-        assert second.base_name == "__.pdf"
+        assert second.display_name == "only/a/folder/"
+        assert second.base_name == "document.pdf" and second.folder == "only/a/folder"
 
 
 def test_folder_and_base_name_split_the_hint_and_a_nested_archive_counts_as_one_folder() -> None:
