@@ -120,7 +120,7 @@ The comparison module flag (`comparison/modules.py`) governs the worker: with `A
 default) the item stays `queued` and nothing runs. Rollback is not merging the lane.
 
 ## Handoff
-- changed files: to be filled at the last commit
-- commands/results: to be filled at the last commit
-- known limits: to be filled at the last commit
-- integration notes: to be filled at the last commit
+- changed files: the new package `src/auditmanager/comparison/profile_queue/**` (`handler.py`, `enqueue.py`, `__init__.py`), `src/auditmanager/comparison/public.py` (appends: the imports, the factory in `HANDLER_FACTORIES`, four names in `__all__`), `tests/unit/comparison/profile_queue/**` (2 files, 45 tests), `tests/integration/comparison/profile_queue/**` (a conftest and 3 files, 18 tests), this file and `docs/program/CMP-PROFILE-QUEUE-01.md`; the full list is `git diff --name-only b774856c..HEAD` (11 files)
+- commands/results: the report's section 6 (unit 45 and integration 18 passed, 63 together on three runs; the neighbours 880 passed and 1 skipped; the contract battery minus the three `D-220` files 1 307 passed) and section 7 (23 mutation proofs, each shown red and then green; the layered ones are named)
+- known limits: the report's section 8; the first three are that a page is stored in the builder's own transaction and not under `WorkItem.require_current` (a worker that lost its lease stores at most the page it was on), that a cancel noticed after the last page ends the item `cancelled` with every page stored, and that `retry_failed` is asked again at each attempt of the same item
+- integration notes: the report's section 9; the one shared-file hunk is `comparison/public.py`; `CMP-INGEST-02` calls `enqueue_version_page_profiles(session, project_uid=, version_uid=, created_by_user_uid=)` once per version of a confirmed set (it carries no `comparison_upload_id`); the integrator's `comparison_work=` line of `CMP-WORK-01` section 7.1 is still needed before a worker process runs any comparison item
