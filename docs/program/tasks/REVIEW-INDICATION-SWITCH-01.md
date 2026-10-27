@@ -149,7 +149,7 @@ Also: the sentence of `run-progress.tsx:134` «Канонические нахо
    * because an environment lookup scattered through a slice is how a localhost default
    * gets reintroduced.
    */
-  
+
   export { MissingConfigurationError, getApiBaseUrl, getInstanceLabel, getWebBuildId, hasApiBaseUrl } from './env';
   ```
 - interpretation: A new module in the same directory, exported from the index, follows the idiom (polling.ts is the precedent for a frozen constant fixed in one place).
@@ -174,7 +174,7 @@ Also: the sentence of `run-progress.tsx:134` «Канонические нахо
 - command: `grep -n "R-146ba" docs/program/OWNER_RULINGS_2026-09-17.md | python3 -c "import sys;[print(l.rstrip(chr(10))[:90]) for l in sys.stdin]"; grep -n "^| A-10\|^| A-11" docs/program/PRODUCTION-READINESS-PLAN-01.md | python3 -c "import sys;[print(l.rstrip(chr(10))[:230]) for l in sys.stdin]"`
 - captured_output:
   ```text
-  1811:| `R-146ba` | *Human review of the sections and of АР v3 during the beta.* The owner 
+  1811:| `R-146ba` | *Human review of the sections and of АР v3 during the beta.* The owner
   1813:| `R-146bc` | *Order of the next window.* Chosen: «АР: решения по цитатам + отчёт нор
   245:| A-10 | During the beta no screen says that a profile or a citation was not reviewed by a human (`A-7` stays true). | `R-146ba` | the label switch is restored by one edit; or the first expert review |
   246:| A-11 | АР v3 is activated on decisions taken by the AI integrator under the owner's delegation; the reviewer attestation says so; no subject-matter expert took part. | `R-146ba` | a qualified expert's review of C01–C22 and t

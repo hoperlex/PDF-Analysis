@@ -132,7 +132,8 @@ All from `.local/worktrees/review-indication-switch-01`; `web/node_modules` is a
 | `pytest tests/integration/releases` (DATABASE_URL from the copied `.env`; the suite makes and drops its own clone of a template; the three `a1_tpl_*` template databases on the stand belong to other runs and were left alone) | 59 passed |
 | `pytest tests/e2e/test_pc01_journey_conformance.py` (static) | 135 passed — **green although the live journey will fail, see the first integration note** |
 | `web` `tests/unit/release-notes tests/unit/release` | 5 files, 18 passed |
-| `tests/contract/program`, `tests/contract/api_v1/test_doc_prose_facts.py`, `test_surface_counts_in_prose.py`, `git diff --check`, the governance one-liner | see the hand-back (run on the final commit) |
+| on the final committed tree: `pytest tests/contract/program`; `tests/contract/api_v1/test_doc_prose_facts.py`; `tests/contract/api_v1/test_surface_counts_in_prose.py` | 28 passed; 44 passed; 33 passed |
+| `git diff --check 05f4584d..HEAD`; the governance one-liner on the task file | clean; prints `[]` |
 
 ## Integration notes
 
