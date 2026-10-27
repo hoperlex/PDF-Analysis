@@ -301,8 +301,8 @@ def audit_blob_references(session: Session) -> BlobReferenceAudit:
 # `CMP-STORAGE-PARTS-01`. `audit_blob_references` starts from the references and asks whether each
 # Blob is there. A comparison upload makes the opposite fault possible: the multipart object is
 # verified and published (`blob` is `available`) and the process dies before `comparison_upload_file.blob_id`
-# is written, so the bytes exist and nothing names them. No delete exists on the storage port, so such
-# bytes are found by this report and removed only by the operator's project erase (ADR-0025 decision 10).
+# is written, so the bytes exist and nothing names them. The storage port has no delete of a published
+# blob (ADR-0025 decision 9: no eviction), so such bytes are made visible here rather than removed.
 
 _IDENTIFIER = re.compile(r"[a-z][a-z0-9_]*\Z")
 
@@ -357,8 +357,8 @@ class UnreferencedBlobReport:
     ``attributed`` -- the Blob has the identity of the declared bytes of one or more comparison upload
     files that hold no Blob: a completion killed between publication and the write of `blob_id`. The
     file may be completed again (publication is idempotent by content). ``unattributed`` -- nothing in
-    the database explains the Blob. Neither is evidence of loss; both are bytes the operator's erase
-    would have to remove, listed so they are not invisible.
+    the database explains the Blob. Neither is evidence of loss; both are stored bytes that no row
+    accounts for, listed so they are not invisible.
     """
 
     attributed: tuple[UnreferencedBlob, ...]

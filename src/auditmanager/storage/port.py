@@ -34,7 +34,7 @@ shape when it arrives.
 
 from __future__ import annotations
 
-from collections.abc import Generator, Sequence
+from collections.abc import Callable, Generator, Sequence
 from typing import BinaryIO, Final, Protocol, runtime_checkable
 
 from .models import BlobId, BlobRole, PublishedBlob, TemporaryBlob, VerifiedBlob
@@ -215,6 +215,7 @@ class MultipartStaging(Protocol):
         declared_size: int,
         role: BlobRole,
         media_type: str,
+        before_publish: Callable[[VerifiedBlob], None] | None = None,
     ) -> PublishedBlob:
         """Assemble the recorded parts, verify the whole object and publish it.
 
@@ -225,6 +226,11 @@ class MultipartStaging(Protocol):
         object is read back: a SHA-256 or size that differs from the declaration raises
         :class:`~auditmanager.storage.errors.ChecksumMismatchError` or
         :class:`~auditmanager.storage.errors.SizeMismatchError` **and removes the assembled object**.
+
+        ``before_publish`` is the seam :class:`~auditmanager.storage.durable_publication.DurablePublicationStore`
+        has: called with the :class:`VerifiedBlob` after the verification and before the canonical copy,
+        so the caller can commit ``verifying`` for that ``blob_id`` first. If it raises, nothing is
+        published and the assembled object is kept, so a retry resumes at the verification.
 
         Retryable after a crash between assembly and verification: with no open upload and the
         assembled object present, it resumes at the verification. With neither,

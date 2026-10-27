@@ -47,7 +47,7 @@ import hashlib
 import logging
 import re
 import secrets
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import datetime, timezone
 from typing import Any, Final
 
@@ -445,6 +445,7 @@ class S3BlobStore:
         declared_size: int,
         role: BlobRole,
         media_type: str,
+        before_publish: Callable[[VerifiedBlob], None] | None = None,
     ) -> PublishedBlob:
         """Assemble the parts under the temporary key, then verify and publish exactly as
         ``put_blob`` does. See :meth:`MultipartStaging.complete_multipart`.
@@ -477,6 +478,8 @@ class S3BlobStore:
                 media_type=media_type,
             )
         )
+        if before_publish is not None:
+            before_publish(verified)
         return self.publish(verified)
 
     def abort_multipart(self, upload_token: str) -> bool:

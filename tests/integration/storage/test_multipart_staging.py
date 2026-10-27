@@ -205,6 +205,60 @@ class TestACompletedFileIsPublishedWhole:
         assert open_uploads() == []
 
 
+class TestTheSeamBeforePublication:
+    """``before_publish`` is where the caller commits ``verifying`` for the declared ``blob_id``."""
+
+    def test_it_sees_the_verified_blob_before_anything_is_canonical(
+        self, store: S3BlobStore, staged: Any, bucket_keys: Any, blobs: list
+    ) -> None:
+        """Mutation proof: the seam is never called."""
+        token, receipts = staged(FIRST, SECOND, LAST)
+        seen: list[tuple[Any, list[str]]] = []
+
+        published = _complete(
+            store, token, receipts, before_publish=lambda v: seen.append((v, bucket_keys()))
+        )
+        blobs.append(published.blob_id)
+
+        ((verified, keys),) = seen
+        assert verified.blob_id == published.blob_id
+        assert (verified.sha256, verified.size) == (sha256_of(WHOLE), len(WHOLE))
+        assert verified.upload_token == token
+        # At that moment the bytes are assembled and verified but not yet canonical.
+        assert keys == [temporary_key(token)]
+        assert bucket_keys() == [canonical_key(published.blob_id)]
+
+    def test_it_is_not_called_for_bytes_that_failed_the_verification(
+        self, store: S3BlobStore, staged: Any
+    ) -> None:
+        token, receipts = staged(FIRST, SECOND, LAST)
+        seen: list[Any] = []
+
+        with pytest.raises(ChecksumMismatchError):
+            _complete(
+                store, token, receipts,
+                declared_sha256=sha256_of(b"other"), before_publish=seen.append,
+            )
+
+        assert seen == []
+
+    def test_a_failure_in_it_publishes_nothing_and_keeps_the_assembly_for_a_retry(
+        self, store: S3BlobStore, staged: Any, bucket_keys: Any, blobs: list
+    ) -> None:
+        token, receipts = staged(FIRST, SECOND, LAST)
+
+        def refuse(_: Any) -> None:
+            raise RuntimeError("the database refused the checkpoint")
+
+        with pytest.raises(RuntimeError):
+            _complete(store, token, receipts, before_publish=refuse)
+
+        assert bucket_keys() == [temporary_key(token)]
+        published = _complete(store, token, receipts)
+        blobs.append(published.blob_id)
+        assert bucket_keys() == [canonical_key(published.blob_id)]
+
+
 class TestAWrongObjectIsRefused:
     def test_a_wrong_digest_is_refused_and_leaves_no_object(
         self, store: S3BlobStore, staged: Any, bucket_keys: Any, open_uploads: Any
