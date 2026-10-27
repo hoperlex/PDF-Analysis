@@ -169,6 +169,6 @@ answers `dependency_unavailable`.
 
 ## Handoff
 - changed files: `docs/program/CMP-SEAL-C0.md` section 6 lists every pinned file moved and section 2 the three files outside `allowed_paths` with their reasons; the new files are the migration `db/migrations/versions/20261028_0038_comparison_foundation.py`, three router files (`comparison_uploads.py`, `comparison_version_orders.py`, `version_pages.py`), `src/auditmanager/comparison/modules.py` and five test files
-- commands/results: report section 8 (contract battery, web, the five integration directories, the journey conformance test, the migration round trip) and section 9 (seventeen mutation proofs)
+- commands/results: report section 8 (contract battery, web, the five integration directories, the journey conformance test, the migration round trip) and section 9 (eighteen mutation proofs)
 - known limits: report section 10 (every operation is a stub; the flag gates nothing yet; `max_images` is accepted and ignored; `upload_kind` is not yet read from the database; the nine tables are empty and unwritten; the ninth table `comparison_upload_set` is this seal's addition)
 - integration notes: report section 12 (merge without squashing, because `web/FRONTEND_LOCK.json` names `21058a2f`; image grows by about 230 MB; the compose line for the flag is PROD-05b's; per-lane operations and tables in section 11)

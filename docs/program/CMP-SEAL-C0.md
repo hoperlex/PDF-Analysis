@@ -115,7 +115,25 @@ Image size: about **+230 MB** of site-packages in the API and worker images. Two
 
 Provisioning: `make bootstrap FOUNDATION_PYTHON=/usr/bin/python3.12`, `npm --prefix web ci`, `.env` with the six lane values on both sides (`FOUNDATION_INSTANCE=auditmanager-cmp-seal-c0`, ports `57710`/`61710`/`61711`, `auditmanager_cmp_seal_c0`, `auditmanager-cmp-seal-c0`), the corpus symlink; `df -h /` before bootstrap (4.3 G), `npm ci` (4.0 G), the first test run (3.3 G); never below 2.2 G. `make up` and `make down` only for the lane's own containers.
 
-RESULTS_PLACEHOLDER
+All commands run in the worktree with `AUDITMANAGER_LEGACY_PROMPTS_REPO=/nonexistent` (`/root/projects/PDF-Proverka` is absent), the lane's `.env` loaded for the container suites, on the lane's own containers.
+
+| required test | command | result | base comparison |
+| --- | --- | --- | --- |
+| whitespace | `git diff --check 03f73103..HEAD` | exit 0, no output | — |
+| contract battery | `pytest -q tests/contract --ignore=tests/contract/test_cp00_candidate.py --ignore=tests/contract/test_cp00_final_state.py --ignore=tests/contract/test_validate_bootstrap.py` | **1307 passed**, 19283 subtests passed, 0 failed (127 s, final tree `c3173f9d`) | base `03f73103`: 1303 passed, **1 failed** (`program/test_wave_governance.py`: this task file's own premise block had no command, date or output; fixed by the P-01 block) |
+| the three `D-220` files | `pytest -q tests/contract/test_cp00_candidate.py tests/contract/test_cp00_final_state.py tests/contract/test_validate_bootstrap.py` | 88 failed, 146 passed, 126 errors, 402 subtests passed | **identical on the base** (88 / 146 / 126 / 402), shown red there first |
+| web lint | `npm --prefix web run lint -- --quiet` | exit 0 | — |
+| web typecheck | `npm --prefix web run typecheck` | exit 0 | — |
+| web tests | `npm --prefix web test -- --run` | 207 files, **3247 tests passed** | the first run on the lane (before the seam test and the set-state rename) had 3 failed: the keyed-writes list of `seam-operations.contract.test.ts` and two rendered-language guards; fixed, see section 7 item 5 |
+| generated client | `npm --prefix web run api:verify` | `OK - 130 operations, contract sha256 5daf6416d4d4100f0a49ec2d834ca52a6139c2b29dc3c3cff68080983e2a1765` | `drift in 4 files` on the probe |
+| journey conformance | `pytest -q tests/e2e/test_pc01_journey_conformance.py` | 135 passed | — |
+| container suites | `pytest -q tests/integration/db tests/integration/recovery tests/integration/composition tests/integration/p02_journey tests/integration/foundation -rf` on the lane's PostgreSQL and MinIO (tree `7eb03997`, 40 min 49 s) | 3391 passed, 2 skipped, **29 failed** — all 29 in three files: `recovery/test_blob_reference_audit.py` (27: its canned catalog, rows and statement count did not know the two new blob sources), `composition/test_every_port_implementation_is_whole.py` (1: the three new `build_router` arguments) and `db/test_schema_invariant_inventory.py` (1: the constraints and functions digests moved by the `needs_confirmation` rename, counts unchanged). Fixed in `c3173f9d` (the audit mock covers the four columns and has six new cases); the three files re-run: **76 passed** (the audit file alone: 39) | no run of the base on these five directories was made (a 40-minute run on a host at 1.8 GB free). The probe branch measured the same directories with only the one-table change; its 35 red files are in section 2. Every one of the 29 reds above is caused by this change; none is a base red |
+| api and composition files touched by the seal | `pytest -q tests/integration/api/test_authorization.py test_operation_surface.py test_query_surface.py test_release_routes.py test_role_register.py test_served_document_and_health_plane.py tests/integration/composition/test_comparison_stub_operations.py` | 172 passed (the whole `tests/integration/api` directory ran in the first pass: 25 failed there, all in these registers, all fixed) | — |
+| migration round trip | `alembic upgrade head`, `downgrade -1`, `upgrade head` on the isolated database `cmp_seal_c0_mig`; and `tests/integration/db/test_comparison_foundation_migration.py` | `0038_comparison_foundation (head)` after each upgrade, `0037_analysis_presets` after the downgrade; 29 passed | — |
+| new unit tests | `pytest -q tests/unit/comparison/test_comparison_modules.py` | 22 passed | — |
+| new erase tests | `pytest -q tests/integration/recovery/test_comparison_foundation_erase.py` | 10 passed | — |
+
+The lane's containers (`auditmanager-cmp-seal-c0-postgres-1`, `-s3-1`, `-s3-init-1`) were brought down with `make down` from the worktree at the end of the lane. `df -h /`: 4.3 G before bootstrap, never below 1.8 G during the lane (the host, not the lane, moved it).
 
 ## 9. Mutation proofs (each: the file changed, the guard run red, the file restored from git, the guard run green)
 
@@ -141,6 +159,7 @@ RESULTS_PLACEHOLDER
 | M15 | `paused` dropped from the `comparison_work` non-terminal list | `test_project_erase.py::test_the_non_terminal_states_are_the_complement_...` | 1 failed | 1 passed |
 | M16 | a foreign key from the journal to `job`; an orphan table | the two mutation tests in the migration file | red in the file | n/a (own database) |
 | M17 | a write is made an administrator's; a malformed part, tile or body | `test_comparison_stub_operations.py` (the role map is a literal written there) | in the file | n/a |
+| M18 | the page-profile blob reference no longer required to be available in the audit | `test_blob_reference_audit.py` | 2 failed, 37 passed | 39 passed |
 
 ## 10. Limits, risks, what the seal does not do
 
