@@ -160,6 +160,17 @@ APPEND_ONLY_BY_CODE_EVIDENCE = {
                "PROD-07 runs as the migrator)",
 }
 
+#: `0038_comparison_foundation` (`CMP-SEAL-C0`): the comparison tables whose lanes have not landed. Their
+#: grants are those of their class above; no statement in ``src/auditmanager`` names them yet, which is
+#: what the scan of :func:`observed_statements` would otherwise report as a table nothing writes. The
+#: lane that writes one removes it from this set (``test_a_sealed_table_that_the_code_now_writes_leaves_the_set``
+#: is red until it does).
+SEALED_NOT_YET_WRITTEN = frozenset((
+    "comparison_model_call", "comparison_page_profile", "comparison_upload", "comparison_upload_file",
+    "comparison_upload_part", "comparison_upload_set", "comparison_version_order", "comparison_work",
+    "comparison_work_attempt",
+))
+
 #: ``SELECT``.
 READ_ONLY = frozenset((
     "alembic_version",            # only the migrator moves the head

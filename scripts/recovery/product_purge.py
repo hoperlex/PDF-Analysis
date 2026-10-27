@@ -165,6 +165,14 @@ PRODUCT_COMMAND_TYPES = frozenset((
     # `0035_comparison_records`: the receipt of a withdrawal. ``comparison_sheet_link.command_id``
     # references it, and it is deleted only after the link table is truncated.
     "withdraw_sheet_pairing",
+    # `0038_comparison_foundation` (`CMP-SEAL-C0`): the receipts of the ten keyed comparison writes, named
+    # as the snake case of the operationId. ``comparison_upload.command_id`` and
+    # ``comparison_version_order.command_id`` reference theirs, and each is deleted only after its table is
+    # truncated. A lane that names a command type differently registers it here.
+    "append_comparison_version_order", "cancel_comparison_upload", "complete_comparison_upload_file",
+    "confirm_comparison_upload_set", "create_comparison_upload", "exclude_comparison_upload_set",
+    "pause_comparison_upload", "resume_comparison_upload", "retry_comparison_upload_set",
+    "upload_comparison_upload_part",
 ))
 
 #: Work that is mid-flight in a worker. Queued work is discarded with the rest; work a worker is

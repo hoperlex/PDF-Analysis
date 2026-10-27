@@ -727,7 +727,7 @@ def _create_queue_tables() -> None:
             not_before          timestamptz NOT NULL DEFAULT clock_timestamp(),
             attempt_count       integer NOT NULL DEFAULT 0,
             max_attempts        integer NOT NULL DEFAULT 3,
-            current_attempt_id  text NULL,
+            current_work_attempt_id  text NULL,
             comparison_upload_id text NULL,
             cancel_requested_at timestamptz NULL,
             failure_reason      text NULL,
@@ -740,11 +740,11 @@ def _create_queue_tables() -> None:
             CONSTRAINT fk_comparison_work_upload
                 FOREIGN KEY (comparison_upload_id) REFERENCES comparison_upload (comparison_upload_id)
                 ON DELETE RESTRICT,
-            CONSTRAINT uq_comparison_work_current_attempt UNIQUE (current_attempt_id),
+            CONSTRAINT uq_comparison_work_current_attempt UNIQUE (current_work_attempt_id),
             CONSTRAINT ck_comparison_work_id_format CHECK ({_id('comparison_work_id', 'cq')}),
             CONSTRAINT ck_comparison_work_project_uid_format CHECK ({_id('project_uid', 'prj')}),
-            CONSTRAINT ck_comparison_work_current_attempt_id_format
-                CHECK ({_id('current_attempt_id', 'cqa', nullable=True)}),
+            CONSTRAINT ck_comparison_work_current_work_attempt_id_format
+                CHECK ({_id('current_work_attempt_id', 'cqa', nullable=True)}),
             CONSTRAINT ck_comparison_work_upload_id_format
                 CHECK ({_id('comparison_upload_id', 'cbt', nullable=True)}),
             CONSTRAINT ck_comparison_work_created_by_format
@@ -813,7 +813,7 @@ def _create_queue_tables() -> None:
     )
     op.execute(
         "ALTER TABLE comparison_work ADD CONSTRAINT fk_comparison_work_current_attempt "
-        "FOREIGN KEY (comparison_work_id, current_attempt_id) "
+        "FOREIGN KEY (comparison_work_id, current_work_attempt_id) "
         "REFERENCES comparison_work_attempt (comparison_work_id, comparison_work_attempt_id) "
         "DEFERRABLE INITIALLY DEFERRED;"
     )
