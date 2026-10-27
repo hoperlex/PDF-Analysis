@@ -3,7 +3,9 @@
  * the pre-check a browser can honestly make, the classification of every upload failure, the
  * read-only panel for a published version, and (`W59-SECTION-UI-01`) the version's
  * expert-confirmed stage and section with the review that offers them; (`W59-DECISION-
- * CARRYOVER-01`) which comparison rows could carry a decision, and its refusals in Russian.
+ * CARRYOVER-01`) which comparison rows could carry a decision, and its refusals in Russian;
+ * (`CMP-VERSION-MARK-01`) the mark of a version uploaded for comparison only and the disabled
+ * run start that goes with it.
  */
 
 export type { ChosenFile, UploadPrecheckProblem } from './model/upload-envelope';
@@ -21,6 +23,15 @@ export type { UploadFailure, UploadFailureKind } from './model/upload-failure';
 export { classifyUploadFailure } from './model/upload-failure';
 
 export { looksLikeDocumentUid, looksLikeVersionUid } from './model/address';
+
+export {
+  COMPARISON_ONLY_DETAIL,
+  COMPARISON_ONLY_MARK,
+  COMPARISON_ONLY_START_NOTE,
+  isComparisonOnly,
+} from './model/upload-kind';
+export type { ComparisonOnlyMarkProps } from './ui/comparison-only-mark';
+export { ComparisonOnlyMark, ComparisonOnlyStart } from './ui/comparison-only-mark';
 
 export type {
   ClassificationFailure,
