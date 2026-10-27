@@ -20,12 +20,13 @@ def _batches(h: Harness, count: int) -> list[str]:
 def _walk(h: Harness, *, limit: int) -> list[list[str]]:
     pages: list[list[str]] = []
     after = None
-    while True:
+    for _ in range(30):  # a listing whose cursor does not advance must fail here, not hang
         page = h.batches.list_uploads(project_uid=h.project_uid, after=after, limit=limit)
         pages.append([item.upload_id for item in page.items])
         if page.next_after is None:
             return pages
         after = page.next_after
+    raise AssertionError(f"the listing never ended: {pages[-3:]}")
 
 
 class TestTheListing:
