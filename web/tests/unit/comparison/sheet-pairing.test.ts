@@ -214,6 +214,63 @@ describe('the approved pairs section serves only what the server sealed', () => 
     expect(markup).not.toContain('data-hunk-id');
   });
 
+  describe('a pair whose own sheet is unchanged but whose differences another pair withheld', () => {
+    const HIDDEN =
+      'Различия скрыты: изменился другой подтверждённый лист. Отзовите изменённую пару и подтвердите заново.';
+    const LINK_B = 'sln_01M2545JSD15ETSNNV904X992J';
+    const CHANGED_PAIR: ApprovedSheetPair = { ...ITEM, state: 'text_changed', diff: null };
+    const OTHER_PAIR: ApprovedSheetPair = {
+      ...ITEM, sheet_link_id: LINK_B, source_page_number: 3, target_page_number: 3, state: 'verified', diff: null,
+    };
+
+    function articleOf(markup: string, link: string): string {
+      const start = markup.indexOf(`data-approved-pair="${link}"`);
+      expect(start).toBeGreaterThan(-1);
+      const end = markup.indexOf('</article>', start);
+      return visible(markup.slice(start, end));
+    }
+
+    it('says on that pair, and only on that pair, why its differences are not shown', () => {
+      const markup = screen(approved({
+        evidence_state: 'text_changed', raw_evidence_seal_sha256: null, link_revision: 2,
+        items: [CHANGED_PAIR, OTHER_PAIR],
+      }), ['expert']);
+      expect(articleOf(markup, LINK_B)).toContain(HIDDEN);
+      expect(articleOf(markup, LINK)).not.toContain(HIDDEN);
+      expect(articleOf(markup, LINK)).toContain(LINK_STATE_TEXT.text_changed);
+      expect(visible(markup).split(HIDDEN).length - 1).toBe(1);
+      expect(markup).not.toContain('data-hunk-id');
+    });
+
+    it('says nothing of the kind while the differences are shown', () => {
+      const markup = screen(approved(), ['expert']);
+      expect(visible(markup)).not.toContain('Различия скрыты');
+    });
+
+    it('never hides a difference that is shown: the line follows the withheld difference, not the state alone', () => {
+      const markup = screen(approved({
+        evidence_state: 'text_changed', raw_evidence_seal_sha256: null,
+        items: [CHANGED_PAIR, { ...OTHER_PAIR, diff: ITEM.diff }],
+      }), ['expert']);
+      expect(visible(markup)).not.toContain('Различия скрыты');
+    });
+
+    it.each(['seal_changed', 'too_large'] as const)(
+      'does not blame another sheet when the evidence is %s', (state) => {
+        const markup = screen(approved({
+          evidence_state: state, raw_evidence_seal_sha256: null,
+          items: [{ ...ITEM, diff: null }],
+        }), ['expert']);
+        expect(visible(markup)).not.toContain('Различия скрыты');
+        expect(visible(markup)).toContain(EVIDENCE_STATE_TEXT[state]);
+      },
+    );
+
+    it('is plain Russian: no identifier, no number, no Latin letters', () => {
+      expect(HIDDEN).not.toMatch(/[A-Za-z0-9_]/);
+    });
+  });
+
   it('says there is nothing approved when nothing is', () => {
     const markup = screen(approved({ items: [], evidence_state: 'none', link_revision: null,
       raw_evidence_seal_sha256: null }), ['expert']);
