@@ -11,7 +11,22 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Version `1.7.0`
+## Version `1.8.0`
+
+`CONTRACT-1-8-0-01` seals the content that `COMPARE-PERSISTED-SUMMARY-01` added under `1.7.0` (owner
+ruling `R-146ar`). Three operations: `approveSheetPairing` and `withdrawSheetPairing` (an expert stores
+and ends the approval of one sheet pair that `compareDocumentVersions` proposed, append-only, keyed and
+refused to an account without `expert`) and `generateComparisonSummary` (an expert asks once for an AI
+summary over the approved pairs; only a recorded implementation exists, any other mode answers
+`503 dependency_unavailable`). `compareDocumentVersions` gains the optional and nullable
+`approved_pairs`, with the optional `summary`. The version rule
+(`docs/program/VERSIONING_AND_FREEZE_POLICY.md`) reads this as a **minor**: operations, schemas and
+optional fields are added and nothing disappears. The surface is 95 paths, 107 operations and 314
+schemas (92, 104 and 301 under `1.7.0`). No error code or migration is added by the version move; the
+content came with migration `0035_comparison_records`. `2.0.0` stays reserved (owner ruling `R-146ar`,
+`D-233`: the strict reading of the removal of `AnalysisProfileStatus.builtin`).
+
+## Version `1.7.0` (historical)
 
 `PROD-11-AR-V1-V2-REMOVAL-01` removes АР v1 and v2 from the server (`ADR-0024` section 2, `AD-12`).
 `startRun` and `reauditRun` on a version classified АР answer the existing `422

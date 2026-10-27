@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:auditmanager:analysis:legacy-stage-map:v1",
   "title": "LegacyStageMap v1",
-  "contract_version": "1.7.0",
+  "contract_version": "1.8.0",
   "description": "Evidence-only map from every accepted legacy stage/order declaration site to its target owner. It is an alias and traceability index, never a source of target truth; the stage registry is authoritative.",
   "type": "object",
   "additionalProperties": false,
@@ -22,7 +22,7 @@
       "const": "auditmanager.analysis.legacy_stage_map"
     },
     "contract_version": {
-      "const": "1.7.0"
+      "const": "1.8.0"
     },
     "status": {
       "const": "candidate"

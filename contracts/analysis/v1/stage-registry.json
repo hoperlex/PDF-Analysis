@@ -1,6 +1,6 @@
 {
   "contract": "auditmanager.analysis.stage_registry",
-  "contract_version": "1.7.0",
+  "contract_version": "1.8.0",
   "status": "candidate",
   "evidence_baseline": {
     "inventory_commit": "667fb00fe3e45d1ce0bce7860725c1654b4cdeba",
@@ -9,7 +9,7 @@
   },
   "alias_resolution": {
     "name_map_contract": "auditmanager.analysis.legacy_stage_name_map",
-    "name_map_contract_version": "1.7.0",
+    "name_map_contract_version": "1.8.0",
     "site_map_contract": "auditmanager.analysis.legacy_stage_map",
     "rule": "This registry stores no legacy alias. A concrete legacy stage name is resolved to a canonical stage_id, or recognised as explicitly excluded, only through legacy-stage-name-map.json; that map in turn cites the declaration site in legacy-stage-map.json and an immutable evidence locator at the pinned legacy commit. The control plane performs the resolution at its boundary and passes only canonical stage_id values to the engine; the engine never accepts a legacy name. Under PD-02 as approved with modification on 2026-09-01, this registry is authoritative only together with that name-level map."
   },

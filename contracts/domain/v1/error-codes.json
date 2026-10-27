@@ -1,9 +1,9 @@
 {
   "contract": "auditmanager.domain.errors",
-  "contract_version": "1.7.0",
-  "supersedes": "1.6.0",
-  "candidate_revision": 25,
-  "revision_note": "Candidate revision 25 by PROD-11-AR-V1-V2-REMOVAL-01: the enum member AnalysisProfileStatus.builtin is removed from the API document and its prose corrected, and family 1.7.0 seal.",
+  "contract_version": "1.8.0",
+  "supersedes": "1.7.0",
+  "candidate_revision": 26,
+  "revision_note": "Candidate revision 26 by CONTRACT-1-8-0-01: the three operations of COMPARE-PERSISTED-SUMMARY-01 (approveSheetPairing, withdrawSheetPairing, generateComparisonSummary) are an additive minor change of the API document (owner ruling R-146ar), and family 1.8.0 seal.",
   "status": "frozen",
   "frozen": true,
   "envelope": {

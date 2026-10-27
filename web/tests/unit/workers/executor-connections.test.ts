@@ -39,7 +39,7 @@ import {
 } from './executor-fixtures';
 
 const ENVELOPE = (code: 'validation_failed' | 'conflict' | 'dependency_unavailable', details: Record<string, string>) => ({
-  contract_version: '1.7.0', error_code: code, message: 'Safe.', correlation_id: 'cid-executor-1', retryable: false, details,
+  contract_version: '1.8.0', error_code: code, message: 'Safe.', correlation_id: 'cid-executor-1', retryable: false, details,
 }) as const;
 
 function connections(roles: Role[], cases = ALL_CASES, extra: Partial<ExecutorConnectionsProps> = {}): string {

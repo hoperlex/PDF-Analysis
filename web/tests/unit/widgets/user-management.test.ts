@@ -29,7 +29,7 @@ const ACCOUNT: Account = {
 
 function refusal(code: ErrorEnvelope['error_code'], reason: string): ApiError {
   return new ApiError(409, {
-    contract_version: '1.7.0',
+    contract_version: '1.8.0',
     error_code: code,
     message: 'Refused',
     correlation_id: 'cid-user-1',

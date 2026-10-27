@@ -1,14 +1,14 @@
-# Domain contract v1 — `1.7.0`, frozen (sealed revision 25)
+# Domain contract v1 — `1.8.0`, frozen (sealed revision 26)
 
 Owner lane: [W0-DOM-01](../../../docs/program/tasks/W0-DOM-01.md) (domain contract
 owner); the additive norm-identity amendment is owned by
 [NORM-ID-01](../../../docs/program/tasks/NORM-ID-01.md). Status: **frozen for the closed
 beta** by `BETA-CONTRACT-SEAL-01` ([the report](../../../docs/program/BETA-CONTRACT-SEAL-01.md)).
-Every catalog in this directory declares `contract_version` `1.7.0`, `supersedes`
-`1.6.0`, `candidate_revision` `25`, `status` `frozen` and `frozen` `true`, and the
-three family schemas pin `candidate_revision` `const: 25`, `status` `const: frozen` and
+Every catalog in this directory declares `contract_version` `1.8.0`, `supersedes`
+`1.7.0`, `candidate_revision` `26`, `status` `frozen` and `frozen` `true`, and the
+three family schemas pin `candidate_revision` `const: 26`, `status` `const: frozen` and
 `frozen` `const: true` to match, so a catalog that fell back to a draft would fail its own
-schema. `PROD-11-AR-V1-V2-REMOVAL-01` advances the shared version for the removal of the enum member
+schema. `CONTRACT-1-8-0-01` advances the shared version for the three additive operations of `COMPARE-PERSISTED-SUMMARY-01` (`approveSheetPairing`, `withdrawSheetPairing`, `generateComparisonSummary`; owner ruling `R-146ar`); the domain catalogues themselves add no code, identity or machine. `PROD-11-AR-V1-V2-REMOVAL-01` advanced the prior shared version for the removal of the enum member
 `AnalysisProfileStatus.builtin` from the API document (the АР v1 profile was its only carrier); the domain
 catalogues themselves add no code, identity or machine. `EXEC-PAR-START-01` advanced the prior shared version for an additive executor choice on
 `startRun` and a read-only executor on `RunStatus`; the domain catalogues themselves add no
