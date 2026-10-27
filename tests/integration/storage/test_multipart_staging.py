@@ -345,22 +345,46 @@ class TestPartsAreRefusedAtCompletion:
         assert bucket_keys() == []
         assert [key for key, _ in open_uploads()] == [temporary_key(token)]
 
-    def test_a_gap_in_the_numbers_is_refused(self, store: S3BlobStore, staged: Any) -> None:
-        token, receipts = staged(FIRST, SECOND, LAST)
-        with pytest.raises(MultipartPartsError):
-            _complete(store, token, [receipts[0], receipts[2]])
+    # The three lists below are ones the store itself accepts (measured on MinIO: `[1, 3]`, `[2, 3]` and
+    # `[1, 1, 2, 3]` all assemble). The declaration is made to match what the list would assemble, so the
+    # sizes add up and the digest is the right one: only the numbering check stands between the list and a
+    # successful publication of a file nobody meant to send.
 
-    def test_a_list_that_does_not_start_at_one_is_refused(
-        self, store: S3BlobStore, staged: Any
+    def test_a_gap_in_the_numbers_is_refused(
+        self, store: S3BlobStore, staged: Any, bucket_keys: Any
     ) -> None:
         token, receipts = staged(FIRST, SECOND, LAST)
+        meant = FIRST + LAST
         with pytest.raises(MultipartPartsError):
-            _complete(store, token, receipts[1:])
+            _complete(
+                store, token, [receipts[0], receipts[2]],
+                declared_sha256=sha256_of(meant), declared_size=len(meant),
+            )
+        assert bucket_keys() == []
 
-    def test_a_repeated_part_is_refused(self, store: S3BlobStore, staged: Any) -> None:
+    def test_a_list_that_does_not_start_at_one_is_refused(
+        self, store: S3BlobStore, staged: Any, bucket_keys: Any
+    ) -> None:
         token, receipts = staged(FIRST, SECOND, LAST)
+        meant = SECOND + LAST
         with pytest.raises(MultipartPartsError):
-            _complete(store, token, [receipts[0], receipts[0], receipts[1], receipts[2]])
+            _complete(
+                store, token, receipts[1:],
+                declared_sha256=sha256_of(meant), declared_size=len(meant),
+            )
+        assert bucket_keys() == []
+
+    def test_a_repeated_part_is_refused(
+        self, store: S3BlobStore, staged: Any, bucket_keys: Any
+    ) -> None:
+        token, receipts = staged(FIRST, SECOND, LAST)
+        meant = FIRST + FIRST + SECOND + LAST
+        with pytest.raises(MultipartPartsError):
+            _complete(
+                store, token, [receipts[0], receipts[0], receipts[1], receipts[2]],
+                declared_sha256=sha256_of(meant), declared_size=len(meant),
+            )
+        assert bucket_keys() == []
 
     def test_no_parts_are_refused(self, store: S3BlobStore, staged: Any) -> None:
         token, _ = staged(FIRST)
