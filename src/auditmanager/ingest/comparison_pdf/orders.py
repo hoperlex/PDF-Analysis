@@ -136,7 +136,7 @@ class ComparisonVersionOrderService:
                 raise DomainError(ErrorCode.CONFLICT, conflict_reason="comparison_version_order_stale")
 
             held = {str(item.version_uid) for item in self._documents.list_versions(session, DocumentUid.parse(document_uid))}
-            if len(set(version_uids)) != len(version_uids) or set(version_uids) != held:
+            if not version_uids or len(set(version_uids)) != len(version_uids) or set(version_uids) != held:
                 raise DomainError(
                     ErrorCode.VALIDATION_FAILED, field="version_uids", constraint="comparison_set_members"
                 )
