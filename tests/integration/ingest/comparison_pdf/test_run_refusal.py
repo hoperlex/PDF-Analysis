@@ -18,7 +18,7 @@ from auditmanager.ingest.comparison_pdf.public import ConfirmedFile
 from auditmanager.runs import RunRepository, start_audit_run
 from auditmanager.runs.commands import COMPARISON_ONLY_VERSION_REASON, reaudit_run, refuse_comparison_only_version
 from auditmanager.shared.errors import DomainError, ErrorCode
-from auditmanager.shared.identity import DocumentUid, IdempotencyKey, ProjectUid
+from auditmanager.shared.identity import DocumentUid, IdempotencyKey
 from tests.integration.ingest.comparison_pdf.support import EXPERT, table, upload_batch, vs1
 
 PROFILE = "ap_01ARZ3NDEKTSV4RRFFQ69G5FAV"

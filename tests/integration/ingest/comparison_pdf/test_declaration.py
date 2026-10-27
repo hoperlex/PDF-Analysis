@@ -217,16 +217,18 @@ class TestActiveBatches:
 
     @pytest.mark.parametrize("state", ["completed", "cancelled"])
     def test_a_finished_batch_frees_its_slot(self, comparison, project, user, session_factory, state) -> None:
+        from sqlalchemy import text
+
         first = create(comparison, str(project.project_uid), {"a.pdf": b"x"}, user=user)
         with session_factory() as session:
-            from sqlalchemy import text
-
-            session.execute(text("UPDATE comparison_upload SET state = :s, terminal_at = now() WHERE comparison_upload_id = :i"),
-                            {"s": state, "i": first.upload_id}) if state == "cancelled" else session.execute(
-                text("UPDATE comparison_upload SET state = 'proposed' WHERE comparison_upload_id = :i"), {"i": first.upload_id})
-            if state == "completed":
-                session.execute(text("UPDATE comparison_upload SET state = 'completed', terminal_at = now() WHERE comparison_upload_id = :i"),
-                                {"i": first.upload_id})
+            # The batch operations of `CMP-INGEST-02` end a batch; here its terminal state is written directly,
+            # along the edges the migration declares (a batch is proposed before it is completed).
+            for step in (["proposed"] if state == "completed" else []) + [state]:
+                session.execute(
+                    text("UPDATE comparison_upload SET state = :s, terminal_at = CASE WHEN :s IN ('completed', 'cancelled') "
+                         "THEN now() END WHERE comparison_upload_id = :i"),
+                    {"s": step, "i": first.upload_id},
+                )
             session.commit()
         again = create(comparison, str(project.project_uid), {"b.pdf": b"y"}, user=user, key="k2")
         assert again.upload_id != first.upload_id

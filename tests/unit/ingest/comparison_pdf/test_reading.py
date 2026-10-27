@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import io
 import json
-import sys
 import time
 import zlib
 from datetime import date

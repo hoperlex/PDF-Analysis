@@ -12,20 +12,17 @@ from __future__ import annotations
 import pytest
 
 from auditmanager.ingest.comparison_pdf.public import PART_BYTES, ComparisonUploadService
-from auditmanager.ingest.comparison_pdf.reading import PdfReading
 from auditmanager.shared.errors import DomainError, ErrorCode
-from auditmanager.storage.public import UploadedPart, abort_multipart_sweep, declare_blob, parse_blob_role
+from auditmanager.storage.public import UploadedPart, abort_multipart_sweep, parse_blob_role
 from tests.integration.ingest.comparison_pdf.support import (
     CORPUS,
     complete,
     create,
     declare,
     padded_pdf,
-    parts_of,
     send,
     sha256,
     table,
-    upload_batch,
     vs1,
 )
 

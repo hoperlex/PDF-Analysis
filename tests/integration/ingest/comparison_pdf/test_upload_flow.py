@@ -13,25 +13,18 @@ import json
 from datetime import date
 
 import pytest
-from sqlalchemy import text
-from sqlalchemy.orm import Session, sessionmaker
-
 from auditmanager.documents.public import (
     MANIFEST_ROLE_COMPARISON_PDF,
     MANIFEST_ROLE_SOURCE_DOCUMENT,
     UPLOAD_KIND_COMPARISON_PDF,
     DocumentRepository,
 )
-from auditmanager.ingest import IngestService
-from auditmanager.ingest.comparison_pdf.public import ComparisonUploadService, ConfirmedFile, ComparisonVersionOrderService
+from auditmanager.ingest.comparison_pdf.public import ComparisonUploadService, ConfirmedFile
 from auditmanager.shared.errors import DomainError, ErrorCode
-from auditmanager.shared.identity import DocumentUid, VersionUid
+from auditmanager.shared.identity import DocumentUid
 from tests.integration.ingest.comparison_pdf.support import (
-    ADMIN,
     CORPUS,
     EXPERT,
-    create,
-    padded_pdf,
     sha256,
     table,
     upload_batch,

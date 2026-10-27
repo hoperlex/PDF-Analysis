@@ -17,7 +17,7 @@ from starlette.testclient import TestClient
 
 from auditmanager.api.app import create_app, create_asgi_app
 from auditmanager.api.security import API_TOKEN_VARIABLE, Subject, build_signer
-from tests.integration.ingest.comparison_pdf.support import CORPUS, parts_of, sha256, vs1
+from tests.integration.ingest.comparison_pdf.support import parts_of, sha256, vs1
 
 SECRET = "comparison-ingest-http-suite"
 
