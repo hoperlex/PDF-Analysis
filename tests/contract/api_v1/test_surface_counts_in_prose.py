@@ -587,7 +587,13 @@ def test_a_stale_claim_in_a_previously_excluded_conf_file_is_red() -> None:
     """`D-99`: mutate the real extensionless scanner input in memory; `.conf` is not skipped."""
     relative = "infra/deploy/proxy/nginx.conf"
     text = (REPO_ROOT / relative).read_text(encoding="utf-8")
-    mutated = text.replace("the ninety-two paths", "the eighty-nine paths", 1)
+    # The mutated phrase is whatever count of paths the file states, found by pattern: a reseal that
+    # moves the surface (`COMPARE-PERSISTED-SUMMARY-01`: 92 -> 95) must not need this test edited. It
+    # was the literal "the ninety-two paths". The replacement is a count the surface never had.
+    assert NUMBER_WORDS["eighty-nine"] != _surface_counts()["paths"]
+    stated = re.search(rf"the (?:{'|'.join(sorted(NUMBER_WORDS, key=len, reverse=True))}) paths", text)
+    assert stated is not None, f"{relative} states no count of paths"
+    mutated = text.replace(stated.group(0), "the eighty-nine paths", 1)
     assert mutated != text
     wrong = _wrong_surface_claims(relative, mutated)
     assert any("'eighty-nine paths' states 89" in item for item in wrong), wrong
