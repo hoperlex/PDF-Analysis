@@ -138,6 +138,7 @@ __all__ = [
     "JobId",
     "RunState",
     "RunExecutor",
+    "RunPreset",
     "RunStatus",
     "RunStatusPage",
     "Severity",
@@ -321,6 +322,12 @@ __all__ = [
     "ExecutorRoute",
     "ExecutorRouteList",
     "SetExecutorRouteRequest",
+    "PresetId",
+    "PresetRevisionId",
+    "AnalysisPresetState",
+    "AnalysisPreset",
+    "AnalysisPresetList",
+    "SaveAnalysisPresetRequest",
     "ExecutorTaskState",
     "RunnerTokenMetadata",
     "IssueRunnerTokenRequest",
@@ -455,6 +462,12 @@ ExecutorConnectionId = TypeAliasType(
 )
 ExecutorRevisionId = TypeAliasType(
     "ExecutorRevisionId", Annotated[str, Field(pattern=rf"^excr_{_ULID}$")]
+)
+#: `ANALYSIS-PRESETS-01`. A preset and each of its revisions are identified by the audit event
+#: written with them (``evt``, migration ``0037``): the first revision's id is the preset's.
+PresetId = TypeAliasType("PresetId", Annotated[str, Field(pattern=rf"^evt_{_ULID}$")])
+PresetRevisionId = TypeAliasType(
+    "PresetRevisionId", Annotated[str, Field(pattern=rf"^evt_{_ULID}$")]
 )
 ExecutorSecretId = TypeAliasType(
     "ExecutorSecretId", Annotated[str, Field(pattern=rf"^exs_{_ULID}$")]
@@ -1058,6 +1071,11 @@ class StartRunRequest(_Object):
     executor_connection_id: ExecutorConnectionId = Field(
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
+    #: `ANALYSIS-PRESETS-01`. Optional and **not nullable**, like ``executor_connection_id``, and
+    #: exclusive with it: a person either takes a preset or names an executor.
+    preset_id: PresetId = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
 
 
 class StartArV3BetaGroupRequest(_Object):
@@ -1196,6 +1214,15 @@ class RunExecutor(_Object):
     pin_id: Annotated[str, Field(min_length=1, max_length=128)]
 
 
+class RunPreset(_Object):
+    """`ANALYSIS-PRESETS-01`. The preset revision a run was started with: the preset, the number of
+    the revision and the name it had then (a later rename does not change it)."""
+
+    preset_id: PresetId
+    revision_no: Annotated[int, Field(ge=1)]
+    name: Annotated[str, Field(min_length=1, max_length=120)]
+
+
 class RunStatus(_Object):
     run_id: RunId
     reaudit_of_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
@@ -1251,6 +1278,9 @@ class RunStatus(_Object):
     #: `EXEC-PAR-START-01`. The executor the run froze, read-only; null (and omitted) for a run
     #: that froze none.
     executor: RunExecutor | None = Field(default=None, json_schema_extra=optional_property)
+    #: `ANALYSIS-PRESETS-01`. The preset the run was started with, read-only; null (and omitted)
+    #: for a run started without one.
+    preset: RunPreset | None = Field(default=None, json_schema_extra=optional_property)
 
 
 class RunStatusPage(_Object):
@@ -3881,6 +3911,51 @@ class SetExecutorRouteRequest(_Object):
     standby_connection_id: ExecutorConnectionId = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
+
+
+# --- analysis presets (`ANALYSIS-PRESETS-01`, `R-146av`) ----------------------------------
+#
+# A preset is a named, saved choice of how a run starts. A run start selects one setting per run,
+# the executor connection, so a preset is a name and that connection: no cost limit, no threshold
+# and no provider mode (none of them is selectable per run). Revisions are append-only; the list
+# shows the current revision of each preset.
+
+
+class AnalysisPresetState(str, enum.Enum):
+    """``active`` can be chosen at run start; ``archived`` is retired for good."""
+
+    ACTIVE = "active"
+    ARCHIVED = "archived"
+
+
+class AnalysisPreset(_Object):
+    """The current revision of one preset. ``preset_id`` is the preset for its whole life;
+    ``revision_id`` and ``revision_no`` name this revision. The name is a label, never an
+    identity."""
+
+    preset_id: PresetId
+    revision_id: PresetRevisionId
+    revision_no: Annotated[int, Field(ge=1)]
+    name: Annotated[str, Field(min_length=1, max_length=120)]
+    executor_connection_id: ExecutorConnectionId
+    state: AnalysisPresetState
+    created_at: datetime
+    revised_at: datetime
+    revised_by: UserUid
+
+
+class AnalysisPresetList(_Object):
+    """Every preset by its current revision: active ones first by name, then archived ones."""
+
+    items: Annotated[list[AnalysisPreset], Field(max_length=100)]
+
+
+class SaveAnalysisPresetRequest(_Object):
+    """The full settings of a preset, for a new preset and for a new revision alike (never a
+    patch)."""
+
+    name: Annotated[str, Field(min_length=1, max_length=120)]
+    executor_connection_id: ExecutorConnectionId
 
 
 # --- the pull channel (`EXEC-PULL-01`, `R-143`) ------------------------------------------

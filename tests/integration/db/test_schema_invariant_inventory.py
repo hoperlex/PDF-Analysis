@@ -271,12 +271,12 @@ from sqlalchemy import Engine, text
 #: ``contract_state_transition`` (the seal adds ``app_user`` and ``registration_request``
 #: to ``state-machines.json``; the registration lifecycle is guarded by its own trigger).
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (782, "6c2ba14f91fc890644fe2e692839efe07b69bb673b4ce443d8eb424a98344d6f"),
+    "columns": (782, "c9df6c8584cd193bfc71da884cb2812d8a03b42062ad3b1271788995b29fec7e"),
     "relations": (79, "135b72d98ce3ebd4cb02aee8e47e44cfe98e493ef0f2e5939806b3900934fb5f"),
-    "constraints": (882, "e0d54b3792fba4dc8bc29527acad84a9cf7ddfcf30e92d79df9aab4a903ed3ec"),
-    "indexes": (198, "a0e65b0b2da4c6b60e71b7280ec52093951323c646d2df5e5946e31326b4b7b2"),
+    "constraints": (882, "69a165b2ece8cda7e0d60e8e3aeb84c220137457d9fb7b06378163ae2d436907"),
+    "indexes": (198, "d9a68815254a8ee43c7241a08cb048836191b66823b87f31650a4dbb65884f4c"),
     "triggers": (93, "cdba5a02dfc8bd3bcfab958967a042ec27bb142a3679f16a9a0f9044aeb2e26b"),
-    "functions": (36, "a33bd4f0552c728b8b2d2d1fe6055feb02e3d364fcaa15e4278bdd53aa01b633"),
+    "functions": (36, "97fb28df363f36428f0e67a12624df55fafac727f0264b958055666464449843"),
     "views": (5, "c41ad974669882ee5d818591ee1d485b70455ddd4e51d236cc83892d18d11b93"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),
     "sequences": (7, "6d533fe16349a92b16b5ca89d51fcb083f1ecdf4f252bc276667a92361bf1656"),

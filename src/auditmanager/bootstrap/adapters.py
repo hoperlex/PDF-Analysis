@@ -64,7 +64,12 @@ from auditmanager.api.schemas.models import (
 )
 from auditmanager.api.schemas import models
 from auditmanager.api.schemas.common import paginate, decode_cursor, encode_cursor
-from auditmanager.api.schemas.runs import RunExecutorView, RunStatusView, StageStateView
+from auditmanager.api.schemas.runs import (
+    RunExecutorView,
+    RunPresetView,
+    RunStatusView,
+    StageStateView,
+)
 from auditmanager.api.security import (
     ROLE_ADMIN,
     ROLE_EXPERT,
@@ -848,8 +853,14 @@ class RunAdapter(_SessionHolder):
         route_freezer: Any = None,
         ar_v3_pack_registry: Any = None,
         ar_v3_installed_pack: Any = None,
+        preset_resolver: Any = None,
     ) -> None:
         super().__init__(session_factory)
+        # `ANALYSIS-PRESETS-01`. Reads a named preset's current revision in the start's own
+        # transaction (:func:`resolve_analysis_preset`); ``None`` keeps the many tests that build a
+        # bare adapter as they are, and a start that names a preset then answers
+        # ``dependency_unavailable`` rather than ignoring the choice.
+        self._preset_resolver = preset_resolver
         # `EXEC-HTTP-01`. The provider resolver the executor binds each Attempt with, and, for
         # the ``database`` source only, the freezer that picks a run's connection revision at
         # start. Both ``None`` keeps the many tests that build a bare adapter as they are.
@@ -978,6 +989,7 @@ class RunAdapter(_SessionHolder):
         idempotency_key: str,
         provider_mode: str | None = None,
         executor_connection_id: str | None = None,
+        preset_id: str | None = None,
     ) -> Any:
         """A caller-supplied provider mode is refused, never silently overridden.
 
@@ -989,6 +1001,10 @@ class RunAdapter(_SessionHolder):
 
         `EXEC-PAR-START-01`: ``executor_connection_id`` is the connection the caller named. It
         is passed to the command beside the freezer; absent, the call is the one it always was.
+
+        `ANALYSIS-PRESETS-01`: ``preset_id`` is a saved preset. The command resolves its current
+        revision in this transaction and starts as if the caller had named that preset's executor;
+        the run records the preset revision. Together with ``executor_connection_id`` it is refused.
         """
         from auditmanager.runs import start_audit_run
 
@@ -1028,6 +1044,8 @@ class RunAdapter(_SessionHolder):
                 # revision here, and its budget follows that revision's pinned model.
                 connection_route=self._route_freezer,
                 executor_connection_id=executor_connection_id,
+                preset_id=preset_id,
+                preset_resolver=self._preset_resolver,
             )
             if not started.replayed:
                 # `D-20`. `created -> queued` happens here, in the transaction that
@@ -1293,6 +1311,19 @@ def _norm_verification_body(view: Any) -> dict[str, Any]:
     return body
 
 
+def resolve_analysis_preset(session: Session, preset_id: str) -> Any:
+    """The seam ``start_audit_run`` reads a named preset through (`ANALYSIS-PRESETS-01`): the
+    ``executors`` context's answer, in the ``runs`` context's own type."""
+    from auditmanager.executors.public import choose_preset
+    from auditmanager.runs import ChosenPreset
+
+    chosen = choose_preset(session, preset_id)
+    return ChosenPreset(
+        preset_id=chosen.preset_id, revision_id=chosen.revision_id,
+        revision_no=chosen.revision_no, executor_connection_id=chosen.executor_connection_id,
+    )
+
+
 def _run_status_view(session: Session, run_id: str) -> RunStatusView:
     """The whole frozen `RunStatus`, from the two places that hold it.
 
@@ -1301,7 +1332,7 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
     `RunStatus.stages` was permanently empty and nothing said so - a `getattr` default is a
     silent answer to a question the object cannot answer.
     """
-    from auditmanager.executors.public import executor_of_revision
+    from auditmanager.executors.public import executor_of_revision, preset_of_revision
     from auditmanager.findings import diagnostics, published_finding_count
     from auditmanager.runs import RunRepository
 
@@ -1314,6 +1345,11 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
     chosen = (
         None if run.connection_revision_id is None
         else executor_of_revision(session, run.connection_revision_id)
+    )
+    # `ANALYSIS-PRESETS-01`. The preset revision the run recorded, with the name it had then.
+    used_preset = (
+        None if run.preset_revision_id is None
+        else preset_of_revision(session, run.preset_revision_id)
     )
     # `D-21`. Read from the `model_call` rows, which are exact, and not from
     # `stage_result.metrics` -- `D-15` measures that pair as a sum over attempts wearing
@@ -1357,6 +1393,10 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
         executor=None if chosen is None else RunExecutorView(
             connection_id=chosen.connection_id, display_name=chosen.display_name,
             pin_id=chosen.pin_id,
+        ),
+        preset=None if used_preset is None else RunPresetView(
+            preset_id=used_preset.preset_id, revision_no=used_preset.revision_no,
+            name=used_preset.name,
         ),
         stages=tuple(
             StageStateView(
@@ -5028,6 +5068,63 @@ class ExecutorAdapter(_SessionHolder):
             return models.ExecutorRoute.model_validate(_executor_route_view(route))
         return self._write(work)
 
+    # `ANALYSIS-PRESETS-01`. A preset is executor configuration: the same role rule, the same
+    # transaction and the same correlation id as every executor write.
+    def list_presets(self, *, user_uid: str) -> models.AnalysisPresetList:
+        from auditmanager.executors.public import list_presets
+
+        def work(session: Session) -> models.AnalysisPresetList:
+            return models.AnalysisPresetList.model_validate(
+                {"items": [_analysis_preset_view(record) for record in list_presets(session)]})
+        return self._read(work)
+
+    def create_preset(
+        self, *, name: str, executor_connection_id: str, user_uid: str, idempotency_key: str
+    ) -> models.AnalysisPreset:
+        from auditmanager.api.routers.correlation import current_correlation_id
+        from auditmanager.executors.public import create_preset
+
+        def work(session: Session) -> models.AnalysisPreset:
+            record = create_preset(
+                session, name=name, executor_connection_id=executor_connection_id,
+                roles=self._roles(session, user_uid), idempotency_key=idempotency_key,
+                actor_uid=user_uid, correlation_id=current_correlation_id(),
+            )
+            return models.AnalysisPreset.model_validate(_analysis_preset_view(record))
+        return self._write(work)
+
+    def revise_preset(
+        self, *, preset_id: str, name: str, executor_connection_id: str, user_uid: str,
+        idempotency_key: str,
+    ) -> models.AnalysisPreset:
+        from auditmanager.api.routers.correlation import current_correlation_id
+        from auditmanager.executors.public import revise_preset
+
+        def work(session: Session) -> models.AnalysisPreset:
+            record = revise_preset(
+                session, preset_id=preset_id, name=name,
+                executor_connection_id=executor_connection_id,
+                roles=self._roles(session, user_uid), idempotency_key=idempotency_key,
+                actor_uid=user_uid, correlation_id=current_correlation_id(),
+            )
+            return models.AnalysisPreset.model_validate(_analysis_preset_view(record))
+        return self._write(work)
+
+    def archive_preset(
+        self, *, preset_id: str, user_uid: str, idempotency_key: str
+    ) -> models.AnalysisPreset:
+        from auditmanager.api.routers.correlation import current_correlation_id
+        from auditmanager.executors.public import archive_preset
+
+        def work(session: Session) -> models.AnalysisPreset:
+            record = archive_preset(
+                session, preset_id=preset_id, roles=self._roles(session, user_uid),
+                idempotency_key=idempotency_key, actor_uid=user_uid,
+                correlation_id=current_correlation_id(),
+            )
+            return models.AnalysisPreset.model_validate(_analysis_preset_view(record))
+        return self._write(work)
+
     def _summary_view(self, session: Session, connection_id: str) -> models.ExecutorConnection:
         from auditmanager.executors.public import connection_detail
 
@@ -5104,6 +5201,18 @@ def _executor_connection_view(summary: Any) -> dict[str, Any]:
         current_revision_id=None if revision is None else revision.revision_id,
         current_revision_no=None if revision is None else revision.revision_no,
     )
+
+
+def _analysis_preset_view(record: Any) -> dict[str, Any]:
+    """One preset's current revision in the frozen shape: identities, the label, the one setting
+    and who and when. Nothing else about the connection."""
+    return {
+        "preset_id": record.preset_id, "revision_id": record.revision_id,
+        "revision_no": record.revision_no, "name": record.name,
+        "executor_connection_id": record.executor_connection_id, "state": record.state,
+        "created_at": record.created_at, "revised_at": record.revised_at,
+        "revised_by": record.revised_by,
+    }
 
 
 def _executor_route_view(route: Any) -> dict[str, Any]:

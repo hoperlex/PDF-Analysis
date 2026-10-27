@@ -109,7 +109,9 @@ def test_the_request_schema_declares_the_field_optional_and_by_reference(openapi
     assert schema["required"] == ["version_uid"]
     assert schema["additionalProperties"] is False
     assert schema["properties"]["executor_connection_id"]["$ref"] == "#/components/schemas/ExecutorConnectionId"
-    assert set(schema["properties"]) == {"version_uid", "provider_mode", "executor_connection_id"}
+    # `ANALYSIS-PRESETS-01` adds the optional `preset_id`; the executor field is what it was.
+    assert set(schema["properties"]) == {
+        "version_uid", "provider_mode", "executor_connection_id", "preset_id"}
 
 
 # --- RunStatus.executor --------------------------------------------------------------------------

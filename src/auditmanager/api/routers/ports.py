@@ -146,6 +146,20 @@ class ExecutorPort(Protocol):
         self, *, work_kind: str, primary_connection_id: str,
         standby_connection_id: str | None, user_uid: str, idempotency_key: str,
     ) -> models.ExecutorRoute: ...
+    # `ANALYSIS-PRESETS-01`. A preset is executor configuration: a name and the connection a run is
+    # started on. Reads are for any role; the three writes re-check the administrator role in
+    # their own transaction, and each writes its audit event in that transaction.
+    def list_presets(self, *, user_uid: str) -> models.AnalysisPresetList: ...
+    def create_preset(
+        self, *, name: str, executor_connection_id: str, user_uid: str, idempotency_key: str
+    ) -> models.AnalysisPreset: ...
+    def revise_preset(
+        self, *, preset_id: str, name: str, executor_connection_id: str, user_uid: str,
+        idempotency_key: str,
+    ) -> models.AnalysisPreset: ...
+    def archive_preset(
+        self, *, preset_id: str, user_uid: str, idempotency_key: str
+    ) -> models.AnalysisPreset: ...
 
 
 class RunnerPort(Protocol):
@@ -519,6 +533,7 @@ class RunPort(Protocol):
         provider_mode: str | None,
         idempotency_key: str,
         executor_connection_id: str | None = None,
+        preset_id: str | None = None,
     ) -> RunStatusView:
         """Start a run, or return the existing one for this key and payload.
 
@@ -530,6 +545,10 @@ class RunPort(Protocol):
         on. ``None`` is the global route, as before. A connection that cannot serve now
         refuses the start; it is never replaced by the standby or another connection, and the
         id is part of the payload the key is compared by.
+
+        ``preset_id`` (`ANALYSIS-PRESETS-01`) names a saved preset instead: its executor
+        connection is applied exactly as if the caller had named it, and the run records the
+        preset revision. A preset together with ``executor_connection_id`` is refused.
         """
 
     def get_run_status(self, *, run_id: str) -> RunStatusView:

@@ -88,7 +88,7 @@ UPGRADE_SURFACE_DIGESTS = {
     # `AR-V3-DECISIONS-01`: likewise, taken from the revision's own bytes once it was final.
     "20261027_0036_cite_partition_v3.py": "c47c4ea1cd7858b8cacd93e8d5832dc5dcd0094db625d16f5404021171f0628a",
     # `ANALYSIS-PRESETS-01`: likewise, taken from the revision's own bytes once it was final.
-    "20261027_0037_analysis_presets.py": "e457cad975fcfcceb419112117c91e1f11830166df5266bf4c8c6e5195068a74",
+    "20261027_0037_analysis_presets.py": "ed2dab94064b31bf86b347e676cc00afb85270ea5e6f8650ffb279a6d2128b9e",
 }
 
 
