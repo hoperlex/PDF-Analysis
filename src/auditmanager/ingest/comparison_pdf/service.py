@@ -1085,5 +1085,3 @@ def _label(value: str) -> str:
     if not cleaned:
         raise DomainError(ErrorCode.INTERNAL_ERROR, message="the actor has no display label")
     return cleaned
-
-
