@@ -134,8 +134,6 @@ def test_a_cell_that_starts_with_a_carriage_return_is_quoted_and_neutralised() -
         "1+1",
         "x-",
         "e-mail@example.com",
-        " =1+1",  # the ruling names the first character; a leading space is not one
-        "\n=1",  # a line feed is not one of the six
         "'=1",  # already starts with an apostrophe: not doubled
         '"=1"',
         "5",
@@ -187,3 +185,123 @@ def test_neutralising_twice_over_two_exports_changes_nothing() -> None:
     """Two exports of the same rows are byte-identical (`OD-11`); the rule keeps no state."""
     rows = (_row(evidence_quote="=1"), _row(evidence_quote="ok", evidence_ordinal=1))
     assert render_csv(rows) == render_csv(rows)
+
+
+# ---------------------------------------------------------------------------------------------
+# ACCESS-COMPARE-JUDGE-FIXES-01, finding 3: the rule looks past leading blanks and invisible
+# characters, and treats a line feed like a tab and a carriage return. The characters are spelled
+# out here as code points, not imported from the module under test.
+# ---------------------------------------------------------------------------------------------
+
+#: Everything a spreadsheet may step over before it reads the first real character.
+LEADING = {
+    "space": " ",
+    "two_spaces": "  ",
+    "no_break_space": "\u00a0",
+    "byte_order_mark": "\ufeff",
+    "zero_width_space": "\u200b",
+    "zero_width_non_joiner": "\u200c",
+    "zero_width_joiner": "\u200d",
+    "word_joiner": "\u2060",
+    "tab": "\t",
+    "carriage_return": "\r",
+    "line_feed": "\n",
+    "space_then_tab": " \t",
+    "space_then_carriage_return": " \r",
+    "space_then_line_feed": " \n",
+    "no_break_space_then_tab": "\u00a0\t",
+    "no_break_space_then_carriage_return": "\u00a0\r",
+    "mixed": " \u00a0\ufeff\u200b\n \u2060",
+}
+
+#: Ascii and fullwidth: U+FF1D, U+FF0B, U+FF0D, U+FF20.
+ALL_TRIGGERS = {
+    "equals": "=", "plus": "+", "minus": "-", "at": "@",
+    "fullwidth_equals": "\uff1d", "fullwidth_plus": "\uff0b",
+    "fullwidth_minus": "\uff0d", "fullwidth_at": "\uff20",
+}
+
+
+@pytest.mark.parametrize("trigger", ALL_TRIGGERS.values(), ids=ALL_TRIGGERS.keys())
+@pytest.mark.parametrize("lead", LEADING.values(), ids=LEADING.keys())
+def test_a_trigger_behind_blanks_or_invisible_characters_is_neutralised(
+    lead: str, trigger: str
+) -> None:
+    value = f"{lead}{trigger}1+1"
+    cells = dict(zip(COLUMNS, row_values(_row(evidence_quote=value))))
+    assert cells["evidence_quote"] == "'" + value
+
+
+@pytest.mark.parametrize("trigger", ALL_TRIGGERS.values(), ids=ALL_TRIGGERS.keys())
+def test_every_trigger_alone_at_the_start_is_neutralised_in_ascii_and_fullwidth(
+    trigger: str,
+) -> None:
+    value = f"{trigger}SUM(A1)"
+    cells = dict(zip(COLUMNS, row_values(_row(evidence_quote=value))))
+    assert cells["evidence_quote"] == "'" + value
+
+
+@pytest.mark.parametrize(
+    "value", ["\tx", "\rx", "\nx", "\n", "\t", "\r\n", "\nplain text"],
+    ids=["tab", "cr", "lf", "lf_alone", "tab_alone", "crlf", "lf_then_text"],
+)
+def test_a_cell_that_itself_starts_with_tab_carriage_return_or_line_feed_is_neutralised(
+    value: str,
+) -> None:
+    cells = dict(zip(COLUMNS, row_values(_row(evidence_quote=value))))
+    assert cells["evidence_quote"] == "'" + value
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        " x",  # blanks in front of a plain character
+        "   ",
+        "\u00a0",
+        "\u00a0x",
+        "\ufeffabc",
+        "\u200bслово",
+        " a=1",  # a trigger further in is nothing
+        "x =1",
+        "\u00a0a=b",
+        "ＡＢВ",  # fullwidth letters are not triggers
+        "ｘ=1",  # a fullwidth x, then an ascii equals sign
+        "· =1",  # a middle dot is not a blank: the cell does not start with a trigger
+        "\u3000=1",  # an ideographic space is not in the stepped-over set
+        "2+2",
+        "x\t=1",
+    ],
+)
+def test_a_cell_whose_first_real_character_is_not_a_trigger_keeps_its_bytes(value: str) -> None:
+    cells = dict(zip(COLUMNS, row_values(_row(evidence_quote=value))))
+    assert cells["evidence_quote"] == value
+
+
+def test_a_cell_of_blanks_only_is_not_a_trigger_and_not_doubled() -> None:
+    for value in (" ", "\u00a0\u200b", "'", "'=1", " '=1"):
+        assert dict(zip(COLUMNS, row_values(_row(finding_text=value))))["finding_text"] == value
+
+
+def test_the_wider_rule_bytes_of_one_row_are_exactly_these() -> None:
+    """The whole file, once, for one cell of each new class: quoting is unchanged around it."""
+    row = _row(
+        finding_text=" =SUM(A1:A2)",
+        recommendation_text="\u00a0+1 выход",
+        evidence_quote="\n=2",
+        latest_comment="\ufeff@x",
+        severity="\uff1d1",
+    )
+    header = ",".join(COLUMNS) + "\r\n"
+    line = (
+        "prj_1,doc_1,ver_1,run_1,published,recorded,fnd_1,fobs_1,internal_contradiction,"
+        "' =SUM(A1:A2),'\u00a0+1 выход,2,\"'\n=2\",accepted,'\ufeff@x,dec_1,"
+        "2026-10-27T09:30:00Z,'\uff1d1,economic\r\n"
+    )
+    assert render_csv((row,)) == BOM + (header + line).encode("utf-8")
+
+
+def test_the_cells_the_rule_leaves_alone_are_the_same_through_the_whole_writer() -> None:
+    rows = tuple(_row(evidence_quote=value, evidence_ordinal=i) for i, value in enumerate(
+        (" x", "a=b", "\u00a0abc", "'=1")))
+    parsed = _parse(render_csv(rows))
+    assert [row["evidence_quote"] for row in parsed] == [" x", "a=b", "\u00a0abc", "'=1"]

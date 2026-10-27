@@ -14,17 +14,16 @@ makes it:
 * **A null projection column is the empty string** — never the literal ``null``, never
   ``NULL``. A reader opening this in a spreadsheet must see an empty cell, not the
   four-letter word a naive ``str(None)`` would produce.
-* **A text cell whose first character a spreadsheet reads as the start of a formula gets
-  one leading apostrophe** (`R-146ax`, ``EXPOSURE-REVIEW-02.md`` ``F-11``). Those characters
-  are ``=``, ``+``, ``-``, ``@``, a tab and a carriage return (:data:`FORMULA_TRIGGERS`).
-  ``evidence_quote`` is a verbatim quotation from a client's document and
-  ``finding_text`` and ``recommendation_text`` are model output, so none of them is under
-  this system's control; the expert who opens the file in Excel must see the text and not
-  run it. Every other cell's bytes are exactly what they were. The rule is about the first
-  character of the cell and no other, as the ruling words it: a leading space is not a
-  trigger here (the optimisation CSV is stricter and looks past spaces; this file keeps
-  the bytes of every cell the ruling does not name), a line feed is not one of the six,
-  and a trigger in the middle of a cell is nothing. **A number is not a text cell.** The one
+* **A text cell that a spreadsheet could read as a formula gets one leading apostrophe**
+  (`R-146ax`, ``EXPOSURE-REVIEW-02.md`` ``F-11``, widened by ``ACCESS-COMPARE-JUDGE-FIXES-01``).
+  The rule is :func:`auditmanager.shared.spreadsheet.neutralise_formula` and is stated there: a cell
+  that starts with a tab, a carriage return or a line feed, or whose first character after any
+  blanks and invisible characters (space, no-break space, U+FEFF, U+200B..U+200D, U+2060, tab, CR,
+  LF) is ``=``, ``+``, ``-``, ``@`` or their fullwidth forms. ``evidence_quote`` is a verbatim
+  quotation from a client's document and ``finding_text`` and ``recommendation_text`` are model
+  output, so none of them is under this system's control; the expert who opens the file in Excel
+  must see the text and not run it. Every other cell's bytes are exactly what they were; a trigger
+  in the middle of a cell is nothing. **A number is not a text cell.** The one
   integer column, ``evidence_page``, comes from ``CHECK (page_number >= 1)``, so no number
   that reaches this module starts with ``-``; an integer is written as digits and never
   altered, which keeps a numeric column readable as a number if a negative one ever existed
@@ -50,6 +49,11 @@ from datetime import datetime, timezone
 from typing import Any, Final, Sequence
 
 from auditmanager.exports.query import ExportRow
+from auditmanager.shared.spreadsheet import (
+    FORMULA_NEUTRALISER,
+    FORMULA_TRIGGERS,
+    neutralise_formula,
+)
 
 #: P02 §6's first seventeen frozen columns, then W56a's two severity columns.
 COLUMNS: Final[tuple[str, ...]] = (
@@ -89,24 +93,6 @@ CONTENT_TYPE: Final[str] = "text/csv; charset=utf-8"
 
 _DELIMITER: Final[str] = ","
 _LINE_TERMINATOR: Final[str] = "\r\n"
-
-#: The first characters that make a spreadsheet read a text cell as a formula, exactly the
-#: six of `R-146ax`: ``=``, ``+``, ``-``, ``@``, tab and carriage return.
-FORMULA_TRIGGERS: Final[frozenset[str]] = frozenset({"=", "+", "-", "@", "\t", "\r"})
-
-#: The one character put in front of such a cell.
-FORMULA_NEUTRALISER: Final[str] = "'"
-
-
-def neutralise_formula(text: str) -> str:
-    """The text, with one leading apostrophe when its first character is a formula trigger.
-
-    Everything else is returned as it came: the empty string, a cell that starts with a
-    space or a letter, a cell with a trigger further in.
-    """
-    if text and text[0] in FORMULA_TRIGGERS:
-        return FORMULA_NEUTRALISER + text
-    return text
 
 
 def _cell(value: Any) -> str:
