@@ -86,6 +86,10 @@ IMMUTABLE_TABLES = {
     # `0030_executor_connections`: a revision of a connection's settings is written once; a changed
     # address is a new revision.
     "executor_connection_revision",
+    # `0035_comparison_records`: an approval or withdrawal of a sheet pairing is appended once and
+    # never changed; the approved set is a query.
+    "comparison_sheet_link",
+    "comparison_summary",
 }
 
 
@@ -342,6 +346,14 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "token_id": "ern",
         "claimed_by_token_id": "ern",
         "task_id": "ext",
+        # `COMPARE-PERSISTED-SUMMARY-01`, migration 0035: the sheet-link history names a comparison,
+        # a link and the two versions of the compared pair.
+        "comparison_id": "cmp",
+        "sheet_link_id": "sln",
+        "source_version_uid": "ver",
+        "target_version_uid": "ver",
+        # B2: a summary is identified by the audit event written with it.
+        "summary_id": "evt",
     }
     assert set(prefix_by_column.values()) <= {
         identity.prefix for identity in IDENTITY_TYPES_BY_ENTITY.values()

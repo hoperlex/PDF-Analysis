@@ -2903,15 +2903,37 @@ class ComparisonAdapter(_SessionHolder):
         *,
         blob_store: Any,
         section_codes: frozenset[str],
+        summary_model: Any = None,
+        cost_ceiling_usd: float = 0.0,
     ) -> None:
-        from auditmanager.comparison.public import VersionComparisonService
+        from auditmanager.comparison.public import (
+            SheetLinkRepository,
+            SheetPairingService,
+            SummaryService,
+            SummaryStore,
+            VersionComparisonService,
+        )
 
         super().__init__(session_factory)
         self._blob_store = blob_store
+        links, store = SheetLinkRepository(), SummaryStore()
         self._service = VersionComparisonService(
             classifications=_ClassificationReader(),
             analyses=_AnalysisReader(blob_store),
             section_codes=section_codes,
+            # `COMPARE-PERSISTED-SUMMARY-01`: the stored approvals and the newest summary are read
+            # in the same session as the comparison; a service built without them would silently
+            # serve no approved pairs.
+            links=links,
+            summaries=store,
+        )
+        self._pairings = SheetPairingService(comparisons=self._service, links=links)
+        # The only model call about a comparison. ``summary_model`` is ``None`` unless the process
+        # is in recorded mode (``composition.summary_model_for``); the meter is the existing
+        # per-run ``CostMeter``, one fresh one per command.
+        self._summaries = SummaryService(
+            comparisons=self._service, links=links, summaries=store, model=summary_model,
+            cost_gate=None if summary_model is None else (lambda: _MeterGate(cost_ceiling_usd)),
         )
 
     def compare_versions(
@@ -3053,6 +3075,233 @@ class ComparisonAdapter(_SessionHolder):
             target_version_uid=outcome.target_version_uid,
             mode=outcome.mode,  # type: ignore[arg-type]
         )
+
+
+    def approve_sheet_pairing(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        source_version_uid: str,
+        target_version_uid: str,
+        mode: str,
+        source_page_number: int,
+        target_page_number: int,
+        suggestion_sha256: str,
+        source_run_id: str | None,
+        target_run_id: str | None,
+        idempotency_key: str,
+        author_label: str,
+        author_user_uid: str,
+    ) -> models.SheetPairingEvent:
+        """`COMPARE-PERSISTED-SUMMARY-01`. One write transaction: the actor's roles, the path,
+        the receipt, the recomputed proposal, the row, its audit event (``comparison.public``)."""
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.api.routers.correlation import current_correlation_id
+        from auditmanager.comparison.public import ApproveSheetPairingRequest
+
+        request = ApproveSheetPairingRequest(
+            project_uid=project_uid,
+            document_uid=document_uid,
+            source_version_uid=source_version_uid,
+            target_version_uid=target_version_uid,
+            source_page_number=source_page_number,
+            target_page_number=target_page_number,
+            suggestion_sha256=suggestion_sha256,
+            mode=mode,
+            source_run_id=source_run_id,
+            target_run_id=target_run_id,
+        )
+
+        def work(session: Session) -> Any:
+            return self._pairings.approve(
+                session,
+                request,
+                actor_uid=author_user_uid,
+                actor_label=author_label,
+                # Read in this transaction: the request register checked the role before the
+                # route; this is the command's own check (`R-60`).
+                actor_roles=AccountRepository().roles_of(session, author_user_uid),
+                idempotency_key=idempotency_key,
+                correlation_id=current_correlation_id(),
+            )
+
+        return _pairing_event(self._pairing_write(work))
+
+    def withdraw_sheet_pairing(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        source_version_uid: str,
+        sheet_link_id: str,
+        mode: str,
+        source_run_id: str | None,
+        target_run_id: str | None,
+        idempotency_key: str,
+        author_label: str,
+        author_user_uid: str,
+    ) -> models.SheetPairingEvent:
+        """`COMPARE-PERSISTED-SUMMARY-01`. The same transaction shape, ending one link."""
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.api.routers.correlation import current_correlation_id
+        from auditmanager.comparison.public import WithdrawSheetPairingRequest
+
+        request = WithdrawSheetPairingRequest(
+            project_uid=project_uid,
+            document_uid=document_uid,
+            source_version_uid=source_version_uid,
+            sheet_link_id=sheet_link_id,
+            mode=mode,
+            source_run_id=source_run_id,
+            target_run_id=target_run_id,
+        )
+
+        def work(session: Session) -> Any:
+            return self._pairings.withdraw(
+                session,
+                request,
+                actor_uid=author_user_uid,
+                actor_label=author_label,
+                actor_roles=AccountRepository().roles_of(session, author_user_uid),
+                idempotency_key=idempotency_key,
+                correlation_id=current_correlation_id(),
+            )
+
+        return _pairing_event(self._pairing_write(work))
+
+    def generate_comparison_summary(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        source_version_uid: str,
+        target_version_uid: str,
+        mode: str,
+        source_run_id: str | None,
+        target_run_id: str | None,
+        idempotency_key: str,
+        author_label: str,
+        author_user_uid: str,
+    ) -> models.GenerateComparisonSummaryResponse:
+        """`COMPARE-PERSISTED-SUMMARY-01` (B2). One write transaction: the actor's roles, the path,
+        the receipt, the sealed evidence, the cost meter, the model, the check, the row, its event."""
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.api.routers.correlation import current_correlation_id
+        from auditmanager.comparison.public import GenerateSummaryRequest
+
+        request = GenerateSummaryRequest(
+            project_uid=project_uid,
+            document_uid=document_uid,
+            source_version_uid=source_version_uid,
+            target_version_uid=target_version_uid,
+            mode=mode,
+            source_run_id=source_run_id,
+            target_run_id=target_run_id,
+        )
+
+        def work(session: Session) -> Any:
+            return self._summaries.generate(
+                session,
+                request,
+                actor_uid=author_user_uid,
+                actor_label=author_label,
+                actor_roles=AccountRepository().roles_of(session, author_user_uid),
+                idempotency_key=idempotency_key,
+                correlation_id=current_correlation_id(),
+            )
+
+        outcome = self._pairing_write(work)
+        return models.GenerateComparisonSummaryResponse(
+            summary=_summary_view(outcome.summary, is_current=True), replayed=outcome.replayed,
+        )
+
+    def _pairing_write(self, work: Any) -> Any:
+        from auditmanager.comparison.public import (
+            ComparisonIntegrityError,
+            ComparisonRequestInvalid,
+        )
+
+        try:
+            return self._write(work)
+        except ComparisonRequestInvalid as exc:
+            raise DomainError(
+                ErrorCode.VALIDATION_FAILED, field=str(exc).removesuffix("_invalid"),
+                constraint="format",
+            ) from None
+        except ComparisonIntegrityError as exc:
+            raise DomainError(
+                ErrorCode.INTERNAL_ERROR,
+                message="the stored comparison inputs contradict their own constraints",
+            ) from exc
+
+
+class _MeterGate:
+    """The summary command's cost gate over the existing per-run ``CostMeter`` (`OD-03`).
+
+    ``check_before_call`` halts at the ceiling before anything is called; after the call the cost
+    is recorded through the same meter. In this release the only implementation is the recorded
+    binding, which reports no cost of its own: ``record_unmetered`` counts the call and charges
+    nothing, so the stored basis is ``unmetered`` (the explicit exception of ``D-225`` piece 2).
+    """
+
+    def __init__(self, ceiling_usd: float) -> None:
+        from auditmanager.analysis.public import CostMeter
+
+        self._meter = CostMeter(ceiling_usd=ceiling_usd)
+
+    def before_call(self) -> None:
+        self._meter.check_before_call()
+
+    def after_unmetered_call(self) -> tuple[str, int]:
+        self._meter.record_unmetered()
+        return self._meter.cost_basis, round(self._meter.spent_usd * 1_000_000)
+
+
+def _summary_view(stored: Any, *, is_current: bool) -> models.ComparisonSummary:
+    """A stored summary as the frozen ``ComparisonSummary``. The label is the read model's constant."""
+    from auditmanager.comparison.public import SUMMARY_LABEL
+
+    return models.ComparisonSummary(
+        summary_id=stored.summary_id,
+        link_revision=stored.link_revision,
+        state=stored.state,
+        rejection_reason=stored.rejection_reason,
+        label=SUMMARY_LABEL,
+        statements=[
+            models.SummaryStatement(text=item.text, hunk_ids=list(item.hunk_ids))
+            for item in stored.statements
+        ],
+        prompt_version=stored.prompt_version,
+        provider_mode=stored.provider_mode,
+        model_identity=stored.model_identity,
+        input_sha256=stored.input_sha256,
+        raw_evidence_seal_sha256=stored.raw_evidence_seal_sha256,
+        cost_basis=stored.cost_basis,
+        is_current=is_current,
+        created_by_label=stored.actor_label,
+        created_at=stored.created_at,
+    )
+
+
+def _pairing_event(outcome: Any) -> models.SheetPairingEvent:
+    """A stored sheet-link row as the frozen ``SheetPairingEvent``."""
+    event = outcome.event
+    return models.SheetPairingEvent(
+        comparison_id=event.comparison_id,
+        sheet_link_id=event.sheet_link_id,
+        event_kind=event.event_kind,
+        link_revision=event.link_revision,
+        replayed=outcome.replayed,
+        source_version_uid=event.source_version_uid,
+        target_version_uid=event.target_version_uid,
+        source_page_number=event.source_page_number,
+        target_page_number=event.target_page_number,
+        suggestion_sha256=event.suggestion_sha256,
+        raw_evidence_seal_sha256=event.raw_evidence_seal_sha256,
+        actor_label=event.actor_label,
+        decided_at=event.decided_at,
+    )
 
 
 class _ClassificationReader:

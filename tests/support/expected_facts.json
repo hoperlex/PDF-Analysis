@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 92,
+    "path_count": 95,
     "operations": [
       [
         "POST",
@@ -314,6 +314,21 @@
         "carryOverDecision"
       ],
       [
+        "POST",
+        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/sheet-pairings",
+        "approveSheetPairing"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/sheet-pairings/{sheet_link_id}/withdrawals",
+        "withdrawSheetPairing"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/summaries",
+        "generateComparisonSummary"
+      ],
+      [
         "GET",
         "/norm-documents",
         "listNormDocuments"
@@ -543,6 +558,8 @@
       "DecisionEventPage",
       "DecisionEventType",
       "DecisionId",
+      "ComparisonId",
+      "SheetLinkId",
       "DecisionRecord",
       "DecisionRecordPage",
       "DocumentUid",
@@ -674,6 +691,12 @@
       "ComparedVersion",
       "SheetPairing",
       "DiffHunk",
+      "ApprovedDiffHunk",
+      "ApprovedSheetDiff",
+      "ApprovedSheetPair",
+      "SummaryStatement",
+      "ComparisonSummary",
+      "ApprovedSheetPairs",
       "SheetDiff",
       "SheetDiffPage",
       "FindingRef",
@@ -690,6 +713,11 @@
       "CarryoverCandidate",
       "CarryOverDecisionRequest",
       "CarryOverDecisionResponse",
+      "ApproveSheetPairingRequest",
+      "WithdrawSheetPairingRequest",
+      "SheetPairingEvent",
+      "GenerateComparisonSummaryRequest",
+      "GenerateComparisonSummaryResponse",
       "AssignmentUid",
       "AssignmentStatus",
       "AssignmentEventKind",
@@ -832,6 +860,6 @@
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0034_pass_scope_all_sections",
+  "migration_head": "0035_comparison_records",
   "contract_version": "1.7.0"
 }

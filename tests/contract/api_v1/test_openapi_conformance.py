@@ -563,7 +563,10 @@ class TestN1ComponentReferenceResolution:
         # EXEC-IMAGE-DELIVERY-01 adds the task-scoped PNG read with a 404.
         # AR-V3-BETA-SIX-RUN-02 adds 404s for the named version and group.
         # AR-V3-BETA-GROUP-API-SEAL-01 adds one: the group review addresses a group by identity.
-        assert len(report) == 74, report
+        # `COMPARE-PERSISTED-SUMMARY-01` adds three: approving and withdrawing a sheet pairing and
+        # asking for the summary address the comparison's source version through its document and
+        # project.
+        assert len(report) == 77, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

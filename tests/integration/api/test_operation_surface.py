@@ -113,6 +113,8 @@ def test_every_declared_operation_is_reachable(
         "token_id": "ern_01M2545JSD15ETSNNV904X991W",
         "task_id": "ext_01M2545JSD15ETSNNV904X991W",
         "blob_id": "blob_01M2545JSD15ETSNNV904X991W",
+        # `COMPARE-PERSISTED-SUMMARY-01`: an approved sheet link.
+        "sheet_link_id": "sln_01M2545JSD15ETSNNV904X991W",
     }
     for operation_id, method, template in sorted(declared_operations(openapi_document)):
         path = template

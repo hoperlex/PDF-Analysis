@@ -31,6 +31,18 @@ from collections.abc import Iterable
 from sqlalchemy import Engine, text
 
 
+#: Resealed by `COMPARE-PERSISTED-SUMMARY-01` for ``0035_comparison_records``, measured, not
+#: predicted: a fresh database upgraded to ``0035`` was recomputed in all eleven families and compared
+#: with the 0034 seal below. Every added row is this revision's and nothing was removed or redefined:
+#: columns +37 -> 773 (``comparison_sheet_link`` 18, ``comparison_summary`` 19); relations +2 -> 78 (the
+#: two tables); constraints +54 -> 868 (``comparison_sheet_link``: primary key, three unique keys, five
+#: foreign keys, nineteen CHECKs; ``comparison_summary``: primary key, one unique key, three foreign
+#: keys, twenty-one CHECKs); indexes +10 -> 194 (the two primary keys, the four unique keys, the partial
+#: unique index of the one ready summary per input, ``ix_comparison_sheet_link_project``,
+#: ``ix_comparison_sheet_link_target_version`` and ``ix_comparison_summary_project``); triggers +4 -> 90
+#: (an ``am_immutable_row`` trigger and a BEFORE INSERT check on each table); functions +2 -> 34
+#: (``am_check_comparison_sheet_link_chain``, ``am_check_comparison_summary``). Views, extensions,
+#: sequences, policies and the state topology are identical to the 0034 seal.
 #: Resealed by `OPT-PROJECT-ALL-SECTIONS-01` for ``0034_pass_scope_all_sections``, measured, not
 #: predicted: one fresh database upgraded to ``0033`` (whose inventory equalled the 0033 seal below
 #: in every family) and then to ``0034`` had all eleven families recomputed. One family moved and by
@@ -239,12 +251,12 @@ from sqlalchemy import Engine, text
 #: ``contract_state_transition`` (the seal adds ``app_user`` and ``registration_request``
 #: to ``state-machines.json``; the registration lifecycle is guarded by its own trigger).
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (736, "c7bc9e13f3bca0a0507cd81ccaba7b15901a2cf0c91e1e60c903b2ce49905c67"),
-    "relations": (76, "2725a7c6c6417f1862a831ba76678909e14b9a050e8cfaf978785f5f5a25a539"),
-    "constraints": (814, "61200aa0b25e778172d50dfd20ab2f2857a5ff49ee0a71626fba0c78254ee300"),
-    "indexes": (184, "f446c62baa74bcdae4304197c77546c7db769767727ba3d0601c48464cc5c47a"),
-    "triggers": (86, "691154ca1227ef801cf6c85adcbc3a56d7f195a5f58fb8bc17ddc30147aff40e"),
-    "functions": (32, "da49fd307be920a22c7a48a12dc1381f4a46ed953bfb327ec4a43bb102a86bef"),
+    "columns": (773, "88bab63bfa9a0f64f33063791917bb0644023a8075f03ac2a22e23545e89c179"),
+    "relations": (78, "5b6ea2428f6469f68b1b20cbfaf36321929f55030ef51b4329db44335da298b4"),
+    "constraints": (868, "ae150dd53fb7c9031cf3fe8d6c3f54b6d2624a2e8b4d128d281fa8c536cd5d03"),
+    "indexes": (194, "00c31298ca59f04d6d0e85fab63d61ecd6f809db26ad5fe6dbcabe4a71143fbc"),
+    "triggers": (90, "1f047154476a27395ac3787e330da452ca652bdaf290e7cd1c9fc958dfb00411"),
+    "functions": (34, "6ee1b2f02020015147e2f08afc88e76a05e94cd9a1e9282e580ab11cced73bd9"),
     "views": (5, "c41ad974669882ee5d818591ee1d485b70455ddd4e51d236cc83892d18d11b93"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),
     "sequences": (7, "6d533fe16349a92b16b5ca89d51fcb083f1ecdf4f252bc276667a92361bf1656"),

@@ -434,6 +434,14 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         # `W59-DECISION-CARRYOVER-01`. A carried decision is a verdict like any other: only an
         # expert confirms it, and the command re-reads the role set in its own transaction.
         "carryOverDecision": _EXPERT,
+        # `COMPARE-PERSISTED-SUMMARY-01`. Approving or withdrawing a sheet pairing is a decision
+        # about evidence like a verdict: only an expert, and the command re-reads the role set in
+        # its own transaction (`R-60`: `admin` alone is refused).
+        "approveSheetPairing": _EXPERT,
+        "withdrawSheetPairing": _EXPERT,
+        # `COMPARE-PERSISTED-SUMMARY-01` (B2). The only way to a model call about a comparison: an
+        # expert asks, on purpose; admin alone does not imply expert.
+        "generateComparisonSummary": _EXPERT,
         # `W60-PRICE-LIST-01`. An expert uploads a project's price list and overrides its vendor
         # list per section; the global vendor list is an administrator's.
         "uploadPriceList": _EXPERT,

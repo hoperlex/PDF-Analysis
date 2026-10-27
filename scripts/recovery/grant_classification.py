@@ -127,7 +127,8 @@ READ_WRITE = frozenset((
 #: refuses ``UPDATE`` (and, but for the four ``norm_*`` ``no_update`` tables, ``DELETE``) or is
 #: inserted into by the code and by nothing else.
 APPEND_ONLY = frozenset((
-    "ar_v3_run_group", "ar_v3_run_group_member", "audit_event", "document_version",
+    "ar_v3_run_group", "ar_v3_run_group_member", "audit_event", "comparison_sheet_link", "comparison_summary",
+    "document_version",
     "document_version_classification", "document_version_classification_correction",
     "executor_connection_revision", "executor_route_event", "expert_decision_event",
     "finding_evidence", "finding_observation", "finding_observation_norm_citation",

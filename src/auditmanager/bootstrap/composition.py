@@ -74,6 +74,19 @@ from auditmanager.releases.public import (
 )
 
 
+def summary_model_for(provider_mode: str) -> Any:
+    """The summary model of a process: the recorded replay in recorded mode, **nothing** otherwise.
+
+    The live implementation is not wired in this release and no live call is made or tested
+    (`R-29`): a process in any other mode answers `generateComparisonSummary` with
+    ``dependency_unavailable`` (``dependency: comparison_summary_model``). There is no fallback from
+    a missing recording to a provider: the recorded model holds no client and no credential.
+    """
+    from auditmanager.comparison.public import RecordedSummaryModel
+
+    return RecordedSummaryModel() if provider_mode == "recorded" else None
+
+
 def _ar_v3_installed_pack(env: dict[str, str]) -> ParsedPackManifest | None:
     """`AR-V3-BETA-PACK-INSTALL-01`: load the sealed reviewed pack named by the environment.
 
@@ -414,6 +427,10 @@ def build_application(
         # digests.
         comparisons=ComparisonAdapter(
             sessions, blob_store=store, section_codes=SECTION_CODES,
+            # `COMPARE-PERSISTED-SUMMARY-01` (B2). A model for summaries exists only in recorded
+            # mode, and the meter is the run ceiling; no live implementation is wired (`R-29`).
+            summary_model=summary_model_for(resolved.provider_mode),
+            cost_ceiling_usd=resolved.run_cost_ceiling_usd,
         ),
         # `W59-ANALYSIS-SETTINGS-01`. The same registry run start routes through, listed
         # read-only for «Настройки анализа», named from the reviewed section catalogue.

@@ -227,6 +227,24 @@ GUARDED = (
         "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
         "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison/carryovers",
     ),
+    # `COMPARE-PERSISTED-SUMMARY-01`. Approving and withdrawing a sheet pairing, addressed the same way.
+    (
+        "approveSheetPairing", "POST",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison/sheet-pairings",
+    ),
+    (
+        "withdrawSheetPairing", "POST",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison/sheet-pairings"
+        "/sln_01M2545JSD15ETSNNV904X991M/withdrawals",
+    ),
+    # `COMPARE-PERSISTED-SUMMARY-01` (B2). The summary command, addressed the same way.
+    (
+        "generateComparisonSummary", "POST",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison/summaries",
+    ),
     # `W59-ANALYSIS-SETTINGS-01`. The text-profile registry, read-only.
     ("listAnalysisProfiles", "GET", "/analysis/profiles"),
     # `W57B-NORMS-CATALOGUE-XLSX-01`. The norms catalogue and the run's workbook.

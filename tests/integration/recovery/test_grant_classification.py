@@ -75,7 +75,7 @@ def test_the_four_classes_partition_the_tables_schema_coverage_declares() -> Non
     classified = grants.READ_WRITE | grants.APPEND_ONLY | grants.READ_ONLY | grants.NONE
     assert classified == coverage.TABLES
     assert sum(len(c) for c in (grants.READ_WRITE, grants.APPEND_ONLY, grants.READ_ONLY, grants.NONE)) == len(classified)
-    assert len(coverage.TABLES) == 64
+    assert len(coverage.TABLES) == 66  # `0035_comparison_records`: comparison_sheet_link, comparison_summary
 
 
 def test_every_table_has_its_privileges_from_its_class() -> None:

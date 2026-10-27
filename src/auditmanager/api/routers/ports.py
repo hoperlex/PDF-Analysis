@@ -1081,6 +1081,82 @@ class ComparisonPort(Protocol):
         a severity the target cannot hold are each ``conflict`` with a ``conflict_reason``.
         """
 
+    def approve_sheet_pairing(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        source_version_uid: str,
+        target_version_uid: str,
+        mode: str,
+        source_page_number: int,
+        target_page_number: int,
+        suggestion_sha256: str,
+        source_run_id: str | None,
+        target_run_id: str | None,
+        idempotency_key: str,
+        author_label: str,
+        author_user_uid: str,
+    ) -> models.SheetPairingEvent:
+        """`COMPARE-PERSISTED-SUMMARY-01`. Store the expert's approval of one proposed pair.
+
+        The expert role is read from the account in the writing transaction; ``admin`` alone is
+        ``permission_denied``. The comparison is recomputed with the request's mode and runs and
+        must still propose exactly this pair under this digest (``conflict``,
+        ``sheet_pair_not_proposed``); a page already held by an active link, the 33rd active
+        link, an earlier approval whose page text has changed and an input beyond the bounds of
+        the raw evidence are each ``conflict`` with their own ``conflict_reason``. The row, its
+        audit event and the receipt commit together.
+        """
+
+    def withdraw_sheet_pairing(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        source_version_uid: str,
+        sheet_link_id: str,
+        mode: str,
+        source_run_id: str | None,
+        target_run_id: str | None,
+        idempotency_key: str,
+        author_label: str,
+        author_user_uid: str,
+    ) -> models.SheetPairingEvent:
+        """`COMPARE-PERSISTED-SUMMARY-01`. End one active link with a new row.
+
+        ``not_found`` for a link that is not of this path; ``conflict`` /
+        ``sheet_link_not_active`` for one already withdrawn; ``conflict`` /
+        ``comparison_not_available`` when the comparison the expert was looking at cannot be
+        recomputed. Nothing is updated or deleted.
+        """
+
+    def generate_comparison_summary(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        source_version_uid: str,
+        target_version_uid: str,
+        mode: str,
+        source_run_id: str | None,
+        target_run_id: str | None,
+        idempotency_key: str,
+        author_label: str,
+        author_user_uid: str,
+    ) -> models.GenerateComparisonSummaryResponse:
+        """`COMPARE-PERSISTED-SUMMARY-01` (B2). Ask the model once for the summary of the sealed
+        approved pairs and store the answer.
+
+        The expert role is read in the writing transaction; ``admin`` alone is
+        ``permission_denied``. ``conflict`` with ``summary_evidence_not_sealed``,
+        ``summary_input_empty`` or ``summary_input_too_large`` before any call; a process with no
+        summary model answers ``dependency_unavailable`` (``dependency: comparison_summary_model``);
+        a missing recording is ``analysis_input_invalid``; the cost ceiling is
+        ``cost_budget_exceeded``. An exact repeat answers the stored summary (``replayed``) and calls
+        nothing. A reply the check refuses is stored as ``rejected`` and returned as an answer.
+        """
+
 @runtime_checkable
 class AnalysisProfilePort(Protocol):
     """``listAnalysisProfiles``. `W59-ANALYSIS-SETTINGS-01`.

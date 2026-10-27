@@ -114,7 +114,7 @@ MIXED_TABLES = frozenset(("audit_event", "blob", "command_record"))
 #: every table that references it are named in the same statement.
 PRODUCT_TABLES = frozenset((
     "analysis_artifact_publication", "ar_v3_run_group", "ar_v3_run_group_member", "attempt",
-    "audit_run", "document", "document_version",
+    "audit_run", "comparison_sheet_link", "comparison_summary", "document", "document_version",
     "document_version_classification", "document_version_classification_correction",
     "executor_task", "expert_decision_event", "finding", "finding_evidence", "finding_observation",
     "finding_observation_norm_citation", "input_manifest_entry", "job", "lease", "model_call",
@@ -132,7 +132,8 @@ PRODUCT_TABLES = frozenset((
 #: predicate of ``audit_event`` are built from this tuple (``_event_keep``).
 KEEP_EVENT_PREFIXES = ("norm_custody.", "executor.", "access.", "erasure.")
 PRODUCT_EVENT_PREFIXES = (
-    "artifact.", "attempt.", "audit_run.", "execution.", "findings.", "job.", "provider.", "stage.",
+    "artifact.", "attempt.", "audit_run.", "comparison.", "execution.", "findings.", "job.",
+    "provider.", "stage.",
 )
 #: ``command_record.command_type``. A registration approval is account-side.
 KEEP_COMMAND_TYPES = frozenset((
@@ -145,13 +146,17 @@ KEEP_COMMAND_TYPES = frozenset((
     "issue_runner_token", "revoke_runner_token",
 ))
 PRODUCT_COMMAND_TYPES = frozenset((
-    "append_decision", "cancel_audit_run", "carry_over_decision", "create_project",
+    "append_decision", "approve_sheet_pairing", "cancel_audit_run", "carry_over_decision",
+    "create_project", "generate_comparison_summary",
     "decide_optimisation_proposal", "reaudit_run", "set_execution_paused", "set_job_priority",
     "set_worker_intake",
     # `0032_ar_v3_run_group`: the receipt of a group start. ``ar_v3_run_group.command_id``
     # references it, and it is deleted only after the group is truncated.
     "start_ar_v3_beta_group",
     "start_audit_run", "start_optimisation_pass", "upload_price_list", "upload_source_document",
+    # `0035_comparison_records`: the receipt of a withdrawal. ``comparison_sheet_link.command_id``
+    # references it, and it is deleted only after the link table is truncated.
+    "withdraw_sheet_pairing",
 ))
 
 #: Work that is mid-flight in a worker. Queued work is discarded with the rest; work a worker is
