@@ -33,7 +33,7 @@ Where the code lives: `entities/document-version/model/upload-kind.ts` (the pred
 | `npm --prefix web run lint -- --quiet` | clean |
 | `npm --prefix web run typecheck` | clean |
 | `git diff --check` | clean |
-| `pytest -q tests/contract` minus the three `D-220` files | see section 7 |
+| `pytest -q tests/contract` minus the three `D-220` files (`test_cp00_candidate.py`, `test_cp00_final_state.py`, `test_validate_bootstrap.py`), seal venv, `PYTHONPATH=$PWD/src`, `AUDITMANAGER_LEGACY_PROMPTS_REPO=/nonexistent`, on the committed tree that already held this report (the section below was the only text added afterwards) | **1307 passed**, 19283 subtests passed, 159 s |
 
 The new file renders, through the harness (`renderScreen`/`renderWith`, one server pass, as `D-53` asks), every state the brief names:
 
@@ -87,4 +87,4 @@ None new or changed. The lane reads `DocumentVersion.upload_kind` from the gener
 
 ### `tests/contract`
 
-(filled after the measurement, see the last commit)
+1307 passed and 19283 subtests passed in 159 s (command in section 3). The lane changed no Python, no contract and no migration, so the figure is the integration branch's own at `cc3dd36b` plus the two documents; it includes `tests/contract/program` (the wave-governance check that reads this lane's task file: command, date and output of the premise block are present) and the prose-fact tests. The three `D-220` files were not run (they open `.git` as a directory and cannot pass in a worktree; `CMP-SEAL-C0` measured them identical on the base).

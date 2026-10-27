@@ -1,7 +1,7 @@
 # Task CMP-VERSION-MARK-01 — the «загружено без пакета портала» mark and the disabled run start on the version screens
 
 task_id: CMP-VERSION-MARK-01
-status: in progress (lane `agent/cmp-version-mark-01`, wave C0; nothing pushed, merged or tagged)
+status: completed in development candidate (lane `agent/cmp-version-mark-01`, wave C0; nothing pushed, merged or tagged)
 
 ## Outcome
 
@@ -149,7 +149,7 @@ Not applicable: a presentation change over an optional field that is `portal_bun
 
 ## Handoff
 
-- changed files: (filled in the last commit)
-- commands/results: (filled in the last commit)
-- known limits: (filled in the last commit)
-- integration notes: (filled in the last commit)
+- changed files: `web/src/entities/document-version/{index.ts, model/upload-kind.ts, ui/comparison-only-mark.tsx, ui/comparison-only-mark.module.css, ui/version-panel.tsx, ui/version-row.tsx}`, `web/src/widgets/run-list/ui/run-list.tsx`, `web/src/_pages/version-detail/ui/version-detail-page.tsx`, `web/tests/unit/version-mark/comparison-only-version.test.ts` (new), `web/tests/unit/styles/screens.ts` (one block appended), this task file and the report `docs/program/CMP-VERSION-MARK-01.md`
+- commands/results: new test file 31 passed; the whole web suite 208 files / 3278 tests passed; `tests/unit/styles` + `tests/guards` 28 files / 384 passed; lint and typecheck clean; `git diff --check` clean; `pytest -q tests/contract` minus the three `D-220` files 1307 passed, 19283 subtests; eight mutations shown red and restored (report section 3)
+- known limits: nothing shows in a running stand until `CMP-INGEST-01` serves `upload_kind`; `widgets/version-history` is the release-notes drawer and was not touched; the version-comparison picker, the stage comparison, the specification-prices and optimisation set choosers and the blocks page draw versions outside the lane's paths and carry no mark (report section 6)
+- integration notes: merge last (wave brief section 3); no wiring file touched; `screens.ts` has one appended block after `VersionDetailPage loaded`; the entity exports `ComparisonOnlyMark`, `ComparisonOnlyStart`, `isComparisonOnly` and the three sentences for later comparison screens
