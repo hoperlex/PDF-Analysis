@@ -6,6 +6,10 @@ It does not expose delete, erase, overwrite, presign, list or any way to name
 an object: those are either later-gate decisions or adapter internals, and a
 port that offered them would make the invariants below unenforceable.
 
+Chunked uploads are a second port, :class:`MultipartStaging` (`CMP-STORAGE-PARTS-01`), so this
+one keeps its shape: its ``abort_multipart`` removes only what a token itself staged and never a
+published blob, which is why it does not reopen the "no delete" rule above.
+
 The two invariants a conforming adapter must hold
 -------------------------------------------------
 1. **Nothing canonical without verification.** A checksum or size mismatch
@@ -30,10 +34,11 @@ shape when it arrives.
 
 from __future__ import annotations
 
-from collections.abc import Generator
+from collections.abc import Generator, Sequence
 from typing import BinaryIO, Final, Protocol, runtime_checkable
 
 from .models import BlobId, BlobRole, PublishedBlob, TemporaryBlob, VerifiedBlob
+from .multipart import UploadedPart
 
 #: Anything the port accepts as content. Bytes for small artifacts, a binary
 #: file object for anything large enough that holding it in memory is wrong.
@@ -160,4 +165,85 @@ class BlobStore(Protocol):
         """
 
 
-__all__ = ["STREAM_CHUNK_BYTES", "BlobChunks", "BlobSource", "BlobStore"]
+@runtime_checkable
+class MultipartStaging(Protocol):
+    """Stage one object as a multipart upload that a database row owns, then publish it.
+
+    `CMP-STORAGE-PARTS-01`, ADR-0025 decision 10. A **second** port beside :class:`BlobStore`, not a
+    widening of it: the ``BlobStore`` member set is pinned by a test and implemented by test doubles
+    that have no business with parts, and the two sequences are different (``temporary -> verify ->
+    publish`` for bytes in hand; ``begin -> part ... -> complete`` for bytes that arrive in chunks).
+    The S3 adapter satisfies both.
+
+    The two invariants of :class:`BlobStore` hold here unchanged. **Nothing canonical without
+    verification**: :meth:`complete_multipart` assembles the parts under a temporary key and then
+    runs the existing ``verify_temporary`` and ``publish`` on it, so a digest or size mismatch leaves
+    no object. **No silent degradation**: every failure is a typed
+    :class:`~auditmanager.storage.errors.StorageError`.
+
+    The token is minted by :func:`~auditmanager.storage.multipart.new_multipart_token` and **persisted
+    by the caller before** :meth:`begin_multipart` is called (the first part's row is refused by the
+    database until it is). The port persists nothing and enumerates nothing.
+    """
+
+    def begin_multipart(self, upload_token: str) -> None:
+        """Open the upload this token names. Idempotent: an upload already open is kept.
+
+        Raises :class:`~auditmanager.storage.errors.BlobMetadataInvalidError` for a string that is
+        not a minted token. Call it only for a file the database still accepts parts for: a token
+        whose upload was aborted would be opened again.
+        """
+
+    def upload_part(
+        self, upload_token: str, part_number: int, source: BlobSource
+    ) -> UploadedPart:
+        """Send one part (1 byte to 16 MiB, number 1 to 10 000) and return its receipt.
+
+        The size and SHA-256 in the receipt are computed here from the bytes sent. Sending the same
+        number again replaces the part; identical bytes give the identical receipt. Raises
+        :class:`~auditmanager.storage.errors.MultipartPartError` for a number or size outside the
+        bounds, and :class:`~auditmanager.storage.errors.TemporaryBlobLostError` when no upload is open
+        for the token (never begun, completed, or aborted).
+        """
+
+    def complete_multipart(
+        self,
+        upload_token: str,
+        parts: Sequence[UploadedPart],
+        *,
+        declared_sha256: str,
+        declared_size: int,
+        role: BlobRole,
+        media_type: str,
+    ) -> PublishedBlob:
+        """Assemble the recorded parts, verify the whole object and publish it.
+
+        ``parts`` are the receipts the caller recorded, ascending from 1 with no gap. Refused before
+        anything is assembled: a list that is not whole and ordered, or not what the store holds
+        (:class:`~auditmanager.storage.errors.MultipartPartsError`), and sizes that do not add up to
+        ``declared_size`` (:class:`~auditmanager.storage.errors.SizeMismatchError`). After assembly the
+        object is read back: a SHA-256 or size that differs from the declaration raises
+        :class:`~auditmanager.storage.errors.ChecksumMismatchError` or
+        :class:`~auditmanager.storage.errors.SizeMismatchError` **and removes the assembled object**.
+
+        Retryable after a crash between assembly and verification: with no open upload and the
+        assembled object present, it resumes at the verification. With neither,
+        :class:`~auditmanager.storage.errors.TemporaryBlobLostError`.
+        """
+
+    def abort_multipart(self, upload_token: str) -> bool:
+        """Remove everything the token holds in the store; idempotent.
+
+        Aborts the open upload and deletes an assembled-but-unverified object. **Never touches a
+        published blob.** Returns ``True`` when something was removed, ``False`` when the store held
+        nothing for the token.
+        """
+
+
+__all__ = [
+    "STREAM_CHUNK_BYTES",
+    "BlobChunks",
+    "BlobSource",
+    "BlobStore",
+    "MultipartStaging",
+]

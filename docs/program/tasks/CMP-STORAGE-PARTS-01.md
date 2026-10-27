@@ -52,7 +52,7 @@ port, its adapter behaviour and its callers are unchanged byte for byte.
   8
   ```
 - interpretation: `test_the_port_offers_no_way_to_name_or_delete_an_object` pins the member set of `BlobStore`, and
-  eight test doubles implement it. Multipart staging is therefore a second Protocol (`MultipartBlobStore`) that the S3
+  eight test doubles implement it. Multipart staging is therefore a second Protocol (`MultipartStaging`) that the S3
   adapter also satisfies; `BlobStore` and `DurablePublicationStore` do not change
 
 ## Historical evidence
@@ -96,7 +96,7 @@ port, its adapter behaviour and its callers are unchanged byte for byte.
 - no change to `BlobStore`, `stage_temporary`, `verify_temporary`, `publish`, `put_blob` or `DurablePublicationStore`
 
 ## Deliverables
-1. `MultipartBlobStore` (a second Protocol in `storage/port.py`), implemented by `S3BlobStore`:
+1. `MultipartStaging` (a second Protocol in `storage/port.py`), implemented by `S3BlobStore`:
    `begin_multipart`, `upload_part`, `complete_multipart`, `abort_multipart`, with value types
    (`UploadedPart`, `MultipartSweepReport`), `new_multipart_token` and typed refusals under existing error codes
 2. `abort_multipart_sweep(store, tokens)` — the function a comparison work handler calls

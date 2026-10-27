@@ -16,6 +16,15 @@ If verification fails, the temporary object is deleted and a typed
 publication is a separate later step, so there is nothing to roll back and no
 window in which a half-published blob is visible.
 
+Multipart staging
+-----------------
+`CMP-STORAGE-PARTS-01` (ADR-0025 decision 10) adds ``begin_multipart``, ``upload_part``,
+``complete_multipart`` and ``abort_multipart`` -- the :class:`~auditmanager.storage.port.MultipartStaging`
+port. The parts are assembled **under the temporary key** of the upload token and then take the very path
+``stage_temporary`` objects take, ``verify_temporary`` and ``publish``, so "nothing canonical without
+verification" is one rule with one implementation. The in-progress upload of a token is found by an
+exact-key ``ListMultipartUploads`` (the token is the only thing persisted), never by a listing of the bucket.
+
 Streamed reads
 --------------
 ``open_stream`` (`W55A-CONTENT-01`, ``R-115``) issues one ``GetObject`` -- with
@@ -38,6 +47,7 @@ import hashlib
 import logging
 import re
 import secrets
+from collections.abc import Sequence
 from datetime import datetime, timezone
 from typing import Any, Final
 
@@ -58,6 +68,7 @@ from .errors import (
     BlobMetadataInvalidError,
     BlobNotFoundError,
     ChecksumMismatchError,
+    MultipartPartsError,
     SizeMismatchError,
     StorageBucketMissingError,
     StorageError,
@@ -73,6 +84,14 @@ from .models import (
     VerifiedBlob,
     derive_blob_id,
     parse_blob_role,
+)
+from .multipart import (
+    MULTIPART_PART_BYTES_MAX,
+    UploadedPart,
+    check_parts_for_completion,
+    parse_multipart_token,
+    validate_part_number,
+    validate_part_size,
 )
 from .port import STREAM_CHUNK_BYTES, BlobChunks, BlobSource
 from .settings import BUCKET_VAR, S3StorageSettings
@@ -94,6 +113,13 @@ _NOT_FOUND_CODES: Final[frozenset[str]] = frozenset({"404", "NoSuchKey", "NotFou
 _INVALID_RANGE_CODES: Final[frozenset[str]] = frozenset({"416", "InvalidRange"})
 _CONTENT_RANGE: Final[re.Pattern[str]] = re.compile(r"^bytes (\d+)-(\d+)/(\d+)$")
 _NO_BUCKET_CODES: Final[frozenset[str]] = frozenset({"NoSuchBucket"})
+#: The upload this token names is not open: never begun, completed, or aborted.
+_NO_UPLOAD_CODES: Final[frozenset[str]] = frozenset({"NoSuchUpload", "404"})
+#: The store refused the parts of a completion: a part it does not hold, with another ETag, out of
+#: order, or too small to sit in the middle of an object.
+_BAD_PARTS_CODES: Final[frozenset[str]] = frozenset(
+    {"InvalidPart", "InvalidPartOrder", "EntityTooSmall"}
+)
 _DENIED_CODES: Final[frozenset[str]] = frozenset(
     {
         "403",
@@ -358,6 +384,242 @@ class S3BlobStore:
         except StorageError:
             self.discard_temporary(temporary)
             raise
+
+    # --- multipart staging (`CMP-STORAGE-PARTS-01`) ----------------------------
+
+    def begin_multipart(self, upload_token: str) -> None:
+        """Open the multipart upload a minted token names. Idempotent."""
+        key = layout.temporary_key(parse_multipart_token(upload_token))
+        if self._open_uploads(key):
+            return
+        try:
+            self._client.create_multipart_upload(Bucket=self._bucket, Key=key)
+        except ClientError as exc:
+            raise self._translate(exc, bucket_scope=True) from None
+        except (BotoCoreError, OSError) as exc:
+            raise self._translate_transport(exc) from None
+
+    def upload_part(
+        self, upload_token: str, part_number: int, source: BlobSource
+    ) -> UploadedPart:
+        """Send one part and return the receipt the caller records.
+
+        Everything that can be refused without the store is refused first, so a refused part moves no
+        byte: the token, the number, the size (read at most one byte past the bound, so an oversized
+        stream is refused without being held whole).
+        """
+        key = layout.temporary_key(parse_multipart_token(upload_token))
+        number = validate_part_number(part_number)
+        data = _read_part(source)
+        sha256 = hashlib.sha256(data).hexdigest()
+        opened = self._open_uploads(key)
+        if not opened:
+            raise TemporaryBlobLostError()
+        try:
+            response = self._client.upload_part(
+                Bucket=self._bucket,
+                Key=key,
+                UploadId=opened[0],
+                PartNumber=number,
+                Body=data,
+            )
+        except ClientError as exc:
+            if _error_code(exc) in _NO_UPLOAD_CODES:
+                raise TemporaryBlobLostError() from None
+            raise self._translate(exc) from None
+        except (BotoCoreError, OSError) as exc:
+            raise self._translate_transport(exc) from None
+        return UploadedPart(
+            part_number=number,
+            size_bytes=len(data),
+            sha256=sha256,
+            etag=_unquoted_etag(response.get("ETag")),
+        )
+
+    def complete_multipart(
+        self,
+        upload_token: str,
+        parts: Sequence[UploadedPart],
+        *,
+        declared_sha256: str,
+        declared_size: int,
+        role: BlobRole,
+        media_type: str,
+    ) -> PublishedBlob:
+        """Assemble the parts under the temporary key, then verify and publish exactly as
+        ``put_blob`` does. See :meth:`MultipartStaging.complete_multipart`.
+
+        No ``except`` removes the assembled object on a *transient* failure: ``verify_temporary`` and
+        ``publish`` already remove it when they refuse its content, and an unreachable store must not
+        throw away an assembly that a retry resumes from (a 250 MiB file is not cheap to send again).
+        """
+        token = parse_multipart_token(upload_token)
+        role = parse_blob_role(role)
+        declared_sha256 = _normalize_sha256(declared_sha256)
+        _require_non_negative_size(declared_size)
+        ordered = check_parts_for_completion(parts, declared_size=declared_size)
+
+        key = layout.temporary_key(token)
+        opened = self._open_uploads(key)
+        if opened:
+            self._require_staged(key, opened[0], ordered)
+            self._assemble(key, opened, ordered)
+        # With no open upload the assembly of an earlier call (killed before it verified) may still
+        # be there, and `verify_temporary` below resumes from it; with neither it raises
+        # `TemporaryBlobLostError` itself.
+
+        verified = self.verify_temporary(
+            TemporaryBlob(
+                upload_token=token,
+                declared_sha256=declared_sha256,
+                declared_size=declared_size,
+                role=role,
+                media_type=media_type,
+            )
+        )
+        return self.publish(verified)
+
+    def abort_multipart(self, upload_token: str) -> bool:
+        """Abort the open upload and delete an unverified assembly. Idempotent.
+
+        The upload is aborted **before** the object is looked for: a completion racing this call
+        either finds no upload (and fails typed) or has already assembled, in which case the object
+        is deleted here. Only ``temporary/<token>`` is touched; a published blob survives.
+        """
+        key = layout.temporary_key(parse_multipart_token(upload_token))
+        removed = False
+        for upload_id in self._open_uploads(key):
+            try:
+                self._client.abort_multipart_upload(
+                    Bucket=self._bucket, Key=key, UploadId=upload_id
+                )
+                removed = True
+            except ClientError as exc:
+                if _error_code(exc) not in _NO_UPLOAD_CODES:
+                    raise self._translate(exc) from None
+            except (BotoCoreError, OSError) as exc:
+                raise self._translate_transport(exc) from None
+        if self._head(key, missing=None) is not None:
+            self._delete(key)
+            removed = True
+        return removed
+
+    def _open_uploads(self, key: str) -> list[str]:
+        """Upload ids open for exactly this key, the earliest first (a deterministic choice).
+
+        ``Prefix`` matches every key that starts with the token, so the key is compared exactly.
+        Two ids can exist only if two ``begin`` calls raced; every later call picks the same
+        (earliest) one, and ``abort_multipart`` removes them all.
+        """
+        found: list[tuple[datetime, str]] = []
+        key_marker = ""
+        id_marker = ""
+        try:
+            while True:
+                request: dict[str, Any] = {"Bucket": self._bucket, "Prefix": key}
+                if key_marker or id_marker:
+                    request["KeyMarker"] = key_marker
+                    request["UploadIdMarker"] = id_marker
+                page = self._client.list_multipart_uploads(**request)
+                for upload in page.get("Uploads") or []:
+                    if upload.get("Key") == key:
+                        found.append(
+                            (
+                                upload.get("Initiated") or datetime.min.replace(tzinfo=timezone.utc),
+                                str(upload["UploadId"]),
+                            )
+                        )
+                if not page.get("IsTruncated"):
+                    break
+                key_marker = str(page.get("NextKeyMarker") or "")
+                id_marker = str(page.get("NextUploadIdMarker") or "")
+        except ClientError as exc:
+            raise self._translate(exc, bucket_scope=True) from None
+        except (BotoCoreError, OSError) as exc:
+            raise self._translate_transport(exc) from None
+        return [upload_id for _, upload_id in sorted(found)]
+
+    def _require_staged(
+        self, key: str, upload_id: str, parts: Sequence[UploadedPart]
+    ) -> None:
+        """Every listed part is held by the store with the receipted ETag and size.
+
+        A part the caller recorded but the store lost or replaced is a missing part. A part the store
+        holds that the caller did not list is ignored: the store drops it when the object is assembled.
+        """
+        held: dict[int, tuple[str, int]] = {}
+        marker = 0
+        try:
+            while True:
+                page = self._client.list_parts(
+                    Bucket=self._bucket,
+                    Key=key,
+                    UploadId=upload_id,
+                    MaxParts=1000,
+                    PartNumberMarker=marker,
+                )
+                for item in page.get("Parts") or []:
+                    held[int(item["PartNumber"])] = (
+                        _unquoted_etag(item.get("ETag")),
+                        int(item["Size"]),
+                    )
+                if not page.get("IsTruncated"):
+                    break
+                marker = int(page["NextPartNumberMarker"])
+        except ClientError as exc:
+            if _error_code(exc) in _NO_UPLOAD_CODES:
+                raise TemporaryBlobLostError() from None
+            raise self._translate(exc) from None
+        except (BotoCoreError, OSError) as exc:
+            raise self._translate_transport(exc) from None
+        for part in parts:
+            if held.get(part.part_number) != (part.etag, part.size_bytes):
+                raise MultipartPartsError(
+                    field="parts",
+                    constraint="every listed part is staged with its receipted ETag and size",
+                )
+
+    def _assemble(
+        self, key: str, opened: list[str], parts: Sequence[UploadedPart]
+    ) -> None:
+        """Ask the store to join the parts into the object under ``key``."""
+        try:
+            self._client.complete_multipart_upload(
+                Bucket=self._bucket,
+                Key=key,
+                UploadId=opened[0],
+                MultipartUpload={
+                    "Parts": [
+                        {"PartNumber": part.part_number, "ETag": f'"{part.etag}"'}
+                        for part in parts
+                    ]
+                },
+            )
+        except ClientError as exc:
+            code = _error_code(exc)
+            if code in _NO_UPLOAD_CODES:
+                raise TemporaryBlobLostError() from None
+            if code in _BAD_PARTS_CODES:
+                raise MultipartPartsError(
+                    field="parts",
+                    constraint="parts accepted by the store: ordered, listed as staged, "
+                    "each but the last at least 5 MiB",
+                ) from None
+            raise self._translate(exc) from None
+        except (BotoCoreError, OSError) as exc:
+            raise self._translate_transport(exc) from None
+        # A second upload for the key exists only if two `begin` calls raced. The assembly is done;
+        # the extra upload would otherwise sit in the store with nothing to name it.
+        for extra in opened[1:]:
+            try:
+                self._client.abort_multipart_upload(
+                    Bucket=self._bucket, Key=key, UploadId=extra
+                )
+            except ClientError as exc:
+                if _error_code(exc) not in _NO_UPLOAD_CODES:
+                    raise self._translate(exc) from None
+            except (BotoCoreError, OSError) as exc:
+                raise self._translate_transport(exc) from None
 
     # --- inspection and read -------------------------------------------------
 
@@ -716,6 +978,22 @@ def _admitted_length(
     if (first, last) != window or content_length != length:
         raise StorageUnavailableError()
     return length
+
+
+def _read_part(source: BlobSource) -> bytes:
+    """The bytes of one part, refused outside ``1..16 MiB`` before anything is sent."""
+    if isinstance(source, (bytes, bytearray)):
+        data = bytes(source)
+    else:
+        # One byte past the bound is enough to know the part is too large.
+        data = source.read(MULTIPART_PART_BYTES_MAX + 1)
+    validate_part_size(len(data))
+    return data
+
+
+def _unquoted_etag(value: object) -> str:
+    """An ETag as an opaque token: S3 quotes it in a response, the database holds it bare."""
+    return str(value or "").strip('"')
 
 
 def _as_temporary(verified: VerifiedBlob) -> TemporaryBlob:
