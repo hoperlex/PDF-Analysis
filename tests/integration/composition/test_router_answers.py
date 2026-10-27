@@ -64,14 +64,11 @@ SEALED_STUB_GETS: frozenset[str] = frozenset({
     _STUB_UPLOAD,
     f"{_STUB_UPLOAD}/proposal",
     f"/projects/{_PRJ}/documents/doc_01ARZ3NDEKTSV4RRFFQ69G5FAV/comparison-version-orders",
-    "/versions/ver_01ARZ3NDEKTSV4RRFFQ69G5FAV/page-profiles",
-    _STUB_PROFILE,
-    f"{_STUB_PROFILE}/preview",
-    f"{_STUB_PROFILE}/thumbnail",
-    f"{_STUB_PROFILE}/tile",
 })
-#: The one sealed stub whose address needs a query string to reach its port (the tile's `level`,
-#: `column` and `row` are required): without it the sweep would read a `422`, not the stub.
+#: `CMP-PROFILE-01` serves the five page reads (`/versions/{ver}/page-profiles`, `/page-profiles/{cpr}` and
+#: its `preview`, `thumbnail` and `tile`) and removes them from the set above: an absent `cpr_` is `404`.
+#: The tile's `level`, `column` and `row` are required, so the sweep gives it a well-formed query that
+#: names nothing; without it the sweep would read a `422` about the query, not the path.
 SEALED_STUB_QUERY: dict[str, str] = {f"{_STUB_PROFILE}/tile": "?level=0&column=0&row=0"}
 NORM_VERIFICATION_OF_AN_ABSENT_RUN = "/runs/run_01ARZ3NDEKTSV4RRFFQ69G5FAV/norm-verification"
 WORKER_GETS = frozenset({"/execution/workers"})
