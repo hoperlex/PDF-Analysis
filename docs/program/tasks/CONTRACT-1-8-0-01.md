@@ -1,7 +1,7 @@
 # Task CONTRACT-1-8-0-01 — the shared API contract moves from 1.7.0 to 1.8.0 (R-146ar)
 
 task_id: CONTRACT-1-8-0-01
-status: in progress (branch `agent/contract-1-8-0-01`, worktree `.local/worktrees/contract-1-8-0-01`, not merged, not pushed)
+status: delivered (branch `agent/contract-1-8-0-01`, worktree `.local/worktrees/contract-1-8-0-01`, not merged, not pushed); the report is `docs/program/CONTRACT-1-8-0-01.md`
 
 ## Outcome
 
@@ -384,7 +384,7 @@ Not applicable: a version literal. The two commits revert together (`git revert`
 
 ## Handoff
 
-- changed files: filled in at the end (see the report)
-- commands/results: filled in at the end
-- known limits: filled in at the end
-- integration notes: filled in at the end
+- changed files: 97 files besides this file and the report: `contracts/analysis/**` (18), `contracts/domain/v1/**` (10), `contracts/events/v1/**` (3), `contracts/api/v1/{openapi.json,README.md}`, `web/openapi/openapi.json`, `web/src/shared/api/generated/**` (4), `web/src/shared/api/credentialed-forward.ts`, `web/FRONTEND_LOCK.json`, three `src` constants, two edge configs, `tests/contract/api_v1/test_contract_seal.py`, `tests/support/expected_facts.json`, 49 web test files, `docs/program/CURRENT_STATE.md`; the exact list is `git diff --name-only 85458f07..HEAD`
+- commands/results: `tests/contract` minus the three `D-220` files 1175 passed; `tests/unit/api` 31 passed; `api:verify` OK; web vitest 202 files / 3085 tests passed; `tsc` and `eslint` exit 0; `git diff --check` clean; governance one-liner `[]`; mutation proofs M1 to M12b in the report
+- known limits: `FRONTEND_LOCK.json` `info_version` has no guard; `tests/integration`, the e2e journey and the full gate were not run; the three `D-220` files were not run; the older wave sentences of `info.description` still say what was true then
+- integration notes: merge without squashing (the lock names the content commit `7288e82c`); `D-244` limit (1), `D-243`, `D-236` and `D-233` item 1 of the register still say `1.7.0` and are the integrator's; forbidden paths untouched (proof in the report)
