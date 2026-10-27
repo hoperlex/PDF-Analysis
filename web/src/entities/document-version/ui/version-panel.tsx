@@ -13,12 +13,18 @@
  * is never a link target: the contract refuses it as a path parameter, and a UI that
  * addressed a version by its ordinal would be building an identity out of a display
  * value.
+ *
+ * `CMP-VERSION-MARK-01`: a version admitted for comparison only (`upload_kind` `comparison_pdf`)
+ * opens with the mark «Загружено без пакета портала — только для сравнения» and the sentence
+ * that says what it is for. Any other version, and a version without the field, is unchanged.
  */
 
 import type { DocumentVersion } from '@/shared/api';
 import { formatInstant } from '@/shared/lib';
 
 import { formatBytes } from '../model/upload-envelope';
+import { COMPARISON_ONLY_DETAIL, isComparisonOnly } from '../model/upload-kind';
+import { ComparisonOnlyMark } from './comparison-only-mark';
 
 export interface VersionPanelProps {
   readonly version: DocumentVersion;
@@ -39,6 +45,14 @@ export function VersionPanel({ version }: VersionPanelProps) {
         {version.display_title ?? version.source_filename ?? 'Опубликованная версия'}
       </p>
       <div className="am-state__detail">
+        {isComparisonOnly(version) ? (
+          <>
+            <p>
+              <ComparisonOnlyMark version={version} />
+            </p>
+            <p data-comparison-only-detail="">{COMPARISON_ONLY_DETAIL}</p>
+          </>
+        ) : null}
         <Field label="Версия">
           <code>{version.version_uid}</code>
         </Field>
