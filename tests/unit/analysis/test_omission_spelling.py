@@ -123,6 +123,13 @@ def test_different_designations_stay_different(term: str, other: str) -> None:
     assert not occurs(other, [sentence(term)])
 
 
+def test_a_word_hyphenated_at_a_line_end_is_one_word() -> None:
+    assert occurs("светильник", ["Светиль-\nник встраиваемый, 2 шт."])
+    assert occurs("светильник", ["Светиль- ник встраиваемый, 2 шт."])
+    assert occurs("светильник", ["Светиль\u00adник встраиваемый, 2 шт."]), "a soft hyphen"
+    assert not occurs("светильник", ["Светильни-\nца встраиваемая, 2 шт."])
+
+
 def test_decimal_comma_and_point_are_one_number_only_between_digits() -> None:
     assert fold("2,5") == fold("2.5")
     assert fold("а,б") != fold("а.б"), "outside digits a comma is a comma"

@@ -133,7 +133,6 @@ _FOLD_TABLE: Final[dict[int, str]] = {
 _DROPPED_CATEGORIES: Final[frozenset[str]] = frozenset({"Mn", "Cf"})  # combining marks, zero-width and soft hyphen
 _SPACE = re.compile(r"\s+")
 _DECIMAL_COMMA = re.compile(r"(?<=\d),(?=\d)")
-_HYPHENATION = re.compile(r"(?<=\w)-\s+(?=\w)")
 #: Whitespace and the separators of a mark (hyphen, point, comma, slash, underscore, bar, middle dot): the
 #: loosest view, in which ``Г-3``, ``Г.3``, ``Г 3``, ``Г/3`` and a mark broken over two table cells are one string.
 _LOOSE = re.compile(r"[\s\-.,/_|·]+")
@@ -156,29 +155,29 @@ def fold(text: str) -> str:
     return _SPACE.sub(" ", _DECIMAL_COMMA.sub(".", translated)).strip()
 
 
-def _dehyphenated(folded: str) -> str:
-    """A line-break hyphenation joined: ``светиль- ник`` reads as ``светильник``."""
-    return _HYPHENATION.sub("", folded)
-
-
 def _loose(folded: str) -> str:
-    """Spaces and the separators of a mark removed: ``Г - 3``, ``Г-3``, ``Г.3`` and ``Г3`` are one string."""
+    """Spaces and the separators of a mark removed: ``Г - 3``, ``Г-3``, ``Г.3`` and ``Г3`` are one string.
+
+    A line-break hyphenation is the same thing (``светиль- ник`` reads as ``светильник``): the view that joined
+    only that (``_dehyphenated``) matched nothing this one does not, no test could make it fail, and
+    `SECTION-JUDGE-FIXES-01` removed it.
+    """
     return _LOOSE.sub("", folded)
 
 
 def occurs(term: str, texts: Sequence[str]) -> bool:
     """Whether ``term`` occurs in any of ``texts`` in any of the ways a record can hide.
 
-    Three views of both sides are tried (the folded text, the text with hyphenation joined, and the text
-    with spaces and the separators of a mark removed), and the texts are tried one by one, joined with a
-    space and joined with nothing (a name broken across a page break). A hit in any is a presence.
+    Two views of both sides are tried (the folded text, and the text with spaces and the separators of a mark
+    removed, which also joins a word hyphenated at a line end), and the texts are tried one by one, joined
+    with a space and joined with nothing (a name broken across a page break). A hit in any is a presence.
     """
     wanted = fold(term)
     if not wanted:
         return False
     pages = [fold(text) for text in texts]
     haystacks = [*pages, " ".join(pages), "".join(pages)]
-    for transform in (str, _dehyphenated, _loose):
+    for transform in (str, _loose):
         needle = transform(wanted)
         if needle and any(needle in transform(haystack) for haystack in haystacks):
             return True
