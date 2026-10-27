@@ -295,15 +295,10 @@ class ComparisonBatchService:
         upload = self._repo.get_upload(session, upload_id, for_update=True)
         assert upload is not None
         sets = self._repo.list_sets(session, upload_id)
-        if upload.state == "proposed":
-            if any(row.state == "done" for row in sets):
-                # A confirmation whose hook never ran: the batch is being processed all the same.
-                self._repo.set_upload_state(session, upload_id, to_state="processing")
-                upload = replace(upload, state="processing")
-                self._lifecycle.ensure_driver(session, upload)
-            elif sets and all(row.state == "excluded" for row in sets):
-                self._repo.set_upload_state(session, upload_id, to_state="completed")
-                return
+        upload = self._lifecycle.promote_if_confirmed(session, upload)  # a confirmation whose hook never ran
+        if upload.state == "proposed" and sets and all(row.state == "excluded" for row in sets):
+            self._repo.set_upload_state(session, upload_id, to_state="completed")
+            return
         if upload.state == "processing":
             self._lifecycle.advance(session, upload)
 

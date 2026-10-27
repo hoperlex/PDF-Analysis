@@ -92,11 +92,12 @@ class Harness:
             upload_id=upload_id, file_id=file_id, user_uid=self.user, idempotency_key=fresh_key("done")
         )
 
-    def proposed(self, sets: Mapping[str, int]) -> str:
+    def proposed(self, sets: Mapping[str, int], *, owner: str | None = None) -> str:
         """Declare, send and complete ``{base name: number of files}``; the batch ends ``proposed`` with one set per
-        base name (a name is a hint, and these have no stamps)."""
+        base name (a name is a hint, and these have no stamps). ``owner`` is the account that declares it (an account
+        may have one active batch, so a second batch in a test is another account's)."""
         names = [f"{base} ({i}).pdf" for base, count in sets.items() for i in range(1, count + 1)]
-        view = self.declare(names)
+        view = self.declare(names, user=owner)
         by_name = {item.display_name: item.file_id for item in view.files or ()}
         for name in names:
             self.send(view.upload_id, by_name[name], name)

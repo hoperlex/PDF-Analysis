@@ -134,6 +134,21 @@ class BatchLifecycle:
         ]
         return sorted(rows, key=lambda row: (row.confirmed_at, row.set_id))
 
+    def promote_if_confirmed(self, session: Session, upload: UploadRow) -> UploadRow:
+        """A ``proposed`` batch that holds a ``done`` set is being processed: move it there (and give it its drive).
+
+        The hook after a confirmation does this at once; the drive and the exclusion do it for a batch whose hook never
+        ran (a process killed between the confirmation's commit and the hook), so that nothing waits for a client.
+        """
+        if upload.state != "proposed" or not any(
+            row.state == "done" for row in self._uploads.list_sets(session, upload.upload_id)
+        ):
+            return upload
+        self._uploads.set_upload_state(session, upload.upload_id, to_state="processing")
+        promoted = replace(upload, state="processing")
+        self.ensure_driver(session, promoted)
+        return promoted
+
     def release_set(self, session: Session, upload: UploadRow, row: SetRow) -> None:
         """Put the page profiles of every version the set made on the queue, once.
 
@@ -190,11 +205,8 @@ class BatchLifecycle:
         row = self._uploads.get_set(session, set_id)
         if upload is None or row is None or row.upload_id != upload_id or row.state != "done":
             return
+        upload = self.promote_if_confirmed(session, upload)
         state = upload.state
-        if state == "proposed":
-            self._uploads.set_upload_state(session, upload_id, to_state="processing")
-            upload = replace(upload, state="processing")
-            state = "processing"
         if state in ("processing", "paused"):
             self.ensure_driver(session, upload)
             if state == "processing":
@@ -237,8 +249,15 @@ class BatchLifecycle:
     def drive(self, session: Session, upload_id: str) -> Drive:
         """One poll of one batch, in one transaction: finished, or when to come back."""
         upload: Any = self._uploads.get_upload(session, upload_id, for_update=True)
-        if upload is None or upload.state in ("completed", "cancelled"):
+        if upload is None or upload.state == "cancelled":
             return Drive(done=True)
+        if upload.state == "completed":
+            # ``CMP-INGEST-01`` completes a batch with its last confirmation; a set whose hook never ran is released
+            # now, in order, and then the drive has nothing left to watch.
+            for pending in self.pending_sets(session, upload_id):
+                self.release_set(session, upload, pending)
+            return Drive(done=True)
+        upload = self.promote_if_confirmed(session, upload)
         if upload.state == "uploading":
             idle = self._batches.idle_seconds(session, upload_id)
             if idle >= ABANDON_AFTER_SECONDS:

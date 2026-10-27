@@ -25,6 +25,17 @@ def user(session_factory: sessionmaker[Session]) -> str:
 
 
 @pytest.fixture
+def other_user(session_factory: sessionmaker[Session]) -> str:
+    """A second expert, whose batch is a second one for the installation (an account may have one active batch)."""
+    from tests.support.accounts import complete_expert_account
+
+    with session_factory() as session:
+        record = complete_expert_account(session, "comparison-batch-other")
+        session.commit()
+        return str(record.user_uid)
+
+
+@pytest.fixture
 def lifecycle() -> BatchLifecycle:
     """The sweep is due at once here (the product waits five minutes for a part still on its way)."""
     return BatchLifecycle(sweep_delay_seconds=0.0)
@@ -50,3 +61,34 @@ def open_uploads(raw_s3, s3_settings):
         return sorted(item["Key"] for item in raw_s3.list_multipart_uploads(Bucket=s3_settings.bucket).get("Uploads", []))
 
     return read
+
+
+class SpyStore:
+    """The real store, with every call recorded (never faked); a failure can be queued for the next call of a name."""
+
+    def __init__(self, inner: S3BlobStore) -> None:
+        self._inner = inner
+        self.calls: list[tuple[str, tuple]] = []
+        self.fail: dict[str, BaseException] = {}
+
+    def __getattr__(self, name: str):
+        target = getattr(self._inner, name)
+        if not callable(target):
+            return target
+
+        def call(*args, **kwargs):
+            self.calls.append((name, args))
+            failure = self.fail.pop(name, None)
+            if failure is not None:
+                raise failure
+            return target(*args, **kwargs)
+
+        return call
+
+    def aborted_tokens(self) -> list[str]:
+        return [args[0] for name, args in self.calls if name == "abort_multipart"]
+
+
+@pytest.fixture
+def spy(store: S3BlobStore) -> SpyStore:
+    return SpyStore(store)
