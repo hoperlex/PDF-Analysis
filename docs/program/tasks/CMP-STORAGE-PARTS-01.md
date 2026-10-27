@@ -135,7 +135,15 @@ handler of the abort sweep marks the file and its parts in the database first, t
 Not applicable: nothing calls the new functions yet; the module flag (`comparison/modules.py`) gates the callers.
 
 ## Handoff
-- changed files: see `docs/program/CMP-STORAGE-PARTS-01.md`
-- commands/results: see the report
-- known limits: see the report
-- integration notes: see the report
+- changed files: `src/auditmanager/storage/{__init__,errors,multipart,port,public,s3}.py` (`multipart.py` new),
+  `scripts/recovery/blob_reference_audit.py`, `tests/unit/storage/test_multipart_offline.py` (new),
+  `tests/integration/storage/{test_multipart_staging,test_unreferenced_comparison_blobs}.py` (new), this file and
+  `docs/program/CMP-STORAGE-PARTS-01.md`
+- commands/results: `pytest -q tests/unit/storage tests/integration/storage` 259 passed (106 pre-existing + 153 new);
+  `tests/contract` minus the three `D-220` files 1307 passed; `git diff --check` clean; 28 mutations shown red and
+  restored (report section 5)
+- known limits: report section 6 (5 MiB minimum of every part but the last; the whole object is re-read through the API
+  process at completion; no CLI or restore-drill wiring of the report)
+- integration notes: report sections 3 and 7. The protocol is named `MultipartStaging`, not `MultipartBlobStore`,
+  because `test_the_package_ships_no_filesystem_adapter` pins every exported name ending `BlobStore`. The one addition
+  beyond the brief is `before_publish` on `complete_multipart` (the seam `DurablePublicationStore` has)
