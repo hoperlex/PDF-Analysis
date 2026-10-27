@@ -29,6 +29,7 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -108,7 +109,7 @@ def test_the_filed_set_is_exactly_five_sections_with_one_positive_and_one_negati
     found = {
         path.name: tuple(sorted(item.stem for item in path.iterdir()))
         for path in sorted(SPECIMENS.iterdir())
-        if path.is_dir()
+        if path.is_dir() and not path.name.startswith("_")
     }
     assert found == EXPECTED
     assert [path.name for path in SPECIMENS.iterdir() if path.is_file()] == ["build_specimens.py"]
@@ -121,7 +122,11 @@ def test_the_files_are_what_the_builder_writes() -> None:
     spec = importlib.util.spec_from_file_location("omission_specimen_builder", SPECIMENS / "build_specimens.py")
     assert spec is not None and spec.loader is not None
     builder = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(builder)
+    keep, sys.dont_write_bytecode = sys.dont_write_bytecode, True  # no __pycache__ in a fixtures directory
+    try:
+        spec.loader.exec_module(builder)
+    finally:
+        sys.dont_write_bytecode = keep
     planned = builder.documents()
     assert set(planned) == set(FILES)
     for path, text in planned.items():
