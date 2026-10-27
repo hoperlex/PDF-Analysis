@@ -11,7 +11,9 @@
 #
 #   {"model": "claude-opus-5", "system": "...", "user_text": "...", ...}
 #
-# and reads the Claude Code JSON result from stdout. Extra task fields are ignored.
+# and reads the Claude Code JSON result from stdout. Extra task fields are ignored. The member
+# "image" is the exception: it is one {"media_type", "data"} object, or a list of up to eight of
+# them in the order the model sees them (32 MiB of PNG together); anything else is refused.
 #
 # What it guarantees:
 #   * SSH_ORIGINAL_COMMAND (what the client typed) is ignored and unset; the client cannot choose
@@ -43,7 +45,9 @@ umask 077
 # Whatever the client typed is not ours to run.
 unset SSH_ORIGINAL_COMMAND
 
-MAX_TASK_BYTES="${PDF_ANALYSIS_MAX_TASK_BYTES:-25165824}"
+# 48 MiB: 32 MiB of PNG (the limit for all the images of a task) is about 43 MiB as base64; a task of
+# one image of at most 16 MiB stayed inside the earlier 24 MiB.
+MAX_TASK_BYTES="${PDF_ANALYSIS_MAX_TASK_BYTES:-50331648}"
 ENV_FILE="${PDF_ANALYSIS_CLAUDE_ENV_FILE:-${HOME:?HOME is not set}/.config/pdf-analysis/claude.env}"
 # Keep below the stand's 900 s Attempt watchdog; the stand also enforces its own timeout.
 CLAUDE_TIMEOUT_SECONDS=840
@@ -110,21 +114,36 @@ image = task.get("image")
 if image is not None:
     import base64
     import binascii
-    if not isinstance(image, dict) or set(image) != {"media_type", "data"} or image["media_type"] != "image/png":
+    # One image is an object, the shape this command has always read. Several are a LIST of such
+    # objects in the same member (at most 8, 32 MiB of PNG together, in the order the model sees
+    # them): a command installed before that existed refuses a list, so it never answers from the
+    # text alone or from one image of several.
+    envelopes = image if isinstance(image, list) else [image]
+    if not 1 <= len(envelopes) <= 8:
         sys.stderr.write("pdf-analysis-forced-command: invalid image envelope\n")
         raise SystemExit(1)
-    try:
-        raw = base64.b64decode(image["data"], validate=True)
-    except (binascii.Error, ValueError, TypeError):
-        sys.stderr.write("pdf-analysis-forced-command: invalid image bytes\n")
+    blocks = []
+    total = 0
+    for envelope in envelopes:
+        if not isinstance(envelope, dict) or set(envelope) != {"media_type", "data"} or envelope["media_type"] != "image/png":
+            sys.stderr.write("pdf-analysis-forced-command: invalid image envelope\n")
+            raise SystemExit(1)
+        try:
+            raw = base64.b64decode(envelope["data"], validate=True)
+        except (binascii.Error, ValueError, TypeError):
+            sys.stderr.write("pdf-analysis-forced-command: invalid image bytes\n")
+            raise SystemExit(1)
+        if not raw.startswith(b"\x89PNG\r\n\x1a\n") or not 1 <= len(raw) <= (16 << 20):
+            sys.stderr.write("pdf-analysis-forced-command: invalid PNG\n")
+            raise SystemExit(1)
+        total += len(raw)
+        blocks.append({"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": envelope["data"]}})
+    if total > (32 << 20):
+        sys.stderr.write("pdf-analysis-forced-command: the images are larger than 32 MiB together\n")
         raise SystemExit(1)
-    if not raw.startswith(b"\x89PNG\r\n\x1a\n") or not 1 <= len(raw) <= (16 << 20):
-        sys.stderr.write("pdf-analysis-forced-command: invalid PNG\n")
-        raise SystemExit(1)
-    # Stream JSON carries a real image block; a textual base64 or file path is not vision input.
+    # Stream JSON carries real image blocks; a textual base64 or file path is not vision input.
     event = {"type": "user", "message": {"role": "user", "content": [
-        {"type": "text", "text": task["user_text"]},
-        {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": image["data"]}},
+        {"type": "text", "text": task["user_text"]}, *blocks,
     ]}}
     with open(work + "/input.jsonl", "w", encoding="utf-8") as out:
         json.dump(event, out, ensure_ascii=False, separators=(",", ":"))

@@ -32,6 +32,15 @@ from auditmanager.executors.commands import (
     set_secret,
 )
 from auditmanager.executors.destinations import DestinationPolicy
+from auditmanager.executors.image_input import (
+    MAX_IMAGE_BYTES,
+    MAX_IMAGES,
+    MAX_TOTAL_IMAGE_BYTES,
+    CropImage,
+    ImageLoad,
+    attach_images,
+    image_load,
+)
 from auditmanager.executors.model import (
     ConnectionRecord,
     ConnectionSummary,
@@ -106,9 +115,16 @@ if TYPE_CHECKING:
 
 __all__ = [
     "CLAIM_LEASE_SECONDS",
+    "MAX_IMAGES",
+    "MAX_IMAGE_BYTES",
+    "MAX_TOTAL_IMAGE_BYTES",
     "ChosenPreset",
     "ClaimedTask",
+    "CropImage",
+    "ImageLoad",
+    "attach_images",
     "claimed_image",
+    "image_load",
     "ConnectionDetail",
     "ConnectionRecord",
     "ConnectionSummary",

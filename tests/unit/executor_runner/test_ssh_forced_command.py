@@ -251,3 +251,114 @@ def test_claude_missing_from_path_is_reported(tmp_path):
     (tmp_path / "bin" / "claude").unlink()
     result = _run({**env, "HOME": env["HOME"]}, _task())
     assert result.returncode == 127 and "claude is not on PATH" in result.stderr
+
+
+# -- several images, `CMP-EXEC-IMAGES-01` --------------------------------------------------------
+
+import base64  # noqa: E402
+
+FROZEN_ONE_IMAGE_SCRIPT = Path(__file__).with_name("frozen_ssh_forced_command_one_image.sh")
+
+
+def _envelope(label: str, pad: int = 0) -> tuple[dict, bytes]:
+    raw = b"\x89PNG\r\n\x1a\n" + label.encode() + b"." * pad
+    return {"media_type": "image/png", "data": base64.b64encode(raw).decode()}, raw
+
+
+def _fresh(tmp_path: Path, name: str):
+    """A second, independent ``_setup`` under the same test directory."""
+    (tmp_path / name).mkdir()
+    return _setup(tmp_path / name)
+
+
+def _blocks(record_path: Path) -> list[dict]:
+    event = json.loads(json.loads(record_path.read_text())["stdin"])
+    return event["message"]["content"]
+
+
+def test_one_image_object_is_one_image_block_as_before(tmp_path):
+    env, record_path, _ = _setup(tmp_path)
+    envelope, raw = _envelope("only")
+    result = _run(env, _task(image=envelope))
+    assert result.returncode == 0, result.stderr
+    content = _blocks(record_path)
+    assert [block["type"] for block in content] == ["text", "image"]
+    assert base64.b64decode(content[1]["source"]["data"]) == raw
+    assert "--input-format" in json.loads(record_path.read_text())["argv"]
+
+
+def test_a_list_of_images_is_one_block_each_in_the_order_given(tmp_path):
+    env, record_path, _ = _setup(tmp_path)
+    made = [_envelope(label) for label in ("left", "right", "detail")]
+    result = _run(env, _task(image=[envelope for envelope, _ in made]))
+    assert result.returncode == 0, result.stderr
+    content = _blocks(record_path)
+    assert [block["type"] for block in content] == ["text", "image", "image", "image"]
+    assert content[0]["text"] == f"Contract: {PAYLOAD}"
+    assert [base64.b64decode(block["source"]["data"]) for block in content[1:]] == [raw for _, raw in made]
+    assert all(block["source"]["media_type"] == "image/png" for block in content[1:])
+
+
+def test_a_list_of_one_is_one_image_and_eight_is_the_most(tmp_path):
+    env, record_path, _ = _setup(tmp_path)
+    assert _run(env, _task(image=[_envelope("one")[0]])).returncode == 0
+    assert len(_blocks(record_path)) == 2
+    env, record_path, _ = _fresh(tmp_path, "eight")
+    assert _run(env, _task(image=[_envelope(str(i))[0] for i in range(8)])).returncode == 0
+    assert len(_blocks(record_path)) == 9
+
+
+@pytest.mark.parametrize("name,image", [
+    ("nine", [_envelope(str(i))[0] for i in range(9)]),
+    ("empty list", []),
+    ("a member that is not an object", [_envelope("a")[0], "not-an-object"]),
+    ("an extra member", [{**_envelope("a")[0], "name": "x"}]),
+    ("a wrong media type", [{**_envelope("a")[0], "media_type": "image/jpeg"}]),
+    ("bytes that are not base64", [{"media_type": "image/png", "data": "!!not base64!!"}]),
+    ("one that is not a PNG", [_envelope("a")[0], {"media_type": "image/png", "data": base64.b64encode(b"GIF89a").decode()}]),
+    ("a string", "iVBORw0KGgo="),
+    ("a number", 3),
+])
+def test_a_list_outside_the_rules_is_refused_and_claude_never_runs(tmp_path, name, image):
+    env, record_path, _ = _setup(tmp_path)
+    result = _run(env, _task(image=image))
+    assert result.returncode == 64 and not record_path.exists(), (name, result.stderr)
+    assert PAYLOAD not in result.stderr and API_KEY not in result.stderr
+
+
+def test_the_images_of_a_task_may_not_exceed_32_mib_together(tmp_path):
+    env, record_path, _ = _setup(tmp_path)
+    big = [_envelope(f"big{index}", pad=12 << 20)[0] for index in range(3)]  # 36 MiB of PNG, 48 MiB as base64
+    result = _run(env, _task(image=big), {"PDF_ANALYSIS_MAX_TASK_BYTES": str(80 << 20)})
+    assert result.returncode == 64 and "32 MiB together" in result.stderr and not record_path.exists()
+    env, record_path, _ = _fresh(tmp_path, "ok")
+    allowed = [_envelope(f"ok{index}", pad=12 << 20)[0] for index in range(2)]  # 24 MiB of PNG
+    result = _run(env, _task(image=allowed), {"PDF_ANALYSIS_MAX_TASK_BYTES": str(80 << 20)})
+    assert result.returncode == 0, result.stderr
+
+
+def test_the_task_size_cap_now_covers_the_images_of_several_crops():
+    text = SCRIPT.read_text()
+    assert "PDF_ANALYSIS_MAX_TASK_BYTES:-50331648" in text, "48 MiB: 32 MiB of PNG is about 43 MiB as base64"
+
+
+def _run_frozen(env: dict, stdin: str):
+    return subprocess.run(["bash", str(FROZEN_ONE_IMAGE_SCRIPT)], input=stdin, capture_output=True,
+                          text=True, env=env, timeout=30)
+
+
+def test_a_command_installed_before_several_images_refuses_a_list_and_serves_one_image(tmp_path):
+    """The task the stand sends for several crops cannot be served from the text alone, or from
+    one crop of several, by a remote command that predates them: it checks the member for an
+    object and refuses a list. The script under test is the one the repository had before."""
+    env, record_path, _ = _setup(tmp_path)
+    one = _run_frozen(env, _task(image=_envelope("one")[0]))
+    assert one.returncode == 0, one.stderr
+    assert len(_blocks(record_path)) == 2, "one image: the old command serves it, as ever"
+    env, record_path, _ = _fresh(tmp_path, "list")
+    several = _run_frozen(env, _task(image=[_envelope("a")[0], _envelope("b")[0]]))
+    assert several.returncode == 64 and "invalid image envelope" in several.stderr
+    assert not record_path.exists(), "claude never started"
+    env, record_path, _ = _fresh(tmp_path, "plain")
+    assert _run_frozen(env, _task(images=[_envelope("a")[0], _envelope("b")[0]])).returncode == 0, \
+        "a list under a NEW member name would be ignored and answered from the text alone: it is never sent"

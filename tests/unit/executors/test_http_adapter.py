@@ -194,3 +194,50 @@ def test_a_tunnelled_connection_is_not_served(gateway_factory: Any) -> None:
     with pytest.raises(DomainError) as refused:
         _adapter(gateway, transport="ssh_tunnel")
     assert refused.value.code is ErrorCode.VALIDATION_FAILED
+
+
+# -- several images, `CMP-EXEC-IMAGES-01` --------------------------------------------------------
+
+from auditmanager.executors.image_input import attach_images  # noqa: E402
+from tests.unit.executors.crop_support import crop  # noqa: E402
+
+CROPS = [crop(label) for label in ("a", "b", "c")]
+MULTI_REQUEST = attach_images(REQUEST, CROPS)
+
+
+@pytest.mark.parametrize("flavour", ["openai_chat", "anthropic_messages"])
+@pytest.mark.parametrize("transport", ["direct", "vpn"])
+def test_http_sends_every_png_in_order_as_its_own_image_block(
+    gateway_factory: Any, flavour: str, transport: str,
+) -> None:
+    gateway = gateway_factory()
+    _adapter(gateway, flavour, transport=transport,
+             base_path="" if flavour == "anthropic_messages" else "/api/v1").complete(MULTI_REQUEST)
+    (seen,) = gateway.requests
+    content = seen["body"]["messages"][-1]["content"]
+    assert content[0] == {"type": "text", "text": "hello"} and len(content) == 1 + len(CROPS)
+    if flavour == "openai_chat":
+        assert {block["type"] for block in content[1:]} == {"image_url"}
+        sent = [base64.b64decode(block["image_url"]["url"].split(",", 1)[1]) for block in content[1:]]
+    else:
+        assert {block["type"] for block in content[1:]} == {"image"}
+        sent = [base64.b64decode(block["source"]["data"]) for block in content[1:]]
+    assert sent == [item.data for item in CROPS], "every crop, in the order it was attached"
+    assert "images" not in seen["body"]
+
+
+@pytest.mark.parametrize("flavour", ["openai_chat", "anthropic_messages"])
+def test_direct_http_refuses_a_list_that_does_not_match_its_bytes_before_network(
+    gateway_factory: Any, flavour: str,
+) -> None:
+    gateway = gateway_factory()
+    for bad in (
+        ModelRequest(MULTI_REQUEST.model_id, MULTI_REQUEST.body,
+                     images_bytes=tuple(reversed(MULTI_REQUEST.images_bytes))),
+        ModelRequest(MULTI_REQUEST.model_id, MULTI_REQUEST.body,
+                     images_bytes=MULTI_REQUEST.images_bytes[:2]),
+    ):
+        with pytest.raises(ProxyDispatchError) as refused:
+            _adapter(gateway, flavour).complete(bad)
+        assert refused.value.dispatch_class == "not_sent"
+    assert gateway.requests == []

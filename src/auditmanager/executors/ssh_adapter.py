@@ -1,4 +1,13 @@
-"""One forced SSH command per model call, with an optional verified PNG on stdin."""
+"""One forced SSH command per model call, with the verified PNGs, in order, on stdin.
+
+The image envelope is the task's ``image`` member. One image is the object the forced command
+has always read (``{"media_type", "data"}``), so a command installed before
+`CMP-EXEC-IMAGES-01` serves it unchanged. Two or more are a **list** of such objects in the
+same member: a command that predates several images checks that member for an object and
+refuses a list (``invalid image envelope``, exit 64), so an old remote never answers from the
+text alone or from one image of several. A list is never sent under a new member name, which an
+old command would ignore.
+"""
 
 from __future__ import annotations
 
@@ -12,12 +21,15 @@ from typing import Any
 from auditmanager.analysis.public import ModelRequest, ModelResponse, ProviderMode, ProxyDispatchError
 from auditmanager.executors.destinations import DestinationPolicy, DestinationRefused, DestinationUnresolvable
 from auditmanager.executors.http_adapter import effective_timeout
-from auditmanager.executors.image_input import checked_png
+from auditmanager.executors.image_input import checked_pngs
 from auditmanager.executors.model import RevisionRecord
 from auditmanager.executors.ssh_transport import SshEndpoint, SshFailure, run_command
 from auditmanager.shared.errors import ErrorCode
 
+#: A task with at most one image, as before: a 16 MiB PNG is about 21.4 MiB as base64.
 MAX_TASK_BYTES = 24 << 20
+#: A task with several images: 32 MiB of PNG is about 42.7 MiB as base64, plus the text.
+MAX_MULTI_IMAGE_TASK_BYTES = 48 << 20
 MAX_ANSWER_BYTES = 2 << 20
 
 
@@ -31,7 +43,7 @@ def _refused(message: str, *, sent: bool = False) -> ProxyDispatchError:
 
 
 def _task(request: ModelRequest, model: str) -> bytes:
-    image = checked_png(request)
+    images = checked_pngs(request)
     body = request.body
     system = body.get("system")
     messages = body.get("messages")
@@ -59,10 +71,14 @@ def _task(request: ModelRequest, model: str) -> bytes:
         schema = output["format"].get("schema")
         if isinstance(schema, Mapping):
             task["output_schema"] = schema
-    if image is not None:
-        task["image"] = {"media_type": "image/png", "data": base64.b64encode(image).decode("ascii")}
+    envelopes = [{"media_type": "image/png", "data": base64.b64encode(image).decode("ascii")}
+                 for image in images]
+    if len(envelopes) == 1:
+        task["image"] = envelopes[0]
+    elif envelopes:
+        task["image"] = envelopes
     raw = json.dumps(task, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    if len(raw) > MAX_TASK_BYTES:
+    if len(raw) > (MAX_TASK_BYTES if len(images) <= 1 else MAX_MULTI_IMAGE_TASK_BYTES):
         raise ProxyDispatchError(
             ErrorCode.ANALYSIS_INPUT_INVALID, dispatch_class="not_sent", retry_safe=False,
             message="the SSH task is too large",

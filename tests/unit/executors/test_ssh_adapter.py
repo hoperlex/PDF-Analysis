@@ -105,3 +105,63 @@ def test_registry_exposes_ssh_command_with_private_key() -> None:
 
 def test_task_envelope_has_no_image_when_none() -> None:
     assert "image" not in json.loads(_task(request(None), "claude-opus-5"))
+
+
+# -- several images, `CMP-EXEC-IMAGES-01` --------------------------------------------------------
+
+from auditmanager.executors.image_input import attach_images  # noqa: E402
+from auditmanager.executors.ssh_adapter import MAX_MULTI_IMAGE_TASK_BYTES, MAX_TASK_BYTES  # noqa: E402
+from tests.unit.executors.crop_support import crop  # noqa: E402
+
+PLAIN = ModelRequest(model_id="claude-opus-5", body={
+    "system": "system", "messages": [{"role": "user", "content": "describe"}], "max_tokens": 64})
+
+
+def test_one_image_keeps_the_envelope_an_older_forced_command_reads() -> None:
+    task = json.loads(_task(request(), "claude-opus-5"))
+    assert set(task["image"]) == {"media_type", "data"}, "an object, as before"
+    single = json.loads(_task(attach_images(PLAIN, [crop("a")]), "claude-opus-5"))
+    assert isinstance(single["image"], dict) and base64.b64decode(single["image"]["data"]) == crop("a").data
+
+
+def test_several_images_are_a_list_in_the_same_member_in_order() -> None:
+    crops = [crop(label) for label in "abc"]
+    task = json.loads(_task(attach_images(PLAIN, crops), "claude-opus-5"))
+    assert isinstance(task["image"], list), "a list under `image`, which an older command refuses"
+    assert "images" not in task
+    assert [base64.b64decode(item["data"]) for item in task["image"]] == [item.data for item in crops]
+    assert all(set(item) == {"media_type", "data"} for item in task["image"])
+
+
+def test_several_images_may_exceed_the_size_of_one_but_not_the_multi_image_limit() -> None:
+    assert MAX_MULTI_IMAGE_TASK_BYTES > MAX_TASK_BYTES
+    big = [crop(str(index), pad=(9 << 20)) for index in range(3)]  # about 36 MiB as base64
+    assert MAX_TASK_BYTES < len(_task(attach_images(PLAIN, big), "claude-opus-5")) <= MAX_MULTI_IMAGE_TASK_BYTES
+    # a text so large that eight images and the text do not fit is refused before the network
+    huge_text = ModelRequest(model_id="claude-opus-5", body={
+        **PLAIN.body, "messages": [{"role": "user", "content": "x" * MAX_MULTI_IMAGE_TASK_BYTES}]})
+    with pytest.raises(ProxyDispatchError):
+        _task(attach_images(huge_text, [crop("a"), crop("b")]), "claude-opus-5")
+
+
+def test_several_images_reach_the_command_and_a_bad_list_never_runs_ssh(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: list[dict] = []
+
+    def fake_run(endpoint, key, host_key, payload, **kwargs):
+        seen.append(json.loads(payload))
+        return answer(), ""
+
+    monkeypatch.setattr("auditmanager.executors.ssh_adapter.run_command", fake_run)
+    crops = [crop(label) for label in "ab"]
+    built = attach_images(PLAIN, crops)
+    SshCommandAdapter(revision(), "private", POLICY, None).complete(built)
+    assert [base64.b64decode(item["data"]) for item in seen[0]["image"]] == [c.data for c in crops]
+    monkeypatch.setattr("auditmanager.executors.ssh_adapter.run_command",
+                        lambda *args, **kwargs: pytest.fail("ssh must not run"))
+    for bad in (ModelRequest(built.model_id, built.body, images_bytes=built.images_bytes[:1]),
+                ModelRequest(built.model_id, built.body, images_bytes=built.images_bytes[::-1])):
+        with pytest.raises(ProxyDispatchError) as refusal:
+            SshCommandAdapter(revision(), "private", POLICY, None).complete(bad)
+        assert refusal.value.dispatch_class == "not_sent"

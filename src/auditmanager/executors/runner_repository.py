@@ -56,6 +56,29 @@ _ATTEMPT_LIVE: Final = (
 )
 
 
+#: The most images a claim may declare it serves, and the count that applies to a claim that
+#: declares none: every runner deployed before `CMP-EXEC-IMAGES-01` sends no ``max_images``.
+MAX_CLAIM_IMAGES: Final[int] = 8
+DEFAULT_CLAIM_IMAGES: Final[int] = 1
+
+
+def _image_count(alias: str | None = None) -> str:
+    """The SQL for how many images a task's payload carries, for the claim gate.
+
+    Absent ``images`` is none. A present member that is not a JSON array is a malformed payload,
+    and counts as more than any claim can declare, so that it is never handed out (the gate fails
+    closed; it never reads a malformed list as an empty one)."""
+    images = f"{alias + '.' if alias else ''}payload -> 'images'"
+    return (f"CASE WHEN {images} IS NULL THEN 0 WHEN jsonb_typeof({images}) = 'array' "
+            f"THEN jsonb_array_length({images}) ELSE {MAX_CLAIM_IMAGES + 1} END")
+
+
+def _declared(max_images: int) -> int:
+    if type(max_images) is not int or not 1 <= max_images <= MAX_CLAIM_IMAGES:
+        raise ValueError("max_images is an integer from 1 to 8")
+    return max_images
+
+
 @dataclass(frozen=True, slots=True)
 class RunnerTokenRecord:
     """A token's metadata. The hash is not a field."""
@@ -309,23 +332,32 @@ class RunnerRepository:
         ), {"t": token_id}).scalar_one())
 
     def redeliver(
-        self, session: Session, *, token_id: str, lease_seconds: int
+        self, session: Session, *, token_id: str, lease_seconds: int,
+        max_images: int = DEFAULT_CLAIM_IMAGES,
     ) -> ClaimedRow | None:
-        """The claim this token already holds, with its lease refreshed."""
+        """The claim this token already holds, with its lease refreshed.
+
+        Never a task with more images than ``max_images``: a claim that declares fewer than the
+        held task needs is not handed it again (its lease lapses and the task returns to ``open``)."""
         row = session.execute(text(
             "UPDATE executor_task SET claim_expires_at = "
             "LEAST(clock_timestamp() + make_interval(secs => :lease), deadline_at) "
             "WHERE task_id = (SELECT task_id FROM executor_task WHERE claimed_by_token_id = :t "
             "AND state = 'claimed' AND claim_expires_at > clock_timestamp() "
+            f"AND {_image_count()} <= :max_images "
             "ORDER BY created_at, task_id LIMIT 1 FOR UPDATE) "
             "RETURNING task_id, claim_expires_at, deadline_at, expected_model, payload"
-        ), {"t": token_id, "lease": lease_seconds}).first()
+        ), {"t": token_id, "lease": lease_seconds, "max_images": _declared(max_images)}).first()
         return None if row is None else ClaimedRow(row[0], row[1], row[2], row[3], _payload(row[4]))
 
     def claim_next(
-        self, session: Session, *, connection_id: str, token_id: str, lease_seconds: int
+        self, session: Session, *, connection_id: str, token_id: str, lease_seconds: int,
+        max_images: int = DEFAULT_CLAIM_IMAGES,
     ) -> ClaimedRow | None:
-        """Claim the oldest open task of the connection whose Attempt is live."""
+        """Claim the oldest open task of the connection whose Attempt is live **and whose images
+        the claim can serve**: never a task with more images than ``max_images`` (ADR-0025
+        decision 18). A task too large for this claim is skipped, not waited on, so it neither
+        blocks the claims behind it nor is handed to a runner that would have to refuse it."""
         row = session.execute(text(
             "UPDATE executor_task t SET state = 'claimed', claimed_by_token_id = :token, "
             "claim_expires_at = LEAST(clock_timestamp() + make_interval(secs => :lease), "
@@ -336,9 +368,11 @@ class RunnerRepository:
             "AND (p.attempt_id IS NULL OR EXISTS (SELECT 1 FROM attempt a JOIN job j "
             "ON j.job_id = a.job_id AND j.current_attempt_id = a.attempt_id "
             "WHERE a.attempt_id = p.attempt_id AND a.state IN ('leased', 'running'))) "
+            f"AND {_image_count('p')} <= :max_images "
             "ORDER BY p.created_at, p.task_id FOR UPDATE OF p SKIP LOCKED LIMIT 1) "
             "RETURNING t.task_id, t.claim_expires_at, t.deadline_at, t.expected_model, t.payload"
-        ), {"c": connection_id, "token": token_id, "lease": lease_seconds}).first()
+        ), {"c": connection_id, "token": token_id, "lease": lease_seconds,
+            "max_images": _declared(max_images)}).first()
         return None if row is None else ClaimedRow(row[0], row[1], row[2], row[3], _payload(row[4]))
 
     def payload_of(self, session: Session, task_id: str) -> Mapping[str, Any] | None:
