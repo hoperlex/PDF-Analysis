@@ -19,7 +19,7 @@ comparison-only version with `analysis_input_invalid`, reason `comparison_only_v
 - API contract: `contracts/api/v1/openapi.json` `1.9.0`, 115 paths / 130 operations / 351 schemas, 27 error codes
 - analysis/comparison/event contract: ADR-0025 decisions 4, 5 and 11
 - migration head: `0038_comparison_foundation` (not touched)
-- base commit: `ae5873e9` on `integration/compare-modules`
+- base commit: `ae5873e9a05e0358bbcfc510ecde48b0606a6d18`
 
 ## Enumerator ownership
 - enumerated_set_changed: no
