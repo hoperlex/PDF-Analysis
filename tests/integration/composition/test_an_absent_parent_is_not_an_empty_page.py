@@ -204,10 +204,9 @@ SEALED_STUB_COLLECTIONS: frozenset[str] = frozenset()
 #: and each then joins the `404` sweep. Two of them list under a project, so they are addressed.
 #: `CMP-INGEST-01` serves ``getComparisonUpload``, ``getComparisonUploadProposal`` and
 #: ``listComparisonVersionOrders`` and removes them: each joins the `404` sweep (an absent `cbt_` is `404
-#: not_found`, and so is an absent project or document of the version-order listing).
-SEALED_STUB_ADDRESSED: frozenset[str] = frozenset({
-    "listComparisonUploads",
-})
+#: not_found`, and so is an absent project or document of the version-order listing). `CMP-INGEST-02` serves
+#: ``listComparisonUploads`` and empties this set: an absent project is `404 not_found`, never an empty page.
+SEALED_STUB_ADDRESSED: frozenset[str] = frozenset()
 
 #: `W55A-SEAL-01`. ``searchNorms`` addresses no parent but is not a listing of everything:
 #: its ``q`` is required, so the bare path is ``422 validation_failed`` on ``q`` and never a

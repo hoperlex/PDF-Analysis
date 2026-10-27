@@ -16,6 +16,7 @@ shares one engine and the composition root remains the only thing that reads con
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict
 from datetime import datetime, timezone
@@ -5331,18 +5332,20 @@ def _comparison_set(view: Any) -> models.ComparisonProposalSet:
 class ComparisonUploadAdapter(_SessionHolder):
     """`CMP-INGEST-01` serves ``createComparisonUpload``, ``getComparisonUpload``, ``getComparisonUploadProposal``,
     ``uploadComparisonUploadPart``, ``completeComparisonUploadFile`` and ``confirmComparisonUploadSet`` over
-    :class:`~auditmanager.ingest.comparison_pdf.public.ComparisonUploadService`; `CMP-INGEST-02` replaces the
-    bodies of the other six (list, exclude, retry, pause, resume, cancel), which stay sealed stubs here.
+    :class:`~auditmanager.ingest.comparison_pdf.public.ComparisonUploadService`; `CMP-INGEST-02` serves the other six
+    (list, exclude, retry, pause, resume, cancel) over
+    :class:`~auditmanager.ingest.comparison_batch.public.ComparisonBatchService`, and its two hooks run here, in a
+    second idempotent transaction after the declaration and after a confirmation (a failed hook is repaired by the
+    client's retry under the same key, which replays the first transaction and runs the hook again).
 
-    The adapter owns the mapping to the contract's models and two reads the service does not make itself: the
+    The adapter owns the mapping to the contract's models and two reads the services do not make themselves: the
     actor's display label (a batch records who started it) and the actor's roles (an expert's act is checked
     again in the transaction that acts, ADR-0025 decision 16)."""
 
-    _DEPENDENCY = "comparison_uploads"
-
-    def __init__(self, session_factory: sessionmaker[Session], *, service: Any) -> None:
+    def __init__(self, session_factory: sessionmaker[Session], *, service: Any, batches: Any) -> None:
         super().__init__(session_factory)
         self._service = service
+        self._batches = batches
 
     def create_upload(
         self, *, project_uid: str, files: Sequence[models.ComparisonUploadFileDeclaration], user_uid: str, idempotency_key: str
@@ -5361,6 +5364,7 @@ class ComparisonUploadAdapter(_SessionHolder):
             ],
             user_uid=user_uid, actor_label=label, idempotency_key=idempotency_key,
         )
+        self._batches.after_declaration(upload_id=view.upload_id)
         return _comparison_upload(view)
 
     def get_upload(self, *, upload_id: str) -> models.ComparisonUpload:
@@ -5413,39 +5417,92 @@ class ComparisonUploadAdapter(_SessionHolder):
             actor_roles=roles,
             idempotency_key=idempotency_key,
         )
+        self._batches.after_confirmation(upload_id=upload_id, set_id=set_id)
         return _comparison_set(view)
 
-    # -- `CMP-INGEST-02`: sealed until it wires them -----------------------------------------------
+    # -- `CMP-INGEST-02`: the batch operations -----------------------------------------------------
 
     def cancel_upload(
         self, *, upload_id: str, user_uid: str, idempotency_key: str
     ) -> models.ComparisonUpload:
-        return _comparison_unavailable(self._DEPENDENCY)
+        _label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        return _comparison_upload(
+            self._batches.cancel_upload(
+                upload_id=upload_id, user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key
+            )
+        )
 
     def exclude_set(
         self, *, upload_id: str, set_id: str, user_uid: str, idempotency_key: str
     ) -> models.ComparisonProposalSet:
-        return _comparison_unavailable(self._DEPENDENCY)
+        _label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        return _comparison_set(
+            self._batches.exclude_set(
+                upload_id=upload_id, set_id=set_id, user_uid=user_uid, actor_roles=roles,
+                idempotency_key=idempotency_key,
+            )
+        )
 
     def list_uploads(
         self, *, project_uid: str, cursor: str | None, limit: int
     ) -> models.ComparisonUploadPage:
-        return _comparison_unavailable(self._DEPENDENCY)
+        page = self._batches.list_uploads(
+            project_uid=project_uid, after=_upload_cursor(cursor), limit=limit
+        )
+        return models.ComparisonUploadPage(
+            items=[_comparison_upload(item) for item in page.items],
+            page=models.PageInfo(
+                next_cursor=None if page.next_after is None
+                else encode_cursor((page.next_after[0].isoformat(), page.next_after[1]))
+            ),
+        )
 
     def pause_upload(
         self, *, upload_id: str, user_uid: str, idempotency_key: str
     ) -> models.ComparisonUpload:
-        return _comparison_unavailable(self._DEPENDENCY)
+        _label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        return _comparison_upload(
+            self._batches.pause_upload(
+                upload_id=upload_id, user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key
+            )
+        )
 
     def resume_upload(
         self, *, upload_id: str, user_uid: str, idempotency_key: str
     ) -> models.ComparisonUpload:
-        return _comparison_unavailable(self._DEPENDENCY)
+        _label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        return _comparison_upload(
+            self._batches.resume_upload(
+                upload_id=upload_id, user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key
+            )
+        )
 
     def retry_set(
         self, *, upload_id: str, set_id: str, user_uid: str, idempotency_key: str
     ) -> models.ComparisonProposalSet:
-        return _comparison_unavailable(self._DEPENDENCY)
+        _label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        return _comparison_set(
+            self._batches.retry_set(
+                upload_id=upload_id, set_id=set_id, user_uid=user_uid, actor_roles=roles,
+                idempotency_key=idempotency_key,
+            )
+        )
+
+
+def _upload_cursor(raw: str | None) -> "tuple[datetime, str] | None":
+    """The ``(created_at, id)`` after which a listing of batches resumes (the sort key of the page before)."""
+    if raw is None:
+        return None
+    parts = decode_cursor(raw)
+    if len(parts) != 2 or not re.fullmatch(r"cbt_[0-9A-HJKMNP-TV-Z]{26}", parts[1]):
+        raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+    try:
+        created = datetime.fromisoformat(parts[0])
+    except ValueError:
+        raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format") from None
+    if created.tzinfo is None:
+        raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+    return created, parts[1]
 
 
 class ComparisonVersionOrderAdapter(_SessionHolder):
