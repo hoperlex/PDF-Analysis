@@ -107,7 +107,7 @@ from .limits import (
     check_declaration,
     parts_needed,
 )
-from .names import name_hint, source_filename_of
+from .names import clean_display_name, name_hint, source_filename_of
 from .proposal import FileEntry, SetProposal, fold_designation, grouping_key, propose_set
 from .reading import PdfReading, read_pdf
 from .repository import (
@@ -242,6 +242,11 @@ class ComparisonUploadService:
         """
         key = IdempotencyKey(idempotency_key)
         label = _label(actor_label)
+        files = [
+            DeclaredFileRequest(clean_display_name(f.display_name), f.size_bytes, f.sha256, f.page_count) for f in files
+        ]
+        if any(not f.display_name for f in files):
+            raise DomainError(ErrorCode.VALIDATION_FAILED, field="files", constraint="display_name")
         fingerprint = payload_fingerprint(
             {
                 "command": "create_comparison_upload.v1",

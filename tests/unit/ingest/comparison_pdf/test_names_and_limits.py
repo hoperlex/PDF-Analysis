@@ -47,6 +47,12 @@ class TestNameHints:
     def test_copies_of_one_name_share_a_base_whatever_their_numbers(self) -> None:
         assert name_hint("План (1).pdf").name_base == name_hint("План (2).pdf").name_base == "план"
 
+    def test_a_display_name_is_stored_without_control_characters(self) -> None:
+        from auditmanager.ingest.comparison_pdf.names import clean_display_name
+
+        assert clean_display_name("  a\x00b\x1f.pdf \n") == "ab.pdf"
+        assert clean_display_name("\x00\x01 ") == ""
+
     def test_the_stored_file_name_is_a_plain_base_name(self) -> None:
         assert source_filename_of("Папка/Под папка\\файл.pdf") == "файл.pdf"
         assert source_filename_of("x" * 300) == "x" * 255
@@ -73,13 +79,13 @@ class TestDecisionNineLimits:
 
     def test_files_at_the_limit_pass_and_one_more_is_refused(self) -> None:
         # 100 name groups keep the sets limit out of this test: every file shares one folder.
-        same_folder = [DeclaredFile(f"Папка/f{i}.pdf", 1) for i in range(MAX_FILES)]
+        same_folder = [DeclaredFile(f"Папка/f{i}.pdf", 1) for i in range(10_000)]
         check_declaration(same_folder, project_stored_bytes=0)
         assert _refusal(same_folder + [DeclaredFile("Папка/last.pdf", 1)]) == ("files", "comparison_files_limit")
 
     def test_sets_are_counted_on_the_name_groups(self) -> None:
-        check_declaration(_files(MAX_SETS), project_stored_bytes=0)
-        assert _refusal(_files(MAX_SETS + 1)) == ("files", "comparison_sets_limit")
+        check_declaration(_files(100), project_stored_bytes=0)
+        assert _refusal(_files(101)) == ("files", "comparison_sets_limit")
 
     def test_the_sets_limit_is_the_groups_not_the_files(self) -> None:
         many_in_few = [DeclaredFile(f"Папка {i % 50}/f{i}.pdf", 1) for i in range(1000)]
@@ -87,27 +93,27 @@ class TestDecisionNineLimits:
 
     def test_declared_bytes_at_the_limit_pass_and_one_more_is_refused(self) -> None:
         # Files of the envelope's own size bound: 8 GiB is 32.77 of them.
-        whole = MAX_BATCH_BYTES // MAX_FILE_BYTES
-        files = [DeclaredFile(f"Папка/f{i}.pdf", MAX_FILE_BYTES) for i in range(whole)]
-        files.append(DeclaredFile("Папка/rest.pdf", MAX_BATCH_BYTES - whole * MAX_FILE_BYTES))
+        eight_gib, file_bytes = 8 * 1024**3, 250 * 1024 * 1024
+        whole = eight_gib // file_bytes
+        files = [DeclaredFile(f"Папка/f{i}.pdf", file_bytes) for i in range(whole)]
+        files.append(DeclaredFile("Папка/rest.pdf", eight_gib - whole * file_bytes))
         check_declaration(files, project_stored_bytes=0)
         files.append(DeclaredFile("Папка/one.pdf", 1))
         assert _refusal(files) == ("files", "comparison_batch_bytes_limit")
 
     def test_declared_pages_at_the_limit_pass_and_one_more_is_refused(self) -> None:
-        pages = [DeclaredFile(f"Папка/f{i}.pdf", 1, 500) for i in range(MAX_BATCH_PAGES // 500)]
+        pages = [DeclaredFile(f"Папка/f{i}.pdf", 1, 500) for i in range(20)]  # 10 000 pages
         check_declaration(pages, project_stored_bytes=0)
         assert _refusal(pages + [DeclaredFile("Папка/x.pdf", 1, 1)]) == ("files", "comparison_batch_pages_limit")
 
     def test_the_project_bytes_are_what_it_stores_plus_what_is_declared(self) -> None:
-        check_declaration(_files(1, size=100), project_stored_bytes=MAX_PROJECT_BYTES - 100)
-        assert _refusal(_files(1, size=100), stored=MAX_PROJECT_BYTES - 99) == ("files", "comparison_project_bytes_limit")
+        eight_gib = 8 * 1024**3
+        check_declaration(_files(1, size=100), project_stored_bytes=eight_gib - 100)
+        assert _refusal(_files(1, size=100), stored=eight_gib - 99) == ("files", "comparison_project_bytes_limit")
 
     def test_one_file_over_the_envelopes_size_is_refused_on_its_content(self) -> None:
-        check_declaration([DeclaredFile("a.pdf", MAX_FILE_BYTES)], project_stored_bytes=0)
-        assert _refusal([DeclaredFile("a.pdf", MAX_FILE_BYTES + 1)]) == (
-            "content", f"byte_size <= {MAX_FILE_BYTES}"
-        )
+        check_declaration([DeclaredFile("a.pdf", 250 * 1024 * 1024)], project_stored_bytes=0)
+        assert _refusal([DeclaredFile("a.pdf", 250 * 1024 * 1024 + 1)]) == ("content", "byte_size <= 262144000")
 
     def test_the_first_limit_on_the_list_is_the_one_reported(self) -> None:
         both = [DeclaredFile(f"Папка/f{i}.pdf", 1) for i in range(MAX_FILES + 1)]

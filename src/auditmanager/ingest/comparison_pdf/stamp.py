@@ -100,7 +100,13 @@ SECTION_MARKS: Final[dict[str, str]] = {
 
 
 def _normal(text: str) -> str:
-    return unicodedata.normalize("NFKC", text).replace(" ", " ")
+    """NFKC, a no-break space as a space, and **no control, surrogate or unassigned character** except the line
+    breaks and the tab: the text is a hostile document's, and a NUL or a lone surrogate would not survive the
+    database's ``text`` and ``jsonb`` (a stored designation is this text's)."""
+    cleaned = unicodedata.normalize("NFKC", text).replace("\u00a0", " ")
+    return "".join(
+        char for char in cleaned if char in "\r\n\t" or unicodedata.category(char) not in ("Cc", "Cs", "Cn")
+    )
 
 
 def _lines(text: str) -> list[str]:

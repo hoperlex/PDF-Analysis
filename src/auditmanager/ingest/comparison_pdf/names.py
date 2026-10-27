@@ -17,7 +17,7 @@ import unicodedata
 from dataclasses import dataclass
 from typing import Final
 
-__all__ = ["NameHint", "group_key", "name_hint", "source_filename_of"]
+__all__ = ["NameHint", "clean_display_name", "group_key", "name_hint", "source_filename_of"]
 
 #: ``(2)`` at the end of the stem: the number a browser or a person appended to a copy.
 _FILE_NUMBER: Final[re.Pattern[str]] = re.compile(r"\((\d{1,3})\)\s*$")
@@ -46,6 +46,12 @@ class NameHint:
     name_base: str
     #: The file part as sent (extension kept), cleaned of control characters; what a person reads.
     file_name: str
+
+
+def clean_display_name(display_name: str) -> str:
+    """The display name as it is stored: no control character (a NUL cannot be stored, and none is a name's), the
+    ends trimmed. Empty when nothing is left -- the caller refuses that, it is not named ``file.pdf``."""
+    return _CONTROL.sub("", display_name).strip()
 
 
 def _fold(value: str) -> str:

@@ -77,6 +77,17 @@ class TestStartRun:
                                 prompt_bundle_id=BUNDLE, documents=DocumentRepository(), version=forgotten)  # type: ignore[arg-type]
         assert refused.value.detail_fields == {"reason": "missing_required_input"}
 
+    def test_the_reference_check_every_start_passes_through_asks_the_kind_too(self, comparison_version) -> None:
+        """Defence in depth: the one function that resolves a run's references (``start_audit_run`` and
+        ``reaudit_run`` both call it) refuses by the kind as well, so a start that reached it by another road cannot
+        read the manifest of a comparison-only version."""
+        from auditmanager.runs.commands import _resolve_references
+
+        with pytest.raises(DomainError) as refused:
+            _resolve_references(None, version_uid=comparison_version.version_uid, analysis_profile_id=PROFILE,  # type: ignore[arg-type]
+                                prompt_bundle_id=BUNDLE, documents=DocumentRepository(), version=comparison_version)
+        assert refused.value.detail_fields == {"reason": "comparison_only_version"}
+
     def test_a_portal_version_is_not_refused_by_this_rule(self, comparison_version) -> None:
         from dataclasses import replace
 

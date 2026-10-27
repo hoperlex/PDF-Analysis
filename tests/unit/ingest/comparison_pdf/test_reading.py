@@ -196,6 +196,14 @@ class TestTheChildren:
         found = _refusal(lambda: inspect_comparison_pdf(_pdf(30, bomb)))
         assert found["constraint"] == "pdf_page_content" and time.monotonic() - started < 30
 
+    def test_a_page_of_240000_characters_is_refused_by_the_character_ceiling_whatever_its_elements(self) -> None:
+        """15 000 strings (15 000 elements, far under the element limit) hold 240 000 characters: the page-character
+        ceiling (200 000, unchanged from the portal's) is a rule of its own."""
+        dense = b"BT /F1 1 Tf 0 0 Td " + b"(AAAAAAAAAAAAAAAA) Tj " * 15_000 + b"ET"
+        found = _refusal(lambda: inspect_comparison_pdf(_pdf(30, dense)))
+        assert found["constraint"] == "pdf_page_content"
+        assert portal.PAGE_CHARACTERS_MAX == COMPARISON_POLICY.page_characters == 200_000
+
     def test_a_text_bomb_under_the_element_limit_is_stopped_by_the_ceiling_not_by_the_api(self) -> None:
         """500 000 strings pass the element rule (1 000 000 here, 400 000 for the portal), and the 8 M characters
         on the page are more than 768 MiB can hold: the child is ended by the kernel and the document is refused

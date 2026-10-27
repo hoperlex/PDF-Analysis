@@ -55,6 +55,15 @@ class TestADeclaredBatch:
         assert len({f.file_id for f in view.files or ()}) == 2
         assert view.upload_id.startswith("cbt_") and all(f.file_id.startswith("cuf_") for f in view.files or ())
 
+    def test_a_name_with_control_characters_is_stored_without_them_and_one_made_of_them_is_refused(
+        self, comparison, project, user, session_factory
+    ) -> None:
+        view = create(comparison, str(project.project_uid), {"a\x00b\x07.pdf": b"%PDF-1.7 x"}, user=user)
+        assert [f.display_name for f in view.files or ()] == ["ab.pdf"]
+        refused = _refused(lambda: _declare(comparison, str(project.project_uid), [DeclaredFileRequest("\x00\x01", 1, SHA)],
+                                            user=f"usr_{new_ulid()}", key="k2"))
+        assert (refused.detail_fields["field"], refused.detail_fields["constraint"]) == ("files", "display_name")
+
     def test_nothing_is_stored_and_no_token_exists_yet(self, comparison, project, user, session_factory, bucket_keys) -> None:
         create(comparison, str(project.project_uid), {"a.pdf": b"%PDF-1.7 x"}, user=user)
         with session_factory() as session:

@@ -127,6 +127,51 @@ class TestARevisionIsRebasedNotOverwritten:
             assert [r[0] for r in table(session, "SELECT revision_no FROM comparison_version_order ORDER BY revision_no")] == [1, 2]
 
 
+class TestTheStaleCheckAndTheInsertAreOneDecision:
+    def test_a_request_that_arrives_while_a_revision_is_being_written_waits_and_is_then_stale(
+        self, orders, project, document, user, session_factory
+    ) -> None:
+        """Session A holds the document's order lock with revision 2 written and not yet committed. A request on
+        base 1 must **wait for the lock** and, when A commits, be refused as stale -- never read revision 1, pass the
+        stale check and die on the chain trigger with a database error."""
+        import time
+        from concurrent.futures import ThreadPoolExecutor
+
+        from auditmanager.ingest import CommandRepository, payload_fingerprint
+        from auditmanager.ingest.comparison_pdf.public import ComparisonUploadRepository
+        from auditmanager.ingest.comparison_pdf.repository import new_order_id
+        from auditmanager.shared.identity import IdempotencyKey
+
+        document_uid, versions = document
+        repo = ComparisonUploadRepository()
+        a = session_factory()
+        try:
+            claim = CommandRepository().begin(a, command_type="append_comparison_version_order",
+                                              idempotency_key=IdempotencyKey("holder"),
+                                              fingerprint=payload_fingerprint({"holder": 1}))
+            repo.lock_document_order(a, document_uid)
+            repo.insert_order(a, order_id=new_order_id(), project_uid=str(project.project_uid), document_uid=document_uid,
+                              revision_no=2, version_uids=list(reversed(versions)), source="expert", actor_user_uid=user,
+                              actor_label=LABEL, command_id=str(claim.command_id))
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                waiting = pool.submit(lambda: _attempt(orders, project, document_uid, versions, user))
+                time.sleep(1.0)
+                assert not waiting.done(), "the request did not wait for the order lock"
+                a.commit()
+                outcome = waiting.result(timeout=30)
+        finally:
+            a.close()
+        assert isinstance(outcome, DomainError), outcome
+        assert outcome.code is ErrorCode.CONFLICT and outcome.detail_fields["conflict_reason"] == "comparison_version_order_stale"
+
+
+def _attempt(orders, project, document_uid, versions, user):
+    try:
+        return _append(orders, project, document_uid, versions, 1, user, key="late")
+    except Exception as failure:  # noqa: BLE001 - the test reads what kind of failure it was
+        return failure
+
+
 class TestARevisionListsTheDocumentsVersions:
     @pytest.mark.parametrize("make", [
         lambda v: v[:-1],                       # one left out

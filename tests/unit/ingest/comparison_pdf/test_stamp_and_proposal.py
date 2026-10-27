@@ -84,6 +84,11 @@ class TestOnePage:
     def test_an_unlabelled_designation_is_found_by_its_shape(self) -> None:
         assert parse_page_stamp("13AV-RD-EM2-PA\r\nЛист 1").designation == "13AV-RD-EM2-PA"
 
+    def test_a_hostile_documents_control_characters_never_reach_a_fact(self) -> None:
+        stamp = parse_page_stamp("Обозначение\r\nСИНТ-01\x00-ЭМ\ud800\r\nСтадия\r\nР\x07")
+        assert stamp.designation == "СИНТ-01-ЭМ" and stamp.project_stage == "R"
+        assert "\x00" not in repr(stamp)
+
     def test_a_date_or_a_revision_is_not_a_designation(self) -> None:
         assert parse_page_stamp("10.03.2026\r\nИзм.2").designation is None
         assert parse_page_stamp("1.2.3").designation is None
