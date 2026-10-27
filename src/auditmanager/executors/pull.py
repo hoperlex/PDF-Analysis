@@ -258,16 +258,23 @@ class PullAdapter:
     # -- internals -------------------------------------------------------------------------
 
     def _write_task(self, payload: Mapping[str, Any], window: float) -> TaskRecord:
+        """Write the task. A call made for a comparison work attempt (`CMP-SPEND-01`, ADR-0025
+        decision 4) has a ``context`` that carries ``comparison_attempt_id`` -- and, like the
+        run's :class:`~auditmanager.jobs.public.AttemptContext`, ``remaining_seconds()`` for
+        :func:`answer_window`; its task is origin ``comparison_call``. Any other call is a Run's
+        call and is written as it always was."""
         context = self._context
+        comparison_attempt_id = getattr(context, "comparison_attempt_id", None)
         with self._sessions() as session:
             task = self._repository.insert_task(
                 session, connection_id=self._revision.connection_id,
-                revision_id=self._revision.revision_id, origin="run_call",
+                revision_id=self._revision.revision_id,
+                origin="comparison_call" if comparison_attempt_id is not None else "run_call",
                 run_id=getattr(context, "run_id", None),
                 attempt_id=getattr(context, "attempt_id", None),
                 model_call_id=getattr(context, "call_id", None), probe_id=None,
                 expected_model=self._revision.settings.gateway_model, payload=payload,
-                deadline_seconds=window,
+                deadline_seconds=window, comparison_attempt_id=comparison_attempt_id,
             )
             session.commit()
         return task

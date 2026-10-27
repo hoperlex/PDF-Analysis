@@ -6,8 +6,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-import pytest
-
 from auditmanager.comparison import public
 from auditmanager.comparison.spend import caller, repository, settler
 
@@ -132,17 +130,9 @@ def test_the_runs_claim_names_an_active_comparison_call_the_way_this_context_doe
         assert fragment in run_side
 
 
-# --- the pull channel's origin (an integrator hunk in a file this lane does not own) ------------------------------------
+# --- the pull channel's origin (the permanent pin of `CMP-C0-FIX-01`, once `CMP-SPEND-01`'s strict xfail) ---------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "executors/pull.py (the image lane's file) still writes origin 'run_call' for every call; the integrator's "
-        "hunk makes PullAdapter._write_task pass origin 'comparison_call' and comparison_attempt_id when the call's "
-        "context carries one. Remove this marker when it is applied: the test is then the permanent pin."
-    ),
-)
 def test_a_pull_adapter_writes_the_comparison_origin_for_a_comparison_call() -> None:
     from contextlib import contextmanager
     from datetime import datetime, timezone
