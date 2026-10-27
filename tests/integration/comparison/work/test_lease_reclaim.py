@@ -112,6 +112,58 @@ def test_a_cancel_requested_before_the_holder_died_cancels_instead_of_requeueing
     assert queue.attempts(work_id)[0]["state"] == "lost"
 
 
+def test_a_cancelled_item_asks_every_settler_about_the_lost_attempt_and_still_ends_cancelled(
+    queue, sessions, worker_id
+) -> None:
+    """`CMP-C0-FIX-01` (`CMP-SPEND-01` report section 8 item 2): a model call the lost attempt left open must be settled
+    even when the item ends ``cancelled``. The cancel wins whatever the settlers answer, and none is skipped."""
+    work_id = queue.enqueue()
+    item = queue.claim(worker_id)
+    with sessions() as session:
+        queue.repository.cancel(session, work_id)
+        session.commit()
+    queue.expire_lease(item.attempt_id)
+    asked: list[tuple[str, str]] = []
+
+    def first(session, attempt_id: str) -> bool:  # type: ignore[no-untyped-def]
+        asked.append(("first", attempt_id))
+        return True
+
+    def second(session, attempt_id: str) -> bool:  # type: ignore[no-untyped-def]
+        asked.append(("second", attempt_id))
+        return False
+
+    assert _reclaim(queue, sessions, spend_settlers=(first, second)) == 1
+    assert asked == [("first", item.attempt_id), ("second", item.attempt_id)]
+    row = queue.work(work_id)
+    assert row["state"] == "cancelled" and row["failure_reason"] is None
+    assert queue.attempts(work_id)[0]["state"] == "lost"
+    assert queue.claim(worker_id) is None
+
+
+def test_a_settler_runs_in_the_reclaim_transaction_of_a_cancelled_item(queue, sessions, worker_id) -> None:
+    """The settler's write and the item's end are one commit: a settler that fails rolls the whole pass back, and the
+    item is still ``running`` with its attempt unfenced for the next pass (nothing half-ended)."""
+    work_id = queue.enqueue()
+    item = queue.claim(worker_id)
+    with sessions() as session:
+        queue.repository.cancel(session, work_id)
+        session.commit()
+    queue.expire_lease(item.attempt_id)
+
+    def broken(session, attempt_id: str) -> bool:  # type: ignore[no-untyped-def]
+        raise RuntimeError("the journal is unreadable")
+
+    with pytest.raises(RuntimeError):
+        with sessions() as session:
+            queue.repository.reclaim_expired(session, spend_settlers=(broken,))
+            session.commit()
+    assert queue.work(work_id)["state"] == "running"
+    assert queue.attempts(work_id)[0]["state"] == "running"
+    assert _reclaim(queue, sessions) == 1
+    assert queue.work(work_id)["state"] == "cancelled"
+
+
 def test_an_attempt_a_settler_calls_ambiguous_ends_the_item_spend_unknown_and_an_explicit_retry_clears_it(
     queue, sessions, worker_id
 ) -> None:

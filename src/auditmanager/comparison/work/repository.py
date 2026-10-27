@@ -477,7 +477,9 @@ class ComparisonWorkRepository:
     ) -> int:
         """Fence the attempts whose lease expired and decide what happens to their items.
 
-        An item whose cancel was requested ends ``cancelled``; one whose attempt left a model call
+        An item whose cancel was requested ends ``cancelled`` (after every ``spend_settlers`` entry
+        has been asked about the lost attempt, so a call it left open is settled ``unknown`` and not
+        left ``sent``); one whose attempt left a model call
         that may have spent (a ``spend_settlers`` entry answers ``True``) ends ``spend_unknown``
         and is never re-sent by itself (ADR-0025 decision 5); one whose attempt budget is spent
         ends ``failed`` with ``attempt_budget_exhausted``; any other goes back to the queue. A
@@ -509,6 +511,12 @@ class ComparisonWorkRepository:
             if state not in {"leased", "running"}:
                 continue
             if work["cancel_requested"]:
+                # The cancel wins, but the lost attempt may have left a model call open (``sent``):
+                # every settler is asked first and, unlike ``any(...)`` below, each one is asked
+                # (the answer is not needed: whatever it says, the item ends ``cancelled``), so no
+                # call stays open behind a cancelled item (`CMP-C0-FIX-01`, `CMP-SPEND-01` item 2).
+                for settle in spend_settlers:
+                    settle(session, attempt_id)
                 self._advance_work(session, work_id, state, "cancelled")
             elif any(settle(session, attempt_id) for settle in spend_settlers):
                 self._advance_work(session, work_id, state, "spend_unknown")

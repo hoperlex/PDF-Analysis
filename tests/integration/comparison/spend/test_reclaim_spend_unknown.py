@@ -171,8 +171,8 @@ def test_an_earlier_attempts_open_call_stops_the_next_attempt_from_sending_if_no
 def test_a_row_an_ended_attempt_left_open_is_settled_by_the_next_call_anywhere(
     caller: Any, queue: Any, journal: Any, sessions: Any, connection: tuple[str, str], h: Any, clean_day: None,
 ) -> None:
-    """The queue settles only a *lost* attempt, and not at all when a cancel was requested; a row left open by an
-    attempt that is over is settled ``unknown`` the next time any call is prepared."""
+    """The queue settles only a *lost* attempt, and only through the settlers it is given (none here); a row left open
+    by an attempt that is over is settled ``unknown`` the next time any call is prepared."""
     stale = queue.claimed()
     _killed_mid_call(caller, stale, connection, h)
     queue.expire_and_reclaim(stale, settlers=())                   # attempt lost, row still sent
@@ -186,19 +186,27 @@ def test_a_row_an_ended_attempt_left_open_is_settled_by_the_next_call_anywhere(
     assert [r["state"] for r in rows] == ["unknown"] and rows[0]["error_code"] == "attempt_ended"
 
 
-def test_a_cancel_that_arrives_with_a_lost_lease_is_not_settled_by_the_queue_but_by_the_next_call(
+def test_a_cancel_that_arrives_with_a_lost_lease_is_settled_by_the_queues_reclaim_too(
     caller: Any, queue: Any, journal: Any, sessions: Any, connection: tuple[str, str], h: Any, clean_day: None,
 ) -> None:
-    """A finding of this lane: ``reclaim_expired`` ends a cancelled item before it asks the settlers, so the call stays
-    open. It blocks no connection (its attempt is over) and is settled by housekeeping."""
+    """``CMP-C0-FIX-01`` (the finding of ``CMP-SPEND-01``, report section 8 item 2): ``reclaim_expired`` used to end a
+    cancelled item before it asked the settlers, so a call that was ``sent`` when the worker died stayed open until
+    housekeeping. It now asks them first: the cancel still wins (the item is ``cancelled``, not ``spend_unknown``) and
+    the call is ``unknown`` the moment the reclaim commits, with the reason a settled lost attempt carries."""
     item = queue.claimed()
-    _killed_mid_call(caller, item, connection, h)
+    adapter = _killed_mid_call(caller, item, connection, h)
     with sessions() as session:
         ComparisonWorkRepository().cancel(session, item.work_id)           # a cancel is requested while it runs
         session.commit()
-    queue.expire_and_reclaim(item, settlers=SPEND_SETTLERS)
-    assert queue.work_state(item.work_id) == "cancelled"
     assert [r["state"] for r in journal.rows(item.work_id)] == ["sent"]
+    queue.expire_and_reclaim(item, settlers=SPEND_SETTLERS)
+    assert queue.work_state(item.work_id) == "cancelled", "the cancel wins over the unknown outcome"
+    rows = journal.rows(item.work_id)
+    assert [r["state"] for r in rows] == ["unknown"], "no sent call may stay open behind a cancelled item"
+    assert rows[0]["error_code"] == "attempt_lost" and rows[0]["has_terminal"] and rows[0]["cost_micros"] is None
+    assert adapter.calls == 1
+    # Nothing is left for housekeeping: the next call anywhere finds no open row of that item to settle.
     fresh = queue.claimed()
     h.make_call(caller, fresh, h.ScriptedAdapter(reply=h.reply(cost=0.1)), connection[1])
     assert [r["state"] for r in journal.rows(item.work_id)] == ["unknown"]
+    assert journal.rows(item.work_id)[0]["error_code"] == "attempt_lost", "not re-settled as attempt_ended"
