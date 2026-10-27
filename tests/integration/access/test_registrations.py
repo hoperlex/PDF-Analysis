@@ -125,14 +125,18 @@ class TestSubmit:
 
     def test_the_queue_holds_100_and_refuses_the_101st(self, session: Session) -> None:
         """99 rows written directly (each submit costs a derivation), then the 100th and
-        101st through the repository."""
+        101st through the repository.
+
+        The 99 are written three days old: the day cap of `R-146ay` counts requests accepted
+        in the last 24 hours, and this test is about the pending cap alone
+        (`tests/integration/access/test_registration_day_cap.py` holds the other)."""
         for index in range(MAX_PENDING_REQUESTS - 1):
             session.execute(
                 text(
                     "INSERT INTO registration_request (request_id, login, last_name, "
                     "first_name, password_algorithm, password_iterations, password_salt, "
-                    "password_hash) VALUES (:rid, :login, 'Петрова', 'Анна', "
-                    "'pbkdf2_sha256', 600000, :s, :d)"
+                    "password_hash, submitted_at) VALUES (:rid, :login, 'Петрова', 'Анна', "
+                    "'pbkdf2_sha256', 600000, :s, :d, now() - interval '3 days')"
                 ),
                 {
                     "rid": f"reg_01ARZ3NDEKTSV4RRFFQ69G{index:04d}",
