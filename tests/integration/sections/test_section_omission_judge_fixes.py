@@ -9,7 +9,10 @@ with the registered AI profile and a scripted adapter. No container, no network.
   with the term) is refused in one call and from the first of two windows; a clean continuation is published;
 * finding 4: a range page the version stores as text-less, and the term in the recognised text of a searched
   page, refuse the pair; both reach the check from the executor;
-* the sentence the stage appends names the pages that were searched.
+* the sentence the stage appends names the pages that were searched;
+* finding 5 (budget): the executor plans the run with the profile's own prompt bundle, so the one-call figure
+  subtracts that prompt and schema (the figures themselves are in
+  ``tests/integration/analysis_text/test_section_input_budget.py``).
 """
 
 from __future__ import annotations
@@ -31,11 +34,13 @@ from auditmanager.analysis.public import (
     publish_artifact,
 )
 from auditmanager.analysis.text import STATUS_SUCCEEDED, ProviderConfig, ProviderMode, run_text_analysis
+from auditmanager.analysis.text.budget import input_budget_characters
 from auditmanager.analysis.text.omission import OMISSION_REASONS, note_for
 from auditmanager.analysis.text.profile_registry import load_text_profile_registry
 from auditmanager.analysis.text.recognised_input import RecognisedPage, total_characters
 from auditmanager.analysis.text.windowed import run_text_analysis_windows
 from auditmanager.analysis.text.windows import WindowPolicy
+from auditmanager.runs import executor as executor_module
 from auditmanager.runs.executor import _run_text_analysis_stage, _StageOutputs
 from auditmanager.runs.retry import RetryPolicy
 from auditmanager.shared.identity import RunId
@@ -328,3 +333,37 @@ def test_the_executor_hands_the_recognised_text_to_the_omission_check() -> None:
 def test_every_new_reason_is_a_stage_metric(reason: str) -> None:
     outcome = one_call((PLAN, GENERAL, SCHEDULE, CLEAN_CONTINUATION), omission(first=3, last=4, heading_page=3))
     assert f"omissions_dropped_{reason}" in outcome.metrics and outcome.metrics[f"omissions_dropped_{reason}"] == 0
+
+
+# --- finding 5: the executor plans the run with the profile's own bundle ------------------------------------
+
+
+def test_the_executor_plans_the_run_with_its_own_prompt_bundle(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[tuple[dict[str, Any], Any]] = []
+    original = executor_module.text_window_policy
+
+    def spy(**kwargs: Any) -> Any:
+        policy = original(**kwargs)
+        seen.append((kwargs, policy))
+        return policy
+
+    monkeypatch.setattr(executor_module, "text_window_policy", spy)
+    pages = (PLAN, GENERAL, SCHEDULE, CLEAN_CONTINUATION)
+    reply = omission(first=3, last=4, heading_page=3)
+    model, ceiling = CONFIG.model_id, CONFIG.run_cost_ceiling_usd
+    old_limit = input_budget_characters(model, ceiling)
+    own_limit = input_budget_characters(model, ceiling, bundle=AI.prompt_bundle)
+    assert own_limit < old_limit
+
+    executor_stage(pages, {}, reply, textless_pages=(), text_character_count=old_limit)
+    kwargs, policy = seen[-1]
+    assert kwargs["bundle"] is AI.prompt_bundle
+    assert policy is not None and policy.window_characters == own_limit, (
+        "a volume exactly at the old (АР) limit is windowed for a run whose own prompt is longer"
+    )
+
+    executor_stage(pages, {}, reply, textless_pages=(), text_character_count=own_limit)
+    assert seen[-1][1] is None, "exactly at the run's own figure: still one call"
+
+    executor_stage(pages, {}, reply, textless_pages=(), text_character_count=own_limit + 1)
+    assert seen[-1][1] is not None
