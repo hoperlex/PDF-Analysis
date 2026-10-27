@@ -130,3 +130,89 @@ def test_server_does_not_release_bytes_if_claim_ends_during_blob_read(monkeypatc
     with pytest.raises(DomainError):
         adapter.read_image(runner=runner, task_id="ext_a", blob_id=IMAGE["blob_id"])
     assert checks == 2 and store.reads == 1
+
+
+# -- several images and opaque crop references, `CMP-EXEC-IMAGES-01` ------------------------------
+
+from auditmanager.executors.image_input import attach_images  # noqa: E402
+from tests.unit.executors.crop_support import crop, descriptor, fake_descriptor, png  # noqa: E402
+
+
+def test_up_to_eight_crop_references_enter_the_task_in_order_without_their_bytes() -> None:
+    crops = [crop(str(index)) for index in range(8)]
+    built = attach_images(_request(), crops)
+    payload = _task_payload(built)
+    assert [item["crop_id"] for item in payload["images"]] == [item.crop_id for item in crops]
+    assert [item["blob_id"] for item in payload["images"]] == [
+        descriptor(item.data, crop_id=item.crop_id)["blob_id"] for item in crops]
+    assert all(item.data not in repr(payload).encode() for item in crops)
+    assert all("portal_block_id" not in item for item in payload["images"])
+
+
+def test_a_portal_block_crop_and_opaque_crops_may_not_be_mixed_with_a_second_identity() -> None:
+    mixed = [{**descriptor(png("m"), crop_id="crop-m"), "portal_block_id": "blk_" + "a" * 32}]
+    with pytest.raises(DomainError):
+        _task_payload(_request(mixed))
+    assert _task_payload(_request([IMAGE, descriptor(png("m"), crop_id="crop-m")]))["images"][0] == IMAGE
+
+
+@pytest.mark.parametrize("images", [
+    [fake_descriptor(index, 1) for index in range(9)],                       # a ninth image
+    [fake_descriptor(index, 12 << 20) for index in range(3)],                # 36 MiB in all
+    [fake_descriptor(0, 16 * 1024 * 1024 + 1)],                              # one above 16 MiB
+    [descriptor(png("d"), crop_id="crop-d"), descriptor(png("e"), crop_id="crop-d")],  # a crop twice
+    [{**descriptor(png("f"), crop_id="crop-f"), "blob_id": "blob_" + "0" * 26}],        # blob id not derived
+    "not-a-list",
+])
+def test_a_list_outside_the_limits_never_creates_a_task(images: object) -> None:
+    with pytest.raises(DomainError) as refused:
+        _task_payload(_request(images))
+    assert refused.value.code is ErrorCode.ANALYSIS_INPUT_INVALID
+
+
+class CropRepository(FakeRepository):
+    """The held task carries three crops, two with the same bytes."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        same = png("blank")
+        self.images = [descriptor(same, crop_id="crop-a-1"), descriptor(png("x"), crop_id="crop-a-2"),
+                       descriptor(same, crop_id="crop-b-1")]
+
+    def payload_of(self, _session, _task_id):
+        return {"images": self.images}
+
+
+def test_a_crop_is_named_by_its_blob_id_exactly_as_a_portal_block_crop_is() -> None:
+    repository = CropRepository()
+    owner = RunnerPrincipal(token_id="ern_a", connection_id="exc_a")
+    found = claimed_image(None, owner, "ext_a", repository.images[1]["blob_id"], repository)
+    assert found["crop_id"] == "crop-a-2"
+    assert claimed_image(None, owner, "ext_a", repository.images[2]["blob_id"], repository)["sha256"] \
+        == repository.images[0]["sha256"], "the same bytes are one Blob under two references"
+    with pytest.raises(DomainError):
+        claimed_image(None, owner, "ext_a", IMAGE["blob_id"], repository)
+    with pytest.raises(DomainError):
+        claimed_image(None, RunnerPrincipal("ern_b", "exc_b"), "ext_a", repository.images[1]["blob_id"], repository)
+
+
+def test_the_served_bytes_of_a_crop_are_checked_against_its_descriptor(monkeypatch) -> None:
+    crop_bytes = png("served")
+    image = descriptor(crop_bytes, crop_id="crop-served")
+    monkeypatch.setattr(executor_public, "claimed_image", lambda *args: image)
+
+    class Store:
+        reads = 0
+
+        def inspect(self, _blob_id):
+            return SimpleNamespace(size=len(crop_bytes), sha256=image["sha256"], media_type="image/png")
+
+        def open_stream(self, _blob_id, *, expected_sha256, expected_size):
+            Store.reads += 1
+            yield crop_bytes if Store.reads == 1 else crop_bytes + b"x"
+
+    adapter = RunnerAdapter(lambda: nullcontext(None), blob_store=Store())
+    runner = SimpleNamespace(token_id="ern_a", connection_id="exc_a")
+    assert adapter.read_image(runner=runner, task_id="ext_a", blob_id=image["blob_id"]) == crop_bytes
+    with pytest.raises(DomainError):
+        adapter.read_image(runner=runner, task_id="ext_a", blob_id=image["blob_id"])

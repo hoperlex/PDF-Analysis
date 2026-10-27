@@ -60,6 +60,7 @@ from sqlalchemy.orm import Session
 from auditmanager.executors.answers import read_answer
 from auditmanager.executors.repository import ExecutorRepository
 from auditmanager.executors.runner_repository import (
+    DEFAULT_CLAIM_IMAGES,
     ClaimedRow,
     RunnerRepository,
     RunnerTokenRecord,
@@ -435,7 +436,7 @@ def claim_task(
     executors: ExecutorRepository | None = None, repository: RunnerRepository | None = None,
     sleep: Callable[[float], None] = time.sleep,
     monotonic: Callable[[], float] = time.monotonic,
-    slots: LongPollSlots | None = None,
+    slots: LongPollSlots | None = None, max_images: int | None = None,
 ) -> ClaimedTask | None:
     """Long poll: the connection's oldest open task, now claimed by this token, or ``None``
     after ``wait_seconds``. Each attempt is its own short transaction, so a waiting runner
@@ -449,14 +450,20 @@ def claim_task(
     by default): one waiting claim per token and :data:`MAX_WAITING_CLAIMS_TOTAL` in all. A
     claim that cannot have one looks once, as ``wait_seconds: 0`` does -- it still receives a
     task that is open and still redelivers its own -- and answers ``None`` (the ``204``)
-    without sleeping. The runner's protocol is unchanged."""
+    without sleeping. The runner's protocol is unchanged.
+
+    ``max_images`` is the most images one task may carry that this runner serves, as it declared
+    it in the claim (ADR-0025 decision 18); ``None`` is a claim that declared nothing, which every
+    runner deployed before `CMP-EXEC-IMAGES-01` is, and means 1. The task handed back never has
+    more images than that, on a fresh claim and on a redelivery."""
+    declared = DEFAULT_CLAIM_IMAGES if max_images is None else max_images
     pool = _LONG_POLLS if slots is None else slots
     wait = max(0, min(int(wait_seconds), MAX_WAIT_SECONDS))
     holds_slot = wait > 0 and pool.try_acquire(principal.token_id)
     try:
         return _poll(
             session_factory, principal, wait=wait if holds_slot else 0, executors=executors,
-            repository=repository, sleep=sleep, monotonic=monotonic)
+            repository=repository, sleep=sleep, monotonic=monotonic, max_images=declared)
     finally:
         if holds_slot:
             pool.release(principal.token_id)
@@ -465,7 +472,7 @@ def claim_task(
 def _poll(
     session_factory: Callable[[], Session], principal: RunnerPrincipal, *, wait: int,
     executors: ExecutorRepository | None, repository: RunnerRepository | None,
-    sleep: Callable[[float], None], monotonic: Callable[[], float],
+    sleep: Callable[[float], None], monotonic: Callable[[], float], max_images: int,
 ) -> ClaimedTask | None:
     store = repository or RunnerRepository()
     revisions = executors or ExecutorRepository()
@@ -484,11 +491,13 @@ def _poll(
             row: ClaimedRow | None = None
             if limit == 1:
                 row = store.redeliver(
-                    session, token_id=principal.token_id, lease_seconds=CLAIM_LEASE_SECONDS)
+                    session, token_id=principal.token_id, lease_seconds=CLAIM_LEASE_SECONDS,
+                    max_images=max_images)
             if row is None and store.held_claims(session, principal.token_id) < limit:
                 row = store.claim_next(
                     session, connection_id=principal.connection_id,
-                    token_id=principal.token_id, lease_seconds=CLAIM_LEASE_SECONDS)
+                    token_id=principal.token_id, lease_seconds=CLAIM_LEASE_SECONDS,
+                    max_images=max_images)
             session.commit()
         if row is not None:
             return _claimed(row)

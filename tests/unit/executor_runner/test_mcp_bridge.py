@@ -347,3 +347,97 @@ def test_stdout_carries_only_json_rpc_lines():
         for line in mcp.raw_stdout:
             assert json.loads(line)["jsonrpc"] == "2.0"
             assert line.endswith(b"\n") and line.count(b"\n") == 1
+
+
+# -- several images, `CMP-EXEC-IMAGES-01` --------------------------------------------------------
+
+
+def test_a_bridge_that_declared_three_images_returns_all_three_in_order_with_their_references():
+    made = [S.make_image(label) for label in ("left", "right", "detail")]
+    with S.FakeRunner() as runner, S.McpSession(
+            runner.origin, extra_args=("--accept-images", "--max-images", "3")) as mcp:
+        mcp.initialize()
+        for image, raw in made:
+            runner.add_image(image["blob_id"], raw)
+        runner.add_task(S.make_task("ext_MCP3", images=[image for image, _ in made]))
+        result = _claim(mcp)
+        payload = mcp.payload(result)
+        assert payload["status"] == "task" and "image_portal_block_id" not in payload
+        assert payload["image_references"] == [
+            {"index": 1, "crop_id": "crop-left"}, {"index": 2, "crop_id": "crop-right"},
+            {"index": 3, "crop_id": "crop-detail"}]
+        assert "all 3" in payload["image_notice"] and "image_input_unsupported" in payload["image_notice"]
+        assert [block["type"] for block in result["content"]] == ["text", "image", "image", "image"]
+        assert [base64.b64decode(block["data"]) for block in result["content"][1:]] == [raw for _, raw in made]
+        assert runner.of_kind("claim")[0]["body"]["max_images"] == 3
+        assert len(runner.of_kind("image")) == 3 and not runner.of_kind("fail")
+
+
+def test_a_bridge_with_the_default_count_refuses_a_task_of_two_images_whole():
+    made = [S.make_image(label) for label in ("a", "b")]
+    with S.FakeRunner() as runner, S.McpSession(runner.origin, extra_args=("--accept-images",)) as mcp:
+        mcp.initialize()
+        for image, raw in made:
+            runner.add_image(image["blob_id"], raw)
+        runner.add_task(S.make_task("ext_MCP2", images=[image for image, _ in made]))
+        result = _claim(mcp)
+        assert mcp.payload(result)["status"] == "unsupported_image_task"
+        assert len(result["content"]) == 1, "no image is shown to the session"
+        assert "max_images" not in runner.of_kind("claim")[0]["body"], "the default declares one, as ever"
+        assert runner.of_kind("fail")[0]["body"]["reason"] == "image_input_unsupported"
+        assert runner.of_kind("image") == [] and not runner.of_kind("answer")
+
+
+def test_a_bridge_fails_the_whole_task_when_one_of_its_images_cannot_be_delivered():
+    made = [S.make_image(label) for label in ("a", "b", "c")]
+    with S.FakeRunner() as runner, S.McpSession(
+            runner.origin, extra_args=("--accept-images", "--max-images", "3")) as mcp:
+        mcp.initialize()
+        runner.add_image(made[0][0]["blob_id"], made[0][1])
+        runner.add_image(made[1][0]["blob_id"], b"\x89PNG\r\n\x1a\nchanged")
+        runner.add_image(made[2][0]["blob_id"], made[2][1])
+        runner.add_task(S.make_task("ext_MCPB3", images=[image for image, _ in made]))
+        result = _claim(mcp)
+        assert mcp.payload(result)["status"] == "image_delivery_failed"
+        assert len(result["content"]) == 1
+        assert runner.of_kind("fail")[0]["body"]["reason"] == "image_delivery_failed"
+
+
+def test_the_one_portal_block_image_result_is_what_it_was():
+    image, raw = S.make_image("block", crop=False)
+    with S.FakeRunner() as runner, S.McpSession(runner.origin, extra_args=("--accept-images",)) as mcp:
+        mcp.initialize()
+        runner.add_image(image["blob_id"], raw)
+        runner.add_task(S.make_task("ext_MCP1", images=[image]))
+        result = _claim(mcp)
+        payload = mcp.payload(result)
+        assert payload["image_portal_block_id"] == image["portal_block_id"]
+        assert "image_references" not in payload and "image_notice" not in payload
+        assert "max_images" not in runner.of_kind("claim")[0]["body"], "the old claim wire"
+        assert [block["type"] for block in result["content"]] == ["text", "image"]
+
+
+def test_one_crop_image_is_listed_by_its_opaque_reference():
+    image, raw = S.make_image("one")
+    with S.FakeRunner() as runner, S.McpSession(runner.origin, extra_args=("--accept-images",)) as mcp:
+        mcp.initialize()
+        runner.add_image(image["blob_id"], raw)
+        runner.add_task(S.make_task("ext_MCPC", images=[image]))
+        payload = mcp.payload(_claim(mcp))
+        assert payload["image_references"] == [{"index": 1, "crop_id": "crop-one"}]
+        assert "image_portal_block_id" not in payload
+
+
+import pytest  # noqa: E402
+
+
+@pytest.mark.parametrize("args", [("--max-images", "3"), ("--accept-images", "--max-images", "9"),
+                                  ("--accept-images", "--max-images", "0")])
+def test_max_images_needs_the_image_switch_and_a_count_from_one_to_eight(args):
+    import subprocess
+    import sys
+
+    result = subprocess.run([sys.executable, str(S.BRIDGE), "--origin", "http://127.0.0.1:1", *args],
+                            env=S.clean_env(PDF_ANALYSIS_RUNNER_TOKEN=S.TOKEN), capture_output=True,
+                            text=True, timeout=20)
+    assert result.returncode == 2, result.stderr

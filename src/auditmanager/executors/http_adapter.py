@@ -45,7 +45,7 @@ from auditmanager.executors.destinations import (
     build_opener,
     refusal_of,
 )
-from auditmanager.executors.image_input import add_anthropic_image, add_openai_image, checked_png
+from auditmanager.executors.image_input import add_anthropic_images, add_openai_images, checked_pngs
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
@@ -187,14 +187,14 @@ class AnthropicMessagesAdapter:
         return ProviderMode.LIVE
 
     def complete(self, request: ModelRequest) -> ModelResponse:
-        image = checked_png(request)
+        images = checked_pngs(request)
         allowed = effective_timeout(self._timeout_seconds, self._context)
         if allowed is None:
             raise _no_time_left()
         body = {**dict(request.body), "model": self._gateway_model}
         body.pop("images", None)
-        if image is not None:
-            add_anthropic_image(body, image)
+        if images:
+            add_anthropic_images(body, images)
         started = time.monotonic()
         try:
             message = self._client.messages.create(**body, timeout=allowed)
@@ -257,13 +257,13 @@ class AnthropicMessagesAdapter:
 
 
 class OpenAIImageAdapter(ProxyAdapter):
-    """A pinned proxy call with the selected PNG in the user message."""
+    """A pinned proxy call with the selected PNGs, in order, in the user message."""
 
     def complete(self, request: ModelRequest) -> ModelResponse:
-        image = checked_png(request)
-        if image is None:
+        images = checked_pngs(request)
+        if not images:
             return super().complete(request)
-        body = add_openai_image(dict(request.body), image)
+        body = add_openai_images(dict(request.body), images)
         body.pop("images", None)
         return super().complete(ModelRequest(
             model_id=request.model_id, body=body,

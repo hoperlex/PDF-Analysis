@@ -65,6 +65,13 @@ The general form is
 For an image-capable session add `--accept-images` after `<stand>`; the bridge then
 fetches and verifies each claimed PNG and returns it as MCP image content alongside
 the task text. Check one image task in the session before using this mode for runs.
+The bridge serves one image per task unless it is started with `--max-images N` (1 to 8,
+only with `--accept-images`); it tells the stand that number when it claims, and the stand
+never hands it a task with more. A task with several images returns them in order after the
+text, with `image_references` naming each by its opaque crop reference (or portal block), and
+a notice that the session answers only if it can see all of them and otherwise reports
+`image_input_unsupported`. Claude Code limits the size of one MCP tool result, so a task of
+many large crops is for the agent (section C), not for a session.
 Another option (`--transport`) must sit between `--env` and the name, or the CLI reads the name
 as one more `KEY=value` pair. `--` separates Claude's options from the server command.
 
@@ -155,7 +162,11 @@ The token lives only in that file; the config refuses a key named `token`, `secr
   `http://127.0.0.1:11434/v1/chat/completions`, vLLM, llama.cpp). `response_format =
   "json_schema"` passes the task schema to servers that constrain decoding. Set
   `[endpoint].accept_images = true` only for a model that accepts an OpenAI Chat
-  `image_url` data URL. The agent verifies the PNG and sends it in the user message.
+  `image_url` data URL. The agent verifies each PNG and sends all of them, in the task's order,
+  in the user message. `[endpoint].max_images` (1 to 8, default 1, above 1 only with
+  `accept_images = true`) is what the agent tells the stand it serves in one task; the stand
+  never hands a task with more, and an agent that is nevertheless handed one fails it with
+  `image_input_unsupported` instead of answering from some of the images.
 - `[model] declared` is the exact pinned id this agent answers as; a task that pins another
   model is failed as `model_mismatch` before any work. It is an assertion: declare only what
   is true (`R-133` records it as `declared`, not `reported`).
@@ -226,13 +237,19 @@ usage into an invented dollar amount. A subscription's availability and limits
 are the account's, so a real probe is required before routing.
 
 For a separate saved-crop image task, set `[command].accept_images = true` only
-when the command accepts `local_images` in the task JSON. The agent downloads the
-claim's PNG over the same authenticated channel, checks its size and SHA-256,
-passes a private temporary file to `codex_answer.py`, and removes it when the
-command ends. `codex_answer.py` attaches it with `codex exec --image`. Text-only
-commands, endpoints and MCP sessions without their image opt-in refuse image tasks.
-Direct and VPN HTTP connections carry a selected PNG as an OpenAI Chat or Anthropic
-Messages image block. SSH command and SSH tunnel connections are still unserved.
+when the command accepts `local_images` in the task JSON. The agent downloads each of the
+claim's PNGs (up to eight, 16 MiB each and 32 MiB together; a crop is named by its blob id,
+and two crops with the same bytes are downloaded once) over the same authenticated channel,
+checks its size and SHA-256, passes private temporary files to `codex_answer.py`, and removes
+them when the command ends. `codex_answer.py` attaches them in order with one
+`codex exec --image` each and names them in the prompt. `[command].max_images` (1 to 8,
+default 1, above 1 only with `accept_images = true`) is what the agent tells the stand it
+serves; the stand never hands a task with more. Text-only commands, endpoints and MCP
+sessions without their image opt-in refuse image tasks.
+Direct and VPN HTTP connections carry the selected PNGs, in order, as OpenAI Chat or Anthropic
+Messages image blocks. SSH command and SSH tunnel connections carry them too (section F).
+A remote command installed before several images existed refuses a task of several (it reads
+the task's `image` member as one object), so it is never answered from part of the evidence.
 The W56b image
 stage will produce these tasks after its prompt and evidence policy is approved;
 the current «Анализ текста» route does not send images.
@@ -344,7 +361,9 @@ name `claude-opus-5` and nothing else, so the stand records the model as **repor
 in the task the answer is the structured object; the probe sends none and gets plain text.
 `reported_cost_usd` is always `null`: the CLI prints a list-price estimate for a subscription run, and
 the connection is `not_metered`. A task with an image is refused (`image_input_unsupported`); the
-stage that sends crops is not active.
+stage that sends crops is not active. (`ssh-forced-command.sh` reads the stand's `image` member
+as one `{"media_type","data"}` object, or a list of up to eight, 32 MiB of PNG together, and
+passes every image to the CLI as an image block; the reply envelope command above serves none.)
 
 ## Known limits of the Claude profiles
 

@@ -165,3 +165,73 @@ def test_fail_reason_is_cut_to_512_characters_and_never_empty():
         client.fail("ext_T", "")
         reasons = [r["body"]["reason"] for r in runner.of_kind("fail")]
         assert reasons == ["r" * 512, "unspecified"]
+
+
+# -- several images, `CMP-EXEC-IMAGES-01` --------------------------------------------------------
+
+
+def _images(count: int, *, crop: bool = True):
+    return [S.make_image(f"i{index}", crop=crop)[0] for index in range(count)]
+
+
+def test_a_claim_declares_max_images_only_above_one_so_the_old_wire_is_unchanged():
+    with S.FakeRunner() as runner:
+        client = rc.RunnerClient(runner.origin, S.TOKEN)
+        client.claim(0)
+        client.claim(0, 1)
+        client.claim(0, 4)
+        client.claim(3, 8)
+        assert [r["body"] for r in runner.of_kind("claim")] == [
+            {"wait_seconds": 0}, {"wait_seconds": 0}, {"wait_seconds": 0, "max_images": 4},
+            {"wait_seconds": 3, "max_images": 8}]
+        for bad in (0, 9, -1, True, "2", None):
+            with pytest.raises(rc.RunnerRejected):
+                client.claim(0, bad)
+        assert len(runner.of_kind("claim")) == 4, "a refused declaration sends nothing"
+
+
+def test_a_claim_takes_up_to_eight_images_of_either_kind_in_order():
+    with S.FakeRunner() as runner:
+        client = rc.RunnerClient(runner.origin, S.TOKEN)
+        crops, blocks = _images(8), _images(3, crop=False)
+        runner.override("claim", S.Reply(200, S.make_task("ext_C8", images=crops)),
+                        S.Reply(200, S.make_task("ext_B3", images=blocks)),
+                        S.Reply(200, S.make_task("ext_MIX", images=[crops[0], blocks[0]])))
+        assert [i["crop_id"] for i in client.claim(0, 8)["images"]] == [i["crop_id"] for i in crops]
+        assert client.claim(0, 8)["images"] == blocks
+        assert len(client.claim(0, 8)["images"]) == 2
+
+
+def _bad_lists():
+    one = S.make_image("one")[0]
+    both = {**one, "portal_block_id": "blk_" + "a" * 32}
+    neither = {k: v for k, v in one.items() if k != "crop_id"}
+    return {
+        "nine": _images(9),
+        "both identities": [both],
+        "no identity": [neither],
+        "a crop twice": [one, S.make_image("two")[0] | {"crop_id": one["crop_id"]}],
+        "a bad crop id": [{**one, "crop_id": "-leading"}],
+        "an extra member": [{**one, "page": 1}],
+        "above 16 MiB": [{**one, "size_bytes": rc.MAX_IMAGE_BYTES + 1}],
+        "above 32 MiB together": [{**S.make_image(f"big{i}")[0], "size_bytes": 12 << 20} for i in range(3)],
+        "not a list": {"0": one},
+        "a bad digest": [{**one, "sha256": "z" * 64}],
+        "a bad blob id": [{**one, "blob_id": "blob_nope"}],
+    }
+
+
+@pytest.mark.parametrize("name", list(_bad_lists()))
+def test_a_malformed_images_member_is_refused_as_a_malformed_task(name):
+    with S.FakeRunner() as runner:
+        client = rc.RunnerClient(runner.origin, S.TOKEN)
+        runner.override("claim", S.Reply(200, S.make_task("ext_BAD", images=_bad_lists()[name])))
+        with pytest.raises(rc.RunnerUnavailable, match="malformed images"):
+            client.claim(0, 8)
+
+
+def test_a_task_with_more_images_than_declared_is_not_served():
+    task = {"images": _images(3)}
+    assert rc.serves_images(task, 3) and rc.serves_images(task, 8)
+    assert not rc.serves_images(task, 2) and not rc.serves_images(task, 1)
+    assert rc.serves_images({}, 1) and rc.serves_images({"images": []}, 1) and rc.serves_images({"images": None}, 1)

@@ -185,7 +185,7 @@ class RunnerPort(Protocol):
         self, *, connection_id: str, token_id: str, user_uid: str, idempotency_key: str
     ) -> models.RunnerTokenMetadata: ...
     def claim_task(
-        self, *, runner: RunnerIdentity, wait_seconds: int
+        self, *, runner: RunnerIdentity, wait_seconds: int, max_images: int | None = None
     ) -> models.ClaimedExecutorTask | None: ...
     def read_image(
         self, *, runner: RunnerIdentity, task_id: str, blob_id: str

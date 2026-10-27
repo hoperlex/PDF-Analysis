@@ -39,7 +39,7 @@ import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
 from runner_client import (
     Backoff,
@@ -51,6 +51,7 @@ from runner_client import (
     RunnerRejected,
     RunnerThrottled,
     RunnerUnavailable,
+    serves_images,
     throttle_delay,
 )
 
@@ -69,8 +70,8 @@ KNOWN_KEYS = {
     "runner": {"origin", "token_env", "wait_seconds", "ca_file", "allow_insecure_http", "concurrency", "drain_seconds", "extend_floor_seconds", "backoff_min_seconds", "backoff_max_seconds"},
     "model": {"declared"},
     "executor": {"mode"},
-    "command": {"argv", "timeout_seconds", "cwd", "accept_images"},
-    "endpoint": {"url", "model", "api_key_env", "timeout_seconds", "response_format", "temperature", "max_tokens", "accept_images"},
+    "command": {"argv", "timeout_seconds", "cwd", "accept_images", "max_images"},
+    "endpoint": {"url", "model", "api_key_env", "timeout_seconds", "response_format", "temperature", "max_tokens", "accept_images", "max_images"},
 }
 
 
@@ -96,6 +97,7 @@ class Config:
     command_timeout: float = 540.0
     command_cwd: Optional[str] = None
     command_accept_images: bool = False
+    command_max_images: int = 1
     endpoint_url: str = ""
     endpoint_model: str = ""
     endpoint_api_key_env: str = ""
@@ -104,6 +106,20 @@ class Config:
     temperature: float = 0.0
     max_tokens: int = 0
     endpoint_accept_images: bool = False
+    endpoint_max_images: int = 1
+
+    @property
+    def accept_images(self) -> bool:
+        return self.command_accept_images if self.mode == "command" else self.endpoint_accept_images
+
+    @property
+    def declared_max_images(self) -> int:
+        """What the agent tells the stand it serves in one task: the configured count when it
+        accepts images at all, otherwise 1 (the stand's default for a claim that says nothing).
+        A task the agent cannot serve is still refused by :meth:`Agent._worker`."""
+        if not self.accept_images:
+            return 1
+        return self.command_max_images if self.mode == "command" else self.endpoint_max_images
 
 
 def _reject_secret_keys(document: dict, where: str = "") -> None:
@@ -153,6 +169,7 @@ def load_config(path: str) -> Config:
     cfg.command_timeout = float(command.get("timeout_seconds", cfg.command_timeout))
     cfg.command_cwd = command.get("cwd") or None
     cfg.command_accept_images = command.get("accept_images", False)
+    cfg.command_max_images = command.get("max_images", cfg.command_max_images)
     cfg.endpoint_url = str(endpoint.get("url", ""))
     cfg.endpoint_model = str(endpoint.get("model", ""))
     cfg.endpoint_api_key_env = str(endpoint.get("api_key_env", ""))
@@ -161,8 +178,17 @@ def load_config(path: str) -> Config:
     cfg.temperature = float(endpoint.get("temperature", cfg.temperature))
     cfg.max_tokens = int(endpoint.get("max_tokens", cfg.max_tokens))
     cfg.endpoint_accept_images = endpoint.get("accept_images", False)
+    cfg.endpoint_max_images = endpoint.get("max_images", cfg.endpoint_max_images)
     validate_config(cfg)
     return cfg
+
+
+def _validate_max_images(section: str, value: Any, accept_images: bool) -> None:
+    if type(value) is not int or not 1 <= value <= 8:
+        raise ConfigError(f"{section} max_images must be an integer in 1..8")
+    if value > 1 and not accept_images:
+        raise ConfigError(f"{section} max_images above 1 needs accept_images = true: an agent that "
+                          "does not take images serves none")
 
 
 def validate_config(cfg: Config) -> None:
@@ -182,9 +208,11 @@ def validate_config(cfg: Config) -> None:
             raise ConfigError("[command] argv must be a non-empty list of strings")
         if type(cfg.command_accept_images) is not bool:
             raise ConfigError("[command] accept_images must be a boolean")
+        _validate_max_images("[command]", cfg.command_max_images, cfg.command_accept_images)
     else:
         if type(cfg.endpoint_accept_images) is not bool:
             raise ConfigError("[endpoint] accept_images must be a boolean")
+        _validate_max_images("[endpoint]", cfg.endpoint_max_images, cfg.endpoint_accept_images)
         if not cfg.endpoint_url.startswith(("http://", "https://")):
             raise ConfigError("[endpoint] url must be an http(s) URL of a /v1/chat/completions endpoint")
         if not cfg.endpoint_model:
@@ -278,21 +306,26 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def run_endpoint(cfg: Config, task: dict, budget: float, should_stop: Any, api_key: str,
-                 image_bytes: bytes | None = None) -> Answer:
-    """One non-streaming chat completion against a local OpenAI-compatible endpoint."""
+                 images: Sequence[bytes] = ()) -> Answer:
+    """One non-streaming chat completion against a local OpenAI-compatible endpoint.
+
+    ``images`` are the task's verified PNGs, **all of them and in the task's order**; each is one
+    ``image_url`` block after the text. An endpoint that does not accept images refuses the
+    task rather than being sent the text alone."""
     body: dict[str, Any] = {
         "model": cfg.endpoint_model,
         "messages": [{"role": "system", "content": task["system"]}, {"role": "user", "content": task["user_text"]}],
         "temperature": cfg.temperature,
         "stream": False,
     }
-    if image_bytes is not None:
+    if images:
         if not cfg.endpoint_accept_images:
             raise ExecutorFailure("image_input_unsupported")
         body["messages"][1]["content"] = [
             {"type": "text", "text": task["user_text"]},
-            {"type": "image_url", "image_url": {
-                "url": "data:image/png;base64," + base64.b64encode(image_bytes).decode("ascii")}},
+            *({"type": "image_url", "image_url": {
+                "url": "data:image/png;base64," + base64.b64encode(raw).decode("ascii")}}
+              for raw in images),
         ]
     if cfg.max_tokens > 0:
         body["max_tokens"] = cfg.max_tokens
@@ -380,7 +413,7 @@ class Agent:
             if not slots.acquire(timeout=0.5):
                 continue
             try:
-                task = self.client.claim(self.cfg.wait_seconds)
+                task = self.client.claim(self.cfg.wait_seconds, self.cfg.declared_max_images)
             except RunnerAuthError:
                 slots.release()
                 self.auth_failed.set()
@@ -444,9 +477,10 @@ class Agent:
             if budget <= 0:
                 self._fail(task_id, "deadline_exceeded: too little time left to start")
                 return
+            # Refuse rather than answer on part of the evidence: a task whose images this agent
+            # does not take, or more of them than it declared, is given back whole.
             if task.get("images") and not (
-                self.cfg.command_accept_images if self.cfg.mode == "command"
-                else self.cfg.endpoint_accept_images
+                self.cfg.accept_images and serves_images(task, self.cfg.declared_max_images)
             ):
                 self._fail(task_id, "image_input_unsupported")
                 return
@@ -464,11 +498,7 @@ class Agent:
                 if self.cfg.mode == "command":
                     with tempfile.TemporaryDirectory(prefix="pdfa-runner-images-") as directory:
                         local_images = []
-                        for image in task.get("images", []):
-                            if should_stop():
-                                raise Interrupted(should_stop())
-                            raw = self.client.image(task_id, image,
-                                                    timeout=max(1.0, min(30.0, budget)))
+                        for image, raw in self._fetch_images(task, budget, should_stop):
                             path = Path(directory) / f"{image['blob_id']}.png"
                             path.write_bytes(raw)
                             path.chmod(0o600)
@@ -476,14 +506,8 @@ class Agent:
                         command_task = {**task, "local_images": local_images}
                         answer = run_command(self.cfg, command_task, budget, should_stop)
                 else:
-                    image_bytes = None
-                    for image in task.get("images", []):
-                        if should_stop():
-                            raise Interrupted(should_stop())
-                        image_bytes = self.client.image(
-                            task_id, image, timeout=max(1.0, min(30.0, budget)))
-                    answer = run_endpoint(self.cfg, task, budget, should_stop, self.api_key,
-                                          image_bytes)
+                    images = [raw for _, raw in self._fetch_images(task, budget, should_stop)]
+                    answer = run_endpoint(self.cfg, task, budget, should_stop, self.api_key, images)
             except Interrupted as stop:
                 self._interrupted(task_id, str(stop))
                 return
@@ -518,6 +542,21 @@ class Agent:
         finally:
             done.set()
             slots.release()
+
+    def _fetch_images(self, task: dict, budget: float, should_stop: Any) -> list[tuple[dict, bytes]]:
+        """Every image of the task, in its order, each verified against its digest and size. A
+        blob that two entries share (two crops with the same bytes) is fetched once. Any failure
+        raises: the task is then failed whole, never worked on with some of its images."""
+        fetched: dict[str, bytes] = {}
+        result: list[tuple[dict, bytes]] = []
+        for image in task.get("images", []):
+            if should_stop():
+                raise Interrupted(should_stop())
+            if image["blob_id"] not in fetched:
+                fetched[image["blob_id"]] = self.client.image(
+                    task["task_id"], image, timeout=max(1.0, min(30.0, budget)))
+            result.append((image, fetched[image["blob_id"]]))
+        return result
 
     def _interrupted(self, task_id: str, reason: str) -> None:
         if reason == "deadline":

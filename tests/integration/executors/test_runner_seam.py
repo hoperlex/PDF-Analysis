@@ -30,13 +30,15 @@ class StubRunner:
     def __init__(self) -> None:
         self.calls: list[tuple] = []
         self.addresses: list[str | None] = []
+        self.claimed_max_images: list[int | None] = []
 
     def authenticate_runner(self, presented: str, *, address: str | None):
         self.addresses.append(address)
         return RunnerIdentity("ern_T", "exc_C") if presented == TOKEN else None
 
-    def claim_task(self, *, runner, wait_seconds):
+    def claim_task(self, *, runner, wait_seconds, max_images=None):
         self.calls.append(("claim", runner, wait_seconds))
+        self.claimed_max_images.append(max_images)
         return None
 
     def extend_claim(self, *, runner, task_id):
@@ -181,6 +183,19 @@ def test_the_claim_defaults_to_the_long_poll_and_refuses_a_wait_outside_the_rang
         assert refused.status == 422 and refused.json()["error_code"] == "validation_failed", bad
     assert len(stub.calls) == 2
     assert post(surface, "/runner/tasks/claim", {"wait_seconds": 1, "extra": 1}).status == 422
+
+
+def test_the_declared_max_images_reaches_the_port_and_an_absent_one_reaches_it_as_none(surface, stub) -> None:
+    """`CMP-EXEC-IMAGES-01`: the router passes the claim's own value, and never invents one."""
+    assert post(surface, "/runner/tasks/claim", {}).status == 204
+    assert post(surface, "/runner/tasks/claim", {"wait_seconds": 0}).status == 204
+    assert post(surface, "/runner/tasks/claim", {"wait_seconds": 0, "max_images": 1}).status == 204
+    assert post(surface, "/runner/tasks/claim", {"max_images": 8}).status == 204
+    assert stub.claimed_max_images == [None, None, 1, 8]
+    before = len(stub.claimed_max_images)
+    for bad in (0, 9):
+        assert post(surface, "/runner/tasks/claim", {"max_images": bad}).status == 422
+    assert len(stub.claimed_max_images) == before, "a refused claim reaches no port"
 
 
 def test_an_empty_claim_answer_has_no_body(surface) -> None:

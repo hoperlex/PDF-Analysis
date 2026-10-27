@@ -50,7 +50,7 @@ class DeliveringRunner(StubRunner):
         self.waiting = True
         self.held = True
 
-    def claim_task(self, *, runner, wait_seconds):
+    def claim_task(self, *, runner, wait_seconds, max_images=None):
         self.calls.append(("claim", runner, wait_seconds))
         if not self.waiting:
             return None
