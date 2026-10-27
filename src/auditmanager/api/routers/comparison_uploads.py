@@ -1,6 +1,6 @@
 """The comparison upload operations, sealed as stubs (`CMP-SEAL-C0`, ADR-0025 decisions 9-11, 16, 25).
 
-Twelve operations: create, list and read an upload batch, stage a part (at most 16 MiB), complete
+The upload endpoints: create, list and read an upload batch, stage a part (at most 16 MiB), complete
 a file, read the proposal, confirm / exclude / retry one set, pause and resume the batch, cancel it.
 Every one answers ``503 dependency_unavailable`` until the lane that owns it wires the port
 (`CMP-INGEST-01`: create, part, complete, proposal, confirm; `CMP-INGEST-02`: list, exclude, retry,
