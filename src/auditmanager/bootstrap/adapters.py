@@ -5342,32 +5342,100 @@ class ComparisonVersionOrderAdapter:
         return _comparison_unavailable(self._DEPENDENCY)
 
 
-class VersionPageAdapter:
-    """`CMP-PROFILE-01` replaces the bodies."""
+def _page_cursor(raw: str | None) -> int:
+    """The page number after which a listing resumes: ``0`` for the first page."""
+    if raw is None:
+        return 0
+    parts = decode_cursor(raw)
+    if len(parts) != 1 or not parts[0].isdigit():
+        raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+    return int(parts[0])
 
-    _DEPENDENCY = "version_pages"
+
+def _page_profile_view(row: Any) -> models.VersionPageProfile:
+    """One stored profile in the frozen shape; only what the profile holds is set."""
+    from datetime import date
+
+    summary = row.summary
+    counts = summary.get("counts") or {}
+    raster = summary.get("raster") or {}
+    fields: dict[str, Any] = {
+        "page_profile_id": row.page_profile_id,
+        "version_uid": row.version_uid,
+        "page_number": row.page_number,
+        "status": row.status,
+        "algo_version": row.algo_version,
+        "content_key": row.content_key,
+        "has_text_layer": bool(summary.get("text_layer", False)),
+        "word_count": int(counts.get("words", 0)),
+        "vector_line_count": int(counts.get("lines", 0)),
+        "annotation_count": int(counts.get("annotations", 0)),
+        "preview_available": row.preview_blob_id is not None,
+        "thumbnail_available": row.thumbnail_blob_id is not None,
+    }
+    if row.reason is not None:
+        fields["reason"] = row.reason
+    if summary.get("width_pt"):
+        fields["width_pt"] = summary["width_pt"]
+        fields["height_pt"] = summary["height_pt"]
+    if raster:
+        fields["raster_width_px"] = raster["width_px"]
+        fields["raster_height_px"] = raster["height_px"]
+    stamp = {key: summary.get("stamp", {}).get(key) for key in (
+        "designation", "sheet_number", "sheet_name", "revision_number", "release_date",
+    )}
+    stamp = {key: value for key, value in stamp.items() if value is not None}
+    if stamp:
+        if "release_date" in stamp:
+            stamp["release_date"] = date.fromisoformat(stamp["release_date"])
+        fields["stamp"] = models.PageStamp(**stamp)
+    return models.VersionPageProfile(**fields)
+
+
+class VersionPageAdapter:
+    """`CMP-PROFILE-01`. The five page reads of a version, from what the worker stored.
+
+    The profile, the preview, the thumbnail and the stored tile levels are rows and blobs; the two tile
+    levels that are not stored are rendered in a ceilinged child by the reader's tile renderer. The API
+    process never loads PDFium for any of them (ADR-0025 decision 9 and the addendum of 2026-10-27).
+    """
+
+    def __init__(
+        self, session_factory: sessionmaker[Session], *, blob_store: Any, tiles: Any = None
+    ) -> None:
+        from auditmanager.comparison.public import PageProfileReader
+
+        self._reader = PageProfileReader(session_factory, blob_store, tiles=tiles)
 
     def get_profile(
         self, *, page_profile_id: str
     ) -> models.VersionPageProfile:
-        return _comparison_unavailable(self._DEPENDENCY)
+        return _page_profile_view(self._reader.get_profile(page_profile_id))
 
     def list_profiles(
         self, *, version_uid: str, cursor: str | None, limit: int
     ) -> models.VersionPageProfilePage:
-        return _comparison_unavailable(self._DEPENDENCY)
+        rows, more = self._reader.list_profiles(
+            version_uid, after_page=_page_cursor(cursor), limit=limit
+        )
+        return models.VersionPageProfilePage(
+            items=[_page_profile_view(row) for row in rows],
+            page=models.PageInfo(
+                next_cursor=encode_cursor((str(rows[-1].page_number),)) if more else None
+            ),
+        )
 
     def read_preview(
         self, *, page_profile_id: str
     ) -> bytes:
-        return _comparison_unavailable(self._DEPENDENCY)
+        return self._reader.read_preview(page_profile_id)
 
     def read_thumbnail(
         self, *, page_profile_id: str
     ) -> bytes:
-        return _comparison_unavailable(self._DEPENDENCY)
+        return self._reader.read_thumbnail(page_profile_id)
 
     def read_tile(
         self, *, page_profile_id: str, level: int, column: int, row: int
     ) -> bytes:
-        return _comparison_unavailable(self._DEPENDENCY)
+        return self._reader.read_tile(page_profile_id, level=level, column=column, row=row)

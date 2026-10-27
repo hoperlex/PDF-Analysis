@@ -147,6 +147,45 @@ HANDLER_FACTORIES: tuple[HandlerFactory, ...] = ()
 #: it (ADR-0025 decision 5). ``CMP-SPEND-01`` appends its settler here. None is registered yet.
 SPEND_SETTLERS: tuple[SpendSettler, ...] = ()
 
+# `CMP-PROFILE-01`: page profiles (words, vector lines, stamp, ink mask, scan flag, stored previews and tiles).
+from auditmanager.comparison.profile.builder import (
+    PageBuildReport,
+    VersionBuildReport,
+    build_version_page_profiles,
+)
+from auditmanager.comparison.profile.limits import (
+    ALGO_VERSION as PAGE_PROFILE_ALGO_VERSION,
+    PIXEL_CAP as PAGE_PIXEL_CAP,
+    REASON_PAGE_TOO_LARGE,
+    REASON_RENDER_FAILED,
+    STATUS_NEEDS_REVIEW as PROFILE_NEEDS_REVIEW,
+    STATUS_READY as PROFILE_READY,
+    STATUS_REFUSED as PROFILE_REFUSED,
+    ChildLimits,
+    registration_dpi,
+)
+from auditmanager.comparison.profile.models import (
+    Annotation as PageAnnotation,
+    InkMask,
+    PageProfileData,
+    PageProfileRow,
+    StampFields,
+    VectorLine,
+    Word as PageWord,
+)
+from auditmanager.comparison.profile.reader import PageProfileReader
+from auditmanager.comparison.profile.runner import (
+    ChildResult,
+    ChildRunner,
+    ChildStartError,
+    SubprocessChildRunner,
+)
+from auditmanager.comparison.profile.tiles import TileRenderer
+
+#: The name the queue can register `build_version_page_profiles` under; its payload is
+#: ``{"version_uid": "ver_..."}`` (`CMP-PROFILE-01`). The registry belongs to `CMP-WORK-01`.
+PAGE_PROFILE_WORK_KIND = "page_profile"
+
 __all__ = [
     "CANCEL_REQUESTED",
     "CancelResult",
@@ -258,4 +297,30 @@ __all__ = [
     "VersionFacts",
     "WithdrawSheetPairingRequest",
     "carryover_candidates",
+    "ChildLimits",
+    "ChildResult",
+    "ChildRunner",
+    "ChildStartError",
+    "InkMask",
+    "PAGE_PIXEL_CAP",
+    "PAGE_PROFILE_ALGO_VERSION",
+    "PAGE_PROFILE_WORK_KIND",
+    "PROFILE_NEEDS_REVIEW",
+    "PROFILE_READY",
+    "PROFILE_REFUSED",
+    "PageAnnotation",
+    "PageBuildReport",
+    "PageProfileData",
+    "PageProfileReader",
+    "PageProfileRow",
+    "PageWord",
+    "REASON_PAGE_TOO_LARGE",
+    "REASON_RENDER_FAILED",
+    "StampFields",
+    "SubprocessChildRunner",
+    "TileRenderer",
+    "VectorLine",
+    "VersionBuildReport",
+    "build_version_page_profiles",
+    "registration_dpi",
 ]

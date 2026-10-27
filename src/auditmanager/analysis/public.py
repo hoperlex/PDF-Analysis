@@ -168,6 +168,12 @@ from auditmanager.analysis.text.stage import STAGE_VERSION as TEXT_STAGE_VERSION
 from auditmanager.analysis.text.anchors import BlockIndex, ResolvedAnchor
 from auditmanager.analysis.text.textlayer import TextLayer
 
+from auditmanager.analysis.geometry.render import (  # CMP-PROFILE-01
+    FULL_PAGE_MAX_PIXELS,
+    PdfiumDocument,
+    page_raster_size,
+)
+
 __all__ = [
     "BetaV3Profile",
     "BetaV3ProfileRefused",
@@ -291,4 +297,7 @@ __all__ = [
     "windowed_budget_characters",
     "sha256_hex",
     "prepare_saved_crop_item",
+    "FULL_PAGE_MAX_PIXELS",
+    "PdfiumDocument",
+    "page_raster_size",
 ]

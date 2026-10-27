@@ -477,7 +477,7 @@ def build_application(
         # replace the three adapters (plan section 4.0 rule 1).
         comparison_uploads=ComparisonUploadAdapter(),
         comparison_version_orders=ComparisonVersionOrderAdapter(),
-        version_pages=VersionPageAdapter(),
+        version_pages=VersionPageAdapter(sessions, blob_store=store),
         execution=ExecutionAdapter(sessions, runs=run_adapter),
         # `W55A-SEAL-01` sealed them; `W55A-SEARCH-01` serves them. The norms reads and the
         # designation over the same session factory, every search under the operator's

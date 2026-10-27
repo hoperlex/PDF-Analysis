@@ -1,12 +1,13 @@
-"""The page reads of a version, sealed as stubs (`CMP-SEAL-C0`, ADR-0025 decision 9).
+"""The page reads of a version (`CMP-SEAL-C0` sealed them; `CMP-PROFILE-01` serves them, ADR-0025 decision 9).
 
 A page is addressed by the identity of its profile (``cpr_``), never by its number: a page number is
 an ordinal and the contract forbids addressing anything by one. ``listVersionPageProfiles`` returns
 the profiles a version has, each with its ``page_number``; the profile, the stored preview and
-thumbnail and one tile of the bounded pyramid are then read by that identity. The API never calls
-PDFium: it reads what the worker stored (`CMP-PROFILE-01` wires the port). Roles: any one role. A
-profile or tile that does not exist is ``404``. Every operation answers ``503
-dependency_unavailable`` until then.
+thumbnail and one tile of the bounded pyramid are then read by that identity. The API process never
+loads PDFium: it reads what the worker stored, and the two tile levels that are not stored are
+rendered in a ceilinged child process (addendum of 2026-10-27). Roles: any one role. A profile,
+image or tile that does not exist is ``404``; a tile whose child ended without a result, or for which
+no render slot was free, is ``503 dependency_unavailable``.
 """
 
 from __future__ import annotations
