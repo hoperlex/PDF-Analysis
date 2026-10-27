@@ -140,7 +140,8 @@ def test_resolve_needs_the_exact_pair_and_no_longer_knows_the_retired_ar_pair(tm
         ("ov", _profile("KJ"), "package_directory_mismatch"),
         ("ar", _profile("AR"), "section_code_not_a_text_profile"),
         ("kj", _profile("AR"), "section_code_not_a_text_profile"),
-        ("kj", _profile("KJ", format="text-profile/2"), "format_invalid"),
+        # `text-profile/2` became a real format (`SECTION-CATEGORY-OCR-01`); the unknown one is /3.
+        ("kj", _profile("KJ", format="text-profile/3"), "format_invalid"),
         ("kj", _profile("KJ", status="approved"), "status_invalid"),
         ("kj", _profile("KJ", profile_version="1.0"), "profile_version_invalid"),
         ("kj", _profile("KJ", analysis_profile_id="pb_01M5AXG1K82P9BCJ1NRYSTC2NA"), "identity_invalid"),

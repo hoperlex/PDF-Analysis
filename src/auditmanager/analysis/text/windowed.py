@@ -36,15 +36,16 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
 from auditmanager.analysis.text.adapter import PROVIDER, ModelAdapter, ModelResponse
-from auditmanager.analysis.text.anchors import BlockIndex, ResolvedAnchor
+from auditmanager.analysis.text.anchors import REASON_ABSENT, BlockIndex, ResolvedAnchor, UnresolvedAnchor
 from auditmanager.analysis.text.artifact import Observation, build_text_observations
 from auditmanager.analysis.text.binding import CallBinding
 from auditmanager.analysis.text.chunk_preflight import ChunkPreflightError, TextChunk
 from auditmanager.analysis.text.config import ProviderConfig, ProviderMode, load_provider_config
 from auditmanager.analysis.text.cost import BUDGET_SCOPE_RUN, CostMeter
 from auditmanager.analysis.text.lock import STAGE_ID, ProviderLock, provider_lock
+from auditmanager.analysis.text.omission import OmissionTally, decide, quotes_of
 from auditmanager.analysis.text.profile import AnalysisProfile
-from auditmanager.analysis.text.prompt import canonical_json
+from auditmanager.analysis.text.prompt import OMISSION_CATEGORY, canonical_json
 from auditmanager.analysis.text.provenance import (
     CALL_SUCCEEDED,
     CALL_TRUNCATED,
@@ -52,6 +53,7 @@ from auditmanager.analysis.text.provenance import (
     assert_consistent_mode,
 )
 from auditmanager.analysis.text.proxy import ProxyDispatchError
+from auditmanager.analysis.text.recognised_input import RecognisedPage
 from auditmanager.analysis.text.response import ParsedResponse, parse_response
 from auditmanager.analysis.text.stage import (
     STAGE_VERSION,
@@ -65,6 +67,7 @@ from auditmanager.analysis.text.stage import (
     _journal_failed_call,
     _pages_analysed,
     _partial_error,
+    _recognised_metrics,
     run_text_analysis,
 )
 from auditmanager.analysis.text.textlayer import TextLayer, load_text_layer
@@ -158,53 +161,102 @@ def _ground_cohort(
     plan: WindowPlan,
     replies: Sequence[_Reply],
     block_index: BlockIndex | None,
-) -> tuple[list[list[Observation]], int, int, int, int]:
+    omissions_enabled: bool = False,
+) -> tuple[list[list[Observation]], int, int, int, int, OmissionTally]:
     """Bind every window's quotes against the full layer and rebuild observations per window.
 
     Returns the observations of each window, the resolved evidence count, the unresolved evidence count,
-    the evidence dropped for naming a page outside its own window, and the dropped observation count.
+    the evidence dropped for naming a page outside its own window, the dropped observation count and the
+    omission tally (`SECTION-CATEGORY-OCR-01`).
     A claim on a page outside its window never reaches the cohort (it would refuse the whole cohort); it is
     an unresolved anchor like a quote on the wrong page is in a single call: counted, never published.
+
+    An omission proposal is a pair of places and is all or nothing: a quote of it outside the window leaves
+    none of its quotes in the cohort, and :func:`~auditmanager.analysis.text.omission.decide` then refuses
+    it (``evidence_unresolved``). Its range must lie inside the window that produced it.
     """
+
+    def inside(reply: _Reply, page_number: int) -> bool:
+        return reply.window.first_page <= page_number <= reply.window.last_page
+
+    def claim_items(reply: _Reply, proposal: Any) -> list[Any]:
+        """The quotes of a proposal that go to the cohort, in order."""
+        if proposal.category == OMISSION_CATEGORY:
+            items = list(quotes_of(proposal))
+            return items if all(inside(reply, item.page_number) for item in items) else []
+        return [item for item in proposal.evidence if inside(reply, item.page_number)]
+
     claims_per_window: list[tuple[WindowQuoteClaim, ...]] = []
     for reply in replies:
-        claims = tuple(
-            WindowQuoteClaim(item.page_number, item.quote)
-            for proposal in reply.parsed.observations
-            for item in proposal.evidence
-            if reply.window.first_page <= item.page_number <= reply.window.last_page
+        claims_per_window.append(
+            tuple(
+                WindowQuoteClaim(item.page_number, item.quote)
+                for proposal in reply.parsed.observations
+                for item in claim_items(reply, proposal)
+            )
         )
-        claims_per_window.append(claims)
     bound = bind_window_claim_cohort(
         plan.layer,
         plan.windows,
         tuple(WindowReplyClaims(index, claims) for index, claims in enumerate(claims_per_window)),
     )
 
+    def with_block(anchor: ResolvedAnchor | UnresolvedAnchor) -> ResolvedAnchor | UnresolvedAnchor:
+        if isinstance(anchor, ResolvedAnchor) and block_index is not None:
+            return dataclasses.replace(
+                anchor,
+                block_id=block_index.containing(anchor.page_number, anchor.char_start, anchor.char_end),
+            )
+        return anchor
+
     resolved_count = 0
     unresolved_count = 0
     outside_count = 0
     dropped = 0
+    tally = OmissionTally(enabled=omissions_enabled)
     observations: list[list[Observation]] = []
     for reply, bound_window in zip(replies, bound, strict=True):
         anchors = iter(bound_window.anchors)
         window_observations: list[Observation] = []
         for proposal in reply.parsed.observations:
+            if proposal.category == OMISSION_CATEGORY:
+                items = quotes_of(proposal)
+                sent = bool(claim_items(reply, proposal))
+                resolutions: list[ResolvedAnchor | UnresolvedAnchor] = []
+                for item in items:
+                    if sent:
+                        resolutions.append(with_block(next(anchors)))
+                    else:
+                        outside_count += 0 if inside(reply, item.page_number) else 1
+                        resolutions.append(
+                            UnresolvedAnchor(item.page_number, item.quote, REASON_ABSENT)
+                        )
+                unresolved_count += sum(isinstance(r, UnresolvedAnchor) for r in resolutions)
+                decision = decide(
+                    plan.layer, proposal, resolutions,
+                    visible=(reply.window.first_page, reply.window.last_page),
+                )
+                tally.record(decision)
+                if decision.reason is None:
+                    resolved_count += len(decision.evidence)
+                    window_observations.append(
+                        Observation(
+                            category=proposal.category,
+                            finding_text=decision.finding_text,
+                            recommendation_text=proposal.recommendation_text,
+                            model_call_id=reply.model_call_id,
+                            evidence=decision.evidence,
+                        )
+                    )
+                continue
             kept: list[ResolvedAnchor] = []
             for item in proposal.evidence:
-                if not reply.window.first_page <= item.page_number <= reply.window.last_page:
+                if not inside(reply, item.page_number):
                     outside_count += 1
                     unresolved_count += 1
                     continue
-                anchor = next(anchors)
+                anchor = with_block(next(anchors))
                 if isinstance(anchor, ResolvedAnchor):
-                    if block_index is not None:
-                        anchor = dataclasses.replace(
-                            anchor,
-                            block_id=block_index.containing(
-                                anchor.page_number, anchor.char_start, anchor.char_end
-                            ),
-                        )
                     kept.append(anchor)
                 else:
                     unresolved_count += 1
@@ -222,7 +274,7 @@ def _ground_cohort(
                 )
             )
         observations.append(window_observations)
-    return observations, resolved_count, unresolved_count, outside_count, dropped
+    return observations, resolved_count, unresolved_count, outside_count, dropped, tally
 
 
 def run_text_analysis_windows(
@@ -240,8 +292,12 @@ def run_text_analysis_windows(
     call_journal: ModelCallJournal | None = None,
     call: CallBinding | None = None,
     custody: WindowCustody | None = None,
+    recognised_pages: Sequence[RecognisedPage] = (),
 ) -> TextAnalysisOutcome:
     """Run the stage over one document version in whole-page windows. Same contract as ``run_text_analysis``.
+
+    ``recognised_pages`` (`SECTION-CATEGORY-OCR-01`) are rendered under their pages in the window that holds
+    them, and the plan counted their blocks when it packed the pages.
 
     ``policy`` says how large a window is and how many a run takes; ``custody`` lets a finished window survive a
     restart and is required for a live run with more than one window (without it a restart would pay for the
@@ -257,7 +313,7 @@ def run_text_analysis_windows(
         text_layer = load_text_layer(text_layer_document)
         _check_graph_version(document_graph)
         block_index = BlockIndex.from_document(block_index_document)
-        plan = plan_text_windows(text_layer, policy)
+        plan = plan_text_windows(text_layer, policy, recognised_pages)
     except DomainError as error:
         return _failure(error, base)
 
@@ -275,6 +331,7 @@ def run_text_analysis_windows(
             meter=cost_meter,
             call_journal=call_journal,
             call=call,
+            recognised_pages=recognised_pages,
         )
 
     count = len(plan.windows)
@@ -448,7 +505,9 @@ def run_text_analysis_windows(
                 call_journal.complete(record)
             records.append(record)
 
-        parsed = parse_response(response.output_text, truncated=response.truncated)
+        parsed = parse_response(
+            response.output_text, truncated=response.truncated, categories=profile.categories
+        )
         if parsed.salvaged and not response.truncated:
             return _failure(
                 DomainError(
@@ -465,7 +524,9 @@ def run_text_analysis_windows(
         replies.append(_Reply(window, model_call_id, response, parsed, recovered is not None))
 
     try:
-        grounded, resolved, unresolved, outside, dropped = _ground_cohort(plan, replies, block_index)
+        grounded, resolved, unresolved, outside, dropped, omissions = _ground_cohort(
+            plan, replies, block_index, omissions_enabled=OMISSION_CATEGORY in profile.categories
+        )
     except (WindowAnchorError, ChunkPreflightError):
         # The cohort refuses an inconsistent plan or reply set; it is never skipped past.
         return _failure(
@@ -543,6 +604,8 @@ def run_text_analysis_windows(
         "windows_recovered": sum(1 for r in replies if r.recovered),
         "windows_independent": True,
         "windows_note": WINDOWS_NOTE,
+        **omissions.metrics(),
+        **_recognised_metrics(recognised_pages),
     }
     try:
         assert_consistent_mode(mode, tuple(records))

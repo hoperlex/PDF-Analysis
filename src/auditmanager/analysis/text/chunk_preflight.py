@@ -9,6 +9,7 @@ neither normalized nor decorated with prompt framing here.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from auditmanager.analysis.text.textlayer import Page, TextLayer
@@ -73,22 +74,36 @@ def _checked_pages(layer: TextLayer) -> tuple[Page, ...]:
 
 
 def partition_text_layer(
-    layer: TextLayer, *, max_chunk_characters: int
+    layer: TextLayer,
+    *,
+    max_chunk_characters: int,
+    page_extra: Mapping[int, int] | None = None,
 ) -> tuple[TextChunk, ...]:
     """Return a complete, deterministic partition or refuse before any call.
 
     Greedy windows retain all pages, including empty ones. A nonempty page
     larger than the ceiling is refused; splitting one page and any desired
     overlap require a separately reviewed citation and budget rule.
+
+    ``page_extra`` (`SECTION-CATEGORY-OCR-01`) is the number of characters a page adds to the call beyond
+    its own text (its recognised-text block): a page weighs its text plus its extra, so a window holds at
+    most the ceiling *with* its blocks. None, or a page not named, weighs its text alone, as before.
     """
     if type(max_chunk_characters) is not int or max_chunk_characters < 1:
         raise ChunkPreflightError("invalid_max_chunk_characters")
     pages = _checked_pages(layer)
     if not layer.document_text.strip():
         raise ChunkPreflightError("empty_text_layer")
+    extra = page_extra or {}
+    if any(type(value) is not int or value < 0 for value in extra.values()):
+        raise ChunkPreflightError("invalid_page_extra")
+
+    def weight(page: Page) -> int:
+        return len(page.text) + extra.get(page.page_number, 0)
+
     # Validate the entire source before returning even the first chunk.
     for page in pages:
-        if len(page.text) > max_chunk_characters:
+        if weight(page) > max_chunk_characters:
             raise ChunkPreflightError("page_exceeds_limit", page_number=page.page_number)
 
     result: list[TextChunk] = []
@@ -97,7 +112,7 @@ def partition_text_layer(
     first_page = first.page_number
     used = 0
     for page in pages:
-        if used and used + len(page.text) > max_chunk_characters:
+        if used and used + weight(page) > max_chunk_characters:
             result.append(TextChunk(
                 version_uid=layer.version_uid,
                 normalization_id=layer.normalization_id,
@@ -111,7 +126,7 @@ def partition_text_layer(
             first_page = page.page_number
             chunk_start = page.char_start
             used = 0
-        used += len(page.text)
+        used += weight(page)
     result.append(TextChunk(
         version_uid=layer.version_uid,
         normalization_id=layer.normalization_id,

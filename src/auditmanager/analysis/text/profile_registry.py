@@ -18,7 +18,15 @@ One source: the **data packages** ``profiles/<code_lower>/{profile.json, system_
   ``prompt_bundle_id`` (``pb_`` ULID), ``profile_version``, ``status`` (``draft`` or
   ``reviewed``), ``title_ru`` and ``source`` (``repository``, ``commit``, ``files`` of
   ``{path, sha256}``). ``system_prompt.md`` replaces v1's ``SYSTEM_PROMPT``; categories,
-  response schema, user preamble, page banner and token limits stay v1's. Exactly **one**
+  response schema, user preamble, page banner and token limits stay v1's.
+
+**Format ``text-profile/2``** (`SECTION-CATEGORY-OCR-01`, `R-146ao`) is the same key set plus ``categories``:
+the profile's own closed list, ``internal_contradiction``, ``explicit_placeholder`` and, for the sections
+that may report a same-document omission, ``documentation`` (the existing contract value). The response
+schema follows the list (:func:`~auditmanager.analysis.text.prompt.response_schema_for`): the two-category
+list gives v1's schema object itself, so a ``text-profile/1`` package, which declares no list and gets the
+v1 pair, builds exactly the profile it always built. A ``/2`` package may not declare the v1 pair alone (it
+would be a ``/1`` package under another name) and may not declare a category this code has no shape for. Exactly **one**
   trailing ``"\\n"`` is stripped from the prompt file (an editor's final newline), so the
   bundle text has v1's convention of no trailing newline and its hash is deterministic.
 
@@ -53,9 +61,10 @@ from auditmanager.analysis.text.prompt import (
     CATEGORIES,
     EFFORT,
     MAX_OUTPUT_TOKENS,
-    RESPONSE_SCHEMA,
+    OMISSION_CATEGORY,
     THINKING,
     PromptBundle,
+    response_schema_for,
 )
 from auditmanager.shared.identity import AnalysisProfileId, IdentityError, PromptBundleId
 
@@ -63,6 +72,7 @@ __all__ = [
     "AUTHORED_SECTIONS",
     "NOT_A_TEXT_PROFILE",
     "PACKAGE_FORMAT",
+    "PACKAGE_FORMAT_CATEGORIES",
     "PACKAGES_ROOT",
     "PROJECT_STRUCTURE_ORDER",
     "SECTION_CODES",
@@ -76,6 +86,8 @@ __all__ = [
 ]
 
 PACKAGE_FORMAT: Final[str] = "text-profile/1"
+#: The format that adds the profile's own ``categories`` (`SECTION-CATEGORY-OCR-01`).
+PACKAGE_FORMAT_CATEGORIES: Final[str] = "text-profile/2"
 PACKAGES_ROOT: Final[Path] = Path(__file__).with_name("profiles")
 
 #: The fifteen section codes. Restated, not imported: ``analysis`` does not depend on the
@@ -119,6 +131,10 @@ _PROFILE_KEYS: Final[frozenset[str]] = frozenset(
         "source",
     }
 )
+#: ``text-profile/2`` adds exactly one key.
+_PROFILE_KEYS_CATEGORIES: Final[frozenset[str]] = _PROFILE_KEYS | {"categories"}
+#: The category lists a ``/2`` package may declare: the v1 pair plus the omission category.
+_DECLARABLE_CATEGORIES: Final[tuple[str, ...]] = (*CATEGORIES, OMISSION_CATEGORY)
 _SOURCE_KEYS: Final[frozenset[str]] = frozenset({"repository", "commit", "files"})
 _FILE_KEYS: Final[frozenset[str]] = frozenset({"path", "sha256"})
 _STATUSES: Final[frozenset[str]] = frozenset({"draft", "reviewed"})
@@ -261,10 +277,18 @@ def _load_package(directory: Path, root: Path) -> RegisteredTextProfile:
         prompt = (directory / "system_prompt.md").read_text(encoding="utf-8")
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise TextProfileLoadError(f"package_unreadable: {name}") from exc
-    if not isinstance(data, dict) or set(data) != _PROFILE_KEYS:
+    # The key set follows the format: `/1` is the original eight keys, `/2` adds `categories`; any other
+    # format string is judged against the original set and then refused by its name.
+    expected_keys = (
+        _PROFILE_KEYS_CATEGORIES
+        if isinstance(data, dict) and data.get("format") == PACKAGE_FORMAT_CATEGORIES
+        else _PROFILE_KEYS
+    )
+    if not isinstance(data, dict) or set(data) != expected_keys:
         raise TextProfileLoadError(f"profile_keys_invalid: {name}")
-    if data["format"] != PACKAGE_FORMAT:
+    if data["format"] not in (PACKAGE_FORMAT, PACKAGE_FORMAT_CATEGORIES):
         raise TextProfileLoadError(f"format_invalid: {name}")
+    categories = _declared_categories(data, name)
     code = data["section_code"]
     if not isinstance(code, str) or code not in SECTION_CODES:
         raise TextProfileLoadError(f"section_code_unknown: {name}")
@@ -313,7 +337,7 @@ def _load_package(directory: Path, root: Path) -> RegisteredTextProfile:
     bundle = PromptBundle(
         prompt_bundle_id=bundle_id,
         system_prompt=text,
-        response_schema=RESPONSE_SCHEMA,
+        response_schema=response_schema_for(categories),
         max_output_tokens=MAX_OUTPUT_TOKENS,
         effort=EFFORT,
         thinking=THINKING,
@@ -323,7 +347,7 @@ def _load_package(directory: Path, root: Path) -> RegisteredTextProfile:
         profile_version=version,
         stage_id=STAGE_ID,
         discipline=code,
-        categories=CATEGORIES,
+        categories=categories,
         prompt_bundle=bundle,
     )
     return RegisteredTextProfile(
@@ -334,6 +358,17 @@ def _load_package(directory: Path, root: Path) -> RegisteredTextProfile:
         package=directory.relative_to(root).as_posix(),
         source=source,
     )
+
+
+def _declared_categories(data: dict[str, Any], name: str) -> tuple[str, ...]:
+    """The profile's categories: the v1 pair for ``/1``, the declared list for ``/2``."""
+    if data["format"] == PACKAGE_FORMAT:
+        return CATEGORIES
+    declared = data["categories"]
+    # `/2` exists to add a category; the v1 pair alone belongs in a `/1` package, and no other list has a shape.
+    if not isinstance(declared, list) or tuple(declared) != _DECLARABLE_CATEGORIES:
+        raise TextProfileLoadError(f"categories_invalid: {name}")
+    return tuple(declared)
 
 
 def _check_source(source: Any, name: str) -> TextProfileSource:

@@ -18,10 +18,11 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Protocol, runtime_checkable
+from typing import Any, Mapping, Protocol, Sequence, runtime_checkable
 
 from auditmanager.analysis.text.config import ProviderMode
 from auditmanager.analysis.text.prompt import PromptBundle, canonical_json, render_document
+from auditmanager.analysis.text.recognised_input import RecognisedPage
 from auditmanager.analysis.text.textlayer import TextLayer
 
 #: The provider this stage calls. ``OD-02``: Anthropic first-party API.
@@ -115,6 +116,7 @@ class ModelAdapter(Protocol):
 def build_request(
     *, model_id: str, bundle: PromptBundle, text_layer: TextLayer,
     idempotency_scope: str | None = None, user_content: str | None = None,
+    recognised: Sequence[RecognisedPage] = (),
 ) -> ModelRequest:
     """Build the one request this stage makes for a document.
 
@@ -127,7 +129,13 @@ def build_request(
     user message and is given only by the windowed analysis, which renders a fragment of the
     text layer. ``None`` is every other caller, and the body is then byte-for-byte what it
     always was.
+
+    ``recognised`` (`SECTION-CATEGORY-OCR-01`) are the recognised-text blocks of text-less pages, rendered
+    into the user message as marked context; none is every version without a scanned page, and the body is
+    then byte-for-byte what it was. It is meaningless with ``user_content`` (a window renders its own).
     """
+    if user_content is not None and recognised:
+        raise ValueError("recognised pages are rendered by the caller of a windowed request")
     body: dict[str, Any] = {
         "model": model_id,
         "max_tokens": bundle.max_output_tokens,
@@ -135,7 +143,9 @@ def build_request(
         "messages": [
             {
                 "role": "user",
-                "content": render_document(text_layer) if user_content is None else user_content,
+                "content": (
+                    render_document(text_layer, recognised) if user_content is None else user_content
+                ),
             },
         ],
         "thinking": dict(bundle.thinking),
