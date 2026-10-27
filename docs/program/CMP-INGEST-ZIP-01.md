@@ -316,7 +316,7 @@ All from the lane's worktree root with `PYTHONPATH=$PWD/src AUDITMANAGER_LEGACY_
 | `.venv/bin/python -m pytest -q tests/unit/ingest/comparison_zip -p no:cacheprovider` | `183 passed` (also with the bare `.venv/bin/pytest`) |
 | `… pytest -q tests/unit/ingest tests/unit/jobs/test_stale_temporaries.py` | `211 passed` |
 | `… pytest -q tests/integration/ingest/test_bundle_archive.py` (and `test_bundle_envelope`, `test_uncuttable_image_block`, `test_block_ceilings`, `test_display_name_scrub`) | `269`, `99`, `60`, `11`, `12 passed` |
-| `… pytest -q tests/contract --ignore=…test_cp00_candidate.py --ignore=…test_validate_bootstrap.py --ignore=…test_cp00_final_state.py` (the three files of `D-220`) | `1306 passed, 19283 subtests` after the task file was repaired (below); the architecture boundary test (`test_alr05_boundaries`) is among them |
+| `… pytest -q tests/contract --ignore=…test_cp00_candidate.py --ignore=…test_validate_bootstrap.py --ignore=…test_cp00_final_state.py` (the three files of `D-220`) | `1307 passed, 19283 subtests` on the final tree, report included (the first run, before the repair below, gave `1306 passed, 1 failed`); the architecture boundary test (`test_alr05_boundaries`) is among them |
 | the differential (§8) | identical, 558 outcomes |
 | the mutation run (§10) | 57 of 57 red, restored tree `183 passed` |
 | `git diff --check` | exit 0 |
@@ -325,7 +325,7 @@ All from the lane's worktree root with `PYTHONPATH=$PWD/src AUDITMANAGER_LEGACY_
 
 **One red the contract battery found in this lane's own file**: `tests/contract/program/test_wave_governance.py` refused the
 task file (`PREMISE_DECLARATION_REQUIRED`: the section needs a `- premise:` line before the `### P-01` block). Repaired in a
-follow-up commit; the file passes (16 passed) and the battery was re-run after it. No `make gate` was run (`R-135`: the
+follow-up commit; the file passes (16 passed) and the whole battery was re-run on the final tree. No `make gate` was run (`R-135`: the
 complete gate moves to the end of the CMP code series; `AGENTS.md` §8 case 3 does not apply — no contract, migration,
 lock, composition root, `Makefile` or `conftest.py` is touched).
 
