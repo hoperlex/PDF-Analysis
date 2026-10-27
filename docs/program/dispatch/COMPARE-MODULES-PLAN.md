@@ -34,6 +34,7 @@ wave records them in `OWNER_RULINGS_2026-09-17.md` and numbers them. Until then 
 | Q-CMP-8 | The approved sheet pairs of wave B (`0035`) once the versions module is on | «Перенести в матрицу»: the approvals become manual matrix edits by a data migration; the old buttons are removed; one history of pairs |
 | Q-CMP-9 | Dependencies | «numpy + OpenCV + reportlab»: `numpy` (BSD), `opencv-python-headless` (Apache-2.0), `reportlab` (BSD) with a free Cyrillic font whose licence allows embedding |
 | Q-CMP-10 | Deviations from the original; real drawings for measurement | Accepted deviation: GRAPHIC evidence in stage cards only for 1↔1 links (D-2). Not accepted (built as in the original): automatic link repair may change an expert's link (D-1 withdrawn), the context-request loop of the AI runtime (D-3 withdrawn), the «ZIP-комплект» upload of whole stage sets (built with a safe reader). Measurement: one version set may be downloaded read-only from `https://auditmanager.app` into `.local/` (outside git) only to measure the engine's memory, time and bytes and to compare with the original's results; it is never sent to a model and is deleted after the measurement |
+| Q-CMP-11 | Gate and estimate (owner's message, 2026-10-27 ≈ 18:20 +05) | «пока игнорируем необходимость гейта для беты, перенесем эту задачу в долг»; «Считай только написание кода. Полный пакет принятия и тестов пока можно опустить.» — the complete gate before the beta becomes a debt row; §7 counts code writing only |
 | Q-CMP-5 | Upload for comparison | «PDF для сравнения»: plain PDFs in batches are admitted for comparison; such a version is marked as uploaded without a portal bundle and compared by its PDF text layer and raster; a section analysis on it still requires a portal bundle; a scan without text is compared as an image only |
 
 Standing rules that also apply: `AGENTS.md` §4 (no LLM output as an expert decision, no AI change to raw
@@ -635,22 +636,33 @@ no split needed); `next build`. Before beta: the complete gate (`D-205`, a host 
 Live AI: off by default; one measured live check per AI slice only within `R-29` and with the owner's key in the
 session.
 
-## 7. Estimate and beta
+## 7. Estimate (code writing only, `Q-CMP-11`)
 
-Method (`R2-18`, restated by `R3-22`): lane execution is not the bottleneck (measured spans: AR-V3-DECISIONS-01 2.0 h,
-COMPARE-PERSISTED-SUMMARY-01 3.0 h, W59-VERSION-COMPARE-01 1.8 h, EXEC-PULL-01 1.6 h, EXEC-PAR-QUEUE-01 0.7 h; about
-30 lanes merged on 2026-10-26/27); the serial chain is. About 38 critical-path steps (§4's order lines, judge and FIX
-per wave, ORIGINAL-READ, MEASURE) at ≈ 3.5 h each including merge and light acceptance, plus the XL engine without
-the original's helpers (+15–20 h), six stop-and-regrant cycles found by round 3 (≈ 9 h), one contract amendment bump
-per wave (≈ 10 h) and the owner-gated live checks: **≈ 170 h for P50 (≈ 17 working days of ≈ 10 h) and ≈ 200 h for
-P80 (≈ 20 days)** after the entry (PW5's SX and PR merged). From a C0 start on 2026-10-29: code-complete **P50 ≈
-2026-11-20, P80 ≈ 2026-11-25**; with the complete gate (≤ 1 day) and the B1–B12 repeat with the comparison screens
-(≈ 1 day): **beta P50 ≈ 2026-11-24, P80 ≈ 2026-11-27…12-02** — **provided a host exists that can run the complete
-gate** (`D-205`; today none does). This uses most of the buffer before the TLS deadline of 2026-12-16 (PROD-01); the
-owner chose this scope knowing it (`Q-CMP-6`). Not measured: the engine on real A1 sheets (CMP-MEASURE-01 answers it
-before C1 closes), memory on the 4 GiB stand, the image channel on deployed runners, and the number of FIX rounds. If
-the date must hold later, the round-3 cut list (`REVIEW-R3.md`, «What to cut») is the ordered menu: the stage module
-first (≈ 5 days), then the PDF report (≈ 1.5), then the multi-project batch (≈ 1).
+What is counted: the lanes' own work as measured on this repository — a lane span from its first commit to its merge
+includes writing the code and the lane's own tests (measured: AR-V3-DECISIONS-01 L 2.0 h, COMPARE-PERSISTED-SUMMARY-01
+L 3.0 h, W59-VERSION-COMPARE-01 1.8 h, EXEC-PULL-01 1.6 h, EXEC-PAR-QUEUE-01 M 0.7 h). Taken as S 0.5 h, M 1.5 h,
+L 2.5–3 h, XL (the engine) ≈ 8 h. What is **not** counted (owner, `Q-CMP-11`): the per-wave judge and FIX rounds, the
+whole-suite runs, the browser journey (CMP-JOURNEY-01), the exposure review (CMP-EXPOSURE-01), the complete gate
+and the B1–B12 repeat; they stay in the plan and are scheduled separately.
+
+Critical path through the order lines of §4, with parallel lanes overlapped:
+
+| Wave | Path | Hours |
+| --- | --- | ---: |
+| before C0 | ORIGINAL-READ ∥ ADR | ≈ 0.5 |
+| C0 | SEAL-C0 3 → FIXTURES 1.5 → STORAGE-PARTS 1.5 → INGEST-01 2.5 → INGEST-02 1.5 (WORK, EXEC-IMAGES, PROFILE, ZIP, MARK, SPEND alongside) | ≈ 10 |
+| C1 | SEAL-C1 3 → ENGINE 8 (MATRIX, VIEWER alongside) → SERIES 1.5 → OVERVIEW 1.5 → VC-UI-01 2.5; MEASURE alongside | ≈ 16.5 |
+| C2 + C3 | SEAL-C2 3 → C2 lanes ≈ 9.5; SEAL-C3 3 after SEAL-C2 → PAIR ∥ LINK 2.5 → TEXT 1.5, overlapping C2 | ≈ 13 |
+| C4 | SEAL-C4 3 → STAGE-AI 2.5 → REPAIR ∥ RUN 1.5 → REVIEW 2.5 → CLOSE 0.5 | ≈ 10 |
+| overhead | serial merges of the wiring files (§4.0 rule 1), stop-and-regrant cycles | ≈ 10–15 |
+| **total** | | **≈ 60–65 h (P50), ≈ 80 h (P80)** |
+
+At ≈ 10 h of lane work per working day: **P50 ≈ 6–6.5 working days, P80 ≈ 8 working days** after the entry (PW5's SX
+and PR merged). From a C0 start on 2026-10-29: code-complete **P50 ≈ 2026-11-05/06, P80 ≈ 2026-11-10**; if lanes run
+around the clock, as on 2026-10-26/27, the calendar shortens to about 3–4 days. With the gate moved to debt and the
+acceptance package not counted, the beta follows the code by the publication itself (≈ half a day). Not measured: the
+engine on 2A0/A1 sheets (CMP-MEASURE-01 has its set since 2026-10-27, see §9 O-9) and the number of
+stop-and-regrant cycles.
 
 ## 8. Risks, stop conditions, rollback
 
@@ -674,10 +686,15 @@ first (≈ 5 days), then the PDF report (≈ 1.5), then the multi-project batch 
 Closed by the owner's second poll: O-1 and O-2 (`Q-CMP-9`), O-4 (`Q-CMP-8`), O-5 (`Q-CMP-10`); O-3 is closed by
 `R-60` (§3.2 minor decisions). Still open:
 - O-6 Executor routes for the new work kinds on the stand (an operator act after the code).
-- O-7 A host that can run the complete gate before the beta (`D-205`) — the owner's.
+- O-7 The complete gate before the beta is moved to debt by the owner (`Q-CMP-11`); proposed debt row for the
+  integrator: «Complete `make gate` before `1.0.0-beta.1` waived 2026-10-27 (Q-CMP-11); the CMP waves ship on light
+  acceptance; a gate host is still missing (`D-205`); close by one complete gate on the first tree that has the CMP
+  modules».
 - O-8 The integrator records `Q-CMP-1`…`Q-CMP-10` as rulings, widens accepted risk A-2 to drawing images, extends
   `R-135` to the CMP waves, and tells the executor workstream and the PROD owners (§3.2) before C0.
-- O-9 The account for CMP-MEASURE-01 on `https://auditmanager.app` (the one lent on 2026-10-27 is temporary).
+- O-9 (closed) The measurement set is in `.local/comparison-measure/13AV-RD-EM2-PA/` (4 versions of `13АВ-РД-ЭМ2-ПА`,
+  15–26 pages, A4…2A0, v3 = v4 byte for byte; README there with hashes). The plan's example `133/23-ГК-ЭМ2` has no
+  source-PDF route in the original.
 
 ## 10. Disposition of judging round 1
 
