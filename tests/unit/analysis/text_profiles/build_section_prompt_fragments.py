@@ -9,7 +9,8 @@ retyped:
   every numbered change the quoted fragments after ``adds`` (the prompt must carry them) and
   after ``removes`` (the prompt must not carry them). A change the parser cannot read is an
   error, never a skip;
-* ``SECTION-WIDEN-G1-01.md``, ``-G2-``, ``-G3-`` and ``SECTION-CATEGORY-OCR-01.md`` -- each report's
+* ``SECTION-WIDEN-G1-01.md``, ``-G2-``, ``-G3-``, ``SECTION-CATEGORY-OCR-01.md`` and
+  ``SECTION-JUDGE-FIXES-01.md`` -- each report's
   machine-readable block between ``<!-- fragments:begin -->`` and ``<!-- fragments:end -->`` (the block
   the report's own check command reads), taken as it stands. An entry may carry an optional ``kind``
   (``present``, the default, or ``absent``: the sentence must stay out of the listed sections; the
@@ -49,6 +50,9 @@ WIDEN = {
     "G3": "SECTION-WIDEN-G3-01",
     #: `SECTION-CATEGORY-OCR-01`: the omission paragraph of AI TX EOM SS ITP (`R-146ao`).
     "C1": "SECTION-CATEGORY-OCR-01",
+    #: `SECTION-JUDGE-FIXES-01`: the three sentences of AI TX EOM SS ITP that said «two categories» while the
+    #: schema allows `documentation` (the old sentences are `absent` entries, the new ones `present`).
+    "J1": "SECTION-JUDGE-FIXES-01",
 }
 #: The registry order of the 14 sections (the ledger's own order).
 SECTION_ORDER = ("AI", "PS", "POS", "TX", "KJ", "KM", "OV", "VK", "PT", "EOM", "SS", "ITP", "GP", "PB")

@@ -10,11 +10,13 @@ This suite reads the sentences. ``section_prompt_fragments.json`` lists, per sec
 
 * ``present`` -- a sentence that must stand: the ``adds`` fragments of the 25 narrowing decisions of
   ``SECTION-REVIEW-LEDGER-01`` and every fragment of the machine-readable tables of
-  ``SECTION-WIDEN-G1-01``, ``-G2-`` and ``-G3-``, and the omission paragraph of five sections in
-  ``SECTION-CATEGORY-OCR-01``;
+  ``SECTION-WIDEN-G1-01``, ``-G2-`` and ``-G3-``, the omission paragraph of five sections in
+  ``SECTION-CATEGORY-OCR-01`` and the three reworded «two categories» sentences of the same five in
+  ``SECTION-JUDGE-FIXES-01``;
 * ``absent`` -- a sentence that must stay gone: the ledger's ``removes`` fragments (a class
   designation, a mark or a symbol that no pinned legacy source contains) and, from
-  ``SECTION-CATEGORY-OCR-01``, the category name ``documentation`` in the nine prompts that do not declare it;
+  ``SECTION-CATEGORY-OCR-01``, the category name ``documentation`` in the nine prompts that do not declare it, and,
+  from ``SECTION-JUDGE-FIXES-01``, the three old «two categories» sentences in the five that do;
 * ``superseded`` -- a ledger sentence that a later lane replaced (``ITP`` question ITP-1, replaced
   by ``SECTION-WIDEN-G3-01``): it is kept in the table, must not stand any more (the new unit rule
   contradicts it) and names the fragments that took its place, which must stand.
@@ -123,6 +125,7 @@ def test_the_table_has_its_format_and_names_its_sources() -> None:
     assert set(TABLE_DOCUMENT) == {"format", "about", "normalisation", "sources", "fragments"}
     assert sorted(TABLE_DOCUMENT["sources"]) == [
         "SECTION-CATEGORY-OCR-01",
+        "SECTION-JUDGE-FIXES-01",
         "SECTION-REVIEW-LEDGER-01",
         "SECTION-WIDEN-G1-01",
         "SECTION-WIDEN-G2-01",
@@ -167,6 +170,12 @@ def test_every_section_is_read_and_the_widened_ones_by_their_lane() -> None:
     kept_out = {code for entry in omission if entry["kind"] == "absent" for code in entry["sections"]}
     assert stands_in == {"AI", "TX", "EOM", "SS", "ITP"}
     assert kept_out == set(SECTIONS) - stands_in and len(kept_out) == 9
+    # `SECTION-JUDGE-FIXES-01`: the three sentences that said «two categories» in the same five prompts are reworded;
+    # the new ones stand and the old ones stay gone in exactly those five.
+    reworded = [entry for entry in ENTRIES if entry["source"] == "SECTION-JUDGE-FIXES-01"]
+    assert {entry["kind"] for entry in reworded} == {"present", "absent"}
+    for kind in ("present", "absent"):
+        assert {code for entry in reworded if entry["kind"] == kind for code in entry["sections"]} == stands_in
 
 
 def test_the_counts_are_the_ones_the_documents_state() -> None:
@@ -177,6 +186,8 @@ def test_the_counts_are_the_ones_the_documents_state() -> None:
         "SECTION-WIDEN-G3-01": (23, 59),
         # `SECTION-CATEGORY-OCR-01`: 11 sentences in the five prompts (6 shared, 5 scopes) and one `absent` entry for the nine others.
         "SECTION-CATEGORY-OCR-01": (12, 44),
+        # `SECTION-JUDGE-FIXES-01`: three new sentences and the three old ones they replace, in the same five prompts.
+        "SECTION-JUDGE-FIXES-01": (6, 30),
     }
     for source, (fragments, pairs) in expected.items():
         mine = [entry for entry in ENTRIES if entry["source"] == source]

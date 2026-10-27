@@ -580,6 +580,8 @@ def _run_text_analysis_stage(
         model_id=provider_config.model_id,
         ceiling_usd=provider_config.run_cost_ceiling_usd,
         recognised_characters=recognised_total_characters(recognised_pages),
+        # `SECTION-JUDGE-FIXES-01`: the call carries this profile's own prompt and schema, not the АР v1 pair.
+        bundle=profile.prompt_bundle,
     )
 
     while True:
@@ -608,6 +610,7 @@ def _run_text_analysis_stage(
                 call_journal=call_journal,
                 call=call,
                 recognised_pages=recognised_pages,
+                textless_pages=textless_pages,
             )
         else:
             outcome = run_text_analysis_windows(
@@ -625,6 +628,7 @@ def _run_text_analysis_stage(
                 policy=window_policy,
                 custody=window_custody,
                 recognised_pages=recognised_pages,
+                textless_pages=textless_pages,
             )
 
         # Complete responses were committed by ``call_journal`` before parsing reached

@@ -104,6 +104,7 @@ def text_window_policy(
     lock: ProviderLock | None = None,
     max_windows: int = MAX_ANALYSIS_WINDOWS,
     recognised_characters: int = 0,
+    bundle: PromptBundle | None = None,
 ) -> WindowPolicy | None:
     """The policy for a run, or ``None`` when the run is analysed in one call exactly as before.
 
@@ -116,6 +117,10 @@ def text_window_policy(
     user message (:func:`~auditmanager.analysis.text.recognised_input.total_characters`); the version's
     recorded count does not include them, so a version just under the budget that its scans push over is
     windowed here rather than sent whole. Zero (the default) is every call that carries no block.
+
+    ``bundle`` (`SECTION-JUDGE-FIXES-01`) is the run's own prompt bundle: the one-call figure, and with it the
+    size of a window, subtracts that bundle's system prompt and schema instead of the АР v1 bundle's. A volume
+    between the section's figure and the АР figure used to be sent whole and is now windowed.
     """
     if text_character_count is None:
         return None
@@ -125,7 +130,7 @@ def text_window_policy(
         raise ValueError("max_windows must be a positive whole number")
     if type(recognised_characters) is not int or recognised_characters < 0:
         raise ValueError("recognised_characters must be a non-negative whole number")
-    call_budget = input_budget_characters(model_id, ceiling_usd, lock=lock)
+    call_budget = input_budget_characters(model_id, ceiling_usd, lock=lock, bundle=bundle)
     if text_character_count + recognised_characters <= call_budget or max_windows == 1:
         return None
     return WindowPolicy(window_characters=call_budget, max_windows=max_windows)
