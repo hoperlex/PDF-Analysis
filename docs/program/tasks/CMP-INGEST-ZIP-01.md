@@ -33,6 +33,8 @@ text.
 
 ## Captured premise evidence
 
+- premise: the wave base is contract `1.9.0` (115 paths, 130 operations, 351 schemas, 27 error codes) at migration head `0038_comparison_foundation`, and the portal bundle reader's 269 archive tests are green on it without a container.
+
 ### P-01 — the base facts of the wave
 - captured_at: 2026-10-28
 - command: `.venv/bin/python -I -c "import json; d=json.load(open('contracts/api/v1/openapi.json')); ops=sum(1 for p in d['paths'].values() for m in p if m in ('get','post','put','patch','delete')); e=json.load(open('contracts/domain/v1/error-codes.json')); print(d['info']['version'], len(d['paths']), ops, len(d['components']['schemas']), len(e['codes']))"; ls db/migrations/versions | tail -1; git rev-parse HEAD`
@@ -105,7 +107,17 @@ text.
 Not applicable: nothing calls the reader yet. The comparison module flag (`AUDITMANAGER_COMPARISON_MODULES`) gates the callers.
 
 ## Handoff
-- changed files: filled in with the report
-- commands/results: filled in with the report
-- known limits: filled in with the report
-- integration notes: filled in with the report
+- changed files: `src/auditmanager/ingest/bundle_archive.py` (+77 / -3: `ArchivePolicy`, `PORTAL_POLICY`, the `policy` parameter, four public aliases);
+  new `src/auditmanager/ingest/comparison_zip/` (`__init__.py`, `policy.py`, `reader.py`, `refusals.py`); new `tests/unit/ingest/comparison_zip/`
+  (`test_adversarial_archives.py`, `test_set_reader.py`, `test_member_envelope.py`, `test_portal_policy_unchanged.py`, `zip_builders.py`);
+  this file and `docs/program/CMP-INGEST-ZIP-01.md`. Commits on `agent/cmp-ingest-zip-01`: `7fbcc34e`, `12b40477`, `76b844e1`, `2c3e3f30`, then the
+  premise repair and the report commit.
+- commands/results: `tests/unit/ingest/comparison_zip` 183 passed; the unedited portal suites (`test_bundle_archive` 269, `test_bundle_envelope` 99,
+  `test_uncuttable_image_block` 60, `test_block_ceilings` 11, `test_display_name_scrub` 12) and `test_stale_temporaries` pass; a differential of 558
+  portal-reader outcomes is byte-identical between `cc3dd36b` and this tree; 57 mutations all turn a test red (table in the report); `tests/contract`
+  minus the three `D-220` files passes; `git diff --check` rc 0.
+- known limits: the thirteen `comparison_zip_*` reasons are not registered in the contract notes (a contract slot's edit; text in the report); the default
+  PDF check is the portal envelope (element ceilings) and costs 361 ms a PDF, so `CMP-INGEST-01` passes its comparison envelope and `CMP-INGEST-02` should
+  defer it per item; `__MACOSX/` is refused; the decision-12 security judge has not been held.
+- integration notes: merge after `CMP-EXEC-IMAGES-01`, before `CMP-INGEST-01`; no wiring file, contract, migration or lock is touched; the API is
+  `auditmanager.ingest.comparison_zip.extract_pdf_set(handle, policy=..., envelope=...)` (report section 6).
