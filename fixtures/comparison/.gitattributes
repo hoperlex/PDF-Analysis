@@ -1,0 +1,5 @@
+# The corpus is byte-exact: its SHA-256 values are what the answer keys and the tests pin.
+# Marking the PDFs binary stops Git translating a byte and stops it trying to diff one. It also
+# settles `git diff --check`: a PDF cross-reference entry must be exactly twenty bytes ending
+# in a space, which a text diff would report as trailing whitespace.
+*.pdf binary

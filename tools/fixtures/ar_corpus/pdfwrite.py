@@ -467,3 +467,337 @@ def show_text(font: EmbeddedFont, resource_name: str, text: str,
         f"1 0 0 1 {num(x)} {num(y)} Tm "
         f"<{hex_glyphs}> Tj ET\n"
     )
+
+
+# --------------------------------------------------------------------------------------
+# CMP-FIXTURES-01 extensions
+# --------------------------------------------------------------------------------------
+#
+# Everything from here down is additive and off by default. No function above this line was
+# changed, and the AR corpus builders call none of what follows, so their output bytes cannot
+# move (`tests/contract/fixtures_ar` and `build_ar_corpus.py --check` prove it). The comparison
+# corpus (`tools/fixtures/comparison`) is the only caller. What it adds:
+#
+# *   a page dictionary with `/CropBox`, `/Rotate` and `/Annots`;
+# *   a text annotation and a square annotation, each with an appearance stream so every
+#     viewer draws the same thing;
+# *   one optional-content group (`/OCG`) and the marked-content operators that use it;
+# *   dashed and solid line, rectangle and circle operators;
+# *   two hatch fills: a tiling pattern (one object) and clipped parallel lines (many);
+# *   text drawn as paths instead of glyphs: the outline of each character stroked, which is
+#     what a plotter export of a CAD font looks like to a PDF reader (no text layer at all).
+#
+# Numbers go through `_n`, which takes the digit count as a parameter, so a second "producer"
+# can print the same coordinates at another precision.
+
+
+def _n(value: float, digits: int = 3) -> str:
+    """A PDF number with at most `digits` decimals and no trailing zeros."""
+    if isinstance(value, int) or float(value).is_integer():
+        return str(int(value))
+    text = f"{value:.{digits}f}".rstrip("0").rstrip(".")
+    return "0" if text in ("-0", "") else text
+
+
+def _rgb(rgb: tuple[float, float, float], *, stroke: bool, digits: int = 3) -> str:
+    r, g, b = rgb
+    return f"{_n(r, digits)} {_n(g, digits)} {_n(b, digits)} {'RG' if stroke else 'rg'}"
+
+
+def page_dictionary(
+    parent: Ref,
+    media_box: list[float],
+    resources: dict[str, object],
+    contents: Ref,
+    *,
+    crop_box: list[float] | None = None,
+    rotate: int | None = None,
+    annots: list[Ref] | None = None,
+) -> dict[str, object]:
+    """A `/Page` dictionary. With every option left out it is the dictionary the AR builders write."""
+    page: dict[str, object] = {
+        "Type": Name("Page"),
+        "Parent": parent,
+        "MediaBox": list(media_box),
+    }
+    if crop_box is not None:
+        page["CropBox"] = list(crop_box)
+    if rotate is not None:
+        if rotate % 90 != 0:
+            raise ValueError("/Rotate is a multiple of 90")
+        page["Rotate"] = rotate
+    page["Resources"] = resources
+    page["Contents"] = contents
+    if annots:
+        page["Annots"] = list(annots)
+    return page
+
+
+def _appearance(pdf: Pdf, width: float, height: float, content: str) -> Ref:
+    return pdf.add_stream(
+        {
+            "Type": Name("XObject"),
+            "Subtype": Name("Form"),
+            "BBox": [0, 0, width, height],
+            "Resources": {},
+        },
+        content.encode("ascii"),
+    )
+
+
+def add_text_annotation(
+    pdf: Pdf,
+    rect: tuple[float, float, float, float],
+    contents: str,
+    *,
+    author: str,
+    modified: str,
+    color: tuple[float, float, float] = (1.0, 0.9, 0.2),
+) -> Ref:
+    """A `/Text` (sticky note) annotation with a drawn icon. `modified` is a PDF date string."""
+    x0, y0, x1, y1 = rect
+    width, height = x1 - x0, y1 - y0
+    icon = (
+        f"q {_rgb(color, stroke=False)} 0 0 {_n(width)} {_n(height)} re f "
+        f"0 0 0 RG 0.8 w 0.4 0.4 {_n(width - 0.8)} {_n(height - 0.8)} re S "
+        f"{_n(width * 0.2)} {_n(height * 0.65)} m {_n(width * 0.8)} {_n(height * 0.65)} l S "
+        f"{_n(width * 0.2)} {_n(height * 0.4)} m {_n(width * 0.8)} {_n(height * 0.4)} l S Q\n"
+    )
+    return pdf.add({
+        "Type": Name("Annot"),
+        "Subtype": Name("Text"),
+        "Rect": [x0, y0, x1, y1],
+        "Contents": RawBytes(pdf_text_string(contents)),
+        "T": RawBytes(pdf_text_string(author)),
+        "M": RawBytes(pdf_literal(modified)),
+        "Name": Name("Comment"),
+        "C": list(color),
+        "F": 4,
+        "Open": False,
+        "AP": {"N": _appearance(pdf, width, height, icon)},
+    })
+
+
+def add_square_annotation(
+    pdf: Pdf,
+    rect: tuple[float, float, float, float],
+    *,
+    color: tuple[float, float, float],
+    border_width: float = 1.5,
+    contents: str | None = None,
+    author: str | None = None,
+    modified: str | None = None,
+) -> Ref:
+    """A `/Square` annotation: an outlined rectangle drawn by its own appearance stream."""
+    x0, y0, x1, y1 = rect
+    width, height = x1 - x0, y1 - y0
+    half = border_width / 2.0
+    body = (
+        f"q {_rgb(color, stroke=True)} {_n(border_width)} w "
+        f"{_n(half)} {_n(half)} {_n(width - border_width)} {_n(height - border_width)} re S Q\n"
+    )
+    annotation: dict[str, object] = {
+        "Type": Name("Annot"),
+        "Subtype": Name("Square"),
+        "Rect": [x0, y0, x1, y1],
+    }
+    if contents is not None:
+        annotation["Contents"] = RawBytes(pdf_text_string(contents))
+    if author is not None:
+        annotation["T"] = RawBytes(pdf_text_string(author))
+    if modified is not None:
+        annotation["M"] = RawBytes(pdf_literal(modified))
+    annotation["C"] = list(color)
+    annotation["BS"] = {"W": border_width, "S": Name("S")}
+    annotation["F"] = 4
+    annotation["AP"] = {"N": _appearance(pdf, width, height, body)}
+    return pdf.add(annotation)
+
+
+def add_ocg(pdf: Pdf, name: str) -> Ref:
+    """One optional-content group (a CAD "layer")."""
+    return pdf.add({"Type": Name("OCG"), "Name": RawBytes(pdf_text_string(name))})
+
+
+def ocg_properties(layers: list[Ref], *, hidden: tuple[Ref, ...] = ()) -> dict[str, object]:
+    """The catalog's `/OCProperties` value. A layer in `hidden` is off by default."""
+    default: dict[str, object] = {
+        "Order": list(layers),
+        "ON": [layer for layer in layers if layer not in hidden],
+    }
+    if hidden:
+        default["OFF"] = list(hidden)
+    return {"OCGs": list(layers), "D": default}
+
+
+def layer_begin(tag: str) -> str:
+    """Start marked content drawn on the group the page's `/Properties /<tag>` names."""
+    return f"/OC /{tag} BDC\n"
+
+
+def layer_end() -> str:
+    return "EMC\n"
+
+
+def _dash(dash: tuple[float, ...] | None, digits: int) -> str:
+    if not dash:
+        return ""
+    return "[" + " ".join(_n(d, digits) for d in dash) + "] 0 d "
+
+
+def stroke_line_op(
+    x1: float, y1: float, x2: float, y2: float, *, width: float,
+    rgb: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    dash: tuple[float, ...] | None = None, digits: int = 3,
+) -> str:
+    """One line, solid or dashed, in its own graphics state."""
+    return (
+        f"q {_n(width, digits)} w {_rgb(rgb, stroke=True, digits=digits)} {_dash(dash, digits)}"
+        f"{_n(x1, digits)} {_n(y1, digits)} m {_n(x2, digits)} {_n(y2, digits)} l S Q\n"
+    )
+
+
+def stroke_rect_op(
+    x: float, y: float, w: float, h: float, *, width: float,
+    rgb: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    dash: tuple[float, ...] | None = None,
+    fill: tuple[float, float, float] | None = None, digits: int = 3,
+) -> str:
+    """A rectangle outline, optionally dashed and optionally filled."""
+    paint = "B" if fill is not None else "S"
+    fill_part = _rgb(fill, stroke=False, digits=digits) + " " if fill is not None else ""
+    return (
+        f"q {_n(width, digits)} w {_rgb(rgb, stroke=True, digits=digits)} {fill_part}"
+        f"{_dash(dash, digits)}{_n(x, digits)} {_n(y, digits)} {_n(w, digits)} {_n(h, digits)} re {paint} Q\n"
+    )
+
+
+def stroke_circle_op(
+    cx: float, cy: float, r: float, *, width: float,
+    rgb: tuple[float, float, float] = (0.0, 0.0, 0.0), digits: int = 3,
+) -> str:
+    """A circle as four cubic Béziers (kappa = 0.5523)."""
+    k = 0.5522847498 * r
+    points = [
+        (cx + r, cy),
+        (cx + r, cy + k, cx + k, cy + r, cx, cy + r),
+        (cx - k, cy + r, cx - r, cy + k, cx - r, cy),
+        (cx - r, cy - k, cx - k, cy - r, cx, cy - r),
+        (cx + k, cy - r, cx + r, cy - k, cx + r, cy),
+    ]
+    parts = [f"{_n(points[0][0], digits)} {_n(points[0][1], digits)} m"]
+    for curve in points[1:]:
+        parts.append(" ".join(_n(v, digits) for v in curve) + " c")
+    return (
+        f"q {_n(width, digits)} w {_rgb(rgb, stroke=True, digits=digits)} "
+        + " ".join(parts) + " h S Q\n"
+    )
+
+
+def add_hatch_pattern(
+    pdf: Pdf, *, spacing: float, width: float, rgb: tuple[float, float, float],
+) -> Ref:
+    """A coloured tiling pattern: 45-degree parallel lines, `spacing` points apart."""
+    s = _n(spacing)
+    body = f"{_rgb(rgb, stroke=True)} {_n(width)} w 0 0 m {s} {s} l S\n"
+    return pdf.add_stream(
+        {
+            "Type": Name("Pattern"),
+            "PatternType": 1,
+            "PaintType": 1,
+            "TilingType": 1,
+            "BBox": [0, 0, spacing, spacing],
+            "XStep": spacing,
+            "YStep": spacing,
+            "Resources": {},
+        },
+        body.encode("ascii"),
+    )
+
+
+def pattern_fill_op(
+    pattern_name: str, x: float, y: float, w: float, h: float, *, digits: int = 3,
+) -> str:
+    """Fill a rectangle with a tiling pattern in the page's `/Pattern` resources."""
+    return (
+        f"q /Pattern cs /{pattern_name} scn "
+        f"{_n(x, digits)} {_n(y, digits)} {_n(w, digits)} {_n(h, digits)} re f Q\n"
+    )
+
+
+def hatch_segments(
+    x: float, y: float, w: float, h: float, *, spacing: float,
+) -> list[tuple[float, float, float, float]]:
+    """Parallel 45-degree lines across a rectangle as (x0, y0, x1, y1), clipped exactly to it.
+
+    The lines run from the left or bottom edge to the right or top edge, `spacing` apart
+    along the x axis, in a fixed order (bottom-right corner first).
+    """
+    out: list[tuple[float, float, float, float]] = []
+    offset = -h
+    while offset < w:
+        x0, y0 = x + max(offset, 0.0), y + max(-offset, 0.0)
+        run = min(w - max(offset, 0.0), h - max(-offset, 0.0))
+        if run > 0:
+            out.append((x0, y0, x0 + run, y0 + run))
+        offset += spacing
+    return out
+
+
+def hatch_lines(
+    x: float, y: float, w: float, h: float, *, spacing: float, width: float,
+    rgb: tuple[float, float, float] = (0.0, 0.0, 0.0), digits: int = 3,
+) -> list[str]:
+    """`hatch_segments` as finished strokes, one `q ... Q` each, so a caller can reorder them."""
+    return [
+        f"q {_n(width, digits)} w {_rgb(rgb, stroke=True, digits=digits)} "
+        f"{_n(x0, digits)} {_n(y0, digits)} m {_n(x1, digits)} {_n(y1, digits)} l S Q\n"
+        for x0, y0, x1, y1 in hatch_segments(x, y, w, h, spacing=spacing)
+    ]
+
+
+def clip_rect_op(x: float, y: float, w: float, h: float, *, digits: int = 3) -> str:
+    """Begin a clip to a rectangle; the caller closes it with `Q`."""
+    return f"q {_n(x, digits)} {_n(y, digits)} {_n(w, digits)} {_n(h, digits)} re W n\n"
+
+
+def stroke_text_op(
+    outlines: object, text: str, size: float, x: float, y: float, *, width: float,
+    rgb: tuple[float, float, float] = (0.0, 0.0, 0.0), digits: int = 3, bare: bool = False,
+) -> str:
+    """Text as paths: every character's outline stroked, one path object per character.
+
+    `outlines` is any object with `units_per_em`, `advance(char) -> font units` and
+    `contours(char) -> list of contours`, each contour a list of segments `("m", x, y)`,
+    `("l", x, y)`, `("c", x1, y1, x2, y2, x3, y3)` or `("h",)` in font units
+    (`tools/fixtures/comparison/outlines.py`). The result contains no text-showing operator.
+    With `bare` each character is just its path and `S`: the caller has set the line width,
+    colour, join and cap, which is how a producer that groups strokes by style writes them.
+    """
+    scale = size / outlines.units_per_em  # type: ignore[attr-defined]
+    pen = x
+    out: list[str] = []
+    for char in text:
+        contours = outlines.contours(char)  # type: ignore[attr-defined]
+        if contours:
+            body: list[str] = []
+            for contour in contours:
+                for seg in contour:
+                    kind = seg[0]
+                    if kind == "h":
+                        body.append("h")
+                        continue
+                    coords: list[str] = []
+                    for index in range(1, len(seg), 2):
+                        coords.append(_n(pen + seg[index] * scale, digits))
+                        coords.append(_n(y + seg[index + 1] * scale, digits))
+                    body.append(" ".join(coords) + " " + kind)
+            if bare:
+                out.append(" ".join(body) + " S\n")
+            else:
+                out.append(
+                    f"q {_n(width, digits)} w {_rgb(rgb, stroke=True, digits=digits)} 1 j 1 J "
+                    + " ".join(body) + " S Q\n"
+                )
+        pen += outlines.advance(char) * scale  # type: ignore[attr-defined]
+    return "".join(out)

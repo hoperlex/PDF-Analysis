@@ -1,0 +1,3940 @@
+{
+  "schema": "cmp-vs1-answer-key/1",
+  "synthetic": true,
+  "notice": "Synthetic corpus. Every name, mark and number is invented; no customer, production or real project bytes (owner decision OD-17).",
+  "generated_by": "tools/fixtures/comparison/build.py",
+  "regenerate": "python3 tools/fixtures/comparison/build.py",
+  "designation": "СИНТ-01-ЭМ",
+  "statuses": [
+    "same",
+    "same_zones_changed",
+    "different",
+    "needs_review",
+    "added",
+    "removed"
+  ],
+  "channels": [
+    "geometry",
+    "color",
+    "text",
+    "text_coverage",
+    "zones",
+    "annotations",
+    "warnings",
+    "spec_positions"
+  ],
+  "channel_rules": {
+    "channels_with_differences": "the engine must report a difference in each of these channels",
+    "channels_without_differences": "the engine must report no difference in any of these channels",
+    "unconstrained": "a channel in neither list may or may not report; for example a changed number may or may not also show in geometry because its glyph pixels differ"
+  },
+  "coordinates": "PDF points, origin at the lower left of the MediaBox, as written; no sheet in this set has /Rotate or a CropBox. bbox = [x0, y0, x1, y1].",
+  "versions": [
+    {
+      "id": "V1",
+      "file": "vs1/v1.pdf",
+      "sha256": "f8e2fe83793e2a1af0dd3261e03af14b948017400af35cea352e8fcd006fdc24",
+      "bytes": 71108,
+      "label": "Изм.0",
+      "date": "15.01.2026",
+      "designation": "СИНТ-01-ЭМ",
+      "page_count": 6,
+      "pdf_title": "СИНТ-01-ЭМ. Изм.0. Рабочие чертежи (синтетический комплект)",
+      "pages": [
+        {
+          "page": 1,
+          "sheet_id": "E01",
+          "role": "regular",
+          "sheet_no": "1",
+          "title": "Общие данные",
+          "format": "A4",
+          "width_pt": 595.28,
+          "height_pt": 841.89,
+          "text_layer": true,
+          "scan": false,
+          "stamp": {
+            "designation": "СИНТ-01-ЭМ",
+            "title": "Общие данные",
+            "stage": "Р",
+            "sheet_no": "1",
+            "revision": "Изм.0",
+            "date": "15.01.2026",
+            "organisation": "СИНТЕТИКПРОЕКТ"
+          },
+          "stamp_bbox": [
+            56.7,
+            14.17,
+            581.11,
+            170.08
+          ],
+          "annotations": [],
+          "content_sha256": "dc8076da7fabc2656c2460f7ed7fd02443a1fde1dc6ca30cce1fe75263f5d83c",
+          "image_sha256": null
+        },
+        {
+          "page": 2,
+          "sheet_id": "E02",
+          "role": "regular",
+          "sheet_no": "2",
+          "title": "План освещения. Корпус 1, этаж 1",
+          "format": "A3",
+          "width_pt": 1190.55,
+          "height_pt": 841.89,
+          "text_layer": true,
+          "scan": false,
+          "stamp": {
+            "designation": "СИНТ-01-ЭМ",
+            "title": "План освещения. Корпус 1, этаж 1",
+            "stage": "Р",
+            "sheet_no": "2",
+            "revision": "Изм.0",
+            "date": "15.01.2026",
+            "organisation": "СИНТЕТИКПРОЕКТ"
+          },
+          "stamp_bbox": [
+            651.97,
+            14.17,
+            1176.38,
+            170.08
+          ],
+          "annotations": [],
+          "content_sha256": "07d7932f37bc7a21db22e34cce0da0a26e4940790f4ef4e18f161849e67eb4a0",
+          "image_sha256": null
+        },
+        {
+          "page": 3,
+          "sheet_id": "E03",
+          "role": "regular",
+          "sheet_no": "3",
+          "title": "Схема электрическая принципиальная ЩО-1",
+          "format": "A3",
+          "width_pt": 1190.55,
+          "height_pt": 841.89,
+          "text_layer": true,
+          "scan": false,
+          "stamp": {
+            "designation": "СИНТ-01-ЭМ",
+            "title": "Схема электрическая принципиальная ЩО-1",
+            "stage": "Р",
+            "sheet_no": "3",
+            "revision": "Изм.0",
+            "date": "15.01.2026",
+            "organisation": "СИНТЕТИКПРОЕКТ"
+          },
+          "stamp_bbox": [
+            651.97,
+            14.17,
+            1176.38,
+            170.08
+          ],
+          "annotations": [],
+          "content_sha256": "322f207c013d6d078242a3141d4d2b2b31336fb5d0dc5424d3904b8f8b78e658",
+          "image_sha256": null
+        },
+        {
+          "page": 4,
+          "sheet_id": "E04",
+          "role": "regular",
+          "sheet_no": "4",
+          "title": "Схема электрическая вводного устройства ВРУ-1",
+          "format": "A3",
+          "width_pt": 1190.55,
+          "height_pt": 841.89,
+          "text_layer": true,
+          "scan": false,
+          "stamp": {
+            "designation": "СИНТ-01-ЭМ",
+            "title": "Схема электрическая вводного устройства ВРУ-1",
+            "stage": "Р",
+            "sheet_no": "4",
+            "revision": "Изм.0",
+            "date": "15.01.2026",
+            "organisation": "СИНТЕТИКПРОЕКТ"
+          },
+          "stamp_bbox": [
+            651.97,
+            14.17,
+            1176.38,
+            170.08
+          ],
+          "annotations": [],
+          "content_sha256": "3370017c28fb00e166082c624fa25af7ef3ead9ddacd41cbe3b3a423b15992d3",
+          "image_sha256": null
+        },
+        {
+          "page": 5,
+          "sheet_id": "E05",
+          "role": "regular",
+          "sheet_no": "5",
+          "title": "План силовых сетей. Корпус 1, этаж 1",
+          "format": "A1",
+          "width_pt": 2383.94,
+          "height_pt": 1683.78,
+          "text_layer": true,
+          "scan": false,
+          "stamp": {
+            "designation": "СИНТ-01-ЭМ",
+            "title": "План силовых сетей. Корпус 1, этаж 1",
+            "stage": "Р",
+            "sheet_no": "5",
+            "revision": "Изм.0",
+            "date": "15.01.2026",
+            "organisation": "СИНТЕТИКПРОЕКТ"
+          },
+          "stamp_bbox": [
+            1845.36,
+            14.17,
+            2369.77,
+            170.08
+          ],
+          "annotations": [],
+          "content_sha256": "14b9846736eda7d4fe0cf51fea6f36030d1f6af534393e08a2bcad0e0b9f5ab6",
+          "image_sha256": null
+        },
+        {
+          "page": 6,
+          "sheet_id": "E06",
+          "role": "regular",
+          "sheet_no": "6",
+          "title": "План заземления. Корпус 1",
+          "format": "A3",
+          "width_pt": 1190.55,
+          "height_pt": 841.89,
+          "text_layer": true,
+          "scan": false,
+          "stamp": {
+            "designation": "СИНТ-01-ЭМ",
+            "title": "План заземления. Корпус 1",
+            "stage": "Р",
+            "sheet_no": "6",
+            "revision": "Изм.0",
+            "date": "15.01.2026",
+            "organisation": "СИНТЕТИКПРОЕКТ"
+          },
+          "stamp_bbox": [
+            651.97,
+            14.17,
+            1176.38,
+            170.08
+          ],
+          "annotations": [],
+          "content_sha256": "087e65a5c1b7bc8e04a06e920a6d5a55598c1f06a0f6167c3153a18e187626af",
+          "image_sha256": null
+        }
+      ]
+    },
+    {
+      "id": "V2",
+      "file": "vs1/v2.pdf",
+      "sha256": "15faa7a2a5862bc7e88be6ca9f6977bb71247f2460b57e82453aa8db0ef92db3",
+      "bytes": 71767,
+      "label": "Изм.1",
+      "date": "12.02.2026",
+      "designation": "СИНТ-01-ЭМ",
+      "page_count": 6,
+      "pdf_title": "СИНТ-01-ЭМ. Изм.1. Рабочие чертежи (синтетический комплект)",
+      "pages": [
+        {
+          "page": 1,
+          "sheet_id": "E01",
+          "role": "regular",
+          "sheet_no": "1",
+          "title": "Общие данные",
+          "format": "A4",
+          "width_pt": 595.28,
+          "height_pt": 841.89,
+          "text_layer": true,
+          "scan": false,
+          "stamp": {
+            "designation": "СИНТ-01-ЭМ",
+            "title": "Общие данные",
+            "stage": "Р",
+            "sheet_no": "1",
+            "revision": "Изм.0",
+            "date": "15.01.2026",
+            "organisation": "СИНТЕТИКПРОЕКТ"
+          },
+          "stamp_bbox": [
+            56.7,
+            14.17,
+            581.11,
+            170.08
+          ],
+          "annotations": [],
+          "content_sha256": "dc8076da7fabc2656c2460f7ed7fd02443a1fde1dc6ca30cce1fe75263f5d83c",
+          "image_sha256": null
+        },
+        {
+          "page": 2,
+          "sheet_id": "E02",
+          "role": "regular",
+          "sheet_no": "2",
+          "title": "План освещения. Корпус 1, этаж 1",
+          "format": "A3",
+          "width_pt": 1190.55,
+          "height_pt": 841.89,
+          "text_layer": true,
+          "scan": false,
+          "stamp": {
+            "designation": "СИНТ-01-ЭМ",
+            "title": "План освещения. Корпус 1, этаж 1",
+            "stage": "Р",
+            "sheet_no": "2",
+            "revision": "Изм.1",
+            "date": "12.02.2026",
+            "organisation": "СИНТЕТИКПРОЕКТ"
+          },
+          "stamp_bbox": [
+            651.97,
+            14.17,
+            1176.38,
+            170.08
+          ],
+          "annotations": [],
+          "content_sha256": "6ec161194e248c1bff5df6816665225658feb89dd2b574d5f349af26752c7407",
+          "image_sha256": null
+        },
+        {
+          "page": 3,
+          "sheet_id": "E03",
+          "role": "regular",
+          "sheet_no": "3",
+          "title": "Схема электрическая принципиальная ЩО-1",
+          "format": "A3",
+          "width_pt": 1190.55,
+          "height_pt": 841.89,
+          "text_layer": true,
+          "scan": false,
+          "stamp": {
+            "designation": "СИНТ-01-ЭМ",
+            "title": "Схема электрическая принципиальная ЩО-1",
+            "stage": "Р",
+            "sheet_no": "3",
+            "revision": "Изм.1",
+            "date": "12.02.2026",
+            "organisation": "СИНТЕТИКПРОЕКТ"
+          },
+          "stamp_bbox": [
+            651.97,
+            14.17,
+            1176.38,
+            170.08
+          ],
+          "annotations": [],
+          "content_sha256": "aa32b3ea51a28497948eaecee0e20c9b1d24f65c4e6b50e141aa1183ae21c9ef",
+          "image_sha256": null
+        },
+        {
+          "page": 4,
+          "sheet_id": "E04",
+          "role": "regular",
+          "sheet_no": "4",
+          "title": "Схема электрическая вводного устройства ВРУ-1",
+          "format": "A3",
+          "width_pt": 1190.55,
+          "height_pt": 841.89,
+          "text_layer": true,
+          "scan": false,
+          "stamp": {
+            "designation": "СИНТ-01-ЭМ",
+            "title": "Схема электрическая вводного устройства ВРУ-1",
+            "stage": "Р",
+            "sheet_no": "4",
+            "revision": "Изм.1",
+            "date": "12.02.2026",
+            "organisation": "СИНТЕТИКПРОЕКТ"
+          },
+          "stamp_bbox": [
+            651.97,
+            14.17,
+            1176.38,
+            170.08
+          ],
+          "annotations": [],
+          "content_sha256": "376f655a49f9c2fa336e1e046d86328fd59e3abf45c06a2f4832bf91a784101d",
+          "image_sha256": null
+        },
+        {
+          "page": 5,
+          "sheet_id": "E05",
+          "role": "regular",
+          "sheet_no": "5",
+          "title": "План силовых сетей. Корпус 1, этаж 1",
+          "format": "A1",
+          "width_pt": 2383.94,
+          "height_pt": 1683.78,
+          "text_layer": true,
+          "scan": false,
+          "stamp": {
+            "designation": "СИНТ-01-ЭМ",
+            "title": "План силовых сетей. Корпус 1, этаж 1",
+            "stage": "Р",
+            "sheet_no": "5",
+            "revision": "Изм.0",
+            "date": "15.01.2026",
+            "organisation": "СИНТЕТИКПРОЕКТ"
+          },
+          "stamp_bbox": [
+            1845.36,
+            14.17,
+            2369.77,
+            170.08
+          ],
+          "annotations": [
+            {
+              "id": "E05.note.1",
+              "kind": "text",
+              "contents": "Проверить трассу лотка по оси Б",
+              "author": "Проверяющий",
+              "rect": [
+                600.0,
+                900.0,
+                624.0,
+                924.0
+              ]
+            }
+          ],
+          "content_sha256": "14b9846736eda7d4fe0cf51fea6f36030d1f6af534393e08a2bcad0e0b9f5ab6",
+          "image_sha256": null
+        },
+        {
+          "page": 6,
+          "sheet_id": "E06",
+          "role": "regular",
+          "sheet_no": "6",
+          "title": "План заземления. Корпус 1",
+          "format": "A3",
+          "width_pt": 1190.55,
+          "height_pt": 841.89,
+          "text_layer": true,
+          "scan": false,
+          "stamp": {
+            "designation": "СИНТ-01-ЭМ",
+            "title": "План заземления. Корпус 1",
+            "stage": "Р",
+            "sheet_no": "6",
+            "revision": "Изм.0",
+            "date": "15.01.2026",
+            "organisation": "СИНТЕТИКПРОЕКТ"
+          },
+          "stamp_bbox": [
+            651.97,
+            14.17,
+            1176.38,
+            170.08
+          ],
+          "annotations": [],
+          "content_sha256": "087e65a5c1b7bc8e04a06e920a6d5a55598c1f06a0f6167c3153a18e187626af",
+          "image_sha256": null
+        }
+      ]
+    },
+    {
+      "id": "V3",
+      "file": "vs1/v3.pdf",
+      "sha256": "6c24c0e80dab4eb530810212756f3f036d2eb5a8799b1e46ec65961bd9e59e8a",
+      "bytes": 75741,
+      "label": "Изм.2",
+      "date": "10.03.2026",
+      "designation": "СИНТ-01-ЭМ",
+      "page_count": 6,
+      "pdf_title": "СИНТ-01-ЭМ. Изм.2. Рабочие чертежи (синтетический комплект)",
+      "pages": [
+        {
+          "page": 1,
+          "sheet_id": "E01",
+          "role": "regular",
+          "sheet_no": "1",
+          "title": "Общие данные",
+          "format": "A4",
+          "width_pt": 595.28,
+          "height_pt": 841.89,
+          "text_layer": true,
+          "scan": false,
+          "stamp": {
+            "designation": "СИНТ-01-ЭМ",
+            "title": "Общие данные",
+            "stage": "Р",
+            "sheet_no": "1",
+            "revision": "Изм.2",
+            "date": "10.03.2026",
+            "organisation": "СИНТЕТИКПРОЕКТ"
+          },
+          "stamp_bbox": [
+            56.7,
+            14.17,
+            581.11,
+            170.08
+          ],
+          "annotations": [],
+          "content_sha256": "9b19086450276f775299034ebfdd282fa883098718e0355015990520bba0932e",
+          "image_sha256": null
+        },
+        {
+          "page": 2,
+          "sheet_id": "E02",
+          "role": "regular",
+          "sheet_no": "2",
+          "title": "План освещения. Корпус 1, этаж 1",
+          "format": "A3",
+          "width_pt": 1190.55,
+          "height_pt": 841.89,
+          "text_layer": true,
+          "scan": false,
+          "stamp": {
+            "designation": "СИНТ-01-ЭМ",
+            "title": "План освещения. Корпус 1, этаж 1",
+            "stage": "Р",
+            "sheet_no": "2",
+            "revision": "Изм.2",
+            "date": "10.03.2026",
+            "organisation": "СИНТЕТИКПРОЕКТ"
+          },
+          "stamp_bbox": [
+            651.97,
+            14.17,
+            1176.38,
+            170.08
+          ],
+          "annotations": [],
+          "content_sha256": "712063a085ff2b3c83d839af4704a89470341dd090b4113672ebe951cebc267d",
+          "image_sha256": null
+        },
+        {
+          "page": 3,
+          "sheet_id": "E03",
+          "role": "regular",
+          "sheet_no": "3",
+          "title": "Схема электрическая принципиальная ЩО-1",
+          "format": "A3",
+          "width_pt": 1190.55,
+          "height_pt": 841.89,
+          "text_layer": true,
+          "scan": false,
+          "stamp": {
+            "designation": "СИНТ-01-ЭМ",
+            "title": "Схема электрическая принципиальная ЩО-1",
+            "stage": "Р",
+            "sheet_no": "3",
+            "revision": "Изм.1",
+            "date": "12.02.2026",
+            "organisation": "СИНТЕТИКПРОЕКТ"
+          },
+          "stamp_bbox": [
+            651.97,
+            14.17,
+            1176.38,
+            170.08
+          ],
+          "annotations": [],
+          "content_sha256": "aa32b3ea51a28497948eaecee0e20c9b1d24f65c4e6b50e141aa1183ae21c9ef",
+          "image_sha256": null
+        },
+        {
+          "page": 4,
+          "sheet_id": "E04",
+          "role": "regular",
+          "sheet_no": "4",
+          "title": "Схема электрическая вводного устройства ВРУ-1",
+          "format": "A3",
+          "width_pt": 1190.55,
+          "height_pt": 841.89,
+          "text_layer": true,
+          "scan": false,
+          "stamp": {
+            "designation": "СИНТ-01-ЭМ",
+            "title": "Схема электрическая вводного устройства ВРУ-1",
+            "stage": "Р",
+            "sheet_no": "4",
+            "revision": "Изм.2",
+            "date": "10.03.2026",
+            "organisation": "СИНТЕТИКПРОЕКТ"
+          },
+          "stamp_bbox": [
+            651.97,
+            14.17,
+            1176.38,
+            170.08
+          ],
+          "annotations": [],
+          "content_sha256": "b495682ae7e94733da17f248e3674c47e1c892c436f5d05a8f813d70ef88897d",
+          "image_sha256": null
+        },
+        {
+          "page": 5,
+          "sheet_id": "E05",
+          "role": "regular",
+          "sheet_no": "5",
+          "title": "План силовых сетей. Корпус 1, этаж 1",
+          "format": "A1",
+          "width_pt": 2383.94,
+          "height_pt": 1683.78,
+          "text_layer": true,
+          "scan": false,
+          "stamp": {
+            "designation": "СИНТ-01-ЭМ",
+            "title": "План силовых сетей. Корпус 1, этаж 1",
+            "stage": "Р",
+            "sheet_no": "5",
+            "revision": "Изм.2",
+            "date": "10.03.2026",
+            "organisation": "СИНТЕТИКПРОЕКТ"
+          },
+          "stamp_bbox": [
+            1845.36,
+            14.17,
+            2369.77,
+            170.08
+          ],
+          "annotations": [
+            {
+              "id": "E05.note.1",
+              "kind": "text",
+              "contents": "Проверить трассу лотка по оси Б",
+              "author": "Проверяющий",
+              "rect": [
+                600.0,
+                900.0,
+                624.0,
+                924.0
+              ]
+            }
+          ],
+          "content_sha256": "59cdac2e566d93efaaebb8ea4c5109c6814cd2cd863d6d8d581c0dcd514136ac",
+          "image_sha256": null
+        },
+        {
+          "page": 6,
+          "sheet_id": "E07",
+          "role": "regular",
+          "sheet_no": "7",
+          "title": "Спецификация оборудования, изделий и материалов",
+          "format": "A4",
+          "width_pt": 595.28,
+          "height_pt": 841.89,
+          "text_layer": true,
+          "scan": false,
+          "stamp": {
+            "designation": "СИНТ-01-ЭМ",
+            "title": "Спецификация оборудования, изделий и материалов",
+            "stage": "Р",
+            "sheet_no": "7",
+            "revision": "Изм.2",
+            "date": "10.03.2026",
+            "organisation": "СИНТЕТИКПРОЕКТ"
+          },
+          "stamp_bbox": [
+            56.7,
+            14.17,
+            581.11,
+            170.08
+          ],
+          "annotations": [
+            {
+              "id": "E07.sq.1",
+              "kind": "square",
+              "contents": "Уточнить сечение",
+              "author": "Проверяющий",
+              "rect": [
+                56.7,
+                656.0,
+                581.1,
+                678.0
+              ]
+            }
+          ],
+          "content_sha256": "8bccb54a096b85085f0019a1115fad6952ae51f33e1aae19f6f3f581fb2dfa50",
+          "image_sha256": null
+        }
+      ]
+    },
+    {
+      "id": "V4",
+      "file": "vs1/v4.pdf",
+      "sha256": "aea77e235e6cb32579f1ab3a59e302f15ae68cac60c9c9fba50e62f9cf7f7ee3",
+      "bytes": 316215,
+      "label": "Изм.3",
+      "date": "07.04.2026",
+      "designation": "СИНТ-01-ЭМ",
+      "page_count": 6,
+      "pdf_title": "СИНТ-01-ЭМ. Изм.3. Рабочие чертежи (синтетический комплект)",
+      "pages": [
+        {
+          "page": 1,
+          "sheet_id": "E01",
+          "role": "regular",
+          "sheet_no": "1",
+          "title": "Общие данные",
+          "format": "A4",
+          "width_pt": 595.28,
+          "height_pt": 841.89,
+          "text_layer": true,
+          "scan": false,
+          "stamp": {
+            "designation": "СИНТ-01-ЭМ",
+            "title": "Общие данные",
+            "stage": "Р",
+            "sheet_no": "1",
+            "revision": "Изм.3",
+            "date": "07.04.2026",
+            "organisation": "СИНТЕТИКПРОЕКТ"
+          },
+          "stamp_bbox": [
+            56.7,
+            14.17,
+            581.11,
+            170.08
+          ],
+          "annotations": [],
+          "content_sha256": "ccc4b5314d452fd4056cff4eecfef79b366761faa170d3f4b7df1262a19868cf",
+          "image_sha256": null
+        },
+        {
+          "page": 2,
+          "sheet_id": "E02",
+          "role": "regular",
+          "sheet_no": "2",
+          "title": "План освещения. Корпус 1, этаж 1",
+          "format": "A3",
+          "width_pt": 1190.55,
+          "height_pt": 841.89,
+          "text_layer": true,
+          "scan": false,
+          "stamp": {
+            "designation": "СИНТ-01-ЭМ",
+            "title": "План освещения. Корпус 1, этаж 1",
+            "stage": "Р",
+            "sheet_no": "2",
+            "revision": "Изм.2",
+            "date": "10.03.2026",
+            "organisation": "СИНТЕТИКПРОЕКТ"
+          },
+          "stamp_bbox": [
+            651.97,
+            14.17,
+            1176.38,
+            170.08
+          ],
+          "annotations": [],
+          "content_sha256": "712063a085ff2b3c83d839af4704a89470341dd090b4113672ebe951cebc267d",
+          "image_sha256": null
+        },
+        {
+          "page": 3,
+          "sheet_id": "E03",
+          "role": "regular",
+          "sheet_no": "3",
+          "title": "Схема электрическая принципиальная ЩО-1",
+          "format": "A3",
+          "width_pt": 1190.55,
+          "height_pt": 841.89,
+          "text_layer": true,
+          "scan": false,
+          "stamp": {
+            "designation": "СИНТ-01-ЭМ",
+            "title": "Схема электрическая принципиальная ЩО-1",
+            "stage": "Р",
+            "sheet_no": "3",
+            "revision": "Изм.1",
+            "date": "12.02.2026",
+            "organisation": "СИНТЕТИКПРОЕКТ"
+          },
+          "stamp_bbox": [
+            651.97,
+            14.17,
+            1176.38,
+            170.08
+          ],
+          "annotations": [],
+          "content_sha256": "d0ce6d1f0c6c6f75ce13727e8571fac0196ad9a89d4a1f01a972d3c902243309",
+          "image_sha256": null
+        },
+        {
+          "page": 4,
+          "sheet_id": "E04",
+          "role": "regular",
+          "sheet_no": "4",
+          "title": "Схема электрическая вводного устройства ВРУ-1",
+          "format": "A3",
+          "width_pt": 1190.55,
+          "height_pt": 841.89,
+          "text_layer": false,
+          "scan": true,
+          "stamp": {
+            "designation": "СИНТ-01-ЭМ",
+            "title": "Схема электрическая вводного устройства ВРУ-1",
+            "stage": "Р",
+            "sheet_no": "4",
+            "revision": "Изм.3",
+            "date": "07.04.2026",
+            "organisation": "СИНТЕТИКПРОЕКТ"
+          },
+          "stamp_bbox": [
+            651.97,
+            14.17,
+            1176.38,
+            170.08
+          ],
+          "annotations": [],
+          "content_sha256": "b81ab2a9013042a8bf18078c9749eb445fe9124ca99cab91d55c359191899dee",
+          "image_sha256": "53c12529dcca134e2a2ea8a26f6b8fdc9aa258394c9879acc991553a739007ad"
+        },
+        {
+          "page": 5,
+          "sheet_id": "E05",
+          "role": "regular",
+          "sheet_no": "5",
+          "title": "План силовых сетей. Корпус 1, этаж 1",
+          "format": "A1",
+          "width_pt": 2383.94,
+          "height_pt": 1683.78,
+          "text_layer": true,
+          "scan": false,
+          "stamp": {
+            "designation": "СИНТ-01-ЭМ",
+            "title": "План силовых сетей. Корпус 1, этаж 1",
+            "stage": "Р",
+            "sheet_no": "5",
+            "revision": "Изм.3",
+            "date": "07.04.2026",
+            "organisation": "СИНТЕТИКПРОЕКТ"
+          },
+          "stamp_bbox": [
+            1845.36,
+            14.17,
+            2369.77,
+            170.08
+          ],
+          "annotations": [
+            {
+              "id": "E05.note.1",
+              "kind": "text",
+              "contents": "Проверить трассу лотка по оси Б",
+              "author": "Проверяющий",
+              "rect": [
+                600.0,
+                900.0,
+                624.0,
+                924.0
+              ]
+            }
+          ],
+          "content_sha256": "3c4217949138a55f126c0d686b360457ab349d57cb81feceacd9277c945cb5d4",
+          "image_sha256": null
+        },
+        {
+          "page": 6,
+          "sheet_id": "E07",
+          "role": "regular",
+          "sheet_no": "7",
+          "title": "Спецификация оборудования, изделий и материалов",
+          "format": "A4",
+          "width_pt": 595.28,
+          "height_pt": 841.89,
+          "text_layer": true,
+          "scan": false,
+          "stamp": {
+            "designation": "СИНТ-01-ЭМ",
+            "title": "Спецификация оборудования, изделий и материалов",
+            "stage": "Р",
+            "sheet_no": "7",
+            "revision": "Изм.2",
+            "date": "10.03.2026",
+            "organisation": "СИНТЕТИКПРОЕКТ"
+          },
+          "stamp_bbox": [
+            56.7,
+            14.17,
+            581.11,
+            170.08
+          ],
+          "annotations": [
+            {
+              "id": "E07.sq.1",
+              "kind": "square",
+              "contents": "Уточнить сечение",
+              "author": "Проверяющий",
+              "rect": [
+                56.7,
+                656.0,
+                581.1,
+                678.0
+              ]
+            }
+          ],
+          "content_sha256": "8bccb54a096b85085f0019a1115fad6952ae51f33e1aae19f6f3f581fb2dfa50",
+          "image_sha256": null
+        }
+      ]
+    },
+    {
+      "id": "V5",
+      "file": "vs1/v5.pdf",
+      "sha256": "f501386735b4a9bc96f81ad70cbd2aaebcfa7d14c382670ba44076564a05bfcc",
+      "bytes": 324278,
+      "label": "Изм.4",
+      "date": "05.05.2026",
+      "designation": "СИНТ-01-ЭМ",
+      "page_count": 8,
+      "pdf_title": "СИНТ-01-ЭМ. Изм.4. Рабочие чертежи (синтетический комплект)",
+      "pages": [
+        {
+          "page": 1,
+          "sheet_id": "E01",
+          "role": "regular",
+          "sheet_no": "1",
+          "title": "Общие данные",
+          "format": "A4",
+          "width_pt": 595.28,
+          "height_pt": 841.89,
+          "text_layer": true,
+          "scan": false,
+          "stamp": {
+            "designation": "СИНТ-01-ЭМ",
+            "title": "Общие данные",
+            "stage": "Р",
+            "sheet_no": "1",
+            "revision": "Изм.4",
+            "date": "05.05.2026",
+            "organisation": "СИНТЕТИКПРОЕКТ"
+          },
+          "stamp_bbox": [
+            56.7,
+            14.17,
+            581.11,
+            170.08
+          ],
+          "annotations": [],
+          "content_sha256": "b6a4cb8f43174168564362b232719dd9821afb739c6103172b49d360a28ace53",
+          "image_sha256": null
+        },
+        {
+          "page": 2,
+          "sheet_id": "E02",
+          "role": "regular",
+          "sheet_no": "2",
+          "title": "План освещения. Корпус 1, этаж 1",
+          "format": "A3",
+          "width_pt": 1190.55,
+          "height_pt": 841.89,
+          "text_layer": true,
+          "scan": false,
+          "stamp": {
+            "designation": "СИНТ-01-ЭМ",
+            "title": "План освещения. Корпус 1, этаж 1",
+            "stage": "Р",
+            "sheet_no": "2",
+            "revision": "Изм.2",
+            "date": "10.03.2026",
+            "organisation": "СИНТЕТИКПРОЕКТ"
+          },
+          "stamp_bbox": [
+            651.97,
+            14.17,
+            1176.38,
+            170.08
+          ],
+          "annotations": [],
+          "content_sha256": "712063a085ff2b3c83d839af4704a89470341dd090b4113672ebe951cebc267d",
+          "image_sha256": null
+        },
+        {
+          "page": 3,
+          "sheet_id": "E03",
+          "role": "regular",
+          "sheet_no": "3",
+          "title": "Схема электрическая принципиальная ЩО-1",
+          "format": "A3",
+          "width_pt": 1190.55,
+          "height_pt": 841.89,
+          "text_layer": true,
+          "scan": false,
+          "stamp": {
+            "designation": "СИНТ-01-ЭМ",
+            "title": "Схема электрическая принципиальная ЩО-1",
+            "stage": "Р",
+            "sheet_no": "3",
+            "revision": "Изм.1",
+            "date": "12.02.2026",
+            "organisation": "СИНТЕТИКПРОЕКТ"
+          },
+          "stamp_bbox": [
+            651.97,
+            14.17,
+            1176.38,
+            170.08
+          ],
+          "annotations": [],
+          "content_sha256": "d0ce6d1f0c6c6f75ce13727e8571fac0196ad9a89d4a1f01a972d3c902243309",
+          "image_sha256": null
+        },
+        {
+          "page": 4,
+          "sheet_id": "E04",
+          "role": "regular",
+          "sheet_no": "4",
+          "title": "Схема электрическая вводного устройства ВРУ-1",
+          "format": "A3",
+          "width_pt": 1190.55,
+          "height_pt": 841.89,
+          "text_layer": false,
+          "scan": true,
+          "stamp": {
+            "designation": "СИНТ-01-ЭМ",
+            "title": "Схема электрическая вводного устройства ВРУ-1",
+            "stage": "Р",
+            "sheet_no": "4",
+            "revision": "Изм.3",
+            "date": "07.04.2026",
+            "organisation": "СИНТЕТИКПРОЕКТ"
+          },
+          "stamp_bbox": [
+            651.97,
+            14.17,
+            1176.38,
+            170.08
+          ],
+          "annotations": [],
+          "content_sha256": "b81ab2a9013042a8bf18078c9749eb445fe9124ca99cab91d55c359191899dee",
+          "image_sha256": "53c12529dcca134e2a2ea8a26f6b8fdc9aa258394c9879acc991553a739007ad"
+        },
+        {
+          "page": 5,
+          "sheet_id": "E05",
+          "role": "split1",
+          "sheet_no": "5.1",
+          "title": "План силовых сетей. Корпус 1, этаж 1 (часть 1)",
+          "format": "A2",
+          "width_pt": 1190.55,
+          "height_pt": 1683.78,
+          "text_layer": true,
+          "scan": false,
+          "stamp": {
+            "designation": "СИНТ-01-ЭМ",
+            "title": "План силовых сетей. Корпус 1, этаж 1 (часть 1)",
+            "stage": "Р",
+            "sheet_no": "5.1",
+            "revision": "Изм.4",
+            "date": "05.05.2026",
+            "organisation": "СИНТЕТИКПРОЕКТ"
+          },
+          "stamp_bbox": [
+            651.97,
+            14.17,
+            1176.38,
+            170.08
+          ],
+          "annotations": [
+            {
+              "id": "E05.note.1",
+              "kind": "text",
+              "contents": "Проверить трассу лотка по оси Б",
+              "author": "Проверяющий",
+              "rect": [
+                600.0,
+                900.0,
+                624.0,
+                924.0
+              ]
+            }
+          ],
+          "content_sha256": "aa2dfd7116033d784cefca391a722201510e6f164d8a5492f08f467ffaad9ac7",
+          "image_sha256": null
+        },
+        {
+          "page": 6,
+          "sheet_id": "E05",
+          "role": "split2",
+          "sheet_no": "5.2",
+          "title": "План силовых сетей. Корпус 1, этаж 1 (часть 2)",
+          "format": "A2",
+          "width_pt": 1190.55,
+          "height_pt": 1683.78,
+          "text_layer": true,
+          "scan": false,
+          "stamp": {
+            "designation": "СИНТ-01-ЭМ",
+            "title": "План силовых сетей. Корпус 1, этаж 1 (часть 2)",
+            "stage": "Р",
+            "sheet_no": "5.2",
+            "revision": "Изм.4",
+            "date": "05.05.2026",
+            "organisation": "СИНТЕТИКПРОЕКТ"
+          },
+          "stamp_bbox": [
+            651.97,
+            14.17,
+            1176.38,
+            170.08
+          ],
+          "annotations": [],
+          "content_sha256": "cf10a604fcdf60ec5a03ea07005d98b0f767e37b7346b28b34f1a0062e59c68f",
+          "image_sha256": null
+        },
+        {
+          "page": 7,
+          "sheet_id": "E07",
+          "role": "regular",
+          "sheet_no": "7",
+          "title": "Спецификация оборудования, изделий и материалов",
+          "format": "A4",
+          "width_pt": 595.28,
+          "height_pt": 841.89,
+          "text_layer": true,
+          "scan": false,
+          "stamp": {
+            "designation": "СИНТ-01-ЭМ",
+            "title": "Спецификация оборудования, изделий и материалов",
+            "stage": "Р",
+            "sheet_no": "7",
+            "revision": "Изм.4",
+            "date": "05.05.2026",
+            "organisation": "СИНТЕТИКПРОЕКТ"
+          },
+          "stamp_bbox": [
+            56.7,
+            14.17,
+            581.11,
+            170.08
+          ],
+          "annotations": [
+            {
+              "id": "E07.sq.1",
+              "kind": "square",
+              "contents": "Уточнить сечение",
+              "author": "Проверяющий",
+              "rect": [
+                56.7,
+                656.0,
+                581.1,
+                678.0
+              ]
+            }
+          ],
+          "content_sha256": "6b106e9a80dd28d605ef8c10b73e96eaf7762c69d87b4df942785bd8a7313405",
+          "image_sha256": null
+        },
+        {
+          "page": 8,
+          "sheet_id": "E03",
+          "role": "duplicate",
+          "sheet_no": "3",
+          "title": "Схема электрическая принципиальная ЩО-1",
+          "format": "A3",
+          "width_pt": 1190.55,
+          "height_pt": 841.89,
+          "text_layer": true,
+          "scan": false,
+          "stamp": {
+            "designation": "СИНТ-01-ЭМ",
+            "title": "Схема электрическая принципиальная ЩО-1",
+            "stage": "Р",
+            "sheet_no": "3",
+            "revision": "Изм.1",
+            "date": "12.02.2026",
+            "organisation": "СИНТЕТИКПРОЕКТ"
+          },
+          "stamp_bbox": [
+            651.97,
+            14.17,
+            1176.38,
+            170.08
+          ],
+          "annotations": [],
+          "content_sha256": "d0ce6d1f0c6c6f75ce13727e8571fac0196ad9a89d4a1f01a972d3c902243309",
+          "image_sha256": null
+        }
+      ]
+    }
+  ],
+  "sheet_identity": [
+    {
+      "sheet_id": "E01",
+      "sheet_no": "1",
+      "title": "Общие данные",
+      "pages": {
+        "V1": [
+          1
+        ],
+        "V2": [
+          1
+        ],
+        "V3": [
+          1
+        ],
+        "V4": [
+          1
+        ],
+        "V5": [
+          1
+        ]
+      }
+    },
+    {
+      "sheet_id": "E02",
+      "sheet_no": "2",
+      "title": "План освещения. Корпус 1, этаж 1",
+      "pages": {
+        "V1": [
+          2
+        ],
+        "V2": [
+          2
+        ],
+        "V3": [
+          2
+        ],
+        "V4": [
+          2
+        ],
+        "V5": [
+          2
+        ]
+      }
+    },
+    {
+      "sheet_id": "E03",
+      "sheet_no": "3",
+      "title": "Схема электрическая принципиальная ЩО-1",
+      "pages": {
+        "V1": [
+          3
+        ],
+        "V2": [
+          3
+        ],
+        "V3": [
+          3
+        ],
+        "V4": [
+          3
+        ],
+        "V5": [
+          3,
+          8
+        ]
+      }
+    },
+    {
+      "sheet_id": "E04",
+      "sheet_no": "4",
+      "title": "Схема электрическая вводного устройства ВРУ-1",
+      "pages": {
+        "V1": [
+          4
+        ],
+        "V2": [
+          4
+        ],
+        "V3": [
+          4
+        ],
+        "V4": [
+          4
+        ],
+        "V5": [
+          4
+        ]
+      }
+    },
+    {
+      "sheet_id": "E05",
+      "sheet_no": "5",
+      "title": "План силовых сетей. Корпус 1, этаж 1",
+      "pages": {
+        "V1": [
+          5
+        ],
+        "V2": [
+          5
+        ],
+        "V3": [
+          5
+        ],
+        "V4": [
+          5
+        ],
+        "V5": [
+          5,
+          6
+        ]
+      }
+    },
+    {
+      "sheet_id": "E06",
+      "sheet_no": "6",
+      "title": "План заземления. Корпус 1",
+      "pages": {
+        "V1": [
+          6
+        ],
+        "V2": [
+          6
+        ]
+      }
+    },
+    {
+      "sheet_id": "E07",
+      "sheet_no": "7",
+      "title": "Спецификация оборудования, изделий и материалов",
+      "pages": {
+        "V3": [
+          6
+        ],
+        "V4": [
+          6
+        ],
+        "V5": [
+          7
+        ]
+      }
+    }
+  ],
+  "transitions": [
+    {
+      "id": "V1->V2",
+      "from": "V1",
+      "to": "V2",
+      "from_label": "Изм.0",
+      "to_label": "Изм.1",
+      "status_counts": {
+        "same": 2,
+        "same_zones_changed": 1,
+        "different": 3,
+        "needs_review": 0,
+        "added": 0,
+        "removed": 0
+      },
+      "sheets": [
+        {
+          "sheet_id": "E01",
+          "sheet_no": "1",
+          "title": "Общие данные",
+          "expected_status": "same",
+          "relation": "one_to_one",
+          "from_page": 1,
+          "to_page": 1,
+          "reasons": [],
+          "channels_with_differences": [],
+          "channels_without_differences": [
+            "geometry",
+            "color",
+            "text",
+            "text_coverage",
+            "zones",
+            "annotations",
+            "warnings",
+            "spec_positions"
+          ],
+          "difference_kinds": [],
+          "text_changes": [],
+          "graphic_changes": [],
+          "annotation_changes": {
+            "added": [],
+            "removed": [],
+            "changed": []
+          },
+          "byte_identical_page": true
+        },
+        {
+          "sheet_id": "E02",
+          "sheet_no": "2",
+          "title": "План освещения. Корпус 1, этаж 1",
+          "expected_status": "different",
+          "relation": "one_to_one",
+          "from_page": 2,
+          "to_page": 2,
+          "reasons": [],
+          "channels_with_differences": [
+            "text",
+            "zones"
+          ],
+          "channels_without_differences": [
+            "color",
+            "text_coverage",
+            "annotations",
+            "warnings",
+            "spec_positions"
+          ],
+          "difference_kinds": [
+            "text_moved",
+            "stamp_changed"
+          ],
+          "text_changes": [
+            {
+              "id": "E02.lbl.sho1",
+              "kind": "text_moved",
+              "zone": "content",
+              "before": "ЩО-1",
+              "after": "ЩО-1",
+              "bbox_before": [
+                740.0,
+                437.41,
+                771.66,
+                450.21
+              ],
+              "bbox_after": [
+                860.0,
+                467.41,
+                891.66,
+                480.21
+              ]
+            },
+            {
+              "id": "stamp.date",
+              "kind": "text_changed",
+              "zone": "stamp",
+              "before": "15.01.2026",
+              "after": "12.02.2026",
+              "bbox_before": [
+                1095.97,
+                74.81,
+                1153.22,
+                86.46
+              ],
+              "bbox_after": [
+                1095.97,
+                74.81,
+                1153.22,
+                86.46
+              ]
+            },
+            {
+              "id": "stamp.revision",
+              "kind": "text_changed",
+              "zone": "stamp",
+              "before": "Изм.0",
+              "after": "Изм.1",
+              "bbox_before": [
+                1003.97,
+                74.34,
+                1039.83,
+                88.31
+              ],
+              "bbox_after": [
+                1003.97,
+                74.34,
+                1039.83,
+                88.31
+              ]
+            }
+          ],
+          "graphic_changes": [],
+          "annotation_changes": {
+            "added": [],
+            "removed": [],
+            "changed": []
+          },
+          "byte_identical_page": false
+        },
+        {
+          "sheet_id": "E03",
+          "sheet_no": "3",
+          "title": "Схема электрическая принципиальная ЩО-1",
+          "expected_status": "different",
+          "relation": "one_to_one",
+          "from_page": 3,
+          "to_page": 3,
+          "reasons": [],
+          "channels_with_differences": [
+            "text",
+            "zones"
+          ],
+          "channels_without_differences": [
+            "color",
+            "text_coverage",
+            "annotations",
+            "warnings",
+            "spec_positions"
+          ],
+          "difference_kinds": [
+            "text_changed",
+            "stamp_changed"
+          ],
+          "text_changes": [
+            {
+              "id": "E03.table.r3c2",
+              "kind": "text_changed",
+              "zone": "content",
+              "before": "3,0",
+              "after": "3,6",
+              "bbox_before": [
+                125.0,
+                369.88,
+                139.31,
+                380.35
+              ],
+              "bbox_after": [
+                125.0,
+                369.88,
+                139.31,
+                380.35
+              ]
+            },
+            {
+              "id": "stamp.date",
+              "kind": "text_changed",
+              "zone": "stamp",
+              "before": "15.01.2026",
+              "after": "12.02.2026",
+              "bbox_before": [
+                1095.97,
+                74.81,
+                1153.22,
+                86.46
+              ],
+              "bbox_after": [
+                1095.97,
+                74.81,
+                1153.22,
+                86.46
+              ]
+            },
+            {
+              "id": "stamp.revision",
+              "kind": "text_changed",
+              "zone": "stamp",
+              "before": "Изм.0",
+              "after": "Изм.1",
+              "bbox_before": [
+                1003.97,
+                74.34,
+                1039.83,
+                88.31
+              ],
+              "bbox_after": [
+                1003.97,
+                74.34,
+                1039.83,
+                88.31
+              ]
+            }
+          ],
+          "graphic_changes": [],
+          "annotation_changes": {
+            "added": [],
+            "removed": [],
+            "changed": []
+          },
+          "byte_identical_page": false
+        },
+        {
+          "sheet_id": "E04",
+          "sheet_no": "4",
+          "title": "Схема электрическая вводного устройства ВРУ-1",
+          "expected_status": "same_zones_changed",
+          "relation": "one_to_one",
+          "from_page": 4,
+          "to_page": 4,
+          "reasons": [],
+          "channels_with_differences": [
+            "zones"
+          ],
+          "channels_without_differences": [
+            "geometry",
+            "color",
+            "text",
+            "text_coverage",
+            "annotations",
+            "warnings",
+            "spec_positions"
+          ],
+          "difference_kinds": [
+            "stamp_changed"
+          ],
+          "text_changes": [
+            {
+              "id": "stamp.date",
+              "kind": "text_changed",
+              "zone": "stamp",
+              "before": "15.01.2026",
+              "after": "12.02.2026",
+              "bbox_before": [
+                1095.97,
+                74.81,
+                1153.22,
+                86.46
+              ],
+              "bbox_after": [
+                1095.97,
+                74.81,
+                1153.22,
+                86.46
+              ]
+            },
+            {
+              "id": "stamp.revision",
+              "kind": "text_changed",
+              "zone": "stamp",
+              "before": "Изм.0",
+              "after": "Изм.1",
+              "bbox_before": [
+                1003.97,
+                74.34,
+                1039.83,
+                88.31
+              ],
+              "bbox_after": [
+                1003.97,
+                74.34,
+                1039.83,
+                88.31
+              ]
+            }
+          ],
+          "graphic_changes": [],
+          "annotation_changes": {
+            "added": [],
+            "removed": [],
+            "changed": []
+          },
+          "byte_identical_page": false
+        },
+        {
+          "sheet_id": "E05",
+          "sheet_no": "5",
+          "title": "План силовых сетей. Корпус 1, этаж 1",
+          "expected_status": "different",
+          "relation": "one_to_one",
+          "from_page": 5,
+          "to_page": 5,
+          "reasons": [],
+          "channels_with_differences": [
+            "annotations"
+          ],
+          "channels_without_differences": [
+            "geometry",
+            "color",
+            "text",
+            "text_coverage",
+            "zones",
+            "warnings",
+            "spec_positions"
+          ],
+          "difference_kinds": [
+            "annotation_changed"
+          ],
+          "text_changes": [],
+          "graphic_changes": [],
+          "annotation_changes": {
+            "added": [
+              {
+                "id": "E05.note.1",
+                "kind": "text",
+                "contents": "Проверить трассу лотка по оси Б",
+                "author": "Проверяющий",
+                "rect": [
+                  600.0,
+                  900.0,
+                  624.0,
+                  924.0
+                ]
+              }
+            ],
+            "removed": [],
+            "changed": []
+          },
+          "byte_identical_page": false
+        },
+        {
+          "sheet_id": "E06",
+          "sheet_no": "6",
+          "title": "План заземления. Корпус 1",
+          "expected_status": "same",
+          "relation": "one_to_one",
+          "from_page": 6,
+          "to_page": 6,
+          "reasons": [],
+          "channels_with_differences": [],
+          "channels_without_differences": [
+            "geometry",
+            "color",
+            "text",
+            "text_coverage",
+            "zones",
+            "annotations",
+            "warnings",
+            "spec_positions"
+          ],
+          "difference_kinds": [],
+          "text_changes": [],
+          "graphic_changes": [],
+          "annotation_changes": {
+            "added": [],
+            "removed": [],
+            "changed": []
+          },
+          "byte_identical_page": true
+        }
+      ]
+    },
+    {
+      "id": "V2->V3",
+      "from": "V2",
+      "to": "V3",
+      "from_label": "Изм.1",
+      "to_label": "Изм.2",
+      "status_counts": {
+        "same": 1,
+        "same_zones_changed": 0,
+        "different": 4,
+        "needs_review": 0,
+        "added": 1,
+        "removed": 1
+      },
+      "sheets": [
+        {
+          "sheet_id": "E01",
+          "sheet_no": "1",
+          "title": "Общие данные",
+          "expected_status": "different",
+          "relation": "one_to_one",
+          "from_page": 1,
+          "to_page": 1,
+          "reasons": [],
+          "channels_with_differences": [
+            "text",
+            "zones"
+          ],
+          "channels_without_differences": [
+            "color",
+            "text_coverage",
+            "annotations",
+            "warnings",
+            "spec_positions"
+          ],
+          "difference_kinds": [
+            "text_added",
+            "text_removed",
+            "stamp_changed"
+          ],
+          "text_changes": [
+            {
+              "id": "E01.list.E06",
+              "kind": "text_removed",
+              "zone": "content",
+              "before": "6   План заземления. Корпус 1",
+              "bbox_before": [
+                70,
+                599.88,
+                215.02,
+                610.35
+              ]
+            },
+            {
+              "id": "E01.list.E07",
+              "kind": "text_added",
+              "zone": "content",
+              "after": "7   Спецификация оборудования, изделий и материалов",
+              "bbox_after": [
+                70,
+                599.88,
+                339.89,
+                610.35
+              ]
+            },
+            {
+              "id": "stamp.date",
+              "kind": "text_changed",
+              "zone": "stamp",
+              "before": "15.01.2026",
+              "after": "10.03.2026",
+              "bbox_before": [
+                500.7,
+                74.81,
+                557.95,
+                86.46
+              ],
+              "bbox_after": [
+                500.7,
+                74.81,
+                557.95,
+                86.46
+              ]
+            },
+            {
+              "id": "stamp.revision",
+              "kind": "text_changed",
+              "zone": "stamp",
+              "before": "Изм.0",
+              "after": "Изм.2",
+              "bbox_before": [
+                408.7,
+                74.34,
+                444.56,
+                88.31
+              ],
+              "bbox_after": [
+                408.7,
+                74.34,
+                444.56,
+                88.31
+              ]
+            }
+          ],
+          "graphic_changes": [],
+          "annotation_changes": {
+            "added": [],
+            "removed": [],
+            "changed": []
+          },
+          "byte_identical_page": false
+        },
+        {
+          "sheet_id": "E02",
+          "sheet_no": "2",
+          "title": "План освещения. Корпус 1, этаж 1",
+          "expected_status": "different",
+          "relation": "one_to_one",
+          "from_page": 2,
+          "to_page": 2,
+          "reasons": [],
+          "channels_with_differences": [
+            "geometry",
+            "zones"
+          ],
+          "channels_without_differences": [
+            "text",
+            "text_coverage",
+            "annotations",
+            "warnings",
+            "spec_positions"
+          ],
+          "difference_kinds": [
+            "graphic_added",
+            "stamp_changed"
+          ],
+          "text_changes": [
+            {
+              "id": "stamp.date",
+              "kind": "text_changed",
+              "zone": "stamp",
+              "before": "12.02.2026",
+              "after": "10.03.2026",
+              "bbox_before": [
+                1095.97,
+                74.81,
+                1153.22,
+                86.46
+              ],
+              "bbox_after": [
+                1095.97,
+                74.81,
+                1153.22,
+                86.46
+              ]
+            },
+            {
+              "id": "stamp.revision",
+              "kind": "text_changed",
+              "zone": "stamp",
+              "before": "Изм.1",
+              "after": "Изм.2",
+              "bbox_before": [
+                1003.97,
+                74.34,
+                1039.83,
+                88.31
+              ],
+              "bbox_after": [
+                1003.97,
+                74.34,
+                1039.83,
+                88.31
+              ]
+            }
+          ],
+          "graphic_changes": [
+            {
+              "id": "E02.cable.new",
+              "kind": "graphic_added",
+              "zone": "content",
+              "bbox_after": [
+                349.6,
+                439.6,
+                600.4,
+                440.4
+              ]
+            }
+          ],
+          "annotation_changes": {
+            "added": [],
+            "removed": [],
+            "changed": []
+          },
+          "byte_identical_page": false
+        },
+        {
+          "sheet_id": "E03",
+          "sheet_no": "3",
+          "title": "Схема электрическая принципиальная ЩО-1",
+          "expected_status": "same",
+          "relation": "one_to_one",
+          "from_page": 3,
+          "to_page": 3,
+          "reasons": [],
+          "channels_with_differences": [],
+          "channels_without_differences": [
+            "geometry",
+            "color",
+            "text",
+            "text_coverage",
+            "zones",
+            "annotations",
+            "warnings",
+            "spec_positions"
+          ],
+          "difference_kinds": [],
+          "text_changes": [],
+          "graphic_changes": [],
+          "annotation_changes": {
+            "added": [],
+            "removed": [],
+            "changed": []
+          },
+          "byte_identical_page": true
+        },
+        {
+          "sheet_id": "E04",
+          "sheet_no": "4",
+          "title": "Схема электрическая вводного устройства ВРУ-1",
+          "expected_status": "different",
+          "relation": "one_to_one",
+          "from_page": 4,
+          "to_page": 4,
+          "reasons": [],
+          "channels_with_differences": [
+            "color",
+            "zones"
+          ],
+          "channels_without_differences": [
+            "geometry",
+            "text",
+            "text_coverage",
+            "annotations",
+            "warnings",
+            "spec_positions"
+          ],
+          "difference_kinds": [
+            "graphic_width",
+            "stamp_changed"
+          ],
+          "text_changes": [
+            {
+              "id": "stamp.date",
+              "kind": "text_changed",
+              "zone": "stamp",
+              "before": "12.02.2026",
+              "after": "10.03.2026",
+              "bbox_before": [
+                1095.97,
+                74.81,
+                1153.22,
+                86.46
+              ],
+              "bbox_after": [
+                1095.97,
+                74.81,
+                1153.22,
+                86.46
+              ]
+            },
+            {
+              "id": "stamp.revision",
+              "kind": "text_changed",
+              "zone": "stamp",
+              "before": "Изм.1",
+              "after": "Изм.2",
+              "bbox_before": [
+                1003.97,
+                74.34,
+                1039.83,
+                88.31
+              ],
+              "bbox_after": [
+                1003.97,
+                74.34,
+                1039.83,
+                88.31
+              ]
+            }
+          ],
+          "graphic_changes": [
+            {
+              "id": "E04.bus.pe",
+              "kind": "graphic_width",
+              "zone": "content",
+              "before": 0.5,
+              "after": 1.5,
+              "bbox_before": [
+                99.75,
+                559.75,
+                700.25,
+                560.25
+              ],
+              "bbox_after": [
+                99.25,
+                559.25,
+                700.75,
+                560.75
+              ]
+            }
+          ],
+          "annotation_changes": {
+            "added": [],
+            "removed": [],
+            "changed": []
+          },
+          "byte_identical_page": false
+        },
+        {
+          "sheet_id": "E05",
+          "sheet_no": "5",
+          "title": "План силовых сетей. Корпус 1, этаж 1",
+          "expected_status": "different",
+          "relation": "one_to_one",
+          "from_page": 5,
+          "to_page": 5,
+          "reasons": [],
+          "channels_with_differences": [
+            "color",
+            "zones"
+          ],
+          "channels_without_differences": [
+            "geometry",
+            "text",
+            "text_coverage",
+            "annotations",
+            "warnings",
+            "spec_positions"
+          ],
+          "difference_kinds": [
+            "graphic_color",
+            "stamp_changed"
+          ],
+          "text_changes": [
+            {
+              "id": "stamp.date",
+              "kind": "text_changed",
+              "zone": "stamp",
+              "before": "15.01.2026",
+              "after": "10.03.2026",
+              "bbox_before": [
+                2289.36,
+                74.81,
+                2346.61,
+                86.46
+              ],
+              "bbox_after": [
+                2289.36,
+                74.81,
+                2346.61,
+                86.46
+              ]
+            },
+            {
+              "id": "stamp.revision",
+              "kind": "text_changed",
+              "zone": "stamp",
+              "before": "Изм.0",
+              "after": "Изм.2",
+              "bbox_before": [
+                2197.36,
+                74.34,
+                2233.22,
+                88.31
+              ],
+              "bbox_after": [
+                2197.36,
+                74.34,
+                2233.22,
+                88.31
+              ]
+            }
+          ],
+          "graphic_changes": [
+            {
+              "id": "E05.L.tray.1",
+              "kind": "graphic_color",
+              "zone": "content",
+              "before": [
+                0.8,
+                0.0,
+                0.0
+              ],
+              "after": [
+                0.0,
+                0.35,
+                0.8
+              ],
+              "bbox_before": [
+                138.5,
+                1498.5,
+                1101.5,
+                1501.5
+              ],
+              "bbox_after": [
+                138.5,
+                1498.5,
+                1101.5,
+                1501.5
+              ]
+            },
+            {
+              "id": "E05.L.tray.2",
+              "kind": "graphic_color",
+              "zone": "content",
+              "before": [
+                0.8,
+                0.0,
+                0.0
+              ],
+              "after": [
+                0.0,
+                0.35,
+                0.8
+              ],
+              "bbox_before": [
+                1098.5,
+                338.5,
+                1101.5,
+                1501.5
+              ],
+              "bbox_after": [
+                1098.5,
+                338.5,
+                1101.5,
+                1501.5
+              ]
+            },
+            {
+              "id": "E05.L.tray.3",
+              "kind": "graphic_color",
+              "zone": "content",
+              "before": [
+                0.8,
+                0.0,
+                0.0
+              ],
+              "after": [
+                0.0,
+                0.35,
+                0.8
+              ],
+              "bbox_before": [
+                438.5,
+                338.5,
+                1101.5,
+                341.5
+              ],
+              "bbox_after": [
+                438.5,
+                338.5,
+                1101.5,
+                341.5
+              ]
+            },
+            {
+              "id": "E05.R.tray.1",
+              "kind": "graphic_color",
+              "zone": "content",
+              "before": [
+                0.8,
+                0.0,
+                0.0
+              ],
+              "after": [
+                0.0,
+                0.35,
+                0.8
+              ],
+              "bbox_before": [
+                1298.5,
+                1498.5,
+                2321.5,
+                1501.5
+              ],
+              "bbox_after": [
+                1298.5,
+                1498.5,
+                2321.5,
+                1501.5
+              ]
+            },
+            {
+              "id": "E05.R.tray.2",
+              "kind": "graphic_color",
+              "zone": "content",
+              "before": [
+                0.8,
+                0.0,
+                0.0
+              ],
+              "after": [
+                0.0,
+                0.35,
+                0.8
+              ],
+              "bbox_before": [
+                2318.5,
+                338.5,
+                2321.5,
+                1501.5
+              ],
+              "bbox_after": [
+                2318.5,
+                338.5,
+                2321.5,
+                1501.5
+              ]
+            },
+            {
+              "id": "E05.R.tray.3",
+              "kind": "graphic_color",
+              "zone": "content",
+              "before": [
+                0.8,
+                0.0,
+                0.0
+              ],
+              "after": [
+                0.0,
+                0.35,
+                0.8
+              ],
+              "bbox_before": [
+                1598.5,
+                338.5,
+                2321.5,
+                341.5
+              ],
+              "bbox_after": [
+                1598.5,
+                338.5,
+                2321.5,
+                341.5
+              ]
+            }
+          ],
+          "annotation_changes": {
+            "added": [],
+            "removed": [],
+            "changed": []
+          },
+          "byte_identical_page": false
+        },
+        {
+          "sheet_id": "E06",
+          "sheet_no": "6",
+          "title": "План заземления. Корпус 1",
+          "expected_status": "removed",
+          "relation": "removed",
+          "from_page": 6,
+          "to_page": null,
+          "reasons": [],
+          "channels_with_differences": [],
+          "channels_without_differences": [],
+          "difference_kinds": [
+            "sheet_removed"
+          ],
+          "notes": "The sheet is not in the next version and is not split or renamed."
+        },
+        {
+          "sheet_id": "E07",
+          "sheet_no": "7",
+          "title": "Спецификация оборудования, изделий и материалов",
+          "expected_status": "added",
+          "relation": "added",
+          "from_page": null,
+          "to_page": 6,
+          "reasons": [],
+          "channels_with_differences": [],
+          "channels_without_differences": [],
+          "difference_kinds": [
+            "sheet_added"
+          ],
+          "annotations_on_page": [
+            {
+              "id": "E07.sq.1",
+              "kind": "square",
+              "contents": "Уточнить сечение",
+              "author": "Проверяющий",
+              "rect": [
+                56.7,
+                656.0,
+                581.1,
+                678.0
+              ]
+            }
+          ],
+          "notes": "The sheet is new in this version.",
+          "spec_positions_on_page": [
+            {
+              "position": "1",
+              "designation": "СИНТ-ЩО.01",
+              "name": "Щит освещения ЩО-1",
+              "quantity": "1",
+              "mass": "45,0"
+            },
+            {
+              "position": "2",
+              "designation": "СИНТ-АВ.16",
+              "name": "Выключатель автоматический 16 А",
+              "quantity": "12",
+              "mass": "0,15"
+            },
+            {
+              "position": "3",
+              "designation": "СИНТ-АВ.63",
+              "name": "Выключатель автоматический 63 А",
+              "quantity": "2",
+              "mass": "0,45"
+            },
+            {
+              "position": "4",
+              "designation": "СИНТ-КБ.325",
+              "name": "Кабель ВВГнг 3×2,5, м",
+              "quantity": "320",
+              "mass": "0,12"
+            },
+            {
+              "position": "5",
+              "designation": "СИНТ-СВ.236",
+              "name": "Светильник ЛПО 2×36",
+              "quantity": "24",
+              "mass": "3,2"
+            },
+            {
+              "position": "6",
+              "designation": "СИНТ-ЗУ.01",
+              "name": "Заземлитель стальной",
+              "quantity": "4",
+              "mass": "2,0"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "V3->V4",
+      "from": "V3",
+      "to": "V4",
+      "from_label": "Изм.2",
+      "to_label": "Изм.3",
+      "status_counts": {
+        "same": 2,
+        "same_zones_changed": 0,
+        "different": 3,
+        "needs_review": 1,
+        "added": 0,
+        "removed": 0
+      },
+      "sheets": [
+        {
+          "sheet_id": "E01",
+          "sheet_no": "1",
+          "title": "Общие данные",
+          "expected_status": "different",
+          "relation": "one_to_one",
+          "from_page": 1,
+          "to_page": 1,
+          "reasons": [],
+          "channels_with_differences": [
+            "geometry",
+            "text",
+            "zones"
+          ],
+          "channels_without_differences": [
+            "text_coverage",
+            "annotations",
+            "warnings",
+            "spec_positions"
+          ],
+          "difference_kinds": [
+            "graphic_added",
+            "text_added",
+            "stamp_changed"
+          ],
+          "text_changes": [
+            {
+              "id": "E01.permit.h1",
+              "kind": "text_added",
+              "zone": "content",
+              "after": "Изм.",
+              "bbox_after": [
+                75.0,
+                515.88,
+                96.17,
+                526.35
+              ]
+            },
+            {
+              "id": "E01.permit.h2",
+              "kind": "text_added",
+              "zone": "content",
+              "after": "Лист",
+              "bbox_after": [
+                125.0,
+                515.88,
+                147.81,
+                526.35
+              ]
+            },
+            {
+              "id": "E01.permit.h3",
+              "kind": "text_added",
+              "zone": "content",
+              "after": "Содержание изменения",
+              "bbox_after": [
+                175.0,
+                515.88,
+                289.55,
+                526.35
+              ]
+            },
+            {
+              "id": "E01.permit.r1c1",
+              "kind": "text_added",
+              "zone": "content",
+              "after": "3",
+              "bbox_after": [
+                75.0,
+                497.88,
+                80.73,
+                508.35
+              ]
+            },
+            {
+              "id": "E01.permit.r1c2",
+              "kind": "text_added",
+              "zone": "content",
+              "after": "5",
+              "bbox_after": [
+                125.0,
+                497.88,
+                130.73,
+                508.35
+              ]
+            },
+            {
+              "id": "E01.permit.r1c3",
+              "kind": "text_added",
+              "zone": "content",
+              "after": "Дополнена трасса кабельного лотка",
+              "bbox_after": [
+                175.0,
+                497.88,
+                350.14,
+                508.35
+              ]
+            },
+            {
+              "id": "E01.permit.r2c1",
+              "kind": "text_added",
+              "zone": "content",
+              "after": "3",
+              "bbox_after": [
+                75.0,
+                479.88,
+                80.73,
+                490.35
+              ]
+            },
+            {
+              "id": "E01.permit.r2c2",
+              "kind": "text_added",
+              "zone": "content",
+              "after": "7",
+              "bbox_after": [
+                125.0,
+                479.88,
+                130.73,
+                490.35
+              ]
+            },
+            {
+              "id": "E01.permit.r2c3",
+              "kind": "text_added",
+              "zone": "content",
+              "after": "Изменено сечение кабеля, поз. 4",
+              "bbox_after": [
+                175.0,
+                479.88,
+                332.54,
+                490.35
+              ]
+            },
+            {
+              "id": "E01.permit.r3c1",
+              "kind": "text_added",
+              "zone": "content",
+              "after": "3",
+              "bbox_after": [
+                75.0,
+                461.88,
+                80.73,
+                472.35
+              ]
+            },
+            {
+              "id": "E01.permit.r3c2",
+              "kind": "text_added",
+              "zone": "content",
+              "after": "4",
+              "bbox_after": [
+                125.0,
+                461.88,
+                130.73,
+                472.35
+              ]
+            },
+            {
+              "id": "E01.permit.r3c3",
+              "kind": "text_added",
+              "zone": "content",
+              "after": "QF2 заменён: 100 А на 125 А",
+              "bbox_after": [
+                175.0,
+                461.88,
+                311.19,
+                472.35
+              ]
+            },
+            {
+              "id": "E01.permit.title",
+              "kind": "text_added",
+              "zone": "content",
+              "after": "Разрешение на внесение изменений",
+              "bbox_after": [
+                70,
+                537.41,
+                283.22,
+                550.21
+              ]
+            },
+            {
+              "id": "stamp.date",
+              "kind": "text_changed",
+              "zone": "stamp",
+              "before": "10.03.2026",
+              "after": "07.04.2026",
+              "bbox_before": [
+                500.7,
+                74.81,
+                557.95,
+                86.46
+              ],
+              "bbox_after": [
+                500.7,
+                74.81,
+                557.95,
+                86.46
+              ]
+            },
+            {
+              "id": "stamp.revision",
+              "kind": "text_changed",
+              "zone": "stamp",
+              "before": "Изм.2",
+              "after": "Изм.3",
+              "bbox_before": [
+                408.7,
+                74.34,
+                444.56,
+                88.31
+              ],
+              "bbox_after": [
+                408.7,
+                74.34,
+                444.56,
+                88.31
+              ]
+            }
+          ],
+          "graphic_changes": [
+            {
+              "id": "E01.permit.grid.h0",
+              "kind": "graphic_added",
+              "zone": "content",
+              "bbox_after": [
+                69.7,
+                529.7,
+                560.3,
+                530.3
+              ]
+            },
+            {
+              "id": "E01.permit.grid.h1",
+              "kind": "graphic_added",
+              "zone": "content",
+              "bbox_after": [
+                69.7,
+                511.7,
+                560.3,
+                512.3
+              ]
+            },
+            {
+              "id": "E01.permit.grid.h2",
+              "kind": "graphic_added",
+              "zone": "content",
+              "bbox_after": [
+                69.7,
+                493.7,
+                560.3,
+                494.3
+              ]
+            },
+            {
+              "id": "E01.permit.grid.h3",
+              "kind": "graphic_added",
+              "zone": "content",
+              "bbox_after": [
+                69.7,
+                475.7,
+                560.3,
+                476.3
+              ]
+            },
+            {
+              "id": "E01.permit.grid.h4",
+              "kind": "graphic_added",
+              "zone": "content",
+              "bbox_after": [
+                69.7,
+                457.7,
+                560.3,
+                458.3
+              ]
+            },
+            {
+              "id": "E01.permit.grid.v0",
+              "kind": "graphic_added",
+              "zone": "content",
+              "bbox_after": [
+                69.7,
+                457.7,
+                70.3,
+                530.3
+              ]
+            },
+            {
+              "id": "E01.permit.grid.v1",
+              "kind": "graphic_added",
+              "zone": "content",
+              "bbox_after": [
+                119.7,
+                457.7,
+                120.3,
+                530.3
+              ]
+            },
+            {
+              "id": "E01.permit.grid.v2",
+              "kind": "graphic_added",
+              "zone": "content",
+              "bbox_after": [
+                169.7,
+                457.7,
+                170.3,
+                530.3
+              ]
+            },
+            {
+              "id": "E01.permit.grid.v3",
+              "kind": "graphic_added",
+              "zone": "content",
+              "bbox_after": [
+                559.7,
+                457.7,
+                560.3,
+                530.3
+              ]
+            }
+          ],
+          "annotation_changes": {
+            "added": [],
+            "removed": [],
+            "changed": []
+          },
+          "byte_identical_page": false
+        },
+        {
+          "sheet_id": "E02",
+          "sheet_no": "2",
+          "title": "План освещения. Корпус 1, этаж 1",
+          "expected_status": "same",
+          "relation": "one_to_one",
+          "from_page": 2,
+          "to_page": 2,
+          "reasons": [],
+          "channels_with_differences": [],
+          "channels_without_differences": [
+            "geometry",
+            "color",
+            "text",
+            "text_coverage",
+            "zones",
+            "annotations",
+            "warnings",
+            "spec_positions"
+          ],
+          "difference_kinds": [],
+          "text_changes": [],
+          "graphic_changes": [],
+          "annotation_changes": {
+            "added": [],
+            "removed": [],
+            "changed": []
+          },
+          "byte_identical_page": true
+        },
+        {
+          "sheet_id": "E03",
+          "sheet_no": "3",
+          "title": "Схема электрическая принципиальная ЩО-1",
+          "expected_status": "different",
+          "relation": "one_to_one",
+          "from_page": 3,
+          "to_page": 3,
+          "reasons": [],
+          "channels_with_differences": [
+            "text"
+          ],
+          "channels_without_differences": [
+            "color",
+            "text_coverage",
+            "zones",
+            "annotations",
+            "warnings",
+            "spec_positions"
+          ],
+          "difference_kinds": [
+            "text_changed"
+          ],
+          "text_changes": [
+            {
+              "id": "E03.table.r2c3",
+              "kind": "text_changed",
+              "zone": "content",
+              "before": "ВВГнг 3×2,5",
+              "after": "ВВГнг 3×4",
+              "bbox_before": [
+                215.0,
+                387.88,
+                273.89,
+                398.35
+              ],
+              "bbox_after": [
+                215.0,
+                387.88,
+                265.3,
+                398.35
+              ]
+            }
+          ],
+          "graphic_changes": [],
+          "annotation_changes": {
+            "added": [],
+            "removed": [],
+            "changed": []
+          },
+          "byte_identical_page": false
+        },
+        {
+          "sheet_id": "E04",
+          "sheet_no": "4",
+          "title": "Схема электрическая вводного устройства ВРУ-1",
+          "expected_status": "needs_review",
+          "relation": "one_to_one",
+          "from_page": 4,
+          "to_page": 4,
+          "reasons": [
+            "NO_TEXT_LAYER"
+          ],
+          "channels_with_differences": [
+            "text_coverage"
+          ],
+          "channels_without_differences": [
+            "annotations",
+            "spec_positions"
+          ],
+          "difference_kinds": [
+            "text_changed",
+            "stamp_changed"
+          ],
+          "text_changes": [],
+          "graphic_changes": [],
+          "annotation_changes": {
+            "added": [],
+            "removed": [],
+            "changed": []
+          },
+          "byte_identical_page": false,
+          "changes_in_pixels": [
+            {
+              "id": "E04.qf2.label",
+              "kind": "text_changed",
+              "zone": "content",
+              "before": "QF2 100 А",
+              "after": "QF2 125 А",
+              "bbox_before": [
+                284,
+                497.88,
+                331.04,
+                508.35
+              ],
+              "bbox_after": [
+                284,
+                497.88,
+                331.04,
+                508.35
+              ]
+            },
+            {
+              "id": "stamp.date",
+              "kind": "text_changed",
+              "zone": "stamp",
+              "before": "10.03.2026",
+              "after": "07.04.2026",
+              "bbox_before": [
+                1095.97,
+                74.81,
+                1153.22,
+                86.46
+              ],
+              "bbox_after": [
+                1095.97,
+                74.81,
+                1153.22,
+                86.46
+              ]
+            },
+            {
+              "id": "stamp.revision",
+              "kind": "text_changed",
+              "zone": "stamp",
+              "before": "Изм.2",
+              "after": "Изм.3",
+              "bbox_before": [
+                1003.97,
+                74.34,
+                1039.83,
+                88.31
+              ],
+              "bbox_after": [
+                1003.97,
+                74.34,
+                1039.83,
+                88.31
+              ]
+            }
+          ],
+          "notes": "Version 4 carries this sheet as a scan: one 1-bit image, no text layer. The sheet it replaces is vector with a text layer, so the text channel cannot be compared and text_coverage must say so. The drawn change (QF2 100 А -> 125 А, the stamp revision and date) exists only in the pixels and is listed under changes_in_pixels."
+        },
+        {
+          "sheet_id": "E05",
+          "sheet_no": "5",
+          "title": "План силовых сетей. Корпус 1, этаж 1",
+          "expected_status": "different",
+          "relation": "one_to_one",
+          "from_page": 5,
+          "to_page": 5,
+          "reasons": [],
+          "channels_with_differences": [
+            "geometry",
+            "zones"
+          ],
+          "channels_without_differences": [
+            "text",
+            "text_coverage",
+            "annotations",
+            "warnings",
+            "spec_positions"
+          ],
+          "difference_kinds": [
+            "graphic_added",
+            "stamp_changed"
+          ],
+          "text_changes": [
+            {
+              "id": "stamp.date",
+              "kind": "text_changed",
+              "zone": "stamp",
+              "before": "10.03.2026",
+              "after": "07.04.2026",
+              "bbox_before": [
+                2289.36,
+                74.81,
+                2346.61,
+                86.46
+              ],
+              "bbox_after": [
+                2289.36,
+                74.81,
+                2346.61,
+                86.46
+              ]
+            },
+            {
+              "id": "stamp.revision",
+              "kind": "text_changed",
+              "zone": "stamp",
+              "before": "Изм.2",
+              "after": "Изм.3",
+              "bbox_before": [
+                2197.36,
+                74.34,
+                2233.22,
+                88.31
+              ],
+              "bbox_after": [
+                2197.36,
+                74.34,
+                2233.22,
+                88.31
+              ]
+            }
+          ],
+          "graphic_changes": [
+            {
+              "id": "E05.L.tray.branch",
+              "kind": "graphic_added",
+              "zone": "content",
+              "bbox_after": [
+                618.5,
+                1038.5,
+                621.5,
+                1501.5
+              ]
+            }
+          ],
+          "annotation_changes": {
+            "added": [],
+            "removed": [],
+            "changed": []
+          },
+          "byte_identical_page": false
+        },
+        {
+          "sheet_id": "E07",
+          "sheet_no": "7",
+          "title": "Спецификация оборудования, изделий и материалов",
+          "expected_status": "same",
+          "relation": "one_to_one",
+          "from_page": 6,
+          "to_page": 6,
+          "reasons": [],
+          "channels_with_differences": [],
+          "channels_without_differences": [
+            "geometry",
+            "color",
+            "text",
+            "text_coverage",
+            "zones",
+            "annotations",
+            "warnings",
+            "spec_positions"
+          ],
+          "difference_kinds": [],
+          "text_changes": [],
+          "graphic_changes": [],
+          "annotation_changes": {
+            "added": [],
+            "removed": [],
+            "changed": []
+          },
+          "byte_identical_page": true,
+          "spec_positions": {
+            "table_layout": "ГОСТ 21.110: позиция, обозначение, наименование, кол., масса ед., примечание",
+            "columns": [
+              "Поз.",
+              "Обозначение",
+              "Наименование и тех. характеристика",
+              "Кол.",
+              "Масса ед., кг",
+              "Прим."
+            ],
+            "table_bbox": [
+              56.7,
+              590.0,
+              581.1,
+              770.0
+            ],
+            "positions_before": [
+              {
+                "position": "1",
+                "designation": "СИНТ-ЩО.01",
+                "name": "Щит освещения ЩО-1",
+                "quantity": "1",
+                "mass": "45,0"
+              },
+              {
+                "position": "2",
+                "designation": "СИНТ-АВ.16",
+                "name": "Выключатель автоматический 16 А",
+                "quantity": "12",
+                "mass": "0,15"
+              },
+              {
+                "position": "3",
+                "designation": "СИНТ-АВ.63",
+                "name": "Выключатель автоматический 63 А",
+                "quantity": "2",
+                "mass": "0,45"
+              },
+              {
+                "position": "4",
+                "designation": "СИНТ-КБ.325",
+                "name": "Кабель ВВГнг 3×2,5, м",
+                "quantity": "320",
+                "mass": "0,12"
+              },
+              {
+                "position": "5",
+                "designation": "СИНТ-СВ.236",
+                "name": "Светильник ЛПО 2×36",
+                "quantity": "24",
+                "mass": "3,2"
+              },
+              {
+                "position": "6",
+                "designation": "СИНТ-ЗУ.01",
+                "name": "Заземлитель стальной",
+                "quantity": "4",
+                "mass": "2,0"
+              }
+            ],
+            "positions_after": [
+              {
+                "position": "1",
+                "designation": "СИНТ-ЩО.01",
+                "name": "Щит освещения ЩО-1",
+                "quantity": "1",
+                "mass": "45,0"
+              },
+              {
+                "position": "2",
+                "designation": "СИНТ-АВ.16",
+                "name": "Выключатель автоматический 16 А",
+                "quantity": "12",
+                "mass": "0,15"
+              },
+              {
+                "position": "3",
+                "designation": "СИНТ-АВ.63",
+                "name": "Выключатель автоматический 63 А",
+                "quantity": "2",
+                "mass": "0,45"
+              },
+              {
+                "position": "4",
+                "designation": "СИНТ-КБ.325",
+                "name": "Кабель ВВГнг 3×2,5, м",
+                "quantity": "320",
+                "mass": "0,12"
+              },
+              {
+                "position": "5",
+                "designation": "СИНТ-СВ.236",
+                "name": "Светильник ЛПО 2×36",
+                "quantity": "24",
+                "mass": "3,2"
+              },
+              {
+                "position": "6",
+                "designation": "СИНТ-ЗУ.01",
+                "name": "Заземлитель стальной",
+                "quantity": "4",
+                "mass": "2,0"
+              }
+            ],
+            "added": [],
+            "removed": [],
+            "changed": []
+          }
+        }
+      ],
+      "permit": {
+        "carrier_sheet": "E01",
+        "table_title": "Разрешение на внесение изменений",
+        "columns": [
+          "Изм.",
+          "Лист",
+          "Содержание изменения"
+        ],
+        "table_bbox": [
+          70.0,
+          458.0,
+          560.0,
+          530.0
+        ],
+        "declared": [
+          {
+            "entry": 1,
+            "change_no": "3",
+            "sheet_no": "5",
+            "sheet_id": "E05",
+            "text": "Дополнена трасса кабельного лотка",
+            "reconciliation": "declared_and_found",
+            "evidence_ids": [
+              "E05.L.tray.branch"
+            ]
+          },
+          {
+            "entry": 2,
+            "change_no": "3",
+            "sheet_no": "7",
+            "sheet_id": "E07",
+            "text": "Изменено сечение кабеля, поз. 4",
+            "reconciliation": "declared_not_found",
+            "evidence_ids": []
+          },
+          {
+            "entry": 3,
+            "change_no": "3",
+            "sheet_no": "4",
+            "sheet_id": "E04",
+            "text": "QF2 заменён: 100 А на 125 А",
+            "reconciliation": "declared_unverifiable_scan",
+            "evidence_ids": []
+          }
+        ],
+        "classes": {
+          "declared_and_found": [
+            "E05"
+          ],
+          "declared_not_found": [
+            "E07"
+          ],
+          "declared_unverifiable_scan": [
+            "E04"
+          ],
+          "found_not_declared": [
+            "E03"
+          ]
+        },
+        "found_not_declared": [
+          {
+            "sheet_id": "E03",
+            "text_change_ids": [
+              "E03.table.r2c3"
+            ]
+          }
+        ],
+        "notes": "Entry 1 is declared and found (a tray branch line appears on sheet 5). Entry 2 is declared and not found (sheet 7 is unchanged in version 4). Entry 3 is declared on a sheet that is a scan in version 4, so it can be neither confirmed nor refuted from text. A cable in the table of sheet 3 changed and no entry mentions it, and its stamp revision was not raised."
+      }
+    },
+    {
+      "id": "V4->V5",
+      "from": "V4",
+      "to": "V5",
+      "from_label": "Изм.3",
+      "to_label": "Изм.4",
+      "status_counts": {
+        "same": 2,
+        "same_zones_changed": 0,
+        "different": 2,
+        "needs_review": 2,
+        "added": 0,
+        "removed": 0
+      },
+      "sheets": [
+        {
+          "sheet_id": "E01",
+          "sheet_no": "1",
+          "title": "Общие данные",
+          "expected_status": "different",
+          "relation": "one_to_one",
+          "from_page": 1,
+          "to_page": 1,
+          "reasons": [],
+          "channels_with_differences": [
+            "text",
+            "zones"
+          ],
+          "channels_without_differences": [
+            "color",
+            "text_coverage",
+            "annotations",
+            "warnings",
+            "spec_positions"
+          ],
+          "difference_kinds": [
+            "text_added",
+            "text_moved",
+            "text_removed",
+            "stamp_changed"
+          ],
+          "text_changes": [
+            {
+              "id": "E01.list.E05",
+              "kind": "text_removed",
+              "zone": "content",
+              "before": "5   План силовых сетей. Корпус 1, этаж 1",
+              "bbox_before": [
+                70,
+                613.88,
+                267.05,
+                624.35
+              ]
+            },
+            {
+              "id": "E01.list.E05.1",
+              "kind": "text_added",
+              "zone": "content",
+              "after": "5.1   План силовых сетей. Корпус 1, этаж 1 (часть 1)",
+              "bbox_after": [
+                70,
+                613.88,
+                320.43,
+                624.35
+              ]
+            },
+            {
+              "id": "E01.list.E05.2",
+              "kind": "text_added",
+              "zone": "content",
+              "after": "5.2   План силовых сетей. Корпус 1, этаж 1 (часть 2)",
+              "bbox_after": [
+                70,
+                599.88,
+                320.43,
+                610.35
+              ]
+            },
+            {
+              "id": "E01.list.E07",
+              "kind": "text_moved",
+              "zone": "content",
+              "before": "7   Спецификация оборудования, изделий и материалов",
+              "after": "7   Спецификация оборудования, изделий и материалов",
+              "bbox_before": [
+                70,
+                599.88,
+                339.89,
+                610.35
+              ],
+              "bbox_after": [
+                70,
+                585.88,
+                339.89,
+                596.35
+              ]
+            },
+            {
+              "id": "stamp.date",
+              "kind": "text_changed",
+              "zone": "stamp",
+              "before": "07.04.2026",
+              "after": "05.05.2026",
+              "bbox_before": [
+                500.7,
+                74.81,
+                557.95,
+                86.46
+              ],
+              "bbox_after": [
+                500.7,
+                74.81,
+                557.95,
+                86.46
+              ]
+            },
+            {
+              "id": "stamp.revision",
+              "kind": "text_changed",
+              "zone": "stamp",
+              "before": "Изм.3",
+              "after": "Изм.4",
+              "bbox_before": [
+                408.7,
+                74.34,
+                444.56,
+                88.31
+              ],
+              "bbox_after": [
+                408.7,
+                74.34,
+                444.56,
+                88.31
+              ]
+            }
+          ],
+          "graphic_changes": [],
+          "annotation_changes": {
+            "added": [],
+            "removed": [],
+            "changed": []
+          },
+          "byte_identical_page": false
+        },
+        {
+          "sheet_id": "E02",
+          "sheet_no": "2",
+          "title": "План освещения. Корпус 1, этаж 1",
+          "expected_status": "same",
+          "relation": "one_to_one",
+          "from_page": 2,
+          "to_page": 2,
+          "reasons": [],
+          "channels_with_differences": [],
+          "channels_without_differences": [
+            "geometry",
+            "color",
+            "text",
+            "text_coverage",
+            "zones",
+            "annotations",
+            "warnings",
+            "spec_positions"
+          ],
+          "difference_kinds": [],
+          "text_changes": [],
+          "graphic_changes": [],
+          "annotation_changes": {
+            "added": [],
+            "removed": [],
+            "changed": []
+          },
+          "byte_identical_page": true
+        },
+        {
+          "sheet_id": "E03",
+          "sheet_no": "3",
+          "title": "Схема электрическая принципиальная ЩО-1",
+          "expected_status": "needs_review",
+          "relation": "duplicate",
+          "from_page": 3,
+          "to_page": 3,
+          "reasons": [
+            "DUPLICATE_SHEET"
+          ],
+          "channels_with_differences": [
+            "warnings"
+          ],
+          "channels_without_differences": [
+            "geometry",
+            "color",
+            "text",
+            "text_coverage",
+            "zones",
+            "annotations",
+            "spec_positions"
+          ],
+          "difference_kinds": [],
+          "text_changes": [],
+          "graphic_changes": [],
+          "annotation_changes": {
+            "added": [],
+            "removed": [],
+            "changed": []
+          },
+          "byte_identical_page": true,
+          "to_pages": [
+            3,
+            8
+          ],
+          "duplicate_pages_identical": true,
+          "notes": "Version 5 contains this sheet twice: page 3 and page 8 have identical content, identical stamps and the same sheet number. Neither differs from the version-4 sheet."
+        },
+        {
+          "sheet_id": "E04",
+          "sheet_no": "4",
+          "title": "Схема электрическая вводного устройства ВРУ-1",
+          "expected_status": "same",
+          "relation": "one_to_one",
+          "from_page": 4,
+          "to_page": 4,
+          "reasons": [],
+          "channels_with_differences": [],
+          "channels_without_differences": [
+            "geometry",
+            "color",
+            "text",
+            "text_coverage",
+            "zones",
+            "annotations",
+            "warnings",
+            "spec_positions"
+          ],
+          "difference_kinds": [],
+          "text_changes": [],
+          "graphic_changes": [],
+          "annotation_changes": {
+            "added": [],
+            "removed": [],
+            "changed": []
+          },
+          "byte_identical_page": true
+        },
+        {
+          "sheet_id": "E05",
+          "sheet_no": "5",
+          "title": "План силовых сетей. Корпус 1, этаж 1",
+          "expected_status": "needs_review",
+          "relation": "split",
+          "from_page": 5,
+          "to_pages": [
+            5,
+            6
+          ],
+          "reasons": [
+            "SPLIT_SHEET"
+          ],
+          "channels_with_differences": [],
+          "channels_without_differences": [],
+          "difference_kinds": [
+            "split"
+          ],
+          "parts": [
+            {
+              "to_page": 5,
+              "sheet_no": "5.1",
+              "format": "A2",
+              "region_in_old_sheet_x": [
+                0.0,
+                1190.55
+              ],
+              "translation_x": 0.0,
+              "scale": 1.0,
+              "content_changes_in_region": [],
+              "operations_in_region": 64,
+              "stamp_changes": [
+                {
+                  "id": "stamp.date",
+                  "kind": "text_changed",
+                  "zone": "stamp",
+                  "before": "07.04.2026",
+                  "after": "05.05.2026",
+                  "bbox_before": [
+                    2289.36,
+                    74.81,
+                    2346.61,
+                    86.46
+                  ],
+                  "bbox_after": [
+                    1095.97,
+                    74.81,
+                    1153.22,
+                    86.46
+                  ]
+                },
+                {
+                  "id": "stamp.revision",
+                  "kind": "text_changed",
+                  "zone": "stamp",
+                  "before": "Изм.3",
+                  "after": "Изм.4",
+                  "bbox_before": [
+                    2197.36,
+                    74.34,
+                    2233.22,
+                    88.31
+                  ],
+                  "bbox_after": [
+                    1003.97,
+                    74.34,
+                    1039.83,
+                    88.31
+                  ]
+                },
+                {
+                  "id": "stamp.sheet_no",
+                  "kind": "text_changed",
+                  "zone": "stamp",
+                  "before": "5",
+                  "after": "5.1",
+                  "bbox_before": [
+                    2289.36,
+                    103.34,
+                    2296.99,
+                    117.31
+                  ],
+                  "bbox_after": [
+                    1095.97,
+                    103.34,
+                    1115.05,
+                    117.31
+                  ]
+                },
+                {
+                  "id": "stamp.title",
+                  "kind": "text_changed",
+                  "zone": "stamp",
+                  "before": "План силовых сетей. Корпус 1, этаж 1",
+                  "after": "План силовых сетей. Корпус 1, этаж 1 (часть 1)",
+                  "bbox_before": [
+                    1855.36,
+                    91.81,
+                    2058.4,
+                    103.46
+                  ],
+                  "bbox_after": [
+                    661.97,
+                    91.81,
+                    914.78,
+                    103.46
+                  ]
+                }
+              ],
+              "annotations": [
+                {
+                  "id": "E05.note.1",
+                  "kind": "text",
+                  "contents": "Проверить трассу лотка по оси Б",
+                  "author": "Проверяющий",
+                  "rect": [
+                    600.0,
+                    900.0,
+                    624.0,
+                    924.0
+                  ]
+                }
+              ]
+            },
+            {
+              "to_page": 6,
+              "sheet_no": "5.2",
+              "format": "A2",
+              "region_in_old_sheet_x": [
+                1193.39,
+                2383.94
+              ],
+              "translation_x": -1193.39,
+              "scale": 1.0,
+              "content_changes_in_region": [],
+              "operations_in_region": 63,
+              "stamp_changes": [
+                {
+                  "id": "stamp.date",
+                  "kind": "text_changed",
+                  "zone": "stamp",
+                  "before": "07.04.2026",
+                  "after": "05.05.2026",
+                  "bbox_before": [
+                    2289.36,
+                    74.81,
+                    2346.61,
+                    86.46
+                  ],
+                  "bbox_after": [
+                    1095.97,
+                    74.81,
+                    1153.22,
+                    86.46
+                  ]
+                },
+                {
+                  "id": "stamp.revision",
+                  "kind": "text_changed",
+                  "zone": "stamp",
+                  "before": "Изм.3",
+                  "after": "Изм.4",
+                  "bbox_before": [
+                    2197.36,
+                    74.34,
+                    2233.22,
+                    88.31
+                  ],
+                  "bbox_after": [
+                    1003.97,
+                    74.34,
+                    1039.83,
+                    88.31
+                  ]
+                },
+                {
+                  "id": "stamp.sheet_no",
+                  "kind": "text_changed",
+                  "zone": "stamp",
+                  "before": "5",
+                  "after": "5.2",
+                  "bbox_before": [
+                    2289.36,
+                    103.34,
+                    2296.99,
+                    117.31
+                  ],
+                  "bbox_after": [
+                    1095.97,
+                    103.34,
+                    1115.05,
+                    117.31
+                  ]
+                },
+                {
+                  "id": "stamp.title",
+                  "kind": "text_changed",
+                  "zone": "stamp",
+                  "before": "План силовых сетей. Корпус 1, этаж 1",
+                  "after": "План силовых сетей. Корпус 1, этаж 1 (часть 2)",
+                  "bbox_before": [
+                    1855.36,
+                    91.81,
+                    2058.4,
+                    103.46
+                  ],
+                  "bbox_after": [
+                    661.97,
+                    91.81,
+                    914.78,
+                    103.46
+                  ]
+                }
+              ],
+              "annotations": []
+            }
+          ],
+          "parts_cover_whole_old_sheet": true,
+          "notes": "The A1 plan of version 4 is two A2 portrait sheets in version 5, cut at x = 1190.55 / 1193.39 pt of the A1 sheet and translated, never scaled. The content of each part is the content of its region of the old sheet; only the title block and the frame differ. A comparison that registers each part against its region must find no content difference (parts[].content_changes_in_region is empty)."
+        },
+        {
+          "sheet_id": "E07",
+          "sheet_no": "7",
+          "title": "Спецификация оборудования, изделий и материалов",
+          "expected_status": "different",
+          "relation": "one_to_one",
+          "from_page": 6,
+          "to_page": 7,
+          "reasons": [],
+          "channels_with_differences": [
+            "text",
+            "zones",
+            "spec_positions"
+          ],
+          "channels_without_differences": [
+            "color",
+            "text_coverage",
+            "annotations",
+            "warnings"
+          ],
+          "difference_kinds": [
+            "text_added",
+            "text_changed",
+            "text_removed",
+            "stamp_changed",
+            "spec_positions_changed"
+          ],
+          "text_changes": [
+            {
+              "id": "E07.row3.4",
+              "kind": "text_changed",
+              "zone": "content",
+              "before": "2",
+              "after": "3",
+              "bbox_before": [
+                425.7,
+                683.11,
+                430.79,
+                692.43
+              ],
+              "bbox_after": [
+                425.7,
+                683.11,
+                430.79,
+                692.43
+              ]
+            },
+            {
+              "id": "E07.row6.1",
+              "kind": "text_removed",
+              "zone": "content",
+              "before": "6",
+              "bbox_before": [
+                59.7,
+                617.11,
+                64.79,
+                626.43
+              ]
+            },
+            {
+              "id": "E07.row6.2",
+              "kind": "text_removed",
+              "zone": "content",
+              "before": "СИНТ-ЗУ.01",
+              "bbox_before": [
+                95.7,
+                617.11,
+                143.79,
+                626.43
+              ]
+            },
+            {
+              "id": "E07.row6.3",
+              "kind": "text_removed",
+              "zone": "content",
+              "before": "Заземлитель стальной",
+              "bbox_before": [
+                225.7,
+                617.11,
+                322.32,
+                626.43
+              ]
+            },
+            {
+              "id": "E07.row6.4",
+              "kind": "text_removed",
+              "zone": "content",
+              "before": "4",
+              "bbox_before": [
+                425.7,
+                617.11,
+                430.79,
+                626.43
+              ]
+            },
+            {
+              "id": "E07.row6.5",
+              "kind": "text_removed",
+              "zone": "content",
+              "before": "2,0",
+              "bbox_before": [
+                461.7,
+                617.11,
+                474.42,
+                626.43
+              ]
+            },
+            {
+              "id": "E07.row7.1",
+              "kind": "text_added",
+              "zone": "content",
+              "after": "7",
+              "bbox_after": [
+                59.7,
+                595.11,
+                64.79,
+                604.43
+              ]
+            },
+            {
+              "id": "E07.row7.2",
+              "kind": "text_added",
+              "zone": "content",
+              "after": "СИНТ-СД.40",
+              "bbox_after": [
+                95.7,
+                595.11,
+                145.62,
+                604.43
+              ]
+            },
+            {
+              "id": "E07.row7.3",
+              "kind": "text_added",
+              "zone": "content",
+              "after": "Светильник светодиодный 40 Вт",
+              "bbox_after": [
+                225.7,
+                595.11,
+                365.32,
+                604.43
+              ]
+            },
+            {
+              "id": "E07.row7.4",
+              "kind": "text_added",
+              "zone": "content",
+              "after": "6",
+              "bbox_after": [
+                425.7,
+                595.11,
+                430.79,
+                604.43
+              ]
+            },
+            {
+              "id": "E07.row7.5",
+              "kind": "text_added",
+              "zone": "content",
+              "after": "1,4",
+              "bbox_after": [
+                461.7,
+                595.11,
+                474.42,
+                604.43
+              ]
+            },
+            {
+              "id": "stamp.date",
+              "kind": "text_changed",
+              "zone": "stamp",
+              "before": "10.03.2026",
+              "after": "05.05.2026",
+              "bbox_before": [
+                500.7,
+                74.81,
+                557.95,
+                86.46
+              ],
+              "bbox_after": [
+                500.7,
+                74.81,
+                557.95,
+                86.46
+              ]
+            },
+            {
+              "id": "stamp.revision",
+              "kind": "text_changed",
+              "zone": "stamp",
+              "before": "Изм.2",
+              "after": "Изм.4",
+              "bbox_before": [
+                408.7,
+                74.34,
+                444.56,
+                88.31
+              ],
+              "bbox_after": [
+                408.7,
+                74.34,
+                444.56,
+                88.31
+              ]
+            }
+          ],
+          "graphic_changes": [],
+          "annotation_changes": {
+            "added": [],
+            "removed": [],
+            "changed": []
+          },
+          "byte_identical_page": false,
+          "spec_positions": {
+            "table_layout": "ГОСТ 21.110: позиция, обозначение, наименование, кол., масса ед., примечание",
+            "columns": [
+              "Поз.",
+              "Обозначение",
+              "Наименование и тех. характеристика",
+              "Кол.",
+              "Масса ед., кг",
+              "Прим."
+            ],
+            "table_bbox": [
+              56.7,
+              590.0,
+              581.1,
+              770.0
+            ],
+            "positions_before": [
+              {
+                "position": "1",
+                "designation": "СИНТ-ЩО.01",
+                "name": "Щит освещения ЩО-1",
+                "quantity": "1",
+                "mass": "45,0"
+              },
+              {
+                "position": "2",
+                "designation": "СИНТ-АВ.16",
+                "name": "Выключатель автоматический 16 А",
+                "quantity": "12",
+                "mass": "0,15"
+              },
+              {
+                "position": "3",
+                "designation": "СИНТ-АВ.63",
+                "name": "Выключатель автоматический 63 А",
+                "quantity": "2",
+                "mass": "0,45"
+              },
+              {
+                "position": "4",
+                "designation": "СИНТ-КБ.325",
+                "name": "Кабель ВВГнг 3×2,5, м",
+                "quantity": "320",
+                "mass": "0,12"
+              },
+              {
+                "position": "5",
+                "designation": "СИНТ-СВ.236",
+                "name": "Светильник ЛПО 2×36",
+                "quantity": "24",
+                "mass": "3,2"
+              },
+              {
+                "position": "6",
+                "designation": "СИНТ-ЗУ.01",
+                "name": "Заземлитель стальной",
+                "quantity": "4",
+                "mass": "2,0"
+              }
+            ],
+            "positions_after": [
+              {
+                "position": "1",
+                "designation": "СИНТ-ЩО.01",
+                "name": "Щит освещения ЩО-1",
+                "quantity": "1",
+                "mass": "45,0"
+              },
+              {
+                "position": "2",
+                "designation": "СИНТ-АВ.16",
+                "name": "Выключатель автоматический 16 А",
+                "quantity": "12",
+                "mass": "0,15"
+              },
+              {
+                "position": "3",
+                "designation": "СИНТ-АВ.63",
+                "name": "Выключатель автоматический 63 А",
+                "quantity": "3",
+                "mass": "0,45"
+              },
+              {
+                "position": "4",
+                "designation": "СИНТ-КБ.325",
+                "name": "Кабель ВВГнг 3×2,5, м",
+                "quantity": "320",
+                "mass": "0,12"
+              },
+              {
+                "position": "5",
+                "designation": "СИНТ-СВ.236",
+                "name": "Светильник ЛПО 2×36",
+                "quantity": "24",
+                "mass": "3,2"
+              },
+              {
+                "position": "7",
+                "designation": "СИНТ-СД.40",
+                "name": "Светильник светодиодный 40 Вт",
+                "quantity": "6",
+                "mass": "1,4"
+              }
+            ],
+            "added": [
+              {
+                "position": "7",
+                "designation": "СИНТ-СД.40",
+                "name": "Светильник светодиодный 40 Вт",
+                "quantity": "6",
+                "mass": "1,4"
+              }
+            ],
+            "removed": [
+              {
+                "position": "6",
+                "designation": "СИНТ-ЗУ.01",
+                "name": "Заземлитель стальной",
+                "quantity": "4",
+                "mass": "2,0"
+              }
+            ],
+            "changed": [
+              {
+                "position": "3",
+                "field": "quantity",
+                "before": "2",
+                "after": "3"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
