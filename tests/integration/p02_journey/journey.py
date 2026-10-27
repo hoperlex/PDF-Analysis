@@ -174,6 +174,18 @@ P02_TABLES = (
     # journey starts single runs, so both counts are expected unchanged across a replay.
     "ar_v3_run_group",
     "ar_v3_run_group_member",
+    # `0035_comparison_records` (`COMPARE-PERSISTED-SUMMARY-01`). The comparison of two versions
+    # as a record, both tables append-only. `comparison_sheet_link` holds an expert's approval or
+    # withdrawal of a sheet pairing and is written only by the commands `approve_sheet_pairing`
+    # and `withdraw_sheet_pairing` (`approveSheetPairing`, `withdrawSheetPairing`);
+    # `comparison_summary` holds the AI summary over the approved pairs and is written only by
+    # `generate_comparison_summary` (`generateComparisonSummary`). The journey uploads, runs,
+    # decides and exports; it never compares two versions, pairs a sheet or asks for a summary
+    # (nothing under this directory names those operations), so both counts are expected
+    # unchanged across a replay -- counted rather than skipped, the same claim as for
+    # `ar_v3_run_group`.
+    "comparison_sheet_link",
+    "comparison_summary",
 )
 
 

@@ -41,7 +41,9 @@ from auditmanager.api.security import (
     API_TOKEN_VARIABLE,
     AccountStanding,
     Subject,
+    TokenSigner,
     build_signer,
+    derive_signing_key,
 )
 from auditmanager.shared.errors import DomainError, ErrorCode
 
@@ -49,6 +51,7 @@ __all__ = [
     "Answer",
     "DEPLOYMENT_SECRET",
     "Request",
+    "SUITE_CREDENTIAL_LIFETIME_SECONDS",
     "SUITE_LOGIN",
     "SUITE_NAMES",
     "SUITE_PASSWORD",
@@ -117,7 +120,19 @@ TEST_SUBJECT = Subject(
 #: expiry at all.
 _SIGNER = build_signer({API_TOKEN_VARIABLE: DEPLOYMENT_SECRET})
 assert _SIGNER is not None, "the suite's own secret derives a signing key"
-TEST_TOKEN = _SIGNER.issue(TEST_SUBJECT, is_default_credential=False).token
+
+#: How long :data:`TEST_TOKEN` stays valid. It is minted **once, when this module is imported**
+#: -- at collection, for a run of many directories -- and used as the default credential of
+#: every request the suite sends, so it must outlive the run. At the production lifetime
+#: (``TOKEN_LIFETIME_SECONDS``, 3600 s) every directory after the first hour of a complete run
+#: answered ``401``: 57 reds in the 95-minute run of ``tests/integration`` that were not defects
+#: (``FIX-P02-GUARDS-01``). The signer is the suite's own, the same key as ``_SIGNER``; ``_SIGNER``
+#: itself keeps the production lifetime because ``SuiteCredentialAdapter`` mints through it and
+#: the exchange tests assert ``expires_in == 3600``.
+SUITE_CREDENTIAL_LIFETIME_SECONDS = 24 * 3600
+TEST_TOKEN = TokenSigner(
+    derive_signing_key(DEPLOYMENT_SECRET), lifetime_seconds=SUITE_CREDENTIAL_LIFETIME_SECONDS
+).issue(TEST_SUBJECT, is_default_credential=False).token
 
 class SuiteCredentialAdapter:
     """``CredentialPort`` for this suite: one account, in memory, with a credential epoch.
