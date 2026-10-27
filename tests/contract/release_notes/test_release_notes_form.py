@@ -153,9 +153,10 @@ def test_authored_shape_and_form() -> None:
     # executor choice of a run. 0.9.0 (RELEASE-0-9-0-DEV-01) is the next development
     # candidate: sheet-pairing approval and the recorded-only summary in the version
     # comparison, the 14 section profiles at 1.1.0/1.2.0 (reviewed with no human review),
-    # whole-page windows for a large text, optimisation for every section, the removal of
-    # the ordinary AR start, and the dashboard sections sentence; it claims no measured
-    # quality for any prompt.
+    # whole-page windows for a large text, optimisation for every section with the
+    # dashboard sentence, the removal of the ordinary AR start, and the routing of an SSH
+    # command connection with the plain-http address rule; it claims no measured quality
+    # for any prompt.
     assert {entry["version"]: entry["revision"] for _, entry in entries} == {
         "0.9.0": 1, "0.8.2": 1, "0.8.1": 1, "0.8.0": 1, "0.7.0": 2, "0.6.0": 2, "0.5.1": 1, "0.5.0": 1,
         "0.4.0": 1, "0.3.0": 2, "0.2.0": 2,
