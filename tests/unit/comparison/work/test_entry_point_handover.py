@@ -22,10 +22,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import pytest
 
 
-@pytest.mark.xfail(strict=True, raises=KeyError, reason="needs the one-argument hunk in workers/__main__.py")
 def test_serve_hands_the_runtimes_comparison_runner_to_the_worker_service(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     import auditmanager.bootstrap.public as bootstrap_public
     import auditmanager.jobs.public as jobs_public
