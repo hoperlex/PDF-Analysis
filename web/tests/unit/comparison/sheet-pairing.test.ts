@@ -135,7 +135,7 @@ function visible(markup: string): string {
 
 function apiError(status: number, code: ErrorCode, details?: Record<string, string>): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.7.0', error_code: code, message: 'A caller-safe sentence.',
+    contract_version: '1.8.0', error_code: code, message: 'A caller-safe sentence.',
     correlation_id: 'cid-pairing', retryable: false, ...(details === undefined ? {} : { details }),
   };
   return new ApiError(status, envelope, 'cid-pairing');

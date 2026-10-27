@@ -66,7 +66,7 @@ describe('an АР version is offered the six checks and never the ordinary start
       [
         'a failed read',
         (client: Client) => seedError(client, PACK, new ApiError(503, {
-          contract_version: '1.7.0', error_code: 'dependency_unavailable', message: 'm',
+          contract_version: '1.8.0', error_code: 'dependency_unavailable', message: 'm',
           correlation_id: 'c', retryable: true,
         }, 'c')),
       ],

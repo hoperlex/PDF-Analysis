@@ -152,7 +152,7 @@ describe('the four states of a comparison screen are four different states', () 
 
   it('renders an error state — not an empty list — when the request failed', () => {
     const envelope: ErrorEnvelope = {
-      contract_version: '1.7.0',
+      contract_version: '1.8.0',
       error_code: 'dependency_unavailable',
       message: 'Одна безопасная для вызывающей стороны фраза.',
       correlation_id: 'cid-comparison-1',

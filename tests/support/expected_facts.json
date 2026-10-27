@@ -861,5 +861,5 @@
     "stored_vocabulary": 25
   },
   "migration_head": "0035_comparison_records",
-  "contract_version": "1.7.0"
+  "contract_version": "1.8.0"
 }
