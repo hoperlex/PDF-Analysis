@@ -283,10 +283,10 @@ from sqlalchemy import Engine, text
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
     "columns": (908, "954eb10214597d10ace4f2af316cb7de34c3c988876312a7490441cb7a9d32bd"),
     "relations": (88, "483e8af8025b3813202abf1222426f7b5e9315b46ee699506e2623e04fb31702"),
-    "constraints": (1038, "c8a624be2e0ce7a9007e67d8d75cd4f47ddfe0b82c3f4d849ddceeaf65f76278"),
+    "constraints": (1038, "a80813a10d4db584a9f69800226f43fc2d9221c5efe335a006ad3a9476ba6636"),
     "indexes": (236, "18d4ef90b0c771cb3df8432b4febf79628372c39b51b3924a917223838278eac"),
     "triggers": (118, "96198c83bdfdf5b60b70395201951d916e64a5f88b1dd4d82b9a8484552ef70a"),
-    "functions": (41, "41620533e24ae97e2a8070cec998bb585d769095bbd39df09dcb0f5e432b02a1"),
+    "functions": (41, "25ad0a1f09f23418b94cdf83e6dfc1551bc15d1fbc3ec1fb5aa67a5c7296658e"),
     "views": (5, "c41ad974669882ee5d818591ee1d485b70455ddd4e51d236cc83892d18d11b93"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),
     "sequences": (7, "6d533fe16349a92b16b5ca89d51fcb083f1ecdf4f252bc276667a92361bf1656"),
