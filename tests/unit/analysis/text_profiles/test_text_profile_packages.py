@@ -64,6 +64,11 @@ PROFILE_KEYS = frozenset(
         "source",
     }
 )
+#: `SECTION-CATEGORY-OCR-01` (`R-146ao`): the five sections that may report a same-document omission under the
+#: existing category `documentation`. They are `text-profile/2` packages with a `categories` key; the other
+#: nine stay `text-profile/1` and byte-identical.
+OMISSION_SECTIONS = frozenset({"AI", "TX", "EOM", "SS", "ITP"})
+OMISSION_CATEGORIES = ["internal_contradiction", "explicit_placeholder", "documentation"]
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 ID_LITERAL = re.compile(r"\b(?:ap|pb)_[0-9A-HJKMNP-TV-Z]{26}\b")
@@ -182,8 +187,13 @@ def test_every_profile_manifest_has_the_text_profile_1_shape() -> None:
     expected = _expected_sections()
     for directory, manifest in _legacy_packages():
         code = manifest["section_code"]
-        assert set(manifest) == PROFILE_KEYS, directory.name
-        assert manifest["format"] == "text-profile/1", code
+        if code in OMISSION_SECTIONS:
+            assert set(manifest) == PROFILE_KEYS | {"categories"}, directory.name
+            assert manifest["format"] == "text-profile/2", code
+            assert manifest["categories"] == OMISSION_CATEGORIES, code
+        else:
+            assert set(manifest) == PROFILE_KEYS, directory.name
+            assert manifest["format"] == "text-profile/1", code
         assert code in catalogue, code
         assert directory.name == code.lower(), (directory.name, code)
         assert code in expected, f"{code}: no line in the expectations file"

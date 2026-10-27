@@ -7,7 +7,7 @@
     "kind": "synthetic",
     "profile_status": "reviewed",
     "prompt_bundle_id": "pb_01M5AXG1KKNVF7G99H0BB166TW",
-    "prompt_bundle_sha256": "10e6fc2e0a0b34c90324d3213e4df031abbdeb7fb00025eef6e0c3087f82b7c1",
+    "prompt_bundle_sha256": "262227fc27dbdf7284c7457ee562e8b922adb3da9797d4ea025bcca13d9114d3",
     "section_code": "EOM",
     "statement": "Synthetic: authored by hand for SECTION-RECORDINGS-01 to prove section routing in recorded mode. No model produced this reply and no provider call was made. Not field evidence for the profile's review.",
     "task_id": "SECTION-RECORDINGS-01",
@@ -15,7 +15,7 @@
   },
   "output_text": "{\"observations\": [{\"category\": \"internal_contradiction\", \"finding_text\": \"Синтетический ответ (ЭОМ), не результат вызова модели: количество эвакуационных выходов, для которых проектируется аварийное освещение, указано как два и как три.\", \"recommendation_text\": \"Уточнить число эвакуационных выходов в исходных данных освещения.\", \"evidence\": [{\"page_number\": 3, \"quote\": \"Из надземной части здания предусмотрено два эвакуационных выхода.\"}, {\"page_number\": 7, \"quote\": \"Из надземной части здания предусмотрено три эвакуационных выхода.\"}]}]}",
   "recording_version": "1.0.0",
-  "request_sha256": "22dee8720e48cace823f348412adae9884023a8507823f5798db105b17b5f1d2",
+  "request_sha256": "27800ff7c699997fff7d184cd0ece9fefe2523b3db7708883b3af53934f61e81",
   "stop_reason": "end_turn",
   "usage": {
     "input_tokens": 2420,

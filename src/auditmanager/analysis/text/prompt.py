@@ -31,14 +31,21 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from typing import Any, Final, Mapping
+from typing import Any, Final, Mapping, Sequence
 
+from auditmanager.analysis.text.recognised_input import RecognisedPage, notice_for, render_block
 from auditmanager.analysis.text.textlayer import TextLayer
 from auditmanager.shared.identity import PromptBundleId
 
 #: The two categories, exactly as ``P02_SEAMS.md`` section 4.7 and the analysis
 #: contract spell them. ASCII, closed, and the same tuple the schema is built from.
 CATEGORIES: Final[tuple[str, ...]] = ("internal_contradiction", "explicit_placeholder")
+
+#: The one category a section profile may add to the two above (`SECTION-CATEGORY-OCR-01`, `R-146ao`): the
+#: existing contract value for a same-document omission. A profile declares its categories in its package
+#: (`text-profile/2`); a profile that does not declare this one cannot receive it
+#: (:func:`~auditmanager.analysis.text.response.parse_response`).
+OMISSION_CATEGORY: Final[str] = "documentation"
 
 #: Pinned identity of this bundle. An immutable bundle has a fixed identity resolved
 #: at run time, not a fresh ULID per run - a new ULID each run would make the artifact
@@ -144,6 +151,71 @@ RESPONSE_SCHEMA: Final[Mapping[str, Any]] = {
     "additionalProperties": False,
 }
 
+#: The omission claim of a three-category profile (`SECTION-CATEGORY-OCR-01`): an optional property of an
+#: observation, a model-side claim that the stage checks and does not store. Field descriptions are
+#: model-facing Russian so that the prompt needs no machine name beyond the category's own.
+OMISSION_SCHEMA: Final[Mapping[str, Any]] = {
+    "type": "object",
+    "description": (
+        "Только для категории documentation: проверяемое утверждение о пропуске. "
+        "Для остальных категорий свойство не указывается."
+    ),
+    "properties": {
+        "term": {
+            "type": "string",
+            "description": (
+                "Запись так, как она напечатана в цитате места, которое её называет: короткое "
+                "обозначение или наименование, не более пяти слов."
+            ),
+        },
+        "first_page": {
+            "type": "integer",
+            "description": "Номер первой страницы всей ведомости, спецификации или перечня, где запись должна быть.",
+        },
+        "last_page": {
+            "type": "integer",
+            "description": "Номер последней страницы той же ведомости, спецификации или перечня.",
+        },
+        "heading": {
+            "type": "object",
+            "description": "Заголовок этой ведомости, спецификации или перечня: дословная цитата с указанием страницы.",
+            "properties": {
+                "page_number": {"type": "integer"},
+                "quote": {"type": "string"},
+            },
+            "required": ["page_number", "quote"],
+            "additionalProperties": False,
+        },
+    },
+    "required": ["term", "first_page", "last_page", "heading"],
+    "additionalProperties": False,
+}
+
+
+def response_schema_for(categories: Sequence[str]) -> Mapping[str, Any]:
+    """The response schema of a profile that declares ``categories``.
+
+    The two v1 categories return :data:`RESPONSE_SCHEMA` itself, so the nine section profiles that
+    declare nothing more keep a byte-identical request. The three-category list
+    (``internal_contradiction``, ``explicit_placeholder``, ``documentation``) returns the same schema
+    with the category enum widened and the optional ``omission`` property added. Any other list is
+    refused: the schema is not a generator of categories.
+    """
+    declared = tuple(categories)
+    if declared == CATEGORIES:
+        return RESPONSE_SCHEMA
+    if declared == (*CATEGORIES, OMISSION_CATEGORY):
+        item = dict(RESPONSE_SCHEMA["properties"]["observations"]["items"])
+        properties = dict(item["properties"])
+        properties["category"] = {"type": "string", "enum": list(declared)}
+        properties["omission"] = OMISSION_SCHEMA
+        item["properties"] = properties
+        observations = dict(RESPONSE_SCHEMA["properties"]["observations"])
+        observations["items"] = item
+        return {**RESPONSE_SCHEMA, "properties": {"observations": observations}}
+    raise ValueError(f"no response schema for categories {declared!r}")
+
+
 #: Generation parameters. No sampling parameter appears: ``temperature``, ``top_p``
 #: and ``top_k`` are removed on the pinned model family and are rejected with a 400.
 #: Adaptive thinking is on because the five exclusion conditions above are exactly the
@@ -153,16 +225,27 @@ EFFORT: Final[str] = "high"
 THINKING: Final[Mapping[str, Any]] = {"type": "adaptive"}
 
 
-def render_document(text_layer: TextLayer) -> str:
+def render_document(
+    text_layer: TextLayer, recognised: Sequence[RecognisedPage] = ()
+) -> str:
     """The document as the model sees it: page banners plus page text.
 
     This rendering exists only to let the model cite a page. Nothing downstream
     measures an offset against it.
+
+    ``recognised`` (`SECTION-CATEGORY-OCR-01`) are the recognised-text blocks of text-less pages. A block
+    stands directly after its page's text, delimited and marked as not from the text layer, and the
+    preamble gains the one notice that says what the blocks are. With none, this is byte for byte what it
+    was: the 14 section requests of a version with no scanned page do not move.
     """
-    parts = [USER_PREAMBLE.format(page_count=len(text_layer.pages)), ""]
+    blocks = {item.page_number: item for item in recognised}
+    parts = [USER_PREAMBLE.format(page_count=len(text_layer.pages)) + notice_for(recognised), ""]
     for page in text_layer.pages:
         parts.append(PAGE_BANNER.format(page_number=page.page_number))
         parts.append(page.text)
+        block = blocks.get(page.page_number)
+        if block is not None:
+            parts.append(render_block(block))
         parts.append("")
     return "\n".join(parts)
 

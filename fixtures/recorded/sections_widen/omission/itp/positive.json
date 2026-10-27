@@ -1,0 +1,40 @@
+{
+ "format": "section-omission-specimen/1",
+ "section_code": "ITP",
+ "case": "positive",
+ "expect": "finding",
+ "expect_reason": null,
+ "origin": {
+  "kind": "synthetic",
+  "statement": "Text and reply authored by hand for SECTION-CATEGORY-OCR-01 to show what the omission rule is meant to publish and what the stage's absence check must refuse. No model produced this reply. Not field evidence for any profile's expert review; it says nothing about how a model answers.",
+  "task_id": "SECTION-CATEGORY-OCR-01",
+  "source_report": "docs/program/SECTION-CATEGORY-OCR-01.md",
+  "filed_by": "SECTION-CATEGORY-OCR-01"
+ },
+ "pages": [
+  "Принципиальная схема ИТП. Насос Н-2 циркуляционный, теплообменник ТО-1 отопления, регулятор РТ-3.",
+  "Спецификация оборудования\nТеплообменник ТО-1, 1 шт.\nРегулятор РТ-3, 1 шт.\nНасос Н-1 циркуляционный, 1 шт."
+ ],
+ "observations": [
+  {
+   "category": "documentation",
+   "finding_text": "Синтетический ответ (ИТП), не результат вызова модели: насос Н-2 назван на схеме на странице 1 и не найден в спецификации оборудования.",
+   "recommendation_text": "Сверить ведомость или спецификацию с местом, которое называет запись.",
+   "evidence": [
+    {
+     "page_number": 1,
+     "quote": "Насос Н-2 циркуляционный"
+    }
+   ],
+   "omission": {
+    "term": "Н-2",
+    "first_page": 2,
+    "last_page": 2,
+    "heading": {
+     "page_number": 2,
+     "quote": "Спецификация оборудования"
+    }
+   }
+  }
+ ]
+}

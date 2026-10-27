@@ -1,0 +1,40 @@
+{
+ "format": "section-omission-specimen/1",
+ "section_code": "AI",
+ "case": "dash_negative",
+ "expect": "dropped",
+ "expect_reason": "term_present_in_range",
+ "origin": {
+  "kind": "synthetic",
+  "statement": "Text and reply authored by hand for SECTION-CATEGORY-OCR-01 to show what the omission rule is meant to publish and what the stage's absence check must refuse. No model produced this reply. Not field evidence for any profile's expert review; it says nothing about how a model answers.",
+  "task_id": "SECTION-CATEGORY-OCR-01",
+  "source_report": "docs/program/SECTION-CATEGORY-OCR-01.md",
+  "filed_by": "SECTION-CATEGORY-OCR-01"
+ },
+ "pages": [
+  "План пола. Помещение 4 — санузел. Дверь Д-5 в санузел, ширина 800 мм. Отметка чистого пола 0,000.",
+  "Ведомость дверных заполнений\nМарка Д-1 Дверь входная, 2 шт.\nМарка Д–5 Дверь в санузел, 1 шт.\nМарка Д-3 Дверь в кухню, 1 шт."
+ ],
+ "observations": [
+  {
+   "category": "documentation",
+   "finding_text": "Синтетический ответ (АИ), не результат вызова модели: марка Д-5 названа на плане и не найдена в ведомости (в ведомости она записана через длинное тире).",
+   "recommendation_text": "Сверить ведомость или спецификацию с местом, которое называет запись.",
+   "evidence": [
+    {
+     "page_number": 1,
+     "quote": "Дверь Д-5 в санузел"
+    }
+   ],
+   "omission": {
+    "term": "Д-5",
+    "first_page": 2,
+    "last_page": 2,
+    "heading": {
+     "page_number": 2,
+     "quote": "Ведомость дверных заполнений"
+    }
+   }
+  }
+ ]
+}

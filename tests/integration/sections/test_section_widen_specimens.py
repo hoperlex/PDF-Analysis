@@ -54,6 +54,10 @@ BASE_LAYER = REPOSITORY_ROOT / "fixtures" / "recorded" / "text_analysis" / "inpu
 MODEL_ID = "claude-opus-5"
 REGISTRY = load_text_profile_registry()
 
+#: The one sub-directory that is not a widen section: the omission specimens of `SECTION-CATEGORY-OCR-01`
+#: (`R-146ao`), a different format held by `test_section_omission_specimens.py`. The glob below is one level
+#: deep and never reaches it.
+OMISSION_DIRECTORY = "omission"
 #: The filed set, by section: the case names are the keys of the reports' specimen blocks.
 EXPECTED = {
     "ps": ("negative", "positive"),
@@ -139,6 +143,8 @@ def _evidence(observations: list[dict[str, Any]]) -> int:
 def test_the_filed_set_is_exactly_the_reports_specimens() -> None:
     found: dict[str, tuple[str, ...]] = {}
     for path in sorted(SPECIMENS.iterdir()):
+        if path.name == OMISSION_DIRECTORY:
+            continue  # `SECTION-CATEGORY-OCR-01`: its own format and its own test, test_section_omission_specimens.py
         assert path.is_dir(), f"{path.name}: only section directories live here"
         found[path.name] = tuple(sorted(item.stem for item in path.iterdir()))
         assert all(item.suffix == ".json" for item in path.iterdir()), path.name

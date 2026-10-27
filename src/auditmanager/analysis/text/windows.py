@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from typing import Any, Final, Mapping, Protocol
+from typing import Any, Final, Mapping, Protocol, Sequence
 
 from auditmanager.analysis.text.adapter import ModelRequest, ModelResponse, build_request
 from auditmanager.analysis.text.budget import MAX_ANALYSIS_WINDOWS, input_budget_characters
@@ -36,6 +36,14 @@ from auditmanager.analysis.text.chunk_preflight import (
 )
 from auditmanager.analysis.text.lock import STAGE_ID, ProviderLock
 from auditmanager.analysis.text.prompt import PAGE_BANNER, PromptBundle, canonical_json
+from auditmanager.analysis.text.recognised_input import (
+    NOTICE,
+    RecognisedPage,
+    extra_by_page,
+    notice_for,
+    render_block,
+    validate,
+)
 from auditmanager.analysis.text.textlayer import Page, TextLayer
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import ModelCallId
@@ -95,6 +103,7 @@ def text_window_policy(
     ceiling_usd: float,
     lock: ProviderLock | None = None,
     max_windows: int = MAX_ANALYSIS_WINDOWS,
+    recognised_characters: int = 0,
 ) -> WindowPolicy | None:
     """The policy for a run, or ``None`` when the run is analysed in one call exactly as before.
 
@@ -102,6 +111,11 @@ def text_window_policy(
     the budget and never windowed), for a count not above the per-call budget (strictly above is the old
     refusal's predicate), and for ``max_windows == 1`` (the rollback). An unpinned ``model_id`` raises the
     same ``model_not_pinned`` the stage would raise at its own pin lookup.
+
+    ``recognised_characters`` (`SECTION-CATEGORY-OCR-01`) is what the recognised-text blocks add to a one-call
+    user message (:func:`~auditmanager.analysis.text.recognised_input.total_characters`); the version's
+    recorded count does not include them, so a version just under the budget that its scans push over is
+    windowed here rather than sent whole. Zero (the default) is every call that carries no block.
     """
     if text_character_count is None:
         return None
@@ -109,8 +123,10 @@ def text_window_policy(
         raise ValueError("text_character_count must be a non-negative whole number or None")
     if type(max_windows) is not int or max_windows < 1:
         raise ValueError("max_windows must be a positive whole number")
+    if type(recognised_characters) is not int or recognised_characters < 0:
+        raise ValueError("recognised_characters must be a non-negative whole number")
     call_budget = input_budget_characters(model_id, ceiling_usd, lock=lock)
-    if text_character_count <= call_budget or max_windows == 1:
+    if text_character_count + recognised_characters <= call_budget or max_windows == 1:
         return None
     return WindowPolicy(window_characters=call_budget, max_windows=max_windows)
 
@@ -123,18 +139,25 @@ def _refuse(reason: str, message: str) -> DomainError:
 
 @dataclass(frozen=True, slots=True)
 class WindowPlan:
-    """The layer, its windows in page order, and the digest of the text they partition."""
+    """The layer, its windows in page order, and the digest of the text they partition.
+
+    ``recognised`` (`SECTION-CATEGORY-OCR-01`) are the recognised-text blocks of the text-less pages; a
+    window renders the blocks of its own pages, and the plan counted them when it packed the pages.
+    """
 
     layer: TextLayer
     windows: tuple[TextChunk, ...]
     window_characters: int
     text_sha256: str
+    recognised: tuple[RecognisedPage, ...] = ()
 
     def pages_of(self, window: TextChunk) -> tuple[Page, ...]:
         return self.layer.pages[window.first_page - 1 : window.last_page]
 
 
-def plan_text_windows(layer: TextLayer, policy: WindowPolicy) -> WindowPlan:
+def plan_text_windows(
+    layer: TextLayer, policy: WindowPolicy, recognised: Sequence[RecognisedPage] = ()
+) -> WindowPlan:
     """Partition ``layer`` into whole-page windows, or refuse before any call is made.
 
     Refusals are ``analysis_input_invalid`` (the code a stage may store; ``analysis_input_budget_exceeded``
@@ -142,9 +165,17 @@ def plan_text_windows(layer: TextLayer, policy: WindowPolicy) -> WindowPlan:
     more than ``policy.max_windows`` windows (both figures are in the message), ``window_page_exceeds_limit``
     when one page alone is larger than a window (splitting a page needs a separately reviewed citation rule),
     ``window_ceiling_unusable`` and ``window_text_layer_invalid`` for the two states the primitive refuses.
+
+    ``recognised`` blocks weigh into the pages they stand under, and the one notice a window's preamble
+    gains is reserved from the ceiling; a window therefore stays within ``policy.window_characters``
+    *with* its recognised text.
     """
+    validate(layer, recognised)  # a handed page the layer lacks is refused here, before any call
+    ceiling = policy.window_characters - ((len(NOTICE) + 1) if recognised else 0)
     try:
-        windows = partition_text_layer(layer, max_chunk_characters=policy.window_characters)
+        windows = partition_text_layer(
+            layer, max_chunk_characters=ceiling, page_extra=extra_by_page(recognised)
+        )
     except ChunkPreflightError as exc:
         if exc.reason == "page_exceeds_limit":
             raise _refuse(
@@ -171,6 +202,7 @@ def plan_text_windows(layer: TextLayer, policy: WindowPolicy) -> WindowPlan:
         windows=windows,
         window_characters=policy.window_characters,
         text_sha256=hashlib.sha256(layer.document_text.encode("utf-8")).hexdigest(),
+        recognised=tuple(recognised),
     )
 
 
@@ -179,7 +211,15 @@ def render_window(plan: WindowPlan, window: TextChunk) -> str:
 
     The page loop is :func:`~auditmanager.analysis.text.prompt.render_document`'s, so a page reads the same in
     a window as in the whole; only the preamble differs, and the banners carry the document's own page numbers.
+    A text-less page of the window carries its recognised-text block, and the preamble the one notice, exactly
+    as in the whole; a window with no such page renders as it always did.
     """
+    pages = plan.pages_of(window)
+    blocks = {
+        item.page_number: item
+        for item in plan.recognised
+        if window.first_page <= item.page_number <= window.last_page
+    }
     parts = [
         WINDOW_PREAMBLE.format(
             index=window.index + 1,
@@ -187,12 +227,16 @@ def render_window(plan: WindowPlan, window: TextChunk) -> str:
             first=window.first_page,
             last=window.last_page,
             total=len(plan.layer.pages),
-        ),
+        )
+        + notice_for(tuple(blocks.values())),
         "",
     ]
-    for page in plan.pages_of(window):
+    for page in pages:
         parts.append(PAGE_BANNER.format(page_number=page.page_number))
         parts.append(page.text)
+        block = blocks.get(page.page_number)
+        if block is not None:
+            parts.append(render_block(block))
         parts.append("")
     return "\n".join(parts)
 

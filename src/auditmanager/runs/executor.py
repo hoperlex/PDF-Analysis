@@ -102,6 +102,7 @@ from auditmanager.analysis.public import (
     ProviderMode,
     TextAnalysisOutcome,
     load_provider_config,
+    recognised_total_characters,
     run_text_analysis,
     run_text_analysis_windows,
     text_window_policy,
@@ -139,6 +140,7 @@ from auditmanager.runs.retry import (
     RetryPolicy,
     not_attempted,
 )
+from auditmanager.runs.section_recognised_input import load_section_recognised_pages
 from auditmanager.runs.v3_group import TrustedPackRegistry
 from auditmanager.runs.window_reply_custody import WindowReplyCustody
 from auditmanager.shared.errors import DomainError, ErrorCode
@@ -478,6 +480,7 @@ def _run_text_analysis_stage(
     call: Any = None,
     text_character_count: int | None = None,
     window_custody: Any = None,
+    textless_pages: tuple[int, ...] | None = None,
 ) -> tuple[StageResult, Mapping[str, Any] | None, AttemptSummary]:
     """Run ``text_analysis``, retrying transport failures, and publish its artifact.
 
@@ -489,6 +492,12 @@ def _run_text_analysis_stage(
     whole-page windows (``run_text_analysis_windows``, with ``window_custody``); no count, or a count not
     above the budget, is the one call it always was, through the same ``run_text_analysis``. The retry
     ladder below is the same for both: a re-invoked windowed stage recovers the windows it finished.
+
+    ``textless_pages`` (`SECTION-CATEGORY-OCR-01`, `R-146aq`) is the version's stored list of text-less pages. For
+    a portal bundle that has some, the recognised text of those pages (this run's own saved
+    ``prepared.recognised_text``) is handed to the stage as marked context, counted in the window decision; it is
+    never part of the text layer, so it cannot ground a finding. ``None`` or an empty list is every version
+    without a scanned page, and nothing changes for it.
 
     Returns the stage result, the observations document, and the attempt tally.
 
@@ -541,12 +550,36 @@ def _run_text_analysis_stage(
             blob_store, parse_blob_id(block_ref.blob_id), expected_role=ROLE_BLOCK_INDEX
         )
 
+    # `SECTION-CATEGORY-OCR-01`: read once, like the three inputs above, so a retry re-reads nothing. An
+    # inconsistent saved artifact fails the stage with its reason; an empty context is never substituted.
+    try:
+        recognised_pages = load_section_recognised_pages(
+            blob_store=blob_store,
+            refs=outputs.refs,
+            version_uid=version_uid,
+            textless_pages=textless_pages,
+        )
+    except DomainError as refusal:
+        return (
+            _text_stage_result(
+                TextAnalysisOutcome(status="failed", artifact=None, model_calls=(), error=refusal),
+                artifact_ref=None,
+                attempts=not_attempted(policy),
+                started=started,
+                finished=clock(),
+            ),
+            None,
+            not_attempted(policy),
+        )
+
     # Decided once, before the first attempt: the predicate is the old refusal's (a count above the
     # per-call budget), so every run the budget used to admit goes through `run_text_analysis` untouched.
+    # The recognised blocks are counted too: the version's count does not include them.
     window_policy = text_window_policy(
         text_character_count=text_character_count,
         model_id=provider_config.model_id,
         ceiling_usd=provider_config.run_cost_ceiling_usd,
+        recognised_characters=recognised_total_characters(recognised_pages),
     )
 
     while True:
@@ -574,6 +607,7 @@ def _run_text_analysis_stage(
                 meter=cost_meter,
                 call_journal=call_journal,
                 call=call,
+                recognised_pages=recognised_pages,
             )
         else:
             outcome = run_text_analysis_windows(
@@ -590,6 +624,7 @@ def _run_text_analysis_stage(
                 call=call,
                 policy=window_policy,
                 custody=window_custody,
+                recognised_pages=recognised_pages,
             )
 
         # Complete responses were committed by ``call_journal`` before parsing reached
@@ -1105,6 +1140,7 @@ def _execute_run_body(
                 profile=text_profile,
                 call=binding.call,
                 text_character_count=version.text_character_count,
+                textless_pages=version.textless_pages,
                 window_custody=None if version.text_character_count is None else WindowReplyCustody(
                     session=session, jobs=job_repo, authority=authority, store=text_store,
                     mode=binding.adapter.provider_mode,
