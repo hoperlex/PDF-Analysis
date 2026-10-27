@@ -161,8 +161,11 @@ is that one file, 16 added and 1 removed lines, the comment included); no schema
 | the classification, the router answers, the unit neighbours | `tests/integration/comparison tests/integration/recovery/test_grant_classification.py tests/integration/recovery/test_comparison_foundation_erase.py tests/integration/composition/test_router_answers.py tests/unit/comparison tests/unit/jobs tests/unit/executors/test_pull_adapter.py` | **783 passed, 1 skipped, 1 xfailed** (before the last two tests of this lane were added) |
 | contract battery | `tests/contract` with `--ignore` of `test_cp00_candidate.py`, `test_validate_bootstrap.py`, `test_cp00_final_state.py` (`D-220`) | **1307 passed**, 19283 subtests, 134 s (includes the import-boundary test) |
 
+| task handoff tool | `python3 scripts/task_handoff.py --task docs/program/tasks/CMP-SPEND-01.md --check-json '["git","diff","--check"]'` | `CHECKS PASS` (path check against the task file's allowed list: PASS; whitespace: PASS); the evidence file is `.local/handoff/CMP-SPEND-01-evidence.md` (ignored), bound to the head it was run on |
+
 The neighbour and contract runs were made on the source of commit `d8d48cee`; `git diff d8d48cee..HEAD -- src scripts db contracts` is empty (what came
-after is tests only). Not run, by the brief: `make gate`, the web battery (no web change), the live journey.
+after is tests only). Not run, by the brief: `make gate` (`R-135` defers it; note that `AGENTS.md` section 8 case 3 names a new `conftest.py`, and this lane adds
+`tests/integration/comparison/spend/conftest.py`, so the final gate covers it), the web battery (no web change), the live journey.
 
 ## 7. Mutation proofs
 
