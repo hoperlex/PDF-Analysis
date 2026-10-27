@@ -369,6 +369,11 @@ def test_the_rule_in_one_place_rebound_targets(paragraph, expected):
     assert _rule(["N1"], [_grounded("N1", paragraph, "rebound")]) is expected
 
 
+def test_the_rule_in_one_place_a_paragraph_no_item_sends_is_withheld_even_when_called_verified():
+    """Inconsistent input (a 'verified' citation on a paragraph no row carries) is never provisional."""
+    assert _rule(["N1"], [_grounded("N1", "p_z", "verified")]) is False
+
+
 def test_the_rule_refuses_an_unknown_label_a_mismatch_and_an_unknown_state():
     with pytest.raises(v3_citations.V3CorpusCitationRefused, match="beta_citation_label_invalid"):
         _rule(["N9"], [_grounded("N9", "p_a")])
