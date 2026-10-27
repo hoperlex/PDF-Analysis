@@ -8,6 +8,7 @@
 
 export { MissingConfigurationError, getApiBaseUrl, getInstanceLabel, getWebBuildId, hasApiBaseUrl } from './env';
 export { RUN_POLLING, pollDelayMs } from './polling';
+export { SHOW_REVIEW_INDICATION } from './review-indication';
 
 // `W50-PLAN.md` §3.1: the only list of screens, and the one validator for `next`/`from`.
 export type {

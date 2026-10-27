@@ -60,6 +60,7 @@ import Link from 'next/link';
 
 import type { RunStatus } from '@/shared/api';
 import { isTerminalRunState } from '@/shared/api';
+import { SHOW_REVIEW_INDICATION } from '@/shared/config';
 import { formatInstant, routes } from '@/shared/lib';
 import { RunWorkerLine, runHoldsLease, runWorker, useWorkerLookup } from '@/entities/execution';
 import { NormReferencesSection } from '@/widgets/norm-references';
@@ -114,6 +115,30 @@ function RunHolder({ runId }: { readonly runId: string }) {
 
 const UNKNOWN_RUN_TITLE = 'Прогон содержит неизвестное значение.';
 
+/**
+ * The second sentence of a published AR v3 beta Run (`R-146as`, `R-146ba`).
+ *
+ * A Run whose reading carries at least one published finding says so and who decides on it; a Run
+ * that publishes none (a count of zero, or a count the server did not report) keeps the sentence that
+ * says no canonical finding is published here. The words that call a citation provisional or say
+ * it needs the expert are `SHOW_REVIEW_INDICATION`'s: with it off they are left out and nothing else
+ * changes. «решение по каждой записывает эксперт» is not one of them: it says whose decision a verdict is.
+ */
+function V3PublishedSentence({ findingCount }: { readonly findingCount: number | null }) {
+  if (findingCount !== null && findingCount > 0) {
+    return SHOW_REVIEW_INDICATION ? (
+      <p>Находки с предварительными нормативными ссылками опубликованы; решение по каждой записывает эксперт. Числовой или правовой вывод не утверждён.</p>
+    ) : (
+      <p>Находки с нормативными ссылками опубликованы; решение по каждой записывает эксперт. Числовой или правовой вывод не утверждён.</p>
+    );
+  }
+  return SHOW_REVIEW_INDICATION ? (
+    <p>Канонические находки здесь не публикуются. Каждая тема и цитата требует проверки эксперта; числовой или правовой вывод не утверждён.</p>
+  ) : (
+    <p>Канонические находки здесь не публикуются. Числовой или правовой вывод не утверждён.</p>
+  );
+}
+
 function Outcome({ status }: { readonly status: RunStatus }) {
   const outcome = runOutcome(status);
   const v3Beta = status.analysis_profile_id === AR_V3_BETA_PROFILE_ID;
@@ -130,8 +155,8 @@ function Outcome({ status }: { readonly status: RunStatus }) {
     case 'published':
       if (v3Beta) return (
         <div className={styles.outcome} data-run-outcome="published" data-review-only="ar-v3-beta">
-          <p>Прогон завершён. Предварительный нормативный разбор АР v3 сохранён.</p>
-          <p>Канонические находки здесь не публикуются. Каждая тема и цитата требует проверки эксперта; числовой или правовой вывод не утверждён.</p>
+          <p>{SHOW_REVIEW_INDICATION ? 'Прогон завершён. Предварительный нормативный разбор АР v3 сохранён.' : 'Прогон завершён. Нормативный разбор АР v3 сохранён.'}</p>
+          <V3PublishedSentence findingCount={outcome.findingCount} />
         </div>
       );
       return (
@@ -149,8 +174,8 @@ function Outcome({ status }: { readonly status: RunStatus }) {
     case 'partial':
       if (v3Beta) return (
         <div className={styles.outcome} data-run-outcome="partial" data-review-only="ar-v3-beta">
-          <p>Предварительный нормативный разбор АР v3 завершился частично. Полный проверенный результат не подтверждён.</p>
-          <p>Канонические находки не публикуются; требуется проверка эксперта.</p>
+          <p>{SHOW_REVIEW_INDICATION ? 'Предварительный нормативный разбор АР v3 завершился частично. Полный проверенный результат не подтверждён.' : 'Нормативный разбор АР v3 завершился частично. Полный проверенный результат не подтверждён.'}</p>
+          <p>{SHOW_REVIEW_INDICATION ? 'Канонические находки не публикуются; требуется проверка эксперта.' : 'Канонические находки не публикуются.'}</p>
         </div>
       );
       return (
@@ -407,7 +432,7 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
       <h2>Разбор</h2>
       {status.analysis_profile_id === AR_V3_BETA_PROFILE_ID ? (
         <NotApplicableState
-          title="Предварительный разбор АР v3"
+          title={SHOW_REVIEW_INDICATION ? 'Предварительный разбор АР v3' : 'Разбор АР v3'}
           detail={
             <p>
               Для просмотра шести прогонов откройте «Настройки анализа» и укажите идентификатор группы из ответа запуска. Здесь нет канонических находок для разбора или принятия решения.
