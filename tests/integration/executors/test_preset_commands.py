@@ -244,6 +244,61 @@ def test_the_same_key_with_another_payload_is_a_reuse_conflict(session) -> None:
     assert rows(session) == 1
 
 
+OTHER_ADMIN = "usr_01M2545JSD15ETSNNV904XH0A2"
+
+
+def test_a_second_administrator_reusing_a_create_key_does_not_get_the_first_ones_preset(session) -> None:
+    """The key belongs to the actor who spent it, as in the comparison commands
+    (`pairing.py`, `summaries.py`): the same key and the same payload from another administrator is a
+    reuse conflict, never a replay of somebody else's answer, and writes nothing."""
+    c = connection(session)
+    k = key()
+    first = make(session, "Основной", c, idempotency_key=k)
+    with pytest.raises(DomainError) as reuse:
+        create_preset(
+            session, name="Основной", executor_connection_id=c, roles=ADMIN_ROLES,
+            idempotency_key=k, actor_uid=OTHER_ADMIN,
+        )
+    expect(reuse, ErrorCode.IDEMPOTENCY_KEY_REUSE)
+    assert rows(session) == 1
+    # the first administrator's own retry is still a replay
+    assert make(session, "Основной", c, idempotency_key=k) == first
+
+
+def test_a_second_administrator_reusing_a_revise_key_does_not_get_the_first_ones_revision(session) -> None:
+    c = connection(session)
+    first = make(session, "Основной", c)
+    k = key()
+    revised = revise(session, first.preset_id, "Другое имя", c, idempotency_key=k)
+    with pytest.raises(DomainError) as reuse:
+        revise_preset(
+            session, preset_id=first.preset_id, name="Другое имя", executor_connection_id=c,
+            roles=ADMIN_ROLES, idempotency_key=k, actor_uid=OTHER_ADMIN,
+        )
+    expect(reuse, ErrorCode.IDEMPOTENCY_KEY_REUSE)
+    assert rows(session) == 2
+    assert revise(session, first.preset_id, "Другое имя", c, idempotency_key=k) == revised
+
+
+def test_a_second_administrator_reusing_an_archive_key_does_not_get_the_first_ones_archive(session) -> None:
+    c = connection(session)
+    first = make(session, "Основной", c)
+    k = key()
+    archived = archive_preset(
+        session, preset_id=first.preset_id, roles=ADMIN_ROLES, idempotency_key=k, actor_uid=ADMIN,
+    )
+    with pytest.raises(DomainError) as reuse:
+        archive_preset(
+            session, preset_id=first.preset_id, roles=ADMIN_ROLES, idempotency_key=k,
+            actor_uid=OTHER_ADMIN,
+        )
+    expect(reuse, ErrorCode.IDEMPOTENCY_KEY_REUSE)
+    assert rows(session) == 2
+    assert archive_preset(
+        session, preset_id=first.preset_id, roles=ADMIN_ROLES, idempotency_key=k, actor_uid=ADMIN,
+    ) == archived
+
+
 # -- revise -------------------------------------------------------------------------------------
 
 

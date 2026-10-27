@@ -1,7 +1,9 @@
 """The administrator's commands on analysis presets, and what a run start asks of them.
 
 Each write: (1) the role check, (2) the name rule, (3) ``CommandRepository.begin`` with an idempotency
-key and a payload fingerprint, (4) the family's advisory lock, (5) the preconditions, each with a typed
+key and a payload fingerprint that names the acting administrator (as the comparison commands do: a key
+belongs to the actor who spent it, so a second administrator reusing it is an ``idempotency_key_reuse``
+conflict and never receives the first one's result), (4) the family's advisory lock, (5) the preconditions, each with a typed
 refusal, (6) the append-only row, (7) the audit event with the revision's id, in the same transaction,
 (8) ``ledger.succeed`` with the identities of what was made. A replay answers the revision that command
 wrote. The caller owns the transaction. Any refusal ends the transaction before the key is claimed for
@@ -129,7 +131,8 @@ def create_preset(
         store or PresetStore(), executors or ExecutorRepository(), commands or CommandRepository()
     )
     claimed = _begin(session, ledger, _CREATE, idempotency_key,
-                     {"name": clean, "executor_connection_id": executor_connection_id})
+                     {"name": clean, "executor_connection_id": executor_connection_id,
+                      "actor_uid": actor_uid})
     if isinstance(claimed, CommandReplay):
         return _replayed(session, presets, claimed)
     presets.lock(session)
@@ -165,7 +168,8 @@ def revise_preset(
         store or PresetStore(), executors or ExecutorRepository(), commands or CommandRepository()
     )
     claimed = _begin(session, ledger, _REVISE, idempotency_key, {
-        "preset_id": preset_id, "name": clean, "executor_connection_id": executor_connection_id})
+        "preset_id": preset_id, "name": clean, "executor_connection_id": executor_connection_id,
+        "actor_uid": actor_uid})
     if isinstance(claimed, CommandReplay):
         return _replayed(session, presets, claimed)
     presets.lock(session)
@@ -204,7 +208,8 @@ def archive_preset(
     """Append the archived revision. It repeats the previous name and connection; one-way."""
     _admin(roles)
     presets, ledger = store or PresetStore(), commands or CommandRepository()
-    claimed = _begin(session, ledger, _ARCHIVE, idempotency_key, {"preset_id": preset_id})
+    claimed = _begin(session, ledger, _ARCHIVE, idempotency_key, {
+        "preset_id": preset_id, "actor_uid": actor_uid})
     if isinstance(claimed, CommandReplay):
         return _replayed(session, presets, claimed)
     presets.lock(session)
