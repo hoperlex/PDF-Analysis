@@ -73,10 +73,12 @@ import {
   versionLabel,
 } from '@/entities/document-version';
 import {
+  ComparisonSummarySection,
   EVIDENCE_STATE_TEXT,
   LINK_STATE_TEXT,
   SheetPairingControls,
   approvalOf,
+  canApproveSheetPairing,
   isApprovablePair,
 } from '@/entities/version-comparison';
 import { CarriedDecisionNote, CarryOverDecision } from '@/features/carry-over-decision';
@@ -126,6 +128,7 @@ function SetComparison({
   const list = useVersionList(current.document_uid);
   const me = useMe();
   const mayCarry = me.data !== undefined && canCarryOverDecision(me.data.roles);
+  const mayApprove = me.data !== undefined && canApproveSheetPairing(me.data.roles);
   const [chosenUid, setChosenUid] = useState<string | null>(null);
   const [stageMode, setStageMode] = useState(false);
   const [diffOffset, setDiffOffset] = useState(0);
@@ -225,6 +228,7 @@ function SetComparison({
           comparison={comparison.data}
           onPage={setDiffOffset}
           carry={mayCarry ? { projectUid, documentUid: current.document_uid } : null}
+          mayApprove={mayApprove}
           carried={carried}
           onCarried={(answer) => setCarried((held) => ({ ...held, [answer.event.finding_uid]: answer }))}
         />
@@ -259,12 +263,15 @@ export function ComparisonResult({
   carry,
   carried = {},
   onCarried,
+  mayApprove = false,
 }: {
   readonly comparison: Comparison;
   readonly onPage: (offset: number) => void;
   readonly carry: CarryContext | null;
   readonly carried?: CarriedAnswers;
   readonly onCarried?: (answer: CarryOverDecisionResponse) => void;
+  /** Whether to draw the buttons that approve, withdraw and summarise (`expert` only). */
+  readonly mayApprove?: boolean;
 }) {
   if (comparison.outcome === 'refused' || comparison.refusal !== null) {
     return (
@@ -293,9 +300,24 @@ export function ComparisonResult({
         эксперт не подтвердил пару, они ничего не утверждают и не меняют. Построчные различия
         показаны так, как их дал детерминированный текст, без участия ИИ.
       </p>
-      <SheetTable sheets={comparison.sheets} comparison={comparison} mayDecide={carry !== null} />
+      <SheetTable sheets={comparison.sheets} comparison={comparison} mayDecide={mayApprove} />
       {comparison.approved_pairs === null || comparison.approved_pairs === undefined ? null : (
-        <ApprovedPairs approved={comparison.approved_pairs} />
+        <>
+          <ApprovedPairs approved={comparison.approved_pairs} />
+          <ComparisonSummarySection
+            approved={comparison.approved_pairs}
+            mayDecide={mayApprove}
+            view={{
+              projectUid: comparison.project_uid,
+              documentUid: comparison.document_uid,
+              sourceVersionUid: comparison.source_version_uid,
+              targetVersionUid: comparison.target_version_uid,
+              mode: comparison.mode,
+              sourceRunId: comparison.source?.run_id ?? null,
+              targetRunId: comparison.target?.run_id ?? null,
+            }}
+          />
+        </>
       )}
       {comparison.sheet_diffs === null ? null : (
         <SheetDiffs page={comparison.sheet_diffs} onPage={onPage} />

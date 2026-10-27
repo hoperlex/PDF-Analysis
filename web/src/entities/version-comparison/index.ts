@@ -30,6 +30,28 @@ export {
   withdrawSignature,
 } from './api/use-sheet-pairing';
 
+export type { SummaryFailure, SummaryFailureKind } from './model/summary';
+export {
+  RECORDED_MODE_TEXT,
+  SUMMARY_CONFLICT_TEXT,
+  SUMMARY_NOT_CURRENT_TEXT,
+  SUMMARY_NOT_PERMITTED_DETAIL,
+  SUMMARY_NOT_SEALED_TEXT,
+  SUMMARY_REJECTION_TEXT,
+  SUMMARY_UNAVAILABLE_DETAIL,
+  canOfferSummary,
+  citationText,
+  citedChange,
+  summaryFailure,
+} from './model/summary';
+
+export type { GenerateComparisonSummaryCommand } from './api/use-comparison-summary';
+export { summarySignature, useGenerateComparisonSummary } from './api/use-comparison-summary';
+
+export type { SummaryView } from './ui/comparison-summary';
+export { ComparisonSummarySection, ComparisonSummaryView } from './ui/comparison-summary';
+export type { ComparisonSummaryViewProps } from './ui/comparison-summary';
+
 export type {
   PairingView,
   SheetPairingControlsProps,
