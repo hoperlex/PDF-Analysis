@@ -3389,7 +3389,8 @@ class ComparisonAdapter(_SessionHolder):
 
         outcome = self._pairing_write(work)
         return models.GenerateComparisonSummaryResponse(
-            summary=_summary_view(outcome.summary, is_current=True), replayed=outcome.replayed,
+            summary=_summary_view(outcome.summary, is_current=outcome.is_current),
+            replayed=outcome.replayed,
         )
 
     def _pairing_write(self, work: Any) -> Any:
