@@ -20,7 +20,7 @@ spend of the dashboard is the union of the two journals. Each guard is shown fai
 - API contract: `contracts/api/v1/openapi.json` `1.9.0`, 115 paths / 130 operations / 351 schemas (this lane changes none)
 - analysis/comparison/event contract: ADR-0025 decisions 5, 6, 19 and the 2026-10-27 addendum; `Q-CMP-7`; `R-29`; `R-133`
 - migration head: `0038_comparison_foundation` (this lane changes none; a missing column is a STOP)
-- base commit: `34dcf9a1dad7c4f9e3ac131eb990ab673502dc12` on `integration/compare-modules`
+- base commit: `34dcf9a1dad7c4f9e3ac131eb990ab673502dc12`
 
 ## Enumerator ownership
 - enumerated_set_changed: no
