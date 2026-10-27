@@ -116,7 +116,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from auditmanager.analysis.public import MAX_ANALYSIS_WINDOWS, windowed_budget_characters
-from auditmanager.documents.public import DocumentRepository
+from auditmanager.documents.public import UPLOAD_KIND_COMPARISON_PDF, DocumentRepository
 from auditmanager.norms.public import current_snapshot
 from auditmanager.jobs.public import JobRepository, append_execution_event
 from auditmanager.ingest.public import (
@@ -373,6 +373,33 @@ def _pinned_profile(
     return pinned.analysis_profile_id, pinned.prompt_bundle_id
 
 
+#: The ``reason`` of the refusal of a plain PDF admitted for comparison only (`CMP-INGEST-01`, ADR-0025
+#: decision 11, ``Q-CMP-5``), registered under ``analysis_input_invalid`` in the frozen domain contract. The
+#: client renders its Russian sentence from the catalogue.
+COMPARISON_ONLY_VERSION_REASON: Final[str] = "comparison_only_version"
+
+
+def refuse_comparison_only_version(version: Any) -> None:
+    """Refuse to start a section analysis on a version that has no portal bundle.
+
+    A version whose ``upload_kind`` is ``comparison_pdf`` is a plain PDF admitted for comparison only: it has
+    no ``source.document`` entry (its manifest role is the distinct ``comparison.source_pdf``) and no portal
+    block list, so a section analysis has nothing to read. The manifest check in :func:`_resolve_references`
+    already refuses it, but with ``missing_required_input`` -- an answer that tells a reviewer a *fault*, when
+    the truth is a *kind*. This is asked first, by the kind, before the profile is routed and before any key is
+    claimed, so the refusal writes nothing and names the reason the screen renders in Russian.
+    """
+    if getattr(version, "upload_kind", None) == UPLOAD_KIND_COMPARISON_PDF:
+        raise DomainError(
+            ErrorCode.ANALYSIS_INPUT_INVALID,
+            message=(
+                "the document version is a plain PDF admitted for comparison only; "
+                "a section analysis needs a portal bundle"
+            ),
+            reason=COMPARISON_ONLY_VERSION_REASON,
+        )
+
+
 def _resolve_references(
     session: Session,
     *,
@@ -392,6 +419,7 @@ def _resolve_references(
     """
     if version is None:
         version = documents.get_version(session, version_uid)
+    refuse_comparison_only_version(version)
 
     blob_ids = {entry.role: str(entry.blob_id) for entry in version.manifest}
     if ROLE_SOURCE_DOCUMENT not in blob_ids:
@@ -590,6 +618,8 @@ def start_audit_run(
     budget = _checked_budget(input_budget_characters)
 
     version_record = document_repo.get_version(session, resolved_version)
+    # `CMP-INGEST-01`. By kind, before the profile is routed and before any key is claimed.
+    refuse_comparison_only_version(version_record)
     # Read only when a pre-claim decision needs it (the budget or the route), exactly as the
     # budget alone read it before this seal.
     known = (
@@ -875,12 +905,14 @@ def reaudit_run(
         "SELECT run_id FROM audit_run WHERE run_id = :run_id FOR UPDATE"
     ), {"run_id": source_run_id}).scalar_one_or_none()
     source = repository.get(session, source_run_id)
-    source_version = None
+    # `CMP-INGEST-01`. A re-audit analyses the source's version again, so a version admitted for comparison
+    # only is refused here by its kind, before the profile is routed and before the key is claimed.
+    source_version = document_repo.get_version(session, VersionUid.parse(source.version_uid))
+    refuse_comparison_only_version(source_version)
     frozen: FrozenRoute | None = None
     if (section_profiles is not None or budget is not None or connection_route is not None) and ledger.find(
         session, command_type="reaudit_run", idempotency_key=IdempotencyKey(idempotency_key)
     ) is None:
-        source_version = document_repo.get_version(session, VersionUid.parse(source.version_uid))
         if section_profiles is not None:
             routed = route_classified_version(source_version, section_profiles)
             analysis_profile_id = routed.analysis_profile_id
@@ -969,6 +1001,7 @@ __all__ = [
     "COMMAND_TYPE_START_RUN",
     "NormsSnapshotReader",
     "SectionProfiles",
+    "COMPARISON_ONLY_VERSION_REASON",
     "ROLE_SOURCE_DOCUMENT",
     "StartedRun",
     "current_norms_snapshot",
@@ -977,6 +1010,7 @@ __all__ = [
     "run_of_command",
     "cancel_audit_run",
     "reaudit_run",
+    "refuse_comparison_only_version",
     "start_audit_run",
     "start_run_fingerprint",
 ]

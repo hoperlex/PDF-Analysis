@@ -72,6 +72,7 @@ from auditmanager.bootstrap.adapters import (
     XlsxExportAdapter,
     resolve_analysis_preset,
 )
+from auditmanager.ingest.comparison_pdf.public import ComparisonUploadService, ComparisonVersionOrderService
 from auditmanager.bootstrap.settings import AppSettings, ConfigurationError
 from auditmanager.bootstrap.settings import load as load_settings
 from auditmanager.runs.public import (
@@ -475,8 +476,12 @@ def build_application(
         # `CMP-SEAL-C0`. The comparison operations, sealed as stubs answering `503
         # dependency_unavailable` until `CMP-INGEST-01`, `CMP-INGEST-02` and `CMP-PROFILE-01`
         # replace the three adapters (plan section 4.0 rule 1).
-        comparison_uploads=ComparisonUploadAdapter(),
-        comparison_version_orders=ComparisonVersionOrderAdapter(),
+        comparison_uploads=ComparisonUploadAdapter(
+            sessions, service=ComparisonUploadService(store, session_factory=sessions)
+        ),
+        comparison_version_orders=ComparisonVersionOrderAdapter(
+            sessions, service=ComparisonVersionOrderService(session_factory=sessions)
+        ),
         version_pages=VersionPageAdapter(sessions, blob_store=store),
         execution=ExecutionAdapter(sessions, runs=run_adapter),
         # `W55A-SEAL-01` sealed them; `W55A-SEARCH-01` serves them. The norms reads and the

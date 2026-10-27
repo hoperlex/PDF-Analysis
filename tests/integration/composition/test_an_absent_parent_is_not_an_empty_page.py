@@ -202,11 +202,11 @@ SEALED_STUB_COLLECTIONS: frozenset[str] = frozenset()
 #: `CMP-SEAL-C0` (ADR-0025 decision 25) filled it with the nine comparison reads whose ports are
 #: sealed stubs; `CMP-INGEST-01`, `CMP-INGEST-02` and `CMP-PROFILE-01` remove the ones they wire,
 #: and each then joins the `404` sweep. Two of them list under a project, so they are addressed.
+#: `CMP-INGEST-01` serves ``getComparisonUpload``, ``getComparisonUploadProposal`` and
+#: ``listComparisonVersionOrders`` and removes them: each joins the `404` sweep (an absent `cbt_` is `404
+#: not_found`, and so is an absent project or document of the version-order listing).
 SEALED_STUB_ADDRESSED: frozenset[str] = frozenset({
     "listComparisonUploads",
-    "getComparisonUpload",
-    "getComparisonUploadProposal",
-    "listComparisonVersionOrders",
 })
 
 #: `W55A-SEAL-01`. ``searchNorms`` addresses no parent but is not a listing of everything:
