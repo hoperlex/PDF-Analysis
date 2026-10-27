@@ -1,9 +1,9 @@
 {
   "contract": "auditmanager.domain.state-machines",
-  "contract_version": "1.8.0",
-  "supersedes": "1.7.0",
-  "candidate_revision": 26,
-  "revision_note": "Candidate revision 26 by CONTRACT-1-8-0-01: the three operations of COMPARE-PERSISTED-SUMMARY-01 (approveSheetPairing, withdrawSheetPairing, generateComparisonSummary) are an additive minor change of the API document (owner ruling R-146ar), and family 1.8.0 seal.",
+  "contract_version": "1.9.0",
+  "supersedes": "1.8.0",
+  "candidate_revision": 27,
+  "revision_note": "Candidate revision 27 by CMP-SEAL-C0: the plain-PDF comparison upload, the order of the versions of a document set and the page reads (eighteen operations), the optional DocumentVersion.upload_kind, ProductVersion.comparison_modules and RunnerImage.crop_id are an additive minor change of the API document, and family 1.9.0 seal. identifiers.json gains eight identity prefixes (cbt, cus, cuf, cvo, cpr, cq, cqa, cmc) for migration 0038; error-codes.json gains no code, only registered reasons under existing codes; state-machines.json gains no machine.",
   "status": "frozen",
   "frozen": true,
   "rules": [

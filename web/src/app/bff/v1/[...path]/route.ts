@@ -19,7 +19,7 @@
  * knows how many operations there are. Swapping the credential later is an edit to the
  * credential selection below, not a sweep through a handler per operation.
  *
- * Those figures are **111 operations across ninety-eight paths**, which is what the
+ * Those figures are **130 operations across 115 paths**, which is what the
  * frozen document declares after `W59-ANALYSIS-SETTINGS-01` adds the read of the
  * analysis-profile registry, `W59-VERSION-UPLOAD-01` the upload of a further version of one
  * set, `W59-DECISION-CARRYOVER-01` the expert-confirmed carryover of a decision to the next

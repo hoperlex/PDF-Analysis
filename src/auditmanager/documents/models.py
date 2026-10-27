@@ -313,6 +313,13 @@ class DocumentVersionRecord:
     #: a correction that commits in that window must not fail a run that is pinned to the
     #: profile it started with.
     classification: VersionClassificationRecord | None = field(default=None, compare=False)
+    #: `CMP-SEAL-C0` (migration ``0038``, ADR-0025 decision 11). How the version reached the
+    #: product: ``portal_bundle`` (every version before ``0038``) or ``comparison_pdf`` (a plain
+    #: PDF admitted for comparison only: no section analysis starts on it, and it never becomes the
+    #: current version of a document that has a portal version). The repository read that fills
+    #: it from ``document_version.upload_kind`` is `CMP-INGEST-01`'s; until it lands every record
+    #: says ``portal_bundle``, which is true of every row that can exist.
+    upload_kind: str = "portal_bundle"
 
     def entry(self, role: str) -> ManifestEntry:
         """The manifest entry for one role.

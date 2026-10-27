@@ -57,6 +57,9 @@ class DocumentVersionView:
     #: `W59-SECTION-SEAL-01`. The version's persisted classification (the frozen
     #: ``VersionClassification``), or ``None`` while unclassified -- then omitted on the wire.
     classification: Any = None
+    #: `CMP-SEAL-C0`. How the version reached the product (``portal_bundle`` or
+    #: ``comparison_pdf``); always emitted.
+    upload_kind: str = "portal_bundle"
 
 
 def manifest_entry_body(view: ManifestEntryView) -> dict[str, Any]:
@@ -88,6 +91,7 @@ def document_version_body(view: DocumentVersionView) -> dict[str, Any]:
         "page_count": view.page_count,
         "published_at": timestamp(view.published_at),
         "input_manifest": [manifest_entry_body(entry) for entry in view.input_manifest],
+        "upload_kind": view.upload_kind,
     }
     if view.display_title is not None:
         body["display_title"] = view.display_title
