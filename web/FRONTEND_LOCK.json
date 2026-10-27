@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "15125f8f6b6c5662d556dcc5f959f36b4c53446bf54d787ecfca4cefd409d21c",
-    "content_commit": "7e6eb754",
-    "content_commit_subject": "fix(api): approved_pairs is optional and nullable like RunStatus.executor; the operation-surface test names a sheet link",
+    "sha256": "f49b6329844442ec8965a9a5dd559983a067881c489c81857d45fd60e7f5d5de",
+    "content_commit": "003c7446",
+    "content_commit_subject": "feat(api): generateComparisonSummary and approved_pairs.summary (contract content under 1.7.0, B2)",
     "dispatch_named_commit": "a3e83f39cfcb02f4ea5565e6f45f3f2b2f720e97",
-    "commit_note": "COMPARE-PERSISTED-SUMMARY-01 (B1) adds approveSheetPairing and withdrawSheetPairing, nine schemas and the optional approved_pairs of compareDocumentVersions; contract content under 1.7.0 (94/106/310), migration 0035, no new error code.",
+    "commit_note": "COMPARE-PERSISTED-SUMMARY-01 (B1, B2) adds approveSheetPairing, withdrawSheetPairing and generateComparisonSummary, thirteen schemas, the optional approved_pairs (with its optional summary) of compareDocumentVersions and the prose of analysis_input_budget_exceeded; contract content under 1.7.0 (95/107/314), migration 0035, no new error code.",
     "openapi_version": "3.1.0",
     "info_version": "1.7.0",
-    "paths": 94,
-    "operations": 106,
-    "component_schemas": 310,
+    "paths": 95,
+    "operations": 107,
+    "component_schemas": 314,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "15125f8f6b6c5662d556dcc5f959f36b4c53446bf54d787ecfca4cefd409d21c",
+    "snapshot_sha256": "f49b6329844442ec8965a9a5dd559983a067881c489c81857d45fd60e7f5d5de",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "efa2d4f422207099f641ffbd1c7de596f079038de8db27745e359775e86c6d2d",
-      "index.ts": "926dcd49df1cac8e8b3c846d024deaef3e2fb8e879102d4f088a4e69d8474db9",
-      "operations.gen.ts": "92c0f9e18323878b582f3a1d21a893c63d6c0cb11c22e992930b773c2a50303f",
-      "types.gen.ts": "f6085ad586fe087f42af1109522cf2a2f674e544e9d9241882c2ef1ec82ecb56"
+      "client.gen.ts": "9f1d45661d918b378df1a56f3a02d0a344596c512478f1534451d61a79da247a",
+      "index.ts": "12af7f92a2fea50a0c9ba5c6d41bb8acf5040f86b5623b24241117f0f31d073f",
+      "operations.gen.ts": "631564f1e47f55f48dd1e41b06a7e9cbefa01a9d67ed1148ca4f476692edcd75",
+      "types.gen.ts": "309ca778cb7b93c3cfa614baebceab20f487353ccf70b1cac48cca6c727a7dab"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },
