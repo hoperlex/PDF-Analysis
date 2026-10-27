@@ -128,7 +128,7 @@ when its attempt budget is spent, cancelled when a cancel was requested, or `spe
 project erase is not blocked by a dead worker) but takes nothing. No handler is registered by this lane.
 
 ## Handoff
-- changed files: (filled in the last commit)
-- commands/results: (filled in the last commit)
-- known limits: (filled in the last commit)
-- integration notes: (filled in the last commit)
+- changed files: `src/auditmanager/comparison/work/**` (new: model, repository, registry, gates, heartbeat, runner, errors), `src/auditmanager/workers/service.py`, `src/auditmanager/bootstrap/composition.py`, `src/auditmanager/comparison/public.py`, `scripts/recovery/grant_classification.py`, `tests/unit/comparison/work/**`, `tests/integration/comparison/work/**`, `tests/integration/recovery/test_grant_classification.py` (one pin, out of row), `docs/program/CMP-WORK-01.md`, this file
+- commands/results: unit `tests/unit/comparison/work` 76 passed + 1 xfailed; integration `tests/integration/comparison/work` 60 passed (own stack); `tests/integration/comparison` 239 passed; `tests/contract` minus the three D-220 files 1307 passed; `test_grant_classification.py` 35 passed; workers and router answers 57 passed + 1 skipped; 33 mutation proofs in the report section 6, each shown red and restored
+- known limits: `workers/__main__.py` is not on the row, so the one-argument hand-over is the integrator's (report 7.1, pinned by a strict xfail); the web block of «Очередь» (ADR decision 6) is not built; no handler is registered; the pause and the Run-claimable reads precede the claim transaction (one item of slack)
+- integration notes: report section 8; later lanes append only to `HANDLER_FACTORIES` and `SPEND_SETTLERS` in `comparison/public.py`; ADR decision 7's «share lock» is replaced by the row locks plus `ON DELETE RESTRICT` (report 7.3)
