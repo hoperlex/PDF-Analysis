@@ -96,6 +96,11 @@ SAMPLES: dict[str, tuple[str, str]] = {
     ),
     "listExecutorRoutes": ("GET", "/executor-routes"),
     "setExecutorRoute": ("PUT", "/executor-routes"),
+    # `ANALYSIS-PRESETS-01`. The presets: reads for any role, writes for an administrator.
+    "listAnalysisPresets": ("GET", "/analysis/presets"),
+    "createAnalysisPreset": ("POST", "/analysis/presets"),
+    "reviseAnalysisPreset": ("POST", "/analysis/presets/evt_01M2545JSD15ETSNNV904X991T/revisions"),
+    "archiveAnalysisPreset": ("POST", "/analysis/presets/evt_01M2545JSD15ETSNNV904X991T/archive"),
     # `EXEC-PULL-01`. Runner tokens are an administrator's (the runner's own four operations
     # are not role-gated: they are authenticated by the token, see RUNNER_OPERATIONS).
     "issueRunnerToken": (
@@ -285,6 +290,7 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "listExecutorConnections": _ANY_ROLE,
     "getExecutorConnection": _ANY_ROLE,
     "listExecutorRoutes": _ANY_ROLE,
+    "listAnalysisPresets": _ANY_ROLE,
     "searchNorms": _ANY_ROLE,
     "getNormDocument": _ANY_ROLE,
     "listNormParagraphs": _ANY_ROLE,
@@ -383,6 +389,11 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "generateExecutorSshKey": _ADMIN,
     "requestExecutorProbe": _ADMIN,
     "setExecutorRoute": _ADMIN,
+    # `ANALYSIS-PRESETS-01` (R-146av): a preset is executor configuration; who may change the route
+    # may change a preset. The list is open to every role.
+    "createAnalysisPreset": _ADMIN,
+    "reviseAnalysisPreset": _ADMIN,
+    "archiveAnalysisPreset": _ADMIN,
     "issueRunnerToken": _ADMIN,
     "revokeRunnerToken": _ADMIN,
     # `W55A-SEAL-01` (R-113): who designated which snapshot, and the designation itself.

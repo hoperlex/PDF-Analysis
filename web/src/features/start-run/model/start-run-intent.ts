@@ -13,9 +13,14 @@
  * `null` (`422 validation_failed` on `executor_connection_id`), and an absent field is the start
  * that follows the stand's route exactly as it did before the choice existed. The signature of a
  * start without a choice is the one it always had, so an unchanged page keeps its key.
+ *
+ * **A preset is a second way to make the same choice** (`ANALYSIS-PRESETS-01`). The request then
+ * carries `preset_id` and not the executor the preset names: the stand resolves the preset's current
+ * version in the start's own transaction, and the same key with the executor chosen by hand is
+ * another request. The signature carries the preset, so choosing another one is another intent.
  */
 
-import type { ExecutorConnectionId, StartRunRequest, VersionUid } from '@/shared/api';
+import type { ExecutorConnectionId, PresetId, StartRunRequest, VersionUid } from '@/shared/api';
 
 export interface StartRunCommand {
   readonly versionUid: VersionUid;
@@ -23,6 +28,8 @@ export interface StartRunCommand {
   readonly idempotencyKey: string;
   /** The connection the person chose. Absent for «По умолчанию (маршрут)»; never `null`. */
   readonly executorConnectionId?: ExecutorConnectionId | undefined;
+  /** The preset the person chose. Absent for «Без пресета»; never `null`; exclusive with the executor. */
+  readonly presetId?: PresetId | undefined;
 }
 
 export interface StartRunIntent {
@@ -32,26 +39,39 @@ export interface StartRunIntent {
   readonly command: (idempotencyKey: string) => StartRunCommand;
 }
 
-/** The intent of starting `versionUid` on the chosen executor, or on the route's when `null`. */
+/**
+ * The intent of starting `versionUid` with the chosen preset, or on the chosen executor, or on the
+ * route's when neither is chosen. A preset wins: the control never offers both, and the request
+ * never carries both.
+ */
 export function startRunIntent(
   versionUid: VersionUid,
   executorConnectionId: ExecutorConnectionId | null,
+  presetId: PresetId | null = null,
 ): StartRunIntent {
-  return {
-    signature:
-      executorConnectionId === null
+  const signature =
+    presetId !== null
+      ? `start-run:${versionUid}:preset:${presetId}`
+      : executorConnectionId === null
         ? `start-run:${versionUid}`
-        : `start-run:${versionUid}:executor:${executorConnectionId}`,
+        : `start-run:${versionUid}:executor:${executorConnectionId}`;
+  return {
+    signature,
     command: (idempotencyKey) => ({
       versionUid,
       idempotencyKey,
-      ...(executorConnectionId === null ? {} : { executorConnectionId }),
+      ...(presetId !== null
+        ? { presetId }
+        : executorConnectionId === null
+          ? {}
+          : { executorConnectionId }),
     }),
   };
 }
 
-/** The request body of a command: `executor_connection_id` only when one was chosen. */
-export function startRunBody({ versionUid, executorConnectionId }: StartRunCommand): StartRunRequest {
+/** The request body of a command: `preset_id` or `executor_connection_id`, only when one was chosen. */
+export function startRunBody({ versionUid, executorConnectionId, presetId }: StartRunCommand): StartRunRequest {
+  if (presetId !== undefined) return { version_uid: versionUid, preset_id: presetId };
   return executorConnectionId === undefined
     ? { version_uid: versionUid }
     : { version_uid: versionUid, executor_connection_id: executorConnectionId };

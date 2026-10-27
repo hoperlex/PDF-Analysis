@@ -55,6 +55,7 @@ from auditmanager.bootstrap.adapters import (
     SectionSpecificationAdapter,
     SpecificationPricesAdapter,
     XlsxExportAdapter,
+    resolve_analysis_preset,
 )
 from auditmanager.bootstrap.settings import AppSettings, ConfigurationError
 from auditmanager.bootstrap.settings import load as load_settings
@@ -369,6 +370,9 @@ def build_application(
         # ``database`` source only, and then runs freeze their connection revision at start.
         providers=providers.resolve,
         route_freezer=providers.freeze,
+        # `ANALYSIS-PRESETS-01`. A named preset is read in the start's own transaction and then
+        # started as the executor it names; always passed, so a served start never ignores one.
+        preset_resolver=resolve_analysis_preset,
         # No expert-approved six-set pack is installed in the beta candidate.
         # This keeps group start closed while allowing historical group reads.
         ar_v3_pack_registry=_registry_of(ar_v3_installed_pack),

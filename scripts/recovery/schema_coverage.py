@@ -38,11 +38,11 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-HEAD = "0036_cite_partition_v3"
+HEAD = "0037_analysis_presets"
 
 #: Every base table of the schema at ``HEAD`` (``relkind`` ``r``, schema ``public``).
 TABLES = frozenset((
-    "account_release_mark", "alembic_version", "analysis_artifact_publication", "app_user", "app_user_role",
+    "account_release_mark", "alembic_version", "analysis_artifact_publication", "analysis_preset_revision", "app_user", "app_user_role",
     "ar_v3_run_group", "ar_v3_run_group_member", "attempt", "audit_event", "audit_run", "blob", "command_record", "comparison_sheet_link", "comparison_summary",
     "contract_state_transition", "document",
     "document_version", "document_version_classification", "document_version_classification_correction",
@@ -90,11 +90,17 @@ TRIGGERS = (
     ("ar_v3_run_group", "trg_ar_v3_group_complete", "am_ar_v3_group_complete", 5),
     ("ar_v3_run_group", "trg_ar_v3_run_group_frozen", "am_immutable_row", 27),
     ("ar_v3_run_group_member", "trg_ar_v3_run_group_member_frozen", "am_immutable_row", 27),
+    # `0037_analysis_presets`: the revisions of a preset are append-only (27 = ROW | BEFORE | DELETE |
+    # UPDATE) and chained on INSERT (7 = ROW | BEFORE | INSERT); a run records its preset only with
+    # the executor that preset names (an INSERT check on `audit_run`).
+    ("analysis_preset_revision", "trg_analysis_preset_revision_chain", "am_check_analysis_preset_chain", 7),
+    ("analysis_preset_revision", "trg_analysis_preset_revision_immutable", "am_immutable_row", 27),
     ("attempt", "trg_attempt_frozen_guard", "am_guard_frozen_columns", 19),
     ("attempt", "trg_attempt_state_guard", "am_guard_state_transition", 23),
     ("audit_event", "trg_audit_event_append_only", "am_append_only", 27),
     ("audit_run", "trg_audit_run_frozen_guard", "am_guard_frozen_columns", 19),
     ("audit_run", "trg_audit_run_norm_set", "am_verify_run_norm_set", 23),
+    ("audit_run", "trg_audit_run_preset_executor", "am_check_audit_run_preset", 7),
     ("audit_run", "trg_audit_run_state_guard", "am_guard_state_transition", 23),
     ("blob", "trg_blob_state_guard", "am_guard_state_transition", 23),
     ("blob", "trg_blob_write_once_guard", "am_guard_write_once_columns", 19),
@@ -203,10 +209,10 @@ SEQUENCES = {
 
 #: ``pg_constraint.contype -> count`` in schema ``public`` at ``HEAD``: p primary key, u unique,
 #: f foreign key, c check, t constraint trigger. A restore that lost one is not the schema.
-CONSTRAINT_COUNTS = {"c": 600, "f": 142, "p": 65, "t": 9, "u": 52}
+CONSTRAINT_COUNTS = {"c": 610, "f": 144, "p": 66, "t": 9, "u": 53}
 
 #: Indexes in schema ``public`` at ``HEAD`` (primary-key and unique indexes included).
-INDEX_COUNT = 194
+INDEX_COUNT = 198
 
 #: Trigger functions that make a table immutable or append-only (the claim a restore must keep).
 GUARD_FUNCTIONS = frozenset((

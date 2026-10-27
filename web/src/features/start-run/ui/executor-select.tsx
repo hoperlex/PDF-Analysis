@@ -47,6 +47,11 @@ export interface ExecutorSelectViewProps {
   /** True while a start is in flight: the choice is the one that was sent. */
   readonly disabled: boolean;
   readonly onChange: (next: ExecutorConnectionId | null) => void;
+  /**
+   * `ANALYSIS-PRESETS-01`: set while a preset is chosen. The select then shows the preset's executor
+   * as `value`, is locked, and says this sentence instead of its own hint.
+   */
+  readonly lockedBy?: string | undefined;
 }
 
 export const DEFAULT_EXECUTOR_LABEL = 'По умолчанию (маршрут)';
@@ -56,7 +61,7 @@ function listed(choices: readonly ExecutorChoice[], value: ExecutorConnectionId 
   return choices.filter((choice) => !choice.archived || choice.connectionId === value);
 }
 
-export function ExecutorSelectView({ id, reading, value, disabled, onChange }: ExecutorSelectViewProps) {
+export function ExecutorSelectView({ id, reading, value, disabled, onChange, lockedBy }: ExecutorSelectViewProps) {
   const choices = reading.phase === 'ready' ? listed(reading.choices, value) : [];
   // A choice the list no longer holds (the connection vanished from a later read) stays selected
   // and visible, disabled, rather than letting the browser show the first option in its place.
@@ -68,7 +73,7 @@ export function ExecutorSelectView({ id, reading, value, disabled, onChange }: E
       <select
         id={id}
         value={value ?? ''}
-        disabled={disabled}
+        disabled={disabled || lockedBy !== undefined}
         onChange={(event) => onChange(chosenExecutor(event.target.value))}
       >
         <option value="">{DEFAULT_EXECUTOR_LABEL}</option>
@@ -110,11 +115,16 @@ export function ExecutorSelectView({ id, reading, value, disabled, onChange }: E
       ) : null}
 
       {reading.phase === 'ready' ? (
-        <p className="am-form__hint" data-executor-hint={value === null ? 'default' : 'chosen'}>
-          {value === null
-            ? 'Без выбора прогон идёт на исполнителе по назначению стенда.'
-            : 'Прогон пойдёт только на выбранном исполнителе. Если он не сможет выполнить прогон, другой исполнитель не подставляется.'}
-          {choices.length === 0 ? ' Подключений для выбора пока нет.' : ''}
+        <p
+          className="am-form__hint"
+          data-executor-hint={lockedBy !== undefined ? 'preset' : value === null ? 'default' : 'chosen'}
+        >
+          {lockedBy !== undefined
+            ? lockedBy
+            : value === null
+              ? 'Без выбора прогон идёт на исполнителе по назначению стенда.'
+              : 'Прогон пойдёт только на выбранном исполнителе. Если он не сможет выполнить прогон, другой исполнитель не подставляется.'}
+          {lockedBy === undefined && choices.length === 0 ? ' Подключений для выбора пока нет.' : ''}
         </p>
       ) : null}
     </div>

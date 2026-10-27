@@ -23,6 +23,7 @@ from auditmanager.shared.errors import ErrorCode, screen_details
 
 __all__ = [
     "RunExecutorView",
+    "RunPresetView",
     "RunStatusView",
     "StageStateView",
     "run_status_body",
@@ -48,6 +49,15 @@ class RunExecutorView:
     connection_id: str
     display_name: str
     pin_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class RunPresetView:
+    """Exactly the frozen ``RunPreset`` (`ANALYSIS-PRESETS-01`): the preset revision a run used."""
+
+    preset_id: str
+    revision_no: int
+    name: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,6 +107,9 @@ class RunStatusView:
     #: `EXEC-PAR-START-01`. The executor the run froze at start; ``None`` for a run that froze
     #: none (the ``environment`` source), rendered only when present.
     executor: RunExecutorView | None = None
+    #: `ANALYSIS-PRESETS-01`. The preset revision the run was started with; ``None`` for a run
+    #: started without one, rendered only when present.
+    preset: RunPresetView | None = None
 
 
 def stage_state_body(view: StageStateView) -> dict[str, Any]:
@@ -182,5 +195,11 @@ def run_status_body(view: RunStatusView) -> dict[str, Any]:
             "connection_id": view.executor.connection_id,
             "display_name": view.executor.display_name,
             "pin_id": view.executor.pin_id,
+        }
+    if view.preset is not None:
+        body["preset"] = {
+            "preset_id": view.preset.preset_id,
+            "revision_no": view.preset.revision_no,
+            "name": view.preset.name,
         }
     return body

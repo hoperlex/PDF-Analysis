@@ -831,7 +831,7 @@ class SeamRunAdapter:
 
     def start_run(
         self, *, version_uid: str, provider_mode: str | None, idempotency_key: str,
-        executor_connection_id: str | None = None,
+        executor_connection_id: str | None = None, preset_id: str | None = None,
     ) -> RunStatusView:
         raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="DocumentVersion")
 

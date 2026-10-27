@@ -9,7 +9,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.8.0 (OpenAPI 3.1.0)
- *   sha256 43f6232677c024d17d04e2370399928dcfcae53ddf3f8995893aada88b2ff7df
+ *   sha256 b215912031f940b4cb20da7a80ad66b6ff2deec4274cba6cf2e0c72a29489be3
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -24,6 +24,8 @@ import type {
   ApproveRegistrationResult,
   ApproveSheetPairingInput,
   ApproveSheetPairingResult,
+  ArchiveAnalysisPresetInput,
+  ArchiveAnalysisPresetResult,
   ArchiveExecutorConnectionInput,
   ArchiveExecutorConnectionResult,
   ArchiveUserInput,
@@ -42,6 +44,8 @@ import type {
   CompareDocumentVersionsResult,
   CorrectVersionClassificationInput,
   CorrectVersionClassificationResult,
+  CreateAnalysisPresetInput,
+  CreateAnalysisPresetResult,
   CreateAssignmentInput,
   CreateAssignmentResult,
   CreateExecutorConnectionInput,
@@ -110,6 +114,8 @@ import type {
   IssueRunnerTokenResult,
   IssueTokenInput,
   IssueTokenResult,
+  ListAnalysisPresetsInput,
+  ListAnalysisPresetsResult,
   ListAnalysisProfilesInput,
   ListAnalysisProfilesResult,
   ListAssignmentsInput,
@@ -180,6 +186,8 @@ import type {
   ResetUserPasswordResult,
   RestoreUserInput,
   RestoreUserResult,
+  ReviseAnalysisPresetInput,
+  ReviseAnalysisPresetResult,
   ReviseExecutorConnectionInput,
   ReviseExecutorConnectionResult,
   RevokeRunnerTokenInput,
@@ -269,6 +277,18 @@ export function approveSheetPairing(
   options?: RequestOptions,
 ): Promise<ApiResponse<ApproveSheetPairingResult>> {
   return request<ApproveSheetPairingResult>(OPERATIONS.approveSheetPairing, input, options);
+}
+
+/**
+ * Archive an analysis preset.
+ *
+ * `POST /analysis/presets/{preset_id}/archive` - a write; carries a required Idempotency-Key.
+ */
+export function archiveAnalysisPreset(
+  input: ArchiveAnalysisPresetInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ArchiveAnalysisPresetResult>> {
+  return request<ArchiveAnalysisPresetResult>(OPERATIONS.archiveAnalysisPreset, input, options);
 }
 
 /**
@@ -377,6 +397,18 @@ export function correctVersionClassification(
   options?: RequestOptions,
 ): Promise<ApiResponse<CorrectVersionClassificationResult>> {
   return request<CorrectVersionClassificationResult>(OPERATIONS.correctVersionClassification, input, options);
+}
+
+/**
+ * Save an analysis preset.
+ *
+ * `POST /analysis/presets` - a write; carries a required Idempotency-Key.
+ */
+export function createAnalysisPreset(
+  input: CreateAnalysisPresetInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CreateAnalysisPresetResult>> {
+  return request<CreateAnalysisPresetResult>(OPERATIONS.createAnalysisPreset, input, options);
 }
 
 /**
@@ -785,6 +817,18 @@ export function issueToken(
   options?: RequestOptions,
 ): Promise<ApiResponse<IssueTokenResult>> {
   return request<IssueTokenResult>(OPERATIONS.issueToken, input, options);
+}
+
+/**
+ * List the analysis presets.
+ *
+ * `GET /analysis/presets`.
+ */
+export function listAnalysisPresets(
+  input: ListAnalysisPresetsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListAnalysisPresetsResult>> {
+  return request<ListAnalysisPresetsResult>(OPERATIONS.listAnalysisPresets, input, options);
 }
 
 /**
@@ -1208,6 +1252,18 @@ export function restoreUser(
 }
 
 /**
+ * Revise an analysis preset.
+ *
+ * `POST /analysis/presets/{preset_id}/revisions` - a write; carries a required Idempotency-Key.
+ */
+export function reviseAnalysisPreset(
+  input: ReviseAnalysisPresetInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ReviseAnalysisPresetResult>> {
+  return request<ReviseAnalysisPresetResult>(OPERATIONS.reviseAnalysisPreset, input, options);
+}
+
+/**
  * Revise Executor Connection
  *
  * `POST /executor-connections/{connection_id}/revisions` - a write; carries a required Idempotency-Key.
@@ -1527,6 +1583,7 @@ export const apiClient = {
   appendDecision,
   approveRegistration,
   approveSheetPairing,
+  archiveAnalysisPreset,
   archiveExecutorConnection,
   archiveUser,
   cancelRun,
@@ -1536,6 +1593,7 @@ export const apiClient = {
   classifyDocumentVersion,
   compareDocumentVersions,
   correctVersionClassification,
+  createAnalysisPreset,
   createAssignment,
   createExecutorConnection,
   createProject,
@@ -1570,6 +1628,7 @@ export const apiClient = {
   getVersionSectionReview,
   issueRunnerToken,
   issueToken,
+  listAnalysisPresets,
   listAnalysisProfiles,
   listAssignments,
   listDecisionHistory,
@@ -1605,6 +1664,7 @@ export const apiClient = {
   requestExecutorProbe,
   resetUserPassword,
   restoreUser,
+  reviseAnalysisPreset,
   reviseExecutorConnection,
   revokeRunnerToken,
   searchNorms,

@@ -566,7 +566,8 @@ class TestN1ComponentReferenceResolution:
         # `COMPARE-PERSISTED-SUMMARY-01` adds three: approving and withdrawing a sheet pairing and
         # asking for the summary address the comparison's source version through its document and
         # project.
-        assert len(report) == 77, report
+        # `ANALYSIS-PRESETS-01` adds two: revising and archiving a preset address it by identity.
+        assert len(report) == 79, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

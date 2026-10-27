@@ -355,6 +355,9 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "listExecutorConnections": _ANY_ROLE,
         "getExecutorConnection": _ANY_ROLE,
         "listExecutorRoutes": _ANY_ROLE,
+        # `ANALYSIS-PRESETS-01`. Every role that can start a run (and the administrator who sets presets)
+        # reads the list.
+        "listAnalysisPresets": _ANY_ROLE,
         "getRunStatus": _ANY_ROLE,
         "getArV3BetaGroup": _ANY_ROLE,
         "getArV3BetaGroupReview": _ANY_ROLE,
@@ -481,6 +484,11 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "generateExecutorSshKey": _ADMIN,
         "requestExecutorProbe": _ADMIN,
         "setExecutorRoute": _ADMIN,
+        # `ANALYSIS-PRESETS-01` (R-146av). A preset is executor configuration, so who may change the
+        # route may change a preset; the commands re-read the role set in their own transaction.
+        "createAnalysisPreset": _ADMIN,
+        "reviseAnalysisPreset": _ADMIN,
+        "archiveAnalysisPreset": _ADMIN,
         # `EXEC-PULL-01`. A runner token is issued and revoked by an administrator; the token's
         # value is shown once and no operation returns it again.
         "issueRunnerToken": _ADMIN,

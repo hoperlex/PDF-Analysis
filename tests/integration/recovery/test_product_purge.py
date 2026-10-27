@@ -66,7 +66,10 @@ def test_the_declaration_partitions_exactly_the_tables_schema_coverage_declares(
     # `0035_comparison_records`: the sheet-link history and the summaries are product data
     # (PRODUCT 32 -> 34).
     assert {"comparison_sheet_link", "comparison_summary"} <= tool.PRODUCT_TABLES
-    assert len(tool.PRODUCT_TABLES) == 34 and len(tool.KEEP_TABLES) == 29 and len(tool.MIXED_TABLES) == 3
+    # `0037_analysis_presets`: the revisions of a named preset are executor configuration, like the
+    # connections they name (KEEP 29 -> 30); a run (PRODUCT) references them, never the reverse.
+    assert "analysis_preset_revision" in tool.KEEP_TABLES and "analysis_preset_revision" not in tool.PRODUCT_TABLES
+    assert len(tool.PRODUCT_TABLES) == 34 and len(tool.KEEP_TABLES) == 30 and len(tool.MIXED_TABLES) == 3
     assert tool.PRODUCT_TABLES | tool.KEEP_TABLES | tool.MIXED_TABLES == TABLES
     # the corpus half of KEEP is schema_coverage's own list, not a copy of it
     assert tool.KEEP_NORM_TABLES is EXEMPT_FROM_FINGERPRINT

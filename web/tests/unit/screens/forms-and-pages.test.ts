@@ -97,9 +97,11 @@ describe('the start-run control', () => {
     const markup = control();
     expect(markup).toContain('>Запустить прогон</button>');
     expect(markup.match(/<button\b/g)).toHaveLength(1);
-    // `EXEC-PAR-WEB-01`: the one select is the executor's. It names no provider mode, and nothing
-    // else on the control is a choice.
-    expect(markup.match(/<select\b/g)).toHaveLength(1);
+    // `EXEC-PAR-WEB-01`: the executor's select. `ANALYSIS-PRESETS-01`: and the preset's, which fills it.
+    // Neither names a provider mode, and nothing else on the control is a choice.
+    expect(markup.match(/<select\b/g)).toHaveLength(2);
+    expect(markup).toContain('data-preset-select');
+    expect(markup).toContain('>Пресет</label>');
     expect(markup).toContain('data-executor-select');
     expect(markup).toContain('>Исполнитель</label>');
     for (const mode of ['live', 'recorded', 'proxy']) {

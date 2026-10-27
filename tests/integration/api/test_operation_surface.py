@@ -115,6 +115,8 @@ def test_every_declared_operation_is_reachable(
         "blob_id": "blob_01M2545JSD15ETSNNV904X991W",
         # `COMPARE-PERSISTED-SUMMARY-01`: an approved sheet link.
         "sheet_link_id": "sln_01M2545JSD15ETSNNV904X991W",
+        # `ANALYSIS-PRESETS-01`: a preset.
+        "preset_id": "evt_01M2545JSD15ETSNNV904X991W",
     }
     for operation_id, method, template in sorted(declared_operations(openapi_document)):
         path = template

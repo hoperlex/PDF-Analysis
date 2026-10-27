@@ -66,7 +66,7 @@ places in this package exist only because of that, and each says so at its own s
 | `routers/idempotency.py` | the required `Idempotency-Key`, as a declared parameter |
 | `routers/multipart.py` | the transport body cap, and the four rules a closed model cannot state |
 | `routers/ports.py` | the nine narrow ports a composition root satisfies |
-| `routers/{projects,documents,runs,findings,decisions,export,blocks,dashboard,auth,me,registrations,users,releases,execution,norms,sections,comparison,analysis_profiles,dispatch,optimisation,specification_prices,optimisation_proposals,section_specification,executors,runner}.py` | the 107 operations |
+| `routers/{projects,documents,runs,findings,decisions,export,blocks,dashboard,auth,me,registrations,users,releases,execution,norms,sections,comparison,analysis_profiles,dispatch,optimisation,specification_prices,optimisation_proposals,section_specification,executors,runner}.py` | the 111 operations |
 | `schemas/models.py` | the 286 `components.schemas`, as Pydantic models |
 | `schemas/{common,projects,documents,runs,findings,decisions}.py` | the view types the ports return, and the functions that render their bytes |
 | `schemas/content.py` | `W55A-SEAL-01`: one parsed `Range` and the `StreamedContent` a content port returns |
@@ -224,7 +224,7 @@ the storage port, not a shortcut around it.
 
 `tests/integration/api` — real PostgreSQL, real MinIO, never a skip.
 
-The 107-operation assertion compares the router's `(operationId, METHOD, path)` set
+The 111-operation assertion compares the router's `(operationId, METHOD, path)` set
 against the frozen document itself, never against a list in the test. `build_router` also
 refuses a duplicate `operationId` at construction — FastAPI logs a warning and serves a
 document declaring the id twice, which leaves `len(routes) == 12` passing while one frozen

@@ -186,6 +186,13 @@ P02_TABLES = (
     # `ar_v3_run_group`.
     "comparison_sheet_link",
     "comparison_summary",
+    # `0037_analysis_presets` (`ANALYSIS-PRESETS-01`). Named executor selections for a run start,
+    # append-only (archive is a new revision). Written only by the preset commands (create,
+    # revise, archive; administrator role); the journey starts runs by hand and never creates a
+    # preset (nothing under this directory names those operations), so the count is expected
+    # unchanged across a replay -- counted rather than skipped, the same claim as for
+    # `ar_v3_run_group`.
+    "analysis_preset_revision",
 )
 
 

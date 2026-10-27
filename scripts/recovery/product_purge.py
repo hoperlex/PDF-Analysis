@@ -94,9 +94,12 @@ KEEP_NORM_TABLES = EXEMPT_FROM_FINGERPRINT
 #: `EXEC-PULL-01`: the runner tokens are configuration too (the stand's credentials for its
 #: runners, not product data); the tasks are the opposite -- they carry the stand's documents and
 #: the model's answers, and reference runs, Attempts and calls -- so ``executor_task`` is PRODUCT.
+#: `ANALYSIS-PRESETS-01` (`0037_analysis_presets`): a preset is a named choice of one of those
+#: connections, kept with them. ``audit_run.preset_revision_id`` (PRODUCT) references it, never the
+#: other way round.
 KEEP_EXECUTOR_TABLES = frozenset((
-    "executor_connection", "executor_connection_revision", "executor_probe",
-    "executor_route_event", "executor_runner_token", "executor_secret",
+    "analysis_preset_revision", "executor_connection", "executor_connection_revision",
+    "executor_probe", "executor_route_event", "executor_runner_token", "executor_secret",
 ))
 KEEP_TABLES = (
     KEEP_ACCOUNT_TABLES | KEEP_RELEASE_TABLES | KEEP_LOOKUP_TABLES | KEEP_NORM_TABLES
@@ -144,6 +147,8 @@ KEEP_COMMAND_TYPES = frozenset((
     "set_executor_secret",
     # `EXEC-PULL-01`: a runner token is issued and revoked as configuration.
     "issue_runner_token", "revoke_runner_token",
+    # `ANALYSIS-PRESETS-01`: a preset is administered and kept like the connections it names.
+    "archive_analysis_preset", "create_analysis_preset", "revise_analysis_preset",
 ))
 PRODUCT_COMMAND_TYPES = frozenset((
     "append_decision", "approve_sheet_pairing", "cancel_audit_run", "carry_over_decision",

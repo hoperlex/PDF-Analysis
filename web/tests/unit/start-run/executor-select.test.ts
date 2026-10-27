@@ -34,17 +34,24 @@ function seeded(cases = ALL_CASES): Client {
   return client;
 }
 
-/** The `<option>` elements of the markup, as `[attributes, text]`. */
+/**
+ * The `<option>` elements of the **executor's** select, as `[attributes, text]`. `ANALYSIS-PRESETS-01`
+ * put the preset's select before it on the control; these tests are about the executor's, so the
+ * slice starts at its marker and ends at its `</select>`.
+ */
 function options(markup: string): Array<readonly [string, string]> {
-  return [...markup.matchAll(/<option\b([^>]*)>([^<]*)<\/option>/g)].map((m) => [m[1] ?? '', m[2] ?? ''] as const);
+  const start = markup.indexOf('data-executor-select');
+  const slice = start < 0 ? '' : markup.slice(start, markup.indexOf('</select>', start));
+  return [...slice.matchAll(/<option\b([^>]*)>([^<]*)<\/option>/g)].map((m) => [m[1] ?? '', m[2] ?? ''] as const);
 }
 
 const optionFor = (markup: string, id: string) => options(markup).find(([attrs]) => attrs.includes(`value="${id}"`));
 
 describe('the selector is on the control', () => {
-  it('draws one labelled select whose first option is the default', () => {
+  it('draws the executor’s labelled select, with the preset’s before it, and its first option is the default', () => {
     const markup = control(seeded());
-    expect(markup.match(/<select\b/g)).toHaveLength(1);
+    expect(markup.match(/<select\b/g)).toHaveLength(2);
+    expect(markup.indexOf('data-preset-select')).toBeLessThan(markup.indexOf('data-executor-select'));
     expect(markup).toMatch(/<label for="([^"]+)">Исполнитель<\/label><select id="\1"/);
     const first = options(markup)[0];
     expect(first?.[1]).toBe(DEFAULT_EXECUTOR_LABEL);

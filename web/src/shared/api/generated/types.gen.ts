@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.8.0 (OpenAPI 3.1.0)
- *   sha256 43f6232677c024d17d04e2370399928dcfcae53ddf3f8995893aada88b2ff7df
+ *   sha256 b215912031f940b4cb20da7a80ad66b6ff2deec4274cba6cf2e0c72a29489be3
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,12 +17,15 @@
 export const CONTRACT_VERSION = '1.8.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '43f6232677c024d17d04e2370399928dcfcae53ddf3f8995893aada88b2ff7df';
+export const CONTRACT_DIGEST = 'b215912031f940b4cb20da7a80ad66b6ff2deec4274cba6cf2e0c72a29489be3';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
   'Account',
   'AccountPage',
+  'AnalysisPreset',
+  'AnalysisPresetList',
+  'AnalysisPresetState',
   'AnalysisProfileId',
   'AnalysisProfileList',
   'AnalysisProfileListItem',
@@ -204,6 +207,8 @@ export const SCHEMA_NAMES = [
   'PortalCrop',
   'PortalGeometryState',
   'PortalRecognisedText',
+  'PresetId',
+  'PresetRevisionId',
   'PriceListAmbiguousColumn',
   'PriceListColumn',
   'PriceListCurrencySource',
@@ -257,6 +262,7 @@ export const SCHEMA_NAMES = [
   'RunExecutor',
   'RunId',
   'RunNormReferences',
+  'RunPreset',
   'RunState',
   'RunStateCount',
   'RunStatus',
@@ -264,6 +270,7 @@ export const SCHEMA_NAMES = [
   'RunnerImage',
   'RunnerImageBlobId',
   'RunnerTokenMetadata',
+  'SaveAnalysisPresetRequest',
   'SectionDocumentCount',
   'SectionReview',
   'SectionReviewOption',
@@ -364,6 +371,33 @@ export type AccountPage = {
   items: Array<Account>;
   page: PageInfo;
 };
+
+/** The current revision of one preset. `preset_id` is the preset for its whole life; `revision_id` and `revision_no` name this revision. The name is a label, never an identity. */
+export type AnalysisPreset = {
+  created_at: string;
+  executor_connection_id: ExecutorConnectionId;
+  name: string;
+  preset_id: PresetId;
+  revised_at: string;
+  revised_by: UserUid;
+  revision_id: PresetRevisionId;
+  revision_no: number;
+  state: AnalysisPresetState;
+};
+
+/** Every preset by its current revision: active ones first by name, then archived ones. */
+export type AnalysisPresetList = {
+  items: Array<AnalysisPreset>;
+};
+
+/** `active` can be chosen at run start; `archived` is retired for good. */
+export const ANALYSIS_PRESET_STATE_VALUES = [
+  'active',
+  'archived',
+] as const;
+
+/** AnalysisPresetState - the closed value set above. */
+export type AnalysisPresetState = (typeof ANALYSIS_PRESET_STATE_VALUES)[number];
 
 export type AnalysisProfileId = string;
 
@@ -2205,6 +2239,16 @@ export type PortalRecognisedText = {
   text: string;
 };
 
+export type PresetId = string;
+
+/** The contract pattern for `PresetId`. Anchored; use with `new RegExp()`. */
+export const PRESET_ID_PATTERN = "^evt_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type PresetRevisionId = string;
+
+/** The contract pattern for `PresetRevisionId`. Anchored; use with `new RegExp()`. */
+export const PRESET_REVISION_ID_PATTERN = "^evt_[0-9A-HJKMNP-TV-Z]{26}$";
+
 /** An optional field two or more columns could be: none of them was read. */
 export type PriceListAmbiguousColumn = {
   field: PriceListField;
@@ -2737,6 +2781,13 @@ export type RunNormReferences = {
   version_uid: VersionUid;
 };
 
+/** ANALYSIS-PRESETS-01: the preset revision a run was started with: the preset, the number of the revision and the name it had then (a later rename does not change it). */
+export type RunPreset = {
+  name: string;
+  preset_id: PresetId;
+  revision_no: number;
+};
+
 /** The audit_run states of contracts/domain/v1/state-machines.json. The success terminal is `published`; there is no `succeeded` run state. `created` is transient and rarely observed by a client. `cancelled` is declared by the contract and is unreachable in PC-01, which has no cancel command. */
 export const RUN_STATE_VALUES = [
   'created',
@@ -2778,6 +2829,8 @@ export type RunStatus = {
   norm_retrieval_set_id?: NormRetrievalSetId;
   /** W55A-SEAL-01 (R-113, CD-6): the norms snapshot this run pinned when it was created -- the current snapshot at that moment. Absent while no snapshot is current, which until W57 is the expected state of every run. */
   norms_snapshot_id?: NormsSnapshotId;
+  /** ANALYSIS-PRESETS-01: the preset revision the run was started with, read-only: the preset, the revision number and the name it had then. Null (and omitted) for a run started without a preset, which includes every re-audit. */
+  preset?: RunPreset | null;
   project_uid: ProjectUid;
   prompt_bundle_id?: PromptBundleId;
   provider_mode: ProviderMode;
@@ -2833,6 +2886,12 @@ export type RunnerTokenMetadata = {
   revoked_by?: UserUid;
   token_id: ExecutorRunnerTokenId;
   token_prefix: string;
+};
+
+/** The full settings of a preset, for a new preset and for a new revision alike (never a patch). */
+export type SaveAnalysisPresetRequest = {
+  executor_connection_id: ExecutorConnectionId;
+  name: string;
 };
 
 /** How many published documents carry one project section (`R-40`, `D-56`). `section` absent means this row is the unclassified bucket, not a sixteenth section. Every one of the fifteen current codes is present even at `document_count: 0`. */
@@ -3340,6 +3399,8 @@ export type StartArV3BetaGroupRequest = {
 export type StartRunRequest = {
   /** EXEC-PAR-START-01: the executor connection this run must be on. Absent: the run follows the global route exactly as before. Present: that connection's current revision is frozen when this release serves it, its current key has a passing probe and it is not archived; otherwise the start is refused and no run exists. Never replaced by the route's standby or by another connection. Part of the payload the idempotency key is compared by. */
   executor_connection_id?: ExecutorConnectionId;
+  /** ANALYSIS-PRESETS-01: a saved preset (listAnalysisPresets) to start the run with. Absent: the run is what it was. Present: the preset's current revision is read in the start's transaction and its executor connection is applied exactly as if executor_connection_id had named it (same usability test, same refusals, no fallback to the standby or to another connection), and the run records the preset revision. Exclusive with executor_connection_id. Part of the payload the idempotency key is compared by, as the preset and not as the connection it resolved to. */
+  preset_id?: PresetId;
   /** Defaults to the server's configured mode. A client asking for `live` is asking to spend money against the OD-03 ceiling. */
   provider_mode?: ProviderMode;
   version_uid: VersionUid;
