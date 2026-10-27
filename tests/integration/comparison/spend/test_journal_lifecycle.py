@@ -275,6 +275,30 @@ def test_a_lease_lost_between_the_two_commits_sends_nothing(
     assert queue.work_state(item.work_id) == "spend_unknown"
 
 
+def test_a_lease_lost_between_the_two_commits_sends_nothing_even_when_no_settler_ended_the_row(
+    sessions: Any, queue: Any, journal: Any, connection: tuple[str, str], h: Any, clean_day: None,
+) -> None:
+    """The fence of the send is the attempt's authority, not the row's state: here the reclaim ran with no settler,
+    so the row is still ``prepared`` and only ``require_current`` stands between the lost lease and the provider."""
+    from auditmanager.comparison.public import ComparisonModelCaller
+
+    item = queue.claimed()
+
+    class Racing(ComparisonModelCaller):
+        def _prepare(self, *args: Any, **kwargs: Any) -> str:
+            call_id = super()._prepare(*args, **kwargs)
+            queue.expire_and_reclaim(item, settlers=())
+            return call_id
+
+    adapter = h.ScriptedAdapter(reply=h.reply())
+    with pytest.raises(CallLost):
+        h.make_call(Racing(sessions), item, adapter, connection[1])
+    assert adapter.calls == 0
+    row = journal.rows(item.work_id)[0]
+    # Nothing was sent, and the wrapper knows it: the row is failed, not left open, and was never marked sent.
+    assert row["state"] == "failed" and row["error_code"] == "lease_lost" and not row["has_sent"]
+
+
 def test_a_reply_that_arrives_after_the_reclaim_settled_the_row_is_lost_not_published(
     caller: Any, queue: Any, journal: Any, connection: tuple[str, str], h: Any, clean_day: None,
 ) -> None:

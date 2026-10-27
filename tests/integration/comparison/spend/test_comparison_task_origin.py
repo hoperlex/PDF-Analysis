@@ -129,6 +129,35 @@ def test_the_task_of_a_superseded_attempt_is_not_served_but_the_current_attempts
     assert _state(sessions, old_task) == "open"
 
 
+def test_a_task_whose_attempt_is_running_but_is_not_the_items_current_attempt_is_not_served(
+    sessions: Any, queue: Any, stand: Any,
+) -> None:
+    """The Run rule (``test_a_task_that_is_not_the_current_attempts_is_not_served``): the attempt must be the one the
+    item names as current. A second attempt is written by hand here, because the queue never leaves two running."""
+    from auditmanager.shared.identity import ComparisonWorkAttemptId
+
+    connection, token = stand
+    item = queue.claimed()
+    task_id = _task(sessions, connection, item.attempt_id)
+    with sessions() as session:
+        newer = str(ComparisonWorkAttemptId.new())
+        session.execute(text(
+            "INSERT INTO comparison_work_attempt (comparison_work_attempt_id, comparison_work_id, attempt_no, "
+            "execution_token) VALUES (:a, :w, 2, :t)"), {"a": newer, "w": item.work_id, "t": f"tok-{newer}"})
+        session.execute(text(
+            "UPDATE comparison_work SET current_work_attempt_id = :a WHERE comparison_work_id = :w"),
+            {"a": newer, "w": item.work_id})
+        session.commit()
+        state = session.execute(text(
+            "SELECT state FROM comparison_work_attempt WHERE comparison_work_attempt_id = :a"),
+            {"a": item.attempt_id}).scalar_one()
+    assert state == "running", "the first attempt is still running: only 'current' can say no"
+    with sessions() as session:
+        assert REPOSITORY.claim_next(session, connection_id=connection[0], token_id=token, lease_seconds=30) is None
+        session.rollback()
+    assert _state(sessions, task_id) == "open"
+
+
 def test_a_claim_is_no_longer_live_once_its_attempt_has_ended(
     sessions: Any, queue: Any, stand: Any,
 ) -> None:
