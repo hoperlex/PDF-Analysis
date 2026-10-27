@@ -385,6 +385,28 @@ class TestAnAbortedUploadLeavesNothing:
         assert open_uploads() == []
         assert bucket_keys() == []
 
+    def test_an_abort_touches_only_its_own_token(
+        self, store: S3BlobStore, staged: Any, bucket_keys: Any, open_uploads: Any
+    ) -> None:
+        """The store narrows the upload listing by prefix already; the exact-key filter behind it
+        (tokens are fixed-length, so no sibling key exists on a real store) is proved by the
+        offline stand-in, ``test_an_exact_key_is_the_only_upload_the_token_names``."""
+        mine, _ = staged(FIRST)
+        other, _ = staged(SECOND)
+        plain = store.stage_temporary(
+            b"plainly staged bytes",
+            declared_sha256=sha256_of(b"plainly staged bytes"),
+            declared_size=len(b"plainly staged bytes"),
+            role=ROLE_SOURCE_DOCUMENT,
+            media_type=MEDIA,
+        )
+
+        assert store.abort_multipart(mine) is True
+
+        assert [key for key, _ in open_uploads()] == [temporary_key(other)]
+        assert bucket_keys() == [temporary_key(plain.upload_token)]
+        store.discard_temporary(plain)
+
     def test_aborting_again_is_a_no_op(self, store: S3BlobStore, staged: Any) -> None:
         token, _ = staged(FIRST)
         assert store.abort_multipart(token) is True
