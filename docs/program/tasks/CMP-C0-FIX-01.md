@@ -145,7 +145,17 @@ Not applicable: the changes are corrections of reported defects on the unrelease
 merge restores the reported behaviour. No migration is involved.
 
 ## Handoff
-- changed files: (filled in by the last commit)
-- commands/results: (filled in by the last commit)
-- known limits: (filled in by the last commit)
-- integration notes: (filled in by the last commit)
+- changed files: `src/auditmanager/executors/pull.py`, `src/auditmanager/comparison/work/repository.py`,
+  `src/auditmanager/runs/v3_group.py`; tests `tests/unit/comparison/spend/test_wiring_and_pins.py` (xfail removed),
+  `tests/unit/comparison/work/test_reclaim_settlers_unit.py` (new), `tests/unit/executors/test_pull_comparison_origin.py`
+  (new), `tests/integration/comparison/work/test_lease_reclaim.py`, `tests/integration/comparison/spend/test_reclaim_spend_unknown.py`
+  (the one hunk outside the brief's list, report section 6 item 1), `tests/integration/documents/test_version_record_equality.py`,
+  `tests/integration/runs/test_v3_group_refuses_a_comparison_only_version.py` (new); this file and `docs/program/CMP-C0-FIX-01.md`
+- commands/results: unit (`tests/unit/comparison`, `tests/unit/executors`) 1244 passed; integration (comparison, documents,
+  ingest/comparison_pdf, db/test_ar_v3_run_group, executors) 806 passed, 16 skipped (sshd opt-ins); `tests/integration/runs` 948
+  passed; `tests/contract` minus the three `D-220` files 1307 passed, 19283 subtests; `git diff --check` clean; every guard
+  shown red under a quoted mutation (report section 5)
+- known limits: report section 6 (one test hunk outside the brief's list awaits ratification; `any(...)` stays in the
+  `spend_unknown` branch; no end-to-end test of `PullAdapter` against real rows with a comparison context; trailer names
+  Sonnet 4.6 as the brief says)
+- integration notes: report section 7; no wiring file is touched, nothing overlaps another lane
