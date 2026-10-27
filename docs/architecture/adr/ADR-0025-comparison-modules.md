@@ -531,3 +531,23 @@ Replace or amend this ADR when `CMP-MEASURE-01` records its figures (a dated add
 second worker slot or a service-level objective is wanted (`ADR-0024` section 5), when the storage boundary gains a delete of published
 blobs, when the owner widens the comparison to sections beyond those the plan names, or when a real client set shows that the
 human-confirmed cards disagree with the deterministic layer often enough to change decision 20.
+
+## Addendum 2026-10-27 — values from CMP-MEASURE-01A
+
+Source: `docs/program/compare/MEASURE-RENDER-01.md` (450 child jobs, none over the ceiling; the real set of four
+versions with pages up to 1682×1189 mm, the synthetic corpus, the realistic A1 from both producers). Changes to the
+values this ADR marked «revisable by CMP-MEASURE-01»:
+
+1. **Decision 8 (child ceilings).** Render, registration and tile children keep 768 MiB, CPU 300 s, wall 600 s. The
+   child that runs `pdfplumber` words and lines gets **1024 MiB** (the heaviest real extraction needs 704 MiB with
+   VmPeak 658–674 MiB). Any end without a result — `MemoryError`, a signal (PDFium aborts with SIGABRT/SIGTRAP below
+   its need) or a CPU stall — maps to a typed `RENDER_FAILED` on that item; one item is one page per child.
+2. **Decision 9 (caps and storage).** The working raster cap stays **40 Mpx**; registration dpi =
+   `min(200, floor(sqrt(40e6 / (w_in × h_in))))`. The whole tile pyramid is **not** stored (54–137 % of the 8 GiB
+   project cap for 1 200 pages): the worker stores preview and thumbnail per page (0.4–1.3 GB per 1 200 vector pages)
+   and may store tile levels 2 and up; levels 0 and 1 are rendered on request in a child process under the 768 MiB
+   ceiling, never inside the API process. The 8 GiB per-project cap stays.
+3. **Admission (decision 11, for CMP-INGEST-01).** The existing envelope (`src/auditmanager/ingest/envelope.py`,
+   `PAGE_ELEMENTS_MAX` = 400 000) would refuse the measured real set (one page has 536 426 elements). Comparison-only
+   admission uses a comparison envelope policy whose per-page element limit is set from this measurement (the
+   comparison path renders and extracts only in ceilinged children); the portal-bundle envelope is unchanged.
