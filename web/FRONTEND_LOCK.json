@@ -16,8 +16,8 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "1ab3103a35cb83e1710232454dd4dbf91dad63b573f12f6fb2a36512c3150817",
-    "content_commit": "51e94130",
+    "sha256": "5daf6416d4d4100f0a49ec2d834ca52a6139c2b29dc3c3cff68080983e2a1765",
+    "content_commit": "21058a2f",
     "content_commit_subject": "CMP-SEAL-C0 (ADR-0025): contract 1.9.0, the comparison modules sealed as stubs (nineteen operations), upload_kind, comparison_modules, runner image references; additive minor, 1.8.0 to 1.9.0",
     "dispatch_named_commit": "a3e83f39cfcb02f4ea5565e6f45f3f2b2f720e97",
     "commit_note": "CMP-SEAL-C0 adds nineteen operations under /projects/{project_uid}/comparison-uploads, /comparison-uploads, /projects/{project_uid}/documents/{document_uid}/comparison-version-orders, /versions/{version_uid}/page-profiles and /page-profiles, thirty schemas, the optional DocumentVersion.upload_kind, ProductVersion.comparison_modules and RunnerImage.crop_id, ClaimedExecutorTask.images up to eight and ClaimExecutorTaskRequest.max_images; every operation is a stub answering 503 dependency_unavailable until its lane wires it; contract 1.9.0 (115/130/351), migration 0038, no new error code. Earlier content: ANALYSIS-PRESETS-01 under 1.8.0 (98/111/321); COMPARE-PERSISTED-SUMMARY-01 under 1.7.0, moved to 1.8.0 by CONTRACT-1-8-0-01 under R-146ar.",
@@ -27,7 +27,7 @@
     "operations": 130,
     "component_schemas": 351,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "1ab3103a35cb83e1710232454dd4dbf91dad63b573f12f6fb2a36512c3150817",
+    "snapshot_sha256": "5daf6416d4d4100f0a49ec2d834ca52a6139c2b29dc3c3cff68080983e2a1765",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "557227f54936f423b90bb83e98628149ef365128aad8469b5ec86958673989ff",
-      "index.ts": "33442b442956a71c04544d355bf60f67e920e117d1966b818c5ff431df30a303",
-      "operations.gen.ts": "a587a4f6f94aad363fbfbf23cb0d75c7965fe9ca23a33b21dd726ca19b500a74",
-      "types.gen.ts": "6d1d9677e9d83b726d86769c7ef664fad379f52e9771dabef58e2fa8b9ece447"
+      "client.gen.ts": "30adcb24e2058073f238e801d1ca9099b203c752f8fe054380c44ff740903fc5",
+      "index.ts": "4f32f9b89d77961686a10666eadc8c250672e30df36ab012b8a992e4f614ab44",
+      "operations.gen.ts": "1add1a645a05f6e95f52ab1e9c2462182a6e96e1bf71195696b4ec64c4ad814e",
+      "types.gen.ts": "d565d342e0d6605e07936729551e68cb494b01f4fd8e5fd8269c1f9882156347"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.9.0 (OpenAPI 3.1.0)
- *   sha256 1ab3103a35cb83e1710232454dd4dbf91dad63b573f12f6fb2a36512c3150817
+ *   sha256 5daf6416d4d4100f0a49ec2d834ca52a6139c2b29dc3c3cff68080983e2a1765
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -755,7 +755,7 @@ export type CompleteComparisonUploadFileResult = ComparisonUploadFile;
 /**
  * Confirm the membership and order of one proposed set.
  *
- * The user's final word on one set: its files in their order (the array order is the version order), their labels, and the designation, stage, section and existing document it belongs to. The stage and section are a proposal an expert confirms through this act; they are never inferred. A file listed twice, a file of another set or a missing file is `422 validation_failed` (`comparison_set_members`); a set that is not in review is `409 conflict` (`comparison_set_state`). A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-INGEST-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_uploads`) and nothing is read or written.
+ * The user's final word on one set: its files in their order (the array order is the version order), their labels, and the designation, stage, section and existing document it belongs to. The stage and section are a proposal an expert confirms through this act; they are never inferred. A file listed twice, a file of another set or a missing file is `422 validation_failed` (`comparison_set_members`); a set that is not awaiting confirmation is `409 conflict` (`comparison_set_state`). A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-INGEST-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_uploads`) and nothing is read or written.
  */
 export type ConfirmComparisonUploadSetInput = {
   /** Path parameters, substituted into `/comparison-uploads/{comparison_upload_id}/sets/{comparison_upload_set_id}/confirmation`. */
