@@ -319,7 +319,14 @@ All with `BS=$(ls -d /root/projects/PDF-Analysis/.venv/bootstrap/lib/python3*/si
 
 `git diff --name-only 93bc5037..HEAD`, filtered for `contracts/`, `db/`, `web/`, `infra/`, `scripts/`, `bootstrap/`, `api/`, `findings/`, the AR v3 modules, the nine other packages (`ps pos kj km ov vk pt gp pb`) and their recordings, `fixtures/recorded/text_analysis/`, `DEBT_REGISTER.md`, `CURRENT_STATE.md` and the root dependency files, prints nothing (0 lines). Every changed file is in the allowed paths of the task file.
 
-(The rows of the last checks — `tests/contract/program` and the two prose tests, the governance one-liner, `git diff --check`, `git status --short` — are in the lane's final message; they run on the committed tree.)
+Added 6 files (the four new test files, the report and the task file), modified 24, renamed 5 (the recordings), deleted none.
+
+| Check (on the committed tree) | Result |
+| --- | --- |
+| `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py` | 105 passed |
+| the governance one-liner on `docs/program/tasks/SECTION-JUDGE-FIXES-01.md` | `[]` |
+| `git diff --check` | clean |
+| `git status --short` | empty |
 
 ## Appendix A — the reproduction against the base
 
