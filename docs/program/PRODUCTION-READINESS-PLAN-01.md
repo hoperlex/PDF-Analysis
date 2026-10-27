@@ -241,6 +241,9 @@ Rules: no lane starts in a wave that names its hotspot for another lane; no wave
 | A-6 | The MinIO in the stack is built from source with an archived upstream and its volume is not inventoried; no scan covers it. | `R-146ae` (not the recommended option) | a published advisory against MinIO, any loss of objects, or a client asking for a storage statement |
 | A-7 | The status `reviewed` on the 14 section profiles carries no human review (neither an expert nor the owner); it is the outcome of a lane's written decisions on the open questions of each record and a judge's read. | `R-146ag` (not the recommended option) | the first section whose real-text output a human rejects, any client-facing statement that calls these profiles verified, or the owner naming experts (`OD-18`) |
 | A-8 | One person can raise and restore the stand; when that person is unavailable nobody can. | `R-146am` | a second person being available, or the first period of real use ending with an incident that the single operator could not close |
+| A-9 | The runner channel hands the complete prompt to the operator's own Claude Code session or unattended agent, a recipient `A-2` does not name. | `R-146az` | the first outside user, or a provider term that forbids it |
+| A-10 | During the beta no screen says that a profile or a citation was not reviewed by a human (`A-7` stays true). | `R-146ba` | the label switch is restored by one edit; or the first expert review |
+| A-11 | АР v3 is activated on decisions taken by the AI integrator under the owner's delegation; the reviewer attestation says so; no subject-matter expert took part. | `R-146ba` | a qualified expert's review of C01–C22 and the six maps |
 
 Not accepted and therefore not a risk register entry: `R-146n` item 4 (no restriction of routing or substitution); it is the cause of `A-2`.
 
