@@ -156,7 +156,18 @@ The module flag (`comparison/modules.py`) gates the screens; the operations are 
 the sealed stubs; no migration is involved.
 
 ## Handoff
-- changed files: (written at the end of the lane)
-- commands/results: (written at the end of the lane)
-- known limits: (written at the end of the lane)
-- integration notes: (written at the end of the lane)
+- changed files: `src/auditmanager/ingest/comparison_pdf/**` (new: `limits`, `names`, `envelope`, `child`, `stamp_reader`,
+  `stamp`, `reading`, `proposal`, `repository`, `service`, `orders`, `views`, `public`), `src/auditmanager/documents/`
+  (`README.md`, `__init__`, `models`, `public`, `repository`), `src/auditmanager/runs/commands.py`, the wiring hunks
+  (`src/auditmanager/bootstrap/{adapters,composition}.py`, `scripts/recovery/grant_classification.py`,
+  `tests/integration/composition/{test_router_answers,test_an_absent_parent_is_not_an_empty_page,test_comparison_stub_operations}.py`),
+  `tests/unit/ingest/comparison_pdf/` (3 files), `tests/integration/ingest/comparison_pdf/` (10 files and a conftest), this
+  file and `docs/program/CMP-INGEST-01.md`
+- commands/results: unit 114 passed; integration 148 passed (262 together); `tests/contract` minus the three `D-220` files
+  1307 passed, 19283 subtests; `tests/integration/composition` 1909 passed, 3 skipped; portal-path ingest and documents 780
+  passed and 1 failed that is red on the base too; runs subset 214 passed; recovery and journey guards 116 passed;
+  `git diff --check` clean; 52 mutations shown red and restored (report section 5)
+- known limits: report section 6 (the reading is inside the completion request; a content-refused file leaves its published
+  blob; a wrong declaration blocks the batch until INGEST-02's cancel; unregistered reason strings; the group start refuses by
+  manifest role; one pre-existing red in `tests/integration/documents`)
+- integration notes: report sections 3 and 7. The API INGEST-02 builds on is `auditmanager.ingest.comparison_pdf.public`
