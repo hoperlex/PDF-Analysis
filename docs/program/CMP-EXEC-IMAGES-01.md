@@ -145,10 +145,13 @@ Existing tests edited (all mechanical): the three stand-in ports `_Port.claim_ta
 `max_images=None`, because the router now passes the keyword; `FakeStore.failed` in `test_pull_adapter.py` gained an
 optional reason. No assertion was weakened or removed.
 
-One flake seen once, in a test that sends no image: `test_mcp_bridge.py::test_the_token_never_appears_in_results_stdout_or_stderr`
-saw the bridge exit with `-6` (an abort at interpreter shutdown, a daemon thread writing to stdout) in one of six full-file
-runs of the runner directory; the same test passed alone five times on this tree and five times on the base tests, and
-in every other run of the file.
+One load-sensitive flake, in a test that sends no image and is not caused by this lane:
+`test_mcp_bridge.py::test_the_token_never_appears_in_results_stdout_or_stderr` saw the bridge exit with `-6` (an abort at
+interpreter shutdown while a daemon thread writes to stderr: the test revokes the token, so the claim keeper logs a refused
+extension as the process ends) twice: once in a run of the file and once in the last confirmation run of 1,049 tests on the final
+tree (`1 failed, 1048 passed`, the failing test being that one). Measured to place it: on a copy of the **base** `tools/` and
+`tests/unit/executor_runner` the file failed once in 28 runs, on this tree alone 0 of 16 runs failed, and the test passes alone
+every time. Whoever gates this should expect it under load and rerun the file.
 
 ## 8. Mutation proofs (every guard shown failing, then restored)
 
