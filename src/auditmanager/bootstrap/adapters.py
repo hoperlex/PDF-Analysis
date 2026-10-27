@@ -2101,6 +2101,31 @@ class CsvExportAdapter(_SessionHolder):
         return self._read(lambda s: export_run_csv(s, run_id).content)
 
 
+def _read_citations_for_export(
+    session: Session, *, run_id: str, version_uid: str, profile_id: str,
+) -> Any:
+    """W57a's verified citation reader, told which stage certifies this profile's partitions.
+
+    An AR v3 beta Run's partitions are certified by the succeeded ``ar_v3_citation_review`` stage
+    (migration ``0036``); every other profile's by ``norm_verification``, the reader's default. The
+    export context calls the injected reader with the Run's identity and profile only, so the choice
+    is made here, from the profile, and nowhere else. Without it the reader's header query (an inner
+    join on the stage) finds no row for a v3 Run and ``exportRunXlsx`` answers
+    ``required_norm_unavailable`` for every AR v3 beta Run
+    (``AR-V3-JUDGE-FIXES-01``).
+    """
+    from auditmanager.analysis.public import AR_V3_BETA_PROFILE_ID
+    from auditmanager.findings.citation_reader import read_verified_citations
+
+    return read_verified_citations(
+        session, run_id=run_id, version_uid=version_uid, profile_id=profile_id,
+        cite_stage_id=(
+            "ar_v3_citation_review" if profile_id == str(AR_V3_BETA_PROFILE_ID)
+            else "norm_verification"
+        ),
+    )
+
+
 class XlsxExportAdapter(_SessionHolder):
     """``exportRunXlsx`` (`W57B-NORMS-CATALOGUE-XLSX-01`).
 
@@ -2136,7 +2161,6 @@ class XlsxExportAdapter(_SessionHolder):
 
     def export_run_xlsx(self, *, run_id: str, principal_id: str) -> bytes:
         from auditmanager.exports import ExportAuthorization, export_run_xlsx
-        from auditmanager.findings.citation_reader import read_verified_citations
 
         authorization = ExportAuthorization(
             run_id=run_id,
@@ -2151,7 +2175,7 @@ class XlsxExportAdapter(_SessionHolder):
                 run_id,
                 authorization=authorization,
                 read_blob=self._read_blob,
-                read_citations=read_verified_citations,
+                read_citations=_read_citations_for_export,
             ).content
         )
 
