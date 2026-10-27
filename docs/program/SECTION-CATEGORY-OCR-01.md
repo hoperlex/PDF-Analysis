@@ -193,3 +193,141 @@ What this does **not** do, said once: it does not know whether the item is meant
 ### What stays out
 
 No contract (`Evidence` stays quote-only; the artifact shape is unchanged), no migration, no change to `findings/grounding.py`, `bootstrap/**`, `api/**`, `web/**`, `infra/**`; no edit to the other nine packages, the ledger, the three widen reports or the register. STOP conditions of the brief were checked: part (a) needs no contract or migration change, and the only source outside `analysis/text/**` and `analysis/public.py` is the loader and the executor's call site (`runs/**`, the OCR input loader of part b).
+
+## Result
+
+| Part | State | What exists |
+| --- | --- | --- |
+| (a) `documentation` for same-document omissions, `AI TX EOM SS ITP` (`R-146ao`) | **built** | the pair-of-places check (`analysis/text/omission.py`), per-profile categories and schema (`text-profile/2`, `prompt.response_schema_for`, `response.parse_response(categories=…)`), five packages at `1.3.0` with one paragraph each (916 to 983 characters), five rebuilt recordings, ten specimens, a fourth source of the sentence-guard table |
+| (b) recognised text as marked context for all 14 sections (`R-146aq`) | **built** | `analysis/text/recognised_input.py`, the loader `runs/section_recognised_input.py` and its call site in the executor, window arithmetic that counts the blocks; no contract, no migration, so no STOP condition applied |
+
+Nothing was run against a model. Every prompt sentence, specimen and reply is the lane's own wording; `reviewed` still carries no human review (`R-146ag`, `A-7`), and the quality of what a model reports with the new category, and how often the check refuses a true omission, are unmeasured (`A-5`).
+
+**Two deliberate differences from the wave brief.** (1) `PRODUCTION-WAVE-PW5.md` section 5 says part (b) changes all 14 prompts and recordings. The instruction to the model is in the **user message** of a call that carries a block (the preamble notice), so the nine other packages, their recordings and every bundle hash are byte-identical and a version without a scanned page sends the same request as before; only the five packages of part (a) changed their prompts. (2) The sentence guard needed no allowlist line (`documentation` is sourced), where the lane brief expected five append-only entries.
+
+## Decisions superseded by `R-146ao`
+
+| Decision | Section | Before | After |
+| --- | --- | --- | --- |
+| `AI-1` (`SECTION-WIDEN-G1-01`) | AI | X: an absence has no quote | **W**: the pair of places and a code-checked absence (Design above) |
+| `TX-1` (G1) | TX | X | **W** |
+| `EOM-4` (`SECTION-WIDEN-G3-01`) | EOM | X | **W** |
+| `ITP-5` (G3) | ITP | X | **W** |
+| `SS-5` (G3) | SS | X | **W** for a device or line named on a scheme and absent from the specification or the cable journal; **X** stays for a list that is merely shorter in one place than in another |
+
+The ledger and the two widen reports are not edited (forbidden paths); this table and the fragment table are the record.
+
+## Files
+
+| Group | Files |
+| --- | --- |
+| New source | `src/auditmanager/analysis/text/omission.py`, `src/auditmanager/analysis/text/recognised_input.py`, `src/auditmanager/runs/section_recognised_input.py` |
+| Edited source | `analysis/text/{prompt,response,profile_registry,adapter,stage,windowed,windows,chunk_preflight}.py`; `analysis/public.py` (additive: `RecognisedPage`, `RecognisedContextError`, `select_recognised_context`, `recognised_total_characters`); `runs/executor.py` (the call site only) |
+| Packages | `profiles/{ai,tx,eom,ss,itp}/{profile.json,system_prompt.md}` |
+| Recordings | `fixtures/recorded/sections/{ai,tx,eom,ss,itp}/<key>.json` renamed to their new keys by `build_fixtures.py` (the nine others unchanged) |
+| Fixtures | `fixtures/recorded/sections_widen/omission/build_specimens.py` and ten files `omission/{ai,tx,eom,ss,itp}/{positive,*_negative}.json` |
+| New tests | `tests/unit/analysis/test_omission_check.py` (45), `test_recognised_input.py` (13), `tests/integration/analysis_text/test_recognised_context.py` (11), `tests/integration/sections/test_section_recognised_input.py` (12), `test_section_omission_specimens.py` (45), `test_section_omission_over_db.py` (1; skipped without a stack) |
+| Edited tests and data | see «Modified tests» |
+| Documents | this file and `docs/program/tasks/SECTION-CATEGORY-OCR-01.md` |
+
+## Modified tests (what each asserted before and after; none is weaker)
+
+| File | Before | After |
+| --- | --- | --- |
+| `tests/unit/analysis/test_text_profile_registry.py` | the defective-package case `format="text-profile/2"` expected `format_invalid` | the same case with `text-profile/3` expects `format_invalid`: `/2` is now a real format (its own cases are in `test_omission_check.py`: it needs a `categories` list that is exactly the v1 pair plus `documentation`; the key set follows the format) |
+| `tests/unit/analysis/text_profiles/test_text_profile_packages.py`, `test_every_profile_manifest_has_the_text_profile_1_shape` | every legacy package has the eight keys and `text-profile/1` | the nine others: unchanged; `AI TX EOM SS ITP`: the eight keys plus `categories`, `text-profile/2`, `categories` equal to the three values (a stricter pin; the v1-skeleton test is untouched and still passes for all 14) |
+| `tests/unit/analysis/text_profiles/section_profile_expectations.json` | `AI` `1.1.0`; `TX EOM SS ITP` `1.2.0` | all five `1.3.0` (data pinned by four tests and the web) |
+| `tests/unit/analysis/text_profiles/build_section_prompt_fragments.py` | sources: ledger, G1 to G3; every widen entry `present` | adds the source `C1` (this report); an entry may carry `kind: absent` |
+| `tests/unit/analysis/text_profiles/section_prompt_fragments.json` | 112 entries | 124, regenerated by the builder (`--write`), not retyped |
+| `tests/unit/analysis/text_profiles/test_section_prompt_fragments.py` | four sources; counts of G1 to G3 | five sources; the counts of the new one (12 entries, 44 pairs); the paragraph stands in exactly five prompts and `documentation` is kept out of the nine others |
+| `tests/integration/sections/test_section_widen_specimens.py` | every sub-directory of `sections_widen` is a section directory | skips the one named `omission` (its own format, held by its own test) |
+
+Recordings: five files renamed to the keys of the new requests and their `origin.prompt_bundle_sha256` updated, by `build_fixtures.py`; `--check` prints `fixtures match`; `test_section_recordings.py` is unedited and passes (it pins one file per section).
+
+## The omission paragraph and the new fragments
+
+Eleven sentences stand in the five prompts (seven shared, five scope sentences, one per section; the block in the Design section is the source, the builder reads it) and `O-NONE` keeps the category name out of the other nine. Growth per prompt: AI +985, TX +963, EOM +918, SS +934, ITP +921 characters (limit 1,200); the response schema grows by 974 characters (627 to 1,601). The paragraph is inserted directly after condition 5 and calls itself the one exception to it and to «ровно две категории».
+
+## The specimens
+
+`build_specimens.py` is the source of the ten files; the test holds the files equal to it.
+
+| Specimen | Text and reply | The stage |
+| --- | --- | --- |
+| `ai/positive` | a door mark on a floor plan, a door schedule without it | published: two evidence items, the mark's quote and the schedule heading |
+| `ai/dash_negative` | the schedule writes the mark with an en dash | dropped `term_present_in_range` |
+| `tx/positive` | an item of an equipment explication, a specification without it | published |
+| `tx/wrapped_negative` | the specification wraps the mark over two lines | dropped `term_present_in_range` |
+| `eom/positive`, `eom/case_negative` | a panel on a single-line scheme; the specification writes it in lower case | published; dropped `term_present_in_range` |
+| `ss/positive`, `ss/second_page_negative` | a camera on the scheme, a two-page cable journal; the term is on the second page | published; dropped `term_present_in_range` |
+| `itp/positive`, `itp/scan_negative` | a pump on the principal scheme; the range includes a page with no text | published; dropped `range_page_without_text` |
+
+Replayed through `run_text_analysis` with each section's own profile over a text layer built from `pages` and a recording keyed to the request the current prompt sends. Also shown on them: the term added to the range turns every positive into a drop; one altered character in the naming quote or in the heading drops the pair; the same reply to a section that does not declare the category (KJ) is malformed and nothing is published. The database path is shown once on the lane stack (`test_section_omission_over_db.py`): the reply over the AR baseline text is published as one `documentation` finding with two evidence rows whose offsets slice back to the quotes, in the tables whose CHECKs name the categories.
+
+## Mutation table
+
+Each mutation is one exact replacement in a committed source or prompt, applied to the worktree, the named tests run, the file restored with `git checkout -- <file>` (`git status` clean after each; the script is `mutate.py`, kept in the session scratch and summarised here). «Red» counts are of the tests named by the mutation, all of which pass unmutated (507 passed, 1 skipped for the union; the skip is the stack-only test).
+
+| # | Mutation | Result | Red tests (shortened) |
+| --- | --- | --- | --- |
+| M1 | the absence check never finds the term | 31 failed | the five dropped negatives, the ten «every way a record can hide» cases |
+| M2 | the absence check always finds the term | 10 failed | the five positives, the usable-page case |
+| M3 | the parser accepts `documentation` from every profile | 6 failed | `a_section_that_does_not_declare_the_category_refuses_the_same_reply` (five positives) and the parser case |
+| M4 | recognised text merged into the text-layer pages before grounding | 3 failed | an OCR-only quote is dropped; a text-layer quote is kept and the OCR one lost; an omission whose quote is OCR-only is refused |
+| M5 | the loader ignores the text-less list (every page's OCR selected) | 2 failed | only the text-less pages are read; the stage sends a block for the text-less page and none for a page with text |
+| M6 | the registry ignores the declared categories | 35 failed | the five profiles' categories and schema, the `/2` package cases |
+| M7 | the notice is written into every call | 4 failed | byte-for-byte rendering without scans; no block and no metric without scans |
+| M8a | window packing ignores the blocks | 3 failed | the partition weight, the window ceiling, a block larger than a window |
+| M8b | the one-call decision ignores the blocks | 1 failed | scans push a version just under the budget into windows |
+| M9 | a heading outside the range accepted | 1 failed | `the_heading_must_lie_inside_the_range` |
+| M10 | the term need not be in a naming quote | 1 failed | `the_term_must_be_in_a_naming_quote` |
+| M11 | a page of the range without text accepted | 2 failed | `itp/scan_negative`, the usable-page case |
+| M12 | the range may reach beyond the window | 2 failed | the window case (stage) and the check case |
+| M13 | an unresolved quote does not drop the pair | 13 failed | the altered-quote cases, the OCR-only omission case, the unresolved-anchor case |
+| M14 | recognised text rendered raw, not as a JSON string | 4 failed | the forged banner and closing marker, the block layout |
+| M15 | a long term accepted (length bound removed) | 2 failed | the long and the many-word terms |
+| M16 | the dash fold removed | 5 failed | `ai/dash_negative` and four spelling cases |
+| M17 | the hyphenation and spacing views removed | 6 failed | `tx/wrapped_negative` and five spelling cases |
+| M18 | `documentation` put into the KJ prompt | 3 failed | `C1:O-NONE`, the whole-table check, the re-wrap check |
+| M19 | one omission sentence deleted from the AI prompt | 4 failed | `C1:O-SPELLING` (present, deleted, one changed character), the whole-table check |
+| M20 | the published text loses the program's sentence | 6 failed | the five positives and the sentence case |
+
+## Commands and counts
+
+All with `BS=$(ls -d /root/projects/PDF-Analysis/.venv/bootstrap/lib/python3*/site-packages)`, `PYTHONPATH=src:$BS .venv/bin/python -m pytest -c pyproject.toml --rootdir=. -q -p no:cacheprovider` and `AUDITMANAGER_LEGACY_PROMPTS_REPO=/nonexistent` (the legacy repository is unusable on this host; the token guard's sourced part and the hash-at-commit check skip with their reasons).
+
+| Command | Result |
+| --- | --- |
+| `tests/unit/analysis tests/integration/sections tests/integration/analysis_text tests/contract/analysis_packages` (`tests/unit/analysis` holds `text_profiles`) | **1406 passed, 73 skipped** (base 1244 passed, 73 skipped: +162 cases, no new skip) |
+| `tests/unit/analysis` / `tests/integration/sections` / `tests/integration/analysis_text` / `tests/contract/analysis_packages` | 649 passed, 73 skipped / 325 passed / 380 passed / 52 passed |
+| `tests/unit/analysis/text_profiles` | 433 passed, 72 skipped (the skips are the token guard's sourced part) |
+| `tests/integration/sections` without a stack | 324 passed, 1 skipped (the stack-only test, with its reason) |
+| `tests/integration/runs` on a private migrated database (`0036_cite_partition_v3`) | **944 passed** (the first run before the last test edit and the last after a fresh database; one intermediate run met a Postgres restart of the lane stack and an unresolved effect it left in the private database: dropped and re-created, not a defect of the lane) |
+| `python3 fixtures/recorded/sections/build_fixtures.py --check` | `fixtures match` |
+| `python3 -I tests/unit/analysis/text_profiles/build_section_prompt_fragments.py` | `fragments match` |
+| `python3 -I fixtures/recorded/sections_widen/omission/build_specimens.py` | `specimens match` |
+| web `npx vitest run tests/unit/analysis-settings` (reads the expectations file) | 106 passed |
+| the token guard's functions over a hash-identical copy of the legacy files (task file P-09) | no unexplained token in any of the 14 prompts |
+
+`tests/contract/program`, the two prose tests, the governance one-liner and `git diff --check` are listed in the task file's «Required tests» and were run on the committed tree (final section).
+
+## Integration notes
+
+- **Merge.** The diff adds 21 files and edits 27 (5 of them renames of recordings). It touches no contract, migration, `web/`, `infra/`, `bootstrap/`, `api/`, `findings/` file, none of the nine other packages and none of their recordings (`git diff --name-only 05f4584d..HEAD` filtered for those paths prints nothing). The one edit in `runs/executor.py` is the loader's call site; `runs/commands.py` is not edited.
+- **The recorded stand.** The five sections' recordings are new files under new keys; an old key finds nothing, as for any prompt edit. The canonical `fixtures/recorded/text_analysis/` is untouched.
+- **Metrics.** A five-section run gains `omissions_proposed|published|dropped` and `omissions_dropped_<reason>` (seven reasons); a call that carried a block gains `recognised_pages` and `recognised_characters`. Any other run's metrics do not move (`metrics` keys are `^[a-z][a-z0-9_]{0,63}$` scalars, the longest new one is 42 characters).
+- **A follow-up outside this lane's paths.** The start-time refusal `analysis_input_budget_exceeded` (`runs/commands.py`) compares `text_character_count` alone. `recognised_character_count` is on the version row; adding it there would refuse a scan-heavy volume at `startRun` instead of at the window plan (`window_plan_over_limit`, reason with both figures, before any call).
+- **A debt candidate.** `budget.input_budget_characters` subtracts the length of v1's prompt and schema (3,639 characters) as the fixed part of every call, while the section prompts are 5,361 to 7,219 characters longer than v1's (SS the longest at 10,231, plus its schema); this lane adds up to 985 + 974 characters to five of them. The shortfall predates this lane; the ceiling still holds the cost (checked after each call).
+- **Host and test hygiene.** `/root/projects/PDF-proverka` was an empty `git init` skeleton while the lane ran (later absent). With the skeleton present, `test_source_files_exist_at_the_recorded_legacy_commit` failed on the base tree too; `AUDITMANAGER_LEGACY_PROMPTS_REPO=/nonexistent` makes the skip explicit. A test that imports a builder from a fixtures directory must not write bytecode there (`sys.dont_write_bytecode`); one did, and the fixed test is the committed one.
+- **Disclosed: one run touched the integrator's lane database.** While checking that `tests/integration/sections` is container-free without a stack, one pytest run used `env -u DATABASE_URL` in a worktree that holds the copied `.env`; the harness then read the shared lane database from that file. The test sessions roll back; what can remain is the test account `section-omission-over-db@suite.invalid` that `provisioned_record` commits (as every suite on that stack does) and the content-addressed baseline PDF blob. A second such run was refused by the permission system and not repeated. Every other database run used a private database that was dropped.
+
+## Limits and assumptions an expert would still check (`A-5`, `A-7`)
+
+1. **The check proves a literal, not an absence.** «The term as printed in the naming quote does not occur, letter for letter, in the text of these pages» is a fact about the saved text layer; whether the item is meant to be in the schedule, whether the schedule lists it under another name, or whether a drawing shows it is the expert's call. The finding says so in its last sentence.
+2. **The model chooses the term and the range.** A bad term (too specific: refused only beyond 60 characters or five words; too generic: dropped as present) or a wrong range is possible. The prompt asks for the shortest distinguishing designation and the whole schedule; nobody measured whether a model does.
+3. **The presence test errs towards dropping.** Substring, case, dashes, `ё`, wrapped lines, spaces and page breaks all count as presence; `Д-5` is present in `Д-50`. True omissions will be dropped, and each drop is counted by reason; the rate is unknown.
+4. **A range page with fewer than 50 non-blank characters** (the product's text-less threshold) makes the pair undecidable, even when its recognised text is available: recognised text is context, not evidence, and is not used to prove an absence.
+5. **Windows.** A schedule that spans two windows is not reported (the range must lie inside the window that produced the proposal); a naming place and a schedule heading in different windows are not paired. The stage metrics already say that windows are independent (`windows_note`).
+6. **Recognised text.** Only TEXT entries of the pages the version stores as text-less are sent; IMAGE descriptions never. The OCR is rendered as one JSON string per page: it keeps the words and loses the markdown layout of tables. The notice and the quoting are the lane's measures against instructions inside scans; they are untested against a model. More client text goes to the provider (`A-2`, widened by `R-146aq`).
+7. **Wording.** The five paragraphs, the notice and the program's sentence were written by the lane; the token guard and the sentence guard see that they are present and sourced, not that they are right. The five recordings and the ten specimens are hand-authored; passing them proves the stage's mechanics, never a profile's quality.
+8. **Not added.** The reverse omission (an item in the schedule absent from the plans), a list that is merely shorter in one place, any comparison of the model's `term` with a synonym table, and any use of the OCR to confirm a finding.
