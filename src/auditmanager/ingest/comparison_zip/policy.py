@@ -149,11 +149,10 @@ class LevelJudge:
     the names that repeat, then what each member is.
     """
 
-    __slots__ = ("archives_allowed", "files_required", "entries_seen")
+    __slots__ = ("archives_allowed", "entries_seen")
 
-    def __init__(self, *, archives_allowed: bool, files_required: bool) -> None:
+    def __init__(self, *, archives_allowed: bool) -> None:
         self.archives_allowed = archives_allowed
-        self.files_required = files_required
         self.entries_seen = 0
 
     def __call__(self, entries: tuple[ArchiveEntry, ...]) -> dict[str, ArchiveEntry]:
@@ -200,6 +199,4 @@ class LevelJudge:
                 chosen[f"{KEY_ZIP}{entry.index:05d}"] = entry
             else:
                 raise refuse_set("comparison_zip_member_kind")
-        if self.files_required and not chosen:
-            raise refuse_set("comparison_zip_empty")
         return chosen

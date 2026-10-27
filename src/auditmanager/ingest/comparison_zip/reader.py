@@ -235,7 +235,7 @@ def extract_pdf_set(
     the returned set and must close it.
     """
     with contextlib.ExitStack() as stack:
-        first = LevelJudge(archives_allowed=policy.nesting_levels >= 1, files_required=True)
+        first = LevelJudge(archives_allowed=policy.nesting_levels >= 1)
         outer = _extract_level(
             handle, policy, first, entries=policy.entries, total_bytes=policy.total_bytes,
             stack=stack,
@@ -249,7 +249,7 @@ def extract_pdf_set(
             if not key.startswith(KEY_ZIP):
                 drafts.append(_Draft(member, 0, shown))
                 continue
-            second = LevelJudge(archives_allowed=False, files_required=False)
+            second = LevelJudge(archives_allowed=False)
             container = _path_of(member)
             with container.open("rb") as inner_handle:
                 inner = _extract_level(

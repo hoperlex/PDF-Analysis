@@ -57,6 +57,7 @@ from tests.unit.ingest.comparison_zip.zip_builders import (  # noqa: F401  (the 
     pdf,
     private_temporary_directory,
     unicode_path,
+    zw,
 )
 
 
@@ -126,6 +127,24 @@ def test_the_members_equal_what_the_standard_library_reads(
         ]
         assert [found.open(m).read() for m in found.members] == [data for _, data in expected]
         assert found.entries_seen == len(FILES)
+
+
+@pytest.mark.parametrize("zip64_end", [False, True], ids=["zip64-entries", "zip64-entries-and-end-record"])
+def test_zip64_directory_entries_and_the_zip64_end_record_are_read(zip64_end: bool) -> None:
+    """``zipfile`` writes ZIP64 only in the local header of a small member; the repository's
+    writer puts the 0xFFFFFFFF markers and the extra field into the central directory too (and a
+    ZIP64 end record), which is where a reader decides what the sizes are."""
+    payloads = [PDF_HEADER + _text(3, 20_000), PDF_HEADER + _text(4, 33_000)]
+    archive = build(
+        entry("a.pdf", payloads[0], zip64=True),
+        entry("b.pdf", payloads[1], method=zw.DEFLATED, deflate="zlib", zip64=True),
+        zip64_end=zip64_end,
+    )
+    with zipfile.ZipFile(io.BytesIO(archive)) as reference:
+        assert [reference.read(name) for name in ("a.pdf", "b.pdf")] == payloads
+    with accept(archive) as found:
+        assert [found.open(m).read() for m in found.members] == payloads
+        assert [m.size for m in found.members] == [len(p) for p in payloads]
 
 
 def test_the_same_archive_read_twice_gives_the_same_set() -> None:

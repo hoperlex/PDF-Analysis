@@ -248,6 +248,14 @@ def test_a_name_that_only_the_unicode_path_field_makes_hostile_is_refused() -> N
     ) == NAME
 
 
+def test_a_header_name_that_is_hostile_is_refused_whatever_the_unicode_path_field_shows() -> None:
+    """The mirror image: the header says ``../evil.pdf`` and the Unicode Path field a harmless
+    name. Each of the two names is held to the rule on its own, so neither can hide the other."""
+    extra = unicode_path(b"../evil.pdf", "evil.pdf")
+    hostile = entry(b"../evil.pdf", PDF_HEADER, local_extra=extra, central_extra=extra)
+    assert refusal(build(hostile)) == NAME
+
+
 def test_a_benign_unicode_path_is_shown_and_accepted() -> None:
     extra = unicode_path(b"ok.pdf", "Раздел 1/чертёж.pdf")
     archive = build(entry("ok.pdf", PDF_HEADER, local_extra=extra, central_extra=extra))
@@ -483,11 +491,13 @@ def test_a_truncated_archive_is_refused_as_unreadable() -> None:
 
 
 def test_one_entry_over_the_production_limit_is_refused_and_the_limit_itself_is_not() -> None:
-    over = build(*[pdf(f"d{i:04d}.pdf", b"x") for i in range(SET_MAX_ENTRIES + 1)])
+    """The limit is written out, not read from the constant: a constant raised by mistake must
+    turn this red as well as the test of the figures."""
+    over = build(*[pdf(f"d{i:04d}.pdf", b"x") for i in range(1001)])
     assert refusal(over) == ENTRIES
-    at = build(*[pdf(f"d{i:04d}.pdf", b"x") for i in range(SET_MAX_ENTRIES)])
+    at = build(*[pdf(f"d{i:04d}.pdf", b"x") for i in range(1000)])
     with accept(at) as found:
-        assert len(found.members) == SET_MAX_ENTRIES
+        assert len(found.members) == 1000
 
 
 def test_directory_entries_count_against_the_limit() -> None:
