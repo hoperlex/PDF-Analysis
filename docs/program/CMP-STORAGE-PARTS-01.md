@@ -110,7 +110,7 @@ Commands run from the worktree root with `AUDITMANAGER_LEGACY_PROMPTS_REPO=/none
 | `tests/integration/storage/test_multipart_staging.py` (real MinIO, independent boto3 client for every "nothing is left" assertion) | 60 |
 | `tests/integration/storage/test_unreferenced_comparison_blobs.py` (real PostgreSQL at head `0038` and MinIO) | 17 |
 | `tests/integration/recovery/test_blob_reference_audit.py tests/contract/domain_p02/test_narrow_sets_against_contracts.py tests/contract/architecture` | 55 passed |
-| `tests/contract` minus the three `D-220` files, on the clean committed tree | 1307 passed, 19283 subtests passed (2 m 16 s) |
+| `tests/contract` minus the three `D-220` files, on the clean committed tree | 1307 passed, 19283 subtests passed (2 m 25 s; tree `9a82b26b`) |
 | `git diff --check` | clean |
 
 The offline suite exists because a real store refuses a bad part list itself: a bucket can show that a list was refused, not that the adapter refused it **before asking the store to assemble**. Its stand-in records every call, so "nothing was assembled" is an assertion about calls; it also reaches the pagination of `ListParts` and `ListMultipartUploads` and the exact-key filter, which a single-digit-part upload on a real store cannot.
@@ -173,4 +173,4 @@ Not provable by mutation: "the abort never removes a published blob" is structur
 
 ## 9. Environment
 
-Stack `auditmanager-cmp-storage-parts-01` (PostgreSQL `57730`, MinIO `61730`/`61731`, database `auditmanager_cmp_storage_parts_01`, bucket `auditmanager-cmp-storage-parts-01`), started with `make up` and stopped with `make down`; `df -h /` before every start and long run (3.2 G before `make up`, never below 2.6 G during the lane; the stop line is 1.5 G). No process was killed.
+Stack `auditmanager-cmp-storage-parts-01` (PostgreSQL `57730`, MinIO `61730`/`61731`, database `auditmanager_cmp_storage_parts_01`, bucket `auditmanager-cmp-storage-parts-01`), started with `make up` and stopped with `make down` (then its two named volumes, `...-postgres-data` and `...-s3-data`, removed by name); `df -h /` before every start and long run (3.2 G before `make up`, never below 2.6 G during the lane; the stop line is 1.5 G). No process was killed.
