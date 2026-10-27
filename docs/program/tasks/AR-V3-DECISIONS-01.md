@@ -305,6 +305,8 @@ Lane AR-A of wave PW5 (`R-146as`, `R-146at`; supersedes the review-only `R-146g`
 - `web/src/widgets/ar-v3-beta-review/**`
 - `web/src/entities/finding/**`
 - `web/tests/unit/analysis-settings/**`
+- `web/tests/guards/rendered-language.guard.test.ts`
+- `web/tests/unit/styles/screens.ts`
 - `docs/manual-tests/PC-01_prototype.md`
 - `docs/program/AR-V3-DECISIONS-01.md`
 - `docs/program/tasks/AR-V3-DECISIONS-01.md`
@@ -358,7 +360,7 @@ The integrator can rely on: terminal state, run count and the six-Run group unch
 Behaviour changes only for AR v3 beta Runs, which need an installed reviewed pack (none is installed on any stand). Rollback: revert the commits; `alembic downgrade 0035_comparison_records` is refused while a certified v3 finding exists (restore a backup instead).
 
 ## Handoff
-- changed files: see the report `docs/program/AR-V3-DECISIONS-01.md` section «Files»
+- changed files: 53, listed in the report `docs/program/AR-V3-DECISIONS-01.md` section «Files»
 - commands/results: see the report section «Commands and counts»
 - known limits: see the report section «Limits»
 - integration notes: see the report section «Integration notes»
