@@ -1,0 +1,1774 @@
+{
+  "schema": "cmp-sp1-answer-key/1",
+  "synthetic": true,
+  "notice": "Synthetic corpus. Every name, mark and number is invented; no customer, production or real project bytes (owner decision OD-17).",
+  "generated_by": "tools/fixtures/comparison/build.py",
+  "regenerate": "python3 tools/fixtures/comparison/build.py",
+  "project": "СИНТ-02-АР",
+  "coordinates": "PDF points, origin at the lower left of the MediaBox; bbox = [x0, y0, x1, y1].",
+  "documents": [
+    {
+      "name": "old_p",
+      "file": "sp1/old_p.pdf",
+      "side": "old",
+      "designation": "СИНТ-02-АР",
+      "stage": "П",
+      "date": "20.02.2026",
+      "revision": "Изм.0",
+      "pdf_title": "СИНТ-02-АР. Стадия П. Архитектурные решения (синтетический документ)",
+      "sha256": "209ef6fe45bfdfde783eabc8e0375a9a06ab06c44ef7af7ff2052f47bcfde07e",
+      "bytes": 53711,
+      "page_count": 6,
+      "sheets": [
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P5",
+        "P6"
+      ]
+    },
+    {
+      "name": "new_r1",
+      "file": "sp1/new_r1.pdf",
+      "side": "new",
+      "designation": "СИНТ-02-АР.1",
+      "stage": "Р",
+      "date": "20.04.2026",
+      "revision": "Изм.0",
+      "pdf_title": "СИНТ-02-АР.1. Стадия Р. Корпус 1 (синтетический документ)",
+      "sha256": "40ceee4b709fc732c1fcf8663ff1cd851f35a541a441bd5fbfe53fcae0a6fcac",
+      "bytes": 46107,
+      "page_count": 3,
+      "sheets": [
+        "R1",
+        "R2",
+        "R3"
+      ]
+    },
+    {
+      "name": "new_r2",
+      "file": "sp1/new_r2.pdf",
+      "side": "new",
+      "designation": "СИНТ-02-АР.2",
+      "stage": "Р",
+      "date": "20.04.2026",
+      "revision": "Изм.0",
+      "pdf_title": "СИНТ-02-АР.2. Стадия Р. Корпус 2 (синтетический документ)",
+      "sha256": "c02e8a49d9a89dd0eb663a1dd058a80d3d21e56f38a4878b65fdad8d469ee8bd",
+      "bytes": 41512,
+      "page_count": 1,
+      "sheets": [
+        "R4"
+      ]
+    },
+    {
+      "name": "new_r3",
+      "file": "sp1/new_r3.pdf",
+      "side": "new",
+      "designation": "СИНТ-02-АР.3",
+      "stage": "Р",
+      "date": "20.04.2026",
+      "revision": "Изм.0",
+      "pdf_title": "СИНТ-02-АР.3. Стадия Р. Разрезы (синтетический документ)",
+      "sha256": "44bea61280175bfb29c12e01810c1602ee79afe6bbb7b39b8798ea39a95194a4",
+      "bytes": 43306,
+      "page_count": 2,
+      "sheets": [
+        "R5",
+        "R6"
+      ]
+    }
+  ],
+  "assembly": {
+    "old": [
+      "old_p"
+    ],
+    "new": [
+      "new_r1",
+      "new_r2",
+      "new_r3"
+    ],
+    "notes": "NEW is an assembly of three Р documents; OLD is one П document."
+  },
+  "sheets": [
+    {
+      "sheet_id": "P1",
+      "document": "old_p",
+      "file": "sp1/old_p.pdf",
+      "page": 1,
+      "side": "old",
+      "title": "План. Корпус 1. Этаж 1",
+      "passport": {
+        "type": "План",
+        "building": "Корпус 1",
+        "level": "Этаж 1"
+      },
+      "format": "A3",
+      "width_pt": 1190.55,
+      "height_pt": 841.89,
+      "text_layer": true,
+      "stamp": {
+        "designation": "СИНТ-02-АР",
+        "title": "План. Корпус 1. Этаж 1",
+        "stage": "П",
+        "sheet_no": "1",
+        "revision": "Изм.0",
+        "date": "20.02.2026"
+      },
+      "stamp_bbox": [
+        651.97,
+        14.17,
+        1176.38,
+        170.08
+      ],
+      "fragments": [
+        {
+          "key": "note1",
+          "text": "Высота помещений 3,0 м",
+          "bbox": [
+            130,
+            212.64,
+            262.77,
+            224.28
+          ]
+        },
+        {
+          "key": "rm101",
+          "text": "101  Холл  24,5 м²",
+          "bbox": [
+            130,
+            695.41,
+            234.01,
+            708.21
+          ]
+        },
+        {
+          "key": "rm102",
+          "text": "102  Кабинет  18,0 м²",
+          "bbox": [
+            480,
+            695.41,
+            604.53,
+            708.21
+          ]
+        },
+        {
+          "key": "rm103",
+          "text": "103  Санузел  6,2 м²",
+          "bbox": [
+            830,
+            695.41,
+            946.45,
+            708.21
+          ]
+        },
+        {
+          "key": "rm104",
+          "text": "104  Лестничная клетка  14,8 м²",
+          "bbox": [
+            130,
+            475.41,
+            318.29,
+            488.21
+          ]
+        },
+        {
+          "key": "rm105",
+          "text": "105  Склад  12,4 м²",
+          "bbox": [
+            480,
+            475.41,
+            591.38,
+            488.21
+          ]
+        }
+      ],
+      "content_sha256": "2cffddcb4276976b4826350452fd6380b2efd2faf5cdba9f73604227b5a70f91"
+    },
+    {
+      "sheet_id": "P2",
+      "document": "old_p",
+      "file": "sp1/old_p.pdf",
+      "page": 2,
+      "side": "old",
+      "title": "План. Корпус 1. Этаж 2",
+      "passport": {
+        "type": "План",
+        "building": "Корпус 1",
+        "level": "Этаж 2"
+      },
+      "format": "A3",
+      "width_pt": 1190.55,
+      "height_pt": 841.89,
+      "text_layer": true,
+      "stamp": {
+        "designation": "СИНТ-02-АР",
+        "title": "План. Корпус 1. Этаж 2",
+        "stage": "П",
+        "sheet_no": "2",
+        "revision": "Изм.0",
+        "date": "20.02.2026"
+      },
+      "stamp_bbox": [
+        651.97,
+        14.17,
+        1176.38,
+        170.08
+      ],
+      "fragments": [
+        {
+          "key": "rm201",
+          "text": "201  Зал  42,0 м²",
+          "bbox": [
+            130,
+            715.41,
+            226.5,
+            728.21
+          ]
+        },
+        {
+          "key": "rm202",
+          "text": "202  Кабинет  16,5 м²",
+          "bbox": [
+            630,
+            715.41,
+            754.53,
+            728.21
+          ]
+        },
+        {
+          "key": "rm203",
+          "text": "203  Санузел  6,2 м²",
+          "bbox": [
+            930,
+            715.41,
+            1046.45,
+            728.21
+          ]
+        }
+      ],
+      "content_sha256": "4897728165c233ef7d5a9dfe907e403095213e875ebea0dbe7cba38700ba89df"
+    },
+    {
+      "sheet_id": "P3",
+      "document": "old_p",
+      "file": "sp1/old_p.pdf",
+      "page": 3,
+      "side": "old",
+      "title": "План. Корпус 1. Кровля",
+      "passport": {
+        "type": "План",
+        "building": "Корпус 1",
+        "level": "Кровля"
+      },
+      "format": "A3",
+      "width_pt": 1190.55,
+      "height_pt": 841.89,
+      "text_layer": true,
+      "stamp": {
+        "designation": "СИНТ-02-АР",
+        "title": "План. Корпус 1. Кровля",
+        "stage": "П",
+        "sheet_no": "3",
+        "revision": "Изм.0",
+        "date": "20.02.2026"
+      },
+      "stamp_bbox": [
+        651.97,
+        14.17,
+        1176.38,
+        170.08
+      ],
+      "fragments": [
+        {
+          "key": "roof",
+          "text": "Кровля корпуса 1",
+          "bbox": [
+            130,
+            715.41,
+            232.49,
+            728.21
+          ]
+        },
+        {
+          "key": "roof1",
+          "text": "Уклон кровли 2 %",
+          "bbox": [
+            140,
+            357.64,
+            233.87,
+            369.28
+          ]
+        },
+        {
+          "key": "roof2",
+          "text": "Парапет h = 600 мм",
+          "bbox": [
+            140,
+            337.64,
+            246.25,
+            349.28
+          ]
+        },
+        {
+          "key": "roof3",
+          "text": "Водосток: 4 воронки",
+          "bbox": [
+            140,
+            317.64,
+            249.14,
+            329.28
+          ]
+        }
+      ],
+      "content_sha256": "83742bfefbbad2d847b7d655745e9806d8ba2e0b74fadb6bbbe208a9ef4c63b4"
+    },
+    {
+      "sheet_id": "P4",
+      "document": "old_p",
+      "file": "sp1/old_p.pdf",
+      "page": 4,
+      "side": "old",
+      "title": "План. Корпус 2. Этаж 1",
+      "passport": {
+        "type": "План",
+        "building": "Корпус 2",
+        "level": "Этаж 1"
+      },
+      "format": "A3",
+      "width_pt": 1190.55,
+      "height_pt": 841.89,
+      "text_layer": true,
+      "stamp": {
+        "designation": "СИНТ-02-АР",
+        "title": "План. Корпус 2. Этаж 1",
+        "stage": "П",
+        "sheet_no": "4",
+        "revision": "Изм.0",
+        "date": "20.02.2026"
+      },
+      "stamp_bbox": [
+        651.97,
+        14.17,
+        1176.38,
+        170.08
+      ],
+      "fragments": [
+        {
+          "key": "note3",
+          "text": "Высота помещений 4,2 м",
+          "bbox": [
+            130,
+            347.64,
+            262.77,
+            359.28
+          ]
+        },
+        {
+          "key": "rm301",
+          "text": "301  Производственный зал  96,0 м²",
+          "bbox": [
+            130,
+            695.41,
+            340.52,
+            708.21
+          ]
+        },
+        {
+          "key": "rm302",
+          "text": "302  Бытовая  14,0 м²",
+          "bbox": [
+            730,
+            695.41,
+            854.89,
+            708.21
+          ]
+        }
+      ],
+      "content_sha256": "2f839b7f0b8e0c05d484a936890468edc86b7b24b8caebee6d484632def00167"
+    },
+    {
+      "sheet_id": "P5",
+      "document": "old_p",
+      "file": "sp1/old_p.pdf",
+      "page": 5,
+      "side": "old",
+      "title": "Разрез 1-1. Корпус 1. Уровень +0,000",
+      "passport": {
+        "type": "Разрез 1-1",
+        "building": "Корпус 1",
+        "level": "Уровень +0,000"
+      },
+      "format": "A3",
+      "width_pt": 1190.55,
+      "height_pt": 841.89,
+      "text_layer": true,
+      "stamp": {
+        "designation": "СИНТ-02-АР",
+        "title": "Разрез 1-1. Корпус 1. Уровень +0,000",
+        "stage": "П",
+        "sheet_no": "5",
+        "revision": "Изм.0",
+        "date": "20.02.2026"
+      },
+      "stamp_bbox": [
+        651.97,
+        14.17,
+        1176.38,
+        170.08
+      ],
+      "fragments": [
+        {
+          "key": "cut1",
+          "text": "Отметка пола +0,000",
+          "bbox": [
+            220,
+            277.64,
+            333.93,
+            289.28
+          ]
+        },
+        {
+          "key": "cut2",
+          "text": "Высота этажа 3,3 м",
+          "bbox": [
+            220,
+            259.64,
+            323.89,
+            271.28
+          ]
+        },
+        {
+          "key": "cut3",
+          "text": "Отметка парапета +7,200",
+          "bbox": [
+            220,
+            241.64,
+            358.54,
+            253.28
+          ]
+        },
+        {
+          "key": "cutbox",
+          "text": "Разрез 1-1",
+          "bbox": [
+            210,
+            695.41,
+            270.29,
+            708.21
+          ]
+        }
+      ],
+      "content_sha256": "5db9405642cc264ec489a14c9cb3aad27866a1e0c39f9925002a0090a23de457"
+    },
+    {
+      "sheet_id": "P6",
+      "document": "old_p",
+      "file": "sp1/old_p.pdf",
+      "page": 6,
+      "side": "old",
+      "title": "Экспликация помещений. Корпус 2. Этаж 1",
+      "passport": {
+        "type": "Экспликация помещений",
+        "building": "Корпус 2",
+        "level": "Этаж 1"
+      },
+      "format": "A4",
+      "width_pt": 595.28,
+      "height_pt": 841.89,
+      "text_layer": true,
+      "stamp": {
+        "designation": "СИНТ-02-АР",
+        "title": "Экспликация помещений. Корпус 2. Этаж 1",
+        "stage": "П",
+        "sheet_no": "6",
+        "revision": "Изм.0",
+        "date": "20.02.2026"
+      },
+      "stamp_bbox": [
+        56.7,
+        14.17,
+        581.11,
+        170.08
+      ],
+      "fragments": [
+        {
+          "key": "ex1",
+          "text": "Экспликация: 301 — производственный зал, 96,0 м²",
+          "bbox": [
+            70,
+            757.64,
+            346.39,
+            769.28
+          ]
+        },
+        {
+          "key": "ex2",
+          "text": "Экспликация: 302 — бытовая, 14,0 м²",
+          "bbox": [
+            70,
+            739.64,
+            268.83,
+            751.28
+          ]
+        },
+        {
+          "key": "ex3",
+          "text": "Экспликация: 303 — склад, 22,5 м²",
+          "bbox": [
+            70,
+            721.64,
+            255.76,
+            733.28
+          ]
+        },
+        {
+          "key": "exarea",
+          "text": "Площадь застройки: 412 м²",
+          "bbox": [
+            70,
+            687.64,
+            216.2,
+            699.28
+          ]
+        },
+        {
+          "key": "exhdr",
+          "text": "Экспликация помещений. Корпус 2, этаж 1",
+          "bbox": [
+            70,
+            787.64,
+            299.84,
+            799.28
+          ]
+        }
+      ],
+      "content_sha256": "5e1d64a1f924cc0ae8ab002d1f07e2b708df5225a0ecc33f0d82519b63a3963e"
+    },
+    {
+      "sheet_id": "R1",
+      "document": "new_r1",
+      "file": "sp1/new_r1.pdf",
+      "page": 1,
+      "side": "new",
+      "title": "План. Корпус 1. Этаж 1",
+      "passport": {
+        "type": "План",
+        "building": "Корпус 1",
+        "level": "Этаж 1"
+      },
+      "format": "A3",
+      "width_pt": 1190.55,
+      "height_pt": 841.89,
+      "text_layer": true,
+      "stamp": {
+        "designation": "СИНТ-02-АР.1",
+        "title": "План. Корпус 1. Этаж 1",
+        "stage": "Р",
+        "sheet_no": "1",
+        "revision": "Изм.0",
+        "date": "20.04.2026"
+      },
+      "stamp_bbox": [
+        651.97,
+        14.17,
+        1176.38,
+        170.08
+      ],
+      "fragments": [
+        {
+          "key": "note1",
+          "text": "Высота помещений 3,0 м",
+          "bbox": [
+            130,
+            212.64,
+            262.77,
+            224.28
+          ]
+        },
+        {
+          "key": "rm101",
+          "text": "101  Холл  25,1 м²",
+          "bbox": [
+            130,
+            695.41,
+            234.01,
+            708.21
+          ]
+        },
+        {
+          "key": "rm102",
+          "text": "102  Кабинет  18,0 м²",
+          "bbox": [
+            480,
+            695.41,
+            604.53,
+            708.21
+          ]
+        },
+        {
+          "key": "rm103",
+          "text": "103  Санузел  6,2 м²",
+          "bbox": [
+            830,
+            695.41,
+            946.45,
+            708.21
+          ]
+        },
+        {
+          "key": "rm104",
+          "text": "104  Лестничная клетка  14,8 м²",
+          "bbox": [
+            130,
+            475.41,
+            318.29,
+            488.21
+          ]
+        },
+        {
+          "key": "rm106",
+          "text": "106  Тамбур  4,2 м²",
+          "bbox": [
+            480,
+            475.41,
+            590.71,
+            488.21
+          ]
+        }
+      ],
+      "content_sha256": "bb8f293e098dcf50b78733c512fdc9c5276d64a8b3bccda69e90d62d4c2361b3"
+    },
+    {
+      "sheet_id": "R2",
+      "document": "new_r1",
+      "file": "sp1/new_r1.pdf",
+      "page": 2,
+      "side": "new",
+      "title": "План. Корпус 1. Этаж 2",
+      "passport": {
+        "type": "План",
+        "building": "Корпус 1",
+        "level": "Этаж 2"
+      },
+      "format": "A3",
+      "width_pt": 1190.55,
+      "height_pt": 841.89,
+      "text_layer": true,
+      "stamp": {
+        "designation": "СИНТ-02-АР.1",
+        "title": "План. Корпус 1. Этаж 2",
+        "stage": "Р",
+        "sheet_no": "2",
+        "revision": "Изм.0",
+        "date": "20.04.2026"
+      },
+      "stamp_bbox": [
+        651.97,
+        14.17,
+        1176.38,
+        170.08
+      ],
+      "fragments": [
+        {
+          "key": "note2",
+          "text": "Отметка чистого пола +3,300",
+          "bbox": [
+            130,
+            437.64,
+            288.33,
+            449.28
+          ]
+        },
+        {
+          "key": "rm201",
+          "text": "201  Зал  42,0 м²",
+          "bbox": [
+            130,
+            715.41,
+            226.5,
+            728.21
+          ]
+        },
+        {
+          "key": "rm202",
+          "text": "202  Кабинет  16,5 м²",
+          "bbox": [
+            630,
+            715.41,
+            754.53,
+            728.21
+          ]
+        },
+        {
+          "key": "rm203",
+          "text": "203  Санузел  6,2 м²",
+          "bbox": [
+            930,
+            715.41,
+            1046.45,
+            728.21
+          ]
+        }
+      ],
+      "content_sha256": "6232bcd1a16e69c7296e58323efc4dffd15e199db326719305e2fcc0668153f4"
+    },
+    {
+      "sheet_id": "R3",
+      "document": "new_r1",
+      "file": "sp1/new_r1.pdf",
+      "page": 3,
+      "side": "new",
+      "title": "План. Корпус 1. Кровля",
+      "passport": {
+        "type": "План",
+        "building": "Корпус 1",
+        "level": "Кровля"
+      },
+      "format": "A3",
+      "width_pt": 1190.55,
+      "height_pt": 841.89,
+      "text_layer": true,
+      "stamp": {
+        "designation": "СИНТ-02-АР.1",
+        "title": "План. Корпус 1. Кровля",
+        "stage": "Р",
+        "sheet_no": "3",
+        "revision": "Изм.0",
+        "date": "20.04.2026"
+      },
+      "stamp_bbox": [
+        651.97,
+        14.17,
+        1176.38,
+        170.08
+      ],
+      "fragments": [
+        {
+          "key": "roof",
+          "text": "Кровля корпуса 1",
+          "bbox": [
+            130,
+            715.41,
+            232.49,
+            728.21
+          ]
+        },
+        {
+          "key": "roof1",
+          "text": "Уклон кровли 3 %",
+          "bbox": [
+            140,
+            357.64,
+            233.87,
+            369.28
+          ]
+        },
+        {
+          "key": "roof3",
+          "text": "Водосток: 4 воронки",
+          "bbox": [
+            140,
+            317.64,
+            249.14,
+            329.28
+          ]
+        }
+      ],
+      "content_sha256": "d2c347d80961a2de0b43589ce56e8431dd2ddafeb77c81e187fc468d42096b2e"
+    },
+    {
+      "sheet_id": "R4",
+      "document": "new_r2",
+      "file": "sp1/new_r2.pdf",
+      "page": 1,
+      "side": "new",
+      "title": "План. Корпус 2. Этаж 1",
+      "passport": {
+        "type": "План",
+        "building": "Корпус 2",
+        "level": "Этаж 1"
+      },
+      "format": "A3",
+      "width_pt": 1190.55,
+      "height_pt": 841.89,
+      "text_layer": true,
+      "stamp": {
+        "designation": "СИНТ-02-АР.2",
+        "title": "План. Корпус 2. Этаж 1",
+        "stage": "Р",
+        "sheet_no": "1",
+        "revision": "Изм.0",
+        "date": "20.04.2026"
+      },
+      "stamp_bbox": [
+        651.97,
+        14.17,
+        1176.38,
+        170.08
+      ],
+      "fragments": [
+        {
+          "key": "ex1",
+          "text": "Экспликация: 301 — производственный зал, 96,0 м²",
+          "bbox": [
+            130,
+            317.64,
+            406.39,
+            329.28
+          ]
+        },
+        {
+          "key": "ex2",
+          "text": "Экспликация: 302 — бытовая, 14,0 м²",
+          "bbox": [
+            130,
+            299.64,
+            328.83,
+            311.28
+          ]
+        },
+        {
+          "key": "ex3",
+          "text": "Экспликация: 303 — склад, 22,5 м²",
+          "bbox": [
+            130,
+            281.64,
+            315.76,
+            293.28
+          ]
+        },
+        {
+          "key": "note3",
+          "text": "Высота помещений 4,2 м",
+          "bbox": [
+            130,
+            347.64,
+            262.77,
+            359.28
+          ]
+        },
+        {
+          "key": "rm301",
+          "text": "301  Производственный зал  96,0 м²",
+          "bbox": [
+            130,
+            695.41,
+            340.52,
+            708.21
+          ]
+        },
+        {
+          "key": "rm302",
+          "text": "302  Бытовая  14,0 м²",
+          "bbox": [
+            730,
+            695.41,
+            854.89,
+            708.21
+          ]
+        }
+      ],
+      "content_sha256": "5c056b170ddbce309e540bbd25fbc6c8b3e323ffbc603005314029674bec51cd"
+    },
+    {
+      "sheet_id": "R5",
+      "document": "new_r3",
+      "file": "sp1/new_r3.pdf",
+      "page": 1,
+      "side": "new",
+      "title": "Разрез 1-1. Корпус 1. Уровень +0,000",
+      "passport": {
+        "type": "Разрез 1-1",
+        "building": "Корпус 1",
+        "level": "Уровень +0,000"
+      },
+      "format": "A3",
+      "width_pt": 1190.55,
+      "height_pt": 841.89,
+      "text_layer": true,
+      "stamp": {
+        "designation": "СИНТ-02-АР.3",
+        "title": "Разрез 1-1. Корпус 1. Уровень +0,000",
+        "stage": "Р",
+        "sheet_no": "1",
+        "revision": "Изм.0",
+        "date": "20.04.2026"
+      },
+      "stamp_bbox": [
+        651.97,
+        14.17,
+        1176.38,
+        170.08
+      ],
+      "fragments": [
+        {
+          "key": "cut1",
+          "text": "Отметка пола +0,000",
+          "bbox": [
+            220,
+            277.64,
+            333.93,
+            289.28
+          ]
+        },
+        {
+          "key": "cut2",
+          "text": "Высота этажа 3,3 м",
+          "bbox": [
+            220,
+            259.64,
+            323.89,
+            271.28
+          ]
+        },
+        {
+          "key": "cut3",
+          "text": "Отметка парапета +7,200",
+          "bbox": [
+            220,
+            241.64,
+            358.54,
+            253.28
+          ]
+        },
+        {
+          "key": "cutbox",
+          "text": "Разрез 1-1",
+          "bbox": [
+            210,
+            695.41,
+            270.29,
+            708.21
+          ]
+        }
+      ],
+      "content_sha256": "c4b5058ffcf5ad016fda01dda2f9b19ed11d31f3d261a916e55ed1406a0e64f6"
+    },
+    {
+      "sheet_id": "R6",
+      "document": "new_r3",
+      "file": "sp1/new_r3.pdf",
+      "page": 2,
+      "side": "new",
+      "title": "Разрез 2-2. Корпус 2. Уровень +0,000",
+      "passport": {
+        "type": "Разрез 2-2",
+        "building": "Корпус 2",
+        "level": "Уровень +0,000"
+      },
+      "format": "A3",
+      "width_pt": 1190.55,
+      "height_pt": 841.89,
+      "text_layer": true,
+      "stamp": {
+        "designation": "СИНТ-02-АР.3",
+        "title": "Разрез 2-2. Корпус 2. Уровень +0,000",
+        "stage": "Р",
+        "sheet_no": "2",
+        "revision": "Изм.0",
+        "date": "20.04.2026"
+      },
+      "stamp_bbox": [
+        651.97,
+        14.17,
+        1176.38,
+        170.08
+      ],
+      "fragments": [
+        {
+          "key": "cut4",
+          "text": "Отметка пола +0,000 (корпус 2)",
+          "bbox": [
+            220,
+            277.64,
+            390.91,
+            289.28
+          ]
+        },
+        {
+          "key": "cut5",
+          "text": "Высота этажа 4,2 м",
+          "bbox": [
+            220,
+            259.64,
+            323.89,
+            271.28
+          ]
+        },
+        {
+          "key": "cutbox2",
+          "text": "Разрез 2-2",
+          "bbox": [
+            210,
+            695.41,
+            270.29,
+            708.21
+          ]
+        }
+      ],
+      "content_sha256": "73a32b0b0682ae5dc1e408020230a1ca3e5589e9b9840b1d41b8c349e579eda0"
+    }
+  ],
+  "sheet_links": [
+    {
+      "old": "P1",
+      "new": "R1",
+      "old_document": "old_p",
+      "new_document": "new_r1",
+      "old_page": 1,
+      "new_page": 1,
+      "kind": "matched",
+      "basis": [
+        "type",
+        "building",
+        "level"
+      ],
+      "passport": {
+        "type": "План",
+        "building": "Корпус 1",
+        "level": "Этаж 1"
+      },
+      "expected_confidence": "high",
+      "stamp_differences": [
+        {
+          "field": "designation",
+          "before": "СИНТ-02-АР",
+          "after": "СИНТ-02-АР.1"
+        },
+        {
+          "field": "stage",
+          "before": "П",
+          "after": "Р"
+        },
+        {
+          "field": "date",
+          "before": "20.02.2026",
+          "after": "20.04.2026"
+        }
+      ],
+      "counts": {
+        "changed": 1,
+        "added": 1,
+        "removed": 1,
+        "unchanged": 4,
+        "moved_out": 0,
+        "moved_in": 0
+      }
+    },
+    {
+      "old": "P2",
+      "new": "R2",
+      "old_document": "old_p",
+      "new_document": "new_r1",
+      "old_page": 2,
+      "new_page": 2,
+      "kind": "matched",
+      "basis": [
+        "type",
+        "building",
+        "level"
+      ],
+      "passport": {
+        "type": "План",
+        "building": "Корпус 1",
+        "level": "Этаж 2"
+      },
+      "expected_confidence": "high",
+      "stamp_differences": [
+        {
+          "field": "designation",
+          "before": "СИНТ-02-АР",
+          "after": "СИНТ-02-АР.1"
+        },
+        {
+          "field": "stage",
+          "before": "П",
+          "after": "Р"
+        },
+        {
+          "field": "date",
+          "before": "20.02.2026",
+          "after": "20.04.2026"
+        }
+      ],
+      "counts": {
+        "changed": 0,
+        "added": 1,
+        "removed": 0,
+        "unchanged": 3,
+        "moved_out": 0,
+        "moved_in": 0
+      }
+    },
+    {
+      "old": "P3",
+      "new": "R3",
+      "old_document": "old_p",
+      "new_document": "new_r1",
+      "old_page": 3,
+      "new_page": 3,
+      "kind": "matched",
+      "basis": [
+        "type",
+        "building",
+        "level"
+      ],
+      "passport": {
+        "type": "План",
+        "building": "Корпус 1",
+        "level": "Кровля"
+      },
+      "expected_confidence": "high",
+      "stamp_differences": [
+        {
+          "field": "designation",
+          "before": "СИНТ-02-АР",
+          "after": "СИНТ-02-АР.1"
+        },
+        {
+          "field": "stage",
+          "before": "П",
+          "after": "Р"
+        },
+        {
+          "field": "date",
+          "before": "20.02.2026",
+          "after": "20.04.2026"
+        }
+      ],
+      "counts": {
+        "changed": 1,
+        "added": 0,
+        "removed": 1,
+        "unchanged": 2,
+        "moved_out": 0,
+        "moved_in": 0
+      }
+    },
+    {
+      "old": "P4",
+      "new": "R4",
+      "old_document": "old_p",
+      "new_document": "new_r2",
+      "old_page": 4,
+      "new_page": 1,
+      "kind": "matched",
+      "basis": [
+        "type",
+        "building",
+        "level"
+      ],
+      "passport": {
+        "type": "План",
+        "building": "Корпус 2",
+        "level": "Этаж 1"
+      },
+      "expected_confidence": "high",
+      "stamp_differences": [
+        {
+          "field": "designation",
+          "before": "СИНТ-02-АР",
+          "after": "СИНТ-02-АР.2"
+        },
+        {
+          "field": "stage",
+          "before": "П",
+          "after": "Р"
+        },
+        {
+          "field": "sheet_no",
+          "before": "4",
+          "after": "1"
+        },
+        {
+          "field": "date",
+          "before": "20.02.2026",
+          "after": "20.04.2026"
+        }
+      ],
+      "counts": {
+        "changed": 0,
+        "added": 0,
+        "removed": 0,
+        "unchanged": 3,
+        "moved_out": 0,
+        "moved_in": 3
+      }
+    },
+    {
+      "old": "P5",
+      "new": "R5",
+      "old_document": "old_p",
+      "new_document": "new_r3",
+      "old_page": 5,
+      "new_page": 1,
+      "kind": "matched",
+      "basis": [
+        "type",
+        "building",
+        "level"
+      ],
+      "passport": {
+        "type": "Разрез 1-1",
+        "building": "Корпус 1",
+        "level": "Уровень +0,000"
+      },
+      "expected_confidence": "high",
+      "stamp_differences": [
+        {
+          "field": "designation",
+          "before": "СИНТ-02-АР",
+          "after": "СИНТ-02-АР.3"
+        },
+        {
+          "field": "stage",
+          "before": "П",
+          "after": "Р"
+        },
+        {
+          "field": "sheet_no",
+          "before": "5",
+          "after": "1"
+        },
+        {
+          "field": "date",
+          "before": "20.02.2026",
+          "after": "20.04.2026"
+        }
+      ],
+      "counts": {
+        "changed": 0,
+        "added": 0,
+        "removed": 0,
+        "unchanged": 4,
+        "moved_out": 0,
+        "moved_in": 0
+      }
+    }
+  ],
+  "sheets_without_pair": {
+    "old_only": [
+      {
+        "sheet_id": "P6",
+        "reason": "the room schedule of building 2 is a block on plan sheet R4 in the Р stage; the sheet itself has no Р counterpart"
+      }
+    ],
+    "new_only": [
+      {
+        "sheet_id": "R6",
+        "reason": "a section sheet that did not exist in the П stage"
+      }
+    ]
+  },
+  "text_fragments": {
+    "classes": "changed: same key on linked sheets, text differs; added / removed: key only on the new / old side (on a linked or unpaired sheet) and nowhere else; moved_between_sheets: same key and same text on a different sheet than its link; unchanged: same key and text on linked sheets",
+    "changed": [
+      {
+        "key": "rm101",
+        "old_sheet": "P1",
+        "new_sheet": "R1",
+        "before": "101  Холл  24,5 м²",
+        "after": "101  Холл  25,1 м²",
+        "bbox_before": [
+          130,
+          695.41,
+          234.01,
+          708.21
+        ],
+        "bbox_after": [
+          130,
+          695.41,
+          234.01,
+          708.21
+        ]
+      },
+      {
+        "key": "roof1",
+        "old_sheet": "P3",
+        "new_sheet": "R3",
+        "before": "Уклон кровли 2 %",
+        "after": "Уклон кровли 3 %",
+        "bbox_before": [
+          140,
+          357.64,
+          233.87,
+          369.28
+        ],
+        "bbox_after": [
+          140,
+          357.64,
+          233.87,
+          369.28
+        ]
+      }
+    ],
+    "added": [
+      {
+        "key": "rm106",
+        "new_sheet": "R1",
+        "after": "106  Тамбур  4,2 м²",
+        "bbox_after": [
+          480,
+          475.41,
+          590.71,
+          488.21
+        ]
+      },
+      {
+        "key": "note2",
+        "new_sheet": "R2",
+        "after": "Отметка чистого пола +3,300",
+        "bbox_after": [
+          130,
+          437.64,
+          288.33,
+          449.28
+        ]
+      },
+      {
+        "key": "cut4",
+        "new_sheet": "R6",
+        "after": "Отметка пола +0,000 (корпус 2)",
+        "bbox_after": [
+          220,
+          277.64,
+          390.91,
+          289.28
+        ]
+      },
+      {
+        "key": "cut5",
+        "new_sheet": "R6",
+        "after": "Высота этажа 4,2 м",
+        "bbox_after": [
+          220,
+          259.64,
+          323.89,
+          271.28
+        ]
+      },
+      {
+        "key": "cutbox2",
+        "new_sheet": "R6",
+        "after": "Разрез 2-2",
+        "bbox_after": [
+          210,
+          695.41,
+          270.29,
+          708.21
+        ]
+      }
+    ],
+    "removed": [
+      {
+        "key": "rm105",
+        "old_sheet": "P1",
+        "before": "105  Склад  12,4 м²",
+        "bbox_before": [
+          480,
+          475.41,
+          591.38,
+          488.21
+        ]
+      },
+      {
+        "key": "roof2",
+        "old_sheet": "P3",
+        "before": "Парапет h = 600 мм",
+        "bbox_before": [
+          140,
+          337.64,
+          246.25,
+          349.28
+        ]
+      },
+      {
+        "key": "exarea",
+        "old_sheet": "P6",
+        "before": "Площадь застройки: 412 м²",
+        "bbox_before": [
+          70,
+          687.64,
+          216.2,
+          699.28
+        ]
+      },
+      {
+        "key": "exhdr",
+        "old_sheet": "P6",
+        "before": "Экспликация помещений. Корпус 2, этаж 1",
+        "bbox_before": [
+          70,
+          787.64,
+          299.84,
+          799.28
+        ]
+      }
+    ],
+    "moved_between_sheets": [
+      {
+        "key": "ex1",
+        "text": "Экспликация: 301 — производственный зал, 96,0 м²",
+        "old_sheet": "P6",
+        "new_sheet": "R4",
+        "bbox_before": [
+          70,
+          757.64,
+          346.39,
+          769.28
+        ],
+        "bbox_after": [
+          130,
+          317.64,
+          406.39,
+          329.28
+        ]
+      },
+      {
+        "key": "ex2",
+        "text": "Экспликация: 302 — бытовая, 14,0 м²",
+        "old_sheet": "P6",
+        "new_sheet": "R4",
+        "bbox_before": [
+          70,
+          739.64,
+          268.83,
+          751.28
+        ],
+        "bbox_after": [
+          130,
+          299.64,
+          328.83,
+          311.28
+        ]
+      },
+      {
+        "key": "ex3",
+        "text": "Экспликация: 303 — склад, 22,5 м²",
+        "old_sheet": "P6",
+        "new_sheet": "R4",
+        "bbox_before": [
+          70,
+          721.64,
+          255.76,
+          733.28
+        ],
+        "bbox_after": [
+          130,
+          281.64,
+          315.76,
+          293.28
+        ]
+      }
+    ],
+    "unchanged": [
+      {
+        "key": "note1",
+        "old_sheet": "P1",
+        "new_sheet": "R1",
+        "before": "Высота помещений 3,0 м",
+        "after": "Высота помещений 3,0 м",
+        "bbox_before": [
+          130,
+          212.64,
+          262.77,
+          224.28
+        ],
+        "bbox_after": [
+          130,
+          212.64,
+          262.77,
+          224.28
+        ]
+      },
+      {
+        "key": "rm102",
+        "old_sheet": "P1",
+        "new_sheet": "R1",
+        "before": "102  Кабинет  18,0 м²",
+        "after": "102  Кабинет  18,0 м²",
+        "bbox_before": [
+          480,
+          695.41,
+          604.53,
+          708.21
+        ],
+        "bbox_after": [
+          480,
+          695.41,
+          604.53,
+          708.21
+        ]
+      },
+      {
+        "key": "rm103",
+        "old_sheet": "P1",
+        "new_sheet": "R1",
+        "before": "103  Санузел  6,2 м²",
+        "after": "103  Санузел  6,2 м²",
+        "bbox_before": [
+          830,
+          695.41,
+          946.45,
+          708.21
+        ],
+        "bbox_after": [
+          830,
+          695.41,
+          946.45,
+          708.21
+        ]
+      },
+      {
+        "key": "rm104",
+        "old_sheet": "P1",
+        "new_sheet": "R1",
+        "before": "104  Лестничная клетка  14,8 м²",
+        "after": "104  Лестничная клетка  14,8 м²",
+        "bbox_before": [
+          130,
+          475.41,
+          318.29,
+          488.21
+        ],
+        "bbox_after": [
+          130,
+          475.41,
+          318.29,
+          488.21
+        ]
+      },
+      {
+        "key": "rm201",
+        "old_sheet": "P2",
+        "new_sheet": "R2",
+        "before": "201  Зал  42,0 м²",
+        "after": "201  Зал  42,0 м²",
+        "bbox_before": [
+          130,
+          715.41,
+          226.5,
+          728.21
+        ],
+        "bbox_after": [
+          130,
+          715.41,
+          226.5,
+          728.21
+        ]
+      },
+      {
+        "key": "rm202",
+        "old_sheet": "P2",
+        "new_sheet": "R2",
+        "before": "202  Кабинет  16,5 м²",
+        "after": "202  Кабинет  16,5 м²",
+        "bbox_before": [
+          630,
+          715.41,
+          754.53,
+          728.21
+        ],
+        "bbox_after": [
+          630,
+          715.41,
+          754.53,
+          728.21
+        ]
+      },
+      {
+        "key": "rm203",
+        "old_sheet": "P2",
+        "new_sheet": "R2",
+        "before": "203  Санузел  6,2 м²",
+        "after": "203  Санузел  6,2 м²",
+        "bbox_before": [
+          930,
+          715.41,
+          1046.45,
+          728.21
+        ],
+        "bbox_after": [
+          930,
+          715.41,
+          1046.45,
+          728.21
+        ]
+      },
+      {
+        "key": "roof",
+        "old_sheet": "P3",
+        "new_sheet": "R3",
+        "before": "Кровля корпуса 1",
+        "after": "Кровля корпуса 1",
+        "bbox_before": [
+          130,
+          715.41,
+          232.49,
+          728.21
+        ],
+        "bbox_after": [
+          130,
+          715.41,
+          232.49,
+          728.21
+        ]
+      },
+      {
+        "key": "roof3",
+        "old_sheet": "P3",
+        "new_sheet": "R3",
+        "before": "Водосток: 4 воронки",
+        "after": "Водосток: 4 воронки",
+        "bbox_before": [
+          140,
+          317.64,
+          249.14,
+          329.28
+        ],
+        "bbox_after": [
+          140,
+          317.64,
+          249.14,
+          329.28
+        ]
+      },
+      {
+        "key": "note3",
+        "old_sheet": "P4",
+        "new_sheet": "R4",
+        "before": "Высота помещений 4,2 м",
+        "after": "Высота помещений 4,2 м",
+        "bbox_before": [
+          130,
+          347.64,
+          262.77,
+          359.28
+        ],
+        "bbox_after": [
+          130,
+          347.64,
+          262.77,
+          359.28
+        ]
+      },
+      {
+        "key": "rm301",
+        "old_sheet": "P4",
+        "new_sheet": "R4",
+        "before": "301  Производственный зал  96,0 м²",
+        "after": "301  Производственный зал  96,0 м²",
+        "bbox_before": [
+          130,
+          695.41,
+          340.52,
+          708.21
+        ],
+        "bbox_after": [
+          130,
+          695.41,
+          340.52,
+          708.21
+        ]
+      },
+      {
+        "key": "rm302",
+        "old_sheet": "P4",
+        "new_sheet": "R4",
+        "before": "302  Бытовая  14,0 м²",
+        "after": "302  Бытовая  14,0 м²",
+        "bbox_before": [
+          730,
+          695.41,
+          854.89,
+          708.21
+        ],
+        "bbox_after": [
+          730,
+          695.41,
+          854.89,
+          708.21
+        ]
+      },
+      {
+        "key": "cut1",
+        "old_sheet": "P5",
+        "new_sheet": "R5",
+        "before": "Отметка пола +0,000",
+        "after": "Отметка пола +0,000",
+        "bbox_before": [
+          220,
+          277.64,
+          333.93,
+          289.28
+        ],
+        "bbox_after": [
+          220,
+          277.64,
+          333.93,
+          289.28
+        ]
+      },
+      {
+        "key": "cut2",
+        "old_sheet": "P5",
+        "new_sheet": "R5",
+        "before": "Высота этажа 3,3 м",
+        "after": "Высота этажа 3,3 м",
+        "bbox_before": [
+          220,
+          259.64,
+          323.89,
+          271.28
+        ],
+        "bbox_after": [
+          220,
+          259.64,
+          323.89,
+          271.28
+        ]
+      },
+      {
+        "key": "cut3",
+        "old_sheet": "P5",
+        "new_sheet": "R5",
+        "before": "Отметка парапета +7,200",
+        "after": "Отметка парапета +7,200",
+        "bbox_before": [
+          220,
+          241.64,
+          358.54,
+          253.28
+        ],
+        "bbox_after": [
+          220,
+          241.64,
+          358.54,
+          253.28
+        ]
+      },
+      {
+        "key": "cutbox",
+        "old_sheet": "P5",
+        "new_sheet": "R5",
+        "before": "Разрез 1-1",
+        "after": "Разрез 1-1",
+        "bbox_before": [
+          210,
+          695.41,
+          270.29,
+          708.21
+        ],
+        "bbox_after": [
+          210,
+          695.41,
+          270.29,
+          708.21
+        ]
+      }
+    ]
+  },
+  "stamp_note": "Title-block fields (designation, stage, sheet number, revision, date) are service zones, not fragments; their expected differences are in sheet_links[].stamp_differences."
+}
