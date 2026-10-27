@@ -76,7 +76,7 @@ def build_comparison_upload_routes(router: APIRouter, uploads: ComparisonUploadP
                    **envelope_responses(401, 403, 404, 422, 500, 503)},
     )
     def list_comparison_uploads(
-        subject: CurrentSubject, project_uid: Annotated[models.ProjectUid, Path()],
+        project_uid: Annotated[models.ProjectUid, Path()],
         cursor: CursorParam = None,  # type: ignore[assignment]
         limit: LimitParam = 50,
     ) -> WireResponse:
@@ -90,7 +90,7 @@ def build_comparison_upload_routes(router: APIRouter, uploads: ComparisonUploadP
         responses={**success(200, "The upload batch with its files and their states."),
                    **envelope_responses(401, 403, 404, 500, 503)},
     )
-    def get_comparison_upload(subject: CurrentSubject, comparison_upload_id: _UploadId) -> WireResponse:
+    def get_comparison_upload(comparison_upload_id: _UploadId) -> WireResponse:
         return json_response(200, _body(uploads.get_upload(upload_id=comparison_upload_id)))
 
     @router.get(
@@ -100,9 +100,7 @@ def build_comparison_upload_routes(router: APIRouter, uploads: ComparisonUploadP
         responses={**success(200, "The proposed grouping, order, stage and section."),
                    **envelope_responses(401, 403, 404, 500, 503)},
     )
-    def get_comparison_upload_proposal(
-        subject: CurrentSubject, comparison_upload_id: _UploadId
-    ) -> WireResponse:
+    def get_comparison_upload_proposal(comparison_upload_id: _UploadId) -> WireResponse:
         return json_response(200, _body(uploads.get_proposal(upload_id=comparison_upload_id)))
 
     @router.put(

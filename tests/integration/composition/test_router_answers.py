@@ -51,7 +51,28 @@ RELEASE_GETS = frozenset({"/system/version", "/releases"})
 #: `W57A-SEAL-01B` sealed the normative report as a refusing stub until the CITE reader; it
 #: answered exactly `503 dependency_unavailable` (named here by `W59-SECTION-SEAL-01`).
 #: `AR-V3-DECISIONS-01` (`R-146at`) serves it and empties this set: an absent `run_` is `404`.
-SEALED_STUB_GETS: frozenset[str] = frozenset()
+#: `CMP-SEAL-C0` (ADR-0025 decision 25) names the nine comparison reads its ports serve as sealed
+#: stubs, each answering exactly `503 dependency_unavailable` until its lane wires the port
+#: (`CMP-INGEST-01`, `CMP-INGEST-02`, `CMP-PROFILE-01`); the lane that wires one removes its path
+#: from this set, and the read then meets the sweep's ordinary rule. Each path is filled the way
+#: the sweep fills it: well-formed identities that name nothing.
+_PRJ = "prj_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+_STUB_UPLOAD = "/comparison-uploads/cbt_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+_STUB_PROFILE = "/page-profiles/cpr_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+SEALED_STUB_GETS: frozenset[str] = frozenset({
+    f"/projects/{_PRJ}/comparison-uploads",
+    _STUB_UPLOAD,
+    f"{_STUB_UPLOAD}/proposal",
+    f"/projects/{_PRJ}/documents/doc_01ARZ3NDEKTSV4RRFFQ69G5FAV/comparison-version-orders",
+    "/versions/ver_01ARZ3NDEKTSV4RRFFQ69G5FAV/page-profiles",
+    _STUB_PROFILE,
+    f"{_STUB_PROFILE}/preview",
+    f"{_STUB_PROFILE}/thumbnail",
+    f"{_STUB_PROFILE}/tile",
+})
+#: The one sealed stub whose address needs a query string to reach its port (the tile's `level`,
+#: `column` and `row` are required): without it the sweep would read a `422`, not the stub.
+SEALED_STUB_QUERY: dict[str, str] = {f"{_STUB_PROFILE}/tile": "?level=0&column=0&row=0"}
 NORM_VERIFICATION_OF_AN_ABSENT_RUN = "/runs/run_01ARZ3NDEKTSV4RRFFQ69G5FAV/norm-verification"
 WORKER_GETS = frozenset({"/execution/workers"})
 
@@ -220,7 +241,7 @@ class TestNoOperationAnswersWithAServerFault:
         assert WORKER_GETS <= {path for _method, path in probes}
         faults = []
         for method, path in probes:
-            status, body = call(app, method, path)
+            status, body = call(app, method, path + SEALED_STUB_QUERY.get(path, ""))
             if path in RELEASE_GETS:
                 if status != 200 or not isinstance(body, dict):
                     faults.append((path, status, body))
@@ -253,6 +274,10 @@ def _absent_identity(parameter: str) -> str:
         "finding_uid": "fnd",
         # `W55A-SEAL-01`: so a norm-document path reaches its handler, not the pattern's 422.
         "norm_document_id": "ndoc",
+        # `CMP-SEAL-C0`: so a comparison path reaches its stub, not the pattern's 422.
+        "comparison_upload_id": "cbt",
+        "comparison_page_profile_id": "cpr",
+        "document_uid": "doc",
     }
     return f"{prefixes.get(parameter, 'prj')}_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 

@@ -49,7 +49,7 @@ def build_comparison_version_order_routes(
                    **envelope_responses(401, 403, 404, 422, 500, 503)},
     )
     def list_comparison_version_orders(
-        subject: CurrentSubject, project_uid: Annotated[models.ProjectUid, Path()],
+        project_uid: Annotated[models.ProjectUid, Path()],
         document_uid: Annotated[models.DocumentUid, Path()],
         cursor: CursorParam = None,  # type: ignore[assignment]
         limit: LimitParam = 50,

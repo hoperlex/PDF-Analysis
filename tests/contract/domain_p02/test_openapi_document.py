@@ -200,6 +200,28 @@ REQUIRED_OPERATIONS = {
     "createAnalysisPreset",
     "reviseAnalysisPreset",
     "archiveAnalysisPreset",
+    # `CMP-SEAL-C0` (ADR-0025). The comparison modules: the plain-PDF upload, the order of the
+    # versions of a document set and the page reads, sealed as stubs. Reads are any one role;
+    # every write is an expert's act and keyed.
+    "createComparisonUpload",
+    "listComparisonUploads",
+    "getComparisonUpload",
+    "getComparisonUploadProposal",
+    "uploadComparisonUploadPart",
+    "completeComparisonUploadFile",
+    "confirmComparisonUploadSet",
+    "excludeComparisonUploadSet",
+    "retryComparisonUploadSet",
+    "pauseComparisonUpload",
+    "resumeComparisonUpload",
+    "cancelComparisonUpload",
+    "listComparisonVersionOrders",
+    "appendComparisonVersionOrder",
+    "listVersionPageProfiles",
+    "getVersionPageProfile",
+    "streamVersionPagePreview",
+    "streamVersionPageThumbnail",
+    "streamVersionPageTile",
     # `EXEC-PULL-01` (R-143). The pull channel: an administrator issues and revokes a runner
     # token (shown once), and a runner calls four operations with one.
     "issueRunnerToken",
@@ -277,6 +299,17 @@ WRITE_OPERATIONS = {
     "createAnalysisPreset",
     "reviseAnalysisPreset",
     "archiveAnalysisPreset",
+    # `CMP-SEAL-C0`. Every comparison write is keyed (ADR-0025 decision 19).
+    "createComparisonUpload",
+    "uploadComparisonUploadPart",
+    "completeComparisonUploadFile",
+    "confirmComparisonUploadSet",
+    "excludeComparisonUploadSet",
+    "retryComparisonUploadSet",
+    "pauseComparisonUpload",
+    "resumeComparisonUpload",
+    "cancelComparisonUpload",
+    "appendComparisonVersionOrder",
     # `EXEC-PULL-01`. The two administrator operations on runner tokens are keyed. The four a
     # runner calls are not: each is idempotent on the task's identity (a repeat of an accepted
     # answer is accepted, a different one is a conflict).

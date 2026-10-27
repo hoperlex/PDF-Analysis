@@ -1017,7 +1017,7 @@ const record = (over: Partial<DecisionRecord> = {}): DecisionRecord => ({
 
 function apiError(status: number, code: ErrorCode): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.8.0',
+    contract_version: '1.9.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1029,7 +1029,7 @@ function apiError(status: number, code: ErrorCode): ApiError {
 /** A norms refusal with the one classifier the seal registered for it (`W55A-WEB-NORMS`). */
 function normsRefusal(code: ErrorCode, details: Readonly<Record<string, string>>): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.8.0',
+    contract_version: '1.9.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1839,7 +1839,7 @@ function startRefusal(
   details?: Record<string, string | number | boolean | null>,
 ): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.8.0',
+    contract_version: '1.9.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -2035,7 +2035,7 @@ function startRunExecutorShapes(): ReactElement {
     code: ErrorCode, status: number, retryable: boolean,
     details: Readonly<Record<string, string>>, message = 'Сообщение об отказе.',
   ): ApiError => new ApiError(status, {
-    contract_version: '1.8.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
+    contract_version: '1.9.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
     retryable, details,
   }, '0f0e9d8c-7b6a-4948-b726-150413021100');
   const cannotServe = (reason: string) =>
@@ -3644,7 +3644,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           422,
           {
-            contract_version: '1.8.0',
+            contract_version: '1.9.0',
             error_code: 'validation_failed',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -3666,7 +3666,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           503,
           {
-            contract_version: '1.8.0',
+            contract_version: '1.9.0',
             error_code: 'dependency_unavailable',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',

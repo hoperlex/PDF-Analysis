@@ -114,7 +114,7 @@ describe('the PDF is read only when it is wanted', () => {
 describe('what the view says when it cannot show a document', () => {
   function refusal(status: number, code: ErrorCode): ApiError {
     const envelope: ErrorEnvelope = {
-      contract_version: '1.8.0', error_code: code, message: 'English the client never prints.',
+      contract_version: '1.9.0', error_code: code, message: 'English the client never prints.',
       correlation_id: 'cid-norms-3', retryable: code === 'dependency_unavailable',
     };
     return new ApiError(status, envelope, 'cid-norms-3');

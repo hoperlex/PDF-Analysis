@@ -117,6 +117,11 @@ def test_every_declared_operation_is_reachable(
         "sheet_link_id": "sln_01M2545JSD15ETSNNV904X991W",
         # `ANALYSIS-PRESETS-01`: a preset.
         "preset_id": "evt_01M2545JSD15ETSNNV904X991W",
+        # `CMP-SEAL-C0`: an upload batch, one of its files and sets, and a page profile.
+        "comparison_upload_id": "cbt_01M2545JSD15ETSNNV904X991W",
+        "comparison_upload_file_id": "cuf_01M2545JSD15ETSNNV904X991W",
+        "comparison_upload_set_id": "cus_01M2545JSD15ETSNNV904X991W",
+        "comparison_page_profile_id": "cpr_01M2545JSD15ETSNNV904X991W",
     }
     for operation_id, method, template in sorted(declared_operations(openapi_document)):
         path = template

@@ -72,6 +72,17 @@ EXPECTED_TABLES = {
     "comparison_summary",
     # `0037_analysis_presets`: the revisions of named presets, as an append-only history.
     "analysis_preset_revision",
+    # `0038_comparison_foundation`: the comparison upload, version order, page profile, queue and spend
+    # journal tables (`CMP-SEAL-C0`).
+    "comparison_upload",
+    "comparison_upload_set",
+    "comparison_upload_file",
+    "comparison_upload_part",
+    "comparison_version_order",
+    "comparison_page_profile",
+    "comparison_work",
+    "comparison_work_attempt",
+    "comparison_model_call",
     # `0019_execution_workers`: the worker registry.
     "worker",
     # `0020_norms_search`: the one current norms snapshot and its append-only history.

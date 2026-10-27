@@ -105,13 +105,17 @@ _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 # ``getArV3BetaGroupReview``, both on ``group_id``; and `EXEC-IMAGE-DELIVERY-01`'s
 # ``getExecutorTaskImage`` on ``task_id`` and ``blob_id``, a runner-token read swept by
 # :data:`RUNNER_ADDRESSED`. With all four, the addressed half is thirty-five.
-EXPECTED_ADDRESSED = 35
+# `CMP-SEAL-C0` adds nine: the two project-scoped listings, the batch and its proposal, the
+# version-order listing, the page-profile listing and the four page reads. Forty-four.
+EXPECTED_ADDRESSED = 44
 
 #: Addressed ``GET`` operations with a required query parameter, and a well-formed value for
 #: it naming nothing. Without it the bare path would be ``422`` for the missing parameter --
 #: a true answer, but about the query and not about the path this sweep judges.
 REQUIRED_QUERY: dict[str, str] = {
     "compareDocumentVersions": "?target_version_uid=ver_01M2545JSD15ETSNNV904X991K",
+    # `CMP-SEAL-C0`: the tile is addressed by query, and the stub answers only a well-formed one.
+    "streamVersionPageTile": "?level=0&column=0&row=0",
 }
 # `W59-ANALYSIS-SETTINGS-01` added ``listAnalysisProfiles``, unaddressed: the registry's
 # fifteen rows, answered as ``items`` like a collection with no parent identity.
@@ -195,7 +199,20 @@ SEALED_STUB_COLLECTIONS: frozenset[str] = frozenset()
 #: ``dependency: norm_verification_reader``) until the CITE reader. `AR-V3-DECISIONS-01`
 #: (`R-146at`) serves it and empties this set again: an absent ``run_`` is now ``404
 #: not_found``, swept with the other addressed reads.
-SEALED_STUB_ADDRESSED: frozenset[str] = frozenset()
+#: `CMP-SEAL-C0` (ADR-0025 decision 25) filled it with the nine comparison reads whose ports are
+#: sealed stubs; `CMP-INGEST-01`, `CMP-INGEST-02` and `CMP-PROFILE-01` remove the ones they wire,
+#: and each then joins the `404` sweep. Two of them list under a project, so they are addressed.
+SEALED_STUB_ADDRESSED: frozenset[str] = frozenset({
+    "listComparisonUploads",
+    "getComparisonUpload",
+    "getComparisonUploadProposal",
+    "listComparisonVersionOrders",
+    "listVersionPageProfiles",
+    "getVersionPageProfile",
+    "streamVersionPagePreview",
+    "streamVersionPageThumbnail",
+    "streamVersionPageTile",
+})
 
 #: `W55A-SEAL-01`. ``searchNorms`` addresses no parent but is not a listing of everything:
 #: its ``q`` is required, so the bare path is ``422 validation_failed`` on ``q`` and never a
@@ -483,7 +500,7 @@ def test_a_sealed_stub_get_with_a_parent_answers_unavailable(app: Composed) -> N
     assert {op for op, _ in stubs} == SEALED_STUB_ADDRESSED
     for operation_id, template in stubs:
         path = re.sub(r"\{(\w+)\}", lambda m: _absent_identity(m.group(1)), template)
-        status, body = _get(app, path)
+        status, body = _get(app, path + REQUIRED_QUERY.get(operation_id, ""))
         assert status == 503, f"{operation_id} answered {status}: {body}"
         assert isinstance(body, dict) and body.get("error_code") == "dependency_unavailable", body
         assert "items" not in body, body

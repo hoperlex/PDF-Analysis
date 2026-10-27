@@ -24,7 +24,6 @@ from auditmanager.api.routers.declarations import (
 from auditmanager.api.routers.ports import VersionPagePort
 from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
 from auditmanager.api.schemas import models
-from auditmanager.api.security import CurrentSubject
 
 __all__ = ["MAX_TILE_INDEX", "MAX_TILE_LEVEL", "build_version_page_routes"]
 
@@ -53,7 +52,7 @@ def build_version_page_routes(router: APIRouter, pages: VersionPagePort) -> None
                    **envelope_responses(401, 403, 404, 422, 500, 503)},
     )
     def list_version_page_profiles(
-        subject: CurrentSubject, version_uid: Annotated[models.VersionUid, Path()],
+        version_uid: Annotated[models.VersionUid, Path()],
         cursor: CursorParam = None,  # type: ignore[assignment]
         limit: LimitParam = 50,
     ) -> WireResponse:
@@ -67,9 +66,7 @@ def build_version_page_routes(router: APIRouter, pages: VersionPagePort) -> None
         responses={**success(200, "The deterministic profile of the page."),
                    **envelope_responses(401, 403, 404, 500, 503)},
     )
-    def get_version_page_profile(
-        subject: CurrentSubject, comparison_page_profile_id: _ProfileId
-    ) -> WireResponse:
+    def get_version_page_profile(comparison_page_profile_id: _ProfileId) -> WireResponse:
         view = pages.get_profile(page_profile_id=comparison_page_profile_id)
         return json_response(200, encode_json(view.model_dump(mode="json", exclude_unset=True)))
 
@@ -80,9 +77,7 @@ def build_version_page_routes(router: APIRouter, pages: VersionPagePort) -> None
         responses={**success(200, "The stored preview PNG of the page.", content=_PNG_CONTENT),
                    **envelope_responses(401, 403, 404, 500, 503)},
     )
-    def stream_version_page_preview(
-        subject: CurrentSubject, comparison_page_profile_id: _ProfileId
-    ) -> WireResponse:
+    def stream_version_page_preview(comparison_page_profile_id: _ProfileId) -> WireResponse:
         return _png(pages.read_preview(page_profile_id=comparison_page_profile_id))
 
     @router.get(
@@ -92,9 +87,7 @@ def build_version_page_routes(router: APIRouter, pages: VersionPagePort) -> None
         responses={**success(200, "The stored thumbnail PNG of the page.", content=_PNG_CONTENT),
                    **envelope_responses(401, 403, 404, 500, 503)},
     )
-    def stream_version_page_thumbnail(
-        subject: CurrentSubject, comparison_page_profile_id: _ProfileId
-    ) -> WireResponse:
+    def stream_version_page_thumbnail(comparison_page_profile_id: _ProfileId) -> WireResponse:
         return _png(pages.read_thumbnail(page_profile_id=comparison_page_profile_id))
 
     @router.get(
@@ -106,7 +99,7 @@ def build_version_page_routes(router: APIRouter, pages: VersionPagePort) -> None
                    **envelope_responses(401, 403, 404, 422, 500, 503)},
     )
     def stream_version_page_tile(
-        subject: CurrentSubject, comparison_page_profile_id: _ProfileId,
+        comparison_page_profile_id: _ProfileId,
         level: Annotated[int, Query(ge=0, le=MAX_TILE_LEVEL)],
         column: Annotated[int, Query(ge=0, le=MAX_TILE_INDEX)],
         row: Annotated[int, Query(ge=0, le=MAX_TILE_INDEX)],

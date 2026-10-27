@@ -331,6 +331,26 @@ GUARDED = (
     ("createAnalysisPreset", "POST", "/analysis/presets"),
     ("reviseAnalysisPreset", "POST", "/analysis/presets/evt_01M2545JSD15ETSNNV904X991K/revisions"),
     ("archiveAnalysisPreset", "POST", "/analysis/presets/evt_01M2545JSD15ETSNNV904X991K/archive"),
+    # `CMP-SEAL-C0`. The comparison modules: behind the seam before any port answers.
+    ("createComparisonUpload", "POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/comparison-uploads"),
+    ("listComparisonUploads", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/comparison-uploads"),
+    ("getComparisonUpload", "GET", "/comparison-uploads/cbt_01M2545JSD15ETSNNV904X991K"),
+    ("getComparisonUploadProposal", "GET", "/comparison-uploads/cbt_01M2545JSD15ETSNNV904X991K/proposal"),
+    ("uploadComparisonUploadPart", "PUT", "/comparison-uploads/cbt_01M2545JSD15ETSNNV904X991K/files/cuf_01M2545JSD15ETSNNV904X991K/parts"),
+    ("completeComparisonUploadFile", "POST", "/comparison-uploads/cbt_01M2545JSD15ETSNNV904X991K/files/cuf_01M2545JSD15ETSNNV904X991K/completion"),
+    ("confirmComparisonUploadSet", "POST", "/comparison-uploads/cbt_01M2545JSD15ETSNNV904X991K/sets/cus_01M2545JSD15ETSNNV904X991K/confirmation"),
+    ("excludeComparisonUploadSet", "POST", "/comparison-uploads/cbt_01M2545JSD15ETSNNV904X991K/sets/cus_01M2545JSD15ETSNNV904X991K/exclusion"),
+    ("retryComparisonUploadSet", "POST", "/comparison-uploads/cbt_01M2545JSD15ETSNNV904X991K/sets/cus_01M2545JSD15ETSNNV904X991K/retry"),
+    ("pauseComparisonUpload", "POST", "/comparison-uploads/cbt_01M2545JSD15ETSNNV904X991K/pause"),
+    ("resumeComparisonUpload", "POST", "/comparison-uploads/cbt_01M2545JSD15ETSNNV904X991K/resume"),
+    ("cancelComparisonUpload", "POST", "/comparison-uploads/cbt_01M2545JSD15ETSNNV904X991K/cancellation"),
+    ("listComparisonVersionOrders", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H/comparison-version-orders"),
+    ("appendComparisonVersionOrder", "POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H/comparison-version-orders"),
+    ("listVersionPageProfiles", "GET", "/versions/ver_01M2545JSD15ETSNNV904X991J/page-profiles"),
+    ("getVersionPageProfile", "GET", "/page-profiles/cpr_01M2545JSD15ETSNNV904X991K"),
+    ("streamVersionPagePreview", "GET", "/page-profiles/cpr_01M2545JSD15ETSNNV904X991K/preview"),
+    ("streamVersionPageThumbnail", "GET", "/page-profiles/cpr_01M2545JSD15ETSNNV904X991K/thumbnail"),
+    ("streamVersionPageTile", "GET", "/page-profiles/cpr_01M2545JSD15ETSNNV904X991K/tile"),
     # `EXEC-PULL-01`. The administrator's two token operations are behind the seam like the rest.
     (
         "issueRunnerToken", "POST",
@@ -915,6 +935,12 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         # `appendDecision` does; whether they may is the role register's (expert) and the
         # command's own re-read.
         "comparison.py",
+        # `CMP-SEAL-C0`: the comparison writes record WHO declared, confirmed, paused or cancelled an
+        # upload batch and WHO appended an order revision (the actor of its rows); that only an expert
+        # may is the role register's and the command's own re-read of the role set. The reads and the
+        # page reads take no subject.
+        "comparison_uploads.py",
+        "comparison_version_orders.py",
         "decisions.py",
         # `W61-DISPATCHER-01`: an assignment records WHO created or moved it; what they may
         # do is the role register's and the dispatch context's own re-read of the role set.
