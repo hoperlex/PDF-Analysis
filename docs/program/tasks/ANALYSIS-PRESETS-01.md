@@ -36,20 +36,42 @@ Under owner ruling `R-146av` an administrator can save a **preset** — a name p
 ### P-01 — the per-run fields of a start
 
 - captured_at: 2026-10-27
-- command: reading `startRun`, `reauditRun`, the group start and the run-start commands under `src/auditmanager/runs/commands.py` and `src/auditmanager/api/schemas/models.py`
-- result: the only per-run fields of `startRun` are `executor_connection_id` and `provider_mode`; `provider_mode` is refused unless it equals the deployment's own; `reauditRun` takes no body; the group start takes only a version; the profile is routed from the version's classification; the cost ceiling is the process-wide `AUDITMANAGER_RUN_COST_CEILING_USD`; no threshold is an input of a start.
+- command: `git show 05f4584d:src/auditmanager/api/schemas/models.py | rg -n "^class StartRunRequest" -A8`
+- captured_output:
+  ```text
+  1053:class StartRunRequest(_Object):
+  1054-    version_uid: VersionUid
+  1055-    provider_mode: ProviderMode = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+  1056-    #: `EXEC-PAR-START-01`. Optional and **not nullable**, like ``provider_mode``: absent means
+  1057-    #: the global route, exactly as before; present means that connection or a refusal.
+  1058-    executor_connection_id: ExecutorConnectionId = Field(
+  1059-        default=None, json_schema_extra=optional_property
+  1060-    )  # type: ignore[assignment]
+  ```
+- interpretation: the only per-run fields of `startRun` besides the version are `provider_mode` (refused unless it equals the deployment's own) and `executor_connection_id`; `reauditRun` takes no body, the group start takes only a version, the profile is routed from the version's classification, the cost ceiling is the process-wide `AUDITMANAGER_RUN_COST_CEILING_USD`, and no threshold is an input of a start. The preset therefore holds a name and an executor connection only.
 
 ### P-02 — identifiers
 
 - captured_at: 2026-10-27
-- command: reading `contracts/domain/identifiers.json` and `src/auditmanager/shared/identity`
-- result: a new id prefix needs those two places and the pin of 48; they are outside the lane's grant, so preset and revision ids are `evt_` ids, as `summary_id` is in `0035`.
+- command: `git show 05f4584d:contracts/domain/v1/identifiers.json | python3 -c "import json,sys;d=json.load(sys.stdin);print(type(d).__name__, len(d.get('prefixes',d.get('identifiers',[]))))"`
+- captured_output:
+  ```text
+  dict 48
+  ```
+- interpretation: the identifier catalogue holds 48 prefixes; a new prefix needs `contracts/domain/identifiers.json`, `src/auditmanager/shared/identity` and the pin of 48, all outside the lane's grant, so preset and revision ids are `evt_` ids, as `summary_id` is in `0035`.
 
-### P-03 — the closest precedents
+### P-03 — where the executor connection enters the run start
 
 - captured_at: 2026-10-27
-- command: reading `docs/program/COMPARE-PERSISTED-SUMMARY-01.md` and `docs/program/AR-V3-DECISIONS-01.md`
-- result: the method for the migration, the head pins, the grants/erase classification and the contract reseal is the one these two lanes used.
+- command: `git show 05f4584d:src/auditmanager/runs/commands.py | rg -n "executor_connection_id" | head -4`
+- captured_output:
+  ```text
+  295:    executor_connection_id: str | None = None,
+  312:    ``executor_connection_id`` (`EXEC-PAR-START-01`) is the executor the caller **named**. It is
+  325:    if executor_connection_id is not None:
+  326:        document["executor_connection_id"] = executor_connection_id
+  ```
+- interpretation: the connection a caller names is folded into the start fingerprint; the lane replaced it there by `preset_id` for a preset start so that a retry after a revision replays, and kept the resolved connection out of the fingerprint.
 
 ## Historical evidence
 
