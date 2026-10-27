@@ -72,7 +72,26 @@ SEAL-C0 and CMP-PROFILE-01 cite the report's figures; ADR-0025 values change onl
 Not applicable (a measurement).
 
 ## Handoff
-- changed files:
-- commands/results:
-- known limits:
-- integration notes:
+- changed files: `tools/measure/comparison_render.py` (new, commit `64f7e2f0`), `docs/program/compare/MEASURE-RENDER-01.md` (new),
+  `docs/program/tasks/CMP-MEASURE-01A.md` (this section). `git diff --name-only 121387bb..HEAD` lists these three and nothing else
+  (the task file itself arrived with `a3bde34a`): no `src/**`, contract, migration, root lock, `web/**`, test or fixture file; no
+  dependency added (the venv's `pypdfium2`, `pdfplumber`, Pillow only).
+- commands/results: the final pass ran from the clean tree at `64f7e2f0` (19:44-20:06 +05:00, one child at a time, host load 3 to 19):
+  `tools/measure/comparison_render.py run|table|levels|fit` over the real set (v1, v2, v3; v4 equals v3 by SHA-256), VS-1, SP-1 and the
+  generated realistic A1 (producers A and B, light, and a 400 001-element variant); 642 child records, host facts and commands in the
+  report. Main pass: 450 of 450 children `ok` under 768 MiB / 300 s / 600 s, no page overran. Worst render by memory: real v3 p13
+  (1680x1190 mm) at 150 dpi, 69.7 Mpx, 4.2 s, RSS 717 MiB / VmPeak 736 MiB; by time: real v1 p8 (1682x1189 mm) at 200 dpi, 124.0 Mpx,
+  8.5 s, RSS 663 MiB. Realistic A1 at 200 dpi: 1.8 s, RSS 196 MiB, preview 396 665 B, thumbnail 18 006 B, 182-tile pyramid 3 905 287 B.
+  Extraction: worst real 11.2 s / RSS 632 MiB (198 694 pdfplumber objects), 400 001-element A1 17.4 s / RSS 654 MiB. Ceilings: a 124 Mpx
+  page needs 704 MiB, the 40 Mpx-capped pages pass at 384 MiB, the heaviest extractions need 704 MiB. `git diff --check`: no output.
+  Guards shown failing in report section 5.4 (ceiling removed from a copy of the script: the 120 MiB job passes; CPU and wall probes).
+- known limits: one shared host (times depend on load; memory repeats within 1 MiB); no engine (numpy/OpenCV absent), so the 40 Mpx cap
+  is supported for rendering only; tiles on request not timed; PNG only; realistic A1 is synthetic; one real set; extraction measured
+  to 198 694 objects, larger figures in the report are a fitted model; RSS under a ceiling is elastic (section 5.2).
+- integration notes: (1) ADR-0025 changes only by a dated addendum citing the report: candidate values are in report section 6
+  (keep 768 MiB for render/tile children; 1024 MiB or a pre-check for the child that runs pdfplumber; any end without a result is
+  `RENDER_FAILED`; keep 40 Mpx with the dpi formula; do not keep the whole tile pyramid as blobs: 4.7-6.1 GB per 1 200 vector pages,
+  11.8 GB for scans). (2) `CMP-INGEST-01`: real set page `v1.pdf` p7 has 536 426 elements, above `PAGE_ELEMENTS_MAX` 400 000, so the
+  envelope would refuse that version; 13 of 59 pages exceed the 75 486 the envelope comment calls the real maximum. (3) The real set is
+  still in `.local/comparison-measure/13AV-RD-EM2-PA/`; its README says to delete it after the measurement. The generated A1 PDFs were
+  deleted. Raw records: `.local/comparison-measure/results-final/` (numbers only, outside git).
