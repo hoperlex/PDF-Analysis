@@ -1,7 +1,7 @@
 {
   "lock_version": 1,
   "purpose": "Everything a later regeneration needs to prove the committed API client matches its input: the toolchain pins, the exact generator invocation, and the exact OpenAPI bytes the client was generated from. Verified by web/tests/guards/frontend-lock.guard.test.ts, which recomputes every digest here and fails if one has moved.",
-  "owner": "CONTRACT-1-8-0-01 reseal",
+  "owner": "AR-V3-DECISIONS-01 reseal",
   "toolchain": {
     "node": "22.23.1",
     "npm": "10.9.8",
@@ -16,9 +16,9 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "e82f1df0f9c3951526592e92ccfcaa69d8182fd4ec024d9a46cca7c69866cb0a",
-    "content_commit": "7288e82c",
-    "content_commit_subject": "CONTRACT-1-8-0-01 (R-146ar): shared contract_version 1.7.0 -> 1.8.0 across the families, served constants, edge bodies, fixtures and tests",
+    "sha256": "43f6232677c024d17d04e2370399928dcfcae53ddf3f8995893aada88b2ff7df",
+    "content_commit": "e431bbb6",
+    "content_commit_subject": "AR-V3-DECISIONS-01 (R-146at): getRunNormVerification description (the served report of an AR v3 beta Run); no path, operation, schema or field change",
     "dispatch_named_commit": "a3e83f39cfcb02f4ea5565e6f45f3f2b2f720e97",
     "commit_note": "COMPARE-PERSISTED-SUMMARY-01 (B1, B2) adds approveSheetPairing, withdrawSheetPairing and generateComparisonSummary, thirteen schemas, the optional approved_pairs (with its optional summary) of compareDocumentVersions and the prose of analysis_input_budget_exceeded; contract content sealed under 1.7.0 and moved to 1.8.0 by CONTRACT-1-8-0-01 under owner ruling R-146ar (95/107/314), migration 0035, no new error code.",
     "openapi_version": "3.1.0",
@@ -27,7 +27,7 @@
     "operations": 107,
     "component_schemas": 314,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "e82f1df0f9c3951526592e92ccfcaa69d8182fd4ec024d9a46cca7c69866cb0a",
+    "snapshot_sha256": "43f6232677c024d17d04e2370399928dcfcae53ddf3f8995893aada88b2ff7df",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "56ae4ef03019cf617d3c89620e380cda45115b5e8df20c0badd40f38182e6fd3",
-      "index.ts": "544ac300ca4ec7d33eb2826e6d874b333f7259bc5e6d28b8268cef5b1a51da30",
-      "operations.gen.ts": "87d53e0e6c6eaf56131760f4f67c0b4e27a5476f0d65d8ceadee51c40a784875",
-      "types.gen.ts": "b3c2e44769fd99c327748c98d744a2a35a69da032c8345ba758b10f582743434"
+      "client.gen.ts": "1dbdf3a6126708fe668428b0ca7376c84751dbca87eb85f849ecd4016c1e75e7",
+      "index.ts": "b8a8894832eb94b28e40e3440b08bbb158e78d6cdc9dfeee95bc06d34e3236ac",
+      "operations.gen.ts": "ce40de1dd140c2e6d593717754366e1057fd2a5a75177ee8e98bba9d654eef45",
+      "types.gen.ts": "544ce8065294e9b7fa4a207cbf1e557a80e7fe11ea5babb4cd50fe384d5ef28b"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },
