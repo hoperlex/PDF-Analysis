@@ -137,10 +137,9 @@ def decision_problems(doc: dict[str, Any]) -> list[str]:
         problems.append("items_not_c01_to_c22_in_order")
         return problems
     modes = {item["id"]: item.get("mode") for item in items}
-    policy_modes = {item.item_id: item.mode for item in policy.items}
     context = tuple(i for i in ITEM_IDS if modes[i] == "context_only")
     provisional = tuple(i for i in ITEM_IDS if modes[i] == "provisional_citation")
-    if context != POLICY_CONTEXT_ONLY or len(provisional) != 14 or modes != policy_modes:
+    if context != POLICY_CONTEXT_ONLY or len(provisional) != 14:
         problems.append("mode_split_differs_from_policy")
     span_of = {
         item["id"]: [(c["norm_document_id"], c["ordinal_first"], c["ordinal_last"])
@@ -323,6 +322,13 @@ def test_the_real_map_tool_accepts_the_decisions_and_builds_six_distinct_maps() 
     assert [m.scope_id for m in maps.maps] == list(SCOPES)
     assert len({m.sha256 for m in maps.maps}) == 6
     assert maps.review is None  # the summary will say pending_expert
+
+
+def test_the_beta_policy_still_has_the_ordered_split() -> None:
+    """The split above is hard-coded from the integrator's order; a policy change must show here."""
+    modes = {item.item_id: item.mode for item in load_beta_source_policy().items}
+    assert tuple(i for i, m in modes.items() if m == "context_only") == POLICY_CONTEXT_ONLY
+    assert sum(m == "provisional_citation" for m in modes.values()) == 14
 
 
 def test_the_vector_placeholder_is_wholly_present_and_marked_or_wholly_replaced() -> None:
