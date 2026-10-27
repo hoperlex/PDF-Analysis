@@ -136,7 +136,7 @@ comparison journal.
 (it only touches rows of attempts the queue lost). The grant's query change is behaviour-neutral while the table is empty.
 
 ## Handoff
-- changed files: filled in by the last commit
-- commands/results: filled in by the last commit
-- known limits: filled in by the last commit
-- integration notes: filled in by the last commit
+- changed files: `src/auditmanager/comparison/spend/**` (new: repository, caller, ceilings, model, errors, settler), `src/auditmanager/comparison/public.py`, `src/auditmanager/executors/runner_repository.py`, `src/auditmanager/dashboard/repository.py`, `src/auditmanager/jobs/repository.py` (the one granted constant), `scripts/recovery/grant_classification.py`, `tests/unit/comparison/spend/**`, `tests/integration/comparison/spend/**`, `docs/program/CMP-SPEND-01.md`, this file
+- commands/results: unit `tests/unit/comparison/spend` 113 passed + 1 xfailed; integration `tests/integration/comparison/spend` 85 passed (own stack, head `0038`); `tests/integration/comparison` 324 passed; `EXEC-PAR-QUEUE-01` tests (jobs connection limit, worker slots, worker composition, `tests/unit/workers`) 73 passed unmodified; executors / jobs / dashboard neighbours 182 passed; `tests/contract` minus the three `D-220` files 1307 passed; 30 mutation proofs in the report section 7 (two survivors found and pinned), each shown red and restored
+- known limits: the `pull.py` hunk that makes a `PullAdapter` write the `comparison_call` origin is the integrator's (pinned by a strict xfail); the dispatch hint `_NEXT_JOB` does not see comparison calls (the claim refuses a Run, the worker's bounded retry absorbs it); `ai_job_id` in an item's payload is the job key until `CMP-SEAL-C2` writes the job; the queue's reclaim does not ask the settlers for a cancelled item (guarded here, one line in the queue to fix); no handler registered, no live call made
+- integration notes: report sections 8 and 9; a later lane builds `ComparisonModelCaller(deps.session_factory)` and returns `error.as_outcome()` from its handler
