@@ -9,9 +9,11 @@ retyped:
   every numbered change the quoted fragments after ``adds`` (the prompt must carry them) and
   after ``removes`` (the prompt must not carry them). A change the parser cannot read is an
   error, never a skip;
-* ``SECTION-WIDEN-G1-01.md``, ``-G2-``, ``-G3-`` -- each report's machine-readable block between
-  ``<!-- fragments:begin -->`` and ``<!-- fragments:end -->`` (the block the report's own check
-  command reads), taken as it stands;
+* ``SECTION-WIDEN-G1-01.md``, ``-G2-``, ``-G3-`` and ``SECTION-CATEGORY-OCR-01.md`` -- each report's
+  machine-readable block between ``<!-- fragments:begin -->`` and ``<!-- fragments:end -->`` (the block
+  the report's own check command reads), taken as it stands. An entry may carry an optional ``kind``
+  (``present``, the default, or ``absent``: the sentence must stay out of the listed sections; the
+  category report uses it to keep ``documentation`` out of the nine other prompts);
 * ``SECTION-WIDEN-G3-01.md``, section «The ledger fragment this lane supersedes» -- the ledger
   sentence that lane replaced. It is recorded in the table as ``superseded``, not dropped.
 
@@ -45,6 +47,8 @@ WIDEN = {
     "G1": "SECTION-WIDEN-G1-01",
     "G2": "SECTION-WIDEN-G2-01",
     "G3": "SECTION-WIDEN-G3-01",
+    #: `SECTION-CATEGORY-OCR-01`: the omission paragraph of AI TX EOM SS ITP (`R-146ao`).
+    "C1": "SECTION-CATEGORY-OCR-01",
 }
 #: The registry order of the 14 sections (the ledger's own order).
 SECTION_ORDER = ("AI", "PS", "POS", "TX", "KJ", "KM", "OV", "VK", "PT", "EOM", "SS", "ITP", "GP", "PB")
@@ -82,13 +86,16 @@ def widen_entries(group: str, report_text: str) -> list[dict[str, Any]]:
         raise SourceError(f"{WIDEN[group]}: no machine-readable fragment block")
     entries: list[dict[str, Any]] = []
     for fragment in json.loads(match.group(1)):
-        if set(fragment) != {"id", "sections", "role", "text"}:
+        if set(fragment) not in ({"id", "sections", "role", "text"}, {"id", "sections", "role", "text", "kind"}):
             raise SourceError(f"{WIDEN[group]}: fragment {fragment.get('id')!r} has keys {sorted(fragment)}")
+        kind = fragment.get("kind", "present")
+        if kind not in ("present", "absent"):
+            raise SourceError(f"{WIDEN[group]}: fragment {fragment.get('id')!r} has kind {kind!r}")
         entries.append(
             {
                 "id": f"{group}:{fragment['id']}",
                 "source": WIDEN[group],
-                "kind": "present",
+                "kind": kind,
                 "sections": list(fragment["sections"]),
                 "role": fragment["role"],
                 "text": normalise(fragment["text"]),

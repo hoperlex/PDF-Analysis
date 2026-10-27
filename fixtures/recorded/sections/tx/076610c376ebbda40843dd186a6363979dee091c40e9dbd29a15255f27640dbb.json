@@ -7,7 +7,7 @@
     "kind": "synthetic",
     "profile_status": "reviewed",
     "prompt_bundle_id": "pb_01M5AXG1K6E7TR87P0RGP6QBZM",
-    "prompt_bundle_sha256": "5bc0b42d658f2305e844c108be6654e09bef1294ddffbb77f8c1e51e394a852a",
+    "prompt_bundle_sha256": "05d6ad626b1c41354837a6515aa0661448e3b9bfcc2edcfe1a2e8e32efa94fba",
     "section_code": "TX",
     "statement": "Synthetic: authored by hand for W59-ANALYSIS-SETTINGS-01 to prove section routing in recorded mode. No model produced this reply and no provider call was made. Not field evidence for the profile's review.",
     "task_id": "W59-ANALYSIS-SETTINGS-01",
@@ -15,7 +15,7 @@
   },
   "output_text": "{\"observations\": [{\"category\": \"internal_contradiction\", \"finding_text\": \"Синтетический ответ (ТХ), не результат вызова модели: степень огнестойкости здания указана по-разному: II и III.\", \"recommendation_text\": \"Оставить одно значение степени огнестойкости здания.\", \"evidence\": [{\"page_number\": 2, \"quote\": \"Степень огнестойкости здания — II.\"}, {\"page_number\": 6, \"quote\": \"Степень огнестойкости здания — III.\"}]}, {\"category\": \"explicit_placeholder\", \"finding_text\": \"Синтетический ответ (ТХ), не результат вызова модели: вместо типа заполнения оконных проёмов оставлено «уточнить».\", \"recommendation_text\": \"Определить тип заполнения оконных проёмов.\", \"evidence\": [{\"page_number\": 8, \"quote\": \"Тип заполнения оконных проёмов — уточнить.\"}]}]}",
   "recording_version": "1.0.0",
-  "request_sha256": "13a339f2aeebcec2be7ef4d14df9568c05231e420a9e77c16c617c6349ae658e",
+  "request_sha256": "076610c376ebbda40843dd186a6363979dee091c40e9dbd29a15255f27640dbb",
   "stop_reason": "end_turn",
   "usage": {
     "input_tokens": 2350,

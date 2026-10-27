@@ -6,7 +6,8 @@
   "SECTION-REVIEW-LEDGER-01": "docs/program/SECTION-REVIEW-LEDGER-01.md",
   "SECTION-WIDEN-G1-01": "docs/program/SECTION-WIDEN-G1-01.md",
   "SECTION-WIDEN-G2-01": "docs/program/SECTION-WIDEN-G2-01.md",
-  "SECTION-WIDEN-G3-01": "docs/program/SECTION-WIDEN-G3-01.md"
+  "SECTION-WIDEN-G3-01": "docs/program/SECTION-WIDEN-G3-01.md",
+  "SECTION-CATEGORY-OCR-01": "docs/program/SECTION-CATEGORY-OCR-01.md"
  },
  "fragments": [
   {
@@ -1214,6 +1215,158 @@
    ],
    "role": "scope: which totals may be added",
    "text": "Здесь это баланс территории: записанный итог («Итого», «Всего» или строка площади участка в конце той же таблицы) и строки позиций (застройка, твёрдые покрытия, озеленение и подобные), из которых он составлен, — площади или доли в процентах. Площади сравнивай с итогом площадей, доли — с записанным итогом долей; итог, которого в таблице нет, не подставляй. Площадь, которую текст относит к другим границам (благоустройства, проектирования), с итогом не сравнивай; строки разных очередей не смешивай. Другие итоги не складывай."
+  },
+  {
+   "id": "C1:O-HEAD",
+   "source": "SECTION-CATEGORY-OCR-01",
+   "kind": "present",
+   "sections": [
+    "AI",
+    "TX",
+    "EOM",
+    "SS",
+    "ITP"
+   ],
+   "role": "rule: the one exception to condition 5 and to the two categories",
+   "text": "Исключение из условия 5 и из слов «ровно две категории» — пропуск, который затем проверяет программа."
+  },
+  {
+   "id": "C1:O-SCOPE-AI",
+   "source": "SECTION-CATEGORY-OCR-01",
+   "kind": "present",
+   "sections": [
+    "AI"
+   ],
+   "role": "scope: which named item may be reported as an omission",
+   "text": "Здесь это марка или наименование, которое текст называет на плане, развёртке или в экспликации, но которого нет в ведомости отделки, ведомости дверных заполнений или спецификации."
+  },
+  {
+   "id": "C1:O-SCOPE-TX",
+   "source": "SECTION-CATEGORY-OCR-01",
+   "kind": "present",
+   "sections": [
+    "TX"
+   ],
+   "role": "scope: which named item may be reported as an omission",
+   "text": "Здесь это позиция или наименование оборудования, которое текст называет в экспликации оборудования или на схеме, но которого нет в спецификации оборудования."
+  },
+  {
+   "id": "C1:O-SCOPE-EOM",
+   "source": "SECTION-CATEGORY-OCR-01",
+   "kind": "present",
+   "sections": [
+    "EOM"
+   ],
+   "role": "scope: which named item may be reported as an omission",
+   "text": "Здесь это щит, группа или аппарат, который текст называет на схеме, но которого нет в спецификации оборудования."
+  },
+  {
+   "id": "C1:O-SCOPE-SS",
+   "source": "SECTION-CATEGORY-OCR-01",
+   "kind": "present",
+   "sections": [
+    "SS"
+   ],
+   "role": "scope: which named item may be reported as an omission",
+   "text": "Здесь это прибор или линия, которые текст называет на схеме, но которых нет в спецификации оборудования или в кабельном журнале."
+  },
+  {
+   "id": "C1:O-SCOPE-ITP",
+   "source": "SECTION-CATEGORY-OCR-01",
+   "kind": "present",
+   "sections": [
+    "ITP"
+   ],
+   "role": "scope: which named item may be reported as an omission",
+   "text": "Здесь это аппарат, насос или арматура, которые текст называет на схеме, но которых нет в спецификации оборудования."
+  },
+  {
+   "id": "C1:O-REPORT",
+   "source": "SECTION-CATEGORY-OCR-01",
+   "kind": "present",
+   "sections": [
+    "AI",
+    "TX",
+    "EOM",
+    "SS",
+    "ITP"
+   ],
+   "role": "category and object: the existing documentation value, the term, the range, the heading quote",
+   "text": "Сообщай его категорией documentation, только если цитата места, называющего запись, дословно содержит её, и заполнен объект пропуска из схемы: запись так, как она напечатана в цитате (короткое обозначение, не более пяти слов), первая и последняя страницы всей ведомости или спецификации и дословная цитата её заголовка на этих страницах."
+  },
+  {
+   "id": "C1:O-CHECK",
+   "source": "SECTION-CATEGORY-OCR-01",
+   "kind": "present",
+   "sections": [
+    "AI",
+    "TX",
+    "EOM",
+    "SS",
+    "ITP"
+   ],
+   "role": "the program's check: the term must not occur in the range",
+   "text": "Программа проверит, что записи нет в тексте этих страниц, и отбросит находку, если она там есть."
+  },
+  {
+   "id": "C1:O-SPELLING",
+   "source": "SECTION-CATEGORY-OCR-01",
+   "kind": "present",
+   "sections": [
+    "AI",
+    "TX",
+    "EOM",
+    "SS",
+    "ITP"
+   ],
+   "role": "conservative: another spelling is a record",
+   "text": "Другое написание той же записи считай записью; сомневаешься — не сообщай."
+  },
+  {
+   "id": "C1:O-WORDING",
+   "source": "SECTION-CATEGORY-OCR-01",
+   "kind": "present",
+   "sections": [
+    "AI",
+    "TX",
+    "EOM",
+    "SS",
+    "ITP"
+   ],
+   "role": "wording: a pair of places, no claim of non-existence or requirement",
+   "text": "В finding_text пиши только, что запись названа на такой-то странице и не найдена на таких-то; не пиши, что её нет в проекте или что она обязательна."
+  },
+  {
+   "id": "C1:O-OTHER",
+   "source": "SECTION-CATEGORY-OCR-01",
+   "kind": "present",
+   "sections": [
+    "AI",
+    "TX",
+    "EOM",
+    "SS",
+    "ITP"
+   ],
+   "role": "the object is for the one category only",
+   "text": "У остальных категорий объекта пропуска нет."
+  },
+  {
+   "id": "C1:O-NONE",
+   "source": "SECTION-CATEGORY-OCR-01",
+   "kind": "absent",
+   "sections": [
+    "PS",
+    "POS",
+    "KJ",
+    "KM",
+    "OV",
+    "VK",
+    "PT",
+    "GP",
+    "PB"
+   ],
+   "role": "the other nine sections keep two categories",
+   "text": "documentation"
   }
  ]
 }
