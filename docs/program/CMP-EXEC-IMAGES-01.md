@@ -259,7 +259,10 @@ handed out, and the end-to-end comparison request reaches a runner of the old sh
 
 `git diff --name-only cc3dd36b HEAD | grep -E '^(contracts/|db/migrations/|pyproject.toml$|uv.lock$|web/|src/auditmanager/bootstrap/(composition|adapters)|src/auditmanager/api/schemas/|src/auditmanager/comparison/|src/auditmanager/executors/model.py|scripts/|infra/)'`
 prints nothing (exit 1) on the final tree. No migration, contract, root lock, composition root, adapter module, wire model or
-global style was touched. Nothing was pushed or merged; no tag was made.
+global style was touched. `python3 scripts/task_handoff.py --task docs/program/tasks/CMP-EXEC-IMAGES-01.md --output .local/...`
+on `c4a9a0aa` reports `Path check: PASS` (every changed file is inside the task's allowed paths) and `Whitespace check: PASS`; its
+`Check status` is `INCOMPLETE` because no command checks were passed to it (the checks of section 7 were run by hand). Nothing was
+pushed or merged; no tag was made.
 
 ## Appendix: the quoted mutations
 
