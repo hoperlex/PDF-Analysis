@@ -5,7 +5,7 @@
   "length_rule": {
     "limit_inference_tokens": 512,
     "authored_limit_characters": 1200,
-    "estimate_method": "characters only; the tokenizer is not available on this host, so no token count was measured. Upper bound: the inference input is the text plus two special tokens, and a SentencePiece tokenizer with Cyrillic coverage produces at most one token per character, so tokens <= characters + 2. embed-texts refuses an over-long text and never truncates it",
+    "estimate_method": "authored as a character-based bound because the tokenizer was not on the authoring host: the inference input is the text plus two special tokens, and a SentencePiece tokenizer with Cyrillic coverage produces at most one token per character, so tokens <= characters + 2. The tokens were measured afterwards in the vector run: token_count_by_item in vectors-provenance.json, maximum 86 (C05), far under the 512 limit. embed-texts refuses an over-long text and never truncates it",
     "longest_text_characters": 314,
     "shortest_text_characters": 230,
     "worst_case_inference_tokens_of_longest": 316
