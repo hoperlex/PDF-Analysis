@@ -175,7 +175,7 @@ def test_the_counts_are_the_ones_the_documents_state() -> None:
         "SECTION-WIDEN-G1-01": (20, 56),
         "SECTION-WIDEN-G2-01": (31, 40),
         "SECTION-WIDEN-G3-01": (23, 59),
-        # `SECTION-CATEGORY-OCR-01`: 11 sentences in the five prompts (7 shared, 5 scopes) and one `absent` entry for the nine others.
+        # `SECTION-CATEGORY-OCR-01`: 11 sentences in the five prompts (6 shared, 5 scopes) and one `absent` entry for the nine others.
         "SECTION-CATEGORY-OCR-01": (12, 44),
     }
     for source, (fragments, pairs) in expected.items():

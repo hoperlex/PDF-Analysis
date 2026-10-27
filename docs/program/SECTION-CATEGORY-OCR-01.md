@@ -246,7 +246,7 @@ Recordings: five files renamed to the keys of the new requests and their `origin
 
 ## The omission paragraph and the new fragments
 
-Eleven sentences stand in the five prompts (seven shared, five scope sentences, one per section; the block in the Design section is the source, the builder reads it) and `O-NONE` keeps the category name out of the other nine. Growth per prompt: AI +985, TX +963, EOM +918, SS +934, ITP +921 characters (limit 1,200); the response schema grows by 974 characters (627 to 1,601). The paragraph is inserted directly after condition 5 and calls itself the one exception to it and to «ровно две категории».
+Eleven sentences stand in the five prompts (six shared, five scope sentences, one per section; the block in the Design section is the source, the builder reads it) and `O-NONE` keeps the category name out of the other nine. Growth per prompt: AI +985, TX +963, EOM +918, SS +934, ITP +921 characters (limit 1,200); the response schema grows by 974 characters (627 to 1,601). The paragraph is inserted directly after condition 5 and calls itself the one exception to it and to «ровно две категории».
 
 ## The specimens
 
@@ -266,7 +266,7 @@ Replayed through `run_text_analysis` with each section's own profile over a text
 
 ## Mutation table
 
-Each mutation is one exact replacement in a committed source or prompt, applied to the worktree, the named tests run, the file restored with `git checkout -- <file>` (`git status` clean after each; the script is `mutate.py`, kept in the session scratch and summarised here). «Red» counts are of the tests named by the mutation, all of which pass unmutated (507 passed, 1 skipped for the union; the skip is the stack-only test).
+Each mutation is one exact replacement in a committed source or prompt, applied to the worktree, the named tests run, the file restored with `git checkout -- <file>` (`git status` clean after each; the script is `mutate.py`, kept in the session scratch and summarised here). «Red» counts are of the tests named by the mutation, all of which pass unmutated (507 passed, 1 skipped for the union; the skip is the legacy-commit hash check). No mutation test touches a database.
 
 | # | Mutation | Result | Red tests (shortened) |
 | --- | --- | --- | --- |
@@ -313,7 +313,7 @@ All with `BS=$(ls -d /root/projects/PDF-Analysis/.venv/bootstrap/lib/python3*/si
 
 ## Integration notes
 
-- **Merge.** The diff adds 21 files and edits 27 (5 of them renames of recordings). It touches no contract, migration, `web/`, `infra/`, `bootstrap/`, `api/`, `findings/` file, none of the nine other packages and none of their recordings (`git diff --name-only 05f4584d..HEAD` filtered for those paths prints nothing). The one edit in `runs/executor.py` is the loader's call site; `runs/commands.py` is not edited.
+- **Merge.** The diff adds 22 files, edits 27 and renames 5 recordings. It touches no contract, migration, `web/`, `infra/`, `bootstrap/`, `api/`, `findings/` file, none of the nine other packages and none of their recordings (`git diff --name-only 05f4584d..HEAD` filtered for those paths prints nothing). The one edit in `runs/executor.py` is the loader's call site; `runs/commands.py` is not edited.
 - **The recorded stand.** The five sections' recordings are new files under new keys; an old key finds nothing, as for any prompt edit. The canonical `fixtures/recorded/text_analysis/` is untouched.
 - **Metrics.** A five-section run gains `omissions_proposed|published|dropped` and `omissions_dropped_<reason>` (seven reasons); a call that carried a block gains `recognised_pages` and `recognised_characters`. Any other run's metrics do not move (`metrics` keys are `^[a-z][a-z0-9_]{0,63}$` scalars, the longest new one is 42 characters).
 - **A follow-up outside this lane's paths.** The start-time refusal `analysis_input_budget_exceeded` (`runs/commands.py`) compares `text_character_count` alone. `recognised_character_count` is on the version row; adding it there would refuse a scan-heavy volume at `startRun` instead of at the window plan (`window_plan_over_limit`, reason with both figures, before any call).
@@ -331,3 +331,14 @@ All with `BS=$(ls -d /root/projects/PDF-Analysis/.venv/bootstrap/lib/python3*/si
 6. **Recognised text.** Only TEXT entries of the pages the version stores as text-less are sent; IMAGE descriptions never. The OCR is rendered as one JSON string per page: it keeps the words and loses the markdown layout of tables. The notice and the quoting are the lane's measures against instructions inside scans; they are untested against a model. More client text goes to the provider (`A-2`, widened by `R-146aq`).
 7. **Wording.** The five paragraphs, the notice and the program's sentence were written by the lane; the token guard and the sentence guard see that they are present and sourced, not that they are right. The five recordings and the ten specimens are hand-authored; passing them proves the stage's mechanics, never a profile's quality.
 8. **Not added.** The reverse omission (an item in the schedule absent from the plans), a list that is merely shorter in one place, any comparison of the model's `term` with a synonym table, and any use of the OCR to confirm a finding.
+
+## Proof that forbidden paths are untouched, and the last checks
+
+`git diff --name-only 05f4584d..HEAD`, filtered for `contracts/`, `db/`, `web/`, `infra/`, `scripts/`, the nine other packages (`ps pos kj km ov vk pt gp pb`) and their recordings, `findings/`, `bootstrap/`, `api/`, `runs/commands.py` and `fixtures/recorded/text_analysis`, prints nothing (0 lines). Added 22, modified 27, renamed 5 (the recordings), all inside the allowed paths of the task file.
+
+| Check (on the committed tree) | Result |
+| --- | --- |
+| `tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py` | 105 passed |
+| the governance one-liner on `docs/program/tasks/SECTION-CATEGORY-OCR-01.md` | `[]` |
+| `git diff --check` | clean |
+| `git status --short` | empty |
