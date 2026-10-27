@@ -149,14 +149,20 @@ def test_authored_shape_and_form() -> None:
     # development candidate; no six-Run or verified citation claim is authored. 0.8.1
     # (RELEASE-0-8-1-DEV-01) is the next development candidate: the pack status, the
     # pack-gated six-check start and its group review, and three interface repairs; it
-    # claims no verified citation, installed pack or numerical conclusion.
+    # claims no verified citation, installed pack or numerical conclusion. 0.8.2 is the
+    # executor choice of a run. 0.9.0 (RELEASE-0-9-0-DEV-01) is the next development
+    # candidate: sheet-pairing approval and the recorded-only summary in the version
+    # comparison, the 14 section profiles at 1.1.0/1.2.0 (reviewed with no human review),
+    # whole-page windows for a large text, optimisation for every section, the removal of
+    # the ordinary AR start, and the dashboard sections sentence; it claims no measured
+    # quality for any prompt.
     assert {entry["version"]: entry["revision"] for _, entry in entries} == {
-        "0.8.2": 1, "0.8.1": 1, "0.8.0": 1, "0.7.0": 2, "0.6.0": 2, "0.5.1": 1, "0.5.0": 1,
+        "0.9.0": 1, "0.8.2": 1, "0.8.1": 1, "0.8.0": 1, "0.7.0": 2, "0.6.0": 2, "0.5.1": 1, "0.5.0": 1,
         "0.4.0": 1, "0.3.0": 2, "0.2.0": 2,
     }
     assert form_failures(entries, version=(ROOT / "VERSION").read_text().strip(), terms=_dictionary()) == set()
     assert [entry["version"] for _, entry in entries] == [
-        "0.8.2", "0.8.1", "0.8.0", "0.7.0", "0.6.0", "0.5.1", "0.5.0", "0.4.0", "0.3.0", "0.2.0",
+        "0.9.0", "0.8.2", "0.8.1", "0.8.0", "0.7.0", "0.6.0", "0.5.1", "0.5.0", "0.4.0", "0.3.0", "0.2.0",
     ]
     archive = entries[-1][1]
     assert archive["is_archive"] is True
