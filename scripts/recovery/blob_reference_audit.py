@@ -167,12 +167,8 @@ def _require_available(blobs: dict[str, tuple[str, BlobFact | None]], blob_id: s
     return entry[1]
 
 
-def audit_blob_references(session: Session) -> BlobReferenceAudit:
-    """Inspect one consistent restored snapshot using SELECT statements only.
-
-    The result is a DB-side requirement list, not an object-copy verdict. The
-    caller must keep the restore isolated and transaction read-only throughout.
-    """
+def _require_pinned_schema(session: Session) -> None:
+    """The head is the pinned one and the set of blob-referencing columns is the closed set above."""
     versions = [row["version_num"] for row in _rows(session, _VERSION)]
     if versions != [_HEAD]:
         raise BlobReferenceAuditRefused("migration head differs")
@@ -186,6 +182,15 @@ def audit_blob_references(session: Session) -> BlobReferenceAudit:
             f"Blob reference catalog differs: missing={sorted(_CATALOG_EXPECTED - catalog)}, "
             f"unknown={sorted(catalog - _CATALOG_EXPECTED)}"
         )
+
+
+def audit_blob_references(session: Session) -> BlobReferenceAudit:
+    """Inspect one consistent restored snapshot using SELECT statements only.
+
+    The result is a DB-side requirement list, not an object-copy verdict. The
+    caller must keep the restore isolated and transaction read-only throughout.
+    """
+    _require_pinned_schema(session)
 
     blobs: dict[str, tuple[str, BlobFact | None]] = {}
     available: list[BlobFact] = []
@@ -291,4 +296,111 @@ def audit_blob_references(session: Session) -> BlobReferenceAudit:
     return BlobReferenceAudit(tuple(counts), tuple(sorted(available, key=lambda fact: fact.blob_id)))
 
 
-__all__ = ["BlobFact", "BlobReferenceAudit", "BlobReferenceAuditRefused", "audit_blob_references"]
+# --- the other direction: published bytes that no table names -------------------------------------
+#
+# `CMP-STORAGE-PARTS-01`. `audit_blob_references` starts from the references and asks whether each
+# Blob is there. A comparison upload makes the opposite fault possible: the multipart object is
+# verified and published (`blob` is `available`) and the process dies before `comparison_upload_file.blob_id`
+# is written, so the bytes exist and nothing names them. The storage port has no delete of a published
+# blob (ADR-0025 decision 9: no eviction), so such bytes are made visible here rather than removed.
+
+_IDENTIFIER = re.compile(r"[a-z][a-z0-9_]*\Z")
+
+
+def _unreferenced_statement() -> Any:
+    """``SELECT`` of the available Blobs that none of the closed `_SOURCES` columns names.
+
+    The identifiers come from the closed constant set above (checked against a plain pattern, never
+    from input); the catalog check that precedes every use of this statement proves that no other
+    column references `public.blob`, so "no source names it" means "no table names it".
+    """
+    clauses = []
+    for schema, table, column in sorted(_SOURCES):
+        if not all(_IDENTIFIER.match(part) for part in (schema, table, column)):
+            raise BlobReferenceAuditRefused("a registered Blob source is not a plain identifier")
+        clauses.append(
+            f"NOT EXISTS (SELECT 1 FROM {schema}.{table} r WHERE r.{column} = b.blob_id)"
+        )
+    return text(
+        "SELECT b.blob_id, b.sha256, b.size_bytes, b.media_type FROM public.blob b "
+        "WHERE b.state = 'available' AND " + " AND ".join(clauses) + ' ORDER BY b.blob_id COLLATE "C"'
+    )
+
+
+_OPEN_COMPARISON_FILES = text("""
+    SELECT comparison_upload_file_id AS owner_id, declared_sha256, declared_size_bytes
+      FROM public.comparison_upload_file WHERE blob_id IS NULL
+     ORDER BY comparison_upload_file_id COLLATE "C"
+""")
+
+
+@dataclass(frozen=True, slots=True)
+class UnreferencedBlob:
+    """One available Blob no table names.
+
+    ``comparison_upload_file_ids`` are the files that hold no Blob yet and declared exactly these
+    bytes (the Blob identity is derived from the declared SHA-256 and size): empty when nothing in
+    the database explains the Blob.
+    """
+
+    blob_id: str
+    sha256: str
+    size_bytes: int
+    media_type: str
+    comparison_upload_file_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class UnreferencedBlobReport:
+    """Available Blobs that no table names, split by whether an open comparison file explains them.
+
+    ``attributed`` -- the Blob has the identity of the declared bytes of one or more comparison upload
+    files that hold no Blob: a completion killed between publication and the write of `blob_id`. The
+    file may be completed again (publication is idempotent by content). ``unattributed`` -- nothing in
+    the database explains the Blob. Neither is evidence of loss; both are stored bytes that no row
+    accounts for, listed so they are not invisible.
+    """
+
+    attributed: tuple[UnreferencedBlob, ...]
+    unattributed: tuple[UnreferencedBlob, ...]
+
+    @property
+    def total_bytes(self) -> int:
+        return sum(blob.size_bytes for blob in self.attributed + self.unattributed)
+
+
+def report_unreferenced_comparison_blobs(session: Session) -> UnreferencedBlobReport:
+    """List the available Blobs that no table names, by SELECT statements only.
+
+    Refuses (like `audit_blob_references`) unless the head is the pinned one and the set of columns
+    that reference a Blob is the closed set, so a newly added reference cannot make a referenced Blob
+    look orphaned. A restore that is being written to would show an in-flight publication as an
+    orphan; run it on the isolated snapshot, as the audit above.
+    """
+    _require_pinned_schema(session)
+
+    declared: dict[str, list[str]] = {}
+    for row in _rows(session, _OPEN_COMPARISON_FILES):
+        identity = str(derive_blob_id(sha256=row["declared_sha256"], size=row["declared_size_bytes"]))
+        declared.setdefault(identity, []).append(row["owner_id"])
+
+    attributed: list[UnreferencedBlob] = []
+    unattributed: list[UnreferencedBlob] = []
+    for row in _rows(session, _unreferenced_statement()):
+        fact = _fact(row, required=True)
+        assert fact is not None
+        files = tuple(declared.get(fact.blob_id, ()))
+        blob = UnreferencedBlob(fact.blob_id, fact.sha256, fact.size_bytes, fact.media_type, files)
+        (attributed if files else unattributed).append(blob)
+    return UnreferencedBlobReport(tuple(attributed), tuple(unattributed))
+
+
+__all__ = [
+    "BlobFact",
+    "BlobReferenceAudit",
+    "BlobReferenceAuditRefused",
+    "UnreferencedBlob",
+    "UnreferencedBlobReport",
+    "audit_blob_references",
+    "report_unreferenced_comparison_blobs",
+]
