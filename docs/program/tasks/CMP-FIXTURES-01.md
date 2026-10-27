@@ -96,7 +96,26 @@ answer keys; CMP-MEASURE-01 uses `realistic_a1.py`.
 Not applicable (test data and a tool).
 
 ## Handoff
-- changed files:
-- commands/results:
-- known limits:
-- integration notes:
+- changed files: 29 paths before this commit, all inside `allowed_paths`: `tools/fixtures/ar_corpus/pdfwrite.py`
+  (334 lines added, 0 deleted); `tools/fixtures/comparison/` (`__init__.py`, `outlines.py`, `scene.py`, `vs1.py`, `sp1.py`,
+  `build.py`, `realistic_a1.py`); `fixtures/comparison/` (`vs1/v1..v5.pdf` and `answer_key.json`, `sp1/old_p.pdf`,
+  `new_r1..r3.pdf` and `answer_key.json`, `README.md`, `.gitattributes`, `SHA256SUMS`); `tests/contract/fixtures_comparison/`
+  (six test modules and `cmp_fixtures_support.py`); this file and `docs/program/CMP-FIXTURES-01.md`. Commits on
+  `agent/cmp-fixtures-01`: `2af62130`, `608fdd3e`, `dd1e29fc`, `b82383e2`, `9ecf141a`, then the report commit.
+- commands/results: the required command gave `296 passed, 19249 subtests passed` (116 new, 114 in `fixtures_ar`, 66 in
+  `fixtures_seeded`; the two old directories gave the same 180 on the base tree); `build.py --check`, `build_ar_corpus.py --check`,
+  `build_portal_bundles.py --check`, `build_ar_specification.py --check` rc 0; `git diff --check` rc 0. The nine committed PDFs
+  are 1 043 745 bytes. The realistic A1 (temporary directory): 4 470 378 bytes, 76 000 painted paths, 185 983 elements by the
+  product reader's count (`--paint-ops 0`: 75 001 elements); `/Rotate 90`, CropBox offset 8.5 pt, one hidden OCG. Details and
+  eight code mutations that turned the tests red: `docs/program/CMP-FIXTURES-01.md`.
+- known limits: V5 has no A1 sheet (the A1 plan is split into two A2 parts); the scan is a 100 dpi 1-bit raster of our own,
+  not a real scan; stroked text is glyph outlines, not a centre-line font; the default realistic A1 is about 2.5 times the
+  largest real page by the reader's count (it also meets 76 000 painted paths); the hidden layer holds lines only; the channel
+  rules (required / forbidden / unconstrained) are this corpus's reading of the original's channels; plain PDF 1.7
+  (no Flate, no xref streams).
+- integration notes: merge `agent/cmp-fixtures-01` onto `integration/compare-modules`; no contract, migration, root lock,
+  `src/**`, `web/**` or `conftest.py` is touched, so light acceptance applies (`R-70`). Lanes assert against
+  `fixtures/comparison/vs1/answer_key.json` and `sp1/answer_key.json`; `CMP-MEASURE-01` runs
+  `python3 tools/fixtures/comparison/realistic_a1.py OUT.pdf --second OUT_B.pdf` (outside the repository). A lane that needs a
+  case or a different expectation stops to the wave's FIX slot and does not edit a key it does not own. Nothing was pushed,
+  merged or tagged.
