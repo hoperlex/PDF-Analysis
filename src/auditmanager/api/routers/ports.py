@@ -73,6 +73,9 @@ __all__ = [
     "RunnerPort",
     "SectionPort",
     "ComparisonPort",
+    "ComparisonUploadPort",
+    "ComparisonVersionOrderPort",
+    "VersionPagePort",
     "AnalysisProfilePort",
     "OptimisationPort",
     "SectionSpecificationPort",
@@ -1409,3 +1412,121 @@ class OptimisationProposalPort(Protocol):
         self, *, optimisation_pass_id: str, user_uid: str
     ) -> bytes:
         """The pass's proposals as the formula-escaped CSV bytes."""
+
+
+# --- comparison modules (`CMP-SEAL-C0`, ADR-0025) ----------------------------------------
+#
+# Three ports, one per lane group, sealed as stubs: every method answers ``503
+# dependency_unavailable`` in the shipped adapter until its lane wires it (plan section 4.0 rule
+# 1: the lane that implements an operation owns its adapter class, its rows here and its router
+# file). They return the wire models, as ``ReleasesPort`` does.
+
+
+@runtime_checkable
+class ComparisonUploadPort(Protocol):
+    """The twelve upload operations. `CMP-INGEST-01` (create, part, complete, proposal, confirm)
+    and `CMP-INGEST-02` (list, exclude, retry, pause, resume, cancel) implement them over
+    `CMP-STORAGE-PARTS-01`'s multipart staging."""
+
+    def create_upload(
+        self, *, project_uid: str, files: Sequence[models.ComparisonUploadFileDeclaration],
+        user_uid: str, idempotency_key: str,
+    ) -> models.ComparisonUpload:
+        """Declare the files of one batch. The limits of ADR-0025 decision 9 are refused here,
+        before the first part, as typed reasons under existing codes."""
+
+    def list_uploads(
+        self, *, project_uid: str, cursor: str | None, limit: int
+    ) -> models.ComparisonUploadPage:
+        """The project's batches, newest first, without their files. An unknown project is
+        ``not_found``."""
+
+    def get_upload(self, *, upload_id: str) -> models.ComparisonUpload:
+        """One batch with its files. An unknown batch is ``not_found``."""
+
+    def get_proposal(self, *, upload_id: str) -> models.ComparisonUploadProposal:
+        """The proposed grouping, order, stage and section."""
+
+    def put_part(
+        self, *, upload_id: str, file_id: str, part_number: int, content: bytes,
+        user_uid: str, idempotency_key: str,
+    ) -> models.ComparisonUploadPartReceipt:
+        """Stage one part (at most 16 MiB). The part has a database owner before its bytes are
+        staged (ADR-0025 decision 10)."""
+
+    def complete_file(
+        self, *, upload_id: str, file_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonUploadFile:
+        """Complete the multipart object and check the declared SHA-256 and size."""
+
+    def confirm_set(
+        self, *, upload_id: str, set_id: str, request: models.ConfirmComparisonUploadSetRequest,
+        user_uid: str, idempotency_key: str,
+    ) -> models.ComparisonProposalSet:
+        """The user's membership and order for one set."""
+
+    def exclude_set(
+        self, *, upload_id: str, set_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonProposalSet:
+        """Leave one set out of the batch."""
+
+    def retry_set(
+        self, *, upload_id: str, set_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonProposalSet:
+        """Queue a failed set again."""
+
+    def pause_upload(
+        self, *, upload_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonUpload:
+        """Pause after the set in hand."""
+
+    def resume_upload(
+        self, *, upload_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonUpload:
+        """Run a paused batch again."""
+
+    def cancel_upload(
+        self, *, upload_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonUpload:
+        """«Отменить пакет»: abort parts that were never completed. The bytes of completed
+        versions are removed only by the operator's project erase."""
+
+
+@runtime_checkable
+class ComparisonVersionOrderPort(Protocol):
+    """The order revisions of a document set. `CMP-INGEST-01` implements them."""
+
+    def list_orders(
+        self, *, project_uid: str, document_uid: str, cursor: str | None, limit: int
+    ) -> models.ComparisonVersionOrderList:
+        """The revisions, newest first. An unknown project or document is ``not_found``."""
+
+    def append_order(
+        self, *, project_uid: str, document_uid: str, version_uids: Sequence[str],
+        base_revision_no: int, user_uid: str, idempotency_key: str,
+    ) -> models.ComparisonVersionOrder:
+        """Append a revision. An expert's act; a stale ``base_revision_no`` is ``conflict``."""
+
+
+@runtime_checkable
+class VersionPagePort(Protocol):
+    """The page reads of a version, addressed by the identity of the page's profile (a page number
+    is an ordinal and never an address). `CMP-PROFILE-01` implements them from what the worker
+    stored; the API never calls PDFium."""
+
+    def list_profiles(
+        self, *, version_uid: str, cursor: str | None, limit: int
+    ) -> models.VersionPageProfilePage:
+        """The stored profiles of the version, by page number. An unknown version is ``not_found``."""
+
+    def get_profile(self, *, page_profile_id: str) -> models.VersionPageProfile:
+        """One page profile, or ``not_found``."""
+
+    def read_preview(self, *, page_profile_id: str) -> bytes:
+        """The stored preview PNG, or ``not_found``."""
+
+    def read_thumbnail(self, *, page_profile_id: str) -> bytes:
+        """The stored thumbnail PNG, or ``not_found``."""
+
+    def read_tile(self, *, page_profile_id: str, level: int, column: int, row: int) -> bytes:
+        """One tile PNG of the bounded pyramid, or ``not_found``."""

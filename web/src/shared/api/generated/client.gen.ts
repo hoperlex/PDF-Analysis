@@ -8,8 +8,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.8.0 (OpenAPI 3.1.0)
- *   sha256 b215912031f940b4cb20da7a80ad66b6ff2deec4274cba6cf2e0c72a29489be3
+ *   AuditManager PC-01 API 1.9.0 (OpenAPI 3.1.0)
+ *   sha256 5daf6416d4d4100f0a49ec2d834ca52a6139c2b29dc3c3cff68080983e2a1765
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -18,6 +18,8 @@
 import type { ApiResponse, RequestOptions } from '../transport';
 import { request } from '../transport';
 import type {
+  AppendComparisonVersionOrderInput,
+  AppendComparisonVersionOrderResult,
   AppendDecisionInput,
   AppendDecisionResult,
   ApproveRegistrationInput,
@@ -30,6 +32,8 @@ import type {
   ArchiveExecutorConnectionResult,
   ArchiveUserInput,
   ArchiveUserResult,
+  CancelComparisonUploadInput,
+  CancelComparisonUploadResult,
   CancelRunInput,
   CancelRunResult,
   CarryOverDecisionInput,
@@ -42,18 +46,26 @@ import type {
   ClassifyDocumentVersionResult,
   CompareDocumentVersionsInput,
   CompareDocumentVersionsResult,
+  CompleteComparisonUploadFileInput,
+  CompleteComparisonUploadFileResult,
+  ConfirmComparisonUploadSetInput,
+  ConfirmComparisonUploadSetResult,
   CorrectVersionClassificationInput,
   CorrectVersionClassificationResult,
   CreateAnalysisPresetInput,
   CreateAnalysisPresetResult,
   CreateAssignmentInput,
   CreateAssignmentResult,
+  CreateComparisonUploadInput,
+  CreateComparisonUploadResult,
   CreateExecutorConnectionInput,
   CreateExecutorConnectionResult,
   CreateProjectInput,
   CreateProjectResult,
   DecideOptimisationProposalInput,
   DecideOptimisationProposalResult,
+  ExcludeComparisonUploadSetInput,
+  ExcludeComparisonUploadSetResult,
   ExportOptimisationProposalsCsvInput,
   ExportOptimisationProposalsCsvResult,
   ExportRunCsvInput,
@@ -76,6 +88,10 @@ import type {
   GetArV3BetaPackStatusResult,
   GetAssignmentInput,
   GetAssignmentResult,
+  GetComparisonUploadInput,
+  GetComparisonUploadResult,
+  GetComparisonUploadProposalInput,
+  GetComparisonUploadProposalResult,
   GetDashboardSummaryInput,
   GetDashboardSummaryResult,
   GetDocumentVersionInput,
@@ -108,6 +124,8 @@ import type {
   GetUserResult,
   GetVersionBlocksInput,
   GetVersionBlocksResult,
+  GetVersionPageProfileInput,
+  GetVersionPageProfileResult,
   GetVersionSectionReviewInput,
   GetVersionSectionReviewResult,
   IssueRunnerTokenInput,
@@ -120,6 +138,10 @@ import type {
   ListAnalysisProfilesResult,
   ListAssignmentsInput,
   ListAssignmentsResult,
+  ListComparisonUploadsInput,
+  ListComparisonUploadsResult,
+  ListComparisonVersionOrdersInput,
+  ListComparisonVersionOrdersResult,
   ListDecisionHistoryInput,
   ListDecisionHistoryResult,
   ListDecisionsInput,
@@ -164,6 +186,8 @@ import type {
   ListRunsResult,
   ListUsersInput,
   ListUsersResult,
+  ListVersionPageProfilesInput,
+  ListVersionPageProfilesResult,
   ListVersionPortalBlocksInput,
   ListVersionPortalBlocksResult,
   ListVersionsInput,
@@ -172,6 +196,8 @@ import type {
   ListWorkersResult,
   MarkReleaseNotesReadInput,
   MarkReleaseNotesReadResult,
+  PauseComparisonUploadInput,
+  PauseComparisonUploadResult,
   PurgeUserInput,
   PurgeUserResult,
   ReadRegistrationStatusInput,
@@ -186,6 +212,10 @@ import type {
   ResetUserPasswordResult,
   RestoreUserInput,
   RestoreUserResult,
+  ResumeComparisonUploadInput,
+  ResumeComparisonUploadResult,
+  RetryComparisonUploadSetInput,
+  RetryComparisonUploadSetResult,
   ReviseAnalysisPresetInput,
   ReviseAnalysisPresetResult,
   ReviseExecutorConnectionInput,
@@ -220,6 +250,12 @@ import type {
   StreamDocumentVersionContentResult,
   StreamNormDocumentContentInput,
   StreamNormDocumentContentResult,
+  StreamVersionPagePreviewInput,
+  StreamVersionPagePreviewResult,
+  StreamVersionPageThumbnailInput,
+  StreamVersionPageThumbnailResult,
+  StreamVersionPageTileInput,
+  StreamVersionPageTileResult,
   StreamVersionPortalBlockCropInput,
   StreamVersionPortalBlockCropResult,
   SubmitExecutorTaskAnswerInput,
@@ -232,6 +268,8 @@ import type {
   UpdateMyProfileResult,
   UpdateUserInput,
   UpdateUserResult,
+  UploadComparisonUploadPartInput,
+  UploadComparisonUploadPartResult,
   UploadDocumentInput,
   UploadDocumentResult,
   UploadDocumentVersionInput,
@@ -242,6 +280,18 @@ import type {
   WithdrawSheetPairingResult,
 } from './operations.gen';
 import { OPERATIONS } from './operations.gen';
+
+/**
+ * Append a revision of the comparison order of a document set.
+ *
+ * `POST /projects/{project_uid}/documents/{document_uid}/comparison-version-orders` - a write; carries a required Idempotency-Key.
+ */
+export function appendComparisonVersionOrder(
+  input: AppendComparisonVersionOrderInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<AppendComparisonVersionOrderResult>> {
+  return request<AppendComparisonVersionOrderResult>(OPERATIONS.appendComparisonVersionOrder, input, options);
+}
 
 /**
  * Append one expert decision event.
@@ -313,6 +363,18 @@ export function archiveUser(
   options?: RequestOptions,
 ): Promise<ApiResponse<ArchiveUserResult>> {
   return request<ArchiveUserResult>(OPERATIONS.archiveUser, input, options);
+}
+
+/**
+ * Cancel an upload batch («Отменить пакет»).
+ *
+ * `POST /comparison-uploads/{comparison_upload_id}/cancellation` - a write; carries a required Idempotency-Key.
+ */
+export function cancelComparisonUpload(
+  input: CancelComparisonUploadInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CancelComparisonUploadResult>> {
+  return request<CancelComparisonUploadResult>(OPERATIONS.cancelComparisonUpload, input, options);
 }
 
 /**
@@ -388,6 +450,30 @@ export function compareDocumentVersions(
 }
 
 /**
+ * Complete one file and check it against its declared values.
+ *
+ * `POST /comparison-uploads/{comparison_upload_id}/files/{comparison_upload_file_id}/completion` - a write; carries a required Idempotency-Key.
+ */
+export function completeComparisonUploadFile(
+  input: CompleteComparisonUploadFileInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CompleteComparisonUploadFileResult>> {
+  return request<CompleteComparisonUploadFileResult>(OPERATIONS.completeComparisonUploadFile, input, options);
+}
+
+/**
+ * Confirm the membership and order of one proposed set.
+ *
+ * `POST /comparison-uploads/{comparison_upload_id}/sets/{comparison_upload_set_id}/confirmation` - a write; carries a required Idempotency-Key.
+ */
+export function confirmComparisonUploadSet(
+  input: ConfirmComparisonUploadSetInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ConfirmComparisonUploadSetResult>> {
+  return request<ConfirmComparisonUploadSetResult>(OPERATIONS.confirmComparisonUploadSet, input, options);
+}
+
+/**
  * Correct Version Classification
  *
  * `POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification/corrections`.
@@ -424,6 +510,18 @@ export function createAssignment(
 }
 
 /**
+ * Declare an upload batch of plain PDFs for comparison.
+ *
+ * `POST /projects/{project_uid}/comparison-uploads` - a write; carries a required Idempotency-Key.
+ */
+export function createComparisonUpload(
+  input: CreateComparisonUploadInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CreateComparisonUploadResult>> {
+  return request<CreateComparisonUploadResult>(OPERATIONS.createComparisonUpload, input, options);
+}
+
+/**
  * Create Executor Connection
  *
  * `POST /executor-connections` - a write; carries a required Idempotency-Key.
@@ -457,6 +555,18 @@ export function decideOptimisationProposal(
   options?: RequestOptions,
 ): Promise<ApiResponse<DecideOptimisationProposalResult>> {
   return request<DecideOptimisationProposalResult>(OPERATIONS.decideOptimisationProposal, input, options);
+}
+
+/**
+ * Leave one set out of the batch.
+ *
+ * `POST /comparison-uploads/{comparison_upload_id}/sets/{comparison_upload_set_id}/exclusion` - a write; carries a required Idempotency-Key.
+ */
+export function excludeComparisonUploadSet(
+  input: ExcludeComparisonUploadSetInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ExcludeComparisonUploadSetResult>> {
+  return request<ExcludeComparisonUploadSetResult>(OPERATIONS.excludeComparisonUploadSet, input, options);
 }
 
 /**
@@ -589,6 +699,30 @@ export function getAssignment(
   options?: RequestOptions,
 ): Promise<ApiResponse<GetAssignmentResult>> {
   return request<GetAssignmentResult>(OPERATIONS.getAssignment, input, options);
+}
+
+/**
+ * Read an upload batch with its files.
+ *
+ * `GET /comparison-uploads/{comparison_upload_id}`.
+ */
+export function getComparisonUpload(
+  input: GetComparisonUploadInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetComparisonUploadResult>> {
+  return request<GetComparisonUploadResult>(OPERATIONS.getComparisonUpload, input, options);
+}
+
+/**
+ * Read the grouping proposal of an upload batch.
+ *
+ * `GET /comparison-uploads/{comparison_upload_id}/proposal`.
+ */
+export function getComparisonUploadProposal(
+  input: GetComparisonUploadProposalInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetComparisonUploadProposalResult>> {
+  return request<GetComparisonUploadProposalResult>(OPERATIONS.getComparisonUploadProposal, input, options);
 }
 
 /**
@@ -784,6 +918,18 @@ export function getVersionBlocks(
 }
 
 /**
+ * Read the deterministic profile of one page.
+ *
+ * `GET /page-profiles/{comparison_page_profile_id}`.
+ */
+export function getVersionPageProfile(
+  input: GetVersionPageProfileInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetVersionPageProfileResult>> {
+  return request<GetVersionPageProfileResult>(OPERATIONS.getVersionPageProfile, input, options);
+}
+
+/**
  * Get Version Section Review
  *
  * `GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review`.
@@ -853,6 +999,30 @@ export function listAssignments(
   options?: RequestOptions,
 ): Promise<ApiResponse<ListAssignmentsResult>> {
   return request<ListAssignmentsResult>(OPERATIONS.listAssignments, input, options);
+}
+
+/**
+ * List the project's upload batches.
+ *
+ * `GET /projects/{project_uid}/comparison-uploads`.
+ */
+export function listComparisonUploads(
+  input: ListComparisonUploadsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListComparisonUploadsResult>> {
+  return request<ListComparisonUploadsResult>(OPERATIONS.listComparisonUploads, input, options);
+}
+
+/**
+ * List the revisions of the comparison order of a document set.
+ *
+ * `GET /projects/{project_uid}/documents/{document_uid}/comparison-version-orders`.
+ */
+export function listComparisonVersionOrders(
+  input: ListComparisonVersionOrdersInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListComparisonVersionOrdersResult>> {
+  return request<ListComparisonVersionOrdersResult>(OPERATIONS.listComparisonVersionOrders, input, options);
 }
 
 /**
@@ -1120,6 +1290,18 @@ export function listUsers(
 }
 
 /**
+ * List the stored page profiles of a version.
+ *
+ * `GET /versions/{version_uid}/page-profiles`.
+ */
+export function listVersionPageProfiles(
+  input: ListVersionPageProfilesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListVersionPageProfilesResult>> {
+  return request<ListVersionPageProfilesResult>(OPERATIONS.listVersionPageProfiles, input, options);
+}
+
+/**
  * List the portal blocks of one published version.
  *
  * `GET /versions/{version_uid}/portal-blocks`.
@@ -1165,6 +1347,18 @@ export function markReleaseNotesRead(
   options?: RequestOptions,
 ): Promise<ApiResponse<MarkReleaseNotesReadResult>> {
   return request<MarkReleaseNotesReadResult>(OPERATIONS.markReleaseNotesRead, input, options);
+}
+
+/**
+ * Pause an upload batch after the set in hand.
+ *
+ * `POST /comparison-uploads/{comparison_upload_id}/pause` - a write; carries a required Idempotency-Key.
+ */
+export function pauseComparisonUpload(
+  input: PauseComparisonUploadInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<PauseComparisonUploadResult>> {
+  return request<PauseComparisonUploadResult>(OPERATIONS.pauseComparisonUpload, input, options);
 }
 
 /**
@@ -1249,6 +1443,30 @@ export function restoreUser(
   options?: RequestOptions,
 ): Promise<ApiResponse<RestoreUserResult>> {
   return request<RestoreUserResult>(OPERATIONS.restoreUser, input, options);
+}
+
+/**
+ * Resume a paused upload batch.
+ *
+ * `POST /comparison-uploads/{comparison_upload_id}/resume` - a write; carries a required Idempotency-Key.
+ */
+export function resumeComparisonUpload(
+  input: ResumeComparisonUploadInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ResumeComparisonUploadResult>> {
+  return request<ResumeComparisonUploadResult>(OPERATIONS.resumeComparisonUpload, input, options);
+}
+
+/**
+ * Queue a failed set again.
+ *
+ * `POST /comparison-uploads/{comparison_upload_id}/sets/{comparison_upload_set_id}/retry` - a write; carries a required Idempotency-Key.
+ */
+export function retryComparisonUploadSet(
+  input: RetryComparisonUploadSetInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<RetryComparisonUploadSetResult>> {
+  return request<RetryComparisonUploadSetResult>(OPERATIONS.retryComparisonUploadSet, input, options);
 }
 
 /**
@@ -1456,6 +1674,42 @@ export function streamNormDocumentContent(
 }
 
 /**
+ * Stream the stored preview PNG of one page.
+ *
+ * `GET /page-profiles/{comparison_page_profile_id}/preview`.
+ */
+export function streamVersionPagePreview(
+  input: StreamVersionPagePreviewInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StreamVersionPagePreviewResult>> {
+  return request<StreamVersionPagePreviewResult>(OPERATIONS.streamVersionPagePreview, input, options);
+}
+
+/**
+ * Stream the stored thumbnail PNG of one page.
+ *
+ * `GET /page-profiles/{comparison_page_profile_id}/thumbnail`.
+ */
+export function streamVersionPageThumbnail(
+  input: StreamVersionPageThumbnailInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StreamVersionPageThumbnailResult>> {
+  return request<StreamVersionPageThumbnailResult>(OPERATIONS.streamVersionPageThumbnail, input, options);
+}
+
+/**
+ * Stream one tile PNG of a page's bounded pyramid.
+ *
+ * `GET /page-profiles/{comparison_page_profile_id}/tile`.
+ */
+export function streamVersionPageTile(
+  input: StreamVersionPageTileInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StreamVersionPageTileResult>> {
+  return request<StreamVersionPageTileResult>(OPERATIONS.streamVersionPageTile, input, options);
+}
+
+/**
  * Stream the PNG this product cut for one IMAGE block.
  *
  * `GET /versions/{version_uid}/portal-blocks/{portal_block_id}/crop`.
@@ -1528,6 +1782,18 @@ export function updateUser(
 }
 
 /**
+ * Stage one part of one file of an upload batch.
+ *
+ * `PUT /comparison-uploads/{comparison_upload_id}/files/{comparison_upload_file_id}/parts` - a write; carries a required Idempotency-Key.
+ */
+export function uploadComparisonUploadPart(
+  input: UploadComparisonUploadPartInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<UploadComparisonUploadPartResult>> {
+  return request<UploadComparisonUploadPartResult>(OPERATIONS.uploadComparisonUploadPart, input, options);
+}
+
+/**
  * Upload one portal bundle and publish an immutable document version.
  *
  * `POST /projects/{project_uid}/documents` - a write; carries a required Idempotency-Key.
@@ -1580,24 +1846,30 @@ export function withdrawSheetPairing(
  * import each function. The named exports above are the ordinary way in.
  */
 export const apiClient = {
+  appendComparisonVersionOrder,
   appendDecision,
   approveRegistration,
   approveSheetPairing,
   archiveAnalysisPreset,
   archiveExecutorConnection,
   archiveUser,
+  cancelComparisonUpload,
   cancelRun,
   carryOverDecision,
   changePassword,
   claimExecutorTask,
   classifyDocumentVersion,
   compareDocumentVersions,
+  completeComparisonUploadFile,
+  confirmComparisonUploadSet,
   correctVersionClassification,
   createAnalysisPreset,
   createAssignment,
+  createComparisonUpload,
   createExecutorConnection,
   createProject,
   decideOptimisationProposal,
+  excludeComparisonUploadSet,
   exportOptimisationProposalsCsv,
   exportRunCsv,
   exportRunXlsx,
@@ -1609,6 +1881,8 @@ export const apiClient = {
   getArV3BetaGroupReview,
   getArV3BetaPackStatus,
   getAssignment,
+  getComparisonUpload,
+  getComparisonUploadProposal,
   getDashboardSummary,
   getDocumentVersion,
   getEffectiveVendorLists,
@@ -1625,12 +1899,15 @@ export const apiClient = {
   getSpecificationPrices,
   getUser,
   getVersionBlocks,
+  getVersionPageProfile,
   getVersionSectionReview,
   issueRunnerToken,
   issueToken,
   listAnalysisPresets,
   listAnalysisProfiles,
   listAssignments,
+  listComparisonUploads,
+  listComparisonVersionOrders,
   listDecisionHistory,
   listDecisions,
   listDocuments,
@@ -1653,10 +1930,12 @@ export const apiClient = {
   listRunFindings,
   listRuns,
   listUsers,
+  listVersionPageProfiles,
   listVersionPortalBlocks,
   listVersions,
   listWorkers,
   markReleaseNotesRead,
+  pauseComparisonUpload,
   purgeUser,
   readRegistrationStatus,
   reauditRun,
@@ -1664,6 +1943,8 @@ export const apiClient = {
   requestExecutorProbe,
   resetUserPassword,
   restoreUser,
+  resumeComparisonUpload,
+  retryComparisonUploadSet,
   reviseAnalysisPreset,
   reviseExecutorConnection,
   revokeRunnerToken,
@@ -1681,12 +1962,16 @@ export const apiClient = {
   startRun,
   streamDocumentVersionContent,
   streamNormDocumentContent,
+  streamVersionPagePreview,
+  streamVersionPageThumbnail,
+  streamVersionPageTile,
   streamVersionPortalBlockCrop,
   submitExecutorTaskAnswer,
   submitRegistration,
   transitionAssignment,
   updateMyProfile,
   updateUser,
+  uploadComparisonUploadPart,
   uploadDocument,
   uploadDocumentVersion,
   uploadPriceList,

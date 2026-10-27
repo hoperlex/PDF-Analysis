@@ -29,6 +29,10 @@ from auditmanager.bootstrap.providers import (
     UnboundAdapter,
 )
 from auditmanager.bootstrap.runner import RunnerAdapter
+from auditmanager.comparison.public import (
+    COMPARISON_MODULES_ENV,
+    parse_modules as parse_comparison_modules,
+)
 from auditmanager.bootstrap.adapters import (
     AccountAdapter,
     AnalysisProfileAdapter,
@@ -50,6 +54,9 @@ from auditmanager.bootstrap.adapters import (
     ProjectAdapter,
     RegistrationAdapter,
     ReleasesAdapter,
+    ComparisonUploadAdapter,
+    ComparisonVersionOrderAdapter,
+    VersionPageAdapter,
     RunAdapter,
     SectionAdapter,
     SectionSpecificationAdapter,
@@ -286,6 +293,10 @@ def build_application(
     except (FileNotFoundError, ValueError) as exc:
         raise ConfigurationError(f"release version or build inputs are invalid: {exc}") from exc
     release_repository = ReleaseRepository(sessions, product_version=product_version)
+    try:
+        comparison_modules = parse_comparison_modules(env.get(COMPARISON_MODULES_ENV))
+    except ValueError as exc:
+        raise ConfigurationError(str(exc)) from exc
 
     store = S3BlobStore(
         S3StorageSettings(
@@ -407,8 +418,19 @@ def build_application(
             sessions, registrations=RegistrationAccessRepository()
         ),
         releases=ReleasesAdapter(
-            release_repository, product_version=product_version, build_id=build_id
+            release_repository,
+            product_version=product_version,
+            build_id=build_id,
+            # `CMP-SEAL-C0` (ADR-0025 decision 23): the module set reaches the web through the
+            # contract (``ProductVersion.comparison_modules``), not through a client env read.
+            comparison_modules=comparison_modules,
         ),
+        # `CMP-SEAL-C0`. The comparison operations, sealed as stubs answering `503
+        # dependency_unavailable` until `CMP-INGEST-01`, `CMP-INGEST-02` and `CMP-PROFILE-01`
+        # replace the three adapters (plan section 4.0 rule 1).
+        comparison_uploads=ComparisonUploadAdapter(),
+        comparison_version_orders=ComparisonVersionOrderAdapter(),
+        version_pages=VersionPageAdapter(),
         execution=ExecutionAdapter(sessions, runs=run_adapter),
         # `W55A-SEAL-01` sealed them; `W55A-SEARCH-01` serves them. The norms reads and the
         # designation over the same session factory, every search under the operator's

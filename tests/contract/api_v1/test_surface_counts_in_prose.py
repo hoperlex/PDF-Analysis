@@ -591,7 +591,10 @@ def test_a_stale_claim_in_a_previously_excluded_conf_file_is_red() -> None:
     # moves the surface (`COMPARE-PERSISTED-SUMMARY-01`: 92 -> 95) must not need this test edited. It
     # was the literal "the ninety-two paths". The replacement is a count the surface never had.
     assert NUMBER_WORDS["eighty-nine"] != _surface_counts()["paths"]
-    stated = re.search(rf"the (?:{'|'.join(sorted(NUMBER_WORDS, key=len, reverse=True))}) paths", text)
+    # `CMP-SEAL-C0`: the surface passed ninety-nine paths (115), which no spelling in
+    # ``NUMBER_WORDS`` reaches, so the stated count is read with the same number pattern the
+    # scan itself uses (digits up to three places, or a spelled 0..99).
+    stated = re.search(rf"the {_NUMBER} paths", text)
     assert stated is not None, f"{relative} states no count of paths"
     mutated = text.replace(stated.group(0), "the eighty-nine paths", 1)
     assert mutated != text

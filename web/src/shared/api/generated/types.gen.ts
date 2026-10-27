@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.8.0 (OpenAPI 3.1.0)
- *   sha256 b215912031f940b4cb20da7a80ad66b6ff2deec4274cba6cf2e0c72a29489be3
+ *   AuditManager PC-01 API 1.9.0 (OpenAPI 3.1.0)
+ *   sha256 5daf6416d4d4100f0a49ec2d834ca52a6139c2b29dc3c3cff68080983e2a1765
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.8.0';
+export const CONTRACT_VERSION = '1.9.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'b215912031f940b4cb20da7a80ad66b6ff2deec4274cba6cf2e0c72a29489be3';
+export const CONTRACT_DIGEST = '5daf6416d4d4100f0a49ec2d834ca52a6139c2b29dc3c3cff68080983e2a1765';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -33,6 +33,7 @@ export const SCHEMA_NAMES = [
   'AnalysisProfileSourceFile',
   'AnalysisProfileStatus',
   'AnalysisProfileSummary',
+  'AppendComparisonVersionOrderRequest',
   'AppendDecisionRequest',
   'AppendDecisionResponse',
   'ApproveRegistrationRequest',
@@ -73,12 +74,36 @@ export const SCHEMA_NAMES = [
   'ClassifyDocumentVersionRequest',
   'ComparedVersion',
   'ComparisonId',
+  'ComparisonModules',
+  'ComparisonPageProfileId',
+  'ComparisonProposalFile',
+  'ComparisonProposalSet',
+  'ComparisonProposalWarning',
   'ComparisonRefusal',
   'ComparisonSummary',
+  'ComparisonUpload',
+  'ComparisonUploadFile',
+  'ComparisonUploadFileDeclaration',
+  'ComparisonUploadFileId',
+  'ComparisonUploadFileState',
+  'ComparisonUploadId',
+  'ComparisonUploadPage',
+  'ComparisonUploadPartReceipt',
+  'ComparisonUploadProposal',
+  'ComparisonUploadSetId',
+  'ComparisonUploadSetState',
+  'ComparisonUploadState',
+  'ComparisonVersionOrder',
+  'ComparisonVersionOrderId',
+  'ComparisonVersionOrderList',
+  'ComparisonVersionOrderSource',
+  'ConfirmComparisonUploadSetRequest',
+  'ConfirmedComparisonFile',
   'CorrectVersionClassificationRequest',
   'CorrelationId',
   'CostBasis',
   'CreateAssignmentRequest',
+  'CreateComparisonUploadRequest',
   'CreateExecutorConnectionRequest',
   'CreateProjectRequest',
   'Cursor',
@@ -199,6 +224,8 @@ export const SCHEMA_NAMES = [
   'OptimisationProposalPage',
   'OptimisationProposalType',
   'PageInfo',
+  'PageProfileStatus',
+  'PageStamp',
   'PersonNames',
   'PortalBlock',
   'PortalBlockId',
@@ -338,7 +365,10 @@ export const SCHEMA_NAMES = [
   'VersionClassification',
   'VersionClassificationRevision',
   'VersionComparison',
+  'VersionPageProfile',
+  'VersionPageProfilePage',
   'VersionUid',
+  'VersionUploadKind',
   'WithdrawSheetPairingRequest',
   'WorkerId',
   'WorkerState',
@@ -455,6 +485,15 @@ export type AnalysisProfileSummary = {
   prompt_bundle_sha256: Sha256;
   source: AnalysisProfileSource | null;
   status: AnalysisProfileStatus;
+};
+
+/**
+ * A new revision of the order. ``base_revision_no`` is the latest revision the caller saw
+ * (``0`` for none); a mismatch is ``409 conflict`` and the caller rebases.
+ */
+export type AppendComparisonVersionOrderRequest = {
+  base_revision_no: number;
+  version_uids: Array<VersionUid>;
 };
 
 export type AppendDecisionRequest = {
@@ -837,6 +876,7 @@ export type ChangePasswordRequest = {
 
 /** The long poll holds the request open for up to ``wait_seconds`` (0 to 25, default 25). */
 export type ClaimExecutorTaskRequest = {
+  max_images?: number;
   wait_seconds?: number;
 };
 
@@ -878,6 +918,61 @@ export type ComparisonId = string;
 /** The contract pattern for `ComparisonId`. Anchored; use with `new RegExp()`. */
 export const COMPARISON_ID_PATTERN = "^cmp_[0-9A-HJKMNP-TV-Z]{26}$";
 
+/**
+ * ``none`` serves neither comparison module (the default), ``versions`` «Сравнение
+ * версий», ``versions,stages`` both. A module that is off has no menu entry and its
+ * operations answer ``dependency_unavailable``.
+ */
+export const COMPARISON_MODULES_VALUES = [
+  'none',
+  'versions',
+  'versions,stages',
+] as const;
+
+/** ComparisonModules - the closed value set above. */
+export type ComparisonModules = (typeof COMPARISON_MODULES_VALUES)[number];
+
+export type ComparisonPageProfileId = string;
+
+/** The contract pattern for `ComparisonPageProfileId`. Anchored; use with `new RegExp()`. */
+export const COMPARISON_PAGE_PROFILE_ID_PATTERN = "^cpr_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type ComparisonProposalFile = {
+  file_id: ComparisonUploadFileId;
+  position: number;
+  version_label?: string;
+};
+
+/**
+ * One proposed document set. ``designation`` is the «шифр» read from the stamp: metadata
+ * an expert confirms, never an identity. ``existing_document_uid`` names the document of the
+ * project the designation matches, when there is one.
+ */
+export type ComparisonProposalSet = {
+  designation?: string;
+  document_uid?: DocumentUid;
+  existing_document_uid?: DocumentUid;
+  failure_reason?: string;
+  files: Array<ComparisonProposalFile>;
+  project_stage?: ProjectStage;
+  section_code?: ProjectSection;
+  set_id: ComparisonUploadSetId;
+  state: ComparisonUploadSetState;
+  warnings?: Array<ComparisonProposalWarning>;
+};
+
+/** What the stamp reader noticed about a proposed set; the user has the final word. */
+export const COMPARISON_PROPOSAL_WARNING_VALUES = [
+  'designations_differ',
+  'order_disagrees_with_file_numbers',
+  'duplicate_revision_number',
+  'no_stamp_found',
+  'scan_without_text',
+] as const;
+
+/** ComparisonProposalWarning - the closed value set above. */
+export type ComparisonProposalWarning = (typeof COMPARISON_PROPOSAL_WARNING_VALUES)[number];
+
 /** Why two versions are not compared; ``side`` when the reason is one side's. */
 export type ComparisonRefusal = {
   reason: "same_version" | "version_not_found" | "different_set" | "foreign_project" | "version_not_published" | "version_order_invalid" | "stage_unclassified" | "section_unconfirmed" | "project_stage_mismatch" | "confirmed_section_mismatch" | "stage_pair_invalid" | "analysis_missing" | "run_not_of_version" | "run_not_published" | "text_unavailable" | "text_too_large";
@@ -908,6 +1003,179 @@ export type ComparisonSummary = {
   state: "ready" | "rejected";
   statements: Array<SummaryStatement>;
   summary_id: string;
+};
+
+/**
+ * One upload batch. ``files`` is present on ``getComparisonUpload`` and absent in the
+ * items of ``listComparisonUploads``. ``part_size_bytes`` is the size of every part but the
+ * last (16 MiB, ADR-0025 decision 10).
+ */
+export type ComparisonUpload = {
+  created_at: string;
+  declared_bytes: number;
+  declared_files: number;
+  files?: Array<ComparisonUploadFile>;
+  part_size_bytes: number;
+  project_uid: ProjectUid;
+  state: ComparisonUploadState;
+  updated_at: string;
+  upload_id: ComparisonUploadId;
+};
+
+export type ComparisonUploadFile = {
+  display_name: string;
+  failure_reason?: string;
+  file_id: ComparisonUploadFileId;
+  parts_staged: number;
+  set_id?: ComparisonUploadSetId;
+  sha256: Sha256;
+  size_bytes: number;
+  state: ComparisonUploadFileState;
+};
+
+/**
+ * One file the client will send. ``display_name`` is a hint for the proposal and never an
+ * identity; ``sha256`` and ``size_bytes`` are checked against the received bytes when the file
+ * is completed.
+ */
+export type ComparisonUploadFileDeclaration = {
+  display_name: string;
+  page_count?: number;
+  sha256: Sha256;
+  size_bytes: number;
+};
+
+export type ComparisonUploadFileId = string;
+
+/** The contract pattern for `ComparisonUploadFileId`. Anchored; use with `new RegExp()`. */
+export const COMPARISON_UPLOAD_FILE_ID_PATTERN = "^cuf_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** ComparisonUploadFileState. */
+export const COMPARISON_UPLOAD_FILE_STATE_VALUES = [
+  'declared',
+  'uploading',
+  'verified',
+  'failed',
+] as const;
+
+/** ComparisonUploadFileState - the closed value set above. */
+export type ComparisonUploadFileState = (typeof COMPARISON_UPLOAD_FILE_STATE_VALUES)[number];
+
+export type ComparisonUploadId = string;
+
+/** The contract pattern for `ComparisonUploadId`. Anchored; use with `new RegExp()`. */
+export const COMPARISON_UPLOAD_ID_PATTERN = "^cbt_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type ComparisonUploadPage = {
+  items: Array<ComparisonUpload>;
+  page: PageInfo;
+};
+
+/**
+ * What the server staged for one part: its size and the SHA-256 it computed, which the
+ * client may compare with its own.
+ */
+export type ComparisonUploadPartReceipt = {
+  file_id: ComparisonUploadFileId;
+  part_number: number;
+  sha256: Sha256;
+  size_bytes: number;
+};
+
+/**
+ * The grouping, order, stage and section the reader proposes for an upload. Nothing is
+ * admitted as a version until the user confirms a set (``confirmComparisonUploadSet``).
+ */
+export type ComparisonUploadProposal = {
+  sets: Array<ComparisonProposalSet>;
+  state: ComparisonUploadState;
+  upload_id: ComparisonUploadId;
+};
+
+export type ComparisonUploadSetId = string;
+
+/** The contract pattern for `ComparisonUploadSetId`. Anchored; use with `new RegExp()`. */
+export const COMPARISON_UPLOAD_SET_ID_PATTERN = "^cus_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** ComparisonUploadSetState. */
+export const COMPARISON_UPLOAD_SET_STATE_VALUES = [
+  'uploading',
+  'reading',
+  'needs_confirmation',
+  'ready',
+  'admitting',
+  'done',
+  'failed',
+  'excluded',
+] as const;
+
+/** ComparisonUploadSetState - the closed value set above. */
+export type ComparisonUploadSetState = (typeof COMPARISON_UPLOAD_SET_STATE_VALUES)[number];
+
+/** ComparisonUploadState. */
+export const COMPARISON_UPLOAD_STATE_VALUES = [
+  'uploading',
+  'proposed',
+  'processing',
+  'paused',
+  'completed',
+  'cancelled',
+] as const;
+
+/** ComparisonUploadState - the closed value set above. */
+export type ComparisonUploadState = (typeof COMPARISON_UPLOAD_STATE_VALUES)[number];
+
+/**
+ * One revision of the order in which the versions of a document set are compared. It
+ * never changes the documents' ordinal that runs and finding carry-over use (ADR-0025
+ * decision 16, `D-5`).
+ */
+export type ComparisonVersionOrder = {
+  created_at: string;
+  created_by: UserUid;
+  document_uid: DocumentUid;
+  order_id: ComparisonVersionOrderId;
+  revision_no: number;
+  source: ComparisonVersionOrderSource;
+  version_uids: Array<VersionUid>;
+};
+
+export type ComparisonVersionOrderId = string;
+
+/** The contract pattern for `ComparisonVersionOrderId`. Anchored; use with `new RegExp()`. */
+export const COMPARISON_VERSION_ORDER_ID_PATTERN = "^cvo_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** Newest revision first. */
+export type ComparisonVersionOrderList = {
+  items: Array<ComparisonVersionOrder>;
+  page: PageInfo;
+};
+
+/** ComparisonVersionOrderSource. */
+export const COMPARISON_VERSION_ORDER_SOURCE_VALUES = [
+  'proposal',
+  'expert',
+] as const;
+
+/** ComparisonVersionOrderSource - the closed value set above. */
+export type ComparisonVersionOrderSource = (typeof COMPARISON_VERSION_ORDER_SOURCE_VALUES)[number];
+
+/**
+ * The user's final word on one set: its members in their order (the array order is the
+ * version order), the labels, and the designation, stage, section and existing document the
+ * set belongs to. The stage and section are a proposal an expert confirms, never inferred.
+ */
+export type ConfirmComparisonUploadSetRequest = {
+  designation?: string;
+  existing_document_uid?: DocumentUid;
+  files: Array<ConfirmedComparisonFile>;
+  project_stage?: ProjectStage;
+  section_code?: ProjectSection;
+};
+
+export type ConfirmedComparisonFile = {
+  file_id: ComparisonUploadFileId;
+  version_label?: string;
 };
 
 /**
@@ -946,6 +1214,15 @@ export type CreateAssignmentRequest = {
   document_uid?: DocumentUid;
   note?: string;
   project_uid: ProjectUid;
+};
+
+/**
+ * The declared files of one upload batch. The limits of ADR-0025 decision 9 (files, sets,
+ * declared bytes and pages, the project's stored bytes, active batches) are refused here,
+ * before the first part, as typed reasons under existing error codes.
+ */
+export type CreateComparisonUploadRequest = {
+  files: Array<ComparisonUploadFileDeclaration>;
 };
 
 export type CreateExecutorConnectionRequest = {
@@ -1061,10 +1338,8 @@ export type DocumentUid = string;
 /** The contract pattern for `DocumentUid`. Anchored; use with `new RegExp()`. */
 export const DOCUMENT_UID_PATTERN = "^doc_[0-9A-HJKMNP-TV-Z]{26}$";
 
-/** A published, immutable input state. There is no endpoint that modifies one. */
 export type DocumentVersion = {
   byte_size: number;
-  /** `W59-SECTION-SEAL-01`. The version's persisted, expert-confirmed project stage and section; absent while no expert has classified this version. Never inherited from another version, the document's `section`, a file name or a suggestion. */
   classification?: VersionClassification;
   display_title?: string;
   document_uid: DocumentUid;
@@ -1073,12 +1348,10 @@ export type DocumentVersion = {
   page_count: number;
   project_uid: ProjectUid;
   published_at: string;
-  /** One of the fifteen project sections, or absent when the document has not been classified. */
   section?: ProjectSection;
   sha256: Sha256;
-  /** The uploaded file name, for display. Never an identity. */
   source_filename?: string | null;
-  /** Display and ordering value only. Never an identity and never accepted as a path parameter. */
+  upload_kind?: VersionUploadKind;
   version_ordinal: number;
   version_uid: VersionUid;
 };
@@ -1130,7 +1403,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The single externally visible failure shape, mirroring urn:auditmanager:domain:error-envelope:v1. `retryable` is pinned to the catalog value for the reported code; a caller never infers it from the HTTP status or the message. */
 export type ErrorEnvelope = {
-  contract_version: "1.8.0";
+  contract_version: "1.9.0";
   correlation_id: CorrelationId;
   /** Safe scalar classifiers only, restricted to the safe_detail_keys the catalog declares for the reported code. The catalog's forbidden key set is rejected. */
   details?: {
@@ -2165,6 +2438,27 @@ export type PageInfo = {
   next_cursor: Cursor | null;
 };
 
+/** PageProfileStatus. */
+export const PAGE_PROFILE_STATUS_VALUES = [
+  'ready',
+  'needs_review',
+  'refused',
+] as const;
+
+/** PageProfileStatus - the closed value set above. */
+export type PageProfileStatus = (typeof PAGE_PROFILE_STATUS_VALUES)[number];
+
+/** The stamp fields read from one page; every member is absent when the page has none. */
+export type PageStamp = {
+  designation?: string;
+  project_stage?: ProjectStage;
+  release_date?: string;
+  revision_number?: string;
+  section_code?: ProjectSection;
+  sheet_name?: string;
+  sheet_number?: string;
+};
+
 /** A person's names, set together. 1-60 characters of letters, separated by single spaces, hyphens or apostrophes, with no word mixing Cyrillic and Latin letters. Surrounding whitespace and invisible characters are removed before the rule is applied. */
 export type PersonNames = {
   first_name: string;
@@ -2430,9 +2724,9 @@ export const PRICE_LIST_ROW_REASON_VALUES = [
 /** PriceListRowReason - the closed value set above. */
 export type PriceListRowReason = (typeof PRICE_LIST_ROW_REASON_VALUES)[number];
 
-/** The running product version from VERSION, its content-derived build identifier, and the unchanged API contract version. */
 export type ProductVersion = {
   build_id: string;
+  comparison_modules?: ComparisonModules;
   contract_version: string;
   product_version: string;
 };
@@ -2859,8 +3153,9 @@ export type RunStatusPage = {
 /** One checked saved PNG, retrievable only by the current runner claim. */
 export type RunnerImage = {
   blob_id: RunnerImageBlobId;
+  crop_id?: string;
   media_type: "image/png";
-  portal_block_id: PortalBlockId;
+  portal_block_id?: PortalBlockId;
   sha256: string;
   size_bytes: number;
 };
@@ -3656,10 +3951,57 @@ export type VersionComparison = {
   target_version_uid: VersionUid;
 };
 
+/**
+ * The deterministic profile of one page of one version (raw evidence, never rewritten by
+ * an AI layer). ``reason`` is the typed reason of a ``needs_review`` or ``refused`` page, for
+ * example ``RENDER_FAILED``. ``content_key`` is the digest the profile is cached under.
+ */
+export type VersionPageProfile = {
+  algo_version: string;
+  annotation_count: number;
+  content_key: Sha256;
+  has_text_layer: boolean;
+  height_pt?: number;
+  page_number: number;
+  page_profile_id: ComparisonPageProfileId;
+  preview_available: boolean;
+  raster_height_px?: number;
+  raster_width_px?: number;
+  reason?: string;
+  stamp?: PageStamp;
+  status: PageProfileStatus;
+  thumbnail_available: boolean;
+  vector_line_count: number;
+  version_uid: VersionUid;
+  width_pt?: number;
+  word_count: number;
+};
+
+/**
+ * The profiles stored for a version, by page number ascending. A page whose profile has not
+ * been computed is absent; the version's ``page_count`` says how many pages it has.
+ */
+export type VersionPageProfilePage = {
+  items: Array<VersionPageProfile>;
+  page: PageInfo;
+};
+
 export type VersionUid = string;
 
 /** The contract pattern for `VersionUid`. Anchored; use with `new RegExp()`. */
 export const VERSION_UID_PATTERN = "^ver_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/**
+ * How a version reached the product. ``comparison_pdf`` is a plain PDF admitted for
+ * comparison only (`Q-CMP-5`): no section analysis can start on it.
+ */
+export const VERSION_UPLOAD_KIND_VALUES = [
+  'portal_bundle',
+  'comparison_pdf',
+] as const;
+
+/** VersionUploadKind - the closed value set above. */
+export type VersionUploadKind = (typeof VERSION_UPLOAD_KIND_VALUES)[number];
 
 /**
  * `COMPARE-PERSISTED-SUMMARY-01`. The comparison view the withdrawing expert was looking at:

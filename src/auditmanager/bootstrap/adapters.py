@@ -377,17 +377,27 @@ class ReleasesAdapter:
     """Transport views over the release context's immutable history and account mark."""
 
     def __init__(
-        self, repository: ReleaseRepository, *, product_version: str, build_id: str
+        self,
+        repository: ReleaseRepository,
+        *,
+        product_version: str,
+        build_id: str,
+        comparison_modules: str = "none",
     ) -> None:
         self._repository = repository
         self._product_version = product_version
         self._build_id = build_id
+        # `CMP-SEAL-C0` (ADR-0025 decision 23): the module set the composition root parsed from
+        # ``AUDITMANAGER_COMPARISON_MODULES``. ``none`` is the sealed default; a value outside the
+        # contract's enum is refused here by the model, never carried.
+        self._comparison_modules = models.ComparisonModules(comparison_modules)
 
     def get_product_version(self) -> ProductVersion:
         return ProductVersion(
             product_version=self._product_version,
             build_id=self._build_id,
             contract_version=CONTRACT_VERSION,
+            comparison_modules=self._comparison_modules,
         )
 
     def list_releases(self, *, user_uid: str) -> ReleaseList:
@@ -480,6 +490,7 @@ def _version_view(record: Any) -> DocumentVersionView:
         display_title=record.display_title,
         section=record.section,
         classification=_classification_view(record.classification),
+        upload_kind=record.upload_kind,
         input_manifest=tuple(
             ManifestEntryView(
                 role=e.role,
@@ -5235,3 +5246,128 @@ def _pull_channel_facts(session: Session, connection_id: str) -> dict[str, Any]:
         ],
         "open_task_count": open_task_count(session, connection_id),
     }
+
+
+# --- comparison modules (`CMP-SEAL-C0`, ADR-0025 decision 25) ----------------------------
+#
+# The shipped adapters of the three comparison ports are stubs: each operation refuses with
+# ``503 dependency_unavailable`` until the lane that owns it replaces the body (plan section 4.0
+# rule 1). Nothing is read or written. The ``dependency`` detail is a stable class name only.
+
+
+def _comparison_unavailable(dependency: str) -> Any:
+    raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency=dependency)
+
+
+class ComparisonUploadAdapter:
+    """`CMP-INGEST-01` (create, part, complete, proposal, confirm) and `CMP-INGEST-02` (list, exclude,
+    retry, pause, resume, cancel) replace the bodies."""
+
+    _DEPENDENCY = "comparison_uploads"
+
+    def cancel_upload(
+        self, *, upload_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonUpload:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def complete_file(
+        self, *, upload_id: str, file_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonUploadFile:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def confirm_set(
+        self, *, upload_id: str, set_id: str, request: models.ConfirmComparisonUploadSetRequest, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonProposalSet:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def create_upload(
+        self, *, project_uid: str, files: Sequence[models.ComparisonUploadFileDeclaration], user_uid: str, idempotency_key: str
+    ) -> models.ComparisonUpload:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def exclude_set(
+        self, *, upload_id: str, set_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonProposalSet:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def get_proposal(
+        self, *, upload_id: str
+    ) -> models.ComparisonUploadProposal:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def get_upload(
+        self, *, upload_id: str
+    ) -> models.ComparisonUpload:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def list_uploads(
+        self, *, project_uid: str, cursor: str | None, limit: int
+    ) -> models.ComparisonUploadPage:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def pause_upload(
+        self, *, upload_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonUpload:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def put_part(
+        self, *, upload_id: str, file_id: str, part_number: int, content: bytes, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonUploadPartReceipt:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def resume_upload(
+        self, *, upload_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonUpload:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def retry_set(
+        self, *, upload_id: str, set_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonProposalSet:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+
+class ComparisonVersionOrderAdapter:
+    """`CMP-INGEST-01` replaces the bodies."""
+
+    _DEPENDENCY = "comparison_version_orders"
+
+    def append_order(
+        self, *, project_uid: str, document_uid: str, version_uids: Sequence[str], base_revision_no: int, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonVersionOrder:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def list_orders(
+        self, *, project_uid: str, document_uid: str, cursor: str | None, limit: int
+    ) -> models.ComparisonVersionOrderList:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+
+class VersionPageAdapter:
+    """`CMP-PROFILE-01` replaces the bodies."""
+
+    _DEPENDENCY = "version_pages"
+
+    def get_profile(
+        self, *, page_profile_id: str
+    ) -> models.VersionPageProfile:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def list_profiles(
+        self, *, version_uid: str, cursor: str | None, limit: int
+    ) -> models.VersionPageProfilePage:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def read_preview(
+        self, *, page_profile_id: str
+    ) -> bytes:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def read_thumbnail(
+        self, *, page_profile_id: str
+    ) -> bytes:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def read_tile(
+        self, *, page_profile_id: str, level: int, column: int, row: int
+    ) -> bytes:
+        return _comparison_unavailable(self._DEPENDENCY)

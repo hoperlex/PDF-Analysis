@@ -46,6 +46,18 @@ dependencies = [
     "pypdfium2==5.13.0",
     # Encodes the crop PNGs pypdfium2 renders (bitmap to PNG). MIT-CMU (HPND).
     "Pillow==12.3.0",
+    # `CMP-SEAL-C0` (`ADR-0025` decision 24, owner answer `Q-CMP-9`): the three libraries of the
+    # comparison modules, taken once here, with the licences of what their wheels bundle in
+    # `docs/program/CMP-SEAL-C0.md`. numpy (BSD-3-Clause) is the array arithmetic of the page
+    # profile and the engine. opencv-python-headless (Apache-2.0; the wheel bundles FFmpeg and the
+    # image codecs under their own licences) gives phase correlation, morphology and connected
+    # components; the 4.x line is pinned because the original's algorithms were written against
+    # it and the API reads the same raster code. reportlab (BSD-3-Clause) writes the PDF report;
+    # the Cyrillic font and its licence arrive with `CMP-VC-REPORT-01`. PyMuPDF stays excluded
+    # (OD-01).
+    "numpy==2.5.4",
+    "opencv-python-headless==4.14.0.94",
+    "reportlab==5.1.0",
     # Model provider SDK (OD-02). Anthropic first-party API. MIT.
     "anthropic==1.4.0",
     # --- Alpha transport pins, owner-ruled 2026-09-17 (R-2). ---

@@ -22,6 +22,10 @@ ROOT = Path(__file__).resolve().parents[2]
 DIRECT = (
     ("pypdfium2", "pypdfium2", "pypdfium2"),
     ("Pillow", "pillow", "Pillow"),
+    # `CMP-SEAL-C0` (ADR-0025 decision 24, `Q-CMP-9`): the comparison modules' three libraries.
+    ("numpy", "numpy", "numpy"),
+    ("opencv-python-headless", "opencv-python-headless", "opencv-python-headless"),
+    ("reportlab", "reportlab", "reportlab"),
 )
 
 

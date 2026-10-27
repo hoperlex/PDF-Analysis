@@ -29,6 +29,12 @@ _SOURCES = frozenset({
     ("public", "norm_retrieval_set", "catalogue_blob_id"),
     # `0026_price_lists`: a price-list revision is bound to its uploaded file's Blob.
     ("public", "price_list_revision", "blob_id"),
+    # `0038_comparison_foundation`: the verified object of an uploaded comparison file, and the
+    # stored profile, preview and thumbnail of a page profile.
+    ("public", "comparison_upload_file", "blob_id"),
+    ("public", "comparison_page_profile", "profile_blob_id"),
+    ("public", "comparison_page_profile", "preview_blob_id"),
+    ("public", "comparison_page_profile", "thumbnail_blob_id"),
 })
 _CATALOG_EXPECTED = _SOURCES | {("public", "blob", "blob_id")}
 
@@ -86,6 +92,18 @@ _RETRIEVAL_SETS = text("""
 _PRICE_LISTS = text("""
     SELECT price_list_id AS owner_id, blob_id, sha256, size_bytes, media_type
       FROM public.price_list_revision ORDER BY price_list_id COLLATE "C"
+""")
+
+
+_COMPARISON_FILES = text("""
+    SELECT comparison_upload_file_id AS owner_id, state, blob_id
+      FROM public.comparison_upload_file WHERE blob_id IS NOT NULL
+     ORDER BY comparison_upload_file_id COLLATE "C"
+""")
+_PAGE_PROFILES = text("""
+    SELECT comparison_page_profile_id AS owner_id,
+           profile_blob_id, preview_blob_id, thumbnail_blob_id
+      FROM public.comparison_page_profile ORDER BY comparison_page_profile_id COLLATE "C"
 """)
 
 
@@ -255,6 +273,20 @@ def audit_blob_references(session: Session) -> BlobReferenceAudit:
         if _declared_fact(row, source=source) != actual:
             raise BlobReferenceAuditRefused(f"{source} facts differ for {row['blob_id']}")
     counts.append(("price_list_revision", len(price_lists)))
+
+    comparison_files = _rows(session, _COMPARISON_FILES)
+    for row in comparison_files:
+        if row["state"] != "verified":
+            raise BlobReferenceAuditRefused("a comparison upload file holds a Blob before it is verified")
+        _require_available(blobs, row["blob_id"], "comparison_upload_file")
+    counts.append(("comparison_upload_file", len(comparison_files)))
+
+    page_profiles = _rows(session, _PAGE_PROFILES)
+    for row in page_profiles:
+        for column in ("profile_blob_id", "preview_blob_id", "thumbnail_blob_id"):
+            if row[column] is not None:
+                _require_available(blobs, row[column], "comparison_page_profile")
+    counts.append(("comparison_page_profile", len(page_profiles)))
 
     return BlobReferenceAudit(tuple(counts), tuple(sorted(available, key=lambda fact: fact.blob_id)))
 

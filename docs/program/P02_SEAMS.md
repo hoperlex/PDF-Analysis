@@ -834,7 +834,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-111 operations, sealed. `A5` generates the typed client from this document; `B6`
+130 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -897,6 +897,7 @@ rows of an append-only history (`analysis_preset_revision`, migration `0037_anal
 revision and an archive are new rows, and each write has one audit event in its transaction.
 `startRun` gains the optional `preset_id` (exclusive with `executor_connection_id`: the preset's
 connection is applied as if the caller had named it) and `RunStatus` the read-only `preset`.
+`CMP-SEAL-C0` (contract `1.9.0`) sealed these comparison-module endpoints as stubs on 2026-10-27 -- `createComparisonUpload`, `listComparisonUploads`, `getComparisonUpload`, `getComparisonUploadProposal`, `uploadComparisonUploadPart`, `completeComparisonUploadFile`, `confirmComparisonUploadSet`, `excludeComparisonUploadSet`, `retryComparisonUploadSet`, `pauseComparisonUpload`, `resumeComparisonUpload`, `cancelComparisonUpload`, `listComparisonVersionOrders`, `appendComparisonVersionOrder`, `listVersionPageProfiles`, `getVersionPageProfile`, `streamVersionPagePreview`, `streamVersionPageThumbnail` and `streamVersionPageTile`. Reads are any one role; every write is an expert's act and keyed. Each answers `503 dependency_unavailable` until its lane (`CMP-INGEST-01`, `CMP-INGEST-02`, `CMP-PROFILE-01`) wires it (`ADR-0025` decision 25). A page is addressed by the identity of its profile (`cpr_`) and never by its number. `DocumentVersion` gains `upload_kind`, `ProductVersion` gains `comparison_modules` (the module set, default `none`), `RunnerImage` no longer requires `portal_block_id` and may carry a `crop_id`, `ClaimedExecutorTask.images` may hold eight images and the claim request may declare `max_images`. Migration `0038_comparison_foundation` adds nine tables.
 `W57B-NORMS-CATALOGUE-XLSX-01` added `listNormDocuments` and `exportRunXlsx` on 2026-10-20:
 the current norms snapshot's documents as a catalogue with display names derived from the
 stored file names (any one role), and the run's W57b Excel workbook with `exportRunCsv`'s
@@ -1101,6 +1102,25 @@ could.
 | `extendExecutorTaskClaim` | `POST /runner/tasks/{task_id}/extend` |
 | `submitExecutorTaskAnswer` | `POST /runner/tasks/{task_id}/answer` |
 | `failExecutorTask` | `POST /runner/tasks/{task_id}/fail` |
+| `createComparisonUpload` | `POST /projects/{project_uid}/comparison-uploads` |
+| `listComparisonUploads` | `GET /projects/{project_uid}/comparison-uploads` |
+| `getComparisonUpload` | `GET /comparison-uploads/{comparison_upload_id}` |
+| `getComparisonUploadProposal` | `GET /comparison-uploads/{comparison_upload_id}/proposal` |
+| `uploadComparisonUploadPart` | `PUT /comparison-uploads/{comparison_upload_id}/files/{comparison_upload_file_id}/parts` |
+| `completeComparisonUploadFile` | `POST /comparison-uploads/{comparison_upload_id}/files/{comparison_upload_file_id}/completion` |
+| `confirmComparisonUploadSet` | `POST /comparison-uploads/{comparison_upload_id}/sets/{comparison_upload_set_id}/confirmation` |
+| `excludeComparisonUploadSet` | `POST /comparison-uploads/{comparison_upload_id}/sets/{comparison_upload_set_id}/exclusion` |
+| `retryComparisonUploadSet` | `POST /comparison-uploads/{comparison_upload_id}/sets/{comparison_upload_set_id}/retry` |
+| `pauseComparisonUpload` | `POST /comparison-uploads/{comparison_upload_id}/pause` |
+| `resumeComparisonUpload` | `POST /comparison-uploads/{comparison_upload_id}/resume` |
+| `cancelComparisonUpload` | `POST /comparison-uploads/{comparison_upload_id}/cancellation` |
+| `listComparisonVersionOrders` | `GET /projects/{project_uid}/documents/{document_uid}/comparison-version-orders` |
+| `appendComparisonVersionOrder` | `POST /projects/{project_uid}/documents/{document_uid}/comparison-version-orders` |
+| `listVersionPageProfiles` | `GET /versions/{version_uid}/page-profiles` |
+| `getVersionPageProfile` | `GET /page-profiles/{comparison_page_profile_id}` |
+| `streamVersionPagePreview` | `GET /page-profiles/{comparison_page_profile_id}/preview` |
+| `streamVersionPageThumbnail` | `GET /page-profiles/{comparison_page_profile_id}/thumbnail` |
+| `streamVersionPageTile` | `GET /page-profiles/{comparison_page_profile_id}/tile` |
 
 Rules that hold across the whole surface:
 
@@ -1112,7 +1132,8 @@ Rules that hold across the whole surface:
   `createExecutorConnection`, `reviseExecutorConnection`, `archiveExecutorConnection`,
   `setExecutorSecret`, `generateExecutorSshKey`, `requestExecutorProbe`,
   `setExecutorRoute`, `createAnalysisPreset`, `reviseAnalysisPreset`, `archiveAnalysisPreset`,
-  `issueRunnerToken` and `revokeRunnerToken`, and no others. A repeat of the decision carryover under another key
+  `issueRunnerToken`, `revokeRunnerToken`,
+  `createComparisonUpload`, `uploadComparisonUploadPart`, `completeComparisonUploadFile`, `confirmComparisonUploadSet`, `excludeComparisonUploadSet`, `retryComparisonUploadSet`, `pauseComparisonUpload`, `resumeComparisonUpload`, `cancelComparisonUpload` and `appendComparisonVersionOrder`, and no others. A repeat of the decision carryover under another key
   that names the same pair and decision answers the event already carried (`replayed: true`)
   and appends nothing.
   `setGlobalVendorList` and `setProjectVendorList` take no key: a repeat of the latest

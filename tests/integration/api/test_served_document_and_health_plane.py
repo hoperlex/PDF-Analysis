@@ -214,6 +214,18 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "getExecutorTaskImage",
             # `AR-V3-BETA-SIX-RUN-02`: starting a six-Run group takes a keyed closed body.
             "startArV3BetaGroup",
+            # `CMP-SEAL-C0`: the declared batch, the part and its completion, the confirmed set, the
+            # appended order and the two listings take a body, a number or a bound the request can
+            # break; the tile takes three required bounded query numbers.
+            "createComparisonUpload",
+            "listComparisonUploads",
+            "uploadComparisonUploadPart",
+            "completeComparisonUploadFile",
+            "confirmComparisonUploadSet",
+            "listComparisonVersionOrders",
+            "appendComparisonVersionOrder",
+            "listVersionPageProfiles",
+            "streamVersionPageTile",
         }, declared_422
 
     def test_no_schema_property_declares_a_default(self) -> None:

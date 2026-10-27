@@ -12,6 +12,15 @@ Everything else in this package stays private to it.
 
 from __future__ import annotations
 
+from auditmanager.comparison.modules import (
+    COMPARISON_MODULES_ENV,
+    DEFAULT_MODULES,
+    MODULE_SETS,
+    MODULE_STAGES,
+    MODULE_VERSIONS,
+    enabled_modules,
+    parse_modules,
+)
 from auditmanager.comparison.carryover import (
     CarriedSourceDecision,
     CarryoverCandidate,
@@ -100,6 +109,13 @@ from auditmanager.comparison.version_reader import VersionFacts
 from auditmanager.comparison.version_section_pair import SuppliedVersionClassification
 
 __all__ = [
+    "COMPARISON_MODULES_ENV",
+    "DEFAULT_MODULES",
+    "MODULE_SETS",
+    "MODULE_STAGES",
+    "MODULE_VERSIONS",
+    "enabled_modules",
+    "parse_modules",
     "CONFLICT_SUMMARY_EVIDENCE_NOT_SEALED",
     "CONFLICT_SUMMARY_INPUT_EMPTY",
     "CONFLICT_SUMMARY_INPUT_TOO_LARGE",

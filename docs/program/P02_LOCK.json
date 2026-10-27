@@ -50,6 +50,32 @@
       "consumed_by": [
         "W55B-GEOMETRY-01"
       ]
+    },
+    "numpy": {
+      "version": "2.5.4",
+      "licence": "BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 (the wheel bundles OpenBLAS and LAPACK, BSD-3-Clause; libgfortran, GPL-3.0-or-later WITH GCC-exception-3.1; libquadmath, LGPL-2.1-or-later)",
+      "purpose": "array arithmetic of the comparison page profile and engine (ADR-0025 decision 24, Q-CMP-9)",
+      "consumed_by": [
+        "CMP-PROFILE-01",
+        "CMP-ENGINE-01"
+      ]
+    },
+    "opencv-python-headless": {
+      "version": "4.14.0.94",
+      "licence": "Apache-2.0 (the wheel bundles FFmpeg libraries, LGPL-2.1; OpenSSL 1.1.1k; libpng, libjpeg-turbo, libwebp, OpenJPEG, libtiff, zlib, libvpx, dav1d, libavif, protobuf and a Mozilla Public License 2.0 component, each under its own licence in LICENSE-3RD-PARTY.txt of the wheel)",
+      "purpose": "phase correlation, morphology and connected components of the comparison engine (ADR-0025 decision 24, Q-CMP-9)",
+      "consumed_by": [
+        "CMP-PROFILE-01",
+        "CMP-ENGINE-01"
+      ]
+    },
+    "reportlab": {
+      "version": "5.1.0",
+      "licence": "BSD-3-Clause",
+      "purpose": "writes the comparison PDF report (ADR-0025 decision 24, Q-CMP-9); the Cyrillic font and its licence arrive with CMP-VC-REPORT-01",
+      "consumed_by": [
+        "CMP-VC-REPORT-01"
+      ]
     }
   },
   "rejected_candidates": {

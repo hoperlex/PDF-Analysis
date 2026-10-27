@@ -27,6 +27,17 @@ INGEST-01, INGEST-02, PROFILE, VERSION-MARK) can start on a green tree and each 
 - premise: base facts read by the integrator at `c86ae7b0`: contract `1.8.0`, 98/111/321, head `0037_analysis_presets`,
   VERSION `0.9.0`; the lane re-reads and prints them before any edit and STOPs if they differ
 
+### P-01 — the base facts the lane re-read before any edit
+- captured_at: 2026-10-27
+- command: `git show 03f73103:contracts/api/v1/openapi.json | python3 -c "import json,sys;d=json.load(sys.stdin);print('contract',d['info']['version'],len(d['paths']),'paths',sum(1 for p in d['paths'].values() for m in p if m in('get','post','put','patch','delete')),'operations',len(d['components']['schemas']),'schemas',len(d['components']['schemas']['ErrorCode']['enum']),'error codes')"; git show 03f73103:VERSION; git grep -n "^revision: str" 03f73103 -- db/migrations/versions/20261027_0037_analysis_presets.py | cut -d: -f3-`
+- captured_output:
+  ```text
+  contract 1.8.0 98 paths 111 operations 321 schemas 27 error codes
+  0.9.0
+  revision: str = "0037_analysis_presets"
+  ```
+- interpretation: equal to the premise (contract `1.8.0`, 98 / 111 / 321, head `0037_analysis_presets`, `VERSION` `0.9.0`), so the lane did not STOP; the report is `docs/program/CMP-SEAL-C0.md`
+
 ## Historical evidence
 - correction_mode: none
 - source_record: not_applicable
@@ -157,7 +168,7 @@ The module set defaults to `none`: with the flag off no comparison menu entry ex
 answers `dependency_unavailable`.
 
 ## Handoff
-- changed files:
-- commands/results:
-- known limits:
-- integration notes:
+- changed files: `docs/program/CMP-SEAL-C0.md` section 6 lists every pinned file moved and section 2 the three files outside `allowed_paths` with their reasons; the new files are the migration `db/migrations/versions/20261028_0038_comparison_foundation.py`, three router files (`comparison_uploads.py`, `comparison_version_orders.py`, `version_pages.py`), `src/auditmanager/comparison/modules.py` and five test files
+- commands/results: report section 8 (contract battery, web, the five integration directories, the journey conformance test, the migration round trip) and section 9 (eighteen mutation proofs)
+- known limits: report section 10 (every operation is a stub; the flag gates nothing yet; `max_images` is accepted and ignored; `upload_kind` is not yet read from the database; the nine tables are empty and unwritten; the ninth table `comparison_upload_set` is this seal's addition)
+- integration notes: report section 12 (merge without squashing, because `web/FRONTEND_LOCK.json` names `21058a2f`; image grows by about 230 MB; the compose line for the flag is PROD-05b's; per-lane operations and tables in section 11)

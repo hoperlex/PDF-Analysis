@@ -186,6 +186,19 @@ P02_TABLES = (
     # `ar_v3_run_group`.
     "comparison_sheet_link",
     "comparison_summary",
+    # `0038_comparison_foundation` (`CMP-SEAL-C0`). The comparison upload, version-order, page-profile,
+    # queue and spend-journal tables. Their operations are sealed stubs answering `503
+    # dependency_unavailable` and nothing under this directory names them, so each count is expected
+    # unchanged across a replay -- counted rather than skipped.
+    "comparison_upload",
+    "comparison_upload_set",
+    "comparison_upload_file",
+    "comparison_upload_part",
+    "comparison_version_order",
+    "comparison_page_profile",
+    "comparison_work",
+    "comparison_work_attempt",
+    "comparison_model_call",
     # `0037_analysis_presets` (`ANALYSIS-PRESETS-01`). Named executor selections for a run start,
     # append-only (archive is a new revision). Written only by the preset commands (create,
     # revise, archive; administrator role); the journey starts runs by hand and never creates a

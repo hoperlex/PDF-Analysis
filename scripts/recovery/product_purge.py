@@ -117,7 +117,10 @@ MIXED_TABLES = frozenset(("audit_event", "blob", "command_record"))
 #: every table that references it are named in the same statement.
 PRODUCT_TABLES = frozenset((
     "analysis_artifact_publication", "ar_v3_run_group", "ar_v3_run_group_member", "attempt",
-    "audit_run", "comparison_sheet_link", "comparison_summary", "document", "document_version",
+    "audit_run", "comparison_model_call", "comparison_page_profile", "comparison_sheet_link",
+    "comparison_summary", "comparison_upload", "comparison_upload_file", "comparison_upload_part",
+    "comparison_upload_set", "comparison_version_order", "comparison_work",
+    "comparison_work_attempt", "document", "document_version",
     "document_version_classification", "document_version_classification_correction",
     "executor_task", "expert_decision_event", "finding", "finding_evidence", "finding_observation",
     "finding_observation_norm_citation", "input_manifest_entry", "job", "lease", "model_call",
@@ -162,6 +165,14 @@ PRODUCT_COMMAND_TYPES = frozenset((
     # `0035_comparison_records`: the receipt of a withdrawal. ``comparison_sheet_link.command_id``
     # references it, and it is deleted only after the link table is truncated.
     "withdraw_sheet_pairing",
+    # `0038_comparison_foundation` (`CMP-SEAL-C0`): the receipts of the ten keyed comparison writes, named
+    # as the snake case of the operationId. ``comparison_upload.command_id`` and
+    # ``comparison_version_order.command_id`` reference theirs, and each is deleted only after its table is
+    # truncated. A lane that names a command type differently registers it here.
+    "append_comparison_version_order", "cancel_comparison_upload", "complete_comparison_upload_file",
+    "confirm_comparison_upload_set", "create_comparison_upload", "exclude_comparison_upload_set",
+    "pause_comparison_upload", "resume_comparison_upload", "retry_comparison_upload_set",
+    "upload_comparison_upload_part",
 ))
 
 #: Work that is mid-flight in a worker. Queued work is discarded with the rest; work a worker is
