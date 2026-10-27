@@ -80,7 +80,7 @@ Beside each proposed pair an expert sees «Подтвердить пару» (an
 
 ### Status
 
-**B1 and B2 are both delivered**; nothing is left for B2 to hand over. Branch `agent/compare-persisted-summary-01`, base `3561e1c8`; 18 commits including the one that carries this report (`git log --reverse --format='%h %s' 3561e1c8..HEAD`); not pushed, not tagged, not merged. The commits in order: the design note and task file; B1 (`0aa942b6` comparison + migration, `a4e890e1` API and contract, `4bc89a5c` recovery classification and head pins, `7e6eb754`, `e2857428` web, `35d58bad`, `223c00d0` lock, `403262f3`); B2 (`a57292dc` comparison + the second table, `003c7446` API and contract, `d4068fe0` recovery, `0cb32bfb` web, `0715ac8a` lock); then two guard repairs (`9b2f59bd`, `640b6256`), the task file and one audit test (correlation id).
+**B1 and B2 are both delivered**; nothing is left for B2 to hand over. Branch `agent/compare-persisted-summary-01`, base `3561e1c8`; the commits are listed by `git log --reverse --format='%h %s' 3561e1c8..HEAD`; not pushed, not tagged, not merged. The commits in order: the design note and task file; B1 (`0aa942b6` comparison + migration, `a4e890e1` API and contract, `4bc89a5c` recovery classification and head pins, `7e6eb754`, `e2857428` web, `35d58bad`, `223c00d0` lock, `403262f3`); B2 (`a57292dc` comparison + the second table, `003c7446` API and contract, `d4068fe0` recovery, `0cb32bfb` web, `0715ac8a` lock); then two guard repairs (`9b2f59bd`, `640b6256`), the task file and one audit test (correlation id).
 
 The integrator's addendum is done in the same reseal: the prose of `analysis_input_budget_exceeded` (summary and note) in `contracts/domain/v1/error-codes.json` says that `budget_characters` is the one-call budget times the number of windows a run may use; the three documents were regenerated, not merged by hand. Prose only; keys, types and status are unchanged.
 
@@ -92,7 +92,7 @@ The integrator's addendum is done in the same reseal: the prose of `analysis_inp
 
 ### Files
 
-85 files changed before this report's own commit (`git diff --shortstat 3561e1c8..HEAD`: +11,561 / -111 at `640b6256`). By area:
+85 files changed (`git diff --shortstat 3561e1c8..HEAD`; `git diff --name-only 3561e1c8..HEAD | wc -l` is 85). By area:
 
 * **Migration**: `db/migrations/versions/20261027_0035_comparison_records.py` (revision id 23 characters).
 * **Domain**: `src/auditmanager/comparison/` new `sheet_links.py`, `approved_evidence.py`, `audit.py`, `pairing.py`, `summaries.py`, `summary_model.py`, `summary_prompt.py`, `summary_records.py`, `summary_validation.py`; modified `service.py`, `read_model.py`, `public.py`. `fixtures/recorded/comparison/` (recording, README, `build_fixtures.py` with `--check`).
@@ -254,7 +254,7 @@ All with the lane stack's `.env` copied to the worktree, `PYTHONPATH=src:$BS`, o
 
 ### Forbidden paths are untouched
 
-`git diff --name-only 3561e1c8..HEAD` shows 86 files, of which none is under `src/auditmanager/optimisation|runs|jobs|analysis|access|shared`, none is `tests/e2e/pc01/journey/manifest.json`, `docs/program/CURRENT_STATE.md`, `DEBT_REGISTER.md`, a ruling, an ADR or a root lock file, the only migration is `0035`, and the only files in `web/src` are under `entities/version-comparison`, `widgets/version-comparison` and the generated client. The command that proves it:
+`git diff --name-only 3561e1c8..HEAD` shows 85 files, of which none is under `src/auditmanager/optimisation|runs|jobs|analysis|access|shared`, none is `tests/e2e/pc01/journey/manifest.json`, `docs/program/CURRENT_STATE.md`, `DEBT_REGISTER.md`, a ruling, an ADR or a root lock file, the only migration is `0035`, and the only files in `web/src` are under `entities/version-comparison`, `widgets/version-comparison` and the generated client. The command that proves it:
 
 ```
 git diff --name-only 3561e1c8..HEAD | grep -E '^(src/auditmanager/(optimisation|runs|jobs|analysis|access|shared)/|tests/e2e/pc01/journey/manifest.json|docs/program/(CURRENT_STATE|DEBT_REGISTER)|docs/(adr|rulings)|package(-lock)?\.json|web/package(-lock)?\.json|uv\.lock|requirements|poetry\.lock|pyproject\.toml|web/src/(app|_pages|shared/(ui|styles|lib)))'   # no output
