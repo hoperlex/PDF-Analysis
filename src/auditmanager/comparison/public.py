@@ -157,11 +157,23 @@ from auditmanager.comparison.work.repository import (
 )
 from auditmanager.comparison.work.runner import ComparisonWorkRunner
 
+# `CMP-PROFILE-QUEUE-01`: the `page_profile` work kind (its handler, its factory and the call that enqueues a version).
+from auditmanager.comparison.profile_queue.enqueue import (
+    enqueue_version_page_profiles,
+    page_profile_dedupe_key,
+)
+from auditmanager.comparison.profile_queue.handler import (
+    PageProfileHandler,
+    page_profile_handler,
+)
+
 #: `CMP-WORK-01` (ADR-0025 decision 4). One tuple of handler factories, each
 #: ``Callable[[WorkDependencies], WorkHandler]``: ``build_worker_runtime`` builds one dependency
 #: bundle and applies every factory to it, and refuses to start on a duplicate ``kind``. A slice
-#: adds its handler by appending its factory here (plan section 4.0 rule 2). None is registered yet.
-HANDLER_FACTORIES: tuple[HandlerFactory, ...] = ()
+#: adds its handler by appending its factory here (plan section 4.0 rule 2).
+HANDLER_FACTORIES: tuple[HandlerFactory, ...] = (
+    page_profile_handler,  # `CMP-PROFILE-QUEUE-01`: kind ``page_profile``
+)
 
 #: `CMP-WORK-01`. Called inside the reclaim transaction for each attempt whose lease was lost:
 #: ``settle(session, attempt_id) -> bool`` marks the attempt's unfinished model calls ``unknown`` and
@@ -346,6 +358,7 @@ __all__ = [
     "PAGE_PIXEL_CAP",
     "PAGE_PROFILE_ALGO_VERSION",
     "PAGE_PROFILE_WORK_KIND",
+    "PageProfileHandler",
     "PROFILE_NEEDS_REVIEW",
     "PROFILE_READY",
     "PROFILE_REFUSED",
@@ -363,5 +376,8 @@ __all__ = [
     "VectorLine",
     "VersionBuildReport",
     "build_version_page_profiles",
+    "enqueue_version_page_profiles",
+    "page_profile_dedupe_key",
+    "page_profile_handler",
     "registration_dpi",
 ]
