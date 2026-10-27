@@ -23,7 +23,7 @@ down`. This is the deployed stack.
 
 | Path | What it is |
 |---|---|
-| `Dockerfile.api` | the 104 operations under uvicorn, plus `T-3`'s health plane |
+| `Dockerfile.api` | the 107 operations under uvicorn, plus `T-3`'s health plane |
 | `Dockerfile.web` | `npm run build`, then `next start` |
 | `serve.py` | the entry point: **one built application, two ports** |
 | `compose.server.yml` | the stack: PostgreSQL, MinIO, migrate, release-notes, api, worker, web, one proxy. Two database urls (`PROD-04`): `DATABASE_URL`, the application role's, reaches `api` and `worker`; `MIGRATOR_DATABASE_URL`, the owner's, reaches `migrate` and `release-notes` only |
@@ -231,7 +231,7 @@ rather than configure anything. `bootstrap/settings.py` records the same reasoni
 Two ports on the API container, from **one built application**:
 
 ```
-:8000   the 104 operations, mounted by the proxy at /api/v1
+:8000   the 107 operations, mounted by the proxy at /api/v1
 :8001   /healthz and /readyz — no credential, no product meaning, no contract
 ```
 
