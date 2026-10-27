@@ -49,8 +49,10 @@ RELEASE_GETS = frozenset({"/system/version", "/releases"})
 #: answering exactly `503 dependency_unavailable`. `W55B-GEOMETRY-01` serves them and empties
 #: this set, so they meet the sweep's ordinary rule: an absent `ver_` is `404`, never a `5xx`.
 #: `W57A-SEAL-01B` sealed the normative report as a refusing stub until the CITE reader; it
-#: answers exactly `503 dependency_unavailable` (named here by `W59-SECTION-SEAL-01`).
-SEALED_STUB_GETS: frozenset[str] = frozenset({"/runs/run_01ARZ3NDEKTSV4RRFFQ69G5FAV/norm-verification"})
+#: answered exactly `503 dependency_unavailable` (named here by `W59-SECTION-SEAL-01`).
+#: `AR-V3-DECISIONS-01` (`R-146at`) serves it and empties this set: an absent `run_` is `404`.
+SEALED_STUB_GETS: frozenset[str] = frozenset()
+NORM_VERIFICATION_OF_AN_ABSENT_RUN = "/runs/run_01ARZ3NDEKTSV4RRFFQ69G5FAV/norm-verification"
 WORKER_GETS = frozenset({"/execution/workers"})
 
 _STATIC_TOKEN_CACHE: str | None = None
@@ -214,6 +216,7 @@ class TestNoOperationAnswersWithAServerFault:
         assert len(probes) >= 5, f"the sweep found too few GET routes: {probes}"
         assert RELEASE_GETS <= {path for _method, path in probes}
         assert SEALED_STUB_GETS <= {path for _method, path in probes}
+        assert NORM_VERIFICATION_OF_AN_ABSENT_RUN in {path for _method, path in probes}
         assert WORKER_GETS <= {path for _method, path in probes}
         faults = []
         for method, path in probes:
@@ -234,6 +237,8 @@ class TestNoOperationAnswersWithAServerFault:
             elif status >= 500:
                 faults.append((path, status, body))
         assert faults == [], f"operations answered with a server fault: {faults}"
+        status, body = call(app, "GET", NORM_VERIFICATION_OF_AN_ABSENT_RUN)
+        assert status == 404 and body["error_code"] == "not_found", (status, body)
 
 
 def _absent_identity(parameter: str) -> str:

@@ -92,16 +92,24 @@ def build_run_routes(router: APIRouter, runs: RunPort) -> None:
             **envelope_responses(401, 403, 404, 500, 503),
         },
         description=(
-            "Read a verified v3 normative report for a run. R-80: any one active "
-            "expert or admin role; an empty role set is refused. A v1/v2 run answers "
-            "not_found. Until the CITE verified reader is implemented, this endpoint "
-            "answers typed 503 dependency_unavailable and exposes no unverified "
-            "citation data (D-151)."
+            "Read a verified v3 normative report for a run. R-80: any one active expert or admin "
+            "role; an empty role set is refused. A run that is not an AR v3 beta run answers "
+            "not_found. For an AR v3 beta run the report is computed from the run's saved "
+            "citation-review stage and the certified citation partitions of its findings "
+            "(R-146at): findings are the run's published grounded findings, withheld_by_reason "
+            "counts the proposals the grounding gates rejected, textless_pages comes from the "
+            "version, and the numeric claims of a finding (required_value, stated_value) are "
+            "never returned for this profile. A run with no verified saved review (not yet "
+            "terminal, failed or cancelled, or whose saved review fails verification) answers "
+            "typed 503 dependency_unavailable and exposes no unverified citation data (D-151)."
         ),
     )
     def get_run_norm_verification(run_id: Annotated[models.RunId, Path()]) -> WireResponse:
         report = runs.get_norm_verification(run_id=run_id)
-        return json_response(200, encode_json(report.model_dump(mode="json")))
+        # ``exclude_unset``: a property the adapter did not set (``error_code`` of a complete
+        # report, a number the beta policy keeps off the wire) is absent, never ``null``; a
+        # required-nullable one the adapter did set (``clause_number``) stays.
+        return json_response(200, encode_json(report.model_dump(mode="json", exclude_unset=True)))
 
     @router.get(
         "/runs/{run_id}/norm-references",

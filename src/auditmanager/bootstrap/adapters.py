@@ -15,6 +15,7 @@ shares one engine and the composition root remains the only thing that reads con
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict
 from datetime import datetime, timezone
@@ -1149,15 +1150,49 @@ class RunAdapter(_SessionHolder):
         return self._read(lambda session: _run_status_view(session, run_id))
 
     def get_norm_verification(self, *, run_id: str) -> models.NormVerificationReport:
-        """Refuse until a reader proves the 0023 partition and the pinned set.
+        """`R-146at`. The canonical report of an AR v3 beta Run, from its saved CITE stage.
 
-        An empty citation SELECT is not a certificate of zero. CITE will replace this
-        seam after it checks stage success and every canonical/member partition.
+        The runs context owns the rule (``runs.v3_norm_report``: the sealed review, the
+        certified citation partitions and their one-to-one comparison); this adapter owns the
+        read snapshot, the refusals the operation declares and the mapping into the frozen
+        ``NormVerificationReport``. A Run of any other profile is ``not_found``. A v3 Run that
+        has no verified saved review (not terminal, failed, cancelled, or a saved review that
+        fails verification) answers the declared ``503 dependency_unavailable`` and returns
+        nothing unverified; the reason goes to the log, not to the wire.
         """
-        raise DomainError(
-            ErrorCode.DEPENDENCY_UNAVAILABLE,
-            dependency="norm_verification_reader",
-        )
+        from auditmanager.analysis.public import AR_V3_BETA_PROFILE_ID
+        from auditmanager.runs import RunRepository
+        from auditmanager.runs.v3_norm_report import read_v3_norm_verification
+
+        def unavailable() -> DomainError:
+            return DomainError(
+                ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="norm_verification_reader",
+            )
+
+        def work(session: Session) -> models.NormVerificationReport:
+            session.connection(execution_options={
+                "isolation_level": "REPEATABLE READ", "postgresql_readonly": True,
+            })
+            run = RunRepository().get(session, run_id)
+            if run.analysis_profile_id != str(AR_V3_BETA_PROFILE_ID):
+                raise _not_found("NormVerificationReport")
+            if run.state not in {"published", "partial"}:
+                raise unavailable()
+            try:
+                view = read_v3_norm_verification(session, run_id, blob_store=self._blob_store)
+            except DomainError as error:
+                if error.code not in {
+                    ErrorCode.ANALYSIS_INPUT_INVALID, ErrorCode.STORAGE_INTEGRITY_ERROR,
+                }:
+                    raise
+                logging.getLogger(__name__).warning(
+                    "norm verification refused for %s: %s", run_id,
+                    dict(error.detail_fields).get("reason"),
+                )
+                raise unavailable() from error
+            return models.NormVerificationReport.model_validate(_norm_verification_body(view))
+
+        return self._read(work)
 
     def get_run_norm_references(self, *, run_id: str) -> models.RunNormReferences:
         """`NORM-REFS-RUN-01`. The norms the run's saved text cites, against its snapshot.
@@ -1210,6 +1245,51 @@ class RunAdapter(_SessionHolder):
             )
 
         return self._read(work)
+
+
+def _norm_verification_body(view: Any) -> dict[str, Any]:
+    """The frozen ``NormVerificationReport`` of one AR v3 beta Run.
+
+    ``required_value`` and ``stated_value`` are never put on the wire for this profile: they are
+    stored (the database requires them for a normative finding) but the beta policy
+    ``numeric_output_policy`` is ``expert_review_required`` and no edition check exists, so a
+    number is not served. Both properties are optional in the contract.
+    """
+
+    def citation(item: Any) -> dict[str, Any]:
+        return {
+            "norms_snapshot_id": item.norms_snapshot_id,
+            "norm_document_id": item.norm_document_id,
+            "norm_paragraph_id": item.norm_paragraph_id,
+            "designation": item.designation, "title": item.title,
+            "clause_number": item.clause_number, "page_label": item.page_label,
+            "quote": item.quote, "state": item.state,
+            "source_attribution": item.source_attribution,
+        }
+
+    def partition(item: Any) -> dict[str, Any]:
+        return {
+            "finding_observation_id": item.finding_observation_id,
+            "norm_citations": [citation(entry) for entry in item.citations],
+        }
+
+    body: dict[str, Any] = {
+        "run_id": view.run_id, "norms_snapshot_id": view.norms_snapshot_id,
+        "norm_retrieval_set_id": view.norm_retrieval_set_id, "status": view.status,
+        "findings": [
+            {
+                "finding_uid": finding.finding_uid,
+                "canonical": partition(finding.canonical),
+                "merged_observations": [partition(m) for m in finding.merged_observations],
+            }
+            for finding in view.findings
+        ],
+        "withheld_by_reason": dict(view.withheld_by_reason),
+        "textless_pages": list(view.textless_pages),
+    }
+    if view.error_code is not None:
+        body["error_code"] = view.error_code
+    return body
 
 
 def _run_status_view(session: Session, run_id: str) -> RunStatusView:

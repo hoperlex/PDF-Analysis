@@ -4345,7 +4345,7 @@
           "runs"
         ],
         "summary": "Get Run Norm Verification",
-        "description": "Read a verified v3 normative report for a run. R-80: any one active expert or admin role; an empty role set is refused. A v1/v2 run answers not_found. Until the CITE verified reader is implemented, this endpoint answers typed 503 dependency_unavailable and exposes no unverified citation data (D-151).",
+        "description": "Read a verified v3 normative report for a run. R-80: any one active expert or admin role; an empty role set is refused. A run that is not an AR v3 beta run answers not_found. For an AR v3 beta run the report is computed from the run's saved citation-review stage and the certified citation partitions of its findings (R-146at): findings are the run's published grounded findings, withheld_by_reason counts the proposals the grounding gates rejected, textless_pages comes from the version, and the numeric claims of a finding (required_value, stated_value) are never returned for this profile. A run with no verified saved review (not yet terminal, failed or cancelled, or whose saved review fails verification) answers typed 503 dependency_unavailable and exposes no unverified citation data (D-151).",
         "parameters": [
           {
             "$ref": "#/components/parameters/CorrelationId"
