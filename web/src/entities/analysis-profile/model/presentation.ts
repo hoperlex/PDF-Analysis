@@ -44,7 +44,7 @@ export const AR_NO_TEXT_PROFILE_CONSEQUENCE =
 /** The note on a version screen where АР has no ordinary start (no pack, or none yet read). */
 export const AR_START_NOTE =
   'Версия АР анализируется группой из шести проверок АР v3, а не обычным прогоном. Группа ' +
-  'становится доступной, когда на сервере установлен проверенный экспертом набор; состояние ' +
+  'становится доступной, когда на сервере установлен набор норм АР v3; состояние ' +
   'набора — в разделе «Настройки анализа».';
 
 /** The label of a status this build does not know. Never a guess at its meaning. */

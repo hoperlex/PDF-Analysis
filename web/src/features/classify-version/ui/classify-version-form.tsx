@@ -208,7 +208,7 @@ export function ClassifyVersionFormView({
           <p className="am-form__hint" data-chosen-profile="unavailable" data-chosen-section="AR">
             У раздела АР нет текстового профиля: обычный прогон по такой версии будет отклонён.
             Версия АР анализируется группой из шести проверок АР v3, когда на сервере установлен
-            проверенный экспертом набор.
+            набор норм АР v3.
           </p>
         ) : (
           <p className="am-form__hint" data-chosen-profile="unavailable">
