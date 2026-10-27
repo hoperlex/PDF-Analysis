@@ -121,7 +121,7 @@ def build_v3_beta_review_artifact(value: V3CitePreflight) -> BuiltV3ReviewArtifa
                     accepted.norm_citations, rows=rows, modes=topic_modes,
                 )
             except V3CorpusCitationRefused as exc:
-                raise _refuse("review_citation_label_invalid") from exc
+                raise _refuse("review_citation_grounding_invalid") from exc
             if not provisional_ok:
                 raise _refuse("review_context_laundered")
             for item_id in items:

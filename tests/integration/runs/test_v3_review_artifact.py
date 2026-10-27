@@ -145,6 +145,8 @@ REFUSALS = {
     "rebound_into_context": "review_context_laundered",
     "rebound_into_unsent": "review_context_laundered",
     "rebound_into_shared_context_paragraph": "review_context_laundered",
+    "unknown_grounding_state": "review_citation_grounding_invalid",
+    "grounded_label_differs_from_proposed": "review_citation_grounding_invalid",
 }
 
 
@@ -189,6 +191,16 @@ def test_mismatched_or_incomplete_review_refuses(change):
         value = _regrounded(value, paragraph=PARAGRAPH["N2"], state="rebound")
     elif change == "rebound_into_unsent":
         value = _regrounded(value, paragraph=UNSENT, state="rebound")
+    elif change == "unknown_grounding_state":
+        value = _regrounded(value, state="guessed")
+    elif change == "grounded_label_differs_from_proposed":
+        # the proposal says N1, the grounded citation says N2 (a classification built on other inputs)
+        grounding = value.review.evaluation.grounding
+        first = grounding.accepted[0]
+        moved = replace(first, norm_citations=(replace(first.norm_citations[0], label="N2"),))
+        value = replace(value, review=replace(value.review, evaluation=replace(
+            value.review.evaluation, grounding=replace(
+                grounding, accepted=(moved, grounding.accepted[1])))))
     elif change == "rebound_into_shared_context_paragraph":
         # C05 (context-only) also sends C01's paragraph; a rebound citation there is not made
         value = _regrounded(value, paragraph=PARAGRAPH["N1"], state="rebound")
