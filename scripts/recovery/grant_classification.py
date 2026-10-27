@@ -104,6 +104,17 @@ READ_WRITE = frozenset((
     "audit_run",
     "blob",
     "command_record",
+    # `0038_comparison_foundation`: the comparison tables whose rows change state (a batch, a set,
+    # a file, a part, a queue item, an attempt, a spend-journal row) or take a write-once blob
+    # reference (a page profile). No statement exists yet; the lanes that implement them write them.
+    "comparison_model_call",
+    "comparison_page_profile",
+    "comparison_upload",
+    "comparison_upload_file",
+    "comparison_upload_part",
+    "comparison_upload_set",
+    "comparison_work",
+    "comparison_work_attempt",
     "document",
     "execution_control",               # singleton upsert (jobs/repository.py)
     "executor_connection",
@@ -128,7 +139,7 @@ READ_WRITE = frozenset((
 #: inserted into by the code and by nothing else.
 APPEND_ONLY = frozenset((
     "analysis_preset_revision", "ar_v3_run_group", "ar_v3_run_group_member", "audit_event",
-    "comparison_sheet_link", "comparison_summary",
+    "comparison_sheet_link", "comparison_summary", "comparison_version_order",
     "document_version",
     "document_version_classification", "document_version_classification_correction",
     "executor_connection_revision", "executor_route_event", "expert_decision_event",

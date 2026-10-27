@@ -114,6 +114,11 @@ NON_TERMINAL_STATES = {
     "job": ("queued", "leased", "running", "retry_wait"),
     "attempt": ("created", "leased", "running"),
     "executor_task": ("open", "claimed"),
+    # `0038_comparison_foundation` (ADR-0025 decision 7): comparison work in flight. A paused item
+    # and an item awaiting an explicit «Повторить» after a possible paid call (``spend_unknown``) are
+    # in flight too: an operator cancels them before erasing the project.
+    "comparison_work": ("queued", "leased", "running", "retry_wait", "paused", "spend_unknown"),
+    "comparison_work_attempt": ("created", "leased", "running"),
 }
 #: The lock name of "another erase is running".
 ADVISORY_LOCK_NAME = "auditmanager.project_erase"

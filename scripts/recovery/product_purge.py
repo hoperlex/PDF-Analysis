@@ -117,7 +117,10 @@ MIXED_TABLES = frozenset(("audit_event", "blob", "command_record"))
 #: every table that references it are named in the same statement.
 PRODUCT_TABLES = frozenset((
     "analysis_artifact_publication", "ar_v3_run_group", "ar_v3_run_group_member", "attempt",
-    "audit_run", "comparison_sheet_link", "comparison_summary", "document", "document_version",
+    "audit_run", "comparison_model_call", "comparison_page_profile", "comparison_sheet_link",
+    "comparison_summary", "comparison_upload", "comparison_upload_file", "comparison_upload_part",
+    "comparison_upload_set", "comparison_version_order", "comparison_work",
+    "comparison_work_attempt", "document", "document_version",
     "document_version_classification", "document_version_classification_correction",
     "executor_task", "expert_decision_event", "finding", "finding_evidence", "finding_observation",
     "finding_observation_norm_citation", "input_manifest_entry", "job", "lease", "model_call",
