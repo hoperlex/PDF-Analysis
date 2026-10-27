@@ -112,6 +112,7 @@ SLICES: dict[str, str] = {
     "ar_v3_run_group": "project_uid = :p",
     "ar_v3_run_group_member": "group_id IN (SELECT group_id FROM ar_v3_run_group WHERE project_uid = :p)",
     "comparison_sheet_link": "project_uid = :p",
+    "comparison_summary": "project_uid = :p",
 }
 _BLOB_SOURCES = (
     f"SELECT blob_id FROM input_manifest_entry WHERE version_uid IN ({_VERSIONS}) "
@@ -343,14 +344,15 @@ def test_the_closure_is_read_from_the_catalog_and_agrees_with_the_hand_written_s
     # every PRODUCT table but ``worker`` is in the closure, and the test's own addressing names the same tables
     assert set(closure.tables) == purge.PRODUCT_TABLES - tool.UNSCOPED_PRODUCT_TABLES
     assert set(closure.tables) == set(SLICES)
-    assert tool.UNSCOPED_PRODUCT_TABLES == {"worker"} and len(closure.tables) == 32
+    assert tool.UNSCOPED_PRODUCT_TABLES == {"worker"} and len(closure.tables) == 33
     assert set(closure.direct) == {
-        "ar_v3_run_group", "audit_run", "comparison_sheet_link", "document", "finding",
-        "optimisation_pass", "price_list_revision", "vendor_list_revision", "work_assignment",
+        "ar_v3_run_group", "audit_run", "comparison_sheet_link", "comparison_summary", "document",
+        "finding", "optimisation_pass", "price_list_revision", "vendor_list_revision",
+        "work_assignment",
     }
     assert {key.child for key in closure.receipt_edges} == {
-        "ar_v3_run_group", "audit_run", "comparison_sheet_link", "expert_decision_event",
-        "optimisation_proposal_decision",
+        "ar_v3_run_group", "audit_run", "comparison_sheet_link", "comparison_summary",
+        "expert_decision_event", "optimisation_proposal_decision",
     }
 
 

@@ -121,8 +121,8 @@ def test_the_seeded_lane_holds_the_realistic_dataset_and_both_audits_accept_it(
     finally:
         engine.dispose()
     # `EXEC-SEAL-01`: +5 executor tables; `EXEC-PULL-01` (0031): +2; `0032_ar_v3_run_group`: +2;
-    # `0035_comparison_records`: +1.
-    assert schema.tables == 65 and schema.guarded_tables >= 29
+    # `0035_comparison_records`: +2.
+    assert schema.tables == 66 and schema.guarded_tables >= 29
     assert len(references.available_blobs) >= 5
     assert dict(references.source_counts)["price_list_revision"] == 2
     assert {"geometry_crop_image", "prepared_text_layer"} <= roles

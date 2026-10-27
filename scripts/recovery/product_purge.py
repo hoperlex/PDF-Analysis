@@ -114,7 +114,7 @@ MIXED_TABLES = frozenset(("audit_event", "blob", "command_record"))
 #: every table that references it are named in the same statement.
 PRODUCT_TABLES = frozenset((
     "analysis_artifact_publication", "ar_v3_run_group", "ar_v3_run_group_member", "attempt",
-    "audit_run", "comparison_sheet_link", "document", "document_version",
+    "audit_run", "comparison_sheet_link", "comparison_summary", "document", "document_version",
     "document_version_classification", "document_version_classification_correction",
     "executor_task", "expert_decision_event", "finding", "finding_evidence", "finding_observation",
     "finding_observation_norm_citation", "input_manifest_entry", "job", "lease", "model_call",
@@ -147,7 +147,7 @@ KEEP_COMMAND_TYPES = frozenset((
 ))
 PRODUCT_COMMAND_TYPES = frozenset((
     "append_decision", "approve_sheet_pairing", "cancel_audit_run", "carry_over_decision",
-    "create_project",
+    "create_project", "generate_comparison_summary",
     "decide_optimisation_proposal", "reaudit_run", "set_execution_paused", "set_job_priority",
     "set_worker_intake",
     # `0032_ar_v3_run_group`: the receipt of a group start. ``ar_v3_run_group.command_id``

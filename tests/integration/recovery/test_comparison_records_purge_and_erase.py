@@ -1,11 +1,12 @@
 """`COMPARE-PERSISTED-SUMMARY-01`: the product purge and the project erase handle the sheet-link history.
 
-Migration ``0035_comparison_records`` added ``comparison_sheet_link``, the command types
-``approve_sheet_pairing`` / ``withdraw_sheet_pairing`` and the ``comparison.*`` audit events. The
+Migration ``0035_comparison_records`` added ``comparison_sheet_link`` and ``comparison_summary``, the
+command types ``approve_sheet_pairing`` / ``withdraw_sheet_pairing`` / ``generate_comparison_summary``
+and the ``comparison.*`` audit events. The
 rest of this directory proves the classification on the stand in miniature (which holds no link);
 this module proves it on rows written the way the product writes them, in a database of its own:
-two projects, each with one document of two versions, one stored approval, the receipt of the
-command that wrote it and the audit event that went with it.
+two projects, each with one document of two versions, one stored approval and one stored summary of
+it, the receipts of the commands that wrote them and the audit events that went with them.
 
 * a dry run of the product purge names the table with its exact count and changes nothing; the
   real run empties the table, its receipts and its audit events;
@@ -28,9 +29,10 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from auditmanager.comparison.audit import record_sheet_link_approved
+from auditmanager.comparison.audit import record_sheet_link_approved, record_summary_generated
 from auditmanager.shared.db.engine import create_database_engine
 from auditmanager.shared.identity import (
+    AuditEventId,
     CommandId,
     ComparisonId,
     DocumentUid,
@@ -57,7 +59,8 @@ def _write_project(engine, name: str) -> dict[str, str]:
         "project": str(ProjectUid.new()), "document": str(DocumentUid.new()),
         "v1": str(VersionUid.new()), "v2": str(VersionUid.new()),
         "comparison": str(ComparisonId.new()), "link": str(SheetLinkId.new()),
-        "command": str(CommandId.new()),
+        "command": str(CommandId.new()), "summary_command": str(CommandId.new()),
+        "summary": str(AuditEventId.new()),
     }
     with engine.begin() as connection:
         connection.execute(text("INSERT INTO project (project_uid, name) VALUES (:p, :n)"),
@@ -86,7 +89,28 @@ def _write_project(engine, name: str) -> dict[str, str]:
                  ":v1, :v2, 2, 3, :s, :s, :s, :seal, :actor, 'Иванов И.', :c)"),
             {"cmp": ids["comparison"], "link": ids["link"], "p": ids["project"], "d": ids["document"],
              "v1": ids["v1"], "v2": ids["v2"], "s": SHA, "seal": SEAL, "actor": ACTOR, "c": ids["command"]})
+    with engine.begin() as connection:
+        connection.execute(
+            text("INSERT INTO command_record (command_id, command_type, idempotency_key, "
+                 "payload_fingerprint, state) VALUES (:c, 'generate_comparison_summary', :k, :f, 'in_progress')"),
+            {"c": ids["summary_command"], "k": secrets.token_hex(8), "f": SHA})
+        connection.execute(
+            text("UPDATE command_record SET state = 'succeeded', outcome = CAST('{}' AS jsonb) "
+                 "WHERE command_id = :c"), {"c": ids["summary_command"]})
+        connection.execute(
+            text("INSERT INTO comparison_summary (summary_id, comparison_id, link_revision, project_uid, "
+                 "raw_evidence_seal_sha256, input_sha256, request_sha256, prompt_version, provider_mode, "
+                 "model_identity, state, statements, cost_basis, cost_micros, actor_user_uid, actor_label, "
+                 "command_id) VALUES (:id, :cmp, 1, :p, :seal, :s, :s, 'comparison-summary-v1', 'recorded', "
+                 "'recorded', 'ready', CAST(:statements AS jsonb), 'unmetered', 0, :actor, 'Иванов И.', :c)"),
+            {"id": ids["summary"], "cmp": ids["comparison"], "p": ids["project"], "seal": SEAL, "s": SHA,
+             "statements": '[{"text": "Размер изменён.", "hunk_ids": ["' + ids["link"] + ':0"]}]',
+             "actor": ACTOR, "c": ids["summary_command"]})
     with Session(engine) as session, session.begin():
+        record_summary_generated(
+            session, event_id=ids["summary"], comparison_id=ids["comparison"], link_revision=1,
+            input_sha256=SHA, raw_evidence_seal_sha256=SEAL, state="ready", actor_uid=ACTOR,
+            correlation_id=None)
         record_sheet_link_approved(
             session, comparison_id=ids["comparison"], sheet_link_id=ids["link"], link_revision=1,
             source_version_uid=ids["v1"], target_version_uid=ids["v2"], source_page_number=2,
@@ -132,31 +156,38 @@ def _events(stand: Stand) -> int:
 def test_the_fixture_is_two_real_approvals_with_their_receipts_and_events(linked: Stand) -> None:
     """The premise of every other test here, measured."""
     assert _count(linked, "comparison_sheet_link") == 2
-    assert _count(linked, "command_record", "command_type = 'approve_sheet_pairing'") == 2
-    assert _events(linked) == 2
+    assert _count(linked, "comparison_summary") == 2
+    assert _count(linked, "command_record", "command_type LIKE '%_sheet_pairing' OR command_type = 'generate_comparison_summary'") == 4
+    assert _events(linked) == 4
 
 
 def test_the_command_types_and_the_event_prefix_are_classified_as_product() -> None:
-    assert {"approve_sheet_pairing", "withdraw_sheet_pairing"} <= purge.PRODUCT_COMMAND_TYPES
+    assert {"approve_sheet_pairing", "withdraw_sheet_pairing", "generate_comparison_summary"} <= (
+        purge.PRODUCT_COMMAND_TYPES)
     assert "comparison." in purge.PRODUCT_EVENT_PREFIXES
-    assert "comparison_sheet_link" in purge.PRODUCT_TABLES
-    assert "comparison_sheet_link" not in purge.KEEP_TABLES | purge.MIXED_TABLES
+    for table in ("comparison_sheet_link", "comparison_summary"):
+        assert table in purge.PRODUCT_TABLES
+        assert table not in purge.KEEP_TABLES | purge.MIXED_TABLES
 
 
 def test_a_dry_run_names_the_table_and_its_receipts_and_changes_nothing(linked: Stand) -> None:
-    before = (_count(linked, "comparison_sheet_link"), _count(linked, "command_record"), _events(linked))
+    before = (_count(linked, "comparison_sheet_link"), _count(linked, "comparison_summary"),
+              _count(linked, "command_record"), _events(linked))
     code, out, err = invoke(purge, linked, "plan", "--dry-run")
     assert code == 0, err
     assert "  comparison_sheet_link  (2 rows)" in out
-    assert "  command_record  (delete 2 rows, keep 0 rows)" in out
+    assert "  comparison_summary  (2 rows)" in out
+    assert "  command_record  (delete 4 rows, keep 0 rows)" in out
     assert "--dry-run: NOTHING ABOVE WAS CHANGED." in out
-    assert (_count(linked, "comparison_sheet_link"), _count(linked, "command_record"), _events(linked)) == before
+    assert (_count(linked, "comparison_sheet_link"), _count(linked, "comparison_summary"),
+            _count(linked, "command_record"), _events(linked)) == before
 
 
 def test_the_product_purge_empties_the_history_its_receipts_and_its_events(linked: Stand, tmp_path: Path) -> None:
     steps = full_purge(purge, linked, tmp_path / "dump")
     assert steps["apply"][0] == 0 and steps["delete"][0] == 0, steps
     assert _count(linked, "comparison_sheet_link") == 0
+    assert _count(linked, "comparison_summary") == 0
     assert _count(linked, "command_record") == 0
     assert _events(linked) == 0
     code, out, err = invoke(purge, linked, "plan")
@@ -170,11 +201,14 @@ def test_the_project_erase_removes_one_projects_link_and_receipt_and_nothing_els
     first, second = linked.summary["first"], linked.summary["second"]
     kept = digest_of(linked.engine, "comparison_sheet_link", f"project_uid = '{second['project']}'")
     kept_receipt = digest_of(linked.engine, "command_record", f"command_id = '{second['command']}'")
-    assert kept[0] == 1 and kept_receipt[0] == 1
+    kept_summary = digest_of(linked.engine, "comparison_summary", f"project_uid = '{second['project']}'")
+    kept_summary_receipt = digest_of(
+        linked.engine, "command_record", f"command_id = '{second['summary_command']}'")
+    assert kept[0] == 1 and kept_receipt[0] == 1 and kept_summary[0] == 1 and kept_summary_receipt[0] == 1
 
     code, out, err = invoke(erase, linked, "--project", first["project"])
     assert code == 0, err
-    assert "comparison_sheet_link" in out
+    assert "comparison_sheet_link" in out and "comparison_summary" in out
     sha = _line(out, "plan-sha256")
     code, out, err = invoke(
         erase, linked, "--apply", "--project", first["project"], "--plan-sha256", sha, "--actor", "admin",
@@ -182,11 +216,16 @@ def test_the_project_erase_removes_one_projects_link_and_receipt_and_nothing_els
     assert code == 0, (out, err)
 
     assert _count(linked, "comparison_sheet_link", "project_uid = :p", p=first["project"]) == 0
+    assert _count(linked, "comparison_summary", "project_uid = :p", p=first["project"]) == 0
     assert _count(linked, "command_record", "command_id = :c", c=first["command"]) == 0
+    assert _count(linked, "command_record", "command_id = :c", c=first["summary_command"]) == 0
     # the other project's history, its receipt and the journal stay byte for byte
     assert digest_of(linked.engine, "comparison_sheet_link", f"project_uid = '{second['project']}'") == kept
     assert digest_of(linked.engine, "command_record", f"command_id = '{second['command']}'") == kept_receipt
-    assert _events(linked) == 2  # the identity-only journal is not the project's rows
+    assert digest_of(linked.engine, "comparison_summary", f"project_uid = '{second['project']}'") == kept_summary
+    assert digest_of(
+        linked.engine, "command_record", f"command_id = '{second['summary_command']}'") == kept_summary_receipt
+    assert _events(linked) == 4  # the identity-only journal is not the project's rows
 
 
 def test_the_history_references_only_what_the_purge_can_leave_consistent(linked: Stand) -> None:
@@ -200,5 +239,10 @@ def test_the_history_references_only_what_the_purge_can_leave_consistent(linked:
             "AND confrelid = 'public.comparison_sheet_link'::regclass")).scalars().all()
     assert sorted(rows) == ["command_record", "document", "document_version", "document_version", "project"]
     assert set(rows) <= purge.PRODUCT_TABLES | purge.KEEP_TABLES | purge.MIXED_TABLES
-    # nothing references it yet; a later summary table is PRODUCT too and is truncated with it
-    assert set(incoming) <= purge.PRODUCT_TABLES
+    # the summaries reference it, and they are PRODUCT too and are truncated with it
+    assert set(incoming) == {"comparison_summary"} <= purge.PRODUCT_TABLES
+    with linked.engine.connect() as connection:
+        summary_references = connection.execute(text(
+            "SELECT confrelid::regclass::text FROM pg_constraint WHERE contype = 'f' "
+            "AND conrelid = 'public.comparison_summary'::regclass")).scalars().all()
+    assert sorted(summary_references) == ["command_record", "comparison_sheet_link", "project"]
