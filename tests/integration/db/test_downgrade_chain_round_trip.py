@@ -85,6 +85,8 @@ UPGRADE_SURFACE_DIGESTS = {
     "20261027_0034_pass_scope_all_sections.py": "665308d0d328145f15004cd92223f0d942d1a3b8ffaaeeaea586088e95196b0f",
     # `COMPARE-PERSISTED-SUMMARY-01`: likewise, taken from the revision's own bytes once it was final.
     "20261027_0035_comparison_records.py": "430cc5a83436393728a1b11a13e99cc63a09761ceff216d237fff586187b7396",
+    # `AR-V3-DECISIONS-01`: likewise, taken from the revision's own bytes once it was final.
+    "20261027_0036_cite_partition_v3.py": "c47c4ea1cd7858b8cacd93e8d5832dc5dcd0094db625d16f5404021171f0628a",
 }
 
 

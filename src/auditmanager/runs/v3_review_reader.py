@@ -1,4 +1,4 @@
-"""Verify a saved AR v3 beta review before a future read-only API exposes it."""
+"""Verify a saved AR v3 beta review (and the findings published from it) before an API exposes it."""
 
 from __future__ import annotations
 
@@ -12,9 +12,9 @@ from sqlalchemy.orm import Session
 from auditmanager.analysis.public import (
     AR_V3_BETA_BUNDLE_ID, AR_V3_BETA_PROFILE_ID, canonical_bytes, sha256_hex,
 )
-from auditmanager.findings.public import publication_rows_exist
 from auditmanager.runs.repository import RunRepository
 from auditmanager.runs.v3_group import GroupView, get_ar_v3_group
+from auditmanager.runs.v3_published_findings import check_run_published_findings
 from auditmanager.runs.v3_provider_call import MAX_REPLY_BYTES
 from auditmanager.runs.v3_review_artifact import FORMAT, MAX_REVIEW_BYTES, ROLE
 from auditmanager.runs.v3_review_terminal import _checked_review
@@ -209,8 +209,7 @@ def read_v3_saved_review(
         raise _refuse("review_stages_invalid")
     citations = tuple(row for row in stages
                       if row.stage_id == "ar_v3_citation_review")
-    if (len(citations) != 1 or citations[0].error is not None
-            or publication_rows_exist(session, run_id)):
+    if len(citations) != 1 or citations[0].error is not None:
         raise _refuse("review_stage_or_findings_invalid")
     stage = _checked_review(citations[0])
     reference = stage.artifacts[0]
@@ -237,11 +236,20 @@ def read_v3_saved_review(
         raise _refuse("review_group_id_invalid") from exc
     group = get_ar_v3_group(session, document["group_id"])
     _verify_binding(document, run=run, metrics=stage.metrics, group=group)
+    # `R-146as`: the Run's finding rows are none (closed before findings were published) or
+    # exactly the review's provisional proposals; anything else is a refusal.
+    findings = check_run_published_findings(
+        session, run_id=run_id, version_uid=run.version_uid,
+        profile_id=str(AR_V3_BETA_PROFILE_ID), document=document,
+    )
     if (run_repo.get(session, run_id) != run
             or run_repo.stage_results(session, run_id) != stages
             or blob_repo.get(session, blob_id) != metadata
             or get_ar_v3_group(session, group.group_id) != group
-            or publication_rows_exist(session, run_id)):
+            or check_run_published_findings(
+                session, run_id=run_id, version_uid=run.version_uid,
+                profile_id=str(AR_V3_BETA_PROFILE_ID), document=document,
+            ) != findings):
         raise _refuse("review_saved_facts_changed")
     return V3SavedReview(run_id, group.group_id, document["scope_id"], document)
 

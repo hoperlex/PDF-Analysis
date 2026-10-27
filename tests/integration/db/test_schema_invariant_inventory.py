@@ -31,6 +31,13 @@ from collections.abc import Iterable
 from sqlalchemy import Engine, text
 
 
+#: Resealed by `AR-V3-DECISIONS-01` for ``0036_cite_partition_v3``, measured, not predicted: a fresh
+#: database upgraded to ``0036`` was recomputed in all eleven families and compared with the 0035 seal
+#: below. One family moved and by exactly the migration's DDL: ``functions`` keeps its 34 rows and
+#: ``am_verify_norm_citation_partition`` is redefined (same row) -- the stage test reads
+#: ``norm_verification`` or ``ar_v3_citation_review`` -- so only its digest changed
+#: (``6ee1b2f0...3bd9`` -> ``6e5b1c9d...37ad``). Columns, relations, constraints, indexes, triggers,
+#: views, extensions, sequences, policies and the state topology are identical to the 0035 seal.
 #: Resealed by `COMPARE-PERSISTED-SUMMARY-01` for ``0035_comparison_records``, measured, not
 #: predicted: a fresh database upgraded to ``0035`` was recomputed in all eleven families and compared
 #: with the 0034 seal below. Every added row is this revision's and nothing was removed or redefined:
@@ -256,7 +263,7 @@ EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
     "constraints": (868, "ae150dd53fb7c9031cf3fe8d6c3f54b6d2624a2e8b4d128d281fa8c536cd5d03"),
     "indexes": (194, "00c31298ca59f04d6d0e85fab63d61ecd6f809db26ad5fe6dbcabe4a71143fbc"),
     "triggers": (90, "1f047154476a27395ac3787e330da452ca652bdaf290e7cd1c9fc958dfb00411"),
-    "functions": (34, "6ee1b2f02020015147e2f08afc88e76a05e94cd9a1e9282e580ab11cced73bd9"),
+    "functions": (34, "6e5b1c9d8e9f792af27dd4f04e3828f977cdf51f700e156ff743c941e68a37ad"),
     "views": (5, "c41ad974669882ee5d818591ee1d485b70455ddd4e51d236cc83892d18d11b93"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),
     "sequences": (7, "6d533fe16349a92b16b5ca89d51fcb083f1ecdf4f252bc276667a92361bf1656"),

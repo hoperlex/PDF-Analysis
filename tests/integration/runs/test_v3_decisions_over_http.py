@@ -28,6 +28,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 
+from auditmanager.analysis.public import AR_V3_BETA_PROFILE_ID
 from auditmanager.documents.public import DocumentRepository
 from auditmanager.runs.public import ReviewAttestation, seal_manifest
 from auditmanager.shared.db.config import DatabaseSettings, parse_database_url
@@ -147,6 +148,10 @@ def _drive(url: str, blob_store: Any, recordings: Path, manifest_dir: Path) -> W
             x[f"report_{scope}"] = wire.call("GET", report_path(run_id), token=tokens["expert"])
             x[f"report_{scope}_again"] = wire.call("GET", report_path(run_id), token=tokens["expert"])
             x[f"report_{scope}_admin"] = wire.call("GET", report_path(run_id), token=tokens["admin"])
+        for scope in SCOPES:
+            x[f"findings_{scope}"] = wire.call("GET", f"/runs/{out.run_of[scope]}/findings", token=tokens["expert"])
+            x[f"status_{scope}"] = wire.call("GET", f"/runs/{out.run_of[scope]}", token=tokens["expert"])
+        x["review_after"] = wire.call("GET", f"{accept.GROUPS}/{out.group_id}/review", token=tokens["expert"])
         run_f1 = out.run_of["F1"]
         x["report_suspended"] = wire.call("GET", report_path(run_f1), token=tokens["suspended"])
         x["report_anonymous"] = wire.call("GET", report_path(run_f1))
@@ -157,6 +162,24 @@ def _drive(url: str, blob_store: Any, recordings: Path, manifest_dir: Path) -> W
             SELECT r.run_id, (SELECT count(*) FROM finding f WHERE f.allocated_by_run_id = r.run_id)
               FROM audit_run r JOIN ar_v3_run_group_member m ON m.run_id = r.run_id
              WHERE m.group_id = :g""", g=out.group_id))
+        out.db["observations"] = accept._rows(factory, """
+            SELECT o.run_id, o.finding_uid, o.finding_observation_id, o.stage_id, o.category, o.grounded,
+                   o.ungrounded_reason, o.analysis_profile_id, o.provider_mode, o.proposed_severity,
+                   o.norm_citation_count, o.required_value, o.stated_value, o.model_call_id,
+                   f.canonical_observation_id
+              FROM finding_observation o LEFT JOIN finding f ON f.finding_uid = o.finding_uid
+              JOIN ar_v3_run_group_member m ON m.run_id = o.run_id
+             WHERE m.group_id = :g ORDER BY o.run_id""", g=out.group_id)
+        out.db["evidence"] = accept._rows(factory, """
+            SELECT o.run_id, e.evidence_ordinal, e.page_number, e.quote, e.char_start, e.char_end
+              FROM finding_evidence e JOIN finding_observation o USING (finding_observation_id)
+              JOIN ar_v3_run_group_member m ON m.run_id = o.run_id WHERE m.group_id = :g ORDER BY 1, 2""",
+            g=out.group_id)
+        out.db["citations"] = accept._rows(factory, """
+            SELECT c.run_id, c.citation_ordinal, c.norm_document_id, c.norm_paragraph_id, c.quote, c.state
+              FROM finding_observation_norm_citation c
+              JOIN ar_v3_run_group_member m ON m.run_id = c.run_id WHERE m.group_id = :g ORDER BY 1, 2""",
+            g=out.group_id)
     finally:
         for item in built:
             item.replay.release.set()
@@ -219,6 +242,88 @@ def test_a_withheld_context_only_proposal_is_not_a_reason_and_not_a_finding(worl
     assert world.db["finding_rows"][world.run_of[scope]] == 0
 
 
+# --- publication (piece 2) ---------------------------------------------------------------------
+
+
+def _observations(world: World, scope: str) -> list[tuple[Any, ...]]:
+    return [row for row in world.db["observations"] if row[0] == world.run_of[scope]]
+
+
+@pytest.mark.parametrize("scope", PROVISIONAL_SCOPES)
+def test_each_provisional_proposal_is_one_grounded_normative_finding_with_its_evidence_and_citation(
+    world: World, scope: str
+) -> None:
+    (row,) = _observations(world, scope)
+    (run_id, finding_uid, observation, stage, category, grounded, reason, profile, mode, severity,
+     citations, required, stated, model_call, canonical) = row
+    assert (stage, category, grounded, reason) == ("text_analysis", "evacuation", True, None)
+    assert profile == str(AR_V3_BETA_PROFILE_ID) and mode == "recorded"
+    assert severity == "operational" and citations == 1 and canonical == observation
+    assert (required, stated) == (accept.REQUIRED_VALUE, accept.STATED_VALUE)  # stored, never served
+    assert world.db["finding_rows"][run_id] == 1
+    (evidence,) = [e for e in world.db["evidence"] if e[0] == run_id]
+    assert evidence[2:4] == (accept.EVIDENCE_PAGE, accept.EVIDENCE_QUOTE)
+    assert evidence[5] - evidence[4] == len(accept.EVIDENCE_QUOTE)
+    (citation,) = [c for c in world.db["citations"] if c[0] == run_id]
+    assert citation[1] == 1 and citation[4] == accept.NORM_QUOTE and citation[5] == "verified"
+
+
+@pytest.mark.parametrize("scope", WITHHELD_SCOPES)
+def test_a_proposal_withheld_by_the_beta_policy_leaves_no_row_of_any_kind(world: World, scope: str) -> None:
+    assert _observations(world, scope) == []
+    assert world.db["finding_rows"][world.run_of[scope]] == 0
+    assert not [c for c in world.db["citations"] if c[0] == world.run_of[scope]]
+
+
+def test_a_rejected_proposal_is_in_no_table_at_all(world: World) -> None:
+    """Six rejected proposals (one per Run) and no diagnostic row: the review keeps their count only."""
+    assert all(row[5] is True and row[6] is None for row in world.db["observations"])
+    assert len(world.db["observations"]) == len(PROVISIONAL_SCOPES)
+
+
+@pytest.mark.parametrize("scope", SCOPES)
+def test_the_run_status_counts_the_published_findings(world: World, scope: str) -> None:
+    status = world.x[f"status_{scope}"].data
+    assert status["state"] == "published"
+    assert status["published_finding_count"] == (1 if scope in PROVISIONAL_SCOPES else 0)
+
+
+@pytest.mark.parametrize("scope", PROVISIONAL_SCOPES)
+def test_a_new_finding_is_pending_with_no_decided_severity_and_no_number_on_the_wire(world: World, scope: str) -> None:
+    answer = world.x[f"findings_{scope}"]
+    assert answer.status == 200, answer.text
+    (item,) = answer.data["items"]
+    assert item["current_verdict"] == "pending" and item["latest_decision_id"] is None
+    assert "decided_severity" not in item
+    assert item["observation"]["proposed_severity"] == "operational"
+    assert not {"required_value", "stated_value"} & _keys(answer.data)
+    assert item["run_id"] == world.run_of[scope] and item["category"] == "evacuation"
+
+
+@pytest.mark.parametrize("scope", WITHHELD_SCOPES)
+def test_a_run_with_nothing_provisional_lists_no_finding(world: World, scope: str) -> None:
+    assert world.x[f"findings_{scope}"].data["items"] == []
+
+
+@pytest.mark.parametrize("scope", PROVISIONAL_SCOPES)
+def test_the_report_lists_exactly_the_finding_the_run_listed(world: World, scope: str) -> None:
+    (item,) = world.x[f"findings_{scope}"].data["items"]
+    (entry,) = world.x[f"report_{scope}"].data["findings"]
+    assert entry["finding_uid"] == item["finding_uid"]
+    assert entry["canonical"]["finding_observation_id"] == item["observation"]["finding_observation_id"]
+    (citation,) = entry["canonical"]["norm_citations"]
+    assert citation["quote"] == accept.NORM_QUOTE and citation["state"] == "verified"
+    assert entry["merged_observations"] == []
+
+
+def test_the_group_review_still_verifies_all_six_runs_with_the_findings_in_place(world: World) -> None:
+    review = world.x["review_after"].data
+    assert [m["review_state"] for m in review["members"]] == ["available"] * 6
+    for member in review["members"]:
+        proposals = member["review"]["provisional_citations"]
+        assert len(proposals) == (1 if member["scope_id"] in PROVISIONAL_SCOPES else 0)
+
+
 @pytest.mark.parametrize("scope", SCOPES)
 def test_the_report_is_the_same_on_a_replay_and_for_an_administrator(world: World, scope: str) -> None:
     first = world.x[f"report_{scope}"]
@@ -238,8 +343,11 @@ def test_no_report_carries_a_number_the_model_claimed(world: World) -> None:
     for scope in SCOPES:
         text_ = world.x[f"report_{scope}"].text
         assert not {"required_value", "stated_value", "proposed_severity"} & _keys(world.x[f"report_{scope}"].data)
-        for claim in (accept.REQUIRED_VALUE, accept.STATED_VALUE, accept.UNGROUNDED_VALUE):
-            assert claim not in text_
+        # The claimed numbers may appear only inside a verbatim quote field (the norm's own words).
+        for key, value in accept._leaves(world.x[f"report_{scope}"].data):
+            if isinstance(value, str) and any(c in value for c in (accept.REQUIRED_VALUE, accept.STATED_VALUE)):
+                assert key == "quote", (key, value)
+        assert accept.UNGROUNDED_VALUE not in text_
         for prose in accept.MODEL_PROSE:
             assert prose not in text_
 

@@ -13,7 +13,7 @@ from auditmanager.analysis.public import (
 from auditmanager.runs import v3_review_reader as reader
 from auditmanager.runs.repository import StageResultRow
 from auditmanager.runs.v3_group import GroupMember, GroupView
-from auditmanager.shared.errors import DomainError
+from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.storage.public import derive_blob_id
 
 
@@ -140,7 +140,9 @@ def _arrange(monkeypatch, document=None, *, payload_override=None):
 
     runs, blobs, store = Runs(), Blobs(), Store()
     monkeypatch.setattr(reader, "get_ar_v3_group", lambda session, group_id: group)
-    monkeypatch.setattr(reader, "publication_rows_exist", lambda *args: False)
+    # `R-146as`: the Run's findings are none, or the review's provisional proposals (the helper
+    # has its own tests); here it answers "none" unless a case says otherwise.
+    monkeypatch.setattr(reader, "check_run_published_findings", lambda *args, **kwargs: ())
     return runs, blobs, store, group
 
 
@@ -168,7 +170,12 @@ def test_missing_or_changed_saved_authority_refuses(monkeypatch, change):
     elif change == "duplicate":
         runs.stages += runs.stages
     elif change == "finding":
-        monkeypatch.setattr(reader, "publication_rows_exist", lambda *args: True)
+        def unexplained(*args, **kwargs):
+            raise DomainError(
+                ErrorCode.ANALYSIS_INPUT_INVALID, reason="published_finding_not_in_review",
+            )
+
+        monkeypatch.setattr(reader, "check_run_published_findings", unexplained)
     else:
         store.payload += b"x"
     with pytest.raises(DomainError):
@@ -222,6 +229,32 @@ def test_succeeded_stage_with_saved_error_refuses(monkeypatch):
 def test_changed_run_after_blob_read_refuses(monkeypatch):
     runs, blobs, store, group = _arrange(monkeypatch)
     runs.change_after_read = True
+    with pytest.raises(DomainError) as caught:
+        _read(runs, blobs, store)
+    assert caught.value.detail_fields["reason"] == "review_saved_facts_changed"
+
+
+def test_findings_the_review_explains_do_not_refuse_and_are_checked_on_both_sides_of_the_read(monkeypatch):
+    runs, blobs, store, group = _arrange(monkeypatch)
+    calls = []
+
+    def explained(session, **kwargs):
+        calls.append(kwargs)
+        return ("finding",)
+
+    monkeypatch.setattr(reader, "check_run_published_findings", explained)
+    review = _read(runs, blobs, store)
+    assert review.run_id == RUN_ID
+    assert len(calls) == 2  # once to verify, once more in the final recheck
+    assert calls[0]["run_id"] == RUN_ID and calls[0]["version_uid"] == VERSION_ID
+    assert calls[0]["profile_id"] == str(AR_V3_BETA_PROFILE_ID)
+    assert calls[0]["document"]["provisional_citations"] == _document()["provisional_citations"]
+
+
+def test_findings_that_change_during_the_read_refuse(monkeypatch):
+    runs, blobs, store, group = _arrange(monkeypatch)
+    answers = iter([(), ("finding",)])
+    monkeypatch.setattr(reader, "check_run_published_findings", lambda *a, **k: next(answers))
     with pytest.raises(DomainError) as caught:
         _read(runs, blobs, store)
     assert caught.value.detail_fields["reason"] == "review_saved_facts_changed"

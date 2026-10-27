@@ -8,7 +8,13 @@ from sqlalchemy.orm import Session
 from auditmanager.findings.artifacts import BlockIndex, ObservationSet, TextLayer
 from auditmanager.findings.grounding import UngroundedReason, run_grounding_gate
 from auditmanager.findings.publication import PublicationResult, publish_gate_result
-from auditmanager.findings.citation_publication import CitationEvidence, V3PublicationCandidate
+from auditmanager.findings.citation_publication import (
+    CitationEvidence,
+    CitationPublicationRefused,
+    PublishedV3CitationFinding,
+    V3PublicationCandidate,
+    publish_grounded_v3_finding,
+)
 from auditmanager.findings.retrieval_set_input import (
     RetrievalSetInputRefused,
     VerifiedRetrievalSetInput,
@@ -49,10 +55,12 @@ def publication_rows_exist(session: Session, run_id: str) -> bool:
 __all__ = [
     "BlockIndex",
     "CitationEvidence",
+    "CitationPublicationRefused",
     "CitationReadRefused",
     "CitationReportRefused",
     "ObservationSet",
     "PublicationResult",
+    "PublishedV3CitationFinding",
     "TerminalSelection",
     "TextLayer",
     "UngroundedReason",
@@ -67,6 +75,7 @@ __all__ = [
     "finding_exists",
     "observation_belongs_to_finding",
     "publish_gate_result",
+    "publish_grounded_v3_finding",
     "publication_rows_exist",
     "published_finding_evidence",
     "read_verified_citation_report",
