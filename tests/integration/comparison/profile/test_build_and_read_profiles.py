@@ -12,6 +12,8 @@ levels that are not stored are rendered in a child.
 from __future__ import annotations
 
 import threading
+import uuid
+from pathlib import Path
 
 import pytest
 from pypdf import PdfWriter
@@ -27,6 +29,20 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 
 PNG = b"\x89PNG\r\n\x1a\n"
 MIB = 1024 * 1024
+
+
+def _unique_pdf(directory: Path, pages: int = 2) -> Path:
+    """A PDF whose pages have never been seen by the lane's object store (blobs are content-addressed: a page
+    that an earlier run published is ``available`` already, and would hide a blob left in flight)."""
+    from reportlab.pdfgen import canvas
+
+    path = directory / f"unique-{uuid.uuid4().hex}.pdf"
+    sheet = canvas.Canvas(str(path), pagesize=(595.28, 841.89))
+    for number in range(pages):
+        sheet.drawString(72, 700, f"unique {uuid.uuid4()} page {number}")
+        sheet.showPage()
+    sheet.save()
+    return path
 
 
 def _reader(session_factory, blob_store) -> PageProfileReader:
@@ -46,16 +62,6 @@ def test_a_version_is_profiled_page_by_page_and_read_back_as_its_key_says(
     assert [row.page_number for row in rows] == [1, 2, 3, 4, 5, 6]
     assert len({row.content_key for row in rows}) == 6
     assert all(row.profile_blob_id and row.preview_blob_id and row.thumbnail_blob_id for row in rows)
-    # Every blob a row names is available (the audit of `blob_reference_audit` requires it).
-    with session_scope(session_factory) as session:
-        states = session.execute(
-            text(
-                "SELECT DISTINCT b.state FROM blob b JOIN comparison_page_profile p ON b.blob_id IN "
-                "(p.profile_blob_id, p.preview_blob_id, p.thumbnail_blob_id) WHERE p.version_uid = :v"
-            ),
-            {"v": version},
-        ).all()
-    assert [tuple(row) for row in states] == [("available",)]
 
     reader = _reader(session_factory, blob_store)
     profiles = reader.read_version_profiles(version)
@@ -73,6 +79,25 @@ def test_a_version_is_profiled_page_by_page_and_read_back_as_its_key_says(
         mask = profile.ink_mask
         assert mask is not None and (mask.dpi, mask.as_array().shape) == (36, (mask.height_px, mask.width_px))
         assert 0.0 < mask.ink_ratio < 0.5 and profile.raster[0] == 200
+
+
+def test_every_blob_a_row_names_is_available_and_none_is_left_in_flight(
+    session_factory, blob_store, seed_version, rows_of, tmp_path
+) -> None:
+    """The audit of ``blob_reference_audit`` requires every blob a page profile names to be ``available``; the
+    journal (declared, verifying, available) ends there for each of the three blobs of each page. The pages are
+    new to the store, so a blob left in an earlier state cannot be hidden by an earlier run's publication."""
+    version = seed_version(_unique_pdf(tmp_path), 2)
+    build_version_page_profiles(session_factory, blob_store, version)
+    rows = rows_of(version)
+    named = {blob for row in rows for blob in (row.profile_blob_id, row.preview_blob_id, row.thumbnail_blob_id)}
+    assert len(named) == 6
+    with session_scope(session_factory) as session:
+        states = {
+            blob: state
+            for blob, state in session.execute(text("SELECT blob_id, state FROM blob WHERE blob_id = ANY(:ids)"), {"ids": sorted(named)}).all()
+        }
+    assert states == {blob: "available" for blob in named}
 
 
 def test_the_images_and_tiles_are_served_stored_for_levels_2_and_up_and_rendered_below(
