@@ -382,8 +382,8 @@ Each replaced the `-` text with the `+` text, once, in the named file.
 -
 - def add_openai_images
 + } for raw in reversed(list(raws))])
-+ 
-+ 
++
++
 + def add_openai_images
 ```
 
