@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.7.0 (OpenAPI 3.1.0)
- *   sha256 f49b6329844442ec8965a9a5dd559983a067881c489c81857d45fd60e7f5d5de
+ *   AuditManager PC-01 API 1.8.0 (OpenAPI 3.1.0)
+ *   sha256 e82f1df0f9c3951526592e92ccfcaa69d8182fd4ec024d9a46cca7c69866cb0a
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.7.0';
+export const CONTRACT_VERSION = '1.8.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'f49b6329844442ec8965a9a5dd559983a067881c489c81857d45fd60e7f5d5de';
+export const CONTRACT_DIGEST = 'e82f1df0f9c3951526592e92ccfcaa69d8182fd4ec024d9a46cca7c69866cb0a';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -1096,7 +1096,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The single externally visible failure shape, mirroring urn:auditmanager:domain:error-envelope:v1. `retryable` is pinned to the catalog value for the reported code; a caller never infers it from the HTTP status or the message. */
 export type ErrorEnvelope = {
-  contract_version: "1.7.0";
+  contract_version: "1.8.0";
   correlation_id: CorrelationId;
   /** Safe scalar classifiers only, restricted to the safe_detail_keys the catalog declares for the reported code. The catalog's forbidden key set is rejected. */
   details?: {
