@@ -24,7 +24,12 @@ from auditmanager.norms.public import (
     qualification,
     select_verified_retrieval_set,
 )
-from auditmanager.runs.commands import _checked_budget, _refuse_over_budget, frozen_input_digest
+from auditmanager.runs.commands import (
+    _checked_budget,
+    _refuse_over_budget,
+    frozen_input_digest,
+    refuse_comparison_only_version,
+)
 from auditmanager.runs.provider import RouteFreezer
 from auditmanager.runs.repository import RunRepository
 from auditmanager.shared.errors import DomainError, ErrorCode
@@ -240,6 +245,10 @@ def start_ar_v3_group(
         return StartedGroup(get_ar_v3_group(session, previous_id), True)
 
     version = DocumentRepository().get_version(session, VersionUid.parse(version_id))
+    # `CMP-C0-FIX-01`. By kind, first: a version admitted for comparison only is refused with
+    # ``comparison_only_version`` (what the screen renders in Russian), not with the fault the
+    # classification or manifest checks below would name.
+    refuse_comparison_only_version(version)
     if version.classification is None:
         raise DomainError(ErrorCode.VERSION_CLASSIFICATION_REQUIRED)
     if version.classification.section_code != "AR":
