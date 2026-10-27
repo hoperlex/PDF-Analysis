@@ -237,7 +237,8 @@ stamp metadata, confirmed, not identity). New identities (prefixes proposed, fix
 identifier catalogue): `cvo_` version-order revision, `cpr_` page profile (content-keyed), `cmx_` matrix revision,
 `cme_` manual matrix edit, `cak_` accepted AI link, `cser_` series, `csp_` sheet-pair result (content-keyed), `cbt_`
 upload batch, `cq_` queue item, `stp_` stage pair, `sas_` assembly, `slk_` stage link revision, `crp_` link repair,
-`crn_` chain run, `cai_` AI job, `ccd_` card, `cdv_` card verdict, `crt_` report. Every id has the catalogue format
+`crn_` chain run, `cai_` AI job, `ccd_` card, `cdv_` card verdict, `crt_` report; the prefixes of `comparison_work_attempt` and
+`comparison_model_call` rows are fixed by SEAL-C0 (never `att_` or `mc_`, ADR-0025 decision 2). Every id has the catalogue format
 `<prefix>_<ULID>` (`contracts/domain/v1/identifiers.json`) and is never parsed; a «content-keyed» row (profile,
 sheet-pair result, card) has a ULID id plus a unique content-key digest column.
 
@@ -387,7 +388,7 @@ module, and the version-scoped screen drops those controls; its heading becomes 
 - **R3-07 Priority and operator control.** Section and AR v3 runs have strict priority: the comparison loop claims
   only when no run is claimable and yields between items (an item is one page or one pair, never a series);
   comparison AI takes the connection per call, not per job; comparison work honours `execution_control.paused` (read
-  through `jobs.public`); «Очередь» gets an admin-visible read-only section «Сравнение» (owned by CMP-WORK-01 on the
+  through `execution/public.py` `ExecutionRepository.dispatch_status`, ADR-0025 decision 6); «Очередь» gets an admin-visible read-only section «Сравнение» (owned by CMP-WORK-01 on the
   web side, `web/src/widgets/execution-queue/**` one block). Throughput (pages/h, pairs/h, calls/h) is written into
   the ADR from the measurement.
 - **R3-08 Money (`Q-CMP-7`).** Estimates in USD from the pinned rates; ceilings USD 10 per job and USD 50 per day per
@@ -525,7 +526,7 @@ repository root; «(new)» marks a path that does not exist at the base.
 | CMP-STORAGE-PARTS-01 | S3 multipart staging, verify-whole, abort sweep (§3.2 R3-04) | M | `src/auditmanager/storage/**`, `tests/**/storage/**`, `scripts/recovery/blob_reference_audit.py` |
 | CMP-INGEST-ZIP-01 | safe reader for ZIP sets with a set policy, own security judge (§3.2 R3-17) | M | `src/auditmanager/ingest/comparison_zip/**` (new), `src/auditmanager/ingest/bundle_archive.py` (policy parameter only) |
 | CMP-WORK-01 | comparison durable queue (A-4): claim, lease, heartbeat, reclaim, pause, cancel, slot accounting, the worker loop hook; mutation proofs | M | `src/auditmanager/comparison/work/**` (new), `src/auditmanager/workers/service.py` (the hook) |
-| CMP-SPEND-01 | `comparison_model_call` journal, cost meter for comparison AI, the `R-29` spend union, the connection limit counting comparison AI work, the `executor_task` origin path | M | `src/auditmanager/comparison/spend/**` (new), `src/auditmanager/runs/repository.py` (`_COST_SUMMARY` only), `src/auditmanager/dashboard/repository.py` (`_SPEND` only), `src/auditmanager/jobs/repository.py` (connection check only), `src/auditmanager/executors/runner_repository.py` (live-attempt OR branch only) |
+| CMP-SPEND-01 | `comparison_model_call` journal, cost meter for comparison AI, the `R-29` spend union, the connection limit counting comparison AI work, the `executor_task` origin path | M | `src/auditmanager/comparison/spend/**` (new), `src/auditmanager/dashboard/repository.py` (`_SPEND` only), `src/auditmanager/jobs/repository.py` (connection check only), `src/auditmanager/executors/runner_repository.py` (live-attempt OR branch only) |
 | CMP-EXEC-IMAGES-01 | N images per request with opaque crop references on every channel (A-6), compatibility refusal, estimate counts | M | `src/auditmanager/executors/image_input.py`, `src/auditmanager/executors/pull.py`, `src/auditmanager/executors/http_adapter.py`, `src/auditmanager/executors/ssh_adapter.py`, `src/auditmanager/executors/ssh_tunnel_adapter.py`, `src/auditmanager/analysis/text/adapter.py` (`ModelRequest` only, after SX), `tools/executor-runner/**` |
 | CMP-FIXTURES-01 | synthetic comparison corpus with answer keys (§6), `/Annots` support in the fixture PDF writer | M | `tools/fixtures/comparison/**` (new), `tools/fixtures/ar_corpus/pdfwrite.py` (annotations only), `fixtures/comparison/**` (new) |
 | CMP-INGEST-01 | plain-PDF admission (single) over chunks, stamp reading (designation, «Изм.», date, stage and section proposals), grouping proposal confirmed by the user, version-order proposal and «Порядок версий» (A-7, D-5), reason `comparison_only_version` | L | `src/auditmanager/ingest/comparison_pdf/**` (new), `src/auditmanager/documents/**`, `src/auditmanager/runs/commands.py` (the reason value only), `web/src/shared/api/catalog-message.ts` (one sentence) |
@@ -584,9 +585,9 @@ SEAL-C3 has merged, which follows the C2 FIX.
 
 | Slice | Result | Size | Own paths |
 | --- | --- | --- | --- |
-| CMP-SEAL-C4 | contract `1.13.0`/migration: AI reviewer rows, classes, syntheses, repairs, cards, verdicts, journal, exports; work kind `comparison_stage_review`; the closed «Система» list | L | seal |
+| CMP-SEAL-C4 | contract `1.13.0`/migration: AI reviewer rows, classes, syntheses, repairs, cards, verdicts, journal, exports; the closed «Система» list (all five work kinds and the `ck_executor_route_work_kind` widening belong to SEAL-C2) | L | seal |
 | CMP-STAGE-AI-01 | reviewer (SAME / MOVED / CHANGED / REMOVED / ADDED / UNCERTAIN over existing fragment ids, ≤ 40 items per chunk, all-or-nothing per group, high confidence for SAME/MOVED; an AI SAME never removes a raw difference row), classifier (PROJECT_CHANGE / SERVICE_STRUCTURE / REVIEW, category, title, «Система»), high-level synthesis; crops of GRAPHIC evidence (D-2) | L | `src/auditmanager/comparison/stage_ai/**` (new) |
-| CMP-STAGE-REPAIR-01 | deterministic purpose precheck, one repair cycle per run (unique exact title or mutual-best fuzzy ≥ 0.94, swaps and cycles), never over an expert link (D-1), repair records, «Откатить» with recompute of steps 02–07, supersession by a later manual edit | M | `src/auditmanager/comparison/stage_repair/**` (new) |
+| CMP-STAGE-REPAIR-01 | deterministic purpose precheck, one repair cycle per run (title: unique exact or mutual-best fuzzy ≥ 0.94 with margin 0.02; content: score ≥ 0.44, margin ≥ 0.14, reverse margin ≥ 0.10, improvement ≥ 0.18 — `ORIGINAL-UNREAD-SOURCES.md`; swaps and chains applied atomically); with HIGH proof it may change an expert's link as a recorded, revertible automatic act (`Q-CMP-10`, D-1 withdrawn); repair records, «Откатить» with recompute of steps 02–07, supersession by a later manual edit | M | `src/auditmanager/comparison/stage_repair/**` (new) |
 | CMP-STAGE-RUN-01 | chain run as comparison work: steps 01–07, single and batch launch, consent for the AI steps, cancel/resume, banners, staleness | M | `src/auditmanager/comparison/stage_run/**` (new) |
 | CMP-STAGE-REVIEW-01 | tab 3 per §1.2 (cards A-10, verdicts, carry-over, sections), tab 4 journal with grouping and exports: Excel by a generic sheet writer exported from `exports/__init__.py`; PDF/HTML per O-2 | L | `src/auditmanager/comparison/stage_review/**` (new), `src/auditmanager/exports/**` (generic sheet writer), `web/src/widgets/stage-changes/**` (new), `web/src/_pages/stage-compare/**` (the tab mounts only) |
 | CMP-EXPOSURE-01 | exposure review of every new operation, as PROD-15 did (§3.2 R3-23) | S | `docs/program/compare/EXPOSURE-REVIEW-CMP.md` (new) |
