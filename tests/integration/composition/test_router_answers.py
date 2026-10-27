@@ -59,11 +59,10 @@ RELEASE_GETS = frozenset({"/system/version", "/releases"})
 _PRJ = "prj_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 _STUB_UPLOAD = "/comparison-uploads/cbt_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 _STUB_PROFILE = "/page-profiles/cpr_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+#: `CMP-INGEST-01` serves three of them and removes their paths: the batch, its proposal and the version-order
+#: listing now answer the sweep's ordinary rule (an absent `cbt_` or `prj_` is `404`).
 SEALED_STUB_GETS: frozenset[str] = frozenset({
     f"/projects/{_PRJ}/comparison-uploads",
-    _STUB_UPLOAD,
-    f"{_STUB_UPLOAD}/proposal",
-    f"/projects/{_PRJ}/documents/doc_01ARZ3NDEKTSV4RRFFQ69G5FAV/comparison-version-orders",
     "/versions/ver_01ARZ3NDEKTSV4RRFFQ69G5FAV/page-profiles",
     _STUB_PROFILE,
     f"{_STUB_PROFILE}/preview",

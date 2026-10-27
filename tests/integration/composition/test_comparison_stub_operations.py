@@ -63,6 +63,14 @@ REQUESTS: dict[str, tuple[str, str, Any, bytes | None, bool]] = {
 }
 EXPERT_WRITES = {name for name, (_m, _p, _b, _c, keyed) in REQUESTS.items() if keyed}
 DEPENDENCIES = {"comparison_uploads", "comparison_version_orders", "version_pages"}
+#: `CMP-INGEST-01` serves these eight; they are no longer stubs. The lane that serves one more adds it here
+#: and the stub test below stops asking it for `503`; the role, key and shape tests below still judge it.
+WIRED = frozenset({
+    "createComparisonUpload", "getComparisonUpload", "getComparisonUploadProposal", "uploadComparisonUploadPart",
+    "completeComparisonUploadFile", "confirmComparisonUploadSet", "listComparisonVersionOrders",
+    "appendComparisonVersionOrder",
+})
+STUBS = sorted(set(REQUESTS) - WIRED)
 
 
 def _client(extra: dict[str, str] | None = None) -> TestClient:
@@ -103,7 +111,7 @@ def test_the_requests_cover_exactly_the_nineteen_operations_the_contract_added()
     assert {triple[2] for triple in FACTS.operations} >= comparison
 
 
-@pytest.mark.parametrize("name", sorted(REQUESTS))
+@pytest.mark.parametrize("name", STUBS)
 def test_every_comparison_operation_answers_dependency_unavailable_and_nothing_else(
     client: TestClient, name: str
 ) -> None:
@@ -113,6 +121,15 @@ def test_every_comparison_operation_answers_dependency_unavailable_and_nothing_e
     assert body["error_code"] == "dependency_unavailable"
     assert body["details"]["dependency"] in DEPENDENCIES, body
     assert body["retryable"] is True
+
+
+@pytest.mark.parametrize("name", sorted(WIRED))
+def test_a_wired_operation_names_what_it_was_asked_about_and_is_no_longer_a_stub(client: TestClient, name: str) -> None:
+    """Every identity in the requests above names nothing, so a served operation answers ``404 not_found`` (the
+    project, the batch, the file, the set or the document), never the stub's ``503``."""
+    response = _call(client, name, token=static_token())
+    assert response.status_code == 404, (name, response.status_code, response.text)
+    assert response.json()["error_code"] == "not_found"
 
 
 @pytest.mark.parametrize("name", sorted(REQUESTS))
@@ -143,7 +160,8 @@ def test_a_part_over_sixteen_mebibytes_is_refused_before_the_stub(client: TestCl
     headers = {"Authorization": f"Bearer {static_token()}", "Idempotency-Key": KEY,
                "content-type": "application/octet-stream"}
     assert client.request(method, path, headers=headers, content=b"x" * (16 * 1024 * 1024 + 1)).status_code == 422
-    assert client.request(method, path, headers=headers, content=b"x" * (16 * 1024 * 1024)).status_code == 503
+    # A part of exactly 16 MiB is within the bound and reaches the operation; the batch it names does not exist.
+    assert client.request(method, path, headers=headers, content=b"x" * (16 * 1024 * 1024)).status_code == 404
     assert client.request(method, path.replace("part_number=1", "part_number=0"), headers=headers,
                           content=b"x").status_code == 422
 

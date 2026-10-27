@@ -5259,45 +5259,172 @@ def _comparison_unavailable(dependency: str) -> Any:
     raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency=dependency)
 
 
-class ComparisonUploadAdapter:
-    """`CMP-INGEST-01` (create, part, complete, proposal, confirm) and `CMP-INGEST-02` (list, exclude,
-    retry, pause, resume, cancel) replace the bodies."""
+def _unset_none(**fields: Any) -> dict[str, Any]:
+    """The fields that have a value. An optional property that is absent is **omitted** from the answer (the
+    models are dumped with ``exclude_unset``), never sent as ``null``."""
+    return {name: value for name, value in fields.items() if value is not None}
+
+
+def _enum_text(value: Any) -> str | None:
+    return None if value is None else str(getattr(value, "value", value))
+
+
+def _comparison_actor(session: Session, user_uid: str) -> tuple[str, frozenset[str]]:
+    """The actor's display label and roles, read in the transaction that is about to act."""
+    from auditmanager.access.public import AccountRepository
+
+    accounts = AccountRepository()
+    account = accounts.get_account(session, user_uid)
+    if account is None:  # pragma: no cover - a credential names an account that exists
+        raise DomainError(ErrorCode.INTERNAL_ERROR, message="the actor has no account")
+    return account.record.display_label, frozenset(accounts.roles_of(session, user_uid))
+
+
+def _comparison_file(view: Any) -> models.ComparisonUploadFile:
+    return models.ComparisonUploadFile(
+        file_id=view.file_id,
+        display_name=view.display_name,
+        size_bytes=view.size_bytes,
+        sha256=view.sha256,
+        state=models.ComparisonUploadFileState(view.state),
+        parts_staged=view.parts_staged,
+        **_unset_none(set_id=view.set_id, failure_reason=view.failure_reason),
+    )
+
+
+def _comparison_upload(view: Any) -> models.ComparisonUpload:
+    return models.ComparisonUpload(
+        upload_id=view.upload_id,
+        project_uid=view.project_uid,
+        state=models.ComparisonUploadState(view.state),
+        part_size_bytes=view.part_size_bytes,
+        declared_files=view.declared_files,
+        declared_bytes=view.declared_bytes,
+        created_at=view.created_at,
+        updated_at=view.updated_at,
+        **({} if view.files is None else {"files": [_comparison_file(item) for item in view.files]}),
+    )
+
+
+def _comparison_set(view: Any) -> models.ComparisonProposalSet:
+    return models.ComparisonProposalSet(
+        set_id=view.set_id,
+        state=models.ComparisonUploadSetState(view.state),
+        files=[
+            models.ComparisonProposalFile(
+                file_id=item.file_id, position=item.position, version_label=item.version_label
+            )
+            for item in view.files
+        ],
+        warnings=[models.ComparisonProposalWarning(name) for name in view.warnings],
+        **_unset_none(
+            designation=view.designation,
+            existing_document_uid=view.existing_document_uid,
+            project_stage=view.project_stage,
+            section_code=view.section_code,
+            failure_reason=view.failure_reason,
+            document_uid=view.document_uid,
+        ),
+    )
+
+
+class ComparisonUploadAdapter(_SessionHolder):
+    """`CMP-INGEST-01` serves ``createComparisonUpload``, ``getComparisonUpload``, ``getComparisonUploadProposal``,
+    ``uploadComparisonUploadPart``, ``completeComparisonUploadFile`` and ``confirmComparisonUploadSet`` over
+    :class:`~auditmanager.ingest.comparison_pdf.public.ComparisonUploadService`; `CMP-INGEST-02` replaces the
+    bodies of the other six (list, exclude, retry, pause, resume, cancel), which stay sealed stubs here.
+
+    The adapter owns the mapping to the contract's models and two reads the service does not make itself: the
+    actor's display label (a batch records who started it) and the actor's roles (an expert's act is checked
+    again in the transaction that acts, ADR-0025 decision 16)."""
 
     _DEPENDENCY = "comparison_uploads"
+
+    def __init__(self, session_factory: sessionmaker[Session], *, service: Any) -> None:
+        super().__init__(session_factory)
+        self._service = service
+
+    def create_upload(
+        self, *, project_uid: str, files: Sequence[models.ComparisonUploadFileDeclaration], user_uid: str, idempotency_key: str
+    ) -> models.ComparisonUpload:
+        from auditmanager.ingest.comparison_pdf.public import DeclaredFileRequest
+
+        label, _roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        view = self._service.create_upload(
+            project_uid=project_uid,
+            files=[
+                DeclaredFileRequest(
+                    display_name=item.display_name, size_bytes=item.size_bytes, sha256=item.sha256,
+                    page_count=item.page_count,
+                )
+                for item in files
+            ],
+            user_uid=user_uid, actor_label=label, idempotency_key=idempotency_key,
+        )
+        return _comparison_upload(view)
+
+    def get_upload(self, *, upload_id: str) -> models.ComparisonUpload:
+        return _comparison_upload(self._service.get_upload(upload_id=upload_id))
+
+    def get_proposal(self, *, upload_id: str) -> models.ComparisonUploadProposal:
+        view = self._service.get_proposal(upload_id=upload_id)
+        return models.ComparisonUploadProposal(
+            upload_id=view.upload_id,
+            state=models.ComparisonUploadState(view.state),
+            sets=[_comparison_set(item) for item in view.sets],
+        )
+
+    def put_part(
+        self, *, upload_id: str, file_id: str, part_number: int, content: bytes, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonUploadPartReceipt:
+        receipt = self._service.put_part(
+            upload_id=upload_id, file_id=file_id, part_number=part_number, content=content,
+            user_uid=user_uid, idempotency_key=idempotency_key,
+        )
+        return models.ComparisonUploadPartReceipt(
+            file_id=receipt.file_id, part_number=receipt.part_number, size_bytes=receipt.size_bytes,
+            sha256=receipt.sha256,
+        )
+
+    def complete_file(
+        self, *, upload_id: str, file_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonUploadFile:
+        return _comparison_file(
+            self._service.complete_file(
+                upload_id=upload_id, file_id=file_id, user_uid=user_uid, idempotency_key=idempotency_key
+            )
+        )
+
+    def confirm_set(
+        self, *, upload_id: str, set_id: str, request: models.ConfirmComparisonUploadSetRequest, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonProposalSet:
+        from auditmanager.ingest.comparison_pdf.public import ConfirmedFile
+
+        _label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        view = self._service.confirm_set(
+            upload_id=upload_id,
+            set_id=set_id,
+            files=[ConfirmedFile(item.file_id, item.version_label) for item in request.files],
+            designation=request.designation,
+            existing_document_uid=request.existing_document_uid,
+            project_stage=_enum_text(request.project_stage),
+            section_code=_enum_text(request.section_code),
+            user_uid=user_uid,
+            actor_roles=roles,
+            idempotency_key=idempotency_key,
+        )
+        return _comparison_set(view)
+
+    # -- `CMP-INGEST-02`: sealed until it wires them -----------------------------------------------
 
     def cancel_upload(
         self, *, upload_id: str, user_uid: str, idempotency_key: str
     ) -> models.ComparisonUpload:
         return _comparison_unavailable(self._DEPENDENCY)
 
-    def complete_file(
-        self, *, upload_id: str, file_id: str, user_uid: str, idempotency_key: str
-    ) -> models.ComparisonUploadFile:
-        return _comparison_unavailable(self._DEPENDENCY)
-
-    def confirm_set(
-        self, *, upload_id: str, set_id: str, request: models.ConfirmComparisonUploadSetRequest, user_uid: str, idempotency_key: str
-    ) -> models.ComparisonProposalSet:
-        return _comparison_unavailable(self._DEPENDENCY)
-
-    def create_upload(
-        self, *, project_uid: str, files: Sequence[models.ComparisonUploadFileDeclaration], user_uid: str, idempotency_key: str
-    ) -> models.ComparisonUpload:
-        return _comparison_unavailable(self._DEPENDENCY)
-
     def exclude_set(
         self, *, upload_id: str, set_id: str, user_uid: str, idempotency_key: str
     ) -> models.ComparisonProposalSet:
-        return _comparison_unavailable(self._DEPENDENCY)
-
-    def get_proposal(
-        self, *, upload_id: str
-    ) -> models.ComparisonUploadProposal:
-        return _comparison_unavailable(self._DEPENDENCY)
-
-    def get_upload(
-        self, *, upload_id: str
-    ) -> models.ComparisonUpload:
         return _comparison_unavailable(self._DEPENDENCY)
 
     def list_uploads(
@@ -5308,11 +5435,6 @@ class ComparisonUploadAdapter:
     def pause_upload(
         self, *, upload_id: str, user_uid: str, idempotency_key: str
     ) -> models.ComparisonUpload:
-        return _comparison_unavailable(self._DEPENDENCY)
-
-    def put_part(
-        self, *, upload_id: str, file_id: str, part_number: int, content: bytes, user_uid: str, idempotency_key: str
-    ) -> models.ComparisonUploadPartReceipt:
         return _comparison_unavailable(self._DEPENDENCY)
 
     def resume_upload(
@@ -5326,20 +5448,58 @@ class ComparisonUploadAdapter:
         return _comparison_unavailable(self._DEPENDENCY)
 
 
-class ComparisonVersionOrderAdapter:
-    """`CMP-INGEST-01` replaces the bodies."""
+class ComparisonVersionOrderAdapter(_SessionHolder):
+    """`CMP-INGEST-01`: the order in which the versions of a document set are compared (ADR-0025 decisions 14
+    and 16), over :class:`~auditmanager.ingest.comparison_pdf.public.ComparisonVersionOrderService`. The cursor
+    is the oldest revision the previous page held."""
 
-    _DEPENDENCY = "comparison_version_orders"
+    def __init__(self, session_factory: sessionmaker[Session], *, service: Any) -> None:
+        super().__init__(session_factory)
+        self._service = service
+
+    @staticmethod
+    def _view(view: Any) -> models.ComparisonVersionOrder:
+        return models.ComparisonVersionOrder(
+            order_id=view.order_id,
+            document_uid=view.document_uid,
+            revision_no=view.revision_no,
+            version_uids=list(view.version_uids),
+            source=models.ComparisonVersionOrderSource(view.source),
+            created_at=view.created_at,
+            created_by=view.created_by,
+        )
 
     def append_order(
         self, *, project_uid: str, document_uid: str, version_uids: Sequence[str], base_revision_no: int, user_uid: str, idempotency_key: str
     ) -> models.ComparisonVersionOrder:
-        return _comparison_unavailable(self._DEPENDENCY)
+        label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        return self._view(
+            self._service.append_order(
+                project_uid=project_uid, document_uid=document_uid, version_uids=list(version_uids),
+                base_revision_no=base_revision_no, user_uid=user_uid, actor_label=label, actor_roles=roles,
+                idempotency_key=idempotency_key,
+            )
+        )
 
     def list_orders(
         self, *, project_uid: str, document_uid: str, cursor: str | None, limit: int
     ) -> models.ComparisonVersionOrderList:
-        return _comparison_unavailable(self._DEPENDENCY)
+        before: int | None = None
+        if cursor is not None:
+            parts = decode_cursor(cursor)
+            if len(parts) != 1 or not parts[0].isdigit():
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+            before = int(parts[0])
+        page = self._service.list_orders(
+            project_uid=project_uid, document_uid=document_uid, before_revision=before, limit=limit
+        )
+        return models.ComparisonVersionOrderList(
+            items=[self._view(item) for item in page.items],
+            page=models.PageInfo(
+                next_cursor=None if page.next_before_revision is None
+                else encode_cursor((str(page.next_before_revision),))
+            ),
+        )
 
 
 class VersionPageAdapter:
