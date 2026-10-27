@@ -133,13 +133,6 @@ _LOCK_ATTEMPT = text(
     "lease_expires_at IS NOT NULL AND lease_expires_at > statement_timestamp() AS lease_current "
     "FROM comparison_work_attempt WHERE comparison_work_attempt_id = :attempt_id FOR UPDATE"
 )
-#: ADR-0025 decision 7: the publishing transaction re-checks, under a share lock, that the project
-#: still exists, so an erase cannot remove it between the check and the publication. The item's own
-#: row is already locked (item, attempt, project: the order the erase takes them in).
-_LOCK_PROJECT = text(
-    "SELECT p.project_uid FROM project p JOIN comparison_work w ON w.project_uid = p.project_uid "
-    "WHERE w.comparison_work_id = :work_id FOR SHARE OF p"
-)
 _CHECK_UNLOCKED = text(
     "SELECT w.state AS work_state, w.current_work_attempt_id, a.state AS attempt_state, "
     "a.execution_token, "
@@ -406,8 +399,13 @@ class ComparisonWorkRepository:
         The publishing transaction calls this before it writes, so a worker whose lease was
         reclaimed cannot publish: ``stale_attempt`` for a superseded or expired attempt,
         ``execution_token_invalid`` for a token that is not the attempt's. The locks are held to
-        the caller's commit, which is what serialises a publication with a reclaim and, with the
-        share lock on the project row (ADR-0025 decision 7), with a project erase.
+        the caller's commit, which is what serialises a publication with a reclaim and with a
+        project erase (ADR-0025 decision 7): the item's and the attempt's rows stay locked, the
+        erase must delete them before it can delete the project (``fk_comparison_work_project`` is
+        ``ON DELETE RESTRICT``), so the project cannot vanish between this check and the
+        publication. A share lock on the ``project`` row itself is not taken: the table is
+        append-only for the application role (``scripts/recovery/grant_classification.py``), and a
+        row lock needs the ``UPDATE`` privilege it does not have.
         """
         self._lock_current(session, authority)
 
@@ -427,8 +425,6 @@ class ComparisonWorkRepository:
         if (work["state"] != "running" or attempt["state"] != "running"
                 or attempt["lease_current"] is not True):
             raise DomainError(ErrorCode.STALE_ATTEMPT, aggregate_type="ComparisonWorkAttempt")
-        if session.execute(_LOCK_PROJECT, {"work_id": authority.work_id}).scalar_one_or_none() is None:
-            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="Project")
         return work
 
     # -- end of an attempt ----------------------------------------------------------------------

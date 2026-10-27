@@ -263,18 +263,25 @@ def test_a_lease_is_positive(sessions) -> None:
         ComparisonWorkRepository(lease_seconds=0)
 
 
-def test_the_publishing_transaction_holds_a_share_lock_on_the_project_row(queue, sessions, worker_id, project) -> None:
-    """ADR-0025 decision 7: between ``require_current`` and the commit the project cannot be removed
-    (an erase takes the row exclusively), while a reader of it is not held up."""
-    queue.enqueue()
+def test_the_publishing_transaction_keeps_the_item_locked_so_a_project_erase_cannot_get_past_it(
+    queue, sessions, worker_id, project
+) -> None:
+    """ADR-0025 decision 7: between ``require_current`` and the commit the project cannot be removed.
+    An erase must delete the item's row first (``ON DELETE RESTRICT`` keeps the project while any row
+    exists), and that row is locked by the publishing transaction; the project itself is refused
+    outright while the item exists."""
+    work_id = queue.enqueue()
     item = queue.claim(worker_id)
-    with sessions() as holder, sessions() as erase, sessions() as reader:
+    with sessions() as holder, sessions() as erase:
         item.require_current(holder)
-        erase.execute(text("SET LOCAL lock_timeout = '200ms'"))
-        with pytest.raises(DBAPIError) as refused:
-            erase.execute(text("SELECT 1 FROM project WHERE project_uid = :p FOR UPDATE"), {"p": project})
-        assert "lock timeout" in str(refused.value).lower() or "could not obtain lock" in str(refused.value).lower()
+        erase.execute(text("SET LOCAL lock_timeout = '300ms'"))
+        with pytest.raises(DBAPIError) as blocked:
+            erase.execute(text("DELETE FROM comparison_work WHERE comparison_work_id = :w"), {"w": work_id})
+        assert "lock timeout" in str(blocked.value).lower() or "could not obtain lock" in str(blocked.value).lower()
         erase.rollback()
-        assert reader.execute(
-            text("SELECT 1 FROM project WHERE project_uid = :p FOR SHARE"), {"p": project}).scalar_one() == 1
+        erase.execute(text("SET LOCAL lock_timeout = '300ms'"))  # the foreign-key check waits for the held row too
+        with pytest.raises(DBAPIError) as restricted:
+            erase.execute(text("DELETE FROM project WHERE project_uid = :p"), {"p": project})
+        assert any(word in str(restricted.value).lower() for word in ("foreign key", "violates", "lock timeout", "could not obtain lock"))
+        erase.rollback()
         holder.rollback()
