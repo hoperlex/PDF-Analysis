@@ -132,20 +132,25 @@ def grounded_citations_are_provisional(
     A citation is judged by the paragraph it was **grounded** to (``GroundedNormCitation``), not by
     the label the model wrote: ``ground_norm_observation`` may *rebind* a quote that is not in the
     labelled paragraph to the one other reliable paragraph of the same document that holds it, and
-    that paragraph can be a context-only one or one that no item sent. A proposal is provisional
-    only if, for each of its citations:
+    that paragraph can be a context-only one, one that no item sent, or another topic's. A proposal
+    is provisional only if, for each of its citations:
 
     * the labelled item is ``provisional_citation``;
-    * the grounded paragraph is a row of at least one item, and **every** item that sends it is
-      ``provisional_citation`` (a paragraph a context-only item also sends is a context-only
-      span whatever label was used);
-    * a ``rebound`` citation lands on a row of the **labelled** item. A rebound into another
-      topic's paragraph, provisional or not, is withheld: the label names the topic and the
-      quote does not ground it, and the system does not re-attribute a finding to another topic.
+    * the grounded paragraph is one of the **labelled item's own rows** (the pair the map decided).
+      A paragraph no item sent, or one only another item sent (provisional or not), withholds the
+      proposal: the label names the topic and the quote does not ground it, and the system does not
+      re-attribute a finding to another topic;
+    * a ``rebound`` citation additionally lands on a paragraph that **no context-only item also
+      sends**. A verified citation is the very row the model was shown under its label, so the map's
+      pairing decides; a rebound one is the system's inference of which paragraph the model meant,
+      and it is not made where a context-only topic could equally claim that paragraph.
 
     Anything else withholds the whole proposal (the existing ``context_only_or_mixed_source``
-    disposition; no new wire value). Unknown labels, a labels/grounding mismatch and an unknown
-    state are refusals, never a quiet classification.
+    disposition; no new wire value). A verified citation in a paragraph that a context-only item
+    also sends stays provisional by its label: the real beta maps share no row between a provisional
+    and a context-only item, and the rule does not second-guess the map's explicit pairing.
+    Unknown labels, a labels/grounding mismatch and an unknown state are refusals, never a quiet
+    classification.
     """
     if len(proposed_labels) != len(grounded):
         raise V3CorpusCitationRefused("beta_citation_grounding_mismatch")
@@ -160,9 +165,9 @@ def grounded_citations_are_provisional(
             raise V3CorpusCitationRefused("beta_citation_label_invalid")
         carriers = rows.paragraph_items.get(citation.paragraph_id, frozenset())
         if (modes[item_id] != PROVISIONAL_MODE
-                or not carriers
-                or any(modes.get(carrier) != PROVISIONAL_MODE for carrier in carriers)
-                or (citation.state == "rebound" and item_id not in carriers)):
+                or item_id not in carriers
+                or (citation.state == "rebound"
+                    and any(modes.get(carrier) != PROVISIONAL_MODE for carrier in carriers))):
             provisional = False
     return provisional
 

@@ -144,7 +144,7 @@ REFUSALS = {
     # AR-V3-JUDGE-FIXES-01: the paragraph a citation was grounded to decides, not its label
     "rebound_into_context": "review_context_laundered",
     "rebound_into_unsent": "review_context_laundered",
-    "verified_in_shared_context_paragraph": "review_context_laundered",
+    "rebound_into_shared_context_paragraph": "review_context_laundered",
 }
 
 
@@ -189,8 +189,9 @@ def test_mismatched_or_incomplete_review_refuses(change):
         value = _regrounded(value, paragraph=PARAGRAPH["N2"], state="rebound")
     elif change == "rebound_into_unsent":
         value = _regrounded(value, paragraph=UNSENT, state="rebound")
-    elif change == "verified_in_shared_context_paragraph":
-        # C05 (context-only) also sends C01's paragraph under a label of its own
+    elif change == "rebound_into_shared_context_paragraph":
+        # C05 (context-only) also sends C01's paragraph; a rebound citation there is not made
+        value = _regrounded(value, paragraph=PARAGRAPH["N1"], state="rebound")
         raw = json.loads(value.prepared.pinned_corpus.verified_set.data)
         rows = json.loads(raw["prompt_part"])["paragraphs"]
         rows.append({"label": "N3", "item_id": "C05", "norm_paragraph_id": PARAGRAPH["N1"]})
@@ -214,6 +215,19 @@ def test_a_rebound_citation_inside_the_labelled_provisional_row_set_is_sealed():
     value = _regrounded(_value(), paragraph=PARAGRAPH["N1"], state="rebound")
     sealed = json.loads(artifact.build_v3_beta_review_artifact(value).payload)
     assert [c["state"] for c in sealed["provisional_citations"][0]["citations"]] == ["rebound"]
+
+
+def test_a_verified_citation_in_a_row_a_context_only_item_also_sends_is_sealed_by_its_label():
+    """The decision of ``grounded_citations_are_provisional``: for a verified citation the map's pairing
+    of the labelled item and the paragraph decides, even where a context-only item sends it too."""
+    value = _value()
+    raw = json.loads(value.prepared.pinned_corpus.verified_set.data)
+    rows = json.loads(raw["prompt_part"])["paragraphs"]
+    rows.append({"label": "N3", "item_id": "C05", "norm_paragraph_id": PARAGRAPH["N1"]})
+    raw["prompt_part"] = json.dumps({"paragraphs": rows})
+    value.prepared.pinned_corpus.verified_set.data = json.dumps(raw).encode()
+    sealed = json.loads(artifact.build_v3_beta_review_artifact(value).payload)
+    assert [c["state"] for c in sealed["provisional_citations"][0]["citations"]] == ["verified"]
 
 
 def test_artifact_cap_refuses(monkeypatch):

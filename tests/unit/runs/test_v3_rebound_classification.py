@@ -8,6 +8,13 @@ mapped documents, so the target can be a paragraph that the beta policy forbids 
 (``context_only``), a paragraph that no item selected, or a paragraph of another topic. The beta
 classification must follow the paragraph, not the label.
 
+Decisions pinned here (``grounded_citations_are_provisional``): the labelled item must be
+provisional and the grounded paragraph one of ITS OWN rows; a rebound citation is also withheld where
+a context-only item could equally claim the paragraph; a rebound into another provisional item's rows
+is withheld (the label names the topic, the quote does not ground it); a VERIFIED citation in a row a
+context-only item also sends stays provisional by its label (the real maps share no such row, and the
+recorded-group worlds share one paragraph across a whole scope).
+
 Pure: no database, no object store, no network. The set is real (``parse_v3_set_input`` validates it)
 and the response is evaluated by the real ``evaluate_v3_supplied_response``; only the custody read is
 replaced, exactly as ``tests/integration/runs/test_v3_corpus_citation_bridge.py`` replaces it.
@@ -252,13 +259,26 @@ def test_one_bad_citation_withholds_the_whole_proposal(monkeypatch):
     assert _outcome(review) == WITHHELD
 
 
-def test_a_paragraph_that_a_context_only_item_also_carries_is_withheld_whatever_the_label(monkeypatch):
-    """C06 also sends C04's paragraph (under its own label): a citation of it is a citation of a
-    context-only span, even when the model used C04's provisional label and the quote is verified."""
+def test_a_verified_citation_in_a_paragraph_a_context_only_item_also_sends_stays_provisional_by_its_label(
+        monkeypatch):
+    """Decision: C06 also sends C04's paragraph under a label of its own. The model quoted the row it
+    was shown under C04's provisional label, so the map's pairing decides. (The real beta maps share
+    no row between a provisional and a context-only item; the synthetic worlds of the recorded group
+    tests share one paragraph across a whole scope, F2 included.)"""
     layout = dict(LAYOUT, C06=("c04", "c06"))
     labels = _labels(layout)
     review = _classify(monkeypatch, [(labels[("C04", "c04")], _text("c04"))], layout)
     assert _states(review) == [(labels[("C04", "c04")], _pid("c04"), "verified")]
+    assert _outcome(review) == PROVISIONAL
+
+
+def test_a_rebound_citation_in_a_paragraph_a_context_only_item_also_sends_is_withheld(monkeypatch):
+    """The same sharing, but the model quoted another row (c04b) than the one it labelled: the system
+    infers the paragraph, and it does not infer one that a context-only topic could equally claim."""
+    layout = dict(LAYOUT, C06=("c04b", "c06"))
+    labels = _labels(layout)
+    review = _classify(monkeypatch, [(labels[("C04", "c04")], _text("c04b"))], layout)
+    assert _states(review) == [(labels[("C04", "c04")], _pid("c04b"), "rebound")]
     assert _outcome(review) == WITHHELD
 
 
@@ -367,6 +387,18 @@ def test_the_rule_in_one_place_verified_own_row():
 @pytest.mark.parametrize(("paragraph", "expected"), [("p_a", True), ("p_b", False), ("p_c", False), ("p_z", False)])
 def test_the_rule_in_one_place_rebound_targets(paragraph, expected):
     assert _rule(["N1"], [_grounded("N1", paragraph, "rebound")]) is expected
+
+
+def test_the_rule_in_one_place_a_rebound_into_a_row_a_context_only_item_shares_is_withheld():
+    rows = _index([
+        {"label": "N1", "item_id": "C04", "norm_paragraph_id": "p_a"},
+        {"label": "N2", "item_id": "C06", "norm_paragraph_id": "p_a"},
+    ])
+    kwargs = dict(rows=rows, modes=MODES)
+    grounded = lambda state: [_grounded("N1", "p_a", state)]  # noqa: E731
+    assert v3_citations.grounded_citations_are_provisional(["N1"], grounded("verified"), **kwargs) is True
+    assert v3_citations.grounded_citations_are_provisional(["N1"], grounded("rebound"), **kwargs) is False
+    assert v3_citations.grounded_citations_are_provisional(["N2"], [_grounded("N2", "p_a")], **kwargs) is False
 
 
 def test_the_rule_in_one_place_a_paragraph_no_item_sends_is_withheld_even_when_called_verified():
