@@ -198,7 +198,7 @@ it merges and do not touch those hotspots.
 | CMP-SEAL-C0 | contract: plain-PDF batch upload, version order revisions, profile and tile reads, job subject; migration `0038` (or next free); error codes; generated client; pins swept by a disposable apply-and-run probe first | L | contract, migration, client, composition root |
 | CMP-JOBS-01 | the typed job subject in `jobs` and `workers`, claim/lease/reclaim for comparison subjects, slot accounting, cancellation; mutation-proved | L | `src/auditmanager/jobs/**`, `src/auditmanager/workers/**` |
 | CMP-INGEST-01 | plain PDF admission (single, batch, ZIP/folder), stamp reading (designation, «Изм.», date), grouping proposal confirmed by the user, version order proposal and «Порядок версий», run-start refusal for comparison-only versions | L | `src/auditmanager/ingest/**`, `src/auditmanager/documents/**` |
-| CMP-PROFILE-01 | page profiles (words with boxes, stamp zone, sheet number/title, ink mask, scan flag), previews, thumbnails and tiles in the blob store, cached by content | L | `src/auditmanager/comparison/profile/**` (new), `src/auditmanager/analysis/geometry/` only through its `public.py` |
+| CMP-PROFILE-01 | page profiles (words with boxes, stamp zone, sheet number/title, ink mask, scan flag), previews, thumbnails and tiles in the blob store, cached by content | L | `src/auditmanager/comparison/profile/**` (new), rendering of `src/auditmanager/analysis/geometry/` only through `src/auditmanager/analysis/public.py` (a one-line export there if missing, granted to this slice) |
 
 ### Wave C1 — version comparison core
 
