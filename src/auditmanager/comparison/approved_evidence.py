@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from typing import Final
 
 from auditmanager.comparison.raw_evidence_seal import (
@@ -168,6 +169,16 @@ def changed_characters(diffs: Sequence[RawTextDiff]) -> int:
     )
 
 
+@dataclass(frozen=True, slots=True)
+class ApprovedEvaluation:
+    """What the approved set is worth now: the projection a reader is served, and, only when it is
+    ``sealed``, the raw artifact it was built from (the input of a summary)."""
+
+    projection: ApprovedSheetPairs
+    raw_diffs: tuple[RawTextDiff, ...]
+    seal: RawEvidenceSeal | None
+
+
 def project_approved_pairs(
     *,
     pair: OrderedVersionPair,
@@ -176,10 +187,23 @@ def project_approved_pairs(
     target_pages: Mapping[int, str],
 ) -> ApprovedSheetPairs:
     """What ``compareDocumentVersions`` says about the active approvals of ``pair``."""
+    return evaluate_approved_pairs(
+        pair=pair, state=state, source_pages=source_pages, target_pages=target_pages,
+    ).projection
+
+
+def evaluate_approved_pairs(
+    *,
+    pair: OrderedVersionPair,
+    state: LinkState,
+    source_pages: Mapping[int, str],
+    target_pages: Mapping[int, str],
+) -> ApprovedEvaluation:
+    """The projection of the active approvals of ``pair`` and, when sealed, its raw artifact."""
     revision = state.latest_revision or None
     active = state.active
     if not active:
-        return ApprovedSheetPairs(revision, EVIDENCE_NONE, None, ())
+        return ApprovedEvaluation(ApprovedSheetPairs(revision, EVIDENCE_NONE, None, ()), (), None)
     comparison_id = state.comparison_id
     assert comparison_id is not None  # an active link implies a stored history
 
@@ -197,8 +221,13 @@ def project_approved_pairs(
     verified = {
         link.sheet_link_id: link_is_verified(link, source_pages, target_pages) for link in active
     }
+    def withheld(evidence_state: str) -> ApprovedEvaluation:
+        return ApprovedEvaluation(
+            ApprovedSheetPairs(revision, evidence_state, None, items({}, verified)), (), None,
+        )
+
     if not all(verified.values()):
-        return ApprovedSheetPairs(revision, EVIDENCE_TEXT_CHANGED, None, items({}, verified))
+        return withheld(EVIDENCE_TEXT_CHANGED)
     try:
         diffs, seal = raw_artifact(
             pair=pair, comparison_id=comparison_id, link_revision=state.latest_revision,
@@ -206,18 +235,23 @@ def project_approved_pairs(
             source_pages=source_pages, target_pages=target_pages,
         )
     except ApprovedEvidenceRefused:
-        return ApprovedSheetPairs(revision, EVIDENCE_TOO_LARGE, None, items({}, verified))
+        return withheld(EVIDENCE_TOO_LARGE)
     if seal.seal_sha256 != state.latest_seal_sha256:
-        return ApprovedSheetPairs(revision, EVIDENCE_SEAL_CHANGED, None, items({}, verified))
+        return withheld(EVIDENCE_SEAL_CHANGED)
     if changed_characters(diffs) > MAX_APPROVED_CHANGED_CHARACTERS:
-        return ApprovedSheetPairs(revision, EVIDENCE_TOO_LARGE, None, items({}, verified))
-    return ApprovedSheetPairs(
-        revision, EVIDENCE_SEALED, seal.seal_sha256,
-        items({diff.sheet_link_id: diff for diff in diffs}, verified),
+        return withheld(EVIDENCE_TOO_LARGE)
+    return ApprovedEvaluation(
+        ApprovedSheetPairs(
+            revision, EVIDENCE_SEALED, seal.seal_sha256,
+            items({diff.sheet_link_id: diff for diff in diffs}, verified),
+        ),
+        diffs,
+        seal,
     )
 
 
 __all__ = [
+    "ApprovedEvaluation", "evaluate_approved_pairs",
     "ApprovedEvidenceRefused", "MAX_APPROVED_CHANGED_CHARACTERS", "changed_characters",
     "hunk_id", "link_is_verified", "page_text_sha256", "project_approved_pairs", "raw_artifact",
 ]

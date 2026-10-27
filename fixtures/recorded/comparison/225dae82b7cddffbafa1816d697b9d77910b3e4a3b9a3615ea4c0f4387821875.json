@@ -1,0 +1,16 @@
+{
+  "recording_version": "1.0.0",
+  "request_sha256": "225dae82b7cddffbafa1816d697b9d77910b3e4a3b9a3615ea4c0f4387821875",
+  "input_sha256": "3abc001ec440751fe11d4437ca33fb0072200470909f49bf62a84a023a58dcf7",
+  "output_text": "{\"statements\": [{\"text\": \"Синтетический ответ, не результат вызова модели: на листе 2 изменена отметка изменения (с 1 на 2).\", \"hunk_ids\": [\"sln_01M2545JSD15ETSNNV904XJ001:0\"]}, {\"text\": \"Синтетический ответ, не результат вызова модели: на листе 2 длина стены изменена с 30 на 35.\", \"hunk_ids\": [\"sln_01M2545JSD15ETSNNV904XJ001:1\"]}]}",
+  "usage": {
+    "input_tokens": 310,
+    "output_tokens": 96
+  },
+  "note": "Hand-authored reply for the synthetic two-version pair of fixtures/recorded/comparison/build_fixtures.py.",
+  "origin": {
+    "kind": "synthetic",
+    "task_id": "COMPARE-PERSISTED-SUMMARY-01",
+    "statement": "Authored by hand; no model produced it and no provider call was made."
+  }
+}

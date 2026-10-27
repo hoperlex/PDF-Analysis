@@ -148,8 +148,14 @@ def _invalid(field: str, constraint: str = "format") -> DomainError:
     return DomainError(ErrorCode.VALIDATION_FAILED, field=field, constraint=constraint)
 
 
-def _conflict(reason: str) -> DomainError:
-    return DomainError(ErrorCode.CONFLICT, aggregate_type=AGGREGATE_TYPE, conflict_reason=reason)
+def _conflict(reason: str, aggregate_type: str = AGGREGATE_TYPE) -> DomainError:
+    return DomainError(ErrorCode.CONFLICT, aggregate_type=aggregate_type, conflict_reason=reason)
+
+
+def _stored_outcome(outcome: object, key: str) -> str | None:
+    """One string of the outcome a succeeded receipt recorded, or ``None``."""
+    value = outcome.get(key) if hasattr(outcome, "get") else None  # type: ignore[attr-defined]
+    return value if isinstance(value, str) else None
 
 
 def _check_identities(request: object, fields: tuple[tuple[str, type], ...]) -> None:

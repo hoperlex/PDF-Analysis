@@ -69,6 +69,7 @@ EXPECTED_TABLES = {
     "ar_v3_run_group_member",
     # `0035_comparison_records`: the approved sheet pairings of two versions, as an append-only history.
     "comparison_sheet_link",
+    "comparison_summary",
     # `0019_execution_workers`: the worker registry.
     "worker",
     # `0020_norms_search`: the one current norms snapshot and its append-only history.

@@ -39,6 +39,7 @@ from auditmanager.shared.identity import (
 AGGREGATE_TYPE: Final[str] = "Comparison"
 EVENT_SHEET_LINK_APPROVED: Final[str] = "comparison.sheet_link_approved"
 EVENT_SHEET_LINK_WITHDRAWN: Final[str] = "comparison.sheet_link_withdrawn"
+EVENT_SUMMARY_GENERATED: Final[str] = "comparison.summary_generated"
 
 _SHEET_KEYS: Final[frozenset[str]] = frozenset({
     "comparison_id", "sheet_link_id", "link_revision", "source_version_uid", "target_version_uid",
@@ -49,6 +50,16 @@ _SHEET_KEYS: Final[frozenset[str]] = frozenset({
 PAYLOAD_KEYS: Final[Mapping[str, tuple[frozenset[str], frozenset[str]]]] = {
     EVENT_SHEET_LINK_APPROVED: (_SHEET_KEYS | {"raw_evidence_seal_sha256"}, frozenset()),
     EVENT_SHEET_LINK_WITHDRAWN: (_SHEET_KEYS, frozenset({"raw_evidence_seal_sha256"})),
+}
+PAYLOAD_KEYS = {
+    **PAYLOAD_KEYS,
+    EVENT_SUMMARY_GENERATED: (
+        frozenset({
+            "comparison_id", "link_revision", "summary_id", "input_sha256",
+            "raw_evidence_seal_sha256", "state", "actor_uid",
+        }),
+        frozenset(),
+    ),
 }
 COMPARISON_EVENT_TYPES: Final[tuple[str, ...]] = tuple(PAYLOAD_KEYS)
 
@@ -82,9 +93,18 @@ def _checked(key: str, value: object) -> object:
         if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 500:
             raise ValueError(f"comparison journal: {key} must be a page number")
         return value
-    if key == "raw_evidence_seal_sha256":
+    if key in ("raw_evidence_seal_sha256", "input_sha256"):
         if not isinstance(value, str) or _SHA256.fullmatch(value) is None:
-            raise ValueError("comparison journal: raw_evidence_seal_sha256 must be a SHA-256")
+            raise ValueError(f"comparison journal: {key} must be a SHA-256")
+        return value
+    if key == "summary_id":
+        try:
+            return str(AuditEventId.parse(value))
+        except (IdentityError, DomainError, TypeError):
+            raise ValueError("comparison journal: summary_id is not a valid identity") from None
+    if key == "state":
+        if value not in ("ready", "rejected"):
+            raise ValueError("comparison journal: state is outside the closed vocabulary")
         return value
     raise ValueError(f"comparison journal: no value rule for {key!r}")  # pragma: no cover
 
@@ -105,13 +125,13 @@ def validated(event_type: str, payload: Mapping[str, object]) -> dict[str, objec
 
 def _append(
     session: Session, *, event_type: str, payload: Mapping[str, object],
-    correlation_id: str | None,
+    correlation_id: str | None, event_id: str | None = None,
 ) -> None:
     """INSERT one event on the caller's session. It never commits and never swallows."""
     checked = validated(event_type, payload)
     bound = None if correlation_id is None else str(CorrelationId.parse(correlation_id))
     session.execute(_INSERT, {
-        "event_id": str(AuditEventId.new()),
+        "event_id": str(AuditEventId.new()) if event_id is None else str(AuditEventId.parse(event_id)),
         "event_type": event_type,
         "aggregate_type": AGGREGATE_TYPE,
         "aggregate_id": checked["comparison_id"],
@@ -176,8 +196,36 @@ def record_sheet_link_withdrawn(
     )
 
 
+def record_summary_generated(
+    session: Session,
+    *,
+    event_id: str,
+    comparison_id: str,
+    link_revision: int,
+    input_sha256: str,
+    raw_evidence_seal_sha256: str,
+    state: str,
+    actor_uid: str,
+    correlation_id: str | None,
+) -> None:
+    """A summary was stored (``ready``) or its reply was refused (``rejected``). ``event_id`` is the
+    summary's own identity: one id, the row and its event."""
+    _append(
+        session,
+        event_type=EVENT_SUMMARY_GENERATED,
+        payload={
+            "comparison_id": comparison_id, "link_revision": link_revision, "summary_id": event_id,
+            "input_sha256": input_sha256, "raw_evidence_seal_sha256": raw_evidence_seal_sha256,
+            "state": state, "actor_uid": actor_uid,
+        },
+        correlation_id=correlation_id,
+        event_id=event_id,
+    )
+
+
 __all__ = [
     "AGGREGATE_TYPE", "COMPARISON_EVENT_TYPES", "EVENT_SHEET_LINK_APPROVED",
-    "EVENT_SHEET_LINK_WITHDRAWN", "PAYLOAD_KEYS", "record_sheet_link_approved",
-    "record_sheet_link_withdrawn", "validated",
+    "EVENT_SHEET_LINK_WITHDRAWN", "EVENT_SUMMARY_GENERATED", "PAYLOAD_KEYS",
+    "record_sheet_link_approved", "record_sheet_link_withdrawn", "record_summary_generated",
+    "validated",
 ]

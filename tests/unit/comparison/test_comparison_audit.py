@@ -22,6 +22,26 @@ def _payload(**changes):
     } | changes
 
 
+SUMMARY = "evt_01M2545JSD15ETSNNV904XD001"
+
+
+def _summary_payload(**changes):
+    return {
+        "comparison_id": CMP, "link_revision": 2, "summary_id": SUMMARY, "input_sha256": "b" * 64,
+        "raw_evidence_seal_sha256": SEAL, "state": "ready", "actor_uid": USER,
+    } | changes
+
+
+def test_the_summary_event_keeps_ids_digests_and_a_state_and_never_the_text() -> None:
+    assert audit.validated(audit.EVENT_SUMMARY_GENERATED, _summary_payload()) == _summary_payload()
+    for key in ("text", "statements", "model_identity", "cost_micros"):
+        with pytest.raises(ValueError, match="non-allowlisted"):
+            audit.validated(audit.EVENT_SUMMARY_GENERATED, _summary_payload() | {key: "x"})
+    for key, value in (("state", "done"), ("summary_id", CMP), ("input_sha256", "B" * 64), ("link_revision", 0)):
+        with pytest.raises(ValueError):
+            audit.validated(audit.EVENT_SUMMARY_GENERATED, _summary_payload() | {key: value})
+
+
 def test_a_complete_payload_is_kept_as_it_is() -> None:
     assert audit.validated(audit.EVENT_SHEET_LINK_APPROVED, _payload()) == _payload()
 

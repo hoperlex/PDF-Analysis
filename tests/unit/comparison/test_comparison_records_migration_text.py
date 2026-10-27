@@ -11,7 +11,7 @@ from pathlib import Path
 from types import ModuleType
 
 from auditmanager.comparison import audit, approved_evidence, raw_text, service, sheet_links
-from auditmanager.comparison import version_reader
+from auditmanager.comparison import summary_prompt, summary_records, summary_validation, version_reader
 
 ROOT = Path(__file__).resolve().parents[3]
 THIS = ROOT / "db/migrations/versions/20261027_0035_comparison_records.py"
@@ -53,8 +53,20 @@ def test_the_chain_function_states_the_limit_it_enforces() -> None:
     )
 
 
+def test_the_summary_vocabulary_restated_in_the_migration_equals_the_code() -> None:
+    migration = _module()
+    assert tuple(migration.SUMMARY_STATES) == summary_records.SUMMARY_STATES
+    assert tuple(migration.REJECTION_REASONS) == summary_validation.REJECTION_REASONS
+    assert tuple(migration.COST_BASES) == summary_records.COST_BASES
+    assert migration.MAX_STATEMENTS == summary_prompt.MAX_STATEMENTS
+    assert tuple(migration.PROVIDER_MODES) == ("recorded", "live")
+    # the summary's own statement ceiling is the one the validator and the response schema state
+    assert summary_prompt.RESPONSE_SCHEMA["properties"]["statements"]["maxItems"] == migration.MAX_STATEMENTS
+
+
 def test_the_journal_event_types_are_the_ones_the_migration_comment_and_purge_expect() -> None:
     assert audit.COMPARISON_EVENT_TYPES == (
         "comparison.sheet_link_approved", "comparison.sheet_link_withdrawn",
+        "comparison.summary_generated",
     )
     assert all(name.startswith("comparison.") for name in audit.COMPARISON_EVENT_TYPES)

@@ -89,6 +89,7 @@ IMMUTABLE_TABLES = {
     # `0035_comparison_records`: an approval or withdrawal of a sheet pairing is appended once and
     # never changed; the approved set is a query.
     "comparison_sheet_link",
+    "comparison_summary",
 }
 
 
@@ -351,6 +352,8 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "sheet_link_id": "sln",
         "source_version_uid": "ver",
         "target_version_uid": "ver",
+        # B2: a summary is identified by the audit event written with it.
+        "summary_id": "evt",
     }
     assert set(prefix_by_column.values()) <= {
         identity.prefix for identity in IDENTITY_TYPES_BY_ENTITY.values()

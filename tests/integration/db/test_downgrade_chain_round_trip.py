@@ -84,7 +84,7 @@ UPGRADE_SURFACE_DIGESTS = {
     # `OPT-PROJECT-ALL-SECTIONS-01`: likewise, taken from the revision's own bytes once it was final.
     "20261027_0034_pass_scope_all_sections.py": "665308d0d328145f15004cd92223f0d942d1a3b8ffaaeeaea586088e95196b0f",
     # `COMPARE-PERSISTED-SUMMARY-01`: likewise, taken from the revision's own bytes once it was final.
-    "20261027_0035_comparison_records.py": "dbb9c9626a76eb2a78bc98d78a998080abafc75154721a0a53ec03858d5b349a",
+    "20261027_0035_comparison_records.py": "430cc5a83436393728a1b11a13e99cc63a09761ceff216d237fff586187b7396",
 }
 
 

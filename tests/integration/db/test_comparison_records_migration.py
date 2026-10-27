@@ -409,7 +409,7 @@ def test_the_downgrade_is_refused_while_a_row_exists_and_only_then(
 
     refused = foundation_command(_alembic("downgrade", PREVIOUS), url)
     assert refused.returncode != 0, refused.describe()
-    assert "0035 downgrade refused: 1 sheet link event(s)" in refused.stderr, refused.stderr
+    assert "0035 downgrade refused: 1 sheet link event(s) and 0 summary row(s)" in refused.stderr, refused.stderr
     assert _version(engine) == THIS and _count(engine) == 1  # a refusal changes nothing
 
 

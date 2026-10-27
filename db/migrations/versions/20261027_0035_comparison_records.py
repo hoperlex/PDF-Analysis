@@ -1,4 +1,4 @@
-"""The comparison of two versions becomes a record: approved sheet pairings (and, with B2, summaries).
+"""The comparison of two versions becomes a record: approved sheet pairings and the AI summary on top.
 
 Revision ID: 0035_comparison_records
 Revises: 0034_pass_scope_all_sections
@@ -48,16 +48,31 @@ decision ledger's idiom), so the history stays readable if an account is later p
 **No backfill.** Nothing existed before; the upgrade creates an empty table beside existing rows
 and changes none of them.
 
+``comparison_summary`` -- the AI summary over the approved pairs, **append-only** as well. A row holds the
+summary of one revision of one comparison: the seal of the raw evidence it summarises, the digest of the
+bounded input and of the exact request, the prompt version, the provider mode and model identity
+(``recorded`` for a replayed reply), the state (``ready``, or ``rejected`` when the validator refused the
+reply -- the reply was paid for, so the rejection is recorded, without statements), the statements as the
+model wrote them with the span identities each cites (``<sheet_link_id>:<n>``), the cost through the meter
+(``unmetered`` only for the recorded binding) and who asked. The summary never changes the raw differences:
+nothing in this table is read back into them. Its identity is an ``audit_event_id`` (``evt_``), the id of the
+audit event written in the same transaction (an appended history row is an audit event, as in ``0025``).
+``(comparison_id, link_revision)`` references the history; ``am_check_comparison_summary`` (BEFORE INSERT,
+``AM001``) requires the revision to be the comparison's **latest**, the project to be the comparison's and the
+seal to be the one that revision stored, so a summary can neither describe a superseded approval set nor
+another project's evidence. At most one ``ready`` row exists per (comparison, revision, input digest, prompt
+version): an exact repeat never pays twice. UPDATE and DELETE are refused (``am_immutable_row``).
+
 The vocabulary (the bounds, the thirty-two) is restated, not imported: a migration is history and
 must not move when the application does. ``tests/unit/comparison`` holds the bounds equal to
 ``auditmanager.comparison``.
 
 Downgrade
 ---------
-Refuses while any row exists: a recorded approval or withdrawal exists nowhere else, and an
-unannounced downgrade would drop the expert's work (the pattern of the refusals in ``0006``,
-``0029``, ``0032``, ``0033`` and ``0034``). With no row it drops the trigger function and the
-table, and nothing else.
+Refuses while any row of either table exists: a recorded approval, withdrawal or summary exists
+nowhere else, and an unannounced downgrade would drop the expert's work (the pattern of the refusals in
+``0006``, ``0029``, ``0032``, ``0033`` and ``0034``). With no row it drops this revision's own objects,
+and nothing else.
 """
 
 from __future__ import annotations
@@ -81,6 +96,15 @@ MAX_ACTIVE_LINKS = 32
 #: ``version_reader.MAX_VERSION_PAGES`` (W55B-SEAL-01, migration 0021): pages of a published version.
 MAX_PAGE_NUMBER = 500
 MAX_LABEL_LENGTH = 128
+SUMMARY_STATES: tuple[str, ...] = ("ready", "rejected")
+#: ``summary_validation.REJECTION_REASONS``.
+REJECTION_REASONS: tuple[str, ...] = (
+    "reply_not_json", "reply_shape_invalid", "unknown_hunk_reference",
+)
+PROVIDER_MODES: tuple[str, ...] = ("recorded", "live")
+COST_BASES: tuple[str, ...] = ("unmetered", "measured", "estimated")
+#: ``summary_prompt.MAX_STATEMENTS``.
+MAX_STATEMENTS = 20
 
 
 def _sql_list(values: Sequence[str]) -> str:
@@ -214,6 +238,34 @@ _CHAIN_FUNCTION = f"""
         """
 
 
+_SUMMARY_FUNCTION = """
+        CREATE FUNCTION am_check_comparison_summary() RETURNS trigger
+        LANGUAGE plpgsql AS $fn$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM comparison_sheet_link l
+                WHERE l.comparison_id = NEW.comparison_id
+                  AND l.link_revision = NEW.link_revision
+                  AND l.project_uid = NEW.project_uid
+                  AND l.raw_evidence_seal_sha256 = NEW.raw_evidence_seal_sha256
+                  AND NOT EXISTS (
+                      SELECT 1 FROM comparison_sheet_link n
+                       WHERE n.comparison_id = l.comparison_id AND n.link_revision > l.link_revision)
+            ) THEN
+                RAISE EXCEPTION
+                    'state_transition_not_allowed: summary % does not describe the latest approved set '
+                    'of comparison % with the seal that revision stored', NEW.summary_id, NEW.comparison_id
+                    USING ERRCODE = 'AM001',
+                          HINT = 'A summary is written by auditmanager.comparison from the sealed '
+                                 'evidence of the latest revision.';
+            END IF;
+            RETURN NEW;
+        END
+        $fn$;
+        """
+
+
 def upgrade() -> None:
     op.execute(
         f"""
@@ -337,13 +389,134 @@ def upgrade() -> None:
     )
 
 
+    op.execute(
+        f"""
+        CREATE TABLE comparison_summary (
+            summary_id               text PRIMARY KEY,
+            comparison_id            text NOT NULL,
+            link_revision            integer NOT NULL,
+            project_uid              text NOT NULL,
+            raw_evidence_seal_sha256 text NOT NULL,
+            input_sha256             text NOT NULL,
+            request_sha256           text NOT NULL,
+            prompt_version           text NOT NULL,
+            provider_mode            text NOT NULL,
+            model_identity           text NOT NULL,
+            state                    text NOT NULL,
+            rejection_reason         text NULL,
+            statements               jsonb NOT NULL,
+            cost_basis               text NOT NULL,
+            cost_micros              bigint NOT NULL,
+            actor_user_uid           text NOT NULL,
+            actor_label              text NOT NULL,
+            command_id               text NOT NULL,
+            created_at               timestamptz NOT NULL DEFAULT clock_timestamp(),
+            CONSTRAINT fk_comparison_summary_history
+                FOREIGN KEY (comparison_id, link_revision)
+                REFERENCES comparison_sheet_link (comparison_id, link_revision) ON DELETE RESTRICT,
+            CONSTRAINT fk_comparison_summary_project
+                FOREIGN KEY (project_uid) REFERENCES project (project_uid) ON DELETE RESTRICT,
+            CONSTRAINT fk_comparison_summary_command
+                FOREIGN KEY (command_id) REFERENCES command_record (command_id) ON DELETE RESTRICT,
+            CONSTRAINT uq_comparison_summary_command UNIQUE (command_id),
+            CONSTRAINT ck_comparison_summary_summary_id_format
+                CHECK (summary_id ~ '^evt_{ULID}$'),
+            CONSTRAINT ck_comparison_summary_comparison_id_format
+                CHECK (comparison_id ~ '^cmp_{ULID}$'),
+            CONSTRAINT ck_comparison_summary_project_uid_format
+                CHECK (project_uid ~ '^prj_{ULID}$'),
+            CONSTRAINT ck_comparison_summary_actor_user_uid_format
+                CHECK (actor_user_uid ~ '^usr_{ULID}$'),
+            CONSTRAINT ck_comparison_summary_command_id_format
+                CHECK (command_id ~ '^cmd_{ULID}$'),
+            CONSTRAINT ck_comparison_summary_link_revision CHECK (link_revision >= 1),
+            CONSTRAINT ck_comparison_summary_raw_evidence_seal_sha256_format
+                CHECK (raw_evidence_seal_sha256 ~ '^[0-9a-f]{{64}}$'),
+            CONSTRAINT ck_comparison_summary_input_sha256_format
+                CHECK (input_sha256 ~ '^[0-9a-f]{{64}}$'),
+            CONSTRAINT ck_comparison_summary_request_sha256_format
+                CHECK (request_sha256 ~ '^[0-9a-f]{{64}}$'),
+            CONSTRAINT ck_comparison_summary_prompt_version
+                CHECK (prompt_version ~ '^[a-z][a-z0-9-]{{2,63}}$'),
+            CONSTRAINT ck_comparison_summary_provider_mode
+                CHECK (provider_mode IN ({_sql_list(PROVIDER_MODES)})),
+            CONSTRAINT ck_comparison_summary_model_identity
+                CHECK (char_length(model_identity) BETWEEN 1 AND 128),
+            CONSTRAINT ck_comparison_summary_state
+                CHECK (state IN ({_sql_list(SUMMARY_STATES)})),
+            CONSTRAINT ck_comparison_summary_cost_basis
+                CHECK (cost_basis IN ({_sql_list(COST_BASES)})),
+            CONSTRAINT ck_comparison_summary_cost_micros CHECK (cost_micros >= 0),
+            CONSTRAINT ck_comparison_summary_actor_label
+                CHECK (char_length(actor_label) BETWEEN 1 AND {MAX_LABEL_LENGTH}
+                       AND actor_label = btrim(actor_label, E' \\t\\r\\n')),
+            CONSTRAINT ck_comparison_summary_statements_is_array
+                CHECK (jsonb_typeof(statements) = 'array'),
+            CONSTRAINT ck_comparison_summary_ready_has_statements
+                CHECK (state <> 'ready'
+                       OR (rejection_reason IS NULL
+                           AND CASE WHEN jsonb_typeof(statements) = 'array'
+                                    THEN jsonb_array_length(statements) BETWEEN 1 AND {MAX_STATEMENTS}
+                                    ELSE false END)),
+            CONSTRAINT ck_comparison_summary_rejected_has_a_reason
+                CHECK (state <> 'rejected'
+                       OR (rejection_reason IS NOT NULL
+                           AND rejection_reason IN ({_sql_list(REJECTION_REASONS)})
+                           AND CASE WHEN jsonb_typeof(statements) = 'array'
+                                    THEN jsonb_array_length(statements) = 0
+                                    ELSE false END)),
+            CONSTRAINT ck_comparison_summary_unmetered_only_when_recorded
+                CHECK (cost_basis <> 'unmetered' OR (provider_mode = 'recorded' AND cost_micros = 0)),
+            CONSTRAINT ck_comparison_summary_recorded_is_unmetered
+                CHECK (provider_mode <> 'recorded'
+                       OR (model_identity = 'recorded' AND cost_basis = 'unmetered'))
+        );
+        """
+    )
+    op.execute(
+        "CREATE UNIQUE INDEX uq_comparison_summary_ready_input "
+        "ON comparison_summary (comparison_id, link_revision, input_sha256, prompt_version) "
+        "WHERE state = 'ready';"
+    )
+    op.execute("CREATE INDEX ix_comparison_summary_project ON comparison_summary (project_uid);")
+    op.execute(
+        """
+        CREATE TRIGGER trg_comparison_summary_immutable
+            BEFORE UPDATE OR DELETE ON comparison_summary
+            FOR EACH ROW EXECUTE FUNCTION am_immutable_row();
+        """
+    )
+    op.execute(_SUMMARY_FUNCTION)
+    op.execute(
+        """
+        CREATE TRIGGER trg_comparison_summary_latest
+            BEFORE INSERT ON comparison_summary
+            FOR EACH ROW EXECUTE FUNCTION am_check_comparison_summary();
+        """
+    )
+    op.execute(
+        "COMMENT ON TABLE comparison_summary IS "
+        "'COMPARE-PERSISTED-SUMMARY-01. The AI summary over the approved sheet pairs of one revision of "
+        "a comparison, append-only: the seal and input it summarises, the prompt version, provider mode "
+        "and model identity, ready statements citing the spans of the raw differences or a rejected "
+        "reply with its reason, the cost through the meter (unmetered only for the recorded binding) and "
+        "who asked. It never changes the raw differences. Never updated or deleted (am_immutable_row); "
+        "it must describe the comparison''s latest revision with the seal that revision stored "
+        "(am_check_comparison_summary); one ready row per revision, input and prompt version.';"
+    )
+
+
 def downgrade() -> None:
     """Refuse while a row exists, otherwise drop this revision's own objects and nothing else."""
-    rows = op.get_bind().execute(text("SELECT count(*) FROM comparison_sheet_link")).scalar_one()
-    if rows:
+    bind = op.get_bind()
+    links = bind.execute(text("SELECT count(*) FROM comparison_sheet_link")).scalar_one()
+    summaries = bind.execute(text("SELECT count(*) FROM comparison_summary")).scalar_one()
+    if links or summaries:
         raise RuntimeError(
-            f"0035 downgrade refused: {rows} sheet link event(s) exist nowhere else; "
-            "restore a backup instead of downgrading"
+            f"0035 downgrade refused: {links} sheet link event(s) and {summaries} summary row(s) "
+            "exist nowhere else; restore a backup instead of downgrading"
         )
+    op.execute("DROP TABLE comparison_summary;")
+    op.execute("DROP FUNCTION am_check_comparison_summary();")
     op.execute("DROP TABLE comparison_sheet_link;")
     op.execute("DROP FUNCTION am_check_comparison_sheet_link_chain();")

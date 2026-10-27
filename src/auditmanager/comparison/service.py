@@ -65,7 +65,9 @@ from auditmanager.comparison.finding_match_suggestions import (
     SuggestedSheetPair,
     suggest_finding_matches_on_sheet_suggestions,
 )
-from auditmanager.comparison.approved_evidence import project_approved_pairs
+from auditmanager.comparison.approved_evidence import evaluate_approved_pairs
+from auditmanager.comparison.raw_evidence_seal import RawEvidenceSeal
+from auditmanager.comparison.raw_text import RawTextDiff
 from auditmanager.comparison.raw_text import RawTextDiffRefused, diff_page_lines
 from auditmanager.comparison.read_model import (
     BASIS_EVIDENCE_OVER_LIMIT,
@@ -76,6 +78,7 @@ from auditmanager.comparison.read_model import (
     BASIS_SHEET_UNPAIRED,
     DIFF_COMPUTED,
     DIFF_TOO_LARGE,
+    EVIDENCE_SEALED,
     FINDINGS_COMPARED,
     FINDINGS_OVER_LIMIT,
     FINDINGS_UNAVAILABLE,
@@ -98,6 +101,7 @@ from auditmanager.comparison.read_model import (
     SIDE_SOURCE,
     SIDE_TARGET,
     ComparedVersion,
+    ComparisonSummaryView,
     ComparisonRefusal,
     DiffHunk,
     FindingComparison,
@@ -106,9 +110,11 @@ from auditmanager.comparison.read_model import (
     SheetDiff,
     SheetDiffPage,
     SheetPairing,
+    SummaryStatementView,
     VersionComparison,
 )
 from auditmanager.comparison.sheet_links import ApprovedLinkReader
+from auditmanager.comparison.summary_records import LatestSummaryReader
 from auditmanager.comparison.sheet_match_suggestions import (
     EXACT_PAIR_ALGORITHM,
     SheetMatchSuggestionRefused,
@@ -245,6 +251,21 @@ class CurrentComparison:
 
 
 @dataclass(frozen=True, slots=True)
+class SealedEvidence:
+    """The approved set recomputed now, for a command that builds on it (the summary).
+
+    ``seal`` and ``raw_diffs`` are present only when the set is ``sealed``: every approved page still
+    has the text digest the expert saw and the recomputed seal equals the stored one.
+    """
+
+    pair: OrderedVersionPair
+    comparison_id: str | None
+    link_revision: int
+    raw_diffs: tuple[RawTextDiff, ...]
+    seal: RawEvidenceSeal | None
+
+
+@dataclass(frozen=True, slots=True)
 class ComparisonRequest:
     project_uid: str
     document_uid: str
@@ -338,6 +359,7 @@ class VersionComparisonService:
         analyses: VersionAnalysisReader,
         section_codes: frozenset[str],
         links: ApprovedLinkReader | None = None,
+        summaries: LatestSummaryReader | None = None,
     ) -> None:
         if not isinstance(section_codes, frozenset) or not section_codes:
             raise ValueError("section_codes must be the sealed, non-empty catalogue")
@@ -345,6 +367,7 @@ class VersionComparisonService:
         self._analyses = analyses
         self._section_codes = section_codes
         self._links = links
+        self._summaries = summaries
 
     def compare(self, session: Session, request: ComparisonRequest) -> VersionComparison:
         """The comparison of ``request``'s pair, or its explicit refusal.
@@ -364,10 +387,44 @@ class VersionComparisonService:
             source_version_uid=prepared.pair.source.version_uid,
             target_version_uid=prepared.pair.target.version_uid,
         )
-        return replace(assembled, approved_pairs=project_approved_pairs(
+        approved = evaluate_approved_pairs(
             pair=prepared.pair, state=state,
             source_pages=prepared.source.text.pages, target_pages=prepared.target.text.pages,
-        ))
+        ).projection
+        if self._summaries is not None and state.comparison_id is not None:
+            stored = self._summaries.latest(session, comparison_id=state.comparison_id)
+            if stored is not None:
+                approved = replace(approved, summary=ComparisonSummaryView(
+                    stored.summary_id, stored.link_revision, stored.state, stored.rejection_reason,
+                    tuple(SummaryStatementView(s.text, s.hunk_ids) for s in stored.statements),
+                    stored.prompt_version, stored.provider_mode, stored.model_identity,
+                    stored.input_sha256, stored.raw_evidence_seal_sha256, stored.cost_basis,
+                    approved.evidence_state == EVIDENCE_SEALED
+                    and stored.link_revision == approved.link_revision
+                    and stored.raw_evidence_seal_sha256 == approved.raw_evidence_seal_sha256,
+                    stored.actor_label, stored.created_at,
+                ))
+        return replace(assembled, approved_pairs=approved)
+
+    def sealed_evidence(self, session: Session, request: ComparisonRequest) -> SealedEvidence | None:
+        """The approved set recomputed now, or ``None`` for a refused comparison. Nothing is written."""
+        _check_request(request)
+        prepared = self._prepare(session, request)
+        if isinstance(prepared, VersionComparison) or self._links is None:
+            return None
+        state = self._links.state(
+            session,
+            source_version_uid=prepared.pair.source.version_uid,
+            target_version_uid=prepared.pair.target.version_uid,
+        )
+        evaluation = evaluate_approved_pairs(
+            pair=prepared.pair, state=state,
+            source_pages=prepared.source.text.pages, target_pages=prepared.target.text.pages,
+        )
+        return SealedEvidence(
+            prepared.pair, state.comparison_id, state.latest_revision,
+            evaluation.raw_diffs, evaluation.seal,
+        )
 
     def current_comparison(self, session: Session, request: ComparisonRequest) -> CurrentComparison:
         """The sheet proposals and the texts behind them, recomputed now, for a pairing command.
@@ -930,7 +987,7 @@ def _finding_comparison(
 
 __all__ = [
     "COMPARISON_ALGORITHM", "ComparisonIntegrityError", "ComparisonRequest",
-    "ComparisonRequestInvalid", "CurrentComparison", "CurrentFindingProposals", "DEFAULT_DIFF_LIMIT",
+    "ComparisonRequestInvalid", "CurrentComparison", "CurrentFindingProposals", "SealedEvidence", "DEFAULT_DIFF_LIMIT",
     "FindingEvidenceSnapshot",
     "FindingSnapshot", "MAX_DIFF_LIMIT", "MAX_DIFF_PAGE_CHARACTERS", "RUN_STATE_PUBLISHED",
     "RunCandidate", "SHEET_DIFF_ALGORITHM", "SavedPageText", "VersionAnalysisReader",

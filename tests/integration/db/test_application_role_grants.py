@@ -377,7 +377,7 @@ def test_the_application_role_cannot_truncate_any_table(applied: Stand) -> None:
             with pytest.raises(errors.InsufficientPrivilege):
                 connection.execute(f'TRUNCATE TABLE "{table}"')
             refused.append(table)
-    assert refused == sorted(coverage.TABLES) and len(refused) == 65  # 0035: comparison_sheet_link
+    assert refused == sorted(coverage.TABLES) and len(refused) == 66  # 0035: comparison_sheet_link, comparison_summary
 
 
 # --- (c) append-only is refused twice ------------------------------------------------------------------
@@ -410,7 +410,7 @@ def test_append_only_tables_refuse_update_and_delete_by_privilege(applied: Stand
             with pytest.raises(errors.InsufficientPrivilege):
                 connection.execute(f'DELETE FROM "{table}" WHERE false')
             checked.append(table)
-    assert checked == sorted(grants.APPEND_ONLY) and len(checked) == len(grants.APPEND_ONLY) == 37  # 0035
+    assert checked == sorted(grants.APPEND_ONLY) and len(checked) == len(grants.APPEND_ONLY) == 38  # 0035
 
 
 def test_read_only_tables_refuse_every_write(applied: Stand) -> None:

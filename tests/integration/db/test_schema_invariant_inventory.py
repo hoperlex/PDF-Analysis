@@ -34,12 +34,15 @@ from sqlalchemy import Engine, text
 #: Resealed by `COMPARE-PERSISTED-SUMMARY-01` for ``0035_comparison_records``, measured, not
 #: predicted: a fresh database upgraded to ``0035`` was recomputed in all eleven families and compared
 #: with the 0034 seal below. Every added row is this revision's and nothing was removed or redefined:
-#: columns +18 -> 754 (``comparison_sheet_link``); relations +1 -> 77 (the table); constraints +28
-#: -> 842 (primary key, three unique keys, five foreign keys, nineteen CHECKs); indexes +6 -> 190
-#: (the primary key, the three unique keys, ``ix_comparison_sheet_link_project`` and
-#: ``ix_comparison_sheet_link_target_version``); triggers +2 -> 88 (``trg_comparison_sheet_link_immutable``
-#: and ``trg_comparison_sheet_link_chain``); functions +1 -> 33 (``am_check_comparison_sheet_link_chain``).
-#: Views, extensions, sequences, policies and the state topology are identical to the 0034 seal.
+#: columns +37 -> 773 (``comparison_sheet_link`` 18, ``comparison_summary`` 19); relations +2 -> 78 (the
+#: two tables); constraints +54 -> 868 (``comparison_sheet_link``: primary key, three unique keys, five
+#: foreign keys, nineteen CHECKs; ``comparison_summary``: primary key, one unique key, three foreign
+#: keys, twenty-one CHECKs); indexes +10 -> 194 (the two primary keys, the four unique keys, the partial
+#: unique index of the one ready summary per input, ``ix_comparison_sheet_link_project``,
+#: ``ix_comparison_sheet_link_target_version`` and ``ix_comparison_summary_project``); triggers +4 -> 90
+#: (an ``am_immutable_row`` trigger and a BEFORE INSERT check on each table); functions +2 -> 34
+#: (``am_check_comparison_sheet_link_chain``, ``am_check_comparison_summary``). Views, extensions,
+#: sequences, policies and the state topology are identical to the 0034 seal.
 #: Resealed by `OPT-PROJECT-ALL-SECTIONS-01` for ``0034_pass_scope_all_sections``, measured, not
 #: predicted: one fresh database upgraded to ``0033`` (whose inventory equalled the 0033 seal below
 #: in every family) and then to ``0034`` had all eleven families recomputed. One family moved and by
@@ -248,12 +251,12 @@ from sqlalchemy import Engine, text
 #: ``contract_state_transition`` (the seal adds ``app_user`` and ``registration_request``
 #: to ``state-machines.json``; the registration lifecycle is guarded by its own trigger).
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (754, "9bff6e8d9bc6881d2b6ab213277094b3a786445dd83d6d155ca57d323bf8d1e8"),
-    "relations": (77, "8ef0dcb82a41099b7573704bd82fa806ddfa1ad162623d625607e38bb9766815"),
-    "constraints": (842, "729550a0663af15d3ef3065033092d49e41cb179beed3e392c80ff998050ff9c"),
-    "indexes": (190, "2a6cfa6a647bcba035b2ca55dd9ae83da8ae79148f0f6f91ffab2fb5519ef33e"),
-    "triggers": (88, "d5a43a468b83584d0c196d254f6de36bcb37710798a3c270b8e0f0e79f355660"),
-    "functions": (33, "07980049a6632b3022b1e516fcc9602f9411304f7902ccecc224eb697408378e"),
+    "columns": (773, "88bab63bfa9a0f64f33063791917bb0644023a8075f03ac2a22e23545e89c179"),
+    "relations": (78, "5b6ea2428f6469f68b1b20cbfaf36321929f55030ef51b4329db44335da298b4"),
+    "constraints": (868, "ae150dd53fb7c9031cf3fe8d6c3f54b6d2624a2e8b4d128d281fa8c536cd5d03"),
+    "indexes": (194, "00c31298ca59f04d6d0e85fab63d61ecd6f809db26ad5fe6dbcabe4a71143fbc"),
+    "triggers": (90, "1f047154476a27395ac3787e330da452ca652bdaf290e7cd1c9fc958dfb00411"),
+    "functions": (34, "6ee1b2f02020015147e2f08afc88e76a05e94cd9a1e9282e580ab11cced73bd9"),
     "views": (5, "c41ad974669882ee5d818591ee1d485b70455ddd4e51d236cc83892d18d11b93"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),
     "sequences": (7, "6d533fe16349a92b16b5ca89d51fcb083f1ecdf4f252bc276667a92361bf1656"),

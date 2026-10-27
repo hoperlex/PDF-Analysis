@@ -29,7 +29,23 @@ from auditmanager.comparison.pairing import (
     SheetPairingService,
     WithdrawSheetPairingRequest,
 )
+from auditmanager.comparison.summaries import (
+    CONFLICT_SUMMARY_EVIDENCE_NOT_SEALED,
+    CONFLICT_SUMMARY_INPUT_EMPTY,
+    CONFLICT_SUMMARY_INPUT_TOO_LARGE,
+    DEPENDENCY_SUMMARY_MODEL,
+    GenerateSummaryRequest,
+    SummaryCostGate,
+    SummaryOutcome,
+    SummaryService,
+    SummaryStore,
+)
+from auditmanager.comparison.summary_model import RecordedSummaryModel, SummaryModel, SummaryReply
+from auditmanager.comparison.summary_records import LatestSummaryReader, StoredSummary
 from auditmanager.comparison.read_model import (
+    SUMMARY_LABEL,
+    ComparisonSummaryView,
+    SummaryStatementView,
     EVIDENCE_NONE,
     EVIDENCE_SEAL_CHANGED,
     EVIDENCE_SEALED,
@@ -84,6 +100,23 @@ from auditmanager.comparison.version_reader import VersionFacts
 from auditmanager.comparison.version_section_pair import SuppliedVersionClassification
 
 __all__ = [
+    "CONFLICT_SUMMARY_EVIDENCE_NOT_SEALED",
+    "CONFLICT_SUMMARY_INPUT_EMPTY",
+    "CONFLICT_SUMMARY_INPUT_TOO_LARGE",
+    "ComparisonSummaryView",
+    "DEPENDENCY_SUMMARY_MODEL",
+    "GenerateSummaryRequest",
+    "LatestSummaryReader",
+    "RecordedSummaryModel",
+    "SUMMARY_LABEL",
+    "StoredSummary",
+    "SummaryCostGate",
+    "SummaryModel",
+    "SummaryOutcome",
+    "SummaryReply",
+    "SummaryService",
+    "SummaryStatementView",
+    "SummaryStore",
     "ApproveSheetPairingRequest",
     "ApprovedDiffHunk",
     "ApprovedLinkReader",

@@ -280,6 +280,44 @@ class ApprovedSheetPair:
     diff: ApprovedSheetDiff | None
 
 
+#: The label that stands beside every stored summary. Part of the read model so that no screen can
+#: leave it out or soften it (`C-2`: «AI never alters the raw differences»; no human has reviewed it).
+SUMMARY_LABEL: Final[str] = "Сводка подготовлена моделью, проверка человеком не проводилась"
+
+
+@dataclass(frozen=True, slots=True)
+class SummaryStatementView:
+    """One statement of a summary and the changed spans it cites (``<sheet_link_id>:<n>``)."""
+
+    text: str
+    hunk_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ComparisonSummaryView:
+    """The newest stored summary of the comparison, beside (never inside) the raw differences.
+
+    ``is_current``: it describes the approved set as it stands now (same revision, same seal, and the
+    set is ``sealed``). A summary of a superseded set is still shown, and says so.
+    """
+
+    summary_id: str
+    link_revision: int
+    state: str
+    rejection_reason: str | None
+    statements: tuple[SummaryStatementView, ...]
+    prompt_version: str
+    provider_mode: str
+    model_identity: str
+    input_sha256: str
+    raw_evidence_seal_sha256: str
+    cost_basis: str
+    is_current: bool
+    created_by_label: str
+    created_at: datetime
+    label: str = SUMMARY_LABEL
+
+
 @dataclass(frozen=True, slots=True)
 class ApprovedSheetPairs:
     """The approved pairs of the compared pair and their evidence, or why it is withheld."""
@@ -290,6 +328,8 @@ class ApprovedSheetPairs:
     #: The recomputed ``raw_evidence_seal`` of the active set; ``None`` unless ``sealed``.
     raw_evidence_seal_sha256: str | None
     items: tuple[ApprovedSheetPair, ...]
+    #: `COMPARE-PERSISTED-SUMMARY-01` (B2). Read from a separate record; it changes nothing above.
+    summary: ComparisonSummaryView | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -314,6 +354,7 @@ class VersionComparison:
 
 
 __all__ = [
+    "ComparisonSummaryView", "SUMMARY_LABEL", "SummaryStatementView",
     "ApprovedDiffHunk", "ApprovedSheetDiff", "ApprovedSheetPair", "ApprovedSheetPairs",
     "EVIDENCE_NONE", "EVIDENCE_SEALED", "EVIDENCE_SEAL_CHANGED", "EVIDENCE_STATES",
     "EVIDENCE_TEXT_CHANGED", "EVIDENCE_TOO_LARGE", "LINK_STATES", "LINK_TEXT_CHANGED",
