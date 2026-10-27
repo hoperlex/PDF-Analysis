@@ -185,3 +185,37 @@ def test_two_applications_racing_for_the_last_place_of_the_day_get_one(
         "conflict_reason": "queue_full"
     }, report
     assert _pending(migrated_engine) == MAX_REQUESTS_PER_DAY
+
+
+def test_an_administrator_rejecting_a_request_frees_a_place_of_the_day_over_http(
+    migrated_engine: Engine,
+) -> None:
+    """The lever against a flood that fills the day: reject what is spam and the door opens by
+    exactly that many places. The refusal is the same ``queue_full`` for any login."""
+    factory = committed_factory(migrated_engine)
+    surface = identity_surface(factory)
+    _fill(migrated_engine, MAX_REQUESTS_PER_DAY - 1, age="1 hour")
+    spam = fresh_login("day-spam")
+    assert submit(surface, spam).status == 201
+
+    refused = submit(surface, fresh_login("day-refused"), correlation="qa49-day-lever")
+    assert refused.status == 409, refused.body
+    assert envelope(refused).get("details") == {"conflict_reason": "queue_full"}, refused.body
+
+    with factory() as session:
+        admin = make_account(
+            session,
+            login=fresh_login("day-admin"),
+            names=("Суточная", "Ада", None),
+            roles=("expert", "admin"),
+        )
+        session.commit()
+        admin_cred = credential_for(session, admin)
+        row = request_row(session, spam)
+    assert row is not None
+    assert reject(surface, admin_cred, row["request_id"]).status == 200
+
+    assert submit(surface, fresh_login("day-after-reject")).status == 201
+    again = submit(surface, fresh_login("day-spent-again"))
+    assert again.status == 409, again.body
+    assert envelope(again).get("details") == {"conflict_reason": "queue_full"}, again.body

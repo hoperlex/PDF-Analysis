@@ -2,9 +2,10 @@
 
 Registration and sign-in stay public; what the owner added is a limit the application owns
 (the edge limits an address, and the browser's own registration never meets the edge's zone):
-at most ``MAX_REQUESTS_PER_DAY`` requests are accepted in any rolling 24 hours, counted from
-``registration_request.submitted_at`` over every request in any state, and the next one is
-refused with the existing ``conflict`` / ``queue_full``.
+at most ``MAX_REQUESTS_PER_DAY`` requests stand or were approved in any rolling 24 hours, counted
+from ``registration_request.submitted_at`` over the ``pending`` and ``approved`` requests (a
+``rejected`` one is the administrator's lever and frees its place), and the next one is refused
+with the existing ``conflict`` / ``queue_full``.
 
 Each test gets its own clone of a migrated database (``conftest.py``) and commits what it
 writes. The rows that fill the window are written directly with a stored digest of zeros --
@@ -104,21 +105,56 @@ def test_the_fortieth_request_of_a_day_is_accepted_and_the_forty_first_is_queue_
         assert _rows(session) == MAX_REQUESTS_PER_DAY
 
 
-def test_decided_requests_still_count_towards_the_day(migrated_engine) -> None:
-    """The window counts requests accepted, not requests pending: deciding one frees no place
-    in the day, only in the queue."""
+def test_a_rejected_request_frees_a_place_in_the_day_and_an_approved_one_does_not(
+    migrated_engine,
+) -> None:
+    """The day counts requests that stand (pending) or were accepted (approved). A rejected one
+    was refused by the administrator, so it frees the place: the administrator's lever when
+    spam fills the day. Before this rule every state counted and nothing could clear the day.
+
+    ``SMALL-HARDENING-02`` asserted here that after one reject and one approve the day was
+    still spent; now the same two decisions leave 39 counted, so one more is accepted."""
     with Session(migrated_engine) as session:
         admin = users.find_by_login(session, "admin")
         assert admin is not None
         ids = _fill(session, MAX_REQUESTS_PER_DAY, age="2 hours")
-        registrations.reject(session, actor_uid=str(admin.user_uid), request_id=ids[0], reason="нет")
+        _refused_as_queue_full(session, "before-decisions@example.com")
+
         registrations.approve(
             session, actor_uid=str(admin.user_uid), request_id=ids[1], roles=("expert",)
         )
         session.commit()
-        assert registrations.pending_total(session) == MAX_REQUESTS_PER_DAY - 2
+        # An approval is a request accepted: the day is still spent.
+        _refused_as_queue_full(session, "after-approval@example.com")
 
-        _refused_as_queue_full(session, "after-decisions@example.com")
+        registrations.reject(session, actor_uid=str(admin.user_uid), request_id=ids[0], reason="нет")
+        session.commit()
+        assert registrations.pending_total(session) == MAX_REQUESTS_PER_DAY - 2
+        # 38 pending + 1 approved = 39 stand: one place is free, and only one.
+        assert _submit(session, "after-reject@example.com").status == "pending"
+        _refused_as_queue_full(session, "one-too-many@example.com")
+
+        # Rejecting another request frees another place.
+        registrations.reject(session, actor_uid=str(admin.user_uid), request_id=ids[2], reason="нет")
+        session.commit()
+        assert _submit(session, "after-second-reject@example.com").status == "pending"
+        _refused_as_queue_full(session, "and-again@example.com")
+
+
+def test_a_day_full_of_rejected_requests_is_an_open_door(migrated_engine) -> None:
+    """Forty requests rejected inside the window leave the count at zero: the administrator who
+    clears a flood reopens registration at once."""
+    with Session(migrated_engine) as session:
+        admin = users.find_by_login(session, "admin")
+        assert admin is not None
+        ids = _fill(session, MAX_REQUESTS_PER_DAY, age="1 hour")
+        for request_id in ids:
+            registrations.reject(
+                session, actor_uid=str(admin.user_uid), request_id=request_id, reason="спам"
+            )
+        session.commit()
+        assert registrations.pending_total(session) == 0
+        assert _submit(session, "all-rejected@example.com").status == "pending"
 
 
 @pytest.mark.parametrize(
