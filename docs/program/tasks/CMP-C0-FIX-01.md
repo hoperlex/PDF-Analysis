@@ -85,12 +85,6 @@ comparison-only version with `analysis_input_invalid`, reason `comparison_only_v
 - `docs/program/CMP-C0-FIX-01.md`
 - `docs/program/tasks/CMP-C0-FIX-01.md`
 
-`tests/unit/executors/**` and `tests/integration/runs/**` take only new tests for items 1 and 4. The one file of
-`tests/integration/comparison/spend/` is **not** in the brief's list and is added by necessity: its test
-`test_a_cancel_that_arrives_with_a_lost_lease_is_not_settled_by_the_queue_but_by_the_next_call` pins the defect of
-item 2 (it asserts the call is still `sent` after the reclaim), so it cannot stay green once the defect is fixed; the lane
-changes that one test and nothing else in the file, and the report asks the integrator to ratify the hunk.
-
 ## Lane resources
 - foundation_instance: `auditmanager-cmp-c0-fix-01`
 - postgres_port: `57810`
@@ -121,6 +115,12 @@ changes that one test and nothing else in the file, and the report asks the inte
 3. `test_version_record_equality.py`: `upload_kind` named in `changed`
 4. `runs/v3_group.py`: `refuse_comparison_only_version(version)` right after `get_version`; a new integration test
 5. the report `docs/program/CMP-C0-FIX-01.md` with a quoted mutation for every guard
+
+About the allowed paths: `tests/unit/executors/**` and `tests/integration/runs/**` take only new tests for items 1 and 4. The one file of
+`tests/integration/comparison/spend/` is **not** in the brief's list and is added by necessity: its test
+`test_a_cancel_that_arrives_with_a_lost_lease_is_not_settled_by_the_queue_but_by_the_next_call` pins the defect of
+item 2 (it asserts the call is still `sent` after the reclaim), so it cannot stay green once the defect is fixed; the lane
+changes that one test and nothing else in the file, and the report asks the integrator to ratify the hunk.
 
 ## Required tests
 - command: `AUDITMANAGER_LEGACY_PROMPTS_REPO=/nonexistent PYTHONPATH=$PWD/src .venv/bin/python -m pytest -q tests/unit/comparison tests/unit/executors tests/integration/comparison tests/integration/documents/test_version_record_equality.py tests/integration/runs` on the lane's own PostgreSQL and MinIO
