@@ -240,5 +240,5 @@ Forward revert of the version, the note file and the pins together; the note fil
 
 - changed files: the eight paths above
 - commands/results: see `docs/program/RELEASE-0-9-0-DEV-01.md`
-- known limits: the executor-level and PostgreSQL-backed tests of the windows, the pairing and the summary were not re-run by this lane; the note judge has read the first revision of the note, not the final one; no live check of any screen
+- known limits: the executor-level and PostgreSQL-backed tests of the windows, the pairing and the summary were not re-run by this lane; two independent note-judge passes: the first on `e1199c25`, the second on `79a7e415`, whose findings are fixed in `d04e8f83`; no live check of any screen
 - integration notes: merge after wave PW4; the note date and the strictly descending date rule need the integrator's decision before `main`
