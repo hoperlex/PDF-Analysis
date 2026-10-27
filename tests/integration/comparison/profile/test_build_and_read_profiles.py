@@ -177,6 +177,10 @@ def test_a_page_that_ends_without_a_result_is_a_typed_row_and_the_version_goes_o
     after = [row.comparison_page_profile_id for row in rows_of(version)]
     assert after[:4] == before[:4] and after[5] == before[5] and after[4] != before[4]
     assert rows_of(version)[4].profile_blob_id is not None
+    # Nothing that is evidence is ever removed: asking to retry a version with no failed page deletes nothing.
+    untouched = build_version_page_profiles(session_factory, blob_store, version, retry_failed=True)
+    assert (untouched.replaced_failed, untouched.pages) == (0, ())
+    assert [row.comparison_page_profile_id for row in rows_of(version)] == after
 
 
 def test_a_page_over_the_pixel_cap_is_stored_refused_and_never_rendered(
