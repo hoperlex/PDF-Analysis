@@ -186,7 +186,8 @@ All with the lane stack's `.env` copied untracked into the worktree, `PYTHONPATH
 | `npx vitest run` in `web/` | 203 files, **3,095 passed** |
 | `npx tsc --noEmit`; `npx eslint --quiet .` in `web/` | exit 0; exit 0 |
 | `npm --prefix web run api:verify` | OK, 107 operations, contract sha256 `43f62326…f7df` |
-| `pytest tests/contract/program tests/contract/api_v1/test_doc_prose_facts.py tests/contract/api_v1/test_surface_counts_in_prose.py` on the committed tree | (to be filled) |
+| `pytest tests/contract` minus the three `D-220` files (`test_cp00_candidate.py`, `test_validate_bootstrap.py`, `test_cp00_final_state.py`), clean committed tree | **1,174 passed, 1 failed**, 19,283 subtests, 90 s. The one red is `test_doc_prose_facts.py::test_the_scanned_docs_state_the_migration_head_this_tree_has`: `docs/program/CURRENT_STATE.md` still says `0035_comparison_records` (the integrator's sentence, integration note 1). `tests/contract/program` and `test_surface_counts_in_prose.py` are green |
+| `git diff --check`; the governance one-liner on the task file | clean; prints `[]` |
 
 
 ### Contract and migration result
