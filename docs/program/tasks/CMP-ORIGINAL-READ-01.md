@@ -66,6 +66,26 @@ Not applicable (a document).
 
 ## Handoff
 - changed files:
+  - `docs/program/compare/ORIGINAL-UNREAD-SOURCES.md` (new; the facts document)
+  - `docs/program/tasks/CMP-ORIGINAL-READ-01.md` (this Handoff section only)
 - commands/results:
+  - downloads: 47 files of the original at `23f379fd` into `.local/orig/` (git-ignored, `git check-ignore` confirms);
+    all `curl --fail`, none missing. Nothing was executed.
+  - `git diff --check` in the worktree: no output (exit 0).
+  - line count of the facts document: 991 lines (above the ~700 soft target; the excess is per-fact `path:line` citations).
 - known limits:
+  - not downloaded, so not read: `stage_comparison/store.py` and the orchestrator (the callers and transport of the Stage 4/5/5.3
+    model calls), `sheet_content_fingerprint.py`, `text_fact_ownership.py`, `room_schedule.py`, `version_comparison_ai/jobs.py`
+    (callers of the describe packet and of `sheet_changes`), `md_report/pdf.py`, and the frontend and version-comparison routers.
+    These are marked UNCONFIRMED in the document, section 4.
+  - `text_fact_producer.py` and `high_level_project_changes.py` have no caller in the downloaded tree; their wiring is UNCONFIRMED.
+  - the md_report, client-edit and sheet-changes prompts were checked by placeholder and rule headings, not read line by line.
+  - model names are copied from the original; not verified against any provider.
 - integration notes:
+  - the Stage 4/5 model calls are in `text_ai_reviewer.py`, `project_change_summary.py` and `high_level_project_changes.py`
+    (`gpt-5.6-luna`, medium); the version calls use `gpt-6.1-sol` (md report, sheet changes, client edit) and `gpt-6-luna`
+    (whole specification, «Луна»), all high effort via `codex exec`.
+  - the expert verdict store is `project_change_v3/expert_review.py`, not in `stage_comparison/`.
+  - the slices should cite section numbers of the document (1.2–1.11 stage, 2.1–2.9 version); the document lists the
+    «Экспертная оценка» HTTP mapping (409 / 404) and the stored UI labels.
+  - forbidden hotspots: untouched (only the two allowed paths changed; `.local/orig/` is git-ignored).
