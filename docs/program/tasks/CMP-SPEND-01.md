@@ -68,12 +68,7 @@ table, `comparison_model_call`, by the wave brief's wiring rule 4.)
 - `docs/program/CMP-SPEND-01.md`
 - `docs/program/tasks/CMP-SPEND-01.md`
 
-The first three and the two test directories are the wave brief's row. `src/auditmanager/jobs/repository.py` is open **only** by the
-grant of the `PROD-20` owner, asked by the integrator (the PW5 integrator's grant, conditions binding): exactly one query, the
-one-active-run-per-connection check; no schema change; no other edit anywhere in `src/auditmanager/jobs/**`; a mutation proof; a test
-that a plain run still serialises per connection as before; the `EXEC-PAR-QUEUE-01` tests stay green unmodified; the function name and
-the before/after SQL are quoted in the report. `comparison/public.py` and `grant_classification.py` are the wave brief's wiring rule 4
-(appends for this lane's names only; the removal of `comparison_model_call` from `SEALED_NOT_YET_WRITTEN`).
+(Why these paths: see "Integration contract" below. The list holds paths only, for `scripts/task_handoff.py`.)
 
 ## Lane resources
 - foundation_instance: `auditmanager-cmp-spend-01`
@@ -118,6 +113,13 @@ the before/after SQL are quoted in the report. `comparison/public.py` and `grant
 - expected: all pass **unmodified** (the `EXEC-PAR-QUEUE-01` tests and the dashboard spend test of the HTTP run path)
 
 ## Integration contract
+Allowed paths. The first three and the two test directories are the wave brief's row. `src/auditmanager/jobs/repository.py` is open **only** by the
+grant of the `PROD-20` owner, asked by the integrator (the PW5 integrator's grant, conditions binding): exactly one query, the
+one-active-run-per-connection check; no schema change; no other edit anywhere in `src/auditmanager/jobs/**`; a mutation proof; a test
+that a plain run still serialises per connection as before; the `EXEC-PAR-QUEUE-01` tests stay green unmodified; the function name and
+the before/after SQL are quoted in the report. `comparison/public.py` and `grant_classification.py` are the wave brief's wiring rule 4
+(appends for this lane's names only; the removal of `comparison_model_call` from `SEALED_NOT_YET_WRITTEN`).
+
 The integrator can rely on: `ComparisonSpendRepository` is the only writer of `comparison_model_call`; a provider call of the comparison
 modules is made only by `ComparisonModelCaller.call`, which commits a `prepared` row before the adapter is called and never retries; a
 reclaimed attempt's `prepared` / `sent` rows become `unknown` in the reclaim transaction (the entry of `SPEND_SETTLERS`) and the item ends
