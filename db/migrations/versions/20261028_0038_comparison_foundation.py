@@ -105,7 +105,7 @@ UPLOAD_STATES: tuple[str, ...] = (
 )
 UPLOAD_TERMINAL: tuple[str, ...] = ("completed", "cancelled")
 SET_STATES: tuple[str, ...] = (
-    "uploading", "reading", "review", "ready", "admitting", "done", "failed", "excluded",
+    "uploading", "reading", "needs_confirmation", "ready", "admitting", "done", "failed", "excluded",
 )
 SET_TERMINAL: tuple[str, ...] = ("done", "excluded")
 FILE_STATES: tuple[str, ...] = ("declared", "uploading", "verified", "failed")
@@ -139,12 +139,12 @@ EDGES: tuple[tuple[str, str, str], ...] = (
     ("comparison_upload_set", "uploading", "reading"),
     ("comparison_upload_set", "uploading", "failed"),
     ("comparison_upload_set", "uploading", "excluded"),
-    ("comparison_upload_set", "reading", "review"),
+    ("comparison_upload_set", "reading", "needs_confirmation"),
     ("comparison_upload_set", "reading", "failed"),
     ("comparison_upload_set", "reading", "excluded"),
-    ("comparison_upload_set", "review", "ready"),
-    ("comparison_upload_set", "review", "failed"),
-    ("comparison_upload_set", "review", "excluded"),
+    ("comparison_upload_set", "needs_confirmation", "ready"),
+    ("comparison_upload_set", "needs_confirmation", "failed"),
+    ("comparison_upload_set", "needs_confirmation", "excluded"),
     ("comparison_upload_set", "ready", "admitting"),
     ("comparison_upload_set", "ready", "excluded"),
     ("comparison_upload_set", "admitting", "done"),

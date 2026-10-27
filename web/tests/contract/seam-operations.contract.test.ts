@@ -102,6 +102,8 @@ describe('the seam operations', () => {
     // `approveRegistration` (`W49-SEAL-01`) creates an account, so it is keyed like every
     // other create on this surface.
     expect(writes).toEqual([
+      // `CMP-SEAL-C0`: the ten keyed comparison writes (ADR-0025 decision 19) sit in this list in order.
+      'appendComparisonVersionOrder',
       'appendDecision',
       'approveRegistration',
       // `COMPARE-PERSISTED-SUMMARY-01`: approving a sheet pairing appends a row of the
@@ -112,16 +114,21 @@ describe('the seam operations', () => {
       // the contract, so this list follows it and does not lead it.
       'archiveAnalysisPreset',
       'archiveExecutorConnection',
+      'cancelComparisonUpload',
       'cancelRun',
       // `W59-DECISION-CARRYOVER-01`: the carryover appends a decision, keyed like `appendDecision`.
       'carryOverDecision',
+      'completeComparisonUploadFile',
+      'confirmComparisonUploadSet',
       // `ANALYSIS-PRESETS-01`: saving, revising and archiving a preset each append a revision, keyed
       // like the executor writes (a preset is executor configuration).
       'createAnalysisPreset',
+      'createComparisonUpload',
       'createExecutorConnection',
       'createProject',
       // `W60-OPT-PROPOSALS-01`: a decision on a proposal is appended, keyed like `appendDecision`.
       'decideOptimisationProposal',
+      'excludeComparisonUploadSet',
       // `COMPARE-PERSISTED-SUMMARY-01` (B2): the summary command is keyed like the other expert writes.
       'generateComparisonSummary',
       'generateExecutorSshKey',
@@ -129,8 +136,11 @@ describe('the seam operations', () => {
       // the other executor writes. The runner's own four operations (claim, extend, answer, fail)
       // are not keyed: the answer is idempotent on the task, and a claim repeats by design.
       'issueRunnerToken',
+      'pauseComparisonUpload',
       'reauditRun',
       'requestExecutorProbe',
+      'resumeComparisonUpload',
+      'retryComparisonUploadSet',
       'reviseAnalysisPreset',
       'reviseExecutorConnection',
       'revokeRunnerToken',
@@ -144,6 +154,7 @@ describe('the seam operations', () => {
       // `W60-OPT-PROPOSALS-01`: a pass stores a pass and its proposals, keyed like a run start.
       'startOptimisationPass',
       'startRun',
+      'uploadComparisonUploadPart',
       'uploadDocument',
       // `W59-VERSION-UPLOAD-01`: the next version of a document is keyed like the first.
       'uploadDocumentVersion',

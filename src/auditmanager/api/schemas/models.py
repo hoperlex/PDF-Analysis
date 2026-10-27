@@ -4198,7 +4198,7 @@ class ComparisonUploadFileState(str, enum.Enum):
 class ComparisonUploadSetState(str, enum.Enum):
     UPLOADING = "uploading"
     READING = "reading"
-    REVIEW = "review"
+    NEEDS_CONFIRMATION = "needs_confirmation"
     READY = "ready"
     ADMITTING = "admitting"
     DONE = "done"
