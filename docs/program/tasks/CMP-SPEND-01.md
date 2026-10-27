@@ -68,8 +68,6 @@ table, `comparison_model_call`, by the wave brief's wiring rule 4.)
 - `docs/program/CMP-SPEND-01.md`
 - `docs/program/tasks/CMP-SPEND-01.md`
 
-(Why these paths: see "Integration contract" below. The list holds paths only, for `scripts/task_handoff.py`.)
-
 ## Lane resources
 - foundation_instance: `auditmanager-cmp-spend-01`
 - postgres_port: `57780`
