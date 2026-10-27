@@ -130,7 +130,7 @@ import { MY_TASKS_LIMIT } from '@/widgets/my-tasks';
 import NotFound from '@/app/not-found';
 import ErrorBoundary from '@/app/error';
 import { DecisionHistory } from '@/widgets/decision-history';
-import { ArV3BetaReview } from '@/widgets/ar-v3-beta-review';
+import { ArV3BetaReview, RunFindings } from '@/widgets/ar-v3-beta-review';
 import { ArV3BetaPack } from '@/widgets/ar-v3-beta-pack';
 import {
   MALFORMED_GROUP_ANSWER, StartArV3GroupView, classifyArV3GroupStartFailure,
@@ -184,6 +184,9 @@ import { newClient, renderScreen, seedError } from '../unit/screens/harness';
 import {
   NOT_INSTALLED_PACK, installedPackFixture, withoutMember,
 } from '../unit/analysis-settings/ar-v3-beta-pack-fixtures';
+import {
+  AVAILABLE_RUN_ID, accountFixture, runFindingsPage, v3FindingFixture,
+} from '../unit/analysis-settings/ar-v3-beta-review-fixtures';
 import { optimisationShapes } from '../unit/optimisation/fixtures';
 import { proposalShapes } from '../unit/optimisation-proposals/fixtures';
 import { derivedScreens, malformedVariants, wellFormed } from '../unit/screens/route-screens';
@@ -2076,6 +2079,42 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
   {
     name: 'ar-v3-group-pending',
     make: () => createElement(ArV3BetaReview, { groupId: 'arg_01M2545JSD15ETSNNV904X991K' }),
+  },
+  // `AR-V3-DECISIONS-01`: the findings under an available scope, in the states a default cache does
+  // not select: the findings read cold (loading), refused, and loaded for an expert. The list is the
+  // widget's own export, so these states carry Cyrillic data only (the whole group's fixture holds
+  // Latin item labels that the panel has always shown as the server sent them).
+  {
+    name: 'ar-v3-run-findings-loading',
+    make: () => createElement(RunFindings, { runId: AVAILABLE_RUN_ID }),
+  },
+  {
+    name: 'ar-v3-run-findings-read-refused',
+    make: () => createElement(RunFindings, { runId: AVAILABLE_RUN_ID }),
+    seedClient: (client) => seedError(
+      client, queryKeys.runs.findings(AVAILABLE_RUN_ID), apiError(503, 'dependency_unavailable'),
+    ),
+  },
+  {
+    name: 'ar-v3-run-findings-loaded-for-an-expert',
+    make: () => createElement(RunFindings, { runId: AVAILABLE_RUN_ID }),
+    seedClient: (client) => {
+      client.setQueryData(queryKeys.runs.findings(AVAILABLE_RUN_ID), { data: runFindingsPage([v3FindingFixture()]) });
+      client.setQueryData(queryKeys.account.me(), accountFixture(['expert']));
+    },
+  },
+  {
+    name: 'ar-v3-run-findings-loaded-for-an-administrator',
+    make: () => createElement(RunFindings, { runId: AVAILABLE_RUN_ID }),
+    seedClient: (client) => {
+      client.setQueryData(queryKeys.runs.findings(AVAILABLE_RUN_ID), { data: runFindingsPage([v3FindingFixture()]) });
+      client.setQueryData(queryKeys.account.me(), accountFixture(['admin']));
+    },
+  },
+  {
+    name: 'ar-v3-run-findings-none',
+    make: () => createElement(RunFindings, { runId: AVAILABLE_RUN_ID }),
+    seedClient: (client) => client.setQueryData(queryKeys.runs.findings(AVAILABLE_RUN_ID), { data: runFindingsPage([]) }),
   },
   {
     name: 'ar-v3-group-invalid-id',
@@ -4218,6 +4257,10 @@ export function branchLabelsInSource(): readonly { readonly label: string; reado
  * red rather than leaving a stale excuse in place.
  */
 const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: string }[] = [
+  {
+    label: 'Решение не записано',
+    why: 'The findings list under an AR v3 scope shows this only after the appendDecision mutation settles with a failure. One static render cannot press «Принять» or «Отклонить» or seed the mutation observer through a query cache (the live test in tests/unit/analysis-settings presses them).',
+  },
   {
     label: 'Действие не выполнено.',
     why: '«Диспетчер» and «Мои задачи» show this only after the transitionAssignment mutation settles with a failure. One static render cannot press a move button or seed the mutation observer through a query cache.',

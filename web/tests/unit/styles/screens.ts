@@ -128,7 +128,9 @@ import {
 } from '../workers/executor-fixtures';
 import { proposalShapes, seedLoadedProposals } from '../optimisation-proposals/fixtures';
 import { SECTION_NO_ROWS, sectionAnswer } from '../section-specification/fixtures';
-import { GROUP_ID, groupReviewFixture } from '../analysis-settings/ar-v3-beta-review-fixtures';
+import {
+  AVAILABLE_RUN_ID, GROUP_ID, accountFixture, groupReviewFixture, runFindingsPage, v3FindingFixture,
+} from '../analysis-settings/ar-v3-beta-review-fixtures';
 import {
   NOT_INSTALLED_PACK, installedPackFixture, withoutMember,
 } from '../analysis-settings/ar-v3-beta-pack-fixtures';
@@ -782,6 +784,10 @@ export function screens(): Screen[] {
   {
     const client = newClient();
     client.setQueryData(queryKeys.runs.arV3GroupReview(GROUP_ID), groupReviewFixture());
+    // `AR-V3-DECISIONS-01`: the available scope's published finding and an expert, so `.finding`,
+    // `.findings` and `.verdicts` (the findings list and the verdict controls) are reached.
+    client.setQueryData(queryKeys.runs.findings(AVAILABLE_RUN_ID), { data: runFindingsPage([v3FindingFixture()]) });
+    client.setQueryData(queryKeys.account.me(), accountFixture(['expert']));
     add('ArV3BetaReview six scopes loaded', renderScreen(client, createElement(ArV3BetaReview, { groupId: GROUP_ID })));
   }
   /*
