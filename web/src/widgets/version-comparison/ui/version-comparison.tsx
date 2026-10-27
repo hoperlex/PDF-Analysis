@@ -410,6 +410,19 @@ function SheetTable({
   );
 }
 
+/**
+ * The server withholds the differences of every approved pair as soon as the text of any one of
+ * them differs from what the expert saw (`evidence_state` `text_changed`). The pair that changed
+ * says so itself; this is the line for a pair whose own sheet is as the expert saw it, so the
+ * reviewer does not look for a fault in a sheet that has none.
+ */
+const HIDDEN_BY_ANOTHER_PAIR =
+  'Различия скрыты: изменился другой подтверждённый лист. Отзовите изменённую пару и подтвердите заново.';
+
+function isHiddenByAnotherPair(approved: ApprovedSheetPairs, item: ApprovedSheetPair): boolean {
+  return approved.evidence_state === 'text_changed' && item.state === 'verified' && item.diff === null;
+}
+
 function ApprovedPairDiff({ item }: { readonly item: ApprovedSheetPair }) {
   if (item.diff === null) return null;
   return (
@@ -457,6 +470,11 @@ function ApprovedPairs({ approved }: { readonly approved: ApprovedSheetPairs }) 
           <p className={styles.summary}>
             Подтвердил: {item.approved_by_label}. {LINK_STATE_TEXT[item.state]}
           </p>
+          {isHiddenByAnotherPair(approved, item) ? (
+            <p className={styles.summary} data-diff-withheld="another-pair">
+              {HIDDEN_BY_ANOTHER_PAIR}
+            </p>
+          ) : null}
           <ApprovedPairDiff item={item} />
         </article>
       ))}

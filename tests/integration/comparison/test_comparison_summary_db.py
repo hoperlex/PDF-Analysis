@@ -30,6 +30,7 @@ from auditmanager.comparison.public import (
     SheetPairingService,
     SuppliedVersionClassification,
     VersionComparisonService,
+    WithdrawSheetPairingRequest,
 )
 from auditmanager.comparison.summaries import (
     GenerateSummaryRequest,
@@ -463,3 +464,75 @@ def test_the_committed_recording_answers_the_synthetic_pair(seeded) -> None:
     parsed = json.loads(reply.output_text)
     assert parsed["statements"] and all(s["hunk_ids"] for s in parsed["statements"])
     assert set(i for s in parsed["statements"] for i in s["hunk_ids"]) <= set(prompt.hunk_ids)
+
+
+def _withdraw(session, world, link, key: str):
+    return world["pairings"].withdraw(
+        session,
+        WithdrawSheetPairingRequest(
+            project_uid=PROJECT, document_uid=DOCUMENT, source_version_uid=V1,
+            sheet_link_id=link.sheet_link_id,
+        ),
+        actor_uid=EXPERT, actor_label="Иванов И. И.", actor_roles=EXPERT_ROLES, idempotency_key=key,
+    ).event
+
+
+def _approved_and_summarised(seeded, tmp_path, tag: str):
+    """Page 7 approved, its summary generated once under ``summary-replay-<tag>``."""
+    world = _world(tmp_path)
+    link = _approve(seeded, world, 7, f"summary-replay-approve-{tag}")
+    prompt = _prompt(seeded, world)
+    _record(tmp_path, prompt, [{"text": "Размер изменён.", "hunk_ids": [prompt.hunk_ids[1]]}])
+    first = _generate(seeded, world, f"summary-replay-{tag}")
+    return world, link, first
+
+
+def test_a_replay_of_a_fresh_summary_is_still_current_and_every_first_answer_is(seeded, tmp_path) -> None:
+    world, _link, first = _approved_and_summarised(seeded, tmp_path, "fresh")
+    replay = _generate(seeded, world, "summary-replay-fresh")
+    other_key = _generate(seeded, world, "summary-replay-fresh-other")
+    assert first.is_current is True and first.replayed is False
+    assert (replay.replayed, replay.is_current, replay.summary) == (True, True, first.summary)
+    assert (other_key.replayed, other_key.is_current) == (True, True)
+    assert world["model"].calls == 1
+
+
+def test_a_replay_after_the_pair_was_withdrawn_returns_the_old_summary_but_not_as_current(seeded, tmp_path) -> None:
+    world, link, first = _approved_and_summarised(seeded, tmp_path, "withdrawn")
+    _withdraw(seeded, world, link, "summary-replay-withdraw-withdrawn")
+    replay = _generate(seeded, world, "summary-replay-withdrawn")
+    assert replay.replayed is True and replay.summary == first.summary
+    assert replay.is_current is False
+    # the read path says the same about the same row
+    read = world["comparisons"].compare(seeded, _request()).approved_pairs.summary
+    assert read.summary_id == first.summary.summary_id and read.is_current is False
+    assert world["model"].calls == 1  # a replay never pays
+
+
+def test_a_replay_after_another_pair_was_approved_is_not_current(seeded, tmp_path) -> None:
+    world, _link, first = _approved_and_summarised(seeded, tmp_path, "later")
+    _approve(seeded, world, 8, "summary-replay-approve-later-8")
+    replay = _generate(seeded, world, "summary-replay-later")
+    assert replay.replayed is True and replay.summary == first.summary and replay.is_current is False
+
+
+def test_a_replay_after_withdraw_and_approve_again_is_not_current_though_the_set_looks_the_same(
+    seeded, tmp_path
+) -> None:
+    world, link, first = _approved_and_summarised(seeded, tmp_path, "again")
+    _withdraw(seeded, world, link, "summary-replay-withdraw-again")
+    _approve(seeded, world, 7, "summary-replay-approve-again-7")
+    read = world["comparisons"].compare(seeded, _request()).approved_pairs
+    assert read.link_revision == 3 and read.summary.is_current is False
+    replay = _generate(seeded, world, "summary-replay-again")
+    assert replay.replayed is True and replay.summary.link_revision == 1
+    assert replay.is_current is False
+
+
+def test_a_replay_after_the_text_of_the_approved_sheet_changed_is_not_current(seeded, tmp_path) -> None:
+    world, _link, first = _approved_and_summarised(seeded, tmp_path, "text")
+    redrawn = TARGET_PAGES | {7: TARGET_PAGES[7].replace("размер 35", "размер 36")}
+    changed = _world(tmp_path, target=redrawn)
+    replay = _generate(seeded, changed, "summary-replay-text")
+    assert replay.replayed is True and replay.summary == first.summary
+    assert replay.is_current is False

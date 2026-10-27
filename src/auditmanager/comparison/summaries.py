@@ -47,7 +47,7 @@ from auditmanager.comparison.pairing import (
     _require_expert,
     _stored_outcome,
 )
-from auditmanager.comparison.service import ComparisonRequest, VersionComparisonService
+from auditmanager.comparison.service import ComparisonRequest, SealedEvidence, VersionComparisonService
 from auditmanager.comparison.sheet_links import SheetLinkRepository
 from auditmanager.comparison.summary_input import SummaryInputRefused, prepare_version_summary_input
 from auditmanager.comparison.summary_model import SummaryModel
@@ -117,8 +117,16 @@ class GenerateSummaryRequest:
 
 @dataclass(frozen=True, slots=True)
 class SummaryOutcome:
+    """The summary the command answers, and whether it describes the approved set as it stands now.
+
+    ``is_current`` is judged from the sealed evidence recomputed in the same transaction, for a first
+    answer and for a replay alike: a retry with an old key after the set changed answers the old row
+    and says it is not current (the same rule as the served read, ``VersionComparisonService.compare``).
+    """
+
     summary: StoredSummary
     replayed: bool
+    is_current: bool
 
 
 _COLUMNS: Final[str] = (
@@ -277,20 +285,27 @@ class SummaryService:
                 "actor_uid": actor_uid,
             }),
         )
-        if isinstance(claimed, CommandReplay):
-            return SummaryOutcome(self._replayed(session, claimed.outcome), True)
-
-        self._links.lock_pair(
-            session, source_version_uid=request.source_version_uid,
-            target_version_uid=request.target_version_uid,
-        )
-        evidence = self._comparisons.sealed_evidence(session, ComparisonRequest(
+        comparison_request = ComparisonRequest(
             project_uid=request.project_uid, document_uid=request.document_uid,
             source_version_uid=request.source_version_uid,
             target_version_uid=request.target_version_uid,
             source_run_id=request.source_run_id, target_run_id=request.target_run_id,
             mode=request.mode,
-        ))
+        )
+        if isinstance(claimed, CommandReplay):
+            # The stored row is the answer, but whether it still describes the approved set is judged
+            # from the evidence recomputed now: a pair withdrawn since, or a sheet redrawn, makes it old.
+            stored = self._replayed(session, claimed.outcome)
+            return SummaryOutcome(
+                stored, True,
+                _describes(stored, self._comparisons.sealed_evidence(session, comparison_request)),
+            )
+
+        self._links.lock_pair(
+            session, source_version_uid=request.source_version_uid,
+            target_version_uid=request.target_version_uid,
+        )
+        evidence = self._comparisons.sealed_evidence(session, comparison_request)
         if evidence is None:
             raise _conflict(CONFLICT_COMPARISON_NOT_AVAILABLE, AGGREGATE_TYPE)
         if evidence.seal is None or evidence.comparison_id is None:
@@ -312,7 +327,7 @@ class SummaryService:
         )
         if existing is not None:
             commands.succeed(session, claimed.command_id, _summary_outcome(existing))
-            return SummaryOutcome(existing, True)
+            return SummaryOutcome(existing, True, _describes(existing, evidence))
 
         cost = self._cost_gate()  # a fresh meter for this command: the ceiling is per command
         if not isinstance(cost, SummaryCostGate):
@@ -365,7 +380,7 @@ class SummaryService:
             correlation_id=correlation_id,
         )
         commands.succeed(session, claimed.command_id, _summary_outcome(stored))
-        return SummaryOutcome(stored, False)
+        return SummaryOutcome(stored, False, _describes(stored, evidence))
 
     def _replayed(self, session: Session, outcome: object) -> StoredSummary:
         identity = _stored_outcome(outcome, "summary_id")
@@ -376,6 +391,22 @@ class SummaryService:
 
 
 _EPOCH: Final[datetime] = datetime(1970, 1, 1)
+
+
+def _describes(stored: StoredSummary, evidence: SealedEvidence | None) -> bool:
+    """Does ``stored`` describe the approved set as ``evidence`` (recomputed now) has it?
+
+    The rule of the served read: the set is ``sealed`` (a seal exists), the revision is the stored
+    one and the seal is the stored one. A refused comparison, an unsealed set, another revision or
+    another seal is not current.
+    """
+    return (
+        evidence is not None
+        and evidence.seal is not None
+        and evidence.comparison_id == stored.comparison_id
+        and evidence.link_revision == stored.link_revision
+        and evidence.seal.seal_sha256 == stored.raw_evidence_seal_sha256
+    )
 
 
 def _summary_outcome(summary: StoredSummary) -> dict[str, object]:

@@ -304,9 +304,11 @@ number equals the routes in `tests/e2e/pc01/journey/manifest.json`:
 20. `/norms`;
 21. `/analysis-settings` — fifteen sections in the project-structure order, read-only: АР
     «текстовый профиль не используется» (it has no text profile; its analysis is the six checks of
-    АР v3), the other fourteen, ПБ among them,
-    «рабочая версия, проверка человеком не проводилась» (reviewed without a human review,
-    `R-146ag`); «Подробнее» shows the identities, both hashes and the legacy source;
+    АР v3), the other fourteen, ПБ among them, «проверен»
+    (reviewed without a human review, `R-146ag`; while the beta switch `SHOW_REVIEW_INDICATION` in
+    `web/src/shared/config/review-indication.ts` is `false`, which is its default, the screen says only
+    «проверен»; setting the switch to `true` brings back the old text «рабочая версия, проверка человеком
+    не проводилась»); «Подробнее» shows the identities, both hashes and the legacy source;
 22. `/queue`;
 23. `/register` in a separate private window;
 24. `/register/submitted` after submitting a test registration;

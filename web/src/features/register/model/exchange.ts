@@ -23,7 +23,7 @@ export function registrationRefusalMessage(refusal: RegistrationRefusal): string
     case 'validation': return 'Проверьте поля и повторите отправку. Заявка не создана.';
     case 'login_taken': return 'Этот адрес уже занят действующей учётной записью.';
     case 'request_pending': return 'Заявка с этим адресом уже ожидает решения администратора.';
-    case 'queue_full': return 'Очередь заявок заполнена. Попробуйте позже.';
+    case 'queue_full': return 'Очередь заявок заполнена или исчерпан лимит заявок на сутки. Попробуйте позже.';
     case 'throttled': return 'Слишком много попыток с этого подключения. Подождите и попробуйте снова.';
     case 'upstream': return 'Сервер не смог подтвердить отправку заявки. Попробуйте позже.';
   }
