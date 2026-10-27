@@ -608,6 +608,7 @@ def _run_text_analysis_stage(
                 call_journal=call_journal,
                 call=call,
                 recognised_pages=recognised_pages,
+                textless_pages=textless_pages,
             )
         else:
             outcome = run_text_analysis_windows(
@@ -625,6 +626,7 @@ def _run_text_analysis_stage(
                 policy=window_policy,
                 custody=window_custody,
                 recognised_pages=recognised_pages,
+                textless_pages=textless_pages,
             )
 
         # Complete responses were committed by ``call_journal`` before parsing reached

@@ -33,7 +33,7 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 from dataclasses import dataclass
-from typing import Any, Mapping, Sequence
+from typing import Any, Collection, Mapping, Sequence
 
 from auditmanager.analysis.text.adapter import PROVIDER, ModelAdapter, ModelResponse
 from auditmanager.analysis.text.anchors import REASON_ABSENT, BlockIndex, ResolvedAnchor, UnresolvedAnchor
@@ -162,6 +162,7 @@ def _ground_cohort(
     replies: Sequence[_Reply],
     block_index: BlockIndex | None,
     omissions_enabled: bool = False,
+    textless_pages: Collection[int] | None = None,
 ) -> tuple[list[list[Observation]], int, int, int, int, OmissionTally]:
     """Bind every window's quotes against the full layer and rebuild observations per window.
 
@@ -173,7 +174,10 @@ def _ground_cohort(
 
     An omission proposal is a pair of places and is all or nothing: a quote of it outside the window leaves
     none of its quotes in the cohort, and :func:`~auditmanager.analysis.text.omission.decide` then refuses
-    it (``evidence_unresolved``). Its range must lie inside the window that produced it.
+    it (``evidence_unresolved``). Its range must lie inside the window that produced it and must not end on
+    the last page of a window that is not the last one; the term must be absent from every page of that
+    window other than the pages of the naming quote, and from the recognised text of those pages
+    (`SECTION-JUDGE-FIXES-01`). ``textless_pages`` is the version's own list of text-less pages.
     """
 
     def inside(reply: _Reply, page_number: int) -> bool:
@@ -235,6 +239,7 @@ def _ground_cohort(
                 decision = decide(
                     plan.layer, proposal, resolutions,
                     visible=(reply.window.first_page, reply.window.last_page),
+                    textless_pages=textless_pages, recognised=plan.recognised,
                 )
                 tally.record(decision)
                 if decision.reason is None:
@@ -293,11 +298,14 @@ def run_text_analysis_windows(
     call: CallBinding | None = None,
     custody: WindowCustody | None = None,
     recognised_pages: Sequence[RecognisedPage] = (),
+    textless_pages: Collection[int] | None = None,
 ) -> TextAnalysisOutcome:
     """Run the stage over one document version in whole-page windows. Same contract as ``run_text_analysis``.
 
     ``recognised_pages`` (`SECTION-CATEGORY-OCR-01`) are rendered under their pages in the window that holds
-    them, and the plan counted their blocks when it packed the pages.
+    them, and the plan counted their blocks when it packed the pages. ``textless_pages``
+    (`SECTION-JUDGE-FIXES-01`) is the version's stored list of text-less pages; like the recognised text it
+    reaches the omission check only.
 
     ``policy`` says how large a window is and how many a run takes; ``custody`` lets a finished window survive a
     restart and is required for a live run with more than one window (without it a restart would pay for the
@@ -332,6 +340,7 @@ def run_text_analysis_windows(
             call_journal=call_journal,
             call=call,
             recognised_pages=recognised_pages,
+            textless_pages=textless_pages,
         )
 
     count = len(plan.windows)
@@ -525,7 +534,8 @@ def run_text_analysis_windows(
 
     try:
         grounded, resolved, unresolved, outside, dropped, omissions = _ground_cohort(
-            plan, replies, block_index, omissions_enabled=OMISSION_CATEGORY in profile.categories
+            plan, replies, block_index, omissions_enabled=OMISSION_CATEGORY in profile.categories,
+            textless_pages=textless_pages,
         )
     except (WindowAnchorError, ChunkPreflightError):
         # The cohort refuses an inconsistent plan or reply set; it is never skipped past.
