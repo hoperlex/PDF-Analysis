@@ -107,6 +107,28 @@ from auditmanager.comparison.service import (
 from auditmanager.comparison.sheet_links import ApprovedLinkReader, LinkEvent, SheetLinkRepository
 from auditmanager.comparison.version_reader import VersionFacts
 from auditmanager.comparison.version_section_pair import SuppliedVersionClassification
+from auditmanager.comparison.spend.caller import ComparisonModelCaller
+from auditmanager.comparison.spend.ceilings import job_ceiling_micros
+from auditmanager.comparison.spend.errors import (
+    CallFailed,
+    CallLost,
+    CallRefused,
+    OutcomeUnknown,
+    SpendError,
+)
+from auditmanager.comparison.spend.model import (
+    DAY_CEILING_USD,
+    JOB_CEILING_USD,
+    JOB_KEY as SPEND_JOB_KEY,
+    CallEstimate,
+    CallRecord,
+    CallResult,
+    CallRoute,
+    Consent,
+    SpendPause,
+)
+from auditmanager.comparison.spend.repository import ComparisonSpendRepository
+from auditmanager.comparison.spend.settler import settle_lost_attempt
 from auditmanager.comparison.work.errors import (
     HandlerRegistryError,
     UnhandledKindError,
@@ -144,13 +166,32 @@ HANDLER_FACTORIES: tuple[HandlerFactory, ...] = ()
 #: `CMP-WORK-01`. Called inside the reclaim transaction for each attempt whose lease was lost:
 #: ``settle(session, attempt_id) -> bool`` marks the attempt's unfinished model calls ``unknown`` and
 #: answers ``True`` if there were any, which ends the item ``spend_unknown`` instead of re-queueing
-#: it (ADR-0025 decision 5). ``CMP-SPEND-01`` appends its settler here. None is registered yet.
-SPEND_SETTLERS: tuple[SpendSettler, ...] = ()
+#: it (ADR-0025 decision 5). `CMP-SPEND-01` registers the settler of the comparison spend journal: the one
+#: thing that stops a reclaimed item from being sent a second time.
+SPEND_SETTLERS: tuple[SpendSettler, ...] = (settle_lost_attempt,)
 
 __all__ = [
     "CANCEL_REQUESTED",
+    "CallEstimate",
+    "CallFailed",
+    "CallLost",
+    "CallRecord",
+    "CallRefused",
+    "CallResult",
+    "CallRoute",
     "CancelResult",
     "ClaimGates",
+    "ComparisonModelCaller",
+    "ComparisonSpendRepository",
+    "Consent",
+    "DAY_CEILING_USD",
+    "JOB_CEILING_USD",
+    "OutcomeUnknown",
+    "SPEND_JOB_KEY",
+    "SpendError",
+    "SpendPause",
+    "job_ceiling_micros",
+    "settle_lost_attempt",
     "Completed",
     "ComparisonWorkRepository",
     "ComparisonWorkRunner",

@@ -43,8 +43,8 @@ _TOKEN_COLUMNS: Final = (
 )
 _TASK_COLUMNS: Final = (
     "task_id, connection_id, revision_id, origin, run_id, attempt_id, model_call_id, probe_id, "
-    "state, expected_model, created_at, deadline_at, claimed_by_token_id, claim_expires_at, "
-    "first_claimed_at, claim_count, declared_model, declared_input_tokens, "
+    "comparison_attempt_id, state, expected_model, created_at, deadline_at, claimed_by_token_id, "
+    "claim_expires_at, first_claimed_at, claim_count, declared_model, declared_input_tokens, "
     "declared_output_tokens, fail_reason, terminal_at, payload_cleared_at, "
     "(deadline_at <= clock_timestamp()) AS past_deadline"
 )
@@ -54,6 +54,20 @@ _ATTEMPT_LIVE: Final = (
     "AND j.current_attempt_id = a.attempt_id WHERE a.attempt_id = t.attempt_id "
     "AND a.state IN ('leased', 'running'))"
 )
+
+
+def _comparison_attempt_live(alias: str) -> str:
+    """`CMP-SPEND-01` (ADR-0025 decision 4): the same rule for a task of origin ``comparison_call``. Its
+    attempt is a ``comparison_work_attempt`` that is leased or running **and** the current attempt of
+    its work item; a task whose attempt is gone, superseded or lost is never served and is cancelled
+    by the sweep, exactly as a Run's task is."""
+    return (
+        "EXISTS (SELECT 1 FROM comparison_work_attempt ca JOIN comparison_work cw "
+        "ON cw.comparison_work_id = ca.comparison_work_id "
+        "AND cw.current_work_attempt_id = ca.comparison_work_attempt_id "
+        f"WHERE ca.comparison_work_attempt_id = {alias}.comparison_attempt_id "
+        "AND ca.state IN ('leased', 'running'))"
+    )
 
 
 #: The most images a claim may declare it serves, and the count that applies to a claim that
@@ -134,6 +148,9 @@ class TaskRecord:
     payload_cleared_at: datetime | None
     #: By the database clock at the moment of the read.
     past_deadline: bool
+    #: Set exactly for a task of origin ``comparison_call`` (`CMP-SPEND-01`); the default keeps every
+    #: caller that builds a record without it as it was.
+    comparison_attempt_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,8 +173,9 @@ def _token(row: Mapping[str, Any]) -> RunnerTokenRecord:
 def _task(row: Mapping[str, Any]) -> TaskRecord:
     return TaskRecord(**{name: row[name] for name in (
         "task_id", "connection_id", "revision_id", "origin", "run_id", "attempt_id",
-        "model_call_id", "probe_id", "state", "expected_model", "created_at", "deadline_at",
-        "claimed_by_token_id", "claim_expires_at", "first_claimed_at", "claim_count",
+        "model_call_id", "probe_id", "comparison_attempt_id", "state", "expected_model",
+        "created_at", "deadline_at", "claimed_by_token_id", "claim_expires_at", "first_claimed_at",
+        "claim_count",
         "declared_model", "declared_input_tokens", "declared_output_tokens", "fail_reason",
         "terminal_at", "payload_cleared_at", "past_deadline")})
 
@@ -244,17 +262,18 @@ class RunnerRepository:
         self, session: Session, *, connection_id: str, revision_id: str, origin: str,
         run_id: str | None, attempt_id: str | None, model_call_id: str | None,
         probe_id: str | None, expected_model: str, payload: Mapping[str, Any],
-        deadline_seconds: float,
+        deadline_seconds: float, comparison_attempt_id: str | None = None,
     ) -> TaskRecord:
         row = session.execute(text(
             "INSERT INTO executor_task (task_id, connection_id, revision_id, origin, run_id, "
-            "attempt_id, model_call_id, probe_id, expected_model, payload, deadline_at) "
-            "VALUES (:id, :c, :r, :origin, :run, :attempt, :call, :probe, :model, "
+            "attempt_id, model_call_id, probe_id, comparison_attempt_id, expected_model, payload, "
+            "deadline_at) "
+            "VALUES (:id, :c, :r, :origin, :run, :attempt, :call, :probe, :comparison, :model, "
             "CAST(:payload AS jsonb), clock_timestamp() + make_interval(secs => :seconds)) "
             f"RETURNING {_TASK_COLUMNS}"
         ), {"id": str(ExecutorTaskId.new()), "c": connection_id, "r": revision_id,
             "origin": origin, "run": run_id, "attempt": attempt_id, "call": model_call_id,
-            "probe": probe_id, "model": expected_model,
+            "probe": probe_id, "comparison": comparison_attempt_id, "model": expected_model,
             "payload": json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
             "seconds": deadline_seconds}).mappings().one()
         session.execute(text("SELECT pg_notify(:channel, '')"), {"channel": TASK_OPEN_CHANNEL})
@@ -312,7 +331,9 @@ class RunnerRepository:
         session.execute(text(
             "UPDATE executor_task t SET state = 'cancelled', terminal_at = clock_timestamp() "
             "WHERE t.connection_id = :c AND t.state IN ('open', 'claimed') "
-            f"AND t.attempt_id IS NOT NULL AND NOT {_ATTEMPT_LIVE}"
+            f"AND ((t.attempt_id IS NOT NULL AND NOT {_ATTEMPT_LIVE}) "
+            "OR (t.comparison_attempt_id IS NOT NULL "
+            f"AND NOT {_comparison_attempt_live('t')}))"
         ), {"c": connection_id})
         session.execute(text(
             "UPDATE executor_task SET state = 'expired', terminal_at = clock_timestamp() "
@@ -368,6 +389,7 @@ class RunnerRepository:
             "AND (p.attempt_id IS NULL OR EXISTS (SELECT 1 FROM attempt a JOIN job j "
             "ON j.job_id = a.job_id AND j.current_attempt_id = a.attempt_id "
             "WHERE a.attempt_id = p.attempt_id AND a.state IN ('leased', 'running'))) "
+            f"AND (p.comparison_attempt_id IS NULL OR {_comparison_attempt_live('p')}) "
             f"AND {_image_count('p')} <= :max_images "
             "ORDER BY p.created_at, p.task_id FOR UPDATE OF p SKIP LOCKED LIMIT 1) "
             "RETURNING t.task_id, t.claim_expires_at, t.deadline_at, t.expected_model, t.payload"
@@ -388,7 +410,8 @@ class RunnerRepository:
             "AND t.claimed_by_token_id = :token AND t.state = 'claimed' "
             "AND t.claim_expires_at > clock_timestamp() "
             "AND t.deadline_at > clock_timestamp() "
-            f"AND (t.attempt_id IS NULL OR {_ATTEMPT_LIVE}))"
+            f"AND (t.attempt_id IS NULL OR {_ATTEMPT_LIVE}) "
+            f"AND (t.comparison_attempt_id IS NULL OR {_comparison_attempt_live('t')}))"
         ), {"id": task_id, "token": token_id}).scalar_one())
 
     def extend_claim(

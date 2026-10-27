@@ -102,13 +102,29 @@ _RUNS_BY_STATE = text("SELECT state, count(*) FROM audit_run GROUP BY state")
 #: states for one run: a call through an unmetered connection has no figure of its own but still
 #: counts as a call. When every call in the deployment is unmetered the aggregate is ``0`` with
 #: basis ``unmetered``; when unmetered and metered calls mix it is the metered sum, ``estimated``.
+#:
+#: **The union of the two journals** (`CMP-SPEND-01`, ADR-0025 decision 5, `R-29`). The deployment's
+#: spend is what the Runs journalled in ``model_call`` **plus** what the comparison modules journalled
+#: in ``comparison_model_call`` -- the per-run ``runs.repository._COST_SUMMARY`` is untouched, because a
+#: comparison call has no Run. Of the comparison journal, a call counts when it may have cost something:
+#: ``completed``; ``failed`` **with** a cost (the provider answered something unusable); ``unknown`` (it
+#: may have spent, and nothing says how much, so it is a call whose cost is unmeasured: it turns the
+#: basis to ``estimated`` and adds nothing to the sum). An open call (``prepared``, ``sent``) has not
+#: spent yet and a ``failed`` call without a cost was proven not to have. The comparison rows carry a
+#: ``NULL`` ``run_id`` so that the per-run form of this query, ``... WHERE run_id = :run``, which the
+#: HTTP run-path test builds by appending to this text, still reads the Runs' rows and none of theirs.
 _SPEND = text(
     "SELECT count(*) AS calls, "
     "       coalesce(sum(cost_micros) FILTER (WHERE cost_basis <> 'unmetered'), 0) AS cost_micros, "
     "       count(*) FILTER (WHERE cost_basis = 'unmetered') AS unmetered, "
     "       count(*) FILTER (WHERE cost_basis <> 'unmetered' "
     "         AND (cost_micros IS NULL OR cost_basis <> 'measured')) AS unmeasured "
-    "FROM model_call"
+    "FROM (SELECT run_id, cost_micros, cost_basis FROM model_call "
+    "      UNION ALL "
+    "      SELECT CAST(NULL AS text), cost_micros, coalesce(cost_basis, 'estimated') "
+    "      FROM comparison_model_call "
+    "      WHERE state IN ('completed', 'unknown') "
+    "         OR (state = 'failed' AND cost_micros IS NOT NULL)) AS spend"
 )
 
 #: Published documents by the section their **current version** is confirmed in

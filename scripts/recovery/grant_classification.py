@@ -166,7 +166,7 @@ APPEND_ONLY_BY_CODE_EVIDENCE = {
 #: lane that writes one removes it from this set (``test_a_sealed_table_that_the_code_now_writes_leaves_the_set``
 #: is red until it does).
 SEALED_NOT_YET_WRITTEN = frozenset((
-    "comparison_model_call", "comparison_page_profile", "comparison_upload", "comparison_upload_file",
+    "comparison_page_profile", "comparison_upload", "comparison_upload_file",
     "comparison_upload_part", "comparison_upload_set", "comparison_version_order",
 ))
 
