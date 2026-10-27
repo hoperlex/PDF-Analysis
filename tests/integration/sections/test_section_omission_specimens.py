@@ -27,6 +27,7 @@ Container-free.
 from __future__ import annotations
 
 import copy
+import importlib.util
 import json
 from pathlib import Path
 from typing import Any
@@ -104,10 +105,28 @@ def replay(code: str, pages: list[str], observations: list[dict[str, Any]], dire
 
 
 def test_the_filed_set_is_exactly_five_sections_with_one_positive_and_one_negative() -> None:
-    found = {path.name: tuple(sorted(item.stem for item in path.iterdir())) for path in sorted(SPECIMENS.iterdir())}
+    found = {
+        path.name: tuple(sorted(item.stem for item in path.iterdir()))
+        for path in sorted(SPECIMENS.iterdir())
+        if path.is_dir()
+    }
     assert found == EXPECTED
+    assert [path.name for path in SPECIMENS.iterdir() if path.is_file()] == ["build_specimens.py"]
     assert len(FILES) == 10 and len(POSITIVES) == 5 and len(NEGATIVES) == 5
     assert {path.parent.name for path in POSITIVES} == set(EXPECTED) == {path.parent.name for path in NEGATIVES}
+
+
+def test_the_files_are_what_the_builder_writes() -> None:
+    """Generated, not retyped: the cases live in ``build_specimens.py`` and the files cannot drift from them."""
+    spec = importlib.util.spec_from_file_location("omission_specimen_builder", SPECIMENS / "build_specimens.py")
+    assert spec is not None and spec.loader is not None
+    builder = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(builder)
+    planned = builder.documents()
+    assert set(planned) == set(FILES)
+    for path, text in planned.items():
+        assert path.read_text("utf-8") == text, path
+    assert builder.main([]) == 0
 
 
 @pytest.mark.parametrize("path", FILES, ids=[_ident(path) for path in FILES])
