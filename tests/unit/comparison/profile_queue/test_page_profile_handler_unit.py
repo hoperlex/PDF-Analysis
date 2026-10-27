@@ -258,9 +258,12 @@ def test_a_version_the_database_does_not_know_fails_without_a_retry() -> None:
     assert harness.run() == Failed(REASON_VERSION_NOT_FOUND, retry=False)
 
 
-def test_a_source_that_cannot_be_read_fails_with_a_retry_and_the_attempt_budget_decides() -> None:
+@pytest.mark.parametrize("code", [ErrorCode.ANALYSIS_INPUT_INVALID, ErrorCode.STORAGE_INTEGRITY_ERROR])
+def test_a_source_that_cannot_be_read_or_is_not_the_recorded_bytes_fails_with_a_retry_and_the_budget_decides(
+    code: ErrorCode,
+) -> None:
     harness = Harness()
-    harness.raises = DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, reason="source_unreadable")
+    harness.raises = DomainError(code, reason="source_unreadable")
     assert harness.run() == Failed(REASON_SOURCE_UNREADABLE, retry=True)
 
 

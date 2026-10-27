@@ -146,6 +146,7 @@ class Lane:
     # -- seeding ---------------------------------------------------------------------------------------------
     def seed(
         self, pdf_path: Path, page_count: int, *, project_uid: str | None = None, with_manifest: bool = True,
+        manifest_sha256: str | None = None,
     ) -> Seeded:
         from auditmanager.comparison.profile.publish import ProfileBlobPublisher
         from auditmanager.documents.public import MANIFEST_ROLE_SOURCE_DOCUMENT
@@ -179,7 +180,7 @@ class Lane:
                         "INSERT INTO input_manifest_entry (version_uid, role, blob_id, sha256, size_bytes, media_type) "
                         "VALUES (:v, :r, :b, :s, :n, 'application/pdf')"
                     ),
-                    {"v": version, "r": MANIFEST_ROLE_SOURCE_DOCUMENT, "b": blob_id, "s": digest, "n": len(data)},
+                    {"v": version, "r": MANIFEST_ROLE_SOURCE_DOCUMENT, "b": blob_id, "s": manifest_sha256 or digest, "n": len(data)},
                 )
         return Seeded(project, version, page_count)
 

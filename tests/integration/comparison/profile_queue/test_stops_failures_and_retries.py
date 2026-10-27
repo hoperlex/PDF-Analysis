@@ -205,6 +205,21 @@ def test_a_version_whose_source_cannot_be_read_is_retried_until_the_budget_is_sp
     assert lane.rows(seeded.version_uid) == []
 
 
+def test_a_version_whose_recorded_digest_is_not_its_blobs_is_never_built_and_ends_failed_after_the_budget(
+    lane, small_pdf, spy
+) -> None:
+    seeded = lane.seed(small_pdf(2), 2, manifest_sha256="0" * 64)  # the manifest records bytes this blob is not
+    enqueued = lane.enqueue(seeded)
+    runner = lane.runner(spy)
+    outcomes = []
+    for _ in range(3):
+        lane.make_due(enqueued.work_id)
+        outcomes.append(runner.execute(lane.claim(runner)))
+    assert outcomes == ["queued", "queued", "failed"]
+    assert lane.work(enqueued.work_id)["failure_reason"] == "page_profile_source_unreadable"
+    assert spy.calls == [] and lane.rows(seeded.version_uid) == [], "no child ever saw bytes that are not the recorded ones"
+
+
 def test_a_payload_of_another_shape_fails_the_item_at_once_without_a_retry_and_without_a_child(lane, small_pdf, spy) -> None:
     seeded = lane.seed(small_pdf(1), 1)
     made = []

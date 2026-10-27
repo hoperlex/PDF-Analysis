@@ -23,8 +23,9 @@ How a build ends
 * a child that never started (:class:`~auditmanager.comparison.profile.runner.ChildStartError`) is the
   server's fault, not a verdict on a page: ``Failed(..., retry=True)``;
 * a version the database does not know: ``Failed`` without a retry (waiting does not create it);
-* a source document that cannot be read or does not match its recorded digest: ``Failed`` with a retry
-  (a storage outage is transient; a corrupted object uses the attempt budget and then ends the item);
+* a source document that cannot be read, is missing from the manifest or does not match its recorded digest
+  (``analysis_input_invalid`` or ``storage_integrity_error``): ``Failed`` with a retry (a storage outage is
+  transient; a corrupted object uses the attempt budget and then ends the item);
 * a payload that is not the shape above: ``Failed`` without a retry;
 * anything else the builder raises reaches the runner, which ends the attempt with a retryable
   ``handler_error`` and logs it.
@@ -87,6 +88,11 @@ REASON_INCOMPLETE: Final[str] = "page_profile_incomplete"
 
 _LEASE_GONE: Final[frozenset[ErrorCode]] = frozenset(
     {ErrorCode.STALE_ATTEMPT, ErrorCode.EXECUTION_TOKEN_INVALID}
+)
+#: What the builder raises for a source document it cannot hand to a child: none in the manifest, an object that
+#: cannot be read, or bytes whose digest is not the one the version recorded.
+_SOURCE_FAULTS: Final[frozenset[ErrorCode]] = frozenset(
+    {ErrorCode.ANALYSIS_INPUT_INVALID, ErrorCode.STORAGE_INTEGRITY_ERROR}
 )
 
 BuildFunction = Callable[..., VersionBuildReport]
@@ -178,7 +184,7 @@ class PageProfileHandler:
         except DomainError as refusal:
             if refusal.code is ErrorCode.NOT_FOUND:
                 return Failed(REASON_VERSION_NOT_FOUND)
-            if refusal.code is ErrorCode.ANALYSIS_INPUT_INVALID:
+            if refusal.code in _SOURCE_FAULTS:
                 return Failed(REASON_SOURCE_UNREADABLE, retry=True)
             raise
         if not report.complete:
