@@ -90,6 +90,9 @@ IMMUTABLE_TABLES = {
     # never changed; the approved set is a query.
     "comparison_sheet_link",
     "comparison_summary",
+    # `0037_analysis_presets`: a revision of a preset is appended once and never changed; the
+    # current revision is a query, and an archive is a revision.
+    "analysis_preset_revision",
 }
 
 
@@ -354,6 +357,12 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "target_version_uid": "ver",
         # B2: a summary is identified by the audit event written with it.
         "summary_id": "evt",
+        # `ANALYSIS-PRESETS-01`, migration 0037: a preset and each of its revisions are identified by
+        # the audit event written with them (the first revision's id is the preset's); a run records
+        # the revision it started with; a preset names the executor connection (`exc`, above).
+        "preset_id": "evt",
+        "preset_revision_id": "evt",
+        "executor_connection_id": "exc",
     }
     assert set(prefix_by_column.values()) <= {
         identity.prefix for identity in IDENTITY_TYPES_BY_ENTITY.values()

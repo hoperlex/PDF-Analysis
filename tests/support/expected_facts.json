@@ -860,6 +860,6 @@
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0036_cite_partition_v3",
+  "migration_head": "0037_analysis_presets",
   "contract_version": "1.8.0"
 }
