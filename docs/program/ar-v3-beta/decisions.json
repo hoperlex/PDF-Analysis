@@ -1,7 +1,7 @@
 {
   "decision_version": "ar-beta-map-decisions-v1",
   "synthetic": false,
-  "comment": "Decisions of the AI integrator for the AR v3 beta, prepared under the owner's delegation R-146ba (accepted risks A-10 and A-11): no subject-matter expert took part, no human compared any norm with its official edition, and nothing here asserts that an edition is current or that a branch applies to a real project. Project date: not set; the beta runs on synthetic documents (R-146bb). Modes: the 8 items C05 C06 C08 C09 C10 C15 C21 C22 are context_only by the beta policy and stay so; the other 14 are provisional_citation with empty edition_evidence (no official page was fetched or compared). Mapping of include/revise/exclude to the tool, which has no exclude state: include = provisional_citation on the proposed span; exclude = context_only, which STILL renders the target text into the prompt part and does NOT remove it from the model's context. Spans: those of spans.proposal.json with the paragraph ids of AR-V3-BETA-SPANS-MEASURE-01; C13 and C20 repeat the spans of C12 and C19; C22 takes D5 ordinals 289-300 (a judgement, see AR-V3-ACTIVATION-PREP-01). PLACEHOLDER: query_vectors.sha256_by_scope holds 64 zeros per scope and must be replaced by the integrator after the query vectors exist; until then this file is not final. There is no review block: the pack summary stays pending_expert.",
+  "comment": "Decisions of the AI integrator for the AR v3 beta, prepared under the owner's delegation R-146ba (accepted risks A-10 and A-11): no subject-matter expert took part, no human compared any norm with its official edition, and nothing here asserts that an edition is current or that a branch applies to a real project. Project date: not set; the beta runs on synthetic documents (R-146bb). Modes: the 8 items C05 C06 C08 C09 C10 C15 C21 C22 are context_only by the beta policy and stay so; the other 14 are provisional_citation with empty edition_evidence (no official page was fetched or compared). Mapping of include/revise/exclude to the tool, which has no exclude state: include = provisional_citation on the proposed span; exclude = context_only, which STILL renders the target text into the prompt part and does NOT remove it from the model's context. Spans: those of spans.proposal.json with the paragraph ids of AR-V3-BETA-SPANS-MEASURE-01; C13 and C20 repeat the spans of C12 and C19; C22 takes D5 ordinals 289-300 (a judgement, see AR-V3-ACTIVATION-PREP-01). Query vectors: query_vectors.sha256_by_scope holds, per scope, the SHA-256 of the lines '<item_id> <vector_sha256>' of the scope's items (rule in docs/program/ar-v3-beta/README.md) computed from the vectors made on 2026-10-27 in the hash-checked bge-m3-dense-v1 environment; the provenance record is docs/program/ar-v3-beta/vectors-provenance.json. There is no review block: the pack summary stays pending_expert.",
   "identity": {
     "norms_snapshot_id": "ns_01M59N8QNBVN91ACA2HCE6VE74",
     "reviewed_content_key": "2026-07-23..2026-08-20+17d+121r.0a1bafe103ff",
@@ -12,12 +12,12 @@
     "profile": "bge-m3-dense-v1",
     "model_revision": "5617a9f61b028005a4858fdac845db406aefb181",
     "sha256_by_scope": {
-      "F1": "0000000000000000000000000000000000000000000000000000000000000000",
-      "F2": "0000000000000000000000000000000000000000000000000000000000000000",
-      "A1": "0000000000000000000000000000000000000000000000000000000000000000",
-      "A2": "0000000000000000000000000000000000000000000000000000000000000000",
-      "S1": "0000000000000000000000000000000000000000000000000000000000000000",
-      "S2": "0000000000000000000000000000000000000000000000000000000000000000"
+      "F1": "eddfef2d3d07f8501ed75c8f41ddcdc08ea0e1775b1dc0d32324101bce442d46",
+      "F2": "604c627de554bcf2bfad5617de1abcb102f502f504051679318e799cab47be0f",
+      "A1": "3b9b93dec6eb2d57918ac90a336e6af65c0cd9ef0f3b11711ff4f4c74327999b",
+      "A2": "b100bc2baadcf0b8d0c77555a6901d690defc09382abb650e6e37b424a882ce8",
+      "S1": "7c07a2498e2616a9c6a690c1f85137ac5741066e3e04c91ea6bc987d1b681595",
+      "S2": "34a461ca053641a97ab20704401527ad39490bbf1f920be913ee5643c5582777"
     }
   },
   "items": [

@@ -478,10 +478,17 @@ DECISION_MUTATIONS: dict[str, tuple[Callable[[dict[str, Any]], None], str]] = {
                          "identity_differs"),
     "model_revision_changed": (_set(("query_vectors", "model_revision"), "0" * 40),
                                "query_vector_profile_or_revision"),
-    "vector_digests_mixed": (_set(("query_vectors", "sha256_by_scope", "F1"), "a" * 64),
+    # The file is final since the vectors exist (2026-10-27): the placeholder state is entered by the
+    # mutation, so each case fails whichever of the two states the stored file is in.
+    "vector_digests_mixed": (_set(("query_vectors", "sha256_by_scope", "F1"), "0" * 64),
                              "vector_digests_mixed"),
-    "placeholder_left_unmarked": (_set(("comment",), "Decisions without the marker word."),
-                                  "placeholder_marker_mismatch"),
+    "placeholder_left_unmarked": (
+        lambda d: (d["query_vectors"]["sha256_by_scope"].update({s: "0" * 64 for s in SCOPES}),
+                   d.__setitem__("comment", "Decisions without the marker word.")),
+        "placeholder_marker_mismatch"),
+    "marker_left_on_final_vectors": (
+        lambda d: d.__setitem__("comment", d["comment"] + " PLACEHOLDER: not final."),
+        "placeholder_marker_mismatch"),
     "currency_claimed": (
         lambda d: _item(d, "C01")["branch"].__setitem__(
             "applicability", PROJECT_DATE + "; редакция актуальна"),
