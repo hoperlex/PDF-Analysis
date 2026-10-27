@@ -156,9 +156,12 @@ def test_authored_shape_and_form() -> None:
     # whole-page windows for a large text, optimisation for every section with the
     # dashboard sentence, the removal of the ordinary AR start, and the routing of an SSH
     # command connection with the plain-http address rule; it claims no measured quality
-    # for any prompt.
+    # for any prompt. 0.9.0 is at revision 2 (REVIEW-INDICATION-SWITCH-01, R-146ba): the
+    # owner took the profile label «рабочая версия, проверка человеком не проводилась» off
+    # the screens for the beta, so the note says the state «проверен» and no longer says that
+    # a screen shows that label; it never reached main, so its revision may be raised.
     assert {entry["version"]: entry["revision"] for _, entry in entries} == {
-        "0.9.0": 1, "0.8.2": 1, "0.8.1": 1, "0.8.0": 1, "0.7.0": 2, "0.6.0": 2, "0.5.1": 1, "0.5.0": 1,
+        "0.9.0": 2, "0.8.2": 1, "0.8.1": 1, "0.8.0": 1, "0.7.0": 2, "0.6.0": 2, "0.5.1": 1, "0.5.0": 1,
         "0.4.0": 1, "0.3.0": 2, "0.2.0": 2,
     }
     assert form_failures(entries, version=(ROOT / "VERSION").read_text().strip(), terms=_dictionary()) == set()

@@ -1,4 +1,11 @@
-/** Frozen F1.3 source-disposition preview. No run, citation or verdict is created here. */
+/**
+ * Frozen F1.3 source-disposition preview. No run, citation or verdict is created here.
+ *
+ * The words that say a topic is provisional and needs the expert are behind
+ * `SHOW_REVIEW_INDICATION` (`R-146ba`): off for the beta, on restores them as they were.
+ */
+
+import { SHOW_REVIEW_INDICATION } from '@/shared/config';
 
 import policy from './beta_sources.json';
 import groups from './scope_groups.json';
@@ -26,9 +33,12 @@ if (
 }
 
 function status(item: Item): string {
-  return item.mode === 'provisional_citation'
-    ? 'Предварительная ссылка — требуется проверка эксперта'
-    : 'Только контекст — требуется проверка эксперта';
+  if (SHOW_REVIEW_INDICATION) {
+    return item.mode === 'provisional_citation'
+      ? 'Предварительная ссылка — требуется проверка эксперта'
+      : 'Только контекст — требуется проверка эксперта';
+  }
+  return item.mode === 'provisional_citation' ? 'Ссылка на норму' : 'Только контекст';
 }
 
 export function ArV3BetaStatus() {
@@ -36,15 +46,18 @@ export function ArV3BetaStatus() {
   const contextOnly = policy.items.length - provisional;
   return (
     <section className={styles.panel} aria-labelledby="ar-v3-beta-title" data-ar-v3-beta-status>
-      <h2 id="ar-v3-beta-title">АР v3: предварительная карта норм</h2>
+      <h2 id="ar-v3-beta-title">{SHOW_REVIEW_INDICATION ? 'АР v3: предварительная карта норм' : 'АР v3: карта норм'}</h2>
       <p className="am-note">
         Сценарий: новый многоквартирный жилой дом Ф1.3. Карта показывает темы и доступность
         источников для будущей проверки. Она не запускает прогон v3, не подтверждает редакцию
         нормы и не выдаёт числовые выводы.
       </p>
       <p data-ar-v3-beta-counts>
-        Тем: {policy.items.length}; предварительные ссылки: {provisional}; только контекст: {contextOnly}.
-        Все пункты требуют проверки эксперта.
+        {SHOW_REVIEW_INDICATION ? (
+          <>Тем: {policy.items.length}; предварительные ссылки: {provisional}; только контекст: {contextOnly}. Все пункты требуют проверки эксперта.</>
+        ) : (
+          <>Тем: {policy.items.length}; ссылки на нормы: {provisional}; только контекст: {contextOnly}.</>
+        )}
       </p>
       <div className={styles.groups}>
         {groups.map((group) => (

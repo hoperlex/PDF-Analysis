@@ -25,6 +25,7 @@
 import Link from 'next/link';
 
 import type { ArV3BetaGroup, ProjectUid, VersionUid } from '@/shared/api';
+import { SHOW_REVIEW_INDICATION } from '@/shared/config';
 import { ErrorState, LoadingState, UnsupportedState } from '@/shared/ui';
 import { routes } from '@/shared/lib';
 import { looksLikeArV3GroupId } from '@/entities/audit-run';
@@ -61,8 +62,9 @@ export function StartArV3GroupView({
       </button>
       <p className="am-note">
         <em>
-          Шесть отдельных прогонов; результат — предварительные цитаты для проверки экспертом,
-          без числовых выводов.
+          {SHOW_REVIEW_INDICATION
+            ? 'Шесть отдельных прогонов; результат — предварительные цитаты для проверки экспертом, без числовых выводов.'
+            : 'Шесть отдельных прогонов; результат — нормативные цитаты, без числовых выводов.'}
         </em>
       </p>
 
