@@ -4,7 +4,7 @@
   "scopes": [
     {
       "scope_id": "F1",
-      "map_sha256": "PLACEHOLDER-NOT-A-DIGEST: replace with the SHA-256 of scope-F1.map.json written by map_pack build",
+      "map_sha256": "6ef3303ad6b336b57daf3256710e9ffdad8fa769e746a78ade9bc254fc6a0246",
       "snapshot_id": "ns_01M59N8QNBVN91ACA2HCE6VE74",
       "reviewed_content_key": "2026-07-23..2026-08-20+17d+121r.0a1bafe103ff",
       "embedding_build": "bge-m3-dense-v1:characters-v2:1200",
@@ -13,7 +13,7 @@
     },
     {
       "scope_id": "F2",
-      "map_sha256": "PLACEHOLDER-NOT-A-DIGEST: replace with the SHA-256 of scope-F2.map.json written by map_pack build",
+      "map_sha256": "56ee1c26e79cfaebb742bf6bc39c1c09789270047a029f898c566c74e89597f6",
       "snapshot_id": "ns_01M59N8QNBVN91ACA2HCE6VE74",
       "reviewed_content_key": "2026-07-23..2026-08-20+17d+121r.0a1bafe103ff",
       "embedding_build": "bge-m3-dense-v1:characters-v2:1200",
@@ -22,7 +22,7 @@
     },
     {
       "scope_id": "A1",
-      "map_sha256": "PLACEHOLDER-NOT-A-DIGEST: replace with the SHA-256 of scope-A1.map.json written by map_pack build",
+      "map_sha256": "4b7c2f9d490faf3acfffe3e5805a21b24d55be70cea731253b50d183aa2fcc29",
       "snapshot_id": "ns_01M59N8QNBVN91ACA2HCE6VE74",
       "reviewed_content_key": "2026-07-23..2026-08-20+17d+121r.0a1bafe103ff",
       "embedding_build": "bge-m3-dense-v1:characters-v2:1200",
@@ -31,7 +31,7 @@
     },
     {
       "scope_id": "A2",
-      "map_sha256": "PLACEHOLDER-NOT-A-DIGEST: replace with the SHA-256 of scope-A2.map.json written by map_pack build",
+      "map_sha256": "5e97bcc69091e8e36d992088e361e06077f25f15f59829914a95e1053b85d0de",
       "snapshot_id": "ns_01M59N8QNBVN91ACA2HCE6VE74",
       "reviewed_content_key": "2026-07-23..2026-08-20+17d+121r.0a1bafe103ff",
       "embedding_build": "bge-m3-dense-v1:characters-v2:1200",
@@ -40,7 +40,7 @@
     },
     {
       "scope_id": "S1",
-      "map_sha256": "PLACEHOLDER-NOT-A-DIGEST: replace with the SHA-256 of scope-S1.map.json written by map_pack build",
+      "map_sha256": "4502cb676a47d79d485076201a0ce16c5619fcf8c41b5200770820035f092f0e",
       "snapshot_id": "ns_01M59N8QNBVN91ACA2HCE6VE74",
       "reviewed_content_key": "2026-07-23..2026-08-20+17d+121r.0a1bafe103ff",
       "embedding_build": "bge-m3-dense-v1:characters-v2:1200",
@@ -49,7 +49,7 @@
     },
     {
       "scope_id": "S2",
-      "map_sha256": "PLACEHOLDER-NOT-A-DIGEST: replace with the SHA-256 of scope-S2.map.json written by map_pack build",
+      "map_sha256": "547aea97e556928b4be79ddc389943badf32aed67cbf8f1492642ef3caa03793",
       "snapshot_id": "ns_01M59N8QNBVN91ACA2HCE6VE74",
       "reviewed_content_key": "2026-07-23..2026-08-20+17d+121r.0a1bafe103ff",
       "embedding_build": "bge-m3-dense-v1:characters-v2:1200",

@@ -370,6 +370,10 @@ def test_scopes_skeleton_has_no_problem_and_the_scope_definitions_match_the_code
 
 def test_the_real_seal_reader_refuses_the_skeleton_for_its_placeholders_only(tmp_path: Path) -> None:
     spec = _load("scopes.json")
+    # The file is final since the maps were built (2026-10-27); the placeholder state is entered here
+    # by putting the skeleton's text back, so the proof holds in either state of the stored file.
+    for scope in spec["scopes"]:
+        scope["map_sha256"] = "PLACEHOLDER-NOT-A-DIGEST: replace with the SHA-256 of the map"
     assert scopes_state(spec) == "placeholder"
     path = tmp_path / "scopes.json"
     path.write_text(json.dumps(spec), encoding="utf-8")
