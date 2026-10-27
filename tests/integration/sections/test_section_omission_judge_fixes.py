@@ -200,6 +200,27 @@ def test_a_range_page_the_version_lists_as_text_less_refuses_the_pair_in_one_cal
     dropped(windows(longer, inner, 4, textless_pages=(3,)), "range_page_textless")
 
 
+def test_a_one_window_plan_hands_the_text_less_list_and_the_recognised_text_on() -> None:
+    """A plan of one window is the single call (`run_text_analysis`); the two inputs must survive the delegation."""
+    pages = (PLAN, GENERAL, SCHEDULE, CLEAN_CONTINUATION)
+    reply = omission(first=3, last=4, heading_page=3)
+    policy = WindowPolicy(window_characters=1_000_000, max_windows=12)
+
+    def run(**extra: Any) -> Any:
+        adapter = Scripted(lambda seen: [reply])
+        outcome = run_text_analysis_windows(
+            run_id=RunId.new(), text_layer_document=document(*pages), adapter=adapter, profile=AI, config=CONFIG,
+            policy=policy, **extra,
+        )
+        assert len(adapter.requests) == 1 and "windows_total" not in outcome.metrics
+        return outcome
+
+    assert run().metrics["omissions_published"] == 1
+    dropped(run(textless_pages=(4,)), "range_page_textless")
+    scan = RecognisedPage(2, "Распознано: на скане написано: дверь Д-5 в санузел.")
+    dropped(run(recognised_pages=(scan,)), "term_in_recognised_text")
+
+
 def test_the_term_in_the_recognised_text_of_a_searched_page_refuses_the_pair() -> None:
     pages = (PLAN, "", SCHEDULE, CLEAN_CONTINUATION)  # page 2 is a scan
     scan = RecognisedPage(2, "Распознано: на скане написано: дверь Д-5 в санузел.")
@@ -277,6 +298,17 @@ def test_the_executor_hands_the_versions_text_less_list_to_the_omission_check() 
     assert executor_stage(pages, {}, reply, textless_pages=()).metrics["omissions_published"] == 1
     assert executor_stage(pages, {}, reply, textless_pages=None).metrics["omissions_published"] == 1
     dropped(executor_stage(pages, {}, reply, textless_pages=(4,)), "range_page_textless")
+
+
+def test_the_executor_hands_the_text_less_list_to_the_windowed_path_too() -> None:
+    """A version whose recorded count is above the one-call budget goes through `run_text_analysis_windows`."""
+    pages = (PLAN, GENERAL, SCHEDULE, CLEAN_CONTINUATION)
+    reply = omission(first=3, last=4, heading_page=3)
+    count = 50_000_000
+    published = executor_stage(pages, {}, reply, textless_pages=(), text_character_count=count)
+    assert published.metrics["omissions_published"] == 1
+    assert "windows_total" not in published.metrics, "one window: the single call, reached through the windowed path"
+    dropped(executor_stage(pages, {}, reply, textless_pages=(4,), text_character_count=count), "range_page_textless")
 
 
 def test_the_executor_hands_the_recognised_text_to_the_omission_check() -> None:
