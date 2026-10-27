@@ -300,7 +300,7 @@ def test_the_registry_serves_three_categories_to_exactly_the_five_and_two_to_the
         if code in five:
             assert profile.categories == CATEGORIES3, code
             assert profile.prompt_bundle.response_schema == response_schema_for(CATEGORIES3), code
-            assert profile.profile_version == "1.3.0", code
+            assert profile.profile_version == "1.3.1", code
         else:
             assert profile.categories == CATEGORIES, code
             assert profile.prompt_bundle.response_schema is RESPONSE_SCHEMA, code

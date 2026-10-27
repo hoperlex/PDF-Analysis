@@ -7,7 +7,8 @@
   "SECTION-WIDEN-G1-01": "docs/program/SECTION-WIDEN-G1-01.md",
   "SECTION-WIDEN-G2-01": "docs/program/SECTION-WIDEN-G2-01.md",
   "SECTION-WIDEN-G3-01": "docs/program/SECTION-WIDEN-G3-01.md",
-  "SECTION-CATEGORY-OCR-01": "docs/program/SECTION-CATEGORY-OCR-01.md"
+  "SECTION-CATEGORY-OCR-01": "docs/program/SECTION-CATEGORY-OCR-01.md",
+  "SECTION-JUDGE-FIXES-01": "docs/program/SECTION-JUDGE-FIXES-01.md"
  },
  "fragments": [
   {
@@ -1367,6 +1368,90 @@
    ],
    "role": "the other nine sections keep two categories",
    "text": "documentation"
+  },
+  {
+   "id": "J1:J-INTRO",
+   "source": "SECTION-JUDGE-FIXES-01",
+   "kind": "present",
+   "sections": [
+    "AI",
+    "TX",
+    "EOM",
+    "SS",
+    "ITP"
+   ],
+   "role": "category list: two categories for the question above, documentation only for the omission paragraph",
+   "text": "Для вопроса выше — ровно две категории; третья, documentation, допустима только для пропуска из абзаца об исключении ниже:"
+  },
+  {
+   "id": "J1:J-HINT",
+   "source": "SECTION-JUDGE-FIXES-01",
+   "kind": "present",
+   "sections": [
+    "AI",
+    "TX",
+    "EOM",
+    "SS",
+    "ITP"
+   ],
+   "role": "checklist hint: the two categories for the hints, documentation only for the omission paragraph",
+   "text": "по этим подсказкам сообщай только то, что подпадает под одну из двух категорий выше (documentation — только для пропуска из абзаца об исключении ниже):"
+  },
+  {
+   "id": "J1:J-CATEGORY",
+   "source": "SECTION-JUDGE-FIXES-01",
+   "kind": "present",
+   "sections": [
+    "AI",
+    "TX",
+    "EOM",
+    "SS",
+    "ITP"
+   ],
+   "role": "reply rule: the category value, documentation for the omission paragraph and nothing else",
+   "text": "- category — одно из двух значений выше; documentation — только для пропуска из абзаца об исключении, и ни для чего другого."
+  },
+  {
+   "id": "J1:J-OLD-INTRO",
+   "source": "SECTION-JUDGE-FIXES-01",
+   "kind": "absent",
+   "sections": [
+    "AI",
+    "TX",
+    "EOM",
+    "SS",
+    "ITP"
+   ],
+   "role": "removed: «exactly two categories, there is no third» contradicted the schema that allows documentation",
+   "text": "Ровно две категории, третьей нет:"
+  },
+  {
+   "id": "J1:J-OLD-HINT",
+   "source": "SECTION-JUDGE-FIXES-01",
+   "kind": "absent",
+   "sections": [
+    "AI",
+    "TX",
+    "EOM",
+    "SS",
+    "ITP"
+   ],
+   "role": "removed: «report only one of the two categories above» left no room for the omission paragraph",
+   "text": "сообщай только то, что подпадает под одну из двух категорий выше:"
+  },
+  {
+   "id": "J1:J-OLD-CATEGORY",
+   "source": "SECTION-JUDGE-FIXES-01",
+   "kind": "absent",
+   "sections": [
+    "AI",
+    "TX",
+    "EOM",
+    "SS",
+    "ITP"
+   ],
+   "role": "removed: «category is strictly one of the two values above» contradicted the schema that allows documentation",
+   "text": "- category — строго одно из двух значений выше."
   }
  ]
 }
