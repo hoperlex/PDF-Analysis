@@ -48,7 +48,7 @@ class TestAConfirmedSetPutsItsPagesOnTheQueue:
         assert sorted(marked) == sorted(_versions_of(h, alpha.set_id))
         assert sorted(marked.values()) == sorted(w["id"] for w in h.work(upload_id, kind="page_profile"))
 
-    def test_asking_again_enqueues_nothing_more(self, h: Harness) -> None:
+    def test_asking_again_enqueues_nothing_more(self, h: Harness, queue: Queue) -> None:
         upload_id = h.proposed({"Alpha": 2, "Beta": 1})
         alpha, _beta = h.sets(upload_id)
         h.confirm(upload_id, alpha, key="confirm-1")
@@ -57,6 +57,13 @@ class TestAConfirmedSetPutsItsPagesOnTheQueue:
         h.confirm(upload_id, alpha, key="confirm-1")  # a replay of the confirmation, and the hook with it
         assert h.work(upload_id) == before
         assert len(h.work(kind="comparison_batch_drive")) == 1
+        # Once its items have ended the set is still not released again: the mark on the set is what says so.
+        queue.run_all()
+        ended = h.work(upload_id)
+        assert [w["state"] for w in ended] == ["succeeded", "succeeded"]
+        h.batches.after_confirmation(upload_id=upload_id, set_id=alpha.set_id)
+        h.confirm(upload_id, alpha, key="confirm-1")
+        assert h.work(upload_id) == ended
 
     def test_a_hook_that_failed_is_repaired_by_the_clients_replay(self, h: Harness) -> None:
         upload_id = h.proposed({"Alpha": 1, "Beta": 1})
