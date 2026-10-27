@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -173,23 +174,54 @@ def plan_v3_corpus_citations(
     for accepted in evaluation.grounding.accepted:
         if not accepted.norm_citations:
             continue
-        proposal = accepted.proposal
-        if proposal.required_value is None or proposal.stated_value is None:
-            raise V3CorpusCitationRefused("normative_value_missing")
-        candidates.append(V3PublicationCandidate(
-            category=proposal.category,
-            finding_text=proposal.finding_text,
-            recommendation_text=proposal.recommendation_text,
-            proposed_severity=proposal.proposed_severity,
-            evidence=tuple(CitationEvidence(
-                anchor.page_number, anchor.quote, anchor.char_start,
-                anchor.char_end, anchor.block_id,
-            ) for anchor in accepted.evidence),
-            norm_citations=accepted.norm_citations,
-            required_value=proposal.required_value,
-            stated_value=proposal.stated_value,
-        ))
+        candidates.append(_publication_candidate(accepted))
     return V3CorpusCitationPlan(request, evaluation, tuple(candidates))
+
+
+def _publication_candidate(accepted: Any) -> V3PublicationCandidate:
+    """The adapter boundary after both pure gates, with no model authority.
+
+    ``accepted`` is one element of ``LocalV3Evaluation.grounding.accepted`` (``proposal``,
+    ``evidence``, ``norm_citations``); the type lives in the analysis internals and is not
+    exported, so it is read structurally.
+    """
+    proposal = accepted.proposal
+    if proposal.required_value is None or proposal.stated_value is None:
+        raise V3CorpusCitationRefused("normative_value_missing")
+    return V3PublicationCandidate(
+        category=proposal.category,
+        finding_text=proposal.finding_text,
+        recommendation_text=proposal.recommendation_text,
+        proposed_severity=proposal.proposed_severity,
+        evidence=tuple(CitationEvidence(
+            anchor.page_number, anchor.quote, anchor.char_start,
+            anchor.char_end, anchor.block_id,
+        ) for anchor in accepted.evidence),
+        norm_citations=accepted.norm_citations,
+        required_value=proposal.required_value,
+        stated_value=proposal.stated_value,
+    )
+
+
+def provisional_publication_candidates(
+    review: V3BetaCitationReview,
+) -> tuple[V3PublicationCandidate, ...]:
+    """The publication candidates of the proposals the beta review marked provisional.
+
+    A proposal is provisional when it passed both pure gates (it is in ``grounding.accepted``)
+    and every citation it makes is of a ``provisional_citation`` topic (it is in
+    ``provisional_proposal_ordinals``). A withheld (context-only or mixed) proposal, a rejected
+    one and an accepted non-normative one yield no candidate. The result is in proposal order.
+    """
+    if not isinstance(review, V3BetaCitationReview):
+        raise V3CorpusCitationRefused("beta_review_required")
+    accepted_by_ordinal = {item.proposal_ordinal: item for item in review.evaluation.grounding.accepted}
+    ordinals = review.provisional_proposal_ordinals
+    if (len(set(ordinals)) != len(ordinals)
+            or set(ordinals) & set(review.withheld_proposal_ordinals)
+            or any(ordinal not in accepted_by_ordinal for ordinal in ordinals)):
+        raise V3CorpusCitationRefused("provisional_ordinal_not_accepted")
+    return tuple(_publication_candidate(accepted_by_ordinal[ordinal]) for ordinal in sorted(ordinals))
 
 
 def plan_v3_beta_citation_review(
@@ -261,5 +293,5 @@ __all__ = [
     "PinnedV3CorpusRequest", "V3BetaCitationReview", "V3BetaTopicReview",
     "V3CorpusCitationPlan", "V3CorpusCitationRefused",
     "prepare_v3_corpus_request", "plan_v3_corpus_citations",
-    "plan_v3_beta_citation_review",
+    "plan_v3_beta_citation_review", "provisional_publication_candidates",
 ]

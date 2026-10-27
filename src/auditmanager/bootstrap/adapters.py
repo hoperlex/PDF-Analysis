@@ -15,6 +15,7 @@ shares one engine and the composition root remains the only thing that reads con
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict
 from datetime import datetime, timezone
@@ -52,6 +53,7 @@ from auditmanager.api.schemas.findings import (
     EvidenceView,
     FindingDetailView,
     FindingView,
+    NormCitationView,
     ObservationView,
     ProvenanceView,
 )
@@ -1149,15 +1151,49 @@ class RunAdapter(_SessionHolder):
         return self._read(lambda session: _run_status_view(session, run_id))
 
     def get_norm_verification(self, *, run_id: str) -> models.NormVerificationReport:
-        """Refuse until a reader proves the 0023 partition and the pinned set.
+        """`R-146at`. The canonical report of an AR v3 beta Run, from its saved CITE stage.
 
-        An empty citation SELECT is not a certificate of zero. CITE will replace this
-        seam after it checks stage success and every canonical/member partition.
+        The runs context owns the rule (``runs.v3_norm_report``: the sealed review, the
+        certified citation partitions and their one-to-one comparison); this adapter owns the
+        read snapshot, the refusals the operation declares and the mapping into the frozen
+        ``NormVerificationReport``. A Run of any other profile is ``not_found``. A v3 Run that
+        has no verified saved review (not terminal, failed, cancelled, or a saved review that
+        fails verification) answers the declared ``503 dependency_unavailable`` and returns
+        nothing unverified; the reason goes to the log, not to the wire.
         """
-        raise DomainError(
-            ErrorCode.DEPENDENCY_UNAVAILABLE,
-            dependency="norm_verification_reader",
-        )
+        from auditmanager.analysis.public import AR_V3_BETA_PROFILE_ID
+        from auditmanager.runs import RunRepository
+        from auditmanager.runs.v3_norm_report import read_v3_norm_verification
+
+        def unavailable() -> DomainError:
+            return DomainError(
+                ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="norm_verification_reader",
+            )
+
+        def work(session: Session) -> models.NormVerificationReport:
+            session.connection(execution_options={
+                "isolation_level": "REPEATABLE READ", "postgresql_readonly": True,
+            })
+            run = RunRepository().get(session, run_id)
+            if run.analysis_profile_id != str(AR_V3_BETA_PROFILE_ID):
+                raise _not_found("NormVerificationReport")
+            if run.state not in {"published", "partial"}:
+                raise unavailable()
+            try:
+                view = read_v3_norm_verification(session, run_id, blob_store=self._blob_store)
+            except DomainError as error:
+                if error.code not in {
+                    ErrorCode.ANALYSIS_INPUT_INVALID, ErrorCode.STORAGE_INTEGRITY_ERROR,
+                }:
+                    raise
+                logging.getLogger(__name__).warning(
+                    "norm verification refused for %s: %s", run_id,
+                    dict(error.detail_fields).get("reason"),
+                )
+                raise unavailable() from error
+            return models.NormVerificationReport.model_validate(_norm_verification_body(view))
+
+        return self._read(work)
 
     def get_run_norm_references(self, *, run_id: str) -> models.RunNormReferences:
         """`NORM-REFS-RUN-01`. The norms the run's saved text cites, against its snapshot.
@@ -1210,6 +1246,51 @@ class RunAdapter(_SessionHolder):
             )
 
         return self._read(work)
+
+
+def _norm_verification_body(view: Any) -> dict[str, Any]:
+    """The frozen ``NormVerificationReport`` of one AR v3 beta Run.
+
+    ``required_value`` and ``stated_value`` are never put on the wire for this profile: they are
+    stored (the database requires them for a normative finding) but the beta policy
+    ``numeric_output_policy`` is ``expert_review_required`` and no edition check exists, so a
+    number is not served. Both properties are optional in the contract.
+    """
+
+    def citation(item: Any) -> dict[str, Any]:
+        return {
+            "norms_snapshot_id": item.norms_snapshot_id,
+            "norm_document_id": item.norm_document_id,
+            "norm_paragraph_id": item.norm_paragraph_id,
+            "designation": item.designation, "title": item.title,
+            "clause_number": item.clause_number, "page_label": item.page_label,
+            "quote": item.quote, "state": item.state,
+            "source_attribution": item.source_attribution,
+        }
+
+    def partition(item: Any) -> dict[str, Any]:
+        return {
+            "finding_observation_id": item.finding_observation_id,
+            "norm_citations": [citation(entry) for entry in item.citations],
+        }
+
+    body: dict[str, Any] = {
+        "run_id": view.run_id, "norms_snapshot_id": view.norms_snapshot_id,
+        "norm_retrieval_set_id": view.norm_retrieval_set_id, "status": view.status,
+        "findings": [
+            {
+                "finding_uid": finding.finding_uid,
+                "canonical": partition(finding.canonical),
+                "merged_observations": [partition(m) for m in finding.merged_observations],
+            }
+            for finding in view.findings
+        ],
+        "withheld_by_reason": dict(view.withheld_by_reason),
+        "textless_pages": list(view.textless_pages),
+    }
+    if view.error_code is not None:
+        body["error_code"] = view.error_code
+    return body
 
 
 def _run_status_view(session: Session, run_id: str) -> RunStatusView:
@@ -1304,7 +1385,10 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
     )
 
 
-def _observation_view(row: Any, evidence: Sequence[Any]) -> ObservationView:
+def _observation_view(
+    row: Any, evidence: Sequence[Any],
+    citations: Mapping[str, tuple[NormCitationView, ...]] | None = None,
+) -> ObservationView:
     return ObservationView(
         finding_observation_id=row.finding_observation_id,
         run_id=row.run_id,
@@ -1331,12 +1415,60 @@ def _observation_view(row: Any, evidence: Sequence[Any]) -> ObservationView:
             model_call_id=row.model_call_id,
         ),
         proposed_severity=getattr(row, "proposed_severity", None),
+        # `R-146as`: the certified citations of an AR v3 beta finding; ``None`` (as before) for
+        # every other observation. ``required_value`` / ``stated_value`` are never served for
+        # this profile (see ``_norm_verification_body``).
+        norm_citations=None if citations is None else citations.get(row.finding_observation_id),
     )
+
+
+def _v3_beta_citations(
+    session: Session, rows: Sequence[Any],
+) -> Mapping[str, tuple[NormCitationView, ...]]:
+    """The certified citations of the AR v3 beta findings among ``rows``, by observation.
+
+    Read through the same certified-partition reader the report uses, so a finding is never
+    shown with a citation the database has not certified. It fails closed: an inconsistent
+    partition is a ``storage_integrity_error``, never a finding listed without its citations.
+    """
+    from auditmanager.analysis.public import AR_V3_BETA_PROFILE_ID
+    from auditmanager.findings.public import CitationReadRefused, read_verified_citations
+
+    beta = str(AR_V3_BETA_PROFILE_ID)
+    mine = [row for row in rows if row.analysis_profile_id == beta]
+    if not mine:
+        return {}
+    try:
+        read = read_verified_citations(
+            session, run_id=mine[0].run_id, version_uid=mine[0].version_uid,
+            profile_id=beta, cite_stage_id="ar_v3_citation_review",
+        )
+    except CitationReadRefused as error:
+        logging.getLogger(__name__).warning(
+            "certified citations refused for %s: %s", mine[0].run_id, error,
+        )
+        raise DomainError(
+            ErrorCode.STORAGE_INTEGRITY_ERROR,
+            message="the certified citation partitions of the run are inconsistent",
+        ) from error
+    return {
+        partition.finding_observation_id: tuple(
+            NormCitationView(
+                norms_snapshot_id=item.norms_snapshot_id, norm_document_id=item.norm_document_id,
+                norm_paragraph_id=item.norm_paragraph_id, designation=item.designation,
+                title=item.title, clause_number=item.clause_number, page_label=item.page_label,
+                quote=item.quote, state=item.state, source_attribution=item.source_attribution,
+            ) for item in partition.citations
+        )
+        for finding in read.findings
+        for partition in (finding.canonical, *finding.merged_observations)
+    }
 
 
 def _finding_view(
     row: Any, evidence: Sequence[Any], verdict: Any,
     merged_rows: Sequence[Any] = (),
+    citations: Mapping[str, tuple[NormCitationView, ...]] | None = None,
 ) -> FindingView:
     return FindingView(
         finding_uid=row.finding_uid,
@@ -1348,9 +1480,9 @@ def _finding_view(
         decided_severity=getattr(verdict, "decided_severity", None),
         latest_decision_id=getattr(verdict, "latest_decision_id", None),
         decision_recorded_at=getattr(verdict, "decision_recorded_at", None),
-        observation=_observation_view(row, evidence),
+        observation=_observation_view(row, evidence, citations),
         merged_observations=(
-            tuple(_observation_view(member, evidence) for member in merged_rows)
+            tuple(_observation_view(member, evidence, citations) for member in merged_rows)
             if merged_rows else None
         ),
     )
@@ -1735,10 +1867,11 @@ class FindingAdapter(_SessionHolder):
         def work(session: Session) -> Sequence[FindingView]:
             rows = published_findings(session, run_id)
             evidence = published_finding_evidence(session, run_id)
+            citations = _v3_beta_citations(session, rows)
             views = [
                 _finding_view(group.canonical, evidence,
                               current_verdict(session, group.canonical.finding_uid),
-                              group.merged)
+                              group.merged, citations)
                 for group in group_published_findings(rows)
             ]
             if category is not None:
@@ -1775,7 +1908,10 @@ class FindingAdapter(_SessionHolder):
             history = decision_history(session, finding_uid)
             comments = [e.comment for e in history if e.comment]
             return FindingDetailView(
-                finding=_finding_view(row, evidence, verdict, matches[0].merged),
+                finding=_finding_view(
+                    row, evidence, verdict, matches[0].merged,
+                    _v3_beta_citations(session, members),
+                ),
                 latest_comment=comments[-1] if comments else None,
                 decision_event_count=len(history),
             )

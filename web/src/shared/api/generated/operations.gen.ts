@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.8.0 (OpenAPI 3.1.0)
- *   sha256 e82f1df0f9c3951526592e92ccfcaa69d8182fd4ec024d9a46cca7c69866cb0a
+ *   sha256 43f6232677c024d17d04e2370399928dcfcae53ddf3f8995893aada88b2ff7df
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -1169,7 +1169,7 @@ export type GetRunNormReferencesResult = RunNormReferences;
 /**
  * Get Run Norm Verification
  *
- * Read a verified v3 normative report for a run. R-80: any one active expert or admin role; an empty role set is refused. A v1/v2 run answers not_found. Until the CITE verified reader is implemented, this endpoint answers typed 503 dependency_unavailable and exposes no unverified citation data (D-151).
+ * Read a verified v3 normative report for a run. R-80: any one active expert or admin role; an empty role set is refused. A run that is not an AR v3 beta run answers not_found. For an AR v3 beta run the report is computed from the run's saved citation-review stage and the certified citation partitions of its findings (R-146at): findings are the run's published grounded findings, withheld_by_reason counts the proposals the grounding gates rejected, textless_pages comes from the version, and the numeric claims of a finding (required_value, stated_value) are never returned for this profile. A run with no verified saved review (not yet terminal, failed or cancelled, or whose saved review fails verification) answers typed 503 dependency_unavailable and exposes no unverified citation data (D-151).
  */
 export type GetRunNormVerificationInput = {
   /** Path parameters, substituted into `/runs/{run_id}/norm-verification`. */

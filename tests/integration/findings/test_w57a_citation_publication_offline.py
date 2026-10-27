@@ -181,3 +181,107 @@ def test_selected_label_and_raw_span_must_match_exact_set_bytes() -> None:
     with pytest.raises(CitationPublicationRefused, match="citation_raw_span_invalid"):
         _publish(session, data, replace(candidate, norm_citations=(wrong_span,)))
     assert _writes(session) == []
+
+
+# --- `AR-V3-DECISIONS-01`: the AR v3 beta CITE stage as the certifying stage ---------------------
+
+
+def _publish_v3(session: _Session, data: bytes, **overrides):
+    return publish_grounded_v3_finding(
+        session, run_id="run_" + "0" * 26, job_id="job_" + "0" * 26, attempt_id="att_" + "0" * 26,
+        execution_token="secret-token", model_call_id="mc_" + "0" * 26, set_bytes=data,
+        candidate=_candidate(), cite_stage_id="ar_v3_citation_review", **overrides,
+    )
+
+
+def _authority_params(session: _Session) -> dict[str, object]:
+    return next(params for sql, params in session.calls if sql.lstrip().startswith("SELECT r.project_uid"))
+
+
+def test_the_default_stage_is_norm_verification_and_the_effect_must_be_of_this_attempt() -> None:
+    data = _set_bytes()
+    session = _Session(data)
+    _publish(session, data)
+    params = _authority_params(session)
+    assert params["cite_stage_id"] == "norm_verification" and params["same_attempt"] is True
+    other = _Session(data)
+    other.authority["effect_attempt_id"] = "att_" + "1" * 26
+    with pytest.raises(CitationPublicationRefused, match="publication_authority_invalid"):
+        _publish(other, data)
+    assert _writes(other) == []
+
+
+def test_the_v3_stage_publishes_when_the_call_was_completed_by_an_earlier_attempt_of_the_job() -> None:
+    data = _set_bytes()
+    session = _Session(data)
+    session.authority["effect_attempt_id"] = "att_" + "1" * 26  # the worker died after the call
+    result = _publish_v3(session, data)
+    params = _authority_params(session)
+    assert params["cite_stage_id"] == "ar_v3_citation_review" and params["same_attempt"] is False
+    assert result.citation_count == 1 and len(_writes(session)) > 0
+
+
+def test_the_v3_stage_still_needs_the_call_to_be_the_same_runs_succeeded_recorded_pair() -> None:
+    data = _set_bytes()
+    for key, value in (("effect_state", "started"), ("call_status", "failed"),
+                       ("effect_response_sha256", "e" * 64), ("cite_status", "failed"),
+                       ("run_state", "running"), ("execution_token", "other")):
+        session = _Session(data)
+        session.authority[key] = value
+        with pytest.raises(CitationPublicationRefused, match="publication_authority_invalid"):
+            _publish_v3(session, data)
+        assert _writes(session) == [], key
+
+
+@pytest.mark.parametrize("stage", ["text_analysis", "finding_merge", "", "AR_V3_CITATION_REVIEW"])
+def test_an_unknown_certifying_stage_is_refused_before_the_database_is_asked(stage: str) -> None:
+    data = _set_bytes()
+    session = _Session(data)
+    with pytest.raises(CitationPublicationRefused, match="cite_stage_unknown"):
+        publish_grounded_v3_finding(
+            session, run_id="run_" + "0" * 26, job_id="job_" + "0" * 26, attempt_id="att_" + "0" * 26,
+            execution_token="secret-token", model_call_id="mc_" + "0" * 26, set_bytes=data,
+            candidate=_candidate(), cite_stage_id=stage,
+        )
+    assert session.calls == []
+
+
+@pytest.mark.parametrize("change", [
+    {"category": "layout"}, {"category": "documentation"}, {"category": "internal_contradiction"},
+    {"evidence": ()}, {"norm_citations": ()}, {"required_value": ""}, {"stated_value": ""},
+])
+def test_only_a_grounded_normative_candidate_is_written_and_nothing_is_asked_otherwise(change: dict[str, object]) -> None:
+    """`AR-V3-DECISIONS-01`: the writer's own shape guard, for both certifying stages.
+
+    The five normative categories only, one to five citations, evidence present, both values
+    present; the refusal comes before any database statement.
+    """
+    data = _set_bytes()
+    for stage in ("norm_verification", "ar_v3_citation_review"):
+        session = _Session(data)
+        with pytest.raises(CitationPublicationRefused, match="grounded_normative_candidate_required"):
+            publish_grounded_v3_finding(
+                session, run_id="run_" + "0" * 26, job_id="job_" + "0" * 26, attempt_id="att_" + "0" * 26,
+                execution_token="secret-token", model_call_id="mc_" + "0" * 26, set_bytes=data,
+                candidate=replace(_candidate(), **change), cite_stage_id=stage,
+            )
+        assert session.calls == []
+
+
+def test_six_citations_are_refused_and_a_non_candidate_is_refused() -> None:
+    data = _set_bytes()
+    one = _candidate()
+    session = _Session(data)
+    with pytest.raises(CitationPublicationRefused, match="grounded_normative_candidate_required"):
+        publish_grounded_v3_finding(
+            session, run_id="run_" + "0" * 26, job_id="job_" + "0" * 26, attempt_id="att_" + "0" * 26,
+            execution_token="secret-token", model_call_id="mc_" + "0" * 26, set_bytes=data,
+            candidate=replace(one, norm_citations=one.norm_citations * 6),
+        )
+    with pytest.raises(CitationPublicationRefused, match="grounded_normative_candidate_required"):
+        publish_grounded_v3_finding(
+            session, run_id="run_" + "0" * 26, job_id="job_" + "0" * 26, attempt_id="att_" + "0" * 26,
+            execution_token="secret-token", model_call_id="mc_" + "0" * 26, set_bytes=data,
+            candidate="not a candidate",  # type: ignore[arg-type]
+        )
+    assert session.calls == []

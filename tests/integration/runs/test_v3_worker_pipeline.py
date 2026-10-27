@@ -60,6 +60,9 @@ class Runs:
                 if self.citation else ())
 
 
+blob_store = object()
+
+
 def _arrange(monkeypatch, *, completed=False, citation=False,
              prior_cost=None, cost_micros=4200, cost_basis="measured"):
     order = []
@@ -78,6 +81,11 @@ def _arrange(monkeypatch, *, completed=False, citation=False,
         order.append("cite")
 
     def finish(*args, **kwargs):
+        # `R-146as`: the terminal publishes from the saved evidence, so it gets the Blob store,
+        # the document repository and the saved-text bound the CITE stage used.
+        assert kwargs["blob_store"] is blob_store
+        assert kwargs["max_text_bytes"] == v3_worker.MAX_V3_SAVED_TEXT_BYTES
+        assert "documents" in kwargs
         order.append("terminal")
         return SimpleNamespace(selection=SimpleNamespace(state="published"))
 
@@ -90,7 +98,7 @@ def _arrange(monkeypatch, *, completed=False, citation=False,
 def _run(jobs, runs, *, provider_for_dispatch=lambda: object(),
          cost_ceiling_usd=1.0):
     return v3_worker.run_v3_worker_chain(
-        object(), authority=AUTHORITY, registry=object(), blob_store=object(),
+        object(), authority=AUTHORITY, registry=object(), blob_store=blob_store,
         provider_for_dispatch=provider_for_dispatch,
         cost_ceiling_usd=cost_ceiling_usd, jobs=jobs, runs=runs,
     )

@@ -7,7 +7,9 @@
  * carries (`._member details`, `._quote`).
  */
 
-import type { ArV3BetaGroupReview } from '@/shared/api';
+import type { Account, ArV3BetaGroupReview, Finding, FindingPage } from '@/shared/api';
+
+import { finding, observation } from '../review/fixtures';
 
 export const GROUP_ID = 'arg_01M2545JSD15ETSNNV904X991K';
 export const SCOPES = ['F1', 'F2', 'A1', 'A2', 'S1', 'S2'] as const;
@@ -42,4 +44,45 @@ export function groupReviewFixture(): ArV3BetaGroupReview {
       } : null,
     })),
   };
+}
+
+/** The run of the first scope: the one member the fixture above gives an available review. */
+export const AVAILABLE_RUN_ID = groupReviewFixture().members[0]!.run_id;
+export const NORM_QUOTE = 'Минимальная ширина эвакуационных путей составляет 1,4 м.';
+export const PDF_QUOTE = 'Ширина эвакуационных путей принята не менее 1,2 м';
+
+/**
+ * `AR-V3-DECISIONS-01`: one published finding of that run, as the server serves an AR v3 beta finding
+ * (`R-146as`): the PDF anchor, one certified norm citation, the model's sentences and a proposed
+ * severity; no `required_value` and no `stated_value` (the profile serves none). Cyrillic on purpose
+ * (the language guard reads it as application chrome otherwise).
+ */
+export function v3FindingFixture(overrides: Partial<Finding> = {}): Finding {
+  const base = observation({
+    category: 'evacuation',
+    finding_text: 'Проверить ширину прохода.',
+    recommendation_text: 'Сверить проект и норму.',
+    proposed_severity: 'operational',
+    evidence: [{
+      evidence_ordinal: 0, page_number: 7, quote: PDF_QUOTE, char_start: 10, char_end: 10 + PDF_QUOTE.length,
+    }],
+    norm_citations: [{
+      norms_snapshot_id: 'ns_01M59N8QNBVN91ACA2HCE6VE74', norm_document_id: 'ndoc_01M59N8QNBVN91ACA2HCE6VE74',
+      norm_paragraph_id: 'npar_01M59N8QNBVN91ACA2HCE6VE74', designation: 'СП 1.13130', title: 'Эвакуационные пути',
+      clause_number: '4.2.5', page_label: 3, quote: NORM_QUOTE, state: 'verified', source_attribution: 'unattributed',
+    }],
+  });
+  return finding({ category: 'evacuation', run_id: AVAILABLE_RUN_ID, observation: base, ...overrides });
+}
+
+export function runFindingsPage(items: Finding[]): FindingPage {
+  return { items, page: { next_cursor: null } } as FindingPage;
+}
+
+export function accountFixture(roles: Account['roles']): Account {
+  return {
+    archived_at: null, display_label: 'Сьютова Е.', first_name: 'Е', is_default_credential: false,
+    last_name: 'Сьютова', login: 'e@suite.invalid', middle_name: null, profile_complete: true, roles,
+    user_uid: 'usr_01M59N8QNBVN91ACA2HCE6VE74',
+  } as Account;
 }

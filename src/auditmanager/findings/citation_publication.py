@@ -27,6 +27,15 @@ NORMATIVE_CATEGORIES = frozenset({
     "evacuation", "fire_safety", "accessibility", "insulation", "sound",
 })
 
+#: The stages whose succeeded StageResult may certify a published citation partition.
+#: ``norm_verification`` is the v1/v2 stage, written in the Attempt that made the call;
+#: ``ar_v3_citation_review`` is the AR v3 beta CITE stage (``0036`` admits it in the database),
+#: whose call and stage may belong to an earlier Attempt of the same Job: the worker replays
+#: saved call/effect evidence through CITE without a second provider call, so a Run resumed
+#: after a crash between CITE and the terminal still publishes.
+CITE_STAGE_IDS = frozenset({"norm_verification", "ar_v3_citation_review"})
+V3_BETA_CITE_STAGE_ID = "ar_v3_citation_review"
+
 
 @dataclass(frozen=True, slots=True)
 class CitationEvidence:
@@ -83,10 +92,11 @@ _AUTHORITY = text("""
        AND mc.run_id = r.run_id AND mc.stage_id = 'text_analysis'
       JOIN provider_call_effect pe ON pe.model_call_id = mc.model_call_id
        AND pe.run_id = r.run_id AND pe.job_id = j.job_id
-       AND pe.attempt_id = a.attempt_id AND pe.stage_id = 'text_analysis'
+       AND (NOT :same_attempt OR pe.attempt_id = a.attempt_id)
+       AND pe.stage_id = 'text_analysis'
       JOIN stage_result st ON st.run_id = r.run_id
-       AND st.stage_id = 'norm_verification'
-       AND st.created_at >= a.created_at
+       AND st.stage_id = :cite_stage_id
+       AND (NOT :same_attempt OR st.created_at >= a.created_at)
      WHERE r.run_id = :run_id AND j.job_id = :job_id
        AND a.attempt_id = :attempt_id
        AND j.current_attempt_id = :attempt_id
@@ -231,6 +241,7 @@ def publish_grounded_v3_finding(
     session: Session, *, run_id: str, job_id: str, attempt_id: str,
     execution_token: str, model_call_id: str, set_bytes: bytes,
     candidate: V3PublicationCandidate,
+    cite_stage_id: str = "norm_verification",
 ) -> PublishedV3CitationFinding:
     """Insert a normative finding and all its citations in the caller's transaction.
 
@@ -238,7 +249,16 @@ def publish_grounded_v3_finding(
     executed the pure PDF/norm gates, and inserted a succeeded CITE StageResult
     in this same transaction. No commit occurs here: 0023's deferred partition
     and canonical quote checks run only when the outer transaction commits.
+
+    ``cite_stage_id`` names the succeeded stage that certifies the partition (see
+    :data:`CITE_STAGE_IDS`). For the default stage the call effect and the stage row must belong
+    to the current Attempt, as before; for the AR v3 beta stage they must belong to the same Job
+    and Run, which the caller's ``completed_v3_call`` and the final fence prove, because the
+    call may have been completed by an earlier Attempt.
     """
+    if cite_stage_id not in CITE_STAGE_IDS:
+        raise CitationPublicationRefused("cite_stage_unknown")
+    same_attempt = cite_stage_id != V3_BETA_CITE_STAGE_ID
     if (not isinstance(candidate, V3PublicationCandidate)
             or candidate.category not in NORMATIVE_CATEGORIES
             or not 1 <= len(candidate.norm_citations) <= 5
@@ -247,7 +267,8 @@ def publish_grounded_v3_finding(
         raise CitationPublicationRefused("grounded_normative_candidate_required")
     row = session.execute(_AUTHORITY, {
         "run_id": run_id, "job_id": job_id, "attempt_id": attempt_id,
-        "model_call_id": model_call_id,
+        "model_call_id": model_call_id, "cite_stage_id": cite_stage_id,
+        "same_attempt": same_attempt,
     }).mappings().one_or_none()
     if row is None or (
         row["run_state"] != "validating"
@@ -258,7 +279,7 @@ def publish_grounded_v3_finding(
         or row["call_status"] != "succeeded"
         or row["call_mode"] != row["provider_mode"]
         or row["effect_state"] != "completed"
-        or row["effect_attempt_id"] != attempt_id
+        or (same_attempt and row["effect_attempt_id"] != attempt_id)
         or row["effect_mode"] != row["call_mode"]
         or row["effect_request_sha256"] != row["call_request_sha256"]
         or row["effect_response_sha256"] != row["call_response_sha256"]

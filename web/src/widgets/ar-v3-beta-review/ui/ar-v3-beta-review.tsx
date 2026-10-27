@@ -11,6 +11,8 @@ import { ErrorState, LoadingState, STATE_LABELS } from '@/shared/ui';
 
 import { completeArV3GroupReview } from '../model/complete-group-review';
 
+import { RunFindings } from './run-findings';
+
 import styles from './ar-v3-beta-review.module.css';
 
 function reviewQuery(groupId: ArV3RunGroupId) {
@@ -88,6 +90,7 @@ function ScopeMember({ member }: { readonly member: ArV3BetaGroupReviewMember })
               </ol>
             )}
             <p>Скрытых предложений: {member.review.withheld_proposal_count}; отклонённых: {member.review.rejected_proposal_count}.</p>
+            <RunFindings runId={member.run_id} />
           </div>
         ) : null}
       </details>

@@ -190,8 +190,10 @@ SEALED_STUB_COLLECTIONS: frozenset[str] = frozenset()
 #: `W55B-SEAL-01` filled it again with the two portal-block reads; `W55B-GEOMETRY-01` serves
 #: them and empties it, and an absent `ver_` is now `404 not_found` for both.
 #: `W57A-SEAL-01B` sealed ``getRunNormVerification`` as a refusing stub (``503``,
-#: ``dependency: norm_verification_reader``) until the CITE reader; it belongs here.
-SEALED_STUB_ADDRESSED: frozenset[str] = frozenset({"getRunNormVerification"})
+#: ``dependency: norm_verification_reader``) until the CITE reader. `AR-V3-DECISIONS-01`
+#: (`R-146at`) serves it and empties this set again: an absent ``run_`` is now ``404
+#: not_found``, swept with the other addressed reads.
+SEALED_STUB_ADDRESSED: frozenset[str] = frozenset()
 
 #: `W55A-SEAL-01`. ``searchNorms`` addresses no parent but is not a listing of everything:
 #: its ``q`` is required, so the bare path is ``422 validation_failed`` on ``q`` and never a
