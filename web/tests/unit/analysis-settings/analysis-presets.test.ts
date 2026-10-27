@@ -31,16 +31,17 @@ vi.mock('@/shared/api', async (importOriginal) => {
 });
 
 import {
-  ApiError, archiveAnalysisPreset, createAnalysisPreset, listAnalysisPresets, reviseAnalysisPreset, startRun,
+  ApiError, archiveAnalysisPreset, createAnalysisPreset, listAnalysisPresets, queryKeys, reviseAnalysisPreset, startRun,
 } from '@/shared/api';
 import type { AnalysisPreset, ErrorEnvelope, RunStatus } from '@/shared/api';
 import { ANALYSIS_PRESETS_KEY, presetBlocker, presetChoices, presetFailure, presetOptionLabel } from '@/entities/analysis-preset';
-import { classifyRunFailure, runPresetLine, runPresetSentence, runPresetValue } from '@/entities/audit-run';
+import { RunRow, classifyRunFailure, runPresetLine, runPresetSentence, runPresetValue } from '@/entities/audit-run';
 import { executorChoices } from '@/entities/executor-connection';
 import { StartRunControl, startRunBody, startRunIntent } from '@/features/start-run';
+import { RunProgress } from '@/widgets/run-progress';
 import { AnalysisPresets } from '@/widgets/analysis-presets';
 
-import { PROJECT_UID, VERSION_UID } from '../review/fixtures';
+import { PROJECT_UID, VERSION_UID, render, runStatus } from '../review/fixtures';
 import { newClient, renderWith } from '../screens/harness';
 import { READY, SPARE, ALL_CASES, executorCase, seedExecutors } from '../workers/executor-fixtures';
 import { mountLive } from './live-render';
@@ -325,6 +326,11 @@ describe('the start request', () => {
       version_uid: version, preset_id: presetId(1) });
   });
 
+  it('never puts the executor beside the preset, whatever command it is handed', () => {
+    const both = { versionUid: VERSION_UID, idempotencyKey: 'k', executorConnectionId: 'exc_X', presetId: presetId(1) };
+    expect(startRunBody(both as never)).toEqual({ version_uid: VERSION_UID, preset_id: presetId(1) });
+  });
+
   it('is another intent for another preset, and the signature without a preset is the one it always had', () => {
     const a = startRunIntent(version, null, presetId(1) as never).signature;
     const b = startRunIntent(version, null, presetId(2) as never).signature;
@@ -461,6 +467,41 @@ describe('the preset on a run', () => {
     expect(runPresetLine(run({}))).toBeNull();
     expect(runPresetLine(run({ preset: null }))).toBeNull();
     expect(runPresetLine(run({ preset: { preset_id: presetId(1), revision_no: 1, name: '  ' } }))).toBeNull();
+  });
+});
+
+describe('the preset on the run page and the run row', () => {
+  const PRESET = { preset_id: presetId(1), revision_no: 2, name: 'Быстрый черновик' };
+
+  function page(over: Partial<RunStatus>): string {
+    const status = runStatus(over);
+    const client = newClient();
+    client.setQueryData(queryKeys.runs.detail(status.run_id), status);
+    return renderWith(client, createElement(RunProgress, { projectUid: PROJECT_UID, runId: status.run_id }));
+  }
+
+  it('names the preset and its version on the run page, beside the executor', () => {
+    const markup = page({ preset: PRESET });
+    expect(markup).toContain('<dt>Пресет</dt>');
+    expect(markup).toContain('data-run-preset');
+    expect(markup).toContain('«Быстрый черновик», версия 2');
+    expect(markup).not.toMatch(/evt_/);
+  });
+
+  it('draws nothing for a run that had no preset', () => {
+    for (const over of [{}, { preset: null }] as Partial<RunStatus>[]) {
+      const markup = page(over);
+      expect(markup).not.toContain('data-run-preset');
+      expect(markup).not.toContain('<dt>Пресет</dt>');
+    }
+  });
+
+  it('names the preset on the run list row, and nothing on a row without one', () => {
+    const withPreset = render(createElement(RunRow, { run: runStatus({ preset: PRESET }), href: '/run' }));
+    expect(withPreset).toContain('data-run-preset');
+    expect(withPreset).toContain('Пресет «Быстрый черновик», версия 2');
+    const without = render(createElement(RunRow, { run: runStatus({}), href: '/run' }));
+    expect(without).not.toContain('data-run-preset');
   });
 });
 
