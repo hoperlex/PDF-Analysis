@@ -167,8 +167,7 @@ APPEND_ONLY_BY_CODE_EVIDENCE = {
 #: is red until it does).
 SEALED_NOT_YET_WRITTEN = frozenset((
     "comparison_model_call", "comparison_page_profile", "comparison_upload", "comparison_upload_file",
-    "comparison_upload_part", "comparison_upload_set", "comparison_version_order", "comparison_work",
-    "comparison_work_attempt",
+    "comparison_upload_part", "comparison_upload_set", "comparison_version_order",
 ))
 
 #: ``SELECT``.

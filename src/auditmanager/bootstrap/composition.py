@@ -31,6 +31,14 @@ from auditmanager.bootstrap.providers import (
 from auditmanager.bootstrap.runner import RunnerAdapter
 from auditmanager.comparison.public import (
     COMPARISON_MODULES_ENV,
+    HANDLER_FACTORIES as COMPARISON_HANDLER_FACTORIES,
+    SPEND_SETTLERS as COMPARISON_SPEND_SETTLERS,
+    ComparisonWorkRepository,
+    ComparisonWorkRunner,
+    HandlerRegistry,
+    WorkDependencies,
+    WorkQueueError,
+    enabled_modules as enabled_comparison_modules,
     parse_modules as parse_comparison_modules,
 )
 from auditmanager.bootstrap.adapters import (
@@ -167,6 +175,42 @@ class WorkerRuntime:
     #: `EXEC-HTTP-01`: ``probe_runner()`` takes the ``requested`` connection probes and runs them
     #: on this process's network path; ``None`` when the process holds no private ring.
     probe_runner: Callable[[], int] | None = None
+    #: `CMP-WORK-01`: the comparison loop the worker hosts as a second claimant
+    #: (:class:`~auditmanager.comparison.public.ComparisonWorkRunner`). Always built by
+    #: :func:`build_worker_runtime`; with ``AUDITMANAGER_COMPARISON_MODULES=none`` (the default)
+    #: it claims nothing and only reclaims expired leases.
+    comparison_work: ComparisonWorkRunner | None = None
+
+
+def build_comparison_work(
+    *, sessions: sessionmaker[Session], engine: Any, blob_store: Any, environ: Mapping[str, str],
+) -> ComparisonWorkRunner:
+    """`CMP-WORK-01` (ADR-0025 decisions 4, 6, 23): the comparison loop's brain, or a refusal.
+
+    The module set is read once from ``AUDITMANAGER_COMPARISON_MODULES`` (an unknown value stops the
+    worker while it is wiring, as it stops the API); one dependency bundle is built and every
+    factory of ``comparison.public.HANDLER_FACTORIES`` is applied to it, refusing a duplicate kind.
+    """
+    try:
+        modules = enabled_comparison_modules(
+            parse_comparison_modules(environ.get(COMPARISON_MODULES_ENV))
+        )
+    except ValueError as exc:
+        raise ConfigurationError(str(exc)) from exc
+    work = ComparisonWorkRepository()
+    try:
+        registry = HandlerRegistry.build(
+            COMPARISON_HANDLER_FACTORIES,
+            WorkDependencies(
+                engine=engine, session_factory=sessions, blob_store=blob_store, work=work,
+            ),
+        )
+    except WorkQueueError as exc:
+        raise ConfigurationError(str(exc)) from exc
+    return ComparisonWorkRunner(
+        sessions, registry=registry, modules=modules, repository=work,
+        spend_settlers=COMPARISON_SPEND_SETTLERS,
+    )
 
 
 def build_worker_runtime(
@@ -252,6 +296,9 @@ def build_worker_runtime(
         slots=resolved.worker_slots,
         state_dir=None if resolved.worker_state_dir is None else Path(resolved.worker_state_dir),
         probe_runner=probe_runner,
+        comparison_work=build_comparison_work(
+            sessions=sessions, engine=engine, blob_store=store, environ=env,
+        ),
     )
 
 
