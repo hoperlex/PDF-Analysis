@@ -1,0 +1,60 @@
+{
+  "analysis_profile_id": "ap_01M5M28ZCDD8VPSP1BTAEW92YE",
+  "prompt_bundle_id": "pb_01M5M28ZCDVCR37BX1884JGSPM",
+  "scopes": [
+    {
+      "scope_id": "F1",
+      "map_sha256": "PLACEHOLDER-NOT-A-DIGEST: replace with the SHA-256 of scope-F1.map.json written by map_pack build",
+      "snapshot_id": "ns_01M59N8QNBVN91ACA2HCE6VE74",
+      "reviewed_content_key": "2026-07-23..2026-08-20+17d+121r.0a1bafe103ff",
+      "embedding_build": "bge-m3-dense-v1:characters-v2:1200",
+      "builder_version": "norm-retrieval-set-prep-v1",
+      "chunking_profile": "characters-v2:1200"
+    },
+    {
+      "scope_id": "F2",
+      "map_sha256": "PLACEHOLDER-NOT-A-DIGEST: replace with the SHA-256 of scope-F2.map.json written by map_pack build",
+      "snapshot_id": "ns_01M59N8QNBVN91ACA2HCE6VE74",
+      "reviewed_content_key": "2026-07-23..2026-08-20+17d+121r.0a1bafe103ff",
+      "embedding_build": "bge-m3-dense-v1:characters-v2:1200",
+      "builder_version": "norm-retrieval-set-prep-v1",
+      "chunking_profile": "characters-v2:1200"
+    },
+    {
+      "scope_id": "A1",
+      "map_sha256": "PLACEHOLDER-NOT-A-DIGEST: replace with the SHA-256 of scope-A1.map.json written by map_pack build",
+      "snapshot_id": "ns_01M59N8QNBVN91ACA2HCE6VE74",
+      "reviewed_content_key": "2026-07-23..2026-08-20+17d+121r.0a1bafe103ff",
+      "embedding_build": "bge-m3-dense-v1:characters-v2:1200",
+      "builder_version": "norm-retrieval-set-prep-v1",
+      "chunking_profile": "characters-v2:1200"
+    },
+    {
+      "scope_id": "A2",
+      "map_sha256": "PLACEHOLDER-NOT-A-DIGEST: replace with the SHA-256 of scope-A2.map.json written by map_pack build",
+      "snapshot_id": "ns_01M59N8QNBVN91ACA2HCE6VE74",
+      "reviewed_content_key": "2026-07-23..2026-08-20+17d+121r.0a1bafe103ff",
+      "embedding_build": "bge-m3-dense-v1:characters-v2:1200",
+      "builder_version": "norm-retrieval-set-prep-v1",
+      "chunking_profile": "characters-v2:1200"
+    },
+    {
+      "scope_id": "S1",
+      "map_sha256": "PLACEHOLDER-NOT-A-DIGEST: replace with the SHA-256 of scope-S1.map.json written by map_pack build",
+      "snapshot_id": "ns_01M59N8QNBVN91ACA2HCE6VE74",
+      "reviewed_content_key": "2026-07-23..2026-08-20+17d+121r.0a1bafe103ff",
+      "embedding_build": "bge-m3-dense-v1:characters-v2:1200",
+      "builder_version": "norm-retrieval-set-prep-v1",
+      "chunking_profile": "characters-v2:1200"
+    },
+    {
+      "scope_id": "S2",
+      "map_sha256": "PLACEHOLDER-NOT-A-DIGEST: replace with the SHA-256 of scope-S2.map.json written by map_pack build",
+      "snapshot_id": "ns_01M59N8QNBVN91ACA2HCE6VE74",
+      "reviewed_content_key": "2026-07-23..2026-08-20+17d+121r.0a1bafe103ff",
+      "embedding_build": "bge-m3-dense-v1:characters-v2:1200",
+      "builder_version": "norm-retrieval-set-prep-v1",
+      "chunking_profile": "characters-v2:1200"
+    }
+  ]
+}
