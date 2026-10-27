@@ -72,3 +72,40 @@ def test_a_key_outside_the_allow_list_is_refused(key) -> None:
 def test_a_value_that_is_not_what_its_key_says_is_refused(key, value) -> None:
     with pytest.raises(ValueError):
         audit.validated(audit.EVENT_SHEET_LINK_APPROVED, _payload() | {key: value})
+
+
+class _RecordingSession:
+    """A session that only remembers what was executed on it."""
+
+    def __init__(self) -> None:
+        self.executed: list[dict[str, object]] = []
+
+    def execute(self, statement, parameters) -> None:  # noqa: ANN001  (the SQLAlchemy signature)
+        self.executed.append(dict(parameters))
+
+
+def _approve(session, correlation_id) -> None:
+    audit.record_sheet_link_approved(
+        session, comparison_id=CMP, sheet_link_id=LINK, link_revision=1, source_version_uid=V1,
+        target_version_uid=V2, source_page_number=1, target_page_number=2, actor_uid=USER,
+        raw_evidence_seal_sha256=SEAL, correlation_id=correlation_id,
+    )
+
+
+def test_the_request_correlation_id_rides_the_event_exactly_as_given() -> None:
+    session = _RecordingSession()
+    _approve(session, "req-0123456789abcdef")
+    (written,) = session.executed
+    assert written["correlation_id"] == "req-0123456789abcdef"
+    assert written["aggregate_id"] == CMP and written["event_type"] == audit.EVENT_SHEET_LINK_APPROVED
+
+
+def test_no_correlation_id_is_left_unbound_and_a_malformed_one_writes_nothing() -> None:
+    session = _RecordingSession()
+    _approve(session, None)
+    assert session.executed[0]["correlation_id"] is None
+    refused = _RecordingSession()
+    for malformed in ("", " leading", "x" * 129, "has space"):
+        with pytest.raises(ValueError):
+            _approve(refused, malformed)
+    assert refused.executed == []
