@@ -9,7 +9,7 @@ first, so the refusal the caller reads is a typed ``conflict`` and not a driver 
 
 **What this module does not write.** ``excluded`` and ``cancelled`` states, ``paused``/``processing`` and the retry
 of a failed set are `CMP-INGEST-02`'s (the batch operations over comparison work). The states written here are
-the ones the eight operations of this lane move through: ``uploading``, ``proposed`` and ``completed`` of a batch;
+the ones this lane's operations move through: ``uploading``, ``proposed`` and ``completed`` of a batch;
 ``uploading``, ``reading``, ``needs_confirmation``, ``ready``, ``admitting``, ``done`` and ``failed`` of a set;
 ``declared``, ``uploading``, ``verified`` and ``failed`` of a file; ``declared``, ``staged`` and ``completed`` of a
 part.
@@ -210,7 +210,7 @@ def _order(row: Any) -> OrderRow:
 
 
 class ComparisonUploadRepository:
-    """The statements of the eight operations. Stateless; every method takes the caller's session."""
+    """The statements of this lane's operations. Stateless; every method takes the caller's session."""
 
     __slots__ = ()
 

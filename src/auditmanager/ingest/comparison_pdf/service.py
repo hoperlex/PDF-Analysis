@@ -1,9 +1,9 @@
 """The use cases of a comparison upload: declare, send in parts, complete, read, propose, confirm.
 
-Seven functions of :class:`ComparisonUploadService` serve six operations of contract ``1.9.0``
-(``createComparisonUpload``, ``getComparisonUpload``, ``getComparisonUploadProposal``,
-``uploadComparisonUploadPart``, ``completeComparisonUploadFile``, ``confirmComparisonUploadSet``); the order of
-the versions of a document is :mod:`.orders`. The rules are ADR-0025 decisions 9, 10, 11 and 16.
+The functions of :class:`ComparisonUploadService` serve the contract's ``createComparisonUpload``,
+``getComparisonUpload``, ``getComparisonUploadProposal``, ``uploadComparisonUploadPart``,
+``completeComparisonUploadFile`` and ``confirmComparisonUploadSet``; the order of the versions of a document is
+:mod:`.orders`. The rules are ADR-0025 decisions 9, 10, 11 and 16.
 
 The sequence of one file, and why it is that sequence
 -----------------------------------------------------
