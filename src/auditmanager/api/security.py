@@ -439,6 +439,9 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         # its own transaction (`R-60`: `admin` alone is refused).
         "approveSheetPairing": _EXPERT,
         "withdrawSheetPairing": _EXPERT,
+        # `COMPARE-PERSISTED-SUMMARY-01` (B2). The only way to a model call about a comparison: an
+        # expert asks, on purpose; admin alone does not imply expert.
+        "generateComparisonSummary": _EXPERT,
         # `W60-PRICE-LIST-01`. An expert uploads a project's price list and overrides its vendor
         # list per section; the global vendor list is an administrator's.
         "uploadPriceList": _EXPERT,

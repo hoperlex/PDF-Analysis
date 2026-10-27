@@ -834,7 +834,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-106 operations, sealed. `A5` generates the typed client from this document; `B6`
+107 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -879,13 +879,17 @@ carrying one source decision to the target finding the recomputed comparison pro
 authored by that expert, whose comment records the carried-from finding, decision and
 versions; the comparison's `findings.carryover_candidates` lists what could be carried, and
 nothing is carried without the confirmation.
-`COMPARE-PERSISTED-SUMMARY-01` added `approveSheetPairing` and `withdrawSheetPairing` on 2026-10-27: an
+`COMPARE-PERSISTED-SUMMARY-01` added `approveSheetPairing`, `withdrawSheetPairing` and `generateComparisonSummary` on 2026-10-27: an
 expert's approval of one sheet pair that `compareDocumentVersions` proposed is stored as a row of an
 append-only history (`comparison_sheet_link`, migration `0035_comparison_records`), and its withdrawal is
 a new row; a sheet is a version, a page coordinate and the SHA-256 of the page text, never a display
 number; each write has one audit event in its transaction and is refused to an account without `expert`.
 `compareDocumentVersions` gains `approved_pairs`: the active approvals and, for approved pairs only, their
-deterministic differences bound to the version bytes by a seal.
+deterministic differences bound to the version bytes by a seal. `generateComparisonSummary` is the only
+operation that calls a model about a comparison (an expert asks once; the sealed approved pairs' changed
+lines are the whole input; the reply is checked against them; the summary is stored append-only beside
+the differences, which it never alters, with a fixed label saying no human reviewed it); only a recorded
+implementation exists, and a process in another mode answers `dependency_unavailable`.
 `W57B-NORMS-CATALOGUE-XLSX-01` added `listNormDocuments` and `exportRunXlsx` on 2026-10-20:
 the current norms snapshot's documents as a catalogue with display names derived from the
 stored file names (any one role), and the run's W57b Excel workbook with `exportRunCsv`'s
@@ -1049,6 +1053,7 @@ could.
 | `carryOverDecision` | `POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/carryovers` |
 | `approveSheetPairing` | `POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/sheet-pairings` |
 | `withdrawSheetPairing` | `POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/sheet-pairings/{sheet_link_id}/withdrawals` |
+| `generateComparisonSummary` | `POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/summaries` |
 | `createAssignment` | `POST /assignments` |
 | `listAssignments` | `GET /assignments` |
 | `getAssignment` | `GET /assignments/{assignment_uid}` |
@@ -1092,7 +1097,7 @@ Rules that hold across the whole surface:
   `uploadDocument`, `uploadDocumentVersion`, `startRun`, `startArV3BetaGroup`, `appendDecision`,
   `approveRegistration`, `cancelRun`, `reauditRun`, `setJobPriority`,
   `setExecutionPaused`, `setWorkerIntake`, `carryOverDecision`,
-  `approveSheetPairing`, `withdrawSheetPairing`, `uploadPriceList`, `startOptimisationPass`, `decideOptimisationProposal`,
+  `approveSheetPairing`, `withdrawSheetPairing`, `generateComparisonSummary`, `uploadPriceList`, `startOptimisationPass`, `decideOptimisationProposal`,
   `createExecutorConnection`, `reviseExecutorConnection`, `archiveExecutorConnection`,
   `setExecutorSecret`, `generateExecutorSshKey`, `requestExecutorProbe`,
   `setExecutorRoute`, `issueRunnerToken` and `revokeRunnerToken`, and no others. A repeat of the decision carryover under another key

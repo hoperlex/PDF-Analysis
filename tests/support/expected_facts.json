@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 94,
+    "path_count": 95,
     "operations": [
       [
         "POST",
@@ -322,6 +322,11 @@
         "POST",
         "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/sheet-pairings/{sheet_link_id}/withdrawals",
         "withdrawSheetPairing"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/summaries",
+        "generateComparisonSummary"
       ],
       [
         "GET",
@@ -689,6 +694,8 @@
       "ApprovedDiffHunk",
       "ApprovedSheetDiff",
       "ApprovedSheetPair",
+      "SummaryStatement",
+      "ComparisonSummary",
       "ApprovedSheetPairs",
       "SheetDiff",
       "SheetDiffPage",
@@ -709,6 +716,8 @@
       "ApproveSheetPairingRequest",
       "WithdrawSheetPairingRequest",
       "SheetPairingEvent",
+      "GenerateComparisonSummaryRequest",
+      "GenerateComparisonSummaryResponse",
       "AssignmentUid",
       "AssignmentStatus",
       "AssignmentEventKind",

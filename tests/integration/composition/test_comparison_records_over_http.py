@@ -232,6 +232,7 @@ def test_nothing_is_approved_before_an_expert_does_it(world) -> None:
     approved = _compare(world)["approved_pairs"]
     assert approved == {
         "link_revision": None, "evidence_state": "none", "raw_evidence_seal_sha256": None, "items": [],
+        "summary": None,  # no summary was ever asked for (B2); reading it calls no model
     }
 
 

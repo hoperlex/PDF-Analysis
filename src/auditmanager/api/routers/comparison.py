@@ -305,3 +305,62 @@ def build_comparison_routes(router: APIRouter, comparisons: ComparisonPort) -> N
             author_user_uid=subject.user_uid,
         )
         return json_response(201, encode_json(withdrawn.model_dump(mode="json")))
+
+    @router.post(
+        f"{_VERSION_PATH}/comparison/summaries",
+        operation_id="generateComparisonSummary",
+        tags=["documents"],
+        status_code=201,
+        response_model=models.GenerateComparisonSummaryResponse,
+        responses={
+            **success(201, "The stored summary of the approved pairs, new or an exact repeat."),
+            **envelope_responses(
+                401, 403, 404, 409, 422, 500, 503,
+                descriptions={409: STATE_CONFLICT_DESCRIPTION},
+            ),
+        },
+        description=(
+            "Ask the model once, on purpose, for a summary of the approved sheet pairs of the "
+            "path's (older) version and `target_version_uid`, and store the answer. This is the "
+            "only operation that calls a model about a comparison; reading the comparison never "
+            "does. The command recomputes the approved pairs' raw differences and their seal in its "
+            "own transaction and needs them `sealed`; it builds the bounded input from the changed "
+            "lines only (an input beyond the bound is refused, never shortened) and takes nothing "
+            "from the client but the view. The reply is checked: every change it cites must exist; "
+            "a reply that cites one that does not is stored as `rejected` (it was paid for) and "
+            "returned as an answer, with no statements. The summary is stored append-only with the "
+            "input digest, the prompt version, the provider mode and model identity, its statements "
+            "and the span identities each cites; it never alters the raw differences, which the "
+            "comparison returns exactly as computed, and it carries a fixed label saying no human "
+            "reviewed it. The cost goes through the cost meter; in this release only the recorded "
+            "implementation exists (`provider_mode: recorded`, `cost_basis: unmetered`), and a "
+            "process in any other mode answers `503 dependency_unavailable` "
+            "(`dependency: comparison_summary_model`). A missing recording is `422 "
+            "analysis_input_invalid` and stores nothing. An exact repeat (same sealed input and prompt "
+            "version, any key) answers the stored summary, `replayed: true`. A refusal before any "
+            "call is `conflict` with `conflict_reason` `summary_evidence_not_sealed`, "
+            "`summary_input_empty` or `summary_input_too_large`, or `comparison_not_available`. "
+            "`expert` is required; `admin` alone is refused (`required_capability: role:expert`)."
+        ),
+    )
+    def generate_comparison_summary(
+        subject: CurrentSubject,
+        project_uid: Annotated[models.ProjectUid, Path()],
+        document_uid: Annotated[models.DocumentUid, Path()],
+        version_uid: Annotated[models.VersionUid, Path()],
+        body: models.GenerateComparisonSummaryRequest,
+        idempotency_key: RequiredIdempotencyKey,
+    ) -> WireResponse:
+        generated = comparisons.generate_comparison_summary(
+            project_uid=project_uid,
+            document_uid=document_uid,
+            source_version_uid=version_uid,
+            target_version_uid=body.target_version_uid,
+            mode=body.mode,
+            source_run_id=body.source_run_id,
+            target_run_id=body.target_run_id,
+            idempotency_key=idempotency_key,
+            author_label=subject.display_label,
+            author_user_uid=subject.user_uid,
+        )
+        return json_response(201, encode_json(generated.model_dump(mode="json")))

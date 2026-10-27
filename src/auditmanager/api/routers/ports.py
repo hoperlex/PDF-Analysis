@@ -1131,6 +1131,32 @@ class ComparisonPort(Protocol):
         recomputed. Nothing is updated or deleted.
         """
 
+    def generate_comparison_summary(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        source_version_uid: str,
+        target_version_uid: str,
+        mode: str,
+        source_run_id: str | None,
+        target_run_id: str | None,
+        idempotency_key: str,
+        author_label: str,
+        author_user_uid: str,
+    ) -> models.GenerateComparisonSummaryResponse:
+        """`COMPARE-PERSISTED-SUMMARY-01` (B2). Ask the model once for the summary of the sealed
+        approved pairs and store the answer.
+
+        The expert role is read in the writing transaction; ``admin`` alone is
+        ``permission_denied``. ``conflict`` with ``summary_evidence_not_sealed``,
+        ``summary_input_empty`` or ``summary_input_too_large`` before any call; a process with no
+        summary model answers ``dependency_unavailable`` (``dependency: comparison_summary_model``);
+        a missing recording is ``analysis_input_invalid``; the cost ceiling is
+        ``cost_budget_exceeded``. An exact repeat answers the stored summary (``replayed``) and calls
+        nothing. A reply the check refuses is stored as ``rejected`` and returned as an answer.
+        """
+
 @runtime_checkable
 class AnalysisProfilePort(Protocol):
     """``listAnalysisProfiles``. `W59-ANALYSIS-SETTINGS-01`.

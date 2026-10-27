@@ -118,6 +118,8 @@ describe('the seam operations', () => {
       'createProject',
       // `W60-OPT-PROPOSALS-01`: a decision on a proposal is appended, keyed like `appendDecision`.
       'decideOptimisationProposal',
+      // `COMPARE-PERSISTED-SUMMARY-01` (B2): the summary command is keyed like the other expert writes.
+      'generateComparisonSummary',
       'generateExecutorSshKey',
       // `EXEC-PULL-01`: issuing and revoking a runner token are administrator commands, keyed like
       // the other executor writes. The runner's own four operations (claim, extend, answer, fail)

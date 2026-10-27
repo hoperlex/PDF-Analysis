@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.7.0 (OpenAPI 3.1.0)
- *   sha256 15125f8f6b6c5662d556dcc5f959f36b4c53446bf54d787ecfca4cefd409d21c
+ *   sha256 f49b6329844442ec8965a9a5dd559983a067881c489c81857d45fd60e7f5d5de
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.7.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '15125f8f6b6c5662d556dcc5f959f36b4c53446bf54d787ecfca4cefd409d21c';
+export const CONTRACT_DIGEST = 'f49b6329844442ec8965a9a5dd559983a067881c489c81857d45fd60e7f5d5de';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -71,6 +71,7 @@ export const SCHEMA_NAMES = [
   'ComparedVersion',
   'ComparisonId',
   'ComparisonRefusal',
+  'ComparisonSummary',
   'CorrectVersionClassificationRequest',
   'CorrelationId',
   'CostBasis',
@@ -143,6 +144,8 @@ export const SCHEMA_NAMES = [
   'FindingPage',
   'FindingRef',
   'FindingUid',
+  'GenerateComparisonSummaryRequest',
+  'GenerateComparisonSummaryResponse',
   'IdempotencyKey',
   'InputManifestEntry',
   'IssueRunnerTokenRequest',
@@ -307,6 +310,7 @@ export const SCHEMA_NAMES = [
   'StartRunRequest',
   'SubmitExecutorTaskAnswerRequest',
   'SubmitRegistrationRequest',
+  'SummaryStatement',
   'TransitionAssignmentRequest',
   'UngroundedReason',
   'UpdateMyProfileRequest',
@@ -505,6 +509,7 @@ export type ApprovedSheetPairs = {
   items: Array<ApprovedSheetPair>;
   link_revision: number | null;
   raw_evidence_seal_sha256: Sha256 | null;
+  summary?: ComparisonSummary | null;
 };
 
 export type ArV3BetaGroup = {
@@ -843,6 +848,32 @@ export const COMPARISON_ID_PATTERN = "^cmp_[0-9A-HJKMNP-TV-Z]{26}$";
 export type ComparisonRefusal = {
   reason: "same_version" | "version_not_found" | "different_set" | "foreign_project" | "version_not_published" | "version_order_invalid" | "stage_unclassified" | "section_unconfirmed" | "project_stage_mismatch" | "confirmed_section_mismatch" | "stage_pair_invalid" | "analysis_missing" | "run_not_of_version" | "run_not_published" | "text_unavailable" | "text_too_large";
   side: "source" | "target" | null;
+};
+
+/**
+ * `COMPARE-PERSISTED-SUMMARY-01` (B2). A model's summary of the approved pairs, stored beside
+ * their raw differences and never inside them. ``label`` is fixed and shown with it: no human has
+ * reviewed the text. ``state`` is ``ready`` or ``rejected`` (the check refused the reply: no
+ * statements, one ``rejection_reason``; the reply was paid for, so it is recorded). ``provider_mode``
+ * ``recorded`` is a replayed reply, ``model_identity`` ``recorded`` then, and ``cost_basis``
+ * ``unmetered``. ``is_current``: it describes the approved set as it stands now.
+ */
+export type ComparisonSummary = {
+  cost_basis: CostBasis;
+  created_at: string;
+  created_by_label: string;
+  input_sha256: Sha256;
+  is_current: boolean;
+  label: "Сводка подготовлена моделью, проверка человеком не проводилась";
+  link_revision: number;
+  model_identity: string;
+  prompt_version: string;
+  provider_mode: "recorded" | "live";
+  raw_evidence_seal_sha256: Sha256;
+  rejection_reason: "reply_not_json" | "reply_shape_invalid" | "unknown_hunk_reference" | null;
+  state: "ready" | "rejected";
+  statements: Array<SummaryStatement>;
+  summary_id: string;
 };
 
 /**
@@ -1591,6 +1622,27 @@ export type FindingUid = string;
 
 /** The contract pattern for `FindingUid`. Anchored; use with `new RegExp()`. */
 export const FINDING_UID_PATTERN = "^fnd_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/**
+ * `COMPARE-PERSISTED-SUMMARY-01` (B2). The comparison view the expert is looking at; the
+ * command recomputes the sealed evidence in its own transaction and takes nothing else from the
+ * client: not the input, not the model, not the seal.
+ */
+export type GenerateComparisonSummaryRequest = {
+  mode: "version" | "stage";
+  source_run_id?: RunId;
+  target_run_id?: RunId;
+  target_version_uid: VersionUid;
+};
+
+/**
+ * `COMPARE-PERSISTED-SUMMARY-01` (B2). The stored summary, new or an exact repeat
+ * (``replayed``: nothing was called and nothing was appended).
+ */
+export type GenerateComparisonSummaryResponse = {
+  replayed: boolean;
+  summary: ComparisonSummary;
+};
 
 /** Not an entity identity. Never interpreted as, converted into or stored as a system identifier. */
 export type IdempotencyKey = string;
@@ -3316,6 +3368,16 @@ export type SubmitRegistrationRequest = {
   middle_name?: string;
   /** The account's future password, held to the deployment's password policy with the applicant's names and e-mail local part added to its blocklist. Stored hashed until the decision, which removes it; it appears in no response body, no error detail and no diagnostic record. */
   password: string;
+};
+
+/**
+ * `COMPARE-PERSISTED-SUMMARY-01` (B2). One statement of a summary and the changed spans of the
+ * approved pairs it cites, each ``<sheet_link_id>:<n>`` (``n`` counts the sheet's non-equal spans
+ * from 0), the same identities ``ApprovedDiffHunk.hunk_id`` carries.
+ */
+export type SummaryStatement = {
+  hunk_ids: Array<string>;
+  text: string;
 };
 
 /** `W61-DISPATCHER-01`. One move along an assignment's history. */

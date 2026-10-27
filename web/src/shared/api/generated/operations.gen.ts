@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.7.0 (OpenAPI 3.1.0)
- *   sha256 15125f8f6b6c5662d556dcc5f959f36b4c53446bf54d787ecfca4cefd409d21c
+ *   sha256 f49b6329844442ec8965a9a5dd559983a067881c489c81857d45fd60e7f5d5de
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -76,6 +76,8 @@ import type {
   FindingDetail,
   FindingPage,
   FindingUid,
+  GenerateComparisonSummaryRequest,
+  GenerateComparisonSummaryResponse,
   IdempotencyKey,
   IssueRunnerTokenRequest,
   IssueTokenRequest,
@@ -185,6 +187,7 @@ export const OPERATION_IDS = [
   'exportRunXlsx',
   'extendExecutorTaskClaim',
   'failExecutorTask',
+  'generateComparisonSummary',
   'generateExecutorSshKey',
   'getArV3BetaGroup',
   'getArV3BetaGroupReview',
@@ -823,6 +826,38 @@ export type FailExecutorTaskInput = {
 
 /** Success body of `failExecutorTask` (`application/json`, HTTP 200). */
 export type FailExecutorTaskResult = ExecutorTaskAck;
+
+// ------------------------------------------------------------------------------------
+// generateComparisonSummary - POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/summaries
+// ------------------------------------------------------------------------------------
+
+/**
+ * Generate Comparison Summary
+ *
+ * Ask the model once, on purpose, for a summary of the approved sheet pairs of the path's (older) version and `target_version_uid`, and store the answer. This is the only operation that calls a model about a comparison; reading the comparison never does. The command recomputes the approved pairs' raw differences and their seal in its own transaction and needs them `sealed`; it builds the bounded input from the changed lines only (an input beyond the bound is refused, never shortened) and takes nothing from the client but the view. The reply is checked: every change it cites must exist; a reply that cites one that does not is stored as `rejected` (it was paid for) and returned as an answer, with no statements. The summary is stored append-only with the input digest, the prompt version, the provider mode and model identity, its statements and the span identities each cites; it never alters the raw differences, which the comparison returns exactly as computed, and it carries a fixed label saying no human reviewed it. The cost goes through the cost meter; in this release only the recorded implementation exists (`provider_mode: recorded`, `cost_basis: unmetered`), and a process in any other mode answers `503 dependency_unavailable` (`dependency: comparison_summary_model`). A missing recording is `422 analysis_input_invalid` and stores nothing. An exact repeat (same sealed input and prompt version, any key) answers the stored summary, `replayed: true`. A refusal before any call is `conflict` with `conflict_reason` `summary_evidence_not_sealed`, `summary_input_empty` or `summary_input_too_large`, or `comparison_not_available`. `expert` is required; `admin` alone is refused (`required_capability: role:expert`).
+ */
+export type GenerateComparisonSummaryInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/summaries`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+    version_uid: VersionUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: GenerateComparisonSummaryRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `generateComparisonSummary` (`application/json`, HTTP 201). */
+export type GenerateComparisonSummaryResult = GenerateComparisonSummaryResponse;
 
 // ------------------------------------------------------------------------------------
 // generateExecutorSshKey - POST /executor-connections/{connection_id}/ssh-key
@@ -3265,6 +3300,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 404, 409, 422, 500, 503],
     tags: ['execution'],
+  },
+  generateComparisonSummary: {
+    operationId: 'generateComparisonSummary',
+    method: 'POST',
+    path: '/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/summaries',
+    pathParams: ['document_uid', 'project_uid', 'version_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['documents'],
   },
   generateExecutorSshKey: {
     operationId: 'generateExecutorSshKey',

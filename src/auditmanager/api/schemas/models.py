@@ -58,6 +58,10 @@ __all__ = [
     "ApprovedSheetDiff",
     "ApprovedSheetPair",
     "ApprovedSheetPairs",
+    "ComparisonSummary",
+    "GenerateComparisonSummaryRequest",
+    "GenerateComparisonSummaryResponse",
+    "SummaryStatement",
     "ComparisonId",
     "SheetLinkId",
     "SheetPairingEvent",
@@ -2453,6 +2457,43 @@ class ApprovedSheetPair(_Object):
     diff: ApprovedSheetDiff | None
 
 
+class SummaryStatement(_Object):
+    """`COMPARE-PERSISTED-SUMMARY-01` (B2). One statement of a summary and the changed spans of the
+    approved pairs it cites, each ``<sheet_link_id>:<n>`` (``n`` counts the sheet's non-equal spans
+    from 0), the same identities ``ApprovedDiffHunk.hunk_id`` carries."""
+
+    text: Annotated[str, Field(min_length=1, max_length=1000)]
+    hunk_ids: Annotated[
+        list[Annotated[str, Field(pattern=rf"^sln_{_ULID}:[0-9]{{1,4}}$")]],
+        Field(min_length=1, max_length=50),
+    ]
+
+
+class ComparisonSummary(_Object):
+    """`COMPARE-PERSISTED-SUMMARY-01` (B2). A model's summary of the approved pairs, stored beside
+    their raw differences and never inside them. ``label`` is fixed and shown with it: no human has
+    reviewed the text. ``state`` is ``ready`` or ``rejected`` (the check refused the reply: no
+    statements, one ``rejection_reason``; the reply was paid for, so it is recorded). ``provider_mode``
+    ``recorded`` is a replayed reply, ``model_identity`` ``recorded`` then, and ``cost_basis``
+    ``unmetered``. ``is_current``: it describes the approved set as it stands now."""
+
+    summary_id: Annotated[str, Field(pattern=rf"^evt_{_ULID}$")]
+    link_revision: Annotated[int, Field(ge=1)]
+    state: Literal["ready", "rejected"]
+    rejection_reason: Literal["reply_not_json", "reply_shape_invalid", "unknown_hunk_reference"] | None
+    label: Literal["Сводка подготовлена моделью, проверка человеком не проводилась"]
+    statements: Annotated[list[SummaryStatement], Field(max_length=20)]
+    prompt_version: Annotated[str, Field(min_length=3, max_length=64)]
+    provider_mode: Literal["recorded", "live"]
+    model_identity: Annotated[str, Field(min_length=1, max_length=128)]
+    input_sha256: Sha256
+    raw_evidence_seal_sha256: Sha256
+    cost_basis: CostBasis
+    is_current: bool
+    created_by_label: Annotated[str, Field(min_length=1, max_length=128)]
+    created_at: datetime
+
+
 class ApprovedSheetPairs(_Object):
     """`COMPARE-PERSISTED-SUMMARY-01`. The active approvals of the compared pair and their
     deterministic evidence. ``evidence_state``: ``none`` (no active approval), ``sealed`` (the
@@ -2465,6 +2506,11 @@ class ApprovedSheetPairs(_Object):
     #: The recomputed ``raw_evidence_seal`` of the active set; null unless ``sealed``.
     raw_evidence_seal_sha256: Sha256 | None
     items: Annotated[list[ApprovedSheetPair], Field(max_length=32)]
+    #: The newest stored summary of the comparison, beside the items and never inside them; null
+    #: when none was asked for. Reading it calls no model.
+    summary: ComparisonSummary | None = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
 
 
 class VersionComparison(_Object):
@@ -2539,6 +2585,25 @@ class SheetPairingEvent(_Object):
     raw_evidence_seal_sha256: Sha256 | None
     actor_label: Annotated[str, Field(min_length=1, max_length=128)]
     decided_at: datetime
+
+
+class GenerateComparisonSummaryRequest(_Object):
+    """`COMPARE-PERSISTED-SUMMARY-01` (B2). The comparison view the expert is looking at; the
+    command recomputes the sealed evidence in its own transaction and takes nothing else from the
+    client: not the input, not the model, not the seal."""
+
+    target_version_uid: VersionUid
+    mode: Literal["version", "stage"]
+    source_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    target_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class GenerateComparisonSummaryResponse(_Object):
+    """`COMPARE-PERSISTED-SUMMARY-01` (B2). The stored summary, new or an exact repeat
+    (``replayed``: nothing was called and nothing was appended)."""
+
+    summary: ComparisonSummary
+    replayed: bool
 
 
 class CarryOverDecisionRequest(_Object):

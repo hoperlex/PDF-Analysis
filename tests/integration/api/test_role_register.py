@@ -168,6 +168,12 @@ SAMPLES: dict[str, tuple[str, str]] = {
         "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison/sheet-pairings"
         "/sln_01M2545JSD15ETSNNV904X991M/withdrawals",
     ),
+    # `COMPARE-PERSISTED-SUMMARY-01` (B2). The only operation that calls a model about a comparison.
+    "generateComparisonSummary": (
+        "POST",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison/summaries",
+    ),
     # `W59-ANALYSIS-SETTINGS-01`. The text-profile registry (any role); no parameter.
     "listAnalysisProfiles": ("GET", "/analysis/profiles"),
     # `W61-DISPATCHER-01`. «Диспетчер»: creating (admin) and listing, reading and moving
@@ -335,6 +341,8 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     # evidence; only an expert, admin alone does not.
     "approveSheetPairing": _EXPERT,
     "withdrawSheetPairing": _EXPERT,
+    # B2: asking a model about a comparison is an expert's act too.
+    "generateComparisonSummary": _EXPERT,
     # `W60-PRICE-LIST-01`: an expert uploads a price list and overrides a project's vendor
     # list; the global vendor list is an administrator's; any one role reads.
     "uploadPriceList": _EXPERT,
