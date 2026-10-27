@@ -169,7 +169,7 @@ def create_asgi_app(
 def create_documentation_app(environ: Mapping[str, str] | None = None) -> FastAPI:
     """The same application shape, with nothing wired behind the six ports.
 
-    The served document is a function of the 104 declarations and the 300 models and not
+    The served document is a function of the 107 declarations and the 313 models and not
     of what sits behind the ports, so this builds it without a database, an object store or
     a credential -- which is what lets the conformance gate read
     ``create_documentation_app().openapi()`` on any checkout. It **cannot serve a request**:
@@ -206,7 +206,7 @@ def _drop_the_422_this_surface_cannot_answer(document: dict[str, Any]) -> dict[s
     **Why this is not document surgery, and how you can tell.** `W13-CONF` measured that
     FastAPI's own 422 must be *displaced, not deleted*: declaring the contract's own
     ``422: {"model": ErrorEnvelope, ...}`` replaces it and keeps ``HTTPValidationError`` and
-    ``ValidationError`` out of ``components.schemas``. **Seventy-seven** of the 104
+    ``ValidationError`` out of ``components.schemas``. **Eighty** of the 107
     operations do exactly that -- measured from the contract, not recalled: this paragraph
     read *"Twelve of the seventeen"* until wave 39, and twelve plus the four below is
     sixteen, which was never the size of this surface. It was thirteen of seventeen before
@@ -239,7 +239,9 @@ def _drop_the_422_this_surface_cannot_answer(document: dict[str, Any]) -> dict[s
     identity, a body or both joined the first, while its two parameterless lists,
     ``listExecutorConnections`` and ``listExecutorRoutes``, declare no ``422`` at all, like
     ``getMe``; `EXEC-PULL-01`'s six pull-channel operations (a path identity, a body or both)
-    joined the first.
+    joined the first, and so did `COMPARE-PERSISTED-SUMMARY-01`'s ``approveSheetPairing`` and
+    ``generateComparisonSummary`` (a body each) and ``withdrawSheetPairing`` (a path identity checked by
+    pattern).
     **Fifteen cannot**, because the contract declares no ``422`` for them:
     ``getRunStatus``, ``getDocumentVersion``, ``getFinding``, ``exportRunCsv``,
     ``getVersionBlocks`` (`W45-BLOCKS`, the same shape as ``getDocumentVersion``),
