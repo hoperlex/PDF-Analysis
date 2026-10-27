@@ -33,7 +33,7 @@ from auditmanager.comparison.profile.repository import PageProfileRepository
 from auditmanager.comparison.profile.source import load_source_version
 from auditmanager.comparison.profile.tiles import TileRenderer
 from auditmanager.shared.db import session_scope
-from auditmanager.shared.errors import DomainError, ErrorCode
+from auditmanager.shared.errors import DomainError, ErrorCode, from_internal
 from auditmanager.storage.public import BlobNotFoundError, StorageError, parse_blob_id
 
 __all__ = ["PageProfileReader"]
@@ -41,6 +41,20 @@ __all__ = ["PageProfileReader"]
 
 def _not_found(what: str = "PageProfile") -> DomainError:
     return DomainError(ErrorCode.NOT_FOUND, aggregate_type=what)
+
+
+def _storage_failure(failure: StorageError, blob_id: str) -> DomainError:
+    """The :class:`DomainError` one storage failure maps to: the code the failure carries, with only the
+    details that code declares safe (``ingest.failures.domain_error_from_storage`` does the same; ingest is
+    another context, and its package root is not a public surface to import from here)."""
+    code = from_internal(getattr(failure, "code", "") or "")
+    allowed = code.safe_detail_keys
+    details = {
+        key: value
+        for key, value in {**dict(failure.details), "blob_id": blob_id}.items()
+        if key in allowed and isinstance(value, (str, int, float, bool))
+    }
+    return DomainError(code, **details)
 
 
 class PageProfileReader:
@@ -90,9 +104,7 @@ class PageProfileReader:
         except BlobNotFoundError:
             raise _not_found() from None
         except StorageError as failure:
-            from auditmanager.ingest import domain_error_from_storage
-
-            raise domain_error_from_storage(failure, blob_id=blob_id) from None
+            raise _storage_failure(failure, blob_id) from None
 
     def read_preview(self, page_profile_id: str) -> bytes:
         row = self.get_profile(page_profile_id)
