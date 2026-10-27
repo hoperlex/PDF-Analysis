@@ -1,7 +1,7 @@
 {
   "lock_version": 1,
   "purpose": "Everything a later regeneration needs to prove the committed API client matches its input: the toolchain pins, the exact generator invocation, and the exact OpenAPI bytes the client was generated from. Verified by web/tests/guards/frontend-lock.guard.test.ts, which recomputes every digest here and fails if one has moved.",
-  "owner": "ANALYSIS-PRESETS-01 reseal",
+  "owner": "CMP-SEAL-C0 reseal",
   "toolchain": {
     "node": "22.23.1",
     "npm": "10.9.8",
@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "b215912031f940b4cb20da7a80ad66b6ff2deec4274cba6cf2e0c72a29489be3",
-    "content_commit": "d263410b",
-    "content_commit_subject": "ANALYSIS-PRESETS-01 (R-146av): listAnalysisPresets, createAnalysisPreset, reviseAnalysisPreset, archiveAnalysisPreset, StartRunRequest.preset_id and RunStatus.preset; additive under 1.8.0",
+    "sha256": "1ab3103a35cb83e1710232454dd4dbf91dad63b573f12f6fb2a36512c3150817",
+    "content_commit": "51e94130",
+    "content_commit_subject": "CMP-SEAL-C0 (ADR-0025): contract 1.9.0, the comparison modules sealed as stubs (nineteen operations), upload_kind, comparison_modules, runner image references; additive minor, 1.8.0 to 1.9.0",
     "dispatch_named_commit": "a3e83f39cfcb02f4ea5565e6f45f3f2b2f720e97",
-    "commit_note": "ANALYSIS-PRESETS-01 adds four operations under /analysis/presets, six schemas (PresetId, PresetRevisionId, AnalysisPresetState, AnalysisPreset, AnalysisPresetList, SaveAnalysisPresetRequest) and RunPreset, the optional StartRunRequest.preset_id and the optional, nullable RunStatus.preset; contract content sealed under 1.8.0 (98/111/321), migration 0037, no new error code. Earlier content: COMPARE-PERSISTED-SUMMARY-01 (B1, B2) under 1.7.0, moved to 1.8.0 by CONTRACT-1-8-0-01 under R-146ar.",
+    "commit_note": "CMP-SEAL-C0 adds nineteen operations under /projects/{project_uid}/comparison-uploads, /comparison-uploads, /projects/{project_uid}/documents/{document_uid}/comparison-version-orders, /versions/{version_uid}/page-profiles and /page-profiles, thirty schemas, the optional DocumentVersion.upload_kind, ProductVersion.comparison_modules and RunnerImage.crop_id, ClaimedExecutorTask.images up to eight and ClaimExecutorTaskRequest.max_images; every operation is a stub answering 503 dependency_unavailable until its lane wires it; contract 1.9.0 (115/130/351), migration 0038, no new error code. Earlier content: ANALYSIS-PRESETS-01 under 1.8.0 (98/111/321); COMPARE-PERSISTED-SUMMARY-01 under 1.7.0, moved to 1.8.0 by CONTRACT-1-8-0-01 under R-146ar.",
     "openapi_version": "3.1.0",
-    "info_version": "1.8.0",
-    "paths": 98,
-    "operations": 111,
-    "component_schemas": 321,
+    "info_version": "1.9.0",
+    "paths": 115,
+    "operations": 130,
+    "component_schemas": 351,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "b215912031f940b4cb20da7a80ad66b6ff2deec4274cba6cf2e0c72a29489be3",
+    "snapshot_sha256": "1ab3103a35cb83e1710232454dd4dbf91dad63b573f12f6fb2a36512c3150817",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "231a08f3f5cab65851c9dc5e8fd02dde7118a54fcd65424b4153915f1b45abc5",
-      "index.ts": "fe85c841d72378fea21421fc5e51dc201e51e54fcf490a28de64b69c8939c12b",
-      "operations.gen.ts": "9810cfae4389982c49bce5832013495be9db5498b8ca805b78bedb87e5bf6930",
-      "types.gen.ts": "7856c7d5d1629e62a983f6a33067c8db8125665d24efc85afe117476ddb7d419"
+      "client.gen.ts": "557227f54936f423b90bb83e98628149ef365128aad8469b5ec86958673989ff",
+      "index.ts": "33442b442956a71c04544d355bf60f67e920e117d1966b818c5ff431df30a303",
+      "operations.gen.ts": "a587a4f6f94aad363fbfbf23cb0d75c7965fe9ca23a33b21dd726ca19b500a74",
+      "types.gen.ts": "6d1d9677e9d83b726d86769c7ef664fad379f52e9771dabef58e2fa8b9ece447"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },
