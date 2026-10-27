@@ -1,7 +1,7 @@
 # Task COMPARE-PERSISTED-SUMMARY-01 — the comparison of two versions becomes a record: approved sheet pairings, sealed raw differences, an AI summary on top
 
 task_id: COMPARE-PERSISTED-SUMMARY-01
-status: in progress (B1 first, then B2). Lane B of wave PW4; the design is in `docs/program/COMPARE-PERSISTED-SUMMARY-01.md`.
+status: delivered, B1 and B2 both (branch `agent/compare-persisted-summary-01`, not merged, not pushed). Lane B of wave PW4; the design and the report are in `docs/program/COMPARE-PERSISTED-SUMMARY-01.md`.
 
 ## Outcome
 
@@ -383,6 +383,16 @@ An expert approves (and withdraws) a sheet pairing of two versions of one set: o
 - `docs/program/COMPARE-PERSISTED-SUMMARY-01.md`
 - `docs/program/tasks/COMPARE-PERSISTED-SUMMARY-01.md`
 
+Files the lane had to touch that the list above does not name, each forced by a guard that reads the member it enumerates
+(the premise did not list them; every one is a prose figure, a count or a placeholder, never behaviour):
+
+- `src/auditmanager/api/app.py`, `src/auditmanager/api/health.py`, `src/auditmanager/api/README.md`, `src/auditmanager/api/routers/__init__.py`, `src/auditmanager/api/routers/declarations.py`, `src/auditmanager/api/routers/errors.py`: the prose that states the sealed surface (95 paths, 107 operations, 314 schemas), read by `tests/contract/api_v1/test_surface_counts_in_prose.py`; `app.py` also had its measured 422 count re-measured (80 of 107)
+- `docs/program/P02_SEAMS.md`: the seam table gains three rows and the sealed-operation count
+- `tests/contract/domain_p02/test_openapi_document.py`, `tests/integration/api/test_authorization.py`, `tests/integration/api/test_operation_surface.py`, `tests/integration/api/test_served_document_and_health_plane.py`: tests that enumerate the operation list or the role map (one placeholder, three sets)
+- `tests/integration/db/test_application_role_grants.py`, `tests/integration/db/test_comparison_summary_migration.py`: the table counts of the grant test and the new summary-table migration suite
+- `tests/integration/composition/test_comparison_summary_over_http.py`: the summary over HTTP
+- `web/tests/contract/seam-operations.contract.test.ts`: the web test that enumerates the operations
+
 Granted by the integrator's message of 2026-10-27 (recorded here): the prose of `analysis_input_budget_exceeded` in `contracts/domain/v1/error-codes.json`, `contracts/api/v1/openapi.json` and `web/openapi/openapi.json`, in the same reseal. Test files that enumerate tables or the operation list (`tests/integration/db/*`, `tests/integration/recovery/**`, `tests/integration/api/test_role_register.py`, `tests/contract/api_v1/**`) are listed because the new table and operations are members of the sets they enumerate; each modified test is reported with its before and after.
 
 ## Lane resources
@@ -435,7 +445,7 @@ Not a feature flag: the operations are new and the read gains one field. Rollbac
 
 ## Handoff
 
-- changed files: see the report, section «Files»
-- commands/results: see the report
-- known limits: see the report
-- integration notes: see the report
+- changed files: `docs/program/COMPARE-PERSISTED-SUMMARY-01.md`, section «Files» (and `git diff --name-only 3561e1c8..HEAD`)
+- commands/results: the same report, section «Commands and counts»
+- known limits: the same report, section «Limits»
+- integration notes: the same report, section «Integration notes» (the files that pin the head and the contract version, and the prose patch for the files outside this lane's grant)
