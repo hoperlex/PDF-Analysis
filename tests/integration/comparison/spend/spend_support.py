@@ -220,5 +220,3 @@ def make_call(
         item, route(adapter, revision_id, **(route_over or {})), request(label), estimate=estimate,
         consent=consent(revision_id, **(consent_over or {})) if with_consent else None,
     )
-
-

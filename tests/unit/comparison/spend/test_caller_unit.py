@@ -8,7 +8,6 @@ states, the edges, the SQL) are proved on a real PostgreSQL in ``tests/integrati
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from types import SimpleNamespace
 from typing import Any
 

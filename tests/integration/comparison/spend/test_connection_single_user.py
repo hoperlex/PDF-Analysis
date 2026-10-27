@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 from sqlalchemy import text
 
-from auditmanager.comparison.public import CallRefused, SPEND_SETTLERS
+from auditmanager.comparison.public import CallRefused
 from auditmanager.jobs.public import ExecutionNotClaimed, JobRepository
 from auditmanager.shared.errors import ErrorCode
 
