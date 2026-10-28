@@ -167,7 +167,7 @@ four groups; the steps of wave C2 answer `not_applicable`; the queue summary is 
 No flag. The reads change nothing; rollback is not merging the lane, after which both operations answer the sealed `503`.
 
 ## Handoff
-- changed files: to be written with the last commit
-- commands/results: to be written with the last commit
-- known limits: to be written with the last commit
-- integration notes: to be written with the last commit
+- changed files: `src/auditmanager/comparison/overview/**` (new, 5 files, 996 lines), the body of `ComparisonOverviewAdapter` in `src/auditmanager/bootstrap/adapters.py`, **one line** of `src/auditmanager/bootstrap/composition.py` (`comparison_overview=ComparisonOverviewAdapter(sessions, modules=comparison_modules)`), the import and one name in `src/auditmanager/comparison/public.py`, the three composition registers (`test_router_answers.py`, `test_an_absent_parent_is_not_an_empty_page.py`, `test_comparison_core_stub_operations.py`), `tests/unit/comparison/overview/**`, `tests/integration/comparison/overview/**`, this file and `docs/program/CMP-VC-OVERVIEW-01.md`; the full list is `git diff --name-only c228cf2e..HEAD`
+- commands/results: the report's section 7 (unit 82 passed; the overview integration directory 46 passed; the whole composition directory 1955 passed, 5 skipped, 0 failed; the whole `tests/unit` and `tests/contract` minus the three `D-220` files 6200 passed, 76 skipped, 0 failed) and section 8 (41 mutation proofs, each red and then green); one project's overview is 14 statements for 1, 2, 30 and 100 sets
+- known limits: the report's section 9; first: the overview reads the matrix and series tables set-wise in its own package because their services read one set each (an oracle test holds the two equal), the contract has no per-row group or chip text (the client derives them, section 6), the list is capped at the contract's 1 000 sets, step 1 is `done` for any set with a version
+- integration notes: the report's section 10; merge after `CMP-SERIES-01`, before `CMP-VC-UI-01`; run `tests/integration/comparison/overview` in its own process; give `CMP-VC-UI-01` section 6 of the report
