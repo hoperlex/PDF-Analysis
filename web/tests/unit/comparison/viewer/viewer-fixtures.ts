@@ -48,13 +48,13 @@ export function comparedPair(overrides: Partial<ComparisonSheetPair> = {}): Comp
       { region_class: 'something_new', layer: 'main', box: { x: 10, y: 10, width: 5, height: 5 } },
     ],
     text_changes: [
-      { kind: 'replaced', before: 'Кабель ВВГнг 3x2,5 длиной 120 м', after: 'Кабель ВВГнг 3x4 длиной 150 м',
+      { kind: 'replaced', before: 'Кабель ВВГнг 3х2,5 длиной 120 м', after: 'Кабель ВВГнг 3х4 длиной 150 м',
         numbers: [{ before: '120', after: '150' }, { before: '2,5', after: '4' }], box: { x: 100, y: 120, width: 80, height: 12 } },
       { kind: 'added', after: 'Установить датчик движения' },
     ],
     service_notes: [
       { kind: 'warning', change: 'removed', zone: 'stamp', before: 'Не для строительства' },
-      { kind: 'stamp', change: 'changed', zone: 'stamp', field: 'revision', before: '0', after: '1' },
+      { kind: 'stamp', change: 'changed', zone: 'stamp', field: 'revision_number', before: '0', after: '1' },
     ],
     how_compared: {
       algo_version: 'vc1.13', dpi: 200, tolerance_pt: 0.5, transform: [1, 0, 0, 1, -3.7, 2.1],

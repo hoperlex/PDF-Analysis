@@ -9,10 +9,12 @@
 import type { HTMLAttributes, ReactNode, Ref } from 'react';
 
 import type { ComparisonLayer, ComparisonPageRef, ComparisonSheetPair } from '@/shared/api';
+import { pairReasonWords } from '@/entities/version-series';
 
 import { shownIndices } from '../model/differences';
 import type { ViewerGeometry } from '../model/geometry';
-import { LAYER_LABELS, LAYER_ORDER, SCAN_NOTE, SPLIT_PART_NOTE, SPLIT_WHOLE_NOTE, STATUS_LABELS } from '../model/labels';
+import { LAYER_LABELS, LAYER_ORDER, SCAN_NOTE, SIDE_WORDS, SPLIT_PART_NOTE, SPLIT_WHOLE_NOTE, STATUS_LABELS } from '../model/labels';
+import type { Side } from '../model/labels';
 import { type SheetKind, type SheetTiles, shownKinds, sheetTiles } from '../model/requests';
 import type { TileRequest } from '../model/tile-loader';
 import { type ViewerAction, type ViewerContext, type ViewerState, filterOf, paneOf } from '../model/viewer-state';
@@ -59,10 +61,11 @@ const BADGE_TONE: Readonly<Record<string, string>> = {
   unmatched: 'inert',
 };
 
-function sheetName(side: string, page: ComparisonPairPageLike | undefined): string {
-  if (page === undefined) return `Лист ${side}: нет в этой версии`;
+/** «Было: л. 5 · План освещения» and «Стало: нет в этой версии»: the sheet of one side, by its place in the pair. */
+function sheetName(side: Side, page: ComparisonPairPageLike | undefined): string {
+  if (page === undefined) return `${SIDE_WORDS[side]}: нет в этой версии`;
   const number = page.sheet_number === undefined ? `стр. ${(page.page as ComparisonPageRef).page_number}` : `л. ${page.sheet_number}`;
-  return `Лист ${side}: ${number}${page.title === undefined ? '' : ` · ${page.title}`}`;
+  return `${SIDE_WORDS[side]}: ${number}${page.title === undefined ? '' : ` · ${page.title}`}`;
 }
 
 type ComparisonPairPageLike = NonNullable<ComparisonSheetPair['page_a']>;
@@ -84,19 +87,19 @@ export function ComparisonViewerView({
   const status = pair.status;
   const notes: string[] = [];
   if (pair.page_a?.scan === true || pair.page_b?.scan === true) notes.push(SCAN_NOTE);
-  if (pair.parts !== undefined && pair.parts.role === 'part') notes.push(`${SPLIT_PART_NOTE}; листы-части покрывают ${Math.round(pair.parts.covered_percent)} % листа A`);
+  if (pair.parts !== undefined && pair.parts.role === 'part') notes.push(`${SPLIT_PART_NOTE}; листы-части покрывают ${Math.round(pair.parts.covered_percent)} % прежнего листа`);
   if (pair.parts !== undefined && pair.parts.role === 'whole' && pair.parts.parts.length > 0) notes.push(SPLIT_WHOLE_NOTE);
 
   let stage: ReactNode;
   if (geometry === null) {
     // Plain markup, not a shared state block: a state block is a "branch" that `rendered-language.guard` requires one
-    // of ITS OWN screens to render, and this widget is not mounted on any screen yet (`CMP-VC-UI-01` mounts it).
+    // of ITS OWN screens to render, and this widget's states are its own.
     stage = (
       <section className={styles.panel} aria-label="Лист нельзя показать" data-viewer-unavailable="">
         <h3 className={styles.panelTitle}>Лист нельзя показать</h3>
         <p className={styles.empty}>
           {pair.failure_reason !== undefined
-            ? `Сравнение листа не удалось: ${pair.failure_reason}.`
+            ? `Сравнение листа не удалось: ${pairReasonWords(pair.failure_reason)}.`
             : 'У листа нет результата сравнения, по которому известен его размер.'}
         </p>
       </section>
@@ -125,10 +128,10 @@ export function ComparisonViewerView({
     );
     const panes =
       state.mode === 'side'
-        ? kinds.map((kind) => paneFor(kind === 'a' ? 'Лист A' : 'Лист B', [{ sheet: sheets.get(kind) as SheetTiles }]))
+        ? kinds.map((kind) => paneFor(kind === 'a' ? SIDE_WORDS.a : SIDE_WORDS.b, [{ sheet: sheets.get(kind) as SheetTiles }]))
         : [
             paneFor(
-              state.swipe ? `Шторка: слева лист ${state.under === 'a' ? 'A' : 'B'}, справа наложение` : 'Наложение',
+              state.swipe ? `Шторка: слева — ${SIDE_WORDS[state.under].toLowerCase()}, справа — наложение` : 'Наложение',
               kinds.map((kind) => ({
                 sheet: sheets.get(kind) as SheetTiles,
                 ...(state.swipe && kind === 'overlay' ? { clipLeft: state.swipePosition } : {}),
@@ -152,8 +155,8 @@ export function ComparisonViewerView({
               onChange={(on) => dispatch({ type: 'swipe', on })}>шторка</Choice>
             {state.swipe ? (
               <>
-                <label className={styles.choice}><input type="radio" name="under" checked={state.under === 'a'} onChange={() => dispatch({ type: 'under', under: 'a' })} />под ней лист A</label>
-                <label className={styles.choice}><input type="radio" name="under" checked={state.under === 'b'} onChange={() => dispatch({ type: 'under', under: 'b' })} />под ней лист B</label>
+                <label className={styles.choice}><input type="radio" name="under" checked={state.under === 'a'} onChange={() => dispatch({ type: 'under', under: 'a' })} />под ней — {SIDE_WORDS.a.toLowerCase()}</label>
+                <label className={styles.choice}><input type="radio" name="under" checked={state.under === 'b'} onChange={() => dispatch({ type: 'under', under: 'b' })} />под ней — {SIDE_WORDS.b.toLowerCase()}</label>
               </>
             ) : null}
           </fieldset>
@@ -178,7 +181,7 @@ export function ComparisonViewerView({
             <legend className={styles.groupTitle}>Отличия на листе</legend>
             <Choice checked={state.showBoxes} onChange={(on) => dispatch({ type: 'boxes', on })}>рамки отличий</Choice>
             <Choice checked={state.alignBlocks} disabled={alignedBlocks === 0}
-              title={alignedBlocks === 0 ? 'Движения блоков не найдено: совмещать нечего' : 'Показать перемещённые блоки листа B на их местах, не меняя PDF'}
+              title={alignedBlocks === 0 ? 'Движения блоков не найдено: совмещать нечего' : 'Показать перемещённые блоки нового листа на их местах, не меняя PDF'}
               onChange={(on) => dispatch({ type: 'align', on })}>
               Совмещать блоки{alignedBlocks > 0 ? ` (${alignedBlocks})` : ''}
             </Choice>
@@ -217,8 +220,8 @@ export function ComparisonViewerView({
   return (
     <div className={styles.viewer} data-comparison-viewer="" data-mode={state.mode}>
       <header className={styles.header}>
-        <h2 className={styles.sheetName}><span className={styles.sheetSide}>{sheetName('A', pair.page_a)}</span></h2>
-        <h2 className={styles.sheetName}><span className={styles.sheetSide}>{sheetName('B', pair.page_b)}</span></h2>
+        <h2 className={styles.sheetName}><span className={styles.sheetSide}>{sheetName('a', pair.page_a)}</span></h2>
+        <h2 className={styles.sheetName}><span className={styles.sheetSide}>{sheetName('b', pair.page_b)}</span></h2>
         <div className={styles.facts}>
           {status === undefined ? null : <span className={`am-badge am-badge--${BADGE_TONE[status] ?? 'inert'}`}>{STATUS_LABELS[status]}</span>}
           {pair.ai_dependent === true ? <span className="am-badge am-badge--inert">пара связана с участием ИИ</span> : null}

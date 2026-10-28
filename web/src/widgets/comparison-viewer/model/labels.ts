@@ -13,6 +13,13 @@ import type {
   ComparisonSheetStatus,
 } from '@/shared/api';
 
+/**
+ * The two sheets of a pair, in the words «было» and «стало» that the matrix and the transitions use. The contract and the
+ * engine call them A and B; the reader sees no letter. «Было» is the older sheet, «стало» the newer one.
+ */
+export const SIDE_WORDS = { a: 'Было', b: 'Стало' } as const;
+export type Side = keyof typeof SIDE_WORDS;
+
 /** The eight layers of the overlay, with the words of `ComparisonLayer`'s description. */
 export const LAYER_LABELS: Readonly<Record<ComparisonLayer, string>> = {
   main: 'Основное',
@@ -95,8 +102,8 @@ export const STATUS_LABELS: Readonly<Record<ComparisonSheetStatus, string>> = {
 export const REGION_CLASS_LABELS: Readonly<Record<string, string>> = {
   text: 'Текст',
   text_moved: 'Сдвиг надписи',
-  graphic_added: 'Графика: добавлено (B)',
-  graphic_removed: 'Графика: удалено (A)',
+  graphic_added: 'Графика: добавлено (стало)',
+  graphic_removed: 'Графика: удалено (было)',
   graphic_changed: 'Графика: изменено',
   color_change: 'Изменение цвета',
   light_fill: 'Светлая заливка / штриховка',
@@ -127,7 +134,7 @@ export type Gender = 'masculine' | 'feminine' | 'neuter';
 export const NOTE_KINDS: Readonly<Record<string, { readonly label: string; readonly gender: Gender }>> = {
   stamp: { label: 'Штамп', gender: 'masculine' },
   warning: { label: 'Предупреждение', gender: 'neuter' },
-  qr: { label: 'QR-код', gender: 'masculine' },
+  qr: { label: 'Матричный код', gender: 'masculine' },
   field: { label: 'Поле', gender: 'neuter' },
   annotation: { label: 'PDF-пометка', gender: 'feminine' },
 };
@@ -156,5 +163,78 @@ export const UNKNOWN_TEXT_KIND_LABEL = 'Изменение текста';
 
 export const WARNING_NOTE = 'Исчезновение предупреждения не подтверждает согласования.';
 export const SCAN_NOTE = 'изображение без текста: надписи не читаются и сравниваются только как картинка';
-export const SPLIT_PART_NOTE = 'Лист B — часть листа A';
-export const SPLIT_WHOLE_NOTE = 'Лист B — весь лист A, составленный из частей';
+export const SPLIT_PART_NOTE = 'Новый лист — часть прежнего листа';
+export const SPLIT_WHOLE_NOTE = 'Новый лист — весь прежний лист, составленный из частей';
+
+/**
+ * Where a service note happened (`ComparisonServiceNote.zone`) and what it is about (`field`), in words. The contract keeps
+ * them free text of at most 64 characters; these are the values the engine writes today (`engine/child/job.py`,
+ * `annotations.py`). A value this table does not know is said as «другая зона» / «другое поле», never printed.
+ */
+export const ZONE_WORDS: Readonly<Record<string, string>> = {
+  stamp: 'штамп',
+  release_stamp: 'отметка о выпуске',
+  qr: 'матричный код',
+  annotations: 'PDF-пометки',
+  margin: 'поля листа',
+};
+export const UNKNOWN_ZONE_WORD = 'другая зона';
+
+const STAMP_FIELD_WORDS: Readonly<Record<string, string>> = {
+  designation: 'обозначение',
+  sheet_title: 'название листа',
+  sheet_number: 'номер листа',
+  revision_number: 'номер последнего изменения',
+  release_date: 'дата выпуска',
+  images: 'подписи (изображения в штампе)',
+};
+const RELEASE_FIELD_WORDS: Readonly<Record<string, string>> = { date: 'дата', text: 'текст отметки' };
+const QR_FIELD_WORDS: Readonly<Record<string, string>> = { qr: 'содержимое кода' };
+/** The subtype of a PDF annotation is its field (`/Highlight`, `/FreeText`, …). */
+const ANNOTATION_FIELD_WORDS: Readonly<Record<string, string>> = {
+  Text: 'заметка',
+  FreeText: 'текст на листе',
+  Highlight: 'выделение',
+  Underline: 'подчёркивание',
+  StrikeOut: 'зачёркивание',
+  Squiggly: 'волнистая линия',
+  Stamp: 'штамп-пометка',
+  Square: 'прямоугольник',
+  Circle: 'окружность',
+  Line: 'линия',
+  Polygon: 'многоугольник',
+  PolyLine: 'ломаная линия',
+  Ink: 'рисунок от руки',
+  Caret: 'вставка',
+  Link: 'ссылка',
+  FileAttachment: 'вложенный файл',
+  Popup: 'всплывающее окно',
+  Redact: 'редактирование',
+};
+export const UNKNOWN_FIELD_WORD = 'другое поле';
+
+const FIELD_WORDS_BY_ZONE: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  stamp: STAMP_FIELD_WORDS,
+  release_stamp: RELEASE_FIELD_WORDS,
+  qr: QR_FIELD_WORDS,
+  annotations: ANNOTATION_FIELD_WORDS,
+};
+
+export function zoneWords(zone: string): string {
+  return ZONE_WORDS[zone] ?? UNKNOWN_ZONE_WORD;
+}
+
+/** The field is named within its zone: `date` of the release mark is not the stamp's date. */
+export function fieldWords(zone: string | undefined, field: string): string {
+  const own = zone === undefined ? undefined : FIELD_WORDS_BY_ZONE[zone]?.[field];
+  return own ?? STAMP_FIELD_WORDS[field] ?? UNKNOWN_FIELD_WORD;
+}
+
+/**
+ * «Алгоритм» of «Как сравнивалось»: the engine's version string is machine text (`cmp-engine/1`), so the reader is given its
+ * number («версия 1») and the string itself stays in a `data-` attribute for whoever has to quote it.
+ */
+export function algorithmWords(version: string): string {
+  const number = /(\d+(?:\.\d+)*)$/.exec(version)?.[1];
+  return number === undefined ? 'версия не указана' : `версия ${number}`;
+}

@@ -62,11 +62,6 @@ export interface ComparisonShape {
   readonly name: string;
   readonly make: () => ReactElement;
   readonly seedClient?: (client: QueryClient) => void;
-  /**
-   * The shape mounts `widgets/comparison-viewer`, whose own words (side letters, the engine's zone and field names) are that
-   * widget's and not this lane's. The contrast census renders it; the language guard does not (the report lists the findings).
-   */
-  readonly censusOnly?: boolean;
 }
 
 const noop = (): void => undefined;
@@ -171,7 +166,6 @@ export const COMPARISON_SHAPES: readonly ComparisonShape[] = [
         viewer: createElement(ComparisonViewer, { pair: comparedPair({ sheet_pair_id: PAIR_ID }) }),
         orderDialog: createElement(VersionOrderDialogView, { heading: '133/23-ГК-ЭМ1', source: 'expert', rows: [{ versionUid: V1, name: '№1', file: 'ЭМ-изм0.pdf', pages: 7 }], changed: true, pending: false, failure: null, onMove: noop, onSave: noop, onCancel: noop }),
       })),
-    censusOnly: true,
   },
   { name: 'sheets-tab-restart-asked', make: () => createElement(SheetsTabView, sheetsProps({ confirmingRestart: true })) },
   { name: 'sheets-tab-applying', make: () => createElement(SheetsTabView, sheetsProps({ draft: DRAFT, applying: true })) },
@@ -221,7 +215,6 @@ export const COMPARISON_SHAPES: readonly ComparisonShape[] = [
         onClose: noop,
       }),
     seedClient: (c) => c.setQueryData(COMPARISON_KEYS.pair(PAIR_ID), comparedPair({ sheet_pair_id: PAIR_ID })),
-    censusOnly: true,
   },
   {
     name: 'pair-viewer-refused',

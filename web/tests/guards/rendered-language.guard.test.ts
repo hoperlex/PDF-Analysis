@@ -3189,7 +3189,7 @@ const SCREENS: readonly ScreenCase[] = [
   ...DERIVED_SCREENS,
   ...EXTRA_SHAPES,
   // `CMP-VC-UI-01`: every state of «Сравнение версий» one static pass reaches (`tests/unit/version-compare/shapes.ts`).
-  ...COMPARISON_SHAPES.filter((shape) => shape.censusOnly !== true),
+  ...COMPARISON_SHAPES,
 ];
 
 /**
