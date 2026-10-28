@@ -323,6 +323,23 @@ describe('the chunked transfer', () => {
     expect(new Set(second.map((call) => call.key)).size).toBe(1);
   });
 
+  it('continues after a stop with the key the part had before it, so the part the stop interrupted is one part', async () => {
+    const controller = new AbortController();
+    const book = ports((call) => {
+      if (call.kind === 'put' && call.part === 2 && !controller.signal.aborted) controller.abort();
+      return undefined;
+    });
+    const keys = book.keys();
+    expect(await run([transferFile({ fileId: 'f1' })], book.transport, keys, controller.signal)).toBe('stopped');
+    const interrupted = book.calls.find((call) => call.kind === 'put' && call.part === 2)?.key;
+    expect(interrupted).toBeDefined();
+    book.calls.length = 0;
+    // The server holds part 1 only, as it would after the stop: the next run starts at part 2 and reuses its key.
+    expect(await run([transferFile({ fileId: 'f1', state: 'uploading', partsStaged: 1 })], book.transport, keys)).toBe('finished');
+    expect(book.calls.find((call) => call.kind === 'put' && call.part === 2)?.key).toBe(interrupted);
+    expect(book.calls.map((call) => call.kind === 'put' ? call.part : 'complete')).toEqual([2, 3, 'complete']);
+  });
+
   it('tries a retryable refusal a bounded number of times, then ends that file and goes on to the next', async () => {
     const failed: string[] = [];
     const done: string[] = [];

@@ -674,6 +674,8 @@ describe('A-12: the version-scoped screen after the matrix took over the sheet p
     expect(text(render(false, true))).toContain('Отозвать');
     const handed = text(render(true, true));
     expect(handed).not.toContain('Отозвать');
+    expect(handed).not.toContain('Подготовить сводку');
+    expect(text(render(false, true))).toContain('Подготовить сводку');
     expect(handed).toContain('Пара подтверждена: Сьютова Е.');
     expect(render(true, true)).toContain('data-pairing-state="approved-read-only"');
   });
