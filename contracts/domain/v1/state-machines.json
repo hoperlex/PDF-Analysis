@@ -1,9 +1,9 @@
 {
   "contract": "auditmanager.domain.state-machines",
-  "contract_version": "1.9.0",
-  "supersedes": "1.8.0",
-  "candidate_revision": 27,
-  "revision_note": "Candidate revision 27 by CMP-SEAL-C0: the plain-PDF comparison upload, the order of the versions of a document set and the page reads (eighteen operations), the optional DocumentVersion.upload_kind, ProductVersion.comparison_modules and RunnerImage.crop_id are an additive minor change of the API document, and family 1.9.0 seal. identifiers.json gains eight identity prefixes (cbt, cus, cuf, cvo, cpr, cq, cqa, cmc) for migration 0038; error-codes.json gains no code, only registered reasons under existing codes; state-machines.json gains no machine.",
+  "contract_version": "1.10.0",
+  "supersedes": "1.9.0",
+  "candidate_revision": 28,
+  "revision_note": "Candidate revision 28 by CMP-SEAL-C1: the effective matrix of a document set and its manual edits, the series of adjacent transitions with their sheet pairs and pair tiles, the overview of a project and the comparison queue read (eighteen operations), and the optional CreateComparisonUploadRequest.compare_after_preparation are an additive minor change of the API document, and family 1.10.0 seal. identifiers.json gains seven identity prefixes (cmx, cme, cak, cser, ctn, ctp, csp) for migration 0039; error-codes.json gains no code, only registered reasons under existing codes; state-machines.json gains no machine.",
   "status": "frozen",
   "frozen": true,
   "rules": [
@@ -937,7 +937,7 @@
         "W49-PLAN.md section 3.3"
       ],
       "notes": [
-        "At most one pending request per login (a partial unique index) and at most 100 pending requests in all; both refusals are conflict, with conflict_reason request_pending and queue_full."
+        "At most one pending request per login (a partial unique index), at most 100 pending requests in all, and at most 40 requests that are pending or approved in any rolling 24 hours (a rejected request does not count; SMALL-HARDENING-02, R-146ax, D-246, D-253). The refusals are conflict, with conflict_reason request_pending for the first and queue_full for the other two."
       ]
     },
     "work_assignment": {

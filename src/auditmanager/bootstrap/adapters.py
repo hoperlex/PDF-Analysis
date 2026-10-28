@@ -3117,17 +3117,23 @@ class ComparisonAdapter(_SessionHolder):
         section_codes: frozenset[str],
         summary_model: Any = None,
         cost_ceiling_usd: float = 0.0,
+        comparison_modules: str = "none",
     ) -> None:
         from auditmanager.comparison.public import (
+            MODULE_VERSIONS,
             SheetLinkRepository,
             SheetPairingService,
             SummaryService,
             SummaryStore,
             VersionComparisonService,
+            enabled_modules,
         )
 
         super().__init__(session_factory)
         self._blob_store = blob_store
+        # `CMP-SEAL-C1` (ADR-0025 decision 13): while the versions module is on, the effective matrix is
+        # the only store of sheet pairs of versions, and the `0035` pairing and summary operations are withdrawn.
+        self._versions_module_on = MODULE_VERSIONS in enabled_modules(comparison_modules)
         links, store = SheetLinkRepository(), SummaryStore()
         self._service = VersionComparisonService(
             classifications=_ClassificationReader(),
@@ -3147,6 +3153,14 @@ class ComparisonAdapter(_SessionHolder):
             comparisons=self._service, links=links, summaries=store, model=summary_model,
             cost_gate=None if summary_model is None else (lambda: _MeterGate(cost_ceiling_usd)),
         )
+
+    def _refuse_while_the_versions_module_is_on(self) -> None:
+        """`CMP-SEAL-C1` (ADR-0025 decision 13). Before anything is read or written: ``503
+        dependency_unavailable`` naming the module. With the module off nothing changes."""
+        if self._versions_module_on:
+            raise DomainError(
+                ErrorCode.DEPENDENCY_UNAVAILABLE, dependency=_VERSIONS_MODULE_DEPENDENCY
+            )
 
     def compare_versions(
         self,
@@ -3308,6 +3322,7 @@ class ComparisonAdapter(_SessionHolder):
     ) -> models.SheetPairingEvent:
         """`COMPARE-PERSISTED-SUMMARY-01`. One write transaction: the actor's roles, the path,
         the receipt, the recomputed proposal, the row, its audit event (``comparison.public``)."""
+        self._refuse_while_the_versions_module_is_on()
         from auditmanager.access.public import AccountRepository
         from auditmanager.api.routers.correlation import current_correlation_id
         from auditmanager.comparison.public import ApproveSheetPairingRequest
@@ -3355,6 +3370,7 @@ class ComparisonAdapter(_SessionHolder):
         author_user_uid: str,
     ) -> models.SheetPairingEvent:
         """`COMPARE-PERSISTED-SUMMARY-01`. The same transaction shape, ending one link."""
+        self._refuse_while_the_versions_module_is_on()
         from auditmanager.access.public import AccountRepository
         from auditmanager.api.routers.correlation import current_correlation_id
         from auditmanager.comparison.public import WithdrawSheetPairingRequest
@@ -3398,6 +3414,7 @@ class ComparisonAdapter(_SessionHolder):
     ) -> models.GenerateComparisonSummaryResponse:
         """`COMPARE-PERSISTED-SUMMARY-01` (B2). One write transaction: the actor's roles, the path,
         the receipt, the sealed evidence, the cost meter, the model, the check, the row, its event."""
+        self._refuse_while_the_versions_module_is_on()
         from auditmanager.access.public import AccountRepository
         from auditmanager.api.routers.correlation import current_correlation_id
         from auditmanager.comparison.public import GenerateSummaryRequest
@@ -5274,6 +5291,9 @@ def _pull_channel_facts(session: Session, connection_id: str) -> dict[str, Any]:
     }
 
 
+#: `CMP-SEAL-C1`: the stable class name of the withdrawn `0035` operations while the versions module is on.
+_VERSIONS_MODULE_DEPENDENCY = "comparison_versions_module"
+
 # --- comparison modules (`CMP-SEAL-C0`, ADR-0025 decision 25) ----------------------------
 #
 # The shipped adapters of the three comparison ports are stubs: each operation refuses with
@@ -5373,10 +5393,16 @@ class ComparisonUploadAdapter(_SessionHolder):
         self._batches = batches
 
     def create_upload(
-        self, *, project_uid: str, files: Sequence[models.ComparisonUploadFileDeclaration], user_uid: str, idempotency_key: str
+        self, *, project_uid: str, files: Sequence[models.ComparisonUploadFileDeclaration], user_uid: str, idempotency_key: str,
+        compare_after_preparation: bool = False,
     ) -> models.ComparisonUpload:
         from auditmanager.ingest.comparison_pdf.public import DeclaredFileRequest
 
+        if compare_after_preparation:
+            # `CMP-SEAL-C1`: «После подготовки сравнить все соседние версии». The column exists; the series that
+            # the flag queues is `CMP-SERIES-01`'s, which removes this refusal and stores the flag. Until then a
+            # `true` is refused before anything is created, never accepted and ignored.
+            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="comparison_series")
         label, _roles = self._read(lambda session: _comparison_actor(session, user_uid))
         view = self._service.create_upload(
             project_uid=project_uid,
@@ -5681,3 +5707,123 @@ class VersionPageAdapter:
         self, *, page_profile_id: str, level: int, column: int, row: int
     ) -> bytes:
         return self._reader.read_tile(page_profile_id, level=level, column=column, row=row)
+
+
+# --- version comparison core (`CMP-SEAL-C1`, ADR-0025 decision 25) -----------------------
+#
+# The shipped adapters of the four ports below are stubs: each operation refuses with
+# ``503 dependency_unavailable`` until the lane that owns it replaces the body (plan section 4.0
+# rule 1). Nothing is read or written. The ``dependency`` detail is a stable class name only.
+
+
+class ComparisonMatrixAdapter:
+    """`CMP-MATRIX-01` replaces the bodies."""
+
+    _DEPENDENCY = "comparison_matrix"
+
+    def apply_edits(
+        self, *, project_uid: str, document_uid: str, base_revision: models.ComparisonMatrixRevision, edits: Sequence[models.ComparisonMatrixEditInput], user_uid: str, idempotency_key: str
+    ) -> models.ComparisonMatrix:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def get_matrix(
+        self, *, project_uid: str, document_uid: str
+    ) -> models.ComparisonMatrix:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def list_ai_links(
+        self, *, project_uid: str, document_uid: str, cursor: str | None, limit: int
+    ) -> models.ComparisonAiLinkList:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def list_edits(
+        self, *, project_uid: str, document_uid: str, cursor: str | None, limit: int
+    ) -> models.ComparisonMatrixEditList:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def prepare_matrix(
+        self, *, project_uid: str, document_uid: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonMatrixPreparation:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def undo_edit(
+        self, *, project_uid: str, document_uid: str, base_revision: models.ComparisonMatrixRevision, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonMatrix:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+
+class ComparisonSeriesAdapter:
+    """`CMP-SERIES-01` replaces the bodies (the sheet-pair results are written by
+    `CMP-ENGINE-01`)."""
+
+    _DEPENDENCY = "comparison_series"
+
+    def cancel_series(
+        self, *, series_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonSeries:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def finish_series(
+        self, *, series_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonSeries:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def get_series(
+        self, *, series_id: str
+    ) -> models.ComparisonSeries:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def get_sheet_pair(
+        self, *, sheet_pair_id: str
+    ) -> models.ComparisonSheetPair:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def list_series(
+        self, *, project_uid: str, document_uid: str, cursor: str | None, limit: int
+    ) -> models.ComparisonSeriesPage:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def list_sheet_pairs(
+        self, *, transition_id: str, status: models.ComparisonSheetStatus | None, only_changes: bool, cursor: str | None, limit: int
+    ) -> models.ComparisonSheetPairPage:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def pause_series(
+        self, *, series_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonSeries:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def resume_series(
+        self, *, series_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonSeries:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def start_series(
+        self, *, project_uid: str, document_uid: str, restart: bool, base_order_revision_no: int | None, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonSeries:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+
+class ComparisonPairTileAdapter:
+    """`CMP-VIEWER-01` replaces the body."""
+
+    _DEPENDENCY = "comparison_pair_tiles"
+
+    def read_tile(
+        self, *, sheet_pair_id: str, mode: models.ComparisonPairTileMode, level: int, column: int, row: int, layers: Sequence[models.ComparisonLayer], align_blocks: bool
+    ) -> bytes:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+
+class ComparisonOverviewAdapter:
+    """`CMP-VC-OVERVIEW-01` replaces the bodies."""
+
+    _DEPENDENCY = "comparison_overview"
+
+    def get_overview(
+        self, *, project_uid: str
+    ) -> models.ComparisonOverview:
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def get_queue_summary(self) -> models.ComparisonQueueSummary:
+        return _comparison_unavailable(self._DEPENDENCY)

@@ -425,6 +425,34 @@ class ComparisonModelCallId(OpaqueId, prefix="cmc", entity="ComparisonModelCall"
     """Identity of one row of the comparison spend journal (`CMP-SEAL-C0`, migration ``0038``, ADR-0025 decision 5). Not ``mc_``: that journal is a Run's."""
 
 
+class ComparisonMatrixId(OpaqueId, prefix="cmx", entity="ComparisonMatrix"):
+    """Identity of one algorithmic build of the effective matrix of a document set (`CMP-SEAL-C1`, migration ``0039``, ADR-0025 decisions 3 and 14). The effective matrix is a read model over a build, accepted AI links and manual edits."""
+
+
+class ComparisonMatrixEditId(OpaqueId, prefix="cme", entity="ComparisonMatrixEdit"):
+    """Identity of one event of the append-only manual edit history of a document set (`CMP-SEAL-C1`, migration ``0039``). A migrated ``0035`` approval carries its ``cmp_`` and ``sln_`` ids in the row's provenance, not as its identity."""
+
+
+class ComparisonAiLinkId(OpaqueId, prefix="cak", entity="ComparisonAiLink"):
+    """Identity of one accepted AI link (`CMP-SEAL-C1`, migration ``0039``, ADR-0025 decision 14). Labelled «ИИ», never an expert act; written in wave C2."""
+
+
+class ComparisonSeriesId(OpaqueId, prefix="cser", entity="ComparisonSeries"):
+    """Identity of one series of adjacent transitions of a document set for one version order (`CMP-SEAL-C1`, migration ``0039``, ADR-0025 decision 21)."""
+
+
+class ComparisonTransitionId(OpaqueId, prefix="ctn", entity="ComparisonTransition"):
+    """Identity of one adjacent transition of a series (`CMP-SEAL-C1`, migration ``0039``). Not a version number or an ordinal: the pair is two version identities."""
+
+
+class ComparisonSheetPairId(OpaqueId, prefix="ctp", entity="ComparisonSheetPair"):
+    """Identity of one sheet pair of a transition, the row that points at a content-keyed result (`CMP-SEAL-C1`, migration ``0039``). Two pairs of equal content share a result and keep their own identity."""
+
+
+class ComparisonSheetPairResultId(OpaqueId, prefix="csp", entity="ComparisonSheetPairResult"):
+    """Identity of the content-keyed result of comparing two pages (`CMP-SEAL-C1`, migration ``0039``, ADR-0025 decision 15): a ULID id and a unique digest column that includes the project; the digest is never a foreign key."""
+
+
 #: Every concrete identity type, keyed by contract entity name.
 IDENTITY_TYPES_BY_ENTITY: Final[dict[str, type[OpaqueId]]] = {
     identity.entity: identity for identity in _REGISTRY.values()

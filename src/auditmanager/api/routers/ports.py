@@ -76,6 +76,10 @@ __all__ = [
     "ComparisonUploadPort",
     "ComparisonVersionOrderPort",
     "VersionPagePort",
+    "ComparisonMatrixPort",
+    "ComparisonSeriesPort",
+    "ComparisonPairTilePort",
+    "ComparisonOverviewPort",
     "AnalysisProfilePort",
     "OptimisationPort",
     "SectionSpecificationPort",
@@ -1430,7 +1434,7 @@ class ComparisonUploadPort(Protocol):
 
     def create_upload(
         self, *, project_uid: str, files: Sequence[models.ComparisonUploadFileDeclaration],
-        user_uid: str, idempotency_key: str,
+        user_uid: str, idempotency_key: str, compare_after_preparation: bool = False,
     ) -> models.ComparisonUpload:
         """Declare the files of one batch. The limits of ADR-0025 decision 9 are refused here,
         before the first part, as typed reasons under existing codes."""
@@ -1530,3 +1534,116 @@ class VersionPagePort(Protocol):
 
     def read_tile(self, *, page_profile_id: str, level: int, column: int, row: int) -> bytes:
         """One tile PNG of the bounded pyramid, or ``not_found``."""
+
+
+@runtime_checkable
+class ComparisonMatrixPort(Protocol):
+    """The effective matrix of a document set, its manual edits and its accepted AI links.
+    `CMP-MATRIX-01` implements them (ADR-0025 decisions 3, 13 and 14)."""
+
+    def get_matrix(self, *, project_uid: str, document_uid: str) -> models.ComparisonMatrix:
+        """The effective matrix, or its state while none is built. An unknown project or a
+        document of another project is ``not_found``."""
+
+    def prepare_matrix(
+        self, *, project_uid: str, document_uid: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonMatrixPreparation:
+        """Queue the profiles that are missing or failed, then the build. An expert's act."""
+
+    def list_edits(
+        self, *, project_uid: str, document_uid: str, cursor: str | None, limit: int
+    ) -> models.ComparisonMatrixEditList:
+        """The edit history, newest event first."""
+
+    def apply_edits(
+        self, *, project_uid: str, document_uid: str,
+        base_revision: models.ComparisonMatrixRevision,
+        edits: Sequence[models.ComparisonMatrixEditInput], user_uid: str, idempotency_key: str,
+    ) -> models.ComparisonMatrix:
+        """Apply a batch together or not at all. A stale ``base_revision`` is ``conflict``
+        (``comparison_matrix_stale``) and nothing is applied. An expert's act."""
+
+    def undo_edit(
+        self, *, project_uid: str, document_uid: str,
+        base_revision: models.ComparisonMatrixRevision, user_uid: str, idempotency_key: str,
+    ) -> models.ComparisonMatrix:
+        """Reverse the latest applied edit. A stale ``base_revision`` is ``conflict``. An
+        expert's act."""
+
+    def list_ai_links(
+        self, *, project_uid: str, document_uid: str, cursor: str | None, limit: int
+    ) -> models.ComparisonAiLinkList:
+        """The accepted AI links, newest first."""
+
+
+@runtime_checkable
+class ComparisonSeriesPort(Protocol):
+    """The series of adjacent transitions of a document set and the sheet pairs of a transition.
+    `CMP-SERIES-01` implements them (ADR-0025 decisions 15 and 21)."""
+
+    def start_series(
+        self, *, project_uid: str, document_uid: str, restart: bool,
+        base_order_revision_no: int | None, user_uid: str, idempotency_key: str,
+    ) -> models.ComparisonSeries:
+        """Start a series for the current order. A stale ``base_order_revision_no`` is
+        ``conflict`` (``comparison_version_order_stale``). An expert's act."""
+
+    def list_series(
+        self, *, project_uid: str, document_uid: str, cursor: str | None, limit: int
+    ) -> models.ComparisonSeriesPage:
+        """The series of the document set, newest first, without their transitions."""
+
+    def get_series(self, *, series_id: str) -> models.ComparisonSeries:
+        """One series with its transitions, or ``not_found``."""
+
+    def pause_series(
+        self, *, series_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonSeries:
+        """Pause after the item in hand. An expert's act."""
+
+    def resume_series(
+        self, *, series_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonSeries:
+        """Continue a paused series. An expert's act."""
+
+    def cancel_series(
+        self, *, series_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonSeries:
+        """Cancel the unfinished items. An expert's act."""
+
+    def finish_series(
+        self, *, series_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonSeries:
+        """«Досчитать»: queue the transitions that have no result. An expert's act."""
+
+    def list_sheet_pairs(
+        self, *, transition_id: str, status: models.ComparisonSheetStatus | None,
+        only_changes: bool, cursor: str | None, limit: int,
+    ) -> models.ComparisonSheetPairPage:
+        """The sheet pairs of a transition, in the order of the matrix rows."""
+
+    def get_sheet_pair(self, *, sheet_pair_id: str) -> models.ComparisonSheetPair:
+        """One sheet pair with its raw deterministic evidence, or ``not_found``."""
+
+
+@runtime_checkable
+class ComparisonPairTilePort(Protocol):
+    """The tiles of a sheet pair. `CMP-VIEWER-01` implements them from what the worker stored;
+    the API never calls PDFium."""
+
+    def read_tile(
+        self, *, sheet_pair_id: str, mode: models.ComparisonPairTileMode, level: int,
+        column: int, row: int, layers: Sequence[models.ComparisonLayer], align_blocks: bool,
+    ) -> bytes:
+        """One tile PNG, or ``not_found``."""
+
+
+@runtime_checkable
+class ComparisonOverviewPort(Protocol):
+    """The read models of the comparison screens. `CMP-VC-OVERVIEW-01` implements them."""
+
+    def get_overview(self, *, project_uid: str) -> models.ComparisonOverview:
+        """The state of every document set of the project. An unknown project is ``not_found``."""
+
+    def get_queue_summary(self) -> models.ComparisonQueueSummary:
+        """The comparison work items by state and kind."""

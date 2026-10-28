@@ -11,6 +11,26 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
+## Version `1.10.0`
+
+`CMP-SEAL-C1` (wave C1 of the comparison modules, `docs/architecture/adr/ADR-0025-comparison-modules.md`)
+adds the version comparison core as sealed stubs, every operation answering `503 dependency_unavailable`
+until its lane wires it. The effective matrix of a document set: `getComparisonMatrix`,
+`prepareComparisonMatrix`, `applyComparisonMatrixEdits` (a keyed batch that carries the base matrix revision;
+a stale base is `409 conflict`), `undoComparisonMatrixEdit`, `listComparisonMatrixEdits` and
+`listComparisonAiLinks` (read-only until wave C2). The series of adjacent transitions: `startComparisonSeries`,
+`listComparisonSeries`, `getComparisonSeries`, `pauseComparisonSeries`, `resumeComparisonSeries`,
+`cancelComparisonSeries` and `finishComparisonSeries`; the sheet pairs of a transition:
+`listComparisonSheetPairs`, `getComparisonSheetPair` and `streamComparisonPairTile`; and the read models
+`getComparisonOverview` and `getComparisonQueueSummary`. Reads are any one role, every write is keyed and an
+expert's act. `CreateComparisonUploadRequest` gains the optional `compare_after_preparation`. While the
+«Сравнение версий» module is on, `approveSheetPairing`, `withdrawSheetPairing` and `generateComparisonSummary`
+answer `503 dependency_unavailable` (`comparison_versions_module`). The version rule
+(`docs/program/VERSIONING_AND_FREEZE_POLICY.md`) reads this as a **minor**. The surface is 131 paths, 148
+operations and 432 schemas (115, 130 and 351 under `1.9.0`, which sealed the comparison upload, the order of
+the versions of a document set and the page reads). No error code is added. Migration `0039_comparison_core` adds
+seven tables and migrates the active approvals of `0035` into manual matrix edits.
+
 ## Version `1.8.0`
 
 `CONTRACT-1-8-0-01` seals the content that `COMPARE-PERSISTED-SUMMARY-01` added under `1.7.0` (owner
