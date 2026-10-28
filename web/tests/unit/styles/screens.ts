@@ -116,6 +116,7 @@ import {
   runStatus,
 } from '../review/fixtures';
 import { addedPair, comparedPair } from '../comparison/viewer/viewer-fixtures';
+import { COMPARISON_SHAPES } from '../version-compare/shapes';
 import { newClient, renderScreen, renderWith, seedError } from '../screens/harness';
 import { derivedScreens, malformedVariants, wellFormed } from '../screens/route-screens';
 import {
@@ -1715,6 +1716,21 @@ export function screens(): Screen[] {
     add('Comparison viewer, a pair with no evidence yet, a scan, a part of a sheet and an AI link',
       comparisonViewerMarkup(bare, [], { tiles: { urlOf: () => null } }));
     add('Comparison viewer, a pair the viewer cannot draw', comparisonViewerMarkup(addedPair()));
+  }
+
+  /*
+   * `CMP-VC-UI-01`: «Сравнение версий». Every state of its screens that one static pass reaches, from the one list the language
+   * guard renders too (`tests/unit/version-compare/shapes.ts`): the page with its tabs, the module that is off, not wired or refused,
+   * the table of document sets in every step state, the sheet matrix with its draft, its flags, its candidates, its stale and failed
+   * states, the transitions in every state, the order dialog, the opened pair with the viewer, the upload dialogs with the proposal
+   * and every set status, the block «Сравнение» of «Очередь» and the version-scoped screen before and after A-12. Every rule of
+   * `version-series.module.css`, `comparison-upload.module.css`, `version-compare-page.module.css` and the block's part of
+   * `execution-queue.module.css` is reached below.
+   */
+  for (const shape of COMPARISON_SHAPES) {
+    const client = newClient();
+    shape.seedClient?.(client);
+    add(`Comparison: ${shape.name}`, renderScreen(client, shape.make()));
   }
 
   /*

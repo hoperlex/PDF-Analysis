@@ -256,6 +256,10 @@
         "every state; `compareDocumentVersions` is asked only when the set has another version,",
         "so it is optional here: a set with one version asks nothing more.",
         "",
+        "CMP-VC-UI-01 (A-12): once the version is read, the comparison also reads the product version (`getProductVersion`) on",
+        "mount, because `ProductVersion.comparison_modules` decides whether the three `0035` controls are offered; it is asked",
+        "in every state the screen has, so it is `expects_api` and not optional.",
+        "",
         "BETA-LIVE-JOURNEY-01. The version comparison also reads the signed-in account (`getMe`)",
         "on mount, in every state, to decide whether «Перенести решение» is offered (an account",
         "without `expert` sees a sentence instead of the button). The first live run after the",
@@ -282,6 +286,11 @@
           "method": "GET",
           "path": "/me",
           "operationId": "getMe"
+        },
+        {
+          "method": "GET",
+          "path": "/system/version",
+          "operationId": "getProductVersion"
         }
       ],
       "optional_api": [
@@ -788,6 +797,38 @@
         {"method": "GET", "path": "/users", "operationId": "listUsers", "$why_optional": "only a session holding `admin` reads the experts a creation or a reassignment may name"},
         {"method": "GET", "path": "/projects", "operationId": "listProjects", "$why_optional": "only a session holding `admin` reads the projects of the creation form"},
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+      ],
+      "follow": null
+    },
+    {
+      "name": "version-comparison",
+      "path": "/version-comparison",
+      "page_module": "web/src/app/version-comparison/page.tsx",
+      "$comment": [
+        "«Сравнение версий» (CMP-VC-UI-01, plan section 1.1) reads the project list, the signed-in account's roles and the product's",
+        "module set on a cold route. The project is chosen on the screen; when the session has exactly one project it is taken without",
+        "a click and the tab «Проекты и этапы» reads the comparison overview of it, plus the project's unfinished uploads while the",
+        "upload dialog is open. A document set opens «Сравнение листов» by a click that this walk does not make, so the matrix,",
+        "the edit history, the series, the sheet pairs, the versions and the thumbnails are `optional_api`: the claim names every read",
+        "the screen can make without asserting a tab the walk never opens. The commands (the preparation, the series, the edit",
+        "batch, the order, the uploads and their parts) require explicit expert intent and are not emitted by this read journey.",
+        "A comparison operation that answers 503 dependency_unavailable (a module that is off or not wired) is a state the screen",
+        "shows as «Модуль ещё недоступен», not a failure of the walk."
+      ],
+      "expects_api": [
+        {"method": "GET", "path": "/projects", "operationId": "listProjects"},
+        {"method": "GET", "path": "/me", "operationId": "getMe"}
+      ],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "GET", "path": "/system/version", "operationId": "getProductVersion", "$why_optional": "the module set rides the product version; an old server omits the field and the screen then asks the operations themselves"},
+        {"method": "GET", "path": "/projects/{project_uid}/comparison-overview", "operationId": "getComparisonOverview", "$why_optional": "read once a project is chosen; with several projects the walk chooses none"},
+        {"method": "GET", "path": "/projects/{project_uid}/comparison-uploads", "operationId": "listComparisonUploads", "$why_optional": "read only while the upload dialog is open"},
+        {"method": "GET", "path": "/projects/{project_uid}/documents/{document_uid}/comparison-matrix", "operationId": "getComparisonMatrix", "$why_optional": "the tab «Сравнение листов» is opened by a click"},
+        {"method": "GET", "path": "/projects/{project_uid}/documents/{document_uid}/comparison-matrix/edits", "operationId": "listComparisonMatrixEdits", "$why_optional": "the tab «Сравнение листов» is opened by a click"},
+        {"method": "GET", "path": "/projects/{project_uid}/documents/{document_uid}/comparison-series", "operationId": "listComparisonSeries", "$why_optional": "the tab «Сравнение листов» is opened by a click"},
+        {"method": "GET", "path": "/projects/{project_uid}/documents/{document_uid}/comparison-version-orders", "operationId": "listComparisonVersionOrders", "$why_optional": "the tab «Сравнение листов» is opened by a click"},
+        {"method": "GET", "path": "/documents/{document_uid}/versions", "operationId": "listVersions", "$why_optional": "the tab «Сравнение листов» is opened by a click"}
       ],
       "follow": null
     },

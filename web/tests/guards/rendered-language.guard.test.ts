@@ -183,6 +183,7 @@ import { CONTRACT_PATH, SEAMS_PATH, readJson, readText, repoRelative, walkFiles 
 import { join } from 'node:path';
 import { REPO_ROOT } from './lib/repo';
 import { newClient, renderScreen, seedError } from '../unit/screens/harness';
+import { COMPARISON_SHAPES } from '../unit/version-compare/shapes';
 import {
   NOT_INSTALLED_PACK, installedPackFixture, withoutMember,
 } from '../unit/analysis-settings/ar-v3-beta-pack-fixtures';
@@ -3187,6 +3188,8 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
 const SCREENS: readonly ScreenCase[] = [
   ...DERIVED_SCREENS,
   ...EXTRA_SHAPES,
+  // `CMP-VC-UI-01`: every state of «Сравнение версий» one static pass reaches (`tests/unit/version-compare/shapes.ts`).
+  ...COMPARISON_SHAPES.filter((shape) => shape.censusOnly !== true),
 ];
 
 /**
@@ -3506,6 +3509,32 @@ const TRANSLATED_SCHEMAS = [
   'ExecutorIdentityBasis',
   'ExecutorRateCheck',
   'ExecutorWorkKind',
+  // `CMP-VC-UI-01`: «Сравнение версий» says every status, flag, state and reason of the comparison in Russian, with the contract
+  // value in a `data-` attribute. Several are plain English words (`same`, `added`, `removed`, `manual`, `high`, `scan`,
+  // `queued`, `running`, `stale`, `failed`, `done`), which must not be permitted bare. `ComparisonLayer` and `ComparisonChannelState`
+  // are rendered by `widgets/comparison-viewer` in Russian too; they join this list with the viewer's own markers (see the report).
+  'ComparisonSheetStatus',
+  'ComparisonCellConfidence',
+  'ComparisonCellFlag',
+  'ComparisonCellState',
+  'ComparisonMatrixState',
+  'ComparisonMatrixStaleReason',
+  'ComparisonMatrixEditKind',
+  'ComparisonMatrixEditStatus',
+  'ComparisonMatrixEditSource',
+  'ComparisonSeriesState',
+  'ComparisonSeriesStaleReason',
+  'ComparisonTransitionState',
+  'ComparisonVerdictCode',
+  'ComparisonStepId',
+  'ComparisonStepState',
+  'ComparisonUploadState',
+  'ComparisonUploadSetState',
+  'ComparisonUploadFileState',
+  'ComparisonProposalWarning',
+  'ComparisonVersionOrderSource',
+  'ComparisonModules',
+  'ComparisonQueueModule',
 ] as const;
 
 function translatedVocabulary(): ReadonlySet<string> {
@@ -3707,10 +3736,9 @@ describe('the guard can tell an English label from a legitimate Latin string', (
     // back in English. Silence from a guard is read as coverage, so a guard that cannot see
     // the class it was built for is worse than none.
     expect(unexplainedLatin('published', VOCABULARY)).toEqual(['published']);
-    // `CMP-SEAL-C1` published `manual` as a member of `ComparisonCellConfidence`. No screen renders that schema yet, so
-    // its words are permitted until `CMP-VC-UI-01` registers it in `TRANSLATED_SCHEMAS` with its marker; the compound
-    // then reads `['needs', 'manual', 'review']` again and this expectation moves back with it.
-    expect(unexplainedLatin('needs_manual_review', VOCABULARY)).toEqual(['needs', 'review']);
+    // `CMP-SEAL-C1` published `manual` as a member of `ComparisonCellConfidence`; `CMP-VC-UI-01` renders that schema in the matrix
+    // and registered it above with its marker, so `manual` is a translated word again and the compound reddens in all three parts.
+    expect(unexplainedLatin('needs_manual_review', VOCABULARY)).toEqual(['needs', 'manual', 'review']);
     expect(unexplainedLatin('→ accepted', VOCABULARY)).toEqual(['accepted']);
     expect(unexplainedLatin('internal_contradiction', VOCABULARY)).toEqual(['internal', 'contradiction']);
     // `D-62`: the stage table's whole first column. `analysis` alone is already an offence
@@ -3986,6 +4014,116 @@ const SCHEMA_MARKERS: readonly {
     schema: 'ExecutorWorkKind',
     attribute: 'data-executor-route',
     why: "`widgets/executor-routes/ui/executor-routes.tsx`, the summary of the route for one kind of model work, «Анализ текста».",
+  },
+  {
+    schema: 'ComparisonSheetStatus',
+    attribute: 'data-sheet-status',
+    why: '`widgets/version-series/ui/sheet-matrix.tsx`, the status badge of a matrix row once its pair in the chosen transition is compared.',
+  },
+  {
+    schema: 'ComparisonCellConfidence',
+    attribute: 'data-cell-confidence',
+    why: "`widgets/version-series/ui/matrix-cell.tsx`, a matched thumbnail: how the sheet was linked, said by the mark on it (?, ▤ группа, ✎, ИИ).",
+  },
+  {
+    schema: 'ComparisonCellFlag',
+    attribute: 'data-cell-flag',
+    why: '`widgets/version-series/ui/matrix-cell.tsx`, the flags of a matched thumbnail: ⧉ дубль, скан, ◫ and ⇉ for a split sheet, ↷ for a link across a missing version.',
+  },
+  {
+    schema: 'ComparisonCellState',
+    attribute: 'data-cell-state',
+    why: '`widgets/version-series/ui/matrix-cell.tsx`, every cell of the matrix: a thumbnail, «⁇ не сопоставлен» with its candidates, or «∅ нет в версии».',
+  },
+  {
+    schema: 'ComparisonMatrixState',
+    attribute: 'data-matrix-state',
+    why: "`widgets/version-series/ui/sheets-tab.tsx`, the root of the tab «Сравнение листов»; the banner above the matrix says the same in words when the matrix is not ready.",
+  },
+  {
+    schema: 'ComparisonMatrixStaleReason',
+    attribute: 'data-matrix-stale-reason',
+    why: "`widgets/version-series/ui/matrix-state.tsx`, why a stale matrix is stale: the order changed, or the pages and the rules did.",
+  },
+  {
+    schema: 'ComparisonMatrixEditKind',
+    attribute: 'data-edit-kind',
+    why: '`widgets/version-series/ui/draft-panel.tsx`, one line of the history of the matrix edits, and of the edits that no longer apply.',
+  },
+  {
+    schema: 'ComparisonMatrixEditStatus',
+    attribute: 'data-edit-status',
+    why: '`widgets/version-series/ui/draft-panel.tsx`, whether a saved edit applies, was undone, or lost its cells after a reorder.',
+  },
+  {
+    schema: 'ComparisonMatrixEditSource',
+    attribute: 'data-edit-source',
+    why: '`widgets/version-series/ui/draft-panel.tsx`, whether an edit is an expert\'s or was moved from an approved pair of the old screen.',
+  },
+  {
+    schema: 'ComparisonSeriesState',
+    attribute: 'data-series-state',
+    why: '`widgets/version-series/ui/transition-summary.tsx`, the state of the series of adjacent transitions above its table.',
+  },
+  {
+    schema: 'ComparisonSeriesStaleReason',
+    attribute: 'data-series-stale-reason',
+    why: '`widgets/version-series/ui/transition-summary.tsx`, why the stored summary is «для прежнего порядка версий».',
+  },
+  {
+    schema: 'ComparisonTransitionState',
+    attribute: 'data-transition-state',
+    why: '`widgets/version-series/ui/transition-summary.tsx`, one row per adjacent transition, its progress and whether it can be opened.',
+  },
+  {
+    schema: 'ComparisonVerdictCode',
+    attribute: 'data-verdict-code',
+    why: '`widgets/version-series/ui/transition-summary.tsx`, each part of the verdict sentence of a transition.',
+  },
+  {
+    schema: 'ComparisonStepId',
+    attribute: 'data-next-step',
+    why: '`widgets/version-series/ui/projects-and-stages.tsx`, the chip «Далее: …» of a document set names the step it proposes.',
+  },
+  {
+    schema: 'ComparisonStepState',
+    attribute: 'data-step-state',
+    why: '`widgets/version-series/ui/projects-and-stages.tsx`, every cell of the steps 1, 2, 3 and 5 of the table, said in the original\'s word.',
+  },
+  {
+    schema: 'ComparisonUploadState',
+    attribute: 'data-upload-state',
+    why: '`widgets/comparison-upload/ui/upload-dialog.tsx`, the state of the batch in the dialog and in the list of unfinished uploads; the strip of «Проекты и этапы» says it too.',
+  },
+  {
+    schema: 'ComparisonUploadSetState',
+    attribute: 'data-set-status',
+    why: '`widgets/comparison-upload/ui/set-editor.tsx`, the status label of each proposed set: Загрузка, Разбор PDF, Требуется проверка and the rest.',
+  },
+  {
+    schema: 'ComparisonUploadFileState',
+    attribute: 'data-file-state',
+    why: '`widgets/comparison-upload/ui/upload-dialog.tsx`, one row per file of the batch with its state and, while it is sent, its progress.',
+  },
+  {
+    schema: 'ComparisonProposalWarning',
+    attribute: 'data-proposal-warning',
+    why: '`widgets/comparison-upload/ui/set-editor.tsx`, the warnings of a proposed set (⚠), each in a sentence.',
+  },
+  {
+    schema: 'ComparisonVersionOrderSource',
+    attribute: 'data-order-source',
+    why: '`widgets/version-series/ui/version-order-dialog.tsx`, where the order in force came from: the stamps, or an expert.',
+  },
+  {
+    schema: 'ComparisonModules',
+    attribute: 'data-comparison-modules',
+    why: '`widgets/execution-queue/ui/comparison-queue-block.tsx`, the root of the block «Сравнение» of «Очередь», with the module set beside the sentence that says it.',
+  },
+  {
+    schema: 'ComparisonQueueModule',
+    attribute: 'data-queue-module',
+    why: '`widgets/execution-queue/ui/comparison-queue-block.tsx`, the module a kind of queued work belongs to, in the table of kinds.',
   },
 ];
 
