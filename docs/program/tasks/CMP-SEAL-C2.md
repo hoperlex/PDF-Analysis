@@ -141,7 +141,7 @@ missing field.
 `comparison_modules` stays `none` by default; with it off every C2 command refuses before any read or write.
 
 ## Handoff
-- changed files:
-- commands/results:
-- known limits:
-- integration notes:
+- changed files: `docs/program/CMP-SEAL-C2.md` §5 lists every pinned file moved and §2 the files outside the allowed paths with their reasons; the new files are the migration `db/migrations/versions/20261029_0040_comparison_ai_reports.py`, five router files (`comparison_ai_pairs.py`, `comparison_ai_sheets.py`, `comparison_specification.py`, `comparison_launch_queue.py`, `comparison_reports.py`) and three test files (`tests/integration/db/test_comparison_ai_reports_migration.py`, `tests/integration/composition/test_comparison_ai_stub_operations.py`, `tests/integration/recovery/test_comparison_ai_reports_erase.py`); contract 1.11.0 (50 operations, 85 schemas, 11 identifier prefixes), the four executor work kinds, the C1 contract items and the regenerated client with `web/FRONTEND_LOCK.json`
+- commands/results: report §6 (contract battery 1310 passed, web 3545 tests passed, journey conformance 135, unit 4890, and the db/recovery/composition/p02_journey/foundation/storage directories and five registers all green on the clean tree `b6f9cb04`) and §7 (fourteen mutation proofs, each red then green with the tree clean)
+- known limits: report §8 (every operation is a stub; the module flag gates all fifty; the twelve tables are empty; shapes marked `[own design]`; `D-263` registry part skipped because `contracts/events/v1` has no list of event types; the container directories were not probed separately; no full `make gate`, `R-135`)
+- integration notes: report §10 (merge without squashing, because `web/FRONTEND_LOCK.json` names `b7b4c643`; expect additive conflicts with `CMP-C1-FIX-A` and `CMP-C1-FIX-B` in `composition.py`, `adapters.py`, the stub registers and the rendered-language guard; per-lane operations, tables and registers in §9)
