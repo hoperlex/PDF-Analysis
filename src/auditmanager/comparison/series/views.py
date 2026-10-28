@@ -10,15 +10,29 @@ parts coverage, the permit -- is the series' own and sits beside them.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from typing import Any, Final
 
 from auditmanager.comparison.series.repository import SeriesRow, TransitionRow
 
-__all__ = ["EVIDENCE_MEMBERS", "pair_dict", "series_dict", "transition_dict"]
+__all__ = ["EVIDENCE_MEMBERS", "contract_reason", "pair_dict", "series_dict", "transition_dict"]
 
 #: The members of the stored result that ``getComparisonSheetPair`` copies verbatim.
 EVIDENCE_MEMBERS: Final[tuple[str, ...]] = ("canvas", "differences", "text_changes", "service_notes", "how_compared")
+
+#: A reason of ``ComparisonSheetPair.reasons`` (the contract's pattern).
+_REASON: Final = re.compile(r"^[A-Z][A-Z0-9_]{2,63}$")
+
+
+def contract_reason(reason: str) -> str:
+    """A stored reason as the contract can carry it. A reason that fits the pattern is passed as it is. The engine also writes
+    ``UNCHECKED_CHANNEL:<channel>`` (a colon and lower case), which the pattern refuses; it becomes ``UNCHECKED_CHANNEL_<CHANNEL>``
+    -- the same words, no information lost (the channel's own state and reason stay in ``channels``). The stored row is untouched."""
+    if _REASON.match(reason):
+        return reason
+    mapped = re.sub(r"[^A-Z0-9_]", "_", reason.upper())[:64]
+    return mapped if _REASON.match(mapped) else "REASON_" + re.sub(r"[^A-Z0-9_]", "_", reason.upper())[:57]
 
 
 def series_dict(
@@ -113,7 +127,7 @@ def pair_dict(row: Mapping[str, Any], *, with_evidence: bool) -> dict[str, Any]:
     if flags:
         out["flags"] = flags
     parts = row["parts"]
-    raw_reasons = list(row["r_reasons"] or [])
+    raw_reasons = list(dict.fromkeys(contract_reason(r) for r in (row["r_reasons"] or [])))
     series_reasons = [r for r in (parts or {}).get("series_reasons", ()) if r not in raw_reasons]
     if row["r_reasons"] is not None or series_reasons:  # a pair with a result always shows the result's reasons, even none
         out["reasons"] = raw_reasons + series_reasons

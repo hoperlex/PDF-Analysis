@@ -32,6 +32,11 @@ def test_the_series_agrees_with_the_answer_key_sheet_by_sheet(
 
     done = service.get_series(series_id=series["series_id"])
     assert done["state"] == "completed", done["state"]
+    from auditmanager.api.schemas import models
+
+    models.ComparisonSeries.model_validate(done)  # what the engine wrote is what the contract can carry
+    for stored in pair_rows(lab, series["series_id"]):
+        models.ComparisonSheetPair.model_validate(service.get_sheet_pair(sheet_pair_id=stored["id"]))
     pages = {
         row["id"]: (row["version_uid"], int(row["page_number"]))
         for row in lab.rows("SELECT comparison_page_profile_id AS id, version_uid, page_number FROM comparison_page_profile "

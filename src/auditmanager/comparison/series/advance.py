@@ -225,6 +225,8 @@ class SeriesAdvancer:
                 for pair_id, record in permit_module.pair_permits(reconciled).items():
                     self._repo.set_permit(session, pair_id, record)
             summary, verdict = transition_verdict(self._pair_facts(session, transition_id))
+            if transition.state == STATE_QUEUED:  # no pair needed the engine: the database has no queued -> completed edge
+                self._repo.run_transition(session, transition_id)
             self._repo.set_transition_state(
                 session, transition_id, from_states=[STATE_QUEUED, STATE_RUNNING], to_state=STATE_COMPLETED,
                 summary=summary, verdict=verdict,
@@ -277,6 +279,8 @@ class SeriesAdvancer:
                 return Advance(True, DRIVE_IDLE_SECONDS)
             transitions = self._repo.transitions(session, series_id)
             if transitions and all(t.state in (STATE_COMPLETED, STATE_FAILED) for t in transitions):
+                if series.state == STATE_QUEUED:  # nothing needed the engine: the database has no queued -> completed edge
+                    self._repo.set_series_state(session, series_id, from_states=[STATE_QUEUED], to_state=STATE_RUNNING)
                 if any(t.state == STATE_FAILED for t in transitions):
                     self._repo.set_series_state(
                         session, series_id, from_states=[STATE_QUEUED, STATE_RUNNING], to_state=STATE_FAILED,

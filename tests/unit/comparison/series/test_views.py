@@ -50,6 +50,15 @@ def test_the_evidence_members_are_copied_verbatim_and_the_engines_own_are_not_ex
     assert out["channels"] == {"text": {"state": "checked", "diffs": 1}} and out["reasons"] == ["DUPLICATE_SHEET"]
 
 
+def test_a_reason_the_contract_cannot_carry_is_mapped_without_losing_a_word() -> None:
+    """The engine writes ``UNCHECKED_CHANNEL:<channel>``; the contract's pattern refuses the colon and the lower case."""
+    assert views.contract_reason("DUPLICATE_SHEET") == "DUPLICATE_SHEET"
+    assert views.contract_reason("UNCHECKED_CHANNEL:text_coverage") == "UNCHECKED_CHANNEL_TEXT_COVERAGE"
+    assert views.contract_reason("X") .startswith("REASON_") and len(views.contract_reason("x" * 100)) <= 64
+    out = views.pair_dict(row(r_reasons=["NO_TEXT_LAYER", "UNCHECKED_CHANNEL:text", "UNCHECKED_CHANNEL:text"]), with_evidence=False)
+    assert out["reasons"] == ["NO_TEXT_LAYER", "UNCHECKED_CHANNEL_TEXT"]
+
+
 def test_the_list_form_carries_no_evidence() -> None:
     out = views.pair_dict(row(), with_evidence=False)
     assert not set(views.EVIDENCE_MEMBERS) & set(out)

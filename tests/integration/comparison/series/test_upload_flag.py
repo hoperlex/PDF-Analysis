@@ -208,7 +208,7 @@ def test_the_follow_up_fails_visibly_when_a_series_is_already_live(lab, sessions
     done_set(lab, flagged.upload_id, doc.document_uid, expert_uid)
     advance(sessions, flagged.upload_id)
     runner = runner_with(sessions, engine, blob_store, compare=ScriptedEngine(sessions))
-    ran = drain(runner, worker_id, engine, sessions, doc.project_uid, rounds=3, limit=3)
+    ran = drain(runner, worker_id, engine, sessions, doc.project_uid, rounds=3, limit=3, hold=("series_pair", "series_drive"))
     assert ("series_after_preparation", "failed") in ran
     failed = lab.rows("SELECT failure_reason AS r FROM comparison_work WHERE comparison_upload_id = :u AND kind = 'series_after_preparation'",
                       u=flagged.upload_id)[0]

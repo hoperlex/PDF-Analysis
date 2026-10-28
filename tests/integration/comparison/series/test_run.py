@@ -150,3 +150,27 @@ def test_a_cancel_stops_the_work_and_what_is_done_stays_done(
     drain(runner, worker_id, engine, sessions, doc.project_uid)
     assert len(fake.calls) == 24  # nothing was computed twice
     assert service.get_series(series_id=series["series_id"])["state"] == "completed"
+
+
+def test_a_transition_none_of_whose_pairs_needed_the_engine_still_completes(lab, sessions, blob_store, service, prepared) -> None:
+    """The database has no ``queued -> completed`` edge for a transition or a series: both pass through ``running``."""
+    from sqlalchemy import text
+
+    from auditmanager.comparison.series.advance import SeriesAdvancer
+
+    doc, series = prepared
+    sid = series["series_id"]
+    with lab.sessions() as session:  # every pair of every transition is one the matrix could not place; no item will run
+        session.execute(text("UPDATE comparison_sheet_pair SET state = 'computing' WHERE state = 'queued' AND comparison_transition_id IN "
+                             "(SELECT comparison_transition_id FROM comparison_transition WHERE comparison_series_id = :s)"), {"s": sid})
+        session.execute(text("UPDATE comparison_sheet_pair SET state = 'done', status = 'unmatched' WHERE state = 'computing' AND "
+                             "comparison_transition_id IN (SELECT comparison_transition_id FROM comparison_transition "
+                             "WHERE comparison_series_id = :s)"), {"s": sid})
+        session.execute(text("UPDATE comparison_work SET state = 'cancelled', terminal_at = clock_timestamp() "
+                             "WHERE comparison_series_id = :s AND kind = 'series_pair'"), {"s": sid})
+        session.commit()
+    assert service.get_series(series_id=sid)["state"] == "queued"
+    assert SeriesAdvancer(sessions, blob_store).advance(sid, fence=lambda session: None).live is False
+    done = service.get_series(series_id=sid)
+    assert done["state"] == "completed" and [t["state"] for t in done["transitions"]] == ["completed"] * 4
+    assert all(t["verdict"] == ["needs_review"] for t in done["transitions"][:1])

@@ -162,23 +162,24 @@ def runner_with(sessions: Any, engine: Any, blob_store: Any, *, compare: Callabl
 
 
 def drain(runner: Any, worker_id: str, engine: Any, sessions: Any, project: str, *, rounds: int = 60,
-          limit: int = 400) -> list[tuple[str, str]]:
+          limit: int = 400, hold: tuple[str, ...] = ()) -> list[tuple[str, str]]:
     """Claim and execute the project's items until none is claimable; ``[(kind, resulting state), ...]``.
 
     The polling item (``series_drive``) has the strongest priority and yields to its next look, so it is taken only when
-    nothing else is claimable (as the 15 s of its delay let the pairs go first in a worker), and then once."""
+    nothing else is claimable (as the 15 s of its delay let the pairs go first in a worker), and then once. ``hold`` names
+    kinds that are not claimed at all."""
     ran: list[tuple[str, str]] = []
     for _ in range(rounds):
         while len(ran) < limit:
             make_due(sessions, project, except_kind="series_drive")
-            with fenced(engine, project, ("series_drive",)):
+            with fenced(engine, project, ("series_drive", *hold)):
                 item = runner.claim(worker_id)
             if item is None:
                 break
             assert item.project_uid == project
             ran.append((item.kind, runner.execute(item)))
         make_due(sessions, project)
-        with fenced(engine, project):
+        with fenced(engine, project, hold):
             item = runner.claim(worker_id)
         if item is None:
             break
