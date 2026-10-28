@@ -1005,11 +1005,19 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         # `appendDecision` does; whether they may is the role register's (expert) and the
         # command's own re-read.
         "comparison.py",
+        # `CMP-SEAL-C2`: every start of an AI job, a launch-queue entry, a report or a specification comparison records WHO
+        # consented or queued it, and every control WHO paused, resumed or cancelled; that only an expert may is the role
+        # register's and the command's own re-read of the role set. The reads take no subject.
+        "comparison_ai_pairs.py",
+        "comparison_ai_sheets.py",
+        "comparison_launch_queue.py",
         # `CMP-SEAL-C1`: a matrix edit records WHO made it and a series WHO started it; that only an
         # expert may is the role register's and the command's own re-read of the role set. The reads,
         # the pair tiles and the overview take no subject.
         "comparison_matrix.py",
+        "comparison_reports.py",
         "comparison_series.py",
+        "comparison_specification.py",
         # `CMP-SEAL-C0`: the comparison writes record WHO declared, confirmed, paused or cancelled an
         # upload batch and WHO appended an order revision (the actor of its rows); that only an expert
         # may is the role register's and the command's own re-read of the role set. The reads and the
