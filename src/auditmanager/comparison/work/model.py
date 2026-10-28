@@ -158,6 +158,8 @@ class WorkItem:
     created_by_user_uid: str | None
     max_attempts: int
     authority: ItemAuthority = field(repr=False)
+    #: The series the item belongs to (a series pauses, resumes and cancels its items by it); ``None`` for any other.
+    comparison_series_id: str | None = None
     #: Set by the item's heartbeat when it finds the lease gone (expired, reclaimed or forced by
     #: the watchdog). A handler that notices it stops; one that does not is fenced at its next
     #: :meth:`require_current`.

@@ -66,10 +66,11 @@ _LOCK_TIMEOUT = text("SET LOCAL lock_timeout = '2s'")
 
 _INSERT = text(
     "INSERT INTO comparison_work (comparison_work_id, project_uid, module, kind, payload, "
-    "dedupe_key, priority, not_before, max_attempts, comparison_upload_id, created_by_user_uid) "
+    "dedupe_key, priority, not_before, max_attempts, comparison_upload_id, comparison_series_id, "
+    "created_by_user_uid) "
     "VALUES (:work_id, :project_uid, :module, :kind, CAST(:payload AS jsonb), :dedupe_key, "
     ":priority, clock_timestamp() + make_interval(secs => :delay), :max_attempts, "
-    ":upload_id, :created_by) "
+    ":upload_id, :series_id, :created_by) "
     "ON CONFLICT (project_uid, kind, dedupe_key) "
     "WHERE dedupe_key IS NOT NULL AND terminal_at IS NULL DO NOTHING "
     "RETURNING comparison_work_id"
@@ -83,7 +84,7 @@ _LIVE_BY_DEDUPE = text(
 #: is what makes the second claimant's pick of the *same* item impossible.
 _PICK = text(
     "SELECT w.comparison_work_id, w.project_uid, w.module, w.kind, w.payload, "
-    "w.comparison_upload_id, w.created_by_user_uid, w.max_attempts "
+    "w.comparison_upload_id, w.comparison_series_id, w.created_by_user_uid, w.max_attempts "
     "FROM comparison_work w WHERE w.state = 'queued' "
     "AND w.module = ANY (CAST(:modules AS text[])) AND w.kind = ANY (CAST(:kinds AS text[])) "
     "AND w.not_before <= statement_timestamp() AND w.cancel_requested_at IS NULL "
@@ -181,9 +182,27 @@ _CANCEL_UPLOAD_RUNNING = text(
     "updated_at = statement_timestamp() WHERE comparison_upload_id = :upload_id "
     "AND state IN ('leased', 'running') AND cancel_requested_at IS NULL"
 )
+_PAUSE_SERIES = text(
+    "UPDATE comparison_work SET state = 'paused', updated_at = statement_timestamp() "
+    "WHERE comparison_series_id = :series_id AND state IN ('queued', 'retry_wait')"
+)
+_RESUME_SERIES = text(
+    "UPDATE comparison_work SET state = 'queued', updated_at = statement_timestamp() "
+    "WHERE comparison_series_id = :series_id AND state = 'paused'"
+)
+_CANCEL_SERIES_AT_REST = text(
+    "UPDATE comparison_work SET state = 'cancelled', updated_at = statement_timestamp(), "
+    "terminal_at = statement_timestamp() WHERE comparison_series_id = :series_id "
+    "AND state IN ('queued', 'paused', 'retry_wait', 'spend_unknown')"
+)
+_CANCEL_SERIES_RUNNING = text(
+    "UPDATE comparison_work SET cancel_requested_at = statement_timestamp(), "
+    "updated_at = statement_timestamp() WHERE comparison_series_id = :series_id "
+    "AND state IN ('leased', 'running') AND cancel_requested_at IS NULL"
+)
 _COLUMNS = (
     "comparison_work_id, project_uid, module, kind, state, payload, priority, not_before, "
-    "attempt_count, max_attempts, current_work_attempt_id, comparison_upload_id, "
+    "attempt_count, max_attempts, current_work_attempt_id, comparison_upload_id, comparison_series_id, "
     "cancel_requested_at IS NOT NULL AS cancel_requested, failure_reason, created_at, terminal_at"
 )
 _GET = text(f"SELECT {_COLUMNS} FROM comparison_work WHERE comparison_work_id = :work_id")
@@ -194,7 +213,8 @@ _LIVE_KINDS = text(
 _COUNTS = text(
     "SELECT state, count(*) AS n FROM comparison_work "
     "WHERE (CAST(:project_uid AS text) IS NULL OR project_uid = :project_uid) "
-    "AND (CAST(:upload_id AS text) IS NULL OR comparison_upload_id = :upload_id) GROUP BY state"
+    "AND (CAST(:upload_id AS text) IS NULL OR comparison_upload_id = :upload_id) "
+    "AND (CAST(:series_id AS text) IS NULL OR comparison_series_id = :series_id) GROUP BY state"
 )
 
 
@@ -231,6 +251,7 @@ class WorkRecord:
     max_attempts: int
     current_attempt_id: str | None
     comparison_upload_id: str | None
+    comparison_series_id: str | None
     cancel_requested: bool
     failure_reason: str | None
     created_at: datetime
@@ -275,7 +296,8 @@ class ComparisonWorkRepository:
         self, session: Session, *, project_uid: str, module: str, kind: str,
         payload: Mapping[str, Any] | None = None, dedupe_key: str | None = None,
         priority: int = 0, delay_seconds: float = 0.0, max_attempts: int = 3,
-        comparison_upload_id: str | None = None, created_by_user_uid: str | None = None,
+        comparison_upload_id: str | None = None, comparison_series_id: str | None = None,
+        created_by_user_uid: str | None = None,
     ) -> Enqueued:
         """Create an item in the caller's transaction and hint the workers.
 
@@ -304,7 +326,8 @@ class ComparisonWorkRepository:
                 "work_id": work_id, "project_uid": project_uid, "module": module, "kind": kind,
                 "payload": json.dumps(body, sort_keys=True), "dedupe_key": dedupe_key,
                 "priority": priority, "delay": float(delay_seconds), "max_attempts": max_attempts,
-                "upload_id": comparison_upload_id, "created_by": created_by_user_uid,
+                "upload_id": comparison_upload_id, "series_id": comparison_series_id,
+                "created_by": created_by_user_uid,
             }).scalar_one_or_none()
             if inserted is not None:
                 _wake_workers(session)
@@ -358,6 +381,7 @@ class ComparisonWorkRepository:
             work_id=work_id, attempt_id=attempt_id, attempt_no=int(attempt["attempt_no"]),
             project_uid=str(row["project_uid"]), module=str(row["module"]), kind=str(row["kind"]),
             payload=dict(row["payload"]), comparison_upload_id=row["comparison_upload_id"],
+            comparison_series_id=row["comparison_series_id"],
             created_by_user_uid=row["created_by_user_uid"], max_attempts=int(row["max_attempts"]),
             authority=ItemAuthority(work_id, attempt_id, str(attempt["execution_token"])),
             _repository=self,
@@ -600,6 +624,22 @@ class ComparisonWorkRepository:
         requested = int(session.execute(_CANCEL_UPLOAD_RUNNING, {"upload_id": upload_id}).rowcount)
         return CancelResult(cancelled=cancelled, requested=requested)
 
+    def pause_for_series(self, session: Session, series_id: str) -> int:
+        """Pause every waiting item of a series (its «Пауза»); an item in flight finishes (it is one pair)."""
+        return int(session.execute(_PAUSE_SERIES, {"series_id": series_id}).rowcount)
+
+    def resume_for_series(self, session: Session, series_id: str) -> int:
+        resumed = int(session.execute(_RESUME_SERIES, {"series_id": series_id}).rowcount)
+        if resumed:
+            _wake_workers(session)
+        return resumed
+
+    def cancel_for_series(self, session: Session, series_id: str) -> CancelResult:
+        """Cancel a series' items: the ones at rest end, the ones in flight are asked to stop."""
+        cancelled = int(session.execute(_CANCEL_SERIES_AT_REST, {"series_id": series_id}).rowcount)
+        requested = int(session.execute(_CANCEL_SERIES_RUNNING, {"series_id": series_id}).rowcount)
+        return CancelResult(cancelled=cancelled, requested=requested)
+
     # -- reads ----------------------------------------------------------------------------------
     def get(self, session: Session, work_id: str) -> WorkRecord | None:
         row = session.execute(_GET, {"work_id": work_id}).mappings().first()
@@ -611,7 +651,8 @@ class ComparisonWorkRepository:
             payload=dict(row["payload"]), priority=int(row["priority"]),
             not_before=row["not_before"], attempt_count=int(row["attempt_count"]),
             max_attempts=int(row["max_attempts"]), current_attempt_id=row["current_work_attempt_id"],
-            comparison_upload_id=row["comparison_upload_id"], cancel_requested=bool(row["cancel_requested"]),
+            comparison_upload_id=row["comparison_upload_id"], comparison_series_id=row["comparison_series_id"],
+            cancel_requested=bool(row["cancel_requested"]),
             failure_reason=row["failure_reason"], created_at=row["created_at"],
             terminal_at=row["terminal_at"],
         )
@@ -627,9 +668,12 @@ class ComparisonWorkRepository:
 
     def counts(
         self, session: Session, *, project_uid: str | None = None, upload_id: str | None = None,
+        series_id: str | None = None,
     ) -> dict[str, int]:
-        """Items by state, for a project and/or an upload (every state with none is absent)."""
-        rows = session.execute(_COUNTS, {"project_uid": project_uid, "upload_id": upload_id}).all()
+        """Items by state, for a project, an upload and/or a series (every state with none is absent)."""
+        rows = session.execute(
+            _COUNTS, {"project_uid": project_uid, "upload_id": upload_id, "series_id": series_id}
+        ).all()
         return {str(state): int(n) for state, n in rows}
 
     # -- transitions ----------------------------------------------------------------------------
