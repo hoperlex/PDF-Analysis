@@ -5,6 +5,7 @@
     comparison_chain.py run    --results DIR [--set DIR] [--files v1.pdf,v2.pdf,...] [--label NAME]
     comparison_chain.py tiles  --results DIR [--tiles 20]
     comparison_chain.py report --results DIR
+    comparison_chain.py bytes  --results DIR   (distinct blobs and bytes per kind; archive members by name and size)
     comparison_chain.py worker                 (internal: the real worker with a recording wrapper)
 
 Run it from the lane worktree with the lane's stack up (``make up`` and ``make migrate``), the lane's interpreter and
@@ -1223,6 +1224,62 @@ def cmd_tiles(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------------------------------------------------
+# bytes: what the store really holds, each blob counted once (the store keeps one object for equal content)
+# ---------------------------------------------------------------------------------------------------------------------
+
+
+def cmd_bytes(args: argparse.Namespace) -> int:
+    """Distinct blobs and bytes per kind, and the members of the page archives (names and sizes only)."""
+    import boto3
+    from botocore.client import Config
+    from sqlalchemy import create_engine, text
+
+    dotenv = load_dotenv()
+    engine = create_engine(dotenv["DATABASE_URL"])
+    kinds = {
+        "sources": "SELECT DISTINCT b.blob_id, b.size_bytes FROM blob b JOIN input_manifest_entry m ON m.blob_id = b.blob_id",
+        "previews": "SELECT DISTINCT b.blob_id, b.size_bytes FROM blob b JOIN comparison_page_profile p ON p.preview_blob_id = b.blob_id",
+        "thumbnails": "SELECT DISTINCT b.blob_id, b.size_bytes FROM blob b JOIN comparison_page_profile p ON p.thumbnail_blob_id = b.blob_id",
+        "archives": "SELECT DISTINCT b.blob_id, b.size_bytes FROM blob b JOIN comparison_page_profile p ON p.profile_blob_id = b.blob_id",
+        "pair_masks": "SELECT DISTINCT b.blob_id, b.size_bytes FROM blob b JOIN comparison_sheet_pair_result r ON r.mask_blob_id = b.blob_id",
+    }
+    result: dict[str, Any] = {}
+    with engine.connect() as connection:
+        found = {kind: connection.execute(text(sql)).all() for kind, sql in kinds.items()}
+        rows = int(connection.execute(text("SELECT count(*) FROM comparison_page_profile")).scalar_one())
+        masked = int(connection.execute(text("SELECT count(*) FROM comparison_sheet_pair_result WHERE mask_blob_id IS NOT NULL")).scalar_one())
+        results_n = int(connection.execute(text("SELECT count(*) FROM comparison_sheet_pair_result")).scalar_one())
+    for kind, items in found.items():
+        result[kind] = {"blobs": len(items), "bytes": sum(int(r[1]) for r in items)}
+    result["page_profile_rows"] = rows
+    result["pair_results"] = results_n
+    result["pair_results_with_mask"] = masked
+    client = boto3.client("s3", endpoint_url=dotenv["S3_ENDPOINT_URL"], region_name=dotenv["S3_REGION"], aws_access_key_id=dotenv["S3_ACCESS_KEY_ID"],
+                          aws_secret_access_key=dotenv["S3_SECRET_ACCESS_KEY"], config=Config(s3={"addressing_style": "path"}))
+    parts: dict[str, int] = defaultdict(int)
+    stored: dict[str, int] = defaultdict(int)
+    tile_count = 0
+    for blob_id, _size in found["archives"]:
+        ulid = str(blob_id).removeprefix("blob_")
+        body = client.get_object(Bucket=dotenv["S3_BUCKET"], Key=f"blobs/{ulid[:2]}/{ulid[2:4]}/{ulid}")["Body"].read()
+        with zipfile.ZipFile(io.BytesIO(body)) as archive:
+            for info in archive.infolist():
+                kind = "tiles" if info.filename.startswith("tiles/") else info.filename
+                parts[kind] += info.file_size
+                stored[kind] += info.compress_size
+                tile_count += 1 if kind == "tiles" else 0
+        del body
+    result["archive_members_raw_bytes"] = dict(parts)
+    result["archive_members_stored_bytes"] = dict(stored)
+    result["archive_tiles"] = tile_count
+    result["total_bytes"] = sum(v["bytes"] for k, v in result.items() if isinstance(v, dict) and "bytes" in v)
+    out = Path(args.results) / "distinct_bytes.json"
+    out.write_text(json.dumps(result, indent=1, sort_keys=True), encoding="ascii")
+    print(json.dumps(result, indent=1, sort_keys=True))
+    return 0
+
+
+# ---------------------------------------------------------------------------------------------------------------------
 # report: tables from the records
 # ---------------------------------------------------------------------------------------------------------------------
 
@@ -1481,9 +1538,11 @@ def main(argv: list[str] | None = None) -> int:
     tiles.add_argument("--interval", type=float, default=0.05)
     report = commands.add_parser("report", help="tables from the records")
     report.add_argument("--results", default=str(RESULTS))
+    sizes = commands.add_parser("bytes", help="distinct blobs and bytes per kind, and the members of the page archives")
+    sizes.add_argument("--results", default=str(RESULTS))
     commands.add_parser("worker", help="internal: the real worker with a recording wrapper")
     args = parser.parse_args(argv)
-    return {"run": cmd_run, "tiles": cmd_tiles, "report": cmd_report, "worker": cmd_worker}[args.command](args)
+    return {"run": cmd_run, "tiles": cmd_tiles, "report": cmd_report, "worker": cmd_worker, "bytes": cmd_bytes}[args.command](args)
 
 
 if __name__ == "__main__":
