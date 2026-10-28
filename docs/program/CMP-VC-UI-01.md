@@ -200,4 +200,17 @@ Green without an edit: `dashboard-invalidation`, `server-credential`, `lazy-boun
 
 ## 13. Checks
 
-(the commands and counts are in the next section as run on the last commit)
+Run on the committed, clean tree whose code is the commit `7617ef74` (the commits after it change only the two documents of the lane), `node_modules` the read-only link to `cmp-seal-c0`, `AUDITMANAGER_LEGACY_PROMPTS_REPO=/nonexistent`, the host busy with other lanes (load average 6-11), so the suite ran with `--maxWorkers=4`. The numbers are the runner's own, copied from its output files in the lane's scratch directory.
+
+| Command | Exit | Result |
+| --- | --- | --- |
+| `git diff --check 9f5f4912..HEAD` | 0 | prints nothing |
+| `npm --prefix web run lint -- --quiet` | 0 | no findings |
+| `npm --prefix web run typecheck` | 0 | no findings |
+| `npm --prefix web run api:verify` | 0 | `OK - 148 operations, contract sha256 7c4c95a4…98238`, no drift |
+| `cd web && npx vitest run --maxWorkers=4` (the **whole** web suite, once, at the end) | 0 | **217 files, 3495 tests passed, 0 failed** (425 s); it holds the lane's files (`unit/version-compare` 131 tests, `unit/run/polling.test.ts` 16), `tests/guards`, `tests/unit/styles` (the census), `tests/unit/shell`, `tests/unit/qa_w50` and every file the pin sweep lists |
+| `.venv/bin/python -m pytest -q tests/contract` without the three `D-220` files | 0 | **1310 passed, 19283 subtests passed** (145 s), on a tree with no uncommitted file (the suite refuses a dirty one) |
+| `.venv/bin/python -m pytest -q tests/e2e/test_pc01_journey_conformance.py` | 0 | **135 passed** (the manifest names the new route and the call `getProductVersion`) |
+| mutation proofs P1a-P15 (section 8) | | each guard red under its mutation, green once the file is restored from git |
+
+Not run, as the brief and `R-135` say: `make gate`, the live journey on a stand, a browser (section 10 item 10). The tree is clean after every proof (`git status --short` prints nothing).
