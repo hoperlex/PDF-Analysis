@@ -101,3 +101,7 @@ missing `contract_version`.
 ADR validation preserves baseline IDs ADR-0001 through ADR-0018 and requires exact
 agreement between current ADR files and `docs/architecture/ADR_INDEX.md`. Additional
 uniquely numbered ADRs are allowed only when indexed.
+
+## AR v3 live activation
+
+`scripts/ar-v3/activate-live.sh` — the owner's one-script path for steps 10a, 10b and 11 of `docs/program/AR-V3-LIVE-ACTIVATION-OWNER-STEPS-01.md` (`R-146be`). Caller: the owner, in the deployed clone on the live host. Safe default: `--check` writes nothing; every write step asks for a typed word; `--rollback` withdraws the pack. Tested with a stand-in `docker` only.
