@@ -228,7 +228,7 @@ Rules: no lane starts in a wave that names its hotspot for another lane; no wave
 
 ## 5. The accepted-risk register
 
-`A-1` to `A-3`, `A-5`, `A-6`, `A-7` and `A-8` are the owner's (`R-146b`, `R-146f`, `R-146h`, `R-146v`, `R-146ae`, `R-146ag`, `R-146am`); `A-4` is the architect's consequence of `R-146a` and `R-146b`. The reopen triggers of `A-2`, `A-3` and `A-4` are confirmed by `R-146w` (`AD-16`); the trigger of `A-5` is given with `R-146v`'s application.
+`A-1` to `A-3`, `A-5`, `A-6`, `A-7` and `A-8` are the owner's (`R-146b`, `R-146f`, `R-146h`, `R-146v`, `R-146ae`, `R-146ag`, `R-146am`); `A-12` rests on the planner session's report of the owner's answer (`R-147d`); `A-4` is the architect's consequence of `R-146a` and `R-146b`. The reopen triggers of `A-2`, `A-3` and `A-4` are confirmed by `R-146w` (`AD-16`); the trigger of `A-5` is given with `R-146v`'s application.
 
 | Id | Risk, stated plainly | Owner's words | Reopen trigger |
 | --- | --- | --- | --- |
@@ -244,6 +244,7 @@ Rules: no lane starts in a wave that names its hotspot for another lane; no wave
 | A-9 | The runner channel hands the complete prompt to the operator's own Claude Code session or unattended agent, a recipient `A-2` does not name. | `R-146az` | the first outside user, or a provider term that forbids it |
 | A-10 | During the beta no screen says that a profile or a citation was not reviewed by a human (`A-7` stays true). | `R-146ba` | the label switch is restored by one edit; or the first expert review |
 | A-11 | АР v3 is activated on decisions taken by the AI integrator under the owner's delegation; the reviewer attestation says so; no subject-matter expert took part. | `R-146ba` | a qualified expert's review of C01–C22 and the six maps |
+| A-12 | `A-2` is widened to drawing images: when the comparison modules are enabled, crops of drawing sheets may be sent to a model in the comparison AI layers, to whichever provider the route reaches. The answer is the planner session's report of the owner's poll (`R-147d`), not the integrator's own hearing of it; the default module flag `none` keeps it inactive. | `R-147d` | the owner sets `AUDITMANAGER_COMPARISON_MODULES` on a host (the enabling is where the owner confirms this row in person), or a provider term forbids image processing |
 
 Not accepted and therefore not a risk register entry: `R-146n` item 4 (no restriction of routing or substitution); it is the cause of `A-2`.
 
