@@ -218,8 +218,10 @@ SEALED_STUB_COLLECTIONS: frozenset[str] = frozenset({"getComparisonQueueSummary"
 #: `CMP-SEAL-C1` fills it with the nine reads of the version comparison core that name a parent; `CMP-MATRIX-01`,
 #: `CMP-SERIES-01`, `CMP-VIEWER-01` and `CMP-VC-OVERVIEW-01` remove the ones they wire, and each then joins the `404`
 #: sweep (an absent project, document, series, transition or sheet pair is `404 not_found`).
+#: `CMP-MATRIX-01` serves ``getComparisonMatrix``, ``listComparisonMatrixEdits`` and ``listComparisonAiLinks`` and
+#: removes them: each joins the `404` sweep.
 SEALED_STUB_ADDRESSED: frozenset[str] = frozenset({
-    "getComparisonMatrix", "listComparisonMatrixEdits", "listComparisonAiLinks", "listComparisonSeries",
+    "listComparisonSeries",
     "getComparisonSeries", "listComparisonSheetPairs", "getComparisonSheetPair", "streamComparisonPairTile",
     "getComparisonOverview",
 })

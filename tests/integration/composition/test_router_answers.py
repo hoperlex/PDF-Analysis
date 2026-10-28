@@ -70,9 +70,10 @@ _STUB_PROFILE = "/page-profiles/cpr_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 #: nothing.
 _STUB_DOCUMENT = f"/projects/{_PRJ}/documents/doc_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 _STUB_PAIR = "/comparison-sheet-pairs/ctp_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+#: `CMP-MATRIX-01` serves the matrix, its edit history and the accepted AI links and removes their three paths: an
+#: absent project or document is `404`.
 SEALED_STUB_GETS: frozenset[str] = frozenset({
-    f"{_STUB_DOCUMENT}/comparison-matrix", f"{_STUB_DOCUMENT}/comparison-matrix/edits",
-    f"{_STUB_DOCUMENT}/comparison-ai-links", f"{_STUB_DOCUMENT}/comparison-series",
+    f"{_STUB_DOCUMENT}/comparison-series",
     "/comparison-series/cser_01ARZ3NDEKTSV4RRFFQ69G5FAV",
     "/comparison-transitions/ctn_01ARZ3NDEKTSV4RRFFQ69G5FAV/sheet-pairs",
     _STUB_PAIR, f"{_STUB_PAIR}/tile", f"/projects/{_PRJ}/comparison-overview", "/execution/comparison-queue",

@@ -174,10 +174,10 @@ APPEND_ONLY_BY_CODE_EVIDENCE = {
 #: lane that writes one removes it from this set (``test_a_sealed_table_that_the_code_now_writes_leaves_the_set``
 #: is red until it does).
 SEALED_NOT_YET_WRITTEN = frozenset((
-    # `0039_comparison_core` (`CMP-SEAL-C1`): the tables of the version comparison core, until `CMP-MATRIX-01`,
-    # `CMP-ENGINE-01` and `CMP-SERIES-01` write them. `comparison_matrix_edit` is written by migration 0039 alone
-    # (the migrated approvals) and by no code yet.
-    "comparison_ai_link", "comparison_matrix", "comparison_matrix_edit", "comparison_series",
+    # `0039_comparison_core` (`CMP-SEAL-C1`): the tables of the version comparison core, until `CMP-SERIES-01` and
+    # wave C2 write them. `CMP-MATRIX-01` writes `comparison_matrix` and `comparison_matrix_edit` and only reads
+    # `comparison_ai_link`, which wave C2 writes; `CMP-ENGINE-01` writes `comparison_sheet_pair_result`.
+    "comparison_ai_link", "comparison_series",
     "comparison_sheet_pair", "comparison_transition",
 ))
 
