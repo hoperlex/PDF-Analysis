@@ -149,4 +149,3 @@ def pair_dict(row: Mapping[str, Any], *, with_evidence: bool) -> dict[str, Any]:
             if member in result:
                 out[member] = result[member]
     return out
-

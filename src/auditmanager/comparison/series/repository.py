@@ -557,4 +557,3 @@ class SeriesRepository:
     def pair_view(self, session: Session, pair_id: str) -> Mapping[str, Any] | None:
         row = session.execute(_PAIR_VIEW, {"id": pair_id}).mappings().first()
         return None if row is None else dict(row)
-

@@ -292,4 +292,3 @@ class SeriesAdvancer:
                     )
                 return Advance(False)
             return Advance(True, DRIVE_ACTIVE_SECONDS)
-

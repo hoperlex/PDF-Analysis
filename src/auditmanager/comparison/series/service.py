@@ -541,4 +541,3 @@ class ComparisonSeriesService:
                 payload={"document_uid": document_uid}, dedupe_key=matrix_build_dedupe_key(document_uid),
                 created_by_user_uid=user_uid,
             )
-
