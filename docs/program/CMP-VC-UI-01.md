@@ -87,18 +87,24 @@ The transfer (`model/transfer.ts`) sends 16 MiB parts numbered from 1, completes
 | orphaned edits, stale reasons | — | «Правки, которые больше не применяются (N)» always in view; «История правок (N)» behind a disclosure; the banner of a stale matrix with its reasons |
 | a click on a sheet with no pair | `V:1227-1248` | the original's sentences (`answerClick`) |
 
-## 5. What waits for the SERIES and OVERVIEW lanes, and what was assumed
+## 5. SERIES and OVERVIEW: what was built against, and what the integrator confirms
 
-The lane was written against the sealed contract while both backends were stubs (`503 dependency_unavailable`); the screens were exercised with seeded caches. The integrator confirms these assumptions when the lanes merge (each has a test that pins it, named):
+The lane was written against the sealed contract while both backends were stubs. `CMP-SERIES-01` merged (`c228cf2e`) while the lane ran; its report and the integrator's notes were read and the screens adapted in commit `feat(web): the facts of CMP-SERIES-01` (the branch was not merged, as told). **Settled by the SERIES report**, each pinned by a test:
+
+1. «Листов» is `summary.sheets` (the lane first used `compared`; test «counts «Листов» by the transition's sheets»).
+2. A split sheet is one pair per part with the older sheet as page A of each; `pairOfRow` finds a row's pair by its newer page first, so the second part's row has its own pair (`model.test.ts`, «gives the second part of a split sheet its own pair»).
+3. «Досчитать» (`finishComparisonSeries`) is offered for a series that has ended with something left: `failed`, `cancelled`, or `completed` with a transition that is not `completed` or has a failed pair; «Продолжить» (`resume`) for `paused`; «Заново» (`start` with `restart` and the `base_order_revision_no` the sheets tab saw) for `completed`, `failed`, `cancelled` — a queued, running or paused series is `comparison_series_active` (`continueOf`, `canRestart`, `hasLeftovers`).
+4. Step 5 words: queued and running are «идёт»; the others as the integrator listed them (`stepView`).
+5. A pair shows `reasons` (the engine's, then the series': `SPLIT_SHEET`, `TABLE_GROUP`, `AI_MATCH`, and `UNCHECKED_CHANNEL_<CHANNEL>` as «не проверено: <канал>»), `permit` (the four states, each item), `parts` (role and coverage), `ai_dependent`, and a failed pair's «ошибка расчёта»; none of these codes is printed.
+6. Sentences owed by the SERIES report (§10) are in `failure.ts`: `comparison_series_active`, `comparison_series_state`, `comparison_version_order_stale`, `comparison_matrix_stale` (now worded for both uses: moved under the reader, or not ready for the start), `comparison_versions_few`; `ComparisonPermitState` and `ComparisonPartRole` joined `TRANSLATED_SCHEMAS`.
+
+**Still assumed (the OVERVIEW lane has not merged); the integrator confirms when it does:**
 
 1. **The grouping of a set** (`groupOf`, `overview-view.ts`): any step `failed` → «Ошибки»; else any step `queued`/`running`/`pausing` → «Идут»; else `next_step` present → «Ждут действия»; else «Готовы». The server's `counters` are shown as they come when nothing is searched; if OVERVIEW groups differently the tiles and the filtered table disagree (`model.test.ts`, «groups a set by its steps»).
 2. **`next_step`** is the step the chip proposes; a set with none and no running step reads «Готово».
 3. **Step figures** (`ComparisonStepCounts`): `profile` uses `ready`, `total`, `failed`; `matrix` `rows`, `unmatched`, `manual_edits`; `series` `done`, `total`, `with_changes`; `upload` `total`. A figure that is absent prints nothing.
-4. **Series ids.** The overview carries none, so a series command from the table («Пауза», «Продолжить», «Заново») reads `listComparisonSeries(limit 1)` first and acts on the newest series (`listComparisonSeries` answers newest first).
-5. **Verdict codes.** `content_same` + `zones_only` together say «…, изменены только служебные зоны»; `zones_only` alone says «изменены только служебные зоны»; `different` quotes `summary.different` and `style_only`; `composition_changed` `added`/`removed`; `needs_review` `needs_review`; `calculation_failed` `failed`. «Листов» is `summary.compared`.
-6. **Transitions in the matrix.** The pair list of a transition is read whole (200 per page, up to ten pages) and a row's pair is the one whose `page_a`/`page_b` equal the row's cells in the chosen sides, an absent page meaning the pair has none on that side (`pairOfRow`).
-7. **The start of a series** sends `base_order_revision_no` (`0` for none) from the sheets tab and nothing from the table (the table does not read the order).
-8. **A file's `failure_reason`** values (`comparison_file_sha256`, `comparison_file_size`, `staged_upload_lost` are retryable; `content_*` are not) are those of `CMP-INGEST-01`; the declared files come back in the order they were declared (matching is by digest and size and does not depend on it).
+4. **Series ids.** The overview carries none, so a series command from the table («Пауза», «Продолжить», «Заново») reads `listComparisonSeries(limit 1)` first and acts on the newest series; «Заново» from the table sends no `base_order_revision_no` (the table does not read the order), from the sheets tab it sends the one seen.
+5. **The step state of a cancelled series** is `interrupted` («прервано») and offers «Продолжить» = `finishComparisonSeries`; a `paused` one offers `resume`.
 
 ## 6. The Russian sentences (g)
 
@@ -114,6 +120,27 @@ Schemas registered in `TRANSLATED_SCHEMAS` with markers (every member is seen by
 4. **The menu entry stays when the module is off.** ADR decision 23 says a module that is off has no menu entry. The registry (`screenDecision`) has no per-deployment column and the frame makes no API call, so hiding the row needs the frame (`_app/**`, not this lane's paths). The screen says «Модуль «Сравнение версий» выключен» and draws no command. FIX slot.
 5. **The block «Сравнение» of «Очередь» mounts through a slot in the widget** (`ComparisonQueueSlot` under the list), because `_pages/queue/**` is outside the lane's paths. The slot draws the block only inside a query provider (several tests render the list bare). The clean mount is one line in `queue-page.tsx`; FIX slot.
 
-## 8. Checks
+## 8. Mutation proofs (the guard shown red, the file restored from git, the same tests green)
 
-(filled below)
+Tool: a script outside the repository applies one replacement to the committed file, runs the named test files, restores the file with `git checkout`, and runs them again; the tree was clean after each. `U` is `web/tests/unit/version-compare`.
+
+| # | commitment | file mutated | guard | red | restored |
+| --- | --- | --- | --- | --- | --- |
+| P1a | **the draft is rebased and what does not fit is reported**: nothing counts as missing | `entities/version-series/model/draft.ts` | `U/model.test.ts` | 2 failed, 33 passed | 35 passed |
+| P1b | the rebased draft takes the fresh revision as its base | `draft.ts` | `U/model.test.ts` | 1 failed | 35 passed |
+| P1c | **a `409 comparison_matrix_stale` is recognised** | `model/failure.ts` | `U/model.test.ts` | 1 failed | 35 passed |
+| P1d | the draft knows the matrix moved under it | `draft.ts` | `U/model.test.ts` | 1 failed | 35 passed |
+| P2a | **A-12: «Подтвердить пару» / «Отозвать» are not offered while the versions module is on** | `widgets/version-comparison/ui/version-comparison.tsx` | `U/screens.test.ts` | 2 failed, 52 passed | 54 passed |
+| P2b | **A-12: «Подготовить сводку» is not offered** | `version-comparison.tsx` | `U/screens.test.ts` | 1 failed, 53 passed (after the test was tightened: the first version survived this mutation) | 54 passed |
+| P2c | A-12: the pointer to «Сравнение версий» is drawn | `version-comparison.tsx` | `U/screens.test.ts` | 1 failed | 54 passed |
+| P3a | **a `503` of the module is the module's state, not an error** (the widget) | `widgets/version-series/ui/module-state.tsx` | `U/screens.test.ts` | 2 failed, 52 passed | 54 passed |
+| P3b | the classifier knows the comparison's dependency names | `model/failure.ts` | `U/model.test.ts`, `U/screens.test.ts` | 4 failed, 85 passed | 89 passed |
+| P4 | **the census block**: no rendered state of the lane's screens | `web/tests/unit/styles/screens.ts` | `tests/unit/styles/contrast.test.ts` | 1 failed, 19 passed (`names every colour-bearing rule that NO rendered screen reaches`) | 20 passed |
+| P5 | the transfer sends from part 1 although the server holds parts | `widgets/comparison-upload/model/transfer.ts` | `U/upload-model.test.ts` | 1 failed | 25 passed |
+| P6 | a part the stop interrupted gets a new key on the next run | `transfer.ts` | `U/upload-model.test.ts` | 1 failed (the first version of the test survived; a stop-and-continue case was added) | 26 passed |
+| P7 | «⤫» is offered for a row with one sheet | `model/matrix-edits.ts` | `U/model.test.ts` | 1 failed | 35 passed |
+| P8 | the queue block shows an unwired module as a plain error | `widgets/execution-queue/ui/comparison-queue-block.tsx` | `U/screens.test.ts` | 1 failed | 54 passed |
+| P9 | the version-scoped screen keeps its old heading | `_pages/stage-comparison/ui/stage-comparison-page.tsx` | `U/screens.test.ts` | 1 failed | 54 passed |
+
+Two of the fourteen first survived (P2b, P6): the guard beside each was tightened in the commit `test(web): two guards that survived their mutation`, and the mutation run again. Counts above are those of the files before the SERIES adaptation added tests.
+
