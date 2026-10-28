@@ -1,6 +1,9 @@
 /**
  * The evidence beside the sheet (`CMP-VIEWER-01`): the channel strip, the text changes, the service zones and «Как
  * сравнивалось». All of it is the engine's raw deterministic evidence, shown as it is (an AI layer never rewrites it).
+ *
+ * The reasons that force «Нужна проверка» are said by `pairReasonWords` of `entities/version-series`, the one complete table
+ * (the engine's reasons, the series' and the unchecked channels); a code it does not know reads «причина не описана».
  */
 
 import { Fragment } from 'react';
@@ -11,6 +14,7 @@ import type {
   ComparisonServiceNote,
   ComparisonTextChange,
 } from '@/shared/api';
+import { pairReasonWords } from '@/entities/version-series';
 
 import {
   CHANNEL_LABELS,
@@ -25,26 +29,6 @@ import type { TextPart } from '../model/text-marks';
 
 import { BeforeAfter } from './before-after';
 import styles from './comparison-viewer.module.css';
-
-/**
- * The reasons that force «Нужна проверка» (`status.py` of the original, listed in its inventory §4.1), in words. A
- * reason this table does not know is shown with its code in brackets and the sentence «причина без описания», so that
- * nothing is hidden and nothing is invented; `CMP-VC-UI-01` owns the full list of sentences.
- */
-export const REASON_WORDS: Readonly<Record<string, string>> = {
-  MATCH_LOW_CONFIDENCE: 'листы сопоставлены с низкой уверенностью',
-  MATCH_AMBIGUOUS: 'сопоставление неоднозначно',
-  ALIGNMENT_UNRELIABLE: 'совмещение листов ненадёжно',
-  DUPLICATE_SHEET: 'лист повторяется в комплекте',
-  RENDER_FAILED: 'лист не удалось отрисовать',
-  NO_TEXT_LAYER: 'нет текстового слоя',
-  STAMP_NOT_RECOGNIZED: 'штамп не распознан',
-  SPEC_NOT_PARSED: 'спецификация не разобрана',
-};
-
-export function reasonWords(code: string): string {
-  return REASON_WORDS[code] ?? `причина без описания (${code})`;
-}
 
 export interface ChannelStripProps {
   readonly channels: ComparisonChannels | undefined;
@@ -82,7 +66,7 @@ export function ChannelStrip({ channels, reasons }: ChannelStripProps) {
         </>
       )}
       {reasons.length === 0 ? null : (
-        <p className={styles.reasons}>причины: {reasons.map(reasonWords).join('; ')}</p>
+        <p className={styles.reasons}>причины: {reasons.map(pairReasonWords).join('; ')}</p>
       )}
     </section>
   );

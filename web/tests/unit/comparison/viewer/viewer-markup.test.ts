@@ -121,8 +121,22 @@ describe('the viewer of a compared pair', () => {
     expect(markup).toContain('Не проверено:');
     expect(markup).toContain('читаемость надписей — нет текстового слоя: надписи сравнены только графически');
     expect(markup).toContain('причины: нет текстового слоя');
-    expect(html(comparedPair({ reasons: ['NEW_REASON'] }))).toContain('причина без описания (NEW_REASON)');
+    // a code nobody described is said as such, and its code is never printed
+    const unknown = html(comparedPair({ reasons: ['NEW_REASON'] }));
+    expect(unknown).toContain('причины: причина не описана');
+    expect(text(unknown)).not.toContain('NEW_REASON');
     expect(html({ ...without(comparedPair(), 'channels'), reasons: [] })).toContain('Каналы сравнения неизвестны');
+  });
+
+  it('says the reasons of the series and the unchecked channels too, from the one table of the entity', () => {
+    // `SPLIT_SHEET` and `UNCHECKED_CHANNEL_<CHANNEL>` were missing from the viewer's own stopgap table
+    const markup = html(comparedPair({ reasons: ['SPLIT_SHEET', 'UNCHECKED_CHANNEL_SPEC_POSITIONS', 'AI_MATCH', 'TABLE_GROUP', 'ALIGNMENT_UNRELIABLE'] }));
+    expect(markup).toContain(
+      'причины: лист разделён между версиями: проверьте части; не проверено: позиции СО; пара опирается на связь, предложенную ИИ; ' +
+        'лист из группы листов таблицы; совмещение листов ненадёжно',
+    );
+    expect(markup).not.toContain('причина не описана');
+    expect(html(comparedPair({ reasons: ['UNCHECKED_CHANNEL_SOMETHING_NEW'] }))).toContain('причины: причина не описана');
   });
 
   it('shows «было → стало» with the numbers that changed marked', () => {
