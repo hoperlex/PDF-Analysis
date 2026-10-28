@@ -551,3 +551,10 @@ values this ADR marked «revisable by CMP-MEASURE-01»:
    `PAGE_ELEMENTS_MAX` = 400 000) would refuse the measured real set (one page has 536 426 elements). Comparison-only
    admission uses a comparison envelope policy whose per-page element limit is set from this measurement (the
    comparison path renders and extracts only in ceilinged children); the portal-bundle envelope is unchanged.
+
+## Addendum 2026-10-28 — identity prefixes added by CMP-SEAL-C1
+
+`ctn_` (a transition of a series) and `ctp_` (a sheet pair of a transition) join the prefixes of decision 2; the
+catalogue now holds 63 prefixes. ADR-0025 decision 7's wording «FOR SHARE on project» is replaced by what CMP-WORK-01
+proved necessary: the application role cannot lock a `project` row (no UPDATE), so the queue relies on item and attempt
+row locks plus `ON DELETE RESTRICT` on `fk_comparison_work_project`.
