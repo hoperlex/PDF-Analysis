@@ -84,3 +84,7 @@ it wrong or insufficient STOPs and reports; it does not invent a second format.
 4. **Not dispatched:** `CMP-MEASURE-01` (the original never compared the real set — it is an audit project there —
    so «statuses vs the original» is not measurable; run the chain profiles → matrix → series for time, RSS and bytes,
    then delete `.local/comparison-measure/13AV-RD-EM2-PA/`) and the wave's FIX lane (items in the integrator handoff).
+5. **Owner ruling, 2026-10-29 (poll answer «Эта сессия закрывает C1»).** The CMP integrator session pdf-analysis-13
+   had spent its AGENTS §7.1 budget (it resumed from a context summary); the owner waived §7.1 for this wave only:
+   the same session merges OVERVIEW and VC-UI-01, dispatches MEASURE-01 and the FIX lane, writes the wave report and
+   then hands the role over (handoff `.local/handoff/integrator-2026-10-28-cmp.md`).
