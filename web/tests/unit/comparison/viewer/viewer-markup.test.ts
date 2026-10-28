@@ -291,7 +291,7 @@ describe('the viewer speaks Russian: no side letter, no engine word', () => {
       { kind: 'annotation', change: 'added', zone: 'annotations', field: 'Highlight', after: 'проверить' },
       { kind: 'annotation', change: 'added', zone: 'annotations', field: 'SomeFutureSubtype', after: 'x' },
       { kind: 'field', change: 'changed', zone: 'some_new_zone', field: 'some_new_field', before: 'a', after: 'b' },
-    ] as ComparisonSheetPair['service_notes'];
+    ] as NonNullable<ComparisonSheetPair['service_notes']>;
     const markup = html(comparedPair({ service_notes: notes }));
     const words = text(markup);
     for (const sentence of [
