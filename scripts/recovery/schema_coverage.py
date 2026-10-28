@@ -38,13 +38,15 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-HEAD = "0038_comparison_foundation"
+HEAD = "0039_comparison_core"
 
 #: Every base table of the schema at ``HEAD`` (``relkind`` ``r``, schema ``public``).
 TABLES = frozenset((
     "account_release_mark", "alembic_version", "analysis_artifact_publication", "analysis_preset_revision", "app_user", "app_user_role",
     "ar_v3_run_group", "ar_v3_run_group_member", "attempt", "audit_event", "audit_run", "blob", "command_record", "comparison_model_call", "comparison_page_profile", "comparison_sheet_link", "comparison_summary",
     "comparison_upload", "comparison_upload_file", "comparison_upload_part", "comparison_upload_set", "comparison_version_order", "comparison_work", "comparison_work_attempt",
+    "comparison_ai_link", "comparison_matrix", "comparison_matrix_edit", "comparison_series", "comparison_sheet_pair",
+    "comparison_sheet_pair_result", "comparison_transition",
     "contract_state_transition", "document",
     "document_version", "document_version_classification", "document_version_classification_correction",
     "execution_control", "executor_connection", "executor_connection_revision", "executor_probe",
@@ -139,6 +141,30 @@ TRIGGERS = (
     ("comparison_work_attempt", "trg_comparison_work_attempt_frozen_guard", "am_guard_frozen_columns", 19),
     ("comparison_work_attempt", "trg_comparison_work_attempt_state_edges", "am_guard_comparison_state_edges", 19),
     ("comparison_work_attempt", "trg_comparison_work_attempt_write_once", "am_guard_write_once_columns", 19),
+    # `0039_comparison_core`: the guards of the version comparison core. 19 = ROW | BEFORE | UPDATE (frozen,
+    # write-once and state-edge guards), 7 = ROW | BEFORE | INSERT (chain and consistency checks), 27 = the
+    # append-only builds, edits and AI links.
+    ("comparison_ai_link", "trg_comparison_ai_link_immutable", "am_immutable_row", 27),
+    ("comparison_ai_link", "trg_comparison_ai_link_pages", "am_check_comparison_ai_link", 7),
+    ("comparison_matrix", "trg_comparison_matrix_chain", "am_check_comparison_matrix_chain", 7),
+    ("comparison_matrix", "trg_comparison_matrix_document", "am_check_comparison_core_document", 7),
+    ("comparison_matrix", "trg_comparison_matrix_immutable", "am_immutable_row", 27),
+    ("comparison_matrix_edit", "trg_comparison_matrix_edit_chain", "am_check_comparison_matrix_edit_chain", 7),
+    ("comparison_matrix_edit", "trg_comparison_matrix_edit_document", "am_check_comparison_core_document", 7),
+    ("comparison_matrix_edit", "trg_comparison_matrix_edit_immutable", "am_immutable_row", 27),
+    ("comparison_series", "trg_comparison_series_document", "am_check_comparison_core_document", 7),
+    ("comparison_series", "trg_comparison_series_frozen_guard", "am_guard_frozen_columns", 19),
+    ("comparison_series", "trg_comparison_series_inputs", "am_check_comparison_series", 7),
+    ("comparison_series", "trg_comparison_series_state_edges", "am_guard_comparison_core_state_edges", 19),
+    ("comparison_sheet_pair", "trg_comparison_sheet_pair_frozen_guard", "am_guard_frozen_columns", 19),
+    ("comparison_sheet_pair", "trg_comparison_sheet_pair_pages", "am_check_comparison_sheet_pair", 7),
+    ("comparison_sheet_pair", "trg_comparison_sheet_pair_state_edges", "am_guard_comparison_core_state_edges", 19),
+    ("comparison_sheet_pair_result", "trg_comparison_sheet_pair_result_frozen_guard", "am_guard_frozen_columns", 19),
+    ("comparison_sheet_pair_result", "trg_comparison_sheet_pair_result_pages", "am_check_comparison_sheet_pair_result", 7),
+    ("comparison_sheet_pair_result", "trg_comparison_sheet_pair_result_write_once", "am_guard_write_once_columns", 19),
+    ("comparison_transition", "trg_comparison_transition_frozen_guard", "am_guard_frozen_columns", 19),
+    ("comparison_transition", "trg_comparison_transition_state_edges", "am_guard_comparison_core_state_edges", 19),
+    ("comparison_transition", "trg_comparison_transition_versions", "am_check_comparison_transition", 7),
     ("contract_state_transition", "trg_contract_state_transition_immutable", "am_immutable_row", 31),
     ("document_version", "trg_document_version_immutable", "am_immutable_row", 27),
     ("document_version_classification", "trg_document_version_classification_immutable", "am_immutable_row", 27),

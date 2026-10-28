@@ -115,6 +115,12 @@ READ_WRITE = frozenset((
     "comparison_upload_set",
     "comparison_work",
     "comparison_work_attempt",
+    # `0039_comparison_core`: a series, a transition and a sheet pair change state; a result takes a write-once mask
+    # reference. No statement exists yet; the lanes that implement them write them.
+    "comparison_series",
+    "comparison_sheet_pair",
+    "comparison_sheet_pair_result",
+    "comparison_transition",
     "document",
     "execution_control",               # singleton upsert (jobs/repository.py)
     "executor_connection",
@@ -140,6 +146,8 @@ READ_WRITE = frozenset((
 APPEND_ONLY = frozenset((
     "analysis_preset_revision", "ar_v3_run_group", "ar_v3_run_group_member", "audit_event",
     "comparison_sheet_link", "comparison_summary", "comparison_version_order",
+    # `0039_comparison_core`: the builds of the matrix, the manual edit history and the accepted AI links.
+    "comparison_ai_link", "comparison_matrix", "comparison_matrix_edit",
     "document_version",
     "document_version_classification", "document_version_classification_correction",
     "executor_connection_revision", "executor_route_event", "expert_decision_event",
@@ -166,6 +174,11 @@ APPEND_ONLY_BY_CODE_EVIDENCE = {
 #: lane that writes one removes it from this set (``test_a_sealed_table_that_the_code_now_writes_leaves_the_set``
 #: is red until it does).
 SEALED_NOT_YET_WRITTEN = frozenset((
+    # `0039_comparison_core` (`CMP-SEAL-C1`): the tables of the version comparison core, until `CMP-MATRIX-01`,
+    # `CMP-ENGINE-01` and `CMP-SERIES-01` write them. `comparison_matrix_edit` is written by migration 0039 alone
+    # (the migrated approvals) and by no code yet.
+    "comparison_ai_link", "comparison_matrix", "comparison_matrix_edit", "comparison_series",
+    "comparison_sheet_pair", "comparison_sheet_pair_result", "comparison_transition",
 ))
 
 #: ``SELECT``.

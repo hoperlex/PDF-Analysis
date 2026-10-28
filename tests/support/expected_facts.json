@@ -1012,6 +1012,6 @@
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0038_comparison_foundation",
+  "migration_head": "0039_comparison_core",
   "contract_version": "1.9.0"
 }
