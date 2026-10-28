@@ -63,7 +63,8 @@ REQUESTS: dict[str, tuple[str, str, Any, bytes | None, bool]] = {
 }
 EXPERT_WRITES = {name for name, (_m, _p, _b, _c, keyed) in REQUESTS.items() if keyed}
 DEPENDENCIES = {"comparison_uploads", "comparison_version_orders", "version_pages"}
-#: `CMP-INGEST-01` serves the first eight and `CMP-INGEST-02` the last six; they are no longer stubs. The lane that
+#: `CMP-INGEST-01` serves the first eight, `CMP-INGEST-02` the next six and `CMP-PROFILE-01` the five page reads; they
+#: are no longer stubs. The lane that
 #: serves one more adds it here and the stub test below stops asking it for `503`; the role, key and shape tests below
 #: still judge it.
 WIRED = frozenset({
@@ -72,6 +73,8 @@ WIRED = frozenset({
     "appendComparisonVersionOrder",
     "listComparisonUploads", "excludeComparisonUploadSet", "retryComparisonUploadSet", "pauseComparisonUpload",
     "resumeComparisonUpload", "cancelComparisonUpload",
+    "listVersionPageProfiles", "getVersionPageProfile", "streamVersionPagePreview", "streamVersionPageThumbnail",
+    "streamVersionPageTile",
 })
 STUBS = sorted(set(REQUESTS) - WIRED)
 
@@ -175,7 +178,9 @@ def test_a_tile_address_outside_its_bounds_is_refused_before_the_stub(client: Te
     assert client.get(base, headers=headers).status_code == 422
     assert client.get(f"{base}?level=13&column=0&row=0", headers=headers).status_code == 422
     assert client.get(f"{base}?level=0&column=4096&row=0", headers=headers).status_code == 422
-    assert client.get(f"{base}?level=12&column=4095&row=4095", headers=headers).status_code == 503
+    # `CMP-PROFILE-01` serves the tile: an address inside its bounds reaches the read, and the profile it names
+    # does not exist.
+    assert client.get(f"{base}?level=12&column=4095&row=4095", headers=headers).status_code == 404
 
 
 def test_the_roles_are_the_ones_the_adr_gives() -> None:
