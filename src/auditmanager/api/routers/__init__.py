@@ -1,4 +1,4 @@
-"""The 130 operations of ``contracts/api/v1/openapi.json``, and nothing else.
+"""The 148 operations of ``contracts/api/v1/openapi.json``, and nothing else.
 
 :func:`build_router` assembles one ``APIRouter`` from the twenty-two router modules. It takes
 its dependencies as arguments and constructs none of them: choosing what sits behind each
@@ -72,6 +72,10 @@ from auditmanager.api.routers.optimisation import build_optimisation_routes
 from auditmanager.api.routers.optimisation_proposals import build_optimisation_proposal_routes
 from auditmanager.api.routers.releases import build_release_routes
 from auditmanager.api.routers.version_pages import build_version_page_routes
+from auditmanager.api.routers.comparison_matrix import build_comparison_matrix_routes
+from auditmanager.api.routers.comparison_overview import build_comparison_overview_routes
+from auditmanager.api.routers.comparison_pair_tiles import build_comparison_pair_tile_routes
+from auditmanager.api.routers.comparison_series import build_comparison_series_routes
 from auditmanager.api.routers.multipart import (
     MAX_BODY,
     MAX_CONCURRENT_UPLOADS,
@@ -88,6 +92,10 @@ from auditmanager.api.routers.ports import (
     ComparisonUploadPort,
     ComparisonVersionOrderPort,
     VersionPagePort,
+    ComparisonMatrixPort,
+    ComparisonOverviewPort,
+    ComparisonPairTilePort,
+    ComparisonSeriesPort,
     DispatchPort,
     CredentialPort,
     CsvExportPort,
@@ -184,6 +192,10 @@ __all__ = [
     "ComparisonUploadPort",
     "ComparisonVersionOrderPort",
     "VersionPagePort",
+    "ComparisonMatrixPort",
+    "ComparisonOverviewPort",
+    "ComparisonPairTilePort",
+    "ComparisonSeriesPort",
     "AnalysisProfilePort",
     "DispatchPort",
     "OptimisationPort",
@@ -216,7 +228,7 @@ BASE_PATH: Final[str] = "/api/v1"
 
 #: ``info.version`` of the frozen document, and the ``ErrorEnvelope.contract_version``
 #: const. The two are one value on purpose.
-CONTRACT_VERSION: Final[str] = "1.9.0"
+CONTRACT_VERSION: Final[str] = "1.10.0"
 
 
 def build_router(
@@ -251,8 +263,12 @@ def build_router(
     comparison_uploads: ComparisonUploadPort | None = None,
     comparison_version_orders: ComparisonVersionOrderPort | None = None,
     version_pages: VersionPagePort | None = None,
+    comparison_matrices: ComparisonMatrixPort | None = None,
+    comparison_series: ComparisonSeriesPort | None = None,
+    comparison_pair_tiles: ComparisonPairTilePort | None = None,
+    comparison_overview: ComparisonOverviewPort | None = None,
 ) -> Router:
-    """Assemble the 130 operations, from the twenty-three router modules -- ``me``,
+    """Assemble the 148 operations, from the twenty-three router modules -- ``me``,
     ``registrations`` and ``users`` are `W49-SEAL-01`'s three, ``sections``
     `W59-SECTION-SEAL-01`'s, ``comparison`` `W59-VERSION-COMPARE-01`'s,
     ``analysis_profiles`` `W59-ANALYSIS-SETTINGS-01`'s, ``dispatch`` `W61-DISPATCHER-01`'s and
@@ -359,6 +375,15 @@ def build_router(
     build_comparison_upload_routes(router, comparison_uploads)  # type: ignore[arg-type]
     build_comparison_version_order_routes(router, comparison_version_orders)  # type: ignore[arg-type]
     build_version_page_routes(router, version_pages)  # type: ignore[arg-type]
+    # `CMP-SEAL-C1` (ADR-0025). The version comparison core: the effective matrix and its edits,
+    # the series and its sheet pairs, the pair tiles, the overview and the queue block, sealed as
+    # stubs answering `503 dependency_unavailable` until `CMP-MATRIX-01`, `CMP-SERIES-01`,
+    # `CMP-VIEWER-01` and `CMP-VC-OVERVIEW-01` wire their ports. Optional with a default, for the
+    # reason `blocks` gives above.
+    build_comparison_matrix_routes(router, comparison_matrices)  # type: ignore[arg-type]
+    build_comparison_series_routes(router, comparison_series)  # type: ignore[arg-type]
+    build_comparison_pair_tile_routes(router, comparison_pair_tiles)  # type: ignore[arg-type]
+    build_comparison_overview_routes(router, comparison_overview)  # type: ignore[arg-type]
     _refuse_a_duplicate_operation_id(router)
     return router
 

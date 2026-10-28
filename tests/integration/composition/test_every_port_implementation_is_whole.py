@@ -166,6 +166,11 @@ PORT_FOR_ARGUMENT = {
     "comparison_uploads": "ComparisonUploadPort",
     "comparison_version_orders": "ComparisonVersionOrderPort",
     "version_pages": "VersionPagePort",
+    # `CMP-SEAL-C1`: the version comparison core's four ports, sealed as stubs.
+    "comparison_matrices": "ComparisonMatrixPort",
+    "comparison_series": "ComparisonSeriesPort",
+    "comparison_pair_tiles": "ComparisonPairTilePort",
+    "comparison_overview": "ComparisonOverviewPort",
 }
 
 

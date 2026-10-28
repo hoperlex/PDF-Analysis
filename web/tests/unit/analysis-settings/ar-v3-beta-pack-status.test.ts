@@ -256,7 +256,7 @@ describe('the pack panel in each of its five states', () => {
       new ApiError(
         503,
         {
-          contract_version: '1.9.0',
+          contract_version: '1.10.0',
           error_code: 'dependency_unavailable' as ErrorCode,
           message: 'm',
           correlation_id: 'cid-pack',

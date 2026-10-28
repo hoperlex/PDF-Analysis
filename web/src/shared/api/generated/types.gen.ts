@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.9.0 (OpenAPI 3.1.0)
- *   sha256 5daf6416d4d4100f0a49ec2d834ca52a6139c2b29dc3c3cff68080983e2a1765
+ *   AuditManager PC-01 API 1.10.0 (OpenAPI 3.1.0)
+ *   sha256 7c4c95a4aef812e1ff8ec8445a46cbc4b83a655a88ca15ff888f0dbde5b98238
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.9.0';
+export const CONTRACT_VERSION = '1.10.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '5daf6416d4d4100f0a49ec2d834ca52a6139c2b29dc3c3cff68080983e2a1765';
+export const CONTRACT_DIGEST = '7c4c95a4aef812e1ff8ec8445a46cbc4b83a655a88ca15ff888f0dbde5b98238';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -36,6 +36,7 @@ export const SCHEMA_NAMES = [
   'AppendComparisonVersionOrderRequest',
   'AppendDecisionRequest',
   'AppendDecisionResponse',
+  'ApplyComparisonMatrixEditsRequest',
   'ApproveRegistrationRequest',
   'ApproveSheetPairingRequest',
   'ApprovedDiffHunk',
@@ -73,14 +74,91 @@ export const SCHEMA_NAMES = [
   'ClaimedExecutorTask',
   'ClassifyDocumentVersionRequest',
   'ComparedVersion',
+  'ComparisonAiLink',
+  'ComparisonAiLinkAnsweredState',
+  'ComparisonAiLinkId',
+  'ComparisonAiLinkList',
+  'ComparisonAiLinkStatus',
+  'ComparisonBox',
+  'ComparisonCanvas',
+  'ComparisonCellConfidence',
+  'ComparisonCellFlag',
+  'ComparisonCellState',
+  'ComparisonChannel',
+  'ComparisonChannelState',
+  'ComparisonChannels',
+  'ComparisonDifference',
+  'ComparisonEditProvenance',
+  'ComparisonHowCompared',
   'ComparisonId',
+  'ComparisonLayer',
+  'ComparisonMatrix',
+  'ComparisonMatrixCandidate',
+  'ComparisonMatrixCell',
+  'ComparisonMatrixColumn',
+  'ComparisonMatrixCounts',
+  'ComparisonMatrixEdit',
+  'ComparisonMatrixEditId',
+  'ComparisonMatrixEditInput',
+  'ComparisonMatrixEditInputKind',
+  'ComparisonMatrixEditKind',
+  'ComparisonMatrixEditList',
+  'ComparisonMatrixEditSource',
+  'ComparisonMatrixEditStatus',
+  'ComparisonMatrixId',
+  'ComparisonMatrixPreparation',
+  'ComparisonMatrixProgress',
+  'ComparisonMatrixRevision',
+  'ComparisonMatrixRow',
+  'ComparisonMatrixStaleReason',
+  'ComparisonMatrixState',
   'ComparisonModules',
+  'ComparisonNoteChange',
+  'ComparisonNumberChange',
+  'ComparisonOverview',
+  'ComparisonOverviewCounters',
+  'ComparisonOverviewSet',
+  'ComparisonOverviewStep',
+  'ComparisonOverviewTotals',
+  'ComparisonOverviewUpload',
   'ComparisonPageProfileId',
+  'ComparisonPageRef',
+  'ComparisonPairPage',
+  'ComparisonPairTileMode',
+  'ComparisonPartRole',
+  'ComparisonPartsCoverage',
+  'ComparisonPermit',
+  'ComparisonPermitItem',
+  'ComparisonPermitState',
   'ComparisonProposalFile',
   'ComparisonProposalSet',
   'ComparisonProposalWarning',
+  'ComparisonQueueCounts',
+  'ComparisonQueueKind',
+  'ComparisonQueueModule',
+  'ComparisonQueueSummary',
   'ComparisonRefusal',
+  'ComparisonSeries',
+  'ComparisonSeriesId',
+  'ComparisonSeriesPage',
+  'ComparisonSeriesStaleReason',
+  'ComparisonSeriesState',
+  'ComparisonServiceNote',
+  'ComparisonSheetPair',
+  'ComparisonSheetPairId',
+  'ComparisonSheetPairPage',
+  'ComparisonSheetPairResultId',
+  'ComparisonSheetPairState',
+  'ComparisonSheetStatus',
+  'ComparisonStepCounts',
+  'ComparisonStepId',
+  'ComparisonStepState',
   'ComparisonSummary',
+  'ComparisonTextChange',
+  'ComparisonTransition',
+  'ComparisonTransitionId',
+  'ComparisonTransitionState',
+  'ComparisonTransitionSummary',
   'ComparisonUpload',
   'ComparisonUploadFile',
   'ComparisonUploadFileDeclaration',
@@ -93,6 +171,7 @@ export const SCHEMA_NAMES = [
   'ComparisonUploadSetId',
   'ComparisonUploadSetState',
   'ComparisonUploadState',
+  'ComparisonVerdictCode',
   'ComparisonVersionOrder',
   'ComparisonVersionOrderId',
   'ComparisonVersionOrderList',
@@ -341,11 +420,13 @@ export const SCHEMA_NAMES = [
   'StageState',
   'StageStatus',
   'StartArV3BetaGroupRequest',
+  'StartComparisonSeriesRequest',
   'StartRunRequest',
   'SubmitExecutorTaskAnswerRequest',
   'SubmitRegistrationRequest',
   'SummaryStatement',
   'TransitionAssignmentRequest',
+  'UndoComparisonMatrixEditRequest',
   'UngroundedReason',
   'UpdateMyProfileRequest',
   'UpdateUserRequest',
@@ -508,6 +589,15 @@ export type AppendDecisionRequest = {
 export type AppendDecisionResponse = {
   current_verdict: Verdict;
   event: DecisionEvent;
+};
+
+/**
+ * «Применить сопоставления (N)»: the batch an expert drafted, with the revision the draft
+ * started from. The edits are applied together or not at all.
+ */
+export type ApplyComparisonMatrixEditsRequest = {
+  base_revision: ComparisonMatrixRevision;
+  edits: Array<ComparisonMatrixEditInput>;
 };
 
 export type ApproveRegistrationRequest = {
@@ -913,10 +1003,442 @@ export type ComparedVersion = {
   version_uid: VersionUid;
 };
 
+/**
+ * An accepted AI link (ADR-0025 decisions 3 and 14): a model's answer that the validator
+ * accepted, shown labelled «ИИ» and never an expert act. It binds the algorithmic build
+ * (``matrix_id``) and the cell state it answered. Written in wave C2; this wave reads.
+ */
+export type ComparisonAiLink = {
+  ai_link_id: ComparisonAiLinkId;
+  answered_state: ComparisonAiLinkAnsweredState;
+  created_at: string;
+  document_uid: DocumentUid;
+  matrix_id: ComparisonMatrixId;
+  other_page: ComparisonPageRef;
+  page: ComparisonPageRef;
+  status: ComparisonAiLinkStatus;
+};
+
+/** ComparisonAiLinkAnsweredState. */
+export const COMPARISON_AI_LINK_ANSWERED_STATE_VALUES = [
+  'unmatched',
+  'doubtful',
+] as const;
+
+/** ComparisonAiLinkAnsweredState - the closed value set above. */
+export type ComparisonAiLinkAnsweredState = (typeof COMPARISON_AI_LINK_ANSWERED_STATE_VALUES)[number];
+
+export type ComparisonAiLinkId = string;
+
+/** The contract pattern for `ComparisonAiLinkId`. Anchored; use with `new RegExp()`. */
+export const COMPARISON_AI_LINK_ID_PATTERN = "^cak_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** Newest first. */
+export type ComparisonAiLinkList = {
+  items: Array<ComparisonAiLink>;
+  page: PageInfo;
+};
+
+/**
+ * ``applied``: the cell it answered is still in the state it answered. ``superseded``: the
+ * cell has since been matched otherwise or edited, so the link no longer shapes the matrix.
+ */
+export const COMPARISON_AI_LINK_STATUS_VALUES = [
+  'applied',
+  'superseded',
+] as const;
+
+/** ComparisonAiLinkStatus - the closed value set above. */
+export type ComparisonAiLinkStatus = (typeof COMPARISON_AI_LINK_STATUS_VALUES)[number];
+
+/** A rectangle on the canvas of the older page, in points. */
+export type ComparisonBox = {
+  height: number;
+  width: number;
+  x: number;
+  y: number;
+};
+
+/** The canvas of the older page, in points; the boxes of the differences are on it. */
+export type ComparisonCanvas = {
+  height_pt: number;
+  width_pt: number;
+};
+
+/**
+ * How a matched cell was linked: ``high`` and ``medium`` by the algorithm, ``group`` as a
+ * member of a table-sheet group, ``manual`` by an expert, ``ai`` by an accepted AI link.
+ */
+export const COMPARISON_CELL_CONFIDENCE_VALUES = [
+  'high',
+  'medium',
+  'group',
+  'manual',
+  'ai',
+] as const;
+
+/** ComparisonCellConfidence - the closed value set above. */
+export type ComparisonCellConfidence = (typeof COMPARISON_CELL_CONFIDENCE_VALUES)[number];
+
+/**
+ * ``split``: the sheet is split across versions. ``duplicate``: the same content stands on
+ * several pages. ``scan``: an image-only page whose text is not compared. ``bridge``: the cell
+ * was linked across a version that lacks the sheet.
+ */
+export const COMPARISON_CELL_FLAG_VALUES = [
+  'split',
+  'duplicate',
+  'scan',
+  'bridge',
+] as const;
+
+/** ComparisonCellFlag - the closed value set above. */
+export type ComparisonCellFlag = (typeof COMPARISON_CELL_FLAG_VALUES)[number];
+
+/**
+ * ``matched``: the cell holds a page of this version. ``unmatched``: no page was matched,
+ * candidates may be offered. ``absent``: the version has no such sheet (determined, or marked
+ * by an expert).
+ */
+export const COMPARISON_CELL_STATE_VALUES = [
+  'matched',
+  'unmatched',
+  'absent',
+] as const;
+
+/** ComparisonCellState - the closed value set above. */
+export type ComparisonCellState = (typeof COMPARISON_CELL_STATE_VALUES)[number];
+
+/**
+ * One channel of the comparison: ``checked`` with the number of differences it found,
+ * ``unchecked`` with the reason it could not look, or ``not_applicable``.
+ */
+export type ComparisonChannel = {
+  diffs?: number;
+  reason?: string;
+  state: ComparisonChannelState;
+};
+
+/** ComparisonChannelState. */
+export const COMPARISON_CHANNEL_STATE_VALUES = [
+  'checked',
+  'unchecked',
+  'not_applicable',
+] as const;
+
+/** ComparisonChannelState - the closed value set above. */
+export type ComparisonChannelState = (typeof COMPARISON_CHANNEL_STATE_VALUES)[number];
+
+/**
+ * The eight channels: ``geometry``, ``color``, ``text``, ``text_coverage``, ``zones``,
+ * ``annotations``, ``warnings`` and ``spec_positions``. A sheet is «Совпадает» only when every
+ * applicable channel is ``checked``.
+ */
+export type ComparisonChannels = {
+  annotations?: ComparisonChannel;
+  color?: ComparisonChannel;
+  geometry?: ComparisonChannel;
+  spec_positions?: ComparisonChannel;
+  text?: ComparisonChannel;
+  text_coverage?: ComparisonChannel;
+  warnings?: ComparisonChannel;
+  zones?: ComparisonChannel;
+};
+
+/**
+ * One entry of «Отличия: N». ``region_class`` is a lower-case word the engine defines
+ * (``text``, ``text_moved``, ``graphic_added``, ``graphic_removed``, ``graphic_changed``,
+ * ``color_change``, ``light_fill``, ``line_style``, ``block_moved``, ``shifted``).
+ */
+export type ComparisonDifference = {
+  after_text?: string;
+  before_text?: string;
+  box: ComparisonBox;
+  layer: ComparisonLayer;
+  region_class: string;
+};
+
+/** For a migrated edit, the ``0035`` records it came from. Absent for an expert's edit. */
+export type ComparisonEditProvenance = {
+  comparison_id: ComparisonId;
+  link_revision: number;
+  sheet_link_id: string;
+};
+
+/**
+ * «Как сравнивалось»: the registration transform of the newer page onto the older one (an
+ * affine matrix ``[a, b, c, d, e, f]``), the raster resolution, the tolerance and the counts of
+ * what was set aside.
+ */
+export type ComparisonHowCompared = {
+  algo_version: string;
+  aligned_blocks?: number;
+  dpi: number;
+  noise_count?: number;
+  separated_objects?: number;
+  tolerance_pt: number;
+  transform?: Array<number>;
+  within_tolerance_count?: number;
+};
+
 export type ComparisonId = string;
 
 /** The contract pattern for `ComparisonId`. Anchored; use with `new RegExp()`. */
 export const COMPARISON_ID_PATTERN = "^cmp_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/**
+ * The layers of the overlay: ``main`` «Основное», ``light_elements`` «Светлые элементы»,
+ * ``color_change`` «места, где изменился цвет», ``line_style`` «Оформление линий», ``moved``
+ * «Перемещено (сдвиг — не изменение)», ``within_tolerance`` «В пределах допуска», ``noise``
+ * «Шум» and ``service_zones`` «Служебные зоны».
+ */
+export const COMPARISON_LAYER_VALUES = [
+  'main',
+  'light_elements',
+  'color_change',
+  'line_style',
+  'moved',
+  'within_tolerance',
+  'noise',
+  'service_zones',
+] as const;
+
+/** ComparisonLayer - the closed value set above. */
+export type ComparisonLayer = (typeof COMPARISON_LAYER_VALUES)[number];
+
+/**
+ * The effective matrix of a document set: the algorithm, then accepted AI links (labelled,
+ * never an expert act), then manual edits (manual wins) (ADR-0025 decision 3). Rows are sheet
+ * identities, ``columns`` are the versions in the current comparison order. ``revision``,
+ * ``columns``, ``rows`` and ``counts`` are absent while no build exists. ``order_id`` is the
+ * version-order revision the build used (absent for the document's own order).
+ * ``orphaned_edit_ids`` lists the edits that no longer apply after a reorder: they are never
+ * applied silently. ``unassigned_pages`` are the pages no row holds.
+ */
+export type ComparisonMatrix = {
+  built_at?: string;
+  columns?: Array<ComparisonMatrixColumn>;
+  counts?: ComparisonMatrixCounts;
+  document_uid: DocumentUid;
+  failure_reason?: string;
+  order_id?: ComparisonVersionOrderId;
+  orphaned_edit_ids?: Array<ComparisonMatrixEditId>;
+  progress: ComparisonMatrixProgress;
+  project_uid: ProjectUid;
+  revision?: ComparisonMatrixRevision;
+  rows?: Array<ComparisonMatrixRow>;
+  stale_reasons?: Array<ComparisonMatrixStaleReason>;
+  state: ComparisonMatrixState;
+  unassigned_pages?: Array<ComparisonPageRef>;
+};
+
+/** A page offered for an unmatched cell, with the algorithm's score. */
+export type ComparisonMatrixCandidate = {
+  page: ComparisonPageRef;
+  score: number;
+};
+
+/**
+ * One cell of a row, for the version column named by ``version_uid``. ``page``,
+ * ``confidence`` and ``flags`` belong to a matched cell; ``candidates`` and ``reason`` to an
+ * unmatched one. ``edit_id`` names the manual edit that made a ``manual`` cell, ``ai_link_id``
+ * the accepted AI link that made an ``ai`` cell.
+ */
+export type ComparisonMatrixCell = {
+  ai_link_id?: ComparisonAiLinkId;
+  candidates?: Array<ComparisonMatrixCandidate>;
+  confidence?: ComparisonCellConfidence;
+  edit_id?: ComparisonMatrixEditId;
+  flags?: Array<ComparisonCellFlag>;
+  page?: ComparisonPageRef;
+  reason?: string;
+  state: ComparisonCellState;
+  version_uid: VersionUid;
+};
+
+/** One version, in the position of the current comparison order. */
+export type ComparisonMatrixColumn = {
+  label?: string;
+  page_count: number;
+  version_uid: VersionUid;
+};
+
+export type ComparisonMatrixCounts = {
+  ai: number;
+  duplicates: number;
+  groups: number;
+  manual: number;
+  rows: number;
+  unmatched: number;
+};
+
+/**
+ * One event of the append-only edit history of a document set, numbered ``edit_no`` from 1
+ * without a gap. ``order_id`` is the version-order revision the edit was made against (absent
+ * for the document's own order).
+ */
+export type ComparisonMatrixEdit = {
+  absent_version_uid?: VersionUid;
+  created_at: string;
+  created_by: UserUid;
+  document_uid: DocumentUid;
+  edit_id: ComparisonMatrixEditId;
+  edit_no: number;
+  kind: ComparisonMatrixEditKind;
+  order_id?: ComparisonVersionOrderId;
+  other_page?: ComparisonPageRef;
+  page?: ComparisonPageRef;
+  provenance?: ComparisonEditProvenance;
+  source: ComparisonMatrixEditSource;
+  status: ComparisonMatrixEditStatus;
+  undoes_edit_id?: ComparisonMatrixEditId;
+};
+
+export type ComparisonMatrixEditId = string;
+
+/** The contract pattern for `ComparisonMatrixEditId`. Anchored; use with `new RegExp()`. */
+export const COMPARISON_MATRIX_EDIT_ID_PATTERN = "^cme_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/**
+ * One edit of a batch. ``link`` needs ``page`` and ``other_page`` (two versions of the
+ * document set), ``unlink`` needs ``page``, ``mark_absent`` needs ``page`` and
+ * ``absent_version_uid``; any other member is refused as ``validation_failed``.
+ */
+export type ComparisonMatrixEditInput = {
+  absent_version_uid?: VersionUid;
+  kind: ComparisonMatrixEditInputKind;
+  other_page?: ComparisonPageRef;
+  page: ComparisonPageRef;
+};
+
+/** ComparisonMatrixEditInputKind. */
+export const COMPARISON_MATRIX_EDIT_INPUT_KIND_VALUES = [
+  'link',
+  'unlink',
+  'mark_absent',
+] as const;
+
+/** ComparisonMatrixEditInputKind - the closed value set above. */
+export type ComparisonMatrixEditInputKind = (typeof COMPARISON_MATRIX_EDIT_INPUT_KIND_VALUES)[number];
+
+/**
+ * ``link``: ``page`` and ``other_page`` are one sheet. ``unlink``: ``page`` leaves its row
+ * for a row of its own. ``mark_absent``: the row of ``page`` has no sheet in
+ * ``absent_version_uid``. ``undo``: the event reverses the edit named by ``undoes_edit_id``
+ * (read side only; an undo is asked for with ``undoComparisonMatrixEdit``).
+ */
+export const COMPARISON_MATRIX_EDIT_KIND_VALUES = [
+  'link',
+  'unlink',
+  'mark_absent',
+  'undo',
+] as const;
+
+/** ComparisonMatrixEditKind - the closed value set above. */
+export type ComparisonMatrixEditKind = (typeof COMPARISON_MATRIX_EDIT_KIND_VALUES)[number];
+
+/** Newest event first. */
+export type ComparisonMatrixEditList = {
+  items: Array<ComparisonMatrixEdit>;
+  page: PageInfo;
+};
+
+/**
+ * ``expert``: made through ``applyComparisonMatrixEdits``. ``migrated_sheet_link``: the
+ * approved pairing of ``approveSheetPairing`` (migration ``0039``, ADR-0025 decision 13); the
+ * ``0035`` ids are in ``provenance``.
+ */
+export const COMPARISON_MATRIX_EDIT_SOURCE_VALUES = [
+  'expert',
+  'migrated_sheet_link',
+] as const;
+
+/** ComparisonMatrixEditSource - the closed value set above. */
+export type ComparisonMatrixEditSource = (typeof COMPARISON_MATRIX_EDIT_SOURCE_VALUES)[number];
+
+/**
+ * ``applied``: the edit shapes the effective matrix. ``undone``: a later undo reversed it.
+ * ``orphaned``: its cells no longer exist in the current order.
+ */
+export const COMPARISON_MATRIX_EDIT_STATUS_VALUES = [
+  'applied',
+  'undone',
+  'orphaned',
+] as const;
+
+/** ComparisonMatrixEditStatus - the closed value set above. */
+export type ComparisonMatrixEditStatus = (typeof COMPARISON_MATRIX_EDIT_STATUS_VALUES)[number];
+
+export type ComparisonMatrixId = string;
+
+/** The contract pattern for `ComparisonMatrixId`. Anchored; use with `new RegExp()`. */
+export const COMPARISON_MATRIX_ID_PATTERN = "^cmx_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/**
+ * What ``prepareComparisonMatrix`` queued: the matrix state after the call and the
+ * progress of the profiles. Profiles that are missing or failed are queued again, then the
+ * matrix is built.
+ */
+export type ComparisonMatrixPreparation = {
+  document_uid: DocumentUid;
+  progress: ComparisonMatrixProgress;
+  state: ComparisonMatrixState;
+};
+
+/** Profiles of the document set's pages: ``ready`` of ``total``, ``failed`` among the rest. */
+export type ComparisonMatrixProgress = {
+  failed: number;
+  ready: number;
+  total: number;
+};
+
+/**
+ * The revision of an effective matrix: the algorithmic build it rests on and the number of
+ * manual edit events of the document set up to it (``0`` for none). An edit batch carries the
+ * revision the caller saw; a mismatch is ``409 conflict`` and the caller rebases its draft
+ * (ADR-0025 decision 14).
+ */
+export type ComparisonMatrixRevision = {
+  edit_no: number;
+  matrix_id: ComparisonMatrixId;
+};
+
+/**
+ * One sheet identity across the versions. ``row_id`` is the identity of the stored profile
+ * of the row's first page and is valid within one revision. ``cells`` holds one cell per column,
+ * in the order of the columns.
+ */
+export type ComparisonMatrixRow = {
+  cells: Array<ComparisonMatrixCell>;
+  row_id: ComparisonPageProfileId;
+  sheet_number?: string;
+  title?: string;
+};
+
+/** ComparisonMatrixStaleReason. */
+export const COMPARISON_MATRIX_STALE_REASON_VALUES = [
+  'order_changed',
+  'profiles_changed',
+] as const;
+
+/** ComparisonMatrixStaleReason - the closed value set above. */
+export type ComparisonMatrixStaleReason = (typeof COMPARISON_MATRIX_STALE_REASON_VALUES)[number];
+
+/**
+ * ``absent``: nothing has been built or queued. ``building``: profiles or the matrix are
+ * being computed. ``ready``: the build matches the current order and profiles. ``stale``: it
+ * does not, see ``stale_reasons``. ``failed``: the last build failed.
+ */
+export const COMPARISON_MATRIX_STATE_VALUES = [
+  'absent',
+  'building',
+  'ready',
+  'stale',
+  'failed',
+] as const;
+
+/** ComparisonMatrixState - the closed value set above. */
+export type ComparisonMatrixState = (typeof COMPARISON_MATRIX_STATE_VALUES)[number];
 
 /**
  * ``none`` serves neither comparison module (the default), ``versions`` «Сравнение
@@ -932,10 +1454,165 @@ export const COMPARISON_MODULES_VALUES = [
 /** ComparisonModules - the closed value set above. */
 export type ComparisonModules = (typeof COMPARISON_MODULES_VALUES)[number];
 
+/** ComparisonNoteChange. */
+export const COMPARISON_NOTE_CHANGE_VALUES = [
+  'added',
+  'removed',
+  'changed',
+] as const;
+
+/** ComparisonNoteChange - the closed value set above. */
+export type ComparisonNoteChange = (typeof COMPARISON_NOTE_CHANGE_VALUES)[number];
+
+export type ComparisonNumberChange = {
+  after: string;
+  before: string;
+};
+
+/**
+ * The overview of a project for «Проекты и этапы»: one entry per document set, the totals
+ * and counters, and the batches still being uploaded. Reading it starts nothing.
+ */
+export type ComparisonOverview = {
+  counters: ComparisonOverviewCounters;
+  generated_at: string;
+  pending_uploads: Array<ComparisonOverviewUpload>;
+  project_uid: ProjectUid;
+  sets: Array<ComparisonOverviewSet>;
+  totals: ComparisonOverviewTotals;
+};
+
+/** «Все / Ждут действия / Идут / Ошибки / Готовы». */
+export type ComparisonOverviewCounters = {
+  all: number;
+  failed: number;
+  ready: number;
+  running: number;
+  waiting: number;
+};
+
+/**
+ * One row of «Проекты и этапы»: a document set («комплект (шифр)»). ``designation`` is the
+ * «шифр», metadata and never an identity. ``steps`` lists the seven steps in order;
+ * ``next_step`` is the step the chip proposes and is absent when nothing is left to do.
+ */
+export type ComparisonOverviewSet = {
+  designation?: string;
+  document_uid: DocumentUid;
+  next_step?: ComparisonStepId;
+  project_stage?: ProjectStage;
+  section_code?: ProjectSection;
+  steps: Array<ComparisonOverviewStep>;
+  title?: string;
+  updated_at?: string;
+  version_count: number;
+};
+
+export type ComparisonOverviewStep = {
+  counts?: ComparisonStepCounts;
+  state: ComparisonStepState;
+  step: ComparisonStepId;
+};
+
+/** «N версий · M переходов». */
+export type ComparisonOverviewTotals = {
+  transitions: number;
+  versions: number;
+};
+
+/** A batch that is not finished: «В загрузке, ещё не в списке проектов». */
+export type ComparisonOverviewUpload = {
+  declared_files: number;
+  sets_done: number;
+  sets_total: number;
+  state: ComparisonUploadState;
+  upload_id: ComparisonUploadId;
+};
+
 export type ComparisonPageProfileId = string;
 
 /** The contract pattern for `ComparisonPageProfileId`. Anchored; use with `new RegExp()`. */
 export const COMPARISON_PAGE_PROFILE_ID_PATTERN = "^cpr_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/**
+ * A page of a version: the version's identity and the page's coordinate inside that
+ * immutable version (never a display number). ``page_profile_id`` is the identity of the page's
+ * stored profile once there is one; the cells of a built matrix always carry it.
+ */
+export type ComparisonPageRef = {
+  page_number: number;
+  page_profile_id?: ComparisonPageProfileId;
+  version_uid: VersionUid;
+};
+
+/**
+ * One side of a sheet pair: the page, its sheet number and title from the stamp, and
+ * whether it is an image-only page.
+ */
+export type ComparisonPairPage = {
+  page: ComparisonPageRef;
+  scan?: boolean;
+  sheet_number?: string;
+  title?: string;
+};
+
+/**
+ * ``overlay``: the older and the newer page on one canvas with the difference layers.
+ * ``a`` and ``b``: the older or the newer page alone.
+ */
+export const COMPARISON_PAIR_TILE_MODE_VALUES = [
+  'overlay',
+  'a',
+  'b',
+] as const;
+
+/** ComparisonPairTileMode - the closed value set above. */
+export type ComparisonPairTileMode = (typeof COMPARISON_PAIR_TILE_MODE_VALUES)[number];
+
+/** ComparisonPartRole. */
+export const COMPARISON_PART_ROLE_VALUES = [
+  'whole',
+  'part',
+] as const;
+
+/** ComparisonPartRole - the closed value set above. */
+export type ComparisonPartRole = (typeof COMPARISON_PART_ROLE_VALUES)[number];
+
+/**
+ * The coverage of a sheet that is split across versions (``◫``, ``⇉``): whether this pair
+ * holds the whole sheet or one part, the other parts, and how much of the older sheet the parts
+ * cover together.
+ */
+export type ComparisonPartsCoverage = {
+  covered_percent: number;
+  parts: Array<ComparisonPageRef>;
+  role: ComparisonPartRole;
+};
+
+/** «Заявлено проектировщиком в разрешении»: the declared items and how each fared. */
+export type ComparisonPermit = {
+  items?: Array<ComparisonPermitItem>;
+  state: ComparisonPermitState;
+};
+
+export type ComparisonPermitItem = {
+  state: ComparisonPermitState;
+  text: string;
+};
+
+/**
+ * The reconciliation of the changes a permit stamp declares with the changes found:
+ * ``declared_and_found``, ``declared_no_diff``, ``diff_not_declared`` and ``needs_review``.
+ */
+export const COMPARISON_PERMIT_STATE_VALUES = [
+  'declared_and_found',
+  'declared_no_diff',
+  'diff_not_declared',
+  'needs_review',
+] as const;
+
+/** ComparisonPermitState - the closed value set above. */
+export type ComparisonPermitState = (typeof COMPARISON_PERMIT_STATE_VALUES)[number];
 
 export type ComparisonProposalFile = {
   file_id: ComparisonUploadFileId;
@@ -973,11 +1650,260 @@ export const COMPARISON_PROPOSAL_WARNING_VALUES = [
 /** ComparisonProposalWarning - the closed value set above. */
 export type ComparisonProposalWarning = (typeof COMPARISON_PROPOSAL_WARNING_VALUES)[number];
 
+/** Comparison work items by state. */
+export type ComparisonQueueCounts = {
+  cancelled: number;
+  failed: number;
+  leased: number;
+  paused: number;
+  queued: number;
+  retry_wait: number;
+  running: number;
+  spend_unknown: number;
+  succeeded: number;
+};
+
+export type ComparisonQueueKind = {
+  counts: ComparisonQueueCounts;
+  kind: string;
+  module: ComparisonQueueModule;
+};
+
+/** ComparisonQueueModule. */
+export const COMPARISON_QUEUE_MODULE_VALUES = [
+  'versions',
+  'stages',
+] as const;
+
+/** ComparisonQueueModule - the closed value set above. */
+export type ComparisonQueueModule = (typeof COMPARISON_QUEUE_MODULE_VALUES)[number];
+
+/**
+ * The read-only «Сравнение» block of «Очередь»: the module set, whether execution is
+ * paused for the whole installation, the items by state and by kind, and the age of the oldest
+ * queued one. Comparison work yields to section runs and honours the pause.
+ */
+export type ComparisonQueueSummary = {
+  counts: ComparisonQueueCounts;
+  kinds: Array<ComparisonQueueKind>;
+  modules: ComparisonModules;
+  oldest_queued_at?: string;
+  paused: boolean;
+};
+
 /** Why two versions are not compared; ``side`` when the reason is one side's. */
 export type ComparisonRefusal = {
   reason: "same_version" | "version_not_found" | "different_set" | "foreign_project" | "version_not_published" | "version_order_invalid" | "stage_unclassified" | "section_unconfirmed" | "project_stage_mismatch" | "confirmed_section_mismatch" | "stage_pair_invalid" | "analysis_missing" | "run_not_of_version" | "run_not_published" | "text_unavailable" | "text_too_large";
   side: "source" | "target" | null;
 };
+
+/**
+ * The comparison of every adjacent pair of the versions of a document set, for one version
+ * order (ADR-0025 decisions 15 and 21). ``transitions`` is present on ``getComparisonSeries``
+ * and absent in the items of ``listComparisonSeries``. ``stale_reasons`` is present when the
+ * stored input digests no longer match the current order, matrix or profiles («Сохранённая
+ * сводка для прежнего порядка версий»). ``restarted_from`` names the series a «Заново» replaced.
+ * ``order_id`` is the version-order revision the series ran on (absent for the document's own
+ * order).
+ */
+export type ComparisonSeries = {
+  created_at: string;
+  document_uid: DocumentUid;
+  failure_reason?: string;
+  matrix_revision?: ComparisonMatrixRevision;
+  order_id?: ComparisonVersionOrderId;
+  project_uid: ProjectUid;
+  restarted_from?: ComparisonSeriesId;
+  series_id: ComparisonSeriesId;
+  stale_reasons?: Array<ComparisonSeriesStaleReason>;
+  state: ComparisonSeriesState;
+  transitions?: Array<ComparisonTransition>;
+  transitions_done: number;
+  transitions_total: number;
+  updated_at: string;
+};
+
+export type ComparisonSeriesId = string;
+
+/** The contract pattern for `ComparisonSeriesId`. Anchored; use with `new RegExp()`. */
+export const COMPARISON_SERIES_ID_PATTERN = "^cser_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** Newest first. */
+export type ComparisonSeriesPage = {
+  items: Array<ComparisonSeries>;
+  page: PageInfo;
+};
+
+/** ComparisonSeriesStaleReason. */
+export const COMPARISON_SERIES_STALE_REASON_VALUES = [
+  'order_changed',
+  'matrix_changed',
+  'profiles_changed',
+] as const;
+
+/** ComparisonSeriesStaleReason - the closed value set above. */
+export type ComparisonSeriesStaleReason = (typeof COMPARISON_SERIES_STALE_REASON_VALUES)[number];
+
+/** ComparisonSeriesState. */
+export const COMPARISON_SERIES_STATE_VALUES = [
+  'queued',
+  'running',
+  'paused',
+  'completed',
+  'failed',
+  'cancelled',
+] as const;
+
+/** ComparisonSeriesState - the closed value set above. */
+export type ComparisonSeriesState = (typeof COMPARISON_SERIES_STATE_VALUES)[number];
+
+/**
+ * A change in the service zones: ``zone`` and ``field`` name where, ``kind`` what (a
+ * ``stamp``, ``warning``, ``qr`` code, ``field`` or PDF ``annotation``). The disappearance of a
+ * warning does not confirm an approval.
+ */
+export type ComparisonServiceNote = {
+  after?: string;
+  before?: string;
+  change: ComparisonNoteChange;
+  field?: string;
+  kind: string;
+  zone?: string;
+};
+
+/**
+ * One sheet pair of a transition: the older page ``page_a``, the newer ``page_b``, either
+ * absent for an ``added`` or ``removed`` sheet. ``status`` and the members after it are absent
+ * until the pair has a result. ``result_id`` is the content-keyed result the pair uses
+ * (ADR-0025 decision 15); it is shared by pairs of equal content within a project. The members
+ * from ``canvas`` on are the raw deterministic evidence and are present on
+ * ``getComparisonSheetPair`` only; an AI layer never rewrites them.
+ */
+export type ComparisonSheetPair = {
+  ai_dependent?: boolean;
+  canvas?: ComparisonCanvas;
+  channels?: ComparisonChannels;
+  confidence?: ComparisonCellConfidence;
+  differences?: Array<ComparisonDifference>;
+  failure_reason?: string;
+  flags?: Array<ComparisonCellFlag>;
+  how_compared?: ComparisonHowCompared;
+  page_a?: ComparisonPairPage;
+  page_b?: ComparisonPairPage;
+  parts?: ComparisonPartsCoverage;
+  permit?: ComparisonPermit;
+  reasons?: Array<string>;
+  result_id?: ComparisonSheetPairResultId;
+  service_notes?: Array<ComparisonServiceNote>;
+  sheet_pair_id: ComparisonSheetPairId;
+  state: ComparisonSheetPairState;
+  status?: ComparisonSheetStatus;
+  text_changes?: Array<ComparisonTextChange>;
+  transition_id: ComparisonTransitionId;
+};
+
+export type ComparisonSheetPairId = string;
+
+/** The contract pattern for `ComparisonSheetPairId`. Anchored; use with `new RegExp()`. */
+export const COMPARISON_SHEET_PAIR_ID_PATTERN = "^ctp_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** The sheet pairs of a transition in the order of the matrix rows. */
+export type ComparisonSheetPairPage = {
+  items: Array<ComparisonSheetPair>;
+  page: PageInfo;
+};
+
+export type ComparisonSheetPairResultId = string;
+
+/** The contract pattern for `ComparisonSheetPairResultId`. Anchored; use with `new RegExp()`. */
+export const COMPARISON_SHEET_PAIR_RESULT_ID_PATTERN = "^csp_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** ComparisonSheetPairState. */
+export const COMPARISON_SHEET_PAIR_STATE_VALUES = [
+  'queued',
+  'computing',
+  'done',
+  'failed',
+] as const;
+
+/** ComparisonSheetPairState - the closed value set above. */
+export type ComparisonSheetPairState = (typeof COMPARISON_SHEET_PAIR_STATE_VALUES)[number];
+
+/**
+ * The status of one sheet pair (the original's ``result_status``): ``same``, ``same_zones_changed``
+ * (the main content is the same, service zones changed), ``different``, ``needs_review``,
+ * ``added`` (only in the newer version), ``removed`` (only in the older one) and
+ * ``unmatched``.
+ */
+export const COMPARISON_SHEET_STATUS_VALUES = [
+  'same',
+  'same_zones_changed',
+  'different',
+  'needs_review',
+  'added',
+  'removed',
+  'unmatched',
+] as const;
+
+/** ComparisonSheetStatus - the closed value set above. */
+export type ComparisonSheetStatus = (typeof COMPARISON_SHEET_STATUS_VALUES)[number];
+
+/** The figures a step's note quotes; each is absent when the step has no such figure. */
+export type ComparisonStepCounts = {
+  done?: number;
+  failed?: number;
+  manual_edits?: number;
+  ready?: number;
+  rows?: number;
+  total?: number;
+  unmatched?: number;
+  with_changes?: number;
+};
+
+/**
+ * The seven steps of a document set on «Проекты и этапы», in order: ``upload`` «Загрузка»,
+ * ``profile`` «Разбор версий», ``matrix`` «Сопоставление листов», ``ai_pairs`` «ИИ-проверка
+ * сомнительных пар», ``series`` «Сравнение соседних», ``ai_changes`` «ИИ-описание изменений»,
+ * ``report`` «Сводка и отчёт».
+ */
+export const COMPARISON_STEP_ID_VALUES = [
+  'upload',
+  'profile',
+  'matrix',
+  'ai_pairs',
+  'series',
+  'ai_changes',
+  'report',
+] as const;
+
+/** ComparisonStepId - the closed value set above. */
+export type ComparisonStepId = (typeof COMPARISON_STEP_ID_VALUES)[number];
+
+/**
+ * The state words of the original's seven columns, as codes. ``not_started`` and
+ * ``not_applicable`` are the two ways a step has nothing to show; ``attention``, ``partial``,
+ * ``stale``, ``interrupted`` and ``paused`` are the amber ones, ``queued``, ``running`` and
+ * ``pausing`` the running ones, ``failed`` the red one, ``blocked`` a step waiting for the one
+ * before it.
+ */
+export const COMPARISON_STEP_STATE_VALUES = [
+  'not_started',
+  'queued',
+  'running',
+  'pausing',
+  'paused',
+  'interrupted',
+  'done',
+  'partial',
+  'stale',
+  'attention',
+  'failed',
+  'blocked',
+  'not_applicable',
+] as const;
+
+/** ComparisonStepState - the closed value set above. */
+export type ComparisonStepState = (typeof COMPARISON_STEP_STATE_VALUES)[number];
 
 /**
  * `COMPARE-PERSISTED-SUMMARY-01` (B2). A model's summary of the approved pairs, stored beside
@@ -1006,11 +1932,78 @@ export type ComparisonSummary = {
 };
 
 /**
+ * «было → стало» of one text fragment; ``numbers`` lists the numeric values that changed
+ * inside it, to be highlighted.
+ */
+export type ComparisonTextChange = {
+  after?: string;
+  before?: string;
+  box?: ComparisonBox;
+  kind: string;
+  numbers?: Array<ComparisonNumberChange>;
+};
+
+/**
+ * One adjacent transition of a series: the older version ``source_version_uid`` and the
+ * next one ``target_version_uid``. ``items_done`` of ``items_total`` sheet pairs have a result.
+ * ``verdict`` is absent until the transition has run.
+ */
+export type ComparisonTransition = {
+  failure_reason?: string;
+  items_done: number;
+  items_total: number;
+  series_id: ComparisonSeriesId;
+  source_version_uid: VersionUid;
+  state: ComparisonTransitionState;
+  summary: ComparisonTransitionSummary;
+  target_version_uid: VersionUid;
+  transition_id: ComparisonTransitionId;
+  verdict?: Array<ComparisonVerdictCode>;
+};
+
+export type ComparisonTransitionId = string;
+
+/** The contract pattern for `ComparisonTransitionId`. Anchored; use with `new RegExp()`. */
+export const COMPARISON_TRANSITION_ID_PATTERN = "^ctn_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** ComparisonTransitionState. */
+export const COMPARISON_TRANSITION_STATE_VALUES = [
+  'queued',
+  'running',
+  'completed',
+  'failed',
+  'cancelled',
+] as const;
+
+/** ComparisonTransitionState - the closed value set above. */
+export type ComparisonTransitionState = (typeof COMPARISON_TRANSITION_STATE_VALUES)[number];
+
+/**
+ * The counts of a transition's sheet pairs. ``needs_review`` includes the unmatched ones.
+ * ``style_only`` counts the ``different`` sheets whose only difference is line style.
+ * ``ai_dependent`` counts the pairs that rest on an accepted AI link.
+ */
+export type ComparisonTransitionSummary = {
+  added: number;
+  ai_dependent?: number;
+  compared: number;
+  different: number;
+  failed: number;
+  needs_review: number;
+  removed: number;
+  same: number;
+  sheets: number;
+  style_only: number;
+  zones_only: number;
+};
+
+/**
  * One upload batch. ``files`` is present on ``getComparisonUpload`` and absent in the
  * items of ``listComparisonUploads``. ``part_size_bytes`` is the size of every part but the
  * last (16 MiB, ADR-0025 decision 10).
  */
 export type ComparisonUpload = {
+  compare_after_preparation?: boolean;
   created_at: string;
   declared_bytes: number;
   declared_files: number;
@@ -1126,6 +2119,24 @@ export const COMPARISON_UPLOAD_STATE_VALUES = [
 export type ComparisonUploadState = (typeof COMPARISON_UPLOAD_STATE_VALUES)[number];
 
 /**
+ * The parts of the deterministic verdict of a transition, in the order they are shown; the
+ * figures they quote are in the transition's ``summary``. A transition has one or more parts.
+ * The client renders the sentence.
+ */
+export const COMPARISON_VERDICT_CODE_VALUES = [
+  'incomplete',
+  'content_same',
+  'zones_only',
+  'different',
+  'composition_changed',
+  'needs_review',
+  'calculation_failed',
+] as const;
+
+/** ComparisonVerdictCode - the closed value set above. */
+export type ComparisonVerdictCode = (typeof COMPARISON_VERDICT_CODE_VALUES)[number];
+
+/**
  * One revision of the order in which the versions of a document set are compared. It
  * never changes the documents' ordinal that runs and finding carry-over use (ADR-0025
  * decision 16, `D-5`).
@@ -1222,6 +2233,7 @@ export type CreateAssignmentRequest = {
  * before the first part, as typed reasons under existing error codes.
  */
 export type CreateComparisonUploadRequest = {
+  compare_after_preparation?: boolean;
   files: Array<ComparisonUploadFileDeclaration>;
 };
 
@@ -1403,7 +2415,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The single externally visible failure shape, mirroring urn:auditmanager:domain:error-envelope:v1. `retryable` is pinned to the catalog value for the reported code; a caller never infers it from the HTTP status or the message. */
 export type ErrorEnvelope = {
-  contract_version: "1.9.0";
+  contract_version: "1.10.0";
   correlation_id: CorrelationId;
   /** Safe scalar classifiers only, restricted to the safe_detail_keys the catalog declares for the reported code. The catalog's forbidden key set is rejected. */
   details?: {
@@ -3691,6 +4703,17 @@ export type StartArV3BetaGroupRequest = {
   version_uid: VersionUid;
 };
 
+/**
+ * «Запустить» (``restart`` false or absent) or «Заново» (``restart`` true: every transition
+ * is computed again for the current order; sheet pairs whose content did not change come from
+ * the result cache). ``base_order_revision_no`` is the revision of the version order the caller
+ * saw (``0`` for none); a mismatch is ``409 conflict`` (``comparison_version_order_stale``).
+ */
+export type StartComparisonSeriesRequest = {
+  base_order_revision_no?: number;
+  restart?: boolean;
+};
+
 export type StartRunRequest = {
   /** EXEC-PAR-START-01: the executor connection this run must be on. Absent: the run follows the global route exactly as before. Present: that connection's current revision is frozen when this release serves it, its current key has a passing probe and it is not archived; otherwise the start is refused and no run exists. Never replaced by the route's standby or by another connection. Part of the payload the idempotency key is compared by. */
   executor_connection_id?: ExecutorConnectionId;
@@ -3741,6 +4764,14 @@ export type TransitionAssignmentRequest = {
   kind: AssignmentTransitionKind;
   new_assignee_user_uid?: UserUid;
   reason?: string;
+};
+
+/**
+ * «Отменить правку»: reverses the latest applied edit. ``base_revision`` is the revision the
+ * caller saw, so an edit made meanwhile by someone else is never undone by mistake.
+ */
+export type UndoComparisonMatrixEditRequest = {
+  base_revision: ComparisonMatrixRevision;
 };
 
 /** Closed deterministic observation-withholding reasons; a withheld item is never a published finding. */

@@ -351,6 +351,25 @@ GUARDED = (
     ("streamVersionPagePreview", "GET", "/page-profiles/cpr_01M2545JSD15ETSNNV904X991K/preview"),
     ("streamVersionPageThumbnail", "GET", "/page-profiles/cpr_01M2545JSD15ETSNNV904X991K/thumbnail"),
     ("streamVersionPageTile", "GET", "/page-profiles/cpr_01M2545JSD15ETSNNV904X991K/tile"),
+    # `CMP-SEAL-C1`. The version comparison core: behind the seam before any port answers.
+    ("getComparisonMatrix", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H/comparison-matrix"),
+    ("prepareComparisonMatrix", "POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H/comparison-matrix/preparation"),
+    ("listComparisonMatrixEdits", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H/comparison-matrix/edits"),
+    ("applyComparisonMatrixEdits", "POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H/comparison-matrix/edits"),
+    ("undoComparisonMatrixEdit", "POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H/comparison-matrix/edits/undo"),
+    ("listComparisonAiLinks", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H/comparison-ai-links"),
+    ("startComparisonSeries", "POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H/comparison-series"),
+    ("listComparisonSeries", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H/comparison-series"),
+    ("getComparisonSeries", "GET", "/comparison-series/cser_01M2545JSD15ETSNNV904X991K"),
+    ("pauseComparisonSeries", "POST", "/comparison-series/cser_01M2545JSD15ETSNNV904X991K/pause"),
+    ("resumeComparisonSeries", "POST", "/comparison-series/cser_01M2545JSD15ETSNNV904X991K/resume"),
+    ("cancelComparisonSeries", "POST", "/comparison-series/cser_01M2545JSD15ETSNNV904X991K/cancellation"),
+    ("finishComparisonSeries", "POST", "/comparison-series/cser_01M2545JSD15ETSNNV904X991K/finish"),
+    ("listComparisonSheetPairs", "GET", "/comparison-transitions/ctn_01M2545JSD15ETSNNV904X991K/sheet-pairs"),
+    ("getComparisonSheetPair", "GET", "/comparison-sheet-pairs/ctp_01M2545JSD15ETSNNV904X991K"),
+    ("streamComparisonPairTile", "GET", "/comparison-sheet-pairs/ctp_01M2545JSD15ETSNNV904X991K/tile"),
+    ("getComparisonOverview", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/comparison-overview"),
+    ("getComparisonQueueSummary", "GET", "/execution/comparison-queue"),
     # `EXEC-PULL-01`. The administrator's two token operations are behind the seam like the rest.
     (
         "issueRunnerToken", "POST",
@@ -935,6 +954,11 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         # `appendDecision` does; whether they may is the role register's (expert) and the
         # command's own re-read.
         "comparison.py",
+        # `CMP-SEAL-C1`: a matrix edit records WHO made it and a series WHO started it; that only an
+        # expert may is the role register's and the command's own re-read of the role set. The reads,
+        # the pair tiles and the overview take no subject.
+        "comparison_matrix.py",
+        "comparison_series.py",
         # `CMP-SEAL-C0`: the comparison writes record WHO declared, confirmed, paused or cancelled an
         # upload batch and WHO appended an order revision (the actor of its rows); that only an expert
         # may is the role register's and the command's own re-read of the role set. The reads and the

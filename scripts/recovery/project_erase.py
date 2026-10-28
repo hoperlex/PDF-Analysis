@@ -119,6 +119,12 @@ NON_TERMINAL_STATES = {
     # in flight too: an operator cancels them before erasing the project.
     "comparison_work": ("queued", "leased", "running", "retry_wait", "paused", "spend_unknown"),
     "comparison_work_attempt": ("created", "leased", "running"),
+    # `0039_comparison_core` (ADR-0025 decisions 7 and 21): a series, a transition and a sheet pair that has not
+    # finished. The queue items they run on stop the erase too; the rows themselves are named so that a series
+    # whose items were cancelled by hand is not erased under a caller who still reads it.
+    "comparison_series": ("queued", "running", "paused"),
+    "comparison_transition": ("queued", "running"),
+    "comparison_sheet_pair": ("queued", "computing"),
 }
 #: The lock name of "another erase is running".
 ADVISORY_LOCK_NAME = "auditmanager.project_erase"

@@ -122,6 +122,10 @@ def test_every_declared_operation_is_reachable(
         "comparison_upload_file_id": "cuf_01M2545JSD15ETSNNV904X991W",
         "comparison_upload_set_id": "cus_01M2545JSD15ETSNNV904X991W",
         "comparison_page_profile_id": "cpr_01M2545JSD15ETSNNV904X991W",
+        # `CMP-SEAL-C1`: a series, one of its transitions and a sheet pair.
+        "comparison_series_id": "cser_01M2545JSD15ETSNNV904X991W",
+        "comparison_transition_id": "ctn_01M2545JSD15ETSNNV904X991W",
+        "comparison_sheet_pair_id": "ctp_01M2545JSD15ETSNNV904X991W",
     }
     for operation_id, method, template in sorted(declared_operations(openapi_document)):
         path = template

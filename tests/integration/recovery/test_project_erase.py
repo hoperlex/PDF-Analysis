@@ -87,6 +87,11 @@ _WORK = "SELECT comparison_work_id FROM comparison_work WHERE project_uid = :p"
 _COMPARISON_ATTEMPTS = (
     f"SELECT comparison_work_attempt_id FROM comparison_work_attempt WHERE comparison_work_id IN ({_WORK})"
 )
+# `0039_comparison_core` (`CMP-SEAL-C1`): the tables of the version comparison core reach the project directly, through
+# the document, or through a series and its transitions.
+_DOCUMENTS = "SELECT document_uid FROM document WHERE project_uid = :p"
+_SERIES = "SELECT comparison_series_id FROM comparison_series WHERE project_uid = :p"
+_TRANSITIONS = f"SELECT comparison_transition_id FROM comparison_transition WHERE comparison_series_id IN ({_SERIES})"
 SLICES: dict[str, str] = {
     "project": "project_uid = :p",
     "document": "project_uid = :p",
@@ -130,6 +135,13 @@ SLICES: dict[str, str] = {
     "comparison_work": "project_uid = :p",
     "comparison_work_attempt": f"comparison_work_id IN ({_WORK})",
     "comparison_model_call": f"comparison_work_id IN ({_WORK})",
+    "comparison_matrix": "project_uid = :p",
+    "comparison_matrix_edit": "project_uid = :p",
+    "comparison_ai_link": f"document_uid IN ({_DOCUMENTS})",
+    "comparison_series": "project_uid = :p",
+    "comparison_transition": f"comparison_series_id IN ({_SERIES})",
+    "comparison_sheet_pair_result": "project_uid = :p",
+    "comparison_sheet_pair": f"comparison_transition_id IN ({_TRANSITIONS})",
 }
 _BLOB_SOURCES = (
     f"SELECT blob_id FROM input_manifest_entry WHERE version_uid IN ({_VERSIONS}) "
@@ -138,7 +150,8 @@ _BLOB_SOURCES = (
     f"UNION SELECT blob_id FROM comparison_upload_file WHERE comparison_upload_id IN ({_UPLOADS}) "
     f"UNION SELECT profile_blob_id FROM comparison_page_profile WHERE version_uid IN ({_VERSIONS}) "
     f"UNION SELECT preview_blob_id FROM comparison_page_profile WHERE version_uid IN ({_VERSIONS}) "
-    f"UNION SELECT thumbnail_blob_id FROM comparison_page_profile WHERE version_uid IN ({_VERSIONS})"
+    f"UNION SELECT thumbnail_blob_id FROM comparison_page_profile WHERE version_uid IN ({_VERSIONS}) "
+    "UNION SELECT mask_blob_id FROM comparison_sheet_pair_result WHERE project_uid = :p"
 )
 _KEEP_BLOBS = ("SELECT blob_id FROM norm_custody_binding UNION SELECT set_blob_id FROM norm_retrieval_set "
                "UNION SELECT catalogue_blob_id FROM norm_retrieval_set")
@@ -366,18 +379,22 @@ def test_the_closure_is_read_from_the_catalog_and_agrees_with_the_hand_written_s
     assert set(closure.tables) == purge.PRODUCT_TABLES - tool.UNSCOPED_PRODUCT_TABLES
     assert set(closure.tables) == set(SLICES)
     # `0038_comparison_foundation`: the nine comparison tables join the closure (33 -> 42); the batch, the
-    # order revisions and the queue item reference the project directly.
-    assert tool.UNSCOPED_PRODUCT_TABLES == {"worker"} and len(closure.tables) == 42
+    # order revisions and the queue item reference the project directly. `0039_comparison_core`: the seven tables of
+    # the version comparison core join it (42 -> 49); the builds, the edits, the series and the results reference the
+    # project directly.
+    assert tool.UNSCOPED_PRODUCT_TABLES == {"worker"} and len(closure.tables) == 49
     assert set(closure.direct) == {
-        "ar_v3_run_group", "audit_run", "comparison_sheet_link", "comparison_summary", "comparison_upload",
+        "ar_v3_run_group", "audit_run", "comparison_matrix", "comparison_matrix_edit", "comparison_series",
+        "comparison_sheet_link", "comparison_sheet_pair_result", "comparison_summary", "comparison_upload",
         "comparison_version_order", "comparison_work", "document", "finding", "optimisation_pass",
         "price_list_revision", "vendor_list_revision", "work_assignment",
     }
     # `0038_comparison_foundation`: an upload batch and an order revision carry the receipt of the write
     # that made them.
     assert {key.child for key in closure.receipt_edges} == {
-        "ar_v3_run_group", "audit_run", "comparison_sheet_link", "comparison_summary", "comparison_upload",
-        "comparison_version_order", "expert_decision_event", "optimisation_proposal_decision",
+        "ar_v3_run_group", "audit_run", "comparison_matrix_edit", "comparison_series", "comparison_sheet_link",
+        "comparison_summary", "comparison_upload", "comparison_version_order", "expert_decision_event",
+        "optimisation_proposal_decision",
     }
 
 

@@ -351,7 +351,7 @@ describe('the page', () => {
   it('renders a refusal in Russian with its correlation id, and no table', () => {
     const client = newClient();
     seedError(client, queryKeys.analysis.profiles(), new ApiError(403, {
-      contract_version: '1.9.0', error_code: 'permission_denied',
+      contract_version: '1.10.0', error_code: 'permission_denied',
       message: 'permission denied', correlation_id: 'cid-analysis-settings-1', retryable: false,
     }, null));
     const markup = renderScreen(client, createElement(AnalysisSettingsPage));

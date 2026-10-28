@@ -378,6 +378,87 @@ __all__ = [
     "AssignmentUid",
     "CreateAssignmentRequest",
     "TransitionAssignmentRequest",
+    "ComparisonMatrixId",
+    "ComparisonMatrixEditId",
+    "ComparisonAiLinkId",
+    "ComparisonSeriesId",
+    "ComparisonTransitionId",
+    "ComparisonSheetPairId",
+    "ComparisonSheetPairResultId",
+    "ComparisonPageRef",
+    "ComparisonMatrixRevision",
+    "ComparisonMatrixState",
+    "ComparisonMatrixStaleReason",
+    "ComparisonCellState",
+    "ComparisonCellConfidence",
+    "ComparisonCellFlag",
+    "ComparisonMatrixCandidate",
+    "ComparisonMatrixCell",
+    "ComparisonMatrixRow",
+    "ComparisonMatrixColumn",
+    "ComparisonMatrixProgress",
+    "ComparisonMatrixCounts",
+    "ComparisonMatrix",
+    "ComparisonMatrixPreparation",
+    "ComparisonMatrixEditKind",
+    "ComparisonMatrixEditInputKind",
+    "ComparisonMatrixEditSource",
+    "ComparisonMatrixEditStatus",
+    "ComparisonMatrixEditInput",
+    "ApplyComparisonMatrixEditsRequest",
+    "UndoComparisonMatrixEditRequest",
+    "ComparisonEditProvenance",
+    "ComparisonMatrixEdit",
+    "ComparisonMatrixEditList",
+    "ComparisonAiLinkAnsweredState",
+    "ComparisonAiLinkStatus",
+    "ComparisonAiLink",
+    "ComparisonAiLinkList",
+    "ComparisonSeriesState",
+    "ComparisonTransitionState",
+    "ComparisonVerdictCode",
+    "ComparisonTransitionSummary",
+    "ComparisonTransition",
+    "ComparisonSeriesStaleReason",
+    "ComparisonSeries",
+    "ComparisonSeriesPage",
+    "StartComparisonSeriesRequest",
+    "ComparisonSheetStatus",
+    "ComparisonSheetPairState",
+    "ComparisonChannelState",
+    "ComparisonChannel",
+    "ComparisonChannels",
+    "ComparisonLayer",
+    "ComparisonBox",
+    "ComparisonDifference",
+    "ComparisonNumberChange",
+    "ComparisonTextChange",
+    "ComparisonNoteChange",
+    "ComparisonServiceNote",
+    "ComparisonHowCompared",
+    "ComparisonPermitState",
+    "ComparisonPermitItem",
+    "ComparisonPermit",
+    "ComparisonPartRole",
+    "ComparisonPartsCoverage",
+    "ComparisonPairPage",
+    "ComparisonCanvas",
+    "ComparisonSheetPair",
+    "ComparisonSheetPairPage",
+    "ComparisonPairTileMode",
+    "ComparisonStepId",
+    "ComparisonStepState",
+    "ComparisonStepCounts",
+    "ComparisonOverviewStep",
+    "ComparisonOverviewSet",
+    "ComparisonOverviewTotals",
+    "ComparisonOverviewCounters",
+    "ComparisonOverviewUpload",
+    "ComparisonOverview",
+    "ComparisonQueueCounts",
+    "ComparisonQueueModule",
+    "ComparisonQueueKind",
+    "ComparisonQueueSummary",
 ]
 
 
@@ -793,7 +874,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.9.0"]
+    contract_version: Literal["1.10.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -4235,6 +4316,13 @@ class CreateComparisonUploadRequest(_Object):
     before the first part, as typed reasons under existing error codes."""
 
     files: Annotated[list[ComparisonUploadFileDeclaration], Field(min_length=1)]
+    #: `CMP-SEAL-C1`. «После подготовки сравнить все соседние версии»: when true, the series of
+    #: adjacent transitions is queued for every set of the batch as soon as the set is prepared.
+    #: Absent means false. Until `CMP-SERIES-01` stores it, ``true`` is refused with ``503
+    #: dependency_unavailable`` and nothing is created.
+    compare_after_preparation: bool = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
 
 
 class ComparisonUploadFile(_Object):
@@ -4269,6 +4357,11 @@ class ComparisonUpload(_Object):
     created_at: datetime
     updated_at: datetime
     files: list[ComparisonUploadFile] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    #: `CMP-SEAL-C1`. The flag the batch was declared with; absent until `CMP-SERIES-01` stores it
+    #: (a batch declared without it is a batch that does not compare after preparation).
+    compare_after_preparation: bool = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
 
@@ -4450,3 +4543,927 @@ class VersionPageProfilePage(_Object):
 
     items: list[VersionPageProfile]
     page: PageInfo
+
+
+# --- version comparison core (`CMP-SEAL-C1`, ADR-0025) ------------------------------------
+#
+# Sealed as stubs: every operation below answers `503 dependency_unavailable` until its lane
+# (CMP-MATRIX-01, CMP-SERIES-01, CMP-VIEWER-01, CMP-VC-OVERVIEW-01) wires it. The shapes are
+# exactly what those lanes implement; a lane that needs a field STOPs to the wave's FIX slot and
+# never edits them. Every member that a lane may leave out is explicitly optional (R3-21).
+
+ComparisonMatrixId = TypeAliasType(
+    "ComparisonMatrixId", Annotated[str, Field(pattern=rf"^cmx_{_ULID}$")]
+)
+ComparisonMatrixEditId = TypeAliasType(
+    "ComparisonMatrixEditId", Annotated[str, Field(pattern=rf"^cme_{_ULID}$")]
+)
+ComparisonAiLinkId = TypeAliasType(
+    "ComparisonAiLinkId", Annotated[str, Field(pattern=rf"^cak_{_ULID}$")]
+)
+ComparisonSeriesId = TypeAliasType(
+    "ComparisonSeriesId", Annotated[str, Field(pattern=rf"^cser_{_ULID}$")]
+)
+ComparisonTransitionId = TypeAliasType(
+    "ComparisonTransitionId", Annotated[str, Field(pattern=rf"^ctn_{_ULID}$")]
+)
+ComparisonSheetPairId = TypeAliasType(
+    "ComparisonSheetPairId", Annotated[str, Field(pattern=rf"^ctp_{_ULID}$")]
+)
+ComparisonSheetPairResultId = TypeAliasType(
+    "ComparisonSheetPairResultId", Annotated[str, Field(pattern=rf"^csp_{_ULID}$")]
+)
+
+
+class ComparisonPageRef(_Object):
+    """A page of a version: the version's identity and the page's coordinate inside that
+    immutable version (never a display number). ``page_profile_id`` is the identity of the page's
+    stored profile once there is one; the cells of a built matrix always carry it."""
+
+    version_uid: VersionUid
+    page_number: Annotated[int, Field(ge=1, le=500)]
+    page_profile_id: ComparisonPageProfileId = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ComparisonMatrixRevision(_Object):
+    """The revision of an effective matrix: the algorithmic build it rests on and the number of
+    manual edit events of the document set up to it (``0`` for none). An edit batch carries the
+    revision the caller saw; a mismatch is ``409 conflict`` and the caller rebases its draft
+    (ADR-0025 decision 14)."""
+
+    matrix_id: ComparisonMatrixId
+    edit_no: Annotated[int, Field(ge=0)]
+
+
+class ComparisonMatrixState(str, enum.Enum):
+    """``absent``: nothing has been built or queued. ``building``: profiles or the matrix are
+    being computed. ``ready``: the build matches the current order and profiles. ``stale``: it
+    does not, see ``stale_reasons``. ``failed``: the last build failed."""
+
+    ABSENT = "absent"
+    BUILDING = "building"
+    READY = "ready"
+    STALE = "stale"
+    FAILED = "failed"
+
+
+class ComparisonMatrixStaleReason(str, enum.Enum):
+    ORDER_CHANGED = "order_changed"
+    PROFILES_CHANGED = "profiles_changed"
+
+
+class ComparisonCellState(str, enum.Enum):
+    """``matched``: the cell holds a page of this version. ``unmatched``: no page was matched,
+    candidates may be offered. ``absent``: the version has no such sheet (determined, or marked
+    by an expert)."""
+
+    MATCHED = "matched"
+    UNMATCHED = "unmatched"
+    ABSENT = "absent"
+
+
+class ComparisonCellConfidence(str, enum.Enum):
+    """How a matched cell was linked: ``high`` and ``medium`` by the algorithm, ``group`` as a
+    member of a table-sheet group, ``manual`` by an expert, ``ai`` by an accepted AI link."""
+
+    HIGH = "high"
+    MEDIUM = "medium"
+    GROUP = "group"
+    MANUAL = "manual"
+    AI = "ai"
+
+
+class ComparisonCellFlag(str, enum.Enum):
+    """``split``: the sheet is split across versions. ``duplicate``: the same content stands on
+    several pages. ``scan``: an image-only page whose text is not compared. ``bridge``: the cell
+    was linked across a version that lacks the sheet."""
+
+    SPLIT = "split"
+    DUPLICATE = "duplicate"
+    SCAN = "scan"
+    BRIDGE = "bridge"
+
+
+class ComparisonMatrixCandidate(_Object):
+    """A page offered for an unmatched cell, with the algorithm's score."""
+
+    page: ComparisonPageRef
+    score: Annotated[float, Field(ge=0, le=1)]
+
+
+class ComparisonMatrixCell(_Object):
+    """One cell of a row, for the version column named by ``version_uid``. ``page``,
+    ``confidence`` and ``flags`` belong to a matched cell; ``candidates`` and ``reason`` to an
+    unmatched one. ``edit_id`` names the manual edit that made a ``manual`` cell, ``ai_link_id``
+    the accepted AI link that made an ``ai`` cell."""
+
+    version_uid: VersionUid
+    state: ComparisonCellState
+    page: ComparisonPageRef = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    confidence: ComparisonCellConfidence = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    flags: list[ComparisonCellFlag] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    candidates: Annotated[list[ComparisonMatrixCandidate], Field(max_length=8)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    reason: Annotated[str, Field(min_length=1, max_length=64)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    edit_id: ComparisonMatrixEditId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    ai_link_id: ComparisonAiLinkId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class ComparisonMatrixRow(_Object):
+    """One sheet identity across the versions. ``row_id`` is the identity of the stored profile
+    of the row's first page and is valid within one revision. ``cells`` holds one cell per column,
+    in the order of the columns."""
+
+    row_id: ComparisonPageProfileId
+    cells: list[ComparisonMatrixCell]
+    title: Annotated[str, Field(min_length=1, max_length=400)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    sheet_number: Annotated[str, Field(min_length=1, max_length=64)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ComparisonMatrixColumn(_Object):
+    """One version, in the position of the current comparison order."""
+
+    version_uid: VersionUid
+    page_count: Annotated[int, Field(ge=0, le=500)]
+    label: Annotated[str, Field(min_length=1, max_length=80)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ComparisonMatrixProgress(_Object):
+    """Profiles of the document set's pages: ``ready`` of ``total``, ``failed`` among the rest."""
+
+    total: Annotated[int, Field(ge=0)]
+    ready: Annotated[int, Field(ge=0)]
+    failed: Annotated[int, Field(ge=0)]
+
+
+class ComparisonMatrixCounts(_Object):
+    rows: Annotated[int, Field(ge=0)]
+    unmatched: Annotated[int, Field(ge=0)]
+    manual: Annotated[int, Field(ge=0)]
+    ai: Annotated[int, Field(ge=0)]
+    groups: Annotated[int, Field(ge=0)]
+    duplicates: Annotated[int, Field(ge=0)]
+
+
+class ComparisonMatrix(_Object):
+    """The effective matrix of a document set: the algorithm, then accepted AI links (labelled,
+    never an expert act), then manual edits (manual wins) (ADR-0025 decision 3). Rows are sheet
+    identities, ``columns`` are the versions in the current comparison order. ``revision``,
+    ``columns``, ``rows`` and ``counts`` are absent while no build exists. ``order_id`` is the
+    version-order revision the build used (absent for the document's own order).
+    ``orphaned_edit_ids`` lists the edits that no longer apply after a reorder: they are never
+    applied silently. ``unassigned_pages`` are the pages no row holds."""
+
+    project_uid: ProjectUid
+    document_uid: DocumentUid
+    state: ComparisonMatrixState
+    progress: ComparisonMatrixProgress
+    revision: ComparisonMatrixRevision = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    order_id: ComparisonVersionOrderId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    stale_reasons: list[ComparisonMatrixStaleReason] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    columns: list[ComparisonMatrixColumn] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    rows: list[ComparisonMatrixRow] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    unassigned_pages: list[ComparisonPageRef] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    counts: ComparisonMatrixCounts = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    orphaned_edit_ids: list[ComparisonMatrixEditId] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    built_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    failure_reason: Annotated[str, Field(min_length=1, max_length=128)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ComparisonMatrixPreparation(_Object):
+    """What ``prepareComparisonMatrix`` queued: the matrix state after the call and the
+    progress of the profiles. Profiles that are missing or failed are queued again, then the
+    matrix is built."""
+
+    document_uid: DocumentUid
+    state: ComparisonMatrixState
+    progress: ComparisonMatrixProgress
+
+
+class ComparisonMatrixEditKind(str, enum.Enum):
+    """``link``: ``page`` and ``other_page`` are one sheet. ``unlink``: ``page`` leaves its row
+    for a row of its own. ``mark_absent``: the row of ``page`` has no sheet in
+    ``absent_version_uid``. ``undo``: the event reverses the edit named by ``undoes_edit_id``
+    (read side only; an undo is asked for with ``undoComparisonMatrixEdit``)."""
+
+    LINK = "link"
+    UNLINK = "unlink"
+    MARK_ABSENT = "mark_absent"
+    UNDO = "undo"
+
+
+class ComparisonMatrixEditInputKind(str, enum.Enum):
+    LINK = "link"
+    UNLINK = "unlink"
+    MARK_ABSENT = "mark_absent"
+
+
+class ComparisonMatrixEditSource(str, enum.Enum):
+    """``expert``: made through ``applyComparisonMatrixEdits``. ``migrated_sheet_link``: the
+    approved pairing of ``approveSheetPairing`` (migration ``0039``, ADR-0025 decision 13); the
+    ``0035`` ids are in ``provenance``."""
+
+    EXPERT = "expert"
+    MIGRATED_SHEET_LINK = "migrated_sheet_link"
+
+
+class ComparisonMatrixEditStatus(str, enum.Enum):
+    """``applied``: the edit shapes the effective matrix. ``undone``: a later undo reversed it.
+    ``orphaned``: its cells no longer exist in the current order."""
+
+    APPLIED = "applied"
+    UNDONE = "undone"
+    ORPHANED = "orphaned"
+
+
+class ComparisonMatrixEditInput(_Object):
+    """One edit of a batch. ``link`` needs ``page`` and ``other_page`` (two versions of the
+    document set), ``unlink`` needs ``page``, ``mark_absent`` needs ``page`` and
+    ``absent_version_uid``; any other member is refused as ``validation_failed``."""
+
+    kind: ComparisonMatrixEditInputKind
+    page: ComparisonPageRef
+    other_page: ComparisonPageRef = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    absent_version_uid: VersionUid = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class ApplyComparisonMatrixEditsRequest(_Object):
+    """«Применить сопоставления (N)»: the batch an expert drafted, with the revision the draft
+    started from. The edits are applied together or not at all."""
+
+    base_revision: ComparisonMatrixRevision
+    edits: Annotated[list[ComparisonMatrixEditInput], Field(min_length=1, max_length=500)]
+
+
+class UndoComparisonMatrixEditRequest(_Object):
+    """«Отменить правку»: reverses the latest applied edit. ``base_revision`` is the revision the
+    caller saw, so an edit made meanwhile by someone else is never undone by mistake."""
+
+    base_revision: ComparisonMatrixRevision
+
+
+class ComparisonEditProvenance(_Object):
+    """For a migrated edit, the ``0035`` records it came from. Absent for an expert's edit."""
+
+    comparison_id: ComparisonId
+    sheet_link_id: Annotated[str, Field(pattern=rf"^sln_{_ULID}$")]
+    link_revision: Annotated[int, Field(ge=1)]
+
+
+class ComparisonMatrixEdit(_Object):
+    """One event of the append-only edit history of a document set, numbered ``edit_no`` from 1
+    without a gap. ``order_id`` is the version-order revision the edit was made against (absent
+    for the document's own order)."""
+
+    edit_id: ComparisonMatrixEditId
+    document_uid: DocumentUid
+    edit_no: Annotated[int, Field(ge=1)]
+    kind: ComparisonMatrixEditKind
+    source: ComparisonMatrixEditSource
+    status: ComparisonMatrixEditStatus
+    created_at: datetime
+    created_by: UserUid
+    page: ComparisonPageRef = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    other_page: ComparisonPageRef = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    absent_version_uid: VersionUid = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    undoes_edit_id: ComparisonMatrixEditId = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    order_id: ComparisonVersionOrderId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    provenance: ComparisonEditProvenance = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ComparisonMatrixEditList(_Object):
+    """Newest event first."""
+
+    items: list[ComparisonMatrixEdit]
+    page: PageInfo
+
+
+class ComparisonAiLinkAnsweredState(str, enum.Enum):
+    UNMATCHED = "unmatched"
+    DOUBTFUL = "doubtful"
+
+
+class ComparisonAiLinkStatus(str, enum.Enum):
+    """``applied``: the cell it answered is still in the state it answered. ``superseded``: the
+    cell has since been matched otherwise or edited, so the link no longer shapes the matrix."""
+
+    APPLIED = "applied"
+    SUPERSEDED = "superseded"
+
+
+class ComparisonAiLink(_Object):
+    """An accepted AI link (ADR-0025 decisions 3 and 14): a model's answer that the validator
+    accepted, shown labelled «ИИ» and never an expert act. It binds the algorithmic build
+    (``matrix_id``) and the cell state it answered. Written in wave C2; this wave reads."""
+
+    ai_link_id: ComparisonAiLinkId
+    document_uid: DocumentUid
+    matrix_id: ComparisonMatrixId
+    page: ComparisonPageRef
+    other_page: ComparisonPageRef
+    answered_state: ComparisonAiLinkAnsweredState
+    status: ComparisonAiLinkStatus
+    created_at: datetime
+
+
+class ComparisonAiLinkList(_Object):
+    """Newest first."""
+
+    items: list[ComparisonAiLink]
+    page: PageInfo
+
+
+class ComparisonSeriesState(str, enum.Enum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    PAUSED = "paused"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class ComparisonTransitionState(str, enum.Enum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class ComparisonVerdictCode(str, enum.Enum):
+    """The parts of the deterministic verdict of a transition, in the order they are shown; the
+    figures they quote are in the transition's ``summary``. A transition has one or more parts.
+    The client renders the sentence."""
+
+    INCOMPLETE = "incomplete"
+    CONTENT_SAME = "content_same"
+    ZONES_ONLY = "zones_only"
+    DIFFERENT = "different"
+    COMPOSITION_CHANGED = "composition_changed"
+    NEEDS_REVIEW = "needs_review"
+    CALCULATION_FAILED = "calculation_failed"
+
+
+class ComparisonTransitionSummary(_Object):
+    """The counts of a transition's sheet pairs. ``needs_review`` includes the unmatched ones.
+    ``style_only`` counts the ``different`` sheets whose only difference is line style.
+    ``ai_dependent`` counts the pairs that rest on an accepted AI link."""
+
+    sheets: Annotated[int, Field(ge=0)]
+    compared: Annotated[int, Field(ge=0)]
+    same: Annotated[int, Field(ge=0)]
+    zones_only: Annotated[int, Field(ge=0)]
+    different: Annotated[int, Field(ge=0)]
+    style_only: Annotated[int, Field(ge=0)]
+    needs_review: Annotated[int, Field(ge=0)]
+    added: Annotated[int, Field(ge=0)]
+    removed: Annotated[int, Field(ge=0)]
+    failed: Annotated[int, Field(ge=0)]
+    ai_dependent: Annotated[int, Field(ge=0)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ComparisonTransition(_Object):
+    """One adjacent transition of a series: the older version ``source_version_uid`` and the
+    next one ``target_version_uid``. ``items_done`` of ``items_total`` sheet pairs have a result.
+    ``verdict`` is absent until the transition has run."""
+
+    transition_id: ComparisonTransitionId
+    series_id: ComparisonSeriesId
+    source_version_uid: VersionUid
+    target_version_uid: VersionUid
+    state: ComparisonTransitionState
+    items_total: Annotated[int, Field(ge=0)]
+    items_done: Annotated[int, Field(ge=0)]
+    summary: ComparisonTransitionSummary
+    verdict: Annotated[list[ComparisonVerdictCode], Field(min_length=1, max_length=7)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    failure_reason: Annotated[str, Field(min_length=1, max_length=128)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ComparisonSeriesStaleReason(str, enum.Enum):
+    ORDER_CHANGED = "order_changed"
+    MATRIX_CHANGED = "matrix_changed"
+    PROFILES_CHANGED = "profiles_changed"
+
+
+class ComparisonSeries(_Object):
+    """The comparison of every adjacent pair of the versions of a document set, for one version
+    order (ADR-0025 decisions 15 and 21). ``transitions`` is present on ``getComparisonSeries``
+    and absent in the items of ``listComparisonSeries``. ``stale_reasons`` is present when the
+    stored input digests no longer match the current order, matrix or profiles («Сохранённая
+    сводка для прежнего порядка версий»). ``restarted_from`` names the series a «Заново» replaced.
+    ``order_id`` is the version-order revision the series ran on (absent for the document's own
+    order)."""
+
+    series_id: ComparisonSeriesId
+    project_uid: ProjectUid
+    document_uid: DocumentUid
+    state: ComparisonSeriesState
+    created_at: datetime
+    updated_at: datetime
+    transitions_total: Annotated[int, Field(ge=0)]
+    transitions_done: Annotated[int, Field(ge=0)]
+    order_id: ComparisonVersionOrderId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    matrix_revision: ComparisonMatrixRevision = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    restarted_from: ComparisonSeriesId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    stale_reasons: list[ComparisonSeriesStaleReason] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    failure_reason: Annotated[str, Field(min_length=1, max_length=128)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    transitions: list[ComparisonTransition] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ComparisonSeriesPage(_Object):
+    """Newest first."""
+
+    items: list[ComparisonSeries]
+    page: PageInfo
+
+
+class StartComparisonSeriesRequest(_Object):
+    """«Запустить» (``restart`` false or absent) or «Заново» (``restart`` true: every transition
+    is computed again for the current order; sheet pairs whose content did not change come from
+    the result cache). ``base_order_revision_no`` is the revision of the version order the caller
+    saw (``0`` for none); a mismatch is ``409 conflict`` (``comparison_version_order_stale``)."""
+
+    restart: bool = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    base_order_revision_no: Annotated[int, Field(ge=0)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ComparisonSheetStatus(str, enum.Enum):
+    """The status of one sheet pair (the original's ``result_status``): ``same``, ``same_zones_changed``
+    (the main content is the same, service zones changed), ``different``, ``needs_review``,
+    ``added`` (only in the newer version), ``removed`` (only in the older one) and
+    ``unmatched``."""
+
+    SAME = "same"
+    SAME_ZONES_CHANGED = "same_zones_changed"
+    DIFFERENT = "different"
+    NEEDS_REVIEW = "needs_review"
+    ADDED = "added"
+    REMOVED = "removed"
+    UNMATCHED = "unmatched"
+
+
+class ComparisonSheetPairState(str, enum.Enum):
+    QUEUED = "queued"
+    COMPUTING = "computing"
+    DONE = "done"
+    FAILED = "failed"
+
+
+class ComparisonChannelState(str, enum.Enum):
+    CHECKED = "checked"
+    UNCHECKED = "unchecked"
+    NOT_APPLICABLE = "not_applicable"
+
+
+class ComparisonChannel(_Object):
+    """One channel of the comparison: ``checked`` with the number of differences it found,
+    ``unchecked`` with the reason it could not look, or ``not_applicable``."""
+
+    state: ComparisonChannelState
+    diffs: Annotated[int, Field(ge=0)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    reason: Annotated[str, Field(min_length=1, max_length=128)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ComparisonChannels(_Object):
+    """The eight channels: ``geometry``, ``color``, ``text``, ``text_coverage``, ``zones``,
+    ``annotations``, ``warnings`` and ``spec_positions``. A sheet is «Совпадает» only when every
+    applicable channel is ``checked``."""
+
+    geometry: ComparisonChannel = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    color: ComparisonChannel = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    text: ComparisonChannel = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    text_coverage: ComparisonChannel = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    zones: ComparisonChannel = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    annotations: ComparisonChannel = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    warnings: ComparisonChannel = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    spec_positions: ComparisonChannel = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class ComparisonLayer(str, enum.Enum):
+    """The layers of the overlay: ``main`` «Основное», ``light_elements`` «Светлые элементы»,
+    ``color_change`` «места, где изменился цвет», ``line_style`` «Оформление линий», ``moved``
+    «Перемещено (сдвиг — не изменение)», ``within_tolerance`` «В пределах допуска», ``noise``
+    «Шум» and ``service_zones`` «Служебные зоны»."""
+
+    MAIN = "main"
+    LIGHT_ELEMENTS = "light_elements"
+    COLOR_CHANGE = "color_change"
+    LINE_STYLE = "line_style"
+    MOVED = "moved"
+    WITHIN_TOLERANCE = "within_tolerance"
+    NOISE = "noise"
+    SERVICE_ZONES = "service_zones"
+
+
+class ComparisonBox(_Object):
+    """A rectangle on the canvas of the older page, in points."""
+
+    x: float
+    y: float
+    width: Annotated[float, Field(ge=0)]
+    height: Annotated[float, Field(ge=0)]
+
+
+class ComparisonDifference(_Object):
+    """One entry of «Отличия: N». ``region_class`` is a lower-case word the engine defines
+    (``text``, ``text_moved``, ``graphic_added``, ``graphic_removed``, ``graphic_changed``,
+    ``color_change``, ``light_fill``, ``line_style``, ``block_moved``, ``shifted``)."""
+
+    region_class: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{1,31}$")]
+    layer: ComparisonLayer
+    box: ComparisonBox
+    before_text: Annotated[str, Field(min_length=1, max_length=2000)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    after_text: Annotated[str, Field(min_length=1, max_length=2000)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ComparisonNumberChange(_Object):
+    before: Annotated[str, Field(min_length=1, max_length=64)]
+    after: Annotated[str, Field(min_length=1, max_length=64)]
+
+
+class ComparisonTextChange(_Object):
+    """«было → стало» of one text fragment; ``numbers`` lists the numeric values that changed
+    inside it, to be highlighted."""
+
+    kind: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{1,31}$")]
+    before: Annotated[str, Field(min_length=1, max_length=2000)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    after: Annotated[str, Field(min_length=1, max_length=2000)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    numbers: list[ComparisonNumberChange] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    box: ComparisonBox = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class ComparisonNoteChange(str, enum.Enum):
+    ADDED = "added"
+    REMOVED = "removed"
+    CHANGED = "changed"
+
+
+class ComparisonServiceNote(_Object):
+    """A change in the service zones: ``zone`` and ``field`` name where, ``kind`` what (a
+    ``stamp``, ``warning``, ``qr`` code, ``field`` or PDF ``annotation``). The disappearance of a
+    warning does not confirm an approval."""
+
+    kind: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{1,31}$")]
+    change: ComparisonNoteChange
+    zone: Annotated[str, Field(min_length=1, max_length=64)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    field: Annotated[str, Field(min_length=1, max_length=64)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    before: Annotated[str, Field(min_length=1, max_length=2000)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    after: Annotated[str, Field(min_length=1, max_length=2000)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ComparisonHowCompared(_Object):
+    """«Как сравнивалось»: the registration transform of the newer page onto the older one (an
+    affine matrix ``[a, b, c, d, e, f]``), the raster resolution, the tolerance and the counts of
+    what was set aside."""
+
+    algo_version: Annotated[str, Field(min_length=1, max_length=64)]
+    dpi: Annotated[int, Field(ge=1)]
+    tolerance_pt: Annotated[float, Field(ge=0)]
+    transform: Annotated[list[float], Field(min_length=6, max_length=6)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    within_tolerance_count: Annotated[int, Field(ge=0)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    noise_count: Annotated[int, Field(ge=0)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    separated_objects: Annotated[int, Field(ge=0)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    aligned_blocks: Annotated[int, Field(ge=0)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ComparisonPermitState(str, enum.Enum):
+    """The reconciliation of the changes a permit stamp declares with the changes found:
+    ``declared_and_found``, ``declared_no_diff``, ``diff_not_declared`` and ``needs_review``."""
+
+    DECLARED_AND_FOUND = "declared_and_found"
+    DECLARED_NO_DIFF = "declared_no_diff"
+    DIFF_NOT_DECLARED = "diff_not_declared"
+    NEEDS_REVIEW = "needs_review"
+
+
+class ComparisonPermitItem(_Object):
+    text: Annotated[str, Field(min_length=1, max_length=2000)]
+    state: ComparisonPermitState
+
+
+class ComparisonPermit(_Object):
+    """«Заявлено проектировщиком в разрешении»: the declared items and how each fared."""
+
+    state: ComparisonPermitState
+    items: Annotated[list[ComparisonPermitItem], Field(max_length=200)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ComparisonPartRole(str, enum.Enum):
+    WHOLE = "whole"
+    PART = "part"
+
+
+class ComparisonPartsCoverage(_Object):
+    """The coverage of a sheet that is split across versions (``◫``, ``⇉``): whether this pair
+    holds the whole sheet or one part, the other parts, and how much of the older sheet the parts
+    cover together."""
+
+    role: ComparisonPartRole
+    covered_percent: Annotated[float, Field(ge=0, le=100)]
+    parts: Annotated[list[ComparisonPageRef], Field(max_length=64)]
+
+
+class ComparisonPairPage(_Object):
+    """One side of a sheet pair: the page, its sheet number and title from the stamp, and
+    whether it is an image-only page."""
+
+    page: ComparisonPageRef
+    sheet_number: Annotated[str, Field(min_length=1, max_length=64)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    title: Annotated[str, Field(min_length=1, max_length=400)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    scan: bool = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class ComparisonCanvas(_Object):
+    """The canvas of the older page, in points; the boxes of the differences are on it."""
+
+    width_pt: Annotated[float, Field(gt=0)]
+    height_pt: Annotated[float, Field(gt=0)]
+
+
+class ComparisonSheetPair(_Object):
+    """One sheet pair of a transition: the older page ``page_a``, the newer ``page_b``, either
+    absent for an ``added`` or ``removed`` sheet. ``status`` and the members after it are absent
+    until the pair has a result. ``result_id`` is the content-keyed result the pair uses
+    (ADR-0025 decision 15); it is shared by pairs of equal content within a project. The members
+    from ``canvas`` on are the raw deterministic evidence and are present on
+    ``getComparisonSheetPair`` only; an AI layer never rewrites them."""
+
+    sheet_pair_id: ComparisonSheetPairId
+    transition_id: ComparisonTransitionId
+    state: ComparisonSheetPairState
+    page_a: ComparisonPairPage = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    page_b: ComparisonPairPage = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    status: ComparisonSheetStatus = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    confidence: ComparisonCellConfidence = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    flags: list[ComparisonCellFlag] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    reasons: Annotated[list[Annotated[str, Field(pattern=r"^[A-Z][A-Z0-9_]{2,63}$")]], Field(max_length=32)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    channels: ComparisonChannels = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    permit: ComparisonPermit = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    parts: ComparisonPartsCoverage = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    result_id: ComparisonSheetPairResultId = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    ai_dependent: bool = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    failure_reason: Annotated[str, Field(min_length=1, max_length=128)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    canvas: ComparisonCanvas = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    differences: Annotated[list[ComparisonDifference], Field(max_length=2000)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    text_changes: Annotated[list[ComparisonTextChange], Field(max_length=2000)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    service_notes: Annotated[list[ComparisonServiceNote], Field(max_length=500)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    how_compared: ComparisonHowCompared = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class ComparisonSheetPairPage(_Object):
+    """The sheet pairs of a transition in the order of the matrix rows."""
+
+    items: list[ComparisonSheetPair]
+    page: PageInfo
+
+
+class ComparisonPairTileMode(str, enum.Enum):
+    """``overlay``: the older and the newer page on one canvas with the difference layers.
+    ``a`` and ``b``: the older or the newer page alone."""
+
+    OVERLAY = "overlay"
+    A = "a"
+    B = "b"
+
+
+class ComparisonStepId(str, enum.Enum):
+    """The seven steps of a document set on «Проекты и этапы», in order: ``upload`` «Загрузка»,
+    ``profile`` «Разбор версий», ``matrix`` «Сопоставление листов», ``ai_pairs`` «ИИ-проверка
+    сомнительных пар», ``series`` «Сравнение соседних», ``ai_changes`` «ИИ-описание изменений»,
+    ``report`` «Сводка и отчёт»."""
+
+    UPLOAD = "upload"
+    PROFILE = "profile"
+    MATRIX = "matrix"
+    AI_PAIRS = "ai_pairs"
+    SERIES = "series"
+    AI_CHANGES = "ai_changes"
+    REPORT = "report"
+
+
+class ComparisonStepState(str, enum.Enum):
+    """The state words of the original's seven columns, as codes. ``not_started`` and
+    ``not_applicable`` are the two ways a step has nothing to show; ``attention``, ``partial``,
+    ``stale``, ``interrupted`` and ``paused`` are the amber ones, ``queued``, ``running`` and
+    ``pausing`` the running ones, ``failed`` the red one, ``blocked`` a step waiting for the one
+    before it."""
+
+    NOT_STARTED = "not_started"
+    QUEUED = "queued"
+    RUNNING = "running"
+    PAUSING = "pausing"
+    PAUSED = "paused"
+    INTERRUPTED = "interrupted"
+    DONE = "done"
+    PARTIAL = "partial"
+    STALE = "stale"
+    ATTENTION = "attention"
+    FAILED = "failed"
+    BLOCKED = "blocked"
+    NOT_APPLICABLE = "not_applicable"
+
+
+class ComparisonStepCounts(_Object):
+    """The figures a step's note quotes; each is absent when the step has no such figure."""
+
+    total: Annotated[int, Field(ge=0)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    ready: Annotated[int, Field(ge=0)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    failed: Annotated[int, Field(ge=0)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    rows: Annotated[int, Field(ge=0)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    unmatched: Annotated[int, Field(ge=0)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    manual_edits: Annotated[int, Field(ge=0)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    done: Annotated[int, Field(ge=0)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    with_changes: Annotated[int, Field(ge=0)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class ComparisonOverviewStep(_Object):
+    step: ComparisonStepId
+    state: ComparisonStepState
+    counts: ComparisonStepCounts = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class ComparisonOverviewSet(_Object):
+    """One row of «Проекты и этапы»: a document set («комплект (шифр)»). ``designation`` is the
+    «шифр», metadata and never an identity. ``steps`` lists the seven steps in order;
+    ``next_step`` is the step the chip proposes and is absent when nothing is left to do."""
+
+    document_uid: DocumentUid
+    version_count: Annotated[int, Field(ge=0)]
+    steps: Annotated[list[ComparisonOverviewStep], Field(min_length=7, max_length=7)]
+    designation: Annotated[str, Field(min_length=1, max_length=200)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    title: Annotated[str, Field(min_length=1, max_length=400)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    project_stage: ProjectStage = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    section_code: ProjectSection = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    next_step: ComparisonStepId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    updated_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class ComparisonOverviewTotals(_Object):
+    """«N версий · M переходов»."""
+
+    versions: Annotated[int, Field(ge=0)]
+    transitions: Annotated[int, Field(ge=0)]
+
+
+class ComparisonOverviewCounters(_Object):
+    """«Все / Ждут действия / Идут / Ошибки / Готовы»."""
+
+    all: Annotated[int, Field(ge=0)]
+    waiting: Annotated[int, Field(ge=0)]
+    running: Annotated[int, Field(ge=0)]
+    failed: Annotated[int, Field(ge=0)]
+    ready: Annotated[int, Field(ge=0)]
+
+
+class ComparisonOverviewUpload(_Object):
+    """A batch that is not finished: «В загрузке, ещё не в списке проектов»."""
+
+    upload_id: ComparisonUploadId
+    state: ComparisonUploadState
+    declared_files: Annotated[int, Field(ge=1)]
+    sets_total: Annotated[int, Field(ge=0)]
+    sets_done: Annotated[int, Field(ge=0)]
+
+
+class ComparisonOverview(_Object):
+    """The overview of a project for «Проекты и этапы»: one entry per document set, the totals
+    and counters, and the batches still being uploaded. Reading it starts nothing."""
+
+    project_uid: ProjectUid
+    generated_at: datetime
+    totals: ComparisonOverviewTotals
+    counters: ComparisonOverviewCounters
+    sets: Annotated[list[ComparisonOverviewSet], Field(max_length=1000)]
+    pending_uploads: Annotated[list[ComparisonOverviewUpload], Field(max_length=100)]
+
+
+class ComparisonQueueCounts(_Object):
+    """Comparison work items by state."""
+
+    queued: Annotated[int, Field(ge=0)]
+    leased: Annotated[int, Field(ge=0)]
+    running: Annotated[int, Field(ge=0)]
+    retry_wait: Annotated[int, Field(ge=0)]
+    paused: Annotated[int, Field(ge=0)]
+    spend_unknown: Annotated[int, Field(ge=0)]
+    succeeded: Annotated[int, Field(ge=0)]
+    failed: Annotated[int, Field(ge=0)]
+    cancelled: Annotated[int, Field(ge=0)]
+
+
+class ComparisonQueueModule(str, enum.Enum):
+    VERSIONS = "versions"
+    STAGES = "stages"
+
+
+class ComparisonQueueKind(_Object):
+    kind: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{2,63}$")]
+    module: ComparisonQueueModule
+    counts: ComparisonQueueCounts
+
+
+class ComparisonQueueSummary(_Object):
+    """The read-only «Сравнение» block of «Очередь»: the module set, whether execution is
+    paused for the whole installation, the items by state and by kind, and the age of the oldest
+    queued one. Comparison work yields to section runs and honours the pause."""
+
+    modules: ComparisonModules
+    paused: bool
+    counts: ComparisonQueueCounts
+    kinds: list[ComparisonQueueKind]
+    oldest_queued_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]

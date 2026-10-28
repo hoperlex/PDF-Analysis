@@ -8,8 +8,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.9.0 (OpenAPI 3.1.0)
- *   sha256 5daf6416d4d4100f0a49ec2d834ca52a6139c2b29dc3c3cff68080983e2a1765
+ *   AuditManager PC-01 API 1.10.0 (OpenAPI 3.1.0)
+ *   sha256 7c4c95a4aef812e1ff8ec8445a46cbc4b83a655a88ca15ff888f0dbde5b98238
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -22,6 +22,8 @@ import type {
   AppendComparisonVersionOrderResult,
   AppendDecisionInput,
   AppendDecisionResult,
+  ApplyComparisonMatrixEditsInput,
+  ApplyComparisonMatrixEditsResult,
   ApproveRegistrationInput,
   ApproveRegistrationResult,
   ApproveSheetPairingInput,
@@ -32,6 +34,8 @@ import type {
   ArchiveExecutorConnectionResult,
   ArchiveUserInput,
   ArchiveUserResult,
+  CancelComparisonSeriesInput,
+  CancelComparisonSeriesResult,
   CancelComparisonUploadInput,
   CancelComparisonUploadResult,
   CancelRunInput,
@@ -76,6 +80,8 @@ import type {
   ExtendExecutorTaskClaimResult,
   FailExecutorTaskInput,
   FailExecutorTaskResult,
+  FinishComparisonSeriesInput,
+  FinishComparisonSeriesResult,
   GenerateComparisonSummaryInput,
   GenerateComparisonSummaryResult,
   GenerateExecutorSshKeyInput,
@@ -88,6 +94,16 @@ import type {
   GetArV3BetaPackStatusResult,
   GetAssignmentInput,
   GetAssignmentResult,
+  GetComparisonMatrixInput,
+  GetComparisonMatrixResult,
+  GetComparisonOverviewInput,
+  GetComparisonOverviewResult,
+  GetComparisonQueueSummaryInput,
+  GetComparisonQueueSummaryResult,
+  GetComparisonSeriesInput,
+  GetComparisonSeriesResult,
+  GetComparisonSheetPairInput,
+  GetComparisonSheetPairResult,
   GetComparisonUploadInput,
   GetComparisonUploadResult,
   GetComparisonUploadProposalInput,
@@ -138,6 +154,14 @@ import type {
   ListAnalysisProfilesResult,
   ListAssignmentsInput,
   ListAssignmentsResult,
+  ListComparisonAiLinksInput,
+  ListComparisonAiLinksResult,
+  ListComparisonMatrixEditsInput,
+  ListComparisonMatrixEditsResult,
+  ListComparisonSeriesInput,
+  ListComparisonSeriesResult,
+  ListComparisonSheetPairsInput,
+  ListComparisonSheetPairsResult,
   ListComparisonUploadsInput,
   ListComparisonUploadsResult,
   ListComparisonVersionOrdersInput,
@@ -196,8 +220,12 @@ import type {
   ListWorkersResult,
   MarkReleaseNotesReadInput,
   MarkReleaseNotesReadResult,
+  PauseComparisonSeriesInput,
+  PauseComparisonSeriesResult,
   PauseComparisonUploadInput,
   PauseComparisonUploadResult,
+  PrepareComparisonMatrixInput,
+  PrepareComparisonMatrixResult,
   PurgeUserInput,
   PurgeUserResult,
   ReadRegistrationStatusInput,
@@ -212,6 +240,8 @@ import type {
   ResetUserPasswordResult,
   RestoreUserInput,
   RestoreUserResult,
+  ResumeComparisonSeriesInput,
+  ResumeComparisonSeriesResult,
   ResumeComparisonUploadInput,
   ResumeComparisonUploadResult,
   RetryComparisonUploadSetInput,
@@ -242,10 +272,14 @@ import type {
   SetWorkerIntakeResult,
   StartArV3BetaGroupInput,
   StartArV3BetaGroupResult,
+  StartComparisonSeriesInput,
+  StartComparisonSeriesResult,
   StartOptimisationPassInput,
   StartOptimisationPassResult,
   StartRunInput,
   StartRunResult,
+  StreamComparisonPairTileInput,
+  StreamComparisonPairTileResult,
   StreamDocumentVersionContentInput,
   StreamDocumentVersionContentResult,
   StreamNormDocumentContentInput,
@@ -264,6 +298,8 @@ import type {
   SubmitRegistrationResult,
   TransitionAssignmentInput,
   TransitionAssignmentResult,
+  UndoComparisonMatrixEditInput,
+  UndoComparisonMatrixEditResult,
   UpdateMyProfileInput,
   UpdateMyProfileResult,
   UpdateUserInput,
@@ -303,6 +339,18 @@ export function appendDecision(
   options?: RequestOptions,
 ): Promise<ApiResponse<AppendDecisionResult>> {
   return request<AppendDecisionResult>(OPERATIONS.appendDecision, input, options);
+}
+
+/**
+ * Apply a drafted batch of manual matrix edits.
+ *
+ * `POST /projects/{project_uid}/documents/{document_uid}/comparison-matrix/edits` - a write; carries a required Idempotency-Key.
+ */
+export function applyComparisonMatrixEdits(
+  input: ApplyComparisonMatrixEditsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ApplyComparisonMatrixEditsResult>> {
+  return request<ApplyComparisonMatrixEditsResult>(OPERATIONS.applyComparisonMatrixEdits, input, options);
 }
 
 /**
@@ -363,6 +411,18 @@ export function archiveUser(
   options?: RequestOptions,
 ): Promise<ApiResponse<ArchiveUserResult>> {
   return request<ArchiveUserResult>(OPERATIONS.archiveUser, input, options);
+}
+
+/**
+ * Cancel a series.
+ *
+ * `POST /comparison-series/{comparison_series_id}/cancellation` - a write; carries a required Idempotency-Key.
+ */
+export function cancelComparisonSeries(
+  input: CancelComparisonSeriesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CancelComparisonSeriesResult>> {
+  return request<CancelComparisonSeriesResult>(OPERATIONS.cancelComparisonSeries, input, options);
 }
 
 /**
@@ -630,6 +690,18 @@ export function failExecutorTask(
 }
 
 /**
+ * Finish the transitions of a series that have no result.
+ *
+ * `POST /comparison-series/{comparison_series_id}/finish` - a write; carries a required Idempotency-Key.
+ */
+export function finishComparisonSeries(
+  input: FinishComparisonSeriesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<FinishComparisonSeriesResult>> {
+  return request<FinishComparisonSeriesResult>(OPERATIONS.finishComparisonSeries, input, options);
+}
+
+/**
  * Generate Comparison Summary
  *
  * `POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/summaries` - a write; carries a required Idempotency-Key.
@@ -699,6 +771,66 @@ export function getAssignment(
   options?: RequestOptions,
 ): Promise<ApiResponse<GetAssignmentResult>> {
   return request<GetAssignmentResult>(OPERATIONS.getAssignment, input, options);
+}
+
+/**
+ * Read the effective matrix of a document set.
+ *
+ * `GET /projects/{project_uid}/documents/{document_uid}/comparison-matrix`.
+ */
+export function getComparisonMatrix(
+  input: GetComparisonMatrixInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetComparisonMatrixResult>> {
+  return request<GetComparisonMatrixResult>(OPERATIONS.getComparisonMatrix, input, options);
+}
+
+/**
+ * Read the overview of the comparison of a project.
+ *
+ * `GET /projects/{project_uid}/comparison-overview`.
+ */
+export function getComparisonOverview(
+  input: GetComparisonOverviewInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetComparisonOverviewResult>> {
+  return request<GetComparisonOverviewResult>(OPERATIONS.getComparisonOverview, input, options);
+}
+
+/**
+ * Read the comparison work queue.
+ *
+ * `GET /execution/comparison-queue`.
+ */
+export function getComparisonQueueSummary(
+  input: GetComparisonQueueSummaryInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetComparisonQueueSummaryResult>> {
+  return request<GetComparisonQueueSummaryResult>(OPERATIONS.getComparisonQueueSummary, input, options);
+}
+
+/**
+ * Read a series with its transitions.
+ *
+ * `GET /comparison-series/{comparison_series_id}`.
+ */
+export function getComparisonSeries(
+  input: GetComparisonSeriesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetComparisonSeriesResult>> {
+  return request<GetComparisonSeriesResult>(OPERATIONS.getComparisonSeries, input, options);
+}
+
+/**
+ * Read one sheet pair with its raw deterministic evidence.
+ *
+ * `GET /comparison-sheet-pairs/{comparison_sheet_pair_id}`.
+ */
+export function getComparisonSheetPair(
+  input: GetComparisonSheetPairInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetComparisonSheetPairResult>> {
+  return request<GetComparisonSheetPairResult>(OPERATIONS.getComparisonSheetPair, input, options);
 }
 
 /**
@@ -999,6 +1131,54 @@ export function listAssignments(
   options?: RequestOptions,
 ): Promise<ApiResponse<ListAssignmentsResult>> {
   return request<ListAssignmentsResult>(OPERATIONS.listAssignments, input, options);
+}
+
+/**
+ * List the accepted AI links of a document set.
+ *
+ * `GET /projects/{project_uid}/documents/{document_uid}/comparison-ai-links`.
+ */
+export function listComparisonAiLinks(
+  input: ListComparisonAiLinksInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListComparisonAiLinksResult>> {
+  return request<ListComparisonAiLinksResult>(OPERATIONS.listComparisonAiLinks, input, options);
+}
+
+/**
+ * List the manual edit history of a document set.
+ *
+ * `GET /projects/{project_uid}/documents/{document_uid}/comparison-matrix/edits`.
+ */
+export function listComparisonMatrixEdits(
+  input: ListComparisonMatrixEditsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListComparisonMatrixEditsResult>> {
+  return request<ListComparisonMatrixEditsResult>(OPERATIONS.listComparisonMatrixEdits, input, options);
+}
+
+/**
+ * List the series of a document set.
+ *
+ * `GET /projects/{project_uid}/documents/{document_uid}/comparison-series`.
+ */
+export function listComparisonSeries(
+  input: ListComparisonSeriesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListComparisonSeriesResult>> {
+  return request<ListComparisonSeriesResult>(OPERATIONS.listComparisonSeries, input, options);
+}
+
+/**
+ * List the sheet pairs of a transition.
+ *
+ * `GET /comparison-transitions/{comparison_transition_id}/sheet-pairs`.
+ */
+export function listComparisonSheetPairs(
+  input: ListComparisonSheetPairsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListComparisonSheetPairsResult>> {
+  return request<ListComparisonSheetPairsResult>(OPERATIONS.listComparisonSheetPairs, input, options);
 }
 
 /**
@@ -1350,6 +1530,18 @@ export function markReleaseNotesRead(
 }
 
 /**
+ * Pause a series.
+ *
+ * `POST /comparison-series/{comparison_series_id}/pause` - a write; carries a required Idempotency-Key.
+ */
+export function pauseComparisonSeries(
+  input: PauseComparisonSeriesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<PauseComparisonSeriesResult>> {
+  return request<PauseComparisonSeriesResult>(OPERATIONS.pauseComparisonSeries, input, options);
+}
+
+/**
  * Pause an upload batch after the set in hand.
  *
  * `POST /comparison-uploads/{comparison_upload_id}/pause` - a write; carries a required Idempotency-Key.
@@ -1359,6 +1551,18 @@ export function pauseComparisonUpload(
   options?: RequestOptions,
 ): Promise<ApiResponse<PauseComparisonUploadResult>> {
   return request<PauseComparisonUploadResult>(OPERATIONS.pauseComparisonUpload, input, options);
+}
+
+/**
+ * Queue the profiles and the build of the matrix of a document set.
+ *
+ * `POST /projects/{project_uid}/documents/{document_uid}/comparison-matrix/preparation` - a write; carries a required Idempotency-Key.
+ */
+export function prepareComparisonMatrix(
+  input: PrepareComparisonMatrixInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<PrepareComparisonMatrixResult>> {
+  return request<PrepareComparisonMatrixResult>(OPERATIONS.prepareComparisonMatrix, input, options);
 }
 
 /**
@@ -1443,6 +1647,18 @@ export function restoreUser(
   options?: RequestOptions,
 ): Promise<ApiResponse<RestoreUserResult>> {
   return request<RestoreUserResult>(OPERATIONS.restoreUser, input, options);
+}
+
+/**
+ * Resume a paused series.
+ *
+ * `POST /comparison-series/{comparison_series_id}/resume` - a write; carries a required Idempotency-Key.
+ */
+export function resumeComparisonSeries(
+  input: ResumeComparisonSeriesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ResumeComparisonSeriesResult>> {
+  return request<ResumeComparisonSeriesResult>(OPERATIONS.resumeComparisonSeries, input, options);
 }
 
 /**
@@ -1626,6 +1842,18 @@ export function startArV3BetaGroup(
 }
 
 /**
+ * Start the comparison of every adjacent pair of versions.
+ *
+ * `POST /projects/{project_uid}/documents/{document_uid}/comparison-series` - a write; carries a required Idempotency-Key.
+ */
+export function startComparisonSeries(
+  input: StartComparisonSeriesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StartComparisonSeriesResult>> {
+  return request<StartComparisonSeriesResult>(OPERATIONS.startComparisonSeries, input, options);
+}
+
+/**
  * Start Optimisation Pass
  *
  * `POST /projects/{project_uid}/documents/{document_uid}/optimisation-passes` - a write; carries a required Idempotency-Key.
@@ -1647,6 +1875,18 @@ export function startRun(
   options?: RequestOptions,
 ): Promise<ApiResponse<StartRunResult>> {
   return request<StartRunResult>(OPERATIONS.startRun, input, options);
+}
+
+/**
+ * Stream one tile PNG of a sheet pair.
+ *
+ * `GET /comparison-sheet-pairs/{comparison_sheet_pair_id}/tile`.
+ */
+export function streamComparisonPairTile(
+  input: StreamComparisonPairTileInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StreamComparisonPairTileResult>> {
+  return request<StreamComparisonPairTileResult>(OPERATIONS.streamComparisonPairTile, input, options);
 }
 
 /**
@@ -1758,6 +1998,18 @@ export function transitionAssignment(
 }
 
 /**
+ * Reverse the latest applied manual matrix edit.
+ *
+ * `POST /projects/{project_uid}/documents/{document_uid}/comparison-matrix/edits/undo` - a write; carries a required Idempotency-Key.
+ */
+export function undoComparisonMatrixEdit(
+  input: UndoComparisonMatrixEditInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<UndoComparisonMatrixEditResult>> {
+  return request<UndoComparisonMatrixEditResult>(OPERATIONS.undoComparisonMatrixEdit, input, options);
+}
+
+/**
  * Set the signed-in account's names, and complete its profile.
  *
  * `PATCH /me`.
@@ -1848,11 +2100,13 @@ export function withdrawSheetPairing(
 export const apiClient = {
   appendComparisonVersionOrder,
   appendDecision,
+  applyComparisonMatrixEdits,
   approveRegistration,
   approveSheetPairing,
   archiveAnalysisPreset,
   archiveExecutorConnection,
   archiveUser,
+  cancelComparisonSeries,
   cancelComparisonUpload,
   cancelRun,
   carryOverDecision,
@@ -1875,12 +2129,18 @@ export const apiClient = {
   exportRunXlsx,
   extendExecutorTaskClaim,
   failExecutorTask,
+  finishComparisonSeries,
   generateComparisonSummary,
   generateExecutorSshKey,
   getArV3BetaGroup,
   getArV3BetaGroupReview,
   getArV3BetaPackStatus,
   getAssignment,
+  getComparisonMatrix,
+  getComparisonOverview,
+  getComparisonQueueSummary,
+  getComparisonSeries,
+  getComparisonSheetPair,
   getComparisonUpload,
   getComparisonUploadProposal,
   getDashboardSummary,
@@ -1906,6 +2166,10 @@ export const apiClient = {
   listAnalysisPresets,
   listAnalysisProfiles,
   listAssignments,
+  listComparisonAiLinks,
+  listComparisonMatrixEdits,
+  listComparisonSeries,
+  listComparisonSheetPairs,
   listComparisonUploads,
   listComparisonVersionOrders,
   listDecisionHistory,
@@ -1935,7 +2199,9 @@ export const apiClient = {
   listVersions,
   listWorkers,
   markReleaseNotesRead,
+  pauseComparisonSeries,
   pauseComparisonUpload,
+  prepareComparisonMatrix,
   purgeUser,
   readRegistrationStatus,
   reauditRun,
@@ -1943,6 +2209,7 @@ export const apiClient = {
   requestExecutorProbe,
   resetUserPassword,
   restoreUser,
+  resumeComparisonSeries,
   resumeComparisonUpload,
   retryComparisonUploadSet,
   reviseAnalysisPreset,
@@ -1958,8 +2225,10 @@ export const apiClient = {
   setProjectVendorList,
   setWorkerIntake,
   startArV3BetaGroup,
+  startComparisonSeries,
   startOptimisationPass,
   startRun,
+  streamComparisonPairTile,
   streamDocumentVersionContent,
   streamNormDocumentContent,
   streamVersionPagePreview,
@@ -1969,6 +2238,7 @@ export const apiClient = {
   submitExecutorTaskAnswer,
   submitRegistration,
   transitionAssignment,
+  undoComparisonMatrixEdit,
   updateMyProfile,
   updateUser,
   uploadComparisonUploadPart,

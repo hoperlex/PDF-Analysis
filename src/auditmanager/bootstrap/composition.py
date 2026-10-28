@@ -63,6 +63,10 @@ from auditmanager.bootstrap.adapters import (
     RegistrationAdapter,
     ReleasesAdapter,
     ComparisonUploadAdapter,
+    ComparisonMatrixAdapter,
+    ComparisonOverviewAdapter,
+    ComparisonPairTileAdapter,
+    ComparisonSeriesAdapter,
     ComparisonVersionOrderAdapter,
     VersionPageAdapter,
     RunAdapter,
@@ -492,6 +496,13 @@ def build_application(
             sessions, service=ComparisonVersionOrderService(session_factory=sessions)
         ),
         version_pages=VersionPageAdapter(sessions, blob_store=store),
+        # `CMP-SEAL-C1`. The version comparison core, sealed as stubs answering `503
+        # dependency_unavailable` until `CMP-MATRIX-01`, `CMP-SERIES-01`, `CMP-VIEWER-01` and
+        # `CMP-VC-OVERVIEW-01` replace the four adapters (plan section 4.0 rule 1).
+        comparison_matrices=ComparisonMatrixAdapter(),
+        comparison_series=ComparisonSeriesAdapter(),
+        comparison_pair_tiles=ComparisonPairTileAdapter(),
+        comparison_overview=ComparisonOverviewAdapter(),
         execution=ExecutionAdapter(sessions, runs=run_adapter),
         # `W55A-SEAL-01` sealed them; `W55A-SEARCH-01` serves them. The norms reads and the
         # designation over the same session factory, every search under the operator's
@@ -518,6 +529,9 @@ def build_application(
             # mode, and the meter is the run ceiling; no live implementation is wired (`R-29`).
             summary_model=summary_model_for(resolved.provider_mode),
             cost_ceiling_usd=resolved.run_cost_ceiling_usd,
+            # `CMP-SEAL-C1` (ADR-0025 decision 13): the module set, so the three `0035` operations are
+            # withdrawn while the versions module is on.
+            comparison_modules=comparison_modules,
         ),
         # `W59-ANALYSIS-SETTINGS-01`. The same registry run start routes through, listed
         # read-only for «Настройки анализа», named from the reviewed section catalogue.

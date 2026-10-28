@@ -370,14 +370,14 @@ def test_the_application_role_cannot_change_a_privilege(applied: Stand, statemen
 
 
 def test_the_application_role_cannot_truncate_any_table(applied: Stand) -> None:
-    """All 76, read-write ones included: ``TRUNCATE`` is the one privilege no class carries."""
+    """All 83, read-write ones included: ``TRUNCATE`` is the one privilege no class carries."""
     refused: list[str] = []
     with applied.app(autocommit=True) as connection:
         for table in sorted(coverage.TABLES):
             with pytest.raises(errors.InsufficientPrivilege):
                 connection.execute(f'TRUNCATE TABLE "{table}"')
             refused.append(table)
-    assert refused == sorted(coverage.TABLES) and len(refused) == 76  # 0038: the nine comparison tables (0037: analysis_preset_revision; 0035: comparison_sheet_link, comparison_summary)
+    assert refused == sorted(coverage.TABLES) and len(refused) == 83  # 0039: the seven tables of the version comparison core (0038: the nine comparison tables (0037: analysis_preset_revision; 0035: comparison_sheet_link, comparison_summary))
 
 
 # --- (c) append-only is refused twice ------------------------------------------------------------------
@@ -410,7 +410,7 @@ def test_append_only_tables_refuse_update_and_delete_by_privilege(applied: Stand
             with pytest.raises(errors.InsufficientPrivilege):
                 connection.execute(f'DELETE FROM "{table}" WHERE false')
             checked.append(table)
-    assert checked == sorted(grants.APPEND_ONLY) and len(checked) == len(grants.APPEND_ONLY) == 40  # 0038: comparison_version_order (0037)
+    assert checked == sorted(grants.APPEND_ONLY) and len(checked) == len(grants.APPEND_ONLY) == 43  # 0039: comparison_matrix, comparison_matrix_edit, comparison_ai_link (0038: comparison_version_order; 0037)
 
 
 def test_read_only_tables_refuse_every_write(applied: Stand) -> None:

@@ -74,7 +74,10 @@ def test_the_declaration_partitions_exactly_the_tables_schema_coverage_declares(
     assert {"comparison_upload", "comparison_upload_set", "comparison_upload_file", "comparison_upload_part",
             "comparison_version_order", "comparison_page_profile", "comparison_work",
             "comparison_work_attempt", "comparison_model_call"} <= tool.PRODUCT_TABLES
-    assert len(tool.PRODUCT_TABLES) == 43 and len(tool.KEEP_TABLES) == 30 and len(tool.MIXED_TABLES) == 3
+    # `0039_comparison_core`: the seven tables of the version comparison core are product data too (PRODUCT 43 -> 50).
+    assert {"comparison_matrix", "comparison_matrix_edit", "comparison_ai_link", "comparison_series",
+            "comparison_transition", "comparison_sheet_pair", "comparison_sheet_pair_result"} <= tool.PRODUCT_TABLES
+    assert len(tool.PRODUCT_TABLES) == 50 and len(tool.KEEP_TABLES) == 30 and len(tool.MIXED_TABLES) == 3
     assert tool.PRODUCT_TABLES | tool.KEEP_TABLES | tool.MIXED_TABLES == TABLES
     # the corpus half of KEEP is schema_coverage's own list, not a copy of it
     assert tool.KEEP_NORM_TABLES is EXEMPT_FROM_FINGERPRINT
