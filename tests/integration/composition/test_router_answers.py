@@ -60,10 +60,10 @@ _PRJ = "prj_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 _STUB_UPLOAD = "/comparison-uploads/cbt_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 _STUB_PROFILE = "/page-profiles/cpr_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 #: `CMP-INGEST-01` serves three of them and removes their paths: the batch, its proposal and the version-order
-#: listing now answer the sweep's ordinary rule (an absent `cbt_` or `prj_` is `404`).
-SEALED_STUB_GETS: frozenset[str] = frozenset({
-    f"/projects/{_PRJ}/comparison-uploads",
-})
+#: listing now answer the sweep's ordinary rule (an absent `cbt_` or `prj_` is `404`). `CMP-INGEST-02` serves the
+#: last of the upload reads (the project's batches, `listComparisonUploads`) and empties this set: an absent
+#: project is `404`, and the listing joins the sweep.
+SEALED_STUB_GETS: frozenset[str] = frozenset()
 #: `CMP-PROFILE-01` serves the five page reads (`/versions/{ver}/page-profiles`, `/page-profiles/{cpr}` and
 #: its `preview`, `thumbnail` and `tile`) and removes them from the set above: an absent `cpr_` is `404`.
 #: The tile's `level`, `column` and `row` are required, so the sweep gives it a well-formed query that

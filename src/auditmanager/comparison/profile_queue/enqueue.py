@@ -49,6 +49,7 @@ def enqueue_version_page_profiles(
     version_uid: str,
     created_by_user_uid: str,
     retry_failed: bool = False,
+    comparison_upload_id: str | None = None,
 ) -> Enqueued:
     """Enqueue the build of ``version_uid``'s page profiles, or answer the live item that already is.
 
@@ -56,6 +57,12 @@ def enqueue_version_page_profiles(
     such rows, see ``build_version_page_profiles``). The caller owns the transaction. A malformed
     version identity is ``validation_failed``; an unknown version, or one of another project, is
     ``not_found``.
+
+    ``comparison_upload_id`` (`CMP-INGEST-02`) names the upload batch the item belongs to, so that the
+    batch's pause, resume and cancel reach it (``ComparisonWorkRepository.pause_for_upload`` and its
+    siblings) and the batch can count its live items. It is not part of the item's identity: the dedupe
+    key stays a function of the version alone, so a live item of the version is returned whichever batch
+    asked first.
     """
     try:
         version = VersionUid(version_uid)
@@ -74,4 +81,5 @@ def enqueue_version_page_profiles(
         payload=page_profile_payload(str(version), retry_failed=retry_failed),
         dedupe_key=page_profile_dedupe_key(str(version), retry_failed=retry_failed),
         created_by_user_uid=created_by_user_uid,
+        comparison_upload_id=comparison_upload_id,
     )

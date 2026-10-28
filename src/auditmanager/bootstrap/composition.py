@@ -72,6 +72,7 @@ from auditmanager.bootstrap.adapters import (
     XlsxExportAdapter,
     resolve_analysis_preset,
 )
+from auditmanager.ingest.comparison_batch.public import BATCH_HANDLER_FACTORIES, ComparisonBatchService
 from auditmanager.ingest.comparison_pdf.public import ComparisonUploadService, ComparisonVersionOrderService
 from auditmanager.bootstrap.settings import AppSettings, ConfigurationError
 from auditmanager.bootstrap.settings import load as load_settings
@@ -200,8 +201,11 @@ def build_comparison_work(
         raise ConfigurationError(str(exc)) from exc
     work = ComparisonWorkRepository()
     try:
+        # `CMP-INGEST-02`: the two work kinds of the batch operations are appended here, not in
+        # ``comparison.public`` (a ``comparison`` module may not import ``ingest``); the registry
+        # still refuses a duplicate kind.
         registry = HandlerRegistry.build(
-            COMPARISON_HANDLER_FACTORIES,
+            (*COMPARISON_HANDLER_FACTORIES, *BATCH_HANDLER_FACTORIES),
             WorkDependencies(
                 engine=engine, session_factory=sessions, blob_store=blob_store, work=work,
             ),
@@ -356,6 +360,10 @@ def build_application(
         )
     )
 
+    # `CMP-INGEST-01` / `CMP-INGEST-02`: one upload service, shared by the adapter's own operations
+    # and by the batch service that reads the batch and the sets back through it.
+    comparison_upload_service = ComparisonUploadService(store, session_factory=sessions)
+
     from auditmanager.executors.runtime import KindRuntime
 
     model_adapter, provider_config, providers = _build_provider(
@@ -477,7 +485,8 @@ def build_application(
         # dependency_unavailable` until `CMP-INGEST-01`, `CMP-INGEST-02` and `CMP-PROFILE-01`
         # replace the three adapters (plan section 4.0 rule 1).
         comparison_uploads=ComparisonUploadAdapter(
-            sessions, service=ComparisonUploadService(store, session_factory=sessions)
+            sessions, service=comparison_upload_service,
+            batches=ComparisonBatchService(comparison_upload_service, session_factory=sessions),
         ),
         comparison_version_orders=ComparisonVersionOrderAdapter(
             sessions, service=ComparisonVersionOrderService(session_factory=sessions)

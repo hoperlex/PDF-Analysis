@@ -63,12 +63,15 @@ REQUESTS: dict[str, tuple[str, str, Any, bytes | None, bool]] = {
 }
 EXPERT_WRITES = {name for name, (_m, _p, _b, _c, keyed) in REQUESTS.items() if keyed}
 DEPENDENCIES = {"comparison_uploads", "comparison_version_orders", "version_pages"}
-#: `CMP-INGEST-01` serves these eight; they are no longer stubs. The lane that serves one more adds it here
-#: and the stub test below stops asking it for `503`; the role, key and shape tests below still judge it.
+#: `CMP-INGEST-01` serves the first eight and `CMP-INGEST-02` the last six; they are no longer stubs. The lane that
+#: serves one more adds it here and the stub test below stops asking it for `503`; the role, key and shape tests below
+#: still judge it.
 WIRED = frozenset({
     "createComparisonUpload", "getComparisonUpload", "getComparisonUploadProposal", "uploadComparisonUploadPart",
     "completeComparisonUploadFile", "confirmComparisonUploadSet", "listComparisonVersionOrders",
     "appendComparisonVersionOrder",
+    "listComparisonUploads", "excludeComparisonUploadSet", "retryComparisonUploadSet", "pauseComparisonUpload",
+    "resumeComparisonUpload", "cancelComparisonUpload",
 })
 STUBS = sorted(set(REQUESTS) - WIRED)
 
