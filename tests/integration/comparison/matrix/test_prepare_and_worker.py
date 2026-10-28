@@ -162,3 +162,31 @@ def test_a_payload_of_another_shape_and_an_unknown_document_fail_without_a_retry
         assert runner.execute(claim(project)) == "failed"
     assert sorted(i["failure_reason"] for i in _items(lab, project)) == [
         "matrix_build_document_not_found", "matrix_build_payload_invalid"]
+
+
+def test_with_the_module_off_the_build_item_stays_queued_and_a_lost_lease_publishes_nothing(
+    service, lab, sessions, engine, blob_store, expert_uid
+) -> None:
+    """Decision 23: a module that is off claims nothing. Decision 7: the publishing transaction is fenced."""
+    from auditmanager.shared.errors import DomainError, ErrorCode
+    from auditmanager.workers.public import WorkerRegistry
+
+    doc = lab.clone()
+    _prepare(service, doc, expert_uid)
+    assert [i["kind"] for i in _items(lab, doc.project_uid)] == ["matrix_build"], "the profiles are stored: only the build"
+    gates = lambda: ClaimGates(paused=default_gates().paused, run_claimable=lambda session: False)  # noqa: E731
+    with mock.patch("auditmanager.comparison.work.runner.default_gates", gates):
+        off = build_comparison_work(sessions=sessions, engine=engine, blob_store=blob_store,
+                                    environ={"AUDITMANAGER_COMPARISON_MODULES": "none"})
+    with sessions() as session:
+        worker_id = WorkerRegistry().register(session, version="cmp-matrix-01-off", slots=1)
+        session.commit()
+    assert off.claim(worker_id) is None
+    assert [i["state"] for i in _items(lab, doc.project_uid)] == ["queued"]
+
+    def refuse(session) -> None:
+        raise DomainError(ErrorCode.STALE_ATTEMPT)
+
+    with pytest.raises(DomainError):
+        service.build_matrix(project_uid=doc.project_uid, document_uid=doc.document_uid, publish_guard=refuse)
+    assert lab.rows("SELECT count(*) AS n FROM comparison_matrix WHERE document_uid = :d", d=doc.document_uid)[0]["n"] == 0
