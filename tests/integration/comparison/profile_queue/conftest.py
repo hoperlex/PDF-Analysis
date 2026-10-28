@@ -169,7 +169,7 @@ class Lane:
     # -- seeding ---------------------------------------------------------------------------------------------
     def seed(
         self, pdf_path: Path, page_count: int, *, project_uid: str | None = None, with_manifest: bool = True,
-        manifest_sha256: str | None = None,
+        manifest_sha256: str | None = None, manifest_role: str | None = None,
     ) -> Seeded:
         from auditmanager.comparison.profile.publish import ProfileBlobPublisher
         from auditmanager.documents.public import MANIFEST_ROLE_SOURCE_DOCUMENT
@@ -203,7 +203,7 @@ class Lane:
                         "INSERT INTO input_manifest_entry (version_uid, role, blob_id, sha256, size_bytes, media_type) "
                         "VALUES (:v, :r, :b, :s, :n, 'application/pdf')"
                     ),
-                    {"v": version, "r": MANIFEST_ROLE_SOURCE_DOCUMENT, "b": blob_id, "s": manifest_sha256 or digest, "n": len(data)},
+                    {"v": version, "r": manifest_role or MANIFEST_ROLE_SOURCE_DOCUMENT, "b": blob_id, "s": manifest_sha256 or digest, "n": len(data)},
                 )
         return Seeded(project, version, page_count)
 
@@ -242,9 +242,14 @@ class Lane:
 
     def runner(
         self, child_runner: ChildRunner | None = None, *, heartbeat_seconds: float = 20.0,
+        pages_per_attempt: int | None = None,
     ) -> ComparisonWorkRunner:
-        """The real runner with the one handler of the kind over ``child_runner`` (the real one if None)."""
-        handler = PageProfileHandler(self.dependencies(), runner=child_runner)
+        """The real runner with the one handler of the kind over ``child_runner`` (the real one if None).
+
+        ``pages_per_attempt`` is the handler's bound (the shipped one if None): a test that shows a version longer than
+        an attempt holds makes the attempt short instead of making the PDF long."""
+        options: dict[str, Any] = {} if pages_per_attempt is None else {"pages_per_attempt": pages_per_attempt}
+        handler = PageProfileHandler(self.dependencies(), runner=child_runner, **options)
         return ComparisonWorkRunner(
             self.sessions, registry=HandlerRegistry({handler.kind: handler}), modules=frozenset({"versions"}),
             repository=self.repository, gates=self.gates(), heartbeat_seconds=heartbeat_seconds,

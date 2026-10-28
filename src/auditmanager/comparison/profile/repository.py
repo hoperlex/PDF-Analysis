@@ -12,12 +12,15 @@ The one delete is :meth:`PageProfileRepository.delete_failed`: a page that ended
 (``needs_review`` with reason ``RENDER_FAILED``) is **not evidence**, and an operator who has freed the
 host of what stopped it may build it again; a profile that is ``ready`` or ``refused`` is never deleted
 here, and a row that a later table already references is refused by that table's foreign key, not by
-this code.
+this code. A retry item sweeps only the rows that already existed when it was asked for
+(``created_before``), so a page that fails again while the item runs is a stored page of that item and a
+later attempt of the same item does not build it once more.
 """
 
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import text
@@ -57,7 +60,8 @@ _INSERT = text(
 )
 _DELETE_FAILED = text(
     "DELETE FROM comparison_page_profile WHERE version_uid = :version_uid AND algo_version = :algo "
-    "AND status = 'needs_review' AND reason = 'RENDER_FAILED'"
+    "AND status = 'needs_review' AND reason = 'RENDER_FAILED' "
+    "AND (CAST(:created_before AS timestamptz) IS NULL OR created_at < CAST(:created_before AS timestamptz))"
 )
 
 
@@ -145,6 +149,15 @@ class PageProfileRepository:
         ).first()
         return None if inserted is None else str(tuple(inserted)[0])
 
-    def delete_failed(self, session: Session, version_uid: str, algo_version: str) -> int:
-        """Remove the rows of pages that ended without a result; the count removed."""
-        return int(session.execute(_DELETE_FAILED, {"version_uid": version_uid, "algo": algo_version}).rowcount)
+    def delete_failed(
+        self, session: Session, version_uid: str, algo_version: str, *, created_before: datetime | None = None
+    ) -> int:
+        """Remove the rows of pages that ended without a result; the count removed.
+
+        With ``created_before`` only the rows written before that instant are removed (database time, both sides)."""
+        return int(
+            session.execute(
+                _DELETE_FAILED,
+                {"version_uid": version_uid, "algo": algo_version, "created_before": created_before},
+            ).rowcount
+        )
