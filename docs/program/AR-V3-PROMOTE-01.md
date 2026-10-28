@@ -135,6 +135,8 @@ The replay of each bundle printed `promote: verified`, `replayed: true`, exit 0,
 
 The `decisions.json` digest was computed from the tracked file; the 14 and 8 come from its `mode` counts (14 `provisional_citation`, 8 `context_only`: C05 C06 C08 C09 C10 C15 C21 C22). The scope statement adds one clause to the feasibility proposal: that the independent check was AI to AI.
 
+**This table is the record of what was sealed on the custody lane (a file that is not installable). Two phrases of its `--scope-statement` say more than was done; the live seal uses the corrected text of section 6a, not this one.**
+
 | Item | Value |
 | --- | --- |
 | `pack_sha256` (inside the manifest, printed by `seal` and `verify`) | `5d87c1ef52b09aaaab73325c0504c401b29a5af23a16162165ef5954de59251d` |
@@ -143,6 +145,23 @@ The `decisions.json` digest was computed from the tracked file; the 14 and 8 com
 | Set ids and `set_sha256` in the manifest | equal to the own `plan` values for all six scopes (checked by script) |
 
 `pack_sha256` is tamper evidence, not a signature (`D-212`); custody of the file is the control.
+
+### 6a. Seal values for the live host (corrected 2026-10-28, `AR-V3-JUDGE-FIXES-01`) — the single source
+
+The settings screen shows the statement verbatim, so each phrase is checked against what the system does and what this lane did:
+
+- «числовые выводы недоступны» (section 6) is wrong as a description of the product: only the numeric **fields** `required_value` and `stated_value` are stored and not served (no API response, CSV or workbook carries them); the model's `finding_text` and `recommendation_text` and the norm quote **are** served and may contain figures that nothing checks. New wording: «числовые поля не отдаются; текст модели и цитата нормы могут содержать числа».
+- «независимая проверка карт, векторов и сводных значений» (section 6) says more than sections 3(c) and 9 record: the vectors were **not** re-derived from the frozen model and the embedding-set digest was taken from the hash-chained manifest; what was checked is that the bytes and digests correspond. New wording: «проверено соответствие байтов и дайджестов; векторы заново не считались».
+
+| Field | Value for the live seal |
+| --- | --- |
+| `--reviewer` | `ИИ-интегратор (Claude Code), сессия integration/ar-close-1026` (unchanged) |
+| `--capacity` | `ИИ-интегратор по поручению владельца (R-146ba); не эксперт предметной области` (unchanged) |
+| `--reviewed-at` | the day of the live seal, `YYYY-MM-DD` |
+| `--decision-ref` | `R-146ba (A-10, A-11); decisions sha256 f18168f037b768a672dc657e9b8cd6bb8e87a199043aee253c11ba24f064f0cb; map digests F1 6ef3303ad6b3, F2 56ee1c26e79c, A1 4b7c2f9d490f, A2 5e97bcc69091, S1 4502cb676a47, S2 547aea97e556` — recompute `sha256sum docs/program/ar-v3-beta/decisions.json` first; it must equal the digest here |
+| `--scope-statement` | `Подготовлено ИИ-интегратором по поручению владельца; эксперт предметной области не участвовал; нормы не сверены с официальной редакцией человеком; независимая проверка выполнена вторым отдельным ИИ-сеансом (ИИ проверяет ИИ): проверено соответствие байтов и дайджестов, векторы заново не считались; это не экспертная проверка. Охват: шесть областей АР v3 (F1 F2 A1 A2 S1 S2), 22 темы C01-C22, 14 тем как предварительная цитата и 8 только как контекст (C05 C06 C08 C09 C10 C15 C21 C22); числовые поля не отдаются; текст модели и цитата нормы могут содержать числа.` |
+
+Before sealing, the counts (14 and 8) must still equal the frozen `decisions.json` (the shape test asserts them). `docs/program/ar-v3-beta/README.md` and `AR-V3-LIVE-ACTIVATION-OWNER-STEPS-01.md` point here; `AR-V3-ACTIVATION-FEASIBILITY-01.md` section 6 holds the original proposal, which is history and was not edited.
 
 ## 7. Commands (secrets not shown)
 
@@ -169,6 +188,6 @@ All from `/root/projects/PDF-Analysis/.local/worktrees/ar-v3-promote-01`, `PYTHO
 
 ## 10. For the integrator
 
-- The sealed pack is on this host only (`.local/ar-v3-draft/pack.json`, mode 0600, file SHA-256 `9c2cdc9d...cd78`, `pack_sha256` `5d87c1ef...9251d`). It names sets in the **custody lane's** database. For the live host (feasibility step 10) the same six bundles (`independent/bundle-<S>/`, now carrying the `expected_*` digests) are promoted there with the same `set_id`s and `plan` must end `verdict: matched` against the digests of section 4; then `seal` again against the live database (a pack sealed here names rows the live database does not hold).
+- The sealed pack is on this host only (`.local/ar-v3-draft/pack.json`, mode 0600, file SHA-256 `9c2cdc9d...cd78`, `pack_sha256` `5d87c1ef...9251d`). It names sets in the **custody lane's** database. For the live host (feasibility step 10) the same six bundles (`independent/bundle-<S>/`, now carrying the `expected_*` digests) are promoted there with the same `set_id`s and `plan` must end `verdict: matched` against the digests of section 4; then `seal` again against the live database with the values of section 6a (a pack sealed here names rows the live database does not hold, and its statement carries the two phrases that 6a corrects).
 - The six set ids must be kept as long as any bundle is; a second id for a scope is never minted.
 - The bundles hold query vectors; they stay out of Git.

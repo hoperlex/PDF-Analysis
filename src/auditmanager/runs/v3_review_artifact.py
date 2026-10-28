@@ -6,6 +6,9 @@ import json
 from dataclasses import dataclass
 
 from auditmanager.analysis.public import canonical_bytes, sha256_hex
+from auditmanager.runs.v3_citations import (
+    V3CorpusCitationRefused, grounded_citations_are_provisional, index_prompt_rows,
+)
 from auditmanager.runs.v3_cite_preflight import V3CitePreflight
 from auditmanager.shared.errors import DomainError, ErrorCode
 
@@ -71,12 +74,11 @@ def build_v3_beta_review_artifact(value: V3CitePreflight) -> BuiltV3ReviewArtifa
 
     try:
         set_document = json.loads(request.verified_set.data)
-        rows = json.loads(set_document["prompt_part"])["paragraphs"]
-        label_items = {row["label"]: row["item_id"] for row in rows}
+        rows = index_prompt_rows(json.loads(set_document["prompt_part"])["paragraphs"])
     except (UnicodeError, ValueError, TypeError, KeyError) as exc:
         raise _refuse("review_label_map_invalid") from exc
-    if (len(label_items) != len(rows)
-            or set(label_items.values()) != set(candidate.item_ids)
+    label_items = rows.label_items
+    if (set(label_items.values()) != set(candidate.item_ids)
             or len(set(label_items.values())) != len(candidate.item_ids)):
         raise _refuse("review_label_map_invalid")
     topic_modes = {topic.item_id: topic.mode for topic in review.topics}
@@ -111,7 +113,16 @@ def build_v3_beta_review_artifact(value: V3CitePreflight) -> BuiltV3ReviewArtifa
                 raise _refuse("review_citation_label_invalid")
             items.append(item_id)
         if ordinal in provisional:
-            if any(topic_modes[item_id] != "provisional_citation" for item_id in items):
+            # the same rule the classifier applied: by the paragraph each citation was grounded
+            # to, not by its label (a rebound quote can land on a context-only paragraph)
+            try:
+                provisional_ok = grounded_citations_are_provisional(
+                    tuple(item.label for item in accepted.proposal.norm_citations or ()),
+                    accepted.norm_citations, rows=rows, modes=topic_modes,
+                )
+            except V3CorpusCitationRefused as exc:
+                raise _refuse("review_citation_grounding_invalid") from exc
+            if not provisional_ok:
                 raise _refuse("review_context_laundered")
             for item_id in items:
                 citation_counts[item_id] += 1

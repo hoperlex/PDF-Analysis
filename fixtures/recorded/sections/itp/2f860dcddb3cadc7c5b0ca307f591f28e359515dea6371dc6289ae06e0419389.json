@@ -7,7 +7,7 @@
     "kind": "synthetic",
     "profile_status": "reviewed",
     "prompt_bundle_id": "pb_01M5AXG1KQR5A6ZPWDX4CC3CTS",
-    "prompt_bundle_sha256": "7f8d66da4739c7437a373177fadba4398512c6e85a5c0cc9074a0a9d1805054f",
+    "prompt_bundle_sha256": "2c906e1c90a532a07a3ab184ec8ed6c88045096b426e641c66c3c33f17c89f28",
     "section_code": "ITP",
     "statement": "Synthetic: authored by hand for SECTION-RECORDINGS-01 to prove section routing in recorded mode. No model produced this reply and no provider call was made. Not field evidence for the profile's review.",
     "task_id": "SECTION-RECORDINGS-01",
@@ -15,7 +15,7 @@
   },
   "output_text": "{\"observations\": [{\"category\": \"internal_contradiction\", \"finding_text\": \"Синтетический ответ (ИТП), не результат вызова модели: степень огнестойкости здания записана двумя разными значениями: II и III.\", \"recommendation_text\": \"Оставить в тексте одну степень огнестойкости здания.\", \"evidence\": [{\"page_number\": 2, \"quote\": \"Степень огнестойкости здания — II.\"}, {\"page_number\": 6, \"quote\": \"Степень огнестойкости здания — III.\"}]}]}",
   "recording_version": "1.0.0",
-  "request_sha256": "230bc8fde920ae599124f12e252f77e56a97d4087e284128c15f5a77eded1d6c",
+  "request_sha256": "2f860dcddb3cadc7c5b0ca307f591f28e359515dea6371dc6289ae06e0419389",
   "stop_reason": "end_turn",
   "usage": {
     "input_tokens": 2440,

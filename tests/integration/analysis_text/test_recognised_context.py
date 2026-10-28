@@ -200,15 +200,25 @@ def test_a_scanned_page_in_the_range_proves_nothing_about_absence() -> None:
 
 
 def test_the_same_pair_is_published_once_its_range_is_text_layer_text() -> None:
+    """Before `SECTION-JUDGE-FIXES-01` this ran with the scan of `SCAN`, whose text names the term («щит ЩО-3 в
+    спецификации не указан»), and the pair was published: the scan lay outside the range. The term in the
+    recognised text of any page the model saw now refuses the pair (second half); the control keeps its
+    meaning with a scan that does not name the term."""
     adapter = Scripted(
         lambda user, index: [
             omission_reply(naming=(1, "Щит ЩО-3 питает освещение этажа"), heading=(3, HEADING), first=3, last=3)
         ]
     )
-    outcome = run(AI, layer(TEXT_1, "", TEXT_3), adapter, (SCAN,))
+    quiet = RecognisedPage(page_number=2, text="На скане записано: степень огнестойкости здания III.")
+    outcome = run(AI, layer(TEXT_1, "", TEXT_3), adapter, (quiet,))
     (published,) = outcome.artifact["observations"]
     assert published["category"] == "documentation" and len(published["evidence"]) == 2
     assert outcome.metrics["omissions_published"] == 1
+    assert "распознанный текст страницы 2 тоже проверен" in published["finding_text"]
+
+    named = run(AI, layer(TEXT_1, "", TEXT_3), adapter, (SCAN,))
+    assert named.artifact["observations"] == []
+    assert named.metrics["omissions_dropped_term_in_recognised_text"] == 1 and named.metrics["omissions_published"] == 0
 
 
 # --- windows --------------------------------------------------------------------------------------------

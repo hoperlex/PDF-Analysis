@@ -34,14 +34,20 @@ def _proposal(label: str) -> ProposedObservation:
     )
 
 
-def _accepted(ordinal: int, label: str) -> GroundedV3Candidate:
+DOCUMENT = "ndoc_01K7F4N2A9R8T6V5W3X2Y1Z0QJ"
+#: The paragraph each label's row carries in the prompt part of the fixture's set (one row per item).
+PARAGRAPH = {"N1": "npar_01K7F4N2A9R8T6V5W3X2Y1Z0QK", "N2": "npar_01K7F4N2A9R8T6V5W3X2Y1Z0QL"}
+#: A reliable paragraph of the same document that no item sends.
+UNSENT = "npar_01K7F4N2A9R8T6V5W3X2Y1Z0QM"
+
+
+def _accepted(ordinal: int, label: str, *, paragraph: str | None = None,
+              state: str = "verified") -> GroundedV3Candidate:
     return GroundedV3Candidate(
         ordinal, _proposal(label),
         (ResolvedAnchor(1, "Ширина 1,2 м", 4, 17),),
         (GroundedNormCitation(
-            label, "ndoc_01K7F4N2A9R8T6V5W3X2Y1Z0QJ",
-            "npar_01K7F4N2A9R8T6V5W3X2Y1Z0QK", 20,
-            "Пункт 1,4 м", "verified",
+            label, DOCUMENT, paragraph or PARAGRAPH[label], 20, "Пункт 1,4 м", state,
         ),),
     )
 
@@ -49,8 +55,8 @@ def _accepted(ordinal: int, label: str) -> GroundedV3Candidate:
 def _value() -> V3CitePreflight:
     set_bytes = json.dumps({
         "prompt_part": json.dumps({"paragraphs": [
-            {"label": "N1", "item_id": "C01"},
-            {"label": "N2", "item_id": "C05"},
+            {"label": "N1", "item_id": "C01", "norm_paragraph_id": PARAGRAPH["N1"]},
+            {"label": "N2", "item_id": "C05", "norm_paragraph_id": PARAGRAPH["N2"]},
         ]}),
     }).encode()
     request = SimpleNamespace(
@@ -124,10 +130,35 @@ def test_canonical_artifact_has_all_topics_and_only_provisional_grounded_quotes(
     assert b"recommendation_text" not in first.payload
 
 
-@pytest.mark.parametrize("change", [
-    "request", "response", "topics", "classification", "salvaged", "malformed",
-    "context_laundered", "duplicate_label",
-])
+#: Each refusal and the reason it must carry (the reason is asserted so that a case cannot pass
+#: for an unrelated one, e.g. a damaged fixture).
+REFUSALS = {
+    "request": "review_binding_or_completeness_invalid",
+    "response": "review_binding_or_completeness_invalid",
+    "topics": "review_binding_or_completeness_invalid",
+    "classification": "review_normative_unclassified",
+    "salvaged": "review_binding_or_completeness_invalid",
+    "malformed": "review_binding_or_completeness_invalid",
+    "context_laundered": "review_context_laundered",
+    "duplicate_label": "review_label_map_invalid",
+    # AR-V3-JUDGE-FIXES-01: the paragraph a citation was grounded to decides, not its label
+    "rebound_into_context": "review_context_laundered",
+    "rebound_into_unsent": "review_context_laundered",
+    "rebound_into_shared_context_paragraph": "review_context_laundered",
+    "unknown_grounding_state": "review_citation_grounding_invalid",
+    "grounded_label_differs_from_proposed": "review_citation_grounding_invalid",
+}
+
+
+def _regrounded(value, **change):
+    """The review with ordinal 0 (label N1, provisional topic C01) grounded elsewhere."""
+    grounding = value.review.evaluation.grounding
+    return replace(value, review=replace(value.review, evaluation=replace(
+        value.review.evaluation, grounding=replace(
+            grounding, accepted=(_accepted(0, "N1", **change), grounding.accepted[1])))))
+
+
+@pytest.mark.parametrize("change", list(REFUSALS))
 def test_mismatched_or_incomplete_review_refuses(change):
     value = _value()
     if change == "request":
@@ -155,16 +186,60 @@ def test_mismatched_or_incomplete_review_refuses(change):
         value = replace(value, review=replace(
             value.review, provisional_proposal_ordinals=(0, 1),
             withheld_proposal_ordinals=()))
+    elif change == "rebound_into_context":
+        # label N1 names provisional C01, but the quote was rebound to C05's (context-only) row
+        value = _regrounded(value, paragraph=PARAGRAPH["N2"], state="rebound")
+    elif change == "rebound_into_unsent":
+        value = _regrounded(value, paragraph=UNSENT, state="rebound")
+    elif change == "unknown_grounding_state":
+        value = _regrounded(value, state="guessed")
+    elif change == "grounded_label_differs_from_proposed":
+        # the proposal says N1, the grounded citation says N2 (a classification built on other inputs)
+        grounding = value.review.evaluation.grounding
+        first = grounding.accepted[0]
+        moved = replace(first, norm_citations=(replace(first.norm_citations[0], label="N2"),))
+        value = replace(value, review=replace(value.review, evaluation=replace(
+            value.review.evaluation, grounding=replace(
+                grounding, accepted=(moved, grounding.accepted[1])))))
+    elif change == "rebound_into_shared_context_paragraph":
+        # C05 (context-only) also sends C01's paragraph; a rebound citation there is not made
+        value = _regrounded(value, paragraph=PARAGRAPH["N1"], state="rebound")
+        raw = json.loads(value.prepared.pinned_corpus.verified_set.data)
+        rows = json.loads(raw["prompt_part"])["paragraphs"]
+        rows.append({"label": "N3", "item_id": "C05", "norm_paragraph_id": PARAGRAPH["N1"]})
+        raw["prompt_part"] = json.dumps({"paragraphs": rows})
+        value.prepared.pinned_corpus.verified_set.data = json.dumps(raw).encode()
     else:
         raw = json.loads(value.prepared.pinned_corpus.verified_set.data)
         raw["prompt_part"] = json.dumps({"paragraphs": [
-            {"label": "N1", "item_id": "C01"},
-            {"label": "N1", "item_id": "C05"},
+            {"label": "N1", "item_id": "C01", "norm_paragraph_id": PARAGRAPH["N1"]},
+            {"label": "N1", "item_id": "C05", "norm_paragraph_id": PARAGRAPH["N2"]},
         ]})
         value.prepared.pinned_corpus.verified_set.data = json.dumps(raw).encode()
     with pytest.raises(DomainError) as caught:
         artifact.build_v3_beta_review_artifact(value)
     assert caught.value.code is ErrorCode.ANALYSIS_INPUT_INVALID
+    assert caught.value.detail_fields["reason"] == REFUSALS[change]
+
+
+def test_a_rebound_citation_inside_the_labelled_provisional_row_set_is_sealed():
+    """Control: the same builder accepts a rebound citation that lands on the labelled item's own row."""
+    value = _regrounded(_value(), paragraph=PARAGRAPH["N1"], state="rebound")
+    sealed = json.loads(artifact.build_v3_beta_review_artifact(value).payload)
+    assert [c["state"] for c in sealed["provisional_citations"][0]["citations"]] == ["rebound"]
+
+
+def test_a_verified_citation_in_a_row_a_context_only_item_also_sends_is_sealed_by_its_label():
+    """The decision of ``grounded_citations_are_provisional``: for a verified citation the map's pairing
+    of the labelled item and the paragraph decides, even where a context-only item sends it too."""
+    value = _value()
+    raw = json.loads(value.prepared.pinned_corpus.verified_set.data)
+    rows = json.loads(raw["prompt_part"])["paragraphs"]
+    rows.append({"label": "N3", "item_id": "C05", "norm_paragraph_id": PARAGRAPH["N1"]})
+    raw["prompt_part"] = json.dumps({"paragraphs": rows})
+    value.prepared.pinned_corpus.verified_set.data = json.dumps(raw).encode()
+    sealed = json.loads(artifact.build_v3_beta_review_artifact(value).payload)
+    assert [c["state"] for c in sealed["provisional_citations"][0]["citations"]] == ["verified"]
 
 
 def test_artifact_cap_refuses(monkeypatch):

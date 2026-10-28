@@ -14,8 +14,9 @@ The lifecycle
   added to the contextual blocklist -- then, under one advisory lock so the queue cap cannot
   be raced past: an active account holding the login answers ``conflict``
   (``login_taken``), a pending request for it ``conflict`` (``request_pending``), and 100
-  pending requests ``conflict`` (``queue_full``) -- as do 40 requests accepted in the last
-  24 hours, whatever became of them (`R-146ay`, `SMALL-HARDENING-02`: the day cap, below).
+  pending requests ``conflict`` (``queue_full``) -- as do 40 requests pending or approved in
+  the last 24 hours (`R-146ay`, `SMALL-HARDENING-02`, `ACCESS-COMPARE-JUDGE-FIXES-01`: the day
+  cap, below).
   The password is stored hashed until the decision. That ``login_taken`` and
   ``request_pending`` tell a submitter that a login is known is an accepted limitation the
   plan registers.
@@ -34,16 +35,19 @@ The day cap
 Registration stays open and so does sign-in (`R-146ay`), and the edge limits only a client
 address, which the application never sees and which a few sources defeat. So the door has a
 limit of its own, in the one place every route in passes: at most
-:data:`MAX_REQUESTS_PER_DAY` requests are *accepted* in any rolling 24 hours, counted from the
-existing ``submitted_at`` column over every request whatever its state (an approved or
-rejected request still happened), by the database's clock, under the same queue lock as the
-pending cap, so two submissions cannot both take the last place. A refused attempt writes
-nothing and so does not count. The answer is the existing ``conflict`` /
-``queue_full``: no new code, no new field. Why 40: well below the pending cap of 100, so a
-flood that is not stopped needs at least two and a half days to fill the queue, where it
-needed a quarter of an hour; above any day on which an organisation's employees (`R-146al`)
-would legitimately open an account each. The trade is stated, not hidden: while the cap is spent
-nobody can apply, and the administrator can still approve what is pending.
+:data:`MAX_REQUESTS_PER_DAY` requests *stand or were approved* in any rolling 24 hours, counted
+from the existing ``submitted_at`` column over the ``pending`` and ``approved`` requests, by the
+database's clock, under the same queue lock as the pending cap, so two submissions cannot both
+take the last place. A ``rejected`` request does not count: the administrator who rejects spam
+frees its place, which is the only lever the day has (an earlier version counted every state and
+left a spent day with no way to clear it). A refused attempt writes nothing and so does not
+count. The answer is the existing ``conflict`` / ``queue_full`` and is the same for any login:
+no new code, no new field. Why 40: well below the pending cap of 100, so a flood that nobody
+rejects needs at least two and a half days to fill the queue, where it needed a quarter of an
+hour; above any day on which an organisation's employees (`R-146al`) would legitimately open an
+account each. The trade is stated, not hidden: while 40 requests stand or were approved nobody can
+apply until the administrator rejects some; a flood the administrator rejects can be repeated, at
+the price of the administrator's attention and the edge's rate limit.
 
 The status read, and the work it does
 -------------------------------------
@@ -130,7 +134,7 @@ _log = logging.getLogger(__name__)
 #: `W49-PLAN.md` §3.3: more than this many pending requests answers ``queue_full``.
 MAX_PENDING_REQUESTS: Final[int] = 100
 
-#: `R-146ay`: at most this many requests are accepted in any rolling
+#: `R-146ay`: at most this many requests are pending or approved in any rolling
 #: :data:`REQUEST_WINDOW_HOURS`; the next one answers ``queue_full``. See the module docstring.
 MAX_REQUESTS_PER_DAY: Final[int] = 40
 
@@ -216,10 +220,12 @@ _LOGIN_HELD_BY_AN_ACTIVE_ACCOUNT = text(
 )
 _COUNT_PENDING = text("SELECT count(*) FROM registration_request WHERE status = 'pending'")
 
-#: Requests accepted in the rolling window, in any state, by the database's clock.
+#: Requests that stand or were approved in the rolling window, by the database's clock. A rejected
+#: request is outside the count: the administrator's lever on a spent day.
 _COUNT_ACCEPTED_IN_WINDOW = text(
     "SELECT count(*) FROM registration_request "
-    "WHERE submitted_at > now() - (:window_hours * interval '1 hour')"
+    "WHERE status IN ('pending', 'approved') "
+    "AND submitted_at > now() - (:window_hours * interval '1 hour')"
 )
 
 _SELECT_REQUEST = text(
@@ -399,8 +405,8 @@ class RegistrationRepository:
         if int(accepted_today) >= MAX_REQUESTS_PER_DAY:
             raise _conflict(
                 "queue_full",
-                f"{MAX_REQUESTS_PER_DAY} registration requests were accepted in the last "
-                f"{REQUEST_WINDOW_HOURS} hours",
+                f"{MAX_REQUESTS_PER_DAY} registration requests are pending or approved from the "
+                f"last {REQUEST_WINDOW_HOURS} hours",
             )
 
         stored = hash_password(password)

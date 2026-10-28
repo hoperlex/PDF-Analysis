@@ -28,7 +28,7 @@ Status mapping, from the stage registry's status policy (``skip_allowed: false``
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Protocol, Sequence
+from typing import Any, Collection, Mapping, Protocol, Sequence
 
 from auditmanager.analysis.text.adapter import (
     PROVIDER,
@@ -153,6 +153,8 @@ def _ground(
     model_call_id: ModelCallId,
     block_index: BlockIndex | None,
     omissions_enabled: bool = False,
+    textless_pages: Collection[int] | None = None,
+    recognised_pages: Sequence[RecognisedPage] = (),
 ) -> _Grounding:
     """Resolve every proposed quotation, and keep only what actually resolved.
 
@@ -186,7 +188,10 @@ def _ground(
             unresolved.extend(
                 outcome for outcome in resolutions if isinstance(outcome, UnresolvedAnchor)
             )
-            decision = decide(text_layer, proposal, resolutions, visible=None)
+            decision = decide(
+                text_layer, proposal, resolutions, visible=None,
+                textless_pages=textless_pages, recognised=recognised_pages,
+            )
             tally.record(decision)
             if decision.reason is None:
                 resolved_count += len(decision.evidence)
@@ -350,6 +355,7 @@ def run_text_analysis(
     call_journal: ModelCallJournal | None = None,
     call: CallBinding | None = None,
     recognised_pages: Sequence[RecognisedPage] = (),
+    textless_pages: Collection[int] | None = None,
 ) -> TextAnalysisOutcome:
     """Run the stage over one document version.
 
@@ -367,6 +373,10 @@ def run_text_analysis(
     the text layer: a quote is resolved against the layer only, so a quote found in a block alone
     resolves to nothing and confirms nothing. None (the default) is every version without a scanned page,
     and the request is then byte for byte what it was.
+
+    ``textless_pages`` (`SECTION-JUDGE-FIXES-01`) is the version's stored list of text-less pages (``None``: not
+    known). It reaches the omission check only: a pair whose range holds one of them is refused, as is a pair
+    whose term occurs in the recognised text of a searched page (``recognised_pages``). It changes no request.
 
     ``document_graph`` is accepted because the stage registry declares it a required
     input and ``B2`` publishes it. PC-01 sends one narrow prompt over the whole text
@@ -543,6 +553,8 @@ def run_text_analysis(
         model_call_id=model_call_id,
         block_index=block_index,
         omissions_enabled=OMISSION_CATEGORY in profile.categories,
+        textless_pages=textless_pages,
+        recognised_pages=recognised_pages,
     )
     analysed = _pages_analysed(
         text_layer, grounding.observations, truncated=response.truncated

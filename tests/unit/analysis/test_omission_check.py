@@ -103,8 +103,9 @@ def test_a_term_named_once_and_absent_from_the_range_is_published_with_both_plac
 
 def test_the_sentence_says_what_was_verified_and_what_was_not() -> None:
     assert note_for("Д-5", 2, 2) == (
-        "Проверка программой: запись «Д-5» не найдена в текстовом слое на странице 2 "
-        "(буквальное совпадение без учёта регистра); другие написания не проверялись."
+        "Проверка программой: запись «Д-5» не найдена в текстовом слое на странице 2; "
+        "сравнение без учёта регистра, тире, пробелов и сходных по начертанию букв; "
+        "другие написания не проверялись."
     )
     assert "на страницах 2–4" in note_for("Д-5", 2, 4)
 
@@ -132,7 +133,7 @@ def test_every_way_a_record_can_hide_is_a_presence(variant: str, why: str) -> No
 
 def test_yo_reads_as_ye_and_compatibility_forms_fold() -> None:
     assert fold("Подъёмник") == fold("подъемник") == "подъемник"
-    assert fold("ﬁlter") == "filter"  # a ligature
+    assert fold("ﬁlter") == fold("filter") != "ﬁlter"  # a ligature (the fold also reads Latin look-alikes)
     assert occurs("Подъёмник", ["Список: подъемник, 1 шт."])
 
 
@@ -141,9 +142,10 @@ def test_a_term_split_by_a_page_break_is_a_presence() -> None:
     assert outcome.reason == "term_present_in_range"
 
 
-def test_the_term_outside_the_range_is_no_presence() -> None:
+def test_the_term_outside_the_range_is_no_presence_in_the_range_but_is_on_a_page_the_model_saw() -> None:
+    """Before `SECTION-JUDGE-FIXES-01` this case was «published, page 3 is not in the range 2-2»: the judge's defect."""
     outcome = check(layer(PLAN, SCHEDULE, "Марка Д-5 Дверь в санузел, 1 шт. Достаточно длинная страница после ведомости."), reply())
-    assert outcome.published, "page 3 is not in the range 2-2"
+    assert outcome.reason == "term_on_other_visible_page", "page 3 is not in the range 2-2, but the model saw it"
     outcome = check(
         layer(PLAN, SCHEDULE, "Марка Д-5 Дверь в санузел, 1 шт. Достаточно длинная страница после ведомости."),
         reply(last_page=3),
@@ -205,14 +207,23 @@ def test_in_a_windowed_run_the_range_must_lie_inside_the_window() -> None:
     text_layer = layer(PLAN, SCHEDULE, "Продолжение ведомости: марка Д-1, марка Д-2, марка Д-3, марка Д-4.")
     assert check(text_layer, reply(last_page=3), visible=(1, 3)).published
     assert check(text_layer, reply(last_page=3), visible=(1, 2)).reason == "range_outside_window"
-    assert check(text_layer, reply(), visible=(1, 2)).published
     assert check(text_layer, reply(), visible=(3, 3)).reason == "range_outside_window"
+
+
+def test_a_claim_may_end_before_the_window_end_but_not_on_it_unless_it_is_the_last_window() -> None:
+    """Before `SECTION-JUDGE-FIXES-01`: `reply()` (pages 2-2) with `visible=(1, 2)` of three pages was published."""
+    text_layer = layer(PLAN, SCHEDULE, "Продолжение ведомости: марка Д-1, марка Д-2, марка Д-3, марка Д-4.")
+    assert check(text_layer, reply(), visible=(1, 2)).reason == "range_reaches_window_end"
+    assert check(text_layer, reply(), visible=(1, 3)).published, "page 2 ends before the window's last page"
+    assert check(text_layer, reply(last_page=3), visible=(1, 3)).published, "the last window may end on the last page"
 
 
 def test_the_reasons_are_the_closed_vocabulary_the_stage_counts() -> None:
     assert OMISSION_REASONS == (
-        "claim_invalid", "range_outside_window", "heading_outside_range", "evidence_unresolved",
-        "term_not_in_naming_quote", "range_page_without_text", "term_present_in_range",
+        "claim_invalid", "range_outside_window", "range_reaches_window_end", "heading_outside_range",
+        "evidence_unresolved", "term_not_in_naming_quote", "finding_text_overclaims", "range_page_textless",
+        "range_page_without_text", "term_present_in_range", "term_on_other_visible_page",
+        "term_in_recognised_text",
     )
     assert all(len(f"omissions_dropped_{reason}") <= 64 for reason in OMISSION_REASONS)
     tally = OmissionTally(enabled=True)
@@ -289,7 +300,7 @@ def test_the_registry_serves_three_categories_to_exactly_the_five_and_two_to_the
         if code in five:
             assert profile.categories == CATEGORIES3, code
             assert profile.prompt_bundle.response_schema == response_schema_for(CATEGORIES3), code
-            assert profile.profile_version == "1.3.0", code
+            assert profile.profile_version == "1.3.1", code
         else:
             assert profile.categories == CATEGORIES, code
             assert profile.prompt_bundle.response_schema is RESPONSE_SCHEMA, code

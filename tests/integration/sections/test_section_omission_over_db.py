@@ -114,7 +114,10 @@ def test_an_omission_is_published_as_a_documentation_finding_with_both_places(
 
     layer = json.loads(BASELINE_LAYER.read_text(encoding="utf-8"))
     pages = {page["page_number"]: page["text"] for page in layer["pages"]}
-    assert NAMING in pages[2] and HEADING in pages[8] and TERM not in pages[8], "the premise: a pair over the baseline"
+    assert NAMING in pages[2] and HEADING in pages[8], "the premise: a pair over the baseline"
+    assert not any(TERM in text for number, text in pages.items() if number != 2), (
+        "the premise: the term is on the naming page only (`SECTION-JUDGE-FIXES-01` searches every page the model saw)"
+    )
 
     classify_document_version(
         session, project_uid=seeded.project_uid, document_uid=seeded.document_uid,
@@ -135,7 +138,8 @@ def test_an_omission_is_published_as_a_documentation_finding_with_both_places(
 
     (finding,) = published_findings(session, run_id)
     assert finding.category == "documentation"
-    sentence = note_for(TERM, 8, 8)
+    others = tuple(number for number in sorted(pages) if number not in (2, 8))
+    sentence = note_for(TERM, 8, 8, others=others, naming_pages=(2,))
     assert finding.finding_text == f"{_reply()['finding_text']} {sentence}"
     assert (finding.analysis_profile_id, finding.prompt_bundle_id) == (AI.analysis_profile_id, AI.prompt_bundle_id)
     assert finding.provider_mode == "recorded"
