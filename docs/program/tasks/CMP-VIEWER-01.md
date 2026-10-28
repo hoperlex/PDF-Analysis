@@ -131,7 +131,7 @@ CMP-VC-UI-01 and is not mounted on a route.
 - `bootstrap/adapters.py` outside the body of `ComparisonPairTileAdapter` (and the imports it needs); `bootstrap/composition.py` outside the one constructor line of that adapter (and its import)
 
 ## Non-goals
-- the codec of the mask (`comparison/engine/mask_codec.py` is ENGINE's); the reader written here follows the text of wave brief section 4 item 1 and is replaced by `decode_mask` at the integrator's call
+- the codec of the mask (`comparison/engine/mask_codec.py` is ENGINE's); the reader first written here followed the text of wave brief section 4 item 1 and was replaced by `decode_mask` after the integrator's merge of `b399d102` (wave brief section 4 item 2)
 - the pair rows and the results (SERIES and ENGINE write them; the tests insert the rows they need directly), the text tint of the original (`text_color`, not in the contract), the AI panel «Изменения в листе», the «Спецификация по позициям» view, the evidence banner
 - the screens that mount the widget, its route, the menu entry and the Russian sentences for the new refusal reasons (CMP-VC-UI-01); the pair data is a prop of the widget, read by the page
 - any eviction or deletion of a stored blob (ADR-0025 decision 9)
@@ -150,7 +150,7 @@ CMP-VC-UI-01 and is not mounted on a route.
 - expected: exit 0; every rule of the widget's stylesheet is reached by a census screen
 
 ## Integration contract
-The integrator can rely on: `GET /comparison-sheet-pairs/{id}/tile` returns `image/png` of at most 512 x 512 pixels (smaller at the right and bottom edges of the level); `mode=a` is the page-profile tile of the pair's older page, `mode=b` is the newer page warped onto the older page's canvas (its own pyramid when the pair has no older page or no transform), `mode=overlay` needs a result with a transform and answers `404` without one; the grid of a tile is the pyramid of page A's page profile, so a tile of any mode at one `(level, column, row)` covers the same canvas square; `layers` empty means no difference layer; the reader never starts a process of its own (levels 0 and 1 go through the page-profile `TileRenderer`). The mask reader is the single seam to replace by `decode_mask`; the transform convention is `x' = a x + c y + e`, `y' = b x + d y + f` for `[a, b, c, d, e, f]`. The widget takes a `ComparisonSheetPair` (from `getComparisonSheetPair`) and fetches tiles through the generated client.
+The integrator can rely on: `GET /comparison-sheet-pairs/{id}/tile` returns `image/png` of at most 512 x 512 pixels (smaller at the right and bottom edges of the level); `mode=a` is the page-profile tile of the pair's older page, `mode=b` is the newer page warped onto the older page's canvas (its own pyramid when the pair has no older page or no transform), `mode=overlay` needs a result with a transform and answers `404` without one; the grid of a tile is the pyramid of page A's page profile, so a tile of any mode at one `(level, column, row)` covers the same canvas square; `layers` empty means no difference layer; the reader never starts a process of its own (levels 0 and 1 go through the page-profile `TileRenderer`). The mask is decoded by the engine's `decode_mask` (`MaskStore`'s one seam); a result without a mask blob draws no layers; the transform convention is `x' = a x + c y + e`, `y' = b x + d y + f` for `[a, b, c, d, e, f]`. The widget takes a `ComparisonSheetPair` (from `getComparisonSheetPair`) and fetches tiles through the generated client.
 
 ## Failure/idempotency/security cases
 - a mask with a wrong magic, format, layer count, a plane over 40 Mpx or a body whose inflated length differs from `8 * h * ceil(w / 8)` is refused (`storage_integrity_error`), and an oversized body is never inflated beyond the declared length
@@ -163,7 +163,7 @@ The integrator can rely on: `GET /comparison-sheet-pairs/{id}/tile` returns `ima
 The module flag (`comparison/modules.py`) governs the screens that will mount the widget; the lane adds no flag. Rollback is not merging the lane: the operation then answers the sealed `503` and the widget is not imported by any route.
 
 ## Handoff
-- changed files: (written in the last commit)
-- commands/results: (written in the last commit)
-- known limits: (written in the last commit)
-- integration notes: (written in the last commit)
+- changed files: `src/auditmanager/comparison/tiles/**` (new, 14 files), the body of `ComparisonPairTileAdapter` and its imports in `bootstrap/adapters.py`, **one line** of `bootstrap/composition.py` (`comparison_pair_tiles=ComparisonPairTileAdapter(sessions, blob_store=store)`), two appended names in `comparison/public.py` (`PairTileReader`), the three composition enumerators (the tile leaves `SEALED_STUB_GETS` and `SEALED_STUB_ADDRESSED`, enters `WIRED`; `SEALED_STUB_QUERY` keeps its query), `tests/unit/comparison/tiles/**`, `tests/integration/comparison/tiles/**`, `web/src/widgets/comparison-viewer/**`, `web/tests/unit/comparison/viewer/**`, the census block of `web/tests/unit/styles/screens.ts`, this file and `docs/program/CMP-VIEWER-01.md`; the full list is `git diff --name-only d11c13fd..HEAD` minus the merge of `b399d102`
+- commands/results: the report's section 8 (tile unit and integration suites, the whole composition directory, the whole `tests/unit` and `tests/contract` minus `D-220`, the web checks) and section 7 (the mutation proofs, each shown red and then restored)
+- known limits: the report's section 10; first: the widget assumes `how_compared.dpi` is the registration dpi of page A, a transform that needs more than 16 source tiles of page B is refused with `503`, and the viewer's grid is derived, not read
+- integration notes: the report's sections 11 and 12; the transform order is the PDF order, `aligned_blocks` is read as ENGINE writes it, and `streamComparisonPairTile` sends no `Cache-Control` (the router is not this lane's)
