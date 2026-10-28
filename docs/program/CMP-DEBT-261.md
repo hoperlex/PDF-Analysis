@@ -33,6 +33,7 @@ How the start-control rule maps: `CMP-VERSION-MARK-01` draws a start disabled wi
 | `npm --prefix web run lint -- --quiet` | clean |
 | `npm --prefix web run typecheck` | clean |
 | `git diff --check` | clean |
+| `pytest -q tests/contract` minus the three `D-220` files (`test_cp00_candidate.py`, `test_cp00_final_state.py`, `test_validate_bootstrap.py`), seal venv, `PYTHONPATH=$PWD/src`, `AUDITMANAGER_LEGACY_PROMPTS_REPO=/nonexistent`, `--basetemp` outside the repo (removed after), on the committed tree that already held this report (this row is the only text added afterwards) | **1310 passed**, 19283 subtests passed, 156 s |
 
 A first run of the three instruments together (`vitest run tests/unit/comparison-only-pickers tests/guards tests/unit/styles`, 02:37) was voided by host load (load average 6.9 on 8 cores): a worker RPC timeout (`Timeout calling "onTaskUpdate"`), 3 of 29 files completed, no test red. It is not counted; the same files were rerun in the two runs of the table and are green.
 
