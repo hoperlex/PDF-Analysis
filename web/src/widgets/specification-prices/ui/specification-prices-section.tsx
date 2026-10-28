@@ -10,19 +10,29 @@
  * confirmed in a section, whichever it is. The first is chosen; the expert may pick another.
  * A project with no such set says so and where a section is confirmed — the server is not
  * asked about a version nobody classified, which it would only answer `version_unclassified`
- * for.
+ * for. **A set whose current version was admitted for comparison only** (`upload_kind`
+ * `comparison_pdf`, `Q-CMP-5`; `CMP-DEBT-261`) is listed and marked, as everywhere
+ * (`CMP-VERSION-MARK-01`), but is a disabled option with the reason beside it: it has no published
+ * run to read a specification from, it is never the set chosen by default, and nothing is
+ * asked of the server for it.
  *
  * **What is shown** is `getSpecificationPrices` for the chosen set, one page of rows at a
  * time (`SpecificationPricesAnswer`): its state, or the rows with their match, the totals per
  * currency and what the totals leave out. Read-only: nothing here writes.
  */
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 
 import type { DocumentUid, DocumentVersion, ProjectUid } from '@/shared/api';
 import { failureMessage } from '@/shared/api/failure-message';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
-import { useDocumentList } from '@/entities/document-version';
+import {
+  COMPARISON_ONLY_MARK,
+  COMPARISON_ONLY_START_NOTE,
+  ComparisonOnlyMark,
+  isComparisonOnly,
+  useDocumentList,
+} from '@/entities/document-version';
 import { projectSectionOf } from '@/entities/project';
 import { useSpecificationPrices } from '@/entities/specification-price';
 
@@ -45,6 +55,15 @@ function setLabel(version: DocumentVersion): string {
   return `${title} — версия ${version.version_ordinal}${section}`;
 }
 
+/**
+ * What an `<option>` says of a set. An option holds text only, so a comparison-only set says the
+ * mark in words here and the list under the select draws the badge; any other set is labelled as
+ * before.
+ */
+function optionLabel(version: DocumentVersion): string {
+  return isComparisonOnly(version) ? `${setLabel(version)} (${COMPARISON_ONLY_MARK})` : setLabel(version);
+}
+
 export interface SpecificationPricesChooserProps {
   readonly sets: readonly DocumentVersion[];
   readonly selected: DocumentUid | null;
@@ -55,6 +74,7 @@ export interface SpecificationPricesChooserProps {
 
 /** The set chooser. Rendered by the static harness. */
 export function SpecificationPricesChooser({ sets, selected, onSelect, partial }: SpecificationPricesChooserProps) {
+  const noteId = useId();
   if (sets.length === 0) {
     return (
       <EmptyState
@@ -63,6 +83,7 @@ export function SpecificationPricesChooser({ sets, selected, onSelect, partial }
       />
     );
   }
+  const comparisonOnly = sets.filter((version) => isComparisonOnly(version));
   return (
     <div className={styles.chooser}>
       <label>
@@ -71,14 +92,29 @@ export function SpecificationPricesChooser({ sets, selected, onSelect, partial }
           value={selected ?? ''}
           onChange={(event) => onSelect(event.target.value as DocumentUid)}
           data-spec-chooser={sets.length}
+          aria-describedby={comparisonOnly.length > 0 ? noteId : undefined}
         >
           {sets.map((version) => (
-            <option key={version.document_uid} value={version.document_uid}>
-              {setLabel(version)}
+            <option key={version.document_uid} value={version.document_uid} disabled={isComparisonOnly(version)}>
+              {optionLabel(version)}
             </option>
           ))}
         </select>
       </label>
+      {comparisonOnly.length > 0 ? (
+        <div data-comparison-only-sets={comparisonOnly.length}>
+          <ul>
+            {comparisonOnly.map((version) => (
+              <li key={version.document_uid}>
+                {setLabel(version)} <ComparisonOnlyMark version={version} />
+              </li>
+            ))}
+          </ul>
+          <p className="am-note" id={noteId}>
+            {COMPARISON_ONLY_START_NOTE}
+          </p>
+        </div>
+      ) : null}
       {partial ? (
         <p className="am-note">Предложены комплекты первой страницы списка документов проекта.</p>
       ) : null}
@@ -89,9 +125,11 @@ export function SpecificationPricesChooser({ sets, selected, onSelect, partial }
 export function SpecificationPricesSection({ projectUid }: SpecificationPricesSectionProps) {
   const documents = useDocumentList(projectUid);
   const sets = classifiedDocumentSets(documents.data?.items ?? []);
+  // A comparison-only set is offered disabled, so it is never the default and never asked for.
+  const readable = sets.filter((version) => !isComparisonOnly(version));
   const [chosen, setChosen] = useState<DocumentUid | null>(null);
   const [offset, setOffset] = useState(0);
-  const selected = chosen ?? sets[0]?.document_uid ?? null;
+  const selected = chosen ?? readable[0]?.document_uid ?? null;
   const prices = useSpecificationPrices(projectUid, selected, offset);
   const documentsFailure = documents.error === null ? null : failureMessage(documents.error);
   const pricesFailure = prices.error === null ? null : failureMessage(prices.error);

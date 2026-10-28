@@ -22,7 +22,9 @@
  * that puts `review` under the run that produced the findings.
  *
  * **Composition only.** The shell from `shared/ui`, the query inside the widget, the back
- * links from `shared/lib`'s route module. Nothing is computed here.
+ * links from `shared/lib`'s route module. Nothing is computed here. `CMP-DEBT-261` added one
+ * more part: the note of a version admitted for comparison only (`./comparison-only-note`),
+ * which reads the version the widget reads and draws nothing for any other version.
  *
  * **Reached from the version screen.** `routes.comparison()` exists and the version screen
  * links here twice: beside its runs («Сравнить два прогона») and beside its stage-and-section
@@ -38,6 +40,7 @@ import { looksLikeVersionUid } from '@/entities/document-version';
 
 import { VersionComparison } from '@/widgets/version-comparison';
 
+import { ComparisonOnlyNote } from './comparison-only-note';
 import { LazyStageComparison } from './lazy-stage-comparison';
 
 /**
@@ -84,6 +87,7 @@ export function StageComparisonPage({ projectUid, versionUid }: StageComparisonP
         Эта версия сравнивается с другой версией того же комплекта: одной стадии и одного
         подтверждённого раздела, или стадии П с более поздней стадией Р.
       </p>
+      <ComparisonOnlyNote versionUid={versionUid} />
       <VersionComparison projectUid={projectUid} versionUid={versionUid} />
       <h2>Сравнение прогонов</h2>
       <p>

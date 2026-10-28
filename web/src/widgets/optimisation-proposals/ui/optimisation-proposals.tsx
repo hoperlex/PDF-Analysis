@@ -8,7 +8,11 @@
  * **Which set.** The project's documents come from `listDocuments` (the cache entry the
  * project's structure reads); the sets offered are those whose **current** version an expert
  * confirmed in a section, whichever it is. A project with none says so and where a section is
- * confirmed.
+ * confirmed. **A set whose current version was admitted for comparison only** (`upload_kind`
+ * `comparison_pdf`, `Q-CMP-5`; `CMP-DEBT-261`) is listed and marked, as everywhere
+ * (`CMP-VERSION-MARK-01`), but is a disabled option with the reason beside it: a pass reads the
+ * set's last published run and such a version has none, so it is never the set chosen by default,
+ * «Запустить проход» is never offered for it, and nothing is asked of the server for it.
  *
  * **What is shown.** The set's passes, newest first, each pinned to the version, run, price
  * list and vendor list it read; the open pass's counts by decision (the proposals' own, never
@@ -20,7 +24,7 @@
  * Nothing here is a finding, reads one or changes one, and a model proposes nothing.
  */
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 
 import type {
   DocumentUid,
@@ -35,7 +39,13 @@ import type { FailureMessage } from '@/shared/api/failure-message';
 import { failureMessage } from '@/shared/api/failure-message';
 import { formatInstant } from '@/shared/lib';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
-import { useDocumentList } from '@/entities/document-version';
+import {
+  COMPARISON_ONLY_MARK,
+  COMPARISON_ONLY_START_NOTE,
+  ComparisonOnlyMark,
+  isComparisonOnly,
+  useDocumentList,
+} from '@/entities/document-version';
 import { projectSectionOf } from '@/entities/project';
 import {
   describeCounts,
@@ -67,6 +77,15 @@ function setLabel(version: DocumentVersion): string {
   return `${title} — версия ${version.version_ordinal}${section}`;
 }
 
+/**
+ * What an `<option>` says of a set. An option holds text only, so a comparison-only set says the
+ * mark in words here and the list under the select draws the badge; any other set is labelled as
+ * before.
+ */
+function optionLabel(version: DocumentVersion): string {
+  return isComparisonOnly(version) ? `${setLabel(version)} (${COMPARISON_ONLY_MARK})` : setLabel(version);
+}
+
 export interface ProposalSetChooserProps {
   readonly sets: readonly DocumentVersion[];
   readonly selected: DocumentUid | null;
@@ -77,6 +96,7 @@ export interface ProposalSetChooserProps {
 
 /** The set chooser. Rendered by the static harness. */
 export function ProposalSetChooser({ sets, selected, onSelect, partial }: ProposalSetChooserProps) {
+  const noteId = useId();
   if (sets.length === 0) {
     return (
       <EmptyState
@@ -85,6 +105,7 @@ export function ProposalSetChooser({ sets, selected, onSelect, partial }: Propos
       />
     );
   }
+  const comparisonOnly = sets.filter((version) => isComparisonOnly(version));
   return (
     <div className={styles.chooser}>
       <label>
@@ -93,14 +114,29 @@ export function ProposalSetChooser({ sets, selected, onSelect, partial }: Propos
           value={selected ?? ''}
           onChange={(event) => onSelect(event.target.value as DocumentUid)}
           data-proposal-set-chooser={sets.length}
+          aria-describedby={comparisonOnly.length > 0 ? noteId : undefined}
         >
           {sets.map((version) => (
-            <option key={version.document_uid} value={version.document_uid}>
-              {setLabel(version)}
+            <option key={version.document_uid} value={version.document_uid} disabled={isComparisonOnly(version)}>
+              {optionLabel(version)}
             </option>
           ))}
         </select>
       </label>
+      {comparisonOnly.length > 0 ? (
+        <div data-comparison-only-sets={comparisonOnly.length}>
+          <ul>
+            {comparisonOnly.map((version) => (
+              <li key={version.document_uid}>
+                {setLabel(version)} <ComparisonOnlyMark version={version} />
+              </li>
+            ))}
+          </ul>
+          <p className="am-note" id={noteId}>
+            {COMPARISON_ONLY_START_NOTE}
+          </p>
+        </div>
+      ) : null}
       {partial ? (
         <p className="am-note">Предложены комплекты первой страницы списка документов проекта.</p>
       ) : null}
@@ -221,9 +257,12 @@ function ActivePass({ passId, canDecide }: ActivePassProps) {
 export function OptimisationProposals({ projectUid, roles }: OptimisationProposalsProps) {
   const documents = useDocumentList(projectUid);
   const sets = classifiedDocumentSets(documents.data?.items ?? []);
+  // A comparison-only set is offered disabled, so it is never the default, never started for and
+  // never asked for.
+  const startable = sets.filter((version) => !isComparisonOnly(version));
   const [chosenSet, setChosenSet] = useState<DocumentUid | null>(null);
   const [chosenPass, setChosenPass] = useState<OptimisationPassId | null>(null);
-  const selectedSet = chosenSet ?? sets[0]?.document_uid ?? null;
+  const selectedSet = chosenSet ?? startable[0]?.document_uid ?? null;
   const passes = useOptimisationPasses(projectUid, selectedSet);
   const list = passes.data?.items ?? [];
   const activePass =
