@@ -70,3 +70,17 @@ it wrong or insufficient STOPs and reports; it does not invent a second format.
    its PDFs or any raster made from them with a tool that shows content to the model (no Read of those files or of
    images rendered from them); only numbers (time, RSS, bytes, counts, statuses) are recorded. Nothing from it is
    committed.
+
+## 5. Integrator records (2026-10-28)
+
+1. **`result.part` confirmed.** The result `jsonb` of brief §4 item 3 may carry `part` (`area_a_pt`, `coverage_a`,
+   `reliable`) for a split sheet, as `CMP-ENGINE-01` writes it; `CMP-SERIES-01` uses it for parts coverage, the
+   viewer ignores it.
+2. **`CMP-VIEWER-01` merged `b399d102` (ENGINE) into its branch** at the integrator's instruction (brief §4 item 2)
+   and switched to `decode_mask`.
+3. **Order deviations.** ENGINE merged before MATRIX (MATRIX was still running; ENGINE touches no adapter or stub
+   register). `CMP-VC-UI-01` was dispatched in parallel with SERIES from `9f5f4912`, against the sealed contract, with
+   the SERIES notes sent by message (its report records them); `CMP-VC-OVERVIEW-01` from `c228cf2e`.
+4. **Not dispatched:** `CMP-MEASURE-01` (the original never compared the real set — it is an audit project there —
+   so «statuses vs the original» is not measurable; run the chain profiles → matrix → series for time, RSS and bytes,
+   then delete `.local/comparison-measure/13AV-RD-EM2-PA/`) and the wave's FIX lane (items in the integrator handoff).
