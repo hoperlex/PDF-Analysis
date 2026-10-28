@@ -151,8 +151,8 @@ All from the lane worktree with `AUDITMANAGER_LEGACY_PROMPTS_REPO=/nonexistent P
 | engine integration tests | `pytest -q tests/integration/comparison/engine` (own PostgreSQL 57850 and MinIO 61850, head `0039`) | **23 passed** |
 | grant classification | `pytest -q tests/integration/recovery/test_grant_classification.py` | **35 passed** (`comparison_sheet_pair_result` is out of `SEALED_NOT_YET_WRITTEN`; the test is red until it is) |
 | the three together, final code | one pytest run of the three paths above | **313 passed** in 367 s |
-| the whole unit battery | `pytest -q tests/unit` | PENDING |
-| the contract battery | `pytest -q tests/contract --ignore=tests/contract/test_cp00_candidate.py --ignore=tests/contract/test_validate_bootstrap.py --ignore=tests/contract/test_cp00_final_state.py` | PENDING |
+| the whole unit battery | `pytest -q tests/unit` | **4582 passed, 76 skipped**, 1 warning, 270 s (on the tree of the report draft `c9004e1a`; the 76 skips and the warning are not this lane's) |
+| the contract battery | `pytest -q tests/contract --ignore=tests/contract/test_cp00_candidate.py --ignore=tests/contract/test_validate_bootstrap.py --ignore=tests/contract/test_cp00_final_state.py` | **1310 passed**, 19283 subtests passed, 144 s (same tree; it holds the boundary guard and the governance test of the task file) |
 | the architecture boundary guard | `pytest -q tests/contract/architecture/test_alr05_boundaries.py` | red once on the first full run (`engine/validate.py` imported `api.schemas.models`, not a public module); fixed in `1a1224c9` by restating the models with a parity test; in the contract run above |
 | mutation proofs | section 7 | every row red then green, tree clean |
 | the real set | section 6 | 59 pairs, 33 children, none without a result |
