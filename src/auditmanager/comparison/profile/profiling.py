@@ -286,7 +286,8 @@ def _assemble(
             / max(1.0, width * height),
         )
         has_text = int(ef["words"]) > 0
-        vector_objects = int(ef["lines"]) + int(ef["rects"]) + int(ef["curves"])
+        # The scan test counts what the page draws (lines, rectangles, curves), not the segments the profile keeps of them.
+        vector_objects = int(ef["drawn_lines"]) + int(ef["rects"]) + int(ef["curves"])
         scan = is_scan(image_coverage=coverage, vector_objects=vector_objects)
         stamp_fields = {
             key: value
@@ -309,6 +310,7 @@ def _assemble(
                 "counts": {
                     "words": ef["words"],
                     "lines": ef["lines"],
+                    "drawn_lines": ef["drawn_lines"],
                     "rects": ef["rects"],
                     "curves": ef["curves"],
                     "chars": ef["chars"],
