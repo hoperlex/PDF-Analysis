@@ -76,7 +76,7 @@ SEALED_STUB_GETS: frozenset[str] = frozenset({
     f"{_STUB_DOCUMENT}/comparison-series",
     "/comparison-series/cser_01ARZ3NDEKTSV4RRFFQ69G5FAV",
     "/comparison-transitions/ctn_01ARZ3NDEKTSV4RRFFQ69G5FAV/sheet-pairs",
-    _STUB_PAIR, f"{_STUB_PAIR}/tile", f"/projects/{_PRJ}/comparison-overview", "/execution/comparison-queue",
+    _STUB_PAIR, f"/projects/{_PRJ}/comparison-overview", "/execution/comparison-queue",
 })
 #: `CMP-PROFILE-01` serves the five page reads (`/versions/{ver}/page-profiles`, `/page-profiles/{cpr}` and
 #: its `preview`, `thumbnail` and `tile`) and removes them from the set above: an absent `cpr_` is `404`.
@@ -84,7 +84,8 @@ SEALED_STUB_GETS: frozenset[str] = frozenset({
 #: names nothing; without it the sweep would read a `422` about the query, not the path.
 SEALED_STUB_QUERY: dict[str, str] = {f"{_STUB_PROFILE}/tile": "?level=0&column=0&row=0"}
 #: `CMP-SEAL-C1`: the pair tile's `mode`, `level`, `column` and `row` are required, so the sweep gives it a well-formed
-#: query that names nothing, like the page tile above.
+#: query that names nothing, like the page tile above. `CMP-VIEWER-01` serves it (an absent `ctp_` is `404`) and it
+#: leaves `SEALED_STUB_GETS`; the query stays, because the sweep still needs it to read the path and not the query.
 SEALED_STUB_QUERY[f"{_STUB_PAIR}/tile"] = "?mode=overlay&level=0&column=0&row=0"
 NORM_VERIFICATION_OF_AN_ABSENT_RUN = "/runs/run_01ARZ3NDEKTSV4RRFFQ69G5FAV/norm-verification"
 WORKER_GETS = frozenset({"/execution/workers"})

@@ -119,7 +119,7 @@ REQUIRED_QUERY: dict[str, str] = {
     "compareDocumentVersions": "?target_version_uid=ver_01M2545JSD15ETSNNV904X991K",
     # `CMP-SEAL-C0`: the tile is addressed by query; `CMP-PROFILE-01` serves it: an absent profile is `404`.
     "streamVersionPageTile": "?level=0&column=0&row=0",
-    # `CMP-SEAL-C1`: the pair tile is addressed by query too; it is a sealed stub until `CMP-VIEWER-01`.
+    # `CMP-SEAL-C1`: the pair tile is addressed by query too; `CMP-VIEWER-01` serves it: an absent pair is `404`.
     "streamComparisonPairTile": "?mode=a&level=0&column=0&row=0",
 }
 # `W59-ANALYSIS-SETTINGS-01` added ``listAnalysisProfiles``, unaddressed: the registry's
@@ -222,7 +222,7 @@ SEALED_STUB_COLLECTIONS: frozenset[str] = frozenset({"getComparisonQueueSummary"
 #: removes them: each joins the `404` sweep.
 SEALED_STUB_ADDRESSED: frozenset[str] = frozenset({
     "listComparisonSeries",
-    "getComparisonSeries", "listComparisonSheetPairs", "getComparisonSheetPair", "streamComparisonPairTile",
+    "getComparisonSeries", "listComparisonSheetPairs", "getComparisonSheetPair",
     "getComparisonOverview",
 })
 

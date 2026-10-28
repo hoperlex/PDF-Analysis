@@ -501,7 +501,7 @@ def build_application(
         # `CMP-VC-OVERVIEW-01` replace the four adapters (plan section 4.0 rule 1).
         comparison_matrices=ComparisonMatrixAdapter(sessions, blob_store=store),
         comparison_series=ComparisonSeriesAdapter(),
-        comparison_pair_tiles=ComparisonPairTileAdapter(),
+        comparison_pair_tiles=ComparisonPairTileAdapter(sessions, blob_store=store),
         comparison_overview=ComparisonOverviewAdapter(),
         execution=ExecutionAdapter(sessions, runs=run_adapter),
         # `W55A-SEAL-01` sealed them; `W55A-SEARCH-01` serves them. The norms reads and the

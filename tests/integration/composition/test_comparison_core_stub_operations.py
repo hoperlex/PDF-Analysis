@@ -64,10 +64,11 @@ EXPERT_WRITES = {name for name, (_m, _p, _b, keyed) in REQUESTS.items() if keyed
 DEPENDENCIES = {"comparison_matrix", "comparison_series", "comparison_pair_tiles", "comparison_overview"}
 #: Lanes that serve one of them remove it from the stub list below and add it here; the role, key and shape tests
 #: still judge it.
-#: `CMP-MATRIX-01` serves the six matrix operations.
+#: `CMP-MATRIX-01` serves the six matrix operations; `CMP-VIEWER-01` serves the pair tile.
 WIRED: frozenset[str] = frozenset({
     "getComparisonMatrix", "prepareComparisonMatrix", "listComparisonMatrixEdits", "applyComparisonMatrixEdits",
     "undoComparisonMatrixEdit", "listComparisonAiLinks",
+    "streamComparisonPairTile",
 })
 STUBS = sorted(set(REQUESTS) - WIRED)
 THE_THREE = ("approveSheetPairing", "withdrawSheetPairing", "generateComparisonSummary")
@@ -168,8 +169,9 @@ def test_a_tile_or_list_query_outside_its_bounds_is_refused_before_the_stub(clie
     assert client.get(f"{tile}?mode=a&level=0&column=4096&row=0", headers=headers).status_code == 422
     assert client.get(f"{tile}?mode=a&level=0&column=0&row=0&layers=hidden", headers=headers).status_code == 422
     assert client.get(f"{tile}?mode=a&level=0&column=0&row=0&layers=main,hidden", headers=headers).status_code == 422
+    # `CMP-VIEWER-01` serves the tile: a well-formed query about a pair that does not exist is `404`, not the stub's `503`.
     assert client.get(f"{tile}?mode=a&level=0&column=0&row=0&layers=main,noise&align_blocks=true",
-                      headers=headers).status_code == 503
+                      headers=headers).status_code == 404
     pairs = f"/comparison-transitions/{TRN}/sheet-pairs"
     assert client.get(f"{pairs}?status=sideways", headers=headers).status_code == 422
     assert client.get(f"{pairs}?limit=0", headers=headers).status_code == 422

@@ -5883,14 +5883,27 @@ class ComparisonSeriesAdapter:
 
 
 class ComparisonPairTileAdapter:
-    """`CMP-VIEWER-01` replaces the body."""
+    """`CMP-VIEWER-01`. ``streamComparisonPairTile`` from what the worker stored.
 
-    _DEPENDENCY = "comparison_pair_tiles"
+    The tiles of page A and page B are the page profile's (stored levels from the archive, levels 0 and 1 rendered by the
+    page-profile reader in a ceilinged child), the mask is bytes reduced with ``numpy``: the API process never loads
+    PDFium for a pair tile (ADR-0025 decision 9 and the addendum of 2026-10-27).
+    """
+
+    def __init__(
+        self, session_factory: sessionmaker[Session], *, blob_store: Any, reader: Any = None
+    ) -> None:
+        from auditmanager.comparison.public import PairTileReader
+
+        self._reader = reader or PairTileReader(session_factory, blob_store)
 
     def read_tile(
         self, *, sheet_pair_id: str, mode: models.ComparisonPairTileMode, level: int, column: int, row: int, layers: Sequence[models.ComparisonLayer], align_blocks: bool
     ) -> bytes:
-        return _comparison_unavailable(self._DEPENDENCY)
+        return self._reader.read_tile(
+            sheet_pair_id=sheet_pair_id, mode=mode.value, level=level, column=column, row=row,
+            layers=[layer.value for layer in layers], align_blocks=align_blocks,
+        )
 
 
 class ComparisonOverviewAdapter:
