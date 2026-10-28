@@ -1,7 +1,7 @@
 """The series of adjacent transitions of «Сравнение версий» (`CMP-SERIES-01`, ADR-0025 decisions 4, 15, 21).
 
 * :mod:`.planning` -- the transitions and sheet pairs of one revision of the effective matrix; only neighbours (pure);
-* :mod:`.service` -- the nine operations: start, list, get, pause, resume, cancel, finish, list the sheet pairs, get one;
+* :mod:`.service` -- the series operations of the contract: start, list, get, pause, resume, cancel, finish, list the sheet pairs, get one;
 * :mod:`.handlers` -- the work kinds ``series_pair``, ``series_drive`` and ``series_after_preparation``;
 * :mod:`.advance` -- reconcile, finalise a transition (parts coverage, permit reconciliation, counts, verdict), conclude;
 * :mod:`.verdict`, :mod:`.parts`, :mod:`.permit`, :mod:`.inputs`, :mod:`.views` -- the pure rules; :mod:`.repository` -- the SQL.

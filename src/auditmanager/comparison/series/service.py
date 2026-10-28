@@ -1,6 +1,6 @@
 """The use cases of the series: start it, read it, steer it, read its sheet pairs (`CMP-SERIES-01`).
 
-One class holds the nine operations the contract seals; it takes plain values and answers contract-shaped dictionaries
+One class holds the operations the contract seals for the series; it takes plain values and answers contract-shaped dictionaries
 (:mod:`.views`) that the adapter in the composition root validates with the generated models.
 
 **Reads** start nothing and change nothing: a series is read from its rows; whether it is stale is *derived* on every read
