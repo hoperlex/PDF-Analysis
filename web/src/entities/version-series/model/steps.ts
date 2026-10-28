@@ -115,7 +115,7 @@ const STEP_WORDS: Readonly<Partial<Record<ComparisonStepId, Partial<Record<Compa
   upload: { done: 'загружен', not_started: 'не загружен' },
   profile: { done: 'готов', running: 'идёт', not_started: 'не начат', failed: 'ошибка' },
   matrix: { done: 'готово', stale: 'устарело', not_started: 'не собрано' },
-  series: { done: 'готово', not_started: 'не запускалось', stale: 'по старому порядку', interrupted: 'прервано' },
+  series: { done: 'готово', not_started: 'не запускалось', stale: 'по старому порядку', interrupted: 'прервано', queued: 'идёт' },
 };
 
 export interface StepView {

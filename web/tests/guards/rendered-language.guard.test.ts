@@ -3535,6 +3535,8 @@ const TRANSLATED_SCHEMAS = [
   'ComparisonVersionOrderSource',
   'ComparisonModules',
   'ComparisonQueueModule',
+  'ComparisonPermitState',
+  'ComparisonPartRole',
 ] as const;
 
 function translatedVocabulary(): ReadonlySet<string> {
@@ -4119,6 +4121,16 @@ const SCHEMA_MARKERS: readonly {
     schema: 'ComparisonModules',
     attribute: 'data-comparison-modules',
     why: '`widgets/execution-queue/ui/comparison-queue-block.tsx`, the root of the block «Сравнение» of «Очередь», with the module set beside the sentence that says it.',
+  },
+  {
+    schema: 'ComparisonPermitState',
+    attribute: 'data-permit-state',
+    why: "`widgets/version-series/ui/sheet-matrix.tsx`, the row head of a compared pair: «Заявлено проектировщиком в разрешении» and how each declared change fared.",
+  },
+  {
+    schema: 'ComparisonPartRole',
+    attribute: 'data-part-role',
+    why: "`widgets/version-series/ui/sheet-matrix.tsx`, the row head of a pair of a sheet split across versions: the whole sheet, or one part of it, and how much of the older sheet the parts cover.",
   },
   {
     schema: 'ComparisonQueueModule',

@@ -23,12 +23,17 @@ import type { GestureResult, Sides } from '@/entities/version-series';
 import {
   DRAG_TYPE,
   PAIR_STATE_LABELS,
+  PERMIT_HEADING,
+  PERMIT_STATE_LABELS,
   SHEET_STATUS_BADGES,
+  UNDESCRIBED_FAILURE,
   changedRows,
   dropOnCell,
   linkCandidate,
   markAbsent,
   pageKey,
+  pairReasonWords,
+  partsLine,
   pairOfRow,
   parseDragged,
   rowHeading,
@@ -103,6 +108,55 @@ function UnassignedRow({
   );
 }
 
+/**
+ * What the series says of a pair beside its status (`CMP-SERIES-01`): the reasons for a review, the part of a split sheet, the
+ * pair's dependence on an AI link, the declared changes of the permit and how each fared, and a failure.
+ */
+function PairDetails({ pair }: { readonly pair: ComparisonSheetPair }) {
+  const reasons = pair.reasons ?? [];
+  const parts = pair.parts;
+  const permit = pair.permit;
+  if (reasons.length === 0 && parts === undefined && permit === undefined && pair.ai_dependent !== true && pair.state !== 'failed') {
+    return null;
+  }
+  return (
+    <div className={styles.pairNote} data-pair-details="">
+      {reasons.length === 0 ? null : (
+        <div>
+          причины:{' '}
+          {reasons.map((code, index) => (
+            <span key={code} data-pair-reason={code}>
+              {index === 0 ? '' : '; '}
+              {pairReasonWords(code)}
+            </span>
+          ))}
+        </div>
+      )}
+      {pair.ai_dependent === true && !reasons.includes('AI_MATCH') ? <div>пара опирается на связь, предложенную ИИ</div> : null}
+      {parts === undefined ? null : <div data-part-role={parts.role}>{partsLine(parts)}</div>}
+      {permit === undefined ? null : (
+        <div data-permit-state={permit.state}>
+          {PERMIT_HEADING}: {PERMIT_STATE_LABELS[permit.state]}
+          {(permit.items ?? []).length === 0 ? null : (
+            <ul className={styles.pairList}>
+              {(permit.items ?? []).map((item, index) => (
+                <li key={`${index}-${item.text}`} data-permit-state={item.state}>
+                  {item.text} — {PERMIT_STATE_LABELS[item.state]}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      {pair.state === 'failed' ? (
+        <div className={styles.errorText} {...(pair.failure_reason === undefined ? {} : { 'data-failure-reason': pair.failure_reason })}>
+          ошибка расчёта{pair.failure_reason === undefined ? '' : `: ${UNDESCRIBED_FAILURE}`}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function RowStatus({
   pair,
   onOpenPair,
@@ -113,23 +167,29 @@ function RowStatus({
   if (pair === null) return null;
   if (pair.status === undefined) {
     return (
-      <span className={styles.note} data-pair-state={pair.state}>
-        {PAIR_STATE_LABELS[pair.state]}
-      </span>
+      <>
+        <span className={styles.note} data-pair-state={pair.state}>
+          {PAIR_STATE_LABELS[pair.state]}
+        </span>
+        <PairDetails pair={pair} />
+      </>
     );
   }
   const badge = SHEET_STATUS_BADGES[pair.status];
   return (
-    <button
-      type="button"
-      className={`am-badge am-badge--${badge.tone} ${styles.statusBadge}`}
-      data-sheet-status={pair.status}
-      data-pair-state={pair.state}
-      title="Открыть сравнение этого листа в выбранной паре: наложение, было, стало и рядом."
-      onClick={() => onOpenPair(pair)}
-    >
-      {badge.icon} {badge.label}
-    </button>
+    <>
+      <button
+        type="button"
+        className={`am-badge am-badge--${badge.tone} ${styles.statusBadge}`}
+        data-sheet-status={pair.status}
+        data-pair-state={pair.state}
+        title="Открыть сравнение этого листа в выбранной паре: наложение, было, стало и рядом."
+        onClick={() => onOpenPair(pair)}
+      >
+        {badge.icon} {badge.label}
+      </button>
+      <PairDetails pair={pair} />
+    </>
   );
 }
 

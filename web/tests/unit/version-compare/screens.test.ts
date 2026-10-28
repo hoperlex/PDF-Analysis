@@ -170,6 +170,7 @@ function sheetsProps(over: Partial<SheetsTabViewProps> = {}): SheetsTabViewProps
     draft: EMPTY_DRAFT, notice: null, dropped: [], draftFailure: null, applying: false, mayEdit: true, prepareBusy: false,
     orderDialog: null, viewer: null, clickNote: null, onPrepare: noop, onApply: noop, onUndo: noop, onRemoveDraft: noop,
     onOpenOrder: noop, onGesture: noop, onSheet: noop, onOpenPair: noop, onOpenTransition: noop, onSeriesAct: noop, onStartSeries: noop,
+    confirmingRestart: false, onAskRestart: noop, onConfirmRestart: noop, onCancelRestart: noop,
     ...over,
   };
 }
@@ -268,8 +269,55 @@ describe('«Сравнение листов»', () => {
     expect(t('paused')).toContain('Продолжить');
     expect(t('paused')).toContain('Отменить');
     expect(t('failed')).toContain('Досчитать');
-    expect(t('completed')).not.toContain('Досчитать');
+    // A completed series with a failed pair has something left (CMP-SERIES-01 decision 4); a clean one has not.
+    expect(t('completed')).toContain('Досчитать');
+    const clean = series({ transitions: (series().transitions ?? []).map((item) => ({ ...item, summary: { ...item.summary, failed: 0 } })) });
+    expect(text(sheets({ series: clean }))).not.toContain('Досчитать');
     expect(text(sheets({ series: series({ state: 'paused' }), mayEdit: false }))).not.toContain('Продолжить');
+  });
+
+  it('offers «Заново» to a series that is not live, asks first, and sends nothing when the reader is not an expert', () => {
+    const ended = (state: 'running' | 'paused' | 'completed' | 'failed' | 'cancelled') => text(sheets({ series: series({ state }) }));
+    expect(ended('completed')).toContain('Заново');
+    expect(ended('failed')).toContain('Заново');
+    expect(ended('cancelled')).toContain('Заново');
+    expect(ended('running')).not.toContain('Заново');
+    expect(ended('paused')).not.toContain('Заново');
+    expect(text(sheets({ mayEdit: false }))).not.toContain('Заново');
+    const asked = text(sheets({ confirmingRestart: true }));
+    expect(asked).toContain('Сравнение соседних заново');
+    expect(asked).toContain('Все переходы будут пересчитаны по текущему порядку и составу версий.');
+    expect(asked).toContain('Пересчитать');
+    expect(text(sheets())).not.toContain('Пересчитать');
+  });
+
+  it('counts «Листов» by the transition\'s sheets, not by the ones compared', () => {
+    const shown = series({
+      transitions: [transition({ transition_id: uid('ctn', 21), source_version_uid: V1, target_version_uid: V2, summary: { sheets: 12, compared: 5, same: 1, zones_only: 0, different: 1, style_only: 0, needs_review: 0, added: 0, removed: 0, failed: 0 }, verdict: ['different'] })],
+    });
+    const markup = sheets({ series: shown });
+    expect(markup).toContain('<td>12</td>');
+    expect(markup).not.toContain('<td>5</td>');
+  });
+
+  it('says beside a pair\'s status why it needs a review, what the permit declared and how a split sheet is covered', () => {
+    const markup = sheets();
+    const t = text(markup).replace(/\s+;/g, ';');
+    expect(t).toContain('причины: листы сопоставлены с низкой уверенностью; не проверено: читаемость надписей');
+    expect(t).toContain('причины: лист разделён между версиями: проверьте части; лист повторяется в комплекте; пара опирается на связь, предложенную ИИ; нет текстового слоя; причина не описана');
+    expect(t).toContain('Заявлено проектировщиком в разрешении: заявлено и найдено');
+    expect(t).toContain('Лист 1: изменён штамп — заявлено и найдено');
+    expect(t).toContain('Заявлено проектировщиком в разрешении: заявлено, различий не найдено');
+    expect(t).toContain('Заявлено проектировщиком в разрешении: найдено, но не заявлено');
+    expect(t).toContain('Заявлено проектировщиком в разрешении: нужна проверка');
+    expect(t).toContain('пара опирается на связь, предложенную ИИ');
+    expect(t).toContain('лист целиком · покрытие 100 %');
+    expect(t).toContain('часть листа · части вместе покрывают 61,5 % прежнего листа');
+    expect(t).toContain('ошибка расчёта: Причина не описана этим клиентом');
+    for (const state of ['declared_and_found', 'declared_no_diff', 'diff_not_declared', 'needs_review']) expect(markup, state).toContain(`data-permit-state="${state}"`);
+    for (const role of ['whole', 'part']) expect(markup, role).toContain(`data-part-role="${role}"`);
+    expect(markup).not.toContain('A_CODE_FROM_THE_FUTURE>');
+    expect(t).not.toContain('SPLIT_SHEET');
   });
 
   it('says the stored summary is for the old order, why, and that a pair of non-neighbours is not compared', () => {
@@ -296,7 +344,7 @@ describe('«Сравнение листов»', () => {
     const t = text(markup);
     for (const label of ['Совпадает', 'Совпадает, изменены служебные зоны', 'Есть отличия', 'Нужна проверка', 'Лист добавлен', 'Лист удалён', 'Не сопоставлен']) expect(t, label).toContain(label);
     const changed = text(sheets({ onlyChanged: true }));
-    expect(changed).toContain('(5 из 7)');
+    expect(changed).toContain('(6 из 8)');
     expect(changed).not.toContain('Общие данные');
     expect(changed).toContain('План этажа 1');
     expect(text(sheets({ pairs: null, onlyChanged: true }))).toContain('Общие данные');
@@ -343,7 +391,7 @@ describe('«Сравнение листов»', () => {
       dropped: [{ kind: 'unlink', page: page(V2, 40) }],
     });
     const t = text(markup);
-    expect(t).toContain('Сопоставление листов изменилось после того, как вы его открыли');
+    expect(t).toContain('оно изменилось после того, как вы его открыли');
     expect(t).toContain('ваши правки остались в черновике');
     expect(t).toContain('Эти правки не подходят к сопоставлению, которое изменилось, и убраны из черновика (1)');
     expect(t).toContain('Отвязать лист 40 (версия №2) в отдельную строку');

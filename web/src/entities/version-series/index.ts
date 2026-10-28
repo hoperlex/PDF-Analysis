@@ -79,13 +79,24 @@ export {
   STALE_SERIES_NOTE,
   TRANSITION_STATE_LABELS,
   canCancelSeries,
+  canRestart,
   continueOf,
+  hasLeftovers,
   latestSeries,
   progressPercent,
   staleReasonsLine,
   transitionOf,
 } from './model/series-words';
 export type { SeriesContinue } from './model/series-words';
+export {
+  CHANNEL_WORDS,
+  PAIR_REASON_WORDS,
+  PART_ROLE_LABELS,
+  PERMIT_HEADING,
+  PERMIT_STATE_LABELS,
+  pairReasonWords,
+  partsLine,
+} from './model/pair-words';
 export {
   CELL_REASON_WORDS,
   CELL_STATE_LABELS,

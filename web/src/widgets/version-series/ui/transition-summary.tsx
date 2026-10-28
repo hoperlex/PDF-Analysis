@@ -19,7 +19,11 @@ import {
   TRANSITION_STATE_LABELS,
   UNDESCRIBED_FAILURE,
   canCancelSeries,
+  canRestart,
   continueOf,
+  RESTART_CONFIRM_ACTION,
+  RESTART_CONFIRM_TEXT,
+  RESTART_CONFIRM_TITLE,
   progressPercent,
   staleReasonsLine,
   verdictParts,
@@ -47,9 +51,14 @@ export interface TransitionSummaryProps {
   readonly notCompared: boolean;
   /** The sides are not two different versions. */
   readonly chooseTwo: boolean;
+  /** «Заново» was pressed and waits for the reader's word. */
+  readonly confirmingRestart: boolean;
   readonly onOpen: (transition: ComparisonTransition) => void;
   readonly onAct: (act: SeriesAct) => void;
   readonly onStart: () => void;
+  readonly onAskRestart: () => void;
+  readonly onConfirmRestart: () => void;
+  readonly onCancelRestart: () => void;
 }
 
 function nameOf(names: ReadonlyMap<string, string>, versionUid: string): string {
@@ -90,7 +99,7 @@ function TransitionRow({
       </td>
       {ran ? (
         <>
-          <td>{summary.compared}</td>
+          <td>{summary.sheets}</td>
           <td>{summary.same}</td>
           <td>{summary.zones_only}</td>
           <td>{summary.different}</td>
@@ -141,9 +150,13 @@ export function TransitionSummary({
   failure,
   notCompared,
   chooseTwo,
+  confirmingRestart,
   onOpen,
   onAct,
   onStart,
+  onAskRestart,
+  onConfirmRestart,
+  onCancelRestart,
 }: TransitionSummaryProps) {
   return (
     <section className={styles.block} aria-label="Сводка переходов" data-transition-summary="">
@@ -181,7 +194,7 @@ export function TransitionSummary({
                 Отменить
               </button>
             ) : null}
-            {mayAct && continueOf(series.state) === 'resume' ? (
+            {mayAct && continueOf(series) === 'resume' ? (
               <button
                 type="button"
                 className="am-button am-button--small am-button--quiet"
@@ -192,7 +205,7 @@ export function TransitionSummary({
                 Продолжить
               </button>
             ) : null}
-            {mayAct && continueOf(series.state) === 'finish' ? (
+            {mayAct && continueOf(series) === 'finish' ? (
               <button
                 type="button"
                 className="am-button am-button--small am-button--quiet"
@@ -203,7 +216,34 @@ export function TransitionSummary({
                 Досчитать
               </button>
             ) : null}
+            {mayAct && canRestart(series.state) ? (
+              <button
+                type="button"
+                className="am-button am-button--small am-button--quiet"
+                disabled={busy}
+                title="Посчитать все переходы заново по текущему порядку и составу версий."
+                onClick={onAskRestart}
+              >
+                Заново
+              </button>
+            ) : null}
           </p>
+          {confirmingRestart ? (
+            <div role="group" aria-label="Подтверждение пересчёта" className={styles.draft} data-restart-confirm="">
+              <p>
+                <strong>{RESTART_CONFIRM_TITLE}</strong>
+              </p>
+              <p className="am-note">{RESTART_CONFIRM_TEXT}</p>
+              <p>
+                <button type="button" className="am-button am-button--small" disabled={busy} onClick={onConfirmRestart}>
+                  {RESTART_CONFIRM_ACTION}
+                </button>{' '}
+                <button type="button" className="am-button am-button--small am-button--quiet" disabled={busy} onClick={onCancelRestart}>
+                  Отмена
+                </button>
+              </p>
+            </div>
+          ) : null}
           <CommandRefusal failure={failure} />
           {(series.stale_reasons ?? []).length === 0 ? null : (
             <div className="am-note" data-series-stale="">

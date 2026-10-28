@@ -87,7 +87,7 @@ export function matrix(over: Partial<ComparisonMatrix> = {}): ComparisonMatrix {
     columns: [
       { version_uid: V1, page_count: 7 },
       { version_uid: V2, page_count: 8 },
-      { version_uid: V3, page_count: 9 },
+      { version_uid: V3, page_count: 10 },
     ],
     rows: [
       row(1, 'Общие данные', '1', [matched(V1, 1, { confidence: 'high' }), matched(V2, 1, { confidence: 'high' }), matched(V3, 1, { confidence: 'high' })]),
@@ -117,9 +117,15 @@ export function matrix(over: Partial<ComparisonMatrix> = {}): ComparisonMatrix {
         unmatched(V2, { reason: 'below_pair' }),
         matched(V3, 9),
       ]),
+      // The second part of the split sheet of row 5: its own row, no older sheet in it (the older sheet stands in row 5).
+      row(8, 'План кровли, часть 2', '5', [
+        absent(V1, { reason: 'no_candidates' }),
+        absent(V2, { reason: 'no_candidates' }),
+        matched(V3, 10, { confidence: 'high', flags: ['split'] }),
+      ]),
     ],
     unassigned_pages: [page(V2, 8)],
-    counts: { rows: 7, unmatched: 2, manual: 1, ai: 1, groups: 1, duplicates: 1 },
+    counts: { rows: 8, unmatched: 2, manual: 1, ai: 1, groups: 1, duplicates: 1 },
     orphaned_edit_ids: [uid('cme', 3)],
     ...over,
   };
@@ -174,7 +180,7 @@ export function series(over: Partial<ComparisonSeries> = {}): ComparisonSeries {
   };
 }
 
-/** The sheet pairs of V2 → V3, one in each of the seven statuses, matched to the rows of {@link matrix}. */
+/** The sheet pairs of №2 → №3, one in each of the seven statuses, matched to the rows of {@link matrix}, and the second part of the split sheet. */
 export function pairs(): ComparisonSheetPair[] {
   const make = (n: number, over: Partial<ComparisonSheetPair>): ComparisonSheetPair => ({
     sheet_pair_id: uid('ctp', n),
@@ -183,13 +189,14 @@ export function pairs(): ComparisonSheetPair[] {
     ...over,
   });
   return [
-    make(1, { status: 'same', page_a: { page: page(V2, 1) }, page_b: { page: page(V3, 1) } }),
-    make(2, { status: 'different', page_a: { page: page(V2, 2) }, page_b: { page: page(V3, 2) } }),
-    make(3, { status: 'same_zones_changed', page_a: { page: page(V2, 3) }, page_b: { page: page(V3, 3) } }),
+    make(1, { status: 'same', page_a: { page: page(V2, 1) }, page_b: { page: page(V3, 1) }, permit: { state: 'declared_and_found', items: [{ state: 'declared_and_found', text: 'Лист 1: изменён штамп' }] } }),
+    make(2, { status: 'different', page_a: { page: page(V2, 2) }, page_b: { page: page(V3, 2) }, reasons: ['MATCH_LOW_CONFIDENCE', 'UNCHECKED_CHANNEL_TEXT_COVERAGE'], permit: { state: 'declared_no_diff' } }),
+    make(3, { status: 'same_zones_changed', page_a: { page: page(V2, 3) }, page_b: { page: page(V3, 3) }, ai_dependent: true, permit: { state: 'diff_not_declared', items: [{ state: 'diff_not_declared', text: 'Лист 3: изменена схема' }] } }),
     make(4, { status: 'removed', page_a: { page: page(V2, 4) } }),
-    make(5, { status: 'needs_review', page_a: { page: page(V2, 5) }, page_b: { page: page(V3, 5) } }),
-    make(6, { status: 'unmatched', page_a: { page: page(V2, 6) } }),
+    make(5, { status: 'needs_review', page_a: { page: page(V2, 5) }, page_b: { page: page(V3, 5) }, reasons: ['SPLIT_SHEET', 'DUPLICATE_SHEET', 'AI_MATCH', 'NO_TEXT_LAYER', 'A_CODE_FROM_THE_FUTURE'], permit: { state: 'needs_review' }, parts: { role: 'whole', covered_percent: 100, parts: [page(V3, 5), page(V3, 10)] } }),
+    make(6, { status: 'unmatched', page_a: { page: page(V2, 6) }, state: 'failed', failure_reason: 'post_phase_x' }),
     make(7, { status: 'added', page_b: { page: page(V3, 9) } }),
+    make(8, { status: 'needs_review', page_a: { page: page(V2, 5) }, page_b: { page: page(V3, 10) }, reasons: ['SPLIT_SHEET'], parts: { role: 'part', covered_percent: 61.5, parts: [page(V3, 5), page(V3, 10)] } }),
   ];
 }
 

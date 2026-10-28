@@ -578,3 +578,18 @@
     margin-left: 0;
   }
 }
+
+.pairNote {
+  display: grid;
+  gap: var(--am-gap-xs);
+  margin-top: var(--am-gap-xs);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+
+.pairList {
+  margin: 0;
+  padding-left: 1rem;
+}

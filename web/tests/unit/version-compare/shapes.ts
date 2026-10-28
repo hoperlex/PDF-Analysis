@@ -99,6 +99,7 @@ function sheetsProps(over: Partial<SheetsTabViewProps> = {}): SheetsTabViewProps
     draft: EMPTY_DRAFT, notice: null, dropped: [], draftFailure: null, applying: false, mayEdit: true, prepareBusy: false,
     orderDialog: null, viewer: null, clickNote: null, onPrepare: noop, onApply: noop, onUndo: noop, onRemoveDraft: noop,
     onOpenOrder: noop, onGesture: noop, onSheet: noop, onOpenPair: noop, onOpenTransition: noop, onSeriesAct: noop, onStartSeries: noop,
+    confirmingRestart: false, onAskRestart: noop, onConfirmRestart: noop, onCancelRestart: noop,
     ...over,
   };
 }
@@ -172,6 +173,7 @@ export const COMPARISON_SHAPES: readonly ComparisonShape[] = [
       })),
     censusOnly: true,
   },
+  { name: 'sheets-tab-restart-asked', make: () => createElement(SheetsTabView, sheetsProps({ confirmingRestart: true })) },
   { name: 'sheets-tab-applying', make: () => createElement(SheetsTabView, sheetsProps({ draft: DRAFT, applying: true })) },
   { name: 'sheets-tab-reader', make: () => createElement(SheetsTabView, sheetsProps({ mayEdit: false, series: series({ state: 'paused' }) })) },
   { name: 'sheets-tab-no-series', make: () => createElement(SheetsTabView, sheetsProps({ series: null, pairs: null, sides: { a: V2, b: V2 } })) },

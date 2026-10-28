@@ -51,6 +51,11 @@ import {
   removeLast,
   requestOf,
   splitDirection,
+  canRestart,
+  continueOf,
+  hasLeftovers,
+  pairReasonWords,
+  partsLine,
   stepActions,
   stepView,
   unlinkSheet,
@@ -60,7 +65,7 @@ import {
 } from '@/entities/version-series';
 import type { DraftEdit, OverviewView } from '@/entities/version-series';
 
-import { DOCUMENT_UID, MATRIX_ID, V1, V2, V3, matrix, overview, page, pairs, uid } from './fixtures';
+import { DOCUMENT_UID, MATRIX_ID, V1, V2, V3, matrix, overview, page, pairs, series, transition, uid } from './fixtures';
 
 const REVISION = { matrix_id: MATRIX_ID, edit_no: 3 };
 const LATIN = /[A-Za-z]/;
@@ -123,6 +128,50 @@ describe('the words of a step (version-comparison-projects.js:41-94)', () => {
     expect(stepActions('series', 'blocked')).toEqual([]);
     expect(stepActions('upload', 'failed')).toEqual([]);
     expect(stepActions('ai_pairs', 'not_started')).toEqual([]);
+  });
+});
+
+describe('the words of the series (CMP-SERIES-01 section 10)', () => {
+  it('says the series of step 5 in the integrator\'s words: queued and running are «идёт»', () => {
+    expect(stepView('series', 'queued').text).toBe('идёт');
+    expect(stepView('series', 'running').text).toBe('идёт');
+    expect(stepView('series', 'paused').text).toBe('пауза');
+    expect(stepView('series', 'interrupted').text).toBe('прервано');
+    expect(stepView('series', 'stale').text).toBe('по старому порядку');
+  });
+
+  it('offers «Продолжить» to a paused series, «Досчитать» to a finished one with something left, «Заново» to one that is not live', () => {
+    const clean = series({ state: 'completed', transitions: (series().transitions ?? []).map((item) => ({ ...item, summary: { ...item.summary, failed: 0 } })) });
+    expect(hasLeftovers(clean)).toBe(false);
+    expect(continueOf(clean)).toBeNull();
+    expect(continueOf(series({ state: 'completed' }))).toBe('finish');
+    expect(hasLeftovers(series({ state: 'completed' }))).toBe(true);
+    const unfinished = series({ state: 'completed', transitions: [transition({ transition_id: uid('ctn', 9), source_version_uid: V1, target_version_uid: V2, state: 'failed' })] });
+    expect(continueOf(unfinished)).toBe('finish');
+    expect(continueOf(series({ state: 'paused' }))).toBe('resume');
+    expect(continueOf(series({ state: 'failed' }))).toBe('finish');
+    expect(continueOf(series({ state: 'cancelled' }))).toBe('finish');
+    expect(continueOf(series({ state: 'running' }))).toBeNull();
+    expect(canRestart('completed')).toBe(true);
+    expect(canRestart('failed')).toBe(true);
+    expect(canRestart('cancelled')).toBe(true);
+    expect(canRestart('paused')).toBe(false);
+    expect(canRestart('running')).toBe(false);
+    expect(canRestart('queued')).toBe(false);
+  });
+
+  it('says the reasons of a pair, including the series\' own and the unchecked channels, and never a code it does not know', () => {
+    expect(pairReasonWords('SPLIT_SHEET')).toBe('лист разделён между версиями: проверьте части');
+    expect(pairReasonWords('NO_TEXT_LAYER')).toBe('нет текстового слоя');
+    expect(pairReasonWords('UNCHECKED_CHANNEL_TEXT')).toBe('не проверено: текст');
+    expect(pairReasonWords('UNCHECKED_CHANNEL_SPEC_POSITIONS')).toBe('не проверено: позиции СО');
+    expect(pairReasonWords('UNCHECKED_CHANNEL_SOMETHING_NEW')).toBe('причина не описана');
+    expect(pairReasonWords('A_CODE_FROM_THE_FUTURE')).toBe('причина не описана');
+  });
+
+  it('says how a split sheet is covered', () => {
+    expect(partsLine({ role: 'whole', covered_percent: 100, parts: [] })).toBe('лист целиком · покрытие 100 %');
+    expect(partsLine({ role: 'part', covered_percent: 61.5, parts: [] })).toBe('часть листа · части вместе покрывают 61,5 % прежнего листа');
   });
 });
 
@@ -238,10 +287,18 @@ describe('the matrix as the screen reads it', () => {
     expect(pairOfRow(rows[5] as never, sides, list)?.status).toBe('unmatched');
     expect(pairOfRow(rows[6] as never, sides, list)?.status).toBe('added');
     expect(changedRows(rows, sides, list).map((row) => row.title)).toEqual([
-      'План этажа 1', 'Спецификация оборудования', 'План кровли', 'Разрез 1-1', 'Узел 3',
+      'План этажа 1', 'Спецификация оборудования', 'План кровли', 'Разрез 1-1', 'Узел 3', 'План кровли, часть 2',
     ]);
     const none: readonly ComparisonSheetPair[] = [];
     expect(changedRows(rows, sides, none)).toEqual([]);
+  });
+
+  it('gives the second part of a split sheet its own pair although the older sheet stands in both (CMP-SERIES-01)', () => {
+    const list = pairs();
+    const sides = { a: V2, b: V3 };
+    expect(pairOfRow(rows[4] as never, sides, list)?.sheet_pair_id).toBe(uid('ctp', 5));
+    expect(pairOfRow(rows[7] as never, sides, list)).toMatchObject({ sheet_pair_id: uid('ctp', 8), parts: { role: 'part' } });
+    expect(pairOfRow(rows[7] as never, sides, list)?.page_a?.page).toEqual(page(V2, 5));
   });
 
   it('reads a split cell as the whole sheet when the next version holds a split sheet too', () => {
@@ -408,7 +465,7 @@ describe('the sentences of the module\'s refusals (CMP-SEAL-C0, CMP-SEAL-C1)', (
   const CONSTRAINTS = [
     'comparison_files_limit', 'comparison_sets_limit', 'comparison_batch_bytes_limit', 'comparison_batch_pages_limit',
     'comparison_project_bytes_limit', 'comparison_part_number', 'comparison_part_size', 'comparison_set_members',
-    'comparison_edit_invalid', 'comparison_edits_limit', 'display_name', 'required_together', 'declared_page_count',
+    'comparison_edit_invalid', 'comparison_edits_limit', 'comparison_versions_few', 'display_name', 'required_together', 'declared_page_count',
     'comparison_zip_unreadable', 'comparison_zip_entry_count', 'comparison_zip_member_name', 'comparison_zip_symlink',
     'comparison_zip_encrypted_member', 'comparison_zip_compression_method', 'comparison_zip_duplicate_member',
     'comparison_zip_member_kind', 'comparison_zip_nested_depth', 'comparison_zip_member_size', 'comparison_zip_total_size',
@@ -449,6 +506,15 @@ describe('the sentences of the module\'s refusals (CMP-SEAL-C0, CMP-SEAL-C1)', (
       const stripped = sentence.replace(/deflate|ZIP|PDF|МиБ|ГиБ/g, '');
       expect(stripped, sentence).not.toMatch(LATIN);
     }
+  });
+
+  it('words the matrix that is not ready, and the document set of one version, for the start of a series', () => {
+    const notReady = comparisonReasonSentence(envelope('conflict', { conflict_reason: 'comparison_matrix_stale' }));
+    expect(notReady).toContain('либо ещё не готово');
+    expect(notReady).toContain('оно изменилось после того, как вы его открыли');
+    expect(comparisonReasonSentence(envelope('validation_failed', { constraint: 'comparison_versions_few' }))).toBe(
+      'В комплекте одна версия: сравнивать соседние версии не с чем. Загрузите ещё одну версию, затем запустите сравнение.',
+    );
   });
 
   it('classifies a module that is not wired as a state of the module, and a stale matrix as a stale matrix', () => {

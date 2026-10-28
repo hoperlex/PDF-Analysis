@@ -122,6 +122,10 @@ export interface SheetsTabViewProps {
   readonly onOpenTransition: (transition: ComparisonTransition) => void;
   readonly onSeriesAct: (act: 'pause' | 'resume' | 'cancel' | 'finish') => void;
   readonly onStartSeries: () => void;
+  readonly confirmingRestart: boolean;
+  readonly onAskRestart: () => void;
+  readonly onConfirmRestart: () => void;
+  readonly onCancelRestart: () => void;
 }
 
 export function SheetsTabView(props: SheetsTabViewProps) {
@@ -185,9 +189,13 @@ export function SheetsTabView(props: SheetsTabViewProps) {
         failure={props.seriesFailure}
         notCompared={notCompared}
         chooseTwo={chooseTwo}
+        confirmingRestart={props.confirmingRestart}
         onOpen={props.onOpenTransition}
         onAct={props.onSeriesAct}
         onStart={props.onStartSeries}
+        onAskRestart={props.onAskRestart}
+        onConfirmRestart={props.onConfirmRestart}
+        onCancelRestart={props.onCancelRestart}
       />
 
       <DraftPanel
@@ -315,6 +323,7 @@ export function SheetsTab({ projectUid, documentUid, heading, mayEdit, renderVie
   const [orderOpen, setOrderOpen] = useState(false);
   const [openPairId, setOpenPairId] = useState<string | null>(null);
   const [clickNote, setClickNote] = useState<string | null>(null);
+  const [restartAsked, setRestartAsked] = useState(false);
 
   const matrixData = matrix.data;
   const columns = matrixData?.columns ?? [];
@@ -511,6 +520,17 @@ export function SheetsTab({ projectUid, documentUid, heading, mayEdit, renderVie
       onStartSeries={() => {
         seriesAct.reset();
         start.mutate({ projectUid, documentUid, restart: false, baseOrderRevisionNo: baseRevisionOf(latestOrder.data) });
+      }}
+      confirmingRestart={restartAsked}
+      onAskRestart={() => setRestartAsked(true)}
+      onCancelRestart={() => setRestartAsked(false)}
+      onConfirmRestart={() => {
+        seriesAct.reset();
+        // «Заново» names the order the reader saw: a stale one is `comparison_version_order_stale`, not a silent recompute.
+        start.mutate(
+          { projectUid, documentUid, restart: true, baseOrderRevisionNo: baseRevisionOf(latestOrder.data) },
+          { onSuccess: () => setRestartAsked(false) },
+        );
       }}
     />
   );

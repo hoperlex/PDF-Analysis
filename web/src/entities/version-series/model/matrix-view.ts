@@ -83,7 +83,14 @@ export function adjacentSides(sides: Sides, columns: readonly ComparisonMatrixCo
   return left >= 0 && right === left + 1;
 }
 
-/** The sheet pair of a row in the compared transition, or `null` when the row has none there. */
+/**
+ * The sheet pair of a row in the compared transition, or `null` when the row has none there.
+ *
+ * A newer page belongs to one pair, so it names the pair; the older page can stand in several, because a sheet split across
+ * versions is one pair per part with the older sheet as page A of every one (`CMP-SERIES-01`). So a row with a newer page takes
+ * the pair of that page (preferring the one whose older page is the row's, when the row has one), and a row without a newer page
+ * takes the pair that has no newer page and the row's older page.
+ */
 export function pairOfRow(
   row: ComparisonMatrixRow,
   sides: Sides,
@@ -93,13 +100,11 @@ export function pairOfRow(
   const left = cellOf(row, sides.a)?.page;
   const right = cellOf(row, sides.b)?.page;
   if (left === undefined && right === undefined) return null;
-  return (
-    pairs.find(
-      (pair) =>
-        (left === undefined ? pair.page_a === undefined : samePage(pair.page_a?.page, left)) &&
-        (right === undefined ? pair.page_b === undefined : samePage(pair.page_b?.page, right)),
-    ) ?? null
-  );
+  if (right === undefined) {
+    return pairs.find((pair) => pair.page_b === undefined && samePage(pair.page_a?.page, left)) ?? null;
+  }
+  const ofRight = pairs.filter((pair) => samePage(pair.page_b?.page, right));
+  return ofRight.find((pair) => left !== undefined && samePage(pair.page_a?.page, left)) ?? ofRight[0] ?? null;
 }
 
 const UNCHANGED: readonly ComparisonSheetStatus[] = ['same', 'same_zones_changed'];

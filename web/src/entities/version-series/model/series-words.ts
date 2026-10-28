@@ -51,10 +51,26 @@ export function canCancelSeries(state: ComparisonSeriesState): boolean {
 /** «Продолжить» continues a paused series; «Досчитать» finishes one that stopped (CMP-SEAL-C1 decision 8). */
 export type SeriesContinue = 'resume' | 'finish' | null;
 
-export function continueOf(state: ComparisonSeriesState): SeriesContinue {
-  if (state === 'paused') return 'resume';
-  if (state === 'failed' || state === 'cancelled') return 'finish';
+/**
+ * Something is left to compute in a series that has ended: a transition that did not complete (queued, running, failed or
+ * cancelled) or one with a pair that failed (`CMP-SERIES-01` section 5 decision 4: «Досчитать» queues exactly those again).
+ */
+export function hasLeftovers(series: Pick<ComparisonSeries, 'transitions'>): boolean {
+  return (series.transitions ?? []).some(
+    (item) => item.state !== 'completed' || item.summary.failed > 0,
+  );
+}
+
+export function continueOf(series: Pick<ComparisonSeries, 'state' | 'transitions'>): SeriesContinue {
+  if (series.state === 'paused') return 'resume';
+  if (series.state === 'failed' || series.state === 'cancelled') return 'finish';
+  if (series.state === 'completed' && hasLeftovers(series)) return 'finish';
   return null;
+}
+
+/** «Заново» replaces a series that is not live; a queued, running or paused one is `comparison_series_active`. */
+export function canRestart(state: ComparisonSeriesState): boolean {
+  return state === 'completed' || state === 'failed' || state === 'cancelled';
 }
 
 export function progressPercent(done: number, total: number): number {
