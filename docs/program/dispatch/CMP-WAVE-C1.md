@@ -29,3 +29,44 @@ commit run the whole `tests/unit` and `tests/contract` minus `D-220`**, not only
 ## 3. Order and merge order
 SEAL-C1 (done) → (MATRIX ∥ ENGINE ∥ VIEWER) → SERIES → OVERVIEW → VC-UI-01; MEASURE-01 after ENGINE. Merge order for
 wiring files: MATRIX, ENGINE, VIEWER, SERIES, OVERVIEW, VC-UI-01. A FIX lane closes the wave.
+
+## 4. Pair evidence interface v1 (binding for ENGINE, VIEWER, SERIES)
+
+ENGINE and VIEWER are developed in parallel; this section fixes what one writes and the other reads. A lane that finds
+it wrong or insufficient STOPs and reports; it does not invent a second format.
+
+1. **Mask blob, format 1** — one per non-`same` result (`comparison_sheet_pair_result.mask_blob_id`), written once by
+   ENGINE in the worker. Bytes: a 16-byte little-endian header `struct.pack("<4sBBHII", b"AMCM", 1, 8, 0, width_px,
+   height_px)`, then `zlib.compress(numpy.packbits(planes, axis=-1, bitorder="big").tobytes(), 6)`, where `planes` is
+   a `bool` array of shape `(8, height_px, width_px)` in the order of the contract enum `ComparisonLayer`: `main`,
+   `light_elements`, `color_change`, `line_style`, `moved`, `within_tolerance`, `noise`, `service_zones`. The grid
+   covers the canvas of page A (`ComparisonCanvas`) at `how_compared.dpi`: `width_px = ceil(width_pt * dpi / 72)`,
+   likewise height; pixel `(x, y)` is the canvas square from `(x, y) * 72 / dpi` points, origin top left. A plane is at
+   most 40 Mpx (ADR-0025 decision 9); a decoder refuses a wrong magic, format, layer count, a size over the cap and a
+   body whose length after decompression differs from `8 * height_px * ceil(width_px / 8)` (decompress with a limit
+   — never an unbounded `zlib.decompress` of stored bytes).
+2. **Codec ownership.** ENGINE owns `src/auditmanager/comparison/engine/mask_codec.py` (`MASK_FORMAT = 1`,
+   `encode_mask`, `decode_mask`) and commits it, with its tests, as its **second commit** (after the task file).
+   VIEWER writes its reader against this text, with tests that build blobs per this text; at its merge turn (after
+   ENGINE has merged) VIEWER replaces its reader by `decode_mask` and adds one round-trip test across both.
+3. **Result `jsonb`** (`comparison_sheet_pair_result.result`), written by ENGINE, copied verbatim by SERIES into
+   `getComparisonSheetPair`: `{"format": 1, "canvas": ComparisonCanvas, "differences": [ComparisonDifference],
+   "text_changes": [ComparisonTextChange], "service_notes": [ComparisonServiceNote], "how_compared":
+   ComparisonHowCompared, "aligned_blocks": [{"box_a": [x0, y0, x1, y1], "dx_pt": float, "dy_pt": float}], "mask":
+   {"format": 1, "dpi": int, "width_px": int, "height_px": int} | null}` — every member that has a contract schema is
+   validated by the generated model of that schema before the row is written (the caps of the schema hold:
+   2000 differences, 2000 text changes, 500 service notes). `how_compared.transform` is the affine `[a, b, c, d, e, f]`
+   mapping page B points onto page A points. `aligned_blocks` is what «Совмещать блоки» uses: with `align_blocks=true`
+   the viewer draws the part of page B inside `box_a` shifted by `(-dx_pt, -dy_pt)` after the transform. Status,
+   reasons, confidence, flags and channels live in their own columns, as sealed.
+4. **Entry points for SERIES** (ENGINE, exported from `src/auditmanager/comparison/engine/__init__.py`): a function
+   that, for a project and two page profiles (either may be absent for `added`/`removed`), returns the result
+   identity — from the cache when the content key exists, otherwise computed in the ceilinged child and written
+   (blob first, then the row; a row never names a blob that was not written) — and a `comparison_work` handler of
+   kind `pair_result` appended to `HANDLER_FACTORIES`, with an enqueue helper whose dedupe key is a function of the
+   project and the two profile identities only. SERIES chooses which to use; ENGINE does not write
+   `comparison_sheet_pair`.
+5. **The real set** `.local/comparison-measure/13AV-RD-EM2-PA/` is measured by code only: no lane opens, reads or views
+   its PDFs or any raster made from them with a tool that shows content to the model (no Read of those files or of
+   images rendered from them); only numbers (time, RSS, bytes, counts, statuses) are recorded. Nothing from it is
+   committed.
