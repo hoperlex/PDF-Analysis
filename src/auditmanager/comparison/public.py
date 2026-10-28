@@ -167,12 +167,37 @@ from auditmanager.comparison.profile_queue.handler import (
     page_profile_handler,
 )
 
+# `CMP-ENGINE-01`: the per-sheet comparison engine (the pair result, its cache, its mask and the `pair_result` work kind).
+from auditmanager.comparison.engine import (
+    ENGINE_ALGO_VERSION,
+    PAIR_RESULT_KIND,
+    DecodedMask,
+    MaskFormatError,
+    PairOutcome,
+    PairResultHandler,
+    PairResultRepository,
+    StoredResult,
+    compare_sheet_pair,
+    decode_mask,
+    encode_mask,
+    encode_packed_planes,
+    enqueue_pair_result,
+    pair_result_dedupe_key,
+    pair_result_handler,
+    pair_result_payload,
+)
+from auditmanager.comparison.engine.mask_codec import (
+    LAYERS as MASK_LAYERS,
+    MASK_FORMAT,
+)
+
 #: `CMP-WORK-01` (ADR-0025 decision 4). One tuple of handler factories, each
 #: ``Callable[[WorkDependencies], WorkHandler]``: ``build_worker_runtime`` builds one dependency
 #: bundle and applies every factory to it, and refuses to start on a duplicate ``kind``. A slice
 #: adds its handler by appending its factory here (plan section 4.0 rule 2).
 HANDLER_FACTORIES: tuple[HandlerFactory, ...] = (
     page_profile_handler,  # `CMP-PROFILE-QUEUE-01`: kind ``page_profile``
+    pair_result_handler,  # `CMP-ENGINE-01`: kind ``pair_result``
 )
 
 #: `CMP-WORK-01`. Called inside the reclaim transaction for each attempt whose lease was lost:
@@ -223,6 +248,24 @@ from auditmanager.comparison.tiles.reader import PairTileReader
 PAGE_PROFILE_WORK_KIND = "page_profile"
 
 __all__ = [
+    "ENGINE_ALGO_VERSION",
+    "MASK_FORMAT",
+    "MASK_LAYERS",
+    "DecodedMask",
+    "MaskFormatError",
+    "PAIR_RESULT_KIND",
+    "PairOutcome",
+    "PairResultHandler",
+    "PairResultRepository",
+    "StoredResult",
+    "compare_sheet_pair",
+    "decode_mask",
+    "encode_mask",
+    "encode_packed_planes",
+    "enqueue_pair_result",
+    "pair_result_dedupe_key",
+    "pair_result_handler",
+    "pair_result_payload",
     "CANCEL_REQUESTED",
     "CallEstimate",
     "CallFailed",
