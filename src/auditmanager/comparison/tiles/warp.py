@@ -31,7 +31,10 @@ from auditmanager.comparison.tiles.limits import MAX_SOURCE_TILES
 __all__ = ["Region", "SourceBudget", "TooManySourceTiles", "choose_source_level", "warp_region"]
 
 _WHITE = 255
-_MARGIN_PX = 2
+#: Bilinear sampling at a position reads the pixel below it and the pixel above it; at a whole pixel the one above has
+#: weight zero. Positions this close to a whole pixel are taken to be on it (OpenCV itself rounds to 1/32), so an identity
+#: transform reads the one tile it covers and not its three neighbours.
+_ON_PIXEL = 1e-6
 
 #: ``fetch(level, column, row)`` -> the decoded tile, an ``(h, w, 3)`` ``uint8`` array, or ``None`` outside the pyramid.
 Fetch = Callable[[int, int, int], "numpy.ndarray | None"]
@@ -140,10 +143,10 @@ def warp_region(
     )
     source = corners @ matrix.T
     tile_px = grid_b.tile_px
-    first_col = math.floor((source[:, 0].min() - _MARGIN_PX) / tile_px)
-    last_col = math.floor((source[:, 0].max() + _MARGIN_PX) / tile_px)
-    first_row = math.floor((source[:, 1].min() - _MARGIN_PX) / tile_px)
-    last_row = math.floor((source[:, 1].max() + _MARGIN_PX) / tile_px)
+    first_col = math.floor(math.floor(source[:, 0].min() + _ON_PIXEL) / tile_px)
+    last_col = math.floor(math.ceil(source[:, 0].max() - _ON_PIXEL) / tile_px)
+    first_row = math.floor(math.floor(source[:, 1].min() + _ON_PIXEL) / tile_px)
+    last_row = math.floor(math.ceil(source[:, 1].max() - _ON_PIXEL) / tile_px)
     first_col, last_col = max(first_col, 0), min(last_col, info.columns - 1)
     first_row, last_row = max(first_row, 0), min(last_row, info.rows - 1)
     white = numpy.full((out_h, out_w, 3), _WHITE, dtype=numpy.uint8)

@@ -128,3 +128,19 @@ def test_the_warp_of_a_region_equals_that_region_of_the_warp(support) -> None:
     whole = _warp(a, b, t, 0, 0, 0)
     part = _warp(a, b, t, 0, 0, 0, region=Region(100, 50, 300, 200))
     assert numpy.array_equal(part, whole[50:200, 100:300])
+
+
+def test_an_identity_transform_reads_the_one_tile_it_covers_and_a_fraction_of_a_pixel_reads_its_neighbours(support) -> None:
+    page = support.noise_page(2000, 1500)
+    a, b = support.Pyramid(page), support.Pyramid(page)
+    budget = SourceBudget()
+    _warp(a, b, IDENTITY, 0, 2, 1, budget)
+    assert budget.count == 1 and b.reads == [(0, 2, 1)]
+    shifted = Affine.from_sequence([1, 0, 0, 1, -0.5, 0])  # half a pixel at 72 dpi
+    budget = SourceBudget()
+    _warp(a, b, shifted, 0, 2, 1, budget)
+    assert budget.count == 2
+    whole = Affine.from_sequence([1, 0, 0, 1, -7, -3])  # whole pixels: 7 to the right and 3 down
+    budget = SourceBudget()
+    _warp(a, b, whole, 0, 2, 1, budget)
+    assert budget.count == 4
