@@ -794,51 +794,75 @@ class Run:
         self.outcome["upload_state_after_files"] = upload["state"]
         proposal = api.call("GET", f"/comparison-uploads/{upload_id}/proposal", expect=200, label="get_proposal")
         sets = proposal["sets"]
-        self.outcome["proposal"] = {
-            "sets": len(sets), "set_states": [s["state"] for s in sets],
-            "warnings": [[w if isinstance(w, str) else w.get("code") for w in (s.get("warnings") or [])] for s in sets],
-            "files_per_set": [len(s["files"]) for s in sets],
-        }
-        if len(sets) != 1:
-            raise ChainStop(f"the proposal holds {len(sets)} sets, not one: {self.outcome['proposal']}")
-        chosen = sets[0]
-        proposed = [f["file_id"] for f in sorted(chosen["files"], key=lambda f: f["position"])]
-        by_id = {v: k for k, v in ids.items()}
-        self.outcome["proposal"]["proposed_order"] = [by_id.get(f, "?") for f in proposed]
-        intended = [ids[p.name] for p in paths]
-        self.outcome["proposal"]["order_equals_file_order"] = proposed == intended
-        confirmed = api.call("POST", f"/comparison-uploads/{upload_id}/sets/{chosen['set_id']}/confirmation",
-                             json={"files": [{"file_id": f} for f in intended]}, expect=200, label="confirm_set", key=True)
+        names_by_file = {v: k for k, v in ids.items()}
+        intended_names = [p.name for p in paths]
+        detail = []
+        for item in sets:
+            ordered = sorted(item["files"], key=lambda f: f["position"])
+            designation = item.get("designation")
+            detail.append({
+                "set_id": item["set_id"], "state": item["state"], "files": [names_by_file.get(f["file_id"], "?") for f in ordered],
+                "warnings": [w if isinstance(w, str) else w.get("code") for w in (item.get("warnings") or [])],
+                "designation_present": bool(designation), "designation_sha256_8": hashlib.sha256(designation.encode()).hexdigest()[:8] if designation else None,
+                "stage_proposed": item.get("project_stage"), "section_proposed": item.get("section_code"),
+                "labels_present": sum(1 for f in ordered if f.get("version_label")),
+                "existing_document_offered": bool(item.get("existing_document_uid")),
+            })
+        self.outcome["proposal"] = {"sets": len(sets), "detail": detail}
+        # one set is confirmed as it is; several (the stamps of the files disagree) are confirmed one after another, each later one
+        # joining the document the first made (``existing_document_uid``), and the order of the versions is then confirmed as
+        # an expert's act: what a person does when the proposal is not one set
+        ordered_sets = sorted(zip(sets, detail), key=lambda pair: min(intended_names.index(n) for n in pair[1]["files"] if n in intended_names))
+        first_set, first_detail = ordered_sets[0]
+        confirmed = api.call("POST", f"/comparison-uploads/{upload_id}/sets/{first_set['set_id']}/confirmation",
+                             json={"files": [{"file_id": ids[n]} for n in first_detail["files"]]}, expect=200, label="confirm_set_1", key=True)
         self.confirmed_at = time.time()
         document_uid = confirmed.get("document_uid")
         if not document_uid:
             raise ChainStop(f"the confirmation made no document: set state {confirmed.get('state')}, {confirmed.get('failure_reason')}")
         self.ids["document_uid"] = document_uid
         self.write_json("ids.json", self.ids)
+        self.stage_end("admission", upload_id=upload_id, confirmed_at=self.confirmed_at)
+        # the first confirmation released the first set to the worker: the page-profile stage begins here, and the few small
+        # requests that remain (the other sets, the order) are made inside it
+        self.stage_begin("page_profiles")
+        for number, (extra, extra_detail) in enumerate(ordered_sets[1:], start=2):
+            joined = api.call("POST", f"/comparison-uploads/{upload_id}/sets/{extra['set_id']}/confirmation",
+                              json={"files": [{"file_id": ids[n]} for n in extra_detail["files"]], "existing_document_uid": document_uid},
+                              expect=200, label=f"confirm_set_{number}", key=True)
+            if joined.get("document_uid") != document_uid:
+                raise ChainStop(f"set {number} did not join the document: state {joined.get('state')}, {joined.get('failure_reason')}")
         orders = api.call("GET", f"/projects/{project_uid}/documents/{document_uid}/comparison-version-orders", expect=200, label="list_orders")
         rows = query("SELECT version_uid, version_ordinal, source_filename, sha256, page_count, byte_size, upload_kind FROM document_version "
                      "WHERE document_uid = :d ORDER BY version_ordinal", d=document_uid)
-        names_by_version = {r[0]: (r[2], r[3], r[4], r[5], r[6]) for r in rows}
-        latest = orders["items"][0] if orders.get("items") else None
+        names_by_version = {r[0]: r[2] for r in rows}
+        version_by_name = {r[2]: r[0] for r in rows}
         self.versions = [r[0] for r in rows]
-        self.outcome["versions"] = {r[0]: r[2] for r in rows}
+        self.outcome["versions"] = dict(names_by_version)
         self.pages_total = sum(int(r[4]) for r in rows)
-        order_names = [names_by_version[v][0] for v in latest["version_uids"]] if latest else None
-        self.outcome["version_order"] = {
-            "revisions": len(orders.get("items") or []), "revision_no": latest and latest["revision_no"],
-            "source": latest and latest["source"], "names": order_names,
-            "equals_intended": order_names == [p.name for p in paths], "document_ordinals": [r[2] for r in rows],
-            "pages_per_version": {names_by_version[r[0]][0]: int(r[4]) for r in rows}, "upload_kind": sorted({r[6] for r in rows}),
+        latest = orders["items"][0] if orders.get("items") else None
+        order_names = [names_by_version[v] for v in latest["version_uids"]] if latest else None
+        record = {
+            "revisions_before": len(orders.get("items") or []), "revision_no": latest and latest["revision_no"], "source": latest and latest["source"],
+            "names": order_names, "equals_intended": order_names == intended_names, "document_ordinals": [r[2] for r in rows],
+            "pages_per_version": {r[2]: int(r[4]) for r in rows}, "upload_kind": sorted({r[6] for r in rows}), "bytes_per_version": {r[2]: int(r[5]) for r in rows},
         }
-        if order_names != [p.name for p in paths]:
-            raise ChainStop(f"the version order {order_names} is not the file order")
-        self.stage_end("admission", upload_id=upload_id, confirmed_at=self.confirmed_at)
-        # what the two upload-reading children cost (read from the sampler: they are children of this process)
+        self.outcome["version_order"] = record
+        if order_names != intended_names:
+            appended = api.call("POST", f"/projects/{project_uid}/documents/{document_uid}/comparison-version-orders",
+                                json={"version_uids": [version_by_name[n] for n in intended_names], "base_revision_no": latest["revision_no"] if latest else 0},
+                                expect=(200, 201), label="append_order", key=True)
+            record["appended"] = {"revision_no": appended.get("revision_no"), "source": appended.get("source")}
+            orders = api.call("GET", f"/projects/{project_uid}/documents/{document_uid}/comparison-version-orders", expect=200, label="list_orders_after")
+            latest = orders["items"][0]
+            order_names = [names_by_version[v] for v in latest["version_uids"]]
+            record.update(names_after=order_names, equals_intended_after=order_names == intended_names, revision_no_after=latest["revision_no"], source_after=latest["source"])
+        if (record.get("names_after") or order_names) != intended_names:
+            raise ChainStop(f"the version order {record.get('names_after') or order_names} is not the file order")
 
     # -- stage 1: page profiles --------------------------------------------------------------------------------------
 
     def stage_profiles(self, api: Api, query: Any) -> None:
-        self.stage_begin("page_profiles")
         project_uid = self.ids["project_uid"]
 
         def finished() -> Any:
@@ -1282,7 +1306,7 @@ def cmd_report(args: argparse.Namespace) -> int:
 
     print("\n## HTTP calls (admission): label, wall s, API VmHWM MiB")
     for call in load_jsonl(results / "calls.jsonl"):
-        if call["label"].startswith(("create_", "part_", "completion_", "get_proposal", "confirm_", "list_orders", "prepare_", "start_", "get_series")) and not call["label"].endswith("poll"):
+        if call["label"].startswith(("create_", "part_", "completion_", "get_proposal", "confirm_", "list_orders", "append_", "prepare_", "start_", "get_series")) and not call["label"].endswith("poll"):
             print(f"| {call['label']} | {call['status']} | {call['wall_s']} | {mib(call['api_hwm_kib'])} | load {call['load1']} |")
 
     print("\n## worker work items by kind (count, wall sum/max s, cpu self sum s, cpu children sum s, worker VmHWM max MiB, VmPeak max MiB)")
