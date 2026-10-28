@@ -24,7 +24,8 @@ A wrong magic, format, number of planes or reserved word, a grid of no pixels, a
 :data:`MAX_BODY_BYTES` once decompressed. **The decompression is bounded**: the decompressor is asked for at most the
 expected length plus one byte, so a hostile or damaged blob that claims a small grid and expands to gigabytes is
 refused after one small allocation, never inflated (an unbounded ``zlib.decompress`` of stored bytes is the failure
-this module exists to avoid).
+this module exists to avoid). **It is streamed**: the body is inflated a piece at a time into one array allocated at the
+expected length, so the process holds the body once, not twice (:func:`_inflate_into`).
 """
 
 from __future__ import annotations
@@ -47,6 +48,8 @@ __all__ = [
     "MAX_BODY_BYTES",
     "MAX_PLANE_PIXELS",
     "MaskFormatError",
+    "IN_CHUNK_BYTES",
+    "OUT_CHUNK_BYTES",
     "body_bytes",
     "decode_mask",
     "encode_mask",
@@ -77,6 +80,10 @@ MAX_PLANE_PIXELS: Final[int] = 40_000_000
 #: pixel wide pads every row to a byte, so its body is eight times the pixel count; such a shape is no canvas.
 MAX_BODY_BYTES: Final[int] = 80_000_000
 COMPRESSION_LEVEL: Final[int] = 6
+#: The decoder inflates one piece of at most this many bytes at a time into the buffer it allocated once, from slices of at
+#: most this many compressed bytes (``CMP-C1-FIX-A`` item 6).
+OUT_CHUNK_BYTES: Final[int] = 1 << 20
+IN_CHUNK_BYTES: Final[int] = 1 << 16
 
 
 class MaskFormatError(ValueError):
@@ -170,14 +177,62 @@ class DecodedMask:
         return numpy.stack([self.plane(index) for index in range(LAYER_COUNT)])
 
 
+def _inflate_into(source: memoryview, expected: int) -> Any:
+    """Inflate the zlib stream ``source`` into a buffer of exactly ``expected`` bytes allocated once, and return it.
+
+    A one-call ``decompress`` builds the body in a growing output buffer and then copies it into the ``bytes`` it returns, so
+    for a moment the 40 MB of a 2A0 mask are held twice (``CMP-VIEWER-01`` section 12 item 3: +75 MiB of resident set,
+    where a streaming reader peaks at +41). Here the decompressor is asked for :data:`OUT_CHUNK_BYTES` at a time from at
+    most :data:`IN_CHUNK_BYTES` of input, each piece is copied into the preallocated array, and the most that is ever held
+    beyond the array is one piece and one slice of the compressed bytes.
+
+    **Bounded**: a piece is never asked for more than one byte beyond what is still expected, so a stream that claims a small
+    grid and expands to gigabytes stops after the one byte that proves it is too long; it is refused, never inflated.
+    ``max_length`` of ``0`` means *no limit* to zlib, so the room is never allowed to reach it."""
+    body: Any = None  # allocated when the first piece proves that the stream produces anything
+    sink: memoryview | None = None
+    decompressor = zlib.decompressobj()
+    filled = position = 0
+    try:
+        while not decompressor.eof:
+            room = expected + 1 - filled  # at least 1: filled > expected is refused below
+            tail = decompressor.unconsumed_tail
+            if tail:
+                chunk = tail
+            elif position < len(source):
+                chunk = source[position : position + IN_CHUNK_BYTES]
+                position += len(chunk)
+            else:
+                break  # the input is spent and the stream did not end
+            piece = decompressor.decompress(chunk, min(room, OUT_CHUNK_BYTES))
+            if filled + len(piece) > expected:
+                raise MaskFormatError("body_length")
+            if piece:
+                if body is None:
+                    body = numpy.empty(expected, dtype=numpy.uint8)
+                    sink = memoryview(body)
+                assert sink is not None
+                sink[filled : filled + len(piece)] = piece
+                filled += len(piece)
+            if not piece and tail and decompressor.unconsumed_tail == tail:
+                raise MaskFormatError("body_corrupt")  # no progress: neither output nor input was taken
+    except zlib.error as failure:
+        raise MaskFormatError("body_corrupt") from failure
+    complete = body is not None and filled == expected and decompressor.eof
+    if not complete or decompressor.unused_data or decompressor.unconsumed_tail or position < len(source):
+        raise MaskFormatError("body_length")
+    body.flags.writeable = False  # what a cache shares is never changed (the one-call decoder returned a read-only view too)
+    return body
+
+
 def decode_mask(data: bytes) -> DecodedMask:
     """Parse and verify a blob; :class:`MaskFormatError` for anything that is not format 1 of the stated size."""
     if not isinstance(data, (bytes, bytearray, memoryview)):
         raise MaskFormatError("not_bytes")
-    data = bytes(data)
-    if len(data) < HEADER_BYTES:
+    view = memoryview(data)
+    if len(view) < HEADER_BYTES:
         raise MaskFormatError("header_short")
-    magic, version, layers, reserved, width_px, height_px = _HEADER.unpack_from(data)
+    magic, version, layers, reserved, width_px, height_px = _HEADER.unpack_from(view)
     if magic != MASK_MAGIC:
         raise MaskFormatError("magic")
     if version != MASK_FORMAT:
@@ -187,14 +242,6 @@ def decode_mask(data: bytes) -> DecodedMask:
     if reserved != 0:
         raise MaskFormatError("reserved")
     _check_grid(width_px, height_px)
-    expected = body_bytes(width_px, height_px)
-    decompressor = zlib.decompressobj()
-    try:
-        # Bounded: never more than one byte beyond what the header allows, whatever the stream says.
-        body = decompressor.decompress(data[HEADER_BYTES:], expected + 1)
-    except zlib.error as failure:
-        raise MaskFormatError("body_corrupt") from failure
-    if len(body) != expected or decompressor.unconsumed_tail or not decompressor.eof or decompressor.unused_data:
-        raise MaskFormatError("body_length")
-    packed = numpy.frombuffer(body, dtype=numpy.uint8).reshape(LAYER_COUNT, height_px, packed_width(width_px))
+    body = _inflate_into(view[HEADER_BYTES:], body_bytes(width_px, height_px))
+    packed = body.reshape(LAYER_COUNT, height_px, packed_width(width_px))
     return DecodedMask(width_px=width_px, height_px=height_px, packed=packed)
