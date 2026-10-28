@@ -66,7 +66,7 @@ def comparison_session(comparison_engine: Engine) -> Iterator[Session]:
 # being uploaded. Run in one process, the directory failed the hosting tests (`CMP-SERIES-01` section 9 item 6). The series
 # directory already ended its own items; this fixture does it for every test of the directory: the work items that are live
 # after a test and were not before it, and the upload batches that are active after it and were not before it, are ended
-# with it.
+# with it. What *other* directories left before the first comparison test is ended once, when the ledger opens.
 
 _DOTENV_NAMES = ("DATABASE_URL",)
 _LIVE_WORK = text("SELECT comparison_work_id FROM comparison_work WHERE terminal_at IS NULL")
@@ -100,6 +100,14 @@ def _work_ledger() -> Iterator[Engine | None]:
             present = connection.execute(
                 text("SELECT to_regclass('public.comparison_work') IS NOT NULL AND to_regclass('public.comparison_upload') IS NOT NULL")
             ).scalar_one()
+        if present:
+            # The directory starts from a database with nothing live. Other directories that ran before it in this process, or
+            # before it in the same database (``tests/integration/ingest`` opens batches and queues ``page_profile`` and
+            # ``series_after_preparation`` items it never runs), leave live work and active batches that no comparison test
+            # created and none can be asked to end; they would refuse a worker's start and the intake of a third batch.
+            for ended, ids in ((end_work, live_work_ids(built)), (end_uploads, active_upload_ids(built))):
+                if ids:
+                    ended(built, ids)
         yield built if present else None
     finally:
         built.dispose()
