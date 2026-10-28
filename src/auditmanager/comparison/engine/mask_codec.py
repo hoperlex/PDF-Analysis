@@ -120,24 +120,32 @@ def encode_mask(planes: Any, *, level: int = COMPRESSION_LEVEL) -> bytes:
 
 
 def encode_packed_planes(packed: Any, width_px: int, height_px: int, *, level: int = COMPRESSION_LEVEL) -> bytes:
-    """The same blob, from planes already packed row by row: a ``uint8`` array ``(8, height_px, ceil(width_px / 8))``.
+    """The same blob, from planes already packed row by row.
 
-    The engine packs a band of rows at a time and never holds the eight planes unpacked (a 40 Mpx page would need
-    320 MB); packing is along the width only, so the packed array is the one :func:`encode_mask` would build. The
-    padding bits of the last byte of a row are cleared here, so the bytes equal the canonical encoding whatever the
-    caller left in them.
-    """
-    array = numpy.asarray(packed)
+    ``packed`` is a ``uint8`` array ``(8, height_px, ceil(width_px / 8))`` or a sequence of eight such planes
+    ``(height_px, ceil(width_px / 8))``. The engine packs a band of rows at a time and never holds the eight planes
+    unpacked (a 40 Mpx page would need 320 MB), and the sequence form lets it compress them one after the other
+    without stacking them into one array (another 40 MB); packing is along the width only, so the bytes
+    decompress to the body :func:`encode_mask` would build. The padding bits of the last byte of a row are cleared
+    here, so the body equals the canonical one whatever the caller left in them (and the caller's arrays are not
+    changed)."""
     width_px, height_px = int(width_px), int(height_px)
-    if array.dtype != numpy.uint8 or array.shape != (LAYER_COUNT, height_px, packed_width(width_px)):
+    planes = [numpy.asarray(plane) for plane in packed]
+    shape = (height_px, packed_width(width_px))
+    if len(planes) != LAYER_COUNT or any(p.dtype != numpy.uint8 or p.shape != shape for p in planes):
         raise MaskFormatError("planes_shape")
     _check_grid(width_px, height_px)
     spare = packed_width(width_px) * 8 - width_px
     keep = numpy.uint8((0xFF << spare) & 0xFF)
-    if spare and (array[:, :, -1] & ~keep).any():
-        array = array.copy()
-        array[:, :, -1] &= keep
-    return _header(width_px, height_px) + zlib.compress(numpy.ascontiguousarray(array).tobytes(), level)
+    compressor = zlib.compressobj(level)
+    parts = [_header(width_px, height_px)]
+    for plane in planes:
+        if spare and (plane[:, -1] & ~keep).any():
+            plane = plane.copy()
+            plane[:, -1] &= keep
+        parts.append(compressor.compress(numpy.ascontiguousarray(plane).data))
+    parts.append(compressor.flush())
+    return b"".join(parts)
 
 
 @dataclass(frozen=True, slots=True)
