@@ -19,7 +19,7 @@ import {
   focusBox,
   zoomAt,
 } from './pyramid';
-import { type DifferenceFilter, stepDifference } from './differences';
+import { type DifferenceFilter, differenceAt, stepDifference } from './differences';
 import type { ComparisonDifference } from '@/shared/api';
 
 export type ViewMode = 'overlay' | 'side';
@@ -29,7 +29,11 @@ export interface ViewerState {
   readonly mode: ViewMode;
   readonly previousMode: ViewMode;
   readonly swipe: boolean;
-  /** Where the swipe divider stands, 0 to 100 (per cent of the window's width). */
+  /**
+   * Where the swipe divider stands, 0 to 100 (per cent of the window's width). The overlay is shown to the right of it and
+   * the lower sheet to the left, so the divider starts at the left edge and dragging it right opens the lower sheet
+   * (`version-comparison-viewer.js:120`: «Тяните вправо — лист B (сверху) скрывается, открывается A»).
+   */
   readonly swipePosition: number;
   readonly under: UnderLayer;
   /** Layers drawn, always in the order of `LAYER_ORDER`. */
@@ -61,6 +65,7 @@ export type ViewerAction =
   | { readonly type: 'pan'; readonly dx: number; readonly dy: number }
   | { readonly type: 'zoom'; readonly factor: number; readonly anchor?: { readonly x: number; readonly y: number } }
   | { readonly type: 'select'; readonly index: number | null }
+  | { readonly type: 'pick'; readonly point: { readonly x: number; readonly y: number } }
   | { readonly type: 'focus-box'; readonly box: { readonly x: number; readonly y: number; readonly width: number; readonly height: number } }
   | { readonly type: 'step'; readonly direction: -1 | 1 };
 
@@ -84,7 +89,7 @@ export function initialState(context: ViewerContext, viewport: Viewport = DEFAUL
     mode,
     previousMode: mode,
     swipe: false,
-    swipePosition: 50,
+    swipePosition: 0,
     under: 'a',
     layers: LAYER_ORDER.filter((layer) => DEFAULT_LAYERS.includes(layer)),
     showBoxes: false,
@@ -164,6 +169,8 @@ export function reduce(state: ViewerState, action: ViewerAction, context: Viewer
     }
     case 'select':
       return focusOn(state, context, action.index);
+    case 'pick':
+      return { ...state, selected: differenceAt(context.differences, filterOf(state), context.dpi, action.point) };
     case 'focus-box':
       return { ...state, selected: null, view: focusBox(boxToSheet(action.box, context.dpi), context.raster, paneOf(state, context)) };
     case 'step':

@@ -16,8 +16,8 @@ import styles from './comparison-viewer.module.css';
 
 export interface PaneLayer {
   readonly sheet: SheetTiles;
-  /** Show only the part of the layer left of this per cent of the pane's width (the swipe); whole when absent. */
-  readonly clipRight?: number;
+  /** Hide the part of the layer left of this per cent of the pane's width (the swipe); whole when absent. */
+  readonly clipLeft?: number;
 }
 
 export interface BoxView {
@@ -72,12 +72,12 @@ export function SheetPane({ label, layers, view, dpi, urlOf, boxes, divider, dra
       {...handlers}
     >
       <span className={styles.paneLabel}>{label}</span>
-      {layers.map(({ sheet, clipRight }) => (
+      {layers.map(({ sheet, clipLeft }) => (
         <div
           key={sheet.kind}
           className={styles.layer}
           data-sheet={sheet.kind}
-          style={clipRight === undefined ? undefined : { clipPath: `inset(0 ${100 - clipRight}% 0 0)` }}
+          style={clipLeft === undefined ? undefined : { clipPath: `inset(0 0 0 ${clipLeft}%)` }}
         >
           {tileImage(sheet.underlay, view, urlOf)}
           {sheet.tiles.map((placed) => tileImage(placed, view, urlOf))}

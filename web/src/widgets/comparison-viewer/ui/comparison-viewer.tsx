@@ -21,6 +21,7 @@ import type { ComparisonSheetPair } from '@/shared/api';
 
 import { canShowOverlay, viewerGeometry } from '../model/geometry';
 import type { RasterSize } from '../model/pyramid';
+import { ZOOM_STEP } from '../model/pyramid';
 import { shownKinds, sheetTiles, wantedRequests } from '../model/requests';
 import { useTileImages } from '../model/use-tile-images';
 import { type ViewerContext, initialState, paneOf, reduce } from '../model/viewer-state';
@@ -38,7 +39,6 @@ export interface ComparisonViewerProps {
 }
 
 const EMPTY_RASTER: RasterSize = { widthPx: 1, heightPx: 1 };
-const WHEEL_STEP = 1.0015;
 
 export function ComparisonViewer({ pair, rasterSize, navigation }: ComparisonViewerProps) {
   const geometry = useMemo(() => viewerGeometry(pair, rasterSize), [pair, rasterSize]);
@@ -61,7 +61,8 @@ export function ComparisonViewer({ pair, rasterSize, navigation }: ComparisonVie
 
   const stage = useRef<HTMLDivElement | null>(null);
   const [dragging, setDragging] = useState(false);
-  const drag = useRef<{ x: number; y: number } | null>(null);
+  const drag = useRef<{ x: number; y: number; startX: number; startY: number; moved: boolean } | null>(null);
+  const latest = useRef({ view: null as null | { zoom: number; offsetX: number; offsetY: number } });
 
   // The window's size: measured once it exists and whenever it changes.
   useEffect(() => {
@@ -78,21 +79,24 @@ export function ComparisonViewer({ pair, rasterSize, navigation }: ComparisonVie
     return () => observer.disconnect();
   }, [geometry]);
 
-  // Ctrl and the wheel zoom about the pointer (`version-comparison-zoom.js`); the listener is not passive because it must
-  // stop the browser zooming the page.
+  // Ctrl or Cmd with the wheel zoom about the pointer; the wheel alone moves the sheet (Shift: sideways) -- the original's
+  // `onWheel` (`version-comparison-zoom.js:103-113`). The listener is not passive because it must stop the page scrolling
+  // and the browser zooming.
   useEffect(() => {
     const element = stage.current;
     if (element === null) return;
     const onWheel = (event: WheelEvent): void => {
-      if (!event.ctrlKey) return;
       event.preventDefault();
-      const box = element.getBoundingClientRect();
-      const pane = element.firstElementChild?.getBoundingClientRect() ?? box;
-      dispatch({
-        type: 'zoom',
-        factor: WHEEL_STEP ** -event.deltaY,
-        anchor: { x: event.clientX - pane.left, y: event.clientY - pane.top },
-      });
+      if (event.ctrlKey || event.metaKey) {
+        const pane = (element.firstElementChild ?? element).getBoundingClientRect();
+        dispatch({
+          type: 'zoom',
+          factor: event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP,
+          anchor: { x: event.clientX - pane.left, y: event.clientY - pane.top },
+        });
+      } else {
+        dispatch({ type: 'pan', dx: -(event.shiftKey ? event.deltaY : event.deltaX), dy: event.shiftKey ? 0 : -event.deltaY });
+      }
     };
     element.addEventListener('wheel', onWheel, { passive: false });
     return () => element.removeEventListener('wheel', onWheel);
@@ -102,18 +106,27 @@ export function ComparisonViewer({ pair, rasterSize, navigation }: ComparisonVie
     onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => {
       if (event.button !== 0) return;
       event.currentTarget.setPointerCapture?.(event.pointerId);
-      drag.current = { x: event.clientX, y: event.clientY };
+      drag.current = { x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, moved: false };
       setDragging(true);
     },
     onPointerMove: (event: ReactPointerEvent<HTMLDivElement>) => {
       const last = drag.current;
       if (last === null) return;
-      drag.current = { x: event.clientX, y: event.clientY };
+      if (Math.hypot(event.clientX - last.startX, event.clientY - last.startY) > 4) last.moved = true;
       dispatch({ type: 'pan', dx: event.clientX - last.x, dy: event.clientY - last.y });
+      last.x = event.clientX;
+      last.y = event.clientY;
     },
-    onPointerUp: () => {
+    // A press that did not move is a click: it picks the change at that place (`pickChangeAt`).
+    onPointerUp: (event: ReactPointerEvent<HTMLDivElement>) => {
+      const last = drag.current;
       drag.current = null;
       setDragging(false);
+      if (last === null || last.moved) return;
+      const rect = event.currentTarget.getBoundingClientRect();
+      const view = latest.current.view;
+      if (view === null) return;
+      dispatch({ type: 'pick', point: { x: (event.clientX - rect.left - view.offsetX) / view.zoom, y: (event.clientY - rect.top - view.offsetY) / view.zoom } });
     },
     onPointerCancel: () => {
       drag.current = null;
@@ -126,6 +139,7 @@ export function ComparisonViewer({ pair, rasterSize, navigation }: ComparisonVie
     },
   };
 
+  latest.current.view = state.view;
   const pane = paneOf(state, context);
   const sheets = useMemo(
     () => (geometry === null ? [] : shownKinds(state, context).map((kind) => sheetTiles(kind, state, geometry.levels, pane))),

@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ComparisonDifference } from '@/shared/api';
-import { countDifferences, shownIndices, stepDifference } from '@/widgets/comparison-viewer/model/differences';
+import { countDifferences, differenceAt, shownIndices, stepDifference } from '@/widgets/comparison-viewer/model/differences';
 import { DEFAULT_LAYERS, LAYER_ORDER } from '@/widgets/comparison-viewer/model/labels';
 import { type ViewerContext, initialState, layersQuery, reduce } from '@/widgets/comparison-viewer/model/viewer-state';
 import { fitView } from '@/widgets/comparison-viewer/model/pyramid';
@@ -36,6 +36,33 @@ describe('«Отличия: N»', () => {
   });
 });
 
+describe('a click on the sheet', () => {
+  it('picks the shown difference under the point, the smallest box where several lie', () => {
+    const scale = 200 / 72;
+    expect(differenceAt(differences, none, 200, { x: 140 * scale, y: 125 * scale })).toBe(0); // inside the text box (100, 120, 80 x 12)
+    expect(differenceAt(differences, none, 200, { x: 415 * scale, y: 515 * scale })).toBe(1);
+    expect(differenceAt(differences, none, 200, { x: 5 * scale, y: 5 * scale })).toBeNull();
+    // a shift is not under the pointer until the list shows it
+    const shift = { x: 320 * scale, y: 305 * scale };
+    expect(differenceAt(differences, none, 200, shift)).toBeNull();
+    expect(differenceAt(differences, { showShifts: true, showStyleOnly: false }, 200, shift)).toBe(3);
+    const nested: ComparisonDifference[] = [
+      { region_class: 'graphic_changed', layer: 'main', box: { x: 0, y: 0, width: 100, height: 100 } },
+      { region_class: 'text', layer: 'main', box: { x: 10, y: 10, width: 5, height: 5 } },
+    ];
+    expect(differenceAt(nested, none, 72, { x: 12, y: 12 })).toBe(1);
+    expect(differenceAt(nested, none, 72, { x: 50, y: 50 })).toBe(0);
+  });
+
+  it('selects it without moving the sheet', () => {
+    const start = initialState(context, { width: 1000, height: 600 });
+    const picked = reduce(start, { type: 'pick', point: { x: 415 * (200 / 72), y: 515 * (200 / 72) } }, context);
+    expect(picked.selected).toBe(1);
+    expect(picked.view).toEqual(start.view);
+    expect(reduce(picked, { type: 'pick', point: { x: 1, y: 1 } }, context).selected).toBeNull();
+  });
+});
+
 describe('the reducer', () => {
   const start = initialState(context, { width: 1000, height: 600 });
 
@@ -43,7 +70,7 @@ describe('the reducer', () => {
     expect(start.mode).toBe('overlay');
     expect(start.layers).toEqual(LAYER_ORDER.filter((layer) => DEFAULT_LAYERS.includes(layer)));
     expect(start.layers).toEqual(['main', 'light_elements', 'color_change', 'line_style', 'service_zones']);
-    expect([start.showBoxes, start.alignBlocks, start.swipe, start.selected]).toEqual([false, false, false, null]);
+    expect([start.showBoxes, start.alignBlocks, start.swipe, start.selected, start.swipePosition]).toEqual([false, false, false, null, 0]);
     expect(start.view).toEqual(fitView(A1, { width: 1000, height: 600 }));
   });
 

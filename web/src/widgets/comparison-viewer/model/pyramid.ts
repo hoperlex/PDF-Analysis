@@ -13,8 +13,13 @@
  */
 
 export const TILE_PX = 512;
-export const MIN_ZOOM_OF_FIT = 0.5;
-export const MAX_ZOOM = 4;
+/** The original's limits (`version-comparison-zoom.js:67`): from a quarter of the fit to sixty-four times it. */
+export const MIN_ZOOM_OF_FIT = 0.25;
+export const MAX_ZOOM_OF_FIT = 64;
+/** One step of the wheel and of the buttons (`version-comparison-zoom.js:107`). */
+export const ZOOM_STEP = 1.15;
+/** The fit leaves a margin of two per cent round the sheet (`version-comparison-zoom.js:37`). */
+const FIT_MARGIN = 0.98;
 const POINTS_PER_INCH = 72;
 
 export interface RasterSize {
@@ -132,7 +137,7 @@ export function placeTile(info: PyramidLevel, column: number, row: number): Plac
 /** The zoom that shows the whole sheet in the window. */
 export function fitZoom(raster: RasterSize, viewport: Viewport): number {
   if (raster.widthPx <= 0 || raster.heightPx <= 0 || viewport.width <= 0 || viewport.height <= 0) return 1;
-  return Math.min(viewport.width / raster.widthPx, viewport.height / raster.heightPx);
+  return Math.min(viewport.width / raster.widthPx, viewport.height / raster.heightPx) * FIT_MARGIN;
 }
 
 export function fitView(raster: RasterSize, viewport: Viewport): View {
@@ -145,7 +150,8 @@ export function fitView(raster: RasterSize, viewport: Viewport): View {
 }
 
 function clampZoom(zoom: number, raster: RasterSize, viewport: Viewport): number {
-  return Math.min(MAX_ZOOM, Math.max(fitZoom(raster, viewport) * MIN_ZOOM_OF_FIT, zoom));
+  const fit = fitZoom(raster, viewport);
+  return Math.min(fit * MAX_ZOOM_OF_FIT, Math.max(fit * MIN_ZOOM_OF_FIT, zoom));
 }
 
 /** Zoom by `factor` keeping the sheet point under `anchor` (window coordinates) where it is. */
@@ -165,7 +171,7 @@ export function zoomAt(
   };
 }
 
-/** A view that shows `box` (in sheet pixels) centred, with room around it, and no closer than `MAX_ZOOM`. */
+/** A view that shows `box` (in sheet pixels) centred, with room around it, and no closer than the zoom limit. */
 export function focusBox(
   box: { readonly left: number; readonly top: number; readonly width: number; readonly height: number },
   raster: RasterSize,

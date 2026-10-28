@@ -75,3 +75,31 @@ export function stepDifference(
   if (at === -1) return direction === 1 ? (indices[0] as number) : (indices[indices.length - 1] as number);
   return indices[(at + direction + indices.length) % indices.length] as number;
 }
+
+/**
+ * The shown difference under a point of the sheet (in sheet pixels), the smallest box when several lie there: a click on
+ * the sheet picks the change at that place (`pickChangeAt`, `version-comparison-viewer.js:528-560`).
+ */
+export function differenceAt(
+  differences: readonly ComparisonDifference[],
+  filter: DifferenceFilter,
+  dpi: number,
+  point: { readonly x: number; readonly y: number },
+): number | null {
+  const scale = dpi / 72;
+  let best: number | null = null;
+  let bestArea = Number.POSITIVE_INFINITY;
+  for (const index of shownIndices(differences, filter)) {
+    const { box } = differences[index] as ComparisonDifference;
+    const left = box.x * scale;
+    const top = box.y * scale;
+    const width = box.width * scale;
+    const height = box.height * scale;
+    if (point.x < left || point.y < top || point.x > left + width || point.y > top + height) continue;
+    if (width * height < bestArea) {
+      best = index;
+      bestArea = width * height;
+    }
+  }
+  return best;
+}

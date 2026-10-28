@@ -164,8 +164,10 @@ describe('the viewer of a compared pair', () => {
     const markup = html(comparedPair(), [{ type: 'swipe', on: true }, { type: 'swipe-position', position: 30 }]);
     expect(markup).toContain('Положение шторки');
     expect(markup).toContain('type="range"');
-    expect(markup).toContain('clip-path:inset(0 70% 0 0)');
+    // the overlay is hidden left of the divider, which opens the lower sheet there (`version-comparison-viewer.js:120`)
+    expect(markup).toContain('clip-path:inset(0 0 0 30%)');
     expect(markup).toContain('left:30%');
+    expect(markup).toContain('Шторка: слева лист A, справа наложение');
     expect(markup.indexOf('data-sheet="a"')).toBeLessThan(markup.indexOf('data-sheet="overlay"'));
     expect(html(comparedPair(), [{ type: 'swipe', on: true }, { type: 'under', under: 'b' }])).toContain('data-sheet="b"');
     expect(html(comparedPair())).not.toContain('type="range"');

@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  MAX_ZOOM, boxToSheet, fitView, fitZoom, focusBox, levelForZoom, placeTile, pyramidLevels, rasterFromCanvas,
+  MAX_ZOOM_OF_FIT, MIN_ZOOM_OF_FIT, boxToSheet, fitView, fitZoom, focusBox, levelForZoom, placeTile, pyramidLevels, rasterFromCanvas,
   visibleTiles, zoomAt,
 } from '@/widgets/comparison-viewer/model/pyramid';
 
@@ -43,7 +43,7 @@ describe('the view', () => {
 
   it('fits the whole sheet, centred', () => {
     const view = fitView(A1, viewport);
-    expect(view.zoom).toBeCloseTo(Math.min(1000 / 6623, 600 / 4678), 9);
+    expect(view.zoom).toBeCloseTo(Math.min(1000 / 6623, 600 / 4678) * 0.98, 9);
     expect(view.offsetX + (A1.widthPx * view.zoom) / 2).toBeCloseTo(500, 6);
     expect(view.offsetY + (A1.heightPx * view.zoom) / 2).toBeCloseTo(300, 6);
     expect(fitZoom(A1, { width: 0, height: 0 })).toBe(1);
@@ -83,10 +83,11 @@ describe('the view', () => {
     expect((anchor.y - zoomed.offsetY) / zoomed.zoom).toBeCloseTo(sheetPoint.y, 6);
   });
 
-  it('never zooms in past 400 % nor out past half the fit', () => {
+  it('keeps the original\'s limits: a quarter of the fit to sixty-four times it', () => {
     const view = fitView(A1, viewport);
-    expect(zoomAt(view, 1e6, { x: 0, y: 0 }, A1, viewport).zoom).toBe(MAX_ZOOM);
-    expect(zoomAt(view, 1e-6, { x: 0, y: 0 }, A1, viewport).zoom).toBeCloseTo(view.zoom / 2, 9);
+    expect(zoomAt(view, 1e6, { x: 0, y: 0 }, A1, viewport).zoom).toBeCloseTo(view.zoom * MAX_ZOOM_OF_FIT, 9);
+    expect(zoomAt(view, 1e-6, { x: 0, y: 0 }, A1, viewport).zoom).toBeCloseTo(view.zoom * MIN_ZOOM_OF_FIT, 9);
+    expect([MIN_ZOOM_OF_FIT, MAX_ZOOM_OF_FIT]).toEqual([0.25, 64]);
   });
 
   it('shows a box centred, close, and no closer than the limit', () => {
@@ -94,7 +95,7 @@ describe('the view', () => {
     expect(box).toEqual({ left: 2777.7777777777778, top: 1944.4444444444443, width: 222.22222222222223, height: 33.33333333333333 });
     const view = focusBox(box, A1, viewport);
     expect(view.zoom).toBeGreaterThan(fitZoom(A1, viewport));
-    expect(view.zoom).toBeLessThanOrEqual(MAX_ZOOM);
+    expect(view.zoom).toBeLessThanOrEqual(fitZoom(A1, viewport) * MAX_ZOOM_OF_FIT);
     expect(view.offsetX + (box.left + box.width / 2) * view.zoom).toBeCloseTo(500, 6);
     expect(view.offsetY + (box.top + box.height / 2) * view.zoom).toBeCloseTo(300, 6);
     const huge = focusBox({ left: 0, top: 0, width: A1.widthPx, height: A1.heightPx }, A1, viewport);

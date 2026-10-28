@@ -128,10 +128,10 @@ export function ComparisonViewerView({
         ? kinds.map((kind) => paneFor(kind === 'a' ? 'Лист A' : 'Лист B', [{ sheet: sheets.get(kind) as SheetTiles }]))
         : [
             paneFor(
-              state.swipe ? `Наложение и лист ${state.under === 'a' ? 'A' : 'B'}` : 'Наложение',
+              state.swipe ? `Шторка: слева лист ${state.under === 'a' ? 'A' : 'B'}, справа наложение` : 'Наложение',
               kinds.map((kind) => ({
                 sheet: sheets.get(kind) as SheetTiles,
-                ...(state.swipe && kind === 'overlay' ? { clipRight: state.swipePosition } : {}),
+                ...(state.swipe && kind === 'overlay' ? { clipLeft: state.swipePosition } : {}),
               })),
               state.swipe ? state.swipePosition : undefined,
             ),
@@ -148,7 +148,7 @@ export function ComparisonViewerView({
             <button type="button" aria-pressed={state.mode === 'side'}
               className={`am-button am-button--quiet am-button--small ${styles.modeButton} ${state.mode === 'side' ? styles.modeButtonOn : ''}`.trim()}
               onClick={() => dispatch({ type: 'mode', mode: 'side' })}>Рядом</button>
-            <Choice checked={state.swipe} disabled={state.mode === 'side'} title={state.mode === 'side' ? 'Шторка работает только в наложении' : undefined}
+            <Choice checked={state.swipe} disabled={state.mode === 'side'} title={state.mode === 'side' ? 'Шторка работает только в наложении' : 'Ползунок под листом: тяните вправо — верхний лист скрывается, открывается нижний'}
               onChange={(on) => dispatch({ type: 'swipe', on })}>шторка</Choice>
             {state.swipe ? (
               <>
@@ -203,7 +203,7 @@ export function ComparisonViewerView({
         ) : null}
         {state.swipe && state.mode === 'overlay' ? (
           <div className={styles.swipe}>
-            <label htmlFor="comparison-viewer-swipe">Положение шторки</label>
+            <label htmlFor="comparison-viewer-swipe">Положение шторки: тяните вправо — верхний лист скрывается, открывается нижний</label>
             <input id="comparison-viewer-swipe" className={styles.slider} type="range" min={0} max={100} value={state.swipePosition}
               onChange={(event) => dispatch({ type: 'swipe-position', position: Number(event.target.value) })} />
           </div>
