@@ -1,0 +1,175 @@
+/*
+ * The upload dialogs of «Сравнение версий» (`CMP-VC-UI-01`). Layout only: no rule here sets a colour that a global class
+ * does not already carry, so both palettes reach it unchanged, and a colour-bearing rule added later joins the contrast
+ * census through its `import.meta.glob`, which then needs a rendered screen reaching it.
+ *
+ * A file name is the reader's text and can be of any length, so every cell that shows one wraps it.
+ */
+
+.dialog {
+  display: grid;
+  gap: var(--am-gap-sm);
+  min-width: 0;
+  max-width: 100%;
+  padding: var(--am-gap);
+  border: 1px solid var(--am-accent);
+  border-radius: var(--am-radius);
+  background: var(--am-surface);
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--am-gap-xs) var(--am-gap);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--am-text-lg);
+}
+
+.note {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.errorText {
+  display: block;
+  color: var(--am-failed);
+  font-size: var(--am-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.warning {
+  margin: 0;
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border: 1px solid var(--am-degraded);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-degraded-light);
+  color: var(--am-degraded);
+  font-size: var(--am-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.hiddenInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+}
+
+.pickers,
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-sm);
+  align-items: center;
+  margin: 0;
+}
+
+.pick {
+  position: relative;
+  cursor: pointer;
+}
+
+.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--am-gap-xs);
+}
+
+.status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--am-gap-xs) var(--am-gap);
+  margin: 0;
+}
+
+.progress {
+  display: block;
+  width: 100%;
+  max-width: 10rem;
+  height: 0.5rem;
+}
+
+.scroller {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--am-text-sm);
+}
+
+.table th,
+.table td {
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border-bottom: 1px solid var(--am-line-soft);
+  text-align: left;
+  vertical-align: top;
+}
+
+.fileName {
+  overflow-wrap: anywhere;
+}
+
+.sets {
+  display: grid;
+  gap: var(--am-gap);
+}
+
+.set {
+  display: grid;
+  gap: var(--am-gap-xs);
+  padding: var(--am-gap-sm);
+  border: 1px solid var(--am-line-strong);
+  border-radius: var(--am-radius);
+  min-width: 0;
+}
+
+.setHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap);
+}
+
+.fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--am-gap-xs);
+  font-size: var(--am-text-sm);
+}
+
+.unfinished {
+  padding: var(--am-gap-sm);
+  border: 1px solid var(--am-line-strong);
+  border-radius: var(--am-radius-sm);
+}
+
+.list {
+  margin: var(--am-gap-xs) 0 0;
+  padding-left: 1.2rem;
+}

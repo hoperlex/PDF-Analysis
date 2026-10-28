@@ -670,6 +670,8 @@ describe('every screen address is built once and matches a route file on disk', 
       // `W55A-WEB-NORMS`: the search's own address, and a document as a result's title links it.
       norms: routes.norms(),
       normDocument: routes.normDocument(NORM_DOCUMENT_ID),
+      // `CMP-VC-UI-01`: the menu item «Сравнение версий», drawn by the frame for a session that may open it.
+      versionComparison: routes.versionComparison(),
     };
     // The names are checked against the module rather than trusted, so a builder added
     // without a line here is red rather than silently unlinked.

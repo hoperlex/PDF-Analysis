@@ -40,6 +40,13 @@ import { VersionComparison } from '@/widgets/version-comparison';
 
 import { LazyStageComparison } from './lazy-stage-comparison';
 
+/**
+ * The heading of this screen. It read «Сравнение версий» before `CMP-VC-UI-01`; that is now the name of a menu item and of
+ * the module that compares the versions of a whole document set, so this screen — one version against another, and two
+ * runs of it — is called what it shows (heading only; the stage module is wave C3).
+ */
+export const VERSION_SCREEN_TITLE = 'Сравнение этой версии и её прогонов';
+
 export interface StageComparisonPageProps {
   readonly projectUid: string;
   readonly versionUid: string;
@@ -51,7 +58,7 @@ export function StageComparisonPage({ projectUid, versionUid }: StageComparisonP
   if (!wellFormed) {
     return (
       <PageShell
-        title="Сравнение версий"
+        title={VERSION_SCREEN_TITLE}
         actions={<Link href={routes.projects()}>Все проекты</Link>}
       >
         <UnsupportedState
@@ -64,7 +71,7 @@ export function StageComparisonPage({ projectUid, versionUid }: StageComparisonP
 
   return (
     <PageShell
-      title="Сравнение версий"
+      title={VERSION_SCREEN_TITLE}
       subtitle={<code>{versionUid}</code>}
       actions={
         <>

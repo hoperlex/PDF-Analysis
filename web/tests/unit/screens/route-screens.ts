@@ -114,6 +114,7 @@ import { RunPage } from '@/_pages/run';
 import { SectionOptimisationPage } from '@/_pages/section-optimisation';
 import { SignInPage } from '@/_pages/sign-in';
 import { StageComparisonPage } from '@/_pages/stage-comparison';
+import { VersionComparePage } from '@/_pages/version-compare';
 import { VersionDetailPage } from '@/_pages/version-detail';
 import { WorkersPage } from '@/_pages/workers';
 
@@ -496,6 +497,17 @@ export const SEEDS: readonly Seed[] = [
     address: '/section-optimisation',
     name: 'section-optimisation',
     make: () => createElement(SectionOptimisationPage, {}),
+    discipline: {},
+  },
+  {
+    /*
+     * `CMP-VC-UI-01`: «Сравнение версий», cold. The caches the contrast census and the language guard seed for it (a project,
+     * its overview, its matrix, its series) are in `tests/unit/styles/screens.ts`; a cold pass reaches the project chooser and
+     * the loading states, which is what `screen-set` asks of every address.
+     */
+    address: '/version-comparison',
+    name: 'version-compare',
+    make: () => createElement(VersionComparePage, {}),
     discipline: {},
   },
   {

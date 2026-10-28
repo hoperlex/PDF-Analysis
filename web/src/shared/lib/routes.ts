@@ -40,6 +40,9 @@ export const routes = {
   /** Durable execution queue. */
   queue: (): string => '/queue',
 
+  /** «Сравнение версий»: the projects and steps of the version comparison, and the sheet matrix (`CMP-VC-UI-01`). */
+  versionComparison: (): string => '/version-comparison',
+
   /** The worker registry, «Исполнители» (`W54-WORKERS-WEB`). */
   workers: (): string => '/workers',
 

@@ -28,11 +28,20 @@
  * confirmed at stage П and the newer at stage Р with one section; otherwise the ordinary
  * comparison is asked and, for a П/Р pair, refused with a reason that names the switch.
  *
+ * **A-12, `CMP-VC-UI-01`: one truth for the sheet pairs of versions.** While `ProductVersion.comparison_modules` names the
+ * versions module, the effective matrix of «Сравнение версий» is the only store of sheet pairs (ADR-0025 decisions 3 and 13) and
+ * the server refuses the three controls below (`approveSheetPairing`, `withdrawSheetPairing`, `generateComparisonSummary`)
+ * with `dependency_unavailable` / `comparison_versions_module`. The screen does not offer what it knows will be refused: it
+ * draws no «Подтвердить пару», no «Отозвать» and no «Подготовить сводку», keeps the stored approvals and the stored summary
+ * readable, and points to «Сравнение версий». While the module set is not known (not read yet, or the read failed) the controls
+ * are offered as before: the server's answer is still typed.
+ *
  * The machine vocabulary stays in `data-` attributes (`data-comparison-outcome`,
  * `data-comparison-refusal`, `data-sheet-status`, `data-proposal-kind`); a reviewer reads
  * Russian.
  */
 
+import Link from 'next/link';
 import { useState } from 'react';
 
 import type {
@@ -51,7 +60,7 @@ import type {
   VersionUid,
 } from '@/shared/api';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
-import { classifyListingFailure } from '@/shared/lib';
+import { classifyListingFailure, routes } from '@/shared/lib';
 import { useMe } from '@/entities/account';
 import { CATEGORY_LABELS } from '@/entities/expert-decision';
 import {
@@ -74,6 +83,7 @@ import {
 } from '@/entities/document-version';
 import {
   ComparisonSummarySection,
+  ComparisonSummaryView,
   EVIDENCE_STATE_TEXT,
   LINK_STATE_TEXT,
   SheetPairingControls,
@@ -81,6 +91,8 @@ import {
   canApproveSheetPairing,
   isApprovablePair,
 } from '@/entities/version-comparison';
+import { useProductVersion } from '@/entities/release';
+import { versionsModuleOn } from '@/entities/version-series';
 import { CarriedDecisionNote, CarryOverDecision } from '@/features/carry-over-decision';
 
 import styles from './version-comparison.module.css';
@@ -129,6 +141,9 @@ function SetComparison({
   const me = useMe();
   const mayCarry = me.data !== undefined && canCarryOverDecision(me.data.roles);
   const mayApprove = me.data !== undefined && canApproveSheetPairing(me.data.roles);
+  const product = useProductVersion(true);
+  // Known to name the versions module: the three `0035` controls are not offered.
+  const handedOver = product.data !== undefined && versionsModuleOn(product.data.comparison_modules);
   const [chosenUid, setChosenUid] = useState<string | null>(null);
   const [stageMode, setStageMode] = useState(false);
   const [diffOffset, setDiffOffset] = useState(0);
@@ -229,6 +244,7 @@ function SetComparison({
           onPage={setDiffOffset}
           carry={mayCarry ? { projectUid, documentUid: current.document_uid } : null}
           mayApprove={mayApprove}
+          handedOver={handedOver}
           carried={carried}
           onCarried={(answer) => setCarried((held) => ({ ...held, [answer.event.finding_uid]: answer }))}
         />
@@ -264,6 +280,7 @@ export function ComparisonResult({
   carried = {},
   onCarried,
   mayApprove = false,
+  handedOver = false,
 }: {
   readonly comparison: Comparison;
   readonly onPage: (offset: number) => void;
@@ -272,6 +289,8 @@ export function ComparisonResult({
   readonly onCarried?: (answer: CarryOverDecisionResponse) => void;
   /** Whether to draw the buttons that approve, withdraw and summarise (`expert` only). */
   readonly mayApprove?: boolean;
+  /** The versions module is on (A-12): the approve, withdraw and summary controls are not offered. */
+  readonly handedOver?: boolean;
 }) {
   if (comparison.outcome === 'refused' || comparison.refusal !== null) {
     return (
@@ -300,23 +319,44 @@ export function ComparisonResult({
         эксперт не подтвердил пару, они ничего не утверждают и не меняют. Построчные различия
         показаны так, как их дал детерминированный текст, без участия ИИ.
       </p>
-      <SheetTable sheets={comparison.sheets} comparison={comparison} mayDecide={mayApprove} />
+      {handedOver ? <HandedOverNote /> : null}
+      <SheetTable
+        sheets={comparison.sheets}
+        comparison={comparison}
+        mayDecide={mayApprove && !handedOver}
+        handedOver={handedOver}
+      />
       {comparison.approved_pairs === null || comparison.approved_pairs === undefined ? null : (
         <>
           <ApprovedPairs approved={comparison.approved_pairs} />
-          <ComparisonSummarySection
-            approved={comparison.approved_pairs}
-            mayDecide={mayApprove}
-            view={{
-              projectUid: comparison.project_uid,
-              documentUid: comparison.document_uid,
-              sourceVersionUid: comparison.source_version_uid,
-              targetVersionUid: comparison.target_version_uid,
-              mode: comparison.mode,
-              sourceRunId: comparison.source?.run_id ?? null,
-              targetRunId: comparison.target?.run_id ?? null,
-            }}
-          />
+          {handedOver ? (
+            comparison.approved_pairs.summary === null || comparison.approved_pairs.summary === undefined ? null : (
+              <ComparisonSummaryView
+                approved={comparison.approved_pairs}
+                mayDecide={false}
+                confirming={false}
+                pending={false}
+                failure={null}
+                onOpen={() => {}}
+                onConfirm={() => {}}
+                onCancel={() => {}}
+              />
+            )
+          ) : (
+            <ComparisonSummarySection
+              approved={comparison.approved_pairs}
+              mayDecide={mayApprove}
+              view={{
+                projectUid: comparison.project_uid,
+                documentUid: comparison.document_uid,
+                sourceVersionUid: comparison.source_version_uid,
+                targetVersionUid: comparison.target_version_uid,
+                mode: comparison.mode,
+                sourceRunId: comparison.source?.run_id ?? null,
+                targetRunId: comparison.target?.run_id ?? null,
+              }}
+            />
+          )}
         </>
       )}
       {comparison.sheet_diffs === null ? null : (
@@ -339,14 +379,41 @@ function pageText(number: number | null): string {
   return number === null ? '—' : `лист ${number}`;
 }
 
+/**
+ * Where the approval of a sheet pair moved (A-12): the sentence that replaces the three controls, with the link to the
+ * screen that now holds them.
+ */
+export const HANDED_OVER_NOTE =
+  'Подтверждение пар листов и сводка по подтверждённым парам перенесены в раздел «Сравнение версий»: теперь у пар листов один источник — матрица сопоставления. Здесь они только показаны.';
+
+/** An approval of the `0035` record, shown and not changeable here (A-12). */
+function ReadOnlyApproval({ approval }: { readonly approval: ApprovedSheetPair | null }) {
+  if (approval === null) return <span>—</span>;
+  return (
+    <span className="am-note" data-pairing-state="approved-read-only" data-sheet-link={approval.sheet_link_id}>
+      Пара подтверждена: {approval.approved_by_label}. {LINK_STATE_TEXT[approval.state]}
+    </span>
+  );
+}
+
+function HandedOverNote() {
+  return (
+    <p className={styles.note} role="note" data-comparison-handed-over="">
+      {HANDED_OVER_NOTE} <Link href={routes.versionComparison()}>Открыть «Сравнение версий»</Link>.
+    </p>
+  );
+}
+
 function SheetTable({
   sheets,
   comparison,
   mayDecide,
+  handedOver,
 }: {
   readonly sheets: readonly SheetPairing[];
   readonly comparison: Comparison;
   readonly mayDecide: boolean;
+  readonly handedOver: boolean;
 }) {
   const approved = comparison.approved_pairs ?? null;
   const view = {
@@ -390,7 +457,9 @@ function SheetTable({
                 <td>{SHEET_STATUS_LABELS[sheet.status]}</td>
                 <td>{pairingBasisText(sheet)}</td>
                 <td>
-                  {isApprovablePair(sheet) ? (
+                  {handedOver ? (
+                    <ReadOnlyApproval approval={approvalOf(approved, sheet)} />
+                  ) : isApprovablePair(sheet) ? (
                     <SheetPairingControls
                       sheet={sheet}
                       approval={approvalOf(approved, sheet)}

@@ -6,6 +6,7 @@ import {
 import type { RunWorker } from '@/entities/execution';
 import { EmptyState, ErrorState } from '@/shared/ui';
 
+import { ComparisonQueueSlot } from './comparison-queue-block';
 import styles from './execution-queue.module.css';
 
 export interface ExecutionQueueProps {
@@ -25,7 +26,20 @@ export interface ExecutionQueueProps {
   readonly onPrevious: (() => void) | null;
 }
 
-export function ExecutionQueue({
+/**
+ * The queue of runs, and under it the read-only block «Сравнение» (`CMP-VC-UI-01`). The block is one component with its own
+ * query, so it appears wherever the queue is drawn inside a query provider and nowhere else.
+ */
+export function ExecutionQueue(props: ExecutionQueueProps) {
+  return (
+    <>
+      <RunQueue {...props} />
+      <ComparisonQueueSlot />
+    </>
+  );
+}
+
+function RunQueue({
   items, roles, asOf, busy, workerOf, onCancel, onReaudit, onPriority, onNext, onPrevious,
 }: ExecutionQueueProps) {
   if (items.some((item) => jobStateLabel(item.state) === null)) {

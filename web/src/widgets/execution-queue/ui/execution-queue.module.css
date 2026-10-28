@@ -50,3 +50,54 @@
   max-width: 100%;
   margin-left: 0.35rem;
 }
+
+/* The read-only block «Сравнение» under the list (`CMP-VC-UI-01`): layout only, every colour from the global classes. */
+.comparison {
+  display: grid;
+  gap: var(--am-gap-xs);
+  margin-top: var(--am-gap);
+  padding: 1rem;
+  border: 1px solid var(--am-line);
+  border-radius: 0.5rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.comparisonTitle {
+  margin: 0;
+  font-size: var(--am-text-lg);
+}
+
+.comparisonNote {
+  margin: 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.comparisonCounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-xs) var(--am-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.comparisonScroller {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.comparisonTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--am-text-sm);
+}
+
+.comparisonTable th,
+.comparisonTable td {
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border-bottom: 1px solid var(--am-line-soft);
+  text-align: left;
+}
