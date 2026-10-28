@@ -312,9 +312,18 @@ def test_a_stream_cut_off_inside_a_piece_or_followed_by_a_second_stream_is_refus
             decode_mask(good[:cut])
     with pytest.raises(MaskFormatError, match="body_length"):
         decode_mask(good + zlib.compress(b"more"))
-    # trailing bytes that never reach the decompressor (whole slices past the end of the stream) are refused as well
+
+
+def test_a_byte_after_a_stream_that_ends_exactly_where_a_slice_ends_is_refused() -> None:
+    """The byte is in a slice the decompressor never sees (its `unused_data` is empty), so the position of the reader is what
+    refuses it. A stored (level 0) stream of 589 768 bytes is 9 slices of 64 KiB to the byte (found by search)."""
+    width, height = 8, 73721
+    stream = zlib.compress(bytes(mask_codec.body_bytes(width, height)), 0)
+    assert len(stream) % mask_codec.IN_CHUNK_BYTES == 0, "the constants moved: search a grid again"
+    header = struct.pack("<4sBBHII", b"AMCM", 1, 8, 0, width, height)
+    assert decode_mask(header + stream).packed.nbytes == mask_codec.body_bytes(width, height)
     with pytest.raises(MaskFormatError, match="body_length"):
-        decode_mask(good + bytes(3 * mask_codec.IN_CHUNK_BYTES))
+        decode_mask(header + stream + b"x")
 
 
 def test_a_blob_that_claims_a_large_grid_and_holds_nothing_allocates_nothing_large() -> None:
