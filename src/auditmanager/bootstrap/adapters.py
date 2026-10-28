@@ -16,6 +16,7 @@ shares one engine and the composition root remains the only thing that reads con
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict
 from datetime import datetime, timezone
@@ -377,17 +378,27 @@ class ReleasesAdapter:
     """Transport views over the release context's immutable history and account mark."""
 
     def __init__(
-        self, repository: ReleaseRepository, *, product_version: str, build_id: str
+        self,
+        repository: ReleaseRepository,
+        *,
+        product_version: str,
+        build_id: str,
+        comparison_modules: str = "none",
     ) -> None:
         self._repository = repository
         self._product_version = product_version
         self._build_id = build_id
+        # `CMP-SEAL-C0` (ADR-0025 decision 23): the module set the composition root parsed from
+        # ``AUDITMANAGER_COMPARISON_MODULES``. ``none`` is the sealed default; a value outside the
+        # contract's enum is refused here by the model, never carried.
+        self._comparison_modules = models.ComparisonModules(comparison_modules)
 
     def get_product_version(self) -> ProductVersion:
         return ProductVersion(
             product_version=self._product_version,
             build_id=self._build_id,
             contract_version=CONTRACT_VERSION,
+            comparison_modules=self._comparison_modules,
         )
 
     def list_releases(self, *, user_uid: str) -> ReleaseList:
@@ -480,6 +491,7 @@ def _version_view(record: Any) -> DocumentVersionView:
         display_title=record.display_title,
         section=record.section,
         classification=_classification_view(record.classification),
+        upload_kind=record.upload_kind,
         input_manifest=tuple(
             ManifestEntryView(
                 role=e.role,
@@ -5260,3 +5272,412 @@ def _pull_channel_facts(session: Session, connection_id: str) -> dict[str, Any]:
         ],
         "open_task_count": open_task_count(session, connection_id),
     }
+
+
+# --- comparison modules (`CMP-SEAL-C0`, ADR-0025 decision 25) ----------------------------
+#
+# The shipped adapters of the three comparison ports are stubs: each operation refuses with
+# ``503 dependency_unavailable`` until the lane that owns it replaces the body (plan section 4.0
+# rule 1). Nothing is read or written. The ``dependency`` detail is a stable class name only.
+
+
+def _comparison_unavailable(dependency: str) -> Any:
+    raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency=dependency)
+
+
+def _unset_none(**fields: Any) -> dict[str, Any]:
+    """The fields that have a value. An optional property that is absent is **omitted** from the answer (the
+    models are dumped with ``exclude_unset``), never sent as ``null``."""
+    return {name: value for name, value in fields.items() if value is not None}
+
+
+def _enum_text(value: Any) -> str | None:
+    return None if value is None else str(getattr(value, "value", value))
+
+
+def _comparison_actor(session: Session, user_uid: str) -> tuple[str, frozenset[str]]:
+    """The actor's display label and roles, read in the transaction that is about to act."""
+    from auditmanager.access.public import AccountRepository
+
+    accounts = AccountRepository()
+    account = accounts.get_account(session, user_uid)
+    if account is None:  # pragma: no cover - a credential names an account that exists
+        raise DomainError(ErrorCode.INTERNAL_ERROR, message="the actor has no account")
+    return account.record.display_label, frozenset(accounts.roles_of(session, user_uid))
+
+
+def _comparison_file(view: Any) -> models.ComparisonUploadFile:
+    return models.ComparisonUploadFile(
+        file_id=view.file_id,
+        display_name=view.display_name,
+        size_bytes=view.size_bytes,
+        sha256=view.sha256,
+        state=models.ComparisonUploadFileState(view.state),
+        parts_staged=view.parts_staged,
+        **_unset_none(set_id=view.set_id, failure_reason=view.failure_reason),
+    )
+
+
+def _comparison_upload(view: Any) -> models.ComparisonUpload:
+    return models.ComparisonUpload(
+        upload_id=view.upload_id,
+        project_uid=view.project_uid,
+        state=models.ComparisonUploadState(view.state),
+        part_size_bytes=view.part_size_bytes,
+        declared_files=view.declared_files,
+        declared_bytes=view.declared_bytes,
+        created_at=view.created_at,
+        updated_at=view.updated_at,
+        **({} if view.files is None else {"files": [_comparison_file(item) for item in view.files]}),
+    )
+
+
+def _comparison_set(view: Any) -> models.ComparisonProposalSet:
+    return models.ComparisonProposalSet(
+        set_id=view.set_id,
+        state=models.ComparisonUploadSetState(view.state),
+        files=[
+            models.ComparisonProposalFile(
+                file_id=item.file_id, position=item.position, version_label=item.version_label
+            )
+            for item in view.files
+        ],
+        warnings=[models.ComparisonProposalWarning(name) for name in view.warnings],
+        **_unset_none(
+            designation=view.designation,
+            existing_document_uid=view.existing_document_uid,
+            project_stage=view.project_stage,
+            section_code=view.section_code,
+            failure_reason=view.failure_reason,
+            document_uid=view.document_uid,
+        ),
+    )
+
+
+class ComparisonUploadAdapter(_SessionHolder):
+    """`CMP-INGEST-01` serves ``createComparisonUpload``, ``getComparisonUpload``, ``getComparisonUploadProposal``,
+    ``uploadComparisonUploadPart``, ``completeComparisonUploadFile`` and ``confirmComparisonUploadSet`` over
+    :class:`~auditmanager.ingest.comparison_pdf.public.ComparisonUploadService`; `CMP-INGEST-02` serves the other six
+    (list, exclude, retry, pause, resume, cancel) over
+    :class:`~auditmanager.ingest.comparison_batch.public.ComparisonBatchService`, and its two hooks run here, in a
+    second idempotent transaction after the declaration and after a confirmation (a failed hook is repaired by the
+    client's retry under the same key, which replays the first transaction and runs the hook again).
+
+    The adapter owns the mapping to the contract's models and two reads the services do not make themselves: the
+    actor's display label (a batch records who started it) and the actor's roles (an expert's act is checked
+    again in the transaction that acts, ADR-0025 decision 16)."""
+
+    def __init__(self, session_factory: sessionmaker[Session], *, service: Any, batches: Any) -> None:
+        super().__init__(session_factory)
+        self._service = service
+        self._batches = batches
+
+    def create_upload(
+        self, *, project_uid: str, files: Sequence[models.ComparisonUploadFileDeclaration], user_uid: str, idempotency_key: str
+    ) -> models.ComparisonUpload:
+        from auditmanager.ingest.comparison_pdf.public import DeclaredFileRequest
+
+        label, _roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        view = self._service.create_upload(
+            project_uid=project_uid,
+            files=[
+                DeclaredFileRequest(
+                    display_name=item.display_name, size_bytes=item.size_bytes, sha256=item.sha256,
+                    page_count=item.page_count,
+                )
+                for item in files
+            ],
+            user_uid=user_uid, actor_label=label, idempotency_key=idempotency_key,
+        )
+        self._batches.after_declaration(upload_id=view.upload_id)
+        return _comparison_upload(view)
+
+    def get_upload(self, *, upload_id: str) -> models.ComparisonUpload:
+        return _comparison_upload(self._service.get_upload(upload_id=upload_id))
+
+    def get_proposal(self, *, upload_id: str) -> models.ComparisonUploadProposal:
+        view = self._service.get_proposal(upload_id=upload_id)
+        return models.ComparisonUploadProposal(
+            upload_id=view.upload_id,
+            state=models.ComparisonUploadState(view.state),
+            sets=[_comparison_set(item) for item in view.sets],
+        )
+
+    def put_part(
+        self, *, upload_id: str, file_id: str, part_number: int, content: bytes, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonUploadPartReceipt:
+        receipt = self._service.put_part(
+            upload_id=upload_id, file_id=file_id, part_number=part_number, content=content,
+            user_uid=user_uid, idempotency_key=idempotency_key,
+        )
+        return models.ComparisonUploadPartReceipt(
+            file_id=receipt.file_id, part_number=receipt.part_number, size_bytes=receipt.size_bytes,
+            sha256=receipt.sha256,
+        )
+
+    def complete_file(
+        self, *, upload_id: str, file_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonUploadFile:
+        return _comparison_file(
+            self._service.complete_file(
+                upload_id=upload_id, file_id=file_id, user_uid=user_uid, idempotency_key=idempotency_key
+            )
+        )
+
+    def confirm_set(
+        self, *, upload_id: str, set_id: str, request: models.ConfirmComparisonUploadSetRequest, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonProposalSet:
+        from auditmanager.ingest.comparison_pdf.public import ConfirmedFile
+
+        _label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        view = self._service.confirm_set(
+            upload_id=upload_id,
+            set_id=set_id,
+            files=[ConfirmedFile(item.file_id, item.version_label) for item in request.files],
+            designation=request.designation,
+            existing_document_uid=request.existing_document_uid,
+            project_stage=_enum_text(request.project_stage),
+            section_code=_enum_text(request.section_code),
+            user_uid=user_uid,
+            actor_roles=roles,
+            idempotency_key=idempotency_key,
+        )
+        self._batches.after_confirmation(upload_id=upload_id, set_id=set_id)
+        return _comparison_set(view)
+
+    # -- `CMP-INGEST-02`: the batch operations -----------------------------------------------------
+
+    def cancel_upload(
+        self, *, upload_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonUpload:
+        _label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        return _comparison_upload(
+            self._batches.cancel_upload(
+                upload_id=upload_id, user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key
+            )
+        )
+
+    def exclude_set(
+        self, *, upload_id: str, set_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonProposalSet:
+        _label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        return _comparison_set(
+            self._batches.exclude_set(
+                upload_id=upload_id, set_id=set_id, user_uid=user_uid, actor_roles=roles,
+                idempotency_key=idempotency_key,
+            )
+        )
+
+    def list_uploads(
+        self, *, project_uid: str, cursor: str | None, limit: int
+    ) -> models.ComparisonUploadPage:
+        page = self._batches.list_uploads(
+            project_uid=project_uid, after=_upload_cursor(cursor), limit=limit
+        )
+        return models.ComparisonUploadPage(
+            items=[_comparison_upload(item) for item in page.items],
+            page=models.PageInfo(
+                next_cursor=None if page.next_after is None
+                else encode_cursor((page.next_after[0].isoformat(), page.next_after[1]))
+            ),
+        )
+
+    def pause_upload(
+        self, *, upload_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonUpload:
+        _label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        return _comparison_upload(
+            self._batches.pause_upload(
+                upload_id=upload_id, user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key
+            )
+        )
+
+    def resume_upload(
+        self, *, upload_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonUpload:
+        _label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        return _comparison_upload(
+            self._batches.resume_upload(
+                upload_id=upload_id, user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key
+            )
+        )
+
+    def retry_set(
+        self, *, upload_id: str, set_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonProposalSet:
+        _label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        return _comparison_set(
+            self._batches.retry_set(
+                upload_id=upload_id, set_id=set_id, user_uid=user_uid, actor_roles=roles,
+                idempotency_key=idempotency_key,
+            )
+        )
+
+
+def _upload_cursor(raw: str | None) -> "tuple[datetime, str] | None":
+    """The ``(created_at, id)`` after which a listing of batches resumes (the sort key of the page before)."""
+    if raw is None:
+        return None
+    parts = decode_cursor(raw)
+    if len(parts) != 2 or not re.fullmatch(r"cbt_[0-9A-HJKMNP-TV-Z]{26}", parts[1]):
+        raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+    try:
+        created = datetime.fromisoformat(parts[0])
+    except ValueError:
+        raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format") from None
+    if created.tzinfo is None:
+        raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+    return created, parts[1]
+
+
+class ComparisonVersionOrderAdapter(_SessionHolder):
+    """`CMP-INGEST-01`: the order in which the versions of a document set are compared (ADR-0025 decisions 14
+    and 16), over :class:`~auditmanager.ingest.comparison_pdf.public.ComparisonVersionOrderService`. The cursor
+    is the oldest revision the previous page held."""
+
+    def __init__(self, session_factory: sessionmaker[Session], *, service: Any) -> None:
+        super().__init__(session_factory)
+        self._service = service
+
+    @staticmethod
+    def _view(view: Any) -> models.ComparisonVersionOrder:
+        return models.ComparisonVersionOrder(
+            order_id=view.order_id,
+            document_uid=view.document_uid,
+            revision_no=view.revision_no,
+            version_uids=list(view.version_uids),
+            source=models.ComparisonVersionOrderSource(view.source),
+            created_at=view.created_at,
+            created_by=view.created_by,
+        )
+
+    def append_order(
+        self, *, project_uid: str, document_uid: str, version_uids: Sequence[str], base_revision_no: int, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonVersionOrder:
+        label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        return self._view(
+            self._service.append_order(
+                project_uid=project_uid, document_uid=document_uid, version_uids=list(version_uids),
+                base_revision_no=base_revision_no, user_uid=user_uid, actor_label=label, actor_roles=roles,
+                idempotency_key=idempotency_key,
+            )
+        )
+
+    def list_orders(
+        self, *, project_uid: str, document_uid: str, cursor: str | None, limit: int
+    ) -> models.ComparisonVersionOrderList:
+        before: int | None = None
+        if cursor is not None:
+            parts = decode_cursor(cursor)
+            if len(parts) != 1 or not parts[0].isdigit():
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+            before = int(parts[0])
+        page = self._service.list_orders(
+            project_uid=project_uid, document_uid=document_uid, before_revision=before, limit=limit
+        )
+        return models.ComparisonVersionOrderList(
+            items=[self._view(item) for item in page.items],
+            page=models.PageInfo(
+                next_cursor=None if page.next_before_revision is None
+                else encode_cursor((str(page.next_before_revision),))
+            ),
+        )
+
+
+def _page_cursor(raw: str | None) -> int:
+    """The page number after which a listing resumes: ``0`` for the first page."""
+    if raw is None:
+        return 0
+    parts = decode_cursor(raw)
+    if len(parts) != 1 or not parts[0].isdigit():
+        raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+    return int(parts[0])
+
+
+def _page_profile_view(row: Any) -> models.VersionPageProfile:
+    """One stored profile in the frozen shape; only what the profile holds is set."""
+    from datetime import date
+
+    summary = row.summary
+    counts = summary.get("counts") or {}
+    raster = summary.get("raster") or {}
+    fields: dict[str, Any] = {
+        "page_profile_id": row.page_profile_id,
+        "version_uid": row.version_uid,
+        "page_number": row.page_number,
+        "status": row.status,
+        "algo_version": row.algo_version,
+        "content_key": row.content_key,
+        "has_text_layer": bool(summary.get("text_layer", False)),
+        "word_count": int(counts.get("words", 0)),
+        "vector_line_count": int(counts.get("lines", 0)),
+        "annotation_count": int(counts.get("annotations", 0)),
+        "preview_available": row.preview_blob_id is not None,
+        "thumbnail_available": row.thumbnail_blob_id is not None,
+    }
+    if row.reason is not None:
+        fields["reason"] = row.reason
+    if summary.get("width_pt"):
+        fields["width_pt"] = summary["width_pt"]
+        fields["height_pt"] = summary["height_pt"]
+    if raster:
+        fields["raster_width_px"] = raster["width_px"]
+        fields["raster_height_px"] = raster["height_px"]
+    stamp = {key: summary.get("stamp", {}).get(key) for key in (
+        "designation", "sheet_number", "sheet_name", "revision_number", "release_date",
+    )}
+    stamp = {key: value for key, value in stamp.items() if value is not None}
+    if stamp:
+        if "release_date" in stamp:
+            stamp["release_date"] = date.fromisoformat(stamp["release_date"])
+        fields["stamp"] = models.PageStamp(**stamp)
+    return models.VersionPageProfile(**fields)
+
+
+class VersionPageAdapter:
+    """`CMP-PROFILE-01`. The five page reads of a version, from what the worker stored.
+
+    The profile, the preview, the thumbnail and the stored tile levels are rows and blobs; the two tile
+    levels that are not stored are rendered in a ceilinged child by the reader's tile renderer. The API
+    process never loads PDFium for any of them (ADR-0025 decision 9 and the addendum of 2026-10-27).
+    """
+
+    def __init__(
+        self, session_factory: sessionmaker[Session], *, blob_store: Any, tiles: Any = None
+    ) -> None:
+        from auditmanager.comparison.public import PageProfileReader
+
+        self._reader = PageProfileReader(session_factory, blob_store, tiles=tiles)
+
+    def get_profile(
+        self, *, page_profile_id: str
+    ) -> models.VersionPageProfile:
+        return _page_profile_view(self._reader.get_profile(page_profile_id))
+
+    def list_profiles(
+        self, *, version_uid: str, cursor: str | None, limit: int
+    ) -> models.VersionPageProfilePage:
+        rows, more = self._reader.list_profiles(
+            version_uid, after_page=_page_cursor(cursor), limit=limit
+        )
+        return models.VersionPageProfilePage(
+            items=[_page_profile_view(row) for row in rows],
+            page=models.PageInfo(
+                next_cursor=encode_cursor((str(rows[-1].page_number),)) if more else None
+            ),
+        )
+
+    def read_preview(
+        self, *, page_profile_id: str
+    ) -> bytes:
+        return self._reader.read_preview(page_profile_id)
+
+    def read_thumbnail(
+        self, *, page_profile_id: str
+    ) -> bytes:
+        return self._reader.read_thumbnail(page_profile_id)
+
+    def read_tile(
+        self, *, page_profile_id: str, level: int, column: int, row: int
+    ) -> bytes:
+        return self._reader.read_tile(page_profile_id, level=level, column=column, row=row)

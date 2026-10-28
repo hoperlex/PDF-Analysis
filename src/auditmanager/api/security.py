@@ -358,6 +358,28 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         # `ANALYSIS-PRESETS-01`. Every role that can start a run (and the administrator who sets presets)
         # reads the list.
         "listAnalysisPresets": _ANY_ROLE,
+        # `CMP-SEAL-C0` (ADR-0025 decisions 9-11, 16): the comparison upload, the order of the
+        # versions of a document set, and the page reads. Reads are any one role; every write is
+        # an expert's act (`R-60`), like ``uploadDocument``.
+        "createComparisonUpload": _EXPERT,
+        "listComparisonUploads": _ANY_ROLE,
+        "getComparisonUpload": _ANY_ROLE,
+        "getComparisonUploadProposal": _ANY_ROLE,
+        "uploadComparisonUploadPart": _EXPERT,
+        "completeComparisonUploadFile": _EXPERT,
+        "confirmComparisonUploadSet": _EXPERT,
+        "excludeComparisonUploadSet": _EXPERT,
+        "retryComparisonUploadSet": _EXPERT,
+        "pauseComparisonUpload": _EXPERT,
+        "resumeComparisonUpload": _EXPERT,
+        "cancelComparisonUpload": _EXPERT,
+        "listComparisonVersionOrders": _ANY_ROLE,
+        "appendComparisonVersionOrder": _EXPERT,
+        "listVersionPageProfiles": _ANY_ROLE,
+        "getVersionPageProfile": _ANY_ROLE,
+        "streamVersionPagePreview": _ANY_ROLE,
+        "streamVersionPageThumbnail": _ANY_ROLE,
+        "streamVersionPageTile": _ANY_ROLE,
         "getRunStatus": _ANY_ROLE,
         "getArV3BetaGroup": _ANY_ROLE,
         "getArV3BetaGroupReview": _ANY_ROLE,

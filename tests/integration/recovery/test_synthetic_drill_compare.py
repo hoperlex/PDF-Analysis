@@ -47,7 +47,7 @@ def test_two_clones_of_one_migrated_schema_are_equal(two_clones: list[Engine]) -
     assert differences(first, second) == []
     # `EXEC-SEAL-01`: +5 tables, +1 view; `EXEC-PULL-01` (0031): +2 tables; `0032_ar_v3_run_group`: +2 tables;
     # `0035_comparison_records`: +2 tables.
-    assert len(first["tables"]) == 67 and len(first["views"]) == 5
+    assert len(first["tables"]) == 76 and len(first["views"]) == 5
     assert set(first["shape"]) == {
         "columns", "constraints", "indexes", "triggers", "functions", "views", "sequences", "extensions",
     }

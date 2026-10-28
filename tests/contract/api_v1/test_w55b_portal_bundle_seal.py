@@ -186,8 +186,9 @@ def test_portal_block_id_is_an_external_identifier_and_not_one_of_the_identities
     assert external["pattern"] == "^blk_[0-9a-f]{32}$"
     # W57a adds nrs_ beside the external blk_; W61-DISPATCHER-01 asg_; W60-PRICE-LIST-01 prl_,
     # prp_ and vnl_; W60-OPT-PROPOSALS-01 opp_, opr_ and opd_; EXEC-SEAL-01 exc_, excr_, exs_,
-    # epb_ and ert_; EXEC-PULL-01 ern_ and ext_.
-    assert len(IDENTIFIERS["identifiers"]) == 48
+    # epb_ and ert_; EXEC-PULL-01 ern_ and ext_; CMP-SEAL-C0 cbt_, cus_, cuf_, cvo_, cpr_, cq_, cqa_
+    # and cmc_.
+    assert len(IDENTIFIERS["identifiers"]) == 56
 
 
 # --- the error catalog --------------------------------------------------------------------

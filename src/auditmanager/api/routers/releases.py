@@ -27,7 +27,11 @@ def build_release_routes(router: APIRouter, releases: ReleasesPort) -> None:
         summary="Read the running product version.",
     )
     def get_product_version(subject: CurrentSubject) -> WireResponse:
-        return json_response(200, encode_json(releases.get_product_version().model_dump(mode="json")))
+        # `exclude_unset`: the optional ``comparison_modules`` is absent from a stand-in that does not
+        # set it, never ``null`` (the schema declares it optional, not nullable).
+        return json_response(
+            200, encode_json(releases.get_product_version().model_dump(mode="json", exclude_unset=True))
+        )
 
     @router.get(
         "/releases",

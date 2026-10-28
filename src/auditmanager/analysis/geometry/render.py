@@ -26,6 +26,7 @@ own per-side rounding of a crop given in points.
 
 from __future__ import annotations
 
+import math
 import threading
 from dataclasses import dataclass
 from types import TracebackType
@@ -36,6 +37,17 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 
 #: The fill of the bitmap before the page is drawn on it: opaque white, as a page prints.
 _WHITE: Final[tuple[int, int, int, int]] = (255, 255, 255, 255)
+
+#: The most pixels a **full-page** render may allocate: 40 Mpx (ADR-0025 decision 9). A page that would
+#: need more is refused with ``analysis_input_invalid`` / ``page_pixel_cap`` before any bitmap exists.
+FULL_PAGE_MAX_PIXELS: Final[int] = 40_000_000
+_PT_PER_INCH: Final[float] = 72.0
+
+
+def page_raster_size(width_pt: float, height_pt: float, dpi: float) -> tuple[int, int]:
+    """The pixel size PDFium allocates for a displayed page of this size at ``dpi`` (``ceil`` of each side)."""
+    scale = dpi / _PT_PER_INCH
+    return max(1, math.ceil(width_pt * scale)), max(1, math.ceil(height_pt * scale))
 
 
 def pdfium_lock() -> threading.Lock:
@@ -150,5 +162,49 @@ class PdfiumDocument:
                 page.close()
         return image
 
+    def render_page(
+        self, page_number: int, *, dpi: float, max_pixels: int = FULL_PAGE_MAX_PIXELS
+    ) -> Any:
+        """The whole 1-based page as displayed, at ``dpi``, as an RGB :class:`PIL.Image.Image`.
 
-__all__ = ["PageGeometry", "PdfiumDocument", "pdfium_lock", "renderer_name"]
+        `CMP-PROFILE-01`. The page is drawn the way a viewer draws it (``/Rotate`` and the CropBox
+        applied, annotations drawn, an opaque white ground), by one call under ``PDFIUM_LOCK``. **The
+        pixel count is checked before the bitmap exists**: a page that would need more than
+        ``max_pixels`` is refused (``analysis_input_invalid``, reason ``page_pixel_cap``), never
+        rendered smaller than asked. Choosing a dpi that keeps a page under the cap is the caller's
+        rule (the comparison's registration dpi); this function only holds the line.
+
+        A caller that must bound what a hostile page costs runs this in a child process under a kernel
+        ceiling, as the page-profile child does (it draws the same pixels without importing the
+        product); inside the API process it is for pages the caller has already measured.
+        """
+        with pdfium_lock():
+            page = self._document[page_number - 1]
+            try:
+                width_pt, height_pt = page.get_size()
+                width_px, height_px = page_raster_size(width_pt, height_pt, dpi)
+                if width_px * height_px > max_pixels:
+                    raise DomainError(
+                        ErrorCode.ANALYSIS_INPUT_INVALID,
+                        message="the page needs more pixels than a full-page render may allocate",
+                        stage_id=self._stage_id,
+                        reason="page_pixel_cap",
+                    )
+                bitmap = page.render(scale=dpi / _PT_PER_INCH)
+                try:
+                    image = bitmap.to_pil().convert("RGB")
+                finally:
+                    bitmap.close()
+            finally:
+                page.close()
+        return image
+
+
+__all__ = [
+    "FULL_PAGE_MAX_PIXELS",
+    "PageGeometry",
+    "PdfiumDocument",
+    "page_raster_size",
+    "pdfium_lock",
+    "renderer_name",
+]

@@ -32,6 +32,13 @@ What it does, in five threads
   takes no new probe.
 * **temporaries** -- every :data:`TEMPORARIES_SWEEP_SECONDS`, the stage temporaries a killed
   process left in this container's ``/tmp`` (`DEBT-TEMP-SWEEP-01`, D-170; see below).
+* **comparison work** -- when a comparison runner is given (`CMP-WORK-01`, ADR-0025 decisions 4
+  and 6), the dispatch loop, once it has found no Run to hand a slot, asks it for one item of
+  comparison work. The item runs in a slot of the same pool, so it is counted against
+  ``AUDITMANAGER_WORKER_SLOTS`` and against :attr:`WorkerService.busy`, and a drain waits for it.
+  Runs keep strict priority: the runner claims nothing while a Run is claimable, while dispatch
+  is paused, or for a module that is off, and an item is never preempted (it is one page or one
+  pair, so a Run waits at most one item). The reclaim pass fences expired comparison leases too.
 
 Temporaries
 -----------
@@ -60,7 +67,7 @@ from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor, wait
 from pathlib import Path
 from time import monotonic
-from typing import Any, Final
+from typing import Any, Final, Protocol
 
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -106,6 +113,30 @@ TEMPORARIES_LIVE_MARGIN_SECONDS: Final[float] = 300.0
 #: modification time is what ``python -m auditmanager.workers health`` reads.
 IDENTITY_FILE: Final[str] = "worker-id"
 HEARTBEAT_FILE: Final[str] = "heartbeat"
+
+#: What :meth:`WorkerService._claim_next` found when it looked for a Run (`CMP-WORK-01`): a Run was
+#: handed to a slot; no Run is claimable (the only case in which comparison work is asked for); or
+#: the look was not conclusive (this worker's intake is off, or the queue could not be read), in
+#: which case nothing is claimed at all -- a failed read is never taken for an empty queue.
+_RUN_OFFERED: Final[str] = "run_offered"
+_NO_RUN: Final[str] = "no_run"
+_RUN_UNKNOWN: Final[str] = "run_unknown"
+
+
+class _ComparisonItem(Protocol):
+    work_id: str
+
+
+class ComparisonWork(Protocol):
+    """What the worker needs of the comparison loop; ``comparison.public.ComparisonWorkRunner``."""
+
+    def verify(self) -> None: ...
+
+    def claim(self, worker_id: str) -> _ComparisonItem | None: ...
+
+    def execute(self, item: Any) -> object: ...
+
+    def reclaim(self) -> int: ...
 
 
 def sweep_running_temporaries() -> SweepReport:
@@ -218,6 +249,7 @@ class WorkerService:
         probe_poll_seconds: float = PROBE_POLL_SECONDS,
         temporaries_sweep: Callable[[], SweepReport] = sweep_running_temporaries,
         temporaries_sweep_seconds: float = TEMPORARIES_SWEEP_SECONDS,
+        comparison_work: ComparisonWork | None = None,
     ) -> None:
         if slots < 1:
             raise ValueError("a worker needs at least one slot")
@@ -237,6 +269,7 @@ class WorkerService:
         self._probe_poll_seconds = probe_poll_seconds
         self._temporaries_sweep = temporaries_sweep
         self._temporaries_sweep_seconds = temporaries_sweep_seconds
+        self._comparison = comparison_work
         self._worker_id: str | None = None
         self._stopped = threading.Event()
         self._draining = threading.Event()
@@ -246,6 +279,10 @@ class WorkerService:
         #: The runs handed to a slot and not yet finished, by their future. The run ids are what
         #: the hint must not offer again and must treat as occupying their connection.
         self._in_flight: dict[Future[None], str] = {}
+        #: `CMP-WORK-01`: the comparison items handed to a slot and not yet finished, by their
+        #: future. Kept apart from the Runs because ``_in_flight``'s values are Run ids, which the
+        #: hint offers to the queue; they count in :attr:`busy`, so they occupy a slot.
+        self._comparison_in_flight: dict[Future[None], str] = {}
         #: Claims lost in a row, bounded by :data:`CLAIM_RETRY_LIMIT` (`EXEC-PAR-QUEUE-01`).
         self._refused_in_a_row = 0
         self._pool = ThreadPoolExecutor(max_workers=slots, thread_name_prefix="auditmanager-worker-run")
@@ -267,10 +304,14 @@ class WorkerService:
     @property
     def busy(self) -> int:
         with self._lock:
-            return len(self._in_flight)
+            return len(self._in_flight) + len(self._comparison_in_flight)
 
     def start(self) -> str:
         """Register a new identity and start listening, claiming and heartbeating."""
+        if self._comparison is not None:
+            # `CMP-WORK-01` (ADR-0025 decision 4): refuse before registering when an enabled module
+            # has live work of a kind this build has no handler for.
+            self._comparison.verify()
         with self._sessions() as session:
             self._worker_id = self._registry.register(
                 session, version=self._version, slots=self._slots,
@@ -302,7 +343,7 @@ class WorkerService:
         deadline = None if timeout is None else monotonic() + timeout
         while True:
             with self._lock:
-                pending = set(self._in_flight)
+                pending = set(self._in_flight) | set(self._comparison_in_flight)
             if not pending:
                 return True
             remaining = None if deadline is None else deadline - monotonic()
@@ -410,26 +451,81 @@ class WorkerService:
                 session.commit()
         except Exception:
             _log.exception("worker %s lease reclaim pass failed", self._worker_id)
+        if self._comparison is None:
+            return
+        try:
+            self._comparison.reclaim()
+        except Exception:
+            _log.exception("worker %s comparison lease reclaim pass failed", self._worker_id)
 
     def _claim_next(self) -> bool:
+        """Hand one runnable Job to a free slot, or, when there is none, one comparison item.
+
+        The claim itself happens in the slot for a Run, and here for a comparison item (it is one
+        short transaction, and the slot count must be exact before the next look).
+        """
+        found = self._offer_next_run()
+        if found == _RUN_OFFERED:
+            return True
+        if found == _NO_RUN and self._comparison is not None:
+            return self._claim_comparison()
+        return False
+
+    def _offer_next_run(self) -> str:
         """Hand one runnable Job to a free slot. The claim itself happens in the slot."""
         with self._lock:
             submitted = tuple(self._in_flight.values())
         try:
             with self._sessions() as session:
                 if not self._registry.intake_enabled(session, self.worker_id):
-                    return False
+                    return _RUN_UNKNOWN
                 run_id = JobRepository().next_queued_run(session, submitted=submitted)
         except Exception:
             _log.exception("worker %s could not read the queue", self._worker_id)
-            return False
+            return _RUN_UNKNOWN
         if run_id is None:
-            return False
+            return _NO_RUN
         future = self._pool.submit(self._run_one, str(run_id))
         with self._lock:
             self._in_flight[future] = str(run_id)
         future.add_done_callback(self._finished)
+        return _RUN_OFFERED
+
+    def _claim_comparison(self) -> bool:
+        """Lease one item of comparison work to a free slot (`CMP-WORK-01`); ``False`` when the
+        runner declines (module off, paused, a Run claimable, nothing queued)."""
+        assert self._comparison is not None
+        try:
+            item = self._comparison.claim(self.worker_id)
+        except Exception:
+            _log.exception("worker %s could not claim comparison work", self._worker_id)
+            return False
+        if item is None:
+            return False
+        # Submitted and registered under one lock: the item may start the instant it is submitted,
+        # and ``busy`` and ``drain`` must never see a slot in use that they do not count.
+        with self._lock:
+            future = self._pool.submit(self._run_comparison_item, item)
+            self._comparison_in_flight[future] = item.work_id
+        future.add_done_callback(self._finished_comparison)
         return True
+
+    def _run_comparison_item(self, item: _ComparisonItem) -> None:
+        assert self._comparison is not None
+        try:
+            self._comparison.execute(item)
+        except Exception:
+            # The runner has already ended the attempt or dropped a lost one; what reaches here is a
+            # fault of the final transaction, and the lease expiry and the reclaim carry on from it.
+            _log.exception(
+                "worker %s: comparison work %s could not be ended here; its lease will expire",
+                self._worker_id, item.work_id,
+            )
+
+    def _finished_comparison(self, future: Future[None]) -> None:
+        with self._lock:
+            self._comparison_in_flight.pop(future, None)
+        self._poll_now.set()
 
     def _run_one(self, run_id: str) -> None:
         try:

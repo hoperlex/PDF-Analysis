@@ -19,11 +19,16 @@ _CATALOG = [
     for table in (
         "blob", "input_manifest_entry", "analysis_artifact_publication",
         "norm_custody_admission", "norm_custody_binding", "price_list_revision",
+        "comparison_upload_file",  # `0038_comparison_foundation` (CMP-SEAL-C0)
     )
 ]
 _CATALOG.extend([
     {"schema_name": "public", "table_name": "norm_retrieval_set", "column_name": column}
     for column in ("set_blob_id", "catalogue_blob_id")
+])
+_CATALOG.extend([
+    {"schema_name": "public", "table_name": "comparison_page_profile", "column_name": column}
+    for column in ("profile_blob_id", "preview_blob_id", "thumbnail_blob_id")
 ])
 
 
@@ -62,6 +67,10 @@ class _Session:
             key = "retrieval_sets"
         elif "FROM public.price_list_revision" in sql:
             key = "price_lists"
+        elif "FROM public.comparison_upload_file" in sql:
+            key = "comparison_files"
+        elif "FROM public.comparison_page_profile" in sql:
+            key = "page_profiles"
         else:
             raise AssertionError(f"unexpected SQL: {sql}")
         return _Rows(self.data[key])
@@ -95,6 +104,12 @@ def _data() -> dict[str, list[dict[str, object]]]:
         "price_lists": [{
             "owner_id": "prl_one", "blob_id": blob_id, "sha256": sha,
             "size_bytes": 13, "media_type": "application/pdf",
+        }],
+        # `0038_comparison_foundation`: a verified upload file and a page profile, both holding the blob.
+        "comparison_files": [{"owner_id": "cuf_one", "state": "verified", "blob_id": blob_id}],
+        "page_profiles": [{
+            "owner_id": "cpr_one", "profile_blob_id": blob_id, "preview_blob_id": blob_id,
+            "thumbnail_blob_id": None,
         }],
     }
 
@@ -131,16 +146,17 @@ def test_healthy_database_returns_all_available_blob_facts_and_reads_only() -> N
         ("input_manifest_entry", 1), ("analysis_artifact_publication", 1),
         ("norm_custody_admission", 1), ("norm_custody_binding", 1),
         ("norm_retrieval_set", 0), ("price_list_revision", 1),
+        ("comparison_upload_file", 1), ("comparison_page_profile", 1),
     )
     assert audit_blob_references(session) == result  # type: ignore[arg-type]
     assert data == session.data
-    assert len(session.statements) == 18  # two audits x nine SELECTs
+    assert len(session.statements) == 22  # two audits x eleven SELECTs
 
 
 def test_verified_retrieval_set_reads_both_0023_blob_columns() -> None:
     data = _data_with_verified_set()
     result = audit_blob_references(_Session(data))  # type: ignore[arg-type]
-    assert result.source_counts[-2] == ("norm_retrieval_set", 1)
+    assert result.source_counts[-4] == ("norm_retrieval_set", 1)
     assert {fact.blob_id for fact in result.available_blobs} == {
         row["blob_id"] for row in data["blob"]
     }
@@ -178,7 +194,7 @@ def test_rejected_set_has_no_blob_references() -> None:
     row = data["retrieval_sets"][0]
     row.update(state="rejected", set_blob_id=None, set_size_bytes=None,
                catalogue_blob_id=None, catalogue_size_bytes=None)
-    assert audit_blob_references(_Session(data)).source_counts[-2] == (  # type: ignore[arg-type]
+    assert audit_blob_references(_Session(data)).source_counts[-4] == (  # type: ignore[arg-type]
         "norm_retrieval_set", 1,
     )
     row["catalogue_blob_id"] = data["blob"][2]["blob_id"]
@@ -191,6 +207,42 @@ def test_price_list_revision_is_a_declared_blob_reference_source() -> None:
     data = _data()
     data["catalog"] = [row for row in data["catalog"] if row["table_name"] != "price_list_revision"]
     with pytest.raises(BlobReferenceAuditRefused, match="price_list_revision"):
+        audit_blob_references(_Session(data))  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("table", ("comparison_upload_file", "comparison_page_profile"))
+def test_the_comparison_tables_are_declared_blob_reference_sources(table: str) -> None:
+    """`0038_comparison_foundation` added four Blob references; the catalog check knows them by name."""
+    data = _data()
+    data["catalog"] = [row for row in data["catalog"] if row["table_name"] != table]
+    with pytest.raises(BlobReferenceAuditRefused, match="catalog differs"):
+        audit_blob_references(_Session(data))  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("change,reason", (
+    ("file_blob_unknown", "comparison_upload_file names an unavailable"),
+    ("file_not_verified", "holds a Blob before it is verified"),
+    ("profile_preview_unknown", "comparison_page_profile names an unavailable"),
+    ("profile_blob_unavailable", "comparison_page_profile names an unavailable"),
+))
+def test_a_comparison_blob_reference_must_name_an_available_blob(change: str, reason: str) -> None:
+    data = _data()
+    if change == "file_blob_unknown":
+        data["comparison_files"][0]["blob_id"] = "blob_" + "0" * 26
+    elif change == "file_not_verified":
+        data["comparison_files"][0]["state"] = "uploading"
+    elif change == "profile_preview_unknown":
+        data["page_profiles"][0]["preview_blob_id"] = "blob_" + "0" * 26
+    else:
+        data["blob"][0]["state"] = "verifying"
+        data["blob"][0].update(sha256=None, size_bytes=None, media_type=None)
+        data["manifest"] = []
+        data["artifacts"] = []
+        data["admissions"] = []
+        data["bindings"] = []
+        data["price_lists"] = []
+        data["comparison_files"] = []
+    with pytest.raises(BlobReferenceAuditRefused, match=reason):
         audit_blob_references(_Session(data))  # type: ignore[arg-type]
 
 
@@ -285,6 +337,8 @@ def test_pending_and_rejected_admissions_need_no_published_object() -> None:
     data["bindings"].clear()
     data["admissions"][0]["state"] = "pending"
     data["price_lists"].clear()
+    data["comparison_files"].clear()
+    data["page_profiles"].clear()
     data["blob"].clear()
     result = audit_blob_references(_Session(data))  # type: ignore[arg-type]
     assert result.available_blobs == ()
@@ -300,6 +354,8 @@ def test_unsettled_artifact_can_hold_incomplete_temporary_blob() -> None:
     data["bindings"].clear()
     data["admissions"].clear()
     data["price_lists"].clear()
+    data["comparison_files"].clear()
+    data["page_profiles"].clear()
     data["artifacts"][0]["state"] = "abandoned"
     data["blob"][0].update(state="temporary", sha256=None, size_bytes=None, media_type=None)
     assert audit_blob_references(_Session(data)).available_blobs == ()  # type: ignore[arg-type]

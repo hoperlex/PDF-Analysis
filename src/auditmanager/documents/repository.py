@@ -35,6 +35,8 @@ from auditmanager.storage.public import BlobId, parse_blob_id
 
 from .models import (
     ROLE_SOURCE_DOCUMENT,
+    UPLOAD_KIND_COMPARISON_PDF,
+    UPLOAD_KIND_PORTAL_BUNDLE,
     ClassificationRevisionRecord,
     CurrentVersionPlacementRecord,
     DocumentVersionRecord,
@@ -135,13 +137,20 @@ _INSERT_VERSION = text(
     "INSERT INTO document_version ("
     "  version_uid, document_uid, version_ordinal, source_filename,"
     "  media_type, byte_size, sha256, page_count,"
-    "  text_character_count, textless_pages, recognised_character_count"
+    "  text_character_count, textless_pages, recognised_character_count, upload_kind"
     ") VALUES ("
     "  :version_uid, :document_uid, :version_ordinal, :source_filename,"
     "  :media_type, :byte_size, :sha256, :page_count,"
     "  :text_character_count, CAST(:textless_pages AS integer[]),"
-    "  :recognised_character_count"
+    "  :recognised_character_count, :upload_kind"
     ")"
+)
+#: `CMP-INGEST-01` (ADR-0025 decision 11). Whether the document already holds a portal version. Read under
+#: the document's row lock (``_LOCK_DOCUMENT``) in the same transaction that decides whether a comparison-only
+#: version may become the document's current one, so two publications cannot disagree about it.
+_HAS_PORTAL_VERSION = text(
+    "SELECT 1 FROM document_version WHERE document_uid = :document_uid "
+    "AND upload_kind = :portal LIMIT 1"
 )
 _INSERT_MANIFEST_ENTRY = text(
     "INSERT INTO input_manifest_entry ("
@@ -158,7 +167,7 @@ _SELECT_VERSION = text(
     "       v.sha256, v.page_count, v.published_at,"
     "       v.text_character_count, v.textless_pages, v.recognised_character_count,"
     "       c.project_stage, c.section_code, c.confirmed_by_user_uid, c.confirmed_at,"
-    "       c.revision "
+    "       c.revision, v.upload_kind "
     "FROM document_version v JOIN document d ON d.document_uid = v.document_uid "
     "LEFT JOIN version_classification_current c ON c.version_uid = v.version_uid "
     "WHERE v.version_uid = :version_uid"
@@ -185,7 +194,7 @@ _LIST_DOCUMENTS = text(
     "       v.sha256, v.page_count, v.published_at,"
     "       v.text_character_count, v.textless_pages, v.recognised_character_count,"
     "       c.project_stage, c.section_code, c.confirmed_by_user_uid, c.confirmed_at,"
-    "       c.revision "
+    "       c.revision, v.upload_kind "
     "FROM document d JOIN document_version v ON v.version_uid = d.current_version_uid "
     "LEFT JOIN version_classification_current c ON c.version_uid = v.version_uid "
     "WHERE d.project_uid = :project_uid "
@@ -249,7 +258,7 @@ _LIST_VERSIONS = text(
     "       v.sha256, v.page_count, v.published_at,"
     "       v.text_character_count, v.textless_pages, v.recognised_character_count,"
     "       c.project_stage, c.section_code, c.confirmed_by_user_uid, c.confirmed_at,"
-    "       c.revision "
+    "       c.revision, v.upload_kind "
     "FROM document_version v JOIN document d ON d.document_uid = v.document_uid "
     "LEFT JOIN version_classification_current c ON c.version_uid = v.version_uid "
     "WHERE v.document_uid = :document_uid "
@@ -447,7 +456,7 @@ def _version_record(
     """One ``document_version`` row, in the column order every SELECT here uses.
 
     Written once. ``get_version``, ``list_documents`` and ``list_versions`` project the
-    same nineteen columns in the same order (`W59-SECTION-SEAL-01` added the four of the
+    same twenty columns in the same order (`W59-SECTION-SEAL-01` added the four of the
     left-joined classification, `CLASSIFICATION-CORRECTION-01` its revision, and the join is
     now to the current view), and three hand-unpacked copies of that tuple
     would be three places for one of them to shift a column silently -- which is a fault
@@ -474,6 +483,7 @@ def _version_record(
         confirmed_by_user_uid,
         confirmed_at,
         classification_revision,
+        upload_kind,
     ) = tuple(row)
     # The left join yields all five or none: every column is NOT NULL in its own table.
     classification = (
@@ -511,6 +521,7 @@ def _version_record(
             None if recognised_character_count is None else int(recognised_character_count)
         ),
         classification=classification,
+        upload_kind=str(upload_kind),
     )
 
 
@@ -580,6 +591,25 @@ class DocumentRepository:
         )
         return document_uid
 
+    def list_document_titles(
+        self, session: Session, project_uid: ProjectUid
+    ) -> tuple[tuple[DocumentUid, str], ...]:
+        """``(document_uid, display_title)`` of every document of one project, oldest first.
+
+        `CMP-INGEST-01`. The grouping proposal of a comparison upload offers the document whose title is the
+        designation it read as «the document this set may belong to»; the title is a label (never an identity)
+        and the offer is a proposal the user confirms. An unknown project is an empty answer here; a caller
+        that must tell the two apart proves the project with :meth:`get_project` first.
+        """
+        rows = session.execute(
+            text(
+                "SELECT document_uid, display_title FROM document WHERE project_uid = :project_uid "
+                "ORDER BY created_at, document_uid"
+            ),
+            {"project_uid": str(project_uid)},
+        ).all()
+        return tuple((DocumentUid(row[0]), row[1]) for row in rows)
+
     def require_document(
         self, session: Session, document_uid: DocumentUid
     ) -> ProjectUid:
@@ -607,6 +637,7 @@ class DocumentRepository:
         text_character_count: int | None = None,
         textless_pages: tuple[int, ...] | None = None,
         recognised_character_count: int | None = None,
+        upload_kind: str = UPLOAD_KIND_PORTAL_BUNDLE,
     ) -> VersionUid:
         """Insert one immutable version with its complete manifest.
 
@@ -623,7 +654,24 @@ class DocumentRepository:
         The three counts of a portal bundle are all given or all absent; a partial set is
         refused here with the typed error the database would refuse it with, so a caller
         learns before a statement is issued.
+
+        **The current-version rule** (`CMP-INGEST-01`, ADR-0025 decision 11). A version whose
+        ``upload_kind`` is ``comparison_pdf`` -- a plain PDF admitted for comparison only -- becomes
+        the document's ``current_version_uid`` **only while the document holds no portal version**:
+        a document that has one keeps pointing at its newest portal version, so every consumer of
+        ``current_version_uid`` (the listing, the project's document count, the section views, the
+        dashboard) goes on seeing the version a run can be started on. Decided here, once, under the
+        document's row lock, so a consumer cannot read what this method never wrote. A portal
+        version always becomes current (it is the version a run starts on), whatever the document
+        held before. A comparison-only version holds none of the portal bundle's counts.
         """
+        if upload_kind not in (UPLOAD_KIND_PORTAL_BUNDLE, UPLOAD_KIND_COMPARISON_PDF):
+            raise DomainError(
+                ErrorCode.VALIDATION_FAILED,
+                aggregate_type="DocumentVersion",
+                field="upload_kind",
+                constraint="enum",
+            )
         given = (text_character_count, textless_pages, recognised_character_count)
         if any(value is None for value in given) and any(value is not None for value in given):
             raise DomainError(
@@ -631,6 +679,13 @@ class DocumentRepository:
                 aggregate_type="DocumentVersion",
                 field="text_character_count",
                 constraint="the three counts are all set or all absent",
+            )
+        if upload_kind == UPLOAD_KIND_COMPARISON_PDF and any(value is not None for value in given):
+            raise DomainError(
+                ErrorCode.VALIDATION_FAILED,
+                aggregate_type="DocumentVersion",
+                field="text_character_count",
+                constraint="a comparison-only version holds no portal bundle counts",
             )
         if not entries:
             raise DomainError(
@@ -659,6 +714,7 @@ class DocumentRepository:
                 "text_character_count": text_character_count,
                 "textless_pages": None if textless_pages is None else list(textless_pages),
                 "recognised_character_count": recognised_character_count,
+                "upload_kind": upload_kind,
             },
         )
         for entry in entries:
@@ -673,11 +729,24 @@ class DocumentRepository:
                     "media_type": entry.media_type,
                 },
             )
-        session.execute(
-            _POINT_DOCUMENT_AT_VERSION,
-            {"document_uid": str(document_uid), "version_uid": str(version_uid)},
-        )
+        if upload_kind == UPLOAD_KIND_PORTAL_BUNDLE or not self._holds_portal_version(
+            session, document_uid
+        ):
+            session.execute(
+                _POINT_DOCUMENT_AT_VERSION,
+                {"document_uid": str(document_uid), "version_uid": str(version_uid)},
+            )
         return version_uid
+
+    @staticmethod
+    def _holds_portal_version(session: Session, document_uid: DocumentUid) -> bool:
+        return (
+            session.execute(
+                _HAS_PORTAL_VERSION,
+                {"document_uid": str(document_uid), "portal": UPLOAD_KIND_PORTAL_BUNDLE},
+            ).first()
+            is not None
+        )
 
     def get_version(
         self, session: Session, version_uid: VersionUid

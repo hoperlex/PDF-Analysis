@@ -328,6 +328,36 @@ __all__ = [
     "AnalysisPreset",
     "AnalysisPresetList",
     "SaveAnalysisPresetRequest",
+    "ComparisonModules",
+    "VersionUploadKind",
+    "ComparisonUploadState",
+    "ComparisonUploadFileState",
+    "ComparisonUploadSetState",
+    "ComparisonProposalWarning",
+    "ComparisonUploadFileDeclaration",
+    "CreateComparisonUploadRequest",
+    "ComparisonUploadFile",
+    "ComparisonUpload",
+    "ComparisonUploadPage",
+    "ComparisonUploadPartReceipt",
+    "ComparisonProposalFile",
+    "ComparisonProposalSet",
+    "ComparisonUploadProposal",
+    "ConfirmedComparisonFile",
+    "ConfirmComparisonUploadSetRequest",
+    "ComparisonVersionOrderSource",
+    "ComparisonVersionOrder",
+    "ComparisonVersionOrderList",
+    "AppendComparisonVersionOrderRequest",
+    "PageProfileStatus",
+    "PageStamp",
+    "VersionPageProfile",
+    "VersionPageProfilePage",
+    "ComparisonUploadId",
+    "ComparisonUploadFileId",
+    "ComparisonUploadSetId",
+    "ComparisonVersionOrderId",
+    "ComparisonPageProfileId",
     "ExecutorTaskState",
     "RunnerTokenMetadata",
     "IssueRunnerTokenRequest",
@@ -763,7 +793,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.8.0"]
+    contract_version: Literal["1.9.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -922,6 +952,25 @@ class SectionReview(_Object):
     options: Annotated[list[SectionReviewOption], Field(min_length=15, max_length=15)]
 
 
+#: The module set (ADR-0025 decision 23): which comparison modules this deployment serves.
+class ComparisonModules(str, enum.Enum):
+    """``none`` serves neither comparison module (the default), ``versions`` «Сравнение
+    версий», ``versions,stages`` both. A module that is off has no menu entry and its
+    operations answer ``dependency_unavailable``."""
+
+    NONE = "none"
+    VERSIONS = "versions"
+    VERSIONS_STAGES = "versions,stages"
+
+
+class VersionUploadKind(str, enum.Enum):
+    """How a version reached the product. ``comparison_pdf`` is a plain PDF admitted for
+    comparison only (`Q-CMP-5`): no section analysis can start on it."""
+
+    PORTAL_BUNDLE = "portal_bundle"
+    COMPARISON_PDF = "comparison_pdf"
+
+
 class DocumentVersion(_Object):
     version_uid: VersionUid
     document_uid: DocumentUid
@@ -945,6 +994,11 @@ class DocumentVersion(_Object):
     page_count: Annotated[int, Field(ge=1, le=500)]
     published_at: datetime
     input_manifest: list[InputManifestEntry]
+    #: `CMP-SEAL-C0`. How the version reached the product; see :class:`VersionUploadKind`.
+    #: Always sent from `1.9.0`.
+    upload_kind: VersionUploadKind = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
 
 
 class DocumentVersionPage(_Object):
@@ -2178,6 +2232,12 @@ class ProductVersion(_Object):
     product_version: str
     build_id: str
     contract_version: str
+    #: `CMP-SEAL-C0` (ADR-0025 decision 23). The comparison modules this deployment serves; see
+    #: :class:`ComparisonModules`. Always sent from `1.9.0`; a client that finds it absent treats
+    #: the set as ``none``.
+    comparison_modules: ComparisonModules = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
 
 
 class ReleaseNoteKind(str, enum.Enum):
@@ -4020,6 +4080,12 @@ class ClaimExecutorTaskRequest(_Object):
     wait_seconds: Annotated[int, Field(ge=0, le=25)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
+    #: `CMP-SEAL-C0` (ADR-0025 decision 18). The most images one task may carry that this runner
+    #: serves; absent means 1, the shape every deployed runner sends today. The server never hands
+    #: out a task with more images than declared.
+    max_images: Annotated[int, Field(ge=1, le=8)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
 
 
 RunnerImageBlobId = TypeAliasType(
@@ -4031,7 +4097,13 @@ class RunnerImage(_Object):
     """One checked saved PNG, retrievable only by the current runner claim."""
 
     blob_id: RunnerImageBlobId
-    portal_block_id: PortalBlockId
+    #: `CMP-SEAL-C0` (ADR-0025 decision 18): no longer required. A portal-block crop carries it; a
+    #: comparison crop carries ``crop_id`` instead.
+    portal_block_id: PortalBlockId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: An opaque crop reference, echoed and never parsed.
+    crop_id: Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
     sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
     size_bytes: Annotated[int, Field(ge=1, le=16 * 1024 * 1024)]
     media_type: Literal["image/png"]
@@ -4048,7 +4120,7 @@ class ClaimedExecutorTask(_Object):
     system: str
     user_text: str
     output_schema: Annotated[dict[str, Any], WithJsonSchema({"type": "object"})]
-    images: Annotated[list[RunnerImage], Field(max_length=1)] = Field(  # type: ignore[assignment]
+    images: Annotated[list[RunnerImage], Field(max_length=8)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
 
@@ -4082,3 +4154,299 @@ class FailExecutorTaskRequest(_Object):
 class ExecutorTaskAck(_Object):
     task_id: ExecutorTaskId
     state: ExecutorTaskState
+
+
+# --- comparison modules (`CMP-SEAL-C0`, ADR-0025) ----------------------------------------
+#
+# Sealed as stubs: every operation below answers `503 dependency_unavailable` until its lane
+# (CMP-INGEST-01, CMP-INGEST-02, CMP-PROFILE-01) wires it. The shapes are exactly what the C0
+# lanes implement; a lane that needs a field STOPs to the wave's FIX slot and never edits them.
+
+ComparisonUploadId = TypeAliasType(
+    "ComparisonUploadId", Annotated[str, Field(pattern=rf"^cbt_{_ULID}$")]
+)
+ComparisonUploadFileId = TypeAliasType(
+    "ComparisonUploadFileId", Annotated[str, Field(pattern=rf"^cuf_{_ULID}$")]
+)
+ComparisonUploadSetId = TypeAliasType(
+    "ComparisonUploadSetId", Annotated[str, Field(pattern=rf"^cus_{_ULID}$")]
+)
+ComparisonVersionOrderId = TypeAliasType(
+    "ComparisonVersionOrderId", Annotated[str, Field(pattern=rf"^cvo_{_ULID}$")]
+)
+ComparisonPageProfileId = TypeAliasType(
+    "ComparisonPageProfileId", Annotated[str, Field(pattern=rf"^cpr_{_ULID}$")]
+)
+
+
+class ComparisonUploadState(str, enum.Enum):
+    UPLOADING = "uploading"
+    PROPOSED = "proposed"
+    PROCESSING = "processing"
+    PAUSED = "paused"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+
+class ComparisonUploadFileState(str, enum.Enum):
+    DECLARED = "declared"
+    UPLOADING = "uploading"
+    VERIFIED = "verified"
+    FAILED = "failed"
+
+
+class ComparisonUploadSetState(str, enum.Enum):
+    UPLOADING = "uploading"
+    READING = "reading"
+    NEEDS_CONFIRMATION = "needs_confirmation"
+    READY = "ready"
+    ADMITTING = "admitting"
+    DONE = "done"
+    FAILED = "failed"
+    EXCLUDED = "excluded"
+
+
+class ComparisonProposalWarning(str, enum.Enum):
+    """What the stamp reader noticed about a proposed set; the user has the final word."""
+
+    DESIGNATIONS_DIFFER = "designations_differ"
+    ORDER_DISAGREES_WITH_FILE_NUMBERS = "order_disagrees_with_file_numbers"
+    DUPLICATE_REVISION_NUMBER = "duplicate_revision_number"
+    NO_STAMP_FOUND = "no_stamp_found"
+    SCAN_WITHOUT_TEXT = "scan_without_text"
+
+
+class ComparisonUploadFileDeclaration(_Object):
+    """One file the client will send. ``display_name`` is a hint for the proposal and never an
+    identity; ``sha256`` and ``size_bytes`` are checked against the received bytes when the file
+    is completed."""
+
+    display_name: Annotated[str, Field(min_length=1, max_length=255)]
+    size_bytes: Annotated[int, Field(ge=1)]
+    sha256: Sha256
+    page_count: Annotated[int, Field(ge=1, le=500)] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+
+
+class CreateComparisonUploadRequest(_Object):
+    """The declared files of one upload batch. The limits of ADR-0025 decision 9 (files, sets,
+    declared bytes and pages, the project's stored bytes, active batches) are refused here,
+    before the first part, as typed reasons under existing error codes."""
+
+    files: Annotated[list[ComparisonUploadFileDeclaration], Field(min_length=1)]
+
+
+class ComparisonUploadFile(_Object):
+    file_id: ComparisonUploadFileId
+    display_name: Annotated[str, Field(min_length=1, max_length=255)]
+    size_bytes: Annotated[int, Field(ge=1)]
+    sha256: Sha256
+    state: ComparisonUploadFileState
+    #: How many parts are staged so far (a resumable client sends the missing ones).
+    parts_staged: Annotated[int, Field(ge=0)]
+    #: The set the proposal placed this file in, once there is a proposal.
+    set_id: ComparisonUploadSetId = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    #: The typed reason a ``failed`` file failed.
+    failure_reason: Annotated[str, Field(min_length=1, max_length=128)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ComparisonUpload(_Object):
+    """One upload batch. ``files`` is present on ``getComparisonUpload`` and absent in the
+    items of ``listComparisonUploads``. ``part_size_bytes`` is the size of every part but the
+    last (16 MiB, ADR-0025 decision 10)."""
+
+    upload_id: ComparisonUploadId
+    project_uid: ProjectUid
+    state: ComparisonUploadState
+    part_size_bytes: Annotated[int, Field(ge=1, le=16 * 1024 * 1024)]
+    declared_files: Annotated[int, Field(ge=1)]
+    declared_bytes: Annotated[int, Field(ge=1)]
+    created_at: datetime
+    updated_at: datetime
+    files: list[ComparisonUploadFile] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ComparisonUploadPage(_Object):
+    items: list[ComparisonUpload]
+    page: PageInfo
+
+
+class ComparisonUploadPartReceipt(_Object):
+    """What the server staged for one part: its size and the SHA-256 it computed, which the
+    client may compare with its own."""
+
+    file_id: ComparisonUploadFileId
+    part_number: Annotated[int, Field(ge=1, le=10000)]
+    size_bytes: Annotated[int, Field(ge=1, le=16 * 1024 * 1024)]
+    sha256: Sha256
+
+
+class ComparisonProposalFile(_Object):
+    file_id: ComparisonUploadFileId
+    #: 1-based place in the proposed order of the set.
+    position: Annotated[int, Field(ge=1)]
+    #: The suggested version label (for example «V2 Изм.3»); editable by the user.
+    version_label: Annotated[str, Field(min_length=1, max_length=80)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ComparisonProposalSet(_Object):
+    """One proposed document set. ``designation`` is the «шифр» read from the stamp: metadata
+    an expert confirms, never an identity. ``existing_document_uid`` names the document of the
+    project the designation matches, when there is one."""
+
+    set_id: ComparisonUploadSetId
+    state: ComparisonUploadSetState
+    files: list[ComparisonProposalFile]
+    designation: Annotated[str, Field(min_length=1, max_length=200)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    existing_document_uid: DocumentUid = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    project_stage: ProjectStage = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    section_code: ProjectSection = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    warnings: list[ComparisonProposalWarning] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    #: The typed reason a ``failed`` set failed.
+    failure_reason: Annotated[str, Field(min_length=1, max_length=128)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    #: The document this set became, once its versions are admitted.
+    document_uid: DocumentUid = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class ComparisonUploadProposal(_Object):
+    """The grouping, order, stage and section the reader proposes for an upload. Nothing is
+    admitted as a version until the user confirms a set (``confirmComparisonUploadSet``)."""
+
+    upload_id: ComparisonUploadId
+    state: ComparisonUploadState
+    sets: list[ComparisonProposalSet]
+
+
+class ConfirmedComparisonFile(_Object):
+    file_id: ComparisonUploadFileId
+    version_label: Annotated[str, Field(min_length=1, max_length=80)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ConfirmComparisonUploadSetRequest(_Object):
+    """The user's final word on one set: its members in their order (the array order is the
+    version order), the labels, and the designation, stage, section and existing document the
+    set belongs to. The stage and section are a proposal an expert confirms, never inferred."""
+
+    files: Annotated[list[ConfirmedComparisonFile], Field(min_length=1)]
+    designation: Annotated[str, Field(min_length=1, max_length=200)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    existing_document_uid: DocumentUid = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    project_stage: ProjectStage = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    section_code: ProjectSection = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class ComparisonVersionOrderSource(str, enum.Enum):
+    PROPOSAL = "proposal"
+    EXPERT = "expert"
+
+
+class ComparisonVersionOrder(_Object):
+    """One revision of the order in which the versions of a document set are compared. It
+    never changes the documents' ordinal that runs and finding carry-over use (ADR-0025
+    decision 16, `D-5`)."""
+
+    order_id: ComparisonVersionOrderId
+    document_uid: DocumentUid
+    revision_no: Annotated[int, Field(ge=1)]
+    version_uids: Annotated[list[VersionUid], Field(min_length=1, max_length=500)]
+    source: ComparisonVersionOrderSource
+    created_at: datetime
+    created_by: UserUid
+
+
+class ComparisonVersionOrderList(_Object):
+    """Newest revision first."""
+
+    items: list[ComparisonVersionOrder]
+    page: PageInfo
+
+
+class AppendComparisonVersionOrderRequest(_Object):
+    """A new revision of the order. ``base_revision_no`` is the latest revision the caller saw
+    (``0`` for none); a mismatch is ``409 conflict`` and the caller rebases."""
+
+    version_uids: Annotated[list[VersionUid], Field(min_length=1, max_length=500)]
+    base_revision_no: Annotated[int, Field(ge=0)]
+
+
+class PageProfileStatus(str, enum.Enum):
+    READY = "ready"
+    NEEDS_REVIEW = "needs_review"
+    REFUSED = "refused"
+
+
+class PageStamp(_Object):
+    """The stamp fields read from one page; every member is absent when the page has none."""
+
+    designation: Annotated[str, Field(min_length=1, max_length=200)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    sheet_number: Annotated[str, Field(min_length=1, max_length=64)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    sheet_name: Annotated[str, Field(min_length=1, max_length=400)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    revision_number: Annotated[str, Field(min_length=1, max_length=32)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    release_date: date = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    project_stage: ProjectStage = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    section_code: ProjectSection = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class VersionPageProfile(_Object):
+    """The deterministic profile of one page of one version (raw evidence, never rewritten by
+    an AI layer). ``reason`` is the typed reason of a ``needs_review`` or ``refused`` page, for
+    example ``RENDER_FAILED``. ``content_key`` is the digest the profile is cached under."""
+
+    page_profile_id: ComparisonPageProfileId
+    version_uid: VersionUid
+    page_number: Annotated[int, Field(ge=1, le=500)]
+    status: PageProfileStatus
+    algo_version: Annotated[str, Field(min_length=1, max_length=64)]
+    content_key: Sha256
+    has_text_layer: bool
+    word_count: Annotated[int, Field(ge=0)]
+    vector_line_count: Annotated[int, Field(ge=0)]
+    annotation_count: Annotated[int, Field(ge=0)]
+    preview_available: bool
+    thumbnail_available: bool
+    reason: Annotated[str, Field(min_length=1, max_length=128)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    width_pt: Annotated[float, Field(gt=0)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    height_pt: Annotated[float, Field(gt=0)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    raster_width_px: Annotated[int, Field(ge=1)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    raster_height_px: Annotated[int, Field(ge=1)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    stamp: PageStamp = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class VersionPageProfilePage(_Object):
+    """The profiles stored for a version, by page number ascending. A page whose profile has not
+    been computed is absent; the version's ``page_count`` says how many pages it has."""
+
+    items: list[VersionPageProfile]
+    page: PageInfo

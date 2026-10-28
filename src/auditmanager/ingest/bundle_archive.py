@@ -39,6 +39,17 @@ Order of the rules, cheapest first (each refusal answers a registered
 3. each member unpacked and counted: its actual bytes against the bounds and against its
    declaration, its CRC-32, and the ratio of those bytes to the compressed bytes the stream
    really used (a header may claim more than the stream holds).
+
+Policies (`CMP-INGEST-ZIP-01`, ADR-0025 decision 12)
+----------------------------------------------------
+:func:`extract_bundle` takes an :class:`ArchivePolicy`. The mechanics above -- the end records,
+the directory, the declared and the counted sizes, the ratio, the CRC and the digest -- are the
+same for every kind of upload; a policy says only which entries a kind accepts
+(:attr:`ArchivePolicy.judge`), how its refusals are named (:attr:`ArchivePolicy.translate`)
+and how large a central directory it will read (:attr:`ArchivePolicy.max_directory_bytes`).
+The default is :data:`PORTAL_POLICY`, which is every rule of this module as it was before the
+parameter existed. The policy of a ZIP *set* (many PDFs in one archive) is written in
+:mod:`auditmanager.ingest.comparison_zip`.
 """
 
 from __future__ import annotations
@@ -49,7 +60,7 @@ import struct
 import tempfile
 import unicodedata
 import zlib
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO, Final
@@ -59,11 +70,15 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 from .envelope import MAX_BYTES
 
 __all__ = [
+    "ACCEPTED_METHODS",
+    "ArchiveEntry",
+    "ArchivePolicy",
     "BundleLimits",
     "DEFAULT_LIMITS",
     "ExtractedBundle",
     "ExtractedMember",
     "MEMBER_BYTES",
+    "PORTAL_POLICY",
     "ROLE_BLOCKS",
     "ROLE_PDF",
     "ROLE_RESULTS_HTML",
@@ -73,7 +88,10 @@ __all__ = [
     "STAMP_AUDIT_BYTES",
     "TEXT_MEMBER_BYTES",
     "ZIP_MAGICS",
+    "decode_display_name",
+    "duplicate_key",
     "extract_bundle",
+    "is_unsafe_name",
     "looks_like_zip",
 ]
 
@@ -771,8 +789,45 @@ def _unpack(
     return members
 
 
+@dataclass(frozen=True, slots=True)
+class ArchivePolicy:
+    """The policy parameter of :func:`extract_bundle` (`CMP-INGEST-ZIP-01`).
+
+    ``judge`` takes every entry of the central directory, in directory order, and returns the
+    members to unpack, keyed by the name this policy gives each (the key names the member's
+    temporary file, never the archive's name for it). It raises :func:`refuse` for an entry or
+    a set it does not accept.
+
+    ``translate``, when given, turns every :class:`DomainError` the extraction raises into the
+    refusal this policy answers with, so a kind of upload need not borrow the portal bundle's
+    constraint names or sentences. ``None`` leaves every refusal as raised.
+
+    ``max_directory_bytes``, when given, refuses an archive whose central directory is larger,
+    before it is read into memory. The portal bundle does not need it (eight entries bound the
+    directory to about 1.5 MiB); a policy that allows many entries does.
+    """
+
+    judge: Callable[[tuple[_Entry, ...]], dict[str, _Entry]]
+    translate: Callable[[DomainError], DomainError] | None = None
+    max_directory_bytes: int | None = None
+
+
+#: The portal bundle's rules, exactly: :func:`_judge_entries`, no renaming, no extra bound.
+PORTAL_POLICY: Final[ArchivePolicy] = ArchivePolicy(judge=_judge_entries)
+
+#: What a policy's ``judge`` is handed and what it may reuse so that every kind of upload
+#: applies the same name, duplicate and method rules as the portal bundle does.
+ArchiveEntry = _Entry
+ACCEPTED_METHODS: Final[tuple[int, ...]] = (_STORED, _DEFLATED)
+is_unsafe_name = _is_unsafe_name
+duplicate_key = _duplicate_key
+
+
 def extract_bundle(
-    handle: BinaryIO, *, limits: BundleLimits = DEFAULT_LIMITS
+    handle: BinaryIO,
+    *,
+    limits: BundleLimits = DEFAULT_LIMITS,
+    policy: ArchivePolicy = PORTAL_POLICY,
 ) -> ExtractedBundle:
     """Apply every archive rule to the upload and take its members out as temporary files.
 
@@ -781,7 +836,21 @@ def extract_bundle(
     ``validation_failed`` (``field: "file"``, a registered ``constraint``) for anything a
     portal bundle is not, having kept nothing: the temporary directory is removed before the
     refusal leaves. On success the caller owns the returned bundle and must close it.
+
+    ``policy`` is the kind of upload the archive must be (:class:`ArchivePolicy`); the default
+    is the portal bundle, whose behaviour this parameter does not change.
     """
+    if policy.translate is None:
+        return _extract(handle, limits, policy)
+    try:
+        return _extract(handle, limits, policy)
+    except DomainError as refused:
+        raise policy.translate(refused) from None
+
+
+def _extract(
+    handle: BinaryIO, limits: BundleLimits, policy: ArchivePolicy
+) -> ExtractedBundle:
     if not looks_like_zip(handle):
         raise refuse("portal_bundle_required")
     directory = tempfile.TemporaryDirectory(prefix="auditmanager-bundle-")
@@ -790,10 +859,15 @@ def extract_bundle(
             archive = _Archive(handle)
             if archive.declared_count > limits.entries:
                 raise refuse("bundle_entry_count")
+            if (
+                policy.max_directory_bytes is not None
+                and archive._directory_size > policy.max_directory_bytes
+            ):
+                raise refuse("bundle_unreadable")
             entries = archive.load_entries()
         except _ArchiveError:
             raise refuse("bundle_unreadable") from None
-        chosen = _judge_entries(entries)
+        chosen = policy.judge(entries)
         _judge_declared(chosen, archive.size, limits)
         members = _unpack(archive, chosen, Path(directory.name), limits)
         return ExtractedBundle(members, directory)

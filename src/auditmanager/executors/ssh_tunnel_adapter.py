@@ -1,4 +1,4 @@
-"""Short-lived SSH forward for the existing HTTP model adapters, including PNG blocks."""
+"""Short-lived SSH forward for the existing HTTP model adapters, including their ordered PNG blocks."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import Any
 from auditmanager.analysis.public import ModelRequest, ModelResponse, ProviderMode, ProxyDispatchError
 from auditmanager.executors.destinations import DestinationPolicy, DestinationRefused, DestinationUnresolvable
 from auditmanager.executors.http_adapter import build_http_adapter, effective_timeout
-from auditmanager.executors.image_input import checked_png
+from auditmanager.executors.image_input import checked_pngs
 from auditmanager.executors.model import RevisionRecord
 from auditmanager.executors.ssh_transport import SshEndpoint, SshFailure, open_tunnel
 from auditmanager.shared.errors import ErrorCode
@@ -77,7 +77,7 @@ class SshTunnelAdapter:
 
     def complete(self, request: ModelRequest) -> ModelResponse:
         # The descriptor/bytes mismatch must fail before an SSH or HTTP connection opens.
-        checked_png(request)
+        checked_pngs(request)
         settings = self._revision.settings
         assert settings.base_url and settings.api_flavour
         try:

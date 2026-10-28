@@ -116,6 +116,7 @@ def build_runner_routes(router: APIRouter, runner: RunnerPort) -> None:
         task = runner.claim_task(
             runner=identity,
             wait_seconds=_DEFAULT_WAIT_SECONDS if body.wait_seconds is None else body.wait_seconds,
+            max_images=body.max_images,
         )
         if task is None:
             return WireResponse(204, ())

@@ -29,6 +29,18 @@ from auditmanager.bootstrap.providers import (
     UnboundAdapter,
 )
 from auditmanager.bootstrap.runner import RunnerAdapter
+from auditmanager.comparison.public import (
+    COMPARISON_MODULES_ENV,
+    HANDLER_FACTORIES as COMPARISON_HANDLER_FACTORIES,
+    SPEND_SETTLERS as COMPARISON_SPEND_SETTLERS,
+    ComparisonWorkRepository,
+    ComparisonWorkRunner,
+    HandlerRegistry,
+    WorkDependencies,
+    WorkQueueError,
+    enabled_modules as enabled_comparison_modules,
+    parse_modules as parse_comparison_modules,
+)
 from auditmanager.bootstrap.adapters import (
     AccountAdapter,
     AnalysisProfileAdapter,
@@ -50,6 +62,9 @@ from auditmanager.bootstrap.adapters import (
     ProjectAdapter,
     RegistrationAdapter,
     ReleasesAdapter,
+    ComparisonUploadAdapter,
+    ComparisonVersionOrderAdapter,
+    VersionPageAdapter,
     RunAdapter,
     SectionAdapter,
     SectionSpecificationAdapter,
@@ -57,6 +72,8 @@ from auditmanager.bootstrap.adapters import (
     XlsxExportAdapter,
     resolve_analysis_preset,
 )
+from auditmanager.ingest.comparison_batch.public import BATCH_HANDLER_FACTORIES, ComparisonBatchService
+from auditmanager.ingest.comparison_pdf.public import ComparisonUploadService, ComparisonVersionOrderService
 from auditmanager.bootstrap.settings import AppSettings, ConfigurationError
 from auditmanager.bootstrap.settings import load as load_settings
 from auditmanager.runs.public import (
@@ -160,6 +177,45 @@ class WorkerRuntime:
     #: `EXEC-HTTP-01`: ``probe_runner()`` takes the ``requested`` connection probes and runs them
     #: on this process's network path; ``None`` when the process holds no private ring.
     probe_runner: Callable[[], int] | None = None
+    #: `CMP-WORK-01`: the comparison loop the worker hosts as a second claimant
+    #: (:class:`~auditmanager.comparison.public.ComparisonWorkRunner`). Always built by
+    #: :func:`build_worker_runtime`; with ``AUDITMANAGER_COMPARISON_MODULES=none`` (the default)
+    #: it claims nothing and only reclaims expired leases.
+    comparison_work: ComparisonWorkRunner | None = None
+
+
+def build_comparison_work(
+    *, sessions: sessionmaker[Session], engine: Any, blob_store: Any, environ: Mapping[str, str],
+) -> ComparisonWorkRunner:
+    """`CMP-WORK-01` (ADR-0025 decisions 4, 6, 23): the comparison loop's brain, or a refusal.
+
+    The module set is read once from ``AUDITMANAGER_COMPARISON_MODULES`` (an unknown value stops the
+    worker while it is wiring, as it stops the API); one dependency bundle is built and every
+    factory of ``comparison.public.HANDLER_FACTORIES`` is applied to it, refusing a duplicate kind.
+    """
+    try:
+        modules = enabled_comparison_modules(
+            parse_comparison_modules(environ.get(COMPARISON_MODULES_ENV))
+        )
+    except ValueError as exc:
+        raise ConfigurationError(str(exc)) from exc
+    work = ComparisonWorkRepository()
+    try:
+        # `CMP-INGEST-02`: the two work kinds of the batch operations are appended here, not in
+        # ``comparison.public`` (a ``comparison`` module may not import ``ingest``); the registry
+        # still refuses a duplicate kind.
+        registry = HandlerRegistry.build(
+            (*COMPARISON_HANDLER_FACTORIES, *BATCH_HANDLER_FACTORIES),
+            WorkDependencies(
+                engine=engine, session_factory=sessions, blob_store=blob_store, work=work,
+            ),
+        )
+    except WorkQueueError as exc:
+        raise ConfigurationError(str(exc)) from exc
+    return ComparisonWorkRunner(
+        sessions, registry=registry, modules=modules, repository=work,
+        spend_settlers=COMPARISON_SPEND_SETTLERS,
+    )
 
 
 def build_worker_runtime(
@@ -245,6 +301,9 @@ def build_worker_runtime(
         slots=resolved.worker_slots,
         state_dir=None if resolved.worker_state_dir is None else Path(resolved.worker_state_dir),
         probe_runner=probe_runner,
+        comparison_work=build_comparison_work(
+            sessions=sessions, engine=engine, blob_store=store, environ=env,
+        ),
     )
 
 
@@ -286,6 +345,10 @@ def build_application(
     except (FileNotFoundError, ValueError) as exc:
         raise ConfigurationError(f"release version or build inputs are invalid: {exc}") from exc
     release_repository = ReleaseRepository(sessions, product_version=product_version)
+    try:
+        comparison_modules = parse_comparison_modules(env.get(COMPARISON_MODULES_ENV))
+    except ValueError as exc:
+        raise ConfigurationError(str(exc)) from exc
 
     store = S3BlobStore(
         S3StorageSettings(
@@ -296,6 +359,10 @@ def build_application(
             bucket=resolved.s3_bucket,
         )
     )
+
+    # `CMP-INGEST-01` / `CMP-INGEST-02`: one upload service, shared by the adapter's own operations
+    # and by the batch service that reads the batch and the sets back through it.
+    comparison_upload_service = ComparisonUploadService(store, session_factory=sessions)
 
     from auditmanager.executors.runtime import KindRuntime
 
@@ -407,8 +474,24 @@ def build_application(
             sessions, registrations=RegistrationAccessRepository()
         ),
         releases=ReleasesAdapter(
-            release_repository, product_version=product_version, build_id=build_id
+            release_repository,
+            product_version=product_version,
+            build_id=build_id,
+            # `CMP-SEAL-C0` (ADR-0025 decision 23): the module set reaches the web through the
+            # contract (``ProductVersion.comparison_modules``), not through a client env read.
+            comparison_modules=comparison_modules,
         ),
+        # `CMP-SEAL-C0`. The comparison operations, sealed as stubs answering `503
+        # dependency_unavailable` until `CMP-INGEST-01`, `CMP-INGEST-02` and `CMP-PROFILE-01`
+        # replace the three adapters (plan section 4.0 rule 1).
+        comparison_uploads=ComparisonUploadAdapter(
+            sessions, service=comparison_upload_service,
+            batches=ComparisonBatchService(comparison_upload_service, session_factory=sessions),
+        ),
+        comparison_version_orders=ComparisonVersionOrderAdapter(
+            sessions, service=ComparisonVersionOrderService(session_factory=sessions)
+        ),
+        version_pages=VersionPageAdapter(sessions, blob_store=store),
         execution=ExecutionAdapter(sessions, runs=run_adapter),
         # `W55A-SEAL-01` sealed them; `W55A-SEARCH-01` serves them. The norms reads and the
         # designation over the same session factory, every search under the operator's

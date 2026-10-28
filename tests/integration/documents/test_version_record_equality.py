@@ -81,6 +81,7 @@ def test_every_other_field_still_counts_toward_equality() -> None:
         "text_character_count": 5,
         "textless_pages": (1,),
         "recognised_character_count": 3,
+        "upload_kind": "comparison_pdf",
     }
     compared = {item.name for item in fields(DocumentVersionRecord) if item.compare}
     assert compared == set(changed) | {"manifest"}, "a new field must be judged here"

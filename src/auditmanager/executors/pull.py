@@ -35,7 +35,6 @@ from __future__ import annotations
 
 import dataclasses
 import logging
-import re
 import time
 from collections.abc import Callable, Mapping
 from typing import Any, Final
@@ -51,6 +50,7 @@ from auditmanager.analysis.public import (
     ProxyDispatchError,
 )
 from auditmanager.executors.answers import SchemaNotSupported, check_supported
+from auditmanager.executors.image_input import ImageReferenceError, checked_descriptors
 from auditmanager.executors.model import RevisionRecord
 from auditmanager.executors.probes import ProbeResult
 from auditmanager.executors.runner_repository import (
@@ -59,7 +59,6 @@ from auditmanager.executors.runner_repository import (
     TaskRecord,
 )
 from auditmanager.shared.errors import ErrorCode
-from auditmanager.storage.public import derive_blob_id
 
 __all__ = [
     "DEADLINE_MARGIN_SECONDS",
@@ -84,13 +83,14 @@ _POLL_SECONDS: Final[float] = 2.0
 _DEPENDENCY_NONE_ONLINE: Final[str] = "no_executor_online"
 _DEPENDENCY_DEADLINE: Final[str] = "executor_deadline"
 _DEPENDENCY_FAILED: Final[str] = "executor_task_failed"
+#: A runner that cannot serve every image of a task fails it with this reason (the first word of
+#: ``fail_reason``) and never answers on a subset; the call says so instead of the generic failure.
+_DEPENDENCY_IMAGES: Final[str] = "executor_image_input_unsupported"
+_IMAGE_REFUSAL: Final[str] = "image_input_unsupported"
 _ECHO_SYSTEM: Final[str] = (
     "You are answering a connection check for an audit application. Reply with one JSON "
     "document that has the single field \"echo\" set to the exact text you were given."
 )
-MAX_RUNNER_IMAGE_BYTES: Final[int] = 16 * 1024 * 1024
-_SHA256: Final = re.compile(r"[0-9a-f]{64}\Z")
-_BLOCK_ID: Final = re.compile(r"blk_[0-9a-f]{32}\Z")
 
 
 def answer_window(revision_deadline_seconds: int, context: Any | None) -> float | None:
@@ -190,29 +190,11 @@ def _task_payload(request: ModelRequest) -> dict[str, Any]:
     if not isinstance(system, str) or not parts:
         raise _error("not_sent", "executor_request", "the request has no prompt to hand over",
                      code=ErrorCode.ANALYSIS_INPUT_INVALID)
-    images = body.get("images", ())
-    if not isinstance(images, (list, tuple)) or len(images) > 1:
-        raise _error("not_sent", "executor_request", "one image is allowed per runner task",
-                     code=ErrorCode.ANALYSIS_INPUT_INVALID)
-    checked_images: list[dict[str, Any]] = []
-    for raw in images:
-        if not isinstance(raw, Mapping) or set(raw) != {
-            "blob_id", "portal_block_id", "sha256", "size_bytes", "media_type",
-        }:
-            raise _error("not_sent", "executor_request", "invalid runner image reference",
-                         code=ErrorCode.ANALYSIS_INPUT_INVALID)
-        blob_id, block_id, digest, size = (
-            raw["blob_id"], raw["portal_block_id"], raw["sha256"], raw["size_bytes"],
-        )
-        if (not isinstance(blob_id, str) or not isinstance(block_id, str)
-                or _BLOCK_ID.fullmatch(block_id) is None
-                or not isinstance(digest, str) or _SHA256.fullmatch(digest) is None
-                or type(size) is not int or not 1 <= size <= MAX_RUNNER_IMAGE_BYTES
-                or raw["media_type"] != "image/png"
-                or blob_id != str(derive_blob_id(sha256=digest, size=size))):
-            raise _error("not_sent", "executor_request", "invalid runner image reference",
-                         code=ErrorCode.ANALYSIS_INPUT_INVALID)
-        checked_images.append(dict(raw))
+    try:
+        checked_images = [dict(item) for item in checked_descriptors(body.get("images", ()))]
+    except ImageReferenceError:
+        raise _error("not_sent", "executor_request", "invalid runner image references",
+                     code=ErrorCode.ANALYSIS_INPUT_INVALID) from None
     payload = {
         "system": system, "user_text": "\n\n".join(parts),
         "output_schema": schema if isinstance(schema, Mapping) else {"type": "object"},
@@ -276,16 +258,23 @@ class PullAdapter:
     # -- internals -------------------------------------------------------------------------
 
     def _write_task(self, payload: Mapping[str, Any], window: float) -> TaskRecord:
+        """Write the task. A call made for a comparison work attempt (`CMP-SPEND-01`, ADR-0025
+        decision 4) has a ``context`` that carries ``comparison_attempt_id`` -- and, like the
+        run's :class:`~auditmanager.jobs.public.AttemptContext`, ``remaining_seconds()`` for
+        :func:`answer_window`; its task is origin ``comparison_call``. Any other call is a Run's
+        call and is written as it always was."""
         context = self._context
+        comparison_attempt_id = getattr(context, "comparison_attempt_id", None)
         with self._sessions() as session:
             task = self._repository.insert_task(
                 session, connection_id=self._revision.connection_id,
-                revision_id=self._revision.revision_id, origin="run_call",
+                revision_id=self._revision.revision_id,
+                origin="comparison_call" if comparison_attempt_id is not None else "run_call",
                 run_id=getattr(context, "run_id", None),
                 attempt_id=getattr(context, "attempt_id", None),
                 model_call_id=getattr(context, "call_id", None), probe_id=None,
                 expected_model=self._revision.settings.gateway_model, payload=payload,
-                deadline_seconds=window,
+                deadline_seconds=window, comparison_attempt_id=comparison_attempt_id,
             )
             session.commit()
         return task
@@ -299,9 +288,7 @@ class PullAdapter:
                 if current is not None and current.state == "answered":
                     return self._response(current, started)
                 if current is not None and current.state == "failed":
-                    raise _error("outcome_unknown", _DEPENDENCY_FAILED,
-                                 "the runner reported that it could not answer; the outcome "
-                                 "is unknown")
+                    raise self._failed(current)
                 if current is not None and current.state in ("expired", "cancelled"):
                     raise self._unanswered(current)
                 remaining = stop - self._monotonic()
@@ -346,6 +333,18 @@ class PullAdapter:
                 session.commit()
         except Exception:  # noqa: BLE001 - the api's sweep cancels it with its Attempt
             _log.warning("executor task %s could not be withdrawn", task_id)
+
+    @staticmethod
+    def _failed(task: TaskRecord) -> ProxyDispatchError:
+        """The runner gave the task back. A refusal of the images is named; the class stays
+        ``outcome_unknown`` as for every failure after a claim, because only the runner says that
+        no model ran (the spend rules of a comparison call are not decided here)."""
+        if (task.fail_reason or "").split(":", 1)[0].strip() == _IMAGE_REFUSAL:
+            return _error("outcome_unknown", _DEPENDENCY_IMAGES,
+                          "the runner cannot serve every image of the task and did not answer; "
+                          "the outcome is unknown")
+        return _error("outcome_unknown", _DEPENDENCY_FAILED,
+                      "the runner reported that it could not answer; the outcome is unknown")
 
     @staticmethod
     def _unanswered(task: TaskRecord) -> ProxyDispatchError:

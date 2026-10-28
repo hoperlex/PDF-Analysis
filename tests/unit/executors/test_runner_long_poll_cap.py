@@ -129,10 +129,13 @@ class _Port:
         self._parking = parking
         self._rows = rows
 
-    def claim_task(self, *, runner: RunnerIdentity, wait_seconds: int) -> None:
+    def claim_task(
+        self, *, runner: RunnerIdentity, wait_seconds: int, max_images: int | None = None
+    ) -> None:
         claim_task(
             _Session, RunnerPrincipal(runner.token_id, runner.connection_id),
             wait_seconds=wait_seconds, executors=_Executors(), repository=self._rows,  # type: ignore[arg-type]
+            max_images=max_images,
             sleep=self._parking.sleep, monotonic=self._parking.monotonic,
         )
         return None

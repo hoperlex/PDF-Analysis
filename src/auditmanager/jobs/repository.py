@@ -59,12 +59,27 @@ _LOCK_CONNECTION = text(
     "SELECT pg_advisory_xact_lock("
     "hashtextextended('auditmanager.executor_connection|' || :connection_id, 0))"
 )
+#: Is the connection busy: with another active Run, or -- `CMP-SPEND-01` (ADR-0025 decision 4; the grant
+#: of the PROD-20 owner) -- with an active **comparison model call**: a ``prepared`` or ``sent`` row of
+#: ``comparison_model_call`` whose attempt still holds its work item (a killed worker's call stays active
+#: until the queue's reclaim ends the attempt, the same rule as a Run's expired Lease). The comparison
+#: wrapper takes the same advisory lock (:data:`_LOCK_CONNECTION`) before it prepares a call and asks the
+#: mirror of this question, so a Run's claim and a comparison call never both pass their check. The
+#: comparison table is empty while no comparison module is on, so a plain Run is decided exactly as before.
 _CONNECTION_HAS_OTHER_ACTIVE_RUN = text(
     "SELECT EXISTS (SELECT 1 FROM job other_job "
     "JOIN audit_run other ON other.run_id = other_job.run_id "
     "JOIN executor_connection_revision peer ON peer.revision_id = other.connection_revision_id "
     "WHERE peer.connection_id = :connection_id AND other.run_id <> :run_id "
-    f"AND other_job.state IN {_ACTIVE_JOB_STATES})"
+    f"AND other_job.state IN {_ACTIVE_JOB_STATES}) "
+    "OR EXISTS (SELECT 1 FROM comparison_model_call active_call "
+    "JOIN comparison_work_attempt active_attempt "
+    "ON active_attempt.comparison_work_attempt_id = active_call.comparison_work_attempt_id "
+    "JOIN executor_connection_revision call_peer "
+    "ON call_peer.revision_id = active_call.connection_revision_id "
+    "WHERE call_peer.connection_id = :connection_id "
+    "AND active_call.state IN ('prepared', 'sent') "
+    "AND active_attempt.state IN ('created', 'leased', 'running'))"
 )
 #: The dispatcher's hint. ``:submitted`` is the Runs this process has already handed to a slot:
 #: they are not offered again, and their connections count as held, because a slot that has not

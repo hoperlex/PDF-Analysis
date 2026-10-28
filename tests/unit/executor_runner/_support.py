@@ -7,6 +7,7 @@ Every process started here is a child of the test and is stopped through its own
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import queue
@@ -43,6 +44,28 @@ def make_task(task_id: str = "ext_TASK1", model: str = "claude-opus-5", lease: i
     }
     task.update(overrides)
     return task
+
+
+_CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+
+
+def make_image(label: str, *, crop: bool = True, pad: int = 0) -> tuple[dict, bytes]:
+    """``(descriptor, bytes)`` of a small synthetic PNG (signature and a label): distinct per label.
+
+    The descriptor is a comparison crop with an opaque ``crop_id``, or a portal-block crop with
+    ``crop=False``. The blob id has the shape the stand's (any 26 Crockford characters) and is
+    derived from the label so that two labels never share one."""
+    raw = b"\x89PNG\r\n\x1a\n" + label.encode() + b"." * pad
+    digest = hashlib.sha256(raw).hexdigest()
+    number = int(digest[:12], 16)
+    tail = "".join(_CROCKFORD[(number >> (5 * index)) & 31] for index in range(8))
+    descriptor = {
+        "blob_id": "blob_01M2545JSD15ETSNNV" + tail, "sha256": digest, "size_bytes": len(raw),
+        "media_type": "image/png",
+        **({"crop_id": f"crop-{label}"} if crop
+           else {"portal_block_id": "blk_" + hashlib.sha256(label.encode()).hexdigest()[:32]}),
+    }
+    return descriptor, raw
 
 
 @dataclass
@@ -372,6 +395,7 @@ def agent_config(
     command_timeout: float = 30.0,
     accept_images: bool = False,
     drain_seconds: int = 5,
+    max_images: Optional[int] = None,
 ) -> Path:
     lines = [
         "[runner]",
@@ -390,8 +414,12 @@ def agent_config(
     if mode == "command":
         lines += ["[command]", "argv = " + json.dumps(argv or []), f"timeout_seconds = {command_timeout}",
                   f"accept_images = {'true' if accept_images else 'false'}"]
+        if max_images is not None:
+            lines.append(f"max_images = {max_images}")
     else:
         lines += ["[endpoint]", f'url = "{endpoint_url}"', 'model = "local-model"', extra_endpoint]
+        if max_images is not None:
+            lines.append(f"max_images = {max_images}")
     path.write_text("\n".join(lines) + "\n")
     return path
 

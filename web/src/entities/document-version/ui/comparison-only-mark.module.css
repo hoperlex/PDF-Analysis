@@ -1,0 +1,15 @@
+/*
+ * Layout for the «загружено без пакета портала» mark. Colour is deliberately absent: the
+ * mark takes its tone from the design system's `.am-badge--*` modifier in `globals.css`,
+ * where the contrast census measures it.
+ *
+ * `.am-badge` does not wrap, which is right for a one-word state and wrong for a sentence:
+ * the mark is wider than a phone. It wraps inside itself, so it never widens its screen.
+ */
+
+.mark {
+  max-width: 100%;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

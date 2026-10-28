@@ -45,16 +45,31 @@
  * there is no other — never the ordinary «Запустить прогон». The section comes from the version the
  * page has read; until it arrives (`undefined`) the list is what it always was, and a press in
  * that interval is refused by the server in the same words.
+ *
+ * `CMP-VERSION-MARK-01`: a version admitted for comparison only (`upload_kind` `comparison_pdf`) has
+ * no portal bundle, so no analysis reads it, and the server refuses both starts
+ * (`analysis_input_invalid`, `comparison_only_version`). The list draws the start disabled, with the
+ * sentence that says why, in place of the ordinary control and of the six checks alike — and in place
+ * of the АР sentence for a version classified АР, whose reason is the less basic one. The kind comes
+ * from the version the page has read; until it arrives (`undefined`) the list is what it always was.
+ * Runs already listed stay listed.
  */
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
-import type { ProjectSection, ProjectUid, RunStatus, VersionUid } from '@/shared/api';
+import type {
+  ProjectSection,
+  ProjectUid,
+  RunStatus,
+  VersionUid,
+  VersionUploadKind,
+} from '@/shared/api';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import { classifyListingFailure, routes } from '@/shared/lib';
 import { AR_START_NOTE } from '@/entities/analysis-profile';
 import { RunRow, arV3GroupReviewAddress, useArV3PackStatus, useRunList } from '@/entities/audit-run';
+import { ComparisonOnlyStart } from '@/entities/document-version';
 import type { ArV3GroupStartIntent } from '@/features/start-ar-v3-group';
 import { StartArV3GroupControl, useArV3GroupStartIntent } from '@/features/start-ar-v3-group';
 import { StartRunControl } from '@/features/start-run';
@@ -67,6 +82,11 @@ export interface RunListProps {
    * АР start (the six checks only); anything else, and `undefined`, the ordinary start.
    */
   readonly sectionCode?: ProjectSection | null | undefined;
+  /**
+   * How the version reached the product, once the page has read it. `'comparison_pdf'` draws the
+   * start disabled with its reason; anything else, and `undefined`, the start as before.
+   */
+  readonly uploadKind?: VersionUploadKind | undefined;
   /** Called with the 202 reading so the screen can move to run progress. */
   readonly onRunStarted?: ((run: RunStatus) => void) | undefined;
 }
@@ -99,12 +119,20 @@ export function RunList(props: RunListProps) {
   return <VersionRunList key={props.versionUid} {...props} />;
 }
 
-function VersionRunList({ projectUid, versionUid, sectionCode, onRunStarted }: RunListProps) {
+function VersionRunList({
+  projectUid,
+  versionUid,
+  sectionCode,
+  uploadKind,
+  onRunStarted,
+}: RunListProps) {
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const query = useRunList(versionUid, cursor);
   const { view: pack } = useArV3PackStatus();
   const packInstalled = pack.phase === 'read' && pack.reading.kind === 'installed';
   const startIntent = useArV3GroupStartIntent(versionUid);
+
+  const comparisonOnly = uploadKind === 'comparison_pdf';
 
   const sixChecks =
     packInstalled || startIntent.inFlight ? (
@@ -115,7 +143,9 @@ function VersionRunList({ projectUid, versionUid, sectionCode, onRunStarted }: R
   const sixChecksInFlight = startIntent.inFlight ? sixChecks : null;
 
   const isAr = sectionCode === 'AR';
-  const startControl = isAr ? (
+  const startControl = comparisonOnly ? (
+    <ComparisonOnlyStart />
+  ) : isAr ? (
     sixChecks ?? <p className="am-note" data-ar-start-note="">{AR_START_NOTE}</p>
   ) : (
     <>
@@ -190,7 +220,9 @@ function VersionRunList({ projectUid, versionUid, sectionCode, onRunStarted }: R
           </button>
         )}
       </div>
-      <h3>{isAr ? 'Запустить анализ АР' : 'Запустить ещё один прогон'}</h3>
+      <h3>
+        {comparisonOnly ? 'Запуск прогона' : isAr ? 'Запустить анализ АР' : 'Запустить ещё один прогон'}
+      </h3>
       {startControl}
     </div>
   );

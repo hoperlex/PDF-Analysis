@@ -42,6 +42,10 @@ class ModelRequest:
     # digest/size descriptor, so the request checksum binds the bytes without
     # copying a PNG into the call journal. Pull transports fetch by descriptor.
     image_bytes: bytes | None = field(default=None, repr=False, compare=False)
+    # `CMP-EXEC-IMAGES-01` (ADR-0025 decision 18): the same, for an ordered list of up to eight
+    # crops. ``body["images"]`` holds one descriptor per entry, in this order; a request carries
+    # ``image_bytes`` (one portal-block crop, as before) or ``images_bytes``, never both.
+    images_bytes: tuple[bytes, ...] = field(default=(), repr=False, compare=False)
 
     @property
     def request_sha256(self) -> str:

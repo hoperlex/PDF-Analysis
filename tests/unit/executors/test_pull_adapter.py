@@ -108,9 +108,9 @@ class FakeStore:
             declared_input_tokens=None if tokens is None else tokens[0],
             declared_output_tokens=None if tokens is None else tokens[1])
 
-    def failed(self) -> None:
+    def failed(self, reason: str = "x") -> None:
         assert self.task is not None
-        self.task = replace(self.task, state="failed", fail_reason="x", terminal_at=NOW)
+        self.task = replace(self.task, state="failed", fail_reason=reason, terminal_at=NOW)
 
 
 class Sessions:
@@ -362,3 +362,29 @@ def test_the_probe_task_asks_for_a_fixed_echo_a_runner_can_give(clock: Clock) ->
     assert store.payload["user_text"] == "abc123"
     assert read_answer(store.payload["output_schema"], '{"echo": "abc123"}') is None
     assert read_answer(store.payload["output_schema"], '{"echo": "other"}') is not None
+
+
+# -- several images, `CMP-EXEC-IMAGES-01` --------------------------------------------------------
+
+
+@pytest.mark.parametrize("reason,dependency", [
+    ("image_input_unsupported", "executor_image_input_unsupported"),
+    ("image_input_unsupported: this agent takes one image", "executor_image_input_unsupported"),
+    ("image_delivery_failed", "executor_task_failed"),
+    ("command_failed: exit status 1", "executor_task_failed"),
+    ("not_image_input_unsupported", "executor_task_failed"),
+])
+def test_a_runner_that_refuses_the_images_is_named_and_never_read_as_an_answer(
+    clock: Clock, reason: str, dependency: str,
+) -> None:
+    def script(c: Clock, store: FakeStore) -> None:
+        if store.task and store.task.state == "open":
+            store.claim()
+        elif store.task and store.task.state == "claimed":
+            store.failed(reason)
+
+    with pytest.raises(ProxyDispatchError) as raised:
+        adapter(clock, FakeStore(clock, script)).complete(REQUEST)
+    # the class stays the conservative one of every failure after a claim; only the name is new
+    assert raised.value.dispatch_class == "outcome_unknown" and raised.value.retry_safe is False
+    assert raised.value.detail_fields == {"dependency": dependency}

@@ -25,6 +25,12 @@ MODEL = "gpt-6-sol"
 MAX_TASK_BYTES = 1024 * 1024
 MAX_OUTPUT_BYTES = 8 * 1024 * 1024
 MAX_IMAGE_BYTES = 16 * 1024 * 1024
+#: ADR-0025 decision 18: up to eight images, 32 MiB together; each is a portal-block crop or an opaque crop.
+MAX_IMAGES = 8
+MAX_TOTAL_IMAGE_BYTES = 32 * 1024 * 1024
+_IMAGE_KEYS = ("blob_id", "sha256", "size_bytes", "media_type")
+_IDENTITY = {"portal_block_id": re.compile(r"blk_[0-9a-f]{32}"),
+             "crop_id": re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")}
 TIMEOUT_SECONDS = 510
 
 
@@ -52,15 +58,20 @@ def read_task(payload: bytes) -> dict:
     images = task.get("images", [])
     local = task.get("local_images", [])
     if (not isinstance(images, list) or not isinstance(local, list)
-            or len(images) > 1 or len(images) != len(local)):
+            or len(images) > MAX_IMAGES or len(images) != len(local)):
         raise TaskError("image_input_invalid")
+    total = 0
     for image, copied in zip(images, local):
-        if (not isinstance(image, dict) or not isinstance(copied, dict)
-                or any(copied.get(key) != image.get(key) for key in
-                       ("blob_id", "portal_block_id", "sha256", "size_bytes", "media_type"))
+        if not isinstance(image, dict) or not isinstance(copied, dict):
+            raise TaskError("image_input_invalid")
+        # exactly one identity: a portal block (the section runs) or an opaque crop (the comparison)
+        named = [name for name in _IDENTITY if name in image]
+        if len(named) != 1 or set(image) != {*_IMAGE_KEYS, named[0]}:
+            raise TaskError("image_input_invalid")
+        name = named[0]
+        if (any(copied.get(key) != image.get(key) for key in (*_IMAGE_KEYS, name))
                 or image.get("media_type") != "image/png"
-                or not isinstance(image.get("portal_block_id"), str)
-                or re.fullmatch(r"blk_[0-9a-f]{32}", image["portal_block_id"]) is None
+                or not isinstance(image[name], str) or _IDENTITY[name].fullmatch(image[name]) is None
                 or not isinstance(image.get("sha256"), str)
                 or re.fullmatch(r"[0-9a-f]{64}", image["sha256"]) is None
                 or type(image.get("size_bytes")) is not int
@@ -68,6 +79,9 @@ def read_task(payload: bytes) -> dict:
                 or not isinstance(copied.get("path"), str)
                 or not Path(copied["path"]).is_absolute()):
             raise TaskError("image_input_invalid")
+        total += image["size_bytes"]
+    if total > MAX_TOTAL_IMAGE_BYTES:
+        raise TaskError("image_input_invalid")
     return task
 
 
@@ -117,6 +131,23 @@ def _events_completed(data: bytes) -> bool:
     return started == completed == 1
 
 
+def _image_sentence(local_images: list[dict]) -> str:
+    """Tell the model what the attached images are, in the order they were attached.
+
+    One portal-block crop keeps the sentence it always had. Anything else is listed by index and
+    reference, and the model is told to answer only if it sees every one of them."""
+    if not local_images:
+        return ""
+    if len(local_images) == 1 and "portal_block_id" in local_images[0]:
+        return "\n\nThe attached image is the crop for portal block " + local_images[0]["portal_block_id"] + "."
+    listed = "; ".join(
+        f"{index} = " + (f"portal block {image['portal_block_id']}" if "portal_block_id" in image
+                         else f"crop {image['crop_id']}")
+        for index, image in enumerate(local_images, start=1))
+    return (f"\n\nThe {len(local_images)} attached images are, in the order attached: {listed}. "
+            "Use all of them; do not answer from some of them.")
+
+
 def _environment() -> dict[str, str]:
     # The CLI needs its own stored ChatGPT login, not an API key inherited from the agent.
     allowed = (
@@ -137,8 +168,7 @@ def answer(task: dict, *, codex: str | None = None) -> str:
         + json.dumps({"system": task["system"], "user_text": task["user_text"]},
                      ensure_ascii=False)
     )
-    if task.get("local_images"):
-        prompt += "\n\nThe attached image is the crop for portal block " + task["local_images"][0]["portal_block_id"] + "."
+    prompt += _image_sentence(task.get("local_images", []))
     with tempfile.TemporaryDirectory(prefix="pdfa-codex-") as area:
         root = Path(area)
         schema_path, answer_path, events_path = (
@@ -159,7 +189,9 @@ def answer(task: dict, *, codex: str | None = None) -> str:
             "-c", "features.shell_tool=false",
             "-c", "web_search=\"disabled\"",
             "--output-schema", str(schema_path),
-            "--output-last-message", str(answer_path), *image_args, "-",
+            # The prompt marker comes before the image flags: ``--image`` takes a list of files
+            # and would take a trailing ``-`` as one more file.
+            "--output-last-message", str(answer_path), "-", *image_args,
         ]
         with events_path.open("wb") as output:
             process = subprocess.Popen(

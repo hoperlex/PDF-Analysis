@@ -30,10 +30,12 @@ from auditmanager.shared.identity import DocumentUid, ProjectUid, VersionUid
 from auditmanager.storage.public import BlobId
 
 __all__ = [
+    "MANIFEST_ROLE_COMPARISON_PDF",
     "MANIFEST_ROLE_MARKDOWN",
     "MANIFEST_ROLE_SOURCE_DOCUMENT",
     "MANIFEST_ROLE_STAMP_AUDIT",
     "MANIFEST_ROLE_STRUCTURED_COMPANION",
+    "ROLE_COMPARISON_PDF",
     "ROLE_SOURCE_DOCUMENT",
     "ROLE_SOURCE_MARKDOWN",
     "ROLE_SOURCE_STAMP_AUDIT",
@@ -43,6 +45,8 @@ __all__ = [
     "ManifestEntry",
     "ProjectListingRecord",
     "ProjectRecord",
+    "UPLOAD_KIND_COMPARISON_PDF",
+    "UPLOAD_KIND_PORTAL_BUNDLE",
     "UploadOutcome",
     "VersionClassificationRecord",
 ]
@@ -56,6 +60,20 @@ ROLE_SOURCE_DOCUMENT: Final[str] = "source_document"
 ROLE_SOURCE_STRUCTURED_COMPANION: Final[str] = "source_structured_companion"
 ROLE_SOURCE_MARKDOWN: Final[str] = "source_markdown"
 ROLE_SOURCE_STAMP_AUDIT: Final[str] = "source_stamp_audit"
+
+
+#: `CMP-INGEST-01` (ADR-0025 decision 11). How a version reached the product: ``document_version.upload_kind``
+#: (migration ``0038``). Every version before it is a portal bundle; a plain PDF admitted for comparison is
+#: ``comparison_pdf``.
+UPLOAD_KIND_PORTAL_BUNDLE: Final[str] = "portal_bundle"
+UPLOAD_KIND_COMPARISON_PDF: Final[str] = "comparison_pdf"
+#: The blob role of a plain PDF admitted for comparison, and the manifest-entry role that binds it to its
+#: version. **Deliberately not** ``source.document``: the existing start-run check requires that entry, so a
+#: comparison-only version is refused by the very rule that refuses a version with no source (ADR-0025
+#: decision 11), and no section analysis can read it by accident. The pattern is the manifest role's own
+#: (``ck_input_manifest_entry_role``).
+ROLE_COMPARISON_PDF: Final[str] = "comparison_pdf"
+MANIFEST_ROLE_COMPARISON_PDF: Final[str] = "comparison.source_pdf"
 
 
 def _required_source_role() -> str:
@@ -313,6 +331,13 @@ class DocumentVersionRecord:
     #: a correction that commits in that window must not fail a run that is pinned to the
     #: profile it started with.
     classification: VersionClassificationRecord | None = field(default=None, compare=False)
+    #: `CMP-SEAL-C0` (migration ``0038``, ADR-0025 decision 11). How the version reached the
+    #: product: ``portal_bundle`` (every version before ``0038``) or ``comparison_pdf`` (a plain
+    #: PDF admitted for comparison only: no section analysis starts on it, and it never becomes the
+    #: current version of a document that has a portal version). `CMP-INGEST-01` reads it from
+    #: ``document_version.upload_kind`` in every SELECT of the repository; the default is the value of every
+    #: version that existed before ``0038`` and of a record built without a row.
+    upload_kind: str = UPLOAD_KIND_PORTAL_BUNDLE
 
     def entry(self, role: str) -> ManifestEntry:
         """The manifest entry for one role.
@@ -327,8 +352,20 @@ class DocumentVersionRecord:
 
     @property
     def source(self) -> ManifestEntry:
-        """The ``source_document`` entry every PC-01 version carries."""
-        return self.entry(MANIFEST_ROLE_SOURCE_DOCUMENT)
+        """The PDF this version *is*: the ``source_document`` entry every PC-01 version carries or,
+        for a plain PDF admitted for comparison (`CMP-INGEST-01`), its ``comparison.source_pdf``
+        entry. A version holds exactly one of the two, so the answer is never ambiguous; a manifest
+        with neither is still a broken manifest (:class:`KeyError`).
+
+        This is the *bytes* accessor (the content stream, the page reads). It is **not** how a run is
+        admitted: :meth:`entry` with ``MANIFEST_ROLE_SOURCE_DOCUMENT`` stays strict, which is what the
+        run start tests, so a comparison-only version is refused there (``comparison_only_version``).
+        """
+        for role in (MANIFEST_ROLE_SOURCE_DOCUMENT, MANIFEST_ROLE_COMPARISON_PDF):
+            for item in self.manifest:
+                if item.role == role:
+                    return item
+        raise KeyError(MANIFEST_ROLE_SOURCE_DOCUMENT)
 
 
 @dataclass(frozen=True, slots=True)

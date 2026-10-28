@@ -12,6 +12,15 @@ Everything else in this package stays private to it.
 
 from __future__ import annotations
 
+from auditmanager.comparison.modules import (
+    COMPARISON_MODULES_ENV,
+    DEFAULT_MODULES,
+    MODULE_SETS,
+    MODULE_STAGES,
+    MODULE_VERSIONS,
+    enabled_modules,
+    parse_modules,
+)
 from auditmanager.comparison.carryover import (
     CarriedSourceDecision,
     CarryoverCandidate,
@@ -98,8 +107,170 @@ from auditmanager.comparison.service import (
 from auditmanager.comparison.sheet_links import ApprovedLinkReader, LinkEvent, SheetLinkRepository
 from auditmanager.comparison.version_reader import VersionFacts
 from auditmanager.comparison.version_section_pair import SuppliedVersionClassification
+from auditmanager.comparison.spend.caller import ComparisonModelCaller
+from auditmanager.comparison.spend.ceilings import job_ceiling_micros
+from auditmanager.comparison.spend.errors import (
+    CallFailed,
+    CallLost,
+    CallRefused,
+    OutcomeUnknown,
+    SpendError,
+)
+from auditmanager.comparison.spend.model import (
+    DAY_CEILING_USD,
+    JOB_CEILING_USD,
+    JOB_KEY as SPEND_JOB_KEY,
+    CallEstimate,
+    CallRecord,
+    CallResult,
+    CallRoute,
+    Consent,
+    SpendPause,
+)
+from auditmanager.comparison.spend.repository import ComparisonSpendRepository
+from auditmanager.comparison.spend.settler import settle_lost_attempt
+from auditmanager.comparison.work.errors import (
+    HandlerRegistryError,
+    UnhandledKindError,
+    WorkQueueError,
+)
+from auditmanager.comparison.work.gates import ClaimGates, default_gates
+from auditmanager.comparison.work.model import (
+    Completed,
+    Failed,
+    HandlerFactory,
+    ItemAuthority,
+    Outcome,
+    SpendSettler,
+    WorkDependencies,
+    WorkHandler,
+    WorkItem,
+    Yielded,
+)
+from auditmanager.comparison.work.registry import HandlerRegistry
+from auditmanager.comparison.work.repository import (
+    CANCEL_REQUESTED,
+    CancelResult,
+    ComparisonWorkRepository,
+    Enqueued,
+    WorkRecord,
+)
+from auditmanager.comparison.work.runner import ComparisonWorkRunner
+
+# `CMP-PROFILE-QUEUE-01`: the `page_profile` work kind (its handler, its factory and the call that enqueues a version).
+from auditmanager.comparison.profile_queue.enqueue import (
+    enqueue_version_page_profiles,
+    page_profile_dedupe_key,
+)
+from auditmanager.comparison.profile_queue.handler import (
+    PageProfileHandler,
+    page_profile_handler,
+)
+
+#: `CMP-WORK-01` (ADR-0025 decision 4). One tuple of handler factories, each
+#: ``Callable[[WorkDependencies], WorkHandler]``: ``build_worker_runtime`` builds one dependency
+#: bundle and applies every factory to it, and refuses to start on a duplicate ``kind``. A slice
+#: adds its handler by appending its factory here (plan section 4.0 rule 2).
+HANDLER_FACTORIES: tuple[HandlerFactory, ...] = (
+    page_profile_handler,  # `CMP-PROFILE-QUEUE-01`: kind ``page_profile``
+)
+
+#: `CMP-WORK-01`. Called inside the reclaim transaction for each attempt whose lease was lost:
+#: ``settle(session, attempt_id) -> bool`` marks the attempt's unfinished model calls ``unknown`` and
+#: answers ``True`` if there were any, which ends the item ``spend_unknown`` instead of re-queueing
+#: it (ADR-0025 decision 5). `CMP-SPEND-01` registers the settler of the comparison spend journal: the one
+#: thing that stops a reclaimed item from being sent a second time.
+SPEND_SETTLERS: tuple[SpendSettler, ...] = (settle_lost_attempt,)
+
+# `CMP-PROFILE-01`: page profiles (words, vector lines, stamp, ink mask, scan flag, stored previews and tiles).
+from auditmanager.comparison.profile.builder import (
+    PageBuildReport,
+    VersionBuildReport,
+    build_version_page_profiles,
+)
+from auditmanager.comparison.profile.limits import (
+    ALGO_VERSION as PAGE_PROFILE_ALGO_VERSION,
+    PIXEL_CAP as PAGE_PIXEL_CAP,
+    REASON_PAGE_TOO_LARGE,
+    REASON_RENDER_FAILED,
+    STATUS_NEEDS_REVIEW as PROFILE_NEEDS_REVIEW,
+    STATUS_READY as PROFILE_READY,
+    STATUS_REFUSED as PROFILE_REFUSED,
+    ChildLimits,
+    registration_dpi,
+)
+from auditmanager.comparison.profile.models import (
+    Annotation as PageAnnotation,
+    InkMask,
+    PageProfileData,
+    PageProfileRow,
+    StampFields,
+    VectorLine,
+    Word as PageWord,
+)
+from auditmanager.comparison.profile.reader import PageProfileReader
+from auditmanager.comparison.profile.runner import (
+    ChildResult,
+    ChildRunner,
+    ChildStartError,
+    SubprocessChildRunner,
+)
+from auditmanager.comparison.profile.tiles import TileRenderer
+
+#: The name the queue can register `build_version_page_profiles` under; its payload is
+#: ``{"version_uid": "ver_..."}`` (`CMP-PROFILE-01`). The registry belongs to `CMP-WORK-01`.
+PAGE_PROFILE_WORK_KIND = "page_profile"
 
 __all__ = [
+    "CANCEL_REQUESTED",
+    "CallEstimate",
+    "CallFailed",
+    "CallLost",
+    "CallRecord",
+    "CallRefused",
+    "CallResult",
+    "CallRoute",
+    "CancelResult",
+    "ClaimGates",
+    "ComparisonModelCaller",
+    "ComparisonSpendRepository",
+    "Consent",
+    "DAY_CEILING_USD",
+    "JOB_CEILING_USD",
+    "OutcomeUnknown",
+    "SPEND_JOB_KEY",
+    "SpendError",
+    "SpendPause",
+    "job_ceiling_micros",
+    "settle_lost_attempt",
+    "Completed",
+    "ComparisonWorkRepository",
+    "ComparisonWorkRunner",
+    "Enqueued",
+    "Failed",
+    "HANDLER_FACTORIES",
+    "HandlerFactory",
+    "HandlerRegistry",
+    "HandlerRegistryError",
+    "ItemAuthority",
+    "Outcome",
+    "SPEND_SETTLERS",
+    "SpendSettler",
+    "UnhandledKindError",
+    "WorkDependencies",
+    "WorkHandler",
+    "WorkItem",
+    "WorkQueueError",
+    "WorkRecord",
+    "Yielded",
+    "default_gates",
+    "COMPARISON_MODULES_ENV",
+    "DEFAULT_MODULES",
+    "MODULE_SETS",
+    "MODULE_STAGES",
+    "MODULE_VERSIONS",
+    "enabled_modules",
+    "parse_modules",
     "CONFLICT_SUMMARY_EVIDENCE_NOT_SEALED",
     "CONFLICT_SUMMARY_INPUT_EMPTY",
     "CONFLICT_SUMMARY_INPUT_TOO_LARGE",
@@ -179,4 +350,34 @@ __all__ = [
     "VersionFacts",
     "WithdrawSheetPairingRequest",
     "carryover_candidates",
+    "ChildLimits",
+    "ChildResult",
+    "ChildRunner",
+    "ChildStartError",
+    "InkMask",
+    "PAGE_PIXEL_CAP",
+    "PAGE_PROFILE_ALGO_VERSION",
+    "PAGE_PROFILE_WORK_KIND",
+    "PageProfileHandler",
+    "PROFILE_NEEDS_REVIEW",
+    "PROFILE_READY",
+    "PROFILE_REFUSED",
+    "PageAnnotation",
+    "PageBuildReport",
+    "PageProfileData",
+    "PageProfileReader",
+    "PageProfileRow",
+    "PageWord",
+    "REASON_PAGE_TOO_LARGE",
+    "REASON_RENDER_FAILED",
+    "StampFields",
+    "SubprocessChildRunner",
+    "TileRenderer",
+    "VectorLine",
+    "VersionBuildReport",
+    "build_version_page_profiles",
+    "enqueue_version_page_profiles",
+    "page_profile_dedupe_key",
+    "page_profile_handler",
+    "registration_dpi",
 ]

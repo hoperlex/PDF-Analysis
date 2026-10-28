@@ -43,8 +43,8 @@ _TOKEN_COLUMNS: Final = (
 )
 _TASK_COLUMNS: Final = (
     "task_id, connection_id, revision_id, origin, run_id, attempt_id, model_call_id, probe_id, "
-    "state, expected_model, created_at, deadline_at, claimed_by_token_id, claim_expires_at, "
-    "first_claimed_at, claim_count, declared_model, declared_input_tokens, "
+    "comparison_attempt_id, state, expected_model, created_at, deadline_at, claimed_by_token_id, "
+    "claim_expires_at, first_claimed_at, claim_count, declared_model, declared_input_tokens, "
     "declared_output_tokens, fail_reason, terminal_at, payload_cleared_at, "
     "(deadline_at <= clock_timestamp()) AS past_deadline"
 )
@@ -54,6 +54,43 @@ _ATTEMPT_LIVE: Final = (
     "AND j.current_attempt_id = a.attempt_id WHERE a.attempt_id = t.attempt_id "
     "AND a.state IN ('leased', 'running'))"
 )
+
+
+def _comparison_attempt_live(alias: str) -> str:
+    """`CMP-SPEND-01` (ADR-0025 decision 4): the same rule for a task of origin ``comparison_call``. Its
+    attempt is a ``comparison_work_attempt`` that is leased or running **and** the current attempt of
+    its work item; a task whose attempt is gone, superseded or lost is never served and is cancelled
+    by the sweep, exactly as a Run's task is."""
+    return (
+        "EXISTS (SELECT 1 FROM comparison_work_attempt ca JOIN comparison_work cw "
+        "ON cw.comparison_work_id = ca.comparison_work_id "
+        "AND cw.current_work_attempt_id = ca.comparison_work_attempt_id "
+        f"WHERE ca.comparison_work_attempt_id = {alias}.comparison_attempt_id "
+        "AND ca.state IN ('leased', 'running'))"
+    )
+
+
+#: The most images a claim may declare it serves, and the count that applies to a claim that
+#: declares none: every runner deployed before `CMP-EXEC-IMAGES-01` sends no ``max_images``.
+MAX_CLAIM_IMAGES: Final[int] = 8
+DEFAULT_CLAIM_IMAGES: Final[int] = 1
+
+
+def _image_count(alias: str | None = None) -> str:
+    """The SQL for how many images a task's payload carries, for the claim gate.
+
+    Absent ``images`` is none. A present member that is not a JSON array is a malformed payload,
+    and counts as more than any claim can declare, so that it is never handed out (the gate fails
+    closed; it never reads a malformed list as an empty one)."""
+    images = f"{alias + '.' if alias else ''}payload -> 'images'"
+    return (f"CASE WHEN {images} IS NULL THEN 0 WHEN jsonb_typeof({images}) = 'array' "
+            f"THEN jsonb_array_length({images}) ELSE {MAX_CLAIM_IMAGES + 1} END")
+
+
+def _declared(max_images: int) -> int:
+    if type(max_images) is not int or not 1 <= max_images <= MAX_CLAIM_IMAGES:
+        raise ValueError("max_images is an integer from 1 to 8")
+    return max_images
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +148,9 @@ class TaskRecord:
     payload_cleared_at: datetime | None
     #: By the database clock at the moment of the read.
     past_deadline: bool
+    #: Set exactly for a task of origin ``comparison_call`` (`CMP-SPEND-01`); the default keeps every
+    #: caller that builds a record without it as it was.
+    comparison_attempt_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,8 +173,9 @@ def _token(row: Mapping[str, Any]) -> RunnerTokenRecord:
 def _task(row: Mapping[str, Any]) -> TaskRecord:
     return TaskRecord(**{name: row[name] for name in (
         "task_id", "connection_id", "revision_id", "origin", "run_id", "attempt_id",
-        "model_call_id", "probe_id", "state", "expected_model", "created_at", "deadline_at",
-        "claimed_by_token_id", "claim_expires_at", "first_claimed_at", "claim_count",
+        "model_call_id", "probe_id", "comparison_attempt_id", "state", "expected_model",
+        "created_at", "deadline_at", "claimed_by_token_id", "claim_expires_at", "first_claimed_at",
+        "claim_count",
         "declared_model", "declared_input_tokens", "declared_output_tokens", "fail_reason",
         "terminal_at", "payload_cleared_at", "past_deadline")})
 
@@ -221,17 +262,18 @@ class RunnerRepository:
         self, session: Session, *, connection_id: str, revision_id: str, origin: str,
         run_id: str | None, attempt_id: str | None, model_call_id: str | None,
         probe_id: str | None, expected_model: str, payload: Mapping[str, Any],
-        deadline_seconds: float,
+        deadline_seconds: float, comparison_attempt_id: str | None = None,
     ) -> TaskRecord:
         row = session.execute(text(
             "INSERT INTO executor_task (task_id, connection_id, revision_id, origin, run_id, "
-            "attempt_id, model_call_id, probe_id, expected_model, payload, deadline_at) "
-            "VALUES (:id, :c, :r, :origin, :run, :attempt, :call, :probe, :model, "
+            "attempt_id, model_call_id, probe_id, comparison_attempt_id, expected_model, payload, "
+            "deadline_at) "
+            "VALUES (:id, :c, :r, :origin, :run, :attempt, :call, :probe, :comparison, :model, "
             "CAST(:payload AS jsonb), clock_timestamp() + make_interval(secs => :seconds)) "
             f"RETURNING {_TASK_COLUMNS}"
         ), {"id": str(ExecutorTaskId.new()), "c": connection_id, "r": revision_id,
             "origin": origin, "run": run_id, "attempt": attempt_id, "call": model_call_id,
-            "probe": probe_id, "model": expected_model,
+            "probe": probe_id, "comparison": comparison_attempt_id, "model": expected_model,
             "payload": json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
             "seconds": deadline_seconds}).mappings().one()
         session.execute(text("SELECT pg_notify(:channel, '')"), {"channel": TASK_OPEN_CHANNEL})
@@ -289,7 +331,9 @@ class RunnerRepository:
         session.execute(text(
             "UPDATE executor_task t SET state = 'cancelled', terminal_at = clock_timestamp() "
             "WHERE t.connection_id = :c AND t.state IN ('open', 'claimed') "
-            f"AND t.attempt_id IS NOT NULL AND NOT {_ATTEMPT_LIVE}"
+            f"AND ((t.attempt_id IS NOT NULL AND NOT {_ATTEMPT_LIVE}) "
+            "OR (t.comparison_attempt_id IS NOT NULL "
+            f"AND NOT {_comparison_attempt_live('t')}))"
         ), {"c": connection_id})
         session.execute(text(
             "UPDATE executor_task SET state = 'expired', terminal_at = clock_timestamp() "
@@ -309,23 +353,32 @@ class RunnerRepository:
         ), {"t": token_id}).scalar_one())
 
     def redeliver(
-        self, session: Session, *, token_id: str, lease_seconds: int
+        self, session: Session, *, token_id: str, lease_seconds: int,
+        max_images: int = DEFAULT_CLAIM_IMAGES,
     ) -> ClaimedRow | None:
-        """The claim this token already holds, with its lease refreshed."""
+        """The claim this token already holds, with its lease refreshed.
+
+        Never a task with more images than ``max_images``: a claim that declares fewer than the
+        held task needs is not handed it again (its lease lapses and the task returns to ``open``)."""
         row = session.execute(text(
             "UPDATE executor_task SET claim_expires_at = "
             "LEAST(clock_timestamp() + make_interval(secs => :lease), deadline_at) "
             "WHERE task_id = (SELECT task_id FROM executor_task WHERE claimed_by_token_id = :t "
             "AND state = 'claimed' AND claim_expires_at > clock_timestamp() "
+            f"AND {_image_count()} <= :max_images "
             "ORDER BY created_at, task_id LIMIT 1 FOR UPDATE) "
             "RETURNING task_id, claim_expires_at, deadline_at, expected_model, payload"
-        ), {"t": token_id, "lease": lease_seconds}).first()
+        ), {"t": token_id, "lease": lease_seconds, "max_images": _declared(max_images)}).first()
         return None if row is None else ClaimedRow(row[0], row[1], row[2], row[3], _payload(row[4]))
 
     def claim_next(
-        self, session: Session, *, connection_id: str, token_id: str, lease_seconds: int
+        self, session: Session, *, connection_id: str, token_id: str, lease_seconds: int,
+        max_images: int = DEFAULT_CLAIM_IMAGES,
     ) -> ClaimedRow | None:
-        """Claim the oldest open task of the connection whose Attempt is live."""
+        """Claim the oldest open task of the connection whose Attempt is live **and whose images
+        the claim can serve**: never a task with more images than ``max_images`` (ADR-0025
+        decision 18). A task too large for this claim is skipped, not waited on, so it neither
+        blocks the claims behind it nor is handed to a runner that would have to refuse it."""
         row = session.execute(text(
             "UPDATE executor_task t SET state = 'claimed', claimed_by_token_id = :token, "
             "claim_expires_at = LEAST(clock_timestamp() + make_interval(secs => :lease), "
@@ -336,9 +389,12 @@ class RunnerRepository:
             "AND (p.attempt_id IS NULL OR EXISTS (SELECT 1 FROM attempt a JOIN job j "
             "ON j.job_id = a.job_id AND j.current_attempt_id = a.attempt_id "
             "WHERE a.attempt_id = p.attempt_id AND a.state IN ('leased', 'running'))) "
+            f"AND (p.comparison_attempt_id IS NULL OR {_comparison_attempt_live('p')}) "
+            f"AND {_image_count('p')} <= :max_images "
             "ORDER BY p.created_at, p.task_id FOR UPDATE OF p SKIP LOCKED LIMIT 1) "
             "RETURNING t.task_id, t.claim_expires_at, t.deadline_at, t.expected_model, t.payload"
-        ), {"c": connection_id, "token": token_id, "lease": lease_seconds}).first()
+        ), {"c": connection_id, "token": token_id, "lease": lease_seconds,
+            "max_images": _declared(max_images)}).first()
         return None if row is None else ClaimedRow(row[0], row[1], row[2], row[3], _payload(row[4]))
 
     def payload_of(self, session: Session, task_id: str) -> Mapping[str, Any] | None:
@@ -354,7 +410,8 @@ class RunnerRepository:
             "AND t.claimed_by_token_id = :token AND t.state = 'claimed' "
             "AND t.claim_expires_at > clock_timestamp() "
             "AND t.deadline_at > clock_timestamp() "
-            f"AND (t.attempt_id IS NULL OR {_ATTEMPT_LIVE}))"
+            f"AND (t.attempt_id IS NULL OR {_ATTEMPT_LIVE}) "
+            f"AND (t.comparison_attempt_id IS NULL OR {_comparison_attempt_live('t')}))"
         ), {"id": task_id, "token": token_id}).scalar_one())
 
     def extend_claim(

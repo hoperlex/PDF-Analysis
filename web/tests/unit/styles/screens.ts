@@ -143,7 +143,7 @@ function withRouter(element: ReactElement): string {
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.8.0',
+    contract_version: '1.9.0',
     error_code: code,
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-contrast-1',
@@ -1167,6 +1167,34 @@ export function screens(): Screen[] {
     add('RunList loaded', at(createElement(RunList, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
     add('ProjectsPage loaded', at(createElement(ProjectsPage, {})));
     add('VersionDetailPage loaded', at(createElement(VersionDetailPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID, roles: ['expert'] })));
+    // `CMP-VERSION-MARK-01`: the same four screens over a version admitted for comparison only
+    // (`upload_kind` `comparison_pdf`): the mark on a row and in the panel, and the run list with
+    // its disabled start — over a list with a run and over an empty one — so the badge's tone, the
+    // wrapped mark, the disabled button and the note beside it are measured where they are drawn.
+    {
+      const flagged = { ...version(), upload_kind: 'comparison_pdf' as const };
+      const comparisonOnly = (): ReturnType<typeof populatedClient> => {
+        const client = populatedClient();
+        const onePage = { next_cursor: 'Y3Vyc29y' } as { next_cursor: string };
+        client.setQueryData(queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT), { items: [flagged], page: onePage });
+        client.setQueryData(queryKeys.versions.list(DOCUMENT_UID, undefined, VERSION_PAGE_LIMIT), { items: [flagged], page: onePage });
+        client.setQueryData(queryKeys.versions.detail(VERSION_UID), flagged);
+        return client;
+      };
+      const atFlagged = (element: ReactElement): string => renderScreen(comparisonOnly(), element);
+      add('DocumentList comparison-only', atFlagged(createElement(DocumentList, { projectUid: PROJECT_UID })));
+      add('VersionList comparison-only', atFlagged(createElement(VersionList, { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID })));
+      add('RunList comparison-only', atFlagged(createElement(RunList, { projectUid: PROJECT_UID, versionUid: VERSION_UID, uploadKind: 'comparison_pdf' })));
+      add(
+        'RunList comparison-only empty',
+        (() => {
+          const client = comparisonOnly();
+          client.setQueryData(queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT), { items: [], page: { next_cursor: null } });
+          return renderScreen(client, createElement(RunList, { projectUid: PROJECT_UID, versionUid: VERSION_UID, uploadKind: 'comparison_pdf' }));
+        })(),
+      );
+      add('VersionDetailPage comparison-only', atFlagged(createElement(VersionDetailPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID, roles: ['expert'] })));
+    }
     // `W59-SECTION-UI-01`: the project structure with a classified and an unclassified
     // document, the confirmed panel with a profile-less section after a refused
     // confirmation, and the form carrying a refusal.

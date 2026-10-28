@@ -393,6 +393,38 @@ class ExecutorTaskId(OpaqueId, prefix="ext", entity="ExecutorTask"):
     """Identity of one task a ``pull`` connection hands to a runner (`EXEC-PULL-01`)."""
 
 
+class ComparisonUploadId(OpaqueId, prefix="cbt", entity="ComparisonUpload"):
+    """Identity of one upload batch of plain PDFs for comparison (`CMP-SEAL-C0`, migration ``0038``, ADR-0025 decision 10)."""
+
+
+class ComparisonUploadSetId(OpaqueId, prefix="cus", entity="ComparisonUploadSet"):
+    """Identity of one proposed document set of an upload batch -- the original's batch item (`CMP-SEAL-C0`, migration ``0038``). The «шифр» is metadata of a set, never its identity."""
+
+
+class ComparisonUploadFileId(OpaqueId, prefix="cuf", entity="ComparisonUploadFile"):
+    """Identity of one declared file of an upload batch (`CMP-SEAL-C0`, migration ``0038``). The display name is a hint and never an identity; the declared SHA-256 and size are verification values."""
+
+
+class ComparisonVersionOrderId(OpaqueId, prefix="cvo", entity="ComparisonVersionOrder"):
+    """Identity of one revision of the order in which the versions of a document set are compared (`CMP-SEAL-C0`, migration ``0038``, ADR-0025 decision 16)."""
+
+
+class ComparisonPageProfileId(OpaqueId, prefix="cpr", entity="ComparisonPageProfile"):
+    """Identity of the profile of one page of one version (`CMP-SEAL-C0`, migration ``0038``). Content-keyed: a ULID id and a unique digest; the digest is never a foreign key (ADR-0025 decision 2)."""
+
+
+class ComparisonWorkId(OpaqueId, prefix="cq", entity="ComparisonWork"):
+    """Identity of one item of the comparison-local durable queue (`CMP-SEAL-C0`, migration ``0038``, ADR-0025 decision 4)."""
+
+
+class ComparisonWorkAttemptId(OpaqueId, prefix="cqa", entity="ComparisonWorkAttempt"):
+    """Identity of one leased execution of a comparison work item (`CMP-SEAL-C0`, migration ``0038``). Not ``att_``: a Job is a Run in the schema, a comparison item is not."""
+
+
+class ComparisonModelCallId(OpaqueId, prefix="cmc", entity="ComparisonModelCall"):
+    """Identity of one row of the comparison spend journal (`CMP-SEAL-C0`, migration ``0038``, ADR-0025 decision 5). Not ``mc_``: that journal is a Run's."""
+
+
 #: Every concrete identity type, keyed by contract entity name.
 IDENTITY_TYPES_BY_ENTITY: Final[dict[str, type[OpaqueId]]] = {
     identity.entity: identity for identity in _REGISTRY.values()

@@ -69,7 +69,7 @@ function envelopeError(status: number, code: ErrorCode, retryable: boolean): Api
   return new ApiError(
     status,
     {
-      contract_version: '1.8.0',
+      contract_version: '1.9.0',
       error_code: code,
       message: 'A caller-safe sentence.',
       correlation_id: 'cid-live',

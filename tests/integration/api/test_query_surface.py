@@ -829,7 +829,14 @@ def _resolve(document: Mapping[str, Any], node: Mapping[str, Any]) -> Mapping[st
 #: `W55A-SEARCH-01` gave them bodies and `W55A-PIN-01` emptied it and drives them below.
 #: `W55B-SEAL-01` lists ``listVersionPortalBlocks`` (``cursor`` and ``limit``) until
 #: `W55B-GEOMETRY-01` gives it a body, empties this set and drives it below.
-SEALED_STUB_QUERY_OPERATIONS: frozenset[str] = frozenset({"listVersionPortalBlocks"})
+#: `CMP-SEAL-C0` lists the four comparison listings (``cursor`` and ``limit``), the tile (``level``,
+#: ``column`` and ``row``) and the part upload (``part_number``) until `CMP-INGEST-01`,
+#: `CMP-INGEST-02` and `CMP-PROFILE-01` give them bodies, empty this set and drive them below.
+SEALED_STUB_QUERY_OPERATIONS: frozenset[str] = frozenset({
+    "listVersionPortalBlocks",
+    "listComparisonUploads", "listComparisonVersionOrders", "listVersionPageProfiles",
+    "streamVersionPageTile", "uploadComparisonUploadPart",
+})
 
 #: The four norms listings, driven over the shipped ``NormsSearchAdapter`` on this suite's
 #: rollback-joined session (`W55A-PIN-01`).
