@@ -286,7 +286,10 @@ describe('this slice adds no second polling loop', () => {
       for (const match of constants) expect(Number((match[2] ?? '').replaceAll('_', '')), match[1]).toBeGreaterThanOrEqual(1000);
       // It can end: each use is a callback with an arm that schedules nothing (`: false`, `? false :` or `return false`).
       for (const use of text.split('refetchInterval').slice(1)) {
-        expect(use.slice(0, 400), file.path).toMatch(/:\s*false\b|\?\s*false\b|return false\b/);
+        // The value of the option only: up to the next option of the same query.
+        const value = use.split(/\n\s*(?:retry|enabled|queryKey|queryFn|staleTime):/)[0] ?? '';
+        expect(value, `${file.path}: a callback`).toMatch(/^:\s*(?:\([^)]*\)|\w+)?\s*=>/);
+        expect(value, `${file.path}: an arm that schedules nothing`).toMatch(/:\s*false\b|\?\s*false\b|return false\b/);
       }
       // And it never reaches the run endpoint.
       expect(text, file.path).not.toMatch(/getRunStatus|pollRunStatus|listRuns/);
