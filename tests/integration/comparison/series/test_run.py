@@ -12,7 +12,7 @@ from auditmanager.comparison.engine.runner import ChildStartError
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 from .support import (
-    ScriptedEngine, build, drain, items, key, make_due, pair_rows, runner_with, start, steer,
+    ScriptedEngine, build, drain, fenced, items, key, make_due, pair_rows, runner_with, start, steer,
 )
 
 
@@ -177,22 +177,31 @@ def test_a_transition_none_of_whose_pairs_needed_the_engine_still_completes(lab,
 
 
 def test_an_item_whose_pair_is_already_done_ends_without_asking_the_engine(lab, sessions, engine, blob_store, worker_id, service, prepared) -> None:
-    """A repeat of an item (a reclaim, an enqueue after a finish) finds the pair written and does nothing more."""
+    """A repeat of an item (a reclaim, an enqueue after a finish) finds the pair written and does nothing more -- while the
+    series is still live, so it is the pair that is looked at and not the state of the series."""
     from auditmanager.comparison.public import ComparisonWorkRepository
     from auditmanager.shared.db import session_scope
 
     doc, series = prepared
     fake = ScriptedEngine(sessions)
     runner = runner_with(sessions, engine, blob_store, compare=fake)
-    drain(runner, worker_id, engine, sessions, doc.project_uid)
-    calls = len(fake.calls)
-    pair = [p for p in pair_rows(lab, series["series_id"]) if p["state"] == "done" and p["result_id"]][0]
+    make_due(sessions, doc.project_uid)
+    with fenced(engine, doc.project_uid, ("series_drive",)):
+        first = runner.claim(worker_id)
+    assert first is not None and runner.execute(first) == "succeeded"
+    pair_id = first.payload["sheet_pair_id"]
+    assert [p["state"] for p in pair_rows(lab, series["series_id"]) if p["id"] == pair_id] == ["done"]
     with session_scope(sessions) as session:
         ComparisonWorkRepository().enqueue(
-            session, project_uid=doc.project_uid, module="versions", kind="series_pair", payload={"sheet_pair_id": pair["id"]},
-            dedupe_key=f"repeat-{pair['id']}", comparison_series_id=series["series_id"])
-    ran = drain(runner, worker_id, engine, sessions, doc.project_uid)
-    assert ran == [("series_pair", "succeeded")] and len(fake.calls) == calls
+            session, project_uid=doc.project_uid, module="versions", kind="series_pair", payload={"sheet_pair_id": pair_id},
+            dedupe_key=f"repeat-{pair_id}", priority=50, comparison_series_id=series["series_id"])
+    make_due(sessions, doc.project_uid)
+    with fenced(engine, doc.project_uid, ("series_drive",)):
+        repeat = runner.claim(worker_id)
+    assert repeat is not None and repeat.payload == {"sheet_pair_id": pair_id} and repeat.work_id != first.work_id
+    asked = len(fake.calls)
+    assert runner.execute(repeat) == "succeeded" and len(fake.calls) == asked
+    assert service.get_series(series_id=series["series_id"])["state"] == "running"
 
 
 def test_a_series_waits_while_the_versions_module_is_off(lab, sessions, engine, blob_store, worker_id, service, prepared) -> None:
