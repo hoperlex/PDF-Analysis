@@ -1,7 +1,7 @@
 # Task CMP-C1-FIX-B — the web FIX slot of wave C1: the screens aligned with the overview, the viewer in Russian, the markers and the queue mount
 
 task_id: CMP-C1-FIX-B
-status: in progress (lane `agent/cmp-c1-fix-b`, wave C1, size M, web only; nothing pushed, merged or tagged)
+status: done (lane `agent/cmp-c1-fix-b`, wave C1, size M, web only; nothing pushed, merged or tagged)
 
 ## Outcome
 
@@ -148,4 +148,14 @@ Not applicable: no behaviour behind a flag. Reverting the lane's commits restore
 
 ## Handoff
 
-(written with the report as the last commit)
+Report: [`../CMP-C1-FIX-B.md`](../CMP-C1-FIX-B.md). Branch `agent/cmp-c1-fix-b`, base `0e867b12`; nothing pushed, nothing merged, no tag.
+
+**Changed files** (`git diff --name-only 0e867b12..HEAD`, 20 code and test files before the two documents): `web/src/entities/version-series/{index.ts,model/overview-view.ts,model/pair-words.ts,model/step-actions.ts,model/steps.ts}`, `web/src/widgets/version-series/ui/projects-and-stages.tsx`, `web/src/widgets/comparison-viewer/{index.ts,model/labels.ts,ui/comparison-viewer-view.tsx,ui/evidence-panels.tsx}`, `web/src/widgets/execution-queue/ui/{comparison-queue-block.tsx,execution-queue.tsx}`, `web/src/_pages/queue/ui/queue-page.tsx`, and under `web/tests/`: `guards/rendered-language.guard.test.ts`, `unit/comparison/viewer/{viewer-fixtures.ts,viewer-markup.test.ts}`, `unit/version-compare/{fixtures.ts,model.test.ts,screens.test.ts,shapes.ts}`; the report and this file.
+
+**Checks** (report section 6): `git diff --check`, `lint --quiet`, `typecheck`, `api:verify` exit 0; the whole web suite 217 files / 3512 tests; `tests/contract` without the three `D-220` files plus the journey conformance 1445 passed (`--basetemp` outside the repository); mutation proofs M1a-M6 and G1-G3 each red then green (report section 5).
+
+**Contracts:** none new, none changed. **Forbidden hotspots:** `git diff --name-only 0e867b12..HEAD -- contracts db src pyproject.toml uv.lock docs/program/P02_LOCK.json web/package.json web/package-lock.json web/FRONTEND_LOCK.json web/openapi web/src/shared web/src/app web/src/_app infra Makefile tests docs/program/CURRENT_STATE.md` prints nothing.
+
+**Known limits** (report sections 3 and 4): a queued series with no row yet (a batch's follow-up) has a «Пауза» that finds nothing; «QR-код» is «матричный код» because the language guard's list of permitted Latin is at its cap; «Версия №N» is not in the viewer (it does not know the order); the menu entry when the module is off, a `group`/chip member on the contract and steps 4/6/7 are not done.
+
+**For the integrator:** merge beside the C2 seal; the only shared file is the language guard (two names appended to `TRANSLATED_SCHEMAS`, two rows appended to `SCHEMA_MARKERS`, one line of `SCREENS`). No symlink or untracked file is left in the tree (`web/node_modules`, a link to the read-only `cmp-seal-c0` install, was removed before the last commit).
