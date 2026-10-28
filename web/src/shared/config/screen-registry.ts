@@ -88,7 +88,7 @@ export interface ScreenEntry {
  * Every screen, in menu order within each group.
  *
  * `R-66`: **Работа** — Проекты, Дашборд, «Оптимизация разделов» (and «Диспетчер» since
- * `W61-DISPATCHER-01`); **Знания** — База знаний,
+ * `W61-DISPATCHER-01`, «Сравнение версий» since `CMP-VC-UI-01`); **Знания** — База знаний,
  * Блоки, «Нормы»; **Система** — Журнал выполнения, Исполнители, «Настройки анализа»,
  * «Очередь». `/optimisation` left the menu and stayed a registered, reachable screen in
  * `hidden` until project optimisation became a project tab; since `W60-OPT-PROPOSALS-01`
@@ -128,6 +128,19 @@ export const SCREEN_REGISTRY = [
   {
     address: '/dispatcher',
     label: 'Диспетчер',
+    group: 'work',
+    access: 'session',
+    roles: 'any-role',
+    inMenu: true,
+  },
+  /*
+   * `CMP-VC-UI-01` (plan §1.1, wave C1): «Сравнение версий». `any-role`: both roles open it, an expert sends the commands
+   * and the API refuses everything else. A module that is off is said so on the screen (`ProductVersion.comparison_modules`);
+   * the registry has no per-deployment column, so the entry is in the menu either way (reported to the FIX slot).
+   */
+  {
+    address: '/version-comparison',
+    label: 'Сравнение версий',
     group: 'work',
     access: 'session',
     roles: 'any-role',
