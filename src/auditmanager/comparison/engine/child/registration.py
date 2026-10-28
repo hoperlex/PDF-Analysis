@@ -7,6 +7,12 @@
 2. **Fallback**: phase correlation of the 36 dpi ink masks, a shift only (``:86-99``).
 3. **Check**: how well the masks agree after the registration (Dice, ``:102-119``).
 
+**A part of a split sheet** (``crop=True``; ``CMP-C1-FIX-A`` item 2) is a crop of A, not a second view of it, so its
+registration is the place **inside** A where its ink fits (:func:`by_template`), the Dice is taken over the area the part
+covers, and the unique-word anchors and the vector lines are used as for any pair. Phase correlation of the whole masks
+puts a part onto the wrong half of a sheet that repeats itself (the synthetic corpus' sheet E05, whose halves differ in
+a few labels), which was the second part registered onto the first part's region.
+
 The work is done on the **downsampled raster** of the profile (the 36 dpi ink mask, 1/5.6 of the 200 dpi canvas),
 never on the full-resolution render. The matrix goes from points of B (the frame of the displayed page) to points of A.
 Line numbers are those of the original at ``23f379fd``.
@@ -26,7 +32,7 @@ import numpy
 from . import settings
 from .geometry import identity
 
-__all__ = ["by_anchors", "by_phase", "dice", "normalize_token", "register"]
+__all__ = ["by_anchors", "by_phase", "by_template", "dice", "normalize_token", "register"]
 
 
 def normalize_token(text: str) -> str:
@@ -183,6 +189,45 @@ def by_phase(mask_a: Any, mask_b: Any, dpi: int) -> dict[str, Any]:
             "matrix": snapped.tolist(), "identity": is_identity}
 
 
+def _blanked(mask: Any, zones: Sequence[Sequence[float]], k: float) -> Any:
+    """A copy of the mask with the service zones (stamp, margins) cleared: they differ between the sheet and its part."""
+    out = mask.copy()
+    for z in zones:
+        out[max(0, int(z[1] * k)) : int(z[3] * k) + 1, max(0, int(z[0] * k)) : int(z[2] * k) + 1] = 0
+    return out
+
+
+def by_template(mask_a: Any, mask_b: Any, dpi: int, zones_a: Sequence[Sequence[float]], zones_b: Sequence[Sequence[float]]) -> dict[str, Any] | None:
+    """Where the page of B, a part cut out of A, sits inside A: the shift with the best normalised cross-correlation of the
+    two ink masks (service zones cleared), ``None`` when B is larger than A and so cannot be a part of it.
+
+    Phase correlation (:func:`by_phase`) compares two views of one extent; a part has half the extent, and on a sheet
+    that repeats itself it finds the wrong half. Here the whole of B is slid over A, so its frame and its position in the
+    drawing decide. A mask over ``PHASE_MAX_PIXELS`` is reduced by an integer factor first (the transform of a 4 Mpx mask
+    needs 180 MiB of address space); the shift is then known to ``uncertainty_pt`` and the vector lines refine it."""
+    k = dpi / 72.0
+    a, b = _blanked(mask_a, zones_a, k), _blanked(mask_b, zones_b, k)
+    pad = settings.TEMPLATE_PAD_PX
+    if b.shape[0] > a.shape[0] + 2 * pad or b.shape[1] > a.shape[1] + 2 * pad or not a.any() or not b.any():
+        return None
+    factor = 1
+    while (a.shape[0] // factor) * (a.shape[1] // factor) > settings.PHASE_MAX_PIXELS:
+        factor += 1
+    if factor > 1:
+        a, b = _pool(a, factor), _pool(b, factor)
+    pad_p = max(1, -(-pad // factor))
+    a = numpy.pad(a, pad_p)
+    if b.shape[0] > a.shape[0] or b.shape[1] > a.shape[1]:
+        return None
+    score = numpy.nan_to_num(cv2.matchTemplate(a.astype(numpy.float32), b.astype(numpy.float32), cv2.TM_CCORR_NORMED))
+    del a, b
+    _, best, _, location = cv2.minMaxLoc(score)
+    dx_px, dy_px = (location[0] - pad_p) * factor, (location[1] - pad_p) * factor
+    snapped, is_identity = _snap(numpy.array([[1.0, 0.0, dx_px / k], [0.0, 1.0, dy_px / k]]))
+    return {"method": "template", "accepted": best >= settings.TEMPLATE_MIN_SCORE, "score": round(float(best), 4),
+            "matrix": snapped.tolist(), "identity": is_identity, "uncertainty_pt": round(factor / k, 3)}
+
+
 def _corners(lines: Any) -> Any:
     """The two corners of the box of each line, ``(2n, 2)``: a line of the page is the same line on the other page
     whatever its direction, and its corners move with it."""
@@ -190,7 +235,7 @@ def _corners(lines: Any) -> Any:
     return numpy.concatenate([lines[:, [0, 1]], lines[:, [2, 3]]])
 
 
-def refine_by_lines(lines_a: Any, lines_b: Any, matrix: Any) -> dict[str, Any] | None:
+def refine_by_lines(lines_a: Any, lines_b: Any, matrix: Any, radius_pt: float | None = None) -> dict[str, Any] | None:
     """The shift that carries the vector lines of B onto those of A, to a tenth of a point, near ``matrix``.
 
     A drawing re-issued with its coordinates unchanged (or moved as a whole) has the same lines at the same distance
@@ -199,7 +244,8 @@ def refine_by_lines(lines_a: Any, lines_b: Any, matrix: Any) -> dict[str, Any] |
     pairs that do not belong to it spread over the plane. The vector is the most voted bin of a histogram, refined by
     the median of its members; it is accepted only with ``LINES_MIN_VOTES`` votes and ``LINES_MIN_SHARE`` of the
     points. The phase correlation of the masks is good to a point or two; this makes it exact on vector sheets.
-    Only a pure shift is refined: the linear part of ``matrix`` must be the identity.
+    Only a pure shift is refined: the linear part of ``matrix`` must be the identity. ``radius_pt`` widens the search
+    when the estimate is only known to more than ``LINES_SEARCH_PT`` (a template match on a reduced mask).
     """
     m = numpy.array(matrix, dtype=numpy.float64)
     if not numpy.allclose(m[:, :2], numpy.eye(2), atol=1e-6) or lines_a is None or lines_b is None:
@@ -213,7 +259,7 @@ def refine_by_lines(lines_a: Any, lines_b: Any, matrix: Any) -> dict[str, Any] |
     if len(pb) > settings.LINES_MAX_POINTS * 2:
         pb = pb[rng.choice(len(pb), settings.LINES_MAX_POINTS * 2, replace=False)]
     pb = pb + m[:, 2]
-    radius = settings.LINES_SEARCH_PT
+    radius = max(settings.LINES_SEARCH_PT, radius_pt or 0.0)
     step = settings.LINES_BIN_PT
     side = int(math.ceil(2 * radius / step)) + 1
     cell = radius
@@ -280,13 +326,20 @@ def refine_by_lines(lines_a: Any, lines_b: Any, matrix: Any) -> dict[str, Any] |
             "matrix": refined.tolist(), "delta_pt": [round(float(delta[0]), 3), round(float(delta[1]), 3)]}
 
 
-def dice(mask_a: Any, mask_b: Any, matrix: Any, dpi: int, zones_a: Sequence[Sequence[float]]) -> float:
-    """How well the ink masks agree after B is carried onto A, with a tolerance of one pixel (``:102-119``)."""
+def dice(
+    mask_a: Any, mask_b: Any, matrix: Any, dpi: int, zones_a: Sequence[Sequence[float]], crop: bool = False
+) -> float:
+    """How well the ink masks agree after B is carried onto A, with a tolerance of one pixel (``:102-119``).
+
+    With ``crop`` (B is a part of A) only the area B covers is judged: the ink of the rest of the sheet belongs to the
+    other parts and is no disagreement, and a quarter of a sheet would never reach ``ALIGN_MIN_DICE`` otherwise."""
     k = dpi / 72.0
     m = numpy.array(matrix, dtype=numpy.float64).copy()
     m[:, 2] *= k
     warped = cv2.warpAffine(mask_b, m, (mask_a.shape[1], mask_a.shape[0]), flags=cv2.INTER_NEAREST)
     a = mask_a.copy()
+    if crop:
+        a = a * cv2.warpAffine(numpy.ones_like(mask_b), m, (mask_a.shape[1], mask_a.shape[0]), flags=cv2.INTER_NEAREST)
     for z in zones_a:
         a[int(z[1] * k) : int(z[3] * k) + 1, int(z[0] * k) : int(z[2] * k) + 1] = 0
         warped[int(z[1] * k) : int(z[3] * k) + 1, int(z[0] * k) : int(z[2] * k) + 1] = 0
@@ -301,17 +354,26 @@ def dice(mask_a: Any, mask_b: Any, matrix: Any, dpi: int, zones_a: Sequence[Sequ
 
 def register(
     words_a: Any, words_b: Any, zones_a: Any, zones_b: Any, mask_a: Any, mask_b: Any, mask_dpi: int,
-    lines_a: Any = None, lines_b: Any = None,
+    lines_a: Any = None, lines_b: Any = None, crop: bool = False,
 ) -> dict[str, Any]:
-    """The final transform of B onto A, with the method, its quality and the attempts (``:122-157``)."""
+    """The final transform of B onto A, with the method, its quality and the attempts (``:122-157``).
+
+    ``crop`` says that B is a part cut out of A (``part == "split"``): its place is looked for inside A
+    (:func:`by_template`); when B is larger than A the pair is registered as any other."""
     anchor = by_anchors(words_a, words_b, zones_a, zones_b)
     chosen = anchor if anchor.get("accepted") else None
     tried: list[dict[str, Any]] = [anchor]
     if chosen is None and mask_a is not None and mask_b is not None:
-        phase = by_phase(mask_a, mask_b, mask_dpi)
-        tried.append(phase)
-        if phase["accepted"]:
-            chosen = phase
+        located = by_template(mask_a, mask_b, mask_dpi, zones_a, zones_b) if crop else None
+        if located is not None:
+            tried.append(located)
+            if located["accepted"]:
+                chosen = located
+        else:
+            phase = by_phase(mask_a, mask_b, mask_dpi)
+            tried.append(phase)
+            if phase["accepted"]:
+                chosen = phase
     if chosen is None:
         chosen = {"method": "identity", "accepted": False, "matrix": identity().tolist(), "identity": True}
     matrix = numpy.array(chosen["matrix"])
@@ -322,19 +384,19 @@ def register(
             chosen = {"method": "phase", "accepted": True, "matrix": identity().tolist(), "identity": True,
                       "response": chosen.get("response")}
             matrix = identity()
-    if chosen["method"] in ("phase", "identity") and lines_a is not None and lines_b is not None:
-        refined = refine_by_lines(lines_a, lines_b, matrix)
+    if chosen["method"] in ("phase", "identity", "template") and lines_a is not None and lines_b is not None:
+        refined = refine_by_lines(lines_a, lines_b, matrix, chosen.get("uncertainty_pt"))
         if refined is not None:
             tried.append({k: v for k, v in refined.items() if k != "matrix"})
             exact = numpy.array(refined["matrix"])
             snapped, is_identity = (identity(), True) if numpy.hypot(*exact[:, 2]) < 0.05 else (exact, False)
             chosen = {"method": "lines", "accepted": True, "matrix": snapped.tolist(), "identity": is_identity}
             matrix = snapped
-    quality = dice(mask_a, mask_b, matrix, mask_dpi, zones_a) if mask_a is not None and mask_b is not None else None
+    quality = dice(mask_a, mask_b, matrix, mask_dpi, zones_a, crop) if mask_a is not None and mask_b is not None else None
     if chosen["method"] == "anchors" and not chosen.get("identity") and quality is not None and quality < settings.ALIGN_MIN_DICE:
         # The anchors may have met on a part of the sheet that moved as a whole; "as is" is checked against the
         # drawing and taken when clearly better (``:136-147``).
-        q_id = dice(mask_a, mask_b, identity(), mask_dpi, zones_a)
+        q_id = dice(mask_a, mask_b, identity(), mask_dpi, zones_a, crop)
         tried.append({"method": "identity_check", "dice36": round(q_id, 4), "accepted": False})
         if q_id >= quality + settings.ALIGN_SWITCH_MARGIN:
             tried[-1]["accepted"] = True

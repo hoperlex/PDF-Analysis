@@ -75,11 +75,11 @@ def test_the_series_agrees_with_the_answer_key_sheet_by_sheet(
     for row in split:
         shown = service.get_sheet_pair(sheet_pair_id=row["id"])
         assert "SPLIT_SHEET" in shown["reasons"] and shown["parts"]["role"] == "part"
-        # The engine registers the second part onto the left half of the older sheet (its area overlaps the first part's:
-        # an item of `CMP-SERIES-01` section 9 for the engine's lane), so the ink figure is refused as unreliable and the
-        # matrix's text coverage of the older sheet by its parts stands, marked as such.
-        assert shown["parts"]["covered_percent"] == row["parts"]["text_percent"] and 0.0 < shown["parts"]["covered_percent"] <= 100.0
-        assert row["parts"]["coverage_reliable"] is False
+        # Each part is registered onto its own region of the older sheet (`CMP-C1-FIX-A` item 2; the second part used to land
+        # on the left half, overlapping the first, so that the ink figure was refused): the areas do not overlap, the ink
+        # coverage of the split is computed from the two shares and is reliable, and it is not the matrix's text figure.
+        assert row["parts"]["coverage_reliable"] is True
+        assert 97.0 <= shown["parts"]["covered_percent"] <= 100.0 and shown["parts"]["covered_percent"] != row["parts"]["text_percent"]
         assert "part" not in shown  # the engine's working member is not an API field
     # the duplicated sheet of V5 is the engine's review (DUPLICATE_SHEET), the scan of V4 is its NO_TEXT_LAYER
     by_sheet = {(r["transition_no"], sheet_of(vs1_key, vs1_key["transitions"][r["transition_no"] - 1]["to"], pages[r["b"]][1]) if r["b"] else "-"): r
