@@ -216,6 +216,7 @@ from auditmanager.comparison.profile.runner import (
     SubprocessChildRunner,
 )
 from auditmanager.comparison.profile.tiles import TileRenderer
+from auditmanager.comparison.tiles.reader import PairTileReader
 
 #: The name the queue can register `build_version_page_profiles` under; its payload is
 #: ``{"version_uid": "ver_..."}`` (`CMP-PROFILE-01`). The registry belongs to `CMP-WORK-01`.
@@ -368,6 +369,7 @@ __all__ = [
     "PageProfileReader",
     "PageProfileRow",
     "PageWord",
+    "PairTileReader",
     "REASON_PAGE_TOO_LARGE",
     "REASON_RENDER_FAILED",
     "StampFields",
