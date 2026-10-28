@@ -1,7 +1,7 @@
 """The use cases of the matrix: read it, prepare it, edit it, undo an edit, build it.
 
-`CMP-MATRIX-01` (ADR-0025 decisions 3, 5, 7, 13, 14, 16). One class holds the six operations the contract seals and
-the build the worker runs. It takes plain values and answers plain values (contract-shaped dictionaries, small
+`CMP-MATRIX-01` (ADR-0025 decisions 3, 5, 7, 13, 14, 16). One class holds the operations the contract seals for the
+matrix and the build the worker runs. It takes plain values and answers plain values (contract-shaped dictionaries, small
 dataclasses); the adapter in the composition root maps them to the generated models.
 
 **Reads** start nothing and change nothing (``getComparisonMatrix``, ``listComparisonMatrixEdits``,
@@ -65,7 +65,6 @@ from auditmanager.comparison.profile_queue.enqueue import enqueue_version_page_p
 from auditmanager.comparison.profile_queue.handler import PAGE_PROFILE_KIND
 from auditmanager.comparison.work.repository import ComparisonWorkRepository
 from auditmanager.documents.public import DocumentRepository
-from auditmanager.ingest.comparison_pdf.public import ComparisonUploadRepository, require_expert
 from auditmanager.ingest.public import CommandReplay, CommandRepository, payload_fingerprint
 from auditmanager.shared.db import session_scope
 from auditmanager.shared.errors import DomainError, ErrorCode
@@ -101,6 +100,13 @@ STATE_BUILDING: Final[str] = "building"
 STATE_READY: Final[str] = "ready"
 STATE_STALE: Final[str] = "stale"
 STATE_FAILED: Final[str] = "failed"
+
+
+def require_expert(roles: frozenset[str] | set[str]) -> None:
+    """A matrix act is an expert's (ADR-0025 decision 16, ``R-60``): an administrator alone is refused. The edge
+    refuses it too (``OPERATION_ROLES``); this is the command's own check, in the transaction that would act."""
+    if "expert" not in roles:
+        raise DomainError(ErrorCode.PERMISSION_DENIED, required_capability="role:expert")
 
 
 def matrix_build_dedupe_key(document_uid: str) -> str:
@@ -159,7 +165,7 @@ def _invalid() -> DomainError:
 
 
 class ComparisonMatrixService:
-    __slots__ = ("_factory", "_blob_store", "_reader", "_documents", "_commands", "_orders", "_repo", "_work")
+    __slots__ = ("_factory", "_blob_store", "_reader", "_documents", "_commands", "_repo", "_work")
 
     def __init__(
         self,
@@ -173,7 +179,6 @@ class ComparisonMatrixService:
         self._reader = profile_reader
         self._documents = DocumentRepository()
         self._commands = CommandRepository()
-        self._orders = ComparisonUploadRepository()
         self._repo = MatrixRepository()
         self._work = ComparisonWorkRepository()
 
@@ -190,7 +195,7 @@ class ComparisonMatrixService:
             self._documents.list_versions(session, DocumentUid.parse(document_uid)), key=lambda v: v.version_ordinal
         )
         own_order = [str(v.version_uid) for v in versions]
-        latest = self._orders.latest_order(session, document_uid)
+        latest = self._repo.latest_order(session, document_uid)
         order = resolve_order(None if latest is None else latest.version_uids, own_order)
         counts = {str(v.version_uid): int(v.page_count) for v in versions}
         facts = self._repo.profile_facts(session, order, PAGE_PROFILE_ALGO_VERSION)
@@ -566,7 +571,7 @@ class ComparisonMatrixService:
             target = latest_applied_edit(self._repo.all_edits(session, document_uid))
             if target is None:
                 raise DomainError(ErrorCode.CONFLICT, conflict_reason="comparison_edit_none")
-            latest_order = self._orders.latest_order(session, document_uid)
+            latest_order = self._repo.latest_order(session, document_uid)
             self._repo.insert_edit(
                 session, project_uid=project_uid, document_uid=document_uid, edit_no=newest + 1, batch_position=1,
                 kind="undo", page=None, other_page=None, absent_version_uid=None, undoes_edit_id=target.edit_id,

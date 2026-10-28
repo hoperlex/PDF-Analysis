@@ -8,9 +8,9 @@ not a driver error.
 
 **Tables it writes**: ``comparison_matrix`` (a build, once per input set) and ``comparison_matrix_edit`` (an
 expert's edit or an undo). **Tables it only reads**: ``comparison_ai_link`` (empty until wave C2),
-``comparison_page_profile`` (the digest of what a build read, the progress of the profiles) and
-``comparison_work`` (is a build or a profile still queued, did the last build fail -- read-only, the queue itself is
-``comparison/work``'s).
+``comparison_version_order`` (the order a build walks), ``comparison_page_profile`` (the digest of what a build read,
+the progress of the profiles) and ``comparison_work`` (is a build or a profile still queued, did the last build
+fail -- read-only, the queue itself is ``comparison/work``'s).
 """
 
 from __future__ import annotations
@@ -37,6 +37,7 @@ from auditmanager.shared.identity import new_ulid
 
 __all__ = [
     "MatrixRepository",
+    "OrderFact",
     "ProfileFact",
     "WorkFact",
     "new_ai_link_id",
@@ -81,6 +82,15 @@ class WorkFact:
     created_at: datetime
 
 
+@dataclass(frozen=True, slots=True)
+class OrderFact:
+    """The latest version-order revision of a document: its identity and the versions in the order chosen."""
+
+    order_id: str
+    revision_no: int
+    version_uids: tuple[str, ...]
+
+
 _BUILD_COLUMNS = (
     "comparison_matrix_id, build_no, order_id, profile_signature, rules_version, algo_version, rows, "
     "unassigned, summary, created_at"
@@ -99,6 +109,10 @@ _PROFILES = text(
     "SELECT comparison_page_profile_id, version_uid, page_number, content_key, status "
     "FROM comparison_page_profile WHERE version_uid = ANY(CAST(:versions AS text[])) AND algo_version = :algo "
     "ORDER BY version_uid, page_number"
+)
+_LATEST_ORDER = text(
+    "SELECT comparison_version_order_id, revision_no, version_uids FROM comparison_version_order "
+    "WHERE document_uid = :document ORDER BY revision_no DESC LIMIT 1"
 )
 _LATEST_BUILD = text(
     f"SELECT {_BUILD_COLUMNS} FROM comparison_matrix WHERE document_uid = :document ORDER BY build_no DESC LIMIT 1"
@@ -184,6 +198,14 @@ class MatrixRepository:
     __slots__ = ()
 
     # -- reads of other tables ------------------------------------------------------------------------------
+
+    def latest_order(self, session: Session, document_uid: str) -> OrderFact | None:
+        """The newest revision of ``comparison_version_order`` (an expert's act of ``CMP-INGEST-01``), read only."""
+        row = session.execute(_LATEST_ORDER, {"document": document_uid}).first()
+        if row is None:
+            return None
+        versions = row[2] if isinstance(row[2], list) else json.loads(row[2])
+        return OrderFact(order_id=row[0], revision_no=int(row[1]), version_uids=tuple(versions))
 
     def profile_facts(self, session: Session, version_uids: Sequence[str], algo_version: str) -> list[ProfileFact]:
         rows = session.execute(_PROFILES, {"versions": list(version_uids), "algo": algo_version}).all()

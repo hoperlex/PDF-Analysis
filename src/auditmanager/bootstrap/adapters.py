@@ -5717,7 +5717,7 @@ class VersionPageAdapter:
 
 
 class ComparisonMatrixAdapter(_SessionHolder):
-    """`CMP-MATRIX-01` serves the six matrix operations over
+    """`CMP-MATRIX-01` serves the matrix operations over
     :class:`~auditmanager.comparison.matrix.service.ComparisonMatrixService` (ADR-0025 decisions 3, 13, 14, 16).
 
     The adapter owns the mapping to the contract's models, the cursors, and the two reads the service does not make
