@@ -363,4 +363,15 @@ MinIO 61910/61911, database `auditmanager_cmp_measure_01`, bucket `auditmanager-
 
 ## 12. Cleanup
 
-(written at the end of the lane: see the task file's Handoff)
+- **The real set directory `.local/comparison-measure/13AV-RD-EM2-PA/` (its README and the four PDFs) was deleted** at 04:23 (+05:00), after the measurement was recorded
+  (the owner's rule in its README); `ls` of the path answers «No such file or directory». `.local/comparison-measure/results-final/` is kept: the earlier
+  `MEASURE-RENDER-01` records and the two directories of this lane, `chain-01` and `chain-01-as-shipped` (numbers, hashes, file names, opaque identities and words that
+  name a state or a typed reason only; no content of the set).
+- The lane's containers `auditmanager-cmp-measure-01-{postgres,s3,s3-init}-1` and the network `auditmanager-cmp-measure-01-net` were removed with `make down`; the volumes
+  `auditmanager-cmp-measure-01-postgres-data` and `auditmanager-cmp-measure-01-s3-data` (which held the derived data of the set: profiles, previews, tiles, masks) were removed
+  **by those exact names**; `docker ps -a`, `docker volume ls` and `docker network ls` list nothing of the lane. The git-ignored `.env`, the pytest base directories and the scratch
+  results of the synthetic test runs were deleted. No temporary directory of the product's children remained (`cmp-source-*`, `cmp-profile-*`, `cmp-engine-*`: none).
+- No process was killed by a pattern. The only signals sent were `SIGTERM` to the lane's own worker by its PID at the end of each run (it drained and exited 0), and none of the
+  guards tripped.
+- Checks: `git diff --check` clean; `tests/contract/program` 28 passed; the whole `tests/contract` minus the three `D-220` files on the committed tree 1 310 passed, 19 283 subtests
+  passed (the report and the tool change no behaviour; nothing else was run, by the brief).

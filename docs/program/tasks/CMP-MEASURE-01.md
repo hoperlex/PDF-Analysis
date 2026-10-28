@@ -129,7 +129,23 @@ the addendum; this lane changes no ADR value by itself.
 Not applicable (a measurement; no behaviour changes).
 
 ## Handoff
-- changed files: (written at the end)
-- commands/results: (written at the end)
-- known limits: (written at the end)
-- integration notes: (written at the end)
+- changed files: `tools/measure/comparison_chain.py` (new: subcommands `run`, `tiles`, `bytes`, `report`, `worker`), `docs/program/compare/MEASURE-ENGINE-01.md` (new),
+  `docs/program/tasks/CMP-MEASURE-01.md` (this file). `git diff --name-only 9861c9f9..HEAD` lists these three and nothing else: no `src/`, contract, migration, lock, dependency,
+  `tests/`, `web/` or `infra/` file. Raw records (numbers only) are outside git in `.local/comparison-measure/results-final/chain-01/` (the run behind shim S-1) and
+  `chain-01-as-shipped/` (the run as shipped).
+- commands/results: run from the clean tree `47f8da2d` on the lane's own stack (host load 2.7 to 4.9, times are upper bounds). **As shipped the chain stops at the first page
+  profile: `load_source_version` reads the manifest role `source.document`, the plain-PDF upload writes `comparison.source_pdf`; 4 of 4 `page_profile` items failed with
+  `page_profile_source_unreadable` after 3 attempts (FIX-1).** Behind shim S-1 (a wrapper in the tool's processes that widens that one condition; `src/` untouched) the whole
+  chain ran: admission 3.7 s; page profiles 229.6 s (85 of 85 pages `ready`; render child worst VmPeak 482.0 MiB, extraction child worst VmPeak 728.4 MiB, worst CPU and wall
+  14.0 s; worker plus child 911.6 MiB at one instant); matrix 8.2 s (worker VmHWM 310.1 MiB; 30 rows, 0 unmatched, 0 groups, 0 splits, 0 duplicates, 0 bridges); series 158.7 s
+  (29 engine children, worst VmPeak 568.6 MiB and 10.0 s; 26 fast-path pairs; worker VmHWM 362.7 MiB); v3 → v4 26 of 26 `same`, verdict `content_same`; no item or child ended without
+  a result. Stored 96 137 739 B (sources 25 981 824, previews 35 274 498, thumbnails 1 239 477, archives 27 782 191 of which tiles 20 565 938, masks 5 859 749). 20 pair tiles:
+  levels 0 and 1 about 350 ms, levels 2 and 3 about 45 ms, API process 200.5 → 314.7 MiB. No original statuses exist for this set. `git diff --check` clean; `tests/contract/program`
+  28 passed; `tests/contract` minus the three `D-220` files 1 310 passed.
+- known limits: one run on a shared host; the stages behind the defect are measured behind the shim; in-process HTTP transport; the upload readers' children are sampled at 50 ms,
+  every other child reports its own VmHWM/VmPeak; one object of 85 pages (no 12 × 100 sheets, no 500-page version, no second slot); no AI work.
+- integration notes: (1) FIX-1 is blocking and is a one-condition change in `comparison/profile/source.py::load_source_version` plus a test from the upload to the profile; until it
+  is fixed no uploaded version can be compared. (2) ADR-0025 changes only by a dated addendum: no marked ceiling or cap needs to change (768 / 1024 MiB, 300 s, 600 s, 40 Mpx, 8 GiB all
+  confirmed with the shares in report section 8.1); the bytes-per-project estimate should be replaced and the throughput written (section 8.2 items 1 and 2); the integrator decides
+  the two open items (the worker's own footprint; a version-sized `page_profile` item against the 900 s watchdog). (3) FIX-2..5 of the report are observations and improvements, not
+  blockers. (4) The real set directory is deleted and the lane's volumes are removed (report section 12).
