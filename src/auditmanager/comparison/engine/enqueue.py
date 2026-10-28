@@ -45,8 +45,12 @@ def enqueue_pair_result(
     reasons: Sequence[str] = (),
     part: str | None = None,
     comparison_upload_id: str | None = None,
+    comparison_series_id: str | None = None,
 ) -> Enqueued:
-    """Enqueue the comparison of two page profiles, or answer the live item that already is."""
+    """Enqueue the comparison of two page profiles, or answer the live item that already is.
+
+    ``comparison_series_id`` attaches the item to a series (`CMP-SERIES-01`): the series' pause, resume and cancel reach it.
+    It is not part of the item's identity: the dedupe key stays ``pair_result:<a>:<b>``."""
     pages = []
     for field, value in (("page_a_profile_id", page_a_profile_id), ("page_b_profile_id", page_b_profile_id)):
         try:
@@ -66,4 +70,5 @@ def enqueue_pair_result(
         dedupe_key=pair_result_dedupe_key(pages[0], pages[1]),
         created_by_user_uid=created_by_user_uid,
         comparison_upload_id=comparison_upload_id,
+        comparison_series_id=comparison_series_id,
     )

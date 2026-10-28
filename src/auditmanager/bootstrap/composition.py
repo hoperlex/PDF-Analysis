@@ -500,7 +500,7 @@ def build_application(
         # dependency_unavailable` until `CMP-MATRIX-01`, `CMP-SERIES-01`, `CMP-VIEWER-01` and
         # `CMP-VC-OVERVIEW-01` replace the four adapters (plan section 4.0 rule 1).
         comparison_matrices=ComparisonMatrixAdapter(sessions, blob_store=store),
-        comparison_series=ComparisonSeriesAdapter(),
+        comparison_series=ComparisonSeriesAdapter(sessions, blob_store=store),
         comparison_pair_tiles=ComparisonPairTileAdapter(sessions, blob_store=store),
         comparison_overview=ComparisonOverviewAdapter(),
         execution=ExecutionAdapter(sessions, runs=run_adapter),

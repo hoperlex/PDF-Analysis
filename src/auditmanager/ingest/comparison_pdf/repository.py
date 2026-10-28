@@ -54,7 +54,8 @@ _ACTIVE_LOCK_KEY: Final[str] = "comparison_upload:active"
 
 _UPLOAD_COLUMNS = (
     "comparison_upload_id, project_uid, state, declared_files, declared_bytes, declared_pages, "
-    "part_size_bytes, pause_requested, actor_user_uid, actor_label, command_id, created_at, updated_at"
+    "part_size_bytes, pause_requested, actor_user_uid, actor_label, command_id, created_at, updated_at, "
+    "compare_after_preparation"
 )
 _SET_COLUMNS = (
     "comparison_upload_set_id, comparison_upload_id, state, designation, existing_document_uid, "
@@ -99,6 +100,8 @@ class UploadRow:
     command_id: str
     created_at: datetime
     updated_at: datetime
+    #: `CMP-SERIES-01`: «После подготовки сравнить все соседние версии» -- the flag the batch was declared with.
+    compare_after_preparation: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,6 +168,7 @@ def _upload(row: Any) -> UploadRow:
         declared_bytes=int(values[4]), declared_pages=int(values[5]), part_size_bytes=int(values[6]),
         pause_requested=bool(values[7]), actor_user_uid=values[8], actor_label=values[9],
         command_id=values[10], created_at=values[11], updated_at=values[12],
+        compare_after_preparation=bool(values[13]),
     )
 
 
@@ -246,18 +250,20 @@ class ComparisonUploadRepository:
         actor_user_uid: str,
         actor_label: str,
         command_id: str,
+        compare_after_preparation: bool = False,
     ) -> UploadRow:
         row = session.execute(
             text(
                 "INSERT INTO comparison_upload (comparison_upload_id, project_uid, declared_files, "
-                "declared_bytes, declared_pages, part_size_bytes, actor_user_uid, actor_label, command_id) "
-                "VALUES (:id, :project, :files, :bytes, :pages, :part, :actor, :label, :command) "
+                "declared_bytes, declared_pages, part_size_bytes, actor_user_uid, actor_label, command_id, "
+                "compare_after_preparation) "
+                "VALUES (:id, :project, :files, :bytes, :pages, :part, :actor, :label, :command, :compare) "
                 f"RETURNING {_UPLOAD_COLUMNS}"
             ),
             {
                 "id": upload_id, "project": project_uid, "files": declared_files, "bytes": declared_bytes,
                 "pages": declared_pages, "part": part_size_bytes, "actor": actor_user_uid,
-                "label": actor_label, "command": command_id,
+                "label": actor_label, "command": command_id, "compare": compare_after_preparation,
             },
         ).one()
         return _upload(row)
