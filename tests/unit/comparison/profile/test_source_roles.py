@@ -91,4 +91,3 @@ def test_a_manifest_that_holds_both_roles_is_refused_as_ambiguous_whichever_come
             load_source_version(object(), VERSION)  # type: ignore[arg-type]
         assert refusal.value.code is ErrorCode.ANALYSIS_INPUT_INVALID
         assert refusal.value.detail_fields["reason"] == REASON_AMBIGUOUS == "source_manifest_ambiguous"
-
