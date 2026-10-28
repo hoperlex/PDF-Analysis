@@ -132,6 +132,9 @@ def test_an_undone_edit_and_the_undo_event_shape_nothing() -> None:
     assert latest_applied_edit(edits).edit_id == "cme_1"
     assert latest_applied_edit([edit(1, "unlink", ref(B, 1)), edit(2, "undo", None, undoes="cme_1")]) is None
     assert latest_applied_edit([]) is None
+    two = [edit(1, "unlink", ref(B, 1)), edit(2, "mark_absent", ref(A, 1), absent=B)]
+    assert latest_applied_edit(two).edit_id == "cme_2", "the newest applied edit, not the oldest"
+    assert latest_applied_edit([*two, edit(3, "undo", None, undoes="cme_2")]).edit_id == "cme_1", "then the one before it"
 
 
 def test_an_edit_whose_cells_do_not_exist_is_orphaned_and_the_rest_still_apply() -> None:
@@ -179,6 +182,11 @@ def test_an_ai_link_bound_to_another_build_or_to_a_cell_in_another_state_is_supe
     assert wrong_state.ai_status == {"cak_1": "superseded"}, "B1 is linked at C already: the cell is no longer unmatched"
     missing = effective_matrix(build(), [], [ai(1, ref(B, 2), ref("ver_Z", 1), "unmatched")])
     assert missing.ai_status == {"cak_1": "superseded"}
+    determined_absent = effective_matrix(build(), [], [ai(1, ref(B, 3), ref(C, 5), "unmatched")])
+    assert determined_absent.ai_status == {"cak_1": "superseded"}, "the cell was ``absent``, not ``unmatched``: no candidates were left"
+    joins_two_rows = effective_matrix(build(), [], [ai(1, ref(B, 2), ref(C, 4), "unmatched")])
+    assert joins_two_rows.ai_status == {"cak_1": "superseded"}, "C4 already stands in a row that links older versions"
+    assert joins_two_rows.counts["ai"] == 0
 
 
 def test_the_same_inputs_give_the_same_bytes_whatever_the_order_they_arrive_in() -> None:

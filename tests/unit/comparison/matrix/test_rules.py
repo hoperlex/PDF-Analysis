@@ -32,8 +32,14 @@ def test_the_thresholds_are_the_originals() -> None:
     ("shared", "expected_score", "state", "confidence", "reason"),
     [
         (15, 15 / 25, "matched", "high", None),  # 0.60 >= 0.55
+        (14, 14 / 26, "matched", "medium", None),  # 0.538: just under the high threshold
         (12, 12 / 28, "matched", "medium", None),  # 0.35 <= 0.4286 < 0.55
+        (11, 11 / 29, "matched", "medium", None),  # 0.379: just over the medium threshold
+        (10, 10 / 30, "unmatched", None, "below_pair"),  # 0.333: just under it, a candidate and no pair
         (9, 9 / 31, "unmatched", None, "below_pair"),  # 0.20 <= 0.29 < 0.35: a candidate, not a pair
+        (8, 8 / 32, "unmatched", None, "below_pair"),  # 0.25
+        (7, 7 / 33, "unmatched", None, "below_pair"),  # 0.212: just over the candidate floor
+        (6, 6 / 34, "absent", None, "no_candidates"),  # 0.176: just under it, not even a candidate
         (5, 5 / 35, "absent", None, "no_candidates"),  # 0.14 < 0.20: not even a candidate
     ],
 )
@@ -134,7 +140,7 @@ def test_the_package_rule_reads_the_designation_correspondence_of_the_confident_
 
 def test_the_page_number_of_an_unstamped_report_decides_when_the_text_does_not() -> None:
     """Rule ``pageno``: three pages of a built-in report with the same text and different footer numbers."""
-    body = tokens("о", 20)
+    body = tokens("о", 80)  # so many shared words that the footer number alone is under the margin of the score
 
     def numbered(version: str, number: int, footer: str):
         return page(version, number, body, extra_words=words([footer], x0=280, y0=800))
