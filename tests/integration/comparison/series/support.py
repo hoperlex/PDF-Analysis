@@ -141,7 +141,8 @@ def make_due(sessions: Any, project: str, *, except_kind: str | None = None) -> 
         session.commit()
 
 
-def runner_with(sessions: Any, engine: Any, blob_store: Any, *, compare: Callable[..., PairOutcome] | None = None) -> Any:
+def runner_with(sessions: Any, engine: Any, blob_store: Any, *, compare: Callable[..., PairOutcome] | None = None,
+                modules: str = "versions") -> Any:
     """The comparison runner the worker builds from the shipped tuple, with the pair comparison replaced by ``compare``
     (the real engine when ``None``). The Run-priority gate reads nothing, so a claim sees only comparison work."""
     from auditmanager.bootstrap import composition
@@ -158,7 +159,7 @@ def runner_with(sessions: Any, engine: Any, blob_store: Any, *, compare: Callabl
             mock.patch("auditmanager.comparison.work.runner.default_gates", gates):
         return composition.build_comparison_work(
             sessions=sessions, engine=engine, blob_store=blob_store,
-            environ={"AUDITMANAGER_COMPARISON_MODULES": "versions"})
+            environ={"AUDITMANAGER_COMPARISON_MODULES": modules})
 
 
 def drain(runner: Any, worker_id: str, engine: Any, sessions: Any, project: str, *, rounds: int = 60,

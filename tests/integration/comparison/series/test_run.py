@@ -193,3 +193,16 @@ def test_an_item_whose_pair_is_already_done_ends_without_asking_the_engine(lab, 
             dedupe_key=f"repeat-{pair['id']}", comparison_series_id=series["series_id"])
     ran = drain(runner, worker_id, engine, sessions, doc.project_uid)
     assert ran == [("series_pair", "succeeded")] and len(fake.calls) == calls
+
+
+def test_a_series_waits_while_the_versions_module_is_off(lab, sessions, engine, blob_store, worker_id, service, prepared) -> None:
+    """ADR-0025 decision 23: the items are filed under the versions module, so a worker without it claims none; the series
+    stays queued with its work intact, and turning the module on runs it."""
+    doc, series = prepared
+    fake = ScriptedEngine(sessions)
+    assert drain(runner_with(sessions, engine, blob_store, compare=fake, modules="none"), worker_id, engine, sessions,
+                 doc.project_uid) == []
+    assert fake.calls == [] and {w["state"] for w in items(lab, series["series_id"])} == {"queued"}
+    assert service.get_series(series_id=series["series_id"])["state"] == "queued"
+    drain(runner_with(sessions, engine, blob_store, compare=fake), worker_id, engine, sessions, doc.project_uid)
+    assert service.get_series(series_id=series["series_id"])["state"] == "completed" and len(fake.calls) == 24
