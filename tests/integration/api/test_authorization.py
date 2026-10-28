@@ -954,17 +954,17 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         # `appendDecision` does; whether they may is the role register's (expert) and the
         # command's own re-read.
         "comparison.py",
+        # `CMP-SEAL-C1`: a matrix edit records WHO made it and a series WHO started it; that only an
+        # expert may is the role register's and the command's own re-read of the role set. The reads,
+        # the pair tiles and the overview take no subject.
+        "comparison_matrix.py",
+        "comparison_series.py",
         # `CMP-SEAL-C0`: the comparison writes record WHO declared, confirmed, paused or cancelled an
         # upload batch and WHO appended an order revision (the actor of its rows); that only an expert
         # may is the role register's and the command's own re-read of the role set. The reads and the
         # page reads take no subject.
         "comparison_uploads.py",
         "comparison_version_orders.py",
-        # `CMP-SEAL-C1`: a matrix edit records WHO made it and a series WHO started it; that only an
-        # expert may is the role register's and the command's own re-read of the role set. The reads,
-        # the pair tiles and the overview take no subject.
-        "comparison_matrix.py",
-        "comparison_series.py",
         "decisions.py",
         # `W61-DISPATCHER-01`: an assignment records WHO created or moved it; what they may
         # do is the role register's and the dispatch context's own re-read of the role set.
