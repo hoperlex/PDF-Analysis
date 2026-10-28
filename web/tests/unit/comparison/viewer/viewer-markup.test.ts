@@ -154,8 +154,11 @@ describe('the viewer of a compared pair', () => {
   });
 
   it('turns «Совмещать блоки» off when there is nothing to align, and on when there is', () => {
-    expect(html(comparedPair())).toMatch(/<input type="checkbox" disabled=""[^>]*\/>Совмещать блоки|Совмещать блоки/);
+    // the count of blocks that can be aligned stands in the label (`version-comparison-viewer.js:90`)
+    expect(html(comparedPair())).toContain('Совмещать блоки (2)');
     const none = html(comparedPair({ how_compared: { algo_version: 'v', dpi: 200, tolerance_pt: 0.5, transform: [1, 0, 0, 1, 0, 0], aligned_blocks: 0 } }));
+    expect(none).not.toContain('Совмещать блоки (');
+    expect(none).toMatch(/<input type="checkbox" disabled=""\/>\s*Совмещать блоки/);
     expect(none).toContain('title="Движения блоков не найдено: совмещать нечего"');
     expect(html(comparedPair())).toContain('title="Показать перемещённые блоки листа B на их местах, не меняя PDF"');
   });

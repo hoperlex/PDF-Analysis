@@ -179,7 +179,9 @@ export function ComparisonViewerView({
             <Choice checked={state.showBoxes} onChange={(on) => dispatch({ type: 'boxes', on })}>рамки отличий</Choice>
             <Choice checked={state.alignBlocks} disabled={alignedBlocks === 0}
               title={alignedBlocks === 0 ? 'Движения блоков не найдено: совмещать нечего' : 'Показать перемещённые блоки листа B на их местах, не меняя PDF'}
-              onChange={(on) => dispatch({ type: 'align', on })}>Совмещать блоки</Choice>
+              onChange={(on) => dispatch({ type: 'align', on })}>
+              Совмещать блоки{alignedBlocks > 0 ? ` (${alignedBlocks})` : ''}
+            </Choice>
           </fieldset>
           {navigation === undefined ? null : (
             <fieldset className={styles.group}>
