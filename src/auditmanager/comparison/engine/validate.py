@@ -17,11 +17,13 @@ of the contract turns that test red and this file is the side that has to move.
 from __future__ import annotations
 
 import enum
+import re
+from collections.abc import Sequence
 from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-__all__ = ["ResultInvalid", "validate_outcome"]
+__all__ = ["REASONS_MAX", "REASON_PATTERN", "ResultInvalid", "validate_outcome"]
 
 
 class ResultInvalid(ValueError):
@@ -134,9 +136,23 @@ MODELS: dict[str, type[BaseModel]] = {
     )
 }
 CAPS = {"differences": 2000, "text_changes": 2000, "service_notes": 500}
+#: The pattern and the cap of ``ComparisonSheetPair.reasons`` (the reasons of a result are copied into it verbatim by the
+#: series). ``CMP-C1-FIX-A`` item 1: a reason the contract cannot carry is a defect of the engine, refused here and never
+#: stored (the first version wrote ``UNCHECKED_CHANNEL:<channel>``). Held to the contract by ``test_restated_models.py``.
+REASON_PATTERN = r"^[A-Z][A-Z0-9_]{2,63}$"
+REASONS_MAX = 32
+_REASON = re.compile(REASON_PATTERN)
 
 
-def validate_outcome(channels: dict[str, Any], result: dict[str, Any]) -> None:
+def validate_outcome(channels: dict[str, Any], result: dict[str, Any], reasons: Sequence[str] | None = None) -> None:
+    """Raise :class:`ResultInvalid` for an outcome the contract does not allow. ``reasons`` (when given) are the pair's
+    reasons: each must fit the contract's pattern and there are at most :data:`REASONS_MAX`."""
+    if reasons is not None:
+        if len(reasons) > REASONS_MAX:
+            raise ResultInvalid(f"{len(reasons)} reasons pass the cap of {REASONS_MAX}")
+        for reason in reasons:
+            if not isinstance(reason, str) or _REASON.fullmatch(reason) is None:
+                raise ResultInvalid(f"the reason {reason!r} does not fit the contract's pattern {REASON_PATTERN}")
     try:
         ComparisonChannels(**channels)
         ComparisonCanvas(**result["canvas"])

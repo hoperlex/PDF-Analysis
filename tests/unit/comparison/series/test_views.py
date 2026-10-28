@@ -51,7 +51,10 @@ def test_the_evidence_members_are_copied_verbatim_and_the_engines_own_are_not_ex
 
 
 def test_a_reason_the_contract_cannot_carry_is_mapped_without_losing_a_word() -> None:
-    """The engine writes ``UNCHECKED_CHANNEL:<channel>``; the contract's pattern refuses the colon and the lower case."""
+    """Tolerance for rows stored under ``cmp-engine/1``, which wrote ``UNCHECKED_CHANNEL:<channel>``; the contract's pattern
+    refuses the colon and the lower case. The engine of today writes ``UNCHECKED_CHANNEL_<CHANNEL>`` (`CMP-C1-FIX-A` item 1),
+    which passes as it is."""
+    assert views.contract_reason("UNCHECKED_CHANNEL_TEXT_COVERAGE") == "UNCHECKED_CHANNEL_TEXT_COVERAGE"
     assert views.contract_reason("DUPLICATE_SHEET") == "DUPLICATE_SHEET"
     assert views.contract_reason("UNCHECKED_CHANNEL:text_coverage") == "UNCHECKED_CHANNEL_TEXT_COVERAGE"
     assert views.contract_reason("X") .startswith("REASON_") and len(views.contract_reason("x" * 100)) <= 64

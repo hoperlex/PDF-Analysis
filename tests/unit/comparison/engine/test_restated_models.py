@@ -84,3 +84,12 @@ def test_valid_and_invalid_members_are_accepted_and_refused_by_both_alike(name: 
         assert _accepts(theirs, payload) and _accepts(ours, payload), payload
     for payload in INVALID[name]:
         assert not _accepts(theirs, payload) and not _accepts(ours, payload), payload
+
+
+def test_the_reason_pattern_and_the_cap_are_those_of_the_contract_document() -> None:
+    import json
+    from pathlib import Path
+
+    document = json.loads((Path(__file__).resolve().parents[4] / "contracts/api/v1/openapi.json").read_text(encoding="utf-8"))
+    reasons = document["components"]["schemas"]["ComparisonSheetPair"]["properties"]["reasons"]
+    assert validate.REASON_PATTERN == reasons["items"]["pattern"] and validate.REASONS_MAX == reasons["maxItems"]

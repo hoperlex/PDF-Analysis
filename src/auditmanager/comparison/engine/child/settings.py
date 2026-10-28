@@ -13,8 +13,10 @@ from typing import Final
 __all__ = ["ALGO_VERSION", "PARAMS"]
 
 #: Names the algorithm that makes a result. The original's is ``vc1.13`` (``settings.py:11``); this one is the
-#: engine's own and starts at 1.
-ALGO_VERSION: Final[str] = "cmp-engine/1"
+#: engine's own and starts at 1. ``2``: the reason of an unchecked channel is ``UNCHECKED_CHANNEL_<CHANNEL>``, the
+#: contract's form, where ``1`` wrote ``UNCHECKED_CHANNEL:<channel>`` (``CMP-C1-FIX-A`` item 1); it is in the content key,
+#: so the results stored under ``1`` are not found and the pair is compared again.
+ALGO_VERSION: Final[str] = "cmp-engine/2"
 
 # -- the raster and the tolerance -------------------------------------------------------------
 #: ``tolerance_pt()`` default, ``settings.py:37-38``: two lines closer than this are the same line.

@@ -26,9 +26,11 @@ _REASON: Final = re.compile(r"^[A-Z][A-Z0-9_]{2,63}$")
 
 
 def contract_reason(reason: str) -> str:
-    """A stored reason as the contract can carry it. A reason that fits the pattern is passed as it is. The engine also writes
-    ``UNCHECKED_CHANNEL:<channel>`` (a colon and lower case), which the pattern refuses; it becomes ``UNCHECKED_CHANNEL_<CHANNEL>``
-    -- the same words, no information lost (the channel's own state and reason stay in ``channels``). The stored row is untouched."""
+    """A stored reason as the contract can carry it. A reason that fits the pattern is passed as it is. This mapping is only
+    tolerance for rows stored under ``cmp-engine/1``, which wrote ``UNCHECKED_CHANNEL:<channel>`` (a colon and lower case) that
+    the pattern refuses; it becomes ``UNCHECKED_CHANNEL_<CHANNEL>`` -- the same words, no information lost (the channel's own
+    state and reason stay in ``channels``). The stored row is untouched. The engine of today writes the contract's form
+    (``CMP-C1-FIX-A`` item 1; ``engine/validate.py`` refuses anything else), so a row of the current algorithm never maps."""
     if _REASON.match(reason):
         return reason
     mapped = re.sub(r"[^A-Z0-9_]", "_", reason.upper())[:64]
