@@ -66,12 +66,15 @@ import { CATEGORY_LABELS } from '@/entities/expert-decision';
 import {
   ClassificationBadges,
   COMPARISON_DIFF_LIMIT,
+  COMPARISON_ONLY_MARK,
+  ComparisonOnlyMark,
   PROPOSAL_BASIS_TEXT,
   PROPOSAL_KIND_LABELS,
   SHEET_STATUS_LABELS,
   TOO_LARGE_TEXT,
   canCarryOverDecision,
   carryoverCandidateOf,
+  isComparisonOnly,
   orderedPair,
   pairingBasisText,
   refusalText,
@@ -128,6 +131,29 @@ function defaultOther(current: DocumentVersion, others: readonly DocumentVersion
     return older.reduce((best, item) => (item.version_ordinal > best.version_ordinal ? item : best));
   }
   return others.reduce((best, item) => (item.version_ordinal < best.version_ordinal ? item : best));
+}
+
+/**
+ * What an `<option>` says of a version (`CMP-DEBT-261`). An option holds text only, so the
+ * mark of a version admitted for comparison only (`CMP-VERSION-MARK-01`) is said in its
+ * words here; the badge itself stands beside the pair below. A version that was not is
+ * labelled exactly as `versionLabel` labels it.
+ */
+function optionLabel(version: DocumentVersion): string {
+  return isComparisonOnly(version)
+    ? `${versionLabel(version)} (${COMPARISON_ONLY_MARK})`
+    : versionLabel(version);
+}
+
+/** The mark beside one version of the compared pair, with the space that separates it; nothing for any other version. */
+function PairMark({ version }: { readonly version: DocumentVersion }) {
+  if (!isComparisonOnly(version)) return null;
+  return (
+    <>
+      {' '}
+      <ComparisonOnlyMark version={version} />
+    </>
+  );
 }
 
 function SetComparison({
@@ -209,7 +235,7 @@ function SetComparison({
           >
             {others.map((item) => (
               <option key={item.version_uid} value={item.version_uid}>
-                {versionLabel(item)}
+                {optionLabel(item)}
               </option>
             ))}
           </select>
@@ -230,9 +256,11 @@ function SetComparison({
       </div>
       <p className={styles.pair}>
         <span>{versionLabel(pair.source)}</span>{' '}
-        <ClassificationBadges classification={pair.source.classification} /> →{' '}
+        <ClassificationBadges classification={pair.source.classification} />
+        <PairMark version={pair.source} /> →{' '}
         <span>{versionLabel(pair.target)}</span>{' '}
         <ClassificationBadges classification={pair.target.classification} />
+        <PairMark version={pair.target} />
       </p>
       {comparison.isPending ? (
         <LoadingState what="сравнение версий" />

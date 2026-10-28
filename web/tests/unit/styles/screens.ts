@@ -49,7 +49,9 @@ import { AnalysisProfileTable } from '@/widgets/analysis-profile-table';
 import { ArV3BetaReview } from '@/widgets/ar-v3-beta-review';
 import { ArV3BetaPack } from '@/widgets/ar-v3-beta-pack';
 import { StartArV3GroupView, classifyArV3GroupStartFailure } from '@/features/start-ar-v3-group';
-import { SpecificationPricesAnswer } from '@/widgets/specification-prices';
+import { SpecificationPricesAnswer, SpecificationPricesChooser } from '@/widgets/specification-prices';
+import { ProposalSetChooser } from '@/widgets/optimisation-proposals';
+import { VersionComparison } from '@/widgets/version-comparison';
 import { NormReferencesAnswer } from '@/widgets/norm-references';
 import { SectionSpecificationAnswer } from '@/widgets/section-specification';
 import { NormSearchResults } from '@/widgets/norm-search';
@@ -66,7 +68,7 @@ import { RunProgress } from '@/widgets/run-progress';
 import { UploadPanel } from '@/widgets/upload-panel';
 import { VersionList } from '@/widgets/version-list';
 import { CropFigureView } from '@/widgets/portal-blocks';
-import { VersionBlockViews } from '@/_pages/blocks';
+import { DocumentChooser, VersionBlockViews } from '@/_pages/blocks';
 import { ClassifyVersionFormView } from '@/features/classify-version';
 import { CorrectVersionClassificationFormView } from '@/features/correct-version-classification';
 import { ProjectStructureView } from '@/widgets/project-sections';
@@ -1224,6 +1226,43 @@ export function screens(): Screen[] {
         })(),
       );
       add('VersionDetailPage comparison-only', atFlagged(createElement(VersionDetailPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID, roles: ['expert'] })));
+    }
+    // `CMP-DEBT-261`: the five pickers that listed a version without the mark, over a comparison-only
+    // one: the version picker and the compared pair, the stage comparison page, the two set choosers
+    // (a disabled option, the badge list and the reason under the select) and the blocks document
+    // picker (the mark, the disabled «Показать блоки» and the reason). The badge, the note and the
+    // disabled controls are measured where these screens draw them.
+    {
+      const OTHER_SUFFIX = 'C';
+      const flaggedOther = {
+        ...version(),
+        version_uid: `${VERSION_UID.slice(0, -1)}${OTHER_SUFFIX}`,
+        version_ordinal: 2,
+        upload_kind: 'comparison_pdf' as const,
+        classification: { ...CONFIRMED, version_uid: `${VERSION_UID.slice(0, -1)}${OTHER_SUFFIX}` },
+      };
+      const classified = { ...version(), classification: CONFIRMED };
+      const flaggedSet = {
+        ...flaggedOther,
+        document_uid: `${DOCUMENT_UID.slice(0, -1)}${OTHER_SUFFIX}`,
+        version_ordinal: 1,
+      };
+      const onePage = { next_cursor: null } as { next_cursor: null };
+      const pickers = (): ReturnType<typeof populatedClient> => {
+        const client = populatedClient();
+        client.setQueryData(queryKeys.versions.list(DOCUMENT_UID, undefined, VERSION_PAGE_LIMIT), { items: [classified, flaggedOther], page: onePage });
+        client.setQueryData(queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT), { items: [classified, flaggedSet], page: onePage });
+        return client;
+      };
+      add('VersionComparison with a comparison-only version', renderScreen(pickers(), createElement(VersionComparison, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
+      add('SpecificationPricesChooser with a comparison-only set', render(createElement(SpecificationPricesChooser, { sets: [classified, flaggedSet], selected: classified.document_uid, onSelect: noop, partial: false })));
+      add('ProposalSetChooser with a comparison-only set', render(createElement(ProposalSetChooser, { sets: [classified, flaggedSet], selected: classified.document_uid, onSelect: noop, partial: false })));
+      add('DocumentChooser with a comparison-only document', renderScreen(pickers(), createElement(DocumentChooser, { projectUid: PROJECT_UID, onChooseVersion: noop })));
+      {
+        const client = pickers();
+        client.setQueryData(queryKeys.versions.detail(VERSION_UID), { ...classified, upload_kind: 'comparison_pdf' as const });
+        add('StageComparisonPage with a comparison-only version', renderScreen(client, createElement(StageComparisonPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
+      }
     }
     // `W59-SECTION-UI-01`: the project structure with a classified and an unclassified
     // document, the confirmed panel with a profile-less section after a refused
