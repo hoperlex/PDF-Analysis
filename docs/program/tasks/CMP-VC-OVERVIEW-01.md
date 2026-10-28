@@ -158,7 +158,7 @@ totals; an unknown project is `404`; the counters add up to the number of rows a
 four groups; the steps of wave C2 answer `not_applicable`; the queue summary is the whole installation's.
 
 ## Failure/idempotency/security cases
-- an unknown project: `404` naming `Project`; a malformed identity: `422`; no credential: `401` (the router and the guards of the wave)
+- an unknown project, or an address that names nothing: `404` naming `Project`; no credential: `401` (the router and the guards of the wave)
 - the module set `none`: the overview and the queue read still answer (as the matrix and series reads do); `modules` of the queue summary says `none`
 - a set with no profile rows, no build and no series reads `not_started` on each step and proposes the preparation
 - a series whose inputs changed reads `stale`; a build whose inputs changed reads `stale`
