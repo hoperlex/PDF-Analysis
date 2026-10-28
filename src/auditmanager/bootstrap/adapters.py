@@ -5348,6 +5348,7 @@ def _comparison_upload(view: Any) -> models.ComparisonUpload:
         declared_bytes=view.declared_bytes,
         created_at=view.created_at,
         updated_at=view.updated_at,
+        compare_after_preparation=view.compare_after_preparation,
         **({} if view.files is None else {"files": [_comparison_file(item) for item in view.files]}),
     )
 
@@ -5398,11 +5399,6 @@ class ComparisonUploadAdapter(_SessionHolder):
     ) -> models.ComparisonUpload:
         from auditmanager.ingest.comparison_pdf.public import DeclaredFileRequest
 
-        if compare_after_preparation:
-            # `CMP-SEAL-C1`: «После подготовки сравнить все соседние версии». The column exists; the series that
-            # the flag queues is `CMP-SERIES-01`'s, which removes this refusal and stores the flag. Until then a
-            # `true` is refused before anything is created, never accepted and ignored.
-            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="comparison_series")
         label, _roles = self._read(lambda session: _comparison_actor(session, user_uid))
         view = self._service.create_upload(
             project_uid=project_uid,
@@ -5414,6 +5410,7 @@ class ComparisonUploadAdapter(_SessionHolder):
                 for item in files
             ],
             user_uid=user_uid, actor_label=label, idempotency_key=idempotency_key,
+            compare_after_preparation=compare_after_preparation,
         )
         self._batches.after_declaration(upload_id=view.upload_id)
         return _comparison_upload(view)
@@ -5830,56 +5827,104 @@ class ComparisonMatrixAdapter(_SessionHolder):
         )
 
 
-class ComparisonSeriesAdapter:
-    """`CMP-SERIES-01` replaces the bodies (the sheet-pair results are written by
-    `CMP-ENGINE-01`)."""
+class ComparisonSeriesAdapter(_SessionHolder):
+    """`CMP-SERIES-01` serves the nine series operations over
+    :class:`~auditmanager.comparison.series.service.ComparisonSeriesService` (ADR-0025 decisions 3, 4, 7, 14, 16, 20, 21).
 
-    _DEPENDENCY = "comparison_series"
+    The adapter owns the mapping to the contract's models, the cursors, and the one read the service does not make itself:
+    the actor's display label and roles (a series is started and steered by an expert, checked again in the transaction
+    that acts)."""
 
-    def cancel_series(
-        self, *, series_id: str, user_uid: str, idempotency_key: str
+    def __init__(self, session_factory: sessionmaker[Session], *, blob_store: Any = None, service: Any = None) -> None:
+        super().__init__(session_factory)
+        if service is None:
+            from auditmanager.comparison.public import ComparisonSeriesService
+
+            service = ComparisonSeriesService(session_factory=session_factory, blob_store=blob_store)
+        self._service = service
+
+    def start_series(
+        self, *, project_uid: str, document_uid: str, restart: bool, base_order_revision_no: int | None, user_uid: str,
+        idempotency_key: str,
     ) -> models.ComparisonSeries:
-        return _comparison_unavailable(self._DEPENDENCY)
-
-    def finish_series(
-        self, *, series_id: str, user_uid: str, idempotency_key: str
-    ) -> models.ComparisonSeries:
-        return _comparison_unavailable(self._DEPENDENCY)
-
-    def get_series(
-        self, *, series_id: str
-    ) -> models.ComparisonSeries:
-        return _comparison_unavailable(self._DEPENDENCY)
-
-    def get_sheet_pair(
-        self, *, sheet_pair_id: str
-    ) -> models.ComparisonSheetPair:
-        return _comparison_unavailable(self._DEPENDENCY)
+        label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        return models.ComparisonSeries.model_validate(
+            self._service.start_series(
+                project_uid=project_uid, document_uid=document_uid, restart=restart,
+                base_order_revision_no=base_order_revision_no, user_uid=user_uid, actor_label=label, actor_roles=roles,
+                idempotency_key=idempotency_key,
+            )
+        )
 
     def list_series(
         self, *, project_uid: str, document_uid: str, cursor: str | None, limit: int
     ) -> models.ComparisonSeriesPage:
-        return _comparison_unavailable(self._DEPENDENCY)
+        after: tuple[datetime, str] | None = None
+        if cursor is not None:
+            parts = decode_cursor(cursor)
+            try:
+                if len(parts) != 2:
+                    raise ValueError("two members")
+                after = (datetime.fromisoformat(parts[0]), parts[1])
+            except ValueError:
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format") from None
+        page = self._service.list_series(project_uid=project_uid, document_uid=document_uid, after=after, limit=limit)
+        return models.ComparisonSeriesPage.model_validate(
+            {
+                "items": page.items,
+                "page": {
+                    "next_cursor": None if page.next_after is None
+                    else encode_cursor((page.next_after[0].isoformat(), page.next_after[1]))
+                },
+            }
+        )
+
+    def get_series(self, *, series_id: str) -> models.ComparisonSeries:
+        return models.ComparisonSeries.model_validate(self._service.get_series(series_id=series_id))
+
+    def _steer(self, method: str, *, series_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonSeries:
+        _label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        return models.ComparisonSeries.model_validate(
+            getattr(self._service, method)(
+                series_id=series_id, user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key
+            )
+        )
+
+    def pause_series(self, *, series_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonSeries:
+        return self._steer("pause_series", series_id=series_id, user_uid=user_uid, idempotency_key=idempotency_key)
+
+    def resume_series(self, *, series_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonSeries:
+        return self._steer("resume_series", series_id=series_id, user_uid=user_uid, idempotency_key=idempotency_key)
+
+    def cancel_series(self, *, series_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonSeries:
+        return self._steer("cancel_series", series_id=series_id, user_uid=user_uid, idempotency_key=idempotency_key)
+
+    def finish_series(self, *, series_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonSeries:
+        return self._steer("finish_series", series_id=series_id, user_uid=user_uid, idempotency_key=idempotency_key)
 
     def list_sheet_pairs(
-        self, *, transition_id: str, status: models.ComparisonSheetStatus | None, only_changes: bool, cursor: str | None, limit: int
+        self, *, transition_id: str, status: models.ComparisonSheetStatus | None, only_changes: bool, cursor: str | None,
+        limit: int,
     ) -> models.ComparisonSheetPairPage:
-        return _comparison_unavailable(self._DEPENDENCY)
+        after: int | None = None
+        if cursor is not None:
+            parts = decode_cursor(cursor)
+            if len(parts) != 1 or not parts[0].isdigit():
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+            after = int(parts[0])
+        page = self._service.list_sheet_pairs(
+            transition_id=transition_id, status=None if status is None else str(_enum_text(status)),
+            only_changes=only_changes, after_no=after, limit=limit,
+        )
+        return models.ComparisonSheetPairPage.model_validate(
+            {
+                "items": page.items,
+                "page": {"next_cursor": None if page.next_after is None else encode_cursor((str(page.next_after),))},
+            }
+        )
 
-    def pause_series(
-        self, *, series_id: str, user_uid: str, idempotency_key: str
-    ) -> models.ComparisonSeries:
-        return _comparison_unavailable(self._DEPENDENCY)
-
-    def resume_series(
-        self, *, series_id: str, user_uid: str, idempotency_key: str
-    ) -> models.ComparisonSeries:
-        return _comparison_unavailable(self._DEPENDENCY)
-
-    def start_series(
-        self, *, project_uid: str, document_uid: str, restart: bool, base_order_revision_no: int | None, user_uid: str, idempotency_key: str
-    ) -> models.ComparisonSeries:
-        return _comparison_unavailable(self._DEPENDENCY)
+    def get_sheet_pair(self, *, sheet_pair_id: str) -> models.ComparisonSheetPair:
+        return models.ComparisonSheetPair.model_validate(self._service.get_sheet_pair(sheet_pair_id=sheet_pair_id))
 
 
 class ComparisonPairTileAdapter:

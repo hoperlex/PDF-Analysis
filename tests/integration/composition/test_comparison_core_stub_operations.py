@@ -64,11 +64,15 @@ EXPERT_WRITES = {name for name, (_m, _p, _b, keyed) in REQUESTS.items() if keyed
 DEPENDENCIES = {"comparison_matrix", "comparison_series", "comparison_pair_tiles", "comparison_overview"}
 #: Lanes that serve one of them remove it from the stub list below and add it here; the role, key and shape tests
 #: still judge it.
-#: `CMP-MATRIX-01` serves the six matrix operations; `CMP-VIEWER-01` serves the pair tile.
+#: `CMP-MATRIX-01` serves the six matrix operations; `CMP-VIEWER-01` serves the pair tile; `CMP-SERIES-01` serves the nine
+#: series operations.
 WIRED: frozenset[str] = frozenset({
     "getComparisonMatrix", "prepareComparisonMatrix", "listComparisonMatrixEdits", "applyComparisonMatrixEdits",
     "undoComparisonMatrixEdit", "listComparisonAiLinks",
     "streamComparisonPairTile",
+    "startComparisonSeries", "listComparisonSeries", "getComparisonSeries", "pauseComparisonSeries",
+    "resumeComparisonSeries", "cancelComparisonSeries", "finishComparisonSeries", "listComparisonSheetPairs",
+    "getComparisonSheetPair",
 })
 STUBS = sorted(set(REQUESTS) - WIRED)
 THE_THREE = ("approveSheetPairing", "withdrawSheetPairing", "generateComparisonSummary")
@@ -175,7 +179,8 @@ def test_a_tile_or_list_query_outside_its_bounds_is_refused_before_the_stub(clie
     pairs = f"/comparison-transitions/{TRN}/sheet-pairs"
     assert client.get(f"{pairs}?status=sideways", headers=headers).status_code == 422
     assert client.get(f"{pairs}?limit=0", headers=headers).status_code == 422
-    assert client.get(f"{pairs}?status=different&only_changes=true&limit=200", headers=headers).status_code == 503
+    # `CMP-SERIES-01` serves the list: a well-formed query about a transition that does not exist is `404`.
+    assert client.get(f"{pairs}?status=different&only_changes=true&limit=200", headers=headers).status_code == 404
 
 
 def test_the_roles_are_the_ones_the_adr_gives() -> None:
@@ -200,19 +205,21 @@ def test_that_check_fails_when_a_write_is_opened_to_an_administrator(monkeypatch
 # -- the upload flag --------------------------------------------------------------------------------
 
 
-def test_the_upload_flag_is_accepted_false_and_refused_true_until_the_series_lane_stores_it(client: TestClient) -> None:
+def test_the_upload_flag_is_accepted_true_and_false_and_reaches_the_operation(client: TestClient) -> None:
     headers = {"Authorization": f"Bearer {static_token()}", "Idempotency-Key": KEY,
                "content-type": "application/json"}
     file = {"display_name": "a.pdf", "size_bytes": 10, "sha256": "a" * 64}
     path = f"/projects/{PRJ}/comparison-uploads"
+    # `CMP-SERIES-01` stores the flag: ``true`` is no longer refused with ``503``; like ``false`` it reaches the
+    # operation, which does not know the project (the storing itself is proved on a real project in
+    # ``tests/integration/comparison/series/test_upload_flag.py``).
     asked = client.post(path, content=json.dumps({"files": [file], "compare_after_preparation": True}).encode(),
                         headers=headers)
-    assert asked.status_code == 503, asked.text
-    assert asked.json()["details"]["dependency"] == "comparison_series"
+    assert asked.status_code == 404, asked.text
     wrong = client.post(path, content=json.dumps({"files": [file], "compare_after_preparation": "maybe"}).encode(),
                         headers=headers)
     assert wrong.status_code == 422
-    # absent and false reach the operation, which does not know the project
+    # absent and false reach the operation too
     for body in ({"files": [file]}, {"files": [file], "compare_after_preparation": False}):
         assert client.post(path, content=json.dumps(body).encode(), headers=headers).status_code == 404
 

@@ -220,9 +220,10 @@ SEALED_STUB_COLLECTIONS: frozenset[str] = frozenset({"getComparisonQueueSummary"
 #: sweep (an absent project, document, series, transition or sheet pair is `404 not_found`).
 #: `CMP-MATRIX-01` serves ``getComparisonMatrix``, ``listComparisonMatrixEdits`` and ``listComparisonAiLinks`` and
 #: removes them: each joins the `404` sweep.
+#: `CMP-SERIES-01` serves ``listComparisonSeries``, ``getComparisonSeries``, ``listComparisonSheetPairs`` and
+#: ``getComparisonSheetPair`` and removes them: each joins the `404` sweep. The count of addressed operations
+#: (:data:`EXPECTED_ADDRESSED`) does not change: they are addressed whether stubbed or served.
 SEALED_STUB_ADDRESSED: frozenset[str] = frozenset({
-    "listComparisonSeries",
-    "getComparisonSeries", "listComparisonSheetPairs", "getComparisonSheetPair",
     "getComparisonOverview",
 })
 

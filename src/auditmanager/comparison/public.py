@@ -203,6 +203,22 @@ from auditmanager.comparison.matrix.service import (
     read_adjacent_sheet_pairs,
 )
 
+# `CMP-SERIES-01`: the series of adjacent transitions (its service, its three work kinds, the follow-up of a prepared set).
+from auditmanager.comparison.series import (
+    SERIES_AFTER_PREPARATION_KIND,
+    SERIES_DRIVE_KIND,
+    SERIES_PAIR_KIND,
+    ComparisonSeriesService,
+    SeriesAfterPreparationHandler,
+    SeriesDriveHandler,
+    SeriesPairHandler,
+    enqueue_series_after_preparation,
+    follow_up_dedupe_key,
+    series_after_preparation_handler,
+    series_drive_handler,
+    series_pair_handler,
+)
+
 #: `CMP-WORK-01` (ADR-0025 decision 4). One tuple of handler factories, each
 #: ``Callable[[WorkDependencies], WorkHandler]``: ``build_worker_runtime`` builds one dependency
 #: bundle and applies every factory to it, and refuses to start on a duplicate ``kind``. A slice
@@ -211,6 +227,9 @@ HANDLER_FACTORIES: tuple[HandlerFactory, ...] = (
     page_profile_handler,  # `CMP-PROFILE-QUEUE-01`: kind ``page_profile``
     pair_result_handler,  # `CMP-ENGINE-01`: kind ``pair_result``
     matrix_build_handler,  # `CMP-MATRIX-01`: kind ``matrix_build``
+    series_pair_handler,  # `CMP-SERIES-01`: kind ``series_pair``
+    series_drive_handler,  # `CMP-SERIES-01`: kind ``series_drive``
+    series_after_preparation_handler,  # `CMP-SERIES-01`: kind ``series_after_preparation``
 )
 
 #: `CMP-WORK-01`. Called inside the reclaim transaction for each attempt whose lease was lost:
@@ -450,4 +469,16 @@ __all__ = [
     "matrix_build_dedupe_key",
     "matrix_build_handler",
     "read_adjacent_sheet_pairs",
+    "ComparisonSeriesService",
+    "SERIES_AFTER_PREPARATION_KIND",
+    "SERIES_DRIVE_KIND",
+    "SERIES_PAIR_KIND",
+    "SeriesAfterPreparationHandler",
+    "SeriesDriveHandler",
+    "SeriesPairHandler",
+    "enqueue_series_after_preparation",
+    "follow_up_dedupe_key",
+    "series_after_preparation_handler",
+    "series_drive_handler",
+    "series_pair_handler",
 ]
