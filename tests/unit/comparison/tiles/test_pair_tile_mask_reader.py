@@ -50,7 +50,8 @@ def test_a_wrong_header_is_refused(support, case: str) -> None:
 
 
 def test_a_plane_over_forty_megapixels_is_refused_before_anything_is_inflated(support) -> None:
-    side = int((MAX_PLANE_PIXELS) ** 0.5) + 1
+    assert MAX_PLANE_PIXELS == 40_000_000  # ADR-0025 decision 9, written out so a changed cap is a changed test
+    side = 6325  # 6325 x 6325 = 40 005 625 pixels, 5 625 over the cap
     header = struct.pack("<4sBBHII", b"AMCM", 1, 8, 0, side, side)
     # A deflate stream that would inflate to far more than it declares: never touched, the cap answers first.
     with pytest.raises(MaskRefused) as refused:

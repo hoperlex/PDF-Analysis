@@ -207,9 +207,10 @@ def test_a_damaged_result_or_mask_is_an_integrity_error_not_a_picture(http, toke
 
     good = support.packed_mask_blob(A1_W, A1_H, {"main": [(1, 1)]})
     cases = {
-        "magic": pair_with(support.mask_blob(numpy.zeros((8, 4, 16), bool), magic=b"XXXX")),
-        "format": pair_with(support.mask_blob(numpy.zeros((8, 4, 16), bool), fmt=9)),
-        "layers": pair_with(support.mask_blob(numpy.zeros((8, 4, 16), bool), layers=3)),
+        # one header field wrong in a mask that is otherwise the A1 sheet's, so only that field can refuse it
+        "magic": pair_with(b"XXXX" + good[4:]),
+        "format": pair_with(good[:4] + bytes([9]) + good[5:]),
+        "layers": pair_with(good[:5] + bytes([3]) + good[6:]),
         "size": pair_with(support.mask_blob(numpy.zeros((8, 4, 16), bool))),  # a 16 x 4 mask for an A1 sheet
         "truncated": pair_with(good[: len(good) // 2]),
         "over_cap": pair_with(good[:16].replace(good[8:16], (50000).to_bytes(4, "little") + (50000).to_bytes(4, "little")) + good[16:]),
