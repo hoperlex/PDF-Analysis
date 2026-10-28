@@ -312,6 +312,9 @@ def test_a_stream_cut_off_inside_a_piece_or_followed_by_a_second_stream_is_refus
             decode_mask(good[:cut])
     with pytest.raises(MaskFormatError, match="body_length"):
         decode_mask(good + zlib.compress(b"more"))
+    # trailing bytes that never reach the decompressor (whole slices past the end of the stream) are refused as well
+    with pytest.raises(MaskFormatError, match="body_length"):
+        decode_mask(good + bytes(3 * mask_codec.IN_CHUNK_BYTES))
 
 
 def test_a_blob_that_claims_a_large_grid_and_holds_nothing_allocates_nothing_large() -> None:
