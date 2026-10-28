@@ -57,6 +57,8 @@ import { NormCatalogueTable } from '@/widgets/norm-catalogue';
 import { NormDocumentFacts, NormParagraphList } from '@/widgets/norm-document';
 import { NormSnapshotHistory, NormSnapshotList } from '@/widgets/norm-snapshots';
 import { ExportPanel } from '@/widgets/export-panel';
+import { ComparisonViewerView, canShowOverlay, initialState, reduce, viewerGeometry } from '@/widgets/comparison-viewer';
+import type { TileStatus, ViewerAction, ViewerContext } from '@/widgets/comparison-viewer';
 import { FindingList } from '@/widgets/finding-list';
 import { ProjectList } from '@/widgets/project-list';
 import { RunList } from '@/widgets/run-list';
@@ -113,6 +115,7 @@ import {
   render,
   runStatus,
 } from '../review/fixtures';
+import { addedPair, comparedPair } from '../comparison/viewer/viewer-fixtures';
 import { newClient, renderScreen, renderWith, seedError } from '../screens/harness';
 import { derivedScreens, malformedVariants, wellFormed } from '../screens/route-screens';
 import {
@@ -399,6 +402,32 @@ const REGISTRATION_REQUEST: RegistrationRequest = {
   status: 'pending',
   submitted_at: '2026-10-08T00:00:00Z',
 };
+
+/**
+ * `CMP-VIEWER-01`: the sheet viewer, one static pass in the state a step list leaves it in. `tiles` says what has
+ * arrived; the markup is {@link ComparisonViewerView}'s, which is what the reader gets.
+ */
+function comparisonViewerMarkup(
+  pair: ReturnType<typeof comparedPair>,
+  steps: ViewerAction[] = [],
+  options: { tiles?: Partial<TileStatus>; dragging?: boolean; navigation?: boolean } = {},
+): string {
+  const geometry = viewerGeometry(pair);
+  const context: ViewerContext = {
+    raster: geometry?.raster ?? { widthPx: 1, heightPx: 1 }, dpi: geometry?.dpi ?? 72, differences: pair.differences ?? [],
+    canOverlay: canShowOverlay(pair), hasA: pair.page_a !== undefined, hasB: pair.page_b !== undefined,
+  };
+  let state = initialState(context, { width: 1000, height: 600 });
+  for (const step of steps) state = reduce(state, step, context);
+  const tiles: TileStatus = {
+    urlOf: (request) => `blob:${request.mode}-${request.level}-${request.column}-${request.row}`,
+    failed: 0, pending: 0, retry: noop, ...options.tiles,
+  };
+  return render(createElement(ComparisonViewerView, {
+    pair, geometry, context, state, tiles, dispatch: noop, ...(options.dragging === true ? { dragging: true } : {}),
+    ...(options.navigation === true ? { navigation: { onPrevious: noop, onNext: noop, onClose: noop } } : {}),
+  }));
+}
 
 export function screens(): Screen[] {
   const out: Screen[] = [];
@@ -1657,6 +1686,35 @@ export function screens(): Screen[] {
           ),
       ),
     );
+  }
+
+  // `CMP-VIEWER-01`: the sheet viewer (plan §1.1). Every rule of `comparison-viewer.module.css` is reached below: the
+  // overlay with a selected difference, its boxes, the sheet being dragged and the neighbouring-sheet controls; the swipe
+  // with its divider and slider; «Рядом» with the controls that are off in it; tiles that failed and tiles still on
+  // their way; a pair with no evidence yet; the notes of a scan, a part of a sheet and a pair made with an AI link; and
+  // the shifts and the look of lines brought into the list.
+  {
+    const withAlignedBlocks = comparedPair();
+    add('Comparison viewer, the overlay: a selected difference, the boxes, the sheet dragged, the sheet controls',
+      comparisonViewerMarkup(withAlignedBlocks, [{ type: 'boxes', on: true }, { type: 'select', index: 1 }, { type: 'align', on: true }],
+        { dragging: true, navigation: true }));
+    add('Comparison viewer, the swipe: divider and slider',
+      comparisonViewerMarkup(comparedPair(), [{ type: 'swipe', on: true }, { type: 'swipe-position', position: 35 }, { type: 'under', under: 'b' }]));
+    add('Comparison viewer, side by side: the swipe and the layers are off',
+      comparisonViewerMarkup(comparedPair(), [{ type: 'mode', mode: 'side' }]));
+    add('Comparison viewer, the shifts and the look of lines in the list',
+      comparisonViewerMarkup(comparedPair(), [{ type: 'shifts', on: true }, { type: 'style-only', on: true }, { type: 'step', direction: 1 }]));
+    add('Comparison viewer, tiles that failed',
+      comparisonViewerMarkup(comparedPair(), [], { tiles: { failed: 3 } }));
+    add('Comparison viewer, tiles on their way',
+      comparisonViewerMarkup(comparedPair(), [], { tiles: { pending: 5, urlOf: () => null } }));
+    const bare = comparedPair({ differences: [], text_changes: [], service_notes: [], reasons: [], parts: { role: 'part', covered_percent: 61.5, parts: [] },
+      ai_dependent: true, page_a: { ...(comparedPair().page_a as object), scan: true } as NonNullable<ReturnType<typeof comparedPair>['page_a']> });
+    delete (bare as { channels?: unknown }).channels;
+    delete (bare as { how_compared?: unknown }).how_compared;
+    add('Comparison viewer, a pair with no evidence yet, a scan, a part of a sheet and an AI link',
+      comparisonViewerMarkup(bare, [], { tiles: { urlOf: () => null } }));
+    add('Comparison viewer, a pair the viewer cannot draw', comparisonViewerMarkup(addedPair()));
   }
 
   /*

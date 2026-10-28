@@ -1,0 +1,386 @@
+/*
+ * The sheet viewer (`CMP-VIEWER-01`, plan §1.1): the overlay of two pages, the panes of «Рядом», the swipe, the layers,
+ * the change boxes, the list «Отличия» and the evidence panels.
+ *
+ * Every colour is a token read and nothing here declares a token (`styling-layer.test.ts`): both palettes live in
+ * `globals.css`, so this file reaches the dark theme by construction. No `:not()` and no custom property, because the
+ * contrast census cannot read either; every rule below is reached by a screen in `tests/unit/styles/screens.ts`.
+ *
+ * Containment is the rule of the whole file. A text of a difference, a title of a sheet or a reason is the engine's
+ * output and can hold a line of any length; none of it may widen the page. The sheet itself is drawn in a pane that clips
+ * it: tiles are absolutely positioned inside and never take part in the page's layout.
+ */
+
+.viewer {
+  display: grid;
+  gap: var(--am-gap);
+  min-width: 0;
+  max-width: 100%;
+  color: var(--am-ink);
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--am-gap-xs) var(--am-gap);
+  min-width: 0;
+}
+
+.sheetName {
+  margin: 0;
+  min-width: 0;
+  font-size: var(--am-text-md);
+  overflow-wrap: anywhere;
+}
+
+.sheetSide {
+  color: var(--am-ink-muted);
+  font-weight: 600;
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
+  align-items: center;
+}
+
+.notes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--am-gap-xs);
+}
+
+.note {
+  margin: 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.noteStrong {
+  margin: 0;
+  padding: 4px 10px;
+  border: 1px solid var(--am-degraded);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-degraded-light);
+  color: var(--am-degraded);
+  font-size: var(--am-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-sm) var(--am-gap);
+  padding: var(--am-gap-sm) 12px;
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius);
+  background: var(--am-surface);
+  color: var(--am-ink);
+  font-size: var(--am-text-sm);
+}
+
+.group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.groupTitle {
+  padding: 0;
+  color: var(--am-ink-muted);
+  font-weight: 600;
+}
+
+.modeButton {
+  min-width: 7ch;
+}
+
+.modeButtonOn {
+  border-color: var(--am-accent-strong);
+  background: var(--am-accent-light);
+  color: var(--am-accent-strong);
+}
+
+.choice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--am-gap-xs);
+  color: var(--am-ink);
+  overflow-wrap: anywhere;
+}
+
+.choiceOff {
+  color: var(--am-ink-muted);
+}
+
+.zoom {
+  min-width: 5ch;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+  color: var(--am-ink-muted);
+}
+
+.stage {
+  display: flex;
+  gap: var(--am-gap-sm);
+  min-width: 0;
+  outline: none;
+}
+
+.stage:focus-visible {
+  border-radius: var(--am-radius-sm);
+  box-shadow: var(--am-ring);
+}
+
+.pane {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  height: min(70vh, 720px);
+  min-height: 320px;
+  overflow: hidden;
+  border: 1px solid var(--am-line-strong);
+  background: var(--am-paper);
+  touch-action: none;
+  cursor: grab;
+}
+
+.paneDragging {
+  cursor: grabbing;
+}
+
+.paneLabel {
+  position: absolute;
+  top: var(--am-gap-xs);
+  left: var(--am-gap-xs);
+  z-index: 3;
+  padding: 0 8px;
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius-pill);
+  background: var(--am-surface);
+  color: var(--am-ink);
+  font-size: var(--am-text-xs);
+  line-height: 1.7;
+  pointer-events: none;
+}
+
+.layer {
+  position: absolute;
+  inset: 0;
+}
+
+.tile {
+  position: absolute;
+  display: block;
+  max-width: none;
+  user-select: none;
+  pointer-events: none;
+}
+
+.box {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid var(--am-failed);
+  pointer-events: none;
+}
+
+.boxSelected {
+  border-color: var(--am-accent-strong);
+  background: var(--am-accent-light);
+  opacity: 0.55;
+  outline: 2px solid var(--am-accent-strong);
+}
+
+.divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  width: 2px;
+  background: var(--am-accent-strong);
+  pointer-events: none;
+}
+
+.progress {
+  position: absolute;
+  right: var(--am-gap-xs);
+  bottom: var(--am-gap-xs);
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--am-gap-sm);
+  padding: 2px 10px;
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-surface);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+}
+
+.progressFailed {
+  border-color: var(--am-failed);
+  background: var(--am-failed-light);
+  color: var(--am-failed);
+}
+
+.swipe {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-sm) var(--am-gap);
+  color: var(--am-ink);
+  font-size: var(--am-text-sm);
+}
+
+.slider {
+  flex: 1 1 12rem;
+  min-width: 8rem;
+  accent-color: var(--am-accent);
+}
+
+.panels {
+  display: grid;
+  gap: var(--am-gap);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  align-items: start;
+}
+
+.panel {
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
+  color: var(--am-ink);
+  overflow-wrap: anywhere;
+}
+
+.panelTitle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
+  margin: 0 0 var(--am-gap-sm);
+  font-size: var(--am-text-md);
+}
+
+.stepper {
+  display: inline-flex;
+  gap: var(--am-gap-xs);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--am-gap-xs);
+  max-height: 24rem;
+  overflow: auto;
+}
+
+.item {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-paper);
+  color: var(--am-ink);
+  font: inherit;
+  font-size: var(--am-text-sm);
+  text-align: start;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.item:hover {
+  background: var(--am-surface);
+}
+
+.itemSelected {
+  border-color: var(--am-accent-strong);
+  background: var(--am-accent-light);
+  color: var(--am-ink);
+}
+
+.itemClass {
+  font-weight: 600;
+}
+
+.beforeAfter {
+  color: var(--am-ink-muted);
+}
+
+.arrow {
+  padding: 0 var(--am-gap-xs);
+  color: var(--am-ink-muted);
+}
+
+.mark {
+  padding: 0 2px;
+  border-radius: 3px;
+  background: var(--am-degraded-light);
+  color: var(--am-degraded);
+  font-weight: 600;
+}
+
+.channelLine {
+  margin: 0 0 var(--am-gap-xs);
+  font-size: var(--am-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.channelLabel {
+  font-weight: 600;
+}
+
+.channelUnchecked {
+  color: var(--am-degraded);
+}
+
+.reasons {
+  margin: var(--am-gap-xs) 0 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.facts2 {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--am-gap-xs) var(--am-gap);
+  margin: 0;
+  font-size: var(--am-text-sm);
+}
+
+.term {
+  margin: 0;
+  color: var(--am-ink-muted);
+}
+
+.value {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+.empty {
+  margin: 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
