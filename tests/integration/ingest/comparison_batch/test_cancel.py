@@ -9,12 +9,11 @@ from __future__ import annotations
 
 import pytest
 
-from auditmanager.ingest.comparison_pdf.public import ConfirmedFile, DeclaredFileRequest
+from auditmanager.ingest.comparison_pdf.public import DeclaredFileRequest
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.storage.public import parse_blob_id
 from tests.integration.ingest.comparison_batch.support import (
     ADMIN,
-    EXPERT,
     Harness,
     Queue,
     distinct_pdf,

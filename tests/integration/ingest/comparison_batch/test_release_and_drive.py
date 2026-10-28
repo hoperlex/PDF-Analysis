@@ -4,13 +4,10 @@ and the drive that watches a batch (completes it, releases the next set, notices
 
 from __future__ import annotations
 
-from datetime import timedelta
-
 import pytest
 from sqlalchemy import text
 
 from auditmanager.comparison.public import Failed, WorkItem
-from auditmanager.ingest.comparison_batch.public import BatchLifecycle
 from auditmanager.shared.db import session_scope
 from tests.integration.ingest.comparison_batch.support import Harness, Queue
 

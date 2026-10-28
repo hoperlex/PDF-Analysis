@@ -33,7 +33,7 @@ named by any statement it makes, and the store is touched only by the sweep, fro
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import replace
 from datetime import datetime
 from typing import Any

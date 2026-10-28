@@ -20,7 +20,6 @@ from auditmanager.comparison.public import (
     Completed,
     ComparisonWorkRepository,
     ComparisonWorkRunner,
-    Failed,
     HandlerRegistry,
     WorkDependencies,
     WorkItem,
