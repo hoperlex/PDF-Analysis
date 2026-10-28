@@ -64,13 +64,21 @@ def test_the_oldest_queued_item_is_the_oldest_with_state_queued(lab: Lab, servic
     assert only_running == {"oldest_queued_at"}
 
 
-def test_the_pause_is_the_installations_execution_pause(lab: Lab, sessions, service) -> None:
+def test_the_pause_is_the_installations_execution_pause(sessions, service) -> None:
     from auditmanager.jobs.public import set_execution_paused
     from auditmanager.shared.db import session_scope
+    from auditmanager.shared.identity import new_ulid
 
-    assert service.get_queue_summary(modules="versions")["paused"] is False
-    for paused in (True, False):
+    def pause(paused: bool) -> None:
         with session_scope(sessions) as session:
-            set_execution_paused(session, paused=paused, roles=frozenset({"admin"}), idempotency_key=f"ov-pause-{paused}-{id(sessions)}",
+            set_execution_paused(session, paused=paused, roles=frozenset({"admin"}), idempotency_key=f"ov-pause-{new_ulid()}",
                                  actor_uid="usr_01ARZ3NDEKTSV4RRFFQ69G5FAV")
-        assert service.get_queue_summary(modules="versions")["paused"] is paused
+
+    pause(False)  # a run that was cut short may have left the installation paused
+    try:
+        assert service.get_queue_summary(modules="versions")["paused"] is False
+        pause(True)
+        assert service.get_queue_summary(modules="versions")["paused"] is True
+    finally:
+        pause(False)
+    assert service.get_queue_summary(modules="versions")["paused"] is False
