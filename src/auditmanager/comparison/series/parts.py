@@ -10,10 +10,10 @@ gives no coverage and a note (``jobs.py:902-904``).
 
 Here the engine has already measured, for each part, the share of the older sheet's ink inside the part's area
 (``coverage_a``, ``CMP-ENGINE-01`` report section 4.2 item 9) and the matrix gives the text coverage of the group
-(``split.covered_percent``). The union of the ink shares is their sum when the areas do not overlap; where two areas do
-overlap the sum counts the overlap twice, so the figure is then capped by the matrix's text coverage. When any part has no
-reliable area the ink figure does not exist and the text coverage stands alone, marked unreliable (the contract's number
-is required; the mark is the series' own and says the number is the weaker one).
+(``split.covered_percent``). The union of the ink shares is their sum when the areas do not overlap. When any part has no
+reliable area, or two areas overlap (one registration is then wrong: the parts of one sheet do not overlap), the ink figure
+does not exist and the text coverage stands alone, marked unreliable (the contract's number is required; the mark is the
+series' own and says the number is the weaker one).
 """
 
 from __future__ import annotations
@@ -58,7 +58,8 @@ def group_coverage(text_percent: float, parts: Sequence[PartFact]) -> tuple[floa
         return round(text_percent, 2), False
     ink = 100.0 * sum(float(p.coverage_a) for p in parts if p.coverage_a is not None)
     rects = [p.area_a_pt for p in parts if p.area_a_pt is not None]
-    overlapping = any(areas_overlap(rects[i], rects[j]) for i in range(len(rects)) for j in range(i + 1, len(rects)))
-    if overlapping:
-        ink = min(ink, text_percent)
+    if any(areas_overlap(rects[i], rects[j]) for i in range(len(rects)) for j in range(i + 1, len(rects))):
+        # Parts of one sheet do not overlap: where two areas do, one registration is wrong (the sum would count the overlap
+        # twice and the areas cannot be trusted), so the ink figure is not offered and the text coverage stands alone.
+        return round(text_percent, 2), False
     return round(max(0.0, min(100.0, ink)), 2), True

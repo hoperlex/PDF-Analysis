@@ -14,10 +14,14 @@ def test_disjoint_reliable_parts_add_up() -> None:
     assert (percent, reliable) == (99.0, True)
 
 
-def test_the_sum_is_capped_at_a_hundred_and_at_the_text_coverage_when_the_areas_overlap() -> None:
+def test_the_sum_is_capped_at_a_hundred() -> None:
     assert group_coverage(100.0, [part([0, 0, 100, 100], 0.7), part([200, 0, 300, 100], 0.7)]) == (100.0, True)
+
+
+def test_overlapping_areas_leave_the_text_coverage_marked_unreliable() -> None:
+    """The parts of one sheet do not overlap: where two areas do, a registration is wrong and the ink figure is not offered."""
     overlapping = [part([0, 0, 100, 100], 0.7), part([20, 0, 120, 100], 0.7)]
-    assert group_coverage(80.0, overlapping) == (80.0, True)  # 140 % counted twice, the text figure caps it
+    assert group_coverage(80.0, overlapping) == (80.0, False)
 
 
 def test_an_unreliable_part_gives_the_text_coverage_marked_unreliable() -> None:
