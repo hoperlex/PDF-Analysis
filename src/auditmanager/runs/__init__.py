@@ -62,7 +62,14 @@ from auditmanager.runs.reconciliation import (
     reconcile_at_startup,
     reconcile_interrupted_runs,
 )
-from auditmanager.runs.provider import FrozenRoute, ProviderBinding, ProviderResolver, RouteFreezer
+from auditmanager.runs.provider import (
+    ChosenPreset,
+    FrozenRoute,
+    PresetResolver,
+    ProviderBinding,
+    ProviderResolver,
+    RouteFreezer,
+)
 from auditmanager.runs.repository import (
     INITIAL_STATE,
     PC01_STAGES,
@@ -93,7 +100,9 @@ __all__ = [
     "DurableCarrier",
     "EffectCheckpoint",
     "ExecutionResult",
+    "ChosenPreset",
     "FrozenRoute",
+    "PresetResolver",
     "INITIAL_STATE",
     "INTERRUPTED_REASON",
     "INTERRUPTED_TERMINAL_REASON",

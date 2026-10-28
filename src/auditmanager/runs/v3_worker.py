@@ -84,7 +84,7 @@ def run_v3_worker_chain(
     documents: DocumentRepository | None = None,
     blobs: BlobMetadataRepository | None = None,
 ) -> V3WorkerOutcome:
-    """Dispatch at most once, ground saved evidence and select review-only terminal.
+    """Dispatch at most once, ground saved evidence, publish the provisional findings and close.
 
     The caller has committed the running Run and deterministic stages, and owns
     the final transaction. Completed call/effect evidence from a prior Attempt
@@ -138,7 +138,8 @@ def run_v3_worker_chain(
     return V3WorkerOutcome(
         finish_v3_review_run(
             session, authority=authority, registry=registry,
-            jobs=job_repo, runs=run_repo,
+            jobs=job_repo, runs=run_repo, blob_store=blob_store,
+            documents=documents, max_text_bytes=MAX_V3_SAVED_TEXT_BYTES,
         ),
         dispatched,
     )

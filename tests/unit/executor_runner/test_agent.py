@@ -470,3 +470,176 @@ def test_systemd_unit_keeps_the_token_off_the_command_line_and_stops_restart_loo
         result = subprocess.run(["systemd-analyze", "verify", str(S.RUNNER_DIR / "pdf-analysis-agent.service")], capture_output=True, text=True, timeout=30)
         problems = [line for line in result.stderr.splitlines() if "pdf-analysis-agent.service" in line and "not executable" not in line and "No such file" not in line and "User" not in line]
         assert not problems, result.stderr
+
+
+# -- several images, `CMP-EXEC-IMAGES-01` --------------------------------------------------------
+
+import hashlib as _hashlib  # noqa: E402
+
+LIST_STUB = r'''
+import hashlib, json, os, sys
+record_dir = sys.argv[1]
+task = json.load(sys.stdin)
+seen = [{"crop_id": image.get("crop_id"), "portal_block_id": image.get("portal_block_id"),
+         "sha256": hashlib.sha256(open(image["path"], "rb").read()).hexdigest(),
+         "mode": oct(os.stat(image["path"]).st_mode & 0o777), "path": image["path"]}
+        for image in task.get("local_images", [])]
+open(os.path.join(record_dir, task["task_id"] + ".images.json"), "w").write(json.dumps(seen))
+print(json.dumps({"findings": [{"id": len(seen)}]}))
+'''
+
+
+def _list_run(tmp_path, runner, tasks, *, accept_images=True, max_images=None, max_tasks=None):
+    records = tmp_path / "records"
+    records.mkdir(exist_ok=True)
+    stub = S.write_stub(tmp_path / "list_stub.py", LIST_STUB)
+    cfg = S.agent_config(tmp_path / "agent.toml", runner.origin, argv=[sys.executable, str(stub), str(records)],
+                         accept_images=accept_images, max_images=max_images)
+    for task in tasks:
+        runner.add_task(task)
+    proc = S.AgentProcess(cfg, "--max-tasks", str(max_tasks or len(tasks)))
+    return proc, proc.wait(timeout=40.0), records
+
+
+def test_an_agent_that_declared_three_images_fetches_all_of_them_in_order_and_cleans_up(tmp_path):
+    made = [S.make_image(label) for label in ("left", "right", "detail")]
+    with S.FakeRunner() as runner:
+        for image, raw in made:
+            runner.add_image(image["blob_id"], raw)
+        proc, code, records = _list_run(
+            tmp_path, runner, [S.make_task("ext_L3", images=[image for image, _ in made])], max_images=3)
+        assert code == 0, proc.stderr
+        assert runner.of_kind("claim")[0]["body"]["max_images"] == 3
+        assert len(runner.of_kind("image")) == 3 and runner.of_kind("answer") and not runner.of_kind("fail")
+        seen = json.loads((records / "ext_L3.images.json").read_text())
+        assert [item["crop_id"] for item in seen] == ["crop-left", "crop-right", "crop-detail"]
+        assert [item["sha256"] for item in seen] == [_hashlib.sha256(raw).hexdigest() for _, raw in made]
+        assert {item["mode"] for item in seen} == {"0o600"}
+        assert not any(Path(item["path"]).exists() for item in seen), "the files live only while the command runs"
+
+
+def test_two_crops_with_the_same_bytes_are_fetched_once_and_both_reach_the_command(tmp_path):
+    first, raw = S.make_image("blank")
+    second = {**first, "crop_id": "crop-blank-b"}
+    with S.FakeRunner() as runner:
+        runner.add_image(first["blob_id"], raw)
+        proc, code, records = _list_run(tmp_path, runner, [S.make_task("ext_LD", images=[first, second])],
+                                        max_images=2)
+        assert code == 0, proc.stderr
+        assert len(runner.of_kind("image")) == 1
+        seen = json.loads((records / "ext_LD.images.json").read_text())
+        assert [item["crop_id"] for item in seen] == ["crop-blank", "crop-blank-b"]
+
+
+def test_an_agent_that_declares_nothing_sends_the_old_claim_and_refuses_what_it_is_handed(tmp_path):
+    made = [S.make_image(label) for label in ("a", "b")]
+    with S.FakeRunner() as runner:
+        proc, code, records = _list_run(tmp_path, runner, [S.make_task("ext_L2", images=[i for i, _ in made])],
+                                        max_images=None)
+        assert code == 0, proc.stderr
+        assert runner.of_kind("claim")[0]["body"] == {"wait_seconds": 1}, "the wire every agent has always spoken"
+        assert runner.of_kind("fail")[0]["body"]["reason"] == "image_input_unsupported"
+        assert runner.of_kind("image") == [] and runner.of_kind("answer") == []
+        assert not list(records.glob("*.images.json")), "the command never ran"
+
+
+def test_a_task_wider_than_the_declaration_is_failed_whole_before_any_fetch(tmp_path):
+    made = [S.make_image(label) for label in ("a", "b", "c")]
+    with S.FakeRunner() as runner:
+        for image, raw in made:
+            runner.add_image(image["blob_id"], raw)
+        proc, code, records = _list_run(tmp_path, runner, [S.make_task("ext_W3", images=[i for i, _ in made])],
+                                        max_images=2)
+        assert code == 0, proc.stderr
+        assert runner.of_kind("claim")[0]["body"]["max_images"] == 2
+        assert runner.of_kind("fail")[0]["body"]["reason"] == "image_input_unsupported"
+        assert runner.of_kind("image") == [] and runner.of_kind("answer") == []
+        assert not list(records.glob("*.images.json"))
+
+
+def test_one_bad_image_among_several_fails_the_task_and_the_command_never_runs(tmp_path):
+    made = [S.make_image(label) for label in ("a", "b", "c")]
+    with S.FakeRunner() as runner:
+        runner.add_image(made[0][0]["blob_id"], made[0][1])
+        runner.add_image(made[1][0]["blob_id"], b"\x89PNG\r\n\x1a\nchanged-bytes")
+        runner.add_image(made[2][0]["blob_id"], made[2][1])
+        proc, code, records = _list_run(tmp_path, runner, [S.make_task("ext_BAD3", images=[i for i, _ in made])],
+                                        max_images=3)
+        assert code == 0, proc.stderr
+        assert runner.of_kind("fail")[0]["body"]["reason"] == "image_delivery_failed"
+        assert runner.of_kind("answer") == [] and not list(records.glob("*.images.json"))
+        assert made[1][0]["sha256"] not in proc.stderr and S.TOKEN not in proc.stderr
+
+
+def test_the_single_portal_block_image_path_is_what_it_was(tmp_path):
+    image, raw = S.make_image("block", crop=False)
+    with S.FakeRunner() as runner:
+        runner.add_image(image["blob_id"], raw)
+        proc, code, records = _list_run(tmp_path, runner, [S.make_task("ext_ONE", images=[image])])
+        assert code == 0, proc.stderr
+        assert runner.of_kind("claim")[0]["body"] == {"wait_seconds": 1}
+        seen = json.loads((records / "ext_ONE.images.json").read_text())
+        assert seen[0]["portal_block_id"] == image["portal_block_id"] and seen[0]["crop_id"] is None
+        assert runner.of_kind("answer")
+
+
+def test_the_endpoint_gets_every_image_in_order_after_the_text(tmp_path):
+    made = [S.make_image(label) for label in ("a", "b", "c")]
+    with S.FakeRunner() as runner, S.FakeOpenAI() as endpoint:
+        cfg = S.agent_config(tmp_path / "agent.toml", runner.origin, mode="endpoint", endpoint_url=endpoint.url,
+                             extra_endpoint="accept_images = true", max_images=3)
+        for image, raw in made:
+            runner.add_image(image["blob_id"], raw)
+        runner.add_task(S.make_task("ext_EP3", images=[i for i, _ in made]))
+        proc = S.AgentProcess(cfg, "--max-tasks", "1")
+        assert proc.wait() == 0, proc.stderr
+        content = endpoint.requests[0]["body"]["messages"][-1]["content"]
+        assert content[0]["type"] == "text" and [block["type"] for block in content[1:]] == ["image_url"] * 3
+        sent = [base64.b64decode(block["image_url"]["url"].split(",", 1)[1]) for block in content[1:]]
+        assert sent == [raw for _, raw in made], "all of them, and not the last one alone"
+        assert runner.of_kind("claim")[0]["body"]["max_images"] == 3 and runner.of_kind("answer")
+
+
+def test_the_endpoint_refuses_rather_than_answer_from_part_of_the_images(tmp_path):
+    made = [S.make_image(label) for label in ("a", "b")]
+    with S.FakeRunner() as runner, S.FakeOpenAI() as endpoint:
+        cfg = S.agent_config(tmp_path / "agent.toml", runner.origin, mode="endpoint", endpoint_url=endpoint.url,
+                             extra_endpoint="accept_images = true")  # declares one
+        runner.add_task(S.make_task("ext_EP2", images=[i for i, _ in made]))
+        proc = S.AgentProcess(cfg, "--max-tasks", "1")
+        assert proc.wait() == 0, proc.stderr
+        assert runner.of_kind("fail")[0]["body"]["reason"] == "image_input_unsupported"
+        assert runner.of_kind("image") == [] and endpoint.requests == [] and runner.of_kind("answer") == []
+
+
+def test_max_images_config_is_checked(tmp_path):
+    def attempt(text: str) -> tuple[int, str]:
+        path = tmp_path / "bad.toml"
+        path.write_text(text)
+        with S.AgentProcess(path) as proc:
+            return proc.wait(timeout=15), proc.stderr
+
+    base = ('[runner]\norigin = "https://stand.example.org"\n[model]\ndeclared = "claude-opus-5"\n'
+            '[executor]\nmode = "command"\n[command]\nargv = ["/bin/true"]\n')
+    for bad in ("0", "9", "true", '"2"', "1.5"):
+        code, err = attempt(base + f"accept_images = true\nmax_images = {bad}\n")
+        assert code == 2 and "max_images must be an integer in 1..8" in err, (bad, err)
+    code, err = attempt(base + "max_images = 3\n")
+    assert code == 2 and "needs accept_images = true" in err
+    endpoint = base.replace("command", "endpoint", 1).replace('argv = ["/bin/true"]', 'url = "http://127.0.0.1:1/v1"\nmodel = "m"')
+    endpoint = endpoint.replace("[command]", "[endpoint]")
+    code, err = attempt(endpoint + "max_images = 2\n")
+    assert code == 2 and "[endpoint] max_images above 1 needs accept_images" in err
+
+
+def test_the_declared_count_is_what_the_config_says_only_when_images_are_accepted():
+    agent = _agent_module()
+    cfg = agent.Config(origin="https://s.example.org", declared_model="m", command_argv=["x"],
+                       command_accept_images=True, command_max_images=5)
+    assert cfg.declared_max_images == 5
+    cfg.command_accept_images = False
+    assert cfg.declared_max_images == 1 and not cfg.accept_images
+    endpoint = agent.Config(origin="https://s.example.org", declared_model="m", mode="endpoint",
+                            endpoint_url="http://x/v1", endpoint_model="m", endpoint_accept_images=True,
+                            endpoint_max_images=8)
+    assert endpoint.declared_max_images == 8

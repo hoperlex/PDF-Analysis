@@ -1,9 +1,9 @@
 {
   "contract": "auditmanager.domain.state-machines",
-  "contract_version": "1.7.0",
-  "supersedes": "1.6.0",
-  "candidate_revision": 25,
-  "revision_note": "Candidate revision 25 by PROD-11-AR-V1-V2-REMOVAL-01: the enum member AnalysisProfileStatus.builtin is removed from the API document and its prose corrected, and family 1.7.0 seal.",
+  "contract_version": "1.9.0",
+  "supersedes": "1.8.0",
+  "candidate_revision": 27,
+  "revision_note": "Candidate revision 27 by CMP-SEAL-C0: the plain-PDF comparison upload, the order of the versions of a document set and the page reads (eighteen operations), the optional DocumentVersion.upload_kind, ProductVersion.comparison_modules and RunnerImage.crop_id are an additive minor change of the API document, and family 1.9.0 seal. identifiers.json gains eight identity prefixes (cbt, cus, cuf, cvo, cpr, cq, cqa, cmc) for migration 0038; error-codes.json gains no code, only registered reasons under existing codes; state-machines.json gains no machine.",
   "status": "frozen",
   "frozen": true,
   "rules": [

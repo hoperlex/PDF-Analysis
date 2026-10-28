@@ -75,7 +75,8 @@ def test_the_four_classes_partition_the_tables_schema_coverage_declares() -> Non
     classified = grants.READ_WRITE | grants.APPEND_ONLY | grants.READ_ONLY | grants.NONE
     assert classified == coverage.TABLES
     assert sum(len(c) for c in (grants.READ_WRITE, grants.APPEND_ONLY, grants.READ_ONLY, grants.NONE)) == len(classified)
-    assert len(coverage.TABLES) == 64
+    # `0037_analysis_presets`: analysis_preset_revision (`0035_comparison_records`: comparison_sheet_link, comparison_summary)
+    assert len(coverage.TABLES) == 76
 
 
 def test_every_table_has_its_privileges_from_its_class() -> None:
@@ -143,9 +144,32 @@ def test_the_scan_finds_the_statements_the_classification_rests_on() -> None:
             assert extra == {"LOCK"}, table
         else:
             assert not extra, (table, extra)
-    # And the tables the code never writes are exactly the read-only class.
+    # And the tables the code never writes are exactly the read-only class, and the comparison tables
+    # (`CMP-SEAL-C0`) whose lanes have not landed.
     never_written = sorted(coverage.TABLES - set(seen))
-    assert never_written == sorted(grants.READ_ONLY), never_written
+    assert never_written == sorted(grants.READ_ONLY | grants.SEALED_NOT_YET_WRITTEN), never_written
+
+
+def test_a_sealed_table_that_the_code_now_writes_leaves_the_set() -> None:
+    """The set names tables no code writes: one that has a statement is a lane that did not remove it."""
+    seen = grants.observed_statements(SOURCE)
+    assert grants.SEALED_NOT_YET_WRITTEN <= coverage.TABLES
+    assert not grants.SEALED_NOT_YET_WRITTEN & grants.READ_ONLY
+    assert sorted(set(seen) & grants.SEALED_NOT_YET_WRITTEN) == []
+
+
+def test_that_check_fails_when_a_statement_names_a_sealed_table(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Mutation: a repository that inserts into a table the set names is seen by the scan, so the set above
+    can go red. The set is given ``comparison_work`` here, whatever the lanes have removed from the real
+    one (`CMP-WORK-01` removed it when its queue began to write the table)."""
+    monkeypatch.setattr(grants, "SEALED_NOT_YET_WRITTEN", frozenset({"comparison_work"}))
+    root = tmp_path / "src"
+    (root / "pkg").mkdir(parents=True)
+    (root / "pkg/repo.py").write_text(
+        'from sqlalchemy import text\nSTATEMENT = text("INSERT INTO comparison_work (comparison_work_id) VALUES (1)")\n',
+        encoding="utf-8")
+    seen = grants.observed_statements(root)
+    assert sorted(set(seen) & grants.SEALED_NOT_YET_WRITTEN) == ["comparison_work"]
 
 
 class TestTheScanRefusesAStatementTheClassesDoNotAllow:

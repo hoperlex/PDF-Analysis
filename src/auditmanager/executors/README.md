@@ -79,6 +79,17 @@ since the key was entered is `secret_unreadable`. Only a revision with an `ok` p
 key can be routed or started on; the standby is used at run start only, and every use is an
 `audit_run.standby_used` event. `environment` keeps today's path, with `R-133` enforced.
 
+## Analysis presets (`ANALYSIS-PRESETS-01`, `R-146av`)
+
+A preset is a named, saved choice of the one setting a run start can take: the executor connection
+(`presets.py`, `preset_store.py`, `preset_commands.py`, `preset_audit.py`; table
+`analysis_preset_revision`, migration `0037`). The cost ceiling is a process-wide setting and no
+threshold is an input of a start, so a preset holds neither. Revisions are append-only and an archive is
+a revision; a preset and each revision are identified by the `evt_` id of the audit event written with
+them. Writing a preset is an administrator's act like every executor write; a run start resolves the
+preset's **current** revision in its own transaction (`choose_preset`) and then starts exactly as if the
+caller had named that connection, and the run records the revision (`audit_run.preset_revision_id`).
+
 Destination rules (T-9) hold in the probe **and** in every call, by the resolved address: loopback,
 link-local, compose service names and the compose network are refused; a private range only for
 `transport: vpn`; `AUDITMANAGER_EXECUTOR_ALLOWED_HOSTS` narrows further.

@@ -7,9 +7,16 @@
  * → newer (the server compares in that direction only) and asks `compareDocumentVersions`.
  * Everything it shows is the server's: a refusal and its reason, the proposed sheet pairs
  * with their evidence, one page of raw line differences, and the proposed matches between
- * the two runs' findings. **Proposals are labelled as proposals** — nothing on this screen
- * approves a sheet pair, matches a finding or records a decision, and the raw differences
- * are shown exactly as computed.
+ * the two runs' findings. **Proposals are labelled as proposals** — a sheet pair is only a
+ * suggestion until an expert confirms it, nothing here matches a finding or records a
+ * decision, and the raw differences are shown exactly as computed.
+ *
+ * **The stored layer** (`COMPARE-PERSISTED-SUMMARY-01`): on a proposed sheet pair an expert
+ * may press «Подтвердить пару» and confirm it, and «Отозвать» on an approved one; the section
+ * «Подтверждённые пары листов» lists the approved pairs and, only for them, the deterministic
+ * differences the server recomputed from the stored text and sealed. When a page's text is no
+ * longer the approved one the section says so and shows no difference. An account without
+ * the expert role sees the state and no buttons.
  *
  * **The one write it leads to** (`W59-DECISION-CARRYOVER-01`): on a «Без изменений» row whose
  * older finding carries an expert decision and whose newer finding has none (the server's
@@ -29,6 +36,8 @@
 import { useState } from 'react';
 
 import type {
+  ApprovedSheetPair,
+  ApprovedSheetPairs,
   CarryOverDecisionResponse,
   DiffHunk,
   DocumentUid,
@@ -63,6 +72,15 @@ import {
   useVersionList,
   versionLabel,
 } from '@/entities/document-version';
+import {
+  ComparisonSummarySection,
+  EVIDENCE_STATE_TEXT,
+  LINK_STATE_TEXT,
+  SheetPairingControls,
+  approvalOf,
+  canApproveSheetPairing,
+  isApprovablePair,
+} from '@/entities/version-comparison';
 import { CarriedDecisionNote, CarryOverDecision } from '@/features/carry-over-decision';
 
 import styles from './version-comparison.module.css';
@@ -110,6 +128,7 @@ function SetComparison({
   const list = useVersionList(current.document_uid);
   const me = useMe();
   const mayCarry = me.data !== undefined && canCarryOverDecision(me.data.roles);
+  const mayApprove = me.data !== undefined && canApproveSheetPairing(me.data.roles);
   const [chosenUid, setChosenUid] = useState<string | null>(null);
   const [stageMode, setStageMode] = useState(false);
   const [diffOffset, setDiffOffset] = useState(0);
@@ -209,6 +228,7 @@ function SetComparison({
           comparison={comparison.data}
           onPage={setDiffOffset}
           carry={mayCarry ? { projectUid, documentUid: current.document_uid } : null}
+          mayApprove={mayApprove}
           carried={carried}
           onCarried={(answer) => setCarried((held) => ({ ...held, [answer.event.finding_uid]: answer }))}
         />
@@ -243,12 +263,15 @@ export function ComparisonResult({
   carry,
   carried = {},
   onCarried,
+  mayApprove = false,
 }: {
   readonly comparison: Comparison;
   readonly onPage: (offset: number) => void;
   readonly carry: CarryContext | null;
   readonly carried?: CarriedAnswers;
   readonly onCarried?: (answer: CarryOverDecisionResponse) => void;
+  /** Whether to draw the buttons that approve, withdraw and summarise (`expert` only). */
+  readonly mayApprove?: boolean;
 }) {
   if (comparison.outcome === 'refused' || comparison.refusal !== null) {
     return (
@@ -273,11 +296,29 @@ export function ComparisonResult({
       data-comparison-sha256={comparison.comparison_sha256 ?? ''}
     >
       <p className={styles.note}>
-        Пары листов и соответствия замечаний — предложения системы, а не решения эксперта:
-        они ничего не утверждают и не меняют. Построчные различия показаны так, как их дал
-        детерминированный текст, без участия ИИ.
+        Пары листов и соответствия замечаний — предложения системы, а не решения эксперта: пока
+        эксперт не подтвердил пару, они ничего не утверждают и не меняют. Построчные различия
+        показаны так, как их дал детерминированный текст, без участия ИИ.
       </p>
-      <SheetTable sheets={comparison.sheets} />
+      <SheetTable sheets={comparison.sheets} comparison={comparison} mayDecide={mayApprove} />
+      {comparison.approved_pairs === null || comparison.approved_pairs === undefined ? null : (
+        <>
+          <ApprovedPairs approved={comparison.approved_pairs} />
+          <ComparisonSummarySection
+            approved={comparison.approved_pairs}
+            mayDecide={mayApprove}
+            view={{
+              projectUid: comparison.project_uid,
+              documentUid: comparison.document_uid,
+              sourceVersionUid: comparison.source_version_uid,
+              targetVersionUid: comparison.target_version_uid,
+              mode: comparison.mode,
+              sourceRunId: comparison.source?.run_id ?? null,
+              targetRunId: comparison.target?.run_id ?? null,
+            }}
+          />
+        </>
+      )}
       {comparison.sheet_diffs === null ? null : (
         <SheetDiffs page={comparison.sheet_diffs} onPage={onPage} />
       )}
@@ -298,7 +339,25 @@ function pageText(number: number | null): string {
   return number === null ? '—' : `лист ${number}`;
 }
 
-function SheetTable({ sheets }: { readonly sheets: readonly SheetPairing[] }) {
+function SheetTable({
+  sheets,
+  comparison,
+  mayDecide,
+}: {
+  readonly sheets: readonly SheetPairing[];
+  readonly comparison: Comparison;
+  readonly mayDecide: boolean;
+}) {
+  const approved = comparison.approved_pairs ?? null;
+  const view = {
+    projectUid: comparison.project_uid,
+    documentUid: comparison.document_uid,
+    sourceVersionUid: comparison.source_version_uid,
+    targetVersionUid: comparison.target_version_uid,
+    mode: comparison.mode,
+    sourceRunId: comparison.source?.run_id ?? null,
+    targetRunId: comparison.target?.run_id ?? null,
+  };
   const counts = new Map<SheetPairing['status'], number>();
   for (const sheet of sheets) counts.set(sheet.status, (counts.get(sheet.status) ?? 0) + 1);
   return (
@@ -316,6 +375,7 @@ function SheetTable({ sheets }: { readonly sheets: readonly SheetPairing[] }) {
               <th scope="col">Более поздняя версия</th>
               <th scope="col">Состояние</th>
               <th scope="col">Основание пары</th>
+              <th scope="col">Подтверждение эксперта</th>
             </tr>
           </thead>
           <tbody>
@@ -329,12 +389,96 @@ function SheetTable({ sheets }: { readonly sheets: readonly SheetPairing[] }) {
                 <td>{pageText(sheet.target_page_number)}</td>
                 <td>{SHEET_STATUS_LABELS[sheet.status]}</td>
                 <td>{pairingBasisText(sheet)}</td>
+                <td>
+                  {isApprovablePair(sheet) ? (
+                    <SheetPairingControls
+                      sheet={sheet}
+                      approval={approvalOf(approved, sheet)}
+                      mayDecide={mayDecide}
+                      view={view}
+                    />
+                  ) : (
+                    <span>—</span>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
     </>
+  );
+}
+
+/**
+ * The server withholds the differences of every approved pair as soon as the text of any one of
+ * them differs from what the expert saw (`evidence_state` `text_changed`). The pair that changed
+ * says so itself; this is the line for a pair whose own sheet is as the expert saw it, so the
+ * reviewer does not look for a fault in a sheet that has none.
+ */
+const HIDDEN_BY_ANOTHER_PAIR =
+  'Различия скрыты: изменился другой подтверждённый лист. Отзовите изменённую пару и подтвердите заново.';
+
+function isHiddenByAnotherPair(approved: ApprovedSheetPairs, item: ApprovedSheetPair): boolean {
+  return approved.evidence_state === 'text_changed' && item.state === 'verified' && item.diff === null;
+}
+
+function ApprovedPairDiff({ item }: { readonly item: ApprovedSheetPair }) {
+  if (item.diff === null) return null;
+  return (
+    <>
+      <p className={styles.summary}>
+        Добавлено строк: {item.diff.added_line_count} · удалено строк: {item.diff.removed_line_count}.
+      </p>
+      <div className={styles.hunks} data-evidence-sha256={item.diff.evidence_sha256}>
+        {item.diff.hunks.map((hunk) => (
+          <div
+            key={`${hunk.source_start}-${hunk.target_start}-${hunk.tag}`}
+            data-hunk-id={hunk.hunk_id ?? ''}
+          >
+            <Hunk hunk={hunk} />
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+/**
+ * The pairs an expert approved and their deterministic differences. The server recomputes the
+ * differences from the stored text and seals them; when it withholds them (`evidence_state`) this
+ * says why in words instead of showing a list that looks complete.
+ */
+function ApprovedPairs({ approved }: { readonly approved: ApprovedSheetPairs }) {
+  return (
+    <section
+      data-approved-pairs={approved.evidence_state}
+      data-raw-evidence-seal={approved.raw_evidence_seal_sha256 ?? ''}
+    >
+      <h3>Подтверждённые пары листов</h3>
+      <p className={styles.summary}>{EVIDENCE_STATE_TEXT[approved.evidence_state]}</p>
+      {approved.items.map((item) => (
+        <article
+          key={item.sheet_link_id}
+          className={styles.diff}
+          data-approved-pair={item.sheet_link_id}
+          data-approved-pair-state={item.state}
+        >
+          <h4>
+            Лист {item.source_page_number} → лист {item.target_page_number}
+          </h4>
+          <p className={styles.summary}>
+            Подтвердил: {item.approved_by_label}. {LINK_STATE_TEXT[item.state]}
+          </p>
+          {isHiddenByAnotherPair(approved, item) ? (
+            <p className={styles.summary} data-diff-withheld="another-pair">
+              {HIDDEN_BY_ANOTHER_PAIR}
+            </p>
+          ) : null}
+          <ApprovedPairDiff item={item} />
+        </article>
+      ))}
+    </section>
   );
 }
 

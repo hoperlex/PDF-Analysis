@@ -130,7 +130,7 @@ import { MY_TASKS_LIMIT } from '@/widgets/my-tasks';
 import NotFound from '@/app/not-found';
 import ErrorBoundary from '@/app/error';
 import { DecisionHistory } from '@/widgets/decision-history';
-import { ArV3BetaReview } from '@/widgets/ar-v3-beta-review';
+import { ArV3BetaReview, RunFindings } from '@/widgets/ar-v3-beta-review';
 import { ArV3BetaPack } from '@/widgets/ar-v3-beta-pack';
 import {
   MALFORMED_GROUP_ANSWER, StartArV3GroupView, classifyArV3GroupStartFailure,
@@ -146,6 +146,8 @@ import {
 } from '@/features/manage-executor-connection';
 import { EXECUTOR_SECRET_OUTCOMES, SetExecutorSecretForm } from '@/features/set-executor-secret';
 import { ExecutorSelectView, StartRunControl, StartRunFailureView } from '@/features/start-run';
+import { ANALYSIS_PRESETS_KEY } from '@/entities/analysis-preset';
+import { AnalysisPresets } from '@/widgets/analysis-presets';
 import { executorChoices } from '@/entities/executor-connection';
 import {
   ALL_CASES as EXECUTOR_CASES, PINNED as EXECUTOR_PINNED, READY as EXECUTOR_READY,
@@ -184,6 +186,9 @@ import { newClient, renderScreen, seedError } from '../unit/screens/harness';
 import {
   NOT_INSTALLED_PACK, installedPackFixture, withoutMember,
 } from '../unit/analysis-settings/ar-v3-beta-pack-fixtures';
+import {
+  AVAILABLE_RUN_ID, accountFixture, runFindingsPage, v3FindingFixture,
+} from '../unit/analysis-settings/ar-v3-beta-review-fixtures';
 import { optimisationShapes } from '../unit/optimisation/fixtures';
 import { proposalShapes } from '../unit/optimisation-proposals/fixtures';
 import { derivedScreens, malformedVariants, wellFormed } from '../unit/screens/route-screens';
@@ -1012,7 +1017,7 @@ const record = (over: Partial<DecisionRecord> = {}): DecisionRecord => ({
 
 function apiError(status: number, code: ErrorCode): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.7.0',
+    contract_version: '1.9.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1024,7 +1029,7 @@ function apiError(status: number, code: ErrorCode): ApiError {
 /** A norms refusal with the one classifier the seal registered for it (`W55A-WEB-NORMS`). */
 function normsRefusal(code: ErrorCode, details: Readonly<Record<string, string>>): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.7.0',
+    contract_version: '1.9.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1834,7 +1839,7 @@ function startRefusal(
   details?: Record<string, string | number | boolean | null>,
 ): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.7.0',
+    contract_version: '1.9.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -2030,7 +2035,7 @@ function startRunExecutorShapes(): ReactElement {
     code: ErrorCode, status: number, retryable: boolean,
     details: Readonly<Record<string, string>>, message = 'Сообщение об отказе.',
   ): ApiError => new ApiError(status, {
-    contract_version: '1.7.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
+    contract_version: '1.9.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
     retryable, details,
   }, '0f0e9d8c-7b6a-4948-b726-150413021100');
   const cannotServe = (reason: string) =>
@@ -2062,10 +2067,75 @@ function startRunExecutorShapes(): ReactElement {
   );
 }
 
+/** `ANALYSIS-PRESETS-01`: a preset as the list returns it. */
+function presetFixture(n: number, over: Record<string, unknown> = {}): Record<string, unknown> {
+  const ulid = `01M2545JSD15ETSNNV904X${String(n).padStart(4, '0')}`.slice(0, 26);
+  return {
+    preset_id: `evt_${ulid}`, revision_id: `evt_${ulid}`, revision_no: 1, name: `Быстрый черновик ${n}`,
+    executor_connection_id: EXECUTOR_READY.connection.connection_id, state: 'active',
+    created_at: '2026-10-27T10:00:00Z', revised_at: '2026-10-27T11:00:00Z',
+    revised_by: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F', ...over,
+  };
+}
+
+function seedPresets(items: readonly Record<string, unknown>[]): (client: ReturnType<typeof newClient>) => void {
+  return (client) => {
+    seedExecutors(client, EXECUTOR_CASES);
+    client.setQueryData(ANALYSIS_PRESETS_KEY, { items: [...items] });
+  };
+}
+
 const EXTRA_SHAPES: readonly ScreenCase[] = [
   {
     name: 'start-run-control',
     make: () => createElement(StartRunControl, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
+  },
+  // `ANALYSIS-PRESETS-01`: the section «Пресеты запуска» of «Настройки анализа» and the preset select of
+  // the start control, in the states a default cache does not select.
+  {
+    name: 'analysis-presets-for-an-administrator',
+    make: () => createElement(AnalysisPresets, { roles: ['admin'] }),
+    seedClient: seedPresets([
+      presetFixture(1),
+      presetFixture(2, { executor_connection_id: 'exc_01M2545JSD15ETSNNV904X9999' }),
+      presetFixture(3, { state: 'archived', revision_no: 2 }),
+    ]),
+  },
+  {
+    name: 'analysis-presets-for-an-expert',
+    make: () => createElement(AnalysisPresets, { roles: ['expert'] }),
+    seedClient: seedPresets([presetFixture(1), presetFixture(3, { state: 'archived', revision_no: 2 })]),
+  },
+  {
+    name: 'analysis-presets-empty-for-an-administrator',
+    make: () => createElement(AnalysisPresets, { roles: ['admin'] }),
+    seedClient: seedPresets([]),
+  },
+  {
+    name: 'analysis-presets-empty-for-an-expert',
+    make: () => createElement(AnalysisPresets, { roles: ['expert'] }),
+    seedClient: seedPresets([]),
+  },
+  {
+    name: 'analysis-presets-read-refused',
+    make: () => createElement(AnalysisPresets, { roles: ['admin'] }),
+    seedClient: (client) => seedError(client, [...ANALYSIS_PRESETS_KEY], apiError(503, 'dependency_unavailable')),
+  },
+  {
+    name: 'start-run-control-with-presets',
+    make: () => createElement(StartRunControl, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
+    seedClient: seedPresets([
+      presetFixture(1),
+      presetFixture(2, { executor_connection_id: 'exc_01M2545JSD15ETSNNV904X9999' }),
+    ]),
+  },
+  {
+    name: 'start-run-control-presets-read-refused',
+    make: () => createElement(StartRunControl, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
+    seedClient: (client) => {
+      seedExecutors(client, EXECUTOR_CASES);
+      seedError(client, [...ANALYSIS_PRESETS_KEY], apiError(503, 'dependency_unavailable'));
+    },
   },
   {
     name: 'start-run-executor-shapes',
@@ -2076,6 +2146,42 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
   {
     name: 'ar-v3-group-pending',
     make: () => createElement(ArV3BetaReview, { groupId: 'arg_01M2545JSD15ETSNNV904X991K' }),
+  },
+  // `AR-V3-DECISIONS-01`: the findings under an available scope, in the states a default cache does
+  // not select: the findings read cold (loading), refused, and loaded for an expert. The list is the
+  // widget's own export, so these states carry Cyrillic data only (the whole group's fixture holds
+  // Latin item labels that the panel has always shown as the server sent them).
+  {
+    name: 'ar-v3-run-findings-loading',
+    make: () => createElement(RunFindings, { runId: AVAILABLE_RUN_ID }),
+  },
+  {
+    name: 'ar-v3-run-findings-read-refused',
+    make: () => createElement(RunFindings, { runId: AVAILABLE_RUN_ID }),
+    seedClient: (client) => seedError(
+      client, queryKeys.runs.findings(AVAILABLE_RUN_ID), apiError(503, 'dependency_unavailable'),
+    ),
+  },
+  {
+    name: 'ar-v3-run-findings-loaded-for-an-expert',
+    make: () => createElement(RunFindings, { runId: AVAILABLE_RUN_ID }),
+    seedClient: (client) => {
+      client.setQueryData(queryKeys.runs.findings(AVAILABLE_RUN_ID), { data: runFindingsPage([v3FindingFixture()]) });
+      client.setQueryData(queryKeys.account.me(), accountFixture(['expert']));
+    },
+  },
+  {
+    name: 'ar-v3-run-findings-loaded-for-an-administrator',
+    make: () => createElement(RunFindings, { runId: AVAILABLE_RUN_ID }),
+    seedClient: (client) => {
+      client.setQueryData(queryKeys.runs.findings(AVAILABLE_RUN_ID), { data: runFindingsPage([v3FindingFixture()]) });
+      client.setQueryData(queryKeys.account.me(), accountFixture(['admin']));
+    },
+  },
+  {
+    name: 'ar-v3-run-findings-none',
+    make: () => createElement(RunFindings, { runId: AVAILABLE_RUN_ID }),
+    seedClient: (client) => client.setQueryData(queryKeys.runs.findings(AVAILABLE_RUN_ID), { data: runFindingsPage([]) }),
   },
   {
     name: 'ar-v3-group-invalid-id',
@@ -3538,7 +3644,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           422,
           {
-            contract_version: '1.7.0',
+            contract_version: '1.9.0',
             error_code: 'validation_failed',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -3560,7 +3666,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           503,
           {
-            contract_version: '1.7.0',
+            contract_version: '1.9.0',
             error_code: 'dependency_unavailable',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -4218,6 +4324,22 @@ export function branchLabelsInSource(): readonly { readonly label: string; reado
  * red rather than leaving a stale excuse in place.
  */
 const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: string }[] = [
+  {
+    label: 'Команда пресету не выполнена',
+    why: 'The preset form and the archive control show this only after a createAnalysisPreset, reviseAnalysisPreset or archiveAnalysisPreset mutation settles with a failure. One static render cannot press «Сохранить пресет» or «Убрать в архив» or seed the mutation observer through a query cache (the live tests in tests/unit/analysis-settings press them and read the sentence).',
+  },
+  {
+    label: 'Загрузка: сохранение пресета…',
+    why: 'The preset form shows the pending state only while its mutation is in flight; one static render cannot start a mutation (the live test presses «Сохранить пресет»).',
+  },
+  {
+    label: 'Загрузка: архивирование пресета…',
+    why: 'The archive control shows the pending state only while its mutation is in flight; one static render cannot start a mutation (the live test presses «Убрать в архив»).',
+  },
+  {
+    label: 'Решение не записано',
+    why: 'The findings list under an AR v3 scope shows this only after the appendDecision mutation settles with a failure. One static render cannot press «Принять» or «Отклонить» or seed the mutation observer through a query cache (the live test in tests/unit/analysis-settings presses them).',
+  },
   {
     label: 'Действие не выполнено.',
     why: '«Диспетчер» and «Мои задачи» show this only after the transitionAssignment mutation settles with a failure. One static render cannot press a move button or seed the mutation observer through a query cache.',

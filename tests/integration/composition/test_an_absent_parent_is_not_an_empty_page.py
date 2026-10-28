@@ -105,13 +105,17 @@ _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 # ``getArV3BetaGroupReview``, both on ``group_id``; and `EXEC-IMAGE-DELIVERY-01`'s
 # ``getExecutorTaskImage`` on ``task_id`` and ``blob_id``, a runner-token read swept by
 # :data:`RUNNER_ADDRESSED`. With all four, the addressed half is thirty-five.
-EXPECTED_ADDRESSED = 35
+# `CMP-SEAL-C0` adds nine: the two project-scoped listings, the batch and its proposal, the
+# version-order listing, the page-profile listing and the four page reads. Forty-four.
+EXPECTED_ADDRESSED = 44
 
 #: Addressed ``GET`` operations with a required query parameter, and a well-formed value for
 #: it naming nothing. Without it the bare path would be ``422`` for the missing parameter --
 #: a true answer, but about the query and not about the path this sweep judges.
 REQUIRED_QUERY: dict[str, str] = {
     "compareDocumentVersions": "?target_version_uid=ver_01M2545JSD15ETSNNV904X991K",
+    # `CMP-SEAL-C0`: the tile is addressed by query; `CMP-PROFILE-01` serves it: an absent profile is `404`.
+    "streamVersionPageTile": "?level=0&column=0&row=0",
 }
 # `W59-ANALYSIS-SETTINGS-01` added ``listAnalysisProfiles``, unaddressed: the registry's
 # fifteen rows, answered as ``items`` like a collection with no parent identity.
@@ -123,7 +127,9 @@ REQUIRED_QUERY: dict[str, str] = {
 # ``listExecutorRoutes`` (collections) and `AR-V3-BETA-PACK-STATUS-API-01`'s
 # ``getArV3BetaPackStatus`` (a server singleton, see :data:`SERVER_STATUS_OPERATIONS`).
 # With all three, the unaddressed half is twenty.
-EXPECTED_UNADDRESSED = 20
+# `ANALYSIS-PRESETS-01`'s ``listAnalysisPresets`` is a collection like ``listExecutorConnections``
+# (every preset, no parent), so the unaddressed half is twenty-one.
+EXPECTED_UNADDRESSED = 21
 
 #: Unaddressed `GET` operations that are not collections and are exempt from
 #: ``test_a_collection_that_names_no_parent_answers_a_page``'s page-shape assertion.
@@ -190,8 +196,17 @@ SEALED_STUB_COLLECTIONS: frozenset[str] = frozenset()
 #: `W55B-SEAL-01` filled it again with the two portal-block reads; `W55B-GEOMETRY-01` serves
 #: them and empties it, and an absent `ver_` is now `404 not_found` for both.
 #: `W57A-SEAL-01B` sealed ``getRunNormVerification`` as a refusing stub (``503``,
-#: ``dependency: norm_verification_reader``) until the CITE reader; it belongs here.
-SEALED_STUB_ADDRESSED: frozenset[str] = frozenset({"getRunNormVerification"})
+#: ``dependency: norm_verification_reader``) until the CITE reader. `AR-V3-DECISIONS-01`
+#: (`R-146at`) serves it and empties this set again: an absent ``run_`` is now ``404
+#: not_found``, swept with the other addressed reads.
+#: `CMP-SEAL-C0` (ADR-0025 decision 25) filled it with the nine comparison reads whose ports are
+#: sealed stubs; `CMP-INGEST-01`, `CMP-INGEST-02` and `CMP-PROFILE-01` remove the ones they wire,
+#: and each then joins the `404` sweep. Two of them list under a project, so they are addressed.
+#: `CMP-INGEST-01` serves ``getComparisonUpload``, ``getComparisonUploadProposal`` and
+#: ``listComparisonVersionOrders`` and removes them: each joins the `404` sweep (an absent `cbt_` is `404
+#: not_found`, and so is an absent project or document of the version-order listing). `CMP-INGEST-02` serves
+#: ``listComparisonUploads`` and empties this set: an absent project is `404 not_found`, never an empty page.
+SEALED_STUB_ADDRESSED: frozenset[str] = frozenset()
 
 #: `W55A-SEAL-01`. ``searchNorms`` addresses no parent but is not a listing of everything:
 #: its ``q`` is required, so the bare path is ``422 validation_failed`` on ``q`` and never a
@@ -225,6 +240,9 @@ _CATALOG_KEY: dict[str, str] = {
     "group_id": "ar_v3_run_group_id",
     "connection_id": "executor_connection_id",
     "task_id": "executor_task_id",
+    # `ANALYSIS-PRESETS-01`: a preset is identified by the audit event written with its first
+    # revision (``evt_``), so its path parameter takes that catalogue key.
+    "preset_id": "audit_event_id",
 }
 
 
@@ -476,7 +494,7 @@ def test_a_sealed_stub_get_with_a_parent_answers_unavailable(app: Composed) -> N
     assert {op for op, _ in stubs} == SEALED_STUB_ADDRESSED
     for operation_id, template in stubs:
         path = re.sub(r"\{(\w+)\}", lambda m: _absent_identity(m.group(1)), template)
-        status, body = _get(app, path)
+        status, body = _get(app, path + REQUIRED_QUERY.get(operation_id, ""))
         assert status == 503, f"{operation_id} answered {status}: {body}"
         assert isinstance(body, dict) and body.get("error_code") == "dependency_unavailable", body
         assert "items" not in body, body

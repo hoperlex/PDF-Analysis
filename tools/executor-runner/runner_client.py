@@ -35,12 +35,19 @@ API_PREFIX = "/api/v1/runner/tasks"
 MAX_REQUEST_BYTES = 1 << 20
 MAX_RESPONSE_BYTES = 16 << 20
 MAX_IMAGE_BYTES = 16 << 20
+#: ADR-0025 decision 18: at most eight images in a task, 32 MiB of PNG together.
+MAX_IMAGES = 8
+MAX_TOTAL_IMAGE_BYTES = 32 << 20
 MAX_WAIT_SECONDS = 25
 DEFAULT_RETRY_AFTER = 30.0
 MAX_RETRY_AFTER = 300.0
 TASK_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 IMAGE_ID_RE = re.compile(r"^blob_[0-9A-HJKMNP-TV-Z]{26}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+BLOCK_ID_RE = re.compile(r"^blk_[0-9a-f]{32}$")
+#: The opaque crop reference of a comparison crop (the contract's pattern). Echoed, never parsed.
+CROP_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+IMAGE_KEYS = {"blob_id", "sha256", "size_bytes", "media_type"}
 USER_AGENT = "pdf-analysis-runner-client/1"
 
 
@@ -177,6 +184,48 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+def valid_images(images: Any) -> bool:
+    """Whether a task's ``images`` is a well-formed list: at most eight, each exactly one of a
+    portal-block reference or an opaque crop reference with the four common members, no identity
+    twice, and the sizes together within 32 MiB. This is the shape check of what the stand sent; a
+    runner then compares the count with what it declared (:func:`serves_images`)."""
+    if not isinstance(images, list) or len(images) > MAX_IMAGES:
+        return False
+    total = 0
+    seen: set[tuple[str, str]] = set()
+    for image in images:
+        if not isinstance(image, dict):
+            return False
+        keys = set(image)
+        if keys == IMAGE_KEYS | {"portal_block_id"}:
+            kind, pattern = "portal_block_id", BLOCK_ID_RE
+        elif keys == IMAGE_KEYS | {"crop_id"}:
+            kind, pattern = "crop_id", CROP_ID_RE
+        else:
+            return False
+        identity = image[kind]
+        if (not isinstance(image["blob_id"], str) or IMAGE_ID_RE.fullmatch(image["blob_id"]) is None
+                or not isinstance(identity, str) or pattern.fullmatch(identity) is None
+                or not isinstance(image["sha256"], str) or SHA256_RE.fullmatch(image["sha256"]) is None
+                or type(image["size_bytes"]) is not int
+                or not 1 <= image["size_bytes"] <= MAX_IMAGE_BYTES
+                or image["media_type"] != "image/png"
+                or (kind, identity) in seen):
+            return False
+        seen.add((kind, identity))
+        total += image["size_bytes"]
+    return total <= MAX_TOTAL_IMAGE_BYTES
+
+
+def serves_images(task: dict, declared: int) -> bool:
+    """Whether a runner that declared ``declared`` may work on ``task``: the task's images fit.
+
+    A runner that finds this false fails the task with ``image_input_unsupported`` and does not
+    answer from some of the images. The stand never hands such a task to a claim that declared
+    enough, so this is the guard against a stand that does."""
+    return len(task.get("images") or []) <= declared
+
+
 class RunnerClient:
     def __init__(
         self,
@@ -303,11 +352,21 @@ class RunnerClient:
 
     # --------------------------------------------------------------- operations
 
-    def claim(self, wait_seconds: int) -> Optional[dict]:
-        """claimExecutorTask. Returns the task document, or None on 204 (nothing arrived)."""
+    def claim(self, wait_seconds: int, max_images: int = 1) -> Optional[dict]:
+        """claimExecutorTask. Returns the task document, or None on 204 (nothing arrived).
+
+        ``max_images`` is the most images one task may carry that this runner serves; the stand
+        never hands a task with more. 1 is what every runner sent before several images existed,
+        and it is sent as nothing at all, so a runner that serves one image speaks exactly the
+        wire it always spoke (a stand older than several images would refuse the new member)."""
         if not isinstance(wait_seconds, int) or isinstance(wait_seconds, bool) or not 0 <= wait_seconds <= MAX_WAIT_SECONDS:
             raise RunnerRejected("wait_seconds must be an integer in 0..25", status=422, error_code="validation_failed")
-        _, document = self._call(f"{API_PREFIX}/claim", {"wait_seconds": wait_seconds}, wait_seconds + 20.0)
+        if not isinstance(max_images, int) or isinstance(max_images, bool) or not 1 <= max_images <= MAX_IMAGES:
+            raise RunnerRejected("max_images must be an integer in 1..8", status=422, error_code="validation_failed")
+        body: dict[str, Any] = {"wait_seconds": wait_seconds}
+        if max_images > 1:
+            body["max_images"] = max_images
+        _, document = self._call(f"{API_PREFIX}/claim", body, wait_seconds + 20.0)
         if document is None:
             return None
         required = {
@@ -328,21 +387,8 @@ class RunnerClient:
             parse_timestamp(document["deadline_at"])
         except ValueError:
             raise RunnerUnavailable("the stand answered a claim with a malformed timestamp", status=200) from None
-        images = document.get("images", [])
-        if not isinstance(images, list) or len(images) > 1:
+        if not valid_images(document.get("images", [])):
             raise RunnerUnavailable("the stand answered a claim with malformed images", status=200)
-        for image in images:
-            if (not isinstance(image, dict)
-                    or not isinstance(image.get("blob_id"), str)
-                    or IMAGE_ID_RE.fullmatch(image["blob_id"]) is None
-                    or not isinstance(image.get("portal_block_id"), str)
-                    or re.fullmatch(r"blk_[0-9a-f]{32}", image["portal_block_id"]) is None
-                    or not isinstance(image.get("sha256"), str)
-                    or SHA256_RE.fullmatch(image["sha256"]) is None
-                    or type(image.get("size_bytes")) is not int
-                    or not 1 <= image["size_bytes"] <= MAX_IMAGE_BYTES
-                    or image.get("media_type") != "image/png"):
-                raise RunnerUnavailable("the stand answered a claim with malformed images", status=200)
         return document
 
     def image(self, task_id: str, image: dict, *, timeout: float = 30.0) -> bytes:

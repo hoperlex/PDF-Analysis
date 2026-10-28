@@ -46,7 +46,11 @@ from auditmanager.analysis.ports.artifacts import (
     read_artifact,
 )
 from auditmanager.analysis.ports.stage import StageContext, StageHandler, StageProduction
-from auditmanager.analysis.profiles.ar_shared.recognised_context import RecognisedContext
+from auditmanager.analysis.profiles.ar_shared.recognised_context import (
+    RecognisedContext,
+    RecognisedContextError,
+    select_context as select_recognised_context,  # SECTION-CATEGORY-OCR-01
+)
 from auditmanager.analysis.profiles.ar_v3.local_evaluation import (
     LocalV3Evaluation,
     SuppliedV3Response,
@@ -108,6 +112,10 @@ from auditmanager.analysis.text.budget import (
     input_budget_characters,
     windowed_budget_characters,
 )
+from auditmanager.analysis.text.recognised_input import (  # SECTION-CATEGORY-OCR-01
+    RecognisedPage,
+    total_characters as recognised_total_characters,
+)
 from auditmanager.analysis.text.windowed import run_text_analysis_windows  # SECTION-CHUNKED-ANALYSIS-01
 from auditmanager.analysis.text.windows import (  # SECTION-CHUNKED-ANALYSIS-01
     PARAM_COUNT as TEXT_WINDOW_PARAM_COUNT,
@@ -159,6 +167,12 @@ from auditmanager.analysis.text.recorded import RecordedAdapter
 from auditmanager.analysis.text.stage import STAGE_VERSION as TEXT_STAGE_VERSION
 from auditmanager.analysis.text.anchors import BlockIndex, ResolvedAnchor
 from auditmanager.analysis.text.textlayer import TextLayer
+
+from auditmanager.analysis.geometry.render import (  # CMP-PROFILE-01
+    FULL_PAGE_MAX_PIXELS,
+    PdfiumDocument,
+    page_raster_size,
+)
 
 __all__ = [
     "BetaV3Profile",
@@ -214,6 +228,8 @@ __all__ = [
     "ProxyDispatchError",
     "ProxySettings",
     "RecognisedContext",
+    "RecognisedContextError",
+    "RecognisedPage",
     "RecordedAdapter",
     "RecoveredWindow",
     "RecognisedRegionCandidate",
@@ -272,11 +288,16 @@ __all__ = [
     "canonical_bytes",
     "read_artifact",
     "run_stage",
+    "recognised_total_characters",
     "run_text_analysis",
     "run_text_analysis_windows",
+    "select_recognised_context",
     "select_run_text_layer_ref",
     "text_window_policy",
     "windowed_budget_characters",
     "sha256_hex",
     "prepare_saved_crop_item",
+    "FULL_PAGE_MAX_PIXELS",
+    "PdfiumDocument",
+    "page_raster_size",
 ]

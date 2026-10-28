@@ -41,6 +41,7 @@ def _view(monkeypatch: pytest.MonkeyPatch, revision: str | None, answers: dict[s
         analysis_profile_id=PROFILE, prompt_bundle_id=BUNDLE, degradation_set=(),
         terminal_reason=None, terminal_detail=None, interrupted_reason=None, terminal_at=None,
         reaudit_of_run_id=None, norms_snapshot_id=None, connection_revision_id=revision,
+        preset_revision_id=None,  # `ANALYSIS-PRESETS-01`: the row now has the column
     )
 
     class _Repository:

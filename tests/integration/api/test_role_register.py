@@ -96,6 +96,31 @@ SAMPLES: dict[str, tuple[str, str]] = {
     ),
     "listExecutorRoutes": ("GET", "/executor-routes"),
     "setExecutorRoute": ("PUT", "/executor-routes"),
+    # `ANALYSIS-PRESETS-01`. The presets: reads for any role, writes for an administrator.
+    "listAnalysisPresets": ("GET", "/analysis/presets"),
+    "createAnalysisPreset": ("POST", "/analysis/presets"),
+    "reviseAnalysisPreset": ("POST", "/analysis/presets/evt_01M2545JSD15ETSNNV904X991T/revisions"),
+    "archiveAnalysisPreset": ("POST", "/analysis/presets/evt_01M2545JSD15ETSNNV904X991T/archive"),
+    # `CMP-SEAL-C0` (ADR-0025). The comparison modules: reads for any role, every write an expert's act.
+    "createComparisonUpload": ("POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/comparison-uploads"),
+    "listComparisonUploads": ("GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/comparison-uploads"),
+    "getComparisonUpload": ("GET", "/comparison-uploads/cbt_01M2545JSD15ETSNNV904X991K"),
+    "getComparisonUploadProposal": ("GET", "/comparison-uploads/cbt_01M2545JSD15ETSNNV904X991K/proposal"),
+    "uploadComparisonUploadPart": ("PUT", "/comparison-uploads/cbt_01M2545JSD15ETSNNV904X991K/files/cuf_01M2545JSD15ETSNNV904X991K/parts"),
+    "completeComparisonUploadFile": ("POST", "/comparison-uploads/cbt_01M2545JSD15ETSNNV904X991K/files/cuf_01M2545JSD15ETSNNV904X991K/completion"),
+    "confirmComparisonUploadSet": ("POST", "/comparison-uploads/cbt_01M2545JSD15ETSNNV904X991K/sets/cus_01M2545JSD15ETSNNV904X991K/confirmation"),
+    "excludeComparisonUploadSet": ("POST", "/comparison-uploads/cbt_01M2545JSD15ETSNNV904X991K/sets/cus_01M2545JSD15ETSNNV904X991K/exclusion"),
+    "retryComparisonUploadSet": ("POST", "/comparison-uploads/cbt_01M2545JSD15ETSNNV904X991K/sets/cus_01M2545JSD15ETSNNV904X991K/retry"),
+    "pauseComparisonUpload": ("POST", "/comparison-uploads/cbt_01M2545JSD15ETSNNV904X991K/pause"),
+    "resumeComparisonUpload": ("POST", "/comparison-uploads/cbt_01M2545JSD15ETSNNV904X991K/resume"),
+    "cancelComparisonUpload": ("POST", "/comparison-uploads/cbt_01M2545JSD15ETSNNV904X991K/cancellation"),
+    "listComparisonVersionOrders": ("GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H/comparison-version-orders"),
+    "appendComparisonVersionOrder": ("POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H/comparison-version-orders"),
+    "listVersionPageProfiles": ("GET", "/versions/ver_01M2545JSD15ETSNNV904X991J/page-profiles"),
+    "getVersionPageProfile": ("GET", "/page-profiles/cpr_01M2545JSD15ETSNNV904X991K"),
+    "streamVersionPagePreview": ("GET", "/page-profiles/cpr_01M2545JSD15ETSNNV904X991K/preview"),
+    "streamVersionPageThumbnail": ("GET", "/page-profiles/cpr_01M2545JSD15ETSNNV904X991K/thumbnail"),
+    "streamVersionPageTile": ("GET", "/page-profiles/cpr_01M2545JSD15ETSNNV904X991K/tile"),
     # `EXEC-PULL-01`. Runner tokens are an administrator's (the runner's own four operations
     # are not role-gated: they are authenticated by the token, see RUNNER_OPERATIONS).
     "issueRunnerToken": (
@@ -154,6 +179,25 @@ SAMPLES: dict[str, tuple[str, str]] = {
         "POST",
         "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
         "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison/carryovers",
+    ),
+    # `COMPARE-PERSISTED-SUMMARY-01`. The expert's approval and withdrawal of a sheet pairing,
+    # addressed the same way; a missing body is refused by the body model only after the role decided.
+    "approveSheetPairing": (
+        "POST",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison/sheet-pairings",
+    ),
+    "withdrawSheetPairing": (
+        "POST",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison/sheet-pairings"
+        "/sln_01M2545JSD15ETSNNV904X991M/withdrawals",
+    ),
+    # `COMPARE-PERSISTED-SUMMARY-01` (B2). The only operation that calls a model about a comparison.
+    "generateComparisonSummary": (
+        "POST",
+        "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H"
+        "/versions/ver_01M2545JSD15ETSNNV904X991J/comparison/summaries",
     ),
     # `W59-ANALYSIS-SETTINGS-01`. The text-profile registry (any role); no parameter.
     "listAnalysisProfiles": ("GET", "/analysis/profiles"),
@@ -266,6 +310,28 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "listExecutorConnections": _ANY_ROLE,
     "getExecutorConnection": _ANY_ROLE,
     "listExecutorRoutes": _ANY_ROLE,
+    "listAnalysisPresets": _ANY_ROLE,
+    # `CMP-SEAL-C0` (ADR-0025 decision 16): reads any one role; every write is the expert's act, and an
+    # administrator without the expert role is refused.
+    "createComparisonUpload": _EXPERT,
+    "listComparisonUploads": _ANY_ROLE,
+    "getComparisonUpload": _ANY_ROLE,
+    "getComparisonUploadProposal": _ANY_ROLE,
+    "uploadComparisonUploadPart": _EXPERT,
+    "completeComparisonUploadFile": _EXPERT,
+    "confirmComparisonUploadSet": _EXPERT,
+    "excludeComparisonUploadSet": _EXPERT,
+    "retryComparisonUploadSet": _EXPERT,
+    "pauseComparisonUpload": _EXPERT,
+    "resumeComparisonUpload": _EXPERT,
+    "cancelComparisonUpload": _EXPERT,
+    "listComparisonVersionOrders": _ANY_ROLE,
+    "appendComparisonVersionOrder": _EXPERT,
+    "listVersionPageProfiles": _ANY_ROLE,
+    "getVersionPageProfile": _ANY_ROLE,
+    "streamVersionPagePreview": _ANY_ROLE,
+    "streamVersionPageThumbnail": _ANY_ROLE,
+    "streamVersionPageTile": _ANY_ROLE,
     "searchNorms": _ANY_ROLE,
     "getNormDocument": _ANY_ROLE,
     "listNormParagraphs": _ANY_ROLE,
@@ -318,6 +384,12 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "appendDecision": _EXPERT,
     # `W59-DECISION-CARRYOVER-01`: a carried decision is a verdict; admin alone does not.
     "carryOverDecision": _EXPERT,
+    # `COMPARE-PERSISTED-SUMMARY-01`: approving or withdrawing a sheet pairing is a decision about
+    # evidence; only an expert, admin alone does not.
+    "approveSheetPairing": _EXPERT,
+    "withdrawSheetPairing": _EXPERT,
+    # B2: asking a model about a comparison is an expert's act too.
+    "generateComparisonSummary": _EXPERT,
     # `W60-PRICE-LIST-01`: an expert uploads a price list and overrides a project's vendor
     # list; the global vendor list is an administrator's; any one role reads.
     "uploadPriceList": _EXPERT,
@@ -358,6 +430,11 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "generateExecutorSshKey": _ADMIN,
     "requestExecutorProbe": _ADMIN,
     "setExecutorRoute": _ADMIN,
+    # `ANALYSIS-PRESETS-01` (R-146av): a preset is executor configuration; who may change the route
+    # may change a preset. The list is open to every role.
+    "createAnalysisPreset": _ADMIN,
+    "reviseAnalysisPreset": _ADMIN,
+    "archiveAnalysisPreset": _ADMIN,
     "issueRunnerToken": _ADMIN,
     "revokeRunnerToken": _ADMIN,
     # `W55A-SEAL-01` (R-113): who designated which snapshot, and the designation itself.

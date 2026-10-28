@@ -6,15 +6,23 @@
  * draft is said to need an expert's review in so many words, because a draft profile is
  * executable and a reviewer reading its findings must know it was never reviewed. A `reviewed`
  * profile is NOT said to be expert-verified: under `R-146ag` (accepted risk `A-7`) the status means
- * a lane answered the record's open questions and no person reviewed it, and the label says so.
+ * a lane answered the record's open questions and no person reviewed it.
+ *
+ * Whether the label of a reviewed profile says that no person reviewed it is the switch
+ * `SHOW_REVIEW_INDICATION` (`R-146ba`, accepted risk `A-10`). With the switch off the label is the
+ * contract's own word «проверен», which claims nothing about who; with it on the label is the
+ * sentence it was before the beta. It is read when the label is asked for, not when this module loads.
  */
 
 import type { AnalysisProfileStatus } from '@/shared/api';
 import { ANALYSIS_PROFILE_STATUS_VALUES } from '@/shared/api';
+import { SHOW_REVIEW_INDICATION } from '@/shared/config';
 
 export const ANALYSIS_PROFILE_STATUS_LABELS: Readonly<Record<AnalysisProfileStatus, string>> = {
   draft: 'черновик, требует экспертной проверки',
-  reviewed: 'рабочая версия, проверка человеком не проводилась',
+  get reviewed(): string {
+    return SHOW_REVIEW_INDICATION ? 'рабочая версия, проверка человеком не проводилась' : 'проверен';
+  },
 };
 
 /** What a section with no registered profile shows instead of one. */
@@ -36,7 +44,7 @@ export const AR_NO_TEXT_PROFILE_CONSEQUENCE =
 /** The note on a version screen where АР has no ordinary start (no pack, or none yet read). */
 export const AR_START_NOTE =
   'Версия АР анализируется группой из шести проверок АР v3, а не обычным прогоном. Группа ' +
-  'становится доступной, когда на сервере установлен проверенный экспертом набор; состояние ' +
+  'становится доступной, когда на сервере установлен набор норм АР v3; состояние ' +
   'набора — в разделе «Настройки анализа».';
 
 /** The label of a status this build does not know. Never a guess at its meaning. */

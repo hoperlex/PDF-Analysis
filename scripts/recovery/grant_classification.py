@@ -104,6 +104,17 @@ READ_WRITE = frozenset((
     "audit_run",
     "blob",
     "command_record",
+    # `0038_comparison_foundation`: the comparison tables whose rows change state (a batch, a set,
+    # a file, a part, a queue item, an attempt, a spend-journal row) or take a write-once blob
+    # reference (a page profile). No statement exists yet; the lanes that implement them write them.
+    "comparison_model_call",
+    "comparison_page_profile",
+    "comparison_upload",
+    "comparison_upload_file",
+    "comparison_upload_part",
+    "comparison_upload_set",
+    "comparison_work",
+    "comparison_work_attempt",
     "document",
     "execution_control",               # singleton upsert (jobs/repository.py)
     "executor_connection",
@@ -127,7 +138,9 @@ READ_WRITE = frozenset((
 #: refuses ``UPDATE`` (and, but for the four ``norm_*`` ``no_update`` tables, ``DELETE``) or is
 #: inserted into by the code and by nothing else.
 APPEND_ONLY = frozenset((
-    "ar_v3_run_group", "ar_v3_run_group_member", "audit_event", "document_version",
+    "analysis_preset_revision", "ar_v3_run_group", "ar_v3_run_group_member", "audit_event",
+    "comparison_sheet_link", "comparison_summary", "comparison_version_order",
+    "document_version",
     "document_version_classification", "document_version_classification_correction",
     "executor_connection_revision", "executor_route_event", "expert_decision_event",
     "finding_evidence", "finding_observation", "finding_observation_norm_citation",
@@ -146,6 +159,14 @@ APPEND_ONLY_BY_CODE_EVIDENCE = {
     "project": "documents/repository.py inserts a project and nothing updates or deletes one (the project erase of "
                "PROD-07 runs as the migrator)",
 }
+
+#: `0038_comparison_foundation` (`CMP-SEAL-C0`): the comparison tables whose lanes have not landed. Their
+#: grants are those of their class above; no statement in ``src/auditmanager`` names them yet, which is
+#: what the scan of :func:`observed_statements` would otherwise report as a table nothing writes. The
+#: lane that writes one removes it from this set (``test_a_sealed_table_that_the_code_now_writes_leaves_the_set``
+#: is red until it does).
+SEALED_NOT_YET_WRITTEN = frozenset((
+))
 
 #: ``SELECT``.
 READ_ONLY = frozenset((

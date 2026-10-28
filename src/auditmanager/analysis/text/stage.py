@@ -28,7 +28,7 @@ Status mapping, from the stage registry's status policy (``skip_allowed: false``
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Protocol, Sequence
+from typing import Any, Collection, Mapping, Protocol, Sequence
 
 from auditmanager.analysis.text.adapter import (
     PROVIDER,
@@ -48,12 +48,19 @@ from auditmanager.analysis.text.binding import CallBinding
 from auditmanager.analysis.text.config import ProviderConfig, ProviderMode, load_provider_config
 from auditmanager.analysis.text.cost import CostMeter
 from auditmanager.analysis.text.lock import STAGE_ID, ProviderLock, provider_lock
+from auditmanager.analysis.text.omission import OmissionTally, decide, quotes_of
 from auditmanager.analysis.text.profile import AnalysisProfile
+from auditmanager.analysis.text.prompt import OMISSION_CATEGORY
 from auditmanager.analysis.text.provenance import (
     CALL_SUCCEEDED,
     CALL_TRUNCATED,
     ModelCallRecord,
     assert_consistent_mode,
+)
+from auditmanager.analysis.text.recognised_input import (
+    RecognisedPage,
+    total_characters,
+    validate as validate_recognised,
 )
 from auditmanager.analysis.text.response import parse_response
 from auditmanager.analysis.text.proxy import MODEL_STUBS, ProxyDispatchError, ReceivedResponse
@@ -97,6 +104,7 @@ class _Grounding:
     resolved_evidence: int
     unresolved: list[UnresolvedAnchor]
     dropped_observations: int
+    omissions: OmissionTally
 
 
 class ModelCallJournal(Protocol):
@@ -144,6 +152,9 @@ def _ground(
     *,
     model_call_id: ModelCallId,
     block_index: BlockIndex | None,
+    omissions_enabled: bool = False,
+    textless_pages: Collection[int] | None = None,
+    recognised_pages: Sequence[RecognisedPage] = (),
 ) -> _Grounding:
     """Resolve every proposed quotation, and keep only what actually resolved.
 
@@ -161,7 +172,39 @@ def _ground(
     unresolved: list[UnresolvedAnchor] = []
     resolved_count = 0
     dropped = 0
+    tally = OmissionTally(enabled=omissions_enabled)
     for proposal in proposals:
+        if proposal.category == OMISSION_CATEGORY:
+            # `SECTION-CATEGORY-OCR-01`: a pair of places and a code-checked absence, all or nothing.
+            resolutions = [
+                resolve_anchor(
+                    text_layer,
+                    page_number=item.page_number,
+                    quote=item.quote,
+                    block_index=block_index,
+                )
+                for item in quotes_of(proposal)
+            ]
+            unresolved.extend(
+                outcome for outcome in resolutions if isinstance(outcome, UnresolvedAnchor)
+            )
+            decision = decide(
+                text_layer, proposal, resolutions, visible=None,
+                textless_pages=textless_pages, recognised=recognised_pages,
+            )
+            tally.record(decision)
+            if decision.reason is None:
+                resolved_count += len(decision.evidence)
+                observations.append(
+                    Observation(
+                        category=proposal.category,
+                        finding_text=decision.finding_text,
+                        recommendation_text=proposal.recommendation_text,
+                        model_call_id=model_call_id,
+                        evidence=decision.evidence,
+                    )
+                )
+            continue
         anchors: list[ResolvedAnchor] = []
         for item in proposal.evidence:
             outcome = resolve_anchor(
@@ -192,6 +235,7 @@ def _ground(
         resolved_evidence=resolved_count,
         unresolved=unresolved,
         dropped_observations=dropped,
+        omissions=tally,
     )
 
 
@@ -310,6 +354,8 @@ def run_text_analysis(
     meter: CostMeter | None = None,
     call_journal: ModelCallJournal | None = None,
     call: CallBinding | None = None,
+    recognised_pages: Sequence[RecognisedPage] = (),
+    textless_pages: Collection[int] | None = None,
 ) -> TextAnalysisOutcome:
     """Run the stage over one document version.
 
@@ -321,6 +367,16 @@ def run_text_analysis(
     and how it is recorded (:class:`~auditmanager.analysis.text.binding.CallBinding`). ``None``
     is today's behaviour: the ``anthropic`` provider label, the pinned rate table, no identity
     comparison here.
+
+    ``recognised_pages`` (`SECTION-CATEGORY-OCR-01`, `R-146aq`) are the recognised-text blocks of the
+    version's text-less pages, rendered into the user message as marked context. They are never part of
+    the text layer: a quote is resolved against the layer only, so a quote found in a block alone
+    resolves to nothing and confirms nothing. None (the default) is every version without a scanned page,
+    and the request is then byte for byte what it was.
+
+    ``textless_pages`` (`SECTION-JUDGE-FIXES-01`) is the version's stored list of text-less pages (``None``: not
+    known). It reaches the omission check only: a pair whose range holds one of them is refused, as is a pair
+    whose term occurs in the recognised text of a searched page (``recognised_pages``). It changes no request.
 
     ``document_graph`` is accepted because the stage registry declares it a required
     input and ``B2`` publishes it. PC-01 sends one narrow prompt over the whole text
@@ -338,11 +394,13 @@ def run_text_analysis(
         text_layer = load_text_layer(text_layer_document)
         _check_graph_version(document_graph)
         block_index = BlockIndex.from_document(block_index_document)
+        validate_recognised(text_layer, recognised_pages)
         request = build_request(
             model_id=resolved_config.model_id,
             bundle=profile.prompt_bundle,
             text_layer=text_layer,
             idempotency_scope=str(run_id),
+            recognised=recognised_pages,
         )
         cost_meter.check_before_call()
     except DomainError as error:
@@ -486,9 +544,17 @@ def run_text_analysis(
     )
     if call_journal is not None:
         call_journal.complete(record)
-    parsed = parse_response(response.output_text, truncated=response.truncated)
+    parsed = parse_response(
+        response.output_text, truncated=response.truncated, categories=profile.categories
+    )
     grounding = _ground(
-        text_layer, parsed.observations, model_call_id=model_call_id, block_index=block_index
+        text_layer,
+        parsed.observations,
+        model_call_id=model_call_id,
+        block_index=block_index,
+        omissions_enabled=OMISSION_CATEGORY in profile.categories,
+        textless_pages=textless_pages,
+        recognised_pages=recognised_pages,
     )
     analysed = _pages_analysed(
         text_layer, grounding.observations, truncated=response.truncated
@@ -545,6 +611,8 @@ def run_text_analysis(
         "cost_basis": cost_meter.cost_basis,
         "cost_ceiling_usd": cost_meter.ceiling_usd,
         "latency_ms": response.latency_ms,
+        **grounding.omissions.metrics(),
+        **_recognised_metrics(recognised_pages),
     }
 
     if response.truncated and not grounding.observations:
@@ -594,6 +662,13 @@ def run_text_analysis(
         error=None,
         metrics=metrics,
     )
+
+
+def _recognised_metrics(pages: Sequence[RecognisedPage]) -> dict[str, int]:
+    """What the call carried of recognised text. Nothing for a call with none: its metrics do not move."""
+    if not pages:
+        return {}
+    return {"recognised_pages": len(pages), "recognised_characters": total_characters(pages)}
 
 
 def _record(

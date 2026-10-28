@@ -79,6 +79,14 @@ _FINDINGS = "SELECT finding_uid FROM finding WHERE project_uid = :p"
 _OBSERVATIONS = f"SELECT finding_observation_id FROM finding_observation WHERE finding_uid IN ({_FINDINGS})"
 _PASSES = "SELECT optimisation_pass_id FROM optimisation_pass WHERE project_uid = :p"
 _PROPOSALS = f"SELECT optimisation_proposal_id FROM optimisation_proposal WHERE optimisation_pass_id IN ({_PASSES})"
+# `0038_comparison_foundation` (`CMP-SEAL-C0`): the comparison tables reach the project through an upload batch,
+# a document version or a queue item.
+_UPLOADS = "SELECT comparison_upload_id FROM comparison_upload WHERE project_uid = :p"
+_UPLOAD_FILES = f"SELECT comparison_upload_file_id FROM comparison_upload_file WHERE comparison_upload_id IN ({_UPLOADS})"
+_WORK = "SELECT comparison_work_id FROM comparison_work WHERE project_uid = :p"
+_COMPARISON_ATTEMPTS = (
+    f"SELECT comparison_work_attempt_id FROM comparison_work_attempt WHERE comparison_work_id IN ({_WORK})"
+)
 SLICES: dict[str, str] = {
     "project": "project_uid = :p",
     "document": "project_uid = :p",
@@ -94,7 +102,7 @@ SLICES: dict[str, str] = {
     "model_call": f"run_id IN ({_RUNS})",
     "provider_call_effect": f"run_id IN ({_RUNS})",
     "analysis_artifact_publication": f"run_id IN ({_RUNS})",
-    "executor_task": f"run_id IN ({_RUNS})",
+    "executor_task": f"run_id IN ({_RUNS}) OR comparison_attempt_id IN ({_COMPARISON_ATTEMPTS})",
     "finding": "project_uid = :p",
     "finding_observation": f"finding_uid IN ({_FINDINGS})",
     "finding_evidence": f"finding_observation_id IN ({_OBSERVATIONS})",
@@ -111,11 +119,26 @@ SLICES: dict[str, str] = {
     "optimisation_proposal_decision": f"optimisation_proposal_id IN ({_PROPOSALS})",
     "ar_v3_run_group": "project_uid = :p",
     "ar_v3_run_group_member": "group_id IN (SELECT group_id FROM ar_v3_run_group WHERE project_uid = :p)",
+    "comparison_sheet_link": "project_uid = :p",
+    "comparison_summary": "project_uid = :p",
+    "comparison_upload": "project_uid = :p",
+    "comparison_upload_set": f"comparison_upload_id IN ({_UPLOADS})",
+    "comparison_upload_file": f"comparison_upload_id IN ({_UPLOADS})",
+    "comparison_upload_part": f"comparison_upload_file_id IN ({_UPLOAD_FILES})",
+    "comparison_version_order": "project_uid = :p",
+    "comparison_page_profile": f"version_uid IN ({_VERSIONS})",
+    "comparison_work": "project_uid = :p",
+    "comparison_work_attempt": f"comparison_work_id IN ({_WORK})",
+    "comparison_model_call": f"comparison_work_id IN ({_WORK})",
 }
 _BLOB_SOURCES = (
     f"SELECT blob_id FROM input_manifest_entry WHERE version_uid IN ({_VERSIONS}) "
     "UNION SELECT blob_id FROM price_list_revision WHERE project_uid = :p "
-    f"UNION SELECT blob_id FROM analysis_artifact_publication WHERE run_id IN ({_RUNS})"
+    f"UNION SELECT blob_id FROM analysis_artifact_publication WHERE run_id IN ({_RUNS}) "
+    f"UNION SELECT blob_id FROM comparison_upload_file WHERE comparison_upload_id IN ({_UPLOADS}) "
+    f"UNION SELECT profile_blob_id FROM comparison_page_profile WHERE version_uid IN ({_VERSIONS}) "
+    f"UNION SELECT preview_blob_id FROM comparison_page_profile WHERE version_uid IN ({_VERSIONS}) "
+    f"UNION SELECT thumbnail_blob_id FROM comparison_page_profile WHERE version_uid IN ({_VERSIONS})"
 )
 _KEEP_BLOBS = ("SELECT blob_id FROM norm_custody_binding UNION SELECT set_blob_id FROM norm_retrieval_set "
                "UNION SELECT catalogue_blob_id FROM norm_retrieval_set")
@@ -342,22 +365,29 @@ def test_the_closure_is_read_from_the_catalog_and_agrees_with_the_hand_written_s
     # every PRODUCT table but ``worker`` is in the closure, and the test's own addressing names the same tables
     assert set(closure.tables) == purge.PRODUCT_TABLES - tool.UNSCOPED_PRODUCT_TABLES
     assert set(closure.tables) == set(SLICES)
-    assert tool.UNSCOPED_PRODUCT_TABLES == {"worker"} and len(closure.tables) == 31
+    # `0038_comparison_foundation`: the nine comparison tables join the closure (33 -> 42); the batch, the
+    # order revisions and the queue item reference the project directly.
+    assert tool.UNSCOPED_PRODUCT_TABLES == {"worker"} and len(closure.tables) == 42
     assert set(closure.direct) == {
-        "ar_v3_run_group", "audit_run", "document", "finding", "optimisation_pass", "price_list_revision",
-        "vendor_list_revision", "work_assignment",
+        "ar_v3_run_group", "audit_run", "comparison_sheet_link", "comparison_summary", "comparison_upload",
+        "comparison_version_order", "comparison_work", "document", "finding", "optimisation_pass",
+        "price_list_revision", "vendor_list_revision", "work_assignment",
     }
+    # `0038_comparison_foundation`: an upload batch and an order revision carry the receipt of the write
+    # that made them.
     assert {key.child for key in closure.receipt_edges} == {
-        "ar_v3_run_group", "audit_run", "expert_decision_event", "optimisation_proposal_decision",
+        "ar_v3_run_group", "audit_run", "comparison_sheet_link", "comparison_summary", "comparison_upload",
+        "comparison_version_order", "expert_decision_event", "optimisation_proposal_decision",
     }
 
 
-def test_the_three_cycles_of_the_closure_are_deleted_in_one_statement_each(migrated_engine: Engine) -> None:
+def test_the_four_cycles_of_the_closure_are_deleted_in_one_statement_each(migrated_engine: Engine) -> None:
     with migrated_engine.connect() as connection:
         _, closure = tool.check_schema(connection)
     order = tool.deletion_order(closure.tables, [(k.child, k.parent) for k in closure.edges])
     assert sorted(group for group in order if len(group) > 1) == [
-        ("attempt", "job"), ("document", "document_version"), ("finding", "finding_observation"),
+        ("attempt", "job"), ("comparison_work", "comparison_work_attempt"), ("document", "document_version"),
+        ("finding", "finding_observation"),
     ]
     position = {table: index for index, group in enumerate(order) for table in group}
     for key in closure.edges:
@@ -375,7 +405,10 @@ def test_the_non_terminal_states_are_the_complement_of_the_schemas_terminal_chec
         return set(re.findall(r"'([a-z_]+)'::text", definition))
 
     for table, terminal_check in (("audit_run", "ck_audit_run_terminal_at"), ("job", "ck_job_terminal_at"),
-                                  ("attempt", "ck_attempt_terminal_at")):
+                                  ("attempt", "ck_attempt_terminal_at"),
+                                  # `CMP-SEAL-C0` (ADR-0025 decision 7): the comparison queue
+                                  ("comparison_work", "ck_comparison_work_terminal_at"),
+                                  ("comparison_work_attempt", "ck_comparison_work_attempt_terminal_at")):
         terminal = states(terminal_check, table)
         every = states(f"ck_{table}_state", table)
         assert terminal < every and set(tool.NON_TERMINAL_STATES[table]) == every - terminal, table

@@ -36,13 +36,13 @@
       "const": "auditmanager.domain.identifiers"
     },
     "contract_version": {
-      "const": "1.7.0"
+      "const": "1.9.0"
     },
     "supersedes": {
-      "const": "1.6.0"
+      "const": "1.8.0"
     },
     "candidate_revision": {
-      "const": 25,
+      "const": 27,
       "description": "Review round of this contract. At the 1.0.0 seal it is the sealed round: it is pinned here so the contract cannot change meaning without a deliberate edit of both the catalog and this schema, exactly as contract_version is pinned, and after the seal such an edit follows the freeze-break and version procedure of VERSIONING_AND_FREEZE_POLICY.md."
     },
     "revision_note": {
@@ -280,6 +280,14 @@
           "executor_route_event_id",
           "executor_runner_token_id",
           "executor_task_id",
+          "comparison_upload_id",
+          "comparison_upload_set_id",
+          "comparison_upload_file_id",
+          "comparison_version_order_id",
+          "comparison_page_profile_id",
+          "comparison_work_id",
+          "comparison_work_attempt_id",
+          "comparison_model_call_id",
           "assignment_uid",
           "norm_custody_admission_id",
           "norm_custody_binding_id",
@@ -357,6 +365,14 @@
                 "executor_route_event_id",
                 "executor_runner_token_id",
                 "executor_task_id",
+                "comparison_upload_id",
+                "comparison_upload_set_id",
+                "comparison_upload_file_id",
+                "comparison_version_order_id",
+                "comparison_page_profile_id",
+                "comparison_work_id",
+                "comparison_work_attempt_id",
+                "comparison_model_call_id",
                 "assignment_uid",
                 "norm_custody_admission_id",
                 "norm_custody_binding_id",

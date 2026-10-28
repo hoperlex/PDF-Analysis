@@ -1,9 +1,9 @@
 {
   "contract": "auditmanager.domain.identifiers",
-  "contract_version": "1.7.0",
-  "supersedes": "1.6.0",
-  "candidate_revision": 25,
-  "revision_note": "Candidate revision 25 by PROD-11-AR-V1-V2-REMOVAL-01: the enum member AnalysisProfileStatus.builtin is removed from the API document and its prose corrected, and family 1.7.0 seal.",
+  "contract_version": "1.9.0",
+  "supersedes": "1.8.0",
+  "candidate_revision": 27,
+  "revision_note": "Candidate revision 27 by CMP-SEAL-C0: the plain-PDF comparison upload, the order of the versions of a document set and the page reads (eighteen operations), the optional DocumentVersion.upload_kind, ProductVersion.comparison_modules and RunnerImage.crop_id are an additive minor change of the API document, and family 1.9.0 seal. identifiers.json gains eight identity prefixes (cbt, cus, cuf, cvo, cpr, cq, cqa, cmc) for migration 0038; error-codes.json gains no code, only registered reasons under existing codes; state-machines.json gains no machine.",
   "status": "frozen",
   "frozen": true,
   "format": "<prefix>_<ULID>",
@@ -76,7 +76,15 @@
     "executor_probe_id": "epb",
     "executor_route_event_id": "ert",
     "executor_runner_token_id": "ern",
-    "executor_task_id": "ext"
+    "executor_task_id": "ext",
+    "comparison_upload_id": "cbt",
+    "comparison_upload_set_id": "cus",
+    "comparison_upload_file_id": "cuf",
+    "comparison_version_order_id": "cvo",
+    "comparison_page_profile_id": "cpr",
+    "comparison_work_id": "cq",
+    "comparison_work_attempt_id": "cqa",
+    "comparison_model_call_id": "cmc"
   },
   "external_identifiers": {
     "portal_block_id": {
@@ -140,7 +148,15 @@
     "ExecutorProbe": "executor_probe_id",
     "ExecutorRouteEvent": "executor_route_event_id",
     "ExecutorRunnerToken": "executor_runner_token_id",
-    "ExecutorTask": "executor_task_id"
+    "ExecutorTask": "executor_task_id",
+    "ComparisonUpload": "comparison_upload_id",
+    "ComparisonUploadSet": "comparison_upload_set_id",
+    "ComparisonUploadFile": "comparison_upload_file_id",
+    "ComparisonVersionOrder": "comparison_version_order_id",
+    "ComparisonPageProfile": "comparison_page_profile_id",
+    "ComparisonWork": "comparison_work_id",
+    "ComparisonWorkAttempt": "comparison_work_attempt_id",
+    "ComparisonModelCall": "comparison_model_call_id"
   },
   "distinct_identities": [
     {
@@ -308,6 +324,25 @@
       "evidence": [
         "EXEC-PULL-01",
         "0031_executor_pull_channel"
+      ]
+    },
+    {
+      "name": "comparison_foundation_identity",
+      "identifiers": [
+        "comparison_upload_id",
+        "comparison_upload_set_id",
+        "comparison_upload_file_id",
+        "comparison_version_order_id",
+        "comparison_page_profile_id",
+        "comparison_work_id",
+        "comparison_work_attempt_id",
+        "comparison_model_call_id"
+      ],
+      "rule": "ComparisonUpload identifies one upload batch of plain PDFs for comparison; ComparisonUploadSet one proposed document set of it (the original's batch item) and ComparisonUploadFile one declared file, whose display name is a hint and whose declared SHA-256 and size are verification values; ComparisonVersionOrder one revision of the order in which the versions of a document set are compared and never changes a version's ordinal; ComparisonPageProfile the raw profile of one page of one version, content-keyed (a ULID id and a unique digest column, the digest never a foreign key); ComparisonWork one item of the comparison-local durable queue and ComparisonWorkAttempt one leased execution of it, neither a Job nor an Attempt (a Job is a Run in the schema); ComparisonModelCall one row of the comparison spend journal, not a ModelCallRecord. Each is allocated independently and never parsed.",
+      "authority": "ADR-0025 decisions 2, 4, 5, 10, 16; CMP-SEAL-C0",
+      "evidence": [
+        "CMP-SEAL-C0",
+        "0038_comparison_foundation"
       ]
     }
   ],

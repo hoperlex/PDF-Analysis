@@ -1,0 +1,107 @@
+{
+  "scope_definitions_version": "ar-v3-beta-scope-definitions-v1",
+  "comment": "Which of C01-C22 belong to which of the six scopes F1 F2 A1 A2 S1 S2. The membership is fixed in code (scope_partition.py, composition_sha256 below, the 'technical groups' of AR-NORM-MAP-APPROVAL-PREP-01) and is not a decision of this file; the split into provisional_citation and context_only repeats decisions.json. The topic wording is a label for the reader, not a requirement.",
+  "composition_sha256": "79396188486c430729213279fb7c1c8fca7c13ede3f3f13388d06d9f93bbb781",
+  "scopes": [
+    {
+      "scope_id": "F1",
+      "topic": "Эвакуация: число выходов, ширина выходов и горизонтальных путей",
+      "item_ids": [
+        "C01",
+        "C02",
+        "C03"
+      ],
+      "provisional_citation_item_ids": [
+        "C01",
+        "C02",
+        "C03"
+      ],
+      "context_only_item_ids": []
+    },
+    {
+      "scope_id": "F2",
+      "topic": "Эвакуация (лестницы, расстояние, кровля) и пожарная безопасность",
+      "item_ids": [
+        "C04",
+        "C05",
+        "C06",
+        "C07",
+        "C08",
+        "C09",
+        "C10"
+      ],
+      "provisional_citation_item_ids": [
+        "C04",
+        "C07"
+      ],
+      "context_only_item_ids": [
+        "C05",
+        "C06",
+        "C08",
+        "C09",
+        "C10"
+      ]
+    },
+    {
+      "scope_id": "A1",
+      "topic": "Доступность: дверной проём, пандус, поручни",
+      "item_ids": [
+        "C11",
+        "C12",
+        "C13",
+        "C14"
+      ],
+      "provisional_citation_item_ids": [
+        "C11",
+        "C12",
+        "C13",
+        "C14"
+      ],
+      "context_only_item_ids": []
+    },
+    {
+      "scope_id": "A2",
+      "topic": "Доступность: лифт, площадка, порог, уборная; теплозащита",
+      "item_ids": [
+        "C15",
+        "C16",
+        "C17",
+        "C18",
+        "C19",
+        "C20"
+      ],
+      "provisional_citation_item_ids": [
+        "C16",
+        "C17",
+        "C18",
+        "C19",
+        "C20"
+      ],
+      "context_only_item_ids": [
+        "C15"
+      ]
+    },
+    {
+      "scope_id": "S1",
+      "topic": "Звукоизоляция: воздушный шум",
+      "item_ids": [
+        "C21"
+      ],
+      "provisional_citation_item_ids": [],
+      "context_only_item_ids": [
+        "C21"
+      ]
+    },
+    {
+      "scope_id": "S2",
+      "topic": "Звукоизоляция: ударный шум",
+      "item_ids": [
+        "C22"
+      ],
+      "provisional_citation_item_ids": [],
+      "context_only_item_ids": [
+        "C22"
+      ]
+    }
+  ]
+}

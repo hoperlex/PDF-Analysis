@@ -116,7 +116,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from auditmanager.analysis.public import MAX_ANALYSIS_WINDOWS, windowed_budget_characters
-from auditmanager.documents.public import DocumentRepository
+from auditmanager.documents.public import UPLOAD_KIND_COMPARISON_PDF, DocumentRepository
 from auditmanager.norms.public import current_snapshot
 from auditmanager.jobs.public import JobRepository, append_execution_event
 from auditmanager.ingest.public import (
@@ -125,7 +125,7 @@ from auditmanager.ingest.public import (
     CommandStarted,
     payload_fingerprint,
 )
-from auditmanager.runs.provider import FrozenRoute, RouteFreezer
+from auditmanager.runs.provider import ChosenPreset, FrozenRoute, PresetResolver, RouteFreezer
 from auditmanager.runs.repository import EXECUTOR_CHOSEN_EVENT, RunRepository, RunRow
 from auditmanager.sections.public import route_classified_version
 from auditmanager.shared.errors import DomainError, ErrorCode
@@ -293,6 +293,7 @@ def start_run_fingerprint(
     provider_mode: str,
     input_basis_digest_value: str,
     executor_connection_id: str | None = None,
+    preset_id: str | None = None,
 ) -> PayloadFingerprint:
     """The comparison value that distinguishes a repeat from a same-key conflict.
 
@@ -314,6 +315,13 @@ def start_run_fingerprint(
     (``idempotency_key_reuse``), not a replay. It is added to the document only when named: an
     absent choice leaves the fingerprint byte-for-byte what it was, so every key accepted before
     this field existed still replays.
+
+    ``preset_id`` (`ANALYSIS-PRESETS-01`) is the preset the caller **named**; it is part of the
+    request in the same way and added to the document only when named. A start through a preset
+    carries the preset and **not** the executor connection the preset resolved to: the request is
+    "this preset", so a retry after an administrator revised the preset is the same payload and
+    replays the run that exists, while the same key with a hand-chosen executor, or with another
+    preset, is ``idempotency_key_reuse``.
     """
     document: dict[str, Any] = {
         "analysis_profile_id": analysis_profile_id,
@@ -324,6 +332,8 @@ def start_run_fingerprint(
     }
     if executor_connection_id is not None:
         document["executor_connection_id"] = executor_connection_id
+    if preset_id is not None:
+        document["preset_id"] = preset_id
     return payload_fingerprint(document)
 
 
@@ -363,6 +373,33 @@ def _pinned_profile(
     return pinned.analysis_profile_id, pinned.prompt_bundle_id
 
 
+#: The ``reason`` of the refusal of a plain PDF admitted for comparison only (`CMP-INGEST-01`, ADR-0025
+#: decision 11, ``Q-CMP-5``), registered under ``analysis_input_invalid`` in the frozen domain contract. The
+#: client renders its Russian sentence from the catalogue.
+COMPARISON_ONLY_VERSION_REASON: Final[str] = "comparison_only_version"
+
+
+def refuse_comparison_only_version(version: Any) -> None:
+    """Refuse to start a section analysis on a version that has no portal bundle.
+
+    A version whose ``upload_kind`` is ``comparison_pdf`` is a plain PDF admitted for comparison only: it has
+    no ``source.document`` entry (its manifest role is the distinct ``comparison.source_pdf``) and no portal
+    block list, so a section analysis has nothing to read. The manifest check in :func:`_resolve_references`
+    already refuses it, but with ``missing_required_input`` -- an answer that tells a reviewer a *fault*, when
+    the truth is a *kind*. This is asked first, by the kind, before the profile is routed and before any key is
+    claimed, so the refusal writes nothing and names the reason the screen renders in Russian.
+    """
+    if getattr(version, "upload_kind", None) == UPLOAD_KIND_COMPARISON_PDF:
+        raise DomainError(
+            ErrorCode.ANALYSIS_INPUT_INVALID,
+            message=(
+                "the document version is a plain PDF admitted for comparison only; "
+                "a section analysis needs a portal bundle"
+            ),
+            reason=COMPARISON_ONLY_VERSION_REASON,
+        )
+
+
 def _resolve_references(
     session: Session,
     *,
@@ -382,6 +419,7 @@ def _resolve_references(
     """
     if version is None:
         version = documents.get_version(session, version_uid)
+    refuse_comparison_only_version(version)
 
     blob_ids = {entry.role: str(entry.blob_id) for entry in version.manifest}
     if ROLE_SOURCE_DOCUMENT not in blob_ids:
@@ -503,6 +541,8 @@ def start_audit_run(
     section_profiles: SectionProfiles | None = None,
     connection_route: RouteFreezer | None = None,
     executor_connection_id: str | None = None,
+    preset_id: str | None = None,
+    preset_resolver: PresetResolver | None = None,
 ) -> StartedRun:
     """Create one durable ``AuditRun``, or answer what already happened under this key.
 
@@ -544,7 +584,23 @@ def start_audit_run(
     unknown, archived, not served, or not probed ``ok``; it never becomes the standby or another
     connection. The choice is part of the idempotency fingerprint and is journaled once the run
     exists (``audit_run.executor_chosen``). Absent, the start is what it always was.
+
+    ``preset_id`` and ``preset_resolver`` (`ANALYSIS-PRESETS-01`): the preset the caller **named**.
+    For a new key the resolver reads the preset's current revision in this transaction and the start
+    **is** the start of a hand-chosen executor -- the preset's connection is handed to the freezer
+    as ``executor_connection_id``, with the same usability test, the same refusals, the same frozen
+    revision, budget, event and job -- and the run row additionally records the preset revision. An
+    unknown or archived preset is refused before the key is claimed, so nothing is written. A preset
+    together with ``executor_connection_id`` is ``validation_failed`` on ``preset_id``: a person
+    either takes a preset or names an executor. A known key is answered before the preset is read
+    (the replay of a run that exists), as for the executor. See :func:`start_run_fingerprint`.
     """
+    if preset_id is not None and executor_connection_id is not None:
+        raise DomainError(
+            ErrorCode.VALIDATION_FAILED,
+            message="a preset and an executor connection are two ways to choose the same thing",
+            field="preset_id", constraint="conflicts_with_executor_connection_id",
+        )
     _explicit_or_routed(analysis_profile_id, prompt_bundle_id, section_profiles)
     command_repo = commands or CommandRepository()
     run_repo = runs or RunRepository()
@@ -562,12 +618,14 @@ def start_audit_run(
     budget = _checked_budget(input_budget_characters)
 
     version_record = document_repo.get_version(session, resolved_version)
+    # `CMP-INGEST-01`. By kind, before the profile is routed and before any key is claimed.
+    refuse_comparison_only_version(version_record)
     # Read only when a pre-claim decision needs it (the budget or the route), exactly as the
     # budget alone read it before this seal.
     known = (
         command_repo.find(session, command_type=COMMAND_TYPE_START_RUN, idempotency_key=key)
         if budget is not None or section_profiles is not None or connection_route is not None
-        or executor_connection_id is not None
+        or executor_connection_id is not None or preset_id is not None
         else None
     )
     if section_profiles is not None:
@@ -596,6 +654,16 @@ def start_audit_run(
     # fresh start. A key the ledger already knows is not refused here -- it is answered below,
     # as a replay, whatever today's budget is.
     frozen: FrozenRoute | None = None
+    chosen_preset: ChosenPreset | None = None
+    if preset_id is not None and known is None:
+        # `ANALYSIS-PRESETS-01`. Before the freezer: the preset only fills the field a person could
+        # fill by hand, and everything after this line is the hand-chosen executor's start.
+        if preset_resolver is None:
+            raise _chosen_executor_unserved()
+        chosen_preset = preset_resolver(session, preset_id)
+        if chosen_preset.preset_id != preset_id:
+            raise ValueError("the preset resolver did not resolve the preset that was named")
+        executor_connection_id = chosen_preset.executor_connection_id
     if executor_connection_id is not None and connection_route is None and known is None:
         raise _chosen_executor_unserved()
     if connection_route is not None and known is None:
@@ -621,7 +689,9 @@ def start_audit_run(
         prompt_bundle_id=prompt_bundle_id,
         provider_mode=provider_mode,
         input_basis_digest_value=basis,
-        executor_connection_id=executor_connection_id,
+        # A start through a preset carries the preset and not the connection it resolved to.
+        executor_connection_id=None if preset_id is not None else executor_connection_id,
+        preset_id=preset_id,
     )
 
     claimed = command_repo.begin(
@@ -665,6 +735,7 @@ def start_audit_run(
         command_id=str(claimed.command_id),
         norms_snapshot_id=snapshot,
         connection_revision_id=None if frozen is None else frozen.revision_id,
+        preset_revision_id=None if chosen_preset is None else chosen_preset.revision_id,
     )
     _journal_standby(session, run_id, frozen)
     _journal_executor_choice(session, run_id, frozen)
@@ -834,12 +905,14 @@ def reaudit_run(
         "SELECT run_id FROM audit_run WHERE run_id = :run_id FOR UPDATE"
     ), {"run_id": source_run_id}).scalar_one_or_none()
     source = repository.get(session, source_run_id)
-    source_version = None
+    # `CMP-INGEST-01`. A re-audit analyses the source's version again, so a version admitted for comparison
+    # only is refused here by its kind, before the profile is routed and before the key is claimed.
+    source_version = document_repo.get_version(session, VersionUid.parse(source.version_uid))
+    refuse_comparison_only_version(source_version)
     frozen: FrozenRoute | None = None
     if (section_profiles is not None or budget is not None or connection_route is not None) and ledger.find(
         session, command_type="reaudit_run", idempotency_key=IdempotencyKey(idempotency_key)
     ) is None:
-        source_version = document_repo.get_version(session, VersionUid.parse(source.version_uid))
         if section_profiles is not None:
             routed = route_classified_version(source_version, section_profiles)
             analysis_profile_id = routed.analysis_profile_id
@@ -928,6 +1001,7 @@ __all__ = [
     "COMMAND_TYPE_START_RUN",
     "NormsSnapshotReader",
     "SectionProfiles",
+    "COMPARISON_ONLY_VERSION_REASON",
     "ROLE_SOURCE_DOCUMENT",
     "StartedRun",
     "current_norms_snapshot",
@@ -936,6 +1010,7 @@ __all__ = [
     "run_of_command",
     "cancel_audit_run",
     "reaudit_run",
+    "refuse_comparison_only_version",
     "start_audit_run",
     "start_run_fingerprint",
 ]

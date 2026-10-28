@@ -21,6 +21,10 @@
  * body names (project, document, version) and shows the confirmed classification, the
  * expert's confirmation form, or a read-only sentence. The session's roles arrive from the
  * route, which has just checked them; they decide only which of those is drawn.
+ *
+ * `CMP-VERSION-MARK-01`: a version admitted for comparison only (`upload_kind`
+ * `comparison_pdf`) carries the mark «Загружено без пакета портала — только для сравнения» in
+ * its panel, and its run list is told the kind so that the start is drawn disabled.
  */
 
 import Link from 'next/link';
@@ -117,6 +121,7 @@ export function VersionDetailPage({ projectUid, versionUid, roles }: VersionDeta
         projectUid={ownerProjectUid}
         versionUid={versionUid}
         sectionCode={version.data?.classification?.section_code}
+        uploadKind={version.data?.upload_kind}
         onRunStarted={(run: RunStatus) => router.push(routes.run(run.project_uid, run.run_id))}
       />
     </PageShell>

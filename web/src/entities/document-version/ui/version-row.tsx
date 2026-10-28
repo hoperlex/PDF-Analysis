@@ -12,6 +12,10 @@
  * `W59-SECTION-UI-01`: every row carries the version's confirmed stage and section, or
  * «Раздел не подтверждён», from the contract's own `classification` field — so a document's
  * version list and the project structure say the same thing the version screen does.
+ *
+ * `CMP-VERSION-MARK-01`: a version admitted for comparison only (`upload_kind` `comparison_pdf`)
+ * carries the mark «Загружено без пакета портала — только для сравнения» under its badges. Any
+ * other version, and a version without the field, draws exactly what it drew before.
  */
 
 import Link from 'next/link';
@@ -20,7 +24,9 @@ import type { DocumentVersion } from '@/shared/api';
 import { formatInstant } from '@/shared/lib';
 
 import { formatBytes } from '../model/upload-envelope';
+import { isComparisonOnly } from '../model/upload-kind';
 import { ClassificationBadges } from './classification-badges';
+import { ComparisonOnlyMark } from './comparison-only-mark';
 
 export interface VersionRowProps {
   readonly version: DocumentVersion;
@@ -47,6 +53,11 @@ export function VersionRow({ version, href, secondary }: VersionRowProps) {
         <p>
           <ClassificationBadges classification={version.classification} />
         </p>
+        {isComparisonOnly(version) ? (
+          <p>
+            <ComparisonOnlyMark version={version} />
+          </p>
+        ) : null}
         <p>
           <code>{version.version_uid}</code>
         </p>

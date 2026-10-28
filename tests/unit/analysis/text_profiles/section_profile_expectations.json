@@ -2,18 +2,18 @@
   "format": "section-profile-expectations/1",
   "about": "One line per non-AR section package under src/auditmanager/analysis/text/profiles/: the status and profile_version its profile.json must declare. Read by the registry, package and HTTP tests and by web/tests/unit/analysis-settings. Moving a section out of draft changes that section's profile.json AND this one line, nothing else here. AR has no package (builtin) and no line. Guarded by test_section_profile_expectations.py.",
   "sections": [
-    {"code": "AI", "status": "reviewed", "profile_version": "1.1.0"},
+    {"code": "AI", "status": "reviewed", "profile_version": "1.3.1"},
     {"code": "PS", "status": "reviewed", "profile_version": "1.2.0"},
     {"code": "POS", "status": "reviewed", "profile_version": "1.2.0"},
-    {"code": "TX", "status": "reviewed", "profile_version": "1.2.0"},
+    {"code": "TX", "status": "reviewed", "profile_version": "1.3.1"},
     {"code": "KJ", "status": "reviewed", "profile_version": "1.2.0"},
     {"code": "KM", "status": "reviewed", "profile_version": "1.2.0"},
     {"code": "OV", "status": "reviewed", "profile_version": "1.2.0"},
     {"code": "VK", "status": "reviewed", "profile_version": "1.2.0"},
     {"code": "PT", "status": "reviewed", "profile_version": "1.2.0"},
-    {"code": "EOM", "status": "reviewed", "profile_version": "1.2.0"},
-    {"code": "SS", "status": "reviewed", "profile_version": "1.2.0"},
-    {"code": "ITP", "status": "reviewed", "profile_version": "1.2.0"},
+    {"code": "EOM", "status": "reviewed", "profile_version": "1.3.1"},
+    {"code": "SS", "status": "reviewed", "profile_version": "1.3.1"},
+    {"code": "ITP", "status": "reviewed", "profile_version": "1.3.1"},
     {"code": "GP", "status": "reviewed", "profile_version": "1.2.0"},
     {"code": "PB", "status": "reviewed", "profile_version": "1.1.0"}
   ]

@@ -131,8 +131,9 @@ describe('the control takes its key and its request from the same choice', () =>
   const source = readText(join(WEB_ROOT, 'src', 'features', 'start-run', 'ui', 'start-run-control.tsx'));
   const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
 
-  it('derives one intent from the version and the chosen executor', () => {
-    expect(code).toContain('startRunIntent(versionUid, chosen)');
+  it('derives one intent from the version, the chosen executor and the chosen preset', () => {
+    // `ANALYSIS-PRESETS-01` added the preset as a third argument of the same single derivation.
+    expect(code).toContain('startRunIntent(versionUid, chosen, chosenPreset)');
   });
 
   it('mints the key for that intent and sends that intent’s command', () => {
@@ -147,9 +148,16 @@ describe('the control takes its key and its request from the same choice', () =>
   it('never changes the choice itself: only the person’s change does, and a refusal changes nothing', () => {
     // After a refusal the control keeps the choice and offers the retry; it must not move to the
     // default or to another connection on its own, and it must not learn of a refusal except to show it.
-    expect(code.match(/setChosen\(/g)).toHaveLength(1);
+    //
+    // `ANALYSIS-PRESETS-01`: choosing a preset fills the executor, so the preset select's own change
+    // handler clears the hand-chosen connection (`setChosen(null)` straight after `setChosenPreset`).
+    // That is still the person's change; no other place may call it, and nothing reacts to an error.
+    expect(code.match(/setChosen\(/g)).toHaveLength(2);
     expect(code).toContain('setChosen(next)');
-    expect(code).not.toMatch(/onError|setChosen\(null\)/);
+    expect(code.match(/setChosen\(null\)/g)).toHaveLength(1);
+    expect(code).toMatch(/setChosenPreset\(next\);[\s\S]{0,200}?setChosen\(null\);\s*mutation\.reset\(\);/);
+    expect(code.match(/setChosenPreset\(/g)).toHaveLength(1);
+    expect(code).not.toMatch(/onError/);
   });
 
   it('writes no intent signature or request body of its own', () => {

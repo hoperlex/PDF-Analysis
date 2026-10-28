@@ -108,7 +108,7 @@ describe('an unconfigured deployment answers the contract, not a stack trace', (
     };
     expect(body.error_code).toBe('authentication_required');
     expect(body.retryable).toBe(false);
-    expect(body.contract_version).toBe('1.7.0');
+    expect(body.contract_version).toBe('1.9.0');
     // The refusal must not name the environment variable: a variable name on a public
     // response is a hint about the deployment that nothing outside needs.
     expect(body.message).not.toContain('AUDITMANAGER_API_TOKEN');

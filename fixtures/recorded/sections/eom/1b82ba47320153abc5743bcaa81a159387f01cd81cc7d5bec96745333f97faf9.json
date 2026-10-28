@@ -1,0 +1,24 @@
+{
+  "latency_ms": 9200,
+  "model_id": "claude-opus-5",
+  "note": "Synthetic ЭОМ (EOM) reply over the AR baseline corpus text layer, authored by hand. Token counts and latency are authored, not measured.",
+  "origin": {
+    "analysis_profile_id": "ap_01M5AXG1KKCKB70088QWAR8WD4",
+    "kind": "synthetic",
+    "profile_status": "reviewed",
+    "prompt_bundle_id": "pb_01M5AXG1KKNVF7G99H0BB166TW",
+    "prompt_bundle_sha256": "7be0560f76ef766fe829716de8a2781f5d7337a9cae3542b9480f43b124b794d",
+    "section_code": "EOM",
+    "statement": "Synthetic: authored by hand for SECTION-RECORDINGS-01 to prove section routing in recorded mode. No model produced this reply and no provider call was made. Not field evidence for the profile's review.",
+    "task_id": "SECTION-RECORDINGS-01",
+    "text_layer": "fixtures/recorded/text_analysis/inputs/ar_baseline_text_layer.json"
+  },
+  "output_text": "{\"observations\": [{\"category\": \"internal_contradiction\", \"finding_text\": \"Синтетический ответ (ЭОМ), не результат вызова модели: количество эвакуационных выходов, для которых проектируется аварийное освещение, указано как два и как три.\", \"recommendation_text\": \"Уточнить число эвакуационных выходов в исходных данных освещения.\", \"evidence\": [{\"page_number\": 3, \"quote\": \"Из надземной части здания предусмотрено два эвакуационных выхода.\"}, {\"page_number\": 7, \"quote\": \"Из надземной части здания предусмотрено три эвакуационных выхода.\"}]}]}",
+  "recording_version": "1.0.0",
+  "request_sha256": "1b82ba47320153abc5743bcaa81a159387f01cd81cc7d5bec96745333f97faf9",
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 2420,
+    "output_tokens": 450
+  }
+}

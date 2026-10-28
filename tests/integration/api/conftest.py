@@ -831,7 +831,7 @@ class SeamRunAdapter:
 
     def start_run(
         self, *, version_uid: str, provider_mode: str | None, idempotency_key: str,
-        executor_connection_id: str | None = None,
+        executor_connection_id: str | None = None, preset_id: str | None = None,
     ) -> RunStatusView:
         raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="DocumentVersion")
 
@@ -839,6 +839,9 @@ class SeamRunAdapter:
         return self._view(run_id)
 
     def get_norm_verification(self, *, run_id: str) -> Any:
+        # `R-146at`: the shipping adapter reads the Run first (an absent one is 404), then
+        # answers the report or the declared 503. This stand-in holds no saved review.
+        self._view(run_id)
         raise DomainError(
             ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="norm_verification_reader"
         )

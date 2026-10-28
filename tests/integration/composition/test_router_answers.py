@@ -49,8 +49,27 @@ RELEASE_GETS = frozenset({"/system/version", "/releases"})
 #: answering exactly `503 dependency_unavailable`. `W55B-GEOMETRY-01` serves them and empties
 #: this set, so they meet the sweep's ordinary rule: an absent `ver_` is `404`, never a `5xx`.
 #: `W57A-SEAL-01B` sealed the normative report as a refusing stub until the CITE reader; it
-#: answers exactly `503 dependency_unavailable` (named here by `W59-SECTION-SEAL-01`).
-SEALED_STUB_GETS: frozenset[str] = frozenset({"/runs/run_01ARZ3NDEKTSV4RRFFQ69G5FAV/norm-verification"})
+#: answered exactly `503 dependency_unavailable` (named here by `W59-SECTION-SEAL-01`).
+#: `AR-V3-DECISIONS-01` (`R-146at`) serves it and empties this set: an absent `run_` is `404`.
+#: `CMP-SEAL-C0` (ADR-0025 decision 25) names the nine comparison reads its ports serve as sealed
+#: stubs, each answering exactly `503 dependency_unavailable` until its lane wires the port
+#: (`CMP-INGEST-01`, `CMP-INGEST-02`, `CMP-PROFILE-01`); the lane that wires one removes its path
+#: from this set, and the read then meets the sweep's ordinary rule. Each path is filled the way
+#: the sweep fills it: well-formed identities that name nothing.
+_PRJ = "prj_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+_STUB_UPLOAD = "/comparison-uploads/cbt_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+_STUB_PROFILE = "/page-profiles/cpr_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+#: `CMP-INGEST-01` serves three of them and removes their paths: the batch, its proposal and the version-order
+#: listing now answer the sweep's ordinary rule (an absent `cbt_` or `prj_` is `404`). `CMP-INGEST-02` serves the
+#: last of the upload reads (the project's batches, `listComparisonUploads`) and empties this set: an absent
+#: project is `404`, and the listing joins the sweep.
+SEALED_STUB_GETS: frozenset[str] = frozenset()
+#: `CMP-PROFILE-01` serves the five page reads (`/versions/{ver}/page-profiles`, `/page-profiles/{cpr}` and
+#: its `preview`, `thumbnail` and `tile`) and removes them from the set above: an absent `cpr_` is `404`.
+#: The tile's `level`, `column` and `row` are required, so the sweep gives it a well-formed query that
+#: names nothing; without it the sweep would read a `422` about the query, not the path.
+SEALED_STUB_QUERY: dict[str, str] = {f"{_STUB_PROFILE}/tile": "?level=0&column=0&row=0"}
+NORM_VERIFICATION_OF_AN_ABSENT_RUN = "/runs/run_01ARZ3NDEKTSV4RRFFQ69G5FAV/norm-verification"
 WORKER_GETS = frozenset({"/execution/workers"})
 
 _STATIC_TOKEN_CACHE: str | None = None
@@ -214,10 +233,11 @@ class TestNoOperationAnswersWithAServerFault:
         assert len(probes) >= 5, f"the sweep found too few GET routes: {probes}"
         assert RELEASE_GETS <= {path for _method, path in probes}
         assert SEALED_STUB_GETS <= {path for _method, path in probes}
+        assert NORM_VERIFICATION_OF_AN_ABSENT_RUN in {path for _method, path in probes}
         assert WORKER_GETS <= {path for _method, path in probes}
         faults = []
         for method, path in probes:
-            status, body = call(app, method, path)
+            status, body = call(app, method, path + SEALED_STUB_QUERY.get(path, ""))
             if path in RELEASE_GETS:
                 if status != 200 or not isinstance(body, dict):
                     faults.append((path, status, body))
@@ -234,6 +254,8 @@ class TestNoOperationAnswersWithAServerFault:
             elif status >= 500:
                 faults.append((path, status, body))
         assert faults == [], f"operations answered with a server fault: {faults}"
+        status, body = call(app, "GET", NORM_VERIFICATION_OF_AN_ABSENT_RUN)
+        assert status == 404 and body["error_code"] == "not_found", (status, body)
 
 
 def _absent_identity(parameter: str) -> str:
@@ -248,6 +270,10 @@ def _absent_identity(parameter: str) -> str:
         "finding_uid": "fnd",
         # `W55A-SEAL-01`: so a norm-document path reaches its handler, not the pattern's 422.
         "norm_document_id": "ndoc",
+        # `CMP-SEAL-C0`: so a comparison path reaches its stub, not the pattern's 422.
+        "comparison_upload_id": "cbt",
+        "comparison_page_profile_id": "cpr",
+        "document_uid": "doc",
     }
     return f"{prefixes.get(parameter, 'prj')}_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 

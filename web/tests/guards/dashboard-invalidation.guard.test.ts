@@ -214,6 +214,8 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
   // a server-rendered form (`features/set-executor-secret`).
   'src/features/manage-executor-connection/model/use-manage-executor-connection.ts': false,
   'src/features/manage-executor-connection/model/use-set-executor-route.ts': false,
+  // `ANALYSIS-PRESETS-01`: saving, revising and archiving a preset changes no number the dashboard reads.
+  'src/features/manage-analysis-preset/model/use-manage-analysis-preset.ts': false,
 };
 
 /** A feature model source with an executable mutation call, independent of its filename. */

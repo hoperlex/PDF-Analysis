@@ -10,7 +10,13 @@
 
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// `REVIEW-INDICATION-SWITCH-01` (`R-146ba`): this file asserts the wording of the screens with
+// `SHOW_REVIEW_INDICATION` ON, the words the tree had before the beta, so it pins the switch ON and
+// leaves every assertion as it was. The beta default (OFF) and both states of each string are in
+// `tests/unit/review-indication/`.
+vi.mock('@/shared/config/review-indication', () => ({ SHOW_REVIEW_INDICATION: true }));
 
 import type { ErrorCode, ErrorEnvelope } from '@/shared/api';
 import { ApiError, TransportError, UnrecognizedApiError } from '@/shared/api';
@@ -31,7 +37,7 @@ function refusal(
   options: { details?: Record<string, string | number | boolean | null>; retryable?: boolean } = {},
 ): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.7.0',
+    contract_version: '1.9.0',
     error_code: code,
     message: 'A caller-safe sentence.',
     correlation_id: 'cid-group',

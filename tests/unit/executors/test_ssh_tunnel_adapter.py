@@ -229,3 +229,33 @@ def test_worker_probe_opens_both_secrets(gateway_factory: Any, monkeypatch: pyte
     result = runner._evaluate(probe())
     assert result.outcome == "ok" and delivered == [("http-key", "ssh-key")]
     assert [item[0] for item in opened] == ["exs_http", "exs_ssh"]
+
+
+def test_several_pngs_go_through_the_tunnel_in_order(
+    gateway_factory: Any, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from auditmanager.executors.image_input import attach_images
+    from tests.unit.executors.crop_support import crop
+
+    gateway = gateway_factory()
+
+    @contextmanager
+    def fake_tunnel(endpoint, ssh_key, host_key, host, port, **kwargs):
+        yield gateway.port
+
+    monkeypatch.setattr("auditmanager.executors.ssh_tunnel_adapter.open_tunnel", fake_tunnel)
+    crops = [crop(label) for label in ("a", "b", "c")]
+    multi = attach_images(ModelRequest("claude-opus-5", {
+        "system": "s", "max_tokens": 16, "messages": [{"role": "user", "content": "hello"}]}), crops)
+    SshTunnelAdapter(revision(gateway), "http-key", "ssh-key", POLICY, None).complete(multi)
+    (seen,) = gateway.requests
+    content = seen["body"]["messages"][-1]["content"]
+    sent = [base64.b64decode(block["image_url"]["url"].split(",", 1)[1]) for block in content[1:]]
+    assert sent == [item.data for item in crops]
+    # and a list that does not match its bytes never opens the tunnel
+    monkeypatch.setattr("auditmanager.executors.ssh_tunnel_adapter.open_tunnel",
+                        lambda *args, **kwargs: pytest.fail("the tunnel must not open"))
+    mismatched = ModelRequest(multi.model_id, multi.body, images_bytes=multi.images_bytes[:2])
+    with pytest.raises(ProxyDispatchError) as refused:
+        SshTunnelAdapter(revision(gateway), "http-key", "ssh-key", POLICY, None).complete(mismatched)
+    assert refused.value.dispatch_class == "not_sent"

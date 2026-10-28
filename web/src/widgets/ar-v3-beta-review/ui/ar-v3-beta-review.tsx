@@ -1,6 +1,12 @@
 'use client';
 
-/** A read-only, linkable view of the six verified AR v3 beta scope outcomes. */
+/**
+ * A read-only, linkable view of the six verified AR v3 beta scope outcomes.
+ *
+ * Every phrase that tells the reader a citation is provisional and waits for the expert stands
+ * behind `SHOW_REVIEW_INDICATION` (`R-146ba`): off for the beta, on restores each one as it was. The
+ * statements that a verdict is the expert's own decision (`run-findings.tsx`) are not behind it.
+ */
 
 import { useQuery } from '@tanstack/react-query';
 
@@ -9,7 +15,11 @@ import type { ArV3BetaGroupReview, ArV3BetaGroupReviewMember, ArV3RunGroupId } f
 import { failureMessage, getArV3BetaGroupReview, queryKeys } from '@/shared/api';
 import { ErrorState, LoadingState, STATE_LABELS } from '@/shared/ui';
 
+import { SHOW_REVIEW_INDICATION } from '@/shared/config';
+
 import { completeArV3GroupReview } from '../model/complete-group-review';
+
+import { RunFindings } from './run-findings';
 
 import styles from './ar-v3-beta-review.module.css';
 
@@ -28,13 +38,13 @@ function reviewStateLabel(state: ArV3BetaGroupReviewMember['review_state']): str
     case 'pending': return 'Ожидает результата';
     case 'failed': return 'Прогон завершился ошибкой';
     case 'verification_refused': return 'Проверка сохранённого разбора отказала';
-    case 'available': return 'Предварительный разбор доступен';
+    case 'available': return SHOW_REVIEW_INDICATION ? 'Предварительный разбор доступен' : 'Разбор доступен';
   }
 }
 
 function topicModeLabel(mode: string): string {
   if (mode === 'context_only') return 'Только контекст';
-  if (mode === 'provisional_citation') return 'Предварительная ссылка';
+  if (mode === 'provisional_citation') return SHOW_REVIEW_INDICATION ? 'Предварительная ссылка' : 'Ссылка на норму';
   return 'Режим источника не распознан';
 }
 
@@ -54,23 +64,27 @@ function ScopeMember({ member }: { readonly member: ArV3BetaGroupReviewMember })
         {member.review_state === 'pending' ? <p>Ссылки появятся только после проверенного сохранения результата.</p> : null}
         {member.review_state === 'available' && member.review !== null ? (
           <div>
-            <p><strong>Только предварительные ссылки.</strong> Каждая тема и цитата требует проверки эксперта. Числовой или правовой вывод здесь не утверждён.</p>
+            {SHOW_REVIEW_INDICATION ? (
+              <p><strong>Только предварительные ссылки.</strong> Каждая тема и цитата требует проверки эксперта. Числовой или правовой вывод здесь не утверждён.</p>
+            ) : (
+              <p>Числовой или правовой вывод здесь не утверждён.</p>
+            )}
             <h3>Темы</h3>
             <ul className={styles.topics}>
               {member.review.topics.map((topic) => (
                 <li key={topic.item_id} data-ar-v3-review-topic={topic.item_id}>
-                  <strong>{topic.item_id}</strong> — {topicModeLabel(topic.mode)}; требует проверки эксперта.
+                  <strong>{topic.item_id}</strong> — {topicModeLabel(topic.mode)}{SHOW_REVIEW_INDICATION ? '; требует проверки эксперта.' : '.'}
                   {topic.source_ids.length > 0 ? <small> Источники: {topic.source_ids.join(', ')}.</small> : null}
                   {topic.reason ? <small> Основание статуса: {topic.reason}.</small> : null}
                 </li>
               ))}
             </ul>
-            <h3>Предварительные цитаты</h3>
-            {member.review.provisional_citations.length === 0 ? <p>Предварительных цитат нет.</p> : (
+            <h3>{SHOW_REVIEW_INDICATION ? 'Предварительные цитаты' : 'Цитаты'}</h3>
+            {member.review.provisional_citations.length === 0 ? <p>{SHOW_REVIEW_INDICATION ? 'Предварительных цитат нет.' : 'Цитат нет.'}</p> : (
               <ol className={styles.proposals}>
                 {member.review.provisional_citations.map((proposal) => (
                   <li key={proposal.proposal_ordinal}>
-                    <p>Предложение {proposal.proposal_ordinal + 1}; требуется проверка эксперта.</p>
+                    <p>Предложение {proposal.proposal_ordinal + 1}{SHOW_REVIEW_INDICATION ? '; требуется проверка эксперта.' : '.'}</p>
                     {proposal.evidence.map((evidence, index) => (
                       <div key={`${evidence.page_number}-${index}`}>
                         <p>Проектный документ, страница {evidence.page_number}:</p>
@@ -88,6 +102,7 @@ function ScopeMember({ member }: { readonly member: ArV3BetaGroupReviewMember })
               </ol>
             )}
             <p>Скрытых предложений: {member.review.withheld_proposal_count}; отклонённых: {member.review.rejected_proposal_count}.</p>
+            <RunFindings runId={member.run_id} />
           </div>
         ) : null}
       </details>
@@ -107,7 +122,11 @@ export function ArV3BetaReview({ groupId }: { readonly groupId: string | null })
   return (
     <section className={styles.panel} aria-labelledby="ar-v3-group-review-title" data-ar-v3-group-review>
       <h2 id="ar-v3-group-review-title">АР v3: разбор группы прогонов</h2>
-      <p>Введите идентификатор группы из ответа запуска. Здесь видны все шесть прогонов и только предварительные нормативные ссылки.</p>
+      {SHOW_REVIEW_INDICATION ? (
+        <p>Введите идентификатор группы из ответа запуска. Здесь видны все шесть прогонов и только предварительные нормативные ссылки.</p>
+      ) : (
+        <p>Введите идентификатор группы из ответа запуска. Здесь видны все шесть прогонов и нормативные ссылки.</p>
+      )}
       <form action="/analysis-settings" method="get" className={styles.lookup}>
         <label htmlFor="ar-v3-group-id">Идентификатор группы
           <input id="ar-v3-group-id" name="group_id" type="text"

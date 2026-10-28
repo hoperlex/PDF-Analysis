@@ -39,6 +39,9 @@ argv = ["/usr/bin/python3", "/opt/pdf-analysis-agent/answer.py"]
 timeout_seconds = 540
 # Set true only when the command consumes local_images PNG paths (codex_answer.py does).
 accept_images = false
+# The most images one task may carry that the command serves, 1 to 8 (default 1; above 1 needs
+# accept_images = true). The stand never hands a task with more; codex_answer.py serves up to 8.
+# max_images = 1
 # cwd = "/opt/pdf-analysis-agent"
 
 # [endpoint]    # used when mode = "endpoint"
@@ -50,3 +53,4 @@ accept_images = false
 # temperature = 0
 # max_tokens = 0                        # 0 = leave to the server
 # accept_images = false                # set true only if the local model accepts image_url data URLs
+# max_images = 1                       # images per task the model sees, 1 to 8; above 1 needs accept_images

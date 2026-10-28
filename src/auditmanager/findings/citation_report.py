@@ -65,10 +65,19 @@ _STAGES = text("""
 
 def read_verified_citation_report(
     session: Session, *, run_id: str, version_uid: str, profile_id: str,
+    cite_stage_id: str = "norm_verification",
 ) -> VerifiedCitationReport:
-    """Combine certified citations and report context from the same DB snapshot."""
+    """Combine certified citations and report context from the same DB snapshot.
+
+    ``cite_stage_id`` is the stage that certifies the partitions
+    (``norm_verification``, or ``ar_v3_citation_review`` for the AR v3 beta Run). The
+    ungrounded-observation counts of this function come from diagnostic rows; a Run whose
+    withheld proposals are not rows (the AR v3 beta Run) has none, and its caller supplies
+    its own counts.
+    """
     citations = read_verified_citations(
         session, run_id=run_id, version_uid=version_uid, profile_id=profile_id,
+        cite_stage_id=cite_stage_id,
     )
     context_rows = session.execute(_CONTEXT, {
         "run_id": run_id, "version_uid": version_uid, "profile_id": profile_id,
@@ -120,7 +129,7 @@ def read_verified_citation_report(
             or any(row["status"] not in {"succeeded", "partial", "failed", "skipped"}
                    for row in stages)
             or any(row["status"] in {"failed", "skipped"} for row in stages)
-            or sum(row["stage_id"] == "norm_verification"
+            or sum(row["stage_id"] == cite_stage_id
                    and row["status"] == "succeeded" for row in stages) != 1):
         raise CitationReportRefused("report_stage_status_invalid")
     partial = [row for row in stages if row["status"] == "partial"]

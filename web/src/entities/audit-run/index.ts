@@ -60,6 +60,12 @@ export { classifyRunFailure } from './model/run-failure';
 export type { ExecutorRefusal, ExecutorRefusalKind } from './model/executor-refusal';
 export { EXECUTOR_DEPENDENCY, EXECUTOR_FIELD, executorRefusal } from './model/executor-refusal';
 
+export type { PresetRefusal, PresetRefusalKind } from './model/preset-refusal';
+export { PRESET_FIELD, presetRefusal } from './model/preset-refusal';
+
+export type { RunPresetLine } from './model/run-preset';
+export { runPresetLine, runPresetSentence, runPresetValue } from './model/run-preset';
+
 export type { RunExecutorLine } from './model/run-executor';
 export {
   runExecutorLine, runExecutorSentence, runExecutorValue, runWaitingSentence,

@@ -2181,11 +2181,11 @@
           },
           {
             "selector": "tr[data-section=\"PB\"][data-profile=\"reviewed\"]",
-            "text_contains": "рабочая версия, проверка человеком не проводилась"
+            "text_contains": "проверен"
           },
           {
             "selector": "tr[data-profile=\"reviewed\"]",
-            "text_contains": "рабочая версия, проверка человеком не проводилась"
+            "text_contains": "проверен"
           }
         ],
         "forbids_rendered": [

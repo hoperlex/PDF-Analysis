@@ -397,6 +397,32 @@ class InvalidBlobIdError(BlobMetadataInvalidError):
     summary = "The value offered is not a well-formed blob_id."
 
 
+# --- multipart staging -------------------------------------------------------
+
+
+class MultipartPartError(BlobMetadataInvalidError):
+    """One part is outside the declared bounds: its number or its size.
+
+    ``CMP-STORAGE-PARTS-01``, ADR-0025 decision 10. A request refusal under the existing
+    ``validation_failed`` code (the contract names the reasons ``comparison_part_number`` and
+    ``comparison_part_size``); ``field`` says which bound, never a value. Nothing was sent to the store.
+    """
+
+    summary = "A multipart part is outside the declared bounds."
+
+
+class MultipartPartsError(BlobMetadataInvalidError):
+    """The parts offered for completion are not a whole, ordered set of the staged parts.
+
+    Raised **before** the store assembles anything: no parts, a repeated number, a gap, numbers not
+    ascending from 1, a part the store does not hold with the receipted ETag and size, or a part too
+    small for the store to accept in the middle of an object. The upload is left as it was, so the
+    caller can correct the list or abort it.
+    """
+
+    summary = "The parts offered are not a whole, ordered set of the staged parts."
+
+
 __all__ = [
     "BLOB_STORAGE_DEPENDENCY",
     "SAFE_DETAIL_KEYS",
@@ -406,6 +432,8 @@ __all__ = [
     "BlobNotFoundError",
     "ChecksumMismatchError",
     "InvalidBlobIdError",
+    "MultipartPartError",
+    "MultipartPartsError",
     "SizeMismatchError",
     "StorageBucketMissingError",
     "StorageConfigurationError",

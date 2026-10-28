@@ -64,6 +64,11 @@ PROFILE_KEYS = frozenset(
         "source",
     }
 )
+#: `SECTION-CATEGORY-OCR-01` (`R-146ao`): the five sections that may report a same-document omission under the
+#: existing category `documentation`. They are `text-profile/2` packages with a `categories` key; the other
+#: nine stay `text-profile/1` and byte-identical.
+OMISSION_SECTIONS = frozenset({"AI", "TX", "EOM", "SS", "ITP"})
+OMISSION_CATEGORIES = ["internal_contradiction", "explicit_placeholder", "documentation"]
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 ID_LITERAL = re.compile(r"\b(?:ap|pb)_[0-9A-HJKMNP-TV-Z]{26}\b")
@@ -128,6 +133,21 @@ def _schema_field_names(node: Any) -> set[str]:
 V1_QUESTION = _v1_block("ЕДИНСТВЕННЫЙ вопрос", "Ровно две категории")
 V1_CATEGORIES = _v1_block("Ровно две категории", "\n\n")
 V1_OUTPUT_CONTRACT = SYSTEM_PROMPT[SYSTEM_PROMPT.index("Требования к ответу:") :]
+#: The profiles that declare `documentation` (`SECTION-CATEGORY-OCR-01`) say it in two of v1's lines
+#: (`SECTION-JUDGE-FIXES-01`): the introduction of the category list and the `category` rule of the reply. Everything
+#: else of both blocks is v1's, byte for byte; the other nine keep both blocks exactly as v1 has them.
+V1_INTRO = "Ровно две категории, третьей нет:\n"
+OMISSION_INTRO = (
+    "Для вопроса выше — ровно две категории; третья, documentation, допустима только для\n"
+    "пропуска из абзаца об исключении ниже:\n"
+)
+V1_CATEGORY_RULE = "- category — строго одно из двух значений выше.\n"
+OMISSION_CATEGORY_RULE = (
+    "- category — одно из двух значений выше; documentation — только для пропуска из абзаца\n"
+    "  об исключении, и ни для чего другого.\n"
+)
+V1_CATEGORIES_OMISSION = V1_CATEGORIES.replace(V1_INTRO, OMISSION_INTRO)
+V1_OUTPUT_CONTRACT_OMISSION = V1_OUTPUT_CONTRACT.replace(V1_CATEGORY_RULE, OMISSION_CATEGORY_RULE)
 V1_CONDITIONS = (
     "Прежде чем сообщить находку, проверь каждое из пяти условий. Если выполняется хотя бы\n"
     "одно — находки нет:\n1. Разные объекты.",
@@ -149,6 +169,9 @@ def test_the_v1_contract_anchors_this_suite_reads_exist() -> None:
     assert all(f"- {category} —" in V1_CATEGORIES for category in CATEGORIES)
     assert V1_OUTPUT_CONTRACT.startswith("Требования к ответу:") and "observations" in V1_OUTPUT_CONTRACT
     assert all(fragment in SYSTEM_PROMPT for fragment in V1_CONDITIONS)
+    # the two blocks the omission profiles reword exist in v1 and are changed by the replacements above
+    assert V1_INTRO in V1_CATEGORIES and V1_CATEGORIES_OMISSION != V1_CATEGORIES
+    assert V1_CATEGORY_RULE in V1_OUTPUT_CONTRACT and V1_OUTPUT_CONTRACT_OMISSION != V1_OUTPUT_CONTRACT
     assert {"observations", "category", "finding_text", "recommendation_text", "evidence", "quote", "page_number"} <= SCHEMA_FIELDS
 
 
@@ -182,8 +205,13 @@ def test_every_profile_manifest_has_the_text_profile_1_shape() -> None:
     expected = _expected_sections()
     for directory, manifest in _legacy_packages():
         code = manifest["section_code"]
-        assert set(manifest) == PROFILE_KEYS, directory.name
-        assert manifest["format"] == "text-profile/1", code
+        if code in OMISSION_SECTIONS:
+            assert set(manifest) == PROFILE_KEYS | {"categories"}, directory.name
+            assert manifest["format"] == "text-profile/2", code
+            assert manifest["categories"] == OMISSION_CATEGORIES, code
+        else:
+            assert set(manifest) == PROFILE_KEYS, directory.name
+            assert manifest["format"] == "text-profile/1", code
         assert code in catalogue, code
         assert directory.name == code.lower(), (directory.name, code)
         assert code in expected, f"{code}: no line in the expectations file"
@@ -289,8 +317,12 @@ def test_every_system_prompt_keeps_the_v1_question_categories_and_output_contrac
         assert f"«{catalogue[code]}»" in opening, code
         assert "«Архитектурные решения» (АР)" not in body, code
         assert V1_QUESTION in body, code
-        assert V1_CATEGORIES in body, code
-        assert body.endswith(V1_OUTPUT_CONTRACT), code
+        # `SECTION-JUDGE-FIXES-01`: a profile that declares `documentation` says so in two lines; the others are v1's.
+        declares_omission = "documentation" in manifest.get("categories", ())
+        assert (V1_CATEGORIES_OMISSION if declares_omission else V1_CATEGORIES) in body, code
+        assert body.endswith(V1_OUTPUT_CONTRACT_OMISSION if declares_omission else V1_OUTPUT_CONTRACT), code
+        if declares_omission:
+            assert V1_INTRO not in body and V1_CATEGORY_RULE not in body, code
         position = 0
         for fragment in V1_CONDITIONS:
             found = body.find(fragment, position)

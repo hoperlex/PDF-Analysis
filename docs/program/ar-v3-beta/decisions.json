@@ -1,0 +1,447 @@
+{
+  "decision_version": "ar-beta-map-decisions-v1",
+  "synthetic": false,
+  "comment": "Decisions of the AI integrator for the AR v3 beta, prepared under the owner's delegation R-146ba (accepted risks A-10 and A-11): no subject-matter expert took part, no human compared any norm with its official edition, and nothing here asserts that an edition is current or that a branch applies to a real project. Project date: not set; the beta runs on synthetic documents (R-146bb). Modes: the 8 items C05 C06 C08 C09 C10 C15 C21 C22 are context_only by the beta policy and stay so; the other 14 are provisional_citation with empty edition_evidence (no official page was fetched or compared). Mapping of include/revise/exclude to the tool, which has no exclude state: include = provisional_citation on the proposed span; exclude = context_only, which STILL renders the target text into the prompt part and does NOT remove it from the model's context. Spans: those of spans.proposal.json with the paragraph ids of AR-V3-BETA-SPANS-MEASURE-01; C13 and C20 repeat the spans of C12 and C19; C22 takes D5 ordinals 289-300 (a judgement, see AR-V3-ACTIVATION-PREP-01). Query vectors: query_vectors.sha256_by_scope holds, per scope, the SHA-256 of the lines '<item_id> <vector_sha256>' of the scope's items (rule in docs/program/ar-v3-beta/README.md) computed from the vectors made on 2026-10-27 in the hash-checked bge-m3-dense-v1 environment; the provenance record is docs/program/ar-v3-beta/vectors-provenance.json. There is no review block: the pack summary stays pending_expert.",
+  "identity": {
+    "norms_snapshot_id": "ns_01M59N8QNBVN91ACA2HCE6VE74",
+    "reviewed_content_key": "2026-07-23..2026-08-20+17d+121r.0a1bafe103ff",
+    "embedding_build": "bge-m3-dense-v1:characters-v2:1200",
+    "scenario": "new_multi_apartment_residential_F1.3"
+  },
+  "query_vectors": {
+    "profile": "bge-m3-dense-v1",
+    "model_revision": "5617a9f61b028005a4858fdac845db406aefb181",
+    "sha256_by_scope": {
+      "F1": "eddfef2d3d07f8501ed75c8f41ddcdc08ea0e1775b1dc0d32324101bce442d46",
+      "F2": "604c627de554bcf2bfad5617de1abcb102f502f504051679318e799cab47be0f",
+      "A1": "3b9b93dec6eb2d57918ac90a336e6af65c0cd9ef0f3b11711ff4f4c74327999b",
+      "A2": "b100bc2baadcf0b8d0c77555a6901d690defc09382abb650e6e37b424a882ce8",
+      "S1": "7c07a2498e2616a9c6a690c1f85137ac5741066e3e04c91ea6bc987d1b681595",
+      "S2": "34a461ca053641a97ab20704401527ad39490bbf1f920be913ee5643c5582777"
+    }
+  },
+  "items": [
+    {
+      "id": "C01",
+      "mode": "provisional_citation",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_01M59N9JD4VPS1C8ACDFC01BGG",
+          "designation": "СП 1.13130.2020",
+          "edition": "редакция локального корпуса (ConsultantPlus), изменения не сверены с официальной редакцией",
+          "kind": "clause",
+          "ordinal_first": 132,
+          "ordinal_last": 137,
+          "norm_paragraph_id_first": "npar_01M59N9JD76Z1P9NMG3GFQJFXA",
+          "norm_paragraph_id_last": "npar_01M59N9JD7XGP58HFVBEKF0X17"
+        }
+      ],
+      "branch": {
+        "id": "N",
+        "applicability": "Сценарий: новое строительство многоквартирного жилого здания, класс Ф1.3 (new_multi_apartment_residential_F1.3); ветвь N, новое жилое строительство. Дата проекта: не задана: бета на синтетических документах (R-146bb). Вопрос листа решений: Выбрать помещение или этаж, класс функциональной пожарной опасности и полную ветвь требования о числе эвакуационных выходов. Применимость не проверена человеком; решение подготовлено ИИ-интегратором по поручению владельца (R-146ba), без эксперта предметной области."
+      },
+      "edition_evidence": []
+    },
+    {
+      "id": "C02",
+      "mode": "provisional_citation",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_01M59N9JD4VPS1C8ACDFC01BGG",
+          "designation": "СП 1.13130.2020",
+          "edition": "редакция локального корпуса (ConsultantPlus), изменения не сверены с официальной редакцией",
+          "kind": "clause",
+          "ordinal_first": 168,
+          "ordinal_last": 169,
+          "norm_paragraph_id_first": "npar_01M59N9JD7QMHBPYNPX8Y3DWYS",
+          "norm_paragraph_id_last": "npar_01M59N9JD7WH6809DSCKJ23TKT"
+        }
+      ],
+      "branch": {
+        "id": "N",
+        "applicability": "Сценарий: новое строительство многоквартирного жилого здания, класс Ф1.3 (new_multi_apartment_residential_F1.3); ветвь N, новое жилое строительство. Дата проекта: не задана: бета на синтетических документах (R-146bb). Вопрос листа решений: Подтвердить, что измеряемый проём является эвакуационным выходом, и выбрать применимое исключение. Применимость не проверена человеком; решение подготовлено ИИ-интегратором по поручению владельца (R-146ba), без эксперта предметной области."
+      },
+      "edition_evidence": []
+    },
+    {
+      "id": "C03",
+      "mode": "provisional_citation",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_01M59N9JD4VPS1C8ACDFC01BGG",
+          "designation": "СП 1.13130.2020",
+          "edition": "редакция локального корпуса (ConsultantPlus), изменения не сверены с официальной редакцией",
+          "kind": "clause",
+          "ordinal_first": 213,
+          "ordinal_last": 214,
+          "norm_paragraph_id_first": "npar_01M59N9JD7F83055AH0YY9VYWK",
+          "norm_paragraph_id_last": "npar_01M59N9JD70SV02QPGW5BKK9BC"
+        }
+      ],
+      "branch": {
+        "id": "N",
+        "applicability": "Сценарий: новое строительство многоквартирного жилого здания, класс Ф1.3 (new_multi_apartment_residential_F1.3); ветвь N, новое жилое строительство. Дата проекта: не задана: бета на синтетических документах (R-146bb). Вопрос листа решений: Подтвердить, что коридор в местах общего пользования является путём эвакуации, и выбрать ветвь по составу эвакуирующихся людей. Применимость не проверена человеком; решение подготовлено ИИ-интегратором по поручению владельца (R-146ba), без эксперта предметной области."
+      },
+      "edition_evidence": []
+    },
+    {
+      "id": "C04",
+      "mode": "provisional_citation",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_01M59N9JD4VPS1C8ACDFC01BGG",
+          "designation": "СП 1.13130.2020",
+          "edition": "редакция локального корпуса (ConsultantPlus), изменения не сверены с официальной редакцией",
+          "kind": "clause",
+          "ordinal_first": 240,
+          "ordinal_last": 248,
+          "norm_paragraph_id_first": "npar_01M59N9JD7DQ8EGMMP5322EE4T",
+          "norm_paragraph_id_last": "npar_01M59N9JD771XG5ZX3338651P0"
+        }
+      ],
+      "branch": {
+        "id": "N",
+        "applicability": "Сценарий: новое строительство многоквартирного жилого здания, класс Ф1.3 (new_multi_apartment_residential_F1.3); ветвь N, новое жилое строительство. Дата проекта: не задана: бета на синтетических документах (R-146bb). Вопрос листа решений: Выбрать назначение и класс лестницы и полную ветвь требования к ширине марша. Применимость не проверена человеком; решение подготовлено ИИ-интегратором по поручению владельца (R-146ba), без эксперта предметной области."
+      },
+      "edition_evidence": []
+    },
+    {
+      "id": "C05",
+      "mode": "context_only",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_01M59N9Z9MD1RNV7QJDBFNC87X",
+          "designation": "Федеральный закон от 22.07.2008 N 123-ФЗ (ред. от 25.12.2023)",
+          "edition": "редакция локального корпуса (ConsultantPlus), изменения не сверены с официальной редакцией",
+          "kind": "clause",
+          "ordinal_first": 489,
+          "ordinal_last": 492,
+          "norm_paragraph_id_first": "npar_01M59N9Z9QN4CKGZF31T5Y59E8",
+          "norm_paragraph_id_last": "npar_01M59N9Z9QNZ79W0F6NF3R5ET5"
+        }
+      ]
+    },
+    {
+      "id": "C06",
+      "mode": "context_only",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_01M59N9JD4VPS1C8ACDFC01BGG",
+          "designation": "СП 1.13130.2020",
+          "edition": "редакция локального корпуса (ConsultantPlus), изменения не сверены с официальной редакцией",
+          "kind": "clause",
+          "ordinal_first": 206,
+          "ordinal_last": 207,
+          "norm_paragraph_id_first": "npar_01M59N9JD7C1PMAASD2DD18J72",
+          "norm_paragraph_id_last": "npar_01M59N9JD7502PB4VEQKNR00WA"
+        }
+      ]
+    },
+    {
+      "id": "C07",
+      "mode": "provisional_citation",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_01M59N9JD4VPS1C8ACDFC01BGG",
+          "designation": "СП 1.13130.2020",
+          "edition": "редакция локального корпуса (ConsultantPlus), изменения не сверены с официальной редакцией",
+          "kind": "range",
+          "ordinal_first": 100,
+          "ordinal_last": 100,
+          "norm_paragraph_id_first": "npar_01M59N9JD74NS77SSQYMGZFKP3",
+          "norm_paragraph_id_last": "npar_01M59N9JD74NS77SSQYMGZFKP3"
+        }
+      ],
+      "branch": {
+        "id": "N",
+        "applicability": "Сценарий: новое строительство многоквартирного жилого здания, класс Ф1.3 (new_multi_apartment_residential_F1.3); ветвь N, новое жилое строительство. Дата проекта: не задана: бета на синтетических документах (R-146bb). Вопрос листа решений: Подтвердить, что кровля эксплуатируемая, и выбрать применимое правило для этажа; прежнее отношение на единицу длины не использовать. Диапазон составляет один абзац-продолжение пункта: начало пункта вне диапазона (замер AR-V3-BETA-SPANS-MEASURE-01). Применимость не проверена человеком; решение подготовлено ИИ-интегратором по поручению владельца (R-146ba), без эксперта предметной области."
+      },
+      "edition_evidence": []
+    },
+    {
+      "id": "C08",
+      "mode": "context_only",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_01M59N9Z9MD1RNV7QJDBFNC87X",
+          "designation": "Федеральный закон от 22.07.2008 N 123-ФЗ (ред. от 25.12.2023)",
+          "edition": "редакция локального корпуса (ConsultantPlus), изменения не сверены с официальной редакцией",
+          "kind": "clause",
+          "ordinal_first": 932,
+          "ordinal_last": 932,
+          "norm_paragraph_id_first": "npar_01M59N9Z9SE5C0BE6WXWSSQS5B",
+          "norm_paragraph_id_last": "npar_01M59N9Z9SE5C0BE6WXWSSQS5B"
+        }
+      ]
+    },
+    {
+      "id": "C09",
+      "mode": "context_only",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_01M59N9WF2B93HJQ3GYNR5FCWS",
+          "designation": "СП 54.13330.2022",
+          "edition": "редакция локального корпуса (ConsultantPlus), изменения не сверены с официальной редакцией",
+          "kind": "clause",
+          "ordinal_first": 343,
+          "ordinal_last": 345,
+          "norm_paragraph_id_first": "npar_01M59N9WF4AG09DXM1XDWMCZG7",
+          "norm_paragraph_id_last": "npar_01M59N9WF4QX2HFCS42YTEYA24"
+        }
+      ]
+    },
+    {
+      "id": "C10",
+      "mode": "context_only",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_01M59N9Z9MD1RNV7QJDBFNC87X",
+          "designation": "Федеральный закон от 22.07.2008 N 123-ФЗ (ред. от 25.12.2023)",
+          "edition": "редакция локального корпуса (ConsultantPlus), изменения не сверены с официальной редакцией",
+          "kind": "clause",
+          "ordinal_first": 356,
+          "ordinal_last": 356,
+          "norm_paragraph_id_first": "npar_01M59N9Z9QPR4DYWGT0TC2AZ96",
+          "norm_paragraph_id_last": "npar_01M59N9Z9QPR4DYWGT0TC2AZ96"
+        }
+      ]
+    },
+    {
+      "id": "C11",
+      "mode": "provisional_citation",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_01M59N9WJPYS8FAQED34RPJF14",
+          "designation": "СП 59.13330.2020",
+          "edition": "редакция локального корпуса (ConsultantPlus), изменения не сверены с официальной редакцией",
+          "kind": "clause",
+          "ordinal_first": 301,
+          "ordinal_last": 304,
+          "norm_paragraph_id_first": "npar_01M59N9WJSC6ZPCTMRAH22FF11",
+          "norm_paragraph_id_last": "npar_01M59N9WJSSJ7TFKY1EJ1H3HGP"
+        }
+      ],
+      "branch": {
+        "id": "N",
+        "applicability": "Сценарий: новое строительство многоквартирного жилого здания, класс Ф1.3 (new_multi_apartment_residential_F1.3); ветвь N, новое жилое строительство. Дата проекта: не задана: бета на синтетических документах (R-146bb). Вопрос листа решений: Выбрать маршрут движения на кресле-коляске и ветвь: новое строительство или исключение при реконструкции. Применимость не проверена человеком; решение подготовлено ИИ-интегратором по поручению владельца (R-146ba), без эксперта предметной области."
+      },
+      "edition_evidence": []
+    },
+    {
+      "id": "C12",
+      "mode": "provisional_citation",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_01M59N9WJPYS8FAQED34RPJF14",
+          "designation": "СП 59.13330.2020",
+          "edition": "редакция локального корпуса (ConsultantPlus), изменения не сверены с официальной редакцией",
+          "kind": "clause",
+          "ordinal_first": 365,
+          "ordinal_last": 373,
+          "norm_paragraph_id_first": "npar_01M59N9WJSB370M00DYFYDS5ME",
+          "norm_paragraph_id_last": "npar_01M59N9WJSCHWJCHRXG4RWWAFR"
+        }
+      ],
+      "branch": {
+        "id": "N",
+        "applicability": "Сценарий: новое строительство многоквартирного жилого здания, класс Ф1.3 (new_multi_apartment_residential_F1.3); ветвь N, новое жилое строительство. Дата проекта: не задана: бета на синтетических документах (R-146bb). Вопрос листа решений: Типы пандусов и условия смешаны в одном диапазоне; выбрать полный поддиапазон применимых случаев или исключить тему. Применимость не проверена человеком; решение подготовлено ИИ-интегратором по поручению владельца (R-146ba), без эксперта предметной области."
+      },
+      "edition_evidence": []
+    },
+    {
+      "id": "C13",
+      "mode": "provisional_citation",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_01M59N9WJPYS8FAQED34RPJF14",
+          "designation": "СП 59.13330.2020",
+          "edition": "редакция локального корпуса (ConsultantPlus), изменения не сверены с официальной редакцией",
+          "kind": "clause",
+          "ordinal_first": 365,
+          "ordinal_last": 373,
+          "norm_paragraph_id_first": "npar_01M59N9WJSB370M00DYFYDS5ME",
+          "norm_paragraph_id_last": "npar_01M59N9WJSCHWJCHRXG4RWWAFR"
+        }
+      ],
+      "branch": {
+        "id": "N",
+        "applicability": "Сценарий: новое строительство многоквартирного жилого здания, класс Ф1.3 (new_multi_apartment_residential_F1.3); ветвь N, новое жилое строительство. Дата проекта: не задана: бета на синтетических документах (R-146bb). Вопрос листа решений: Выбрать одностороннее движение или общий маршрут. Диапазон совпадает с диапазоном C12; самостоятельного доказательства отдельного вопроса нет, тема сохранена отдельной по правилу инструмента (нужны все двадцать две темы). Применимость не проверена человеком; решение подготовлено ИИ-интегратором по поручению владельца (R-146ba), без эксперта предметной области."
+      },
+      "edition_evidence": []
+    },
+    {
+      "id": "C14",
+      "mode": "provisional_citation",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_01M59N9WJPYS8FAQED34RPJF14",
+          "designation": "СП 59.13330.2020",
+          "edition": "редакция локального корпуса (ConsultantPlus), изменения не сверены с официальной редакцией",
+          "kind": "clause",
+          "ordinal_first": 377,
+          "ordinal_last": 380,
+          "norm_paragraph_id_first": "npar_01M59N9WJS1GR0EXPKCK67JGGB",
+          "norm_paragraph_id_last": "npar_01M59N9WJSFD60RD4MA4DHXKNB"
+        }
+      ],
+      "branch": {
+        "id": "N",
+        "applicability": "Сценарий: новое строительство многоквартирного жилого здания, класс Ф1.3 (new_multi_apartment_residential_F1.3); ветвь N, новое жилое строительство. Дата проекта: не задана: бета на синтетических документах (R-146bb). Вопрос листа решений: Подтвердить, что выбранный маршрут действительно содержит пандус или открытую лестницу. Применимость не проверена человеком; решение подготовлено ИИ-интегратором по поручению владельца (R-146ba), без эксперта предметной области."
+      },
+      "edition_evidence": []
+    },
+    {
+      "id": "C15",
+      "mode": "context_only",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_01M59N9WJPYS8FAQED34RPJF14",
+          "designation": "СП 59.13330.2020",
+          "edition": "редакция локального корпуса (ConsultantPlus), изменения не сверены с официальной редакцией",
+          "kind": "clause",
+          "ordinal_first": 390,
+          "ordinal_last": 391,
+          "norm_paragraph_id_first": "npar_01M59N9WJSTE5RG1K5D81NKMHM",
+          "norm_paragraph_id_last": "npar_01M59N9WJSRXDHJRWY41PH6PMS"
+        }
+      ]
+    },
+    {
+      "id": "C16",
+      "mode": "provisional_citation",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_01M59N9WJPYS8FAQED34RPJF14",
+          "designation": "СП 59.13330.2020",
+          "edition": "редакция локального корпуса (ConsultantPlus), изменения не сверены с официальной редакцией",
+          "kind": "clause",
+          "ordinal_first": 296,
+          "ordinal_last": 300,
+          "norm_paragraph_id_first": "npar_01M59N9WJSP6F2C1R9VCW0AC6R",
+          "norm_paragraph_id_last": "npar_01M59N9WJS8RHAGSSF2CNPAPB4"
+        }
+      ],
+      "branch": {
+        "id": "N",
+        "applicability": "Сценарий: новое строительство многоквартирного жилого здания, класс Ф1.3 (new_multi_apartment_residential_F1.3); ветвь N, новое жилое строительство. Дата проекта: не задана: бета на синтетических документах (R-146bb). Вопрос листа решений: Выбрать ветвь: с пандусом, без пандуса или реконструкция и приспособление; прежний квадрат площадки исключён. Применимость не проверена человеком; решение подготовлено ИИ-интегратором по поручению владельца (R-146ba), без эксперта предметной области."
+      },
+      "edition_evidence": []
+    },
+    {
+      "id": "C17",
+      "mode": "provisional_citation",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_01M59N9WJPYS8FAQED34RPJF14",
+          "designation": "СП 59.13330.2020",
+          "edition": "редакция локального корпуса (ConsultantPlus), изменения не сверены с официальной редакцией",
+          "kind": "clause",
+          "ordinal_first": 345,
+          "ordinal_last": 346,
+          "norm_paragraph_id_first": "npar_01M59N9WJSXSZCFZKXNJX8GED6",
+          "norm_paragraph_id_last": "npar_01M59N9WJSBZTMT6XQAAKSZG0K"
+        }
+      ],
+      "branch": {
+        "id": "N",
+        "applicability": "Сценарий: новое строительство многоквартирного жилого здания, класс Ф1.3 (new_multi_apartment_residential_F1.3); ветвь N, новое жилое строительство. Дата проекта: не задана: бета на синтетических документах (R-146bb). Вопрос листа решений: Определить доступный дверной проём и указанное исключение для порога; прежнее значение в миллиметрах исключено. Применимость не проверена человеком; решение подготовлено ИИ-интегратором по поручению владельца (R-146ba), без эксперта предметной области."
+      },
+      "edition_evidence": []
+    },
+    {
+      "id": "C18",
+      "mode": "provisional_citation",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_01M59N9WJPYS8FAQED34RPJF14",
+          "designation": "СП 59.13330.2020",
+          "edition": "редакция локального корпуса (ConsultantPlus), изменения не сверены с официальной редакцией",
+          "kind": "clause",
+          "ordinal_first": 447,
+          "ordinal_last": 452,
+          "norm_paragraph_id_first": "npar_01M59N9WJS7M96V5JQHYPTNP71",
+          "norm_paragraph_id_last": "npar_01M59N9WJSG0GM8DXGPEX3B7JR"
+        }
+      ],
+      "branch": {
+        "id": "N",
+        "applicability": "Сценарий: новое строительство многоквартирного жилого здания, класс Ф1.3 (new_multi_apartment_residential_F1.3); ветвь N, новое жилое строительство. Дата проекта: не задана: бета на синтетических документах (R-146bb). Вопрос листа решений: Подтвердить, что объект является уборной для посетителей, и выбрать полную ветвь по кабине. Применимость не проверена человеком; решение подготовлено ИИ-интегратором по поручению владельца (R-146ba), без эксперта предметной области."
+      },
+      "edition_evidence": []
+    },
+    {
+      "id": "C19",
+      "mode": "provisional_citation",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_01M59N9VSS64AB4R6N6XX3Q74G",
+          "designation": "СП 50.13330.2024",
+          "edition": "редакция локального корпуса (ConsultantPlus), изменения не сверены с официальной редакцией",
+          "kind": "clause",
+          "ordinal_first": 138,
+          "ordinal_last": 142,
+          "norm_paragraph_id_first": "npar_01M59N9VSV5B5M1PA0W4ZMVA3N",
+          "norm_paragraph_id_last": "npar_01M59N9VSVRWCMWHW8RX6P9BMJ"
+        }
+      ],
+      "branch": {
+        "id": "N",
+        "applicability": "Сценарий: новое строительство многоквартирного жилого здания, класс Ф1.3 (new_multi_apartment_residential_F1.3); ветвь N, новое жилое строительство. Дата проекта: не задана: бета на синтетических документах (R-146bb). Вопрос листа решений: Определить отапливаемую оболочку, зону и заданные в проекте и нормах значения; самостоятельный теплотехнический расчёт не выполняется. Применимость не проверена человеком; решение подготовлено ИИ-интегратором по поручению владельца (R-146ba), без эксперта предметной области."
+      },
+      "edition_evidence": []
+    },
+    {
+      "id": "C20",
+      "mode": "provisional_citation",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_01M59N9VSS64AB4R6N6XX3Q74G",
+          "designation": "СП 50.13330.2024",
+          "edition": "редакция локального корпуса (ConsultantPlus), изменения не сверены с официальной редакцией",
+          "kind": "clause",
+          "ordinal_first": 138,
+          "ordinal_last": 142,
+          "norm_paragraph_id_first": "npar_01M59N9VSV5B5M1PA0W4ZMVA3N",
+          "norm_paragraph_id_last": "npar_01M59N9VSVRWCMWHW8RX6P9BMJ"
+        }
+      ],
+      "branch": {
+        "id": "N",
+        "applicability": "Сценарий: новое строительство многоквартирного жилого здания, класс Ф1.3 (new_multi_apartment_residential_F1.3); ветвь N, новое жилое строительство. Дата проекта: не задана: бета на синтетических документах (R-146bb). Вопрос листа решений: Диапазон совпадает с диапазоном C19; вопрос относится к отдельному элементу оболочки. Тема сохранена отдельной по правилу инструмента (нужны все двадцать две темы); расчёт остаётся вне инструмента. Применимость не проверена человеком; решение подготовлено ИИ-интегратором по поручению владельца (R-146ba), без эксперта предметной области."
+      },
+      "edition_evidence": []
+    },
+    {
+      "id": "C21",
+      "mode": "context_only",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_01M59N9W1JY06JA08QK08DE2HT",
+          "designation": "СП 51.13330.2011",
+          "edition": "редакция локального корпуса (ConsultantPlus), изменения не сверены с официальной редакцией",
+          "kind": "table",
+          "ordinal_first": 289,
+          "ordinal_last": 300,
+          "norm_paragraph_id_first": "npar_01M59N9W1MRAP221SWF5Z40NGT",
+          "norm_paragraph_id_last": "npar_01M59N9W1MQNXE72MFHNWECQ6E"
+        }
+      ]
+    },
+    {
+      "id": "C22",
+      "mode": "context_only",
+      "targets": [
+        {
+          "norm_document_id": "ndoc_01M59N9W1JY06JA08QK08DE2HT",
+          "designation": "СП 51.13330.2011",
+          "edition": "редакция локального корпуса (ConsultantPlus), изменения не сверены с официальной редакцией",
+          "kind": "table",
+          "ordinal_first": 289,
+          "ordinal_last": 300,
+          "norm_paragraph_id_first": "npar_01M59N9W1MRAP221SWF5Z40NGT",
+          "norm_paragraph_id_last": "npar_01M59N9W1MQNXE72MFHNWECQ6E"
+        }
+      ]
+    }
+  ]
+}

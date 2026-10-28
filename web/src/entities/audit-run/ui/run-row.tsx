@@ -22,6 +22,7 @@ import { RunStateBadge } from '@/shared/ui';
 import { formatInstant } from '@/shared/lib';
 
 import { runExecutorLine, runExecutorSentence } from '../model/run-executor';
+import { runPresetLine, runPresetSentence } from '../model/run-preset';
 
 export interface RunRowProps {
   readonly run: RunStatus;
@@ -31,6 +32,7 @@ export interface RunRowProps {
 
 export function RunRow({ run, href }: RunRowProps) {
   const executor = runExecutorLine(run);
+  const preset = runPresetLine(run);
   return (
     <li className="am-state" style={{ marginBottom: '0.5rem' }} data-run-id={run.run_id}>
       <p className="am-state__title">
@@ -47,6 +49,7 @@ export function RunRow({ run, href }: RunRowProps) {
             : ` · завершён ${formatInstant(run.terminal_at)}`}
         </p>
         {executor === null ? null : <p data-run-executor>{runExecutorSentence(executor)}</p>}
+        {preset === null ? null : <p data-run-preset>{runPresetSentence(preset)}</p>}
         <p>
           Находок{' '}
           {run.published_finding_count === undefined ? '—' : run.published_finding_count} ·

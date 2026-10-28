@@ -177,7 +177,7 @@ function descendants(node: FakeNode): FakeNode[] {
  */
 const tick = (): Promise<void> => new Promise((done) => setTimeout(done, 0));
 
-type Clickable = { onClick?: (event: unknown) => void };
+type Clickable = { onClick?: (event: unknown) => void; onChange?: (event: unknown) => void };
 
 /** The props React stored on a node, which is where its `onClick` lives. */
 function propsOf(node: FakeNode): Clickable {
@@ -200,6 +200,14 @@ export interface LiveRender {
   press(label: string): Promise<boolean>;
   /** How many buttons carry exactly this text. */
   count(label: string): number;
+  /**
+   * Change the one field (a `<select>` or an `<input>`) whose `<label>` has exactly this text, to
+   * `value`: the `onChange` the field carries is called with a `target` holding the value, which is
+   * all this application's handlers read. Throws unless exactly one label matches, and unless the
+   * field exists. A disabled field is not changed, as in a browser, and `false` is returned.
+   * (`ANALYSIS-PRESETS-01`: the preset and executor selects, the name field.)
+   */
+  change(label: string, value: string): Promise<boolean>;
   unmount(): Promise<void>;
 }
 
@@ -258,6 +266,22 @@ export async function mountLive(element: ReactElement): Promise<LiveRender> {
       return true;
     },
     count: (label) => buttons(label).length,
+    change: async (label, value) => {
+      const labels = descendants(container).filter((node) => node.nodeName === 'label' && node.textContent === label);
+      if (labels.length !== 1) throw new Error(`expected one label «${label}», found ${labels.length}`);
+      const target = labels[0]?.getAttribute('for') ?? null;
+      const field = descendants(container).find((node) => target !== null && node.getAttribute('id') === target);
+      if (field === undefined) throw new Error(`label «${label}» points at no field`);
+      if (field.getAttribute('disabled') !== null) return false;
+      const onChange = propsOf(field).onChange;
+      if (onChange === undefined) throw new Error(`field «${label}» has no onChange`);
+      await act(async () => {
+        onChange({ type: 'change', target: { value }, currentTarget: { value }, preventDefault() {} });
+        await tick();
+        await tick();
+      });
+      return true;
+    },
     unmount: async () => {
       await act(async () => {
         root.unmount();

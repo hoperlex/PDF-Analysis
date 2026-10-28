@@ -11,7 +11,34 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Version `1.7.0`
+## Version `1.8.0`
+
+`CONTRACT-1-8-0-01` seals the content that `COMPARE-PERSISTED-SUMMARY-01` added under `1.7.0` (owner
+ruling `R-146ar`). Three operations: `approveSheetPairing` and `withdrawSheetPairing` (an expert stores
+and ends the approval of one sheet pair that `compareDocumentVersions` proposed, append-only, keyed and
+refused to an account without `expert`) and `generateComparisonSummary` (an expert asks once for an AI
+summary over the approved pairs; only a recorded implementation exists, any other mode answers
+`503 dependency_unavailable`). `compareDocumentVersions` gains the optional and nullable
+`approved_pairs`, with the optional `summary`. The version rule
+(`docs/program/VERSIONING_AND_FREEZE_POLICY.md`) reads this as a **minor**: operations, schemas and
+optional fields are added and nothing disappears. The surface is 98 paths, 111 operations and 321
+schemas (92, 104 and 301 under `1.7.0`). No error code or migration is added by the version move; the
+content came with migration `0035_comparison_records`.
+
+`ANALYSIS-PRESETS-01` (owner ruling `R-146av`) adds, under the same `1.8.0`, the named presets of how a run
+starts: `listAnalysisPresets` (any role), `createAnalysisPreset`, `reviseAnalysisPreset` and
+`archiveAnalysisPreset` (an administrator, keyed; a revision and an archive are new rows of an append-only
+history), the optional `StartRunRequest.preset_id` (exclusive with `executor_connection_id`) and the
+optional, nullable, read-only `RunStatus.preset`. A run start selects one setting per run, the executor
+connection, so a preset is a name and that connection; the cost ceiling is a process-wide setting and no
+threshold is an input of a start, so a preset holds neither. No error code is added (the refusals reuse
+`validation_failed`, `conflict`, `not_found` and `permission_denied` with their existing detail keys) and
+migration `0037_analysis_presets` adds one table and one nullable column of `audit_run`. The identity of a
+preset and of each revision is `evt_<ULID>`, the id of the audit event written with it; a dedicated prefix
+is a change of the domain contract, which this addition does not make. `2.0.0` stays reserved (owner ruling `R-146ar`,
+`D-233`: the strict reading of the removal of `AnalysisProfileStatus.builtin`).
+
+## Version `1.7.0` (historical)
 
 `PROD-11-AR-V1-V2-REMOVAL-01` removes АР v1 and v2 from the server (`ADR-0024` section 2, `AD-12`).
 `startRun` and `reauditRun` on a version classified АР answer the existing `422

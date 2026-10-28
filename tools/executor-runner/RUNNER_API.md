@@ -62,12 +62,20 @@ payloads (document text) and returns model answers. It never reaches PostgreSQL 
 Long poll. Request:
 
 ```json
-{"wait_seconds": 25}
+{"wait_seconds": 25, "max_images": 4}
 ```
 
 `wait_seconds` is an integer in 0..25 (a value outside the range is `422`, never clamped
 silently). The server holds the request open until a task for this token's connection is
 open or `wait_seconds` elapse.
+
+`max_images` is optional, an integer in 1..8: the most images one task may carry that this
+runner serves. **The server never hands a claim a task with more images than the claim
+declared**, on a fresh claim and on a redelivery; such a task stays open for a runner that
+declared enough (and expires unclaimed if none does). **An absent value means 1**, which is the
+claim every runner sent before several images existed, so a runner that serves one image or
+none sends nothing and is handed no task of several. A runner that serves several declares how
+many; one that is nevertheless handed more fails the task with `image_input_unsupported`.
 
 - **200** - a task, now claimed by this token:
 
@@ -81,7 +89,9 @@ open or `wait_seconds` elapse.
     "user_text": "…user message…",
   "output_schema": {"type": "object", "properties": {…}, "required": […]},
   "images": [{"blob_id": "blob_…", "portal_block_id": "blk_…",
-              "sha256": "…", "size_bytes": 12345, "media_type": "image/png"}]
+              "sha256": "…", "size_bytes": 12345, "media_type": "image/png"},
+             {"blob_id": "blob_…", "crop_id": "…",
+              "sha256": "…", "size_bytes": 23456, "media_type": "image/png"}]
   }
   ```
 
@@ -91,11 +101,16 @@ open or `wait_seconds` elapse.
     use any other capability.
   - `output_schema` is a JSON Schema (draft 2020-12). The answer's `output_text` must be one
     JSON document that validates against it.
-  - `images` is optional and contains at most one saved PNG. A runner must fetch it with
-    `getExecutorTaskImage`, verify its size and SHA-256 and present it to an image-capable
-    model as an image. A text-only runner fails the task with `image_input_unsupported`;
-    it never silently answers from the text alone. The source `portal_block_id` identifies
-    the crop in the drawing; the Blob ID is opaque and is not an object-store path.
+  - `images` is optional and is an **ordered list of at most 8** saved PNGs (16 MiB each, 32 MiB
+    together, never more than the claim's `max_images`). A runner must fetch every one with
+    `getExecutorTaskImage`, verify its size and SHA-256 and present all of them, in this
+    order, to an image-capable model as images. A runner that cannot present all of them
+    (text-only, or fewer than the task has) fails the task with `image_input_unsupported`;
+    it never silently answers from the text alone or from some of the images. Each image names
+    its source with exactly one of `portal_block_id` (a crop of a portal block in the drawing)
+    or `crop_id` (an opaque crop reference of the comparison modules: echoed, never parsed,
+    unique in the task). Two images may be the same Blob (the same bytes under two
+    references); the Blob ID is opaque and is not an object-store path.
   - `claim_expires_at` is the claim lease. A claim that is not extended before it lapses
     returns the task to `open` and another claim (possibly by another runner) may take it.
   - `deadline_at` is the end of the answer window. After it the task is `expired`; no
@@ -173,7 +188,8 @@ Responses:
 
 `reason` is a string of 1..512 characters. Runner clients start it with a lower-case
 code (`model_mismatch`, `schema_invalid_answer`, `answer_not_json`, `command_failed`,
-`endpoint_failed`, `output_truncated`, `deadline_exceeded`, `agent_shutdown`) optionally
+`endpoint_failed`, `output_truncated`, `deadline_exceeded`, `agent_shutdown`,
+`image_input_unsupported`, `image_delivery_failed`) optionally
 followed by `: ` and a short, payload-free detail. The stand stores it truncated and
 scrubbed; it never reaches a log with document text.
 
@@ -220,16 +236,19 @@ opaque string of `[A-Za-z0-9_-]{1,64}` and percent-encode it into the path.
 ```json
 {
   "ClaimRequest": {"type": "object", "additionalProperties": false,
-    "properties": {"wait_seconds": {"type": "integer", "minimum": 0, "maximum": 25}}},
+    "properties": {"wait_seconds": {"type": "integer", "minimum": 0, "maximum": 25},
+      "max_images": {"type": "integer", "minimum": 1, "maximum": 8}}},
   "ClaimedTask": {"type": "object", "additionalProperties": false,
     "required": ["task_id", "claim_expires_at", "deadline_at", "model", "system", "user_text", "output_schema"],
     "properties": {"task_id": {"type": "string"}, "claim_expires_at": {"type": "string", "format": "date-time"},
       "deadline_at": {"type": "string", "format": "date-time"}, "model": {"type": "string"},
       "system": {"type": "string"}, "user_text": {"type": "string"}, "output_schema": {"type": "object"},
-      "images": {"type": "array", "maxItems": 1, "items": {"$ref": "#/RunnerImage"}}}},
+      "images": {"type": "array", "maxItems": 8, "items": {"$ref": "#/RunnerImage"}}}},
   "RunnerImage": {"type": "object", "additionalProperties": false,
-    "required": ["blob_id", "portal_block_id", "sha256", "size_bytes", "media_type"],
+    "required": ["blob_id", "sha256", "size_bytes", "media_type"],
+    "description": "exactly one of portal_block_id and crop_id",
     "properties": {"blob_id": {"type": "string"}, "portal_block_id": {"type": "string"},
+      "crop_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
       "sha256": {"type": "string"}, "size_bytes": {"type": "integer", "maximum": 16777216},
       "media_type": {"const": "image/png"}}},
   "ExtendResponse": {"type": "object", "required": ["claim_expires_at"],

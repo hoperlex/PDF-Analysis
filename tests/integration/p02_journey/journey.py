@@ -174,6 +174,38 @@ P02_TABLES = (
     # journey starts single runs, so both counts are expected unchanged across a replay.
     "ar_v3_run_group",
     "ar_v3_run_group_member",
+    # `0035_comparison_records` (`COMPARE-PERSISTED-SUMMARY-01`). The comparison of two versions
+    # as a record, both tables append-only. `comparison_sheet_link` holds an expert's approval or
+    # withdrawal of a sheet pairing and is written only by the commands `approve_sheet_pairing`
+    # and `withdraw_sheet_pairing` (`approveSheetPairing`, `withdrawSheetPairing`);
+    # `comparison_summary` holds the AI summary over the approved pairs and is written only by
+    # `generate_comparison_summary` (`generateComparisonSummary`). The journey uploads, runs,
+    # decides and exports; it never compares two versions, pairs a sheet or asks for a summary
+    # (nothing under this directory names those operations), so both counts are expected
+    # unchanged across a replay -- counted rather than skipped, the same claim as for
+    # `ar_v3_run_group`.
+    "comparison_sheet_link",
+    "comparison_summary",
+    # `0038_comparison_foundation` (`CMP-SEAL-C0`). The comparison upload, version-order, page-profile,
+    # queue and spend-journal tables. Their operations are sealed stubs answering `503
+    # dependency_unavailable` and nothing under this directory names them, so each count is expected
+    # unchanged across a replay -- counted rather than skipped.
+    "comparison_upload",
+    "comparison_upload_set",
+    "comparison_upload_file",
+    "comparison_upload_part",
+    "comparison_version_order",
+    "comparison_page_profile",
+    "comparison_work",
+    "comparison_work_attempt",
+    "comparison_model_call",
+    # `0037_analysis_presets` (`ANALYSIS-PRESETS-01`). Named executor selections for a run start,
+    # append-only (archive is a new revision). Written only by the preset commands (create,
+    # revise, archive; administrator role); the journey starts runs by hand and never creates a
+    # preset (nothing under this directory names those operations), so the count is expected
+    # unchanged across a replay -- counted rather than skipped, the same claim as for
+    # `ar_v3_run_group`.
+    "analysis_preset_revision",
 )
 
 

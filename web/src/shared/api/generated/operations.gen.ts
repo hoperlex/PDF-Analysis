@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.7.0 (OpenAPI 3.1.0)
- *   sha256 14375c443fb530324592bdb3dfb1f40dbe10e45ad82785e9797331ecbfd9357a
+ *   AuditManager PC-01 API 1.9.0 (OpenAPI 3.1.0)
+ *   sha256 5daf6416d4d4100f0a49ec2d834ca52a6139c2b29dc3c3cff68080983e2a1765
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,10 +17,14 @@
 import type {
   Account,
   AccountPage,
+  AnalysisPreset,
+  AnalysisPresetList,
   AnalysisProfileList,
+  AppendComparisonVersionOrderRequest,
   AppendDecisionRequest,
   AppendDecisionResponse,
   ApproveRegistrationRequest,
+  ApproveSheetPairingRequest,
   ArV3BetaGroup,
   ArV3BetaGroupReview,
   ArV3BetaPackStatus,
@@ -36,9 +40,23 @@ import type {
   ClaimExecutorTaskRequest,
   ClaimedExecutorTask,
   ClassifyDocumentVersionRequest,
+  ComparisonPageProfileId,
+  ComparisonProposalSet,
+  ComparisonUpload,
+  ComparisonUploadFile,
+  ComparisonUploadFileId,
+  ComparisonUploadId,
+  ComparisonUploadPage,
+  ComparisonUploadPartReceipt,
+  ComparisonUploadProposal,
+  ComparisonUploadSetId,
+  ComparisonVersionOrder,
+  ComparisonVersionOrderList,
+  ConfirmComparisonUploadSetRequest,
   CorrectVersionClassificationRequest,
   CorrelationId,
   CreateAssignmentRequest,
+  CreateComparisonUploadRequest,
   CreateExecutorConnectionRequest,
   CreateProjectRequest,
   Cursor,
@@ -75,6 +93,8 @@ import type {
   FindingDetail,
   FindingPage,
   FindingUid,
+  GenerateComparisonSummaryRequest,
+  GenerateComparisonSummaryResponse,
   IdempotencyKey,
   IssueRunnerTokenRequest,
   IssueTokenRequest,
@@ -99,6 +119,7 @@ import type {
   OptimisationProposalPage,
   PortalBlockId,
   PortalBlockPage,
+  PresetId,
   PriceListId,
   PriceListPositionPage,
   PriceListRevision,
@@ -126,6 +147,7 @@ import type {
   RunStatusPage,
   RunnerImageBlobId,
   RunnerTokenMetadata,
+  SaveAnalysisPresetRequest,
   SectionReview,
   SectionSpecification,
   SectionVendorList,
@@ -137,6 +159,8 @@ import type {
   SetJobPriorityRequest,
   SetProjectVendorListRequest,
   SetWorkerIntakeRequest,
+  SheetLinkId,
+  SheetPairingEvent,
   SpecificationPrices,
   StartArV3BetaGroupRequest,
   StartRunRequest,
@@ -154,37 +178,52 @@ import type {
   VersionBlockIndex,
   VersionClassification,
   VersionComparison,
+  VersionPageProfile,
+  VersionPageProfilePage,
   VersionUid,
+  WithdrawSheetPairingRequest,
   WorkerId,
 } from './types.gen';
 
 /** Every operationId in the contract, sorted. */
 export const OPERATION_IDS = [
+  'appendComparisonVersionOrder',
   'appendDecision',
   'approveRegistration',
+  'approveSheetPairing',
+  'archiveAnalysisPreset',
   'archiveExecutorConnection',
   'archiveUser',
+  'cancelComparisonUpload',
   'cancelRun',
   'carryOverDecision',
   'changePassword',
   'claimExecutorTask',
   'classifyDocumentVersion',
   'compareDocumentVersions',
+  'completeComparisonUploadFile',
+  'confirmComparisonUploadSet',
   'correctVersionClassification',
+  'createAnalysisPreset',
   'createAssignment',
+  'createComparisonUpload',
   'createExecutorConnection',
   'createProject',
   'decideOptimisationProposal',
+  'excludeComparisonUploadSet',
   'exportOptimisationProposalsCsv',
   'exportRunCsv',
   'exportRunXlsx',
   'extendExecutorTaskClaim',
   'failExecutorTask',
+  'generateComparisonSummary',
   'generateExecutorSshKey',
   'getArV3BetaGroup',
   'getArV3BetaGroupReview',
   'getArV3BetaPackStatus',
   'getAssignment',
+  'getComparisonUpload',
+  'getComparisonUploadProposal',
   'getDashboardSummary',
   'getDocumentVersion',
   'getEffectiveVendorLists',
@@ -201,11 +240,15 @@ export const OPERATION_IDS = [
   'getSpecificationPrices',
   'getUser',
   'getVersionBlocks',
+  'getVersionPageProfile',
   'getVersionSectionReview',
   'issueRunnerToken',
   'issueToken',
+  'listAnalysisPresets',
   'listAnalysisProfiles',
   'listAssignments',
+  'listComparisonUploads',
+  'listComparisonVersionOrders',
   'listDecisionHistory',
   'listDecisions',
   'listDocuments',
@@ -228,10 +271,12 @@ export const OPERATION_IDS = [
   'listRunFindings',
   'listRuns',
   'listUsers',
+  'listVersionPageProfiles',
   'listVersionPortalBlocks',
   'listVersions',
   'listWorkers',
   'markReleaseNotesRead',
+  'pauseComparisonUpload',
   'purgeUser',
   'readRegistrationStatus',
   'reauditRun',
@@ -239,6 +284,9 @@ export const OPERATION_IDS = [
   'requestExecutorProbe',
   'resetUserPassword',
   'restoreUser',
+  'resumeComparisonUpload',
+  'retryComparisonUploadSet',
+  'reviseAnalysisPreset',
   'reviseExecutorConnection',
   'revokeRunnerToken',
   'searchNorms',
@@ -255,19 +303,55 @@ export const OPERATION_IDS = [
   'startRun',
   'streamDocumentVersionContent',
   'streamNormDocumentContent',
+  'streamVersionPagePreview',
+  'streamVersionPageThumbnail',
+  'streamVersionPageTile',
   'streamVersionPortalBlockCrop',
   'submitExecutorTaskAnswer',
   'submitRegistration',
   'transitionAssignment',
   'updateMyProfile',
   'updateUser',
+  'uploadComparisonUploadPart',
   'uploadDocument',
   'uploadDocumentVersion',
   'uploadPriceList',
+  'withdrawSheetPairing',
 ] as const;
 
 /** The closed set of operations this client can perform. */
 export type OperationId = (typeof OPERATION_IDS)[number];
+
+// ------------------------------------------------------------------------------------
+// appendComparisonVersionOrder - POST /projects/{project_uid}/documents/{document_uid}/comparison-version-orders
+// ------------------------------------------------------------------------------------
+
+/**
+ * Append a revision of the comparison order of a document set.
+ *
+ * Appends a revision listing the versions of the document, each once. `base_revision_no` is the latest revision the caller saw (`0` for none); a stale one is `409 conflict` (`comparison_version_order_stale`) and the caller rebases (`ADR-0025` decision 14). History is append-only. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-INGEST-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_version_orders`) and nothing is read or written.
+ */
+export type AppendComparisonVersionOrderInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/comparison-version-orders`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: AppendComparisonVersionOrderRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `appendComparisonVersionOrder` (`application/json`, HTTP 201). */
+export type AppendComparisonVersionOrderResult = ComparisonVersionOrder;
 
 // ------------------------------------------------------------------------------------
 // appendDecision - POST /findings/{finding_uid}/decisions
@@ -332,6 +416,66 @@ export type ApproveRegistrationInput = {
 export type ApproveRegistrationResult = RegistrationRequest;
 
 // ------------------------------------------------------------------------------------
+// approveSheetPairing - POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/sheet-pairings
+// ------------------------------------------------------------------------------------
+
+/**
+ * Approve Sheet Pairing
+ *
+ * Store the calling expert's approval of one sheet pair that the comparison of the path's (older) version with `target_version_uid` proposes: a source page and a target page of the two immutable versions, identified by the SHA-256 of their text and by `suggestion_sha256`, never by a display number. The comparison is recomputed with the body's `mode` and runs when the confirmation arrives and must still propose exactly this pair under this digest. The approval is one new row of an append-only history, with the actor, the time and the seal of the raw evidence of the approved set, and one audit event, in one transaction; it is never updated. An exact repeat of an active approval answers it, `replayed: true`. A refusal is `conflict` with `conflict_reason` `sheet_pair_not_proposed`, `sheet_page_already_paired`, `sheet_pair_limit_reached` (at most 32 active approvals), `approved_text_changed` (an earlier approval's page text is no longer the approved one; withdraw it first) or `sheet_pair_too_large`. `expert` is required; `admin` alone is refused (`required_capability: role:expert`).
+ */
+export type ApproveSheetPairingInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/sheet-pairings`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+    version_uid: VersionUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: ApproveSheetPairingRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `approveSheetPairing` (`application/json`, HTTP 201). */
+export type ApproveSheetPairingResult = SheetPairingEvent;
+
+// ------------------------------------------------------------------------------------
+// archiveAnalysisPreset - POST /analysis/presets/{preset_id}/archive
+// ------------------------------------------------------------------------------------
+
+/**
+ * Archive an analysis preset.
+ *
+ * Append the archived revision, which repeats the previous name and connection. One-way: nothing follows an archive, and the name is free again. An administrator's act (`role:admin`). Refusals: `403`, `404` for an unknown preset, `409 conflict` (`preset_archived`) for one already archived.
+ */
+export type ArchiveAnalysisPresetInput = {
+  /** Path parameters, substituted into `/analysis/presets/{preset_id}/archive`. */
+  path: {
+    preset_id: PresetId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `archiveAnalysisPreset` (`application/json`, HTTP 200). */
+export type ArchiveAnalysisPresetResult = AnalysisPreset;
+
+// ------------------------------------------------------------------------------------
 // archiveExecutorConnection - POST /executor-connections/{connection_id}/archive
 // ------------------------------------------------------------------------------------
 
@@ -377,6 +521,34 @@ export type ArchiveUserInput = {
 
 /** Success body of `archiveUser` (`application/json`, HTTP 200). */
 export type ArchiveUserResult = Account;
+
+// ------------------------------------------------------------------------------------
+// cancelComparisonUpload - POST /comparison-uploads/{comparison_upload_id}/cancellation
+// ------------------------------------------------------------------------------------
+
+/**
+ * Cancel an upload batch («Отменить пакет»).
+ *
+ * Aborts the parts that were never completed. The bytes of versions that were already admitted are not removed by this act; they are removed only by the operator's project erase (`ADR-0025` decision 10, `R-146c`). A finished batch is `409 conflict` (`comparison_upload_state`). A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-INGEST-02` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_uploads`) and nothing is read or written.
+ */
+export type CancelComparisonUploadInput = {
+  /** Path parameters, substituted into `/comparison-uploads/{comparison_upload_id}/cancellation`. */
+  path: {
+    comparison_upload_id: ComparisonUploadId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `cancelComparisonUpload` (`application/json`, HTTP 200). */
+export type CancelComparisonUploadResult = ComparisonUpload;
 
 // ------------------------------------------------------------------------------------
 // cancelRun - POST /runs/{run_id}/cancel
@@ -516,7 +688,7 @@ export type ClassifyDocumentVersionResult = VersionClassification;
 /**
  * Compare Document Versions
  *
- * Compare two versions of one document set: the path names the older (source) version and `target_version_uid` the newer one. Both must be published versions of the named document in the named project with the same confirmed section and, with `mode=version` (the default), the same explicit project stage; with `mode=stage` the source must be classified `P` and the target `R` (design to working documentation of one set). Each needs a published run (the newest one, or the one `source_run_id` / `target_run_id` names). A path that names no such version is `404`; otherwise a pair the rule does not admit is `outcome: refused` with one `refusal.reason`, never relabelled. The answer carries proposed sheet pairs with their evidence, one page of raw line differences (`diff_offset`, `diff_limit`, `next_offset`) and proposed matches between the two runs' findings. Every pairing and match is a proposal; nothing is written. Any one role, `role:admin|expert`.
+ * Compare two versions of one document set: the path names the older (source) version and `target_version_uid` the newer one. Both must be published versions of the named document in the named project with the same confirmed section and, with `mode=version` (the default), the same explicit project stage; with `mode=stage` the source must be classified `P` and the target `R` (design to working documentation of one set). Each needs a published run (the newest one, or the one `source_run_id` / `target_run_id` names). A path that names no such version is `404`; otherwise a pair the rule does not admit is `outcome: refused` with one `refusal.reason`, never relabelled. The answer carries proposed sheet pairs with their evidence, one page of raw line differences (`diff_offset`, `diff_limit`, `next_offset`) and proposed matches between the two runs' findings. Every pairing and match in `sheets`, `sheet_diffs` and `findings` is a proposal; this read writes nothing. `approved_pairs` (null for a refused comparison) lists the sheet pairs an expert approved for exactly this pair of versions (`approveSheetPairing`) and, for approved pairs only, their deterministic line differences, recomputed from the immutable text and bound to the version bytes by a seal; when a page's text is no longer the approved one (`text_changed`), the seal differs (`seal_changed`) or the set exceeds the response budget (`too_large`) the differences are withheld, never truncated. Any one role, `role:admin|expert`.
  */
 export type CompareDocumentVersionsInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison`. */
@@ -548,6 +720,66 @@ export type CompareDocumentVersionsInput = {
 export type CompareDocumentVersionsResult = VersionComparison;
 
 // ------------------------------------------------------------------------------------
+// completeComparisonUploadFile - POST /comparison-uploads/{comparison_upload_id}/files/{comparison_upload_file_id}/completion
+// ------------------------------------------------------------------------------------
+
+/**
+ * Complete one file and check it against its declared values.
+ *
+ * Completes the multipart object of the file and verifies the whole object against the declared SHA-256 and size (`ADR-0025` decision 10). A mismatch is `422 storage_integrity_error` (`expected_sha256` and `actual_sha256`, or `role: comparison_file_size`): the file is marked failed, nothing is published, and the client sends it again. Names are never identity. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-INGEST-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_uploads`) and nothing is read or written.
+ */
+export type CompleteComparisonUploadFileInput = {
+  /** Path parameters, substituted into `/comparison-uploads/{comparison_upload_id}/files/{comparison_upload_file_id}/completion`. */
+  path: {
+    comparison_upload_file_id: ComparisonUploadFileId;
+    comparison_upload_id: ComparisonUploadId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `completeComparisonUploadFile` (`application/json`, HTTP 200). */
+export type CompleteComparisonUploadFileResult = ComparisonUploadFile;
+
+// ------------------------------------------------------------------------------------
+// confirmComparisonUploadSet - POST /comparison-uploads/{comparison_upload_id}/sets/{comparison_upload_set_id}/confirmation
+// ------------------------------------------------------------------------------------
+
+/**
+ * Confirm the membership and order of one proposed set.
+ *
+ * The user's final word on one set: its files in their order (the array order is the version order), their labels, and the designation, stage, section and existing document it belongs to. The stage and section are a proposal an expert confirms through this act; they are never inferred. A file listed twice, a file of another set or a missing file is `422 validation_failed` (`comparison_set_members`); a set that is not awaiting confirmation is `409 conflict` (`comparison_set_state`). A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-INGEST-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_uploads`) and nothing is read or written.
+ */
+export type ConfirmComparisonUploadSetInput = {
+  /** Path parameters, substituted into `/comparison-uploads/{comparison_upload_id}/sets/{comparison_upload_set_id}/confirmation`. */
+  path: {
+    comparison_upload_id: ComparisonUploadId;
+    comparison_upload_set_id: ComparisonUploadSetId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: ConfirmComparisonUploadSetRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `confirmComparisonUploadSet` (`application/json`, HTTP 200). */
+export type ConfirmComparisonUploadSetResult = ComparisonProposalSet;
+
+// ------------------------------------------------------------------------------------
 // correctVersionClassification - POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification/corrections
 // ------------------------------------------------------------------------------------
 
@@ -575,6 +807,32 @@ export type CorrectVersionClassificationInput = {
 export type CorrectVersionClassificationResult = VersionClassification;
 
 // ------------------------------------------------------------------------------------
+// createAnalysisPreset - POST /analysis/presets
+// ------------------------------------------------------------------------------------
+
+/**
+ * Save an analysis preset.
+ *
+ * Save a preset: a name and an executor connection. An administrator's act, like every executor write (`role:admin`; the command re-reads the role set in its own transaction). The name is trimmed, 1 to 120 characters without control characters, and unique among active presets without regard to case. The connection must exist and must not be archived. At most 100 presets exist. The change and its audit event commit together. Refusals: `403`, `422 validation_failed` (`name`: `required`, `max_length`, `printable`; `executor_connection_id`: `unknown_connection`), `409 conflict` (`preset_name_in_use`, `preset_limit_reached`, `connection_archived`).
+ */
+export type CreateAnalysisPresetInput = {
+  /** Request body, sent as `application/json`. */
+  body: SaveAnalysisPresetRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `createAnalysisPreset` (`application/json`, HTTP 201). */
+export type CreateAnalysisPresetResult = AnalysisPreset;
+
+// ------------------------------------------------------------------------------------
 // createAssignment - POST /assignments
 // ------------------------------------------------------------------------------------
 
@@ -594,6 +852,36 @@ export type CreateAssignmentInput = {
 
 /** Success body of `createAssignment` (`application/json`, HTTP 200). */
 export type CreateAssignmentResult = Assignment;
+
+// ------------------------------------------------------------------------------------
+// createComparisonUpload - POST /projects/{project_uid}/comparison-uploads
+// ------------------------------------------------------------------------------------
+
+/**
+ * Declare an upload batch of plain PDFs for comparison.
+ *
+ * Declares the files of one batch under a project: for each a display name (a hint for the grouping proposal, never an identity), its size in bytes and its SHA-256, optionally its page count. Nothing is stored yet; the response names the batch, the part size (16 MiB, `ADR-0025` decision 10) and each file's identity, and the client then sends the parts. The limits of `ADR-0025` decision 9 -- at most 10 000 files, 100 document sets, 8 GiB and 10 000 declared pages, and the project's stored bytes -- are refused here, before the first part, as `422 validation_failed` with a registered `constraint` (`comparison_files_limit`, `comparison_sets_limit`, `comparison_batch_bytes_limit`, `comparison_batch_pages_limit`, `comparison_project_bytes_limit`); an account that already has an active batch, or an installation that already has two, is `409 conflict` (`conflict_reason: comparison_upload_active`). No error code is added. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-INGEST-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_uploads`) and nothing is read or written.
+ */
+export type CreateComparisonUploadInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/comparison-uploads`. */
+  path: {
+    project_uid: ProjectUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: CreateComparisonUploadRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `createComparisonUpload` (`application/json`, HTTP 201). */
+export type CreateComparisonUploadResult = ComparisonUpload;
 
 // ------------------------------------------------------------------------------------
 // createExecutorConnection - POST /executor-connections
@@ -668,6 +956,35 @@ export type DecideOptimisationProposalInput = {
 
 /** Success body of `decideOptimisationProposal` (`application/json`, HTTP 201). */
 export type DecideOptimisationProposalResult = ProposalDecisionResult;
+
+// ------------------------------------------------------------------------------------
+// excludeComparisonUploadSet - POST /comparison-uploads/{comparison_upload_id}/sets/{comparison_upload_set_id}/exclusion
+// ------------------------------------------------------------------------------------
+
+/**
+ * Leave one set out of the batch.
+ *
+ * The set is excluded: its files stay in the batch as history and nothing is admitted from it. A set that is already done, or already excluded, is `409 conflict` (`comparison_set_state`). A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-INGEST-02` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_uploads`) and nothing is read or written.
+ */
+export type ExcludeComparisonUploadSetInput = {
+  /** Path parameters, substituted into `/comparison-uploads/{comparison_upload_id}/sets/{comparison_upload_set_id}/exclusion`. */
+  path: {
+    comparison_upload_id: ComparisonUploadId;
+    comparison_upload_set_id: ComparisonUploadSetId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `excludeComparisonUploadSet` (`application/json`, HTTP 200). */
+export type ExcludeComparisonUploadSetResult = ComparisonProposalSet;
 
 // ------------------------------------------------------------------------------------
 // exportOptimisationProposalsCsv - GET /optimisation-passes/{optimisation_pass_id}/export.csv
@@ -787,6 +1104,38 @@ export type FailExecutorTaskInput = {
 export type FailExecutorTaskResult = ExecutorTaskAck;
 
 // ------------------------------------------------------------------------------------
+// generateComparisonSummary - POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/summaries
+// ------------------------------------------------------------------------------------
+
+/**
+ * Generate Comparison Summary
+ *
+ * Ask the model once, on purpose, for a summary of the approved sheet pairs of the path's (older) version and `target_version_uid`, and store the answer. This is the only operation that calls a model about a comparison; reading the comparison never does. The command recomputes the approved pairs' raw differences and their seal in its own transaction and needs them `sealed`; it builds the bounded input from the changed lines only (an input beyond the bound is refused, never shortened) and takes nothing from the client but the view. The reply is checked: every change it cites must exist; a reply that cites one that does not is stored as `rejected` (it was paid for) and returned as an answer, with no statements. The summary is stored append-only with the input digest, the prompt version, the provider mode and model identity, its statements and the span identities each cites; it never alters the raw differences, which the comparison returns exactly as computed, and it carries a fixed label saying no human reviewed it. The cost goes through the cost meter; in this release only the recorded implementation exists (`provider_mode: recorded`, `cost_basis: unmetered`), and a process in any other mode answers `503 dependency_unavailable` (`dependency: comparison_summary_model`). A missing recording is `422 analysis_input_invalid` and stores nothing. An exact repeat (same sealed input and prompt version, any key) answers the stored summary, `replayed: true`. A refusal before any call is `conflict` with `conflict_reason` `summary_evidence_not_sealed`, `summary_input_empty` or `summary_input_too_large`, or `comparison_not_available`. `expert` is required; `admin` alone is refused (`required_capability: role:expert`).
+ */
+export type GenerateComparisonSummaryInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/summaries`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+    version_uid: VersionUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: GenerateComparisonSummaryRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `generateComparisonSummary` (`application/json`, HTTP 201). */
+export type GenerateComparisonSummaryResult = GenerateComparisonSummaryResponse;
+
+// ------------------------------------------------------------------------------------
 // generateExecutorSshKey - POST /executor-connections/{connection_id}/ssh-key
 // ------------------------------------------------------------------------------------
 
@@ -885,6 +1234,52 @@ export type GetAssignmentInput = {
 
 /** Success body of `getAssignment` (`application/json`, HTTP 200). */
 export type GetAssignmentResult = AssignmentDetail;
+
+// ------------------------------------------------------------------------------------
+// getComparisonUpload - GET /comparison-uploads/{comparison_upload_id}
+// ------------------------------------------------------------------------------------
+
+/**
+ * Read an upload batch with its files.
+ *
+ * The batch, its state and the state of every declared file with the parts staged so far, which is what a resumable client needs: it sends the parts that are missing. An unknown batch is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-INGEST-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_uploads`) and nothing is read or written.
+ */
+export type GetComparisonUploadInput = {
+  /** Path parameters, substituted into `/comparison-uploads/{comparison_upload_id}`. */
+  path: {
+    comparison_upload_id: ComparisonUploadId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getComparisonUpload` (`application/json`, HTTP 200). */
+export type GetComparisonUploadResult = ComparisonUpload;
+
+// ------------------------------------------------------------------------------------
+// getComparisonUploadProposal - GET /comparison-uploads/{comparison_upload_id}/proposal
+// ------------------------------------------------------------------------------------
+
+/**
+ * Read the grouping proposal of an upload batch.
+ *
+ * The proposed grouping of the batch's files into document sets by designation (the «шифр» read from the stamp, metadata an expert confirms and never an identity), the proposed order in each set, the stage and section proposal and the warnings the reader noticed. Nothing becomes a version until the user confirms a set. A scan without text is compared as an image only and says so as a warning. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-INGEST-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_uploads`) and nothing is read or written.
+ */
+export type GetComparisonUploadProposalInput = {
+  /** Path parameters, substituted into `/comparison-uploads/{comparison_upload_id}/proposal`. */
+  path: {
+    comparison_upload_id: ComparisonUploadId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getComparisonUploadProposal` (`application/json`, HTTP 200). */
+export type GetComparisonUploadProposalResult = ComparisonUploadProposal;
 
 // ------------------------------------------------------------------------------------
 // getDashboardSummary - GET /dashboard
@@ -1096,7 +1491,7 @@ export type GetRunNormReferencesResult = RunNormReferences;
 /**
  * Get Run Norm Verification
  *
- * Read a verified v3 normative report for a run. R-80: any one active expert or admin role; an empty role set is refused. A v1/v2 run answers not_found. Until the CITE verified reader is implemented, this endpoint answers typed 503 dependency_unavailable and exposes no unverified citation data (D-151).
+ * Read a verified v3 normative report for a run. R-80: any one active expert or admin role; an empty role set is refused. A run that is not an AR v3 beta run answers not_found. For an AR v3 beta run the report is computed from the run's saved citation-review stage and the certified citation partitions of its findings (R-146at): findings are the run's published grounded findings, withheld_by_reason counts the proposals the grounding gates rejected, textless_pages comes from the version, and the numeric claims of a finding (required_value, stated_value) are never returned for this profile. A run with no verified saved review (not yet terminal, failed or cancelled, or whose saved review fails verification) answers typed 503 dependency_unavailable and exposes no unverified citation data (D-151).
  */
 export type GetRunNormVerificationInput = {
   /** Path parameters, substituted into `/runs/{run_id}/norm-verification`. */
@@ -1250,6 +1645,29 @@ export type GetVersionBlocksInput = {
 export type GetVersionBlocksResult = VersionBlockIndex;
 
 // ------------------------------------------------------------------------------------
+// getVersionPageProfile - GET /page-profiles/{comparison_page_profile_id}
+// ------------------------------------------------------------------------------------
+
+/**
+ * Read the deterministic profile of one page.
+ *
+ * The profile the worker computed and stored for the page: its status (`ready`, `needs_review` or `refused`, with a typed `reason`), the stamp fields, counts and the content key. The API never calls PDFium (`ADR-0025` decision 9). A profile that does not exist is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-PROFILE-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: version_pages`) and nothing is read or written.
+ */
+export type GetVersionPageProfileInput = {
+  /** Path parameters, substituted into `/page-profiles/{comparison_page_profile_id}`. */
+  path: {
+    comparison_page_profile_id: ComparisonPageProfileId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getVersionPageProfile` (`application/json`, HTTP 200). */
+export type GetVersionPageProfileResult = VersionPageProfile;
+
+// ------------------------------------------------------------------------------------
 // getVersionSectionReview - GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review
 // ------------------------------------------------------------------------------------
 
@@ -1326,6 +1744,25 @@ export type IssueTokenInput = {
 export type IssueTokenResult = IssueTokenResponse;
 
 // ------------------------------------------------------------------------------------
+// listAnalysisPresets - GET /analysis/presets
+// ------------------------------------------------------------------------------------
+
+/**
+ * List the analysis presets.
+ *
+ * The named presets of how a run starts (`R-146av`, `ANALYSIS-PRESETS-01`). A run start selects exactly one setting per run, the executor connection, so a preset is a name plus that connection; the cost ceiling is a process-wide setting and no threshold is an input of a start, so a preset holds neither. Each item is the preset's current revision; every earlier revision is kept and a run records the revision it started with. Archived presets are listed after the active ones. Any one role, `role:admin|expert`.
+ */
+export type ListAnalysisPresetsInput = {
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listAnalysisPresets` (`application/json`, HTTP 200). */
+export type ListAnalysisPresetsResult = AnalysisPresetList;
+
+// ------------------------------------------------------------------------------------
 // listAnalysisProfiles - GET /analysis/profiles
 // ------------------------------------------------------------------------------------
 
@@ -1372,6 +1809,67 @@ export type ListAssignmentsInput = {
 
 /** Success body of `listAssignments` (`application/json`, HTTP 200). */
 export type ListAssignmentsResult = AssignmentPage;
+
+// ------------------------------------------------------------------------------------
+// listComparisonUploads - GET /projects/{project_uid}/comparison-uploads
+// ------------------------------------------------------------------------------------
+
+/**
+ * List the project's upload batches.
+ *
+ * The project's batches, newest first, without their files, so that an interrupted upload can be found and resumed after a reload. An unknown project is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-INGEST-02` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_uploads`) and nothing is read or written.
+ */
+export type ListComparisonUploadsInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/comparison-uploads`. */
+  path: {
+    project_uid: ProjectUid;
+  };
+  /** Query string parameters. */
+  query?: {
+    /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
+    cursor?: Cursor;
+    /** Page size. */
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listComparisonUploads` (`application/json`, HTTP 200). */
+export type ListComparisonUploadsResult = ComparisonUploadPage;
+
+// ------------------------------------------------------------------------------------
+// listComparisonVersionOrders - GET /projects/{project_uid}/documents/{document_uid}/comparison-version-orders
+// ------------------------------------------------------------------------------------
+
+/**
+ * List the revisions of the comparison order of a document set.
+ *
+ * The revisions, newest first, of the order in which the versions of one document set are compared. The order never changes the documents' ordinal that runs and finding carry-over use (`D-5`). An unknown project or document is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-INGEST-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_version_orders`) and nothing is read or written.
+ */
+export type ListComparisonVersionOrdersInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/comparison-version-orders`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+  };
+  /** Query string parameters. */
+  query?: {
+    /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
+    cursor?: Cursor;
+    /** Page size. */
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listComparisonVersionOrders` (`application/json`, HTTP 200). */
+export type ListComparisonVersionOrdersResult = ComparisonVersionOrderList;
 
 // ------------------------------------------------------------------------------------
 // listDecisionHistory - GET /findings/{finding_uid}/decisions
@@ -1962,6 +2460,36 @@ export type ListUsersInput = {
 export type ListUsersResult = AccountPage;
 
 // ------------------------------------------------------------------------------------
+// listVersionPageProfiles - GET /versions/{version_uid}/page-profiles
+// ------------------------------------------------------------------------------------
+
+/**
+ * List the stored page profiles of a version.
+ *
+ * The profiles the worker stored for the pages of a version, by page number ascending, each with its `page_number` and its own identity: a page is addressed by that identity and never by its number. A page whose profile has not been computed is absent; the version's `page_count` says how many pages it has. An unknown version is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-PROFILE-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: version_pages`) and nothing is read or written.
+ */
+export type ListVersionPageProfilesInput = {
+  /** Path parameters, substituted into `/versions/{version_uid}/page-profiles`. */
+  path: {
+    version_uid: VersionUid;
+  };
+  /** Query string parameters. */
+  query?: {
+    /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
+    cursor?: Cursor;
+    /** Page size. */
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listVersionPageProfiles` (`application/json`, HTTP 200). */
+export type ListVersionPageProfilesResult = VersionPageProfilePage;
+
+// ------------------------------------------------------------------------------------
 // listVersionPortalBlocks - GET /versions/{version_uid}/portal-blocks
 // ------------------------------------------------------------------------------------
 
@@ -2071,6 +2599,34 @@ export type MarkReleaseNotesReadInput = {
 export type MarkReleaseNotesReadResult = void;
 
 // ------------------------------------------------------------------------------------
+// pauseComparisonUpload - POST /comparison-uploads/{comparison_upload_id}/pause
+// ------------------------------------------------------------------------------------
+
+/**
+ * Pause an upload batch after the set in hand.
+ *
+ * The batch finishes the set it is processing and then stops. A batch that is not being processed is `409 conflict` (`comparison_upload_state`). A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-INGEST-02` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_uploads`) and nothing is read or written.
+ */
+export type PauseComparisonUploadInput = {
+  /** Path parameters, substituted into `/comparison-uploads/{comparison_upload_id}/pause`. */
+  path: {
+    comparison_upload_id: ComparisonUploadId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `pauseComparisonUpload` (`application/json`, HTTP 200). */
+export type PauseComparisonUploadResult = ComparisonUpload;
+
+// ------------------------------------------------------------------------------------
 // purgeUser - DELETE /users/{user_uid}
 // ------------------------------------------------------------------------------------
 
@@ -2121,7 +2677,7 @@ export type ReadRegistrationStatusResult = RegistrationStatusResponse;
 /**
  * Reaudit Run
  *
- * A re-audit runs the same version on the current configuration (R-82), so it faces today's analysis input budget, not the source run's: over it, the answer is `422 analysis_input_budget_exceeded` with `details.character_count` and `details.budget_characters`, and no run exists (R-118). A v3 re-audit may refuse absent verified retrieval set with 422 required_norm_unavailable and reference_kind norm_retrieval_set. `W59-SECTION-SEAL-01`: the new run is routed from the version's persisted classification exactly as `startRun` is, never from the source run's profile; an unclassified version is `422 version_classification_required` and a section with no registered text profile is `422 section_profile_unavailable`. `EXEC-PAR-START-01`: a re-audit of a run whose executor was named at its start runs on that same connection (its current revision), not on today's route; if that connection can no longer serve, the answer is `503 dependency_unavailable` with `details.dependency` `executor_connection` and no run exists. It is never redirected to the standby or to another connection.
+ * A re-audit runs the same version on the current configuration (R-82), so it faces today's limit (the one-call analysis input budget times the number of windows a run may use), not the source run's: over it, the answer is `422 analysis_input_budget_exceeded` with `details.character_count` and `details.budget_characters`, and no run exists (R-118). A v3 re-audit may refuse absent verified retrieval set with 422 required_norm_unavailable and reference_kind norm_retrieval_set. `W59-SECTION-SEAL-01`: the new run is routed from the version's persisted classification exactly as `startRun` is, never from the source run's profile; an unclassified version is `422 version_classification_required` and a section with no registered text profile is `422 section_profile_unavailable`. `EXEC-PAR-START-01`: a re-audit of a run whose executor was named at its start runs on that same connection (its current revision), not on today's route; if that connection can no longer serve, the answer is `503 dependency_unavailable` with `details.dependency` `executor_connection` and no run exists. It is never redirected to the standby or to another connection.
  */
 export type ReauditRunInput = {
   /** Path parameters, substituted into `/runs/{run_id}/reaudit`. */
@@ -2238,6 +2794,93 @@ export type RestoreUserInput = {
 
 /** Success body of `restoreUser` (`application/json`, HTTP 200). */
 export type RestoreUserResult = Account;
+
+// ------------------------------------------------------------------------------------
+// resumeComparisonUpload - POST /comparison-uploads/{comparison_upload_id}/resume
+// ------------------------------------------------------------------------------------
+
+/**
+ * Resume a paused upload batch.
+ *
+ * A batch that is not paused is `409 conflict` (`comparison_upload_state`). A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-INGEST-02` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_uploads`) and nothing is read or written.
+ */
+export type ResumeComparisonUploadInput = {
+  /** Path parameters, substituted into `/comparison-uploads/{comparison_upload_id}/resume`. */
+  path: {
+    comparison_upload_id: ComparisonUploadId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `resumeComparisonUpload` (`application/json`, HTTP 200). */
+export type ResumeComparisonUploadResult = ComparisonUpload;
+
+// ------------------------------------------------------------------------------------
+// retryComparisonUploadSet - POST /comparison-uploads/{comparison_upload_id}/sets/{comparison_upload_set_id}/retry
+// ------------------------------------------------------------------------------------
+
+/**
+ * Queue a failed set again.
+ *
+ * Only a failed set can be retried. A set in any other state is `409 conflict` (`comparison_set_state`). A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-INGEST-02` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_uploads`) and nothing is read or written.
+ */
+export type RetryComparisonUploadSetInput = {
+  /** Path parameters, substituted into `/comparison-uploads/{comparison_upload_id}/sets/{comparison_upload_set_id}/retry`. */
+  path: {
+    comparison_upload_id: ComparisonUploadId;
+    comparison_upload_set_id: ComparisonUploadSetId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `retryComparisonUploadSet` (`application/json`, HTTP 200). */
+export type RetryComparisonUploadSetResult = ComparisonProposalSet;
+
+// ------------------------------------------------------------------------------------
+// reviseAnalysisPreset - POST /analysis/presets/{preset_id}/revisions
+// ------------------------------------------------------------------------------------
+
+/**
+ * Revise an analysis preset.
+ *
+ * Append a revision with the full settings, never a patch; the earlier revision is kept as it was and runs that used it keep pointing at it. An administrator's act (`role:admin`). Refusals: `403`, `404` for an unknown preset, `422 validation_failed` as for creation and `differs_from_current` on `name` when nothing would change, `409 conflict` (`preset_archived`, `preset_name_in_use`, `connection_archived`).
+ */
+export type ReviseAnalysisPresetInput = {
+  /** Path parameters, substituted into `/analysis/presets/{preset_id}/revisions`. */
+  path: {
+    preset_id: PresetId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: SaveAnalysisPresetRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `reviseAnalysisPreset` (`application/json`, HTTP 201). */
+export type ReviseAnalysisPresetResult = AnalysisPreset;
 
 // ------------------------------------------------------------------------------------
 // reviseExecutorConnection - POST /executor-connections/{connection_id}/revisions
@@ -2573,11 +3216,13 @@ export type StartOptimisationPassResult = OptimisationPass;
  *
  * PD-03, in the subset PC-01 exercises. A new idempotency key creates a run. The same key with the same payload returns the existing run and creates nothing, whatever state that run is in, terminal included. The same key with a different payload returns `idempotency_key_reuse` and creates nothing. A new key over a terminal run creates a new run and leaves the terminal one exactly as it was: a terminal run is never reopened.
  *
- * A version whose recorded text is larger than the analysis input budget is refused up front with `422 analysis_input_budget_exceeded` and no run exists (R-118). A version published before the portal-bundle upload has no recorded count and is not refused by this rule.
+ * A version whose recorded text is larger than the most a run takes (the analysis input budget of one model call times the number of windows a run may use) is refused up front with `422 analysis_input_budget_exceeded` and no run exists (R-118). A version published before the portal-bundle upload has no recorded count and is not refused by this rule.
  *
  * `W59-SECTION-SEAL-01`: the run's analysis profile is routed from the version's persisted classification through the section-keyed profile registry -- never from a file name, a suggestion or the document's legacy `section`, and never by an AR fallback. A version with no classification is refused with `422 version_classification_required`; a confirmed section with no registered text profile is refused with `422 section_profile_unavailable` (`BETA-CONTRACT-SEAL-01`, `D-179`: both used to be `required_norm_unavailable` told apart by `details.reference_kind`). Neither carries details, and both refusals precede the key's claim, so nothing is written. An existing run keeps the profile it pinned.
  *
  * `EXEC-PAR-START-01`: the optional `executor_connection_id` names the connection the run must be on. Absent, the run follows the global route (and its standby rule) exactly as before. Present, the run freezes that connection's current revision if this release serves it, its current key has a passing probe and it is not archived; otherwise the start is refused before the key is claimed, so no run, command record or event exists: `422 validation_failed` with `details.field` `executor_connection_id` for an unknown or malformed id, `503 dependency_unavailable` with `details.dependency` `executor_connection` for a connection that cannot serve now. A named connection never falls back to the route's standby or to another connection. The choice is part of the payload the idempotency key is compared by: the same key with another connection is `idempotency_key_reuse`.
+ *
+ * `ANALYSIS-PRESETS-01`: the optional `preset_id` names a saved preset instead of a connection. Its current revision is read in the start's transaction and its executor connection is applied exactly as if `executor_connection_id` had named it, so every refusal of that field applies unchanged; the run records the preset revision and `RunStatus.preset` shows it. `422 validation_failed` with `details.field` `preset_id` refuses an unknown preset (`unknown_preset`) and a preset together with `executor_connection_id` (`conflicts_with_executor_connection_id`); `409 conflict` with `details.conflict_reason` `preset_archived` refuses an archived one. All three precede the key's claim, so nothing is written. The preset, not the connection it resolved to, is part of the payload the idempotency key is compared by: a retry after an administrator revised the preset replays the run that exists, and the same key with a hand-chosen connection is `idempotency_key_reuse`. `reauditRun` records no preset.
  */
 export type StartRunInput = {
   /** Request body, sent as `application/json`. */
@@ -2651,6 +3296,81 @@ export type StreamNormDocumentContentInput = {
 
 /** Success body of `streamNormDocumentContent` (`application/pdf`, HTTP 200/206). */
 export type StreamNormDocumentContentResult = Blob;
+
+// ------------------------------------------------------------------------------------
+// streamVersionPagePreview - GET /page-profiles/{comparison_page_profile_id}/preview
+// ------------------------------------------------------------------------------------
+
+/**
+ * Stream the stored preview PNG of one page.
+ *
+ * The bytes the worker stored, with no redirect and no link. A page that has no preview is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-PROFILE-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: version_pages`) and nothing is read or written.
+ */
+export type StreamVersionPagePreviewInput = {
+  /** Path parameters, substituted into `/page-profiles/{comparison_page_profile_id}/preview`. */
+  path: {
+    comparison_page_profile_id: ComparisonPageProfileId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `streamVersionPagePreview` (`image/png`, HTTP 200). */
+export type StreamVersionPagePreviewResult = Blob;
+
+// ------------------------------------------------------------------------------------
+// streamVersionPageThumbnail - GET /page-profiles/{comparison_page_profile_id}/thumbnail
+// ------------------------------------------------------------------------------------
+
+/**
+ * Stream the stored thumbnail PNG of one page.
+ *
+ * The bytes the worker stored, with no redirect and no link. A page that has no thumbnail is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-PROFILE-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: version_pages`) and nothing is read or written.
+ */
+export type StreamVersionPageThumbnailInput = {
+  /** Path parameters, substituted into `/page-profiles/{comparison_page_profile_id}/thumbnail`. */
+  path: {
+    comparison_page_profile_id: ComparisonPageProfileId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `streamVersionPageThumbnail` (`image/png`, HTTP 200). */
+export type StreamVersionPageThumbnailResult = Blob;
+
+// ------------------------------------------------------------------------------------
+// streamVersionPageTile - GET /page-profiles/{comparison_page_profile_id}/tile
+// ------------------------------------------------------------------------------------
+
+/**
+ * Stream one tile PNG of a page's bounded pyramid.
+ *
+ * One tile of the bounded pyramid rendered in the worker's child process (`ADR-0025` decision 9), addressed by the query parameters `level`, `column` and `row` (structural bounds 0..12 and 0..4095); whether a level is stored or rendered again on request is `CMP-PROFILE-01`'s to decide, and the address is the same. A tile that does not exist is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-PROFILE-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: version_pages`) and nothing is read or written.
+ */
+export type StreamVersionPageTileInput = {
+  /** Path parameters, substituted into `/page-profiles/{comparison_page_profile_id}/tile`. */
+  path: {
+    comparison_page_profile_id: ComparisonPageProfileId;
+  };
+  /** Query string parameters. */
+  query: {
+    column: number;
+    level: number;
+    row: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `streamVersionPageTile` (`image/png`, HTTP 200). */
+export type StreamVersionPageTileResult = Blob;
 
 // ------------------------------------------------------------------------------------
 // streamVersionPortalBlockCrop - GET /versions/{version_uid}/portal-blocks/{portal_block_id}/crop
@@ -2790,6 +3510,41 @@ export type UpdateUserInput = {
 export type UpdateUserResult = Account;
 
 // ------------------------------------------------------------------------------------
+// uploadComparisonUploadPart - PUT /comparison-uploads/{comparison_upload_id}/files/{comparison_upload_file_id}/parts
+// ------------------------------------------------------------------------------------
+
+/**
+ * Stage one part of one file of an upload batch.
+ *
+ * The part is named by the query parameter `part_number` (from 1; a part number is an ordinal inside a file and the file is the identity). The body is the raw part, `application/octet-stream`, at most 16 MiB (`ADR-0025` decision 10; the default proxy location, no proxy change). The part has a database owner before its bytes are staged, and the file's multipart token is persisted before the first part. Part numbers run from 1; sending the same part again with the same bytes replays the recorded receipt. Refusals: `404`, `409 conflict` (`comparison_upload_state`), `422 validation_failed` (`comparison_part_number`, `comparison_part_size`). A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-INGEST-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_uploads`) and nothing is read or written.
+ */
+export type UploadComparisonUploadPartInput = {
+  /** Path parameters, substituted into `/comparison-uploads/{comparison_upload_id}/files/{comparison_upload_file_id}/parts`. */
+  path: {
+    comparison_upload_file_id: ComparisonUploadFileId;
+    comparison_upload_id: ComparisonUploadId;
+  };
+  /** Query string parameters. */
+  query: {
+    part_number: number;
+  };
+  /** Request body, sent as `application/octet-stream`. */
+  body: Blob;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `uploadComparisonUploadPart` (`application/json`, HTTP 200). */
+export type UploadComparisonUploadPartResult = ComparisonUploadPartReceipt;
+
+// ------------------------------------------------------------------------------------
 // uploadDocument - POST /projects/{project_uid}/documents
 // ------------------------------------------------------------------------------------
 
@@ -2893,6 +3648,39 @@ export type UploadPriceListInput = {
 export type UploadPriceListResult = PriceListRevision;
 
 // ------------------------------------------------------------------------------------
+// withdrawSheetPairing - POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/sheet-pairings/{sheet_link_id}/withdrawals
+// ------------------------------------------------------------------------------------
+
+/**
+ * Withdraw Sheet Pairing
+ *
+ * End one active sheet link of the path's (older) version with a new row of the append-only history: nothing is updated or deleted, and the approval stays in the history. The body names the comparison view the expert was looking at (`mode` and runs): the approved set that remains is sealed over that view's text. A link that is not of this path is `404`; a link already withdrawn is `conflict` with `conflict_reason` `sheet_link_not_active`; a view that cannot be recomputed is `conflict` with `comparison_not_available`. The same key repeated answers the first withdrawal, `replayed: true`. `expert` is required; `admin` alone is refused (`required_capability: role:expert`).
+ */
+export type WithdrawSheetPairingInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/sheet-pairings/{sheet_link_id}/withdrawals`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+    sheet_link_id: SheetLinkId;
+    version_uid: VersionUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: WithdrawSheetPairingRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `withdrawSheetPairing` (`application/json`, HTTP 201). */
+export type WithdrawSheetPairingResult = SheetPairingEvent;
+
+// ------------------------------------------------------------------------------------
 // Runtime descriptors
 // ------------------------------------------------------------------------------------
 
@@ -2901,6 +3689,20 @@ export type UploadPriceListResult = PriceListRevision;
  * table; they never build a URL, a method or a header name by hand.
  */
 export const OPERATIONS = {
+  appendComparisonVersionOrder: {
+    operationId: 'appendComparisonVersionOrder',
+    method: 'POST',
+    path: '/projects/{project_uid}/documents/{document_uid}/comparison-version-orders',
+    pathParams: ['document_uid', 'project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['comparison'],
+  },
   appendDecision: {
     operationId: 'appendDecision',
     method: 'POST',
@@ -2929,6 +3731,34 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['registrations'],
   },
+  approveSheetPairing: {
+    operationId: 'approveSheetPairing',
+    method: 'POST',
+    path: '/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/sheet-pairings',
+    pathParams: ['document_uid', 'project_uid', 'version_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['documents'],
+  },
+  archiveAnalysisPreset: {
+    operationId: 'archiveAnalysisPreset',
+    method: 'POST',
+    path: '/analysis/presets/{preset_id}/archive',
+    pathParams: ['preset_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['analysis'],
+  },
   archiveExecutorConnection: {
     operationId: 'archiveExecutorConnection',
     method: 'POST',
@@ -2956,6 +3786,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 500, 503],
     tags: ['users'],
+  },
+  cancelComparisonUpload: {
+    operationId: 'cancelComparisonUpload',
+    method: 'POST',
+    path: '/comparison-uploads/{comparison_upload_id}/cancellation',
+    pathParams: ['comparison_upload_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
   },
   cancelRun: {
     operationId: 'cancelRun',
@@ -3041,6 +3885,34 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['documents'],
   },
+  completeComparisonUploadFile: {
+    operationId: 'completeComparisonUploadFile',
+    method: 'POST',
+    path: '/comparison-uploads/{comparison_upload_id}/files/{comparison_upload_file_id}/completion',
+    pathParams: ['comparison_upload_file_id', 'comparison_upload_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['comparison'],
+  },
+  confirmComparisonUploadSet: {
+    operationId: 'confirmComparisonUploadSet',
+    method: 'POST',
+    path: '/comparison-uploads/{comparison_upload_id}/sets/{comparison_upload_set_id}/confirmation',
+    pathParams: ['comparison_upload_id', 'comparison_upload_set_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['comparison'],
+  },
   correctVersionClassification: {
     operationId: 'correctVersionClassification',
     method: 'POST',
@@ -3055,6 +3927,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['documents'],
   },
+  createAnalysisPreset: {
+    operationId: 'createAnalysisPreset',
+    method: 'POST',
+    path: '/analysis/presets',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 409, 422, 500, 503],
+    tags: ['analysis'],
+  },
   createAssignment: {
     operationId: 'createAssignment',
     method: 'POST',
@@ -3068,6 +3954,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['dispatch'],
+  },
+  createComparisonUpload: {
+    operationId: 'createComparisonUpload',
+    method: 'POST',
+    path: '/projects/{project_uid}/comparison-uploads',
+    pathParams: ['project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['comparison'],
   },
   createExecutorConnection: {
     operationId: 'createExecutorConnection',
@@ -3110,6 +4010,20 @@ export const OPERATIONS = {
     successStatuses: [201],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['optimisation'],
+  },
+  excludeComparisonUploadSet: {
+    operationId: 'excludeComparisonUploadSet',
+    method: 'POST',
+    path: '/comparison-uploads/{comparison_upload_id}/sets/{comparison_upload_set_id}/exclusion',
+    pathParams: ['comparison_upload_id', 'comparison_upload_set_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
   },
   exportOptimisationProposalsCsv: {
     operationId: 'exportOptimisationProposalsCsv',
@@ -3181,6 +4095,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 404, 409, 422, 500, 503],
     tags: ['execution'],
   },
+  generateComparisonSummary: {
+    operationId: 'generateComparisonSummary',
+    method: 'POST',
+    path: '/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/summaries',
+    pathParams: ['document_uid', 'project_uid', 'version_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['documents'],
+  },
   generateExecutorSshKey: {
     operationId: 'generateExecutorSshKey',
     method: 'POST',
@@ -3250,6 +4178,34 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 500, 503],
     tags: ['dispatch'],
+  },
+  getComparisonUpload: {
+    operationId: 'getComparisonUpload',
+    method: 'GET',
+    path: '/comparison-uploads/{comparison_upload_id}',
+    pathParams: ['comparison_upload_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['comparison'],
+  },
+  getComparisonUploadProposal: {
+    operationId: 'getComparisonUploadProposal',
+    method: 'GET',
+    path: '/comparison-uploads/{comparison_upload_id}/proposal',
+    pathParams: ['comparison_upload_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['comparison'],
   },
   getDashboardSummary: {
     operationId: 'getDashboardSummary',
@@ -3475,6 +4431,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 500, 503],
     tags: ['documents'],
   },
+  getVersionPageProfile: {
+    operationId: 'getVersionPageProfile',
+    method: 'GET',
+    path: '/page-profiles/{comparison_page_profile_id}',
+    pathParams: ['comparison_page_profile_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['comparison'],
+  },
   getVersionSectionReview: {
     operationId: 'getVersionSectionReview',
     method: 'GET',
@@ -3517,6 +4487,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 422, 500, 503],
     tags: ['auth'],
   },
+  listAnalysisPresets: {
+    operationId: 'listAnalysisPresets',
+    method: 'GET',
+    path: '/analysis/presets',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 500, 503],
+    tags: ['analysis'],
+  },
   listAnalysisProfiles: {
     operationId: 'listAnalysisProfiles',
     method: 'GET',
@@ -3544,6 +4528,34 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 422, 500, 503],
     tags: ['dispatch'],
+  },
+  listComparisonUploads: {
+    operationId: 'listComparisonUploads',
+    method: 'GET',
+    path: '/projects/{project_uid}/comparison-uploads',
+    pathParams: ['project_uid'],
+    queryParams: ['cursor', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['comparison'],
+  },
+  listComparisonVersionOrders: {
+    operationId: 'listComparisonVersionOrders',
+    method: 'GET',
+    path: '/projects/{project_uid}/documents/{document_uid}/comparison-version-orders',
+    pathParams: ['document_uid', 'project_uid'],
+    queryParams: ['cursor', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['comparison'],
   },
   listDecisionHistory: {
     operationId: 'listDecisionHistory',
@@ -3853,6 +4865,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 422, 500, 503],
     tags: ['users'],
   },
+  listVersionPageProfiles: {
+    operationId: 'listVersionPageProfiles',
+    method: 'GET',
+    path: '/versions/{version_uid}/page-profiles',
+    pathParams: ['version_uid'],
+    queryParams: ['cursor', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['comparison'],
+  },
   listVersionPortalBlocks: {
     operationId: 'listVersionPortalBlocks',
     method: 'GET',
@@ -3908,6 +4934,20 @@ export const OPERATIONS = {
     successStatuses: [204],
     errorStatuses: [401, 403, 422, 500, 503],
     tags: ['account'],
+  },
+  pauseComparisonUpload: {
+    operationId: 'pauseComparisonUpload',
+    method: 'POST',
+    path: '/comparison-uploads/{comparison_upload_id}/pause',
+    pathParams: ['comparison_upload_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
   },
   purgeUser: {
     operationId: 'purgeUser',
@@ -4006,6 +5046,48 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 500, 503],
     tags: ['users'],
+  },
+  resumeComparisonUpload: {
+    operationId: 'resumeComparisonUpload',
+    method: 'POST',
+    path: '/comparison-uploads/{comparison_upload_id}/resume',
+    pathParams: ['comparison_upload_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
+  },
+  retryComparisonUploadSet: {
+    operationId: 'retryComparisonUploadSet',
+    method: 'POST',
+    path: '/comparison-uploads/{comparison_upload_id}/sets/{comparison_upload_set_id}/retry',
+    pathParams: ['comparison_upload_id', 'comparison_upload_set_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
+  },
+  reviseAnalysisPreset: {
+    operationId: 'reviseAnalysisPreset',
+    method: 'POST',
+    path: '/analysis/presets/{preset_id}/revisions',
+    pathParams: ['preset_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['analysis'],
   },
   reviseExecutorConnection: {
     operationId: 'reviseExecutorConnection',
@@ -4231,6 +5313,48 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['norms'],
   },
+  streamVersionPagePreview: {
+    operationId: 'streamVersionPagePreview',
+    method: 'GET',
+    path: '/page-profiles/{comparison_page_profile_id}/preview',
+    pathParams: ['comparison_page_profile_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'image/png',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['comparison'],
+  },
+  streamVersionPageThumbnail: {
+    operationId: 'streamVersionPageThumbnail',
+    method: 'GET',
+    path: '/page-profiles/{comparison_page_profile_id}/thumbnail',
+    pathParams: ['comparison_page_profile_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'image/png',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['comparison'],
+  },
+  streamVersionPageTile: {
+    operationId: 'streamVersionPageTile',
+    method: 'GET',
+    path: '/page-profiles/{comparison_page_profile_id}/tile',
+    pathParams: ['comparison_page_profile_id'],
+    queryParams: ['column', 'level', 'row'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'image/png',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['comparison'],
+  },
   streamVersionPortalBlockCrop: {
     operationId: 'streamVersionPortalBlockCrop',
     method: 'GET',
@@ -4315,6 +5439,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['users'],
   },
+  uploadComparisonUploadPart: {
+    operationId: 'uploadComparisonUploadPart',
+    method: 'PUT',
+    path: '/comparison-uploads/{comparison_upload_id}/files/{comparison_upload_file_id}/parts',
+    pathParams: ['comparison_upload_file_id', 'comparison_upload_id'],
+    queryParams: ['part_number'],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/octet-stream',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['comparison'],
+  },
   uploadDocument: {
     operationId: 'uploadDocument',
     method: 'POST',
@@ -4356,5 +5494,19 @@ export const OPERATIONS = {
     successStatuses: [201],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['optimisation'],
+  },
+  withdrawSheetPairing: {
+    operationId: 'withdrawSheetPairing',
+    method: 'POST',
+    path: '/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/sheet-pairings/{sheet_link_id}/withdrawals',
+    pathParams: ['document_uid', 'project_uid', 'sheet_link_id', 'version_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['documents'],
   },
 } as const;

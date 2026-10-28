@@ -14,6 +14,23 @@ makes it:
 * **A null projection column is the empty string** — never the literal ``null``, never
   ``NULL``. A reader opening this in a spreadsheet must see an empty cell, not the
   four-letter word a naive ``str(None)`` would produce.
+* **A text cell that a spreadsheet could read as a formula gets one leading apostrophe**
+  (`R-146ax`, ``EXPOSURE-REVIEW-02.md`` ``F-11``, widened by ``ACCESS-COMPARE-JUDGE-FIXES-01``).
+  The rule is :func:`auditmanager.shared.spreadsheet.neutralise_formula` and is stated there: a cell
+  that starts with a tab, a carriage return or a line feed, or whose first character after any
+  blanks and invisible characters (space, no-break space, U+FEFF, U+200B..U+200D, U+2060, tab, CR,
+  LF) is ``=``, ``+``, ``-``, ``@`` or their fullwidth forms. ``evidence_quote`` is a verbatim
+  quotation from a client's document and ``finding_text`` and ``recommendation_text`` are model
+  output, so none of them is under this system's control; the expert who opens the file in Excel
+  must see the text and not run it. Every other cell's bytes are exactly what they were; a trigger
+  in the middle of a cell is nothing. **A number is not a text cell.** The one
+  integer column, ``evidence_page``, comes from ``CHECK (page_number >= 1)``, so no number
+  that reaches this module starts with ``-``; an integer is written as digits and never
+  altered, which keeps a numeric column readable as a number if a negative one ever existed
+  (the XLSX writer refuses a negative count outright). A negative number held in a *text*
+  column (``-5`` as a quotation) is text and is neutralised like any other. The XLSX
+  writer reaches the same end by a different road: it stores every string as an
+  ``inlineStr``, which is text whatever its first character.
 
 One row per evidence item of the canonical observation. A finding with three
 quotations produces three rows sharing the finding-level columns.
@@ -32,6 +49,11 @@ from datetime import datetime, timezone
 from typing import Any, Final, Sequence
 
 from auditmanager.exports.query import ExportRow
+from auditmanager.shared.spreadsheet import (
+    FORMULA_NEUTRALISER,
+    FORMULA_TRIGGERS,
+    neutralise_formula,
+)
 
 #: P02 §6's first seventeen frozen columns, then W56a's two severity columns.
 COLUMNS: Final[tuple[str, ...]] = (
@@ -74,7 +96,8 @@ _LINE_TERMINATOR: Final[str] = "\r\n"
 
 
 def _cell(value: Any) -> str:
-    """One cell's text. ``None`` is the empty string; a datetime is RFC 3339 with ``Z``."""
+    """One cell's text. ``None`` is the empty string; a datetime is RFC 3339 with ``Z``; a
+    text cell that starts like a formula gets a leading apostrophe."""
     if value is None:
         return ""
     if isinstance(value, datetime):
@@ -86,7 +109,10 @@ def _cell(value: Any) -> str:
         # Not reachable from the current column set, and defined rather than left to
         # str(): a stray "True" in a CSV a reviewer reads is worse than a refusal.
         return "true" if value else "false"
-    return str(value)
+    if isinstance(value, int):
+        # A number is digits and is never altered (module docstring: ``evidence_page``).
+        return str(value)
+    return neutralise_formula(str(value))
 
 
 def row_values(row: ExportRow) -> tuple[str, ...]:
@@ -120,7 +146,10 @@ __all__ = [
     "BOM",
     "COLUMNS",
     "CONTENT_TYPE",
+    "FORMULA_NEUTRALISER",
+    "FORMULA_TRIGGERS",
     "SORT_KEY",
+    "neutralise_formula",
     "render_csv",
     "row_values",
 ]

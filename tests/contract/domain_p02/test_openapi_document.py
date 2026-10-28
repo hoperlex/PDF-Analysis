@@ -136,6 +136,11 @@ REQUIRED_OPERATIONS = {
     # `W59-DECISION-CARRYOVER-01`. An expert-confirmed carryover of one decision to the
     # matched finding of the next version: a keyed write to the decision ledger.
     "carryOverDecision",
+    # `COMPARE-PERSISTED-SUMMARY-01`. An expert's approval of a proposed sheet pair and its
+    # withdrawal: keyed writes to the append-only history of the comparison.
+    "approveSheetPairing",
+    "withdrawSheetPairing",
+    "generateComparisonSummary",
     # `W59-ANALYSIS-SETTINGS-01`. The text-profile registry run start routes through,
     # read-only, for «Настройки анализа».
     "listAnalysisProfiles",
@@ -189,6 +194,34 @@ REQUIRED_OPERATIONS = {
     "requestExecutorProbe",
     "listExecutorRoutes",
     "setExecutorRoute",
+    # `ANALYSIS-PRESETS-01` (R-146av). The named presets of how a run starts: any role reads them,
+    # an administrator saves, revises and archives them.
+    "listAnalysisPresets",
+    "createAnalysisPreset",
+    "reviseAnalysisPreset",
+    "archiveAnalysisPreset",
+    # `CMP-SEAL-C0` (ADR-0025). The comparison modules: the plain-PDF upload, the order of the
+    # versions of a document set and the page reads, sealed as stubs. Reads are any one role;
+    # every write is an expert's act and keyed.
+    "createComparisonUpload",
+    "listComparisonUploads",
+    "getComparisonUpload",
+    "getComparisonUploadProposal",
+    "uploadComparisonUploadPart",
+    "completeComparisonUploadFile",
+    "confirmComparisonUploadSet",
+    "excludeComparisonUploadSet",
+    "retryComparisonUploadSet",
+    "pauseComparisonUpload",
+    "resumeComparisonUpload",
+    "cancelComparisonUpload",
+    "listComparisonVersionOrders",
+    "appendComparisonVersionOrder",
+    "listVersionPageProfiles",
+    "getVersionPageProfile",
+    "streamVersionPagePreview",
+    "streamVersionPageThumbnail",
+    "streamVersionPageTile",
     # `EXEC-PULL-01` (R-143). The pull channel: an administrator issues and revokes a runner
     # token (shown once), and a runner calls four operations with one.
     "issueRunnerToken",
@@ -242,6 +275,10 @@ WRITE_OPERATIONS = {
     "setWorkerIntake",
     # `W59-DECISION-CARRYOVER-01`. Appends a decision event, so it is keyed like `appendDecision`.
     "carryOverDecision",
+    # `COMPARE-PERSISTED-SUMMARY-01`. Each appends a row of the sheet-link history, so both are keyed.
+    "approveSheetPairing",
+    "withdrawSheetPairing",
+    "generateComparisonSummary",
     # `W60-PRICE-LIST-01`. Stores a file and a revision, keyed like `uploadDocument`. The two
     # vendor-list writes are not keyed: an exact repeat writes nothing, and a stale writer is
     # refused by `expected_vendor_list_id`.
@@ -258,6 +295,21 @@ WRITE_OPERATIONS = {
     "generateExecutorSshKey",
     "requestExecutorProbe",
     "setExecutorRoute",
+    # `ANALYSIS-PRESETS-01`. Each appends a revision of the preset history, so all three are keyed.
+    "createAnalysisPreset",
+    "reviseAnalysisPreset",
+    "archiveAnalysisPreset",
+    # `CMP-SEAL-C0`. Every comparison write is keyed (ADR-0025 decision 19).
+    "createComparisonUpload",
+    "uploadComparisonUploadPart",
+    "completeComparisonUploadFile",
+    "confirmComparisonUploadSet",
+    "excludeComparisonUploadSet",
+    "retryComparisonUploadSet",
+    "pauseComparisonUpload",
+    "resumeComparisonUpload",
+    "cancelComparisonUpload",
+    "appendComparisonVersionOrder",
     # `EXEC-PULL-01`. The two administrator operations on runner tokens are keyed. The four a
     # runner calls are not: each is idempotent on the task's identity (a repeat of an accepted
     # answer is accepted, a different one is a conflict).
@@ -606,8 +658,10 @@ INPUT_LESS_OPERATIONS: frozenset[str] = frozenset(
     # `EXEC-SEAL-01` adds the two executor lists: a connection list and a route list take no input.
     # `AR-V3-BETA-PACK-STATUS-API-01` adds ``getArV3BetaPackStatus``: it reads the server's own
     # installed pack and addresses no identity.
+    # `ANALYSIS-PRESETS-01` adds ``listAnalysisPresets``: the list takes no input.
     {"getDashboardSummary", "getMe", "getProductVersion", "listReleases", "listAnalysisProfiles",
-     "listExecutorConnections", "listExecutorRoutes", "getArV3BetaPackStatus"}
+     "listExecutorConnections", "listExecutorRoutes", "getArV3BetaPackStatus",
+     "listAnalysisPresets"}
 )
 
 

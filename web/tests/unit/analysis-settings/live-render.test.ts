@@ -62,3 +62,33 @@ describe('press', () => {
     await expect(live.press('Б')).rejects.toThrow('expected one button «Б», found 0');
   });
 });
+
+describe('change (`ANALYSIS-PRESETS-01`)', () => {
+  function Field({ disabled = false }: { disabled?: boolean }) {
+    const [value, setValue] = useState('a');
+    return createElement(
+      'div',
+      null,
+      createElement('label', { htmlFor: 'f1' }, 'Поле'),
+      createElement('input', { id: 'f1', value, disabled, onChange: (event: { target: { value: string } }) => setValue(event.target.value) }),
+      createElement('p', null, `значение: ${value}`),
+    );
+  }
+
+  it('delivers the new value to the field the label points at, and the page follows it', async () => {
+    live = await mountLive(createElement(Field));
+    expect(await live.change('Поле', 'b')).toBe(true);
+    expect(live.markup()).toContain('значение: b');
+  });
+
+  it('delivers nothing to a disabled field, and says so', async () => {
+    live = await mountLive(createElement(Field, { disabled: true }));
+    expect(await live.change('Поле', 'b')).toBe(false);
+    expect(live.markup()).toContain('значение: a');
+  });
+
+  it('throws unless exactly one label carries the text', async () => {
+    live = await mountLive(createElement(Field));
+    await expect(live.change('Нет такого', 'b')).rejects.toThrow(/expected one label/);
+  });
+});

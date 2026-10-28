@@ -45,7 +45,7 @@ function apiError(
   message = 'A caller-safe sentence.',
 ): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.7.0', error_code: code, message, correlation_id: 'cid-exec', retryable, details,
+    contract_version: '1.9.0', error_code: code, message, correlation_id: 'cid-exec', retryable, details,
   };
   return new ApiError(status, envelope, 'cid-exec');
 }
@@ -212,7 +212,8 @@ describe('the control keeps the select and the start beside a refusal', () => {
     const markup = control(cannotServe('archived'));
     expect(markup).toContain('data-run-failure="executor_unavailable"');
     expect(markup).toContain('data-executor-select');
-    expect(markup.match(/<select\b/g)).toHaveLength(1);
+    // the executor's select and, since `ANALYSIS-PRESETS-01`, the preset's beside it
+    expect(markup.match(/<select\b/g)).toHaveLength(2);
     expect(markup).toContain('>Запустить прогон</button>');
     expect(markup.match(new RegExp(RETRY, 'g'))).toHaveLength(1);
     // The start button, the retry, and the select’s own «Прочитать список снова» is absent here.

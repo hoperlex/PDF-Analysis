@@ -341,6 +341,8 @@ def test_the_run_status_view_carries_the_pin(monkeypatch, pinned) -> None:
         terminal_at=None, reaudit_of_run_id=None, norms_snapshot_id=pinned,
         # `RunRow` always has the field (`EXEC-PAR-START-01` reads it for the status's executor).
         connection_revision_id=None,
+        # `ANALYSIS-PRESETS-01`: likewise for the preset the status shows.
+        preset_revision_id=None,
     )
 
     class _Repository:

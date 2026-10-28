@@ -38,6 +38,8 @@ class _Session:
     def execute(self, statement, params):
         assert params == ({
             "run_id": "run_current", "version_uid": "ver_current", "profile_id": "ap_v3",
+            # `AR-V3-DECISIONS-01`: the certifying stage is a bind; the default is the v1/v2 stage.
+            "cite_stage_id": "norm_verification",
         } if self.calls == 0 else {"run_id": "run_current"})
         assert "INSERT" not in str(statement).upper()
         result = _Mappings(self.rows[self.calls])

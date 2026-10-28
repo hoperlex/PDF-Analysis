@@ -89,7 +89,7 @@ _HEADER = text("""
        AND s.norms_snapshot_id = r.norms_snapshot_id
       JOIN norms_snapshot ns ON ns.norms_snapshot_id = r.norms_snapshot_id
       JOIN stage_result st ON st.run_id = r.run_id
-       AND st.stage_id = 'norm_verification'
+       AND st.stage_id = :cite_stage_id
      WHERE r.run_id = :run_id AND r.version_uid = :version_uid
        AND r.analysis_profile_id = :profile_id
 """)
@@ -136,6 +136,10 @@ _CITATIONS = text("""
      WHERE o.run_id = :run_id
      ORDER BY c.finding_observation_id COLLATE "C", c.citation_ordinal
 """)
+
+#: The two stages whose succeeded StageResult certifies a citation partition: the v1/v2
+#: ``norm_verification`` stage and, since migration ``0036``, the AR v3 beta CITE stage.
+CITE_STAGE_IDS = frozenset({"norm_verification", "ar_v3_citation_review"})
 
 _NORMATIVE = frozenset({
     "evacuation", "fire_safety", "accessibility", "insulation", "sound",
@@ -195,17 +199,23 @@ def _citation(row: dict, header: dict) -> VerifiedCitation:
 
 def read_verified_citations(
     session: Session, *, run_id: str, version_uid: str, profile_id: str,
+    cite_stage_id: str = "norm_verification",
 ) -> VerifiedCitationRead:
     """Read one terminal Run's exact certified finding partitions, without a commit.
 
     ``profile_id`` must be the later registered v3 identity, not a caller chosen
     assertion. The caller also owns authorization and a repeatable-read snapshot.
+    ``cite_stage_id`` names the succeeded StageResult that certifies the partitions;
+    it is one of :data:`CITE_STAGE_IDS`, never free text.
     """
+    if cite_stage_id not in CITE_STAGE_IDS:
+        raise CitationReadRefused("cite_stage_unknown")
     if not all(isinstance(value, str) and value for value in
                (run_id, version_uid, profile_id)):
         raise CitationReadRefused("read_identity_missing")
     header_row = session.execute(_HEADER, {
         "run_id": run_id, "version_uid": version_uid, "profile_id": profile_id,
+        "cite_stage_id": cite_stage_id,
     }).mappings().one_or_none()
     if header_row is None:
         raise CitationReadRefused("run_or_v3_profile_unavailable")

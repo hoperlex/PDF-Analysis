@@ -94,9 +94,12 @@ KEEP_NORM_TABLES = EXEMPT_FROM_FINGERPRINT
 #: `EXEC-PULL-01`: the runner tokens are configuration too (the stand's credentials for its
 #: runners, not product data); the tasks are the opposite -- they carry the stand's documents and
 #: the model's answers, and reference runs, Attempts and calls -- so ``executor_task`` is PRODUCT.
+#: `ANALYSIS-PRESETS-01` (`0037_analysis_presets`): a preset is a named choice of one of those
+#: connections, kept with them. ``audit_run.preset_revision_id`` (PRODUCT) references it, never the
+#: other way round.
 KEEP_EXECUTOR_TABLES = frozenset((
-    "executor_connection", "executor_connection_revision", "executor_probe",
-    "executor_route_event", "executor_runner_token", "executor_secret",
+    "analysis_preset_revision", "executor_connection", "executor_connection_revision",
+    "executor_probe", "executor_route_event", "executor_runner_token", "executor_secret",
 ))
 KEEP_TABLES = (
     KEEP_ACCOUNT_TABLES | KEEP_RELEASE_TABLES | KEEP_LOOKUP_TABLES | KEEP_NORM_TABLES
@@ -114,7 +117,10 @@ MIXED_TABLES = frozenset(("audit_event", "blob", "command_record"))
 #: every table that references it are named in the same statement.
 PRODUCT_TABLES = frozenset((
     "analysis_artifact_publication", "ar_v3_run_group", "ar_v3_run_group_member", "attempt",
-    "audit_run", "document", "document_version",
+    "audit_run", "comparison_model_call", "comparison_page_profile", "comparison_sheet_link",
+    "comparison_summary", "comparison_upload", "comparison_upload_file", "comparison_upload_part",
+    "comparison_upload_set", "comparison_version_order", "comparison_work",
+    "comparison_work_attempt", "document", "document_version",
     "document_version_classification", "document_version_classification_correction",
     "executor_task", "expert_decision_event", "finding", "finding_evidence", "finding_observation",
     "finding_observation_norm_citation", "input_manifest_entry", "job", "lease", "model_call",
@@ -132,7 +138,8 @@ PRODUCT_TABLES = frozenset((
 #: predicate of ``audit_event`` are built from this tuple (``_event_keep``).
 KEEP_EVENT_PREFIXES = ("norm_custody.", "executor.", "access.", "erasure.")
 PRODUCT_EVENT_PREFIXES = (
-    "artifact.", "attempt.", "audit_run.", "execution.", "findings.", "job.", "provider.", "stage.",
+    "artifact.", "attempt.", "audit_run.", "comparison.", "execution.", "findings.", "job.",
+    "provider.", "stage.",
 )
 #: ``command_record.command_type``. A registration approval is account-side.
 KEEP_COMMAND_TYPES = frozenset((
@@ -143,15 +150,29 @@ KEEP_COMMAND_TYPES = frozenset((
     "set_executor_secret",
     # `EXEC-PULL-01`: a runner token is issued and revoked as configuration.
     "issue_runner_token", "revoke_runner_token",
+    # `ANALYSIS-PRESETS-01`: a preset is administered and kept like the connections it names.
+    "archive_analysis_preset", "create_analysis_preset", "revise_analysis_preset",
 ))
 PRODUCT_COMMAND_TYPES = frozenset((
-    "append_decision", "cancel_audit_run", "carry_over_decision", "create_project",
+    "append_decision", "approve_sheet_pairing", "cancel_audit_run", "carry_over_decision",
+    "create_project", "generate_comparison_summary",
     "decide_optimisation_proposal", "reaudit_run", "set_execution_paused", "set_job_priority",
     "set_worker_intake",
     # `0032_ar_v3_run_group`: the receipt of a group start. ``ar_v3_run_group.command_id``
     # references it, and it is deleted only after the group is truncated.
     "start_ar_v3_beta_group",
     "start_audit_run", "start_optimisation_pass", "upload_price_list", "upload_source_document",
+    # `0035_comparison_records`: the receipt of a withdrawal. ``comparison_sheet_link.command_id``
+    # references it, and it is deleted only after the link table is truncated.
+    "withdraw_sheet_pairing",
+    # `0038_comparison_foundation` (`CMP-SEAL-C0`): the receipts of the ten keyed comparison writes, named
+    # as the snake case of the operationId. ``comparison_upload.command_id`` and
+    # ``comparison_version_order.command_id`` reference theirs, and each is deleted only after its table is
+    # truncated. A lane that names a command type differently registers it here.
+    "append_comparison_version_order", "cancel_comparison_upload", "complete_comparison_upload_file",
+    "confirm_comparison_upload_set", "create_comparison_upload", "exclude_comparison_upload_set",
+    "pause_comparison_upload", "resume_comparison_upload", "retry_comparison_upload_set",
+    "upload_comparison_upload_part",
 ))
 
 #: Work that is mid-flight in a worker. Queued work is discarded with the rest; work a worker is

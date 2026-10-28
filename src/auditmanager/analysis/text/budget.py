@@ -60,6 +60,7 @@ from typing import Final
 from auditmanager.analysis.text.lock import ProviderLock, provider_lock
 from auditmanager.analysis.text.prompt import (
     AR_TEXT_PROMPT_BUNDLE,
+    PromptBundle,
     canonical_json,
 )
 
@@ -102,9 +103,15 @@ def _exact(value: float) -> Fraction:
     return Fraction(repr(float(value)))
 
 
-def _fixed_prompt_characters() -> int:
-    """What every request carries whatever the document: the system prompt and the schema."""
-    bundle = AR_TEXT_PROMPT_BUNDLE
+def _fixed_prompt_characters(bundle: PromptBundle = AR_TEXT_PROMPT_BUNDLE) -> int:
+    """What every request carries whatever the document: the system prompt and the schema of ``bundle``.
+
+    ``bundle`` is the bundle the call is made with (`SECTION-JUDGE-FIXES-01`). The default is the АР v1
+    bundle the figures of this module were calibrated on (3 639 characters, the AR v3 path and
+    ``bootstrap/settings``); a section run passes its own, whose system prompt and schema run from 7 163 (ПБ) to
+    12 086 (СС) characters when this was written (`tests/integration/analysis_text/test_section_input_budget.py`
+    measures them).
+    """
     return len(bundle.system_prompt) + len(canonical_json(bundle.response_schema))
 
 
@@ -114,11 +121,20 @@ def input_budget_characters(
     reserved_characters: int = 0,
     *,
     lock: ProviderLock | None = None,
+    bundle: PromptBundle | None = None,
 ) -> int:
     """The most pypdfium2 characters a document may have for a run to finish under the ceiling.
 
     ``reserved_characters`` is room set aside for text the document does not carry -- W57's
     norms context, which ``CAP-01`` fixes. It defaults to zero and is subtracted.
+
+    ``bundle`` (`SECTION-JUDGE-FIXES-01`) is the prompt bundle of the run being planned. Every call carries
+    its system prompt and its response schema, so the figure subtracts **that** bundle's length and prices its
+    output cap. ``None`` (the default) is the АР v1 bundle the calibration was made on, which is what the
+    start-up check of ``bootstrap/settings`` and the AR v3 path use and what this function always did. A
+    section run passes its profile's bundle where the run is planned (:func:`~auditmanager.analysis.text.
+    windows.text_window_policy`): the section prompts are longer than v1's by 3.5 to 8.4 thousand characters, and a
+    volume the АР figure admitted in one call could otherwise come out over the ceiling.
 
     Never negative: a ceiling the output cap alone exhausts, or a reservation larger than
     the room, is a budget of zero. Monotone: a higher ceiling never lowers the figure, and a
@@ -137,8 +153,9 @@ def input_budget_characters(
     if input_rate <= 0:
         raise ValueError("a pinned input rate must be positive")
 
+    chosen = AR_TEXT_PROMPT_BUNDLE if bundle is None else bundle
     output_usd = (
-        Fraction(AR_TEXT_PROMPT_BUNDLE.max_output_tokens)
+        Fraction(chosen.max_output_tokens)
         * _exact(pin.output_per_mtok_usd)
         / 1_000_000
     )
@@ -147,7 +164,7 @@ def input_budget_characters(
         return 0
     characters = (
         math.floor(input_tokens * CHARACTERS_PER_TOKEN)
-        - _fixed_prompt_characters()
+        - _fixed_prompt_characters(chosen)
         - PAGE_FRAMING_ALLOWANCE_CHARACTERS
         - reserved_characters
     )

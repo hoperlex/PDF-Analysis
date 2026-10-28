@@ -34,17 +34,24 @@ function seeded(cases = ALL_CASES): Client {
   return client;
 }
 
-/** The `<option>` elements of the markup, as `[attributes, text]`. */
+/**
+ * The `<option>` elements of the **executor's** select, as `[attributes, text]`. `ANALYSIS-PRESETS-01`
+ * put the preset's select before it on the control; these tests are about the executor's, so the
+ * slice starts at its marker and ends at its `</select>`.
+ */
 function options(markup: string): Array<readonly [string, string]> {
-  return [...markup.matchAll(/<option\b([^>]*)>([^<]*)<\/option>/g)].map((m) => [m[1] ?? '', m[2] ?? ''] as const);
+  const start = markup.indexOf('data-executor-select');
+  const slice = start < 0 ? '' : markup.slice(start, markup.indexOf('</select>', start));
+  return [...slice.matchAll(/<option\b([^>]*)>([^<]*)<\/option>/g)].map((m) => [m[1] ?? '', m[2] ?? ''] as const);
 }
 
 const optionFor = (markup: string, id: string) => options(markup).find(([attrs]) => attrs.includes(`value="${id}"`));
 
 describe('the selector is on the control', () => {
-  it('draws one labelled select whose first option is the default', () => {
+  it('draws the executor’s labelled select, with the preset’s before it, and its first option is the default', () => {
     const markup = control(seeded());
-    expect(markup.match(/<select\b/g)).toHaveLength(1);
+    expect(markup.match(/<select\b/g)).toHaveLength(2);
+    expect(markup.indexOf('data-preset-select')).toBeLessThan(markup.indexOf('data-executor-select'));
     expect(markup).toMatch(/<label for="([^"]+)">Исполнитель<\/label><select id="\1"/);
     const first = options(markup)[0];
     expect(first?.[1]).toBe(DEFAULT_EXECUTOR_LABEL);
@@ -125,7 +132,7 @@ describe('a connection whose settings were not read is not offered', () => {
     client.setQueryData(queryKeys.execution.connections(), { items: [READY.connection], pinned_models: [] });
     // Its detail read failed: the list is known, the settings are not.
     seedError(client, queryKeys.execution.connection(READY.connection.connection_id),
-      new ApiError(503, { contract_version: '1.7.0', error_code: 'dependency_unavailable', message: 'm', correlation_id: 'c', retryable: true } satisfies ErrorEnvelope, 'c'));
+      new ApiError(503, { contract_version: '1.9.0', error_code: 'dependency_unavailable', message: 'm', correlation_id: 'c', retryable: true } satisfies ErrorEnvelope, 'c'));
     const markup = control(client);
     const option = optionFor(markup, READY.connection.connection_id);
     expect(option?.[0]).toContain('disabled');
@@ -144,7 +151,7 @@ describe('while the list loads, and when it cannot be read, the default start st
   it('says the list is not read, offers to read it again, and leaves the start enabled', () => {
     const client = newClient();
     seedError(client, queryKeys.execution.connections(), new ApiError(503, {
-      contract_version: '1.7.0', error_code: 'dependency_unavailable', message: 'm',
+      contract_version: '1.9.0', error_code: 'dependency_unavailable', message: 'm',
       correlation_id: 'cid-list', retryable: true,
     }, 'cid-list'));
     const markup = control(client);

@@ -15,6 +15,8 @@ shares one engine and the composition root remains the only thing that reads con
 
 from __future__ import annotations
 
+import logging
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict
 from datetime import datetime, timezone
@@ -52,6 +54,7 @@ from auditmanager.api.schemas.findings import (
     EvidenceView,
     FindingDetailView,
     FindingView,
+    NormCitationView,
     ObservationView,
     ProvenanceView,
 )
@@ -62,7 +65,12 @@ from auditmanager.api.schemas.models import (
 )
 from auditmanager.api.schemas import models
 from auditmanager.api.schemas.common import paginate, decode_cursor, encode_cursor
-from auditmanager.api.schemas.runs import RunExecutorView, RunStatusView, StageStateView
+from auditmanager.api.schemas.runs import (
+    RunExecutorView,
+    RunPresetView,
+    RunStatusView,
+    StageStateView,
+)
 from auditmanager.api.security import (
     ROLE_ADMIN,
     ROLE_EXPERT,
@@ -370,17 +378,27 @@ class ReleasesAdapter:
     """Transport views over the release context's immutable history and account mark."""
 
     def __init__(
-        self, repository: ReleaseRepository, *, product_version: str, build_id: str
+        self,
+        repository: ReleaseRepository,
+        *,
+        product_version: str,
+        build_id: str,
+        comparison_modules: str = "none",
     ) -> None:
         self._repository = repository
         self._product_version = product_version
         self._build_id = build_id
+        # `CMP-SEAL-C0` (ADR-0025 decision 23): the module set the composition root parsed from
+        # ``AUDITMANAGER_COMPARISON_MODULES``. ``none`` is the sealed default; a value outside the
+        # contract's enum is refused here by the model, never carried.
+        self._comparison_modules = models.ComparisonModules(comparison_modules)
 
     def get_product_version(self) -> ProductVersion:
         return ProductVersion(
             product_version=self._product_version,
             build_id=self._build_id,
             contract_version=CONTRACT_VERSION,
+            comparison_modules=self._comparison_modules,
         )
 
     def list_releases(self, *, user_uid: str) -> ReleaseList:
@@ -473,6 +491,7 @@ def _version_view(record: Any) -> DocumentVersionView:
         display_title=record.display_title,
         section=record.section,
         classification=_classification_view(record.classification),
+        upload_kind=record.upload_kind,
         input_manifest=tuple(
             ManifestEntryView(
                 role=e.role,
@@ -846,8 +865,14 @@ class RunAdapter(_SessionHolder):
         route_freezer: Any = None,
         ar_v3_pack_registry: Any = None,
         ar_v3_installed_pack: Any = None,
+        preset_resolver: Any = None,
     ) -> None:
         super().__init__(session_factory)
+        # `ANALYSIS-PRESETS-01`. Reads a named preset's current revision in the start's own
+        # transaction (:func:`resolve_analysis_preset`); ``None`` keeps the many tests that build a
+        # bare adapter as they are, and a start that names a preset then answers
+        # ``dependency_unavailable`` rather than ignoring the choice.
+        self._preset_resolver = preset_resolver
         # `EXEC-HTTP-01`. The provider resolver the executor binds each Attempt with, and, for
         # the ``database`` source only, the freezer that picks a run's connection revision at
         # start. Both ``None`` keeps the many tests that build a bare adapter as they are.
@@ -976,6 +1001,7 @@ class RunAdapter(_SessionHolder):
         idempotency_key: str,
         provider_mode: str | None = None,
         executor_connection_id: str | None = None,
+        preset_id: str | None = None,
     ) -> Any:
         """A caller-supplied provider mode is refused, never silently overridden.
 
@@ -987,6 +1013,10 @@ class RunAdapter(_SessionHolder):
 
         `EXEC-PAR-START-01`: ``executor_connection_id`` is the connection the caller named. It
         is passed to the command beside the freezer; absent, the call is the one it always was.
+
+        `ANALYSIS-PRESETS-01`: ``preset_id`` is a saved preset. The command resolves its current
+        revision in this transaction and starts as if the caller had named that preset's executor;
+        the run records the preset revision. Together with ``executor_connection_id`` it is refused.
         """
         from auditmanager.runs import start_audit_run
 
@@ -1026,6 +1056,8 @@ class RunAdapter(_SessionHolder):
                 # revision here, and its budget follows that revision's pinned model.
                 connection_route=self._route_freezer,
                 executor_connection_id=executor_connection_id,
+                preset_id=preset_id,
+                preset_resolver=self._preset_resolver,
             )
             if not started.replayed:
                 # `D-20`. `created -> queued` happens here, in the transaction that
@@ -1149,15 +1181,49 @@ class RunAdapter(_SessionHolder):
         return self._read(lambda session: _run_status_view(session, run_id))
 
     def get_norm_verification(self, *, run_id: str) -> models.NormVerificationReport:
-        """Refuse until a reader proves the 0023 partition and the pinned set.
+        """`R-146at`. The canonical report of an AR v3 beta Run, from its saved CITE stage.
 
-        An empty citation SELECT is not a certificate of zero. CITE will replace this
-        seam after it checks stage success and every canonical/member partition.
+        The runs context owns the rule (``runs.v3_norm_report``: the sealed review, the
+        certified citation partitions and their one-to-one comparison); this adapter owns the
+        read snapshot, the refusals the operation declares and the mapping into the frozen
+        ``NormVerificationReport``. A Run of any other profile is ``not_found``. A v3 Run that
+        has no verified saved review (not terminal, failed, cancelled, or a saved review that
+        fails verification) answers the declared ``503 dependency_unavailable`` and returns
+        nothing unverified; the reason goes to the log, not to the wire.
         """
-        raise DomainError(
-            ErrorCode.DEPENDENCY_UNAVAILABLE,
-            dependency="norm_verification_reader",
-        )
+        from auditmanager.analysis.public import AR_V3_BETA_PROFILE_ID
+        from auditmanager.runs import RunRepository
+        from auditmanager.runs.v3_norm_report import read_v3_norm_verification
+
+        def unavailable() -> DomainError:
+            return DomainError(
+                ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="norm_verification_reader",
+            )
+
+        def work(session: Session) -> models.NormVerificationReport:
+            session.connection(execution_options={
+                "isolation_level": "REPEATABLE READ", "postgresql_readonly": True,
+            })
+            run = RunRepository().get(session, run_id)
+            if run.analysis_profile_id != str(AR_V3_BETA_PROFILE_ID):
+                raise _not_found("NormVerificationReport")
+            if run.state not in {"published", "partial"}:
+                raise unavailable()
+            try:
+                view = read_v3_norm_verification(session, run_id, blob_store=self._blob_store)
+            except DomainError as error:
+                if error.code not in {
+                    ErrorCode.ANALYSIS_INPUT_INVALID, ErrorCode.STORAGE_INTEGRITY_ERROR,
+                }:
+                    raise
+                logging.getLogger(__name__).warning(
+                    "norm verification refused for %s: %s", run_id,
+                    dict(error.detail_fields).get("reason"),
+                )
+                raise unavailable() from error
+            return models.NormVerificationReport.model_validate(_norm_verification_body(view))
+
+        return self._read(work)
 
     def get_run_norm_references(self, *, run_id: str) -> models.RunNormReferences:
         """`NORM-REFS-RUN-01`. The norms the run's saved text cites, against its snapshot.
@@ -1212,6 +1278,64 @@ class RunAdapter(_SessionHolder):
         return self._read(work)
 
 
+def _norm_verification_body(view: Any) -> dict[str, Any]:
+    """The frozen ``NormVerificationReport`` of one AR v3 beta Run.
+
+    ``required_value`` and ``stated_value`` are never put on the wire for this profile: they are
+    stored (the database requires them for a normative finding) but the beta policy
+    ``numeric_output_policy`` is ``expert_review_required`` and no edition check exists, so a
+    number is not served. Both properties are optional in the contract.
+    """
+
+    def citation(item: Any) -> dict[str, Any]:
+        return {
+            "norms_snapshot_id": item.norms_snapshot_id,
+            "norm_document_id": item.norm_document_id,
+            "norm_paragraph_id": item.norm_paragraph_id,
+            "designation": item.designation, "title": item.title,
+            "clause_number": item.clause_number, "page_label": item.page_label,
+            "quote": item.quote, "state": item.state,
+            "source_attribution": item.source_attribution,
+        }
+
+    def partition(item: Any) -> dict[str, Any]:
+        return {
+            "finding_observation_id": item.finding_observation_id,
+            "norm_citations": [citation(entry) for entry in item.citations],
+        }
+
+    body: dict[str, Any] = {
+        "run_id": view.run_id, "norms_snapshot_id": view.norms_snapshot_id,
+        "norm_retrieval_set_id": view.norm_retrieval_set_id, "status": view.status,
+        "findings": [
+            {
+                "finding_uid": finding.finding_uid,
+                "canonical": partition(finding.canonical),
+                "merged_observations": [partition(m) for m in finding.merged_observations],
+            }
+            for finding in view.findings
+        ],
+        "withheld_by_reason": dict(view.withheld_by_reason),
+        "textless_pages": list(view.textless_pages),
+    }
+    if view.error_code is not None:
+        body["error_code"] = view.error_code
+    return body
+
+
+def resolve_analysis_preset(session: Session, preset_id: str) -> Any:
+    """The seam ``start_audit_run`` reads a named preset through (`ANALYSIS-PRESETS-01`): the
+    ``executors`` context's answer, in the ``runs`` context's own type."""
+    from auditmanager.executors.public import choose_preset
+    from auditmanager.runs import ChosenPreset
+
+    chosen = choose_preset(session, preset_id)
+    return ChosenPreset(
+        preset_id=chosen.preset_id, revision_id=chosen.revision_id,
+        revision_no=chosen.revision_no, executor_connection_id=chosen.executor_connection_id,
+    )
+
+
 def _run_status_view(session: Session, run_id: str) -> RunStatusView:
     """The whole frozen `RunStatus`, from the two places that hold it.
 
@@ -1220,7 +1344,7 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
     `RunStatus.stages` was permanently empty and nothing said so - a `getattr` default is a
     silent answer to a question the object cannot answer.
     """
-    from auditmanager.executors.public import executor_of_revision
+    from auditmanager.executors.public import executor_of_revision, preset_of_revision
     from auditmanager.findings import diagnostics, published_finding_count
     from auditmanager.runs import RunRepository
 
@@ -1233,6 +1357,11 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
     chosen = (
         None if run.connection_revision_id is None
         else executor_of_revision(session, run.connection_revision_id)
+    )
+    # `ANALYSIS-PRESETS-01`. The preset revision the run recorded, with the name it had then.
+    used_preset = (
+        None if run.preset_revision_id is None
+        else preset_of_revision(session, run.preset_revision_id)
     )
     # `D-21`. Read from the `model_call` rows, which are exact, and not from
     # `stage_result.metrics` -- `D-15` measures that pair as a sum over attempts wearing
@@ -1277,6 +1406,10 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
             connection_id=chosen.connection_id, display_name=chosen.display_name,
             pin_id=chosen.pin_id,
         ),
+        preset=None if used_preset is None else RunPresetView(
+            preset_id=used_preset.preset_id, revision_no=used_preset.revision_no,
+            name=used_preset.name,
+        ),
         stages=tuple(
             StageStateView(
                 stage_id=stage.stage_id,
@@ -1304,7 +1437,10 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
     )
 
 
-def _observation_view(row: Any, evidence: Sequence[Any]) -> ObservationView:
+def _observation_view(
+    row: Any, evidence: Sequence[Any],
+    citations: Mapping[str, tuple[NormCitationView, ...]] | None = None,
+) -> ObservationView:
     return ObservationView(
         finding_observation_id=row.finding_observation_id,
         run_id=row.run_id,
@@ -1331,12 +1467,60 @@ def _observation_view(row: Any, evidence: Sequence[Any]) -> ObservationView:
             model_call_id=row.model_call_id,
         ),
         proposed_severity=getattr(row, "proposed_severity", None),
+        # `R-146as`: the certified citations of an AR v3 beta finding; ``None`` (as before) for
+        # every other observation. ``required_value`` / ``stated_value`` are never served for
+        # this profile (see ``_norm_verification_body``).
+        norm_citations=None if citations is None else citations.get(row.finding_observation_id),
     )
+
+
+def _v3_beta_citations(
+    session: Session, rows: Sequence[Any],
+) -> Mapping[str, tuple[NormCitationView, ...]]:
+    """The certified citations of the AR v3 beta findings among ``rows``, by observation.
+
+    Read through the same certified-partition reader the report uses, so a finding is never
+    shown with a citation the database has not certified. It fails closed: an inconsistent
+    partition is a ``storage_integrity_error``, never a finding listed without its citations.
+    """
+    from auditmanager.analysis.public import AR_V3_BETA_PROFILE_ID
+    from auditmanager.findings.public import CitationReadRefused, read_verified_citations
+
+    beta = str(AR_V3_BETA_PROFILE_ID)
+    mine = [row for row in rows if row.analysis_profile_id == beta]
+    if not mine:
+        return {}
+    try:
+        read = read_verified_citations(
+            session, run_id=mine[0].run_id, version_uid=mine[0].version_uid,
+            profile_id=beta, cite_stage_id="ar_v3_citation_review",
+        )
+    except CitationReadRefused as error:
+        logging.getLogger(__name__).warning(
+            "certified citations refused for %s: %s", mine[0].run_id, error,
+        )
+        raise DomainError(
+            ErrorCode.STORAGE_INTEGRITY_ERROR,
+            message="the certified citation partitions of the run are inconsistent",
+        ) from error
+    return {
+        partition.finding_observation_id: tuple(
+            NormCitationView(
+                norms_snapshot_id=item.norms_snapshot_id, norm_document_id=item.norm_document_id,
+                norm_paragraph_id=item.norm_paragraph_id, designation=item.designation,
+                title=item.title, clause_number=item.clause_number, page_label=item.page_label,
+                quote=item.quote, state=item.state, source_attribution=item.source_attribution,
+            ) for item in partition.citations
+        )
+        for finding in read.findings
+        for partition in (finding.canonical, *finding.merged_observations)
+    }
 
 
 def _finding_view(
     row: Any, evidence: Sequence[Any], verdict: Any,
     merged_rows: Sequence[Any] = (),
+    citations: Mapping[str, tuple[NormCitationView, ...]] | None = None,
 ) -> FindingView:
     return FindingView(
         finding_uid=row.finding_uid,
@@ -1348,9 +1532,9 @@ def _finding_view(
         decided_severity=getattr(verdict, "decided_severity", None),
         latest_decision_id=getattr(verdict, "latest_decision_id", None),
         decision_recorded_at=getattr(verdict, "decision_recorded_at", None),
-        observation=_observation_view(row, evidence),
+        observation=_observation_view(row, evidence, citations),
         merged_observations=(
-            tuple(_observation_view(member, evidence) for member in merged_rows)
+            tuple(_observation_view(member, evidence, citations) for member in merged_rows)
             if merged_rows else None
         ),
     )
@@ -1735,10 +1919,11 @@ class FindingAdapter(_SessionHolder):
         def work(session: Session) -> Sequence[FindingView]:
             rows = published_findings(session, run_id)
             evidence = published_finding_evidence(session, run_id)
+            citations = _v3_beta_citations(session, rows)
             views = [
                 _finding_view(group.canonical, evidence,
                               current_verdict(session, group.canonical.finding_uid),
-                              group.merged)
+                              group.merged, citations)
                 for group in group_published_findings(rows)
             ]
             if category is not None:
@@ -1775,7 +1960,10 @@ class FindingAdapter(_SessionHolder):
             history = decision_history(session, finding_uid)
             comments = [e.comment for e in history if e.comment]
             return FindingDetailView(
-                finding=_finding_view(row, evidence, verdict, matches[0].merged),
+                finding=_finding_view(
+                    row, evidence, verdict, matches[0].merged,
+                    _v3_beta_citations(session, members),
+                ),
                 latest_comment=comments[-1] if comments else None,
                 decision_event_count=len(history),
             )
@@ -1925,6 +2113,31 @@ class CsvExportAdapter(_SessionHolder):
         return self._read(lambda s: export_run_csv(s, run_id).content)
 
 
+def _read_citations_for_export(
+    session: Session, *, run_id: str, version_uid: str, profile_id: str,
+) -> Any:
+    """W57a's verified citation reader, told which stage certifies this profile's partitions.
+
+    An AR v3 beta Run's partitions are certified by the succeeded ``ar_v3_citation_review`` stage
+    (migration ``0036``); every other profile's by ``norm_verification``, the reader's default. The
+    export context calls the injected reader with the Run's identity and profile only, so the choice
+    is made here, from the profile, and nowhere else. Without it the reader's header query (an inner
+    join on the stage) finds no row for a v3 Run and ``exportRunXlsx`` answers
+    ``required_norm_unavailable`` for every AR v3 beta Run
+    (``AR-V3-JUDGE-FIXES-01``).
+    """
+    from auditmanager.analysis.public import AR_V3_BETA_PROFILE_ID
+    from auditmanager.findings.citation_reader import read_verified_citations
+
+    return read_verified_citations(
+        session, run_id=run_id, version_uid=version_uid, profile_id=profile_id,
+        cite_stage_id=(
+            "ar_v3_citation_review" if profile_id == str(AR_V3_BETA_PROFILE_ID)
+            else "norm_verification"
+        ),
+    )
+
+
 class XlsxExportAdapter(_SessionHolder):
     """``exportRunXlsx`` (`W57B-NORMS-CATALOGUE-XLSX-01`).
 
@@ -1960,7 +2173,6 @@ class XlsxExportAdapter(_SessionHolder):
 
     def export_run_xlsx(self, *, run_id: str, principal_id: str) -> bytes:
         from auditmanager.exports import ExportAuthorization, export_run_xlsx
-        from auditmanager.findings.citation_reader import read_verified_citations
 
         authorization = ExportAuthorization(
             run_id=run_id,
@@ -1975,7 +2187,7 @@ class XlsxExportAdapter(_SessionHolder):
                 run_id,
                 authorization=authorization,
                 read_blob=self._read_blob,
-                read_citations=read_verified_citations,
+                read_citations=_read_citations_for_export,
             ).content
         )
 
@@ -2903,15 +3115,37 @@ class ComparisonAdapter(_SessionHolder):
         *,
         blob_store: Any,
         section_codes: frozenset[str],
+        summary_model: Any = None,
+        cost_ceiling_usd: float = 0.0,
     ) -> None:
-        from auditmanager.comparison.public import VersionComparisonService
+        from auditmanager.comparison.public import (
+            SheetLinkRepository,
+            SheetPairingService,
+            SummaryService,
+            SummaryStore,
+            VersionComparisonService,
+        )
 
         super().__init__(session_factory)
         self._blob_store = blob_store
+        links, store = SheetLinkRepository(), SummaryStore()
         self._service = VersionComparisonService(
             classifications=_ClassificationReader(),
             analyses=_AnalysisReader(blob_store),
             section_codes=section_codes,
+            # `COMPARE-PERSISTED-SUMMARY-01`: the stored approvals and the newest summary are read
+            # in the same session as the comparison; a service built without them would silently
+            # serve no approved pairs.
+            links=links,
+            summaries=store,
+        )
+        self._pairings = SheetPairingService(comparisons=self._service, links=links)
+        # The only model call about a comparison. ``summary_model`` is ``None`` unless the process
+        # is in recorded mode (``composition.summary_model_for``); the meter is the existing
+        # per-run ``CostMeter``, one fresh one per command.
+        self._summaries = SummaryService(
+            comparisons=self._service, links=links, summaries=store, model=summary_model,
+            cost_gate=None if summary_model is None else (lambda: _MeterGate(cost_ceiling_usd)),
         )
 
     def compare_versions(
@@ -3053,6 +3287,234 @@ class ComparisonAdapter(_SessionHolder):
             target_version_uid=outcome.target_version_uid,
             mode=outcome.mode,  # type: ignore[arg-type]
         )
+
+
+    def approve_sheet_pairing(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        source_version_uid: str,
+        target_version_uid: str,
+        mode: str,
+        source_page_number: int,
+        target_page_number: int,
+        suggestion_sha256: str,
+        source_run_id: str | None,
+        target_run_id: str | None,
+        idempotency_key: str,
+        author_label: str,
+        author_user_uid: str,
+    ) -> models.SheetPairingEvent:
+        """`COMPARE-PERSISTED-SUMMARY-01`. One write transaction: the actor's roles, the path,
+        the receipt, the recomputed proposal, the row, its audit event (``comparison.public``)."""
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.api.routers.correlation import current_correlation_id
+        from auditmanager.comparison.public import ApproveSheetPairingRequest
+
+        request = ApproveSheetPairingRequest(
+            project_uid=project_uid,
+            document_uid=document_uid,
+            source_version_uid=source_version_uid,
+            target_version_uid=target_version_uid,
+            source_page_number=source_page_number,
+            target_page_number=target_page_number,
+            suggestion_sha256=suggestion_sha256,
+            mode=mode,
+            source_run_id=source_run_id,
+            target_run_id=target_run_id,
+        )
+
+        def work(session: Session) -> Any:
+            return self._pairings.approve(
+                session,
+                request,
+                actor_uid=author_user_uid,
+                actor_label=author_label,
+                # Read in this transaction: the request register checked the role before the
+                # route; this is the command's own check (`R-60`).
+                actor_roles=AccountRepository().roles_of(session, author_user_uid),
+                idempotency_key=idempotency_key,
+                correlation_id=current_correlation_id(),
+            )
+
+        return _pairing_event(self._pairing_write(work))
+
+    def withdraw_sheet_pairing(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        source_version_uid: str,
+        sheet_link_id: str,
+        mode: str,
+        source_run_id: str | None,
+        target_run_id: str | None,
+        idempotency_key: str,
+        author_label: str,
+        author_user_uid: str,
+    ) -> models.SheetPairingEvent:
+        """`COMPARE-PERSISTED-SUMMARY-01`. The same transaction shape, ending one link."""
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.api.routers.correlation import current_correlation_id
+        from auditmanager.comparison.public import WithdrawSheetPairingRequest
+
+        request = WithdrawSheetPairingRequest(
+            project_uid=project_uid,
+            document_uid=document_uid,
+            source_version_uid=source_version_uid,
+            sheet_link_id=sheet_link_id,
+            mode=mode,
+            source_run_id=source_run_id,
+            target_run_id=target_run_id,
+        )
+
+        def work(session: Session) -> Any:
+            return self._pairings.withdraw(
+                session,
+                request,
+                actor_uid=author_user_uid,
+                actor_label=author_label,
+                actor_roles=AccountRepository().roles_of(session, author_user_uid),
+                idempotency_key=idempotency_key,
+                correlation_id=current_correlation_id(),
+            )
+
+        return _pairing_event(self._pairing_write(work))
+
+    def generate_comparison_summary(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        source_version_uid: str,
+        target_version_uid: str,
+        mode: str,
+        source_run_id: str | None,
+        target_run_id: str | None,
+        idempotency_key: str,
+        author_label: str,
+        author_user_uid: str,
+    ) -> models.GenerateComparisonSummaryResponse:
+        """`COMPARE-PERSISTED-SUMMARY-01` (B2). One write transaction: the actor's roles, the path,
+        the receipt, the sealed evidence, the cost meter, the model, the check, the row, its event."""
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.api.routers.correlation import current_correlation_id
+        from auditmanager.comparison.public import GenerateSummaryRequest
+
+        request = GenerateSummaryRequest(
+            project_uid=project_uid,
+            document_uid=document_uid,
+            source_version_uid=source_version_uid,
+            target_version_uid=target_version_uid,
+            mode=mode,
+            source_run_id=source_run_id,
+            target_run_id=target_run_id,
+        )
+
+        def work(session: Session) -> Any:
+            return self._summaries.generate(
+                session,
+                request,
+                actor_uid=author_user_uid,
+                actor_label=author_label,
+                actor_roles=AccountRepository().roles_of(session, author_user_uid),
+                idempotency_key=idempotency_key,
+                correlation_id=current_correlation_id(),
+            )
+
+        outcome = self._pairing_write(work)
+        return models.GenerateComparisonSummaryResponse(
+            summary=_summary_view(outcome.summary, is_current=outcome.is_current),
+            replayed=outcome.replayed,
+        )
+
+    def _pairing_write(self, work: Any) -> Any:
+        from auditmanager.comparison.public import (
+            ComparisonIntegrityError,
+            ComparisonRequestInvalid,
+        )
+
+        try:
+            return self._write(work)
+        except ComparisonRequestInvalid as exc:
+            raise DomainError(
+                ErrorCode.VALIDATION_FAILED, field=str(exc).removesuffix("_invalid"),
+                constraint="format",
+            ) from None
+        except ComparisonIntegrityError as exc:
+            raise DomainError(
+                ErrorCode.INTERNAL_ERROR,
+                message="the stored comparison inputs contradict their own constraints",
+            ) from exc
+
+
+class _MeterGate:
+    """The summary command's cost gate over the existing per-run ``CostMeter`` (`OD-03`).
+
+    ``check_before_call`` halts at the ceiling before anything is called; after the call the cost
+    is recorded through the same meter. In this release the only implementation is the recorded
+    binding, which reports no cost of its own: ``record_unmetered`` counts the call and charges
+    nothing, so the stored basis is ``unmetered`` (the explicit exception of ``D-225`` piece 2).
+    """
+
+    def __init__(self, ceiling_usd: float) -> None:
+        from auditmanager.analysis.public import CostMeter
+
+        self._meter = CostMeter(ceiling_usd=ceiling_usd)
+
+    def before_call(self) -> None:
+        self._meter.check_before_call()
+
+    def after_unmetered_call(self) -> tuple[str, int]:
+        self._meter.record_unmetered()
+        return self._meter.cost_basis, round(self._meter.spent_usd * 1_000_000)
+
+
+def _summary_view(stored: Any, *, is_current: bool) -> models.ComparisonSummary:
+    """A stored summary as the frozen ``ComparisonSummary``. The label is the read model's constant."""
+    from auditmanager.comparison.public import SUMMARY_LABEL
+
+    return models.ComparisonSummary(
+        summary_id=stored.summary_id,
+        link_revision=stored.link_revision,
+        state=stored.state,
+        rejection_reason=stored.rejection_reason,
+        label=SUMMARY_LABEL,
+        statements=[
+            models.SummaryStatement(text=item.text, hunk_ids=list(item.hunk_ids))
+            for item in stored.statements
+        ],
+        prompt_version=stored.prompt_version,
+        provider_mode=stored.provider_mode,
+        model_identity=stored.model_identity,
+        input_sha256=stored.input_sha256,
+        raw_evidence_seal_sha256=stored.raw_evidence_seal_sha256,
+        cost_basis=stored.cost_basis,
+        is_current=is_current,
+        created_by_label=stored.actor_label,
+        created_at=stored.created_at,
+    )
+
+
+def _pairing_event(outcome: Any) -> models.SheetPairingEvent:
+    """A stored sheet-link row as the frozen ``SheetPairingEvent``."""
+    event = outcome.event
+    return models.SheetPairingEvent(
+        comparison_id=event.comparison_id,
+        sheet_link_id=event.sheet_link_id,
+        event_kind=event.event_kind,
+        link_revision=event.link_revision,
+        replayed=outcome.replayed,
+        source_version_uid=event.source_version_uid,
+        target_version_uid=event.target_version_uid,
+        source_page_number=event.source_page_number,
+        target_page_number=event.target_page_number,
+        suggestion_sha256=event.suggestion_sha256,
+        raw_evidence_seal_sha256=event.raw_evidence_seal_sha256,
+        actor_label=event.actor_label,
+        decided_at=event.decided_at,
+    )
 
 
 class _ClassificationReader:
@@ -4643,6 +5105,63 @@ class ExecutorAdapter(_SessionHolder):
             return models.ExecutorRoute.model_validate(_executor_route_view(route))
         return self._write(work)
 
+    # `ANALYSIS-PRESETS-01`. A preset is executor configuration: the same role rule, the same
+    # transaction and the same correlation id as every executor write.
+    def list_presets(self, *, user_uid: str) -> models.AnalysisPresetList:
+        from auditmanager.executors.public import list_presets
+
+        def work(session: Session) -> models.AnalysisPresetList:
+            return models.AnalysisPresetList.model_validate(
+                {"items": [_analysis_preset_view(record) for record in list_presets(session)]})
+        return self._read(work)
+
+    def create_preset(
+        self, *, name: str, executor_connection_id: str, user_uid: str, idempotency_key: str
+    ) -> models.AnalysisPreset:
+        from auditmanager.api.routers.correlation import current_correlation_id
+        from auditmanager.executors.public import create_preset
+
+        def work(session: Session) -> models.AnalysisPreset:
+            record = create_preset(
+                session, name=name, executor_connection_id=executor_connection_id,
+                roles=self._roles(session, user_uid), idempotency_key=idempotency_key,
+                actor_uid=user_uid, correlation_id=current_correlation_id(),
+            )
+            return models.AnalysisPreset.model_validate(_analysis_preset_view(record))
+        return self._write(work)
+
+    def revise_preset(
+        self, *, preset_id: str, name: str, executor_connection_id: str, user_uid: str,
+        idempotency_key: str,
+    ) -> models.AnalysisPreset:
+        from auditmanager.api.routers.correlation import current_correlation_id
+        from auditmanager.executors.public import revise_preset
+
+        def work(session: Session) -> models.AnalysisPreset:
+            record = revise_preset(
+                session, preset_id=preset_id, name=name,
+                executor_connection_id=executor_connection_id,
+                roles=self._roles(session, user_uid), idempotency_key=idempotency_key,
+                actor_uid=user_uid, correlation_id=current_correlation_id(),
+            )
+            return models.AnalysisPreset.model_validate(_analysis_preset_view(record))
+        return self._write(work)
+
+    def archive_preset(
+        self, *, preset_id: str, user_uid: str, idempotency_key: str
+    ) -> models.AnalysisPreset:
+        from auditmanager.api.routers.correlation import current_correlation_id
+        from auditmanager.executors.public import archive_preset
+
+        def work(session: Session) -> models.AnalysisPreset:
+            record = archive_preset(
+                session, preset_id=preset_id, roles=self._roles(session, user_uid),
+                idempotency_key=idempotency_key, actor_uid=user_uid,
+                correlation_id=current_correlation_id(),
+            )
+            return models.AnalysisPreset.model_validate(_analysis_preset_view(record))
+        return self._write(work)
+
     def _summary_view(self, session: Session, connection_id: str) -> models.ExecutorConnection:
         from auditmanager.executors.public import connection_detail
 
@@ -4721,6 +5240,18 @@ def _executor_connection_view(summary: Any) -> dict[str, Any]:
     )
 
 
+def _analysis_preset_view(record: Any) -> dict[str, Any]:
+    """One preset's current revision in the frozen shape: identities, the label, the one setting
+    and who and when. Nothing else about the connection."""
+    return {
+        "preset_id": record.preset_id, "revision_id": record.revision_id,
+        "revision_no": record.revision_no, "name": record.name,
+        "executor_connection_id": record.executor_connection_id, "state": record.state,
+        "created_at": record.created_at, "revised_at": record.revised_at,
+        "revised_by": record.revised_by,
+    }
+
+
 def _executor_route_view(route: Any) -> dict[str, Any]:
     return _present(
         work_kind=route.work_kind, primary_connection_id=route.primary_connection_id,
@@ -4741,3 +5272,412 @@ def _pull_channel_facts(session: Session, connection_id: str) -> dict[str, Any]:
         ],
         "open_task_count": open_task_count(session, connection_id),
     }
+
+
+# --- comparison modules (`CMP-SEAL-C0`, ADR-0025 decision 25) ----------------------------
+#
+# The shipped adapters of the three comparison ports are stubs: each operation refuses with
+# ``503 dependency_unavailable`` until the lane that owns it replaces the body (plan section 4.0
+# rule 1). Nothing is read or written. The ``dependency`` detail is a stable class name only.
+
+
+def _comparison_unavailable(dependency: str) -> Any:
+    raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency=dependency)
+
+
+def _unset_none(**fields: Any) -> dict[str, Any]:
+    """The fields that have a value. An optional property that is absent is **omitted** from the answer (the
+    models are dumped with ``exclude_unset``), never sent as ``null``."""
+    return {name: value for name, value in fields.items() if value is not None}
+
+
+def _enum_text(value: Any) -> str | None:
+    return None if value is None else str(getattr(value, "value", value))
+
+
+def _comparison_actor(session: Session, user_uid: str) -> tuple[str, frozenset[str]]:
+    """The actor's display label and roles, read in the transaction that is about to act."""
+    from auditmanager.access.public import AccountRepository
+
+    accounts = AccountRepository()
+    account = accounts.get_account(session, user_uid)
+    if account is None:  # pragma: no cover - a credential names an account that exists
+        raise DomainError(ErrorCode.INTERNAL_ERROR, message="the actor has no account")
+    return account.record.display_label, frozenset(accounts.roles_of(session, user_uid))
+
+
+def _comparison_file(view: Any) -> models.ComparisonUploadFile:
+    return models.ComparisonUploadFile(
+        file_id=view.file_id,
+        display_name=view.display_name,
+        size_bytes=view.size_bytes,
+        sha256=view.sha256,
+        state=models.ComparisonUploadFileState(view.state),
+        parts_staged=view.parts_staged,
+        **_unset_none(set_id=view.set_id, failure_reason=view.failure_reason),
+    )
+
+
+def _comparison_upload(view: Any) -> models.ComparisonUpload:
+    return models.ComparisonUpload(
+        upload_id=view.upload_id,
+        project_uid=view.project_uid,
+        state=models.ComparisonUploadState(view.state),
+        part_size_bytes=view.part_size_bytes,
+        declared_files=view.declared_files,
+        declared_bytes=view.declared_bytes,
+        created_at=view.created_at,
+        updated_at=view.updated_at,
+        **({} if view.files is None else {"files": [_comparison_file(item) for item in view.files]}),
+    )
+
+
+def _comparison_set(view: Any) -> models.ComparisonProposalSet:
+    return models.ComparisonProposalSet(
+        set_id=view.set_id,
+        state=models.ComparisonUploadSetState(view.state),
+        files=[
+            models.ComparisonProposalFile(
+                file_id=item.file_id, position=item.position, version_label=item.version_label
+            )
+            for item in view.files
+        ],
+        warnings=[models.ComparisonProposalWarning(name) for name in view.warnings],
+        **_unset_none(
+            designation=view.designation,
+            existing_document_uid=view.existing_document_uid,
+            project_stage=view.project_stage,
+            section_code=view.section_code,
+            failure_reason=view.failure_reason,
+            document_uid=view.document_uid,
+        ),
+    )
+
+
+class ComparisonUploadAdapter(_SessionHolder):
+    """`CMP-INGEST-01` serves ``createComparisonUpload``, ``getComparisonUpload``, ``getComparisonUploadProposal``,
+    ``uploadComparisonUploadPart``, ``completeComparisonUploadFile`` and ``confirmComparisonUploadSet`` over
+    :class:`~auditmanager.ingest.comparison_pdf.public.ComparisonUploadService`; `CMP-INGEST-02` serves the other six
+    (list, exclude, retry, pause, resume, cancel) over
+    :class:`~auditmanager.ingest.comparison_batch.public.ComparisonBatchService`, and its two hooks run here, in a
+    second idempotent transaction after the declaration and after a confirmation (a failed hook is repaired by the
+    client's retry under the same key, which replays the first transaction and runs the hook again).
+
+    The adapter owns the mapping to the contract's models and two reads the services do not make themselves: the
+    actor's display label (a batch records who started it) and the actor's roles (an expert's act is checked
+    again in the transaction that acts, ADR-0025 decision 16)."""
+
+    def __init__(self, session_factory: sessionmaker[Session], *, service: Any, batches: Any) -> None:
+        super().__init__(session_factory)
+        self._service = service
+        self._batches = batches
+
+    def create_upload(
+        self, *, project_uid: str, files: Sequence[models.ComparisonUploadFileDeclaration], user_uid: str, idempotency_key: str
+    ) -> models.ComparisonUpload:
+        from auditmanager.ingest.comparison_pdf.public import DeclaredFileRequest
+
+        label, _roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        view = self._service.create_upload(
+            project_uid=project_uid,
+            files=[
+                DeclaredFileRequest(
+                    display_name=item.display_name, size_bytes=item.size_bytes, sha256=item.sha256,
+                    page_count=item.page_count,
+                )
+                for item in files
+            ],
+            user_uid=user_uid, actor_label=label, idempotency_key=idempotency_key,
+        )
+        self._batches.after_declaration(upload_id=view.upload_id)
+        return _comparison_upload(view)
+
+    def get_upload(self, *, upload_id: str) -> models.ComparisonUpload:
+        return _comparison_upload(self._service.get_upload(upload_id=upload_id))
+
+    def get_proposal(self, *, upload_id: str) -> models.ComparisonUploadProposal:
+        view = self._service.get_proposal(upload_id=upload_id)
+        return models.ComparisonUploadProposal(
+            upload_id=view.upload_id,
+            state=models.ComparisonUploadState(view.state),
+            sets=[_comparison_set(item) for item in view.sets],
+        )
+
+    def put_part(
+        self, *, upload_id: str, file_id: str, part_number: int, content: bytes, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonUploadPartReceipt:
+        receipt = self._service.put_part(
+            upload_id=upload_id, file_id=file_id, part_number=part_number, content=content,
+            user_uid=user_uid, idempotency_key=idempotency_key,
+        )
+        return models.ComparisonUploadPartReceipt(
+            file_id=receipt.file_id, part_number=receipt.part_number, size_bytes=receipt.size_bytes,
+            sha256=receipt.sha256,
+        )
+
+    def complete_file(
+        self, *, upload_id: str, file_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonUploadFile:
+        return _comparison_file(
+            self._service.complete_file(
+                upload_id=upload_id, file_id=file_id, user_uid=user_uid, idempotency_key=idempotency_key
+            )
+        )
+
+    def confirm_set(
+        self, *, upload_id: str, set_id: str, request: models.ConfirmComparisonUploadSetRequest, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonProposalSet:
+        from auditmanager.ingest.comparison_pdf.public import ConfirmedFile
+
+        _label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        view = self._service.confirm_set(
+            upload_id=upload_id,
+            set_id=set_id,
+            files=[ConfirmedFile(item.file_id, item.version_label) for item in request.files],
+            designation=request.designation,
+            existing_document_uid=request.existing_document_uid,
+            project_stage=_enum_text(request.project_stage),
+            section_code=_enum_text(request.section_code),
+            user_uid=user_uid,
+            actor_roles=roles,
+            idempotency_key=idempotency_key,
+        )
+        self._batches.after_confirmation(upload_id=upload_id, set_id=set_id)
+        return _comparison_set(view)
+
+    # -- `CMP-INGEST-02`: the batch operations -----------------------------------------------------
+
+    def cancel_upload(
+        self, *, upload_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonUpload:
+        _label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        return _comparison_upload(
+            self._batches.cancel_upload(
+                upload_id=upload_id, user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key
+            )
+        )
+
+    def exclude_set(
+        self, *, upload_id: str, set_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonProposalSet:
+        _label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        return _comparison_set(
+            self._batches.exclude_set(
+                upload_id=upload_id, set_id=set_id, user_uid=user_uid, actor_roles=roles,
+                idempotency_key=idempotency_key,
+            )
+        )
+
+    def list_uploads(
+        self, *, project_uid: str, cursor: str | None, limit: int
+    ) -> models.ComparisonUploadPage:
+        page = self._batches.list_uploads(
+            project_uid=project_uid, after=_upload_cursor(cursor), limit=limit
+        )
+        return models.ComparisonUploadPage(
+            items=[_comparison_upload(item) for item in page.items],
+            page=models.PageInfo(
+                next_cursor=None if page.next_after is None
+                else encode_cursor((page.next_after[0].isoformat(), page.next_after[1]))
+            ),
+        )
+
+    def pause_upload(
+        self, *, upload_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonUpload:
+        _label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        return _comparison_upload(
+            self._batches.pause_upload(
+                upload_id=upload_id, user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key
+            )
+        )
+
+    def resume_upload(
+        self, *, upload_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonUpload:
+        _label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        return _comparison_upload(
+            self._batches.resume_upload(
+                upload_id=upload_id, user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key
+            )
+        )
+
+    def retry_set(
+        self, *, upload_id: str, set_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonProposalSet:
+        _label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        return _comparison_set(
+            self._batches.retry_set(
+                upload_id=upload_id, set_id=set_id, user_uid=user_uid, actor_roles=roles,
+                idempotency_key=idempotency_key,
+            )
+        )
+
+
+def _upload_cursor(raw: str | None) -> "tuple[datetime, str] | None":
+    """The ``(created_at, id)`` after which a listing of batches resumes (the sort key of the page before)."""
+    if raw is None:
+        return None
+    parts = decode_cursor(raw)
+    if len(parts) != 2 or not re.fullmatch(r"cbt_[0-9A-HJKMNP-TV-Z]{26}", parts[1]):
+        raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+    try:
+        created = datetime.fromisoformat(parts[0])
+    except ValueError:
+        raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format") from None
+    if created.tzinfo is None:
+        raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+    return created, parts[1]
+
+
+class ComparisonVersionOrderAdapter(_SessionHolder):
+    """`CMP-INGEST-01`: the order in which the versions of a document set are compared (ADR-0025 decisions 14
+    and 16), over :class:`~auditmanager.ingest.comparison_pdf.public.ComparisonVersionOrderService`. The cursor
+    is the oldest revision the previous page held."""
+
+    def __init__(self, session_factory: sessionmaker[Session], *, service: Any) -> None:
+        super().__init__(session_factory)
+        self._service = service
+
+    @staticmethod
+    def _view(view: Any) -> models.ComparisonVersionOrder:
+        return models.ComparisonVersionOrder(
+            order_id=view.order_id,
+            document_uid=view.document_uid,
+            revision_no=view.revision_no,
+            version_uids=list(view.version_uids),
+            source=models.ComparisonVersionOrderSource(view.source),
+            created_at=view.created_at,
+            created_by=view.created_by,
+        )
+
+    def append_order(
+        self, *, project_uid: str, document_uid: str, version_uids: Sequence[str], base_revision_no: int, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonVersionOrder:
+        label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        return self._view(
+            self._service.append_order(
+                project_uid=project_uid, document_uid=document_uid, version_uids=list(version_uids),
+                base_revision_no=base_revision_no, user_uid=user_uid, actor_label=label, actor_roles=roles,
+                idempotency_key=idempotency_key,
+            )
+        )
+
+    def list_orders(
+        self, *, project_uid: str, document_uid: str, cursor: str | None, limit: int
+    ) -> models.ComparisonVersionOrderList:
+        before: int | None = None
+        if cursor is not None:
+            parts = decode_cursor(cursor)
+            if len(parts) != 1 or not parts[0].isdigit():
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+            before = int(parts[0])
+        page = self._service.list_orders(
+            project_uid=project_uid, document_uid=document_uid, before_revision=before, limit=limit
+        )
+        return models.ComparisonVersionOrderList(
+            items=[self._view(item) for item in page.items],
+            page=models.PageInfo(
+                next_cursor=None if page.next_before_revision is None
+                else encode_cursor((str(page.next_before_revision),))
+            ),
+        )
+
+
+def _page_cursor(raw: str | None) -> int:
+    """The page number after which a listing resumes: ``0`` for the first page."""
+    if raw is None:
+        return 0
+    parts = decode_cursor(raw)
+    if len(parts) != 1 or not parts[0].isdigit():
+        raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+    return int(parts[0])
+
+
+def _page_profile_view(row: Any) -> models.VersionPageProfile:
+    """One stored profile in the frozen shape; only what the profile holds is set."""
+    from datetime import date
+
+    summary = row.summary
+    counts = summary.get("counts") or {}
+    raster = summary.get("raster") or {}
+    fields: dict[str, Any] = {
+        "page_profile_id": row.page_profile_id,
+        "version_uid": row.version_uid,
+        "page_number": row.page_number,
+        "status": row.status,
+        "algo_version": row.algo_version,
+        "content_key": row.content_key,
+        "has_text_layer": bool(summary.get("text_layer", False)),
+        "word_count": int(counts.get("words", 0)),
+        "vector_line_count": int(counts.get("lines", 0)),
+        "annotation_count": int(counts.get("annotations", 0)),
+        "preview_available": row.preview_blob_id is not None,
+        "thumbnail_available": row.thumbnail_blob_id is not None,
+    }
+    if row.reason is not None:
+        fields["reason"] = row.reason
+    if summary.get("width_pt"):
+        fields["width_pt"] = summary["width_pt"]
+        fields["height_pt"] = summary["height_pt"]
+    if raster:
+        fields["raster_width_px"] = raster["width_px"]
+        fields["raster_height_px"] = raster["height_px"]
+    stamp = {key: summary.get("stamp", {}).get(key) for key in (
+        "designation", "sheet_number", "sheet_name", "revision_number", "release_date",
+    )}
+    stamp = {key: value for key, value in stamp.items() if value is not None}
+    if stamp:
+        if "release_date" in stamp:
+            stamp["release_date"] = date.fromisoformat(stamp["release_date"])
+        fields["stamp"] = models.PageStamp(**stamp)
+    return models.VersionPageProfile(**fields)
+
+
+class VersionPageAdapter:
+    """`CMP-PROFILE-01`. The five page reads of a version, from what the worker stored.
+
+    The profile, the preview, the thumbnail and the stored tile levels are rows and blobs; the two tile
+    levels that are not stored are rendered in a ceilinged child by the reader's tile renderer. The API
+    process never loads PDFium for any of them (ADR-0025 decision 9 and the addendum of 2026-10-27).
+    """
+
+    def __init__(
+        self, session_factory: sessionmaker[Session], *, blob_store: Any, tiles: Any = None
+    ) -> None:
+        from auditmanager.comparison.public import PageProfileReader
+
+        self._reader = PageProfileReader(session_factory, blob_store, tiles=tiles)
+
+    def get_profile(
+        self, *, page_profile_id: str
+    ) -> models.VersionPageProfile:
+        return _page_profile_view(self._reader.get_profile(page_profile_id))
+
+    def list_profiles(
+        self, *, version_uid: str, cursor: str | None, limit: int
+    ) -> models.VersionPageProfilePage:
+        rows, more = self._reader.list_profiles(
+            version_uid, after_page=_page_cursor(cursor), limit=limit
+        )
+        return models.VersionPageProfilePage(
+            items=[_page_profile_view(row) for row in rows],
+            page=models.PageInfo(
+                next_cursor=encode_cursor((str(rows[-1].page_number),)) if more else None
+            ),
+        )
+
+    def read_preview(
+        self, *, page_profile_id: str
+    ) -> bytes:
+        return self._reader.read_preview(page_profile_id)
+
+    def read_thumbnail(
+        self, *, page_profile_id: str
+    ) -> bytes:
+        return self._reader.read_thumbnail(page_profile_id)
+
+    def read_tile(
+        self, *, page_profile_id: str, level: int, column: int, row: int
+    ) -> bytes:
+        return self._reader.read_tile(page_profile_id, level=level, column=column, row=row)

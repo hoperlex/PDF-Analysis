@@ -73,6 +73,9 @@ __all__ = [
     "RunnerPort",
     "SectionPort",
     "ComparisonPort",
+    "ComparisonUploadPort",
+    "ComparisonVersionOrderPort",
+    "VersionPagePort",
     "AnalysisProfilePort",
     "OptimisationPort",
     "SectionSpecificationPort",
@@ -146,6 +149,20 @@ class ExecutorPort(Protocol):
         self, *, work_kind: str, primary_connection_id: str,
         standby_connection_id: str | None, user_uid: str, idempotency_key: str,
     ) -> models.ExecutorRoute: ...
+    # `ANALYSIS-PRESETS-01`. A preset is executor configuration: a name and the connection a run is
+    # started on. Reads are for any role; the three writes re-check the administrator role in
+    # their own transaction, and each writes its audit event in that transaction.
+    def list_presets(self, *, user_uid: str) -> models.AnalysisPresetList: ...
+    def create_preset(
+        self, *, name: str, executor_connection_id: str, user_uid: str, idempotency_key: str
+    ) -> models.AnalysisPreset: ...
+    def revise_preset(
+        self, *, preset_id: str, name: str, executor_connection_id: str, user_uid: str,
+        idempotency_key: str,
+    ) -> models.AnalysisPreset: ...
+    def archive_preset(
+        self, *, preset_id: str, user_uid: str, idempotency_key: str
+    ) -> models.AnalysisPreset: ...
 
 
 class RunnerPort(Protocol):
@@ -168,7 +185,7 @@ class RunnerPort(Protocol):
         self, *, connection_id: str, token_id: str, user_uid: str, idempotency_key: str
     ) -> models.RunnerTokenMetadata: ...
     def claim_task(
-        self, *, runner: RunnerIdentity, wait_seconds: int
+        self, *, runner: RunnerIdentity, wait_seconds: int, max_images: int | None = None
     ) -> models.ClaimedExecutorTask | None: ...
     def read_image(
         self, *, runner: RunnerIdentity, task_id: str, blob_id: str
@@ -519,6 +536,7 @@ class RunPort(Protocol):
         provider_mode: str | None,
         idempotency_key: str,
         executor_connection_id: str | None = None,
+        preset_id: str | None = None,
     ) -> RunStatusView:
         """Start a run, or return the existing one for this key and payload.
 
@@ -530,6 +548,10 @@ class RunPort(Protocol):
         on. ``None`` is the global route, as before. A connection that cannot serve now
         refuses the start; it is never replaced by the standby or another connection, and the
         id is part of the payload the key is compared by.
+
+        ``preset_id`` (`ANALYSIS-PRESETS-01`) names a saved preset instead: its executor
+        connection is applied exactly as if the caller had named it, and the run records the
+        preset revision. A preset together with ``executor_connection_id`` is refused.
         """
 
     def get_run_status(self, *, run_id: str) -> RunStatusView:
@@ -1081,6 +1103,82 @@ class ComparisonPort(Protocol):
         a severity the target cannot hold are each ``conflict`` with a ``conflict_reason``.
         """
 
+    def approve_sheet_pairing(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        source_version_uid: str,
+        target_version_uid: str,
+        mode: str,
+        source_page_number: int,
+        target_page_number: int,
+        suggestion_sha256: str,
+        source_run_id: str | None,
+        target_run_id: str | None,
+        idempotency_key: str,
+        author_label: str,
+        author_user_uid: str,
+    ) -> models.SheetPairingEvent:
+        """`COMPARE-PERSISTED-SUMMARY-01`. Store the expert's approval of one proposed pair.
+
+        The expert role is read from the account in the writing transaction; ``admin`` alone is
+        ``permission_denied``. The comparison is recomputed with the request's mode and runs and
+        must still propose exactly this pair under this digest (``conflict``,
+        ``sheet_pair_not_proposed``); a page already held by an active link, the 33rd active
+        link, an earlier approval whose page text has changed and an input beyond the bounds of
+        the raw evidence are each ``conflict`` with their own ``conflict_reason``. The row, its
+        audit event and the receipt commit together.
+        """
+
+    def withdraw_sheet_pairing(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        source_version_uid: str,
+        sheet_link_id: str,
+        mode: str,
+        source_run_id: str | None,
+        target_run_id: str | None,
+        idempotency_key: str,
+        author_label: str,
+        author_user_uid: str,
+    ) -> models.SheetPairingEvent:
+        """`COMPARE-PERSISTED-SUMMARY-01`. End one active link with a new row.
+
+        ``not_found`` for a link that is not of this path; ``conflict`` /
+        ``sheet_link_not_active`` for one already withdrawn; ``conflict`` /
+        ``comparison_not_available`` when the comparison the expert was looking at cannot be
+        recomputed. Nothing is updated or deleted.
+        """
+
+    def generate_comparison_summary(
+        self,
+        *,
+        project_uid: str,
+        document_uid: str,
+        source_version_uid: str,
+        target_version_uid: str,
+        mode: str,
+        source_run_id: str | None,
+        target_run_id: str | None,
+        idempotency_key: str,
+        author_label: str,
+        author_user_uid: str,
+    ) -> models.GenerateComparisonSummaryResponse:
+        """`COMPARE-PERSISTED-SUMMARY-01` (B2). Ask the model once for the summary of the sealed
+        approved pairs and store the answer.
+
+        The expert role is read in the writing transaction; ``admin`` alone is
+        ``permission_denied``. ``conflict`` with ``summary_evidence_not_sealed``,
+        ``summary_input_empty`` or ``summary_input_too_large`` before any call; a process with no
+        summary model answers ``dependency_unavailable`` (``dependency: comparison_summary_model``);
+        a missing recording is ``analysis_input_invalid``; the cost ceiling is
+        ``cost_budget_exceeded``. An exact repeat answers the stored summary (``replayed``) and calls
+        nothing. A reply the check refuses is stored as ``rejected`` and returned as an answer.
+        """
+
 @runtime_checkable
 class AnalysisProfilePort(Protocol):
     """``listAnalysisProfiles``. `W59-ANALYSIS-SETTINGS-01`.
@@ -1314,3 +1412,121 @@ class OptimisationProposalPort(Protocol):
         self, *, optimisation_pass_id: str, user_uid: str
     ) -> bytes:
         """The pass's proposals as the formula-escaped CSV bytes."""
+
+
+# --- comparison modules (`CMP-SEAL-C0`, ADR-0025) ----------------------------------------
+#
+# Three ports, one per lane group, sealed as stubs: every method answers ``503
+# dependency_unavailable`` in the shipped adapter until its lane wires it (plan section 4.0 rule
+# 1: the lane that implements an operation owns its adapter class, its rows here and its router
+# file). They return the wire models, as ``ReleasesPort`` does.
+
+
+@runtime_checkable
+class ComparisonUploadPort(Protocol):
+    """The twelve upload operations. `CMP-INGEST-01` (create, part, complete, proposal, confirm)
+    and `CMP-INGEST-02` (list, exclude, retry, pause, resume, cancel) implement them over
+    `CMP-STORAGE-PARTS-01`'s multipart staging."""
+
+    def create_upload(
+        self, *, project_uid: str, files: Sequence[models.ComparisonUploadFileDeclaration],
+        user_uid: str, idempotency_key: str,
+    ) -> models.ComparisonUpload:
+        """Declare the files of one batch. The limits of ADR-0025 decision 9 are refused here,
+        before the first part, as typed reasons under existing codes."""
+
+    def list_uploads(
+        self, *, project_uid: str, cursor: str | None, limit: int
+    ) -> models.ComparisonUploadPage:
+        """The project's batches, newest first, without their files. An unknown project is
+        ``not_found``."""
+
+    def get_upload(self, *, upload_id: str) -> models.ComparisonUpload:
+        """One batch with its files. An unknown batch is ``not_found``."""
+
+    def get_proposal(self, *, upload_id: str) -> models.ComparisonUploadProposal:
+        """The proposed grouping, order, stage and section."""
+
+    def put_part(
+        self, *, upload_id: str, file_id: str, part_number: int, content: bytes,
+        user_uid: str, idempotency_key: str,
+    ) -> models.ComparisonUploadPartReceipt:
+        """Stage one part (at most 16 MiB). The part has a database owner before its bytes are
+        staged (ADR-0025 decision 10)."""
+
+    def complete_file(
+        self, *, upload_id: str, file_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonUploadFile:
+        """Complete the multipart object and check the declared SHA-256 and size."""
+
+    def confirm_set(
+        self, *, upload_id: str, set_id: str, request: models.ConfirmComparisonUploadSetRequest,
+        user_uid: str, idempotency_key: str,
+    ) -> models.ComparisonProposalSet:
+        """The user's membership and order for one set."""
+
+    def exclude_set(
+        self, *, upload_id: str, set_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonProposalSet:
+        """Leave one set out of the batch."""
+
+    def retry_set(
+        self, *, upload_id: str, set_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonProposalSet:
+        """Queue a failed set again."""
+
+    def pause_upload(
+        self, *, upload_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonUpload:
+        """Pause after the set in hand."""
+
+    def resume_upload(
+        self, *, upload_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonUpload:
+        """Run a paused batch again."""
+
+    def cancel_upload(
+        self, *, upload_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonUpload:
+        """«Отменить пакет»: abort parts that were never completed. The bytes of completed
+        versions are removed only by the operator's project erase."""
+
+
+@runtime_checkable
+class ComparisonVersionOrderPort(Protocol):
+    """The order revisions of a document set. `CMP-INGEST-01` implements them."""
+
+    def list_orders(
+        self, *, project_uid: str, document_uid: str, cursor: str | None, limit: int
+    ) -> models.ComparisonVersionOrderList:
+        """The revisions, newest first. An unknown project or document is ``not_found``."""
+
+    def append_order(
+        self, *, project_uid: str, document_uid: str, version_uids: Sequence[str],
+        base_revision_no: int, user_uid: str, idempotency_key: str,
+    ) -> models.ComparisonVersionOrder:
+        """Append a revision. An expert's act; a stale ``base_revision_no`` is ``conflict``."""
+
+
+@runtime_checkable
+class VersionPagePort(Protocol):
+    """The page reads of a version, addressed by the identity of the page's profile (a page number
+    is an ordinal and never an address). `CMP-PROFILE-01` implements them from what the worker
+    stored; the API never calls PDFium."""
+
+    def list_profiles(
+        self, *, version_uid: str, cursor: str | None, limit: int
+    ) -> models.VersionPageProfilePage:
+        """The stored profiles of the version, by page number. An unknown version is ``not_found``."""
+
+    def get_profile(self, *, page_profile_id: str) -> models.VersionPageProfile:
+        """One page profile, or ``not_found``."""
+
+    def read_preview(self, *, page_profile_id: str) -> bytes:
+        """The stored preview PNG, or ``not_found``."""
+
+    def read_thumbnail(self, *, page_profile_id: str) -> bytes:
+        """The stored thumbnail PNG, or ``not_found``."""
+
+    def read_tile(self, *, page_profile_id: str, level: int, column: int, row: int) -> bytes:
+        """One tile PNG of the bounded pyramid, or ``not_found``."""

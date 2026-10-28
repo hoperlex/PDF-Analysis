@@ -162,6 +162,10 @@ PORT_FOR_ARGUMENT = {
     # `EXEC-SEAL-01`, `EXEC-HTTP-01`: the connections; `EXEC-PULL-01`: the pull channel.
     "executors": "ExecutorPort",
     "runner": "RunnerPort",
+    # `CMP-SEAL-C0`: the comparison modules' three ports, sealed as stubs.
+    "comparison_uploads": "ComparisonUploadPort",
+    "comparison_version_orders": "ComparisonVersionOrderPort",
+    "version_pages": "VersionPagePort",
 }
 
 

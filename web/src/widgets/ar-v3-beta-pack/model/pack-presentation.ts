@@ -23,6 +23,12 @@ export const PACK_FAULT_DETAIL =
   'Ответ сервера не соответствует контракту, поэтому пакет не показан ни установленным, ни ' +
   'отсутствующим, а запуск шести проверок недоступен.';
 
+/**
+ * The attestation record of the sealed pack, as «Настройки анализа» shows it: who prepared it and
+ * that the system does not check it. It is NOT behind the review-indication switch (`R-146ba`, the
+ * integrator's rule): the record states what the pack is, and stays whatever that switch says.
+ * `web/tests/guards/review-indication.guard.test.ts` holds it out of the switch on purpose.
+ */
 export const ATTESTATION_SENTENCE =
   'Запись рецензента приложена при установке пакета; система её не проверяет, цитаты ' +
   'остаются предварительными и требуют проверки эксперта.';

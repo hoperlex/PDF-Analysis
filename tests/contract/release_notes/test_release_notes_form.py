@@ -149,14 +149,28 @@ def test_authored_shape_and_form() -> None:
     # development candidate; no six-Run or verified citation claim is authored. 0.8.1
     # (RELEASE-0-8-1-DEV-01) is the next development candidate: the pack status, the
     # pack-gated six-check start and its group review, and three interface repairs; it
-    # claims no verified citation, installed pack or numerical conclusion.
+    # claims no verified citation, installed pack or numerical conclusion. 0.8.2 is the
+    # executor choice of a run. 0.9.0 (RELEASE-0-9-0-DEV-01) is the next development
+    # candidate: sheet-pairing approval and the recorded-only summary in the version
+    # comparison, the 14 section profiles from 1.1.0 to 1.3.x (reviewed with no human review),
+    # whole-page windows for a large text, optimisation for every section with the
+    # dashboard sentence, the removal of the ordinary AR start, and the routing of an SSH
+    # command connection with the plain-http address rule; it claims no measured quality
+    # for any prompt. 0.9.0 is at revision 2 (REVIEW-INDICATION-SWITCH-01, R-146ba): the
+    # owner took the profile label «рабочая версия, проверка человеком не проводилась» off
+    # the screens for the beta, so the note says the state «проверен» and no longer says that
+    # a screen shows that label; it never reached main, so its revision may be raised. It is at
+    # revision 3 (ACCESS-COMPARE-JUDGE-FIXES-01): item 3 had quoted the profile versions as
+    # «1.1.0 или 1.2.0» while five profiles were at 1.3.0; it now quotes a range that holds every
+    # profile.json (test_note_profile_versions.py) and says that five sections report omissions
+    # under «Документация»; it too has not reached main.
     assert {entry["version"]: entry["revision"] for _, entry in entries} == {
-        "0.8.2": 1, "0.8.1": 1, "0.8.0": 1, "0.7.0": 2, "0.6.0": 2, "0.5.1": 1, "0.5.0": 1,
+        "0.9.0": 3, "0.8.2": 1, "0.8.1": 1, "0.8.0": 1, "0.7.0": 2, "0.6.0": 2, "0.5.1": 1, "0.5.0": 1,
         "0.4.0": 1, "0.3.0": 2, "0.2.0": 2,
     }
     assert form_failures(entries, version=(ROOT / "VERSION").read_text().strip(), terms=_dictionary()) == set()
     assert [entry["version"] for _, entry in entries] == [
-        "0.8.2", "0.8.1", "0.8.0", "0.7.0", "0.6.0", "0.5.1", "0.5.0", "0.4.0", "0.3.0", "0.2.0",
+        "0.9.0", "0.8.2", "0.8.1", "0.8.0", "0.7.0", "0.6.0", "0.5.1", "0.5.0", "0.4.0", "0.3.0", "0.2.0",
     ]
     archive = entries[-1][1]
     assert archive["is_archive"] is True

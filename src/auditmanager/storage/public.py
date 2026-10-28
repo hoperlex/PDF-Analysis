@@ -9,6 +9,8 @@ from auditmanager.storage.errors import (
     BlobIntegrityError,
     BlobMetadataInvalidError,
     BlobNotFoundError,
+    MultipartPartError,
+    MultipartPartsError,
     StorageError,
     TemporaryBlobLostError,
 )
@@ -24,7 +26,21 @@ from auditmanager.storage.models import (
     parse_blob_id,
     parse_blob_role,
 )
-from auditmanager.storage.port import STREAM_CHUNK_BYTES, BlobChunks, BlobSource, BlobStore
+from auditmanager.storage.multipart import (
+    MULTIPART_PART_BYTES_MAX,
+    MULTIPART_PART_NUMBER_MAX,
+    MultipartSweepReport,
+    UploadedPart,
+    abort_multipart_sweep,
+    new_multipart_token,
+)
+from auditmanager.storage.port import (
+    STREAM_CHUNK_BYTES,
+    BlobChunks,
+    BlobSource,
+    BlobStore,
+    MultipartStaging,
+)
 from auditmanager.storage.s3 import S3BlobStore, sha256_of
 from auditmanager.storage.settings import S3StorageSettings
 
@@ -41,6 +57,8 @@ def canonical_object_key_for_recovery(blob_id: BlobId) -> str:
 
 
 __all__ = [
+    "MULTIPART_PART_BYTES_MAX",
+    "MULTIPART_PART_NUMBER_MAX",
     "STREAM_CHUNK_BYTES",
     "BlobAttributeConflictError",
     "BlobChunks",
@@ -57,14 +75,21 @@ __all__ = [
     "S3StorageSettings",
     "BlobStore",
     "DurablePublicationStore",
+    "MultipartStaging",
+    "MultipartPartError",
+    "MultipartPartsError",
+    "MultipartSweepReport",
     "PublishedBlob",
     "StorageError",
     "TemporaryBlob",
     "TemporaryBlobLostError",
+    "UploadedPart",
     "VerifiedBlob",
+    "abort_multipart_sweep",
     "canonical_object_key_for_recovery",
     "declare_blob",
     "derive_blob_id",
+    "new_multipart_token",
     "parse_blob_id",
     "parse_blob_role",
     "sha256_of",

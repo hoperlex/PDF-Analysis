@@ -63,7 +63,18 @@ def test_the_declaration_partitions_exactly_the_tables_schema_coverage_declares(
     # the stand's documents and answers (PRODUCT 29 -> 30).
     # `0032_ar_v3_run_group`: the group and its six members are product data (PRODUCT 30 -> 32).
     assert {"ar_v3_run_group", "ar_v3_run_group_member"} <= tool.PRODUCT_TABLES
-    assert len(tool.PRODUCT_TABLES) == 32 and len(tool.KEEP_TABLES) == 29 and len(tool.MIXED_TABLES) == 3
+    # `0035_comparison_records`: the sheet-link history and the summaries are product data
+    # (PRODUCT 32 -> 34).
+    assert {"comparison_sheet_link", "comparison_summary"} <= tool.PRODUCT_TABLES
+    # `0037_analysis_presets`: the revisions of a named preset are executor configuration, like the
+    # connections they name (KEEP 29 -> 30); a run (PRODUCT) references them, never the reverse.
+    assert "analysis_preset_revision" in tool.KEEP_TABLES and "analysis_preset_revision" not in tool.PRODUCT_TABLES
+    # `0038_comparison_foundation`: the nine comparison tables carry product data and reference the
+    # project, document versions and executor tasks, so they are truncated with the rest (PRODUCT 34 -> 43).
+    assert {"comparison_upload", "comparison_upload_set", "comparison_upload_file", "comparison_upload_part",
+            "comparison_version_order", "comparison_page_profile", "comparison_work",
+            "comparison_work_attempt", "comparison_model_call"} <= tool.PRODUCT_TABLES
+    assert len(tool.PRODUCT_TABLES) == 43 and len(tool.KEEP_TABLES) == 30 and len(tool.MIXED_TABLES) == 3
     assert tool.PRODUCT_TABLES | tool.KEEP_TABLES | tool.MIXED_TABLES == TABLES
     # the corpus half of KEEP is schema_coverage's own list, not a copy of it
     assert tool.KEEP_NORM_TABLES is EXEMPT_FROM_FINGERPRINT

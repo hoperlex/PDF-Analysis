@@ -76,6 +76,8 @@ def serve(environ: Mapping[str, str]) -> int:
         # `EXEC-HTTP-01`: «Проверить» runs on this process's network path; only a worker that
         # holds the private ring can open a connection's key, so only that one takes probes.
         probe_runner=runtime.probe_runner,
+        # `CMP-WORK-01`: the comparison queue's runner, claimed only when no Run is claimable.
+        comparison_work=runtime.comparison_work,
     )
     stop = threading.Event()
 

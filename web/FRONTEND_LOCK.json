@@ -1,7 +1,7 @@
 {
   "lock_version": 1,
   "purpose": "Everything a later regeneration needs to prove the committed API client matches its input: the toolchain pins, the exact generator invocation, and the exact OpenAPI bytes the client was generated from. Verified by web/tests/guards/frontend-lock.guard.test.ts, which recomputes every digest here and fails if one has moved.",
-  "owner": "OPT-PROJECT-ALL-SECTIONS-01 reseal",
+  "owner": "CMP-SEAL-C0 reseal",
   "toolchain": {
     "node": "22.23.1",
     "npm": "10.9.8",
@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "14375c443fb530324592bdb3dfb1f40dbe10e45ad82785e9797331ecbfd9357a",
-    "content_commit": "19f4781d",
-    "content_commit_subject": "docs(contract): section_not_ar is no longer produced; uploadDocument and the dashboard say what is true",
+    "sha256": "5daf6416d4d4100f0a49ec2d834ca52a6139c2b29dc3c3cff68080983e2a1765",
+    "content_commit": "21058a2f",
+    "content_commit_subject": "CMP-SEAL-C0 (ADR-0025): contract 1.9.0, the comparison modules sealed as stubs (nineteen operations), upload_kind, comparison_modules, runner image references; additive minor, 1.8.0 to 1.9.0",
     "dispatch_named_commit": "a3e83f39cfcb02f4ea5565e6f45f3f2b2f720e97",
-    "commit_note": "OPT-PROJECT-ALL-SECTIONS-01 repairs prose only: getSpecificationPrices and startOptimisationPass accept a version of any section (section_not_ar stays in the enum, no longer produced), uploadDocument says what routes an analysis, getDashboardSummary says fifteen sections, one reseal paragraph in info.description; contract 1.7.0 (92/104/301), migration 0034, no new error code.",
+    "commit_note": "CMP-SEAL-C0 adds nineteen operations under /projects/{project_uid}/comparison-uploads, /comparison-uploads, /projects/{project_uid}/documents/{document_uid}/comparison-version-orders, /versions/{version_uid}/page-profiles and /page-profiles, thirty schemas, the optional DocumentVersion.upload_kind, ProductVersion.comparison_modules and RunnerImage.crop_id, ClaimedExecutorTask.images up to eight and ClaimExecutorTaskRequest.max_images; every operation is a stub answering 503 dependency_unavailable until its lane wires it; contract 1.9.0 (115/130/351), migration 0038, no new error code. Earlier content: ANALYSIS-PRESETS-01 under 1.8.0 (98/111/321); COMPARE-PERSISTED-SUMMARY-01 under 1.7.0, moved to 1.8.0 by CONTRACT-1-8-0-01 under R-146ar.",
     "openapi_version": "3.1.0",
-    "info_version": "1.7.0",
-    "paths": 92,
-    "operations": 104,
-    "component_schemas": 301,
+    "info_version": "1.9.0",
+    "paths": 115,
+    "operations": 130,
+    "component_schemas": 351,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "14375c443fb530324592bdb3dfb1f40dbe10e45ad82785e9797331ecbfd9357a",
+    "snapshot_sha256": "5daf6416d4d4100f0a49ec2d834ca52a6139c2b29dc3c3cff68080983e2a1765",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "e905afb72af12f2d9867752371e50f15083ae7315ca96ec19340477c0a29702a",
-      "index.ts": "c1adb3a7a351c302c31dc70b871d8bbb744b90be38e67dfdae2b8e48a2e5582e",
-      "operations.gen.ts": "16f110bba9f614e7062e7a24e3f62a7eddfec71787da94027af41c77cf75e066",
-      "types.gen.ts": "77f90291913f03deb265917f1ed5ef749cfb601762041b34006683afdc3ffe68"
+      "client.gen.ts": "30adcb24e2058073f238e801d1ca9099b203c752f8fe054380c44ff740903fc5",
+      "index.ts": "4f32f9b89d77961686a10666eadc8c250672e30df36ab012b8a992e4f614ab44",
+      "operations.gen.ts": "1add1a645a05f6e95f52ab1e9c2462182a6e96e1bf71195696b4ec64c4ad814e",
+      "types.gen.ts": "d565d342e0d6605e07936729551e68cb494b01f4fd8e5fd8269c1f9882156347"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

@@ -28,7 +28,10 @@ from sqlalchemy.orm import Session
 
 from auditmanager.jobs.public import AttemptContext
 
-__all__ = ["FrozenRoute", "ProviderBinding", "ProviderResolver", "RouteFreezer"]
+__all__ = [
+    "ChosenPreset", "FrozenRoute", "PresetResolver", "ProviderBinding", "ProviderResolver",
+    "RouteFreezer",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +65,26 @@ class RouteFreezer(Protocol):
     connection was named, so one that predates the keyword is called exactly as before."""
 
     def __call__(self, session: Session, *, connection_id: str | None = None) -> FrozenRoute: ...
+
+
+@dataclass(frozen=True, slots=True)
+class ChosenPreset:
+    """What a run start applies from a named preset (`ANALYSIS-PRESETS-01`): the preset's current
+    revision, resolved in the start's own transaction, and the one setting a start can take."""
+
+    preset_id: str
+    revision_id: str
+    revision_no: int
+    executor_connection_id: str
+
+
+class PresetResolver(Protocol):
+    """``resolve(session, preset_id)`` is the preset's current revision, or the refusal that stops
+    the start before anything is written (an unknown preset, an archived one). The ``runs`` context
+    never reads the preset's tables: the composition root hands it this seam, as it hands it the
+    route freezer."""
+
+    def __call__(self, session: Session, preset_id: str) -> ChosenPreset: ...
 
 
 ProviderResolver = Callable[[Session, Any, AttemptContext], ProviderBinding]

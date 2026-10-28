@@ -1,4 +1,4 @@
-"""The 104 operations of ``contracts/api/v1/openapi.json``, and nothing else.
+"""The 130 operations of ``contracts/api/v1/openapi.json``, and nothing else.
 
 :func:`build_router` assembles one ``APIRouter`` from the twenty-two router modules. It takes
 its dependencies as arguments and constructs none of them: choosing what sits behind each
@@ -26,6 +26,10 @@ from fastapi import APIRouter
 from auditmanager.api.routers.auth import build_auth_routes
 from auditmanager.api.routers.ar_v3_groups import build_ar_v3_group_routes
 from auditmanager.api.routers.blocks import build_block_routes
+from auditmanager.api.routers.comparison_uploads import build_comparison_upload_routes
+from auditmanager.api.routers.comparison_version_orders import (
+    build_comparison_version_order_routes,
+)
 from auditmanager.api.routers.correlation import (
     CORRELATION_HEADER,
     CorrelationMiddleware,
@@ -67,6 +71,7 @@ from auditmanager.api.routers.norms import build_norm_routes
 from auditmanager.api.routers.optimisation import build_optimisation_routes
 from auditmanager.api.routers.optimisation_proposals import build_optimisation_proposal_routes
 from auditmanager.api.routers.releases import build_release_routes
+from auditmanager.api.routers.version_pages import build_version_page_routes
 from auditmanager.api.routers.multipart import (
     MAX_BODY,
     MAX_CONCURRENT_UPLOADS,
@@ -80,6 +85,9 @@ from auditmanager.api.routers.ports import (
     OptimisationProposalPort,
     BlockPort,
     ComparisonPort,
+    ComparisonUploadPort,
+    ComparisonVersionOrderPort,
+    VersionPagePort,
     DispatchPort,
     CredentialPort,
     CsvExportPort,
@@ -173,6 +181,9 @@ __all__ = [
     "RunPort",
     "SectionPort",
     "ComparisonPort",
+    "ComparisonUploadPort",
+    "ComparisonVersionOrderPort",
+    "VersionPagePort",
     "AnalysisProfilePort",
     "DispatchPort",
     "OptimisationPort",
@@ -205,7 +216,7 @@ BASE_PATH: Final[str] = "/api/v1"
 
 #: ``info.version`` of the frozen document, and the ``ErrorEnvelope.contract_version``
 #: const. The two are one value on purpose.
-CONTRACT_VERSION: Final[str] = "1.7.0"
+CONTRACT_VERSION: Final[str] = "1.9.0"
 
 
 def build_router(
@@ -237,8 +248,11 @@ def build_router(
     executors: ExecutorPort | None = None,
     runner: RunnerPort | None = None,
     ar_v3_groups: ArV3GroupPort | None = None,
+    comparison_uploads: ComparisonUploadPort | None = None,
+    comparison_version_orders: ComparisonVersionOrderPort | None = None,
+    version_pages: VersionPagePort | None = None,
 ) -> Router:
-    """Assemble the 104 operations, from the twenty-three router modules -- ``me``,
+    """Assemble the 130 operations, from the twenty-three router modules -- ``me``,
     ``registrations`` and ``users`` are `W49-SEAL-01`'s three, ``sections``
     `W59-SECTION-SEAL-01`'s, ``comparison`` `W59-VERSION-COMPARE-01`'s,
     ``analysis_profiles`` `W59-ANALYSIS-SETTINGS-01`'s, ``dispatch`` `W61-DISPATCHER-01`'s and
@@ -338,6 +352,13 @@ def build_router(
     # `EXEC-PULL-01`. The pull channel: two administrator operations on runner tokens and the
     # four a runner calls with one. Optional with a default, for the reason `blocks` gives.
     build_runner_routes(router, runner)  # type: ignore[arg-type]
+    # `CMP-SEAL-C0` (ADR-0025). The comparison modules' upload, version-order and page reads,
+    # sealed as stubs answering `503 dependency_unavailable` until `CMP-INGEST-01`,
+    # `CMP-INGEST-02` and `CMP-PROFILE-01` wire their ports. Optional with a default, for the
+    # reason `blocks` gives above.
+    build_comparison_upload_routes(router, comparison_uploads)  # type: ignore[arg-type]
+    build_comparison_version_order_routes(router, comparison_version_orders)  # type: ignore[arg-type]
+    build_version_page_routes(router, version_pages)  # type: ignore[arg-type]
     _refuse_a_duplicate_operation_id(router)
     return router
 

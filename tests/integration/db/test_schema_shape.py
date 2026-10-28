@@ -86,6 +86,16 @@ IMMUTABLE_TABLES = {
     # `0030_executor_connections`: a revision of a connection's settings is written once; a changed
     # address is a new revision.
     "executor_connection_revision",
+    # `0035_comparison_records`: an approval or withdrawal of a sheet pairing is appended once and
+    # never changed; the approved set is a query.
+    "comparison_sheet_link",
+    "comparison_summary",
+    # `0037_analysis_presets`: a revision of a preset is appended once and never changed; the
+    # current revision is a query, and an archive is a revision.
+    "analysis_preset_revision",
+    # `0038_comparison_foundation`: an order revision of a document set is appended once and never
+    # changed; the current order is a query.
+    "comparison_version_order",
 }
 
 
@@ -118,6 +128,12 @@ def _trigger_functions(engine: Engine, table: str) -> set[str]:
         }
 
 
+#: The one secret-class column of the run's Attempt, and its twin of the comparison queue
+#: (`0038_comparison_foundation`, ADR-0025 decision 4): an opaque equality-only capability, never
+#: returned, parsed or ordered.
+SECRET_CLASS_COLUMNS = {("attempt", "execution_token"), ("comparison_work_attempt", "execution_token")}
+
+
 def test_no_column_names_an_address_a_secret_or_a_model_payload(
     migrated_engine: Engine,
 ) -> None:
@@ -125,11 +141,11 @@ def test_no_column_names_an_address_a_secret_or_a_model_payload(
         f"{table}.{column}"
         for table, column in _columns(migrated_engine)
         if column in BANNED_COLUMN_NAMES
-        and (table, column) != ("attempt", "execution_token")
+        and (table, column) not in SECRET_CLASS_COLUMNS
     ]
     assert offenders == [], (
         "the object-key layout is confined to the S3 adapter and secrets are stored "
-        "only in the exact contract-owned attempt.execution_token column; "
+        "only in the exact contract-owned attempt.execution_token column and its comparison twin; "
         f"found {offenders}"
     )
 
@@ -342,6 +358,40 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "token_id": "ern",
         "claimed_by_token_id": "ern",
         "task_id": "ext",
+        # `COMPARE-PERSISTED-SUMMARY-01`, migration 0035: the sheet-link history names a comparison,
+        # a link and the two versions of the compared pair.
+        "comparison_id": "cmp",
+        "sheet_link_id": "sln",
+        "source_version_uid": "ver",
+        "target_version_uid": "ver",
+        # B2: a summary is identified by the audit event written with it.
+        "summary_id": "evt",
+        # `ANALYSIS-PRESETS-01`, migration 0037: a preset and each of its revisions are identified by
+        # the audit event written with them (the first revision's id is the preset's); a run records
+        # the revision it started with; a preset names the executor connection (`exc`, above).
+        "preset_id": "evt",
+        "preset_revision_id": "evt",
+        "executor_connection_id": "exc",
+        # `CMP-SEAL-C0`, migration 0038 (ADR-0025 decision 2): the comparison identities and the
+        # columns that hold them -- an upload batch, its set and file, an order revision, a page
+        # profile, a queue item and its attempt, a journal row; the document a proposal matched, the
+        # blobs a profile stores, the task a journal row waited on, and the attempt a task names.
+        "comparison_upload_id": "cbt",
+        "comparison_upload_set_id": "cus",
+        "set_id": "cus",
+        "comparison_upload_file_id": "cuf",
+        "comparison_version_order_id": "cvo",
+        "comparison_page_profile_id": "cpr",
+        "comparison_work_id": "cq",
+        "comparison_work_attempt_id": "cqa",
+        "current_work_attempt_id": "cqa",
+        "comparison_attempt_id": "cqa",
+        "comparison_model_call_id": "cmc",
+        "existing_document_uid": "doc",
+        "profile_blob_id": "blob",
+        "preview_blob_id": "blob",
+        "thumbnail_blob_id": "blob",
+        "executor_task_id": "ext",
     }
     assert set(prefix_by_column.values()) <= {
         identity.prefix for identity in IDENTITY_TYPES_BY_ENTITY.values()

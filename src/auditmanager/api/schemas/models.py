@@ -53,6 +53,19 @@ __all__ = [
     "AnalysisProfileStatus",
     "AnalysisProfileSummary",
     "ApproveRegistrationRequest",
+    "ApproveSheetPairingRequest",
+    "ApprovedDiffHunk",
+    "ApprovedSheetDiff",
+    "ApprovedSheetPair",
+    "ApprovedSheetPairs",
+    "ComparisonSummary",
+    "GenerateComparisonSummaryRequest",
+    "GenerateComparisonSummaryResponse",
+    "SummaryStatement",
+    "ComparisonId",
+    "SheetLinkId",
+    "SheetPairingEvent",
+    "WithdrawSheetPairingRequest",
     "AppendDecisionRequest",
     "AppendDecisionResponse",
     "ClassifyDocumentVersionRequest",
@@ -125,6 +138,7 @@ __all__ = [
     "JobId",
     "RunState",
     "RunExecutor",
+    "RunPreset",
     "RunStatus",
     "RunStatusPage",
     "Severity",
@@ -308,6 +322,42 @@ __all__ = [
     "ExecutorRoute",
     "ExecutorRouteList",
     "SetExecutorRouteRequest",
+    "PresetId",
+    "PresetRevisionId",
+    "AnalysisPresetState",
+    "AnalysisPreset",
+    "AnalysisPresetList",
+    "SaveAnalysisPresetRequest",
+    "ComparisonModules",
+    "VersionUploadKind",
+    "ComparisonUploadState",
+    "ComparisonUploadFileState",
+    "ComparisonUploadSetState",
+    "ComparisonProposalWarning",
+    "ComparisonUploadFileDeclaration",
+    "CreateComparisonUploadRequest",
+    "ComparisonUploadFile",
+    "ComparisonUpload",
+    "ComparisonUploadPage",
+    "ComparisonUploadPartReceipt",
+    "ComparisonProposalFile",
+    "ComparisonProposalSet",
+    "ComparisonUploadProposal",
+    "ConfirmedComparisonFile",
+    "ConfirmComparisonUploadSetRequest",
+    "ComparisonVersionOrderSource",
+    "ComparisonVersionOrder",
+    "ComparisonVersionOrderList",
+    "AppendComparisonVersionOrderRequest",
+    "PageProfileStatus",
+    "PageStamp",
+    "VersionPageProfile",
+    "VersionPageProfilePage",
+    "ComparisonUploadId",
+    "ComparisonUploadFileId",
+    "ComparisonUploadSetId",
+    "ComparisonVersionOrderId",
+    "ComparisonPageProfileId",
     "ExecutorTaskState",
     "RunnerTokenMetadata",
     "IssueRunnerTokenRequest",
@@ -443,6 +493,12 @@ ExecutorConnectionId = TypeAliasType(
 ExecutorRevisionId = TypeAliasType(
     "ExecutorRevisionId", Annotated[str, Field(pattern=rf"^excr_{_ULID}$")]
 )
+#: `ANALYSIS-PRESETS-01`. A preset and each of its revisions are identified by the audit event
+#: written with them (``evt``, migration ``0037``): the first revision's id is the preset's.
+PresetId = TypeAliasType("PresetId", Annotated[str, Field(pattern=rf"^evt_{_ULID}$")])
+PresetRevisionId = TypeAliasType(
+    "PresetRevisionId", Annotated[str, Field(pattern=rf"^evt_{_ULID}$")]
+)
 ExecutorSecretId = TypeAliasType(
     "ExecutorSecretId", Annotated[str, Field(pattern=rf"^exs_{_ULID}$")]
 )
@@ -486,6 +542,15 @@ FindingObservationId = TypeAliasType(
 )
 DecisionId = TypeAliasType(
     "DecisionId", Annotated[str, Field(pattern=rf"^dec_{_ULID}$")]
+)
+#: `COMPARE-PERSISTED-SUMMARY-01`. A comparison (one ordered pair of versions of one set) and one
+#: approved sheet link; both declared in ``contracts/domain/v1/identifiers.json`` and allocated
+#: from migration ``0035``.
+ComparisonId = TypeAliasType(
+    "ComparisonId", Annotated[str, Field(pattern=rf"^cmp_{_ULID}$")]
+)
+SheetLinkId = TypeAliasType(
+    "SheetLinkId", Annotated[str, Field(pattern=rf"^sln_{_ULID}$")]
 )
 AnalysisProfileId = TypeAliasType(
     "AnalysisProfileId", Annotated[str, Field(pattern=rf"^ap_{_ULID}$")]
@@ -728,7 +793,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.7.0"]
+    contract_version: Literal["1.9.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -887,6 +952,25 @@ class SectionReview(_Object):
     options: Annotated[list[SectionReviewOption], Field(min_length=15, max_length=15)]
 
 
+#: The module set (ADR-0025 decision 23): which comparison modules this deployment serves.
+class ComparisonModules(str, enum.Enum):
+    """``none`` serves neither comparison module (the default), ``versions`` «Сравнение
+    версий», ``versions,stages`` both. A module that is off has no menu entry and its
+    operations answer ``dependency_unavailable``."""
+
+    NONE = "none"
+    VERSIONS = "versions"
+    VERSIONS_STAGES = "versions,stages"
+
+
+class VersionUploadKind(str, enum.Enum):
+    """How a version reached the product. ``comparison_pdf`` is a plain PDF admitted for
+    comparison only (`Q-CMP-5`): no section analysis can start on it."""
+
+    PORTAL_BUNDLE = "portal_bundle"
+    COMPARISON_PDF = "comparison_pdf"
+
+
 class DocumentVersion(_Object):
     version_uid: VersionUid
     document_uid: DocumentUid
@@ -910,6 +994,11 @@ class DocumentVersion(_Object):
     page_count: Annotated[int, Field(ge=1, le=500)]
     published_at: datetime
     input_manifest: list[InputManifestEntry]
+    #: `CMP-SEAL-C0`. How the version reached the product; see :class:`VersionUploadKind`.
+    #: Always sent from `1.9.0`.
+    upload_kind: VersionUploadKind = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
 
 
 class DocumentVersionPage(_Object):
@@ -1034,6 +1123,11 @@ class StartRunRequest(_Object):
     #: `EXEC-PAR-START-01`. Optional and **not nullable**, like ``provider_mode``: absent means
     #: the global route, exactly as before; present means that connection or a refusal.
     executor_connection_id: ExecutorConnectionId = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+    #: `ANALYSIS-PRESETS-01`. Optional and **not nullable**, like ``executor_connection_id``, and
+    #: exclusive with it: a person either takes a preset or names an executor.
+    preset_id: PresetId = Field(
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
 
@@ -1174,6 +1268,15 @@ class RunExecutor(_Object):
     pin_id: Annotated[str, Field(min_length=1, max_length=128)]
 
 
+class RunPreset(_Object):
+    """`ANALYSIS-PRESETS-01`. The preset revision a run was started with: the preset, the number of
+    the revision and the name it had then (a later rename does not change it)."""
+
+    preset_id: PresetId
+    revision_no: Annotated[int, Field(ge=1)]
+    name: Annotated[str, Field(min_length=1, max_length=120)]
+
+
 class RunStatus(_Object):
     run_id: RunId
     reaudit_of_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
@@ -1229,6 +1332,9 @@ class RunStatus(_Object):
     #: `EXEC-PAR-START-01`. The executor the run froze, read-only; null (and omitted) for a run
     #: that froze none.
     executor: RunExecutor | None = Field(default=None, json_schema_extra=optional_property)
+    #: `ANALYSIS-PRESETS-01`. The preset the run was started with, read-only; null (and omitted)
+    #: for a run started without one.
+    preset: RunPreset | None = Field(default=None, json_schema_extra=optional_property)
 
 
 class RunStatusPage(_Object):
@@ -2126,6 +2232,12 @@ class ProductVersion(_Object):
     product_version: str
     build_id: str
     contract_version: str
+    #: `CMP-SEAL-C0` (ADR-0025 decision 23). The comparison modules this deployment serves; see
+    #: :class:`ComparisonModules`. Always sent from `1.9.0`; a client that finds it absent treats
+    #: the set as ``none``.
+    comparison_modules: ComparisonModules = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
 
 
 class ReleaseNoteKind(str, enum.Enum):
@@ -2389,6 +2501,108 @@ class FindingComparison(_Object):
     carryover_candidates: Annotated[list[CarryoverCandidate], Field(max_length=200)]
 
 
+class ApprovedDiffHunk(_Object):
+    """One span of an approved pair's raw line diff; 0-based line indices, end exclusive. A
+    changed span carries ``hunk_id`` (``<sheet_link_id>:<n>``, ``n`` counting the sheet's
+    non-equal spans from 0); an ``equal`` span carries its ranges and neither lines nor an id."""
+
+    tag: Literal["equal", "insert", "delete", "replace"]
+    source_start: _LineIndex
+    source_end: _LineIndex
+    target_start: _LineIndex
+    target_end: _LineIndex
+    source_lines: Annotated[list[str], Field(max_length=1000)]
+    target_lines: Annotated[list[str], Field(max_length=1000)]
+    hunk_id: Annotated[str, Field(pattern=rf"^sln_{_ULID}:[0-9]{{1,4}}$")] | None
+
+
+class ApprovedSheetDiff(_Object):
+    """The deterministic differences of one approved pair, recomputed on every read."""
+
+    source_line_count: _LineIndex
+    target_line_count: _LineIndex
+    added_line_count: _LineIndex
+    removed_line_count: _LineIndex
+    hunks: list[ApprovedDiffHunk]
+    #: Binds the complete raw diff of the sheet and its link, equal lines included.
+    evidence_sha256: Sha256
+
+
+class ApprovedSheetPair(_Object):
+    """One active expert approval of a source page against a target page."""
+
+    sheet_link_id: SheetLinkId
+    source_page_number: _PageNumber
+    target_page_number: _PageNumber
+    #: ``verified``: both pages still have the text digest the expert saw. ``text_changed``: a
+    #: page is of another text now; no difference is served for any pair of the set.
+    state: Literal["verified", "text_changed"]
+    #: The proposal the expert confirmed (``SheetPairing.suggestion_sha256``).
+    suggestion_sha256: Sha256
+    approved_by_label: Annotated[str, Field(min_length=1, max_length=128)]
+    approved_at: datetime
+    #: The link revision of the approval itself.
+    link_revision: Annotated[int, Field(ge=1)]
+    #: Present only when the whole set is ``sealed``.
+    diff: ApprovedSheetDiff | None
+
+
+class SummaryStatement(_Object):
+    """`COMPARE-PERSISTED-SUMMARY-01` (B2). One statement of a summary and the changed spans of the
+    approved pairs it cites, each ``<sheet_link_id>:<n>`` (``n`` counts the sheet's non-equal spans
+    from 0), the same identities ``ApprovedDiffHunk.hunk_id`` carries."""
+
+    text: Annotated[str, Field(min_length=1, max_length=1000)]
+    hunk_ids: Annotated[
+        list[Annotated[str, Field(pattern=rf"^sln_{_ULID}:[0-9]{{1,4}}$")]],
+        Field(min_length=1, max_length=50),
+    ]
+
+
+class ComparisonSummary(_Object):
+    """`COMPARE-PERSISTED-SUMMARY-01` (B2). A model's summary of the approved pairs, stored beside
+    their raw differences and never inside them. ``label`` is fixed and shown with it: no human has
+    reviewed the text. ``state`` is ``ready`` or ``rejected`` (the check refused the reply: no
+    statements, one ``rejection_reason``; the reply was paid for, so it is recorded). ``provider_mode``
+    ``recorded`` is a replayed reply, ``model_identity`` ``recorded`` then, and ``cost_basis``
+    ``unmetered``. ``is_current``: it describes the approved set as it stands now."""
+
+    summary_id: Annotated[str, Field(pattern=rf"^evt_{_ULID}$")]
+    link_revision: Annotated[int, Field(ge=1)]
+    state: Literal["ready", "rejected"]
+    rejection_reason: Literal["reply_not_json", "reply_shape_invalid", "unknown_hunk_reference"] | None
+    label: Literal["Сводка подготовлена моделью, проверка человеком не проводилась"]
+    statements: Annotated[list[SummaryStatement], Field(max_length=20)]
+    prompt_version: Annotated[str, Field(min_length=3, max_length=64)]
+    provider_mode: Literal["recorded", "live"]
+    model_identity: Annotated[str, Field(min_length=1, max_length=128)]
+    input_sha256: Sha256
+    raw_evidence_seal_sha256: Sha256
+    cost_basis: CostBasis
+    is_current: bool
+    created_by_label: Annotated[str, Field(min_length=1, max_length=128)]
+    created_at: datetime
+
+
+class ApprovedSheetPairs(_Object):
+    """`COMPARE-PERSISTED-SUMMARY-01`. The active approvals of the compared pair and their
+    deterministic evidence. ``evidence_state``: ``none`` (no active approval), ``sealed`` (the
+    differences were recomputed and their seal equals the stored one), ``text_changed``,
+    ``seal_changed`` or ``too_large`` (no difference is served, none is truncated)."""
+
+    #: The comparison's current link revision; null when nothing was ever approved.
+    link_revision: Annotated[int, Field(ge=1)] | None
+    evidence_state: Literal["none", "sealed", "text_changed", "seal_changed", "too_large"]
+    #: The recomputed ``raw_evidence_seal`` of the active set; null unless ``sealed``.
+    raw_evidence_seal_sha256: Sha256 | None
+    items: Annotated[list[ApprovedSheetPair], Field(max_length=32)]
+    #: The newest stored summary of the comparison, beside the items and never inside them; null
+    #: when none was asked for. Reading it calls no model.
+    summary: ComparisonSummary | None = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
 class VersionComparison(_Object):
     """Two versions of one set compared, or the explicit reason they are not."""
 
@@ -2407,6 +2621,79 @@ class VersionComparison(_Object):
     sheets: Annotated[list[SheetPairing], Field(max_length=1000)]
     sheet_diffs: SheetDiffPage | None
     findings: FindingComparison | None
+    #: `COMPARE-PERSISTED-SUMMARY-01`. Optional and nullable like ``RunStatus.executor``: a client or a
+    #: fixture that predates it still validates, and the server always sends it (null for a refused
+    #: comparison).
+    approved_pairs: ApprovedSheetPairs | None = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ApproveSheetPairingRequest(_Object):
+    """`COMPARE-PERSISTED-SUMMARY-01`. One expert confirmation of one proposed sheet pair.
+
+    The path names the source (older) version; the comparison is recomputed with these values
+    when the confirmation arrives and must still propose exactly these pages under exactly this
+    ``suggestion_sha256``.
+    """
+
+    target_version_uid: VersionUid
+    mode: Literal["version", "stage"]
+    source_page_number: _PageNumber
+    target_page_number: _PageNumber
+    suggestion_sha256: Sha256
+    source_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    target_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class WithdrawSheetPairingRequest(_Object):
+    """`COMPARE-PERSISTED-SUMMARY-01`. The comparison view the withdrawing expert was looking at:
+    the text the remaining approved set is sealed over is that view's text."""
+
+    mode: Literal["version", "stage"]
+    source_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    target_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class SheetPairingEvent(_Object):
+    """`COMPARE-PERSISTED-SUMMARY-01`. The stored approval or withdrawal of one sheet link.
+    ``replayed`` is true when this call appended nothing: the same key repeated, or an exact
+    repeat of an active link under another key."""
+
+    comparison_id: ComparisonId
+    sheet_link_id: SheetLinkId
+    event_kind: Literal["approved", "withdrawn"]
+    link_revision: Annotated[int, Field(ge=1)]
+    replayed: bool
+    source_version_uid: VersionUid
+    target_version_uid: VersionUid
+    source_page_number: _PageNumber
+    target_page_number: _PageNumber
+    suggestion_sha256: Sha256
+    #: The seal of the approved set after this event; null when a withdrawal left nothing, or
+    #: nothing that can be sealed.
+    raw_evidence_seal_sha256: Sha256 | None
+    actor_label: Annotated[str, Field(min_length=1, max_length=128)]
+    decided_at: datetime
+
+
+class GenerateComparisonSummaryRequest(_Object):
+    """`COMPARE-PERSISTED-SUMMARY-01` (B2). The comparison view the expert is looking at; the
+    command recomputes the sealed evidence in its own transaction and takes nothing else from the
+    client: not the input, not the model, not the seal."""
+
+    target_version_uid: VersionUid
+    mode: Literal["version", "stage"]
+    source_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    target_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class GenerateComparisonSummaryResponse(_Object):
+    """`COMPARE-PERSISTED-SUMMARY-01` (B2). The stored summary, new or an exact repeat
+    (``replayed``: nothing was called and nothing was appended)."""
+
+    summary: ComparisonSummary
+    replayed: bool
 
 
 class CarryOverDecisionRequest(_Object):
@@ -3686,6 +3973,51 @@ class SetExecutorRouteRequest(_Object):
     )
 
 
+# --- analysis presets (`ANALYSIS-PRESETS-01`, `R-146av`) ----------------------------------
+#
+# A preset is a named, saved choice of how a run starts. A run start selects one setting per run,
+# the executor connection, so a preset is a name and that connection: no cost limit, no threshold
+# and no provider mode (none of them is selectable per run). Revisions are append-only; the list
+# shows the current revision of each preset.
+
+
+class AnalysisPresetState(str, enum.Enum):
+    """``active`` can be chosen at run start; ``archived`` is retired for good."""
+
+    ACTIVE = "active"
+    ARCHIVED = "archived"
+
+
+class AnalysisPreset(_Object):
+    """The current revision of one preset. ``preset_id`` is the preset for its whole life;
+    ``revision_id`` and ``revision_no`` name this revision. The name is a label, never an
+    identity."""
+
+    preset_id: PresetId
+    revision_id: PresetRevisionId
+    revision_no: Annotated[int, Field(ge=1)]
+    name: Annotated[str, Field(min_length=1, max_length=120)]
+    executor_connection_id: ExecutorConnectionId
+    state: AnalysisPresetState
+    created_at: datetime
+    revised_at: datetime
+    revised_by: UserUid
+
+
+class AnalysisPresetList(_Object):
+    """Every preset by its current revision: active ones first by name, then archived ones."""
+
+    items: Annotated[list[AnalysisPreset], Field(max_length=100)]
+
+
+class SaveAnalysisPresetRequest(_Object):
+    """The full settings of a preset, for a new preset and for a new revision alike (never a
+    patch)."""
+
+    name: Annotated[str, Field(min_length=1, max_length=120)]
+    executor_connection_id: ExecutorConnectionId
+
+
 # --- the pull channel (`EXEC-PULL-01`, `R-143`) ------------------------------------------
 #
 # Four operations are the runner's, authenticated by a runner token (its own principal, never a
@@ -3748,6 +4080,12 @@ class ClaimExecutorTaskRequest(_Object):
     wait_seconds: Annotated[int, Field(ge=0, le=25)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
+    #: `CMP-SEAL-C0` (ADR-0025 decision 18). The most images one task may carry that this runner
+    #: serves; absent means 1, the shape every deployed runner sends today. The server never hands
+    #: out a task with more images than declared.
+    max_images: Annotated[int, Field(ge=1, le=8)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
 
 
 RunnerImageBlobId = TypeAliasType(
@@ -3759,7 +4097,13 @@ class RunnerImage(_Object):
     """One checked saved PNG, retrievable only by the current runner claim."""
 
     blob_id: RunnerImageBlobId
-    portal_block_id: PortalBlockId
+    #: `CMP-SEAL-C0` (ADR-0025 decision 18): no longer required. A portal-block crop carries it; a
+    #: comparison crop carries ``crop_id`` instead.
+    portal_block_id: PortalBlockId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: An opaque crop reference, echoed and never parsed.
+    crop_id: Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
     sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
     size_bytes: Annotated[int, Field(ge=1, le=16 * 1024 * 1024)]
     media_type: Literal["image/png"]
@@ -3776,7 +4120,7 @@ class ClaimedExecutorTask(_Object):
     system: str
     user_text: str
     output_schema: Annotated[dict[str, Any], WithJsonSchema({"type": "object"})]
-    images: Annotated[list[RunnerImage], Field(max_length=1)] = Field(  # type: ignore[assignment]
+    images: Annotated[list[RunnerImage], Field(max_length=8)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
 
@@ -3810,3 +4154,299 @@ class FailExecutorTaskRequest(_Object):
 class ExecutorTaskAck(_Object):
     task_id: ExecutorTaskId
     state: ExecutorTaskState
+
+
+# --- comparison modules (`CMP-SEAL-C0`, ADR-0025) ----------------------------------------
+#
+# Sealed as stubs: every operation below answers `503 dependency_unavailable` until its lane
+# (CMP-INGEST-01, CMP-INGEST-02, CMP-PROFILE-01) wires it. The shapes are exactly what the C0
+# lanes implement; a lane that needs a field STOPs to the wave's FIX slot and never edits them.
+
+ComparisonUploadId = TypeAliasType(
+    "ComparisonUploadId", Annotated[str, Field(pattern=rf"^cbt_{_ULID}$")]
+)
+ComparisonUploadFileId = TypeAliasType(
+    "ComparisonUploadFileId", Annotated[str, Field(pattern=rf"^cuf_{_ULID}$")]
+)
+ComparisonUploadSetId = TypeAliasType(
+    "ComparisonUploadSetId", Annotated[str, Field(pattern=rf"^cus_{_ULID}$")]
+)
+ComparisonVersionOrderId = TypeAliasType(
+    "ComparisonVersionOrderId", Annotated[str, Field(pattern=rf"^cvo_{_ULID}$")]
+)
+ComparisonPageProfileId = TypeAliasType(
+    "ComparisonPageProfileId", Annotated[str, Field(pattern=rf"^cpr_{_ULID}$")]
+)
+
+
+class ComparisonUploadState(str, enum.Enum):
+    UPLOADING = "uploading"
+    PROPOSED = "proposed"
+    PROCESSING = "processing"
+    PAUSED = "paused"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+
+class ComparisonUploadFileState(str, enum.Enum):
+    DECLARED = "declared"
+    UPLOADING = "uploading"
+    VERIFIED = "verified"
+    FAILED = "failed"
+
+
+class ComparisonUploadSetState(str, enum.Enum):
+    UPLOADING = "uploading"
+    READING = "reading"
+    NEEDS_CONFIRMATION = "needs_confirmation"
+    READY = "ready"
+    ADMITTING = "admitting"
+    DONE = "done"
+    FAILED = "failed"
+    EXCLUDED = "excluded"
+
+
+class ComparisonProposalWarning(str, enum.Enum):
+    """What the stamp reader noticed about a proposed set; the user has the final word."""
+
+    DESIGNATIONS_DIFFER = "designations_differ"
+    ORDER_DISAGREES_WITH_FILE_NUMBERS = "order_disagrees_with_file_numbers"
+    DUPLICATE_REVISION_NUMBER = "duplicate_revision_number"
+    NO_STAMP_FOUND = "no_stamp_found"
+    SCAN_WITHOUT_TEXT = "scan_without_text"
+
+
+class ComparisonUploadFileDeclaration(_Object):
+    """One file the client will send. ``display_name`` is a hint for the proposal and never an
+    identity; ``sha256`` and ``size_bytes`` are checked against the received bytes when the file
+    is completed."""
+
+    display_name: Annotated[str, Field(min_length=1, max_length=255)]
+    size_bytes: Annotated[int, Field(ge=1)]
+    sha256: Sha256
+    page_count: Annotated[int, Field(ge=1, le=500)] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+
+
+class CreateComparisonUploadRequest(_Object):
+    """The declared files of one upload batch. The limits of ADR-0025 decision 9 (files, sets,
+    declared bytes and pages, the project's stored bytes, active batches) are refused here,
+    before the first part, as typed reasons under existing error codes."""
+
+    files: Annotated[list[ComparisonUploadFileDeclaration], Field(min_length=1)]
+
+
+class ComparisonUploadFile(_Object):
+    file_id: ComparisonUploadFileId
+    display_name: Annotated[str, Field(min_length=1, max_length=255)]
+    size_bytes: Annotated[int, Field(ge=1)]
+    sha256: Sha256
+    state: ComparisonUploadFileState
+    #: How many parts are staged so far (a resumable client sends the missing ones).
+    parts_staged: Annotated[int, Field(ge=0)]
+    #: The set the proposal placed this file in, once there is a proposal.
+    set_id: ComparisonUploadSetId = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    #: The typed reason a ``failed`` file failed.
+    failure_reason: Annotated[str, Field(min_length=1, max_length=128)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ComparisonUpload(_Object):
+    """One upload batch. ``files`` is present on ``getComparisonUpload`` and absent in the
+    items of ``listComparisonUploads``. ``part_size_bytes`` is the size of every part but the
+    last (16 MiB, ADR-0025 decision 10)."""
+
+    upload_id: ComparisonUploadId
+    project_uid: ProjectUid
+    state: ComparisonUploadState
+    part_size_bytes: Annotated[int, Field(ge=1, le=16 * 1024 * 1024)]
+    declared_files: Annotated[int, Field(ge=1)]
+    declared_bytes: Annotated[int, Field(ge=1)]
+    created_at: datetime
+    updated_at: datetime
+    files: list[ComparisonUploadFile] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ComparisonUploadPage(_Object):
+    items: list[ComparisonUpload]
+    page: PageInfo
+
+
+class ComparisonUploadPartReceipt(_Object):
+    """What the server staged for one part: its size and the SHA-256 it computed, which the
+    client may compare with its own."""
+
+    file_id: ComparisonUploadFileId
+    part_number: Annotated[int, Field(ge=1, le=10000)]
+    size_bytes: Annotated[int, Field(ge=1, le=16 * 1024 * 1024)]
+    sha256: Sha256
+
+
+class ComparisonProposalFile(_Object):
+    file_id: ComparisonUploadFileId
+    #: 1-based place in the proposed order of the set.
+    position: Annotated[int, Field(ge=1)]
+    #: The suggested version label (for example «V2 Изм.3»); editable by the user.
+    version_label: Annotated[str, Field(min_length=1, max_length=80)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ComparisonProposalSet(_Object):
+    """One proposed document set. ``designation`` is the «шифр» read from the stamp: metadata
+    an expert confirms, never an identity. ``existing_document_uid`` names the document of the
+    project the designation matches, when there is one."""
+
+    set_id: ComparisonUploadSetId
+    state: ComparisonUploadSetState
+    files: list[ComparisonProposalFile]
+    designation: Annotated[str, Field(min_length=1, max_length=200)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    existing_document_uid: DocumentUid = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    project_stage: ProjectStage = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    section_code: ProjectSection = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    warnings: list[ComparisonProposalWarning] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    #: The typed reason a ``failed`` set failed.
+    failure_reason: Annotated[str, Field(min_length=1, max_length=128)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    #: The document this set became, once its versions are admitted.
+    document_uid: DocumentUid = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class ComparisonUploadProposal(_Object):
+    """The grouping, order, stage and section the reader proposes for an upload. Nothing is
+    admitted as a version until the user confirms a set (``confirmComparisonUploadSet``)."""
+
+    upload_id: ComparisonUploadId
+    state: ComparisonUploadState
+    sets: list[ComparisonProposalSet]
+
+
+class ConfirmedComparisonFile(_Object):
+    file_id: ComparisonUploadFileId
+    version_label: Annotated[str, Field(min_length=1, max_length=80)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ConfirmComparisonUploadSetRequest(_Object):
+    """The user's final word on one set: its members in their order (the array order is the
+    version order), the labels, and the designation, stage, section and existing document the
+    set belongs to. The stage and section are a proposal an expert confirms, never inferred."""
+
+    files: Annotated[list[ConfirmedComparisonFile], Field(min_length=1)]
+    designation: Annotated[str, Field(min_length=1, max_length=200)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    existing_document_uid: DocumentUid = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    project_stage: ProjectStage = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    section_code: ProjectSection = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class ComparisonVersionOrderSource(str, enum.Enum):
+    PROPOSAL = "proposal"
+    EXPERT = "expert"
+
+
+class ComparisonVersionOrder(_Object):
+    """One revision of the order in which the versions of a document set are compared. It
+    never changes the documents' ordinal that runs and finding carry-over use (ADR-0025
+    decision 16, `D-5`)."""
+
+    order_id: ComparisonVersionOrderId
+    document_uid: DocumentUid
+    revision_no: Annotated[int, Field(ge=1)]
+    version_uids: Annotated[list[VersionUid], Field(min_length=1, max_length=500)]
+    source: ComparisonVersionOrderSource
+    created_at: datetime
+    created_by: UserUid
+
+
+class ComparisonVersionOrderList(_Object):
+    """Newest revision first."""
+
+    items: list[ComparisonVersionOrder]
+    page: PageInfo
+
+
+class AppendComparisonVersionOrderRequest(_Object):
+    """A new revision of the order. ``base_revision_no`` is the latest revision the caller saw
+    (``0`` for none); a mismatch is ``409 conflict`` and the caller rebases."""
+
+    version_uids: Annotated[list[VersionUid], Field(min_length=1, max_length=500)]
+    base_revision_no: Annotated[int, Field(ge=0)]
+
+
+class PageProfileStatus(str, enum.Enum):
+    READY = "ready"
+    NEEDS_REVIEW = "needs_review"
+    REFUSED = "refused"
+
+
+class PageStamp(_Object):
+    """The stamp fields read from one page; every member is absent when the page has none."""
+
+    designation: Annotated[str, Field(min_length=1, max_length=200)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    sheet_number: Annotated[str, Field(min_length=1, max_length=64)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    sheet_name: Annotated[str, Field(min_length=1, max_length=400)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    revision_number: Annotated[str, Field(min_length=1, max_length=32)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    release_date: date = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    project_stage: ProjectStage = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    section_code: ProjectSection = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class VersionPageProfile(_Object):
+    """The deterministic profile of one page of one version (raw evidence, never rewritten by
+    an AI layer). ``reason`` is the typed reason of a ``needs_review`` or ``refused`` page, for
+    example ``RENDER_FAILED``. ``content_key`` is the digest the profile is cached under."""
+
+    page_profile_id: ComparisonPageProfileId
+    version_uid: VersionUid
+    page_number: Annotated[int, Field(ge=1, le=500)]
+    status: PageProfileStatus
+    algo_version: Annotated[str, Field(min_length=1, max_length=64)]
+    content_key: Sha256
+    has_text_layer: bool
+    word_count: Annotated[int, Field(ge=0)]
+    vector_line_count: Annotated[int, Field(ge=0)]
+    annotation_count: Annotated[int, Field(ge=0)]
+    preview_available: bool
+    thumbnail_available: bool
+    reason: Annotated[str, Field(min_length=1, max_length=128)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    width_pt: Annotated[float, Field(gt=0)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    height_pt: Annotated[float, Field(gt=0)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    raster_width_px: Annotated[int, Field(ge=1)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    raster_height_px: Annotated[int, Field(ge=1)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    stamp: PageStamp = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class VersionPageProfilePage(_Object):
+    """The profiles stored for a version, by page number ascending. A page whose profile has not
+    been computed is absent; the version's ``page_count`` says how many pages it has."""
+
+    items: list[VersionPageProfile]
+    page: PageInfo

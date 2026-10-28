@@ -355,6 +355,31 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "listExecutorConnections": _ANY_ROLE,
         "getExecutorConnection": _ANY_ROLE,
         "listExecutorRoutes": _ANY_ROLE,
+        # `ANALYSIS-PRESETS-01`. Every role that can start a run (and the administrator who sets presets)
+        # reads the list.
+        "listAnalysisPresets": _ANY_ROLE,
+        # `CMP-SEAL-C0` (ADR-0025 decisions 9-11, 16): the comparison upload, the order of the
+        # versions of a document set, and the page reads. Reads are any one role; every write is
+        # an expert's act (`R-60`), like ``uploadDocument``.
+        "createComparisonUpload": _EXPERT,
+        "listComparisonUploads": _ANY_ROLE,
+        "getComparisonUpload": _ANY_ROLE,
+        "getComparisonUploadProposal": _ANY_ROLE,
+        "uploadComparisonUploadPart": _EXPERT,
+        "completeComparisonUploadFile": _EXPERT,
+        "confirmComparisonUploadSet": _EXPERT,
+        "excludeComparisonUploadSet": _EXPERT,
+        "retryComparisonUploadSet": _EXPERT,
+        "pauseComparisonUpload": _EXPERT,
+        "resumeComparisonUpload": _EXPERT,
+        "cancelComparisonUpload": _EXPERT,
+        "listComparisonVersionOrders": _ANY_ROLE,
+        "appendComparisonVersionOrder": _EXPERT,
+        "listVersionPageProfiles": _ANY_ROLE,
+        "getVersionPageProfile": _ANY_ROLE,
+        "streamVersionPagePreview": _ANY_ROLE,
+        "streamVersionPageThumbnail": _ANY_ROLE,
+        "streamVersionPageTile": _ANY_ROLE,
         "getRunStatus": _ANY_ROLE,
         "getArV3BetaGroup": _ANY_ROLE,
         "getArV3BetaGroupReview": _ANY_ROLE,
@@ -434,6 +459,14 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         # `W59-DECISION-CARRYOVER-01`. A carried decision is a verdict like any other: only an
         # expert confirms it, and the command re-reads the role set in its own transaction.
         "carryOverDecision": _EXPERT,
+        # `COMPARE-PERSISTED-SUMMARY-01`. Approving or withdrawing a sheet pairing is a decision
+        # about evidence like a verdict: only an expert, and the command re-reads the role set in
+        # its own transaction (`R-60`: `admin` alone is refused).
+        "approveSheetPairing": _EXPERT,
+        "withdrawSheetPairing": _EXPERT,
+        # `COMPARE-PERSISTED-SUMMARY-01` (B2). The only way to a model call about a comparison: an
+        # expert asks, on purpose; admin alone does not imply expert.
+        "generateComparisonSummary": _EXPERT,
         # `W60-PRICE-LIST-01`. An expert uploads a project's price list and overrides its vendor
         # list per section; the global vendor list is an administrator's.
         "uploadPriceList": _EXPERT,
@@ -473,6 +506,11 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "generateExecutorSshKey": _ADMIN,
         "requestExecutorProbe": _ADMIN,
         "setExecutorRoute": _ADMIN,
+        # `ANALYSIS-PRESETS-01` (R-146av). A preset is executor configuration, so who may change the
+        # route may change a preset; the commands re-read the role set in their own transaction.
+        "createAnalysisPreset": _ADMIN,
+        "reviseAnalysisPreset": _ADMIN,
+        "archiveAnalysisPreset": _ADMIN,
         # `EXEC-PULL-01`. A runner token is issued and revoked by an administrator; the token's
         # value is shown once and no operation returns it again.
         "issueRunnerToken": _ADMIN,

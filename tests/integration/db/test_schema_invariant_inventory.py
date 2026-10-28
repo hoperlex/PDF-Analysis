@@ -31,6 +31,48 @@ from collections.abc import Iterable
 from sqlalchemy import Engine, text
 
 
+#: Resealed by `CMP-SEAL-C0` for ``0038_comparison_foundation``, measured, not predicted: a fresh
+#: database upgraded to ``0038`` was recomputed in all eleven families and compared with the 0037 seal
+#: below. Every count moved by exactly the migration's DDL and nothing was removed: columns +126 -> 908
+#: (nine tables 124, ``document_version.upload_kind`` and ``executor_task.comparison_attempt_id``);
+#: relations +9 -> 88 (the tables); constraints +156 -> 1038; indexes +38 -> 236; triggers +25 -> 118
+#: (the state-edge, frozen, write-once, insert and immutable guards of the nine tables; the frozen guard
+#: of ``executor_task`` is recreated with ``comparison_attempt_id``, so its row is redefined and the
+#: count is unchanged by it); functions +5 -> 41 (``am_guard_comparison_state_edges`` and the four
+#: insert and chain checks). Views, extensions, sequences, policies and the state topology are
+#: identical to the 0037 seal (their digests are unchanged).
+#: Resealed by `ANALYSIS-PRESETS-01` for ``0037_analysis_presets``, measured, not predicted: a fresh
+#: database upgraded to ``0037`` was recomputed in all eleven families and compared with the 0036 seal
+#: below. Every count moved by exactly the migration's DDL and nothing was removed: columns +9 -> 782
+#: (``analysis_preset_revision`` 8, ``audit_run.preset_revision_id`` 1); relations +1 -> 79 (the
+#: table); constraints +14 -> 882 (the table: primary key, one unique key, one foreign key, nine
+#: CHECKs; ``audit_run``: one foreign key and the format CHECK of the new column); indexes +4 -> 198
+#: (the primary key, the unique ``(preset_id, revision_no)``, ``ix_analysis_preset_revision_connection``
+#: and the partial ``ix_audit_run_preset_revision``); triggers +3 -> 93 (the table's
+#: ``am_immutable_row`` and chain trigger, and the INSERT check on ``audit_run``; the frozen guard of
+#: ``audit_run`` is recreated with ``preset_revision_id`` in its column list, so its row is redefined
+#: and the count is unchanged by it); functions +2 -> 36 (``am_check_analysis_preset_chain``,
+#: ``am_check_audit_run_preset``). Views, extensions, sequences, policies and the state topology are
+#: identical to the 0036 seal.
+#: Resealed by `AR-V3-DECISIONS-01` for ``0036_cite_partition_v3``, measured, not predicted: a fresh
+#: database upgraded to ``0036`` was recomputed in all eleven families and compared with the 0035 seal
+#: below. One family moved and by exactly the migration's DDL: ``functions`` keeps its 34 rows and
+#: ``am_verify_norm_citation_partition`` is redefined (same row) -- the stage test reads
+#: ``norm_verification`` or ``ar_v3_citation_review`` -- so only its digest changed
+#: (``6ee1b2f0...3bd9`` -> ``6e5b1c9d...37ad``). Columns, relations, constraints, indexes, triggers,
+#: views, extensions, sequences, policies and the state topology are identical to the 0035 seal.
+#: Resealed by `COMPARE-PERSISTED-SUMMARY-01` for ``0035_comparison_records``, measured, not
+#: predicted: a fresh database upgraded to ``0035`` was recomputed in all eleven families and compared
+#: with the 0034 seal below. Every added row is this revision's and nothing was removed or redefined:
+#: columns +37 -> 773 (``comparison_sheet_link`` 18, ``comparison_summary`` 19); relations +2 -> 78 (the
+#: two tables); constraints +54 -> 868 (``comparison_sheet_link``: primary key, three unique keys, five
+#: foreign keys, nineteen CHECKs; ``comparison_summary``: primary key, one unique key, three foreign
+#: keys, twenty-one CHECKs); indexes +10 -> 194 (the two primary keys, the four unique keys, the partial
+#: unique index of the one ready summary per input, ``ix_comparison_sheet_link_project``,
+#: ``ix_comparison_sheet_link_target_version`` and ``ix_comparison_summary_project``); triggers +4 -> 90
+#: (an ``am_immutable_row`` trigger and a BEFORE INSERT check on each table); functions +2 -> 34
+#: (``am_check_comparison_sheet_link_chain``, ``am_check_comparison_summary``). Views, extensions,
+#: sequences, policies and the state topology are identical to the 0034 seal.
 #: Resealed by `OPT-PROJECT-ALL-SECTIONS-01` for ``0034_pass_scope_all_sections``, measured, not
 #: predicted: one fresh database upgraded to ``0033`` (whose inventory equalled the 0033 seal below
 #: in every family) and then to ``0034`` had all eleven families recomputed. One family moved and by
@@ -239,12 +281,12 @@ from sqlalchemy import Engine, text
 #: ``contract_state_transition`` (the seal adds ``app_user`` and ``registration_request``
 #: to ``state-machines.json``; the registration lifecycle is guarded by its own trigger).
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (736, "c7bc9e13f3bca0a0507cd81ccaba7b15901a2cf0c91e1e60c903b2ce49905c67"),
-    "relations": (76, "2725a7c6c6417f1862a831ba76678909e14b9a050e8cfaf978785f5f5a25a539"),
-    "constraints": (814, "61200aa0b25e778172d50dfd20ab2f2857a5ff49ee0a71626fba0c78254ee300"),
-    "indexes": (184, "f446c62baa74bcdae4304197c77546c7db769767727ba3d0601c48464cc5c47a"),
-    "triggers": (86, "691154ca1227ef801cf6c85adcbc3a56d7f195a5f58fb8bc17ddc30147aff40e"),
-    "functions": (32, "da49fd307be920a22c7a48a12dc1381f4a46ed953bfb327ec4a43bb102a86bef"),
+    "columns": (908, "954eb10214597d10ace4f2af316cb7de34c3c988876312a7490441cb7a9d32bd"),
+    "relations": (88, "483e8af8025b3813202abf1222426f7b5e9315b46ee699506e2623e04fb31702"),
+    "constraints": (1038, "a80813a10d4db584a9f69800226f43fc2d9221c5efe335a006ad3a9476ba6636"),
+    "indexes": (236, "18d4ef90b0c771cb3df8432b4febf79628372c39b51b3924a917223838278eac"),
+    "triggers": (118, "96198c83bdfdf5b60b70395201951d916e64a5f88b1dd4d82b9a8484552ef70a"),
+    "functions": (41, "25ad0a1f09f23418b94cdf83e6dfc1551bc15d1fbc3ec1fb5aa67a5c7296658e"),
     "views": (5, "c41ad974669882ee5d818591ee1d485b70455ddd4e51d236cc83892d18d11b93"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),
     "sequences": (7, "6d533fe16349a92b16b5ca89d51fcb083f1ecdf4f252bc276667a92361bf1656"),
