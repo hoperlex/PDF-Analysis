@@ -279,4 +279,3 @@ function a12Comparison(approved: boolean): unknown {
     sheet_diffs: null, findings: null, source: null, target: null,
   };
 }
-

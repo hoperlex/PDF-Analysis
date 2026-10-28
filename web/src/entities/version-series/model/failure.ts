@@ -4,7 +4,7 @@
  * The contract adds no error code for the comparison module: every refusal rides an existing code with a
  * registered **reason** in one safe detail key — `conflict_reason` under `conflict`, `constraint` under
  * `validation_failed`, `dependency` under `dependency_unavailable`, `role` under `storage_integrity_error`
- * (`contracts/domain/v1/error-codes.json`, the notes of those four codes). `catalog-message.ts` words a
+ * (`contracts/domain/v1/error-codes.json`, the notes of the codes that name them). `catalog-message.ts` words a
  * *code*; the reasons are the screens' words, and this file is where they live, as the preset and
  * pairing refusals keep theirs next to their entities. A reason this table does not know falls back to
  * the code's own catalogue sentence, never to the server's English.

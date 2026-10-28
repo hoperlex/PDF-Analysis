@@ -695,4 +695,3 @@ describe('the heading of the version-scoped screen', () => {
     expect(series().state).toBe('completed');
   });
 });
-
