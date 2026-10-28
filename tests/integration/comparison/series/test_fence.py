@@ -94,3 +94,68 @@ def test_the_series_advances_only_under_a_fence_that_holds(lab, sessions, blob_s
     assert done["state"] == "completed"
     assert all("content_same" not in t["verdict"] and "incomplete" in t["verdict"] for t in done["transitions"])
     assert items(lab, sid)[0]["state"] in ("cancelled", "queued")
+
+
+def test_the_pair_is_marked_computing_only_under_the_fence(lab, sessions, engine, blob_store, worker_id, prepared) -> None:
+    from auditmanager.comparison.public import ComparisonWorkRepository, SeriesPairHandler, WorkDependencies
+
+    doc, series = prepared
+    runner = runner_with(sessions, engine, blob_store, compare=ScriptedEngine(sessions))
+    item = claim_pair(runner, worker_id, engine, sessions, doc.project_uid)
+    expire_lease(sessions, item.work_id)
+    handler = SeriesPairHandler(WorkDependencies(engine=engine, session_factory=sessions, blob_store=blob_store,
+                                                 work=ComparisonWorkRepository()))
+    with pytest.raises(DomainError) as lost:
+        handler._begin(item, item.payload["sheet_pair_id"])
+    assert lost.value.code is ErrorCode.STALE_ATTEMPT
+    assert [p["state"] for p in pair_rows(lab, series["series_id"])].count("computing") == 0
+
+
+class FailAfter:
+    """A fence that holds for ``holds`` transactions and then refuses: the attempt lost its lease in between."""
+
+    def __init__(self, holds: int) -> None:
+        self.holds, self.calls = holds, 0
+
+    def __call__(self, session) -> None:
+        self.calls += 1
+        if self.calls > self.holds:
+            raise DomainError(ErrorCode.STALE_ATTEMPT)
+
+
+def orphaned(lab, sessions, sid: str) -> None:
+    from sqlalchemy import text
+
+    with lab.sessions() as session:
+        session.execute(text("UPDATE comparison_work SET state = 'cancelled', terminal_at = clock_timestamp() "
+                             "WHERE comparison_series_id = :s AND kind = 'series_pair'"), {"s": sid})
+        session.commit()
+
+
+def test_a_fence_that_refuses_after_the_reconcile_stops_the_finalisation_of_every_transition(
+    lab, sessions, blob_store, service, prepared,
+) -> None:
+    doc, series = prepared
+    sid = series["series_id"]
+    orphaned(lab, sessions, sid)
+    fence = FailAfter(1)  # the reconcile may write, the first finalisation may not
+    with pytest.raises(DomainError):
+        SeriesAdvancer(sessions, blob_store).advance(sid, fence=fence)
+    assert fence.calls == 2
+    seen = service.get_series(series_id=sid)
+    assert [t["state"] for t in seen["transitions"]] == ["running"] * 4 and "verdict" not in seen["transitions"][0]
+    assert [p["state"] for p in pair_rows(lab, sid)].count("failed") == 24  # what the reconcile wrote stands
+
+
+def test_a_fence_that_refuses_at_the_end_leaves_the_series_unconcluded(lab, sessions, blob_store, service, prepared) -> None:
+    doc, series = prepared
+    sid = series["series_id"]
+    orphaned(lab, sessions, sid)
+    fence = FailAfter(1 + 4)  # the reconcile and the four finalisations may write, the conclusion may not
+    with pytest.raises(DomainError):
+        SeriesAdvancer(sessions, blob_store).advance(sid, fence=fence)
+    seen = service.get_series(series_id=sid)
+    assert [t["state"] for t in seen["transitions"]] == ["completed"] * 4 and seen["state"] in ("queued", "running")
+    # a second look under a fence that holds concludes it
+    assert SeriesAdvancer(sessions, blob_store).advance(sid, fence=lambda session: None).live is False
+    assert service.get_series(series_id=sid)["state"] == "completed"
