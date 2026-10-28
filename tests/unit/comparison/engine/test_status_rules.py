@@ -137,4 +137,3 @@ def test_the_engine_never_writes_a_colon_and_every_reason_it_writes_fits_the_con
         assert ":" not in reason and pattern.fullmatch(reason), reason
     assert st.unchecked_channel_reason("spec_positions") == "UNCHECKED_CHANNEL_SPEC_POSITIONS"
     assert all(pattern.fullmatch(st.unchecked_channel_reason(name)) for name in CHANNELS)
-
