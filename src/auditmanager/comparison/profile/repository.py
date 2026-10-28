@@ -15,11 +15,16 @@ here, and a row that a later table already references is refused by that table's
 this code. A retry item sweeps only the rows that already existed when it was asked for
 (``created_before``), so a page that fails again while the item runs is a stored page of that item and a
 later attempt of the same item does not build it once more.
+
+:meth:`PageProfileRepository.reusable_rows` reads the rows of a version a byte-identical version may take
+over (`CMP-C1-FIX-C` item 3, ``reuse.py``): every row of the algorithm version except a page that ended
+without a result.
 """
 
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
@@ -62,6 +67,11 @@ _DELETE_FAILED = text(
     "DELETE FROM comparison_page_profile WHERE version_uid = :version_uid AND algo_version = :algo "
     "AND status = 'needs_review' AND reason = 'RENDER_FAILED' "
     "AND (CAST(:created_before AS timestamptz) IS NULL OR created_at < CAST(:created_before AS timestamptz))"
+)
+_REUSABLE = text(
+    f"SELECT {_COLUMNS} FROM comparison_page_profile "
+    "WHERE version_uid = :version_uid AND algo_version = :algo AND page_number = ANY(CAST(:pages AS integer[])) "
+    "AND NOT (status = 'needs_review' AND reason = 'RENDER_FAILED') ORDER BY page_number"
 )
 
 
@@ -161,3 +171,14 @@ class PageProfileRepository:
                 {"version_uid": version_uid, "algo": algo_version, "created_before": created_before},
             ).rowcount
         )
+
+    def reusable_rows(
+        self, session: Session, version_uid: str, algo_version: str, pages: Sequence[int]
+    ) -> list[PageProfileRow]:
+        """The rows of ``pages`` of ``version_uid`` that another version of the same bytes may take over."""
+        if not pages:
+            return []
+        rows = session.execute(
+            _REUSABLE, {"version_uid": version_uid, "algo": algo_version, "pages": [int(p) for p in pages]}
+        ).all()
+        return [_row(row) for row in rows]
