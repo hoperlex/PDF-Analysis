@@ -9,7 +9,7 @@ page without them; they are compared on their own, field by field (:mod:`.job`).
 content stream of a page (how PDF editors append a release mark, a warning or a QR code) from an in-memory copy and
 compares the drawing under it. That needs a PDF editor (``PyMuPDF``, excluded by ADR-0025 ``OD-01``), and a copy of an A1
 page through ``pypdf`` costs more than the child's ceiling. Here a release mark is a *zone* the main comparison leaves
-out (the original does the same with a mark it could not separate, ``engine.py:253-259``), and a warning set into the
+out (the original does the same with a mark it could not separate, ``engine.py:452-458``), and a warning set into the
 page content is reported as such: the ``warnings`` channel is ``unchecked`` and the pair is ``PARTIAL_COVERAGE``
 (``engine.py:978-981``, the original's own answer to a warning it did not separate).
 """
@@ -28,7 +28,7 @@ from .words import MM
 
 __all__ = ["page_zones", "qr_like_components", "read_qr", "release_text", "zone_bbox"]
 
-#: ``service.py:325``: how far around a release mark a QR code is looked for (x, y), points.
+#: ``service.py:98``: how far around a release mark a QR code is looked for (x, y), points.
 QR_SEARCH_PT = (250.0, 100.0)
 QR_DPI = 200
 
@@ -94,7 +94,7 @@ def zone_bbox(zones: Sequence[dict[str, Any]], kind: str) -> list[float] | None:
 
 
 def release_text(zones: Sequence[dict[str, Any]], zone_words: Sequence[str]) -> str:
-    """The text of the release mark: from the zone, else the words that stand in it (``service.py:347``)."""
+    """The text of the release mark: from the zone, else the words that stand in it (``service.py:120``)."""
     texts = [" ".join(str(z.get("text") or "").split()) for z in zones if z["type"] == "release_stamp"]
     return " | ".join(t for t in texts if t) or " ".join(" ".join(zone_words).split())
 
@@ -112,7 +112,7 @@ def _qr_crops(gray: Any) -> list[Any]:
 
 
 def read_qr(gray: Any) -> dict[str, Any] | None:
-    """A QR code in a grey area (``service.py:278-311``): its content if it reads, else a fingerprint of its modules;
+    """A QR code in a grey area (``service.py:51-84``): its content if it reads, else a fingerprint of its modules;
     ``None`` when the area holds no code."""
     detector = cv2.QRCodeDetector()
     try:
@@ -141,7 +141,7 @@ def read_qr(gray: Any) -> dict[str, Any] | None:
 
 
 def qr_search_box(zones: Sequence[dict[str, Any]], width_pt: float, height_pt: float) -> list[float] | None:
-    """The area around the release mark (else the title block) in which to look for a QR code (``service.py:328``)."""
+    """The area around the release mark (else the title block) in which to look for a QR code (``service.py:101``)."""
     box = zone_bbox(zones, "release_stamp") or zone_bbox(zones, "stamp")
     if not box:
         return None

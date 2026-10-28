@@ -1,5 +1,5 @@
 """Regions of difference: grouping, classes, and the checks that look at the pixels around a region
-(port of ``engine.py:105-136``, ``:186-239``, ``:759-898``).
+(port of ``engine.py:186-307``, ``:759-898``).
 
 `CMP-ENGINE-01`. A *region* is a group of difference pixels that belong together. The original closes the union of
 the difference layers with a disk of ``REGION_CLOSE_MM`` and labels the connected components of the whole canvas
@@ -162,7 +162,7 @@ def layer_counts(store: PlaneStore, labels: Any, n: int, factor: int, names: Seq
 
 def shift_explains(store: PlaneStore, vectors: Sequence[tuple[float, float]], box_px: Sequence[int], canvas: Canvas,
                    deadline: float) -> bool:
-    """The region is explained as a whole by the shifts of neighbouring inscriptions or of a block (``:186-239``).
+    """The region is explained as a whole by the shifts of neighbouring inscriptions or of a block (``engine.py:234-275``).
 
     Each connected part of the difference (a mark, a line) looks for its own shift within ``SHIFT_REFINE_PT`` of the
     shift of a neighbouring inscription: the rows of a legend drift apart by different distances, the mark and the
@@ -264,7 +264,7 @@ def glyph_line(mask: Any, mm_px: float, common: Any | None = None, deadline: flo
 
 def overdraw(bgr_a: Any, bgr_b: Any, color: Any, dark_a: Any, dark_b: Any, box: Sequence[int], pad: int) -> bool:
     """The colour changed because of the order in which crossing lines are drawn, not because a line was recoloured
-    (``:79-108``). Windows are given whole (rendered around the box); ``box`` is relative to them."""
+    (``engine.py:278-307``). Windows are given whole (rendered around the box); ``box`` is relative to them."""
     x0, y0, x1, y1 = box
     h, w = color.shape
     X0, Y0, X1, Y1 = max(0, x0 - pad), max(0, y0 - pad), min(w, x1 + pad), min(h, y1 + pad)

@@ -2,10 +2,10 @@
 
 `CMP-ENGINE-01`. «Совпадает» (``same``) is given only if **every applicable channel is ``checked``**; a channel the
 engine did not compute or could not compute is ``unchecked`` with its reason, never ``not_applicable``. The sets are
-the original's (``status.py:216-224``) with one deliberate difference, below.
+the original's (``status.py:11-20``) with one deliberate difference, below.
 
 **The one difference from the original.** The original counts the ``annotations`` channel with the service channels
-(``status.py:218``), so a sheet whose only change is a PDF annotation is «Совпадает, изменены служебные зоны». ADR-0025
+(``status.py:13``), so a sheet whose only change is a PDF annotation is «Совпадает, изменены служебные зоны». ADR-0025
 decision 15 and plan R3-09 say that an annotation-only change gives ``different`` in ``annotations``, and the answer
 key of the synthetic corpus (V1 to V2, sheet E05) says the same; so here ``annotations`` is a main channel.
 """
@@ -28,16 +28,16 @@ __all__ = [
     "unchecked",
 ]
 
-#: ``status.py:216``: the eight channels, in the order the contract lists them.
+#: ``status.py:11``: the eight channels, in the order the contract lists them.
 CHANNELS: Final[tuple[str, ...]] = (
     "geometry", "color", "text", "text_coverage", "zones", "annotations", "warnings", "spec_positions",
 )
-#: ``status.py:217`` plus ``annotations`` (see the module note).
+#: ``status.py:12`` plus ``annotations`` (see the module note).
 MAIN_CHANNELS: Final[tuple[str, ...]] = ("geometry", "color", "text", "annotations")
-#: ``status.py:218`` without ``annotations``.
+#: ``status.py:13`` without ``annotations``.
 SERVICE_CHANNELS: Final[tuple[str, ...]] = ("zones", "warnings")
 
-#: ``status.py:221-225``: reasons that make the result «Нужна проверка» whatever the number of differences.
+#: ``status.py:16-20``: reasons that make the result «Нужна проверка» whatever the number of differences.
 ORIGINAL_FORCING_REASONS: Final[frozenset[str]] = frozenset({
     "MATCH_LOW_CONFIDENCE", "MATCH_AMBIGUOUS", "MATCH_UNRESOLVED", "ALIGNMENT_UNRELIABLE", "ALIGNMENT_PARTIAL",
     "PARTIAL_COVERAGE", "DUPLICATE_SHEET", "RENDER_FAILED", "NO_TEXT_LAYER", "TEXT_UNREADABLE_IN_DIFF_AREA",
@@ -61,22 +61,22 @@ def _clip(text: str) -> str:
 
 
 def checked(diffs: int = 0) -> dict[str, Any]:
-    """The channel was looked at and found ``diffs`` differences (``status.py:238``)."""
+    """The channel was looked at and found ``diffs`` differences (``status.py:33``)."""
     return {"state": "checked", "diffs": int(diffs)}
 
 
 def unchecked(reason: str) -> dict[str, Any]:
-    """The channel could not be looked at, and why (``status.py:242``)."""
+    """The channel could not be looked at, and why (``status.py:37``)."""
     return {"state": "unchecked", "reason": _clip(reason)}
 
 
 def not_applicable(reason: str) -> dict[str, Any]:
-    """The channel has nothing to look at on this pair (``status.py:246``)."""
+    """The channel has nothing to look at on this pair (``status.py:41``)."""
     return {"state": "not_applicable", "reason": _clip(reason)}
 
 
 def decide(channels: dict[str, dict[str, Any]], reasons: list[str]) -> tuple[str, list[str]]:
-    """The status and the reasons from the channels and the forcing reasons (``status.py:250-271``).
+    """The status and the reasons from the channels and the forcing reasons (``status.py:45-66``).
 
     A channel nobody computed is ``unchecked`` (a defence against a forgotten channel, ``:254``). The order of the
     rules is the original's: a forcing reason; a difference in a main channel; an unchecked channel; a difference in

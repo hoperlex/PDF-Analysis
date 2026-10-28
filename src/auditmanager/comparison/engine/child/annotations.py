@@ -1,7 +1,7 @@
-"""PDF annotations of the two pages (port of ``engine._compare_annotations``, ``engine.py:149-180``).
+"""PDF annotations of the two pages (port of ``engine._compare_annotations``, ``engine.py:348-379``).
 
 `CMP-ENGINE-01`. An annotation of A is the same as one of B when they are of the same kind and their rectangles, B
-carried onto A, overlap at least half (``iou >= 0.5``, ``engine.py:168``); the pair is *changed* when the text differs.
+carried onto A, overlap at least half (``iou >= 0.5``, ``engine.py:367``); the pair is *changed* when the text differs.
 The page profile keeps the rectangle in the PDF's own frame (origin at the lower left, not turned); the engine moves it
 into the frame of the displayed page only when the page is not turned, and compares annotations of a turned page by
 kind and text alone (the profile does not carry the box offset a turned page would need). The original also keyed on the

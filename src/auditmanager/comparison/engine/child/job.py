@@ -102,7 +102,7 @@ def _lines(page: dict[str, Any]) -> Any:
 
 
 def _part_area(mask36: Any, zones_b: list[list[float]], m: Any) -> list[float] | None:
-    """The extent of the content of B outside its service zones, in the frame of A, with 3 mm to spare (``:262-275``)."""
+    """The extent of the content of B outside its service zones, in the frame of A, with 3 mm to spare (``engine.py:461-474``)."""
     if mask36 is None:
         return None
     k = settings.MASK_DPI / 72.0
@@ -712,7 +712,7 @@ def _change(before: str, after: str) -> str:
 
 def _service_fields(a: dict, b: dict, zones_a: list[dict], zones_b: list[dict], zone_words: dict[str, tuple[list[str], list[str]]],
                     windows: dict[str, Any]) -> list[dict[str, Any]]:
-    """What changed in the service zones, field by field, «было → стало» (``service.compare``, ``service.py:352-410``).
+    """What changed in the service zones, field by field, «было → стало» (``service.compare``, ``service.py:125-183``).
     Nothing is hidden and nothing is read as an approval."""
     out: list[dict[str, Any]] = []
     sa, sb = a.get("stamp") or {}, b.get("stamp") or {}
@@ -782,7 +782,7 @@ def _overlap(a: list[float], b: list[float]) -> bool:
 
 
 def _aligned_blocks(moves: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """The blocks the viewer may align (``block_alignment.moves``, ``block_alignment.py:357-365``): moved with at least
+    """The blocks the viewer may align (``block_alignment.moves``, ``block_alignment.py:16-24``): moved with at least
     90 % of the pixels explained, and with no competing translation over the same area."""
     candidates = [mv for mv in moves if mv.get("share", 0) >= settings.ALIGN_MIN_SHARE]
     selected = [

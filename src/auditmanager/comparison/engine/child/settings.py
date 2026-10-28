@@ -41,7 +41,7 @@ BLOCK_MIN_WORDS: Final[int] = 5
 BLOCK_TOL_PT: Final[float] = 1.0
 BLOCK_MIN_SHIFT_PT: Final[float] = 3.0
 BLOCK_MIN_IOU: Final[float] = 0.6
-#: ``block_alignment.py:359-360``: only a block moved with at least this share explained is aligned in the viewer.
+#: ``block_alignment.py:18-19``: only a block moved with at least this share explained is aligned in the viewer.
 ALIGN_MIN_SHARE: Final[float] = 0.9
 #: ``settings.py:77-79``.
 GLYPH_MAX_ASPECT: Final[float] = 2.0
@@ -76,6 +76,7 @@ LINES_SEARCH_PT: Final[float] = 3.5
 LINES_BIN_PT: Final[float] = 0.1
 LINES_MIN_VOTES: Final[int] = 8
 LINES_MIN_SHARE: Final[float] = 0.05
+LINES_PEAK_RATIO: Final[float] = 2.0
 LINES_MAX_POINTS: Final[int] = 12_000
 #: The working band: rows are compared a band at a time so that a 40 Mpx page fits the ceiling of 768 MiB
 #: (ADR-0025 decision 8, "the engine tiles its full-resolution work to fit").
@@ -99,6 +100,6 @@ PARAMS: Final[dict[str, float | int]] = {
     "anchor_ratio": ANCHOR_MIN_RATIO, "anchor_residual_pt": ANCHOR_MAX_MEDIAN_RESIDUAL_PT,
     "anchor_ransac_pt": ANCHOR_RANSAC_PT, "align_dice": ALIGN_MIN_DICE, "align_switch": ALIGN_SWITCH_MARGIN,
     "phase_max_px": PHASE_MAX_PIXELS, "lines_search_pt": LINES_SEARCH_PT, "lines_bin_pt": LINES_BIN_PT,
-    "lines_min_votes": LINES_MIN_VOTES, "lines_min_share": LINES_MIN_SHARE,
+    "lines_min_votes": LINES_MIN_VOTES, "lines_min_share": LINES_MIN_SHARE, "lines_peak_ratio": LINES_PEAK_RATIO,
     "pixel_cap": 40_000_000, "max_dpi": 200, "min_dpi": 72,
 }

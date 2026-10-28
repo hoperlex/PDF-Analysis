@@ -51,7 +51,7 @@ WARNING_PATTERNS = (
 #: ``stamp.py:26``: the usual marks «В производство работ».
 RELEASE_PATTERNS = (re.compile(r"в\s*производств", re.I), re.compile(r"к\s*производств", re.I))
 _DATE_FULL = re.compile(r"\b\d{2}\.\d{2}\.\d{4}\b")
-#: ``service.py:255``: a date in a release mark.
+#: ``service.py:28``: a date in a release mark.
 DATE_RE = re.compile(r"\b\d{2}\.\d{2}\.\d{2,4}\b")
 _LABEL_ROW = {"изм.", "изм", "кол.уч.", "кол.уч", "кол. уч.", "лист", "№док.", "№ док.", "№док", "подп.", "подпись", "дата"}
 
@@ -142,7 +142,7 @@ def compare_words(wa: list[dict], wb: list[dict], same_pt: float) -> dict[str, A
 
 
 def warning_lines(words: list[dict]) -> list[dict[str, Any]]:
-    """Warnings baked into the main stream: rows with «НЕ СОГЛАСОВАНО» and the like (``engine.py:111-134``).
+    """Warnings baked into the main stream: rows with «НЕ СОГЛАСОВАНО» and the like (``engine.py:310-333``).
 
     A warning is an inscription of its own: a row of one phrase (up to four words) or one set clearly larger than the
     body text. The word «копия» in the title of a sheet taken from a list is not a warning."""
@@ -246,7 +246,7 @@ def release_blocks(words: list[dict]) -> list[dict[str, Any]]:
 
 def detect_frame(page_w: float, page_h: float, segments: Iterable[Sequence[float]]) -> list[float] | None:
     """The frame of a GOST sheet by long lines near the edges: about 20 mm at the left, 5 mm at the others
-    (``stamp.py:56-71``). ``segments`` are ``(x0, y0, x1, y1)`` boxes of the long lines."""
+    (``stamp.py:68-85``). ``segments`` are ``(x0, y0, x1, y1)`` boxes of the long lines."""
     segments = list(segments)
 
     def near(values: list[float], lo: float, hi: float) -> float | None:
@@ -266,7 +266,7 @@ def detect_frame(page_w: float, page_h: float, segments: Iterable[Sequence[float
 
 
 def stamp_zone(words: list[dict], page_w: float, page_h: float, frame: list[float] | None) -> list[float] | None:
-    """The zone of the title block (``stamp.py:78-111``): from the row of signature labels, else by the frame."""
+    """The zone of the title block (``stamp.py:87-111``): from the row of signature labels, else by the frame."""
     corner = [w for w in words if w["pt"][0] > page_w - 205 * MM and w["pt"][1] > page_h - 70 * MM]
     best: list[dict] | None = None
     for row in _text_lines(corner):
@@ -288,7 +288,7 @@ def stamp_zone(words: list[dict], page_w: float, page_h: float, frame: list[floa
 
 
 def classify_kind(words: list[dict], designation: str | None, page_h: float) -> str:
-    """``spec`` for a specification sheet (``stamp.classify_kind``, ``stamp.py:193-204``), else ``other``."""
+    """``spec`` for a specification sheet (``stamp.classify_kind``, ``stamp.py:190-204``), else ``other``."""
     top = {_low(w["text"]) for w in words if w["pt"][1] < page_h * 0.3}
     if (designation or "").upper().endswith(".СО") or (
         {"поз."} & top and any(t.startswith("наименование") for t in top) and any(t.startswith("кол") for t in top)
@@ -298,5 +298,5 @@ def classify_kind(words: list[dict], designation: str | None, page_h: float) -> 
 
 
 def norm(text: Any) -> str:
-    """Whitespace normalised text (``service._norm``, ``service.py:261``)."""
+    """Whitespace normalised text (``service._norm``, ``service.py:34``)."""
     return " ".join(str(text or "").split())

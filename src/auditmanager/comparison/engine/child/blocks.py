@@ -4,9 +4,9 @@
 place). Without this step it looks like «removed + added». Here:
 
 1. from the same words «only in A» / «only in B» (and the moved ones) groups of at least ``BLOCK_MIN_WORDS`` words that
-   share a vector (within ``BLOCK_TOL_PT``, at least ``BLOCK_MIN_SHIFT_PT`` long) are found (:func:`find`, ``:190-240``);
+   share a vector (within ``BLOCK_TOL_PT``, at least ``BLOCK_MIN_SHIFT_PT`` long) are found (:func:`find`, ``blocks.py:33-83``);
 2. a group is confirmed by the raster: the pixels «only A» in the block, shifted by the vector, agree with the pixels
-   «only B» (a share of at least ``BLOCK_MIN_IOU``, :func:`confirm`, ``:269-341``);
+   «only B» (a share of at least ``BLOCK_MIN_IOU``, :func:`confirm`, ``blocks.py:112-184``);
 3. the pixels the shift explains leave «only A/B» for the layer «moved»; the rest inside the block stays an ordinary
    difference (a change inside a moved block).
 
@@ -37,7 +37,7 @@ _K5 = numpy.ones((5, 5), numpy.uint8)
 
 
 def find(words_cmp: dict[str, Any]) -> list[dict[str, Any]]:
-    """Candidates for moved blocks from the words: ``[{vector, a_words, b_words}]`` (``:190-240``)."""
+    """Candidates for moved blocks from the words: ``[{vector, a_words, b_words}]`` (``blocks.py:33-83``)."""
     pairs: list[tuple[float, float, dict, dict]] = []
     by_text_a: dict[str, list[dict]] = defaultdict(list)
     by_text_b: dict[str, list[dict]] = defaultdict(list)
@@ -95,7 +95,7 @@ def _union(rects: list[list[float]]) -> list[float]:
 
 
 def _touching_box(store: PlaneStore, name: str, rect: tuple[int, int, int, int]) -> list[int] | None:
-    """The extent of the components of a plane that touch ``rect``, searched in a window around it (``:247-261``)."""
+    """The extent of the components of a plane that touch ``rect``, searched in a window around it (``blocks.py:90-104``)."""
     x0, y0, x1, y1 = rect
     bw, bh = x1 - x0, y1 - y0
     X0, Y0, X1, Y1 = max(0, x0 - bw), max(0, y0 - bh), min(store.width, x1 + bw), min(store.height, y1 + bh)
@@ -123,11 +123,11 @@ def _shift(mask: Any, dx: int, dy: int) -> Any:
 
 
 def confirm(candidates: list[dict[str, Any]], store: PlaneStore, canvas: Canvas) -> list[dict[str, Any]]:
-    """The raster check of the candidates; the plane store is changed in place (``:269-341``).
+    """The raster check of the candidates; the plane store is changed in place (``blocks.py:112-184``).
 
     ``a_only`` and ``b_only`` lose the pixels the shift explains, ``moved`` gains them. A word moves at most once:
     the candidates come in the order of :func:`find` (more words first) and a word taken by a confirmed block is not
-    offered to the next, or one line of A would move onto its own place and onto a new line of B at once (``:280-284``).
+    offered to the next, or one line of A would move onto its own place and onto a new line of B at once (``blocks.py:123-127``).
     """
     out: list[dict[str, Any]] = []
     claimed_a: set[int] = set()

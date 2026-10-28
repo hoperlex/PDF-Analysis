@@ -257,6 +257,14 @@ def refine_by_lines(lines_a: Any, lines_b: Any, matrix: Any) -> dict[str, Any] |
     votes = int(round(float(window[peak])))
     if votes < max(settings.LINES_MIN_VOTES, int(settings.LINES_MIN_SHARE * min(len(pa), len(pb)))):
         return None
+    # The peak must stand out: a periodic drawing (a hatch, a grid of equal cells) agrees with itself at many shifts, and
+    # then no shift is the shift. Half a point around the peak is left out and the next highest bin must have at most half
+    # of its votes.
+    reach = int(round(0.5 / step))
+    rest = window.copy()
+    rest[max(0, peak[0] - reach) : peak[0] + reach + 1, max(0, peak[1] - reach) : peak[1] + reach + 1] = 0
+    if votes < settings.LINES_PEAK_RATIO * float(rest.max()):
+        return None
     # Second pass: the members of the peak, whose median is the shift.
     low = numpy.array([(peak[0] - 1) * step - radius, (peak[1] - 1) * step - radius])
     members = []
