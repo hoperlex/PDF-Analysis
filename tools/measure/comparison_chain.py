@@ -1268,7 +1268,7 @@ def cmd_report(args: argparse.Namespace) -> int:
     print(f"stopped: {outcome.get('stopped')}; guard: {outcome.get('guard')}; shim: {outcome.get('shim')}; worker exit {outcome.get('worker_exit_code')}\n")
 
     print("## stages")
-    print("| stage | wall s | load1 start/end | API cpu s | worker cpu s (self) | worker cpu s (children waited) | worker VmHWM MiB (item max) | worker VmPeak MiB | worker RSS max MiB (samples) | worker+children RSS max MiB | API VmHWM MiB at end | blobs added MB | database added MB |")
+    print("| stage | wall s | load1 start/end | API cpu s | worker cpu s (self) | worker cpu s (children waited) | worker VmHWM MiB (item max) | worker VmPeak MiB | worker RSS max MiB (samples) | worker+children RSS max MiB | API VmHWM MiB at end | blobs added MiB | database added MiB |")
     print("| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
     for stage in stages:
         t0, t1 = stage["begin"]["t"], stage["end"]["t"]
@@ -1344,7 +1344,7 @@ def cmd_report(args: argparse.Namespace) -> int:
         name = version_of(page["t0"])
         render, extract = page_children.get((name, page["page"], "render")), page_children.get((name, page["page"], "extract"))
         rows.append((name, page, render, extract))
-    print("\n## page profiles by size class (pages; render wall sum/max s; extract wall sum/max s; render VmHWM/VmPeak max MiB; extract VmHWM/VmPeak max MiB; archive+preview+thumbnail bytes sum/max MB)")
+    print("\n## page profiles by size class (pages; render wall sum/max s; extract wall sum/max s; render VmHWM/VmPeak max MiB; extract VmHWM/VmPeak max MiB; archive+preview+thumbnail bytes sum/max MiB)")
     by_class: dict[str, list[Any]] = defaultdict(list)
     for row in rows:
         by_class[size_class(row[1]["width_pt"] or 0, row[1]["height_pt"] or 0)].append(row)
@@ -1358,7 +1358,7 @@ def cmd_report(args: argparse.Namespace) -> int:
               f"{sum((r[3] or {}).get('wall_s', 0) for r in group):.1f}/{max(((r[3] or {}).get('wall_s', 0) for r in group), default=0):.1f} | "
               f"{mib(max(fact(r[2], 'vm_hwm_kib') for r in group))}/{mib(max(fact(r[2], 'vm_peak_kib') for r in group))} | "
               f"{mib(max(fact(r[3], 'vm_hwm_kib') for r in group))}/{mib(max(fact(r[3], 'vm_peak_kib') for r in group))} | {mb(sum(stored))}/{mb(max(stored))} |")
-    print("\n## page profiles by version (pages, ready, render wall s, extract wall s, bytes archive/preview/thumbnail MB, archive parts: profile.json/mask/tiles MB, tiles count)")
+    print("\n## page profiles by version (pages, ready, render wall s, extract wall s, bytes archive/preview/thumbnail MiB, archive parts: profile.json/mask/tiles MiB, tiles count)")
     for name in sorted({r[0] for r in rows}):
         group = [r for r in rows if r[0] == name]
         print(f"| {name} | {len(group)} | {sum(1 for r in group if r[1]['status'] == 'ready')} | {sum((r[2] or {}).get('wall_s', 0) for r in group):.1f} | "
