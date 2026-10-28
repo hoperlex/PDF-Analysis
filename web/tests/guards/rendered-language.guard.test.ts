@@ -1018,7 +1018,7 @@ const record = (over: Partial<DecisionRecord> = {}): DecisionRecord => ({
 
 function apiError(status: number, code: ErrorCode): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.10.0',
+    contract_version: '1.11.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1030,7 +1030,7 @@ function apiError(status: number, code: ErrorCode): ApiError {
 /** A norms refusal with the one classifier the seal registered for it (`W55A-WEB-NORMS`). */
 function normsRefusal(code: ErrorCode, details: Readonly<Record<string, string>>): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.10.0',
+    contract_version: '1.11.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1840,7 +1840,7 @@ function startRefusal(
   details?: Record<string, string | number | boolean | null>,
 ): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.10.0',
+    contract_version: '1.11.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -2036,7 +2036,7 @@ function startRunExecutorShapes(): ReactElement {
     code: ErrorCode, status: number, retryable: boolean,
     details: Readonly<Record<string, string>>, message = 'Сообщение об отказе.',
   ): ApiError => new ApiError(status, {
-    contract_version: '1.10.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
+    contract_version: '1.11.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
     retryable, details,
   }, '0f0e9d8c-7b6a-4948-b726-150413021100');
   const cannotServe = (reason: string) =>
@@ -2540,6 +2540,18 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
       work_kind: 'text_analysis', primary_connection_id: EXECUTOR_READY.connection.connection_id,
       set_at: '2026-10-21T10:00:00Z', set_by: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
     }]),
+  },
+  {
+    // `CMP-SEAL-C2` (ADR-0025 decision 17): a route for each of the four kinds of model work of «Сравнение версий», beside
+    // «Анализ текста», so that every member of `ExecutorWorkKind` stands on a screen.
+    name: 'workers-routes-comparison-kinds',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'routes' }),
+    seedClient: (client) => seedExecutors(client, EXECUTOR_CASES, (
+      ['text_analysis', 'comparison_pair_check', 'comparison_sheet_changes', 'comparison_spec', 'comparison_report'] as const
+    ).map((kind) => ({
+      work_kind: kind, primary_connection_id: EXECUTOR_READY.connection.connection_id,
+      set_at: '2026-10-21T10:00:00Z', set_by: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+    }))),
   },
   {
     // No route at all: a run would be refused, and the screen says so.
@@ -3679,7 +3691,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           422,
           {
-            contract_version: '1.10.0',
+            contract_version: '1.11.0',
             error_code: 'validation_failed',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -3701,7 +3713,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           503,
           {
-            contract_version: '1.10.0',
+            contract_version: '1.11.0',
             error_code: 'dependency_unavailable',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',

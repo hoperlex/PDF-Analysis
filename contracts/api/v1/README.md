@@ -11,6 +11,31 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
+## Version `1.11.0`
+
+`CMP-SEAL-C2` (wave C2 of the comparison modules, `docs/architecture/adr/ADR-0025-comparison-modules.md`)
+adds the version comparison AI, specifications, launch queue and reports as sealed stubs, every operation
+answering `503 dependency_unavailable` until its lane wires it, and `comparison_modules` first while the
+«Сравнение версий» module is off. The AI check of the doubtful pairs of a document set
+(`estimateComparisonAiPairCheck`, `startComparisonAiPairCheck`, `getComparisonAiPairCheck`, the three controls and
+`listComparisonAiPairHints`); the AI description of changes, per series (estimate, start, read and six
+controls: pause, resume, cancel, «Досчитать», «Убрать из очереди», «Повторить листы с ошибкой») and per sheet pair
+(read, history, estimate, start, MD of one sheet) with the «Проверить» list of a transition; the deterministic
+positions of a specification page and sheet pair and the AI comparison of whole specifications per transition;
+the launch queue of a project and the installation's AI queue; and the deterministic MD summary of a series and
+the PDF reports (a draft with its estimate, then a start that consents to it, continue, «Пересобрать PDF»,
+delete, «Подготовить отчёт для заказчика», the downloads). Fifty in all. Every AI start carries the
+digest of the estimate it consents to, in micro-USD, with the ceilings of USD 10 per job and USD 50 per day for
+the installation and a pause when the spend passes 1.2 times the estimate (a connection that is not metered has
+no ceiling). Reads are any one role; every write is keyed and an expert's act. `ExecutorWorkKind` gains
+`comparison_pair_check`, `comparison_sheet_changes`, `comparison_spec` and `comparison_report`. The contract
+items wave C1 left: `ComparisonMatrixStaleReason` gains `algorithm_changed`, `ComparisonMatrixColumn` gains
+`label_source`, `ComparisonPairPage` gains `raster`, and `startComparisonSeries` states
+`comparison_matrix_stale` and `comparison_versions_few`. The version rule
+(`docs/program/VERSIONING_AND_FREEZE_POLICY.md`) reads this as a **minor**. The surface is 176 paths, 198
+operations and 517 schemas (131, 148 and 432 under `1.10.0`). No error code is added. Migration
+`0040_comparison_ai_reports` adds twelve tables and widens `ck_executor_route_work_kind`.
+
 ## Version `1.10.0`
 
 `CMP-SEAL-C1` (wave C1 of the comparison modules, `docs/architecture/adr/ADR-0025-comparison-modules.md`)

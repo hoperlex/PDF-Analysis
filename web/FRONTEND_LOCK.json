@@ -1,7 +1,7 @@
 {
   "lock_version": 1,
   "purpose": "Everything a later regeneration needs to prove the committed API client matches its input: the toolchain pins, the exact generator invocation, and the exact OpenAPI bytes the client was generated from. Verified by web/tests/guards/frontend-lock.guard.test.ts, which recomputes every digest here and fails if one has moved.",
-  "owner": "CMP-SEAL-C1 reseal",
+  "owner": "CMP-SEAL-C2 reseal",
   "toolchain": {
     "node": "22.23.1",
     "npm": "10.9.8",
@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "7c4c95a4aef812e1ff8ec8445a46cbc4b83a655a88ca15ff888f0dbde5b98238",
-    "content_commit": "e49c4b00",
-    "content_commit_subject": "CMP-SEAL-C1 (ADR-0025): contract 1.10.0, the version comparison core sealed as stubs (eighteen operations), compare_after_preparation, seven identity prefixes; additive minor, 1.9.0 to 1.10.0",
+    "sha256": "44c565cf7bc8dd3211758ea0be03a7379af6608fd7964582019fde57a5191162",
+    "content_commit": "b7b4c643",
+    "content_commit_subject": "CMP-SEAL-C2 (ADR-0025): contract 1.11.0, the version comparison AI, specifications, launch queue and reports sealed as stubs (fifty operations), four executor work kinds, eleven identity prefixes; additive minor, 1.10.0 to 1.11.0",
     "dispatch_named_commit": "a3e83f39cfcb02f4ea5565e6f45f3f2b2f720e97",
-    "commit_note": "CMP-SEAL-C1 adds eighteen operations under /projects/{project_uid}/documents/{document_uid}/comparison-matrix, /comparison-ai-links and /comparison-series, /comparison-series/{comparison_series_id}, /comparison-transitions/{comparison_transition_id}/sheet-pairs, /comparison-sheet-pairs/{comparison_sheet_pair_id}, /projects/{project_uid}/comparison-overview and /execution/comparison-queue, eighty-one schemas, and the optional CreateComparisonUploadRequest.compare_after_preparation; additive minor, 1.9.0 to 1.10.0. The commit named above holds these bytes; do not squash.",
+    "commit_note": "CMP-SEAL-C2 adds fifty operations under /projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-check, /comparison-ai-pair-hints, /comparison-ai-pair-checks, /comparison-series/{comparison_series_id}/ai-sheet-changes, /specifications, /reports and /summary-md, /comparison-ai-sheet-jobs, /comparison-sheet-pairs/{comparison_sheet_pair_id}/description and /spec-positions, /comparison-transitions/{comparison_transition_id}/review-sheets and /specification, /page-profiles/{comparison_page_profile_id}/spec-positions, /comparison-ai-spec-jobs, /projects/{project_uid}/comparison-launch-queue, /comparison-launch-entries, /comparison-reports and /execution/comparison-ai-queue, eighty-six schemas (four of the core extended: ComparisonMatrixStaleReason, ComparisonMatrixColumn, ComparisonPairPage, ExecutorWorkKind); additive minor, 1.10.0 to 1.11.0. The commit named above holds these bytes; do not squash.",
     "openapi_version": "3.1.0",
-    "info_version": "1.10.0",
-    "paths": 131,
-    "operations": 148,
-    "component_schemas": 432,
+    "info_version": "1.11.0",
+    "paths": 176,
+    "operations": 198,
+    "component_schemas": 517,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "7c4c95a4aef812e1ff8ec8445a46cbc4b83a655a88ca15ff888f0dbde5b98238",
+    "snapshot_sha256": "44c565cf7bc8dd3211758ea0be03a7379af6608fd7964582019fde57a5191162",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "f8e3ec6d8da26ec3313cbb5e176812740bc48d69def2b19a2a54b6dd8c2e9e30",
-      "index.ts": "8d70726f6a32806a7cc6b3b90fa75797542cb388533344b292e59bce159dbc54",
-      "operations.gen.ts": "5b85feff426f629afef281ced93e937032d491356081158a507df095dbb93483",
-      "types.gen.ts": "0fd1ff867fe806734e4c1349610a1f54ace2a452eb3ddd13882d10442a9b8687"
+      "client.gen.ts": "03f42e042b8d31922bb00dad0202d806e6797f2ad0cc78c1e3ebce9fb7f2138e",
+      "index.ts": "1b5d3d732f0349b271d9ea4add9d916285bb5b7722e5157d1bba059cac15c3c6",
+      "operations.gen.ts": "e57030990db019fd2110bdb04b351801febe0e3497ef8ca238efbc482edaab1a",
+      "types.gen.ts": "6a1ea55c3870f3c9809147f53f843c0c9001c7c005f4e3625f7fda35f947d232"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

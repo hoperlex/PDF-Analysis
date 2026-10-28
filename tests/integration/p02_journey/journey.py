@@ -210,6 +210,22 @@ P02_TABLES = (
     "comparison_transition",
     "comparison_sheet_pair_result",
     "comparison_sheet_pair",
+    # `0040_comparison_ai_reports` (`CMP-SEAL-C2`). The consented AI jobs, the content-keyed pair-check answers and sheet
+    # descriptions, the questions and sheet items, the specification extractions and comparisons, the reports with their
+    # parts and files, and the launch queue with its entries. Their operations are sealed stubs and nothing under this
+    # directory names them, so each count is expected unchanged across a replay -- counted rather than skipped.
+    "comparison_ai_job",
+    "comparison_ai_pair_answer",
+    "comparison_ai_pair_question",
+    "comparison_sheet_description",
+    "comparison_ai_sheet_item",
+    "comparison_spec_extraction",
+    "comparison_spec_comparison",
+    "comparison_report",
+    "comparison_report_part",
+    "comparison_report_artifact",
+    "comparison_launch_queue",
+    "comparison_launch_entry",
     # `0037_analysis_presets` (`ANALYSIS-PRESETS-01`). Named executor selections for a run start,
     # append-only (archive is a new revision). Written only by the preset commands (create,
     # revise, archive; administrator role); the journey starts runs by hand and never creates a

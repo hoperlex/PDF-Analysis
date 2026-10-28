@@ -92,6 +92,21 @@ EXPECTED_TABLES = {
     "comparison_transition",
     "comparison_sheet_pair_result",
     "comparison_sheet_pair",
+    # `0040_comparison_ai_reports`: the consented AI jobs, the content-keyed pair-check answers and sheet descriptions, the
+    # questions and sheet items, the specification extractions and comparisons, the reports with their parts and files,
+    # and the launch queue with its entries (`CMP-SEAL-C2`).
+    "comparison_ai_job",
+    "comparison_ai_pair_answer",
+    "comparison_ai_pair_question",
+    "comparison_sheet_description",
+    "comparison_ai_sheet_item",
+    "comparison_spec_extraction",
+    "comparison_spec_comparison",
+    "comparison_report",
+    "comparison_report_part",
+    "comparison_report_artifact",
+    "comparison_launch_queue",
+    "comparison_launch_entry",
     # `0019_execution_workers`: the worker registry.
     "worker",
     # `0020_norms_search`: the one current norms snapshot and its append-only history.

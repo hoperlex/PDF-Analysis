@@ -571,7 +571,9 @@ class TestN1ComponentReferenceResolution:
         # a version, an upload, a set or a page profile by identity, so each declares a `404`.
         # `CMP-SEAL-C1` adds seventeen: every operation of the version comparison core but the queue read addresses a
         # project, a document, a series, a transition or a sheet pair by identity, so each declares a `404`.
-        assert len(report) == 115, report
+        # `CMP-SEAL-C2` adds forty-nine: every operation of wave C2 but the installation's AI queue addresses a project,
+        # a document, a series, a transition, a sheet pair, a page profile, a job, a report or a queue entry by identity.
+        assert len(report) == 164, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

@@ -1,13 +1,12 @@
-"""The series of adjacent transitions of a document set and the sheet pairs of a transition,
-sealed as stubs (`CMP-SEAL-C1`, ADR-0025 decisions 15, 16 and 21).
+"""The series of adjacent transitions of a document set and the sheet pairs of a transition
+(`CMP-SEAL-C1` sealed them, `CMP-SERIES-01` serves them; ADR-0025 decisions 15, 16 and 21).
 
 ``startComparisonSeries`` («Запустить» / «Заново») compares every adjacent pair of versions for
 the current order; ``getComparisonSeries`` and ``listComparisonSeries`` read it with the summary
 counts and the deterministic verdict of each transition; ``pauseComparisonSeries``,
 ``resumeComparisonSeries``, ``cancelComparisonSeries`` and ``finishComparisonSeries``
 («Досчитать») steer it; ``listComparisonSheetPairs`` and ``getComparisonSheetPair`` read the
-results. Reads are any one role; every write is an expert's act (`R-60`) and keyed. All nine
-answer ``503 dependency_unavailable`` until `CMP-SERIES-01` wires the port.
+results. Reads are any one role; every write is an expert's act (`R-60`) and keyed.
 """
 
 from __future__ import annotations

@@ -211,7 +211,7 @@ def test_the_product_version_says_none_unless_the_deployment_names_a_module_set(
     response = client.get("/system/version", headers={"Authorization": f"Bearer {static_token()}"})
     assert response.status_code == 200
     body = response.json()
-    assert body["comparison_modules"] == "none" and body["contract_version"] == "1.10.0"
+    assert body["comparison_modules"] == "none" and body["contract_version"] == "1.11.0"
 
 
 @pytest.mark.parametrize("value", ["versions", "versions,stages"])

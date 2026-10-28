@@ -395,6 +395,7 @@ __all__ = [
     "ComparisonMatrixCandidate",
     "ComparisonMatrixCell",
     "ComparisonMatrixRow",
+    "ComparisonMatrixLabelSource",
     "ComparisonMatrixColumn",
     "ComparisonMatrixProgress",
     "ComparisonMatrixCounts",
@@ -441,6 +442,7 @@ __all__ = [
     "ComparisonPermit",
     "ComparisonPartRole",
     "ComparisonPartsCoverage",
+    "ComparisonRasterSize",
     "ComparisonPairPage",
     "ComparisonCanvas",
     "ComparisonSheetPair",
@@ -459,6 +461,89 @@ __all__ = [
     "ComparisonQueueModule",
     "ComparisonQueueKind",
     "ComparisonQueueSummary",
+    "ComparisonAiJobId",
+    "ComparisonAiPairQuestionId",
+    "ComparisonSheetDescriptionId",
+    "ComparisonSpecExtractionId",
+    "ComparisonSpecComparisonId",
+    "ComparisonReportId",
+    "ComparisonLaunchEntryId",
+    "ComparisonAiMethod",
+    "ComparisonAiJobState",
+    "ComparisonAiPauseReason",
+    "ComparisonAiCeiling",
+    "ComparisonAiRoute",
+    "ComparisonAiEstimate",
+    "ComparisonAiConsent",
+    "StartComparisonAiJobRequest",
+    "StartComparisonAiSheetChangesRequest",
+    "ResumeComparisonAiJobRequest",
+    "ComparisonAiSpend",
+    "ComparisonAiJobCounts",
+    "ComparisonAiJob",
+    "ComparisonAiPairQuestionKind",
+    "ComparisonAiPairDecision",
+    "ComparisonAiConfidence",
+    "ComparisonAiPairCounts",
+    "ComparisonAiPairCheck",
+    "ComparisonAiPairHint",
+    "ComparisonAiPairHintPage",
+    "ComparisonAiSheetState",
+    "ComparisonAiTier",
+    "ComparisonAiCertainty",
+    "ComparisonAiSide",
+    "ComparisonAiExcludeReason",
+    "ComparisonAiChange",
+    "ComparisonAiUnresolved",
+    "ComparisonAiDeclaredItem",
+    "ComparisonAiExcluded",
+    "ComparisonAiCoverage",
+    "ComparisonAiDiagnostics",
+    "ComparisonSheetDescriptionSource",
+    "ComparisonSheetDescription",
+    "ComparisonSheetDescriptionRevision",
+    "ComparisonSheetDescriptionHistory",
+    "ComparisonAiTransitionProgress",
+    "ComparisonAiSheetChanges",
+    "ComparisonReviewSheetKind",
+    "ComparisonReviewSheet",
+    "ComparisonReviewSheetPage",
+    "ComparisonAiQueueItem",
+    "ComparisonAiQueue",
+    "ComparisonSpecMethod",
+    "ComparisonSpecState",
+    "ComparisonSpecPhase",
+    "ComparisonSpecChangeKind",
+    "ComparisonSpecPosition",
+    "ComparisonSpecFieldChange",
+    "ComparisonSpecChange",
+    "ComparisonSpecTotals",
+    "ComparisonSpecCoverage",
+    "ComparisonSpecification",
+    "ComparisonSpecificationPage",
+    "ComparisonSpecChangePage",
+    "ComparisonSpecPage",
+    "ComparisonSheetPairSpecPositions",
+    "ComparisonLaunchEntryState",
+    "ComparisonLaunchQueueState",
+    "ComparisonLaunchEntry",
+    "ComparisonLaunchQueueCounts",
+    "ComparisonLaunchQueue",
+    "ComparisonLaunchItem",
+    "EnqueueComparisonLaunchRequest",
+    "ComparisonReportKind",
+    "ComparisonReportSource",
+    "ComparisonReportState",
+    "ComparisonReportStage",
+    "ComparisonReportUnitMark",
+    "ComparisonReportFacts",
+    "ComparisonReportPart",
+    "ComparisonReportArtifactKind",
+    "ComparisonReportArtifact",
+    "ComparisonReport",
+    "ComparisonReportPage",
+    "CreateComparisonReportRequest",
+    "PrepareComparisonClientReportRequest",
 ]
 
 
@@ -874,7 +959,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.10.0"]
+    contract_version: Literal["1.11.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -3775,9 +3860,15 @@ class ExecutorKind(str, enum.Enum):
 
 
 class ExecutorWorkKind(str, enum.Enum):
-    """The kind of model work a route serves. Today exactly one stage calls a model."""
+    """The kind of model work a route serves: the one run stage that calls a model, and (`CMP-SEAL-C2`,
+    ADR-0025 decision 17) the four kinds of model work of the version comparison. Their images ride the
+    image channel of `CMP-EXEC-IMAGES-01`; ``comparison_stage_review`` joins with `CMP-SEAL-C4`."""
 
     TEXT_ANALYSIS = "text_analysis"
+    COMPARISON_PAIR_CHECK = "comparison_pair_check"
+    COMPARISON_SHEET_CHANGES = "comparison_sheet_changes"
+    COMPARISON_SPEC = "comparison_spec"
+    COMPARISON_REPORT = "comparison_report"
 
 
 class ExecutorApiFlavour(str, enum.Enum):
@@ -4610,8 +4701,14 @@ class ComparisonMatrixState(str, enum.Enum):
 
 
 class ComparisonMatrixStaleReason(str, enum.Enum):
+    """Why the latest build no longer matches: ``order_changed`` the version order moved,
+    ``profiles_changed`` a page profile was recomputed, ``algorithm_changed`` the matching algorithm or its
+    rule set (``ALGO_VERSION``, ``RULES_VERSION``) is not the one the build was made with
+    (`CMP-SEAL-C2`, from `CMP-MATRIX-01`)."""
+
     ORDER_CHANGED = "order_changed"
     PROFILES_CHANGED = "profiles_changed"
+    ALGORITHM_CHANGED = "algorithm_changed"
 
 
 class ComparisonCellState(str, enum.Enum):
@@ -4691,12 +4788,27 @@ class ComparisonMatrixRow(_Object):
     )
 
 
+class ComparisonMatrixLabelSource(str, enum.Enum):
+    """Where a column label comes from: ``proposal`` the version's label the user confirmed with its
+    upload set (the suggested label of the proposal when the user left it), ``file_name`` the stored file
+    name of the version, which is a hint and never an identity."""
+
+    PROPOSAL = "proposal"
+    FILE_NAME = "file_name"
+
+
 class ComparisonMatrixColumn(_Object):
-    """One version, in the position of the current comparison order."""
+    """One version, in the position of the current comparison order. ``label`` is the version's label of
+    the upload proposal (``label_source`` ``proposal``) or, for a version that carried none, its stored
+    file name (``file_name``); both are absent for a version that came from a portal bundle, and the
+    client then writes «Версия №N» for the N-th column (`CMP-SEAL-C2`, from `CMP-MATRIX-01`)."""
 
     version_uid: VersionUid
     page_count: Annotated[int, Field(ge=0, le=500)]
     label: Annotated[str, Field(min_length=1, max_length=80)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    label_source: ComparisonMatrixLabelSource = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
 
@@ -5236,9 +5348,18 @@ class ComparisonPartsCoverage(_Object):
     parts: Annotated[list[ComparisonPageRef], Field(max_length=64)]
 
 
+class ComparisonRasterSize(_Object):
+    """The size in pixels of the full-resolution raster of a page, the base of its tile pyramid
+    (level 0): the viewer lays tiles on it and need not derive it (`CMP-SEAL-C2`, from
+    `CMP-VIEWER-01`)."""
+
+    width_px: Annotated[int, Field(ge=1)]
+    height_px: Annotated[int, Field(ge=1)]
+
+
 class ComparisonPairPage(_Object):
     """One side of a sheet pair: the page, its sheet number and title from the stamp, and
-    whether it is an image-only page."""
+    whether it is an image-only page. ``raster`` is the size of the page's raster pyramid."""
 
     page: ComparisonPageRef
     sheet_number: Annotated[str, Field(min_length=1, max_length=64)] = Field(  # type: ignore[assignment]
@@ -5248,6 +5369,7 @@ class ComparisonPairPage(_Object):
         default=None, json_schema_extra=optional_property
     )
     scan: bool = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    raster: ComparisonRasterSize = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class ComparisonCanvas(_Object):
@@ -5467,3 +5589,955 @@ class ComparisonQueueSummary(_Object):
     counts: ComparisonQueueCounts
     kinds: list[ComparisonQueueKind]
     oldest_queued_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+# --- version comparison AI, specifications, reports and the launch queue (`CMP-SEAL-C2`, ADR-0025) ---
+#
+# Sealed as stubs: every operation below answers `503 dependency_unavailable` until its lane
+# (CMP-VC-AIPAIR-01, CMP-VC-AISHEET-01, CMP-VC-SPEC-01, CMP-VC-QUEUE-01, CMP-VC-REPORT-01) wires it,
+# and, with the module off, `comparison_modules` before anything is read. The shapes are exactly what
+# those lanes implement; a lane that needs a field STOPs to the wave's FIX slot and never edits them.
+# Every member a lane may leave out is explicitly optional (R3-21). Money is integer micro-USD, like
+# the spend journal (`comparison_model_call.cost_micros`).
+
+ComparisonAiJobId = TypeAliasType("ComparisonAiJobId", Annotated[str, Field(pattern=rf"^cai_{_ULID}$")])
+ComparisonAiPairQuestionId = TypeAliasType(
+    "ComparisonAiPairQuestionId", Annotated[str, Field(pattern=rf"^cpq_{_ULID}$")]
+)
+ComparisonSheetDescriptionId = TypeAliasType(
+    "ComparisonSheetDescriptionId", Annotated[str, Field(pattern=rf"^csd_{_ULID}$")]
+)
+ComparisonSpecExtractionId = TypeAliasType(
+    "ComparisonSpecExtractionId", Annotated[str, Field(pattern=rf"^cse_{_ULID}$")]
+)
+ComparisonSpecComparisonId = TypeAliasType(
+    "ComparisonSpecComparisonId", Annotated[str, Field(pattern=rf"^cscp_{_ULID}$")]
+)
+ComparisonReportId = TypeAliasType("ComparisonReportId", Annotated[str, Field(pattern=rf"^crt_{_ULID}$")])
+ComparisonLaunchEntryId = TypeAliasType(
+    "ComparisonLaunchEntryId", Annotated[str, Field(pattern=rf"^cle_{_ULID}$")]
+)
+
+_REASON_CODE = r"^[a-z][a-z0-9_]{2,63}$"
+_ENGINE_CODE = r"^[A-Z][A-Z0-9_]{2,63}$"
+_NOT_GIVEN: dict[str, Any] = {"default": None, "json_schema_extra": optional_property}
+
+
+class ComparisonAiMethod(str, enum.Enum):
+    """The four kinds of model work of the version comparison. Each is also an executor work kind,
+    ``comparison_<method>`` (``ExecutorWorkKind``), routed in «Назначения»: ``pair_check`` the AI check
+    of the doubtful pairs of the matrix, ``sheet_changes`` the AI description of changes, ``spec`` the
+    comparison of whole specifications, ``report`` the report from the summary."""
+
+    PAIR_CHECK = "pair_check"
+    SHEET_CHANGES = "sheet_changes"
+    SPEC = "spec"
+    REPORT = "report"
+
+
+class ComparisonAiJobState(str, enum.Enum):
+    """``queued``: waiting, in the installation's AI queue or for a free executor. ``paused``: stopped,
+    see ``pause_reason``. A ``completed`` job whose ``counts.failed`` is not zero is the original's
+    «частично»."""
+
+    QUEUED = "queued"
+    RUNNING = "running"
+    PAUSED = "paused"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class ComparisonAiPauseReason(str, enum.Enum):
+    """Why a job is ``paused``: ``user`` asked; ``quota`` the subscription's quota is spent; ``auth`` the
+    executor is not authorised; ``overrun`` the actual spend passed 1.2 times the consented estimate;
+    ``route_changed`` the route or the revision of the connection changed since the consent;
+    ``module_off`` the versions module was turned off. After ``overrun`` and ``route_changed`` a
+    resume carries a new consent."""
+
+    USER = "user"
+    QUOTA = "quota"
+    AUTH = "auth"
+    OVERRUN = "overrun"
+    ROUTE_CHANGED = "route_changed"
+    MODULE_OFF = "module_off"
+
+
+class ComparisonAiCeiling(str, enum.Enum):
+    """The hard ceilings of ``Q-CMP-7``: ``job`` USD 10 for one job, ``day`` USD 50 per day for the
+    installation. A connection that is not metered has none."""
+
+    JOB = "job"
+    DAY = "day"
+
+
+class ComparisonAiRoute(_Object):
+    """What serves the calls of an estimate or a job: the connection and its revision, the model the
+    revision pins (a reply from another model is refused, ``R-133``), how it is billed and whether the
+    process is in recorded mode, in which case every answer is a recorded test answer."""
+
+    connection_id: ExecutorConnectionId
+    revision_id: ExecutorRevisionId
+    pinned_model: Annotated[str, Field(min_length=1, max_length=128)]
+    billing: ExecutorBilling
+    provider_mode: ProviderMode
+
+
+class ComparisonAiEstimate(_Object):
+    """What an AI start would do and cost, computed without a model call. ``estimate_digest`` binds the
+    route, the pinned model, the ceilings and every figure below: the start carries it, and a start whose
+    digest is not the one now computed is ``409 conflict`` (``comparison_estimate_stale``). ``units`` is
+    what the job works on (questions, sheets, transitions, versions or report parts); ``reused`` of the
+    units already have a stored answer under the same content key and are never sent again. For a
+    connection that is not metered ``estimate_micros`` is ``0`` and no ceiling applies. ``blocked_by`` is
+    present when the start would be refused for a ceiling (``comparison_ceiling_job`` or
+    ``comparison_ceiling_day``)."""
+
+    method: ComparisonAiMethod
+    estimate_digest: Sha256
+    route: ComparisonAiRoute
+    units: Annotated[int, Field(ge=0)]
+    reused: Annotated[int, Field(ge=0)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    questions: Annotated[int, Field(ge=0)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    pairs: Annotated[int, Field(ge=0)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    sheets: Annotated[int, Field(ge=0)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    transitions: Annotated[int, Field(ge=0)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    versions: Annotated[int, Field(ge=0)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    calls: Annotated[int, Field(ge=0)]
+    images: Annotated[int, Field(ge=0)]
+    image_bytes: Annotated[int, Field(ge=0)]
+    prompt_chars: Annotated[int, Field(ge=0)]
+    input_tokens: Annotated[int, Field(ge=0)]
+    output_tokens: Annotated[int, Field(ge=0)]
+    estimate_micros: Annotated[int, Field(ge=0)]
+    ceiling_micros: Annotated[int, Field(ge=0)]
+    day_remaining_micros: Annotated[int, Field(ge=0)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    blocked_by: ComparisonAiCeiling = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class ComparisonAiConsent(_Object):
+    """The user's consent to one estimate: the digest of the estimate that was shown and the explicit
+    confirmation of the line «Подтверждаю передачу материалов исполнителю». ``confirmed`` false is
+    ``422 validation_failed`` (``comparison_consent_required``)."""
+
+    estimate_digest: Sha256
+    confirmed: bool
+
+
+class StartComparisonAiJobRequest(_Object):
+    """Starts an AI job. Refused before anything is read or written when the versions module is off."""
+
+    consent: ComparisonAiConsent
+
+
+class StartComparisonAiSheetChangesRequest(_Object):
+    """«Запустить» (``restart`` false or absent) or «Описать заново» (``restart`` true: every sheet is
+    described again; a sheet whose content, prompt version and model did not change keeps its stored
+    answer and is not sent)."""
+
+    consent: ComparisonAiConsent
+    restart: bool = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class ResumeComparisonAiJobRequest(_Object):
+    """Resumes a paused job. ``consent`` is required after ``overrun`` and ``route_changed`` (a new
+    estimate for what is left) and ignored after the other pause reasons."""
+
+    consent: ComparisonAiConsent = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class ComparisonAiSpend(_Object):
+    """The spend of a job so far, from the comparison journal. ``reserved_micros`` is what the calls in
+    flight may still cost; ``unknown_calls`` are calls whose outcome is not known and that are never sent
+    again until a person says «Повторить»."""
+
+    spent_micros: Annotated[int, Field(ge=0)]
+    reserved_micros: Annotated[int, Field(ge=0)]
+    calls: Annotated[int, Field(ge=0)]
+    unknown_calls: Annotated[int, Field(ge=0)]
+    input_tokens: Annotated[int, Field(ge=0)]
+    output_tokens: Annotated[int, Field(ge=0)]
+
+
+class ComparisonAiJobCounts(_Object):
+    """The units of a job: ``total``, those ``done``, those ``failed`` and those whose call outcome is
+    ``unknown``."""
+
+    total: Annotated[int, Field(ge=0)]
+    done: Annotated[int, Field(ge=0)]
+    failed: Annotated[int, Field(ge=0)]
+    unknown: Annotated[int, Field(ge=0)]
+
+
+class ComparisonAiJob(_Object):
+    """One AI job: the consented estimate (frozen), the state, the units and the spend. A job belongs to
+    one document set; ``series_id``, ``transition_id`` and ``sheet_pair_id`` name its scope when it has
+    one. ``queue_position`` is present while the job waits in the installation's AI queue.
+    Every AI text a job produces is model output not confirmed by an engineer."""
+
+    job_id: ComparisonAiJobId
+    method: ComparisonAiMethod
+    project_uid: ProjectUid
+    document_uid: DocumentUid
+    state: ComparisonAiJobState
+    estimate: ComparisonAiEstimate
+    consented_by: UserUid
+    consented_at: datetime
+    spend: ComparisonAiSpend
+    counts: ComparisonAiJobCounts
+    created_at: datetime
+    updated_at: datetime
+    series_id: ComparisonSeriesId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    transition_id: ComparisonTransitionId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    sheet_pair_id: ComparisonSheetPairId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    pause_reason: ComparisonAiPauseReason = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    failure_reason: Annotated[str, Field(pattern=_REASON_CODE)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    queue_position: Annotated[int, Field(ge=1)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    finished_at: datetime = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+# --- AI check of doubtful pairs (CMP-VC-AIPAIR-01) -----------------------------------------
+
+
+class ComparisonAiPairQuestionKind(str, enum.Enum):
+    """``no_pair``: sheet A has no pair and the cell of B has candidates («⁇»). ``medium_pair``: the algorithm's
+    pair has medium confidence. Sheets of a multi-sheet table group are not asked."""
+
+    NO_PAIR = "no_pair"
+    MEDIUM_PAIR = "medium_pair"
+
+
+class ComparisonAiPairDecision(str, enum.Enum):
+    """What the lane's rule made of the answers. ``link_accepted``: written as an accepted AI link
+    (high confidence, the candidate number and the page agree, the sheet is not inside a multi-sheet
+    specification, B is not linked to another A, no other A chose the same B, the reverse question
+    returned A with high confidence). The ``hint_*`` values are shown as «ИИ ?» or «вероятно стр. N»
+    and change nothing: ``hint_table`` a multi-sheet table, ``hint_confidence`` not high,
+    ``hint_taken`` B is already paired by the algorithm, ``hint_shared`` two sheets chose one,
+    ``hint_reverse`` the reverse question did not confirm. ``none``: no candidate is the same sheet.
+    ``answer_mismatch``: the number and the page disagree and the answer is dropped. ``failed``: no usable
+    answer. ``medium_confirm``, ``medium_weak``, ``medium_other`` and ``medium_none``: the answers to a
+    ``medium`` question (the pair is confirmed, confirmed without confidence, another sheet is
+    named, none is the same sheet). A manual edit always wins over any of them."""
+
+    LINK_ACCEPTED = "link_accepted"
+    HINT_TABLE = "hint_table"
+    HINT_CONFIDENCE = "hint_confidence"
+    HINT_TAKEN = "hint_taken"
+    HINT_SHARED = "hint_shared"
+    HINT_REVERSE = "hint_reverse"
+    NONE = "none"
+    ANSWER_MISMATCH = "answer_mismatch"
+    FAILED = "failed"
+    MEDIUM_CONFIRM = "medium_confirm"
+    MEDIUM_WEAK = "medium_weak"
+    MEDIUM_OTHER = "medium_other"
+    MEDIUM_NONE = "medium_none"
+
+
+class ComparisonAiConfidence(str, enum.Enum):
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class ComparisonAiPairCounts(_Object):
+    """«вопросов · пар · подсказок · против»: ``questions`` asked, ``answered`` of them, ``pairs``
+    accepted as AI links, ``hints`` shown, ``against`` the model said no candidate is the same sheet,
+    ``failed`` without a usable answer, ``reused`` answered from the store without a call."""
+
+    questions: Annotated[int, Field(ge=0)]
+    answered: Annotated[int, Field(ge=0)]
+    pairs: Annotated[int, Field(ge=0)]
+    hints: Annotated[int, Field(ge=0)]
+    against: Annotated[int, Field(ge=0)]
+    failed: Annotated[int, Field(ge=0)]
+    reused: Annotated[int, Field(ge=0)]
+
+
+class ComparisonAiPairCheck(_Object):
+    """The AI check of the doubtful pairs of a document set: the latest job and its figures. Both are
+    absent until a check was started. Accepted answers are written as accepted AI links by the
+    lane's rule and never by a client call (``AGENTS.md`` section 4)."""
+
+    document_uid: DocumentUid
+    job: ComparisonAiJob = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    counts: ComparisonAiPairCounts = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class ComparisonAiPairHint(_Object):
+    """The answer to one question, for the matrix cell it concerns: sheet ``page`` of the older version
+    against the cell of ``version_uid``. ``hint_page`` is «вероятно стр. N». ``link_id`` names the
+    accepted AI link a ``link_accepted`` decision wrote. ``stale`` is true when the question was asked of a
+    matrix build that is no longer the latest. ``reason`` is the model's own sentence, not confirmed by an
+    engineer."""
+
+    question_id: ComparisonAiPairQuestionId
+    job_id: ComparisonAiJobId
+    matrix_id: ComparisonMatrixId
+    kind: ComparisonAiPairQuestionKind
+    decision: ComparisonAiPairDecision
+    page: ComparisonPageRef
+    version_uid: VersionUid
+    candidates: Annotated[list[ComparisonPageRef], Field(max_length=8)]
+    stale: bool
+    created_at: datetime
+    hint_page: ComparisonPageRef = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    confidence: ComparisonAiConfidence = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    link_id: ComparisonAiLinkId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    reason: Annotated[str, Field(min_length=1, max_length=300)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class ComparisonAiPairHintPage(_Object):
+    """Newest first."""
+
+    items: list[ComparisonAiPairHint]
+    page: PageInfo
+
+
+# --- AI description of changes (CMP-VC-AISHEET-01) -----------------------------------------
+
+
+class ComparisonAiSheetState(str, enum.Enum):
+    """The eleven states of «Изменения в листе»: ``not_processed`` «Не обработано» (not the same as no
+    changes), ``queued`` «В очереди», ``running`` «В обработке», ``done`` «Готово», ``needs_clarification``
+    «Требуется уточнение», ``partial`` «Частично», ``no_construction_changes`` «Строительных изменений не
+    выявлено», ``stale`` «Описание устарело», ``failed`` «Ошибка», ``cancelled`` «Отменено»,
+    ``engine_same`` «По данным сравнения изменений нет»."""
+
+    NOT_PROCESSED = "not_processed"
+    QUEUED = "queued"
+    RUNNING = "running"
+    DONE = "done"
+    NEEDS_CLARIFICATION = "needs_clarification"
+    PARTIAL = "partial"
+    NO_CONSTRUCTION_CHANGES = "no_construction_changes"
+    STALE = "stale"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    ENGINE_SAME = "engine_same"
+
+
+class ComparisonAiTier(str, enum.Enum):
+    """How a value of a change was checked by the program: ``from_text`` found in the text layer of its own
+    side, ``from_image`` read from the drawing the model cited («с изображения»), ``unverified`` found in
+    neither («не подтверждено»)."""
+
+    FROM_TEXT = "from_text"
+    FROM_IMAGE = "from_image"
+    UNVERIFIED = "unverified"
+
+
+class ComparisonAiCertainty(str, enum.Enum):
+    CONFIRMED = "confirmed"
+    UNCLEAR = "unclear"
+
+
+class ComparisonAiSide(str, enum.Enum):
+    A = "a"
+    B = "b"
+
+
+class ComparisonAiExcludeReason(str, enum.Enum):
+    """Why an engine pointer is «Не включено в сводку»."""
+
+    SERVICE = "service"
+    FORMATTING = "formatting"
+    LABEL_MOVE = "label_move"
+    REVISION_MARK = "revision_mark"
+    DUPLICATE = "duplicate"
+    NOT_CONSTRUCTION = "not_construction"
+
+
+class ComparisonAiChange(_Object):
+    """One change of the description: the construction object and its place, «Было» (only from side A)
+    and «стало» (only from side B), the tier of each value and, for an item the model could not settle,
+    the limitation («Неясно»). ``box`` and ``side`` serve «Показать на чертеже»."""
+
+    change_id: Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9_.-]{0,31}$")]
+    object_name: Annotated[str, Field(min_length=1, max_length=300)]
+    certainty: ComparisonAiCertainty
+    kind: Annotated[str, Field(pattern=r"^[a-z][a-z_]{1,31}$")] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    place: Annotated[str, Field(min_length=1, max_length=300)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    was: Annotated[str, Field(min_length=1, max_length=500)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    now: Annotated[str, Field(min_length=1, max_length=500)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    was_tier: ComparisonAiTier = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    now_tier: ComparisonAiTier = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    limitation: Annotated[str, Field(min_length=1, max_length=300)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    side: ComparisonAiSide = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    box: ComparisonBox = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class ComparisonAiUnresolved(_Object):
+    """An item under «Требует уточнения (N)»."""
+
+    question: Annotated[str, Field(min_length=1, max_length=500)]
+    side: ComparisonAiSide = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    box: ComparisonBox = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class ComparisonAiDeclaredItem(_Object):
+    """An item under «Заявлено проектировщиком в разрешении (N)», from the permit's stamp."""
+
+    text: Annotated[str, Field(min_length=1, max_length=500)]
+    reference: Annotated[str, Field(min_length=1, max_length=120)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class ComparisonAiExcluded(_Object):
+    """An engine pointer the program ruled out of the description, with the reason."""
+
+    reason: ComparisonAiExcludeReason
+    text: Annotated[str, Field(min_length=1, max_length=300)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class ComparisonAiCoverage(_Object):
+    """How many engine candidates the description covers: ``candidates`` offered, ``in_changes`` named in
+    a change, ``not_reviewed`` left unreviewed."""
+
+    candidates: Annotated[int, Field(ge=0)]
+    in_changes: Annotated[int, Field(ge=0)]
+    not_reviewed: Annotated[int, Field(ge=0)]
+
+
+class ComparisonAiDiagnostics(_Object):
+    """The «Диагностика» panel: kept out of the main report. ``issues`` are the codes of the checks that
+    failed."""
+
+    issues: Annotated[list[Annotated[str, Field(pattern=_ENGINE_CODE)]], Field(max_length=64)]
+    excluded_by_program: Annotated[int, Field(ge=0)]
+    candidates: Annotated[int, Field(ge=0)]
+
+
+class ComparisonSheetDescriptionSource(str, enum.Enum):
+    """``sheet`` the description of the sheet pair; ``whole_specification`` the changes of this sheet
+    were taken from the comparison of the whole specifications («По полной спецификации · только
+    изменения этого листа»)."""
+
+    SHEET = "sheet"
+    WHOLE_SPECIFICATION = "whole_specification"
+
+
+class ComparisonSheetDescription(_Object):
+    """The stored AI description of one sheet pair (or of one added or removed sheet). Reading it never
+    calls a model. ``description_id`` and the members after ``source`` are absent while the state is
+    ``not_processed``, ``queued``, ``running`` or ``engine_same``. ``job_id`` names the job that is
+    queued or running for the sheet. ``recorded`` is true for a recorded (test) answer, which the client
+    labels as such. The description is model output not confirmed by an engineer and never changes the
+    raw comparison of the pair."""
+
+    sheet_pair_id: ComparisonSheetPairId
+    state: ComparisonAiSheetState
+    history_count: Annotated[int, Field(ge=0)]
+    description_id: ComparisonSheetDescriptionId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    source: ComparisonSheetDescriptionSource = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    changes: Annotated[list[ComparisonAiChange], Field(max_length=300)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    unresolved: Annotated[list[ComparisonAiUnresolved], Field(max_length=100)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    declared: Annotated[list[ComparisonAiDeclaredItem], Field(max_length=100)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    excluded: Annotated[list[ComparisonAiExcluded], Field(max_length=300)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    coverage: ComparisonAiCoverage = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    diagnostics: ComparisonAiDiagnostics = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    job_id: ComparisonAiJobId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    model: Annotated[str, Field(min_length=1, max_length=128)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    prompt_version: Annotated[str, Field(min_length=1, max_length=64)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    recorded: bool = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    created_at: datetime = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class ComparisonSheetDescriptionRevision(_Object):
+    """One entry of «История (N)»."""
+
+    description_id: ComparisonSheetDescriptionId
+    state: ComparisonAiSheetState
+    changes_count: Annotated[int, Field(ge=0)]
+    unresolved_count: Annotated[int, Field(ge=0)]
+    recorded: bool
+    created_at: datetime
+    model: Annotated[str, Field(min_length=1, max_length=128)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    prompt_version: Annotated[str, Field(min_length=1, max_length=64)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class ComparisonSheetDescriptionHistory(_Object):
+    """Newest first."""
+
+    items: list[ComparisonSheetDescriptionRevision]
+    page: PageInfo
+
+
+class ComparisonAiTransitionProgress(_Object):
+    """One row of «ИИ-описание изменений»: «Листов» (``sheets`` to describe, ``done`` of them),
+    «Изм.» (``changed``: sheets with changes), «Вопр.» (``questions``), «Ошибок» (``errors``),
+    «Проверить» (``to_review``), «Обращ.» (``calls``), tokens and ``seconds``."""
+
+    transition_id: ComparisonTransitionId
+    sheets: Annotated[int, Field(ge=0)]
+    done: Annotated[int, Field(ge=0)]
+    changed: Annotated[int, Field(ge=0)]
+    questions: Annotated[int, Field(ge=0)]
+    errors: Annotated[int, Field(ge=0)]
+    to_review: Annotated[int, Field(ge=0)]
+    calls: Annotated[int, Field(ge=0)]
+    input_tokens: Annotated[int, Field(ge=0)]
+    output_tokens: Annotated[int, Field(ge=0)]
+    seconds: Annotated[int, Field(ge=0)]
+
+
+class ComparisonAiSheetChanges(_Object):
+    """The AI description of changes of a series: the latest job (absent until one was started) and the
+    progress of each transition."""
+
+    series_id: ComparisonSeriesId
+    transitions: Annotated[list[ComparisonAiTransitionProgress], Field(max_length=100)]
+    job: ComparisonAiJob = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class ComparisonReviewSheetKind(str, enum.Enum):
+    """``to_check``: the AI found no change but the comparison left marks («Проверить»). ``added`` and
+    ``removed``: a single sheet of the transition, described on its own."""
+
+    TO_CHECK = "to_check"
+    ADDED = "added"
+    REMOVED = "removed"
+
+
+class ComparisonReviewSheet(_Object):
+    sheet_pair_id: ComparisonSheetPairId
+    kind: ComparisonReviewSheetKind
+    state: ComparisonAiSheetState
+    page_a: ComparisonPairPage = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    page_b: ComparisonPairPage = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class ComparisonReviewSheetPage(_Object):
+    """In the order of the matrix rows."""
+
+    items: list[ComparisonReviewSheet]
+    page: PageInfo
+
+
+class ComparisonAiQueueItem(_Object):
+    """One job in the installation's AI queue «Очередь «ИИ-описание изменений»»."""
+
+    job_id: ComparisonAiJobId
+    method: ComparisonAiMethod
+    state: ComparisonAiJobState
+    project_uid: ProjectUid
+    document_uid: DocumentUid
+    counts: ComparisonAiJobCounts
+    created_at: datetime
+    series_id: ComparisonSeriesId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    queue_position: Annotated[int, Field(ge=1)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class ComparisonAiQueue(_Object):
+    """The AI jobs that are queued, running or paused anywhere in the installation, running first, then
+    in the order they will start. A read for any role; it starts nothing."""
+
+    items: Annotated[list[ComparisonAiQueueItem], Field(max_length=200)]
+    queued: Annotated[int, Field(ge=0)]
+    running: Annotated[int, Field(ge=0)]
+    paused: Annotated[int, Field(ge=0)]
+
+
+# --- specifications (CMP-VC-SPEC-01) ---------------------------------------------------------
+
+
+class ComparisonSpecMethod(str, enum.Enum):
+    """``whole``: «полное сравнение», the whole specification of each version was read by a model and the
+    two were compared order-independently. ``sheet_ai``: «листовой ИИ», the specification sheets are
+    described one by one in the AI description of changes."""
+
+    WHOLE = "whole"
+    SHEET_AI = "sheet_ai"
+
+
+class ComparisonSpecState(str, enum.Enum):
+    """``not_applicable``: the transition has no specification sheet. ``incomplete``: a side could not be
+    read completely and no addition, removal or absence of change is published. ``running`` and
+    ``paused`` carry the phase."""
+
+    NOT_APPLICABLE = "not_applicable"
+    NOT_STARTED = "not_started"
+    RUNNING = "running"
+    PAUSED = "paused"
+    COMPLETED = "completed"
+    INCOMPLETE = "incomplete"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class ComparisonSpecPhase(str, enum.Enum):
+    PREPARING = "preparing"
+    COMPARING = "comparing"
+    DONE = "done"
+
+
+class ComparisonSpecChangeKind(str, enum.Enum):
+    """``changed``, ``added`` «+добавлено», ``removed`` «−удалено», ``unclear`` «?неясно» (the match is
+    ambiguous), ``renumbered`` (only the position number differs) and ``moved`` (the same position under
+    another section, not a change)."""
+
+    CHANGED = "changed"
+    ADDED = "added"
+    REMOVED = "removed"
+    UNCLEAR = "unclear"
+    RENUMBERED = "renumbered"
+    MOVED = "moved"
+
+
+class ComparisonSpecPosition(_Object):
+    """One position of a specification, every value verbatim as the sheet writes it (nothing is summed,
+    rounded or normalised). ``section`` and ``parent`` place the row; ``ambiguous`` marks a row whose type
+    the parser could not decide and did not guess."""
+
+    name: Annotated[str, Field(max_length=400)]
+    pos: Annotated[str, Field(max_length=32)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    mark: Annotated[str, Field(max_length=200)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    code: Annotated[str, Field(max_length=120)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    supplier: Annotated[str, Field(max_length=200)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    unit: Annotated[str, Field(max_length=32)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    quantity: Annotated[str, Field(max_length=64)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    mass: Annotated[str, Field(max_length=64)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    note: Annotated[str, Field(max_length=400)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    section: Annotated[str, Field(max_length=200)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    parent: Annotated[str, Field(max_length=400)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    ambiguous: bool = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    page: ComparisonPageRef = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class ComparisonSpecFieldChange(_Object):
+    """«было → стало» of one field. ``field`` is one of the nine fields of a position of a specification
+    (GOST 21.110): ``pos``, ``name``, ``mark``, ``code``, ``supplier``, ``unit``, ``quantity``, ``mass``
+    and ``note`` (an open word, so that the contract does not freeze the table layout)."""
+
+    field: Annotated[str, Field(pattern=r"^[a-z][a-z_]{1,15}$")]
+    was: Annotated[str, Field(max_length=400)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    now: Annotated[str, Field(max_length=400)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class ComparisonSpecChange(_Object):
+    """One change between two specifications: the position before (``old``) and after (``new``), the
+    fields that differ, and the sentence the comparison renders. A position that exists on one side only
+    is ``added`` or ``removed`` and carries that side."""
+
+    change_id: Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9_.-]{0,31}$")]
+    kind: ComparisonSpecChangeKind
+    fields: Annotated[list[ComparisonSpecFieldChange], Field(max_length=9)]
+    old: ComparisonSpecPosition = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    new: ComparisonSpecPosition = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    text: Annotated[str, Field(min_length=1, max_length=600)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class ComparisonSpecTotals(_Object):
+    """«изменено / +добавлено / −удалено / ?неясно», and the two kinds that are not changes."""
+
+    changed: Annotated[int, Field(ge=0)]
+    added: Annotated[int, Field(ge=0)]
+    removed: Annotated[int, Field(ge=0)]
+    unclear: Annotated[int, Field(ge=0)]
+    renumbered: Annotated[int, Field(ge=0)]
+    moved: Annotated[int, Field(ge=0)]
+
+
+class ComparisonSpecCoverage(_Object):
+    """«покрыто»: the blocks of the specification text the model's markup covers and the rows it could
+    not settle. A quote or a value the program cannot find in the source makes that side incomplete."""
+
+    blocks_total: Annotated[int, Field(ge=0)]
+    blocks_covered: Annotated[int, Field(ge=0)]
+    rows_total: Annotated[int, Field(ge=0)]
+    rows_unresolved: Annotated[int, Field(ge=0)]
+
+
+class ComparisonSpecification(_Object):
+    """The comparison of the specifications of one transition: the method, the number of specification
+    sheets of the older and of the newer version, the coverage and the totals once there are any, and the
+    reason a side is incomplete or the comparison failed (an engine-style code). The changes themselves
+    are read page by page. Part B is model output not confirmed by an engineer; the deterministic
+    positions of part A are read per sheet."""
+
+    transition_id: ComparisonTransitionId
+    method: ComparisonSpecMethod
+    state: ComparisonSpecState
+    sheets_a: Annotated[int, Field(ge=0)]
+    sheets_b: Annotated[int, Field(ge=0)]
+    comparison_id: ComparisonSpecComparisonId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    phase: ComparisonSpecPhase = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    coverage_a: ComparisonSpecCoverage = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    coverage_b: ComparisonSpecCoverage = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    totals: ComparisonSpecTotals = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    reason: Annotated[str, Field(pattern=_ENGINE_CODE)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    job_id: ComparisonAiJobId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    extraction_a_id: ComparisonSpecExtractionId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    extraction_b_id: ComparisonSpecExtractionId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    updated_at: datetime = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class ComparisonSpecificationPage(_Object):
+    """The transitions of a series that have a specification, in transition order."""
+
+    items: list[ComparisonSpecification]
+    page: PageInfo
+
+
+class ComparisonSpecChangePage(_Object):
+    """The changes of a transition's specification comparison, in the order the comparison lists them
+    (changed, removed, added, unclear, renumbered)."""
+
+    items: list[ComparisonSpecChange]
+    page: PageInfo
+
+
+class ComparisonSpecPage(_Object):
+    """Part A for one page of a version: whether the page is a specification sheet and, when it is, the
+    positions the deterministic parser reads from the page's words and vector lines (``spec_version`` is
+    the parser's). Deterministic; no model is called."""
+
+    page_profile_id: ComparisonPageProfileId
+    is_specification: bool
+    spec_version: Annotated[str, Field(min_length=1, max_length=32)]
+    positions: Annotated[list[ComparisonSpecPosition], Field(max_length=2000)]
+    ambiguous_rows: Annotated[int, Field(ge=0)]
+
+
+class ComparisonSheetPairSpecPositions(_Object):
+    """«Спецификация по позициям» of a sheet pair: the position changes that fall on the pair's pages,
+    deterministic, from the positions of the whole specification of each version (a position may move
+    between pages without changing)."""
+
+    sheet_pair_id: ComparisonSheetPairId
+    is_specification: bool
+    totals: ComparisonSpecTotals
+    changes: Annotated[list[ComparisonSpecChange], Field(max_length=2000)]
+
+
+# --- the launch queue (CMP-VC-QUEUE-01) --------------------------------------------------------
+
+
+class ComparisonLaunchEntryState(str, enum.Enum):
+    """``waiting``, ``running``, ``done``, ``skipped`` (the step needed nothing or its set was removed),
+    ``failed``, and ``needs_consent``: an AI step whose estimate now exists and has not been consented
+    to. A queue asks for AI consent per set only when its estimate exists."""
+
+    WAITING = "waiting"
+    RUNNING = "running"
+    NEEDS_CONSENT = "needs_consent"
+    DONE = "done"
+    SKIPPED = "skipped"
+    FAILED = "failed"
+
+
+class ComparisonLaunchQueueState(str, enum.Enum):
+    """«идёт», «на паузе», «ошибка — процесс остановлен», «выполнена», «пусто»."""
+
+    RUNNING = "running"
+    PAUSED = "paused"
+    FAILED = "failed"
+    DONE = "done"
+    IDLE = "idle"
+
+
+class ComparisonLaunchEntry(_Object):
+    """One selected step of one document set. The queue runs one step at a time across sets, in the order
+    of ``position`` (``1`` first): the profiles, the matrix, the AI check of pairs, the series, the AI
+    description, the summary and report. ``job_id`` and ``series_id`` name what the entry started."""
+
+    entry_id: ComparisonLaunchEntryId
+    document_uid: DocumentUid
+    step: ComparisonStepId
+    state: ComparisonLaunchEntryState
+    position: Annotated[int, Field(ge=1)]
+    restart: bool
+    created_at: datetime
+    updated_at: datetime
+    reason: Annotated[str, Field(pattern=_REASON_CODE)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    job_id: ComparisonAiJobId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    series_id: ComparisonSeriesId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class ComparisonLaunchQueueCounts(_Object):
+    """«готово N из M · пропущено K · ошибок E»: ``done`` of ``total``, ``skipped``, ``failed``, and those
+    ``running``, ``waiting`` and ``needs_consent``."""
+
+    total: Annotated[int, Field(ge=0)]
+    done: Annotated[int, Field(ge=0)]
+    running: Annotated[int, Field(ge=0)]
+    waiting: Annotated[int, Field(ge=0)]
+    needs_consent: Annotated[int, Field(ge=0)]
+    skipped: Annotated[int, Field(ge=0)]
+    failed: Annotated[int, Field(ge=0)]
+
+
+class ComparisonLaunchQueue(_Object):
+    """«Очередь запуска» of a project. A project has one queue; reading it starts nothing."""
+
+    project_uid: ProjectUid
+    state: ComparisonLaunchQueueState
+    counts: ComparisonLaunchQueueCounts
+    entries: Annotated[list[ComparisonLaunchEntry], Field(max_length=500)]
+    updated_at: datetime = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class ComparisonLaunchItem(_Object):
+    """A set and a step to queue. ``consent`` is given for an AI step (``ai_pairs``, ``ai_changes``,
+    ``report``) whose estimate exists, one consent per set; for a step with no estimate yet the entry waits
+    and becomes ``needs_consent``. A consent on a step that is not an AI step is
+    ``422 validation_failed``."""
+
+    document_uid: DocumentUid
+    step: ComparisonStepId
+    consent: ComparisonAiConsent = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class EnqueueComparisonLaunchRequest(_Object):
+    """«Запустить выбранные по очереди» / «Поставить в очередь». The ``upload`` step cannot be queued
+    (``422 validation_failed``, ``comparison_step_not_queueable``). ``restart`` is «Заново» for the
+    ``series`` and ``ai_changes`` steps."""
+
+    items: Annotated[list[ComparisonLaunchItem], Field(min_length=1, max_length=200)]
+    restart: bool = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+# --- the MD summary and the PDF report (CMP-VC-REPORT-01) ----------------------------------------
+
+
+class ComparisonReportKind(str, enum.Enum):
+    """``client``: «Отчёт для заказчика · Изменения проектных решений», one model call per transition over
+    the summary's facts; a program check drops every point whose number, mark or direction the facts do not
+    confirm. ``analytic``: analyst, verifier and composer."""
+
+    CLIENT = "client"
+    ANALYTIC = "analytic"
+
+
+class ComparisonReportSource(str, enum.Enum):
+    """``series_summary``: the deterministic MD summary of the series. ``uploaded_md``: an MD file the
+    user uploaded (UTF-8, at most 20 MiB, with the transitions headed «## N. … A → B»)."""
+
+    SERIES_SUMMARY = "series_summary"
+    UPLOADED_MD = "uploaded_md"
+
+
+class ComparisonReportState(str, enum.Enum):
+    """``draft``: created with its estimate, not started and nothing spent. ``partial``: finished with a
+    transition missing or a unit failed («неполный результат»)."""
+
+    DRAFT = "draft"
+    QUEUED = "queued"
+    RUNNING = "running"
+    PAUSED = "paused"
+    COMPLETED = "completed"
+    PARTIAL = "partial"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class ComparisonReportStage(str, enum.Enum):
+    """«файл принят, подготовка», «анализ переходов», «проверка выводов», «составление отчёта»,
+    «написание текста для заказчика» (the client kind) and «формирование PDF»."""
+
+    INTAKE = "intake"
+    TRANSITION_ANALYSIS = "transition_analysis"
+    VERIFICATION = "verification"
+    COMPOSITION = "composition"
+    CLIENT_WRITING = "client_writing"
+    PDF_WRITING = "pdf_writing"
+
+
+class ComparisonReportUnitMark(str, enum.Enum):
+    """«✓ ⟳ ✗ ·»."""
+
+    DONE = "done"
+    RUNNING = "running"
+    FAILED = "failed"
+    PENDING = "pending"
+
+
+class ComparisonReportFacts(_Object):
+    """The program's check of the analyst's claims against the source: found, confirmed, contradicted,
+    unconfirmed."""
+
+    found: Annotated[int, Field(ge=0)]
+    confirmed: Annotated[int, Field(ge=0)]
+    contradicted: Annotated[int, Field(ge=0)]
+    unconfirmed: Annotated[int, Field(ge=0)]
+
+
+class ComparisonReportPart(_Object):
+    """The progress of one transition of a report. An analytic report fills ``analysis``,
+    ``verification``, ``facts`` and ``warnings`` («Анализ», «Проверка», «Факты», «Предупреждения»); a
+    client report ``selection``, ``points`` and ``questions`` («Отбор», «Пунктов», «Вопросов»)."""
+
+    transition_id: ComparisonTransitionId
+    analysis: ComparisonReportUnitMark = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    verification: ComparisonReportUnitMark = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    selection: ComparisonReportUnitMark = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    facts: ComparisonReportFacts = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    warnings: Annotated[int, Field(ge=0)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    points: Annotated[int, Field(ge=0)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    questions: Annotated[int, Field(ge=0)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class ComparisonReportArtifactKind(str, enum.Enum):
+    REPORT_PDF = "report_pdf"
+    SOURCE_MD = "source_md"
+
+
+class ComparisonReportArtifact(_Object):
+    """A stored file of a report, downloaded by ``streamComparisonReportPdf`` or
+    ``streamComparisonReportSourceMd``."""
+
+    kind: ComparisonReportArtifactKind
+    size_bytes: Annotated[int, Field(ge=0)]
+    sha256: Sha256
+    created_at: datetime
+
+
+class ComparisonReport(_Object):
+    """A report built from the MD summary of a series. A ``draft`` carries the ``estimate`` the start
+    consents to; once started, ``job`` holds the consented estimate and the spend. ``prepared_from_id``
+    names the analytic report a client report was prepared from. ``reuse`` reuses the finished parts of
+    earlier reports of the same summary. Every page of the PDF carries the unconfirmed-by-an-engineer
+    label and the recall line («изменённых листов N, описано K, отброшено проверкой D»); the label is the
+    client's text, the figures are the report's."""
+
+    report_id: ComparisonReportId
+    series_id: ComparisonSeriesId
+    project_uid: ProjectUid
+    document_uid: DocumentUid
+    kind: ComparisonReportKind
+    source: ComparisonReportSource
+    state: ComparisonReportState
+    reuse: bool
+    parts: Annotated[list[ComparisonReportPart], Field(max_length=100)]
+    artifacts: Annotated[list[ComparisonReportArtifact], Field(max_length=4)]
+    created_at: datetime
+    updated_at: datetime
+    stage: ComparisonReportStage = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    estimate: ComparisonAiEstimate = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    job: ComparisonAiJob = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    source_name: Annotated[str, Field(min_length=1, max_length=200)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    prepared_from_id: ComparisonReportId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    failure_reason: Annotated[str, Field(pattern=_REASON_CODE)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    finished_at: datetime = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class ComparisonReportPage(_Object):
+    """The report history of a series, newest first."""
+
+    items: list[ComparisonReport]
+    page: PageInfo
+
+
+class CreateComparisonReportRequest(_Object):
+    """Creates a ``draft`` report from the series' MD summary and computes its estimate; no model is
+    called and nothing is spent. ``kind`` defaults to ``client``."""
+
+    kind: ComparisonReportKind = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    reuse: bool = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class PrepareComparisonClientReportRequest(_Object):
+    """«Подготовить отчёт для заказчика» from a finished analytic report: a new ``client`` draft that
+    reads the analytic report's verified facts."""
+
+    reuse: bool = Field(**_NOT_GIVEN)  # type: ignore[assignment]

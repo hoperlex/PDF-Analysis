@@ -76,7 +76,40 @@ _STUB_PAIR = "/comparison-sheet-pairs/ctp_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 #: removes their four paths: an absent project, document, series, transition or pair is `404`.
 #: `CMP-VC-OVERVIEW-01` serves the overview and the queue summary and empties this set: an absent project is `404`, and
 #: the queue summary answers `200`, like every other GET of the sweep.
-SEALED_STUB_GETS: frozenset[str] = frozenset()
+#: `CMP-SEAL-C2` (ADR-0025 decision 25) names the twenty-three reads of the version comparison AI, specifications, launch
+#: queue and reports as sealed stubs, each answering exactly `503 dependency_unavailable` (`comparison_modules` while the
+#: versions module is off, as it is in this sweep, and the lane's class name once it is on) until its lane wires the port
+#: (`CMP-VC-AIPAIR-01`, `CMP-VC-AISHEET-01`, `CMP-VC-SPEC-01`, `CMP-VC-QUEUE-01`, `CMP-VC-REPORT-01`); the lane that wires
+#: one removes its path from this set, and the read then meets the sweep's ordinary rule. Each path is filled the way the
+#: sweep fills it: well-formed identities that name nothing.
+_STUB_SERIES = "/comparison-series/cser_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+_STUB_TRANSITION = "/comparison-transitions/ctn_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+_STUB_REPORT = "/comparison-reports/crt_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+SEALED_STUB_GETS: frozenset[str] = frozenset({
+    f"{_STUB_DOCUMENT}/comparison-ai-pair-check/estimate",
+    f"{_STUB_DOCUMENT}/comparison-ai-pair-check",
+    f"{_STUB_DOCUMENT}/comparison-ai-pair-hints",
+    f"{_STUB_SERIES}/ai-sheet-changes/estimate",
+    f"{_STUB_SERIES}/ai-sheet-changes",
+    f"{_STUB_PAIR}/description",
+    f"{_STUB_PAIR}/description-history",
+    f"{_STUB_PAIR}/description/estimate",
+    f"{_STUB_PAIR}/description/md",
+    f"{_STUB_TRANSITION}/review-sheets",
+    f"{_STUB_PROFILE}/spec-positions",
+    f"{_STUB_PAIR}/spec-positions",
+    f"{_STUB_SERIES}/specifications",
+    f"{_STUB_TRANSITION}/specification",
+    f"{_STUB_TRANSITION}/specification/changes",
+    f"{_STUB_TRANSITION}/specification/estimate",
+    f"/projects/{_PRJ}/comparison-launch-queue",
+    "/execution/comparison-ai-queue",
+    f"{_STUB_SERIES}/summary-md",
+    f"{_STUB_SERIES}/reports",
+    _STUB_REPORT,
+    f"{_STUB_REPORT}/pdf",
+    f"{_STUB_REPORT}/source-md",
+})
 #: `CMP-PROFILE-01` serves the five page reads (`/versions/{ver}/page-profiles`, `/page-profiles/{cpr}` and
 #: its `preview`, `thumbnail` and `tile`) and removes them from the set above: an absent `cpr_` is `404`.
 #: The tile's `level`, `column` and `row` are required, so the sweep gives it a well-formed query that
@@ -295,6 +328,10 @@ def _absent_identity(parameter: str) -> str:
         "comparison_series_id": "cser",
         "comparison_transition_id": "ctn",
         "comparison_sheet_pair_id": "ctp",
+        # `CMP-SEAL-C2`: so a path of the AI, specification, queue and report operations reaches its stub.
+        "comparison_ai_job_id": "cai",
+        "comparison_report_id": "crt",
+        "comparison_launch_entry_id": "cle",
     }
     return f"{prefixes.get(parameter, 'prj')}_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 

@@ -1,9 +1,9 @@
 {
   "contract": "auditmanager.domain.identifiers",
-  "contract_version": "1.10.0",
-  "supersedes": "1.9.0",
-  "candidate_revision": 28,
-  "revision_note": "Candidate revision 28 by CMP-SEAL-C1: the effective matrix of a document set and its manual edits, the series of adjacent transitions with their sheet pairs and pair tiles, the overview of a project and the comparison queue read (eighteen operations), and the optional CreateComparisonUploadRequest.compare_after_preparation are an additive minor change of the API document, and family 1.10.0 seal. identifiers.json gains seven identity prefixes (cmx, cme, cak, cser, ctn, ctp, csp) for migration 0039; error-codes.json gains no code, only registered reasons under existing codes; state-machines.json gains no machine.",
+  "contract_version": "1.11.0",
+  "supersedes": "1.10.0",
+  "candidate_revision": 29,
+  "revision_note": "Candidate revision 29 by CMP-SEAL-C2: the AI check of the doubtful pairs of a document set, the AI description of changes, specifications, the launch queue and the MD summary and PDF reports (fifty operations), the four executor work kinds of the version comparison, and the additive members algorithm_changed, label_source and raster are an additive minor change of the API document, and family 1.11.0 seal. identifiers.json gains eleven identity prefixes (cai, cpa, cpq, csi, csd, cse, cscp, crt, crpt, cra, cle) for migration 0040; error-codes.json gains no code, only registered reasons under existing codes; state-machines.json gains no machine.",
   "status": "frozen",
   "frozen": true,
   "format": "<prefix>_<ULID>",
@@ -91,7 +91,18 @@
     "comparison_series_id": "cser",
     "comparison_transition_id": "ctn",
     "comparison_sheet_pair_id": "ctp",
-    "comparison_sheet_pair_result_id": "csp"
+    "comparison_sheet_pair_result_id": "csp",
+    "comparison_ai_job_id": "cai",
+    "comparison_ai_pair_answer_id": "cpa",
+    "comparison_ai_pair_question_id": "cpq",
+    "comparison_ai_sheet_item_id": "csi",
+    "comparison_sheet_description_id": "csd",
+    "comparison_spec_extraction_id": "cse",
+    "comparison_spec_comparison_id": "cscp",
+    "comparison_report_id": "crt",
+    "comparison_report_part_id": "crpt",
+    "comparison_report_artifact_id": "cra",
+    "comparison_launch_entry_id": "cle"
   },
   "external_identifiers": {
     "portal_block_id": {
@@ -170,7 +181,18 @@
     "ComparisonSeries": "comparison_series_id",
     "ComparisonTransition": "comparison_transition_id",
     "ComparisonSheetPair": "comparison_sheet_pair_id",
-    "ComparisonSheetPairResult": "comparison_sheet_pair_result_id"
+    "ComparisonSheetPairResult": "comparison_sheet_pair_result_id",
+    "ComparisonAiJob": "comparison_ai_job_id",
+    "ComparisonAiPairAnswer": "comparison_ai_pair_answer_id",
+    "ComparisonAiPairQuestion": "comparison_ai_pair_question_id",
+    "ComparisonAiSheetItem": "comparison_ai_sheet_item_id",
+    "ComparisonSheetDescription": "comparison_sheet_description_id",
+    "ComparisonSpecExtraction": "comparison_spec_extraction_id",
+    "ComparisonSpecComparison": "comparison_spec_comparison_id",
+    "ComparisonReport": "comparison_report_id",
+    "ComparisonReportPart": "comparison_report_part_id",
+    "ComparisonReportArtifact": "comparison_report_artifact_id",
+    "ComparisonLaunchEntry": "comparison_launch_entry_id"
   },
   "distinct_identities": [
     {
@@ -375,6 +397,28 @@
       "evidence": [
         "CMP-SEAL-C1",
         "0039_comparison_core"
+      ]
+    },
+    {
+      "name": "comparison_ai_identity",
+      "identifiers": [
+        "comparison_ai_job_id",
+        "comparison_ai_pair_answer_id",
+        "comparison_ai_pair_question_id",
+        "comparison_ai_sheet_item_id",
+        "comparison_sheet_description_id",
+        "comparison_spec_extraction_id",
+        "comparison_spec_comparison_id",
+        "comparison_report_id",
+        "comparison_report_part_id",
+        "comparison_report_artifact_id",
+        "comparison_launch_entry_id"
+      ],
+      "rule": "ComparisonAiJob identifies one consented AI job of the version comparison (the estimate it consented to is frozen with it; its method is a pair check, a sheet description, a specification comparison or a report). ComparisonAiPairAnswer is the content-keyed answer of the model to one question of the pair check (a ULID id and a unique digest column that includes the project, so an answered question is never sent again; the digest is never a foreign key); ComparisonAiPairQuestion one question of a job and the decision made of its answers. ComparisonAiSheetItem is one sheet pair of an AI description job. ComparisonSheetDescription is the content-keyed AI description of one result (or of one single page), keyed by content, prompt version and model. ComparisonSpecExtraction is the content-keyed reading of the whole specification of one version and ComparisonSpecComparison the comparison of the specifications of one transition. ComparisonReport is one PDF report of a series, ComparisonReportPart one transition of it and ComparisonReportArtifact one stored file of it. ComparisonLaunchEntry is one selected step of one document set in the launch queue of a project (the queue itself is one row per project and has no identity of its own). A report, a job, an answer and a description are never identified by a file name, a sheet number or a checksum; each is allocated independently and never parsed.",
+      "authority": "ADR-0025 decisions 2, 3, 15, 17, 19, 20; CMP-SEAL-C2",
+      "evidence": [
+        "CMP-SEAL-C2",
+        "0040_comparison_ai_reports"
       ]
     }
   ],

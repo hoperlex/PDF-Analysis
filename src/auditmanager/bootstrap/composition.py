@@ -64,7 +64,12 @@ from auditmanager.bootstrap.adapters import (
     RegistrationAdapter,
     ReleasesAdapter,
     ComparisonUploadAdapter,
+    ComparisonAiPairAdapter,
+    ComparisonAiSheetAdapter,
+    ComparisonLaunchQueueAdapter,
     ComparisonMatrixAdapter,
+    ComparisonReportAdapter,
+    ComparisonSpecificationAdapter,
     ComparisonOverviewAdapter,
     ComparisonPairTileAdapter,
     ComparisonSeriesAdapter,
@@ -508,6 +513,15 @@ def build_application(
         comparison_series=ComparisonSeriesAdapter(sessions, blob_store=store),
         comparison_pair_tiles=ComparisonPairTileAdapter(sessions, blob_store=store, tiles=tile_renderer),
         comparison_overview=ComparisonOverviewAdapter(sessions, modules=comparison_modules),
+        # `CMP-SEAL-C2`. The version comparison AI, specifications, launch queue and reports, sealed as stubs
+        # answering `503 dependency_unavailable` (`comparison_modules` while the versions module is off) until
+        # `CMP-VC-AIPAIR-01`, `CMP-VC-AISHEET-01`, `CMP-VC-SPEC-01`, `CMP-VC-QUEUE-01` and `CMP-VC-REPORT-01`
+        # replace the five adapters (plan section 4.0 rule 1).
+        comparison_ai_pairs=ComparisonAiPairAdapter(comparison_modules=comparison_modules),
+        comparison_ai_sheets=ComparisonAiSheetAdapter(comparison_modules=comparison_modules),
+        comparison_specifications=ComparisonSpecificationAdapter(comparison_modules=comparison_modules),
+        comparison_launch_queue=ComparisonLaunchQueueAdapter(comparison_modules=comparison_modules),
+        comparison_reports=ComparisonReportAdapter(comparison_modules=comparison_modules),
         execution=ExecutionAdapter(sessions, runs=run_adapter),
         # `W55A-SEAL-01` sealed them; `W55A-SEARCH-01` serves them. The norms reads and the
         # designation over the same session factory, every search under the operator's

@@ -236,6 +236,30 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "listComparisonSeries",
             "listComparisonSheetPairs",
             "streamComparisonPairTile",
+            # `CMP-SEAL-C2`: every start takes a closed consent body, a resume an optional consent, the listings
+            # a bound, the specification changes a ``kind``, the estimate of a series description ``only_failed``,
+            # the queue a closed list of items, the creation of a report a closed body, and the upload of a
+            # report's source a ``kind`` and a size bound.
+            "startComparisonAiPairCheck",
+            "resumeComparisonAiPairCheck",
+            "listComparisonAiPairHints",
+            "estimateComparisonAiSheetChanges",
+            "startComparisonAiSheetChanges",
+            "resumeComparisonAiSheetChanges",
+            "retryComparisonAiSheetChanges",
+            "startComparisonSheetDescription",
+            "listComparisonSheetDescriptionHistory",
+            "listComparisonReviewSheets",
+            "listComparisonSpecifications",
+            "startComparisonSpecification",
+            "listComparisonSpecificationChanges",
+            "enqueueComparisonLaunch",
+            "listComparisonReports",
+            "createComparisonReport",
+            "uploadComparisonReportSource",
+            "startComparisonReport",
+            "continueComparisonReport",
+            "prepareComparisonClientReport",
         }, declared_422
 
     def test_no_schema_property_declares_a_default(self) -> None:

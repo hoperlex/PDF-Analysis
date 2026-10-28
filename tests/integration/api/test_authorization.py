@@ -370,6 +370,57 @@ GUARDED = (
     ("streamComparisonPairTile", "GET", "/comparison-sheet-pairs/ctp_01M2545JSD15ETSNNV904X991K/tile"),
     ("getComparisonOverview", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/comparison-overview"),
     ("getComparisonQueueSummary", "GET", "/execution/comparison-queue"),
+    # `CMP-SEAL-C2`. The version comparison AI, specifications, launch queue and reports: behind the seam before any port answers.
+    ("estimateComparisonAiPairCheck", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H/comparison-ai-pair-check/estimate"),
+    ("getComparisonAiPairCheck", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H/comparison-ai-pair-check"),
+    ("startComparisonAiPairCheck", "POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H/comparison-ai-pair-check"),
+    ("pauseComparisonAiPairCheck", "POST", "/comparison-ai-pair-checks/cai_01M2545JSD15ETSNNV904X991K/pause"),
+    ("resumeComparisonAiPairCheck", "POST", "/comparison-ai-pair-checks/cai_01M2545JSD15ETSNNV904X991K/resume"),
+    ("cancelComparisonAiPairCheck", "POST", "/comparison-ai-pair-checks/cai_01M2545JSD15ETSNNV904X991K/cancellation"),
+    ("listComparisonAiPairHints", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H/comparison-ai-pair-hints"),
+    ("estimateComparisonAiSheetChanges", "GET", "/comparison-series/cser_01M2545JSD15ETSNNV904X991K/ai-sheet-changes/estimate"),
+    ("getComparisonAiSheetChanges", "GET", "/comparison-series/cser_01M2545JSD15ETSNNV904X991K/ai-sheet-changes"),
+    ("startComparisonAiSheetChanges", "POST", "/comparison-series/cser_01M2545JSD15ETSNNV904X991K/ai-sheet-changes"),
+    ("pauseComparisonAiSheetChanges", "POST", "/comparison-ai-sheet-jobs/cai_01M2545JSD15ETSNNV904X991K/pause"),
+    ("resumeComparisonAiSheetChanges", "POST", "/comparison-ai-sheet-jobs/cai_01M2545JSD15ETSNNV904X991K/resume"),
+    ("cancelComparisonAiSheetChanges", "POST", "/comparison-ai-sheet-jobs/cai_01M2545JSD15ETSNNV904X991K/cancellation"),
+    ("finishComparisonAiSheetChanges", "POST", "/comparison-ai-sheet-jobs/cai_01M2545JSD15ETSNNV904X991K/finish"),
+    ("dequeueComparisonAiSheetChanges", "POST", "/comparison-ai-sheet-jobs/cai_01M2545JSD15ETSNNV904X991K/dequeue"),
+    ("retryComparisonAiSheetChanges", "POST", "/comparison-ai-sheet-jobs/cai_01M2545JSD15ETSNNV904X991K/retry"),
+    ("getComparisonSheetDescription", "GET", "/comparison-sheet-pairs/ctp_01M2545JSD15ETSNNV904X991K/description"),
+    ("startComparisonSheetDescription", "POST", "/comparison-sheet-pairs/ctp_01M2545JSD15ETSNNV904X991K/description"),
+    ("listComparisonSheetDescriptionHistory", "GET", "/comparison-sheet-pairs/ctp_01M2545JSD15ETSNNV904X991K/description-history"),
+    ("estimateComparisonSheetDescription", "GET", "/comparison-sheet-pairs/ctp_01M2545JSD15ETSNNV904X991K/description/estimate"),
+    ("streamComparisonSheetDescriptionMd", "GET", "/comparison-sheet-pairs/ctp_01M2545JSD15ETSNNV904X991K/description/md"),
+    ("listComparisonReviewSheets", "GET", "/comparison-transitions/ctn_01M2545JSD15ETSNNV904X991K/review-sheets"),
+    ("getVersionPageSpecPositions", "GET", "/page-profiles/cpr_01M2545JSD15ETSNNV904X991K/spec-positions"),
+    ("getComparisonSheetPairSpecPositions", "GET", "/comparison-sheet-pairs/ctp_01M2545JSD15ETSNNV904X991K/spec-positions"),
+    ("listComparisonSpecifications", "GET", "/comparison-series/cser_01M2545JSD15ETSNNV904X991K/specifications"),
+    ("getComparisonSpecification", "GET", "/comparison-transitions/ctn_01M2545JSD15ETSNNV904X991K/specification"),
+    ("startComparisonSpecification", "POST", "/comparison-transitions/ctn_01M2545JSD15ETSNNV904X991K/specification"),
+    ("listComparisonSpecificationChanges", "GET", "/comparison-transitions/ctn_01M2545JSD15ETSNNV904X991K/specification/changes"),
+    ("estimateComparisonSpecification", "GET", "/comparison-transitions/ctn_01M2545JSD15ETSNNV904X991K/specification/estimate"),
+    ("cancelComparisonSpecification", "POST", "/comparison-ai-spec-jobs/cai_01M2545JSD15ETSNNV904X991K/cancellation"),
+    ("getComparisonLaunchQueue", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/comparison-launch-queue"),
+    ("enqueueComparisonLaunch", "POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/comparison-launch-queue/entries"),
+    ("pauseComparisonLaunchQueue", "POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/comparison-launch-queue/pause"),
+    ("resumeComparisonLaunchQueue", "POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/comparison-launch-queue/resume"),
+    ("clearComparisonLaunchQueue", "POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/comparison-launch-queue/clear"),
+    ("removeComparisonLaunchEntry", "POST", "/comparison-launch-entries/cle_01M2545JSD15ETSNNV904X991K/removal"),
+    ("getComparisonAiQueue", "GET", "/execution/comparison-ai-queue"),
+    ("streamComparisonSeriesSummary", "GET", "/comparison-series/cser_01M2545JSD15ETSNNV904X991K/summary-md"),
+    ("listComparisonReports", "GET", "/comparison-series/cser_01M2545JSD15ETSNNV904X991K/reports"),
+    ("createComparisonReport", "POST", "/comparison-series/cser_01M2545JSD15ETSNNV904X991K/reports"),
+    ("uploadComparisonReportSource", "POST", "/comparison-series/cser_01M2545JSD15ETSNNV904X991K/reports/upload"),
+    ("getComparisonReport", "GET", "/comparison-reports/crt_01M2545JSD15ETSNNV904X991K"),
+    ("startComparisonReport", "POST", "/comparison-reports/crt_01M2545JSD15ETSNNV904X991K/start"),
+    ("cancelComparisonReport", "POST", "/comparison-reports/crt_01M2545JSD15ETSNNV904X991K/cancellation"),
+    ("continueComparisonReport", "POST", "/comparison-reports/crt_01M2545JSD15ETSNNV904X991K/continuation"),
+    ("rebuildComparisonReportPdf", "POST", "/comparison-reports/crt_01M2545JSD15ETSNNV904X991K/pdf-rebuild"),
+    ("deleteComparisonReport", "POST", "/comparison-reports/crt_01M2545JSD15ETSNNV904X991K/deletion"),
+    ("prepareComparisonClientReport", "POST", "/comparison-reports/crt_01M2545JSD15ETSNNV904X991K/client-report"),
+    ("streamComparisonReportPdf", "GET", "/comparison-reports/crt_01M2545JSD15ETSNNV904X991K/pdf"),
+    ("streamComparisonReportSourceMd", "GET", "/comparison-reports/crt_01M2545JSD15ETSNNV904X991K/source-md"),
     # `EXEC-PULL-01`. The administrator's two token operations are behind the seam like the rest.
     (
         "issueRunnerToken", "POST",
@@ -954,11 +1005,19 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         # `appendDecision` does; whether they may is the role register's (expert) and the
         # command's own re-read.
         "comparison.py",
+        # `CMP-SEAL-C2`: every start of an AI job, a launch-queue entry, a report or a specification comparison records WHO
+        # consented or queued it, and every control WHO paused, resumed or cancelled; that only an expert may is the role
+        # register's and the command's own re-read of the role set. The reads take no subject.
+        "comparison_ai_pairs.py",
+        "comparison_ai_sheets.py",
+        "comparison_launch_queue.py",
         # `CMP-SEAL-C1`: a matrix edit records WHO made it and a series WHO started it; that only an
         # expert may is the role register's and the command's own re-read of the role set. The reads,
         # the pair tiles and the overview take no subject.
         "comparison_matrix.py",
+        "comparison_reports.py",
         "comparison_series.py",
+        "comparison_specification.py",
         # `CMP-SEAL-C0`: the comparison writes record WHO declared, confirmed, paused or cancelled an
         # upload batch and WHO appended an order revision (the actor of its rows); that only an expert
         # may is the role register's and the command's own re-read of the role set. The reads and the

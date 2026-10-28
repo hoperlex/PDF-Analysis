@@ -171,6 +171,12 @@ PORT_FOR_ARGUMENT = {
     "comparison_series": "ComparisonSeriesPort",
     "comparison_pair_tiles": "ComparisonPairTilePort",
     "comparison_overview": "ComparisonOverviewPort",
+    # `CMP-SEAL-C2`: the version comparison AI, specifications, launch queue and reports, five ports sealed as stubs.
+    "comparison_ai_pairs": "ComparisonAiPairPort",
+    "comparison_ai_sheets": "ComparisonAiSheetPort",
+    "comparison_specifications": "ComparisonSpecificationPort",
+    "comparison_launch_queue": "ComparisonLaunchQueuePort",
+    "comparison_reports": "ComparisonReportPort",
 }
 
 

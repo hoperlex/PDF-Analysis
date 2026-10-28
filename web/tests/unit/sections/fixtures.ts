@@ -95,7 +95,7 @@ export function apiError(
   details?: Record<string, string | number | boolean | null>,
 ): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.10.0',
+    contract_version: '1.11.0',
     error_code: code,
     message: 'A caller-safe sentence.',
     correlation_id: 'cid-section',

@@ -43,7 +43,7 @@ let rolesOf: Map<string, string[]>;
 let mintCounter = 0;
 
 const EPOCH_ENVELOPE = JSON.stringify({
-  contract_version: '1.10.0',
+  contract_version: '1.11.0',
   correlation_id: 'qa49-api-epoch-raised',
   error_code: 'authentication_required',
   message: 'The credential is not accepted.',
@@ -95,7 +95,7 @@ function respond(path: string, method: string, authorization: string | null, bod
   if (path.startsWith('/users') && login !== null && !(rolesOf.get(login) ?? []).includes('admin')) {
     return json(
       {
-        contract_version: '1.10.0',
+        contract_version: '1.11.0',
         correlation_id: 'qa49-api-403',
         error_code: 'permission_denied',
         message: 'Not permitted.',

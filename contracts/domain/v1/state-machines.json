@@ -1,9 +1,9 @@
 {
   "contract": "auditmanager.domain.state-machines",
-  "contract_version": "1.10.0",
-  "supersedes": "1.9.0",
-  "candidate_revision": 28,
-  "revision_note": "Candidate revision 28 by CMP-SEAL-C1: the effective matrix of a document set and its manual edits, the series of adjacent transitions with their sheet pairs and pair tiles, the overview of a project and the comparison queue read (eighteen operations), and the optional CreateComparisonUploadRequest.compare_after_preparation are an additive minor change of the API document, and family 1.10.0 seal. identifiers.json gains seven identity prefixes (cmx, cme, cak, cser, ctn, ctp, csp) for migration 0039; error-codes.json gains no code, only registered reasons under existing codes; state-machines.json gains no machine.",
+  "contract_version": "1.11.0",
+  "supersedes": "1.10.0",
+  "candidate_revision": 29,
+  "revision_note": "Candidate revision 29 by CMP-SEAL-C2: the AI check of the doubtful pairs of a document set, the AI description of changes, specifications, the launch queue and the MD summary and PDF reports (fifty operations), the four executor work kinds of the version comparison, and the additive members algorithm_changed, label_source and raster are an additive minor change of the API document, and family 1.11.0 seal. identifiers.json gains eleven identity prefixes (cai, cpa, cpq, csi, csd, cse, cscp, crt, crpt, cra, cle) for migration 0040; error-codes.json gains no code, only registered reasons under existing codes; state-machines.json gains no machine.",
   "status": "frozen",
   "frozen": true,
   "rules": [

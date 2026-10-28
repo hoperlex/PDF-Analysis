@@ -842,6 +842,13 @@ SEALED_STUB_QUERY_OPERATIONS: frozenset[str] = frozenset({
     # them below.
     "listComparisonMatrixEdits", "listComparisonAiLinks", "listComparisonSeries",
     "listComparisonSheetPairs", "streamComparisonPairTile",
+    # `CMP-SEAL-C2`: the six listings of wave C2 (``cursor`` and ``limit``, and the ``kind`` of a specification
+    # change), the estimate of the series description (``only_failed``) and the upload of a report's source (``kind``,
+    # ``reuse`` and ``source_name``) until `CMP-VC-AIPAIR-01`, `CMP-VC-AISHEET-01`, `CMP-VC-SPEC-01` and
+    # `CMP-VC-REPORT-01` give them bodies, empty this set and drive them below.
+    "listComparisonAiPairHints", "listComparisonSheetDescriptionHistory", "listComparisonReviewSheets",
+    "listComparisonSpecifications", "listComparisonSpecificationChanges", "listComparisonReports",
+    "estimateComparisonAiSheetChanges", "uploadComparisonReportSource",
 })
 
 #: The four norms listings, driven over the shipped ``NormsSearchAdapter`` on this suite's

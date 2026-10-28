@@ -1,13 +1,12 @@
-"""The effective matrix of a document set and its manual edits, sealed as stubs (`CMP-SEAL-C1`,
-ADR-0025 decisions 3, 13, 14 and 16).
+"""The effective matrix of a document set and its manual edits (`CMP-SEAL-C1` sealed them, `CMP-MATRIX-01` serves
+them; ADR-0025 decisions 3, 13, 14 and 16).
 
 ``getComparisonMatrix`` reads the effective matrix (the algorithm, then accepted AI links, then
 manual edits), ``prepareComparisonMatrix`` queues the profiles that are missing or failed and the
 build, ``applyComparisonMatrixEdits`` applies a drafted batch against the revision the caller saw,
 ``undoComparisonMatrixEdit`` reverses the latest applied edit, ``listComparisonMatrixEdits`` is the
-edit history and ``listComparisonAiLinks`` the accepted AI links (written in wave C2). Reads are any
-one role; every write is an expert's act (`R-60`) and keyed. All six answer ``503
-dependency_unavailable`` until `CMP-MATRIX-01` wires the port.
+edit history and ``listComparisonAiLinks`` the accepted AI links (written by the AI check of pairs, wave C2). Reads
+are any one role; every write is an expert's act (`R-60`) and keyed.
 """
 
 from __future__ import annotations
