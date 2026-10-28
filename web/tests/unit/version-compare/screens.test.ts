@@ -98,7 +98,15 @@ describe('«Проекты и этапы»', () => {
     expect(projects()).toContain('<span class="');
     const all = projects();
     expect(all).toMatch(/data-overview-filter="all"[^>]*><span[^>]*>13</);
-    expect(all).toMatch(/data-overview-filter="waiting"[^>]*><span[^>]*>5</);
+    expect(all).toMatch(/data-overview-filter="waiting"[^>]*><span[^>]*>6</);
+    expect(all).toMatch(/data-overview-filter="running"[^>]*><span[^>]*>3</);
+    expect(all).toMatch(/data-overview-filter="failed"[^>]*><span[^>]*>1</);
+    expect(all).toMatch(/data-overview-filter="ready"[^>]*><span[^>]*>3</);
+    // a search that lets every set through (the letter «к» is in every code and in the one title) recomputes the numbers the server sent
+    const everything = projects({ view: { ...INITIAL_VIEW, query: 'к' } });
+    for (const [filter, count] of [['all', 13], ['waiting', 6], ['running', 3], ['failed', 1], ['ready', 3]] as const) {
+      expect(everything, filter).toMatch(new RegExp(`data-overview-filter="${filter}"[^>]*><span[^>]*>${count}<`));
+    }
     const searched = projects({ view: { ...INITIAL_VIEW, query: '133/23-ГК-ЭМ1' } });
     expect(searched).toMatch(/data-overview-filter="all"[^>]*><span[^>]*>2</);
     expect(searched).toMatch(/data-overview-filter="waiting"[^>]*><span[^>]*>1</);

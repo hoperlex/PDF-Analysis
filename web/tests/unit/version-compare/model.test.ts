@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import type { ComparisonMatrix, ComparisonSheetPair, ComparisonTransitionSummary } from '@/shared/api';
+import type { ComparisonMatrix, ComparisonOverviewSet, ComparisonSheetPair, ComparisonTransitionSummary } from '@/shared/api';
 import { ApiError } from '@/shared/api';
 import {
   ALREADY_THERE,
@@ -175,19 +175,94 @@ describe('the words of the series (CMP-SERIES-01 section 10)', () => {
   });
 });
 
-describe('the groups, the search and the sorts of the overview', () => {
+describe('the group of a row as the screen reads it', () => {
   const sets = overview().sets;
 
-  it('groups a set by its steps: an error, then a running step, then a proposed next step, else ready', () => {
+  it('groups a set by the step it proposes and that step\'s state, as the server counts', () => {
     const byState = (state: string) => sets.find((set) => set.steps[1]?.state === state);
     expect(groupOf(byState('failed') as never)).toBe('failed');
-    expect(groupOf(byState('running') as never)).toBe('running');
     expect(groupOf(byState('queued') as never)).toBe('running');
-    expect(groupOf({ ...(byState('done') as never as object), next_step: 'series' } as never)).toBe('waiting');
-    const done = { ...(byState('done') as object) } as { next_step?: string };
-    delete done.next_step;
-    expect(groupOf(done as never)).toBe('ready');
+    expect(groupOf(byState('stale') as never)).toBe('waiting');
+    expect(groupOf(byState('done') as never)).toBe('ready');
+    // a failed step the set does not propose is not the row's colour, and a running step it does not propose is not "Идут"
+    const mixed = { ...(byState('done') as object), next_step: 'series' } as never as ComparisonOverviewSet;
+    const withStates = (states: Record<string, string>): ComparisonOverviewSet =>
+      ({ ...mixed, steps: mixed.steps.map((entry) => ({ ...entry, state: states[entry.step] ?? entry.state })) }) as never;
+    expect(groupOf(withStates({ profile: 'failed', matrix: 'running', series: 'stale' }))).toBe('waiting');
+    expect(groupOf(withStates({ profile: 'done', series: 'failed' }))).toBe('waiting');
+    expect(groupOf(withStates({ series: 'running' }))).toBe('running');
   });
+});
+
+describe('the group of a row and the counters are the server\'s rule (CMP-VC-OVERVIEW-01 section 6.3)', () => {
+  const STEP_IDS = ['upload', 'profile', 'matrix', 'ai_pairs', 'series', 'ai_changes', 'report'] as const;
+  const STATES = [
+    'not_started', 'queued', 'running', 'pausing', 'paused', 'interrupted', 'done', 'partial', 'stale', 'attention', 'failed', 'blocked',
+    'not_applicable',
+  ] as const;
+  type Group = 'waiting' | 'running' | 'failed' | 'ready';
+
+  /** The group by the state of the PROPOSED step, written out for the upload, the profile and the matrix (a failure there is red). */
+  const RED_STEPS: Readonly<Record<(typeof STATES)[number], Group>> = {
+    not_started: 'waiting', queued: 'running', running: 'running', pausing: 'running', paused: 'waiting', interrupted: 'waiting',
+    done: 'waiting', partial: 'waiting', stale: 'waiting', attention: 'waiting', failed: 'failed', blocked: 'waiting', not_applicable: 'waiting',
+  };
+  /** The same for every other step: a failed series is «Ждут действия», as in the original (`OV:321-322`). */
+  const OTHER_STEPS: Readonly<Record<(typeof STATES)[number], Group>> = { ...RED_STEPS, failed: 'waiting' };
+
+  /** A set whose proposed step has `state` and whose other six steps all have `others`: they must not matter. */
+  function setProposing(next: (typeof STEP_IDS)[number] | undefined, state: (typeof STATES)[number], others: (typeof STATES)[number], n: number): ComparisonOverviewSet {
+    return {
+      document_uid: uid('doc', n),
+      version_count: 3,
+      ...(next === undefined ? {} : { next_step: next }),
+      steps: STEP_IDS.map((step) => ({ step, state: step === next ? state : others })),
+    } as ComparisonOverviewSet;
+  }
+
+  it('puts every proposed step in every state in the group the server counts it in, whatever the other steps say', () => {
+    let n = 0;
+    for (const next of STEP_IDS) {
+      const table = next === 'upload' || next === 'profile' || next === 'matrix' ? RED_STEPS : OTHER_STEPS;
+      for (const state of STATES) {
+        for (const others of ['failed', 'running', 'done'] as const) {
+          n += 1;
+          expect(groupOf(setProposing(next, state, others, n)), `${next}/${state} among ${others}`).toBe(table[state]);
+        }
+      }
+    }
+    expect(n).toBe(7 * 13 * 3);
+  });
+
+  it('puts a set that proposes nothing in «Готовы», whatever its steps say', () => {
+    for (const state of STATES) {
+      expect(groupOf(setProposing(undefined, state, state, 1)), state).toBe('ready');
+    }
+  });
+
+  it('recomputes the counters over every state combination exactly as the server counts them', () => {
+    const rows: ComparisonOverviewSet[] = [];
+    for (const next of STEP_IDS) for (const state of STATES) rows.push(setProposing(next, state, 'failed', rows.length + 1));
+    for (const state of STATES) rows.push(setProposing(undefined, state, 'running', rows.length + 1));
+    // By hand: each of the 3 red-when-failed steps has 3 running states, 1 failed and 9 waiting; each of the other 4 has
+    // 3 running, 0 failed and 10 waiting; the 13 rows with nothing proposed are ready. 91 + 13 = 104.
+    const server = { all: 104, waiting: 3 * 9 + 4 * 10, running: 7 * 3, failed: 3, ready: 13 };
+    expect(server).toEqual({ all: 104, waiting: 67, running: 21, failed: 3, ready: 13 });
+    expect(countsOf(rows)).toEqual(server);
+    for (const group of ['waiting', 'running', 'failed', 'ready'] as const) {
+      expect(visibleSets(rows, { query: '', mark: '', filter: group, sort: { key: 'code', direction: 'asc' } }).length, group).toBe(server[group]);
+    }
+  });
+
+  it('recomputes the fixture overview\'s counters to the ones its read carries', () => {
+    const read = overview();
+    expect(countsOf(read.sets)).toEqual(read.counters);
+    expect(read.counters).toEqual({ all: 13, waiting: 6, running: 3, failed: 1, ready: 3 });
+  });
+});
+
+describe('the search, the mark and the sorts of the overview', () => {
+  const sets = overview().sets;
 
   it('takes the mark from the tail of the designation', () => {
     expect(markOf('133/23-ГК-ЭМ2')).toBe('ЭМ');

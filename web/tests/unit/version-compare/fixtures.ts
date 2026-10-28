@@ -225,22 +225,45 @@ function setOf(n: number, designation: string | undefined, state: ComparisonStep
 }
 
 /**
+ * The step each set of {@link overview} proposes, by the state its steps all have (`next_step` of the contract). Every
+ * step id is proposed once or more (the language guard needs the seven markers), and the proposed step has the state of
+ * the whole set, so the group of a row (OVERVIEW section 6.3) is read off this table:
+ *
+ *   waiting: not_started, paused, interrupted, partial, stale, attention (6) · running: queued, running, pausing (3)
+ *   failed: failed, whose proposed step is the profile (1) · ready: done, blocked, not_applicable (3)
+ */
+const NEXT_STEP_BY_STATE: Readonly<Partial<Record<ComparisonStepState, ComparisonStepId>>> = {
+  not_started: 'upload',
+  queued: 'profile',
+  running: 'matrix',
+  pausing: 'ai_pairs',
+  paused: 'series',
+  interrupted: 'ai_changes',
+  partial: 'report',
+  stale: 'series',
+  attention: 'matrix',
+  failed: 'profile',
+};
+
+/**
  * An overview holding a set in each of the thirteen step states (the same state in all seven steps of the set), so every state word
- * of the table and every next-step chip is on a screen, and the totals and counters the server would send.
+ * of the table and every next-step chip is on a screen, and the totals and counters the server would send: the counters are
+ * written out for the table above, not computed from the rows.
  */
 export function overview(over: Partial<ComparisonOverview> = {}): ComparisonOverview {
-  const sets = COMPARISON_STEP_STATE_VALUES.map((state, index) =>
-    setOf(index + 1, index === 12 ? undefined : `133/23-ГК-${['ЭМ', 'ТХ', 'АР', 'ОВ', 'ВК'][index % 5]}${index + 1}`, state, {
-      ...(index % 2 === 0 ? { next_step: STEP_IDS[index / 2] as ComparisonStepId } : {}),
-      ...(index === 12 ? { title: 'Комплект без шифра' } : {}),
-    }),
-  );
+  const sets = COMPARISON_STEP_STATE_VALUES.map((state, index) => {
+    const next = NEXT_STEP_BY_STATE[state];
+    return setOf(index + 1, index === 12 ? undefined : `133/23-ГК-${['ЭМ', 'ТХ', 'АР', 'ОВ', 'ВК'][index % 5]}${index + 1}`, state, {
+      ...(next === undefined ? {} : { next_step: next }),
+      ...(index === 12 ? { title: 'Комплект без шифра', version_count: 1 } : {}),
+    });
+  });
   return {
     project_uid: PROJECT_UID,
     generated_at: NOW,
     sets,
     totals: { versions: 120, transitions: 90 },
-    counters: { all: 13, waiting: 5, running: 3, failed: 1, ready: 4 },
+    counters: { all: 13, waiting: 6, running: 3, failed: 1, ready: 3 },
     pending_uploads: [{ upload_id: UPLOAD_ID, state: 'uploading', declared_files: 12, sets_done: 1, sets_total: 4 }],
     ...over,
   };

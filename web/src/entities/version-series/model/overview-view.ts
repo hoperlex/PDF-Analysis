@@ -4,8 +4,10 @@
  * `:310-319`, `:269`).
  *
  * The server sends one entry per document set with its seven steps and, beside them, the counters. The
- * screen filters and sorts what it has, so the group of a set is decided here, once, by a rule a test
- * pins; it is the rule the counters are assumed to follow (the report lists it for the integrator).
+ * counters cover every set of the project; the screen narrows the rows with the search and the mark and
+ * counts the rest again, so the group of a set is decided here by the rule the server counts with
+ * (`docs/program/CMP-VC-OVERVIEW-01.md` section 6.3, `rules.group_of`): a test over every combination of a
+ * proposed step and its state pins the two to each other.
  */
 
 import type { ComparisonOverviewCounters, ComparisonOverviewSet, ComparisonStepId, ComparisonStepState } from '@/shared/api';
@@ -27,15 +29,20 @@ function stateOf(set: ComparisonOverviewSet, step: ComparisonStepId): Comparison
   return set.steps.find((entry) => entry.step === step)?.state;
 }
 
+/** The steps whose failure turns the row red: a failed series is the reader's to finish, not an error of the row. */
+const RED_WHEN_FAILED: ReadonlySet<ComparisonStepId> = new Set<ComparisonStepId>(['upload', 'profile', 'matrix']);
+
 /**
- * The group of a set: an error in any step is «Ошибки»; else a step that is being computed is «Идут»;
- * else a proposed next step is «Ждут действия»; else «Готовы».
+ * The group of a set (`CMP-VC-OVERVIEW-01` section 6.3, the server's own rule): nothing proposed is «Готовы»; the step
+ * the chip proposes being computed is «Идут»; that step failed is «Ошибки» when it is the upload, the profile or the
+ * matrix; anything else is «Ждут действия» (a failed series among them, as in the original).
  */
 export function groupOf(set: ComparisonOverviewSet): OverviewGroup {
-  if (set.steps.some((entry) => entry.state === 'failed')) return 'failed';
-  if (set.steps.some((entry) => isRunningState(entry.state))) return 'running';
-  if (set.next_step !== undefined) return 'waiting';
-  return 'ready';
+  if (set.next_step === undefined) return 'ready';
+  const state = stateOf(set, set.next_step);
+  if (state !== undefined && isRunningState(state)) return 'running';
+  if (state === 'failed' && RED_WHEN_FAILED.has(set.next_step)) return 'failed';
+  return 'waiting';
 }
 
 /** The «шифр» a row is known by: the designation, else the title, else nothing a reader could use. */
