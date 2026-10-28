@@ -20,6 +20,7 @@ from starlette.testclient import TestClient
 from auditmanager.api.app import create_app, create_asgi_app
 from auditmanager.api.security import API_TOKEN_VARIABLE, OPERATION_ROLES
 from auditmanager.comparison.public import COMPARISON_MODULES_ENV
+from tests.integration.composition.test_comparison_ai_stub_operations import REQUESTS as WAVE_C2_REQUESTS
 from tests.integration.composition.test_router_answers import DEPLOYMENT_SECRET, static_token
 from tests.support.expected_facts import FACTS
 
@@ -118,7 +119,8 @@ def test_the_requests_cover_exactly_the_eighteen_operations_the_contract_added()
     sealed = {op["operationId"] for item in document["paths"].values() for m, op in item.items()
               if m in ("get", "post", "put", "patch", "delete") and "comparison" in op.get("tags", [])} | {
         "getComparisonQueueSummary"}
-    assert set(REQUESTS) == sealed - first_wave and len(REQUESTS) == 18
+    # `CMP-SEAL-C2` tags its fifty operations `comparison` too (all but the AI queue); they are the next wave's.
+    assert set(REQUESTS) == sealed - first_wave - set(WAVE_C2_REQUESTS) and len(REQUESTS) == 18
     assert {triple[2] for triple in FACTS.operations} >= set(REQUESTS)
 
 

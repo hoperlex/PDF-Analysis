@@ -8,8 +8,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.10.0 (OpenAPI 3.1.0)
- *   sha256 7c4c95a4aef812e1ff8ec8445a46cbc4b83a655a88ca15ff888f0dbde5b98238
+ *   AuditManager PC-01 API 1.11.0 (OpenAPI 3.1.0)
+ *   sha256 44c565cf7bc8dd3211758ea0be03a7379af6608fd7964582019fde57a5191162
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -34,8 +34,16 @@ import type {
   ArchiveExecutorConnectionResult,
   ArchiveUserInput,
   ArchiveUserResult,
+  CancelComparisonAiPairCheckInput,
+  CancelComparisonAiPairCheckResult,
+  CancelComparisonAiSheetChangesInput,
+  CancelComparisonAiSheetChangesResult,
+  CancelComparisonReportInput,
+  CancelComparisonReportResult,
   CancelComparisonSeriesInput,
   CancelComparisonSeriesResult,
+  CancelComparisonSpecificationInput,
+  CancelComparisonSpecificationResult,
   CancelComparisonUploadInput,
   CancelComparisonUploadResult,
   CancelRunInput,
@@ -48,18 +56,24 @@ import type {
   ClaimExecutorTaskResult,
   ClassifyDocumentVersionInput,
   ClassifyDocumentVersionResult,
+  ClearComparisonLaunchQueueInput,
+  ClearComparisonLaunchQueueResult,
   CompareDocumentVersionsInput,
   CompareDocumentVersionsResult,
   CompleteComparisonUploadFileInput,
   CompleteComparisonUploadFileResult,
   ConfirmComparisonUploadSetInput,
   ConfirmComparisonUploadSetResult,
+  ContinueComparisonReportInput,
+  ContinueComparisonReportResult,
   CorrectVersionClassificationInput,
   CorrectVersionClassificationResult,
   CreateAnalysisPresetInput,
   CreateAnalysisPresetResult,
   CreateAssignmentInput,
   CreateAssignmentResult,
+  CreateComparisonReportInput,
+  CreateComparisonReportResult,
   CreateComparisonUploadInput,
   CreateComparisonUploadResult,
   CreateExecutorConnectionInput,
@@ -68,6 +82,20 @@ import type {
   CreateProjectResult,
   DecideOptimisationProposalInput,
   DecideOptimisationProposalResult,
+  DeleteComparisonReportInput,
+  DeleteComparisonReportResult,
+  DequeueComparisonAiSheetChangesInput,
+  DequeueComparisonAiSheetChangesResult,
+  EnqueueComparisonLaunchInput,
+  EnqueueComparisonLaunchResult,
+  EstimateComparisonAiPairCheckInput,
+  EstimateComparisonAiPairCheckResult,
+  EstimateComparisonAiSheetChangesInput,
+  EstimateComparisonAiSheetChangesResult,
+  EstimateComparisonSheetDescriptionInput,
+  EstimateComparisonSheetDescriptionResult,
+  EstimateComparisonSpecificationInput,
+  EstimateComparisonSpecificationResult,
   ExcludeComparisonUploadSetInput,
   ExcludeComparisonUploadSetResult,
   ExportOptimisationProposalsCsvInput,
@@ -80,6 +108,8 @@ import type {
   ExtendExecutorTaskClaimResult,
   FailExecutorTaskInput,
   FailExecutorTaskResult,
+  FinishComparisonAiSheetChangesInput,
+  FinishComparisonAiSheetChangesResult,
   FinishComparisonSeriesInput,
   FinishComparisonSeriesResult,
   GenerateComparisonSummaryInput,
@@ -94,16 +124,32 @@ import type {
   GetArV3BetaPackStatusResult,
   GetAssignmentInput,
   GetAssignmentResult,
+  GetComparisonAiPairCheckInput,
+  GetComparisonAiPairCheckResult,
+  GetComparisonAiQueueInput,
+  GetComparisonAiQueueResult,
+  GetComparisonAiSheetChangesInput,
+  GetComparisonAiSheetChangesResult,
+  GetComparisonLaunchQueueInput,
+  GetComparisonLaunchQueueResult,
   GetComparisonMatrixInput,
   GetComparisonMatrixResult,
   GetComparisonOverviewInput,
   GetComparisonOverviewResult,
   GetComparisonQueueSummaryInput,
   GetComparisonQueueSummaryResult,
+  GetComparisonReportInput,
+  GetComparisonReportResult,
   GetComparisonSeriesInput,
   GetComparisonSeriesResult,
+  GetComparisonSheetDescriptionInput,
+  GetComparisonSheetDescriptionResult,
   GetComparisonSheetPairInput,
   GetComparisonSheetPairResult,
+  GetComparisonSheetPairSpecPositionsInput,
+  GetComparisonSheetPairSpecPositionsResult,
+  GetComparisonSpecificationInput,
+  GetComparisonSpecificationResult,
   GetComparisonUploadInput,
   GetComparisonUploadResult,
   GetComparisonUploadProposalInput,
@@ -142,6 +188,8 @@ import type {
   GetVersionBlocksResult,
   GetVersionPageProfileInput,
   GetVersionPageProfileResult,
+  GetVersionPageSpecPositionsInput,
+  GetVersionPageSpecPositionsResult,
   GetVersionSectionReviewInput,
   GetVersionSectionReviewResult,
   IssueRunnerTokenInput,
@@ -156,12 +204,24 @@ import type {
   ListAssignmentsResult,
   ListComparisonAiLinksInput,
   ListComparisonAiLinksResult,
+  ListComparisonAiPairHintsInput,
+  ListComparisonAiPairHintsResult,
   ListComparisonMatrixEditsInput,
   ListComparisonMatrixEditsResult,
+  ListComparisonReportsInput,
+  ListComparisonReportsResult,
+  ListComparisonReviewSheetsInput,
+  ListComparisonReviewSheetsResult,
   ListComparisonSeriesInput,
   ListComparisonSeriesResult,
+  ListComparisonSheetDescriptionHistoryInput,
+  ListComparisonSheetDescriptionHistoryResult,
   ListComparisonSheetPairsInput,
   ListComparisonSheetPairsResult,
+  ListComparisonSpecificationChangesInput,
+  ListComparisonSpecificationChangesResult,
+  ListComparisonSpecificationsInput,
+  ListComparisonSpecificationsResult,
   ListComparisonUploadsInput,
   ListComparisonUploadsResult,
   ListComparisonVersionOrdersInput,
@@ -220,10 +280,18 @@ import type {
   ListWorkersResult,
   MarkReleaseNotesReadInput,
   MarkReleaseNotesReadResult,
+  PauseComparisonAiPairCheckInput,
+  PauseComparisonAiPairCheckResult,
+  PauseComparisonAiSheetChangesInput,
+  PauseComparisonAiSheetChangesResult,
+  PauseComparisonLaunchQueueInput,
+  PauseComparisonLaunchQueueResult,
   PauseComparisonSeriesInput,
   PauseComparisonSeriesResult,
   PauseComparisonUploadInput,
   PauseComparisonUploadResult,
+  PrepareComparisonClientReportInput,
+  PrepareComparisonClientReportResult,
   PrepareComparisonMatrixInput,
   PrepareComparisonMatrixResult,
   PurgeUserInput,
@@ -232,18 +300,30 @@ import type {
   ReadRegistrationStatusResult,
   ReauditRunInput,
   ReauditRunResult,
+  RebuildComparisonReportPdfInput,
+  RebuildComparisonReportPdfResult,
   RejectRegistrationInput,
   RejectRegistrationResult,
+  RemoveComparisonLaunchEntryInput,
+  RemoveComparisonLaunchEntryResult,
   RequestExecutorProbeInput,
   RequestExecutorProbeResult,
   ResetUserPasswordInput,
   ResetUserPasswordResult,
   RestoreUserInput,
   RestoreUserResult,
+  ResumeComparisonAiPairCheckInput,
+  ResumeComparisonAiPairCheckResult,
+  ResumeComparisonAiSheetChangesInput,
+  ResumeComparisonAiSheetChangesResult,
+  ResumeComparisonLaunchQueueInput,
+  ResumeComparisonLaunchQueueResult,
   ResumeComparisonSeriesInput,
   ResumeComparisonSeriesResult,
   ResumeComparisonUploadInput,
   ResumeComparisonUploadResult,
+  RetryComparisonAiSheetChangesInput,
+  RetryComparisonAiSheetChangesResult,
   RetryComparisonUploadSetInput,
   RetryComparisonUploadSetResult,
   ReviseAnalysisPresetInput,
@@ -272,14 +352,32 @@ import type {
   SetWorkerIntakeResult,
   StartArV3BetaGroupInput,
   StartArV3BetaGroupResult,
+  StartComparisonAiPairCheckInput,
+  StartComparisonAiPairCheckResult,
+  StartComparisonAiSheetChangesInput,
+  StartComparisonAiSheetChangesResult,
+  StartComparisonReportInput,
+  StartComparisonReportResult,
   StartComparisonSeriesInput,
   StartComparisonSeriesResult,
+  StartComparisonSheetDescriptionInput,
+  StartComparisonSheetDescriptionResult,
+  StartComparisonSpecificationInput,
+  StartComparisonSpecificationResult,
   StartOptimisationPassInput,
   StartOptimisationPassResult,
   StartRunInput,
   StartRunResult,
   StreamComparisonPairTileInput,
   StreamComparisonPairTileResult,
+  StreamComparisonReportPdfInput,
+  StreamComparisonReportPdfResult,
+  StreamComparisonReportSourceMdInput,
+  StreamComparisonReportSourceMdResult,
+  StreamComparisonSeriesSummaryInput,
+  StreamComparisonSeriesSummaryResult,
+  StreamComparisonSheetDescriptionMdInput,
+  StreamComparisonSheetDescriptionMdResult,
   StreamDocumentVersionContentInput,
   StreamDocumentVersionContentResult,
   StreamNormDocumentContentInput,
@@ -304,6 +402,8 @@ import type {
   UpdateMyProfileResult,
   UpdateUserInput,
   UpdateUserResult,
+  UploadComparisonReportSourceInput,
+  UploadComparisonReportSourceResult,
   UploadComparisonUploadPartInput,
   UploadComparisonUploadPartResult,
   UploadDocumentInput,
@@ -414,6 +514,42 @@ export function archiveUser(
 }
 
 /**
+ * Cancel an AI check of pairs.
+ *
+ * `POST /comparison-ai-pair-checks/{comparison_ai_job_id}/cancellation` - a write; carries a required Idempotency-Key.
+ */
+export function cancelComparisonAiPairCheck(
+  input: CancelComparisonAiPairCheckInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CancelComparisonAiPairCheckResult>> {
+  return request<CancelComparisonAiPairCheckResult>(OPERATIONS.cancelComparisonAiPairCheck, input, options);
+}
+
+/**
+ * Cancel an AI description of changes.
+ *
+ * `POST /comparison-ai-sheet-jobs/{comparison_ai_job_id}/cancellation` - a write; carries a required Idempotency-Key.
+ */
+export function cancelComparisonAiSheetChanges(
+  input: CancelComparisonAiSheetChangesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CancelComparisonAiSheetChangesResult>> {
+  return request<CancelComparisonAiSheetChangesResult>(OPERATIONS.cancelComparisonAiSheetChanges, input, options);
+}
+
+/**
+ * Cancel a report.
+ *
+ * `POST /comparison-reports/{comparison_report_id}/cancellation` - a write; carries a required Idempotency-Key.
+ */
+export function cancelComparisonReport(
+  input: CancelComparisonReportInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CancelComparisonReportResult>> {
+  return request<CancelComparisonReportResult>(OPERATIONS.cancelComparisonReport, input, options);
+}
+
+/**
  * Cancel a series.
  *
  * `POST /comparison-series/{comparison_series_id}/cancellation` - a write; carries a required Idempotency-Key.
@@ -423,6 +559,18 @@ export function cancelComparisonSeries(
   options?: RequestOptions,
 ): Promise<ApiResponse<CancelComparisonSeriesResult>> {
   return request<CancelComparisonSeriesResult>(OPERATIONS.cancelComparisonSeries, input, options);
+}
+
+/**
+ * Cancel a specification comparison.
+ *
+ * `POST /comparison-ai-spec-jobs/{comparison_ai_job_id}/cancellation` - a write; carries a required Idempotency-Key.
+ */
+export function cancelComparisonSpecification(
+  input: CancelComparisonSpecificationInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CancelComparisonSpecificationResult>> {
+  return request<CancelComparisonSpecificationResult>(OPERATIONS.cancelComparisonSpecification, input, options);
 }
 
 /**
@@ -498,6 +646,18 @@ export function classifyDocumentVersion(
 }
 
 /**
+ * Clear the launch queue.
+ *
+ * `POST /projects/{project_uid}/comparison-launch-queue/clear` - a write; carries a required Idempotency-Key.
+ */
+export function clearComparisonLaunchQueue(
+  input: ClearComparisonLaunchQueueInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ClearComparisonLaunchQueueResult>> {
+  return request<ClearComparisonLaunchQueueResult>(OPERATIONS.clearComparisonLaunchQueue, input, options);
+}
+
+/**
  * Compare Document Versions
  *
  * `GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison`.
@@ -534,6 +694,18 @@ export function confirmComparisonUploadSet(
 }
 
 /**
+ * Continue a report.
+ *
+ * `POST /comparison-reports/{comparison_report_id}/continuation` - a write; carries a required Idempotency-Key.
+ */
+export function continueComparisonReport(
+  input: ContinueComparisonReportInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ContinueComparisonReportResult>> {
+  return request<ContinueComparisonReportResult>(OPERATIONS.continueComparisonReport, input, options);
+}
+
+/**
  * Correct Version Classification
  *
  * `POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification/corrections`.
@@ -567,6 +739,18 @@ export function createAssignment(
   options?: RequestOptions,
 ): Promise<ApiResponse<CreateAssignmentResult>> {
   return request<CreateAssignmentResult>(OPERATIONS.createAssignment, input, options);
+}
+
+/**
+ * Make a report draft from the summary of a series.
+ *
+ * `POST /comparison-series/{comparison_series_id}/reports` - a write; carries a required Idempotency-Key.
+ */
+export function createComparisonReport(
+  input: CreateComparisonReportInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CreateComparisonReportResult>> {
+  return request<CreateComparisonReportResult>(OPERATIONS.createComparisonReport, input, options);
 }
 
 /**
@@ -615,6 +799,90 @@ export function decideOptimisationProposal(
   options?: RequestOptions,
 ): Promise<ApiResponse<DecideOptimisationProposalResult>> {
   return request<DecideOptimisationProposalResult>(OPERATIONS.decideOptimisationProposal, input, options);
+}
+
+/**
+ * Delete a report.
+ *
+ * `POST /comparison-reports/{comparison_report_id}/deletion` - a write; carries a required Idempotency-Key.
+ */
+export function deleteComparisonReport(
+  input: DeleteComparisonReportInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<DeleteComparisonReportResult>> {
+  return request<DeleteComparisonReportResult>(OPERATIONS.deleteComparisonReport, input, options);
+}
+
+/**
+ * Take an AI description of changes out of the AI queue.
+ *
+ * `POST /comparison-ai-sheet-jobs/{comparison_ai_job_id}/dequeue` - a write; carries a required Idempotency-Key.
+ */
+export function dequeueComparisonAiSheetChanges(
+  input: DequeueComparisonAiSheetChangesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<DequeueComparisonAiSheetChangesResult>> {
+  return request<DequeueComparisonAiSheetChangesResult>(OPERATIONS.dequeueComparisonAiSheetChanges, input, options);
+}
+
+/**
+ * Queue document sets and steps.
+ *
+ * `POST /projects/{project_uid}/comparison-launch-queue/entries` - a write; carries a required Idempotency-Key.
+ */
+export function enqueueComparisonLaunch(
+  input: EnqueueComparisonLaunchInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<EnqueueComparisonLaunchResult>> {
+  return request<EnqueueComparisonLaunchResult>(OPERATIONS.enqueueComparisonLaunch, input, options);
+}
+
+/**
+ * Estimate the AI check of the doubtful pairs of a document set.
+ *
+ * `GET /projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-check/estimate`.
+ */
+export function estimateComparisonAiPairCheck(
+  input: EstimateComparisonAiPairCheckInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<EstimateComparisonAiPairCheckResult>> {
+  return request<EstimateComparisonAiPairCheckResult>(OPERATIONS.estimateComparisonAiPairCheck, input, options);
+}
+
+/**
+ * Estimate the AI description of changes of a series.
+ *
+ * `GET /comparison-series/{comparison_series_id}/ai-sheet-changes/estimate`.
+ */
+export function estimateComparisonAiSheetChanges(
+  input: EstimateComparisonAiSheetChangesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<EstimateComparisonAiSheetChangesResult>> {
+  return request<EstimateComparisonAiSheetChangesResult>(OPERATIONS.estimateComparisonAiSheetChanges, input, options);
+}
+
+/**
+ * Estimate the AI description of one sheet.
+ *
+ * `GET /comparison-sheet-pairs/{comparison_sheet_pair_id}/description/estimate`.
+ */
+export function estimateComparisonSheetDescription(
+  input: EstimateComparisonSheetDescriptionInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<EstimateComparisonSheetDescriptionResult>> {
+  return request<EstimateComparisonSheetDescriptionResult>(OPERATIONS.estimateComparisonSheetDescription, input, options);
+}
+
+/**
+ * Estimate the comparison of the whole specifications of a transition.
+ *
+ * `GET /comparison-transitions/{comparison_transition_id}/specification/estimate`.
+ */
+export function estimateComparisonSpecification(
+  input: EstimateComparisonSpecificationInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<EstimateComparisonSpecificationResult>> {
+  return request<EstimateComparisonSpecificationResult>(OPERATIONS.estimateComparisonSpecification, input, options);
 }
 
 /**
@@ -687,6 +955,18 @@ export function failExecutorTask(
   options?: RequestOptions,
 ): Promise<ApiResponse<FailExecutorTaskResult>> {
   return request<FailExecutorTaskResult>(OPERATIONS.failExecutorTask, input, options);
+}
+
+/**
+ * Finish an interrupted AI description of changes.
+ *
+ * `POST /comparison-ai-sheet-jobs/{comparison_ai_job_id}/finish` - a write; carries a required Idempotency-Key.
+ */
+export function finishComparisonAiSheetChanges(
+  input: FinishComparisonAiSheetChangesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<FinishComparisonAiSheetChangesResult>> {
+  return request<FinishComparisonAiSheetChangesResult>(OPERATIONS.finishComparisonAiSheetChanges, input, options);
 }
 
 /**
@@ -774,6 +1054,54 @@ export function getAssignment(
 }
 
 /**
+ * Read the latest AI check of a document set.
+ *
+ * `GET /projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-check`.
+ */
+export function getComparisonAiPairCheck(
+  input: GetComparisonAiPairCheckInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetComparisonAiPairCheckResult>> {
+  return request<GetComparisonAiPairCheckResult>(OPERATIONS.getComparisonAiPairCheck, input, options);
+}
+
+/**
+ * Read the AI queue of the installation.
+ *
+ * `GET /execution/comparison-ai-queue`.
+ */
+export function getComparisonAiQueue(
+  input: GetComparisonAiQueueInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetComparisonAiQueueResult>> {
+  return request<GetComparisonAiQueueResult>(OPERATIONS.getComparisonAiQueue, input, options);
+}
+
+/**
+ * Read the AI description of changes of a series.
+ *
+ * `GET /comparison-series/{comparison_series_id}/ai-sheet-changes`.
+ */
+export function getComparisonAiSheetChanges(
+  input: GetComparisonAiSheetChangesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetComparisonAiSheetChangesResult>> {
+  return request<GetComparisonAiSheetChangesResult>(OPERATIONS.getComparisonAiSheetChanges, input, options);
+}
+
+/**
+ * Read the launch queue of a project.
+ *
+ * `GET /projects/{project_uid}/comparison-launch-queue`.
+ */
+export function getComparisonLaunchQueue(
+  input: GetComparisonLaunchQueueInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetComparisonLaunchQueueResult>> {
+  return request<GetComparisonLaunchQueueResult>(OPERATIONS.getComparisonLaunchQueue, input, options);
+}
+
+/**
  * Read the effective matrix of a document set.
  *
  * `GET /projects/{project_uid}/documents/{document_uid}/comparison-matrix`.
@@ -810,6 +1138,18 @@ export function getComparisonQueueSummary(
 }
 
 /**
+ * Read a report.
+ *
+ * `GET /comparison-reports/{comparison_report_id}`.
+ */
+export function getComparisonReport(
+  input: GetComparisonReportInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetComparisonReportResult>> {
+  return request<GetComparisonReportResult>(OPERATIONS.getComparisonReport, input, options);
+}
+
+/**
  * Read a series with its transitions.
  *
  * `GET /comparison-series/{comparison_series_id}`.
@@ -822,6 +1162,18 @@ export function getComparisonSeries(
 }
 
 /**
+ * Read the AI description of a sheet pair.
+ *
+ * `GET /comparison-sheet-pairs/{comparison_sheet_pair_id}/description`.
+ */
+export function getComparisonSheetDescription(
+  input: GetComparisonSheetDescriptionInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetComparisonSheetDescriptionResult>> {
+  return request<GetComparisonSheetDescriptionResult>(OPERATIONS.getComparisonSheetDescription, input, options);
+}
+
+/**
  * Read one sheet pair with its raw deterministic evidence.
  *
  * `GET /comparison-sheet-pairs/{comparison_sheet_pair_id}`.
@@ -831,6 +1183,30 @@ export function getComparisonSheetPair(
   options?: RequestOptions,
 ): Promise<ApiResponse<GetComparisonSheetPairResult>> {
   return request<GetComparisonSheetPairResult>(OPERATIONS.getComparisonSheetPair, input, options);
+}
+
+/**
+ * Read the positions that changed on a sheet pair.
+ *
+ * `GET /comparison-sheet-pairs/{comparison_sheet_pair_id}/spec-positions`.
+ */
+export function getComparisonSheetPairSpecPositions(
+  input: GetComparisonSheetPairSpecPositionsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetComparisonSheetPairSpecPositionsResult>> {
+  return request<GetComparisonSheetPairSpecPositionsResult>(OPERATIONS.getComparisonSheetPairSpecPositions, input, options);
+}
+
+/**
+ * Read the specification comparison of a transition.
+ *
+ * `GET /comparison-transitions/{comparison_transition_id}/specification`.
+ */
+export function getComparisonSpecification(
+  input: GetComparisonSpecificationInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetComparisonSpecificationResult>> {
+  return request<GetComparisonSpecificationResult>(OPERATIONS.getComparisonSpecification, input, options);
 }
 
 /**
@@ -1062,6 +1438,18 @@ export function getVersionPageProfile(
 }
 
 /**
+ * Read the positions of a specification page.
+ *
+ * `GET /page-profiles/{comparison_page_profile_id}/spec-positions`.
+ */
+export function getVersionPageSpecPositions(
+  input: GetVersionPageSpecPositionsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetVersionPageSpecPositionsResult>> {
+  return request<GetVersionPageSpecPositionsResult>(OPERATIONS.getVersionPageSpecPositions, input, options);
+}
+
+/**
  * Get Version Section Review
  *
  * `GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review`.
@@ -1146,6 +1534,18 @@ export function listComparisonAiLinks(
 }
 
 /**
+ * List the answers and hints of the AI check of pairs.
+ *
+ * `GET /projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-hints`.
+ */
+export function listComparisonAiPairHints(
+  input: ListComparisonAiPairHintsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListComparisonAiPairHintsResult>> {
+  return request<ListComparisonAiPairHintsResult>(OPERATIONS.listComparisonAiPairHints, input, options);
+}
+
+/**
  * List the manual edit history of a document set.
  *
  * `GET /projects/{project_uid}/documents/{document_uid}/comparison-matrix/edits`.
@@ -1155,6 +1555,30 @@ export function listComparisonMatrixEdits(
   options?: RequestOptions,
 ): Promise<ApiResponse<ListComparisonMatrixEditsResult>> {
   return request<ListComparisonMatrixEditsResult>(OPERATIONS.listComparisonMatrixEdits, input, options);
+}
+
+/**
+ * List the reports of a series.
+ *
+ * `GET /comparison-series/{comparison_series_id}/reports`.
+ */
+export function listComparisonReports(
+  input: ListComparisonReportsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListComparisonReportsResult>> {
+  return request<ListComparisonReportsResult>(OPERATIONS.listComparisonReports, input, options);
+}
+
+/**
+ * List the sheets of a transition to review.
+ *
+ * `GET /comparison-transitions/{comparison_transition_id}/review-sheets`.
+ */
+export function listComparisonReviewSheets(
+  input: ListComparisonReviewSheetsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListComparisonReviewSheetsResult>> {
+  return request<ListComparisonReviewSheetsResult>(OPERATIONS.listComparisonReviewSheets, input, options);
 }
 
 /**
@@ -1170,6 +1594,18 @@ export function listComparisonSeries(
 }
 
 /**
+ * List the earlier descriptions of a sheet pair.
+ *
+ * `GET /comparison-sheet-pairs/{comparison_sheet_pair_id}/description-history`.
+ */
+export function listComparisonSheetDescriptionHistory(
+  input: ListComparisonSheetDescriptionHistoryInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListComparisonSheetDescriptionHistoryResult>> {
+  return request<ListComparisonSheetDescriptionHistoryResult>(OPERATIONS.listComparisonSheetDescriptionHistory, input, options);
+}
+
+/**
  * List the sheet pairs of a transition.
  *
  * `GET /comparison-transitions/{comparison_transition_id}/sheet-pairs`.
@@ -1179,6 +1615,30 @@ export function listComparisonSheetPairs(
   options?: RequestOptions,
 ): Promise<ApiResponse<ListComparisonSheetPairsResult>> {
   return request<ListComparisonSheetPairsResult>(OPERATIONS.listComparisonSheetPairs, input, options);
+}
+
+/**
+ * List the changes of a transition's specification.
+ *
+ * `GET /comparison-transitions/{comparison_transition_id}/specification/changes`.
+ */
+export function listComparisonSpecificationChanges(
+  input: ListComparisonSpecificationChangesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListComparisonSpecificationChangesResult>> {
+  return request<ListComparisonSpecificationChangesResult>(OPERATIONS.listComparisonSpecificationChanges, input, options);
+}
+
+/**
+ * List the specification comparisons of a series.
+ *
+ * `GET /comparison-series/{comparison_series_id}/specifications`.
+ */
+export function listComparisonSpecifications(
+  input: ListComparisonSpecificationsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListComparisonSpecificationsResult>> {
+  return request<ListComparisonSpecificationsResult>(OPERATIONS.listComparisonSpecifications, input, options);
 }
 
 /**
@@ -1530,6 +1990,42 @@ export function markReleaseNotesRead(
 }
 
 /**
+ * Pause an AI check of pairs.
+ *
+ * `POST /comparison-ai-pair-checks/{comparison_ai_job_id}/pause` - a write; carries a required Idempotency-Key.
+ */
+export function pauseComparisonAiPairCheck(
+  input: PauseComparisonAiPairCheckInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<PauseComparisonAiPairCheckResult>> {
+  return request<PauseComparisonAiPairCheckResult>(OPERATIONS.pauseComparisonAiPairCheck, input, options);
+}
+
+/**
+ * Pause an AI description of changes.
+ *
+ * `POST /comparison-ai-sheet-jobs/{comparison_ai_job_id}/pause` - a write; carries a required Idempotency-Key.
+ */
+export function pauseComparisonAiSheetChanges(
+  input: PauseComparisonAiSheetChangesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<PauseComparisonAiSheetChangesResult>> {
+  return request<PauseComparisonAiSheetChangesResult>(OPERATIONS.pauseComparisonAiSheetChanges, input, options);
+}
+
+/**
+ * Pause the launch queue.
+ *
+ * `POST /projects/{project_uid}/comparison-launch-queue/pause` - a write; carries a required Idempotency-Key.
+ */
+export function pauseComparisonLaunchQueue(
+  input: PauseComparisonLaunchQueueInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<PauseComparisonLaunchQueueResult>> {
+  return request<PauseComparisonLaunchQueueResult>(OPERATIONS.pauseComparisonLaunchQueue, input, options);
+}
+
+/**
  * Pause a series.
  *
  * `POST /comparison-series/{comparison_series_id}/pause` - a write; carries a required Idempotency-Key.
@@ -1551,6 +2047,18 @@ export function pauseComparisonUpload(
   options?: RequestOptions,
 ): Promise<ApiResponse<PauseComparisonUploadResult>> {
   return request<PauseComparisonUploadResult>(OPERATIONS.pauseComparisonUpload, input, options);
+}
+
+/**
+ * Prepare the client report from an analytic report.
+ *
+ * `POST /comparison-reports/{comparison_report_id}/client-report` - a write; carries a required Idempotency-Key.
+ */
+export function prepareComparisonClientReport(
+  input: PrepareComparisonClientReportInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<PrepareComparisonClientReportResult>> {
+  return request<PrepareComparisonClientReportResult>(OPERATIONS.prepareComparisonClientReport, input, options);
 }
 
 /**
@@ -1602,6 +2110,18 @@ export function reauditRun(
 }
 
 /**
+ * Write the PDF of a report again.
+ *
+ * `POST /comparison-reports/{comparison_report_id}/pdf-rebuild` - a write; carries a required Idempotency-Key.
+ */
+export function rebuildComparisonReportPdf(
+  input: RebuildComparisonReportPdfInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<RebuildComparisonReportPdfResult>> {
+  return request<RebuildComparisonReportPdfResult>(OPERATIONS.rebuildComparisonReportPdf, input, options);
+}
+
+/**
  * Reject a registration request with a reason.
  *
  * `POST /registrations/{request_id}/reject`.
@@ -1611,6 +2131,18 @@ export function rejectRegistration(
   options?: RequestOptions,
 ): Promise<ApiResponse<RejectRegistrationResult>> {
   return request<RejectRegistrationResult>(OPERATIONS.rejectRegistration, input, options);
+}
+
+/**
+ * Remove one entry from the launch queue.
+ *
+ * `POST /comparison-launch-entries/{comparison_launch_entry_id}/removal` - a write; carries a required Idempotency-Key.
+ */
+export function removeComparisonLaunchEntry(
+  input: RemoveComparisonLaunchEntryInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<RemoveComparisonLaunchEntryResult>> {
+  return request<RemoveComparisonLaunchEntryResult>(OPERATIONS.removeComparisonLaunchEntry, input, options);
 }
 
 /**
@@ -1650,6 +2182,42 @@ export function restoreUser(
 }
 
 /**
+ * Resume an AI check of pairs.
+ *
+ * `POST /comparison-ai-pair-checks/{comparison_ai_job_id}/resume` - a write; carries a required Idempotency-Key.
+ */
+export function resumeComparisonAiPairCheck(
+  input: ResumeComparisonAiPairCheckInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ResumeComparisonAiPairCheckResult>> {
+  return request<ResumeComparisonAiPairCheckResult>(OPERATIONS.resumeComparisonAiPairCheck, input, options);
+}
+
+/**
+ * Resume an AI description of changes.
+ *
+ * `POST /comparison-ai-sheet-jobs/{comparison_ai_job_id}/resume` - a write; carries a required Idempotency-Key.
+ */
+export function resumeComparisonAiSheetChanges(
+  input: ResumeComparisonAiSheetChangesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ResumeComparisonAiSheetChangesResult>> {
+  return request<ResumeComparisonAiSheetChangesResult>(OPERATIONS.resumeComparisonAiSheetChanges, input, options);
+}
+
+/**
+ * Resume the launch queue.
+ *
+ * `POST /projects/{project_uid}/comparison-launch-queue/resume` - a write; carries a required Idempotency-Key.
+ */
+export function resumeComparisonLaunchQueue(
+  input: ResumeComparisonLaunchQueueInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ResumeComparisonLaunchQueueResult>> {
+  return request<ResumeComparisonLaunchQueueResult>(OPERATIONS.resumeComparisonLaunchQueue, input, options);
+}
+
+/**
  * Resume a paused series.
  *
  * `POST /comparison-series/{comparison_series_id}/resume` - a write; carries a required Idempotency-Key.
@@ -1671,6 +2239,18 @@ export function resumeComparisonUpload(
   options?: RequestOptions,
 ): Promise<ApiResponse<ResumeComparisonUploadResult>> {
   return request<ResumeComparisonUploadResult>(OPERATIONS.resumeComparisonUpload, input, options);
+}
+
+/**
+ * Describe the sheets that failed again.
+ *
+ * `POST /comparison-ai-sheet-jobs/{comparison_ai_job_id}/retry` - a write; carries a required Idempotency-Key.
+ */
+export function retryComparisonAiSheetChanges(
+  input: RetryComparisonAiSheetChangesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<RetryComparisonAiSheetChangesResult>> {
+  return request<RetryComparisonAiSheetChangesResult>(OPERATIONS.retryComparisonAiSheetChanges, input, options);
 }
 
 /**
@@ -1842,6 +2422,42 @@ export function startArV3BetaGroup(
 }
 
 /**
+ * Start the AI check of the doubtful pairs of a document set.
+ *
+ * `POST /projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-check` - a write; carries a required Idempotency-Key.
+ */
+export function startComparisonAiPairCheck(
+  input: StartComparisonAiPairCheckInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StartComparisonAiPairCheckResult>> {
+  return request<StartComparisonAiPairCheckResult>(OPERATIONS.startComparisonAiPairCheck, input, options);
+}
+
+/**
+ * Start the AI description of changes of a series.
+ *
+ * `POST /comparison-series/{comparison_series_id}/ai-sheet-changes` - a write; carries a required Idempotency-Key.
+ */
+export function startComparisonAiSheetChanges(
+  input: StartComparisonAiSheetChangesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StartComparisonAiSheetChangesResult>> {
+  return request<StartComparisonAiSheetChangesResult>(OPERATIONS.startComparisonAiSheetChanges, input, options);
+}
+
+/**
+ * Start a report draft.
+ *
+ * `POST /comparison-reports/{comparison_report_id}/start` - a write; carries a required Idempotency-Key.
+ */
+export function startComparisonReport(
+  input: StartComparisonReportInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StartComparisonReportResult>> {
+  return request<StartComparisonReportResult>(OPERATIONS.startComparisonReport, input, options);
+}
+
+/**
  * Start the comparison of every adjacent pair of versions.
  *
  * `POST /projects/{project_uid}/documents/{document_uid}/comparison-series` - a write; carries a required Idempotency-Key.
@@ -1851,6 +2467,30 @@ export function startComparisonSeries(
   options?: RequestOptions,
 ): Promise<ApiResponse<StartComparisonSeriesResult>> {
   return request<StartComparisonSeriesResult>(OPERATIONS.startComparisonSeries, input, options);
+}
+
+/**
+ * Describe one sheet with the AI.
+ *
+ * `POST /comparison-sheet-pairs/{comparison_sheet_pair_id}/description` - a write; carries a required Idempotency-Key.
+ */
+export function startComparisonSheetDescription(
+  input: StartComparisonSheetDescriptionInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StartComparisonSheetDescriptionResult>> {
+  return request<StartComparisonSheetDescriptionResult>(OPERATIONS.startComparisonSheetDescription, input, options);
+}
+
+/**
+ * Start the comparison of the whole specifications of a transition.
+ *
+ * `POST /comparison-transitions/{comparison_transition_id}/specification` - a write; carries a required Idempotency-Key.
+ */
+export function startComparisonSpecification(
+  input: StartComparisonSpecificationInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StartComparisonSpecificationResult>> {
+  return request<StartComparisonSpecificationResult>(OPERATIONS.startComparisonSpecification, input, options);
 }
 
 /**
@@ -1887,6 +2527,54 @@ export function streamComparisonPairTile(
   options?: RequestOptions,
 ): Promise<ApiResponse<StreamComparisonPairTileResult>> {
   return request<StreamComparisonPairTileResult>(OPERATIONS.streamComparisonPairTile, input, options);
+}
+
+/**
+ * Download the PDF of a report.
+ *
+ * `GET /comparison-reports/{comparison_report_id}/pdf`.
+ */
+export function streamComparisonReportPdf(
+  input: StreamComparisonReportPdfInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StreamComparisonReportPdfResult>> {
+  return request<StreamComparisonReportPdfResult>(OPERATIONS.streamComparisonReportPdf, input, options);
+}
+
+/**
+ * Download the MD a report was built from.
+ *
+ * `GET /comparison-reports/{comparison_report_id}/source-md`.
+ */
+export function streamComparisonReportSourceMd(
+  input: StreamComparisonReportSourceMdInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StreamComparisonReportSourceMdResult>> {
+  return request<StreamComparisonReportSourceMdResult>(OPERATIONS.streamComparisonReportSourceMd, input, options);
+}
+
+/**
+ * Download the MD summary of a series.
+ *
+ * `GET /comparison-series/{comparison_series_id}/summary-md`.
+ */
+export function streamComparisonSeriesSummary(
+  input: StreamComparisonSeriesSummaryInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StreamComparisonSeriesSummaryResult>> {
+  return request<StreamComparisonSeriesSummaryResult>(OPERATIONS.streamComparisonSeriesSummary, input, options);
+}
+
+/**
+ * Download the AI description of a sheet as Markdown.
+ *
+ * `GET /comparison-sheet-pairs/{comparison_sheet_pair_id}/description/md`.
+ */
+export function streamComparisonSheetDescriptionMd(
+  input: StreamComparisonSheetDescriptionMdInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StreamComparisonSheetDescriptionMdResult>> {
+  return request<StreamComparisonSheetDescriptionMdResult>(OPERATIONS.streamComparisonSheetDescriptionMd, input, options);
 }
 
 /**
@@ -2034,6 +2722,18 @@ export function updateUser(
 }
 
 /**
+ * Make a report draft from an uploaded MD file.
+ *
+ * `POST /comparison-series/{comparison_series_id}/reports/upload` - a write; carries a required Idempotency-Key.
+ */
+export function uploadComparisonReportSource(
+  input: UploadComparisonReportSourceInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<UploadComparisonReportSourceResult>> {
+  return request<UploadComparisonReportSourceResult>(OPERATIONS.uploadComparisonReportSource, input, options);
+}
+
+/**
  * Stage one part of one file of an upload batch.
  *
  * `PUT /comparison-uploads/{comparison_upload_id}/files/{comparison_upload_file_id}/parts` - a write; carries a required Idempotency-Key.
@@ -2106,29 +2806,44 @@ export const apiClient = {
   archiveAnalysisPreset,
   archiveExecutorConnection,
   archiveUser,
+  cancelComparisonAiPairCheck,
+  cancelComparisonAiSheetChanges,
+  cancelComparisonReport,
   cancelComparisonSeries,
+  cancelComparisonSpecification,
   cancelComparisonUpload,
   cancelRun,
   carryOverDecision,
   changePassword,
   claimExecutorTask,
   classifyDocumentVersion,
+  clearComparisonLaunchQueue,
   compareDocumentVersions,
   completeComparisonUploadFile,
   confirmComparisonUploadSet,
+  continueComparisonReport,
   correctVersionClassification,
   createAnalysisPreset,
   createAssignment,
+  createComparisonReport,
   createComparisonUpload,
   createExecutorConnection,
   createProject,
   decideOptimisationProposal,
+  deleteComparisonReport,
+  dequeueComparisonAiSheetChanges,
+  enqueueComparisonLaunch,
+  estimateComparisonAiPairCheck,
+  estimateComparisonAiSheetChanges,
+  estimateComparisonSheetDescription,
+  estimateComparisonSpecification,
   excludeComparisonUploadSet,
   exportOptimisationProposalsCsv,
   exportRunCsv,
   exportRunXlsx,
   extendExecutorTaskClaim,
   failExecutorTask,
+  finishComparisonAiSheetChanges,
   finishComparisonSeries,
   generateComparisonSummary,
   generateExecutorSshKey,
@@ -2136,11 +2851,19 @@ export const apiClient = {
   getArV3BetaGroupReview,
   getArV3BetaPackStatus,
   getAssignment,
+  getComparisonAiPairCheck,
+  getComparisonAiQueue,
+  getComparisonAiSheetChanges,
+  getComparisonLaunchQueue,
   getComparisonMatrix,
   getComparisonOverview,
   getComparisonQueueSummary,
+  getComparisonReport,
   getComparisonSeries,
+  getComparisonSheetDescription,
   getComparisonSheetPair,
+  getComparisonSheetPairSpecPositions,
+  getComparisonSpecification,
   getComparisonUpload,
   getComparisonUploadProposal,
   getDashboardSummary,
@@ -2160,6 +2883,7 @@ export const apiClient = {
   getUser,
   getVersionBlocks,
   getVersionPageProfile,
+  getVersionPageSpecPositions,
   getVersionSectionReview,
   issueRunnerToken,
   issueToken,
@@ -2167,9 +2891,15 @@ export const apiClient = {
   listAnalysisProfiles,
   listAssignments,
   listComparisonAiLinks,
+  listComparisonAiPairHints,
   listComparisonMatrixEdits,
+  listComparisonReports,
+  listComparisonReviewSheets,
   listComparisonSeries,
+  listComparisonSheetDescriptionHistory,
   listComparisonSheetPairs,
+  listComparisonSpecificationChanges,
+  listComparisonSpecifications,
   listComparisonUploads,
   listComparisonVersionOrders,
   listDecisionHistory,
@@ -2199,18 +2929,28 @@ export const apiClient = {
   listVersions,
   listWorkers,
   markReleaseNotesRead,
+  pauseComparisonAiPairCheck,
+  pauseComparisonAiSheetChanges,
+  pauseComparisonLaunchQueue,
   pauseComparisonSeries,
   pauseComparisonUpload,
+  prepareComparisonClientReport,
   prepareComparisonMatrix,
   purgeUser,
   readRegistrationStatus,
   reauditRun,
+  rebuildComparisonReportPdf,
   rejectRegistration,
+  removeComparisonLaunchEntry,
   requestExecutorProbe,
   resetUserPassword,
   restoreUser,
+  resumeComparisonAiPairCheck,
+  resumeComparisonAiSheetChanges,
+  resumeComparisonLaunchQueue,
   resumeComparisonSeries,
   resumeComparisonUpload,
+  retryComparisonAiSheetChanges,
   retryComparisonUploadSet,
   reviseAnalysisPreset,
   reviseExecutorConnection,
@@ -2225,10 +2965,19 @@ export const apiClient = {
   setProjectVendorList,
   setWorkerIntake,
   startArV3BetaGroup,
+  startComparisonAiPairCheck,
+  startComparisonAiSheetChanges,
+  startComparisonReport,
   startComparisonSeries,
+  startComparisonSheetDescription,
+  startComparisonSpecification,
   startOptimisationPass,
   startRun,
   streamComparisonPairTile,
+  streamComparisonReportPdf,
+  streamComparisonReportSourceMd,
+  streamComparisonSeriesSummary,
+  streamComparisonSheetDescriptionMd,
   streamDocumentVersionContent,
   streamNormDocumentContent,
   streamVersionPagePreview,
@@ -2241,6 +2990,7 @@ export const apiClient = {
   undoComparisonMatrixEdit,
   updateMyProfile,
   updateUser,
+  uploadComparisonReportSource,
   uploadComparisonUploadPart,
   uploadDocument,
   uploadDocumentVersion,

@@ -48,7 +48,7 @@ describe('the six-check start is drawn only on an installed, valid pack', () => 
     [
       'a failed read',
       (client) => seedError(client, PACK, new ApiError(503, {
-        contract_version: '1.10.0', error_code: 'dependency_unavailable', message: 'm',
+        contract_version: '1.11.0', error_code: 'dependency_unavailable', message: 'm',
         correlation_id: 'c', retryable: true,
       }, 'c')),
       false,

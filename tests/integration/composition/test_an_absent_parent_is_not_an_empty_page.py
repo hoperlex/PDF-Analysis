@@ -110,7 +110,13 @@ _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 # `CMP-SEAL-C1` adds nine: the matrix, its edit history and the accepted AI links, the series of a document set and
 # one series, the sheet pairs of a transition and one sheet pair with its tile, and the overview of a project (the
 # queue read names no parent). Fifty-three.
-EXPECTED_ADDRESSED = 53
+# `CMP-SEAL-C2` adds twenty-two: the AI check of a document set (its estimate, the latest check, the hints), the AI
+# description of a series (the estimate and the progress), of a sheet pair (the description, its history, its estimate and
+# its MD) and the sheets to review of a transition, the positions of a specification page and of a sheet pair, the
+# specifications of a series and the specification of a transition (with its changes and estimate), the launch queue of a
+# project, and the MD summary, the reports and one report of a series with its PDF and source. The installation's AI queue
+# names no parent. Seventy-five.
+EXPECTED_ADDRESSED = 75
 
 #: Addressed ``GET`` operations with a required query parameter, and a well-formed value for
 #: it naming nothing. Without it the bare path would be ``422`` for the missing parameter --
@@ -134,8 +140,9 @@ REQUIRED_QUERY: dict[str, str] = {
 # With all three, the unaddressed half is twenty.
 # `ANALYSIS-PRESETS-01`'s ``listAnalysisPresets`` is a collection like ``listExecutorConnections``
 # (every preset, no parent), so the unaddressed half is twenty-one. `CMP-SEAL-C1` adds the comparison queue read
-# (``getComparisonQueueSummary``, the installation's queue, no parent): twenty-two.
-EXPECTED_UNADDRESSED = 22
+# (``getComparisonQueueSummary``, the installation's queue, no parent): twenty-two. `CMP-SEAL-C2` adds the installation's
+# AI queue (``getComparisonAiQueue``, no parent): twenty-three.
+EXPECTED_UNADDRESSED = 23
 
 #: Unaddressed `GET` operations that are not collections and are exempt from
 #: ``test_a_collection_that_names_no_parent_answers_a_page``'s page-shape assertion.
@@ -195,7 +202,9 @@ EXECUTION_COLLECTIONS = frozenset({"listExecutionQueue", "listExecutionJournal"}
 #: state and kind); it answers `503 dependency_unavailable` until `CMP-VC-OVERVIEW-01` serves it, and then joins
 #: the aggregate operations above, which are objects and not pages.
 #: `CMP-VC-OVERVIEW-01` serves it and empties this set: it joins :data:`COMPARISON_QUEUE_OPERATIONS`.
-SEALED_STUB_COLLECTIONS: frozenset[str] = frozenset()
+#: `CMP-SEAL-C2`: ``getComparisonAiQueue`` names no parent and is not a page (the AI jobs of the installation with their
+#: counts); it answers `503 dependency_unavailable` until `CMP-VC-QUEUE-01` serves it, and then it leaves this set.
+SEALED_STUB_COLLECTIONS: frozenset[str] = frozenset({"getComparisonAiQueue"})
 
 #: `CMP-VC-OVERVIEW-01`. ``getComparisonQueueSummary`` is an aggregate of the whole installation, not a page and not a
 #: dashboard: the module set, the pause, the items by state and by kind. Exempt from the page check, and checked for its
@@ -231,7 +240,34 @@ COMPARISON_QUEUE_OPERATIONS = frozenset({"getComparisonQueueSummary"})
 #: (:data:`EXPECTED_ADDRESSED`) does not change: they are addressed whether stubbed or served.
 #: `CMP-VC-OVERVIEW-01` serves ``getComparisonOverview`` and empties this set: an absent project is `404 not_found`,
 #: never an empty overview.
-SEALED_STUB_ADDRESSED: frozenset[str] = frozenset()
+#: `CMP-SEAL-C2` fills it with the twenty-two reads of the version comparison AI, specifications, launch queue and reports
+#: that name a parent; `CMP-VC-AIPAIR-01`, `CMP-VC-AISHEET-01`, `CMP-VC-SPEC-01`, `CMP-VC-QUEUE-01` and `CMP-VC-REPORT-01`
+#: remove the ones they wire, and each then joins the `404` sweep (an absent project, document, series, transition,
+#: sheet pair, page profile or report is `404 not_found`).
+SEALED_STUB_ADDRESSED: frozenset[str] = frozenset({
+    "estimateComparisonAiPairCheck",
+    "getComparisonAiPairCheck",
+    "listComparisonAiPairHints",
+    "estimateComparisonAiSheetChanges",
+    "getComparisonAiSheetChanges",
+    "getComparisonSheetDescription",
+    "listComparisonSheetDescriptionHistory",
+    "estimateComparisonSheetDescription",
+    "streamComparisonSheetDescriptionMd",
+    "listComparisonReviewSheets",
+    "getVersionPageSpecPositions",
+    "getComparisonSheetPairSpecPositions",
+    "listComparisonSpecifications",
+    "getComparisonSpecification",
+    "listComparisonSpecificationChanges",
+    "estimateComparisonSpecification",
+    "getComparisonLaunchQueue",
+    "streamComparisonSeriesSummary",
+    "listComparisonReports",
+    "getComparisonReport",
+    "streamComparisonReportPdf",
+    "streamComparisonReportSourceMd",
+})
 
 #: `W55A-SEAL-01`. ``searchNorms`` addresses no parent but is not a listing of everything:
 #: its ``q`` is required, so the bare path is ``422 validation_failed`` on ``q`` and never a

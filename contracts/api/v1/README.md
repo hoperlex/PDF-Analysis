@@ -33,7 +33,7 @@ items wave C1 left: `ComparisonMatrixStaleReason` gains `algorithm_changed`, `Co
 `label_source`, `ComparisonPairPage` gains `raster`, and `startComparisonSeries` states
 `comparison_matrix_stale` and `comparison_versions_few`. The version rule
 (`docs/program/VERSIONING_AND_FREEZE_POLICY.md`) reads this as a **minor**. The surface is 176 paths, 198
-operations and 518 schemas (131, 148 and 432 under `1.10.0`). No error code is added. Migration
+operations and 517 schemas (131, 148 and 432 under `1.10.0`). No error code is added. Migration
 `0040_comparison_ai_reports` adds twelve tables and widens `ck_executor_route_work_kind`.
 
 ## Version `1.10.0`

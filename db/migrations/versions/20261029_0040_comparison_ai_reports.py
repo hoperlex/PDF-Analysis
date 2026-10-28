@@ -82,13 +82,13 @@ JOB_STATES: tuple[str, ...] = ("queued", "running", "paused", "completed", "fail
 JOB_LIVE: tuple[str, ...] = ("queued", "running", "paused")
 PAUSE_REASONS: tuple[str, ...] = ("user", "quota", "auth", "overrun", "route_changed", "module_off")
 PROVIDER_MODES: tuple[str, ...] = ("live", "recorded")
-QUESTION_KINDS: tuple[str, ...] = ("review", "medium")
-ANSWER_KINDS: tuple[str, ...] = ("review", "medium", "reverse")
+QUESTION_KINDS: tuple[str, ...] = ("no_pair", "medium_pair")
+ANSWER_KINDS: tuple[str, ...] = ("no_pair", "medium_pair", "reverse_check")
 CONFIDENCES: tuple[str, ...] = ("high", "medium", "low")
 QUESTION_STATES: tuple[str, ...] = ("queued", "answered", "failed", "cancelled")
 DECISIONS: tuple[str, ...] = (
-    "accepted", "hint_table", "hint_confidence", "hint_taken", "hint_shared", "hint_reverse", "none",
-    "mismatch", "failed", "medium_confirm", "medium_weak", "medium_other", "medium_none",
+    "link_accepted", "hint_table", "hint_confidence", "hint_taken", "hint_shared", "hint_reverse", "none",
+    "answer_mismatch", "failed", "medium_confirm", "medium_weak", "medium_other", "medium_none",
 )
 ITEM_STATES: tuple[str, ...] = ("queued", "running", "done", "failed", "cancelled", "skipped")
 DESCRIPTION_STATES: tuple[str, ...] = (
@@ -98,15 +98,17 @@ DESCRIPTION_SOURCES: tuple[str, ...] = ("sheet", "whole_specification")
 EXTRACTION_STATES: tuple[str, ...] = ("complete", "partial")
 SPEC_SOURCES: tuple[str, ...] = ("positions", "whole")
 SPEC_STATES: tuple[str, ...] = ("queued", "running", "completed", "incomplete", "failed", "cancelled")
-SPEC_PHASES: tuple[str, ...] = ("preparation", "comparison", "done")
+SPEC_PHASES: tuple[str, ...] = ("preparing", "comparing", "done")
 REPORT_KINDS: tuple[str, ...] = ("client", "analytic")
 REPORT_SOURCES: tuple[str, ...] = ("series_summary", "uploaded_md")
 REPORT_STATES: tuple[str, ...] = (
     "draft", "queued", "running", "paused", "completed", "partial", "failed", "cancelled",
 )
-REPORT_STAGES: tuple[str, ...] = ("intake", "analysis", "verification", "composition", "writing", "pdf")
+REPORT_STAGES: tuple[str, ...] = (
+    "intake", "transition_analysis", "verification", "composition", "client_writing", "pdf_writing",
+)
 UNIT_MARKS: tuple[str, ...] = ("done", "running", "failed", "pending")
-ARTIFACT_KINDS: tuple[str, ...] = ("pdf", "source_md", "report_json")
+ARTIFACT_KINDS: tuple[str, ...] = ("report_pdf", "source_md", "report_text")
 LAUNCH_STEPS: tuple[str, ...] = ("profile", "matrix", "ai_pairs", "series", "ai_changes", "report")
 LAUNCH_STATES: tuple[str, ...] = (
     "waiting", "running", "needs_consent", "done", "skipped", "failed",
@@ -847,7 +849,7 @@ def _pair_check() -> None:
                 (state = 'failed') = (failure_reason IS NOT NULL)
                 AND (failure_reason IS NULL OR failure_reason ~ '^[a-z][a-z0-9_]{{2,63}}$')),
             CONSTRAINT ck_comparison_ai_pair_question_link CHECK (
-                comparison_ai_link_id IS NULL OR decision = 'accepted'),
+                comparison_ai_link_id IS NULL OR decision = 'link_accepted'),
             CONSTRAINT ck_comparison_ai_pair_question_reverse CHECK (
                 reverse_answer_id IS NULL OR answer_id IS NOT NULL)
         );
@@ -1423,7 +1425,7 @@ def _alter_existing() -> None:
     )
     op.execute(
         "ALTER TABLE comparison_work ADD CONSTRAINT ck_comparison_work_ai_job_payload "
-        "CHECK (comparison_ai_job_id IS NULL OR payload ->> 'ai_job_id' = comparison_ai_job_id)"
+        "CHECK (comparison_ai_job_id IS NULL OR coalesce(payload ->> 'ai_job_id', '') = comparison_ai_job_id)"
     )
     op.execute(
         "CREATE INDEX ix_comparison_work_ai_job ON comparison_work (comparison_ai_job_id) "

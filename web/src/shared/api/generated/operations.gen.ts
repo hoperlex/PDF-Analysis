@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.10.0 (OpenAPI 3.1.0)
- *   sha256 7c4c95a4aef812e1ff8ec8445a46cbc4b83a655a88ca15ff888f0dbde5b98238
+ *   AuditManager PC-01 API 1.11.0 (OpenAPI 3.1.0)
+ *   sha256 44c565cf7bc8dd3211758ea0be03a7379af6608fd7964582019fde57a5191162
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -41,7 +41,16 @@ import type {
   ClaimExecutorTaskRequest,
   ClaimedExecutorTask,
   ClassifyDocumentVersionRequest,
+  ComparisonAiEstimate,
+  ComparisonAiJob,
+  ComparisonAiJobId,
   ComparisonAiLinkList,
+  ComparisonAiPairCheck,
+  ComparisonAiPairHintPage,
+  ComparisonAiQueue,
+  ComparisonAiSheetChanges,
+  ComparisonLaunchEntryId,
+  ComparisonLaunchQueue,
   ComparisonMatrix,
   ComparisonMatrixEditList,
   ComparisonMatrixPreparation,
@@ -50,13 +59,26 @@ import type {
   ComparisonPairTileMode,
   ComparisonProposalSet,
   ComparisonQueueSummary,
+  ComparisonReport,
+  ComparisonReportId,
+  ComparisonReportKind,
+  ComparisonReportPage,
+  ComparisonReviewSheetPage,
   ComparisonSeries,
   ComparisonSeriesId,
   ComparisonSeriesPage,
+  ComparisonSheetDescription,
+  ComparisonSheetDescriptionHistory,
   ComparisonSheetPair,
   ComparisonSheetPairId,
   ComparisonSheetPairPage,
+  ComparisonSheetPairSpecPositions,
   ComparisonSheetStatus,
+  ComparisonSpecChangeKind,
+  ComparisonSpecChangePage,
+  ComparisonSpecPage,
+  ComparisonSpecification,
+  ComparisonSpecificationPage,
   ComparisonTransitionId,
   ComparisonUpload,
   ComparisonUploadFile,
@@ -72,6 +94,7 @@ import type {
   CorrectVersionClassificationRequest,
   CorrelationId,
   CreateAssignmentRequest,
+  CreateComparisonReportRequest,
   CreateComparisonUploadRequest,
   CreateExecutorConnectionRequest,
   CreateProjectRequest,
@@ -84,6 +107,7 @@ import type {
   DocumentVersion,
   DocumentVersionPage,
   EffectiveVendorLists,
+  EnqueueComparisonLaunchRequest,
   ExecutionDispatchStatus,
   ExecutionJournalPage,
   ExecutionQueueItem,
@@ -135,6 +159,7 @@ import type {
   OptimisationProposalPage,
   PortalBlockId,
   PortalBlockPage,
+  PrepareComparisonClientReportRequest,
   PresetId,
   PriceListId,
   PriceListPositionPage,
@@ -156,6 +181,7 @@ import type {
   RejectRegistrationRequest,
   ReleaseList,
   ResetUserPasswordRequest,
+  ResumeComparisonAiJobRequest,
   ReviseExecutorConnectionRequest,
   RunId,
   RunNormReferences,
@@ -179,6 +205,8 @@ import type {
   SheetPairingEvent,
   SpecificationPrices,
   StartArV3BetaGroupRequest,
+  StartComparisonAiJobRequest,
+  StartComparisonAiSheetChangesRequest,
   StartComparisonSeriesRequest,
   StartRunRequest,
   SubmitExecutorTaskAnswerRequest,
@@ -213,29 +241,44 @@ export const OPERATION_IDS = [
   'archiveAnalysisPreset',
   'archiveExecutorConnection',
   'archiveUser',
+  'cancelComparisonAiPairCheck',
+  'cancelComparisonAiSheetChanges',
+  'cancelComparisonReport',
   'cancelComparisonSeries',
+  'cancelComparisonSpecification',
   'cancelComparisonUpload',
   'cancelRun',
   'carryOverDecision',
   'changePassword',
   'claimExecutorTask',
   'classifyDocumentVersion',
+  'clearComparisonLaunchQueue',
   'compareDocumentVersions',
   'completeComparisonUploadFile',
   'confirmComparisonUploadSet',
+  'continueComparisonReport',
   'correctVersionClassification',
   'createAnalysisPreset',
   'createAssignment',
+  'createComparisonReport',
   'createComparisonUpload',
   'createExecutorConnection',
   'createProject',
   'decideOptimisationProposal',
+  'deleteComparisonReport',
+  'dequeueComparisonAiSheetChanges',
+  'enqueueComparisonLaunch',
+  'estimateComparisonAiPairCheck',
+  'estimateComparisonAiSheetChanges',
+  'estimateComparisonSheetDescription',
+  'estimateComparisonSpecification',
   'excludeComparisonUploadSet',
   'exportOptimisationProposalsCsv',
   'exportRunCsv',
   'exportRunXlsx',
   'extendExecutorTaskClaim',
   'failExecutorTask',
+  'finishComparisonAiSheetChanges',
   'finishComparisonSeries',
   'generateComparisonSummary',
   'generateExecutorSshKey',
@@ -243,11 +286,19 @@ export const OPERATION_IDS = [
   'getArV3BetaGroupReview',
   'getArV3BetaPackStatus',
   'getAssignment',
+  'getComparisonAiPairCheck',
+  'getComparisonAiQueue',
+  'getComparisonAiSheetChanges',
+  'getComparisonLaunchQueue',
   'getComparisonMatrix',
   'getComparisonOverview',
   'getComparisonQueueSummary',
+  'getComparisonReport',
   'getComparisonSeries',
+  'getComparisonSheetDescription',
   'getComparisonSheetPair',
+  'getComparisonSheetPairSpecPositions',
+  'getComparisonSpecification',
   'getComparisonUpload',
   'getComparisonUploadProposal',
   'getDashboardSummary',
@@ -267,6 +318,7 @@ export const OPERATION_IDS = [
   'getUser',
   'getVersionBlocks',
   'getVersionPageProfile',
+  'getVersionPageSpecPositions',
   'getVersionSectionReview',
   'issueRunnerToken',
   'issueToken',
@@ -274,9 +326,15 @@ export const OPERATION_IDS = [
   'listAnalysisProfiles',
   'listAssignments',
   'listComparisonAiLinks',
+  'listComparisonAiPairHints',
   'listComparisonMatrixEdits',
+  'listComparisonReports',
+  'listComparisonReviewSheets',
   'listComparisonSeries',
+  'listComparisonSheetDescriptionHistory',
   'listComparisonSheetPairs',
+  'listComparisonSpecificationChanges',
+  'listComparisonSpecifications',
   'listComparisonUploads',
   'listComparisonVersionOrders',
   'listDecisionHistory',
@@ -306,18 +364,28 @@ export const OPERATION_IDS = [
   'listVersions',
   'listWorkers',
   'markReleaseNotesRead',
+  'pauseComparisonAiPairCheck',
+  'pauseComparisonAiSheetChanges',
+  'pauseComparisonLaunchQueue',
   'pauseComparisonSeries',
   'pauseComparisonUpload',
+  'prepareComparisonClientReport',
   'prepareComparisonMatrix',
   'purgeUser',
   'readRegistrationStatus',
   'reauditRun',
+  'rebuildComparisonReportPdf',
   'rejectRegistration',
+  'removeComparisonLaunchEntry',
   'requestExecutorProbe',
   'resetUserPassword',
   'restoreUser',
+  'resumeComparisonAiPairCheck',
+  'resumeComparisonAiSheetChanges',
+  'resumeComparisonLaunchQueue',
   'resumeComparisonSeries',
   'resumeComparisonUpload',
+  'retryComparisonAiSheetChanges',
   'retryComparisonUploadSet',
   'reviseAnalysisPreset',
   'reviseExecutorConnection',
@@ -332,10 +400,19 @@ export const OPERATION_IDS = [
   'setProjectVendorList',
   'setWorkerIntake',
   'startArV3BetaGroup',
+  'startComparisonAiPairCheck',
+  'startComparisonAiSheetChanges',
+  'startComparisonReport',
   'startComparisonSeries',
+  'startComparisonSheetDescription',
+  'startComparisonSpecification',
   'startOptimisationPass',
   'startRun',
   'streamComparisonPairTile',
+  'streamComparisonReportPdf',
+  'streamComparisonReportSourceMd',
+  'streamComparisonSeriesSummary',
+  'streamComparisonSheetDescriptionMd',
   'streamDocumentVersionContent',
   'streamNormDocumentContent',
   'streamVersionPagePreview',
@@ -348,6 +425,7 @@ export const OPERATION_IDS = [
   'undoComparisonMatrixEdit',
   'updateMyProfile',
   'updateUser',
+  'uploadComparisonReportSource',
   'uploadComparisonUploadPart',
   'uploadDocument',
   'uploadDocumentVersion',
@@ -428,7 +506,7 @@ export type AppendDecisionResult = AppendDecisionResponse;
 /**
  * Apply a drafted batch of manual matrix edits.
  *
- * «Применить сопоставления (N)»: applies the batch an expert drafted (`link`, `unlink` and `mark_absent`, at most 500) together or not at all. `base_revision` is the revision of the matrix the caller saw (the build and the number of edit events); when either is no longer current the answer is `409 conflict` (`comparison_matrix_stale`), nothing is applied and the client rebases its draft (`ADR-0025` decision 14). A batch that names a page outside its version, joins a version to itself or carries a member its kind does not take is `422 validation_failed`. An edit binds the version-order revision in force; a later reorder marks the edits whose cells no longer exist as orphaned and never applies them silently. History is append-only. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). An unknown project, or a document of another project, is `404`. Sealed as a stub by `CMP-SEAL-C1` (`ADR-0025`): until `CMP-MATRIX-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_matrix`) and nothing is read or written.
+ * «Применить сопоставления (N)»: applies the batch an expert drafted (`link`, `unlink` and `mark_absent`, at most 500) together or not at all. `base_revision` is the revision of the matrix the caller saw (the build and the number of edit events); when either is no longer current the answer is `409 conflict` (`comparison_matrix_stale`), nothing is applied and the client rebases its draft (`ADR-0025` decision 14). A batch that names a page outside its version, joins a version to itself or carries a member its kind does not take is `422 validation_failed`. An edit binds the version-order revision in force; a later reorder marks the edits whose cells no longer exist as orphaned and never applies them silently. History is append-only. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). An unknown project, or a document of another project, is `404`. Served by `CMP-MATRIX-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_matrix`) until the lane wired it.
  */
 export type ApplyComparisonMatrixEditsInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/comparison-matrix/edits`. */
@@ -590,13 +668,97 @@ export type ArchiveUserInput = {
 export type ArchiveUserResult = Account;
 
 // ------------------------------------------------------------------------------------
+// cancelComparisonAiPairCheck - POST /comparison-ai-pair-checks/{comparison_ai_job_id}/cancellation
+// ------------------------------------------------------------------------------------
+
+/**
+ * Cancel an AI check of pairs.
+ *
+ * Cancels the unfinished questions; answers already stored stay and are never asked again. A job that is already finished is `409 conflict` (`comparison_ai_job_state`). An unknown job is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AIPAIR-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_pairs`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type CancelComparisonAiPairCheckInput = {
+  /** Path parameters, substituted into `/comparison-ai-pair-checks/{comparison_ai_job_id}/cancellation`. */
+  path: {
+    comparison_ai_job_id: ComparisonAiJobId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `cancelComparisonAiPairCheck` (`application/json`, HTTP 200). */
+export type CancelComparisonAiPairCheckResult = ComparisonAiJob;
+
+// ------------------------------------------------------------------------------------
+// cancelComparisonAiSheetChanges - POST /comparison-ai-sheet-jobs/{comparison_ai_job_id}/cancellation
+// ------------------------------------------------------------------------------------
+
+/**
+ * Cancel an AI description of changes.
+ *
+ * «Отменить» and «Отменить задание»: cancels the unfinished sheets of a series job or of a single-sheet job. A job that is already finished is `409 conflict` (`comparison_ai_job_state`). An unknown job is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AISHEET-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_sheets`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type CancelComparisonAiSheetChangesInput = {
+  /** Path parameters, substituted into `/comparison-ai-sheet-jobs/{comparison_ai_job_id}/cancellation`. */
+  path: {
+    comparison_ai_job_id: ComparisonAiJobId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `cancelComparisonAiSheetChanges` (`application/json`, HTTP 200). */
+export type CancelComparisonAiSheetChangesResult = ComparisonAiJob;
+
+// ------------------------------------------------------------------------------------
+// cancelComparisonReport - POST /comparison-reports/{comparison_report_id}/cancellation
+// ------------------------------------------------------------------------------------
+
+/**
+ * Cancel a report.
+ *
+ * «Отменить»: stops a queued, running or paused report; its finished parts are kept. A report in another state is `409 conflict` (`comparison_report_state`). An unknown report is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-REPORT-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_reports`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type CancelComparisonReportInput = {
+  /** Path parameters, substituted into `/comparison-reports/{comparison_report_id}/cancellation`. */
+  path: {
+    comparison_report_id: ComparisonReportId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `cancelComparisonReport` (`application/json`, HTTP 200). */
+export type CancelComparisonReportResult = ComparisonReport;
+
+// ------------------------------------------------------------------------------------
 // cancelComparisonSeries - POST /comparison-series/{comparison_series_id}/cancellation
 // ------------------------------------------------------------------------------------
 
 /**
  * Cancel a series.
  *
- * «Отменить»: cancels the items that have not run; results already computed stay. A series that is already finished is `409 conflict` (`comparison_series_state`). An unknown series is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C1` (`ADR-0025`): until `CMP-SERIES-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_series`) and nothing is read or written.
+ * «Отменить»: cancels the items that have not run; results already computed stay. A series that is already finished is `409 conflict` (`comparison_series_state`). An unknown series is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Served by `CMP-SERIES-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_series`) until the lane wired it.
  */
 export type CancelComparisonSeriesInput = {
   /** Path parameters, substituted into `/comparison-series/{comparison_series_id}/cancellation`. */
@@ -616,6 +778,34 @@ export type CancelComparisonSeriesInput = {
 
 /** Success body of `cancelComparisonSeries` (`application/json`, HTTP 200). */
 export type CancelComparisonSeriesResult = ComparisonSeries;
+
+// ------------------------------------------------------------------------------------
+// cancelComparisonSpecification - POST /comparison-ai-spec-jobs/{comparison_ai_job_id}/cancellation
+// ------------------------------------------------------------------------------------
+
+/**
+ * Cancel a specification comparison.
+ *
+ * Cancels the unfinished versions of a `spec` job. A job that is already finished is `409 conflict` (`comparison_ai_job_state`). An unknown job, or a job of another method, is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-SPEC-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_specification`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type CancelComparisonSpecificationInput = {
+  /** Path parameters, substituted into `/comparison-ai-spec-jobs/{comparison_ai_job_id}/cancellation`. */
+  path: {
+    comparison_ai_job_id: ComparisonAiJobId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `cancelComparisonSpecification` (`application/json`, HTTP 200). */
+export type CancelComparisonSpecificationResult = ComparisonAiJob;
 
 // ------------------------------------------------------------------------------------
 // cancelComparisonUpload - POST /comparison-uploads/{comparison_upload_id}/cancellation
@@ -777,6 +967,34 @@ export type ClassifyDocumentVersionInput = {
 export type ClassifyDocumentVersionResult = VersionClassification;
 
 // ------------------------------------------------------------------------------------
+// clearComparisonLaunchQueue - POST /projects/{project_uid}/comparison-launch-queue/clear
+// ------------------------------------------------------------------------------------
+
+/**
+ * Clear the launch queue.
+ *
+ * «Очистить»: the waiting entries and the history leave the queue; the step that is running continues. An unknown project is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-QUEUE-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_launch_queue`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type ClearComparisonLaunchQueueInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/comparison-launch-queue/clear`. */
+  path: {
+    project_uid: ProjectUid;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `clearComparisonLaunchQueue` (`application/json`, HTTP 200). */
+export type ClearComparisonLaunchQueueResult = ComparisonLaunchQueue;
+
+// ------------------------------------------------------------------------------------
 // compareDocumentVersions - GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison
 // ------------------------------------------------------------------------------------
 
@@ -875,6 +1093,36 @@ export type ConfirmComparisonUploadSetInput = {
 export type ConfirmComparisonUploadSetResult = ComparisonProposalSet;
 
 // ------------------------------------------------------------------------------------
+// continueComparisonReport - POST /comparison-reports/{comparison_report_id}/continuation
+// ------------------------------------------------------------------------------------
+
+/**
+ * Continue a report.
+ *
+ * «Продолжить»: an interrupted, partial, failed or paused report goes on, its finished parts reused. After a pause for `overrun` or `route_changed` the request carries a new consent for what is left. A report in another state is `409 conflict` (`comparison_report_state`). An unknown report is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-REPORT-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_reports`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type ContinueComparisonReportInput = {
+  /** Path parameters, substituted into `/comparison-reports/{comparison_report_id}/continuation`. */
+  path: {
+    comparison_report_id: ComparisonReportId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: ResumeComparisonAiJobRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `continueComparisonReport` (`application/json`, HTTP 200). */
+export type ContinueComparisonReportResult = ComparisonReport;
+
+// ------------------------------------------------------------------------------------
 // correctVersionClassification - POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification/corrections
 // ------------------------------------------------------------------------------------
 
@@ -947,6 +1195,36 @@ export type CreateAssignmentInput = {
 
 /** Success body of `createAssignment` (`application/json`, HTTP 200). */
 export type CreateAssignmentResult = Assignment;
+
+// ------------------------------------------------------------------------------------
+// createComparisonReport - POST /comparison-series/{comparison_series_id}/reports
+// ------------------------------------------------------------------------------------
+
+/**
+ * Make a report draft from the summary of a series.
+ *
+ * «Сформировать PDF-отчёт…», source «сводка проекта»: makes a `draft` report of the given kind (`client` by default, `analytic`) with its estimate (transitions to write, prompt size, routed model, USD estimate). No model is called and nothing is spent; `startComparisonReport` consents to the estimate. A series with no summary is `409 conflict` (`comparison_summary_unavailable`). An unknown series is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-REPORT-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_reports`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type CreateComparisonReportInput = {
+  /** Path parameters, substituted into `/comparison-series/{comparison_series_id}/reports`. */
+  path: {
+    comparison_series_id: ComparisonSeriesId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: CreateComparisonReportRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `createComparisonReport` (`application/json`, HTTP 201). */
+export type CreateComparisonReportResult = ComparisonReport;
 
 // ------------------------------------------------------------------------------------
 // createComparisonUpload - POST /projects/{project_uid}/comparison-uploads
@@ -1051,6 +1329,189 @@ export type DecideOptimisationProposalInput = {
 
 /** Success body of `decideOptimisationProposal` (`application/json`, HTTP 201). */
 export type DecideOptimisationProposalResult = ProposalDecisionResult;
+
+// ------------------------------------------------------------------------------------
+// deleteComparisonReport - POST /comparison-reports/{comparison_report_id}/deletion
+// ------------------------------------------------------------------------------------
+
+/**
+ * Delete a report.
+ *
+ * «Удалить»: the report leaves the history. The stored bytes stay (the storage offers no delete of a published blob; only the operator's project erase removes them). A report that is queued or running is `409 conflict` (`comparison_report_state`). An unknown report is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-REPORT-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_reports`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type DeleteComparisonReportInput = {
+  /** Path parameters, substituted into `/comparison-reports/{comparison_report_id}/deletion`. */
+  path: {
+    comparison_report_id: ComparisonReportId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `deleteComparisonReport` (`application/json`, HTTP 200). */
+export type DeleteComparisonReportResult = ComparisonReport;
+
+// ------------------------------------------------------------------------------------
+// dequeueComparisonAiSheetChanges - POST /comparison-ai-sheet-jobs/{comparison_ai_job_id}/dequeue
+// ------------------------------------------------------------------------------------
+
+/**
+ * Take an AI description of changes out of the AI queue.
+ *
+ * «Убрать из очереди»: a job that has not started leaves the installation's AI queue and is cancelled. A job that has started is `409 conflict` (`comparison_ai_job_state`). An unknown job is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AISHEET-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_sheets`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type DequeueComparisonAiSheetChangesInput = {
+  /** Path parameters, substituted into `/comparison-ai-sheet-jobs/{comparison_ai_job_id}/dequeue`. */
+  path: {
+    comparison_ai_job_id: ComparisonAiJobId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `dequeueComparisonAiSheetChanges` (`application/json`, HTTP 200). */
+export type DequeueComparisonAiSheetChangesResult = ComparisonAiJob;
+
+// ------------------------------------------------------------------------------------
+// enqueueComparisonLaunch - POST /projects/{project_uid}/comparison-launch-queue/entries
+// ------------------------------------------------------------------------------------
+
+/**
+ * Queue document sets and steps.
+ *
+ * «Запустить выбранные по очереди»: queues the selected document sets × steps (`profile`, `matrix`, `ai_pairs`, `series`, `ai_changes`, `report`); the queue runs one step at a time across sets. The `upload` step cannot be queued (`422 validation_failed`, `comparison_step_not_queueable`), nor can a consent be given to a step that is not an AI step. An AI step carries its own consent when its estimate exists, one consent per set; without one it waits and becomes `needs_consent`. A set or step already queued is `409 conflict` (`comparison_launch_entry_active`). An unknown project, or a document of another project, is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-QUEUE-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_launch_queue`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type EnqueueComparisonLaunchInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/comparison-launch-queue/entries`. */
+  path: {
+    project_uid: ProjectUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: EnqueueComparisonLaunchRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `enqueueComparisonLaunch` (`application/json`, HTTP 201). */
+export type EnqueueComparisonLaunchResult = ComparisonLaunchQueue;
+
+// ------------------------------------------------------------------------------------
+// estimateComparisonAiPairCheck - GET /projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-check/estimate
+// ------------------------------------------------------------------------------------
+
+/**
+ * Estimate the AI check of the doubtful pairs of a document set.
+ *
+ * The estimate behind «Проверить» of step 4: the questions the latest matrix would ask (`no_pair` for a sheet with no pair whose cell has candidates, `medium_pair` for a pair of medium confidence; a sheet of a multi-sheet table group is never asked), the pairs, the images with their bytes, the prompt size, the routed model and the USD estimate; `reused` of the questions already have a stored answer under the same content key and are never sent again. Computing it calls no model. A matrix that is not `ready` is `409 conflict` (`comparison_matrix_stale`); nothing to ask is `409 conflict` (`comparison_ai_nothing_to_do`). An unknown project, or a document of another project, is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AIPAIR-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_pairs`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type EstimateComparisonAiPairCheckInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-check/estimate`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `estimateComparisonAiPairCheck` (`application/json`, HTTP 200). */
+export type EstimateComparisonAiPairCheckResult = ComparisonAiEstimate;
+
+// ------------------------------------------------------------------------------------
+// estimateComparisonAiSheetChanges - GET /comparison-series/{comparison_series_id}/ai-sheet-changes/estimate
+// ------------------------------------------------------------------------------------
+
+/**
+ * Estimate the AI description of changes of a series.
+ *
+ * The estimate behind «Запустить» of step 6: the sheets whose comparison is not `same`, the images with their bytes, the prompt size, the routed model and the USD estimate; `reused` of the sheets keep a stored answer for the same content, prompt version and model. With `only_failed` true it is the estimate of «Повторить листы с ошибкой». Computing it calls no model. A series with no finished transition is `409 conflict` (`comparison_ai_nothing_to_do`). An unknown series is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AISHEET-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_sheets`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type EstimateComparisonAiSheetChangesInput = {
+  /** Path parameters, substituted into `/comparison-series/{comparison_series_id}/ai-sheet-changes/estimate`. */
+  path: {
+    comparison_series_id: ComparisonSeriesId;
+  };
+  /** Query string parameters. */
+  query?: {
+    only_failed?: boolean;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `estimateComparisonAiSheetChanges` (`application/json`, HTTP 200). */
+export type EstimateComparisonAiSheetChangesResult = ComparisonAiEstimate;
+
+// ------------------------------------------------------------------------------------
+// estimateComparisonSheetDescription - GET /comparison-sheet-pairs/{comparison_sheet_pair_id}/description/estimate
+// ------------------------------------------------------------------------------------
+
+/**
+ * Estimate the AI description of one sheet.
+ *
+ * «Описать этот лист…»: the sheets, images with their bytes, prompt size, model and USD estimate of describing one sheet pair, or one added or removed sheet. Computing it calls no model. A sheet pair whose comparison is `same` needs no description and is `409 conflict` (`comparison_ai_nothing_to_do`). An unknown sheet pair is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AISHEET-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_sheets`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type EstimateComparisonSheetDescriptionInput = {
+  /** Path parameters, substituted into `/comparison-sheet-pairs/{comparison_sheet_pair_id}/description/estimate`. */
+  path: {
+    comparison_sheet_pair_id: ComparisonSheetPairId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `estimateComparisonSheetDescription` (`application/json`, HTTP 200). */
+export type EstimateComparisonSheetDescriptionResult = ComparisonAiEstimate;
+
+// ------------------------------------------------------------------------------------
+// estimateComparisonSpecification - GET /comparison-transitions/{comparison_transition_id}/specification/estimate
+// ------------------------------------------------------------------------------------
+
+/**
+ * Estimate the comparison of the whole specifications of a transition.
+ *
+ * The versions to read, the images, the prompt size, the routed model and the USD estimate; a version whose specification already has a stored extraction under the same content key is `reused`. Computing it calls no model. A transition with no specification sheet is `409 conflict` (`comparison_ai_nothing_to_do`). An unknown transition is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-SPEC-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_specification`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type EstimateComparisonSpecificationInput = {
+  /** Path parameters, substituted into `/comparison-transitions/{comparison_transition_id}/specification/estimate`. */
+  path: {
+    comparison_transition_id: ComparisonTransitionId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `estimateComparisonSpecification` (`application/json`, HTTP 200). */
+export type EstimateComparisonSpecificationResult = ComparisonAiEstimate;
 
 // ------------------------------------------------------------------------------------
 // excludeComparisonUploadSet - POST /comparison-uploads/{comparison_upload_id}/sets/{comparison_upload_set_id}/exclusion
@@ -1199,13 +1660,41 @@ export type FailExecutorTaskInput = {
 export type FailExecutorTaskResult = ExecutorTaskAck;
 
 // ------------------------------------------------------------------------------------
+// finishComparisonAiSheetChanges - POST /comparison-ai-sheet-jobs/{comparison_ai_job_id}/finish
+// ------------------------------------------------------------------------------------
+
+/**
+ * Finish an interrupted AI description of changes.
+ *
+ * «Досчитать»: queues the sheets of an interrupted, paused or cancelled job that have no result, under the consent the job already holds. A job with nothing left is `409 conflict` (`comparison_ai_nothing_to_do`); a job that is running is `409 conflict` (`comparison_ai_job_state`). An unknown job is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AISHEET-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_sheets`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type FinishComparisonAiSheetChangesInput = {
+  /** Path parameters, substituted into `/comparison-ai-sheet-jobs/{comparison_ai_job_id}/finish`. */
+  path: {
+    comparison_ai_job_id: ComparisonAiJobId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `finishComparisonAiSheetChanges` (`application/json`, HTTP 200). */
+export type FinishComparisonAiSheetChangesResult = ComparisonAiJob;
+
+// ------------------------------------------------------------------------------------
 // finishComparisonSeries - POST /comparison-series/{comparison_series_id}/finish
 // ------------------------------------------------------------------------------------
 
 /**
  * Finish the transitions of a series that have no result.
  *
- * «Досчитать»: queues, in the same series, the transitions that have no complete result (cancelled, failed or incomplete ones), reusing what is done. A series that is queued, running or paused, or that has nothing left, is `409 conflict` (`comparison_series_state`). An unknown series is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C1` (`ADR-0025`): until `CMP-SERIES-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_series`) and nothing is read or written.
+ * «Досчитать»: queues, in the same series, the transitions that have no complete result (cancelled, failed or incomplete ones), reusing what is done. A series that is queued, running or paused, or that has nothing left, is `409 conflict` (`comparison_series_state`). An unknown series is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Served by `CMP-SERIES-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_series`) until the lane wired it.
  */
 export type FinishComparisonSeriesInput = {
   /** Path parameters, substituted into `/comparison-series/{comparison_series_id}/finish`. */
@@ -1359,13 +1848,102 @@ export type GetAssignmentInput = {
 export type GetAssignmentResult = AssignmentDetail;
 
 // ------------------------------------------------------------------------------------
+// getComparisonAiPairCheck - GET /projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-check
+// ------------------------------------------------------------------------------------
+
+/**
+ * Read the latest AI check of a document set.
+ *
+ * The latest job of the AI check of the doubtful pairs and its counts «вопросов · пар · подсказок · против». Both are absent until a check was started. Reading starts nothing. An unknown project, or a document of another project, is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AIPAIR-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_pairs`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type GetComparisonAiPairCheckInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-check`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getComparisonAiPairCheck` (`application/json`, HTTP 200). */
+export type GetComparisonAiPairCheckResult = ComparisonAiPairCheck;
+
+// ------------------------------------------------------------------------------------
+// getComparisonAiQueue - GET /execution/comparison-ai-queue
+// ------------------------------------------------------------------------------------
+
+/**
+ * Read the AI queue of the installation.
+ *
+ * «Очередь «ИИ-описание изменений»»: the AI jobs of the installation that are queued, running or paused, running first, then in the order they will start (one series at a time). Reading starts nothing. Any one role (`role:admin|expert`, `R-80`). Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-QUEUE-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_launch_queue`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type GetComparisonAiQueueInput = {
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getComparisonAiQueue` (`application/json`, HTTP 200). */
+export type GetComparisonAiQueueResult = ComparisonAiQueue;
+
+// ------------------------------------------------------------------------------------
+// getComparisonAiSheetChanges - GET /comparison-series/{comparison_series_id}/ai-sheet-changes
+// ------------------------------------------------------------------------------------
+
+/**
+ * Read the AI description of changes of a series.
+ *
+ * The latest job and, per transition, the progress «Листов / Изм. / Вопр. / Ошибок / Проверить / Обращ.», the tokens and the time. Reading starts nothing and calls no model. An unknown series is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AISHEET-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_sheets`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type GetComparisonAiSheetChangesInput = {
+  /** Path parameters, substituted into `/comparison-series/{comparison_series_id}/ai-sheet-changes`. */
+  path: {
+    comparison_series_id: ComparisonSeriesId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getComparisonAiSheetChanges` (`application/json`, HTTP 200). */
+export type GetComparisonAiSheetChangesResult = ComparisonAiSheetChanges;
+
+// ------------------------------------------------------------------------------------
+// getComparisonLaunchQueue - GET /projects/{project_uid}/comparison-launch-queue
+// ------------------------------------------------------------------------------------
+
+/**
+ * Read the launch queue of a project.
+ *
+ * «Очередь запуска»: «готово N из M · пропущено K · ошибок E», its state, and the entries in the order they run. A project has one queue. Reading starts nothing. An unknown project is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-QUEUE-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_launch_queue`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type GetComparisonLaunchQueueInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/comparison-launch-queue`. */
+  path: {
+    project_uid: ProjectUid;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getComparisonLaunchQueue` (`application/json`, HTTP 200). */
+export type GetComparisonLaunchQueueResult = ComparisonLaunchQueue;
+
+// ------------------------------------------------------------------------------------
 // getComparisonMatrix - GET /projects/{project_uid}/documents/{document_uid}/comparison-matrix
 // ------------------------------------------------------------------------------------
 
 /**
  * Read the effective matrix of a document set.
  *
- * The effective matrix of the versions of a document set (`ADR-0025` decision 3): rows are sheet identities, columns are the versions in the current comparison order, and a cell is matched (with its confidence `high`, `medium`, `group`, `manual` or `ai` and the flags `split`, `duplicate`, `scan` and `bridge`), unmatched (with candidates and a reason) or absent. The algorithm comes first, then accepted AI links (labelled, never an expert act), then manual edits, and manual wins. `revision` is what an edit batch names as its base. `state` is `absent` while nothing is built, `building` while profiles or the matrix are computed, `stale` when the build no longer matches the current order or profiles (`stale_reasons` says which) and `failed` when the last build failed; `revision`, `columns`, `rows` and `counts` are absent while no build exists. Edits made against another order that no longer apply are listed in `orphaned_edit_ids` and are never applied silently. The read starts nothing and changes nothing. An unknown project, or a document of another project, is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C1` (`ADR-0025`): until `CMP-MATRIX-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_matrix`) and nothing is read or written.
+ * The effective matrix of the versions of a document set (`ADR-0025` decision 3): rows are sheet identities, columns are the versions in the current comparison order, and a cell is matched (with its confidence `high`, `medium`, `group`, `manual` or `ai` and the flags `split`, `duplicate`, `scan` and `bridge`), unmatched (with candidates and a reason) or absent. The algorithm comes first, then accepted AI links (labelled, never an expert act), then manual edits, and manual wins. `revision` is what an edit batch names as its base. `state` is `absent` while nothing is built, `building` while profiles or the matrix are computed, `stale` when the build no longer matches the current order or profiles (`stale_reasons` says which) and `failed` when the last build failed; `revision`, `columns`, `rows` and `counts` are absent while no build exists. Edits made against another order that no longer apply are listed in `orphaned_edit_ids` and are never applied silently. The read starts nothing and changes nothing. An unknown project, or a document of another project, is `404`. Any one role (`role:admin|expert`, `R-80`). Served by `CMP-MATRIX-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_matrix`) until the lane wired it.
  */
 export type GetComparisonMatrixInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/comparison-matrix`. */
@@ -1389,7 +1967,7 @@ export type GetComparisonMatrixResult = ComparisonMatrix;
 /**
  * Read the overview of the comparison of a project.
  *
- * The overview behind «Проекты и этапы»: for every document set of the project («комплект (шифр)»; the designation is metadata and never an identity) the number of versions, the state and figures of the seven steps (`upload`, `profile`, `matrix`, `ai_pairs`, `series`, `ai_changes`, `report`) and the next step the chip proposes; the totals «N версий · M переходов», the counters «Все / Ждут действия / Идут / Ошибки / Готовы» and the batches that are still being uploaded. The steps of waves after the first report `not_started` or `not_applicable`. Reading it starts nothing. An unknown project is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C1` (`ADR-0025`): until `CMP-VC-OVERVIEW-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_overview`) and nothing is read or written.
+ * The overview behind «Проекты и этапы»: for every document set of the project («комплект (шифр)»; the designation is metadata and never an identity) the number of versions, the state and figures of the seven steps (`upload`, `profile`, `matrix`, `ai_pairs`, `series`, `ai_changes`, `report`) and the next step the chip proposes; the totals «N версий · M переходов», the counters «Все / Ждут действия / Идут / Ошибки / Готовы» and the batches that are still being uploaded. The steps of waves after the first report `not_started` or `not_applicable`. Reading it starts nothing. An unknown project is `404`. Any one role (`role:admin|expert`, `R-80`). Served by `CMP-VC-OVERVIEW-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_overview`) until the lane wired it.
  */
 export type GetComparisonOverviewInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/comparison-overview`. */
@@ -1412,7 +1990,7 @@ export type GetComparisonOverviewResult = ComparisonOverview;
 /**
  * Read the comparison work queue.
  *
- * The read-only «Сравнение» block of «Очередь» (`ADR-0025` decision 6): the module set the deployment serves, whether execution is paused for the whole installation, and the comparison work items by state and by kind. Comparison work claims only when no section run is claimable, yields between items and honours the pause and a module that is off. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C1` (`ADR-0025`): until `CMP-VC-OVERVIEW-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_overview`) and nothing is read or written.
+ * The read-only «Сравнение» block of «Очередь» (`ADR-0025` decision 6): the module set the deployment serves, whether execution is paused for the whole installation, and the comparison work items by state and by kind. Comparison work claims only when no section run is claimable, yields between items and honours the pause and a module that is off. Any one role (`role:admin|expert`, `R-80`). Served by `CMP-VC-OVERVIEW-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_overview`) until the lane wired it.
  */
 export type GetComparisonQueueSummaryInput = {
   /**
@@ -1425,13 +2003,36 @@ export type GetComparisonQueueSummaryInput = {
 export type GetComparisonQueueSummaryResult = ComparisonQueueSummary;
 
 // ------------------------------------------------------------------------------------
+// getComparisonReport - GET /comparison-reports/{comparison_report_id}
+// ------------------------------------------------------------------------------------
+
+/**
+ * Read a report.
+ *
+ * State, stage, kind, source, the per-transition progress (for an analytic report «Анализ», «Проверка», «Факты», «Предупреждения»; for a client report «Отбор», «Пунктов», «Вопросов»), the estimate of a draft or the job with the usage of a started one, and the stored files. Reading starts nothing. An unknown report is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-REPORT-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_reports`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type GetComparisonReportInput = {
+  /** Path parameters, substituted into `/comparison-reports/{comparison_report_id}`. */
+  path: {
+    comparison_report_id: ComparisonReportId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getComparisonReport` (`application/json`, HTTP 200). */
+export type GetComparisonReportResult = ComparisonReport;
+
+// ------------------------------------------------------------------------------------
 // getComparisonSeries - GET /comparison-series/{comparison_series_id}
 // ------------------------------------------------------------------------------------
 
 /**
  * Read a series with its transitions.
  *
- * One series with its transitions in the order of the versions: for each, the older and the newer version, the state, the sheet pairs done of the total, the counts (`compared`, `same`, `zones_only`, `different`, `style_only`, `needs_review`, `added`, `removed`, `failed`) and the deterministic verdict as an ordered list of codes. A transition whose pairs rest on an accepted AI link counts them in `ai_dependent` (`ADR-0025` decision 3). An unknown series is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C1` (`ADR-0025`): until `CMP-SERIES-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_series`) and nothing is read or written.
+ * One series with its transitions in the order of the versions: for each, the older and the newer version, the state, the sheet pairs done of the total, the counts (`compared`, `same`, `zones_only`, `different`, `style_only`, `needs_review`, `added`, `removed`, `failed`) and the deterministic verdict as an ordered list of codes. A transition whose pairs rest on an accepted AI link counts them in `ai_dependent` (`ADR-0025` decision 3). An unknown series is `404`. Any one role (`role:admin|expert`, `R-80`). Served by `CMP-SERIES-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_series`) until the lane wired it.
  */
 export type GetComparisonSeriesInput = {
   /** Path parameters, substituted into `/comparison-series/{comparison_series_id}`. */
@@ -1448,13 +2049,36 @@ export type GetComparisonSeriesInput = {
 export type GetComparisonSeriesResult = ComparisonSeries;
 
 // ------------------------------------------------------------------------------------
+// getComparisonSheetDescription - GET /comparison-sheet-pairs/{comparison_sheet_pair_id}/description
+// ------------------------------------------------------------------------------------
+
+/**
+ * Read the AI description of a sheet pair.
+ *
+ * The stored description behind the panel «Изменения в листе»: the state (one of the eleven labels), the changes with object, «Было» / «стало», place, «Неясно» and the tier of each value, «Требует уточнения», «Заявлено проектировщиком в разрешении», what was left out of the summary, the coverage, the diagnostics and the number of earlier descriptions. It works for an added or removed sheet too. Reading calls no model; a sheet that was never described is `not_processed`, which is not the same as no changes. The description is model output not confirmed by an engineer, and a recorded answer is marked `recorded`. An unknown sheet pair is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AISHEET-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_sheets`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type GetComparisonSheetDescriptionInput = {
+  /** Path parameters, substituted into `/comparison-sheet-pairs/{comparison_sheet_pair_id}/description`. */
+  path: {
+    comparison_sheet_pair_id: ComparisonSheetPairId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getComparisonSheetDescription` (`application/json`, HTTP 200). */
+export type GetComparisonSheetDescriptionResult = ComparisonSheetDescription;
+
+// ------------------------------------------------------------------------------------
 // getComparisonSheetPair - GET /comparison-sheet-pairs/{comparison_sheet_pair_id}
 // ------------------------------------------------------------------------------------
 
 /**
  * Read one sheet pair with its raw deterministic evidence.
  *
- * One sheet pair of a transition with everything the viewer shows: the channels (`geometry`, `color`, `text`, `text_coverage`, `zones`, `annotations`, `warnings`, `spec_positions`, each `checked` with its difference count, `unchecked` with a reason, or `not_applicable`), the list of differences with their class, layer and box on the canvas of the older page, the text changes with the numbers that changed («было → стало»), the service-zone notes («Исчезновение предупреждения не подтверждает согласования.») and «Как сравнивалось». This is raw evidence: an AI layer never rewrites it (`ADR-0025` decision 3). `result_id` is the content-keyed result the pair uses; pairs of equal content within a project share it (decision 15). A pair with no result yet has `state` `queued`, `computing` or `failed`. An unknown pair is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C1` (`ADR-0025`): until `CMP-SERIES-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_series`) and nothing is read or written.
+ * One sheet pair of a transition with everything the viewer shows: the channels (`geometry`, `color`, `text`, `text_coverage`, `zones`, `annotations`, `warnings`, `spec_positions`, each `checked` with its difference count, `unchecked` with a reason, or `not_applicable`), the list of differences with their class, layer and box on the canvas of the older page, the text changes with the numbers that changed («было → стало»), the service-zone notes («Исчезновение предупреждения не подтверждает согласования.») and «Как сравнивалось». This is raw evidence: an AI layer never rewrites it (`ADR-0025` decision 3). `result_id` is the content-keyed result the pair uses; pairs of equal content within a project share it (decision 15). A pair with no result yet has `state` `queued`, `computing` or `failed`. An unknown pair is `404`. Any one role (`role:admin|expert`, `R-80`). Served by `CMP-SERIES-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_series`) until the lane wired it.
  */
 export type GetComparisonSheetPairInput = {
   /** Path parameters, substituted into `/comparison-sheet-pairs/{comparison_sheet_pair_id}`. */
@@ -1469,6 +2093,52 @@ export type GetComparisonSheetPairInput = {
 
 /** Success body of `getComparisonSheetPair` (`application/json`, HTTP 200). */
 export type GetComparisonSheetPairResult = ComparisonSheetPair;
+
+// ------------------------------------------------------------------------------------
+// getComparisonSheetPairSpecPositions - GET /comparison-sheet-pairs/{comparison_sheet_pair_id}/spec-positions
+// ------------------------------------------------------------------------------------
+
+/**
+ * Read the positions that changed on a sheet pair.
+ *
+ * «Спецификация по позициям»: the position changes that fall on the pages of the sheet pair, deterministic, from the positions of the whole specification of each version (a page change alone is not a change). No model is called. An unknown sheet pair is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-SPEC-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_specification`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type GetComparisonSheetPairSpecPositionsInput = {
+  /** Path parameters, substituted into `/comparison-sheet-pairs/{comparison_sheet_pair_id}/spec-positions`. */
+  path: {
+    comparison_sheet_pair_id: ComparisonSheetPairId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getComparisonSheetPairSpecPositions` (`application/json`, HTTP 200). */
+export type GetComparisonSheetPairSpecPositionsResult = ComparisonSheetPairSpecPositions;
+
+// ------------------------------------------------------------------------------------
+// getComparisonSpecification - GET /comparison-transitions/{comparison_transition_id}/specification
+// ------------------------------------------------------------------------------------
+
+/**
+ * Read the specification comparison of a transition.
+ *
+ * Method, state and phase, the sheets A and B, the coverage of each side, the totals and the reason a side is incomplete or the comparison failed. Reading starts nothing. An unknown transition is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-SPEC-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_specification`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type GetComparisonSpecificationInput = {
+  /** Path parameters, substituted into `/comparison-transitions/{comparison_transition_id}/specification`. */
+  path: {
+    comparison_transition_id: ComparisonTransitionId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getComparisonSpecification` (`application/json`, HTTP 200). */
+export type GetComparisonSpecificationResult = ComparisonSpecification;
 
 // ------------------------------------------------------------------------------------
 // getComparisonUpload - GET /comparison-uploads/{comparison_upload_id}
@@ -1903,6 +2573,29 @@ export type GetVersionPageProfileInput = {
 export type GetVersionPageProfileResult = VersionPageProfile;
 
 // ------------------------------------------------------------------------------------
+// getVersionPageSpecPositions - GET /page-profiles/{comparison_page_profile_id}/spec-positions
+// ------------------------------------------------------------------------------------
+
+/**
+ * Read the positions of a specification page.
+ *
+ * Part A, deterministic: whether the page is a specification sheet and, when it is, the positions read from the page's words and vector lines (a table by GOST 21.110: columns by the vertical rules of the header, rows by the horizontal rules; every value verbatim, an ambiguous row flagged and never guessed). No model is called. An unknown page profile is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-SPEC-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_specification`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type GetVersionPageSpecPositionsInput = {
+  /** Path parameters, substituted into `/page-profiles/{comparison_page_profile_id}/spec-positions`. */
+  path: {
+    comparison_page_profile_id: ComparisonPageProfileId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getVersionPageSpecPositions` (`application/json`, HTTP 200). */
+export type GetVersionPageSpecPositionsResult = ComparisonSpecPage;
+
+// ------------------------------------------------------------------------------------
 // getVersionSectionReview - GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review
 // ------------------------------------------------------------------------------------
 
@@ -2052,7 +2745,7 @@ export type ListAssignmentsResult = AssignmentPage;
 /**
  * List the accepted AI links of a document set.
  *
- * The accepted AI links, newest first (`ADR-0025` decisions 3 and 14): model answers that the validator accepted, shown labelled «ИИ» and never an expert act. Each binds the algorithmic build it answered and the cell state it answered (`unmatched` or `doubtful`) and is `applied` only while that cell is still in that state, otherwise `superseded`. The table is read-only here; wave C2 writes it, so the list is empty until then. An unknown project, or a document of another project, is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C1` (`ADR-0025`): until `CMP-MATRIX-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_matrix`) and nothing is read or written.
+ * The accepted AI links, newest first (`ADR-0025` decisions 3 and 14): model answers that the validator accepted, shown labelled «ИИ» and never an expert act. Each binds the algorithmic build it answered and the cell state it answered (`unmatched` or `doubtful`) and is `applied` only while that cell is still in that state, otherwise `superseded`. The table is read-only here; wave C2 writes it, so the list is empty until then. An unknown project, or a document of another project, is `404`. Any one role (`role:admin|expert`, `R-80`). Served by `CMP-MATRIX-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_matrix`) until the lane wired it.
  */
 export type ListComparisonAiLinksInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/comparison-ai-links`. */
@@ -2077,13 +2770,44 @@ export type ListComparisonAiLinksInput = {
 export type ListComparisonAiLinksResult = ComparisonAiLinkList;
 
 // ------------------------------------------------------------------------------------
+// listComparisonAiPairHints - GET /projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-hints
+// ------------------------------------------------------------------------------------
+
+/**
+ * List the answers and hints of the AI check of pairs.
+ *
+ * The answers and hints per matrix cell, newest first: the question, the decision (`link_accepted` or a `hint_*` value, `none`, `answer_mismatch`, `failed`, `medium_*`), the page it concerns, the page «вероятно стр. N», the candidates, the confidence, the accepted link a `link_accepted` decision wrote and whether the question was asked of a matrix build that is no longer the latest. The page is addressed by `cursor` and `limit`. Reading starts nothing. An unknown project, or a document of another project, is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AIPAIR-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_pairs`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type ListComparisonAiPairHintsInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-hints`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+  };
+  /** Query string parameters. */
+  query?: {
+    /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
+    cursor?: Cursor;
+    /** Page size. */
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listComparisonAiPairHints` (`application/json`, HTTP 200). */
+export type ListComparisonAiPairHintsResult = ComparisonAiPairHintPage;
+
+// ------------------------------------------------------------------------------------
 // listComparisonMatrixEdits - GET /projects/{project_uid}/documents/{document_uid}/comparison-matrix/edits
 // ------------------------------------------------------------------------------------
 
 /**
  * List the manual edit history of a document set.
  *
- * The append-only history of manual matrix edits, newest event first, each numbered `edit_no` from 1 without a gap. An event is a `link`, an `unlink`, a `mark_absent` or an `undo` that names the edit it reverses; `source` is `expert` for an edit made through `applyComparisonMatrixEdits` and `migrated_sheet_link` for an approved sheet pairing of `approveSheetPairing` that migration `0039` turned into an edit (`ADR-0025` decision 13; the `0035` ids are in `provenance` and the `0035` rows stay as immutable history). `status` is `applied`, `undone` or `orphaned`. An unknown project, or a document of another project, is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C1` (`ADR-0025`): until `CMP-MATRIX-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_matrix`) and nothing is read or written.
+ * The append-only history of manual matrix edits, newest event first, each numbered `edit_no` from 1 without a gap. An event is a `link`, an `unlink`, a `mark_absent` or an `undo` that names the edit it reverses; `source` is `expert` for an edit made through `applyComparisonMatrixEdits` and `migrated_sheet_link` for an approved sheet pairing of `approveSheetPairing` that migration `0039` turned into an edit (`ADR-0025` decision 13; the `0035` ids are in `provenance` and the `0035` rows stay as immutable history). `status` is `applied`, `undone` or `orphaned`. An unknown project, or a document of another project, is `404`. Any one role (`role:admin|expert`, `R-80`). Served by `CMP-MATRIX-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_matrix`) until the lane wired it.
  */
 export type ListComparisonMatrixEditsInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/comparison-matrix/edits`. */
@@ -2108,13 +2832,73 @@ export type ListComparisonMatrixEditsInput = {
 export type ListComparisonMatrixEditsResult = ComparisonMatrixEditList;
 
 // ------------------------------------------------------------------------------------
+// listComparisonReports - GET /comparison-series/{comparison_series_id}/reports
+// ------------------------------------------------------------------------------------
+
+/**
+ * List the reports of a series.
+ *
+ * The report history of the series, newest first, each with its state, stage, per-transition progress, usage and downloads. A deleted report is not listed. The page is addressed by `cursor` and `limit`. An unknown series is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-REPORT-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_reports`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type ListComparisonReportsInput = {
+  /** Path parameters, substituted into `/comparison-series/{comparison_series_id}/reports`. */
+  path: {
+    comparison_series_id: ComparisonSeriesId;
+  };
+  /** Query string parameters. */
+  query?: {
+    /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
+    cursor?: Cursor;
+    /** Page size. */
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listComparisonReports` (`application/json`, HTTP 200). */
+export type ListComparisonReportsResult = ComparisonReportPage;
+
+// ------------------------------------------------------------------------------------
+// listComparisonReviewSheets - GET /comparison-transitions/{comparison_transition_id}/review-sheets
+// ------------------------------------------------------------------------------------
+
+/**
+ * List the sheets of a transition to review.
+ *
+ * The «Проверить» list: the sheets where the AI found no change but the comparison left marks, and the added and removed single sheets of the transition, each with its description state, in the order of the matrix rows. The page is addressed by `cursor` and `limit`. An unknown transition is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AISHEET-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_sheets`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type ListComparisonReviewSheetsInput = {
+  /** Path parameters, substituted into `/comparison-transitions/{comparison_transition_id}/review-sheets`. */
+  path: {
+    comparison_transition_id: ComparisonTransitionId;
+  };
+  /** Query string parameters. */
+  query?: {
+    /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
+    cursor?: Cursor;
+    /** Page size. */
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listComparisonReviewSheets` (`application/json`, HTTP 200). */
+export type ListComparisonReviewSheetsResult = ComparisonReviewSheetPage;
+
+// ------------------------------------------------------------------------------------
 // listComparisonSeries - GET /projects/{project_uid}/documents/{document_uid}/comparison-series
 // ------------------------------------------------------------------------------------
 
 /**
  * List the series of a document set.
  *
- * The series of a document set, newest first, without their transitions: the state, the order and matrix they ran on, how many transitions have a result and, when the stored input digests no longer match the current order, matrix or profiles, `stale_reasons` («Сохранённая сводка для прежнего порядка версий»). An unknown project, or a document of another project, is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C1` (`ADR-0025`): until `CMP-SERIES-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_series`) and nothing is read or written.
+ * The series of a document set, newest first, without their transitions: the state, the order and matrix they ran on, how many transitions have a result and, when the stored input digests no longer match the current order, matrix or profiles, `stale_reasons` («Сохранённая сводка для прежнего порядка версий»). An unknown project, or a document of another project, is `404`. Any one role (`role:admin|expert`, `R-80`). Served by `CMP-SERIES-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_series`) until the lane wired it.
  */
 export type ListComparisonSeriesInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/comparison-series`. */
@@ -2139,13 +2923,43 @@ export type ListComparisonSeriesInput = {
 export type ListComparisonSeriesResult = ComparisonSeriesPage;
 
 // ------------------------------------------------------------------------------------
+// listComparisonSheetDescriptionHistory - GET /comparison-sheet-pairs/{comparison_sheet_pair_id}/description-history
+// ------------------------------------------------------------------------------------
+
+/**
+ * List the earlier descriptions of a sheet pair.
+ *
+ * «История (N)»: the descriptions of the sheet pair, newest first, each with its state, counts, model and prompt version. The page is addressed by `cursor` and `limit`. An unknown sheet pair is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AISHEET-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_sheets`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type ListComparisonSheetDescriptionHistoryInput = {
+  /** Path parameters, substituted into `/comparison-sheet-pairs/{comparison_sheet_pair_id}/description-history`. */
+  path: {
+    comparison_sheet_pair_id: ComparisonSheetPairId;
+  };
+  /** Query string parameters. */
+  query?: {
+    /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
+    cursor?: Cursor;
+    /** Page size. */
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listComparisonSheetDescriptionHistory` (`application/json`, HTTP 200). */
+export type ListComparisonSheetDescriptionHistoryResult = ComparisonSheetDescriptionHistory;
+
+// ------------------------------------------------------------------------------------
 // listComparisonSheetPairs - GET /comparison-transitions/{comparison_transition_id}/sheet-pairs
 // ------------------------------------------------------------------------------------
 
 /**
  * List the sheet pairs of a transition.
  *
- * The sheet pairs of one transition in the order of the matrix rows: the older and the newer page (either absent for an added or removed sheet), the state, the status (`same`, `same_zones_changed`, `different`, `needs_review`, `added`, `removed` or `unmatched`), the link confidence and flags, the forcing reasons, the eight channels, the permit reconciliation and the parts coverage. `status` keeps one status and `only_changes` keeps every status but `same`. The members that carry the raw evidence (`canvas`, `differences`, `text_changes`, `service_notes`, `how_compared`) are absent here and present on `getComparisonSheetPair`. An unknown transition is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C1` (`ADR-0025`): until `CMP-SERIES-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_series`) and nothing is read or written.
+ * The sheet pairs of one transition in the order of the matrix rows: the older and the newer page (either absent for an added or removed sheet), the state, the status (`same`, `same_zones_changed`, `different`, `needs_review`, `added`, `removed` or `unmatched`), the link confidence and flags, the forcing reasons, the eight channels, the permit reconciliation and the parts coverage. `status` keeps one status and `only_changes` keeps every status but `same`. The members that carry the raw evidence (`canvas`, `differences`, `text_changes`, `service_notes`, `how_compared`) are absent here and present on `getComparisonSheetPair`. An unknown transition is `404`. Any one role (`role:admin|expert`, `R-80`). Served by `CMP-SERIES-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_series`) until the lane wired it.
  */
 export type ListComparisonSheetPairsInput = {
   /** Path parameters, substituted into `/comparison-transitions/{comparison_transition_id}/sheet-pairs`. */
@@ -2169,6 +2983,67 @@ export type ListComparisonSheetPairsInput = {
 
 /** Success body of `listComparisonSheetPairs` (`application/json`, HTTP 200). */
 export type ListComparisonSheetPairsResult = ComparisonSheetPairPage;
+
+// ------------------------------------------------------------------------------------
+// listComparisonSpecificationChanges - GET /comparison-transitions/{comparison_transition_id}/specification/changes
+// ------------------------------------------------------------------------------------
+
+/**
+ * List the changes of a transition's specification.
+ *
+ * The changes of the whole-specification comparison in the order it lists them (changed, removed, added, unclear, renumbered), optionally of one `kind`. A group unresolved in either version is not compared line by line and is described by the sheet AI instead. The page is addressed by `cursor` and `limit`. An unknown transition is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-SPEC-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_specification`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type ListComparisonSpecificationChangesInput = {
+  /** Path parameters, substituted into `/comparison-transitions/{comparison_transition_id}/specification/changes`. */
+  path: {
+    comparison_transition_id: ComparisonTransitionId;
+  };
+  /** Query string parameters. */
+  query?: {
+    /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
+    cursor?: Cursor;
+    kind?: ComparisonSpecChangeKind;
+    /** Page size. */
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listComparisonSpecificationChanges` (`application/json`, HTTP 200). */
+export type ListComparisonSpecificationChangesResult = ComparisonSpecChangePage;
+
+// ------------------------------------------------------------------------------------
+// listComparisonSpecifications - GET /comparison-series/{comparison_series_id}/specifications
+// ------------------------------------------------------------------------------------
+
+/**
+ * List the specification comparisons of a series.
+ *
+ * The block «Полные спецификации (СО)»: per transition that has a specification, the method («полное сравнение» or «листовой ИИ»), the specification sheets of the older and the newer version, the coverage, the totals «изменено / +добавлено / −удалено / ?неясно» and the reason. The page is addressed by `cursor` and `limit`. An unknown series is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-SPEC-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_specification`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type ListComparisonSpecificationsInput = {
+  /** Path parameters, substituted into `/comparison-series/{comparison_series_id}/specifications`. */
+  path: {
+    comparison_series_id: ComparisonSeriesId;
+  };
+  /** Query string parameters. */
+  query?: {
+    /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
+    cursor?: Cursor;
+    /** Page size. */
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listComparisonSpecifications` (`application/json`, HTTP 200). */
+export type ListComparisonSpecificationsResult = ComparisonSpecificationPage;
 
 // ------------------------------------------------------------------------------------
 // listComparisonUploads - GET /projects/{project_uid}/comparison-uploads
@@ -2959,13 +3834,97 @@ export type MarkReleaseNotesReadInput = {
 export type MarkReleaseNotesReadResult = void;
 
 // ------------------------------------------------------------------------------------
+// pauseComparisonAiPairCheck - POST /comparison-ai-pair-checks/{comparison_ai_job_id}/pause
+// ------------------------------------------------------------------------------------
+
+/**
+ * Pause an AI check of pairs.
+ *
+ * «Пауза»: stops the job after the call in hand; queued questions wait. A job that is not queued or running is `409 conflict` (`comparison_ai_job_state`). An unknown job, or a job of another method, is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AIPAIR-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_pairs`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type PauseComparisonAiPairCheckInput = {
+  /** Path parameters, substituted into `/comparison-ai-pair-checks/{comparison_ai_job_id}/pause`. */
+  path: {
+    comparison_ai_job_id: ComparisonAiJobId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `pauseComparisonAiPairCheck` (`application/json`, HTTP 200). */
+export type PauseComparisonAiPairCheckResult = ComparisonAiJob;
+
+// ------------------------------------------------------------------------------------
+// pauseComparisonAiSheetChanges - POST /comparison-ai-sheet-jobs/{comparison_ai_job_id}/pause
+// ------------------------------------------------------------------------------------
+
+/**
+ * Pause an AI description of changes.
+ *
+ * «Пауза»: stops the job after the call in hand. A job that is not queued or running is `409 conflict` (`comparison_ai_job_state`). An unknown job, or a job of another method, is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AISHEET-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_sheets`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type PauseComparisonAiSheetChangesInput = {
+  /** Path parameters, substituted into `/comparison-ai-sheet-jobs/{comparison_ai_job_id}/pause`. */
+  path: {
+    comparison_ai_job_id: ComparisonAiJobId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `pauseComparisonAiSheetChanges` (`application/json`, HTTP 200). */
+export type PauseComparisonAiSheetChangesResult = ComparisonAiJob;
+
+// ------------------------------------------------------------------------------------
+// pauseComparisonLaunchQueue - POST /projects/{project_uid}/comparison-launch-queue/pause
+// ------------------------------------------------------------------------------------
+
+/**
+ * Pause the launch queue.
+ *
+ * «Пауза очереди»: the step in hand finishes and no further entry starts. A queue that is not running is `409 conflict` (`comparison_launch_queue_state`). An unknown project is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-QUEUE-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_launch_queue`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type PauseComparisonLaunchQueueInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/comparison-launch-queue/pause`. */
+  path: {
+    project_uid: ProjectUid;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `pauseComparisonLaunchQueue` (`application/json`, HTTP 200). */
+export type PauseComparisonLaunchQueueResult = ComparisonLaunchQueue;
+
+// ------------------------------------------------------------------------------------
 // pauseComparisonSeries - POST /comparison-series/{comparison_series_id}/pause
 // ------------------------------------------------------------------------------------
 
 /**
  * Pause a series.
  *
- * «Пауза»: stops the series after the items in hand; queued items wait. A series that is not queued or running is `409 conflict` (`comparison_series_state`). An unknown series is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C1` (`ADR-0025`): until `CMP-SERIES-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_series`) and nothing is read or written.
+ * «Пауза»: stops the series after the items in hand; queued items wait. A series that is not queued or running is `409 conflict` (`comparison_series_state`). An unknown series is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Served by `CMP-SERIES-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_series`) until the lane wired it.
  */
 export type PauseComparisonSeriesInput = {
   /** Path parameters, substituted into `/comparison-series/{comparison_series_id}/pause`. */
@@ -3015,13 +3974,43 @@ export type PauseComparisonUploadInput = {
 export type PauseComparisonUploadResult = ComparisonUpload;
 
 // ------------------------------------------------------------------------------------
+// prepareComparisonClientReport - POST /comparison-reports/{comparison_report_id}/client-report
+// ------------------------------------------------------------------------------------
+
+/**
+ * Prepare the client report from an analytic report.
+ *
+ * «Подготовить отчёт для заказчика»: a new `client` draft with its estimate that reads the verified facts of a finished analytic report. An analytic report that is not finished, or a client report, is `409 conflict` (`comparison_report_state`). No model is called. An unknown report is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-REPORT-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_reports`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type PrepareComparisonClientReportInput = {
+  /** Path parameters, substituted into `/comparison-reports/{comparison_report_id}/client-report`. */
+  path: {
+    comparison_report_id: ComparisonReportId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: PrepareComparisonClientReportRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `prepareComparisonClientReport` (`application/json`, HTTP 201). */
+export type PrepareComparisonClientReportResult = ComparisonReport;
+
+// ------------------------------------------------------------------------------------
 // prepareComparisonMatrix - POST /projects/{project_uid}/documents/{document_uid}/comparison-matrix/preparation
 // ------------------------------------------------------------------------------------
 
 /**
  * Queue the profiles and the build of the matrix of a document set.
  *
- * «Подготовить» and «Повторить»: queues the page profiles of the document set's versions that are missing or failed, then the algorithmic build of the matrix (`ADR-0025` decisions 3 and 14). It is idempotent: a preparation that is already queued or running is returned as it is, and a build that is current is not repeated. It never changes a manual edit. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). An unknown project, or a document of another project, is `404`. Sealed as a stub by `CMP-SEAL-C1` (`ADR-0025`): until `CMP-MATRIX-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_matrix`) and nothing is read or written.
+ * «Подготовить» and «Повторить»: queues the page profiles of the document set's versions that are missing or failed, then the algorithmic build of the matrix (`ADR-0025` decisions 3 and 14). It is idempotent: a preparation that is already queued or running is returned as it is, and a build that is current is not repeated. It never changes a manual edit. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). An unknown project, or a document of another project, is `404`. Served by `CMP-MATRIX-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_matrix`) until the lane wired it.
  */
 export type PrepareComparisonMatrixInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/comparison-matrix/preparation`. */
@@ -3116,6 +4105,34 @@ export type ReauditRunInput = {
 export type ReauditRunResult = RunStatus;
 
 // ------------------------------------------------------------------------------------
+// rebuildComparisonReportPdf - POST /comparison-reports/{comparison_report_id}/pdf-rebuild
+// ------------------------------------------------------------------------------------
+
+/**
+ * Write the PDF of a report again.
+ *
+ * «Пересобрать PDF»: writes the PDF again from the stored text; no model is called and nothing is spent. A report whose text is not complete is `409 conflict` (`comparison_report_state`). An unknown report is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-REPORT-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_reports`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type RebuildComparisonReportPdfInput = {
+  /** Path parameters, substituted into `/comparison-reports/{comparison_report_id}/pdf-rebuild`. */
+  path: {
+    comparison_report_id: ComparisonReportId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `rebuildComparisonReportPdf` (`application/json`, HTTP 200). */
+export type RebuildComparisonReportPdfResult = ComparisonReport;
+
+// ------------------------------------------------------------------------------------
 // rejectRegistration - POST /registrations/{request_id}/reject
 // ------------------------------------------------------------------------------------
 
@@ -3139,6 +4156,34 @@ export type RejectRegistrationInput = {
 
 /** Success body of `rejectRegistration` (`application/json`, HTTP 200). */
 export type RejectRegistrationResult = RegistrationRequest;
+
+// ------------------------------------------------------------------------------------
+// removeComparisonLaunchEntry - POST /comparison-launch-entries/{comparison_launch_entry_id}/removal
+// ------------------------------------------------------------------------------------
+
+/**
+ * Remove one entry from the launch queue.
+ *
+ * «✕»: one waiting entry leaves the queue. An entry that is running or finished is `409 conflict` (`comparison_launch_entry_state`). An unknown entry is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-QUEUE-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_launch_queue`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type RemoveComparisonLaunchEntryInput = {
+  /** Path parameters, substituted into `/comparison-launch-entries/{comparison_launch_entry_id}/removal`. */
+  path: {
+    comparison_launch_entry_id: ComparisonLaunchEntryId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `removeComparisonLaunchEntry` (`application/json`, HTTP 200). */
+export type RemoveComparisonLaunchEntryResult = ComparisonLaunchQueue;
 
 // ------------------------------------------------------------------------------------
 // requestExecutorProbe - POST /executor-connections/{connection_id}/probes
@@ -3213,13 +4258,101 @@ export type RestoreUserInput = {
 export type RestoreUserResult = Account;
 
 // ------------------------------------------------------------------------------------
+// resumeComparisonAiPairCheck - POST /comparison-ai-pair-checks/{comparison_ai_job_id}/resume
+// ------------------------------------------------------------------------------------
+
+/**
+ * Resume an AI check of pairs.
+ *
+ * «Продолжить»: continues a paused job. After a pause for `overrun` (the actual spend passed 1.2 times the consented estimate) or `route_changed` the request carries a new consent for what is left (`comparison_consent_required` when it does not, `comparison_estimate_stale` when its digest is not the one now computed); after the other reasons the consent is ignored. A job that is not paused is `409 conflict` (`comparison_ai_job_state`). An unknown job is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AIPAIR-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_pairs`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type ResumeComparisonAiPairCheckInput = {
+  /** Path parameters, substituted into `/comparison-ai-pair-checks/{comparison_ai_job_id}/resume`. */
+  path: {
+    comparison_ai_job_id: ComparisonAiJobId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: ResumeComparisonAiJobRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `resumeComparisonAiPairCheck` (`application/json`, HTTP 200). */
+export type ResumeComparisonAiPairCheckResult = ComparisonAiJob;
+
+// ------------------------------------------------------------------------------------
+// resumeComparisonAiSheetChanges - POST /comparison-ai-sheet-jobs/{comparison_ai_job_id}/resume
+// ------------------------------------------------------------------------------------
+
+/**
+ * Resume an AI description of changes.
+ *
+ * «Продолжить»: continues a paused job. After a pause for `overrun` or `route_changed` the request carries a new consent for what is left; after the other reasons (`user`, `quota`, `auth`, `module_off`) the consent is ignored. A job that is not paused is `409 conflict` (`comparison_ai_job_state`). An unknown job is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AISHEET-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_sheets`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type ResumeComparisonAiSheetChangesInput = {
+  /** Path parameters, substituted into `/comparison-ai-sheet-jobs/{comparison_ai_job_id}/resume`. */
+  path: {
+    comparison_ai_job_id: ComparisonAiJobId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: ResumeComparisonAiJobRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `resumeComparisonAiSheetChanges` (`application/json`, HTTP 200). */
+export type ResumeComparisonAiSheetChangesResult = ComparisonAiJob;
+
+// ------------------------------------------------------------------------------------
+// resumeComparisonLaunchQueue - POST /projects/{project_uid}/comparison-launch-queue/resume
+// ------------------------------------------------------------------------------------
+
+/**
+ * Resume the launch queue.
+ *
+ * «Продолжить очередь»: continues a paused or failed queue. A queue that is running is `409 conflict` (`comparison_launch_queue_state`). An unknown project is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-QUEUE-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_launch_queue`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type ResumeComparisonLaunchQueueInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/comparison-launch-queue/resume`. */
+  path: {
+    project_uid: ProjectUid;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `resumeComparisonLaunchQueue` (`application/json`, HTTP 200). */
+export type ResumeComparisonLaunchQueueResult = ComparisonLaunchQueue;
+
+// ------------------------------------------------------------------------------------
 // resumeComparisonSeries - POST /comparison-series/{comparison_series_id}/resume
 // ------------------------------------------------------------------------------------
 
 /**
  * Resume a paused series.
  *
- * «Продолжить»: queues the paused items again. A series that is not paused is `409 conflict` (`comparison_series_state`). An unknown series is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C1` (`ADR-0025`): until `CMP-SERIES-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_series`) and nothing is read or written.
+ * «Продолжить»: queues the paused items again. A series that is not paused is `409 conflict` (`comparison_series_state`). An unknown series is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Served by `CMP-SERIES-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_series`) until the lane wired it.
  */
 export type ResumeComparisonSeriesInput = {
   /** Path parameters, substituted into `/comparison-series/{comparison_series_id}/resume`. */
@@ -3267,6 +4400,36 @@ export type ResumeComparisonUploadInput = {
 
 /** Success body of `resumeComparisonUpload` (`application/json`, HTTP 200). */
 export type ResumeComparisonUploadResult = ComparisonUpload;
+
+// ------------------------------------------------------------------------------------
+// retryComparisonAiSheetChanges - POST /comparison-ai-sheet-jobs/{comparison_ai_job_id}/retry
+// ------------------------------------------------------------------------------------
+
+/**
+ * Describe the sheets that failed again.
+ *
+ * «Повторить листы с ошибкой»: describes again only the sheets that failed, for example after a refusal of the provider. It is a new spend, so the request carries the consent to the estimate of `estimateComparisonAiSheetChanges` with `only_failed` true; the checks of the start apply (`comparison_estimate_stale`, `comparison_consent_required`, `comparison_ceiling_job`, `comparison_ceiling_day`). A job with no failed sheet is `409 conflict` (`comparison_ai_nothing_to_do`). An unknown job is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AISHEET-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_sheets`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type RetryComparisonAiSheetChangesInput = {
+  /** Path parameters, substituted into `/comparison-ai-sheet-jobs/{comparison_ai_job_id}/retry`. */
+  path: {
+    comparison_ai_job_id: ComparisonAiJobId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: StartComparisonAiJobRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `retryComparisonAiSheetChanges` (`application/json`, HTTP 200). */
+export type RetryComparisonAiSheetChangesResult = ComparisonAiJob;
 
 // ------------------------------------------------------------------------------------
 // retryComparisonUploadSet - POST /comparison-uploads/{comparison_upload_id}/sets/{comparison_upload_set_id}/retry
@@ -3624,13 +4787,104 @@ export type StartArV3BetaGroupInput = {
 export type StartArV3BetaGroupResult = ArV3BetaGroup;
 
 // ------------------------------------------------------------------------------------
+// startComparisonAiPairCheck - POST /projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-check
+// ------------------------------------------------------------------------------------
+
+/**
+ * Start the AI check of the doubtful pairs of a document set.
+ *
+ * Starts a job (`pair_check`) that asks the model, one question per call, whether a candidate is the same sheet. The start carries the consent: the digest of the estimate that was shown and the explicit confirmation (`ADR-0025` decision 19). A digest that is not the one now computed is `409 conflict` (`comparison_estimate_stale`); a consent that is missing or not confirmed is `422 validation_failed` (`comparison_consent_required`); an estimate over the USD 10 ceiling of one job or the USD 50 ceiling of the installation's day is `409 conflict` (`comparison_ceiling_job`, `comparison_ceiling_day`), and a connection that is not metered has no ceiling; a live job for the same scope is `409 conflict` (`comparison_ai_job_active`); a work kind with no route in «Назначения» is `503 dependency_unavailable` (`executor_route_missing`). Nothing is sent to a model before the consent and the estimate agree, and the text of the answer is model output not confirmed by an engineer. An answer is accepted as an AI link only with high confidence, an agreeing candidate number and page, a sheet outside a multi-sheet specification, a B that no other A claims and a reverse question that returns A with high confidence; any other answer is a hint, and a manual edit always wins. An accepted answer is written as an accepted AI link by the service and never by this call. An unknown project, or a document of another project, is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AIPAIR-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_pairs`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type StartComparisonAiPairCheckInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-check`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: StartComparisonAiJobRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `startComparisonAiPairCheck` (`application/json`, HTTP 201). */
+export type StartComparisonAiPairCheckResult = ComparisonAiJob;
+
+// ------------------------------------------------------------------------------------
+// startComparisonAiSheetChanges - POST /comparison-series/{comparison_series_id}/ai-sheet-changes
+// ------------------------------------------------------------------------------------
+
+/**
+ * Start the AI description of changes of a series.
+ *
+ * Queues a job (`sheet_changes`) in the installation's AI queue, one series at a time; it describes the changed sheets of every transition, per sheet a packet of tables, places and shifts with the crops and words around them, and the answer is checked by the program (tiers `from_text`, `from_image`, `unverified`). With `restart` true every sheet is described again (a sheet whose content, prompt version and model did not change keeps its stored answer). The start carries the consent: the digest of the estimate that was shown and the explicit confirmation (`ADR-0025` decision 19). A digest that is not the one now computed is `409 conflict` (`comparison_estimate_stale`); a consent that is missing or not confirmed is `422 validation_failed` (`comparison_consent_required`); an estimate over the USD 10 ceiling of one job or the USD 50 ceiling of the installation's day is `409 conflict` (`comparison_ceiling_job`, `comparison_ceiling_day`), and a connection that is not metered has no ceiling; a live job for the same scope is `409 conflict` (`comparison_ai_job_active`); a work kind with no route in «Назначения» is `503 dependency_unavailable` (`executor_route_missing`). Nothing is sent to a model before the consent and the estimate agree, and the text of the answer is model output not confirmed by an engineer. An unknown series is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AISHEET-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_sheets`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type StartComparisonAiSheetChangesInput = {
+  /** Path parameters, substituted into `/comparison-series/{comparison_series_id}/ai-sheet-changes`. */
+  path: {
+    comparison_series_id: ComparisonSeriesId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: StartComparisonAiSheetChangesRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `startComparisonAiSheetChanges` (`application/json`, HTTP 201). */
+export type StartComparisonAiSheetChangesResult = ComparisonAiJob;
+
+// ------------------------------------------------------------------------------------
+// startComparisonReport - POST /comparison-reports/{comparison_report_id}/start
+// ------------------------------------------------------------------------------------
+
+/**
+ * Start a report draft.
+ *
+ * Starts the model work of a `draft` report: for the client kind one call per transition over the facts of the summary with discipline priorities, where a program check drops every point whose number, mark or direction the facts do not confirm; for the analytic kind an analyst, a verifier and a composer. The PDF is written by a program. The start carries the consent: the digest of the estimate that was shown and the explicit confirmation (`ADR-0025` decision 19). A digest that is not the one now computed is `409 conflict` (`comparison_estimate_stale`); a consent that is missing or not confirmed is `422 validation_failed` (`comparison_consent_required`); an estimate over the USD 10 ceiling of one job or the USD 50 ceiling of the installation's day is `409 conflict` (`comparison_ceiling_job`, `comparison_ceiling_day`), and a connection that is not metered has no ceiling; a live job for the same scope is `409 conflict` (`comparison_ai_job_active`); a work kind with no route in «Назначения» is `503 dependency_unavailable` (`executor_route_missing`). Nothing is sent to a model before the consent and the estimate agree, and the text of the answer is model output not confirmed by an engineer. A report that is not a draft is `409 conflict` (`comparison_report_state`). An unknown report is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-REPORT-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_reports`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type StartComparisonReportInput = {
+  /** Path parameters, substituted into `/comparison-reports/{comparison_report_id}/start`. */
+  path: {
+    comparison_report_id: ComparisonReportId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: StartComparisonAiJobRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `startComparisonReport` (`application/json`, HTTP 200). */
+export type StartComparisonReportResult = ComparisonReport;
+
+// ------------------------------------------------------------------------------------
 // startComparisonSeries - POST /projects/{project_uid}/documents/{document_uid}/comparison-series
 // ------------------------------------------------------------------------------------
 
 /**
  * Start the comparison of every adjacent pair of versions.
  *
- * «Запустить» and «Заново»: compares every adjacent pair of the versions of a document set for the current comparison order (`ADR-0025` decisions 15 and 21), one transition per pair, as durable comparison work. With `restart` true every transition is computed again; sheet pairs whose content did not change are taken from the result cache of the project. `base_order_revision_no` is the revision of the version order the caller saw (`0` for none); a stale one is `409 conflict` (`comparison_version_order_stale`). A series that is still running for the document set is `409 conflict` (`comparison_series_active`). A pair of versions that are not adjacent in the order is never compared. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). An unknown project, or a document of another project, is `404`. Sealed as a stub by `CMP-SEAL-C1` (`ADR-0025`): until `CMP-SERIES-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_series`) and nothing is read or written.
+ * «Запустить» and «Заново»: compares every adjacent pair of the versions of a document set for the current comparison order (`ADR-0025` decisions 15 and 21), one transition per pair, as durable comparison work. With `restart` true every transition is computed again; sheet pairs whose content did not change are taken from the result cache of the project. `base_order_revision_no` is the revision of the version order the caller saw (`0` for none); a stale one is `409 conflict` (`comparison_version_order_stale`). A series that is still running for the document set is `409 conflict` (`comparison_series_active`). A pair of versions that are not adjacent in the order is never compared. A matrix that is not `ready` (absent, building, stale or failed) is `409 conflict` (`comparison_matrix_stale`); a document set of one version has nothing to compare and is `422 validation_failed` (`comparison_versions_few`). A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). An unknown project, or a document of another project, is `404`. Served by `CMP-SERIES-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_series`) until the lane wired it.
  */
 export type StartComparisonSeriesInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/comparison-series`. */
@@ -3653,6 +4907,66 @@ export type StartComparisonSeriesInput = {
 
 /** Success body of `startComparisonSeries` (`application/json`, HTTP 201). */
 export type StartComparisonSeriesResult = ComparisonSeries;
+
+// ------------------------------------------------------------------------------------
+// startComparisonSheetDescription - POST /comparison-sheet-pairs/{comparison_sheet_pair_id}/description
+// ------------------------------------------------------------------------------------
+
+/**
+ * Describe one sheet with the AI.
+ *
+ * «Передать и описать»: a job (`sheet_changes`) for one sheet pair, or for one added or removed sheet, cancelled with `cancelComparisonAiSheetChanges`. The start carries the consent: the digest of the estimate that was shown and the explicit confirmation (`ADR-0025` decision 19). A digest that is not the one now computed is `409 conflict` (`comparison_estimate_stale`); a consent that is missing or not confirmed is `422 validation_failed` (`comparison_consent_required`); an estimate over the USD 10 ceiling of one job or the USD 50 ceiling of the installation's day is `409 conflict` (`comparison_ceiling_job`, `comparison_ceiling_day`), and a connection that is not metered has no ceiling; a live job for the same scope is `409 conflict` (`comparison_ai_job_active`); a work kind with no route in «Назначения» is `503 dependency_unavailable` (`executor_route_missing`). Nothing is sent to a model before the consent and the estimate agree, and the text of the answer is model output not confirmed by an engineer. An unknown sheet pair is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AISHEET-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_sheets`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type StartComparisonSheetDescriptionInput = {
+  /** Path parameters, substituted into `/comparison-sheet-pairs/{comparison_sheet_pair_id}/description`. */
+  path: {
+    comparison_sheet_pair_id: ComparisonSheetPairId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: StartComparisonAiJobRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `startComparisonSheetDescription` (`application/json`, HTTP 201). */
+export type StartComparisonSheetDescriptionResult = ComparisonAiJob;
+
+// ------------------------------------------------------------------------------------
+// startComparisonSpecification - POST /comparison-transitions/{comparison_transition_id}/specification
+// ------------------------------------------------------------------------------------
+
+/**
+ * Start the comparison of the whole specifications of a transition.
+ *
+ * Starts a job (`spec`) that has a model mark the structure of the whole specification of each version (the program copies the cells and checks the coverage, the quotes and the values) and then compares the two order-independently. A side that cannot be read completely makes the comparison `incomplete` and no addition, removal or absence of change is published. The start carries the consent: the digest of the estimate that was shown and the explicit confirmation (`ADR-0025` decision 19). A digest that is not the one now computed is `409 conflict` (`comparison_estimate_stale`); a consent that is missing or not confirmed is `422 validation_failed` (`comparison_consent_required`); an estimate over the USD 10 ceiling of one job or the USD 50 ceiling of the installation's day is `409 conflict` (`comparison_ceiling_job`, `comparison_ceiling_day`), and a connection that is not metered has no ceiling; a live job for the same scope is `409 conflict` (`comparison_ai_job_active`); a work kind with no route in «Назначения» is `503 dependency_unavailable` (`executor_route_missing`). Nothing is sent to a model before the consent and the estimate agree, and the text of the answer is model output not confirmed by an engineer. An unknown transition is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-SPEC-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_specification`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type StartComparisonSpecificationInput = {
+  /** Path parameters, substituted into `/comparison-transitions/{comparison_transition_id}/specification`. */
+  path: {
+    comparison_transition_id: ComparisonTransitionId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: StartComparisonAiJobRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `startComparisonSpecification` (`application/json`, HTTP 201). */
+export type StartComparisonSpecificationResult = ComparisonAiJob;
 
 // ------------------------------------------------------------------------------------
 // startOptimisationPass - POST /projects/{project_uid}/documents/{document_uid}/optimisation-passes
@@ -3724,7 +5038,7 @@ export type StartRunResult = RunStatus;
 /**
  * Stream one tile PNG of a sheet pair.
  *
- * One tile of the pair's overlay (`mode` `overlay`: the older and the newer page on one canvas with the difference layers chosen by the `layers` parameter, a comma-separated list of layer names (`main`, `light_elements`, `color_change`, `line_style`, `moved`, `within_tolerance`, `noise`, `service_zones`)) or of the older (`a`) or newer (`b`) page alone, at the pyramid `level`, `column` and `row` (structural bounds 0..12 and 0..4095). When a level is reduced the maximum of the difference masks is kept, so a small change survives zooming. `align_blocks` aligns the recognised blocks of the newer page onto the older one without changing the PDF. The API never loads PDFium: it reduces what the worker stored. A pair, a mask or a tile that does not exist is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C1` (`ADR-0025`): until `CMP-VIEWER-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_pair_tiles`) and nothing is read or written.
+ * One tile of the pair's overlay (`mode` `overlay`: the older and the newer page on one canvas with the difference layers chosen by the `layers` parameter, a comma-separated list of layer names (`main`, `light_elements`, `color_change`, `line_style`, `moved`, `within_tolerance`, `noise`, `service_zones`)) or of the older (`a`) or newer (`b`) page alone, at the pyramid `level`, `column` and `row` (structural bounds 0..12 and 0..4095). When a level is reduced the maximum of the difference masks is kept, so a small change survives zooming. `align_blocks` aligns the recognised blocks of the newer page onto the older one without changing the PDF. The API never loads PDFium: it reduces what the worker stored. A pair, a mask or a tile that does not exist is `404`. Any one role (`role:admin|expert`, `R-80`). Served by `CMP-VIEWER-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_pair_tiles`) until the lane wired it.
  */
 export type StreamComparisonPairTileInput = {
   /** Path parameters, substituted into `/comparison-sheet-pairs/{comparison_sheet_pair_id}/tile`. */
@@ -3748,6 +5062,98 @@ export type StreamComparisonPairTileInput = {
 
 /** Success body of `streamComparisonPairTile` (`image/png`, HTTP 200). */
 export type StreamComparisonPairTileResult = Blob;
+
+// ------------------------------------------------------------------------------------
+// streamComparisonReportPdf - GET /comparison-reports/{comparison_report_id}/pdf
+// ------------------------------------------------------------------------------------
+
+/**
+ * Download the PDF of a report.
+ *
+ * «Скачать PDF»: the report's PDF, written by a program with an embedded Cyrillic font; every page carries the label that the text is model output not confirmed by an engineer and the recall line. A report without a PDF is `409 conflict` (`comparison_report_state`). An unknown report is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-REPORT-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_reports`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type StreamComparisonReportPdfInput = {
+  /** Path parameters, substituted into `/comparison-reports/{comparison_report_id}/pdf`. */
+  path: {
+    comparison_report_id: ComparisonReportId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `streamComparisonReportPdf` (`application/pdf`, HTTP 200). */
+export type StreamComparisonReportPdfResult = Blob;
+
+// ------------------------------------------------------------------------------------
+// streamComparisonReportSourceMd - GET /comparison-reports/{comparison_report_id}/source-md
+// ------------------------------------------------------------------------------------
+
+/**
+ * Download the MD a report was built from.
+ *
+ * «Исходный MD» and «Скачать MD»: the exact bytes of the summary the report was built from. An unknown report is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-REPORT-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_reports`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type StreamComparisonReportSourceMdInput = {
+  /** Path parameters, substituted into `/comparison-reports/{comparison_report_id}/source-md`. */
+  path: {
+    comparison_report_id: ComparisonReportId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `streamComparisonReportSourceMd` (`text/markdown`, HTTP 200). */
+export type StreamComparisonReportSourceMdResult = string;
+
+// ------------------------------------------------------------------------------------
+// streamComparisonSeriesSummary - GET /comparison-series/{comparison_series_id}/summary-md
+// ------------------------------------------------------------------------------------
+
+/**
+ * Download the MD summary of a series.
+ *
+ * «Сводка изменений (MD)»: the deterministic Markdown summary of the series, per transition and per sheet with the pages of both versions, the main change text, the count of open questions and the «Реестр» of categories (computed by the engine, only service zones, described by the AI, whole specification, ambiguous, not processed); the same bytes for the same data. A transition whose pairs depend on an accepted AI link is marked. It is available after a sheet is described or a specification is compared, otherwise `409 conflict` (`comparison_summary_unavailable`). An unknown series is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-REPORT-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_reports`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type StreamComparisonSeriesSummaryInput = {
+  /** Path parameters, substituted into `/comparison-series/{comparison_series_id}/summary-md`. */
+  path: {
+    comparison_series_id: ComparisonSeriesId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `streamComparisonSeriesSummary` (`text/markdown`, HTTP 200). */
+export type StreamComparisonSeriesSummaryResult = string;
+
+// ------------------------------------------------------------------------------------
+// streamComparisonSheetDescriptionMd - GET /comparison-sheet-pairs/{comparison_sheet_pair_id}/description/md
+// ------------------------------------------------------------------------------------
+
+/**
+ * Download the AI description of a sheet as Markdown.
+ *
+ * «MD листа»: the stored description of the sheet pair as UTF-8 Markdown. A sheet with no stored description is `409 conflict` (`comparison_description_missing`). An unknown sheet pair is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AISHEET-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_sheets`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type StreamComparisonSheetDescriptionMdInput = {
+  /** Path parameters, substituted into `/comparison-sheet-pairs/{comparison_sheet_pair_id}/description/md`. */
+  path: {
+    comparison_sheet_pair_id: ComparisonSheetPairId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `streamComparisonSheetDescriptionMd` (`text/markdown`, HTTP 200). */
+export type StreamComparisonSheetDescriptionMdResult = string;
 
 // ------------------------------------------------------------------------------------
 // streamDocumentVersionContent - GET /versions/{version_uid}/content
@@ -3978,7 +5384,7 @@ export type TransitionAssignmentResult = Assignment;
 /**
  * Reverse the latest applied manual matrix edit.
  *
- * «Отменить правку» on a saved edit: appends an `undo` event that reverses the latest applied edit of the document set. `base_revision` is the revision the caller saw, so an edit made meanwhile by someone else is never undone by mistake: a stale one is `409 conflict` (`comparison_matrix_stale`), and a document set with no applied edit is `409 conflict` (`comparison_edit_none`). History is append-only. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). An unknown project, or a document of another project, is `404`. Sealed as a stub by `CMP-SEAL-C1` (`ADR-0025`): until `CMP-MATRIX-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_matrix`) and nothing is read or written.
+ * «Отменить правку» on a saved edit: appends an `undo` event that reverses the latest applied edit of the document set. `base_revision` is the revision the caller saw, so an edit made meanwhile by someone else is never undone by mistake: a stale one is `409 conflict` (`comparison_matrix_stale`), and a document set with no applied edit is `409 conflict` (`comparison_edit_none`). History is append-only. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). An unknown project, or a document of another project, is `404`. Served by `CMP-MATRIX-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_matrix`) until the lane wired it.
  */
 export type UndoComparisonMatrixEditInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/comparison-matrix/edits/undo`. */
@@ -4047,6 +5453,42 @@ export type UpdateUserInput = {
 
 /** Success body of `updateUser` (`application/json`, HTTP 200). */
 export type UpdateUserResult = Account;
+
+// ------------------------------------------------------------------------------------
+// uploadComparisonReportSource - POST /comparison-series/{comparison_series_id}/reports/upload
+// ------------------------------------------------------------------------------------
+
+/**
+ * Make a report draft from an uploaded MD file.
+ *
+ * «загрузить MD-файл»: the body is the file (`text/markdown`, UTF-8, at most 20 MiB) and `kind`, `reuse` and `source_name` (a hint, never an identity) are query values. A file that is empty, larger than 20 MiB, not UTF-8 or without a transition headed «## N. … A → B» is `422 validation_failed` (`comparison_report_source_invalid`). Makes a `draft` with its estimate; no model is called. An unknown series is `404`. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-REPORT-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_reports`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ */
+export type UploadComparisonReportSourceInput = {
+  /** Path parameters, substituted into `/comparison-series/{comparison_series_id}/reports/upload`. */
+  path: {
+    comparison_series_id: ComparisonSeriesId;
+  };
+  /** Query string parameters. */
+  query?: {
+    kind?: ComparisonReportKind;
+    reuse?: boolean;
+    source_name?: string;
+  };
+  /** Request body, sent as `text/markdown`. */
+  body: Blob;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `uploadComparisonReportSource` (`application/json`, HTTP 201). */
+export type UploadComparisonReportSourceResult = ComparisonReport;
 
 // ------------------------------------------------------------------------------------
 // uploadComparisonUploadPart - PUT /comparison-uploads/{comparison_upload_id}/files/{comparison_upload_file_id}/parts
@@ -4340,11 +5782,67 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 500, 503],
     tags: ['users'],
   },
+  cancelComparisonAiPairCheck: {
+    operationId: 'cancelComparisonAiPairCheck',
+    method: 'POST',
+    path: '/comparison-ai-pair-checks/{comparison_ai_job_id}/cancellation',
+    pathParams: ['comparison_ai_job_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
+  },
+  cancelComparisonAiSheetChanges: {
+    operationId: 'cancelComparisonAiSheetChanges',
+    method: 'POST',
+    path: '/comparison-ai-sheet-jobs/{comparison_ai_job_id}/cancellation',
+    pathParams: ['comparison_ai_job_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
+  },
+  cancelComparisonReport: {
+    operationId: 'cancelComparisonReport',
+    method: 'POST',
+    path: '/comparison-reports/{comparison_report_id}/cancellation',
+    pathParams: ['comparison_report_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
+  },
   cancelComparisonSeries: {
     operationId: 'cancelComparisonSeries',
     method: 'POST',
     path: '/comparison-series/{comparison_series_id}/cancellation',
     pathParams: ['comparison_series_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
+  },
+  cancelComparisonSpecification: {
+    operationId: 'cancelComparisonSpecification',
+    method: 'POST',
+    path: '/comparison-ai-spec-jobs/{comparison_ai_job_id}/cancellation',
+    pathParams: ['comparison_ai_job_id'],
     queryParams: [],
     headerParams: [],
     requiresIdempotencyKey: true,
@@ -4438,6 +5936,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['documents'],
   },
+  clearComparisonLaunchQueue: {
+    operationId: 'clearComparisonLaunchQueue',
+    method: 'POST',
+    path: '/projects/{project_uid}/comparison-launch-queue/clear',
+    pathParams: ['project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
+  },
   compareDocumentVersions: {
     operationId: 'compareDocumentVersions',
     method: 'GET',
@@ -4471,6 +5983,20 @@ export const OPERATIONS = {
     method: 'POST',
     path: '/comparison-uploads/{comparison_upload_id}/sets/{comparison_upload_set_id}/confirmation',
     pathParams: ['comparison_upload_id', 'comparison_upload_set_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['comparison'],
+  },
+  continueComparisonReport: {
+    operationId: 'continueComparisonReport',
+    method: 'POST',
+    path: '/comparison-reports/{comparison_report_id}/continuation',
+    pathParams: ['comparison_report_id'],
     queryParams: [],
     headerParams: [],
     requiresIdempotencyKey: true,
@@ -4521,6 +6047,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['dispatch'],
+  },
+  createComparisonReport: {
+    operationId: 'createComparisonReport',
+    method: 'POST',
+    path: '/comparison-series/{comparison_series_id}/reports',
+    pathParams: ['comparison_series_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['comparison'],
   },
   createComparisonUpload: {
     operationId: 'createComparisonUpload',
@@ -4577,6 +6117,104 @@ export const OPERATIONS = {
     successStatuses: [201],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['optimisation'],
+  },
+  deleteComparisonReport: {
+    operationId: 'deleteComparisonReport',
+    method: 'POST',
+    path: '/comparison-reports/{comparison_report_id}/deletion',
+    pathParams: ['comparison_report_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
+  },
+  dequeueComparisonAiSheetChanges: {
+    operationId: 'dequeueComparisonAiSheetChanges',
+    method: 'POST',
+    path: '/comparison-ai-sheet-jobs/{comparison_ai_job_id}/dequeue',
+    pathParams: ['comparison_ai_job_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
+  },
+  enqueueComparisonLaunch: {
+    operationId: 'enqueueComparisonLaunch',
+    method: 'POST',
+    path: '/projects/{project_uid}/comparison-launch-queue/entries',
+    pathParams: ['project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['comparison'],
+  },
+  estimateComparisonAiPairCheck: {
+    operationId: 'estimateComparisonAiPairCheck',
+    method: 'GET',
+    path: '/projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-check/estimate',
+    pathParams: ['document_uid', 'project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
+  },
+  estimateComparisonAiSheetChanges: {
+    operationId: 'estimateComparisonAiSheetChanges',
+    method: 'GET',
+    path: '/comparison-series/{comparison_series_id}/ai-sheet-changes/estimate',
+    pathParams: ['comparison_series_id'],
+    queryParams: ['only_failed'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['comparison'],
+  },
+  estimateComparisonSheetDescription: {
+    operationId: 'estimateComparisonSheetDescription',
+    method: 'GET',
+    path: '/comparison-sheet-pairs/{comparison_sheet_pair_id}/description/estimate',
+    pathParams: ['comparison_sheet_pair_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
+  },
+  estimateComparisonSpecification: {
+    operationId: 'estimateComparisonSpecification',
+    method: 'GET',
+    path: '/comparison-transitions/{comparison_transition_id}/specification/estimate',
+    pathParams: ['comparison_transition_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
   },
   excludeComparisonUploadSet: {
     operationId: 'excludeComparisonUploadSet',
@@ -4661,6 +6299,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 404, 409, 422, 500, 503],
     tags: ['execution'],
+  },
+  finishComparisonAiSheetChanges: {
+    operationId: 'finishComparisonAiSheetChanges',
+    method: 'POST',
+    path: '/comparison-ai-sheet-jobs/{comparison_ai_job_id}/finish',
+    pathParams: ['comparison_ai_job_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
   },
   finishComparisonSeries: {
     operationId: 'finishComparisonSeries',
@@ -4760,6 +6412,62 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 500, 503],
     tags: ['dispatch'],
   },
+  getComparisonAiPairCheck: {
+    operationId: 'getComparisonAiPairCheck',
+    method: 'GET',
+    path: '/projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-check',
+    pathParams: ['document_uid', 'project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['comparison'],
+  },
+  getComparisonAiQueue: {
+    operationId: 'getComparisonAiQueue',
+    method: 'GET',
+    path: '/execution/comparison-ai-queue',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 500, 503],
+    tags: ['execution'],
+  },
+  getComparisonAiSheetChanges: {
+    operationId: 'getComparisonAiSheetChanges',
+    method: 'GET',
+    path: '/comparison-series/{comparison_series_id}/ai-sheet-changes',
+    pathParams: ['comparison_series_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['comparison'],
+  },
+  getComparisonLaunchQueue: {
+    operationId: 'getComparisonLaunchQueue',
+    method: 'GET',
+    path: '/projects/{project_uid}/comparison-launch-queue',
+    pathParams: ['project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['comparison'],
+  },
   getComparisonMatrix: {
     operationId: 'getComparisonMatrix',
     method: 'GET',
@@ -4802,6 +6510,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 500, 503],
     tags: ['execution'],
   },
+  getComparisonReport: {
+    operationId: 'getComparisonReport',
+    method: 'GET',
+    path: '/comparison-reports/{comparison_report_id}',
+    pathParams: ['comparison_report_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['comparison'],
+  },
   getComparisonSeries: {
     operationId: 'getComparisonSeries',
     method: 'GET',
@@ -4816,11 +6538,53 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 500, 503],
     tags: ['comparison'],
   },
+  getComparisonSheetDescription: {
+    operationId: 'getComparisonSheetDescription',
+    method: 'GET',
+    path: '/comparison-sheet-pairs/{comparison_sheet_pair_id}/description',
+    pathParams: ['comparison_sheet_pair_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['comparison'],
+  },
   getComparisonSheetPair: {
     operationId: 'getComparisonSheetPair',
     method: 'GET',
     path: '/comparison-sheet-pairs/{comparison_sheet_pair_id}',
     pathParams: ['comparison_sheet_pair_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['comparison'],
+  },
+  getComparisonSheetPairSpecPositions: {
+    operationId: 'getComparisonSheetPairSpecPositions',
+    method: 'GET',
+    path: '/comparison-sheet-pairs/{comparison_sheet_pair_id}/spec-positions',
+    pathParams: ['comparison_sheet_pair_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['comparison'],
+  },
+  getComparisonSpecification: {
+    operationId: 'getComparisonSpecification',
+    method: 'GET',
+    path: '/comparison-transitions/{comparison_transition_id}/specification',
+    pathParams: ['comparison_transition_id'],
     queryParams: [],
     headerParams: [],
     requiresIdempotencyKey: false,
@@ -5096,6 +6860,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 500, 503],
     tags: ['comparison'],
   },
+  getVersionPageSpecPositions: {
+    operationId: 'getVersionPageSpecPositions',
+    method: 'GET',
+    path: '/page-profiles/{comparison_page_profile_id}/spec-positions',
+    pathParams: ['comparison_page_profile_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['comparison'],
+  },
   getVersionSectionReview: {
     operationId: 'getVersionSectionReview',
     method: 'GET',
@@ -5194,11 +6972,53 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['comparison'],
   },
+  listComparisonAiPairHints: {
+    operationId: 'listComparisonAiPairHints',
+    method: 'GET',
+    path: '/projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-hints',
+    pathParams: ['document_uid', 'project_uid'],
+    queryParams: ['cursor', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['comparison'],
+  },
   listComparisonMatrixEdits: {
     operationId: 'listComparisonMatrixEdits',
     method: 'GET',
     path: '/projects/{project_uid}/documents/{document_uid}/comparison-matrix/edits',
     pathParams: ['document_uid', 'project_uid'],
+    queryParams: ['cursor', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['comparison'],
+  },
+  listComparisonReports: {
+    operationId: 'listComparisonReports',
+    method: 'GET',
+    path: '/comparison-series/{comparison_series_id}/reports',
+    pathParams: ['comparison_series_id'],
+    queryParams: ['cursor', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['comparison'],
+  },
+  listComparisonReviewSheets: {
+    operationId: 'listComparisonReviewSheets',
+    method: 'GET',
+    path: '/comparison-transitions/{comparison_transition_id}/review-sheets',
+    pathParams: ['comparison_transition_id'],
     queryParams: ['cursor', 'limit'],
     headerParams: [],
     requiresIdempotencyKey: false,
@@ -5222,12 +7042,54 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['comparison'],
   },
+  listComparisonSheetDescriptionHistory: {
+    operationId: 'listComparisonSheetDescriptionHistory',
+    method: 'GET',
+    path: '/comparison-sheet-pairs/{comparison_sheet_pair_id}/description-history',
+    pathParams: ['comparison_sheet_pair_id'],
+    queryParams: ['cursor', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['comparison'],
+  },
   listComparisonSheetPairs: {
     operationId: 'listComparisonSheetPairs',
     method: 'GET',
     path: '/comparison-transitions/{comparison_transition_id}/sheet-pairs',
     pathParams: ['comparison_transition_id'],
     queryParams: ['cursor', 'limit', 'only_changes', 'status'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['comparison'],
+  },
+  listComparisonSpecificationChanges: {
+    operationId: 'listComparisonSpecificationChanges',
+    method: 'GET',
+    path: '/comparison-transitions/{comparison_transition_id}/specification/changes',
+    pathParams: ['comparison_transition_id'],
+    queryParams: ['cursor', 'kind', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['comparison'],
+  },
+  listComparisonSpecifications: {
+    operationId: 'listComparisonSpecifications',
+    method: 'GET',
+    path: '/comparison-series/{comparison_series_id}/specifications',
+    pathParams: ['comparison_series_id'],
+    queryParams: ['cursor', 'limit'],
     headerParams: [],
     requiresIdempotencyKey: false,
     requestMediaType: null,
@@ -5642,6 +7504,48 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 422, 500, 503],
     tags: ['account'],
   },
+  pauseComparisonAiPairCheck: {
+    operationId: 'pauseComparisonAiPairCheck',
+    method: 'POST',
+    path: '/comparison-ai-pair-checks/{comparison_ai_job_id}/pause',
+    pathParams: ['comparison_ai_job_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
+  },
+  pauseComparisonAiSheetChanges: {
+    operationId: 'pauseComparisonAiSheetChanges',
+    method: 'POST',
+    path: '/comparison-ai-sheet-jobs/{comparison_ai_job_id}/pause',
+    pathParams: ['comparison_ai_job_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
+  },
+  pauseComparisonLaunchQueue: {
+    operationId: 'pauseComparisonLaunchQueue',
+    method: 'POST',
+    path: '/projects/{project_uid}/comparison-launch-queue/pause',
+    pathParams: ['project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
+  },
   pauseComparisonSeries: {
     operationId: 'pauseComparisonSeries',
     method: 'POST',
@@ -5668,6 +7572,20 @@ export const OPERATIONS = {
     responseMediaType: 'application/json',
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
+  },
+  prepareComparisonClientReport: {
+    operationId: 'prepareComparisonClientReport',
+    method: 'POST',
+    path: '/comparison-reports/{comparison_report_id}/client-report',
+    pathParams: ['comparison_report_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['comparison'],
   },
   prepareComparisonMatrix: {
@@ -5726,6 +7644,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['execution'],
   },
+  rebuildComparisonReportPdf: {
+    operationId: 'rebuildComparisonReportPdf',
+    method: 'POST',
+    path: '/comparison-reports/{comparison_report_id}/pdf-rebuild',
+    pathParams: ['comparison_report_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
+  },
   rejectRegistration: {
     operationId: 'rejectRegistration',
     method: 'POST',
@@ -5739,6 +7671,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['registrations'],
+  },
+  removeComparisonLaunchEntry: {
+    operationId: 'removeComparisonLaunchEntry',
+    method: 'POST',
+    path: '/comparison-launch-entries/{comparison_launch_entry_id}/removal',
+    pathParams: ['comparison_launch_entry_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
   },
   requestExecutorProbe: {
     operationId: 'requestExecutorProbe',
@@ -5782,6 +7728,48 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 500, 503],
     tags: ['users'],
   },
+  resumeComparisonAiPairCheck: {
+    operationId: 'resumeComparisonAiPairCheck',
+    method: 'POST',
+    path: '/comparison-ai-pair-checks/{comparison_ai_job_id}/resume',
+    pathParams: ['comparison_ai_job_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['comparison'],
+  },
+  resumeComparisonAiSheetChanges: {
+    operationId: 'resumeComparisonAiSheetChanges',
+    method: 'POST',
+    path: '/comparison-ai-sheet-jobs/{comparison_ai_job_id}/resume',
+    pathParams: ['comparison_ai_job_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['comparison'],
+  },
+  resumeComparisonLaunchQueue: {
+    operationId: 'resumeComparisonLaunchQueue',
+    method: 'POST',
+    path: '/projects/{project_uid}/comparison-launch-queue/resume',
+    pathParams: ['project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
+  },
   resumeComparisonSeries: {
     operationId: 'resumeComparisonSeries',
     method: 'POST',
@@ -5808,6 +7796,20 @@ export const OPERATIONS = {
     responseMediaType: 'application/json',
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
+  },
+  retryComparisonAiSheetChanges: {
+    operationId: 'retryComparisonAiSheetChanges',
+    method: 'POST',
+    path: '/comparison-ai-sheet-jobs/{comparison_ai_job_id}/retry',
+    pathParams: ['comparison_ai_job_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['comparison'],
   },
   retryComparisonUploadSet: {
@@ -6006,11 +8008,81 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['runs'],
   },
+  startComparisonAiPairCheck: {
+    operationId: 'startComparisonAiPairCheck',
+    method: 'POST',
+    path: '/projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-check',
+    pathParams: ['document_uid', 'project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['comparison'],
+  },
+  startComparisonAiSheetChanges: {
+    operationId: 'startComparisonAiSheetChanges',
+    method: 'POST',
+    path: '/comparison-series/{comparison_series_id}/ai-sheet-changes',
+    pathParams: ['comparison_series_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['comparison'],
+  },
+  startComparisonReport: {
+    operationId: 'startComparisonReport',
+    method: 'POST',
+    path: '/comparison-reports/{comparison_report_id}/start',
+    pathParams: ['comparison_report_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['comparison'],
+  },
   startComparisonSeries: {
     operationId: 'startComparisonSeries',
     method: 'POST',
     path: '/projects/{project_uid}/documents/{document_uid}/comparison-series',
     pathParams: ['document_uid', 'project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['comparison'],
+  },
+  startComparisonSheetDescription: {
+    operationId: 'startComparisonSheetDescription',
+    method: 'POST',
+    path: '/comparison-sheet-pairs/{comparison_sheet_pair_id}/description',
+    pathParams: ['comparison_sheet_pair_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['comparison'],
+  },
+  startComparisonSpecification: {
+    operationId: 'startComparisonSpecification',
+    method: 'POST',
+    path: '/comparison-transitions/{comparison_transition_id}/specification',
+    pathParams: ['comparison_transition_id'],
     queryParams: [],
     headerParams: [],
     requiresIdempotencyKey: true,
@@ -6060,6 +8132,62 @@ export const OPERATIONS = {
     responseMediaType: 'image/png',
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['comparison'],
+  },
+  streamComparisonReportPdf: {
+    operationId: 'streamComparisonReportPdf',
+    method: 'GET',
+    path: '/comparison-reports/{comparison_report_id}/pdf',
+    pathParams: ['comparison_report_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/pdf',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
+  },
+  streamComparisonReportSourceMd: {
+    operationId: 'streamComparisonReportSourceMd',
+    method: 'GET',
+    path: '/comparison-reports/{comparison_report_id}/source-md',
+    pathParams: ['comparison_report_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'text/markdown',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
+  },
+  streamComparisonSeriesSummary: {
+    operationId: 'streamComparisonSeriesSummary',
+    method: 'GET',
+    path: '/comparison-series/{comparison_series_id}/summary-md',
+    pathParams: ['comparison_series_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'text/markdown',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
+  },
+  streamComparisonSheetDescriptionMd: {
+    operationId: 'streamComparisonSheetDescriptionMd',
+    method: 'GET',
+    path: '/comparison-sheet-pairs/{comparison_sheet_pair_id}/description/md',
+    pathParams: ['comparison_sheet_pair_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'text/markdown',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
     tags: ['comparison'],
   },
   streamDocumentVersionContent: {
@@ -6229,6 +8357,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['users'],
+  },
+  uploadComparisonReportSource: {
+    operationId: 'uploadComparisonReportSource',
+    method: 'POST',
+    path: '/comparison-series/{comparison_series_id}/reports/upload',
+    pathParams: ['comparison_series_id'],
+    queryParams: ['kind', 'reuse', 'source_name'],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'text/markdown',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['comparison'],
   },
   uploadComparisonUploadPart: {
     operationId: 'uploadComparisonUploadPart',

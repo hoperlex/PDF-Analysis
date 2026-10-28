@@ -14,7 +14,7 @@ import { classifyCreateProjectFailure, classifyProjectListFailure } from '@/enti
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.10.0',
+    contract_version: '1.11.0',
     error_code: code,
     message: 'A caller-safe sentence.',
     correlation_id: 'corr-1',

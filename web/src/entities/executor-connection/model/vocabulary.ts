@@ -72,6 +72,11 @@ export const PURPOSE_LABELS: Readonly<Record<ExecutorSecretPurpose, string>> = {
 
 export const WORK_KIND_LABELS: Readonly<Record<ExecutorWorkKind, string>> = {
   text_analysis: 'Анализ текста',
+  // `CMP-SEAL-C2` (ADR-0025 decision 17): the four kinds of model work of «Сравнение версий».
+  comparison_pair_check: 'Сравнение версий: проверка сомнительных пар',
+  comparison_sheet_changes: 'Сравнение версий: описание изменений',
+  comparison_spec: 'Сравнение версий: спецификации',
+  comparison_report: 'Сравнение версий: отчёт',
 };
 
 export const PROBE_STATE_LABELS: Readonly<Record<ExecutorProbeState, string>> = {

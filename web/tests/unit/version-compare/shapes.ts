@@ -197,7 +197,7 @@ export const COMPARISON_SHAPES: readonly ComparisonShape[] = [
   },
   { name: 'sheets-tab-matrix-absent', make: () => createElement(SheetsTabView, sheetsProps({ matrix: matrix({ state: 'absent', rows: [], progress: { ready: 0, total: 0, failed: 0 } }), series: null, pairs: null })) },
   { name: 'sheets-tab-matrix-building', make: () => createElement(SheetsTabView, sheetsProps({ matrix: matrix({ state: 'building', rows: [], progress: { ready: 10, total: 24, failed: 1 } }), series: null, pairs: null })) },
-  { name: 'sheets-tab-matrix-stale', make: () => createElement(SheetsTabView, sheetsProps({ matrix: matrix({ state: 'stale', stale_reasons: ['order_changed', 'profiles_changed'] }) })) },
+  { name: 'sheets-tab-matrix-stale', make: () => createElement(SheetsTabView, sheetsProps({ matrix: matrix({ state: 'stale', stale_reasons: ['order_changed', 'profiles_changed', 'algorithm_changed'] }) })) },
   { name: 'sheets-tab-matrix-failed', make: () => createElement(SheetsTabView, sheetsProps({ matrix: matrix({ state: 'failed', failure_reason: 'some_code', rows: [] }), series: null, pairs: null })) },
   { name: 'sheets-tab-matrix-empty', make: () => createElement(SheetsTabView, sheetsProps({ matrix: matrix({ rows: [], unassigned_pages: [], orphaned_edit_ids: [] }), edits: [] })) },
   ...COMPARISON_SERIES_STATE_VALUES.map(seriesOf),

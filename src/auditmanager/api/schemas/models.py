@@ -513,7 +513,6 @@ __all__ = [
     "ComparisonSpecMethod",
     "ComparisonSpecState",
     "ComparisonSpecPhase",
-    "ComparisonSpecField",
     "ComparisonSpecChangeKind",
     "ComparisonSpecPosition",
     "ComparisonSpecFieldChange",
@@ -5801,34 +5800,34 @@ class ComparisonAiJob(_Object):
 
 
 class ComparisonAiPairQuestionKind(str, enum.Enum):
-    """``review``: sheet A has no pair and the cell of B has candidates («⁇»). ``medium``: the algorithm's
+    """``no_pair``: sheet A has no pair and the cell of B has candidates («⁇»). ``medium_pair``: the algorithm's
     pair has medium confidence. Sheets of a multi-sheet table group are not asked."""
 
-    REVIEW = "review"
-    MEDIUM = "medium"
+    NO_PAIR = "no_pair"
+    MEDIUM_PAIR = "medium_pair"
 
 
 class ComparisonAiPairDecision(str, enum.Enum):
-    """What the lane's rule made of the answers. ``accepted``: written as an accepted AI link
+    """What the lane's rule made of the answers. ``link_accepted``: written as an accepted AI link
     (high confidence, the candidate number and the page agree, the sheet is not inside a multi-sheet
     specification, B is not linked to another A, no other A chose the same B, the reverse question
     returned A with high confidence). The ``hint_*`` values are shown as «ИИ ?» or «вероятно стр. N»
     and change nothing: ``hint_table`` a multi-sheet table, ``hint_confidence`` not high,
     ``hint_taken`` B is already paired by the algorithm, ``hint_shared`` two sheets chose one,
     ``hint_reverse`` the reverse question did not confirm. ``none``: no candidate is the same sheet.
-    ``mismatch``: the number and the page disagree and the answer is dropped. ``failed``: no usable
+    ``answer_mismatch``: the number and the page disagree and the answer is dropped. ``failed``: no usable
     answer. ``medium_confirm``, ``medium_weak``, ``medium_other`` and ``medium_none``: the answers to a
     ``medium`` question (the pair is confirmed, confirmed without confidence, another sheet is
     named, none is the same sheet). A manual edit always wins over any of them."""
 
-    ACCEPTED = "accepted"
+    LINK_ACCEPTED = "link_accepted"
     HINT_TABLE = "hint_table"
     HINT_CONFIDENCE = "hint_confidence"
     HINT_TAKEN = "hint_taken"
     HINT_SHARED = "hint_shared"
     HINT_REVERSE = "hint_reverse"
     NONE = "none"
-    MISMATCH = "mismatch"
+    ANSWER_MISMATCH = "answer_mismatch"
     FAILED = "failed"
     MEDIUM_CONFIRM = "medium_confirm"
     MEDIUM_WEAK = "medium_weak"
@@ -5869,7 +5868,7 @@ class ComparisonAiPairCheck(_Object):
 class ComparisonAiPairHint(_Object):
     """The answer to one question, for the matrix cell it concerns: sheet ``page`` of the older version
     against the cell of ``version_uid``. ``hint_page`` is «вероятно стр. N». ``link_id`` names the
-    accepted AI link an ``accepted`` decision wrote. ``stale`` is true when the question was asked of a
+    accepted AI link a ``link_accepted`` decision wrote. ``stale`` is true when the question was asked of a
     matrix build that is no longer the latest. ``reason`` is the model's own sentence, not confirmed by an
     engineer."""
 
@@ -5920,12 +5919,12 @@ class ComparisonAiSheetState(str, enum.Enum):
 
 
 class ComparisonAiTier(str, enum.Enum):
-    """How a value of a change was checked by the program: ``text`` found in the text layer of its own
-    side, ``image`` read from the drawing the model cited («с изображения»), ``unverified`` found in
+    """How a value of a change was checked by the program: ``from_text`` found in the text layer of its own
+    side, ``from_image`` read from the drawing the model cited («с изображения»), ``unverified`` found in
     neither («не подтверждено»)."""
 
-    TEXT = "text"
-    IMAGE = "image"
+    FROM_TEXT = "from_text"
+    FROM_IMAGE = "from_image"
     UNVERIFIED = "unverified"
 
 
@@ -6092,10 +6091,10 @@ class ComparisonAiSheetChanges(_Object):
 
 
 class ComparisonReviewSheetKind(str, enum.Enum):
-    """``review``: the AI found no change but the comparison left marks («Проверить»). ``added`` and
+    """``to_check``: the AI found no change but the comparison left marks («Проверить»). ``added`` and
     ``removed``: a single sheet of the transition, described on its own."""
 
-    REVIEW = "review"
+    TO_CHECK = "to_check"
     ADDED = "added"
     REMOVED = "removed"
 
@@ -6167,24 +6166,9 @@ class ComparisonSpecState(str, enum.Enum):
 
 
 class ComparisonSpecPhase(str, enum.Enum):
-    PREPARATION = "preparation"
-    COMPARISON = "comparison"
+    PREPARING = "preparing"
+    COMPARING = "comparing"
     DONE = "done"
-
-
-class ComparisonSpecField(str, enum.Enum):
-    """The nine fields of a position of a specification (GOST 21.110): the position number, name,
-    type and mark, code, supplier, unit, quantity, mass and note."""
-
-    POS = "pos"
-    NAME = "name"
-    MARK = "mark"
-    CODE = "code"
-    SUPPLIER = "supplier"
-    UNIT = "unit"
-    QUANTITY = "quantity"
-    MASS = "mass"
-    NOTE = "note"
 
 
 class ComparisonSpecChangeKind(str, enum.Enum):
@@ -6221,9 +6205,11 @@ class ComparisonSpecPosition(_Object):
 
 
 class ComparisonSpecFieldChange(_Object):
-    """«было → стало» of one field."""
+    """«было → стало» of one field. ``field`` is one of the nine fields of a position of a specification
+    (GOST 21.110): ``pos``, ``name``, ``mark``, ``code``, ``supplier``, ``unit``, ``quantity``, ``mass``
+    and ``note`` (an open word, so that the contract does not freeze the table layout)."""
 
-    field: ComparisonSpecField
+    field: Annotated[str, Field(pattern=r"^[a-z][a-z_]{1,15}$")]
     was: Annotated[str, Field(max_length=400)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
     now: Annotated[str, Field(max_length=400)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
 
@@ -6450,11 +6436,11 @@ class ComparisonReportStage(str, enum.Enum):
     «написание текста для заказчика» (the client kind) and «формирование PDF»."""
 
     INTAKE = "intake"
-    ANALYSIS = "analysis"
+    TRANSITION_ANALYSIS = "transition_analysis"
     VERIFICATION = "verification"
     COMPOSITION = "composition"
-    WRITING = "writing"
-    PDF = "pdf"
+    CLIENT_WRITING = "client_writing"
+    PDF_WRITING = "pdf_writing"
 
 
 class ComparisonReportUnitMark(str, enum.Enum):
@@ -6492,7 +6478,7 @@ class ComparisonReportPart(_Object):
 
 
 class ComparisonReportArtifactKind(str, enum.Enum):
-    PDF = "pdf"
+    REPORT_PDF = "report_pdf"
     SOURCE_MD = "source_md"
 
 
