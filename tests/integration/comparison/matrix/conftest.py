@@ -41,6 +41,7 @@ _NAMES = (
     "S3_SECRET_ACCESS_KEY", "S3_BUCKET",
 )
 SECRET = "comparison-matrix-suite"
+TEMPLATE_PROJECT = "Матрица листов: образец"
 
 
 def _load_dotenv() -> None:
@@ -138,8 +139,8 @@ class Lab:
                     )
         return Doc(project, document, tuple(made), {v: self.template.page_counts[s] for v, s in zip(made, self.template.versions)})
 
-    def add_version(self, doc: Doc, source_version: str | None = None) -> str:
-        """Publish one more version (ordinal after the last) without profiles."""
+    def add_version(self, doc: Doc, source_version: str | None = None, *, profiles: bool = False) -> str:
+        """Publish one more version (ordinal after the last), with a copy of the source's profile rows if asked."""
         source = source_version or self.template.versions[0]
         version = str(VersionUid.new())
         with session_scope(self.sessions) as session:
@@ -154,7 +155,57 @@ class Lab:
                 ),
                 {"v": version, "d": doc.document_uid, "o": ordinal, "s": source},
             )
+            if profiles:
+                session.execute(
+                    text(
+                        "INSERT INTO comparison_page_profile (comparison_page_profile_id, version_uid, page_number, "
+                        "content_key, algo_version, status, reason, profile, profile_blob_id, preview_blob_id, "
+                        "thumbnail_blob_id) SELECT 'cpr_' || :ulid_prefix || lpad(page_number::text, 6, '0'), :v, "
+                        "page_number, content_key, algo_version, status, reason, profile, profile_blob_id, "
+                        "preview_blob_id, thumbnail_blob_id FROM comparison_page_profile WHERE version_uid = :s"
+                    ),
+                    {"v": version, "s": source, "ulid_prefix": new_ulid()[:20]},
+                )
         return version
+
+    def seed_sources(self, files: list[str]) -> Doc:
+        """A document whose versions are the given VS-1 files with their source blob in the manifest and **no**
+        profiles: what a confirmed upload leaves before the worker has profiled it."""
+        project, document = str(ProjectUid.new()), str(DocumentUid.new())
+        versions: list[str] = []
+        counts: dict[str, int] = {}
+        with session_scope(self.sessions) as session:
+            session.execute(text("INSERT INTO project (project_uid, name) VALUES (:p, 'Матрица листов: подготовка')"), {"p": project})
+            session.execute(
+                text("INSERT INTO document (document_uid, project_uid, display_title) VALUES (:d, :p, 'Комплект')"),
+                {"d": document, "p": project},
+            )
+        for ordinal, name in enumerate(files, start=1):
+            data = (FIXTURES / "vs1" / name).read_bytes()
+            digest = hashlib.sha256(data).hexdigest()
+            version = str(VersionUid.new())
+            pages = {"v1.pdf": 6, "v2.pdf": 6, "v3.pdf": 6}[name]
+            blob_id = ProfileBlobPublisher(self.sessions, self.blob_store).publish(
+                data, role="source_document", media_type="application/pdf"
+            )
+            with session_scope(self.sessions) as session:
+                session.execute(
+                    text(
+                        "INSERT INTO document_version (version_uid, document_uid, version_ordinal, media_type, byte_size, "
+                        "sha256, page_count) VALUES (:v, :d, :o, 'application/pdf', :n, :s, :c)"
+                    ),
+                    {"v": version, "d": document, "o": ordinal, "n": len(data), "s": digest, "c": pages},
+                )
+                session.execute(
+                    text(
+                        "INSERT INTO input_manifest_entry (version_uid, role, blob_id, sha256, size_bytes, media_type) "
+                        "VALUES (:v, :r, :b, :s, :n, 'application/pdf')"
+                    ),
+                    {"v": version, "r": MANIFEST_ROLE_SOURCE_DOCUMENT, "b": blob_id, "s": digest, "n": len(data)},
+                )
+            versions.append(version)
+            counts[version] = pages
+        return Doc(project, document, tuple(versions), counts)
 
     def rows(self, sql: str, **params: Any) -> list[dict[str, Any]]:
         with self.sessions() as session:
@@ -163,12 +214,27 @@ class Lab:
 
 @pytest.fixture(scope="session")
 def template(sessions: sessionmaker[Session], blob_store: S3BlobStore, vs1_key: dict[str, Any]) -> Doc:
-    """VS-1 as a published document of five versions with every page profiled by the real children."""
+    """VS-1 as a published document of five versions with every page profiled by the real children.
+
+    Built once per database: a later run of the suite finds the document (named by ``TEMPLATE_PROJECT``) with every
+    page of the five versions profiled and reuses it, so only the first run pays the thirty seconds."""
+    with sessions() as session:
+        found = session.execute(text(
+            "SELECT d.document_uid, p.project_uid FROM document d JOIN project p ON p.project_uid = d.project_uid "
+            "WHERE p.name = :n ORDER BY p.created_at DESC LIMIT 1"), {"n": TEMPLATE_PROJECT}).first()
+        if found is not None:
+            rows = session.execute(text(
+                "SELECT v.version_uid, v.page_count, count(cp.comparison_page_profile_id) AS profiled "
+                "FROM document_version v LEFT JOIN comparison_page_profile cp ON cp.version_uid = v.version_uid "
+                "WHERE v.document_uid = :d GROUP BY v.version_uid, v.page_count, v.version_ordinal "
+                "ORDER BY v.version_ordinal"), {"d": found[0]}).all()
+            if len(rows) == len(vs1_key["versions"]) and all(r[1] == r[2] for r in rows):
+                return Doc(found[1], found[0], tuple(r[0] for r in rows), {r[0]: int(r[1]) for r in rows})
     project, document = str(ProjectUid.new()), str(DocumentUid.new())
     versions: list[str] = []
     counts: dict[str, int] = {}
     with session_scope(sessions) as session:
-        session.execute(text("INSERT INTO project (project_uid, name) VALUES (:p, 'Матрица листов: образец')"), {"p": project})
+        session.execute(text("INSERT INTO project (project_uid, name) VALUES (:p, :n)"), {"p": project, "n": TEMPLATE_PROJECT})
         session.execute(
             text("INSERT INTO document (document_uid, project_uid, display_title) VALUES (:d, :p, 'Образец')"),
             {"d": document, "p": project},
