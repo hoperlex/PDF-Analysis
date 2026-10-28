@@ -21,6 +21,7 @@ from starlette.testclient import TestClient
 from auditmanager.api.app import create_app, create_asgi_app
 from auditmanager.api.security import API_TOKEN_VARIABLE
 from auditmanager.comparison.profile.builder import build_version_page_profiles
+from auditmanager.comparison.profile import limits
 from auditmanager.comparison.profile.limits import ChildLimits
 
 SECRET = "page-reads-static-token"
@@ -106,7 +107,7 @@ def test_the_listing_pages_by_page_number_with_an_opaque_cursor(http, token, bui
     second = _json(_get(http, token, f"/versions/{built['good']}/page-profiles", limit=4, cursor=body["page"]["next_cursor"]))
     assert [item["page_number"] for item in second["items"]] == [5, 6] and second["page"].get("next_cursor") is None
     item = body["items"][1]
-    assert item["status"] == "ready" and item["algo_version"] == "cmp-profile/1" and len(item["content_key"]) == 64
+    assert item["status"] == "ready" and item["algo_version"] == limits.ALGO_VERSION and len(item["content_key"]) == 64
     assert item["page_profile_id"].startswith("cpr_") and item["version_uid"] == built["good"]
     assert (item["has_text_layer"], item["preview_available"], item["thumbnail_available"]) == (True, True, True)
     assert item["word_count"] > 0 and item["vector_line_count"] > 0 and item["annotation_count"] == 0

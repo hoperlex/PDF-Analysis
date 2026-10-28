@@ -16,7 +16,16 @@ What it hashes
   streams by their dictionary and their decoded bytes (an image stream by its **encoded** bytes
   and its dictionary, so an image is never decoded here), indirect references by the digest of
   what they point at, so object numbers never reach the digest;
-* the page boxes and ``/Rotate``, because the same stream on another box is another sheet.
+* the page boxes and ``/Rotate``, because the same stream on another box is another sheet;
+* **the default visibility of every optional-content group the page refers to** (`CMP-C1-FIX-A` item 7). A group is a
+  dictionary in the resources and is hashed by value like the rest, but whether it is shown lives in the catalogue
+  (``/OCProperties`` ``/D``: ``/BaseState``, ``/ON``, ``/OFF``, ``/AS``), so two pages with the same stream and the same
+  resources that differ only in a layer's default visibility drew different sheets and had one Merkle. The state is folded
+  into the digest of **each reference** to a group, so it belongs to the places that use it, no object number reaches the
+  digest, and a layer the page does not use cannot change it. PDFium's order is followed: ``/BaseState`` (``/ON`` unless
+  ``/OFF``), then ``/ON``, then ``/OFF``; a group named by an ``/AS`` entry of the event ``View`` is marked, because its
+  ``/Usage`` ``/View`` state (in the group's own dictionary, hashed by value) then decides. A page that refers to no group
+  has the digest it had before.
 
 A reference loop hashes as a fixed marker; the walk has a node budget and a depth ceiling and
 raises :class:`MerkleBudgetExceeded` past them (the child reports it as a failure of that page,
@@ -55,18 +64,78 @@ class MerkleBudgetExceeded(Exception):
 
 
 class _Walk:
-    __slots__ = ("memo", "path", "nodes", "skip_keys")
+    __slots__ = ("memo", "path", "nodes", "skip_keys", "optional_content")
 
-    def __init__(self, skip_keys: frozenset[str] = frozenset()) -> None:
+    def __init__(self, skip_keys: frozenset[str] = frozenset(), optional_content: "_OptionalContent | None" = None) -> None:
         self.memo: dict[tuple[int, int], bytes] = {}
         self.path: set[tuple[int, int]] = set()
         self.nodes = 0
         self.skip_keys = skip_keys
+        self.optional_content = optional_content
 
     def tick(self) -> None:
         self.nodes += 1
         if self.nodes > MAX_NODES:
             raise MerkleBudgetExceeded("nodes")
+
+
+def _reference_key(value: Any) -> tuple[int, int] | None:
+    """``(object number, generation)`` of an indirect reference; the key is used inside one document, never hashed."""
+    idnum, generation = getattr(value, "idnum", None), getattr(value, "generation", None)
+    return None if idnum is None else (int(idnum), int(generation or 0))
+
+
+def _references(value: Any) -> set[tuple[int, int]]:
+    """The indirect references in an array (the ``/ON``, ``/OFF`` and ``/OCGs`` arrays name groups by reference)."""
+    if value is None:
+        return set()
+    resolved = _resolve(value)
+    if not hasattr(resolved, "__iter__") or isinstance(resolved, (str, bytes)) or hasattr(resolved, "keys"):
+        return set()
+    keys = (_reference_key(item) for item in resolved)
+    return {key for key in keys if key is not None}
+
+
+class _OptionalContent:
+    """The default visibility of the optional-content groups of a document, as a viewer shows them at load.
+
+    ISO 32000-1 section 8.11.4.3, in PDFium's reading (``CPDF_OCContext::LoadOCGStateFromConfig``): the default
+    configuration ``/OCProperties /D`` gives ``/BaseState`` (``/ON`` unless it says ``/OFF``); a group in ``/ON`` is then on;
+    one in ``/OFF`` is off. A group named by an ``/AS`` entry of the event ``View`` takes its state from its own
+    ``/Usage`` instead, so it is only marked here (the dictionary is hashed by value)."""
+
+    __slots__ = ("base_on", "forced_on", "forced_off", "automatic")
+
+    def __init__(self, catalog: Any) -> None:
+        properties = _resolve(catalog.get("/OCProperties")) if catalog is not None and hasattr(catalog, "get") else None
+        config = _resolve(properties.get("/D")) if properties is not None and hasattr(properties, "get") else None
+        if config is None or not hasattr(config, "get"):
+            self.base_on, self.forced_on, self.forced_off, self.automatic = True, set(), set(), set()
+            return
+        self.base_on = str(_resolve(config.get("/BaseState", "/ON"))) != "/OFF"
+        self.forced_on = _references(config.get("/ON"))
+        self.forced_off = _references(config.get("/OFF"))
+        automatic: set[tuple[int, int]] = set()
+        entries = _resolve(config.get("/AS"))
+        for entry in entries if entries is not None and hasattr(entries, "__iter__") else ():
+            entry = _resolve(entry)
+            if entry is not None and hasattr(entry, "get") and str(_resolve(entry.get("/Event", "/View"))) == "/View":
+                automatic |= _references(entry.get("/OCGs"))
+        self.automatic = automatic
+
+    def state(self, key: tuple[int, int]) -> bytes:
+        on = self.base_on
+        if key in self.forced_on:
+            on = True
+        if key in self.forced_off:
+            on = False
+        return (b"on" if on else b"off") + (b"+as" if key in self.automatic else b"")
+
+
+def _optional_content(page: Any) -> _OptionalContent:
+    reader = getattr(page, "pdf", None)
+    catalog = getattr(reader, "root_object", None) if reader is not None else None
+    return _OptionalContent(catalog)
 
 
 def _hash(*parts: bytes) -> bytes:
@@ -113,6 +182,8 @@ def _digest(value: Any, walk: _Walk, depth: int) -> bytes:
         try:
             target = value.get_object()
             result = _digest(target, walk, depth + 1)
+            if walk.optional_content is not None and isinstance(target, DictionaryObject) and str(target.get("/Type", "")) == "/OCG":
+                result = _hash(b"ocg", result, walk.optional_content.state(key))
         finally:
             walk.path.discard(key)
         walk.memo[key] = result
@@ -229,7 +300,7 @@ def displayed_page(page: Any) -> tuple[float, float, int]:
 
 def page_digest(page: Any) -> str:
     """The content Merkle of a pypdf page, as 64 lowercase hexadecimal digits."""
-    walk = _Walk()
+    walk = _Walk(optional_content=_optional_content(page))
     content = hashlib.sha256()
     for stream in _content_streams(page):
         data = stream.get_data()
@@ -252,6 +323,7 @@ def annotation_records(page: Any) -> list[dict[str, Any]]:
         return []
     annotations = annotations.get_object() if hasattr(annotations, "get_object") else annotations
     records: list[dict[str, Any]] = []
+    optional_content = _optional_content(page)
     for index, entry in enumerate(annotations):
         if index >= _MAX_ANNOTATIONS:
             raise MerkleBudgetExceeded("annotations")
@@ -259,7 +331,7 @@ def annotation_records(page: Any) -> list[dict[str, Any]]:
         if annotation is None or not hasattr(annotation, "get"):
             records.append({"subtype": None, "rect": None, "contents": None, "sha256": _hash(b"unreadable").hex()})
             continue
-        walk = _Walk(skip_keys=_ANNOTATION_BACK_REFERENCES)
+        walk = _Walk(skip_keys=_ANNOTATION_BACK_REFERENCES, optional_content=optional_content)
         rect = annotation.get("/Rect")
         try:
             rect_list = [round(float(value), 2) for value in rect] if rect is not None else None
