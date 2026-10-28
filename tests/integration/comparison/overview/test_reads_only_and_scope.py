@@ -11,6 +11,7 @@ from sqlalchemy.exc import InternalError, OperationalError, ProgrammingError
 
 from auditmanager.comparison.overview import repository as overview_repository
 from auditmanager.shared.errors import DomainError, ErrorCode
+from auditmanager.shared.identity import ProjectUid
 
 from .conftest import Doc, Lab
 from .test_bounded import populate
@@ -54,12 +55,13 @@ def test_neither_read_enqueues_work_even_for_a_set_that_needs_preparation(lab: L
 def test_the_reads_run_in_a_transaction_the_database_refuses_to_write_in(lab: Lab, service, monkeypatch) -> None:
     """The structural guard: a write attempted inside either read is refused by PostgreSQL itself."""
     project = lab.project()
+    bait = str(ProjectUid.new())  # unique to this run: if the guard is gone the row is written once and never meets another run
     refused: list[str] = []
     original = overview_repository.OverviewRepository.documents
 
     def writes_then_reads(self: Any, session: Any, project_uid: str) -> Any:
         try:
-            session.execute(text("INSERT INTO project (project_uid, name) VALUES ('prj_01ARZ3NDEKTSV4RRFFQ69G5FAZ', 'x')"))
+            session.execute(text("INSERT INTO project (project_uid, name) VALUES (:p, 'x')"), {"p": bait})
         except (InternalError, OperationalError, ProgrammingError) as failure:
             refused.append(str(failure.orig))
             session.rollback()
@@ -69,7 +71,7 @@ def test_the_reads_run_in_a_transaction_the_database_refuses_to_write_in(lab: La
     monkeypatch.setattr(overview_repository.OverviewRepository, "documents", writes_then_reads)
     service.get_overview(project_uid=project)
     assert refused and "read-only" in refused[0].lower(), refused
-    assert lab.rows("SELECT count(*) AS n FROM project WHERE project_uid = 'prj_01ARZ3NDEKTSV4RRFFQ69G5FAZ'")[0]["n"] == 0
+    assert lab.rows("SELECT count(*) AS n FROM project WHERE project_uid = :p", p=bait)[0]["n"] == 0
 
 
 # -- one project's rows only -----------------------------------------------------------------------------------------------
