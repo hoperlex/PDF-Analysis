@@ -25,7 +25,9 @@ How a build ends
 * a version the database does not know: ``Failed`` without a retry (waiting does not create it);
 * a source document that cannot be read, is missing from the manifest or does not match its recorded digest
   (``analysis_input_invalid`` or ``storage_integrity_error``): ``Failed`` with a retry (a storage outage is
-  transient; a corrupted object uses the attempt budget and then ends the item);
+  transient; a corrupted object uses the attempt budget and then ends the item); the source is the version's
+  ``source.document`` (portal) or ``comparison.source_pdf`` (plain-PDF upload), and a manifest that holds both is
+  ``Failed`` without a retry (``page_profile_source_ambiguous``);
 * a payload that is not the shape above: ``Failed`` without a retry;
 * anything else the builder raises reaches the runner, which ends the attempt with a retryable
   ``handler_error`` and logs it.
@@ -49,6 +51,7 @@ from auditmanager.comparison.profile.builder import (
     build_version_page_profiles,
 )
 from auditmanager.comparison.profile.runner import ChildRunner, ChildStartError
+from auditmanager.comparison.profile.source import REASON_AMBIGUOUS
 from auditmanager.comparison.work.model import (
     Completed,
     Failed,
@@ -67,6 +70,7 @@ __all__ = [
     "REASON_CHILD_START_FAILED",
     "REASON_INCOMPLETE",
     "REASON_PAYLOAD_INVALID",
+    "REASON_SOURCE_AMBIGUOUS",
     "REASON_SOURCE_UNREADABLE",
     "REASON_VERSION_NOT_FOUND",
     "page_profile_handler",
@@ -83,6 +87,7 @@ PAYLOAD_KEYS: Final[frozenset[str]] = frozenset({"version_uid", "retry_failed"})
 REASON_PAYLOAD_INVALID: Final[str] = "page_profile_payload_invalid"
 REASON_VERSION_NOT_FOUND: Final[str] = "page_profile_version_not_found"
 REASON_SOURCE_UNREADABLE: Final[str] = "page_profile_source_unreadable"
+REASON_SOURCE_AMBIGUOUS: Final[str] = "page_profile_source_ambiguous"
 REASON_CHILD_START_FAILED: Final[str] = "page_profile_child_start_failed"
 REASON_INCOMPLETE: Final[str] = "page_profile_incomplete"
 
@@ -185,6 +190,8 @@ class PageProfileHandler:
             if refusal.code is ErrorCode.NOT_FOUND:
                 return Failed(REASON_VERSION_NOT_FOUND)
             if refusal.code in _SOURCE_FAULTS:
+                if refusal.detail_fields.get("reason") == REASON_AMBIGUOUS:
+                    return Failed(REASON_SOURCE_AMBIGUOUS)  # waiting does not make a manifest choose
                 return Failed(REASON_SOURCE_UNREADABLE, retry=True)
             raise
         if not report.complete:

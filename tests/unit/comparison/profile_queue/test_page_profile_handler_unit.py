@@ -362,3 +362,22 @@ def test_the_flags_the_heartbeat_thread_sets_are_the_items_own_events() -> None:
     item = make_item(FakeRepository())
     assert isinstance(item.cancelled, threading.Event) and isinstance(item.lease_lost, threading.Event)
     assert not item.cancelled.is_set() and not item.lease_lost.is_set()
+
+
+# -- the two kinds of source (`CMP-C1-FIX-C` item 1) -------------------------------------------------------
+
+
+def test_a_source_that_cannot_be_read_retries_but_a_manifest_that_holds_two_sources_does_not() -> None:
+    """An unreadable source may be a storage outage, so the attempt budget is spent on it; a manifest that binds both source
+    roles does not become one by waiting, so the item ends at once with a reason of its own."""
+    from auditmanager.comparison.profile.source import REASON_AMBIGUOUS, REASON_UNREADABLE
+    from auditmanager.comparison.profile_queue.handler import REASON_SOURCE_AMBIGUOUS
+
+    unreadable = Harness()
+    unreadable.raises = DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, reason=REASON_UNREADABLE)
+    assert unreadable.run() == Failed(REASON_SOURCE_UNREADABLE, retry=True)
+
+    ambiguous = Harness()
+    ambiguous.raises = DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, reason=REASON_AMBIGUOUS)
+    assert ambiguous.run() == Failed(REASON_SOURCE_AMBIGUOUS)
+    assert Failed(REASON_SOURCE_AMBIGUOUS).retry is False
