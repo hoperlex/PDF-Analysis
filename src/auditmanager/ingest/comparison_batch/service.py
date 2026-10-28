@@ -121,7 +121,7 @@ class ComparisonBatchService:
                     upload_id=row.upload_id, project_uid=row.project_uid, state=row.state,
                     part_size_bytes=row.part_size_bytes, declared_files=row.declared_files,
                     declared_bytes=row.declared_bytes, created_at=row.created_at, updated_at=row.updated_at,
-                    files=None,
+                    files=None, compare_after_preparation=row.compare_after_preparation,
                 )
                 for row in page
             )
