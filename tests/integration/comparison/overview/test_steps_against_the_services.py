@@ -225,6 +225,32 @@ def test_a_series_whose_version_was_added_after_it_reads_stale_with_the_same_rea
     assert steps(row)["series"]["state"] == "stale"
 
 
+def test_a_manual_edit_after_the_series_makes_it_stale(lab, service, matrix_service, series_service, expert_uid) -> None:
+    """The series is bound to the number of manual edit events; an applied edit moves it (``matrix_changed``)."""
+    from auditmanager.comparison.public import MatrixEditInput, MatrixPageRef
+
+    doc = lab.document(lab.project())
+    rows = lab.aligned_rows(doc, unmatched=1)
+    last = doc.versions[2]
+    rows.append({"cells": [
+        {"version_uid": doc.versions[0], "state": "absent", "reason": "no_candidates"},
+        {"version_uid": doc.versions[1], "state": "absent", "reason": "no_candidates"},
+        {"version_uid": last, "state": "matched", "page_number": 2, "page_profile_id": doc.pages[last][1],
+         "confidence": "high", "flags": []},
+    ]})
+    build = lab.build(doc, rows)
+    lab.series(doc, build, "completed")
+    assert steps(row_of(service.get_overview(project_uid=doc.project_uid), doc))["series"]["state"] == "done"
+    matrix_service.apply_edits(
+        project_uid=doc.project_uid, document_uid=doc.document_uid, base_matrix_id=build.matrix_id, base_edit_no=0,
+        edits=[MatrixEditInput(kind="link", page=MatrixPageRef(doc.versions[0], 2), other_page=MatrixPageRef(last, 2))],
+        user_uid=expert_uid, actor_label="Т", actor_roles=frozenset({"expert"}), idempotency_key=f"ov-s-{doc.document_uid[-12:]}",
+    )
+    row = check_against_services(lab, service, matrix_service, series_service, doc)
+    assert steps(row)["series"]["state"] == "stale"
+    assert series_service.list_series(project_uid=doc.project_uid, document_uid=doc.document_uid, after=None, limit=1).items[0]["stale_reasons"] == ["matrix_changed"]
+
+
 def test_each_series_state(lab, service, matrix_service, series_service) -> None:
     for state, completed in (("queued", 0), ("running", 1), ("paused", 1), ("failed", 1), ("cancelled", 0)):
         doc, build = _ready(lab)

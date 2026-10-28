@@ -168,6 +168,16 @@ def test_the_metadata_of_the_admitting_set_is_the_rows_and_a_set_without_one_has
     assert rows[plain.document_uid]["title"] == "Без шифра"
 
 
+def test_the_newest_admitting_set_gives_the_metadata(lab: Lab, service) -> None:
+    """A document that grew by a second batch carries the designation of the batch that admitted its latest versions."""
+    project = lab.project()
+    doc = lab.document(project)
+    lab.stamp(doc, designation="ЭМ-старый", stage="P")
+    lab.stamp(doc, designation="ЭМ-новый", stage="R", section="EOM")
+    (row,) = service.get_overview(project_uid=project)["sets"]
+    assert (row["designation"], row["project_stage"], row["section_code"]) == ("ЭМ-новый", "R", "EOM")
+
+
 def test_the_rows_are_in_a_stable_order_by_designation_then_title(lab: Lab, service) -> None:
     project = lab.project()
     b = lab.document(project, title="Б"); lab.stamp(b, designation="ЭМ-2")
