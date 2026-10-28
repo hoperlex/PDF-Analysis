@@ -1,7 +1,7 @@
 # Task CMP-PQ-ISOLATION-01 — the `page_profile` queue suite does not depend on the rows other integration directories leave in a shared database
 
 ## Outcome
-`tests/integration/comparison/profile_queue/` passes (18 tests) on a database that also holds rows left by other
+`tests/integration/comparison/profile_queue/` passes (its 18 tests, and the 2 that prove the isolation) on a database that also holds rows left by other
 integration directories. Today it passes only on a fresh database: eleven of the eighteen end in
 `the runner claimed nothing: a gate is shut or no item is due` (`conftest.py`, `Lane.claim`) as soon as a Run is
 claimable anywhere in the database, because the comparison queue yields to any claimable Run by design (strict
@@ -57,8 +57,13 @@ of Runs over comparison work stays proved by `tests/integration/comparison/work/
 
 ## Allowed paths
 - `tests/integration/comparison/profile_queue/**`
+- `tests/unit/comparison/work/test_composition_unit.py`
+- `tests/unit/runs/test_serving_start_sweeps_temporaries.py`
 - `docs/program/CMP-PQ-ISOLATION-01.md`
 - `docs/program/tasks/CMP-PQ-ISOLATION-01.md`
+
+The two unit files were added to the lane by message of the PW5 integrator on 2026-10-28 (tests only, still no change
+under `src/`): both were red on the integration tree for reasons outside this lane's first brief.
 
 ## Lane resources
 - foundation_instance: `auditmanager-cmp-pq-isolation-01`
@@ -81,14 +86,22 @@ of Runs over comparison work stays proved by `tests/integration/comparison/work/
 - a shared fixture for the other comparison directories (they decide for themselves)
 
 ## Deliverables
-- `tests/integration/comparison/profile_queue/conftest.py`: the lane's runner built with scoped gates; a claim that cannot
-  lease a foreign item; a reclaim read scoped to the lane's attempts
-- the three test files changed only where they read the queue globally
+- `tests/integration/comparison/profile_queue/conftest.py`: the lane's runner built with a Run-priority gate scoped to the
+  lane's projects (`Lane.gates`, `Lane.worker_runner`); a claim that cannot lease a foreign item (`Lane.claim`); a reclaim
+  count scoped to the lane's attempts (`Lane.reclaim`); the helpers that plant foreign rows
+- the three existing test files changed only where they read the queue globally
+- `tests/integration/comparison/profile_queue/test_foreign_rows_do_not_change_the_verdict.py`: two tests that plant a foreign
+  Run, a stronger foreign item and a foreign expired lease, so the isolation is shown on any database
+- `tests/unit/comparison/work/test_composition_unit.py`: the bundle test asserts what it means (every factory, patched or
+  appended by the root, receives the one bundle; the kinds it patched are registered) and not a closed set of kinds
+- `tests/unit/runs/test_serving_start_sweeps_temporaries.py`: the stand-in `Runtime` carries `comparison_work = None`
 - the report `docs/program/CMP-PQ-ISOLATION-01.md`
 
 ## Required tests
 - command: `AUDITMANAGER_LEGACY_PROMPTS_REPO=/nonexistent PYTHONPATH=$PWD/src .venv/bin/python -m pytest -q tests/integration/comparison/profile_queue`
-- expected: 18 passed on a fresh database; 18 passed again, without a reset, after an integration file that leaves queued Runs has run against the same database; the same second run fails on the base tree (the reproduction)
+- expected: 20 passed (the 18 of the base and the two new) on a fresh database; 20 passed again, without a reset, after an integration file that leaves queued Runs (`tests/integration/composition/test_the_run_leaves_the_request_thread.py`) has run against the same database; the base tree's four files fail 11 of 18 on that database (the reproduction)
+- command: `AUDITMANAGER_LEGACY_PROMPTS_REPO=/nonexistent PYTHONPATH=$PWD/src .venv/bin/python -m pytest -q tests/unit` and the same for `tests/contract` minus `test_cp00_candidate.py`, `test_cp00_final_state.py`, `test_validate_bootstrap.py`
+- expected: no failure in `tests/unit`; in `tests/contract` only what the base already fails (`test_wave_governance.py` on `docs/program/tasks/CMP-SEAL-C1.md`)
 
 ## Integration contract
 The integrator can rely on: nothing outside `tests/integration/comparison/profile_queue/` changed; the suite no longer needs
@@ -97,15 +110,16 @@ adds each have a quoted mutation under which they fail.
 
 ## Failure/idempotency/security cases
 - a Run of the lane's own projects that is claimable still shuts the lane's gate (the scoped gate is a read of the real
-  `job`/`run` tables, not a constant)
-- a foreign `page_profile` item that is queued is neither leased nor changed by the suite
-- the suite deletes only the rows of the projects it seeded (unchanged)
+  `job` / `audit_run` tables, not a constant); a Job that is not due does not
+- a foreign `page_profile` item that is queued, even a stronger one, is neither leased nor changed by the suite
+- a foreign expired lease is fenced by the worker's reclaim (as it would be in production) but is not counted as the lane's
+- the suite deletes only the rows of the projects it seeded or planted (the Jobs and Runs it plants are deleted too)
 
 ## Rollback / feature flag
 Not applicable: tests only. Rollback is not merging the lane.
 
 ## Handoff
-- changed files: see `docs/program/CMP-PQ-ISOLATION-01.md`
-- commands/results: see `docs/program/CMP-PQ-ISOLATION-01.md`
-- known limits: see `docs/program/CMP-PQ-ISOLATION-01.md`
-- integration notes: see `docs/program/CMP-PQ-ISOLATION-01.md`
+- changed files: the four files of `tests/integration/comparison/profile_queue/` (`conftest.py`, two existing tests, one new test), the two unit files named above, this file and `docs/program/CMP-PQ-ISOLATION-01.md`; nothing under `src/`
+- commands/results: profile_queue 18 passed (base, fresh) / 20 passed (lane, fresh) / 20 passed (lane, 4 foreign queued Jobs, no reset) / 11 failed + 7 passed (base files, same database); `tests/unit` 4313 passed, 76 skipped, 0 failed; `tests/contract` minus the three `D-220` files 1309 passed, 1 failed (`CMP-SEAL-C1.md`, red on the base); the table and the mutations are in the report
+- known limits: the claim fence holds a row lock for one claim; the pause gate is the real one; see the report
+- integration notes: no wiring or `src/` file touched, so no merge-order constraint; the stack (3 containers, network, 2 volumes) was removed
