@@ -1017,7 +1017,7 @@ const record = (over: Partial<DecisionRecord> = {}): DecisionRecord => ({
 
 function apiError(status: number, code: ErrorCode): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.9.0',
+    contract_version: '1.10.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1029,7 +1029,7 @@ function apiError(status: number, code: ErrorCode): ApiError {
 /** A norms refusal with the one classifier the seal registered for it (`W55A-WEB-NORMS`). */
 function normsRefusal(code: ErrorCode, details: Readonly<Record<string, string>>): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.9.0',
+    contract_version: '1.10.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1839,7 +1839,7 @@ function startRefusal(
   details?: Record<string, string | number | boolean | null>,
 ): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.9.0',
+    contract_version: '1.10.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -2035,7 +2035,7 @@ function startRunExecutorShapes(): ReactElement {
     code: ErrorCode, status: number, retryable: boolean,
     details: Readonly<Record<string, string>>, message = 'Сообщение об отказе.',
   ): ApiError => new ApiError(status, {
-    contract_version: '1.9.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
+    contract_version: '1.10.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
     retryable, details,
   }, '0f0e9d8c-7b6a-4948-b726-150413021100');
   const cannotServe = (reason: string) =>
@@ -3621,7 +3621,9 @@ describe('the guard can tell an English label from a legitimate Latin string', (
     expect(unexplainedLatin('0f0e9d8c-7b6a-4948-b726-150413021100', VOCABULARY)).toEqual([]);
     // `W55B-WEB-BLOCKS`: the text-line block id in the contract's own shape, and only in it.
     expect(unexplainedLatin('b_000003', VOCABULARY)).toEqual([]);
-    expect(unexplainedLatin('блок b_12', VOCABULARY)).toEqual(['b']);
+    // `CMP-SEAL-C1` published `a` and `b` as the pages of `ComparisonPairTileMode`, so a stray `b` is a contract word
+    // now; the control keeps its meaning with a letter the contract does not use.
+    expect(unexplainedLatin('блок z_12', VOCABULARY)).toEqual(['z']);
   });
 
   it('reads every upload rule and every upload refusal as Russian prose (W55B-INGEST-01)', () => {
@@ -3644,7 +3646,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           422,
           {
-            contract_version: '1.9.0',
+            contract_version: '1.10.0',
             error_code: 'validation_failed',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -3666,7 +3668,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           503,
           {
-            contract_version: '1.9.0',
+            contract_version: '1.10.0',
             error_code: 'dependency_unavailable',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -3705,7 +3707,10 @@ describe('the guard can tell an English label from a legitimate Latin string', (
     // back in English. Silence from a guard is read as coverage, so a guard that cannot see
     // the class it was built for is worse than none.
     expect(unexplainedLatin('published', VOCABULARY)).toEqual(['published']);
-    expect(unexplainedLatin('needs_manual_review', VOCABULARY)).toEqual(['needs', 'manual', 'review']);
+    // `CMP-SEAL-C1` published `manual` as a member of `ComparisonCellConfidence`. No screen renders that schema yet, so
+    // its words are permitted until `CMP-VC-UI-01` registers it in `TRANSLATED_SCHEMAS` with its marker; the compound
+    // then reads `['needs', 'manual', 'review']` again and this expectation moves back with it.
+    expect(unexplainedLatin('needs_manual_review', VOCABULARY)).toEqual(['needs', 'review']);
     expect(unexplainedLatin('→ accepted', VOCABULARY)).toEqual(['accepted']);
     expect(unexplainedLatin('internal_contradiction', VOCABULARY)).toEqual(['internal', 'contradiction']);
     // `D-62`: the stage table's whole first column. `analysis` alone is already an offence
@@ -3733,7 +3738,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
     // were split into words, `review` alone would pass -- and a screen saying `review`
     // would stop being an offence.
     expect(unexplainedLatin('review', VOCABULARY)).toEqual(['review']);
-    expect(unexplainedLatin('manual', VOCABULARY)).toEqual(['manual']);
+    expect(unexplainedLatin('needs', VOCABULARY)).toEqual(['needs']);
     expect(unexplainedLatin('analysis', VOCABULARY)).toEqual(['analysis']);
   });
 });

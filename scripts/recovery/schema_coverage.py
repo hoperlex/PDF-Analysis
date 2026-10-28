@@ -264,10 +264,10 @@ SEQUENCES = {
 
 #: ``pg_constraint.contype -> count`` in schema ``public`` at ``HEAD``: p primary key, u unique,
 #: f foreign key, c check, t constraint trigger. A restore that lost one is not the schema.
-CONSTRAINT_COUNTS = {"c": 721, "f": 169, "p": 75, "t": 9, "u": 64}
+CONSTRAINT_COUNTS = {"c": 811, "f": 203, "p": 82, "t": 9, "u": 75}
 
 #: Indexes in schema ``public`` at ``HEAD`` (primary-key and unique indexes included).
-INDEX_COUNT = 236
+INDEX_COUNT = 277
 
 #: Trigger functions that make a table immutable or append-only (the claim a restore must keep).
 GUARD_FUNCTIONS = frozenset((

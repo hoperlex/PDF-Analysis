@@ -83,6 +83,15 @@ EXPECTED_TABLES = {
     "comparison_work",
     "comparison_work_attempt",
     "comparison_model_call",
+    # `0039_comparison_core`: the builds of the matrix, its manual edits, the accepted AI links, the series of adjacent
+    # transitions with their sheet pairs, and the content-keyed results (`CMP-SEAL-C1`).
+    "comparison_matrix",
+    "comparison_matrix_edit",
+    "comparison_ai_link",
+    "comparison_series",
+    "comparison_transition",
+    "comparison_sheet_pair_result",
+    "comparison_sheet_pair",
     # `0019_execution_workers`: the worker registry.
     "worker",
     # `0020_norms_search`: the one current norms snapshot and its append-only history.

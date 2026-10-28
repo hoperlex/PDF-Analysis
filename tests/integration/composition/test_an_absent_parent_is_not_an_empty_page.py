@@ -107,7 +107,10 @@ _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 # :data:`RUNNER_ADDRESSED`. With all four, the addressed half is thirty-five.
 # `CMP-SEAL-C0` adds nine: the two project-scoped listings, the batch and its proposal, the
 # version-order listing, the page-profile listing and the four page reads. Forty-four.
-EXPECTED_ADDRESSED = 44
+# `CMP-SEAL-C1` adds nine: the matrix, its edit history and the accepted AI links, the series of a document set and
+# one series, the sheet pairs of a transition and one sheet pair with its tile, and the overview of a project (the
+# queue read names no parent). Fifty-three.
+EXPECTED_ADDRESSED = 53
 
 #: Addressed ``GET`` operations with a required query parameter, and a well-formed value for
 #: it naming nothing. Without it the bare path would be ``422`` for the missing parameter --
@@ -116,6 +119,8 @@ REQUIRED_QUERY: dict[str, str] = {
     "compareDocumentVersions": "?target_version_uid=ver_01M2545JSD15ETSNNV904X991K",
     # `CMP-SEAL-C0`: the tile is addressed by query; `CMP-PROFILE-01` serves it: an absent profile is `404`.
     "streamVersionPageTile": "?level=0&column=0&row=0",
+    # `CMP-SEAL-C1`: the pair tile is addressed by query too; it is a sealed stub until `CMP-VIEWER-01`.
+    "streamComparisonPairTile": "?mode=a&level=0&column=0&row=0",
 }
 # `W59-ANALYSIS-SETTINGS-01` added ``listAnalysisProfiles``, unaddressed: the registry's
 # fifteen rows, answered as ``items`` like a collection with no parent identity.
@@ -128,8 +133,9 @@ REQUIRED_QUERY: dict[str, str] = {
 # ``getArV3BetaPackStatus`` (a server singleton, see :data:`SERVER_STATUS_OPERATIONS`).
 # With all three, the unaddressed half is twenty.
 # `ANALYSIS-PRESETS-01`'s ``listAnalysisPresets`` is a collection like ``listExecutorConnections``
-# (every preset, no parent), so the unaddressed half is twenty-one.
-EXPECTED_UNADDRESSED = 21
+# (every preset, no parent), so the unaddressed half is twenty-one. `CMP-SEAL-C1` adds the comparison queue read
+# (``getComparisonQueueSummary``, the installation's queue, no parent): twenty-two.
+EXPECTED_UNADDRESSED = 22
 
 #: Unaddressed `GET` operations that are not collections and are exempt from
 #: ``test_a_collection_that_names_no_parent_answers_a_page``'s page-shape assertion.
@@ -185,7 +191,10 @@ EXECUTION_COLLECTIONS = frozenset({"listExecutionQueue", "listExecutionJournal"}
 #: serves them and empties it, so both join the page-shape sweep: no snapshot loaded is a
 #: page with no items, and so is a history with no designation. The sweep's account holds
 #: ``admin``, so the administrator's history answers its page rather than the seam's ``403``.
-SEALED_STUB_COLLECTIONS: frozenset[str] = frozenset()
+#: `CMP-SEAL-C1`: ``getComparisonQueueSummary`` names no parent and is not a page (the read of the comparison queue by
+#: state and kind); it answers `503 dependency_unavailable` until `CMP-VC-OVERVIEW-01` serves it, and then joins
+#: the aggregate operations above, which are objects and not pages.
+SEALED_STUB_COLLECTIONS: frozenset[str] = frozenset({"getComparisonQueueSummary"})
 
 #: `W55A-SEAL-01`. Addressed ``GET`` operations whose port is a sealed stub: they cannot
 #: answer ``404`` for an absent identity until something reads the identity, so they are
@@ -206,7 +215,14 @@ SEALED_STUB_COLLECTIONS: frozenset[str] = frozenset()
 #: ``listComparisonVersionOrders`` and removes them: each joins the `404` sweep (an absent `cbt_` is `404
 #: not_found`, and so is an absent project or document of the version-order listing). `CMP-INGEST-02` serves
 #: ``listComparisonUploads`` and empties this set: an absent project is `404 not_found`, never an empty page.
-SEALED_STUB_ADDRESSED: frozenset[str] = frozenset()
+#: `CMP-SEAL-C1` fills it with the nine reads of the version comparison core that name a parent; `CMP-MATRIX-01`,
+#: `CMP-SERIES-01`, `CMP-VIEWER-01` and `CMP-VC-OVERVIEW-01` remove the ones they wire, and each then joins the `404`
+#: sweep (an absent project, document, series, transition or sheet pair is `404 not_found`).
+SEALED_STUB_ADDRESSED: frozenset[str] = frozenset({
+    "getComparisonMatrix", "listComparisonMatrixEdits", "listComparisonAiLinks", "listComparisonSeries",
+    "getComparisonSeries", "listComparisonSheetPairs", "getComparisonSheetPair", "streamComparisonPairTile",
+    "getComparisonOverview",
+})
 
 #: `W55A-SEAL-01`. ``searchNorms`` addresses no parent but is not a listing of everything:
 #: its ``q`` is required, so the bare path is ``422 validation_failed`` on ``q`` and never a

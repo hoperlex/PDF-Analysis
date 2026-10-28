@@ -836,6 +836,12 @@ SEALED_STUB_QUERY_OPERATIONS: frozenset[str] = frozenset({
     "listVersionPortalBlocks",
     "listComparisonUploads", "listComparisonVersionOrders", "listVersionPageProfiles",
     "streamVersionPageTile", "uploadComparisonUploadPart",
+    # `CMP-SEAL-C1`: the four listings of the core (``cursor`` and ``limit``, and the filters of the sheet
+    # pairs) and the pair tile (``mode``, ``level``, ``column``, ``row``, ``layer`` and ``align_blocks``)
+    # until `CMP-MATRIX-01`, `CMP-SERIES-01` and `CMP-VIEWER-01` give them bodies, empty this set and drive
+    # them below.
+    "listComparisonMatrixEdits", "listComparisonAiLinks", "listComparisonSeries",
+    "listComparisonSheetPairs", "streamComparisonPairTile",
 })
 
 #: The four norms listings, driven over the shipped ``NormsSearchAdapter`` on this suite's

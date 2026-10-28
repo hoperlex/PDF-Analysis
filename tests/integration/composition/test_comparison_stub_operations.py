@@ -113,7 +113,8 @@ def test_the_requests_cover_exactly_the_nineteen_operations_the_contract_added()
     document = json.load(open("contracts/api/v1/openapi.json", encoding="utf-8"))
     comparison = {op["operationId"] for item in document["paths"].values() for m, op in item.items()
                   if m in ("get", "post", "put", "patch", "delete") and "comparison" in op.get("tags", [])}
-    assert set(REQUESTS) == comparison and len(comparison) == 19
+    # `CMP-SEAL-C1` tags seventeen more operations `comparison`; they are `test_comparison_core_stub_operations.py`'s.
+    assert set(REQUESTS) <= comparison and len(REQUESTS) == 19
     assert {triple[2] for triple in FACTS.operations} >= comparison
 
 
@@ -210,7 +211,7 @@ def test_the_product_version_says_none_unless_the_deployment_names_a_module_set(
     response = client.get("/system/version", headers={"Authorization": f"Bearer {static_token()}"})
     assert response.status_code == 200
     body = response.json()
-    assert body["comparison_modules"] == "none" and body["contract_version"] == "1.9.0"
+    assert body["comparison_modules"] == "none" and body["contract_version"] == "1.10.0"
 
 
 @pytest.mark.parametrize("value", ["versions", "versions,stages"])

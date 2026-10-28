@@ -569,7 +569,9 @@ class TestN1ComponentReferenceResolution:
         # `ANALYSIS-PRESETS-01` adds two: revising and archiving a preset address it by identity.
         # `CMP-SEAL-C0` adds nineteen: every comparison operation addresses a project, a document,
         # a version, an upload, a set or a page profile by identity, so each declares a `404`.
-        assert len(report) == 98, report
+        # `CMP-SEAL-C1` adds seventeen: every operation of the version comparison core but the queue read addresses a
+        # project, a document, a series, a transition or a sheet pair by identity, so each declares a `404`.
+        assert len(report) == 115, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

@@ -199,6 +199,17 @@ P02_TABLES = (
     "comparison_work",
     "comparison_work_attempt",
     "comparison_model_call",
+    # `0039_comparison_core` (`CMP-SEAL-C1`). The version comparison core: the builds of the matrix, its manual edit
+    # history, the accepted AI links, the series with its transitions and sheet pairs, and the content-keyed results.
+    # Their operations are sealed stubs and nothing under this directory names them, so each count is expected
+    # unchanged across a replay -- counted rather than skipped.
+    "comparison_matrix",
+    "comparison_matrix_edit",
+    "comparison_ai_link",
+    "comparison_series",
+    "comparison_transition",
+    "comparison_sheet_pair_result",
+    "comparison_sheet_pair",
     # `0037_analysis_presets` (`ANALYSIS-PRESETS-01`). Named executor selections for a run start,
     # append-only (archive is a new revision). Written only by the preset commands (create,
     # revise, archive; administrator role); the journey starts runs by hand and never creates a

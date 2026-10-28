@@ -226,6 +226,16 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "appendComparisonVersionOrder",
             "listVersionPageProfiles",
             "streamVersionPageTile",
+            # `CMP-SEAL-C1`: the batch of edits and the undo take a closed body, the start of a series an
+            # optional closed body, and the three listings and the pair tile a bound or a required query.
+            "listComparisonMatrixEdits",
+            "applyComparisonMatrixEdits",
+            "undoComparisonMatrixEdit",
+            "listComparisonAiLinks",
+            "startComparisonSeries",
+            "listComparisonSeries",
+            "listComparisonSheetPairs",
+            "streamComparisonPairTile",
         }, declared_422
 
     def test_no_schema_property_declares_a_default(self) -> None:

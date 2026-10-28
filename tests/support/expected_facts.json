@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 115,
+    "path_count": 131,
     "operations": [
       [
         "POST",
@@ -652,6 +652,96 @@
         "GET",
         "/page-profiles/{comparison_page_profile_id}/tile",
         "streamVersionPageTile"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/documents/{document_uid}/comparison-matrix",
+        "getComparisonMatrix"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/documents/{document_uid}/comparison-matrix/preparation",
+        "prepareComparisonMatrix"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/documents/{document_uid}/comparison-matrix/edits",
+        "listComparisonMatrixEdits"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/documents/{document_uid}/comparison-matrix/edits",
+        "applyComparisonMatrixEdits"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/documents/{document_uid}/comparison-matrix/edits/undo",
+        "undoComparisonMatrixEdit"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/documents/{document_uid}/comparison-ai-links",
+        "listComparisonAiLinks"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/documents/{document_uid}/comparison-series",
+        "startComparisonSeries"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/documents/{document_uid}/comparison-series",
+        "listComparisonSeries"
+      ],
+      [
+        "GET",
+        "/comparison-series/{comparison_series_id}",
+        "getComparisonSeries"
+      ],
+      [
+        "POST",
+        "/comparison-series/{comparison_series_id}/pause",
+        "pauseComparisonSeries"
+      ],
+      [
+        "POST",
+        "/comparison-series/{comparison_series_id}/resume",
+        "resumeComparisonSeries"
+      ],
+      [
+        "POST",
+        "/comparison-series/{comparison_series_id}/cancellation",
+        "cancelComparisonSeries"
+      ],
+      [
+        "POST",
+        "/comparison-series/{comparison_series_id}/finish",
+        "finishComparisonSeries"
+      ],
+      [
+        "GET",
+        "/comparison-transitions/{comparison_transition_id}/sheet-pairs",
+        "listComparisonSheetPairs"
+      ],
+      [
+        "GET",
+        "/comparison-sheet-pairs/{comparison_sheet_pair_id}",
+        "getComparisonSheetPair"
+      ],
+      [
+        "GET",
+        "/comparison-sheet-pairs/{comparison_sheet_pair_id}/tile",
+        "streamComparisonPairTile"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/comparison-overview",
+        "getComparisonOverview"
+      ],
+      [
+        "GET",
+        "/execution/comparison-queue",
+        "getComparisonQueueSummary"
       ]
     ],
     "schema_names": [
@@ -670,6 +760,7 @@
       "AppendComparisonVersionOrderRequest",
       "AppendDecisionRequest",
       "AppendDecisionResponse",
+      "ApplyComparisonMatrixEditsRequest",
       "ApproveRegistrationRequest",
       "ApproveSheetPairingRequest",
       "ApprovedDiffHunk",
@@ -707,14 +798,91 @@
       "ClaimedExecutorTask",
       "ClassifyDocumentVersionRequest",
       "ComparedVersion",
+      "ComparisonAiLink",
+      "ComparisonAiLinkAnsweredState",
+      "ComparisonAiLinkId",
+      "ComparisonAiLinkList",
+      "ComparisonAiLinkStatus",
+      "ComparisonBox",
+      "ComparisonCanvas",
+      "ComparisonCellConfidence",
+      "ComparisonCellFlag",
+      "ComparisonCellState",
+      "ComparisonChannel",
+      "ComparisonChannelState",
+      "ComparisonChannels",
+      "ComparisonDifference",
+      "ComparisonEditProvenance",
+      "ComparisonHowCompared",
       "ComparisonId",
+      "ComparisonLayer",
+      "ComparisonMatrix",
+      "ComparisonMatrixCandidate",
+      "ComparisonMatrixCell",
+      "ComparisonMatrixColumn",
+      "ComparisonMatrixCounts",
+      "ComparisonMatrixEdit",
+      "ComparisonMatrixEditId",
+      "ComparisonMatrixEditInput",
+      "ComparisonMatrixEditInputKind",
+      "ComparisonMatrixEditKind",
+      "ComparisonMatrixEditList",
+      "ComparisonMatrixEditSource",
+      "ComparisonMatrixEditStatus",
+      "ComparisonMatrixId",
+      "ComparisonMatrixPreparation",
+      "ComparisonMatrixProgress",
+      "ComparisonMatrixRevision",
+      "ComparisonMatrixRow",
+      "ComparisonMatrixStaleReason",
+      "ComparisonMatrixState",
       "ComparisonModules",
+      "ComparisonNoteChange",
+      "ComparisonNumberChange",
+      "ComparisonOverview",
+      "ComparisonOverviewCounters",
+      "ComparisonOverviewSet",
+      "ComparisonOverviewStep",
+      "ComparisonOverviewTotals",
+      "ComparisonOverviewUpload",
       "ComparisonPageProfileId",
+      "ComparisonPageRef",
+      "ComparisonPairPage",
+      "ComparisonPairTileMode",
+      "ComparisonPartRole",
+      "ComparisonPartsCoverage",
+      "ComparisonPermit",
+      "ComparisonPermitItem",
+      "ComparisonPermitState",
       "ComparisonProposalFile",
       "ComparisonProposalSet",
       "ComparisonProposalWarning",
+      "ComparisonQueueCounts",
+      "ComparisonQueueKind",
+      "ComparisonQueueModule",
+      "ComparisonQueueSummary",
       "ComparisonRefusal",
+      "ComparisonSeries",
+      "ComparisonSeriesId",
+      "ComparisonSeriesPage",
+      "ComparisonSeriesStaleReason",
+      "ComparisonSeriesState",
+      "ComparisonServiceNote",
+      "ComparisonSheetPair",
+      "ComparisonSheetPairId",
+      "ComparisonSheetPairPage",
+      "ComparisonSheetPairResultId",
+      "ComparisonSheetPairState",
+      "ComparisonSheetStatus",
+      "ComparisonStepCounts",
+      "ComparisonStepId",
+      "ComparisonStepState",
       "ComparisonSummary",
+      "ComparisonTextChange",
+      "ComparisonTransition",
+      "ComparisonTransitionId",
+      "ComparisonTransitionState",
+      "ComparisonTransitionSummary",
       "ComparisonUpload",
       "ComparisonUploadFile",
       "ComparisonUploadFileDeclaration",
@@ -727,6 +895,7 @@
       "ComparisonUploadSetId",
       "ComparisonUploadSetState",
       "ComparisonUploadState",
+      "ComparisonVerdictCode",
       "ComparisonVersionOrder",
       "ComparisonVersionOrderId",
       "ComparisonVersionOrderList",
@@ -975,11 +1144,13 @@
       "StageState",
       "StageStatus",
       "StartArV3BetaGroupRequest",
+      "StartComparisonSeriesRequest",
       "StartRunRequest",
       "SubmitExecutorTaskAnswerRequest",
       "SubmitRegistrationRequest",
       "SummaryStatement",
       "TransitionAssignmentRequest",
+      "UndoComparisonMatrixEditRequest",
       "UngroundedReason",
       "UpdateMyProfileRequest",
       "UpdateUserRequest",
@@ -1013,5 +1184,5 @@
     "stored_vocabulary": 25
   },
   "migration_head": "0039_comparison_core",
-  "contract_version": "1.9.0"
+  "contract_version": "1.10.0"
 }
