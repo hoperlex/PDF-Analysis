@@ -174,3 +174,22 @@ def test_a_transition_none_of_whose_pairs_needed_the_engine_still_completes(lab,
     done = service.get_series(series_id=sid)
     assert done["state"] == "completed" and [t["state"] for t in done["transitions"]] == ["completed"] * 4
     assert all(t["verdict"] == ["needs_review"] for t in done["transitions"][:1])
+
+
+def test_an_item_whose_pair_is_already_done_ends_without_asking_the_engine(lab, sessions, engine, blob_store, worker_id, service, prepared) -> None:
+    """A repeat of an item (a reclaim, an enqueue after a finish) finds the pair written and does nothing more."""
+    from auditmanager.comparison.public import ComparisonWorkRepository
+    from auditmanager.shared.db import session_scope
+
+    doc, series = prepared
+    fake = ScriptedEngine(sessions)
+    runner = runner_with(sessions, engine, blob_store, compare=fake)
+    drain(runner, worker_id, engine, sessions, doc.project_uid)
+    calls = len(fake.calls)
+    pair = [p for p in pair_rows(lab, series["series_id"]) if p["state"] == "done" and p["result_id"]][0]
+    with session_scope(sessions) as session:
+        ComparisonWorkRepository().enqueue(
+            session, project_uid=doc.project_uid, module="versions", kind="series_pair", payload={"sheet_pair_id": pair["id"]},
+            dedupe_key=f"repeat-{pair['id']}", comparison_series_id=series["series_id"])
+    ran = drain(runner, worker_id, engine, sessions, doc.project_uid)
+    assert ran == [("series_pair", "succeeded")] and len(fake.calls) == calls
