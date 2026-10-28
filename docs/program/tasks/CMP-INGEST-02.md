@@ -150,7 +150,18 @@ additive. Reverting the merge restores the sealed stubs; with live items of a ki
 worker refuses to start (`CMP-WORK-01`), so a revert cancels or lets those items end first. No migration is involved.
 
 ## Handoff
-- changed files: (written last)
-- commands/results: (written last)
-- known limits: (written last)
-- integration notes: (written last)
+- changed files: `src/auditmanager/ingest/comparison_batch/**` (new: `rules`, `repository`, `lifecycle`, `handlers`,
+  `service`, `views`, `public`), `src/auditmanager/comparison/profile_queue/enqueue.py` (the keyword), the wiring hunks
+  (`src/auditmanager/bootstrap/{adapters,composition}.py`,
+  `tests/integration/composition/{test_router_answers,test_an_absent_parent_is_not_an_empty_page,test_comparison_stub_operations}.py`),
+  `tests/integration/ingest/comparison_batch/` (8 test files, `support.py`, `conftest.py`), this file and
+  `docs/program/CMP-INGEST-02.md`
+- commands/results: the lane's suite 150 passed; INGEST-01 and PROFILE-QUEUE suites on the changed tree 325 passed;
+  composition, recovery and api register files 287 passed, 1 skipped, 6 failed (the six are red on the base too:
+  `test_comparison_stub_operations.py`, the `CMP-PROFILE-01` rows); `tests/contract` minus the three `D-220` files
+  1307 passed, 19283 subtests; `git diff --check` clean; 46 mutations shown red and restored (report section 6)
+- known limits: report section 7 (the flag of «После подготовки сравнить все соседние версии» is recorded nowhere: the
+  contract has no field; acts are not in `audit_event`; a part in flight at a cancel meets the database's refusal; with the
+  module set `none` the drive and the sweep never run; abandonment is for `uploading` batches only)
+- integration notes: report sections 4 and 8. The two work kinds are registered by the composition root, not by
+  `comparison.public.HANDLER_FACTORIES`; `BatchLifecycle.advance` is the one place wave C1 extends
