@@ -5952,14 +5952,22 @@ class ComparisonPairTileAdapter:
 
 
 class ComparisonOverviewAdapter:
-    """`CMP-VC-OVERVIEW-01` replaces the bodies."""
+    """`CMP-VC-OVERVIEW-01` serves the overview of «Проекты и этапы» and the comparison queue summary over
+    :class:`~auditmanager.comparison.overview.service.ComparisonOverviewService` (ADR-0025 decisions 4, 6, 23).
 
-    _DEPENDENCY = "comparison_overview"
+    Both are reads in one read-only transaction: nothing is written, enqueued or sent to a model. ``modules`` is the module
+    set the deployment serves, parsed once by the composition root."""
 
-    def get_overview(
-        self, *, project_uid: str
-    ) -> models.ComparisonOverview:
-        return _comparison_unavailable(self._DEPENDENCY)
+    def __init__(self, session_factory: sessionmaker[Session], *, modules: str = "none", service: Any = None) -> None:
+        if service is None:
+            from auditmanager.comparison.public import ComparisonOverviewService
+
+            service = ComparisonOverviewService(session_factory=session_factory)
+        self._service = service
+        self._modules = modules
+
+    def get_overview(self, *, project_uid: str) -> models.ComparisonOverview:
+        return models.ComparisonOverview.model_validate(self._service.get_overview(project_uid=project_uid))
 
     def get_queue_summary(self) -> models.ComparisonQueueSummary:
-        return _comparison_unavailable(self._DEPENDENCY)
+        return models.ComparisonQueueSummary.model_validate(self._service.get_queue_summary(modules=self._modules))
