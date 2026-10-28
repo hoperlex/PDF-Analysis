@@ -52,7 +52,11 @@ def test_a_pair_is_compared_written_with_its_mask_and_found_again_without_a_seco
     assert (decoded.width_px, decoded.height_px) == (info["width_px"], info["height_px"])
     assert decoded.plane("main").any() and decoded.plane("service_zones").any()
 
-    again = compare(lane, v1, v2, 2, 2)
+    class NoChild:
+        def run(self, settings, limits):
+            raise AssertionError("a pair found by its content key must not start a child")
+
+    again = compare(lane, v1, v2, 2, 2, runner=NoChild())
     assert (again.created, again.cached, again.result_id) == (False, True, first.result_id)
     assert len(lane.results(v1.project_uid)) == 1
 
