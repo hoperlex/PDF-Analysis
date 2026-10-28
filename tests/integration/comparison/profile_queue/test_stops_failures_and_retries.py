@@ -1,7 +1,8 @@
 """How a ``page_profile`` item ends, stops and is retried (`CMP-PROFILE-QUEUE-01`), against PostgreSQL, MinIO and the
 real page children.
 
-The runner and the gates are the real ones; the only stand-in is a spy around the real child runner that, at a chosen
+The runner is the real one (its Run-priority gate reads the lane's own projects, see ``conftest.py``: the database is
+shared with other integration directories); the only stand-in is a spy around the real child runner that, at a chosen
 ``(mode, page)`` call, requests a cancel, lets the lease run out, fails to start a child or reports a child that ended
 without a result -- the states a stop button, a killed worker, a broken host and a starved page leave. The item's own
 heartbeat thread is kept silent (an interval of an hour) wherever a stop is shown, so that the stop is the handler's
@@ -79,7 +80,7 @@ def test_a_lease_that_runs_out_mid_build_stops_it_between_pages_and_the_reclaime
     assert pages_started(spy) == {0, 1, 2}
     assert lane.work(enqueued.work_id)["state"] == "running", "the reclaim, not the stopped holder, ends the attempt"
 
-    assert runner.reclaim() == 1
+    assert lane.reclaim(runner) == 1, "the lane's one lost attempt (the reclaim fences other directories' too; those are not counted)"
     assert lane.work(enqueued.work_id)["state"] == "queued"
     lane.make_due(enqueued.work_id)
     ids = [row.id for row in rows]
