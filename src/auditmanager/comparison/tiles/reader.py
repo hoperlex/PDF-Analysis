@@ -2,8 +2,8 @@
 
 `CMP-VIEWER-01`, ADR-0025 decision 9 and the addenda of 2026-10-27 and 2026-10-28. **The API never calls PDFium**: the
 tiles of page A and page B are the page profile's (stored levels 2 and up from the archive, levels 0 and 1 rendered on
-request in a ceilinged child by the page-profile reader), the mask is bytes that this process reads and reduces with
-``numpy``, and nothing is written.
+request in a ceilinged child by the page-profile reader), the mask is bytes that this process reads (with the engine's
+codec) and reduces with ``numpy``, and nothing is written.
 
 The three modes
 ---------------
@@ -18,7 +18,8 @@ The three modes
     Both pages on one canvas (the darker pixel of the two) with the selected mask layers painted over them in solid
     colour; with ``align_blocks`` page B carries its aligned blocks moved back and the layers are not painted on the old
     or the new place of a block. It needs a result with a transform: a pair that was never compared has no overlay
-    (``404``). ``layers`` empty means no layer; a ``same`` result has no mask and nothing to draw.
+    (``404``). ``layers`` empty means no layer; a result without a mask (a ``same`` pair, or a difference in the annotations
+    or the fields alone) has nothing to draw: the pages are shown without layers, never an error.
 
 The grid is the pyramid of page A's page profile (or of page B's, for a ``b`` that has no canvas). A level, column or row
 outside it is ``404``.
@@ -42,6 +43,7 @@ from typing import Any
 import numpy
 from sqlalchemy.orm import Session, sessionmaker
 
+from auditmanager.comparison.engine.mask_codec import LAYERS
 from auditmanager.comparison.profile.models import PageProfileRow
 from auditmanager.comparison.profile.reader import PageProfileReader
 from auditmanager.comparison.tiles import errors
@@ -62,9 +64,6 @@ __all__ = ["MODE_A", "MODE_B", "MODE_OVERLAY", "PairTileReader"]
 MODE_OVERLAY = "overlay"
 MODE_A = "a"
 MODE_B = "b"
-#: A result with these statuses has a mask when it was compared; the others have none by construction (``same``) or
-#: whether they have one is the engine's choice (``needs_review``).
-_MASK_EXPECTED = frozenset({"different", "same_zones_changed"})
 _FRAME_TOLERANCE_PT = 0.5
 _MASK_TOLERANCE_PX = 1
 
@@ -248,8 +247,9 @@ class PairTileReader:
         if not layers:
             return {}
         if result.mask_blob_id is None:
-            if result.status in _MASK_EXPECTED:
-                raise errors.not_found("ComparisonMask")
+            # `same` has no mask by construction, and a difference in the annotations or the fields alone may have none
+            # either (`CMP-ENGINE-01`): the pages are shown without layers, never an error. A mask the result NAMES and
+            # the object store does not hold is another matter: that is `404` (`MaskStore`).
             return {}
         dpi = view.grid_dpi
         if dpi is None or view.mask_size is None:
@@ -267,4 +267,4 @@ class PairTileReader:
             return {name: numpy.zeros((size[1], size[0]), dtype=bool) for name in layers}
         xs, x_end = axis_starts(origin[0], size[0], num, den, planes.width_px)
         ys, y_end = axis_starts(origin[1], size[1], num, den, planes.height_px)
-        return {name: reduce_max(planes.plane(name), xs, x_end, ys, y_end) for name in layers}
+        return {name: reduce_max(planes.packed[LAYERS.index(name)], xs, x_end, ys, y_end) for name in layers}

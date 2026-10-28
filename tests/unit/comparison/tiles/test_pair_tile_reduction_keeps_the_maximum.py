@@ -8,7 +8,7 @@ import math
 import numpy
 import pytest
 
-from auditmanager.comparison.tiles.mask import read_mask
+from auditmanager.comparison.engine.mask_codec import LAYERS, decode_mask
 from auditmanager.comparison.tiles.reduction import axis_starts, reduce_max
 
 TILE = 512
@@ -24,7 +24,7 @@ def _tile(mask, layer: str, level: int, column: int, row: int, *, raster_dpi: in
     tw, th = min(TILE, level_w - column * TILE), min(TILE, level_h - row * TILE)
     xs, x_end = axis_starts(column * TILE, tw, num, den, mask.width_px)
     ys, y_end = axis_starts(row * TILE, th, num, den, mask.height_px)
-    return reduce_max(mask.plane(layer), xs, x_end, ys, y_end)
+    return reduce_max(mask.packed[LAYERS.index(layer)], xs, x_end, ys, y_end)
 
 
 def _brute(planes: "numpy.ndarray", layer: int, level: int, column: int, row: int) -> "numpy.ndarray":
@@ -44,7 +44,7 @@ def _brute(planes: "numpy.ndarray", layer: int, level: int, column: int, row: in
 def test_the_reduction_is_the_definition_at_every_level_for_random_masks(support) -> None:
     rng = numpy.random.default_rng(11)
     planes = rng.random((8, 700, 1300)) < 0.0007  # a few dozen lone pixels per plane
-    mask = read_mask(support.mask_blob(planes))
+    mask = decode_mask(support.mask_blob(planes))
     for level in range(0, 4):
         f = 1 << level
         columns, rows = math.ceil(math.ceil(1300 / f) / TILE), math.ceil(math.ceil(700 / f) / TILE)
@@ -60,7 +60,7 @@ def test_one_lone_pixel_survives_at_every_level_of_an_a1_sized_mask(support, x: 
     width, height = 6623, 4677  # A1 at 200 dpi
     planes = numpy.zeros((8, height, width), dtype=bool)
     planes[3, y, x] = True
-    mask = read_mask(support.mask_blob(planes))
+    mask = decode_mask(support.mask_blob(planes))
     for level in range(0, 5):
         f = 1 << level
         column, row = (x // f) // TILE, (y // f) // TILE
@@ -74,7 +74,7 @@ def test_a_mean_would_lose_it_so_the_guard_is_about_the_maximum(support) -> None
     """The mutation the proof quotes: block mean >= 0.5 instead of the maximum drops a lone pixel at level 1."""
     planes = numpy.zeros((8, 8, 16), dtype=bool)
     planes[0, 3, 5] = True
-    mask = read_mask(support.mask_blob(planes))
+    mask = decode_mask(support.mask_blob(planes))
     assert _tile(mask, "main", 1, 0, 0).sum() == 1
     blocks = planes[0].reshape(4, 2, 8, 2).mean(axis=(1, 3)) >= 0.5
     assert blocks.sum() == 0
@@ -84,7 +84,7 @@ def test_a_mask_coarser_than_the_raster_is_repeated_not_dropped(support) -> None
     """Mask at 50 dpi on a 100 dpi raster: one mask pixel covers 2 x 2 raster pixels, nothing is lost."""
     planes = numpy.zeros((8, 40, 60), dtype=bool)
     planes[0, 10, 20] = True
-    mask = read_mask(support.mask_blob(planes))
+    mask = decode_mask(support.mask_blob(planes))
     tile = _tile(mask, "main", 0, 0, 0, raster_dpi=100, mask_dpi=50)
     assert tile.shape == (80, 120) and tile.sum() == 4
     assert tile[20:22, 40:42].all()
@@ -96,7 +96,7 @@ def test_a_mask_finer_than_the_raster_with_a_ratio_that_is_not_a_whole_number_ke
     """Mask at 150 dpi on a 100 dpi raster (k = 1.5 at level 0): every mask pixel falls in exactly one block."""
     rng = numpy.random.default_rng(5)
     planes = rng.random((8, 90, 150)) < 0.01
-    mask = read_mask(support.mask_blob(planes))
+    mask = decode_mask(support.mask_blob(planes))
     tile = _tile(mask, "main", 0, 0, 0, raster_dpi=100, mask_dpi=150)
     assert tile.shape == (60, 100)
     assert tile.sum() >= 1
@@ -113,7 +113,7 @@ def test_a_mask_finer_than_the_raster_with_a_ratio_that_is_not_a_whole_number_ke
 def test_a_partial_tile_at_the_edge_reads_only_what_exists(support) -> None:
     planes = numpy.zeros((8, 10, 20), dtype=bool)
     planes[0, 9, 19] = True
-    mask = read_mask(support.mask_blob(planes))
+    mask = decode_mask(support.mask_blob(planes))
     tile = _tile(mask, "main", 0, 0, 0)
     assert tile.shape == (10, 20) and tile[9, 19] and tile.sum() == 1
     tile = _tile(mask, "main", 2, 0, 0)

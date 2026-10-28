@@ -229,17 +229,27 @@ def support() -> SimpleNamespace:
         header = struct.pack("<4sBBHII", fields["magic"], fields["fmt"], fields["layers"], fields["reserved"], width, height)
         return header + zlib.compress(numpy.packbits(planes, axis=-1, bitorder="big").tobytes(), 6)
 
-    def packed_mask_blob(width: int, height: int, pixels: dict[str, list[tuple[int, int]]]) -> bytes:
-        """A mask of the size of an A1 raster without a 250 MB ``bool`` array: the packed planes are built directly."""
-        import struct
-        import zlib
-
-        from auditmanager.comparison.tiles.mask import LAYER_NAMES
+    def packed_planes(width: int, height: int, pixels: dict[str, list[tuple[int, int]]]) -> "numpy.ndarray":
+        """The packed planes of a mask of the size of an A1 raster, built without a 250 MB ``bool`` array."""
+        from auditmanager.comparison.engine.mask_codec import LAYERS
 
         packed = numpy.zeros((8, height, (width + 7) // 8), dtype=numpy.uint8)
         for name, points in pixels.items():
             for x, y in points:
-                packed[LAYER_NAMES.index(name), y, x // 8] |= 0x80 >> (x % 8)
-        return struct.pack("<4sBBHII", b"AMCM", 1, 8, 0, width, height) + zlib.compress(packed.tobytes(), 1)
+                packed[LAYERS.index(name), y, x // 8] |= 0x80 >> (x % 8)
+        return packed
 
-    return SimpleNamespace(mask_blob=mask_blob, packed_mask_blob=packed_mask_blob)
+    def packed_mask_blob(width: int, height: int, pixels: dict[str, list[tuple[int, int]]]) -> bytes:
+        """The blob the ENGINE's codec writes for those pixels (`encode_packed_planes`, what a worker publishes)."""
+        from auditmanager.comparison.engine.mask_codec import encode_packed_planes
+
+        return encode_packed_planes(packed_planes(width, height, pixels), width, height, level=1)
+
+    def brief_mask_blob(width: int, height: int, pixels: dict[str, list[tuple[int, int]]]) -> bytes:
+        """The same planes written per the TEXT of wave brief C1 section 4 item 1, without the engine's codec."""
+        import struct
+        import zlib
+
+        return struct.pack("<4sBBHII", b"AMCM", 1, 8, 0, width, height) + zlib.compress(packed_planes(width, height, pixels).tobytes(), 1)
+
+    return SimpleNamespace(mask_blob=mask_blob, packed_mask_blob=packed_mask_blob, brief_mask_blob=brief_mask_blob)

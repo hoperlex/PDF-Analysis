@@ -30,7 +30,7 @@ def _imports(path: Path) -> set[str]:
 
 def test_no_module_of_the_package_imports_a_pdf_library_or_starts_a_process() -> None:
     files = sorted(PACKAGE.glob("*.py"))
-    assert len(files) >= 12
+    assert len(files) >= 11
     offenders = {}
     for path in files:
         bad = {name for name in _imports(path) if name.split(".")[0] in BANNED or name.startswith(BANNED_PREFIXES)}
@@ -51,7 +51,8 @@ import sys, struct, zlib
 sys.path.insert(0, %(src)r)
 import numpy
 import auditmanager.bootstrap.composition  # the whole product's imports
-from auditmanager.comparison.tiles import aligned, compose, grid, mask, reduction, warp
+from auditmanager.comparison.engine import mask_codec
+from auditmanager.comparison.tiles import aligned, compose, grid, reduction, warp
 
 levels = [(1300, 900, 3, 2), (650, 450, 1, 1)]
 summary = {"width_pt": 1300.0, "height_pt": 900.0, "raster": {"dpi": 72, "width_px": 1300, "height_px": 900},
@@ -70,9 +71,9 @@ b = aligned.warp_aligned(fetch, warp.SourceBudget(), blocks=[aligned.AlignedBloc
                          level_a=0, origin=(0, 0), size=(512, 512), grid_b=g, to_a=to_a)
 planes = numpy.zeros((8, 900, 1300), bool); planes[0, 100, 100] = True
 blob = struct.pack("<4sBBHII", b"AMCM", 1, 8, 0, 1300, 900) + zlib.compress(numpy.packbits(planes, axis=-1).tobytes())
-m = mask.read_mask(blob)
+m = mask_codec.decode_mask(blob)
 xs, xe = reduction.axis_starts(0, 512, 1, 1, 1300); ys, ye = reduction.axis_starts(0, 512, 1, 1, 900)
-hit = reduction.reduce_max(m.plane("main"), xs, xe, ys, ye)
+hit = reduction.reduce_max(m.packed[0], xs, xe, ys, ye)
 image = compose.paint_layers(compose.min_composite(b, b), {"main": hit}, (0, 0))
 assert compose.decode_png(compose.encode_png(image)).shape == (512, 512, 3)
 loaded = sorted(n for n in sys.modules if n.split(".")[0] in {"pypdfium2", "pdfplumber", "pypdf", "fitz", "pdfminer"})

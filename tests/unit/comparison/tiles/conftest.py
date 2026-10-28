@@ -19,7 +19,7 @@ import pytest
 
 from auditmanager.comparison.profile.child.geometry import pyramid_levels
 from auditmanager.comparison.tiles.grid import PageGrid
-from auditmanager.comparison.tiles.mask import LAYER_NAMES
+from auditmanager.comparison.engine.mask_codec import LAYERS as LAYER_NAMES
 
 TILE = 512
 
@@ -91,5 +91,6 @@ def noise_page(width: int, height: int, seed: int = 7) -> "numpy.ndarray":
 def support() -> SimpleNamespace:
     """The builders above (a conftest cannot be imported by a test under the importlib import mode)."""
     return SimpleNamespace(
-        mask_blob=mask_blob, planes_with=planes_with, Pyramid=Pyramid, noise_page=noise_page, TILE=TILE
+        mask_blob=mask_blob, planes_with=planes_with, Pyramid=Pyramid, noise_page=noise_page, TILE=TILE,
+        packed_plane=lambda mask, name: mask.packed[LAYER_NAMES.index(name)],
     )

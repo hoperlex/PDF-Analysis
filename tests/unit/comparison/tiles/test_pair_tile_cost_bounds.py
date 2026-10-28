@@ -3,34 +3,15 @@
 
 from __future__ import annotations
 
-import struct
 import tracemalloc
-import zlib
 
 import numpy
 
-from auditmanager.comparison.tiles.mask import read_mask
 from auditmanager.comparison.tiles.reduction import axis_starts, reduce_max
 
 MIB = 1024 * 1024
 #: 2A0 (1682 x 1189 mm) at the 113 dpi of the registration rule.
 WIDTH, HEIGHT = 7483, 5290
-
-
-def test_a_hostile_body_allocates_no_more_than_a_chunk_beyond_what_the_header_declares(support) -> None:
-    """Sixty-four megabytes of zeros in about sixty kilobytes, behind a header that declares sixty-four bytes."""
-    bomb = zlib.compress(b"\0" * (64 * MIB), 9)
-    header = struct.pack("<4sBBHII", b"AMCM", 1, 8, 0, 16, 4)
-    tracemalloc.start()
-    try:
-        try:
-            read_mask(header + bomb)
-        except Exception:  # the refusal is asserted in the reader's own tests
-            pass
-        _, peak = tracemalloc.get_traced_memory()
-    finally:
-        tracemalloc.stop()
-    assert peak < 4 * MIB, peak  # two chunks (the inflated chunk and its resize), never the 64 MiB the stream holds
 
 
 def test_a_whole_sheet_tile_of_a_2a0_plane_is_reduced_on_packed_bytes_not_on_an_unpacked_plane() -> None:

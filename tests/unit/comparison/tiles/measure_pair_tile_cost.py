@@ -28,7 +28,8 @@ import numpy
 
 from auditmanager.comparison.tiles.compose import encode_png, min_composite, paint_layers
 from auditmanager.comparison.tiles.grid import Affine, PageGrid
-from auditmanager.comparison.tiles.mask import LAYER_NAMES, read_mask
+from auditmanager.comparison.engine.mask_codec import LAYERS as LAYER_NAMES
+from auditmanager.comparison.engine.mask_codec import decode_mask
 from auditmanager.comparison.tiles.reduction import axis_starts, reduce_max
 from auditmanager.comparison.tiles.warp import Region, SourceBudget, warp_region
 
@@ -88,9 +89,9 @@ def measure(path: str, built: float) -> None:
     out["blob_built_s"] = built
     out["rss_mib_before_decode"], out["peak_rss_mib_before_decode"] = round(_status("VmRSS"), 1), round(_status("VmHWM"), 1)
     began = time.perf_counter()
-    mask = read_mask(blob)
+    mask = decode_mask(blob)
     out["decode_cold_s"] = round(time.perf_counter() - began, 3)
-    out["inflated_bytes"] = mask.nbytes
+    out["inflated_bytes"] = int(mask.packed.nbytes)
     out["rss_mib_after_decode"], out["peak_rss_mib_after_decode"] = round(_status("VmRSS"), 1), round(_status("VmHWM"), 1)
 
     levels = []
@@ -105,7 +106,7 @@ def measure(path: str, built: float) -> None:
             xs, x_end = axis_starts(column * 512, tw, 1 << level, 1, WIDTH)
             ys, y_end = axis_starts(row * 512, th, 1 << level, 1, HEIGHT)
             for name in LAYER_NAMES:
-                reduce_max(mask.plane(name), xs, x_end, ys, y_end)
+                reduce_max(mask.packed[LAYER_NAMES.index(name)], xs, x_end, ys, y_end)
             timings.append(round((time.perf_counter() - began) * 1000, 1))
         levels.append({"level": level, "tiles": f"{columns}x{rows}", "ms_all_8_layers_worst_of_3_tiles": max(timings)})
         if max(level_w, level_h) <= 512:

@@ -137,6 +137,25 @@ def test_one_changed_pixel_is_drawn_at_every_level_and_only_in_the_layer_asked_f
     assert numpy.all(line == PALETTE_RGB["line_style"][::-1], axis=2).sum() == 1
 
 
+def test_a_mask_written_by_the_engines_codec_and_one_written_per_the_briefs_text_are_drawn_alike(http, token, make_pair, support) -> None:
+    """The round trip: `encode_packed_planes` (the worker's writer) -> the object store -> the tile path -> the pixels, and
+    the same planes written from the brief's text give the same tiles."""
+    pixels = {"main": [(3001, 2003), (10, 10)], "moved": [(4000, 100)], "service_zones": [(x, 4600) for x in range(500, 700)]}
+    description = {"mask": {"format": 1, "dpi": 200, "width_px": A1_W, "height_px": A1_H}}
+    engine = make_pair(mask=support.packed_mask_blob(A1_W, A1_H, pixels), result=description)
+    brief = make_pair(mask=support.brief_mask_blob(A1_W, A1_H, pixels), result=description)
+    for level, column, row in ((0, 5, 3), (2, 0, 0), (4, 0, 0)):
+        asked = dict(layers="main,moved,service_zones")
+        one = _decode(_tile(http, token, engine, "overlay", level, column, row, **asked))
+        two = _decode(_tile(http, token, brief, "overlay", level, column, row, **asked))
+        assert numpy.array_equal(one, two), (level, column, row)
+    painted = _decode(_tile(http, token, engine, "overlay", 0, 5, 3, layers="main"))
+    assert numpy.all(painted == PALETTE_RGB["main"][::-1], axis=2).sum() == 1  # (3001, 2003) is in tile (5, 3) of level 0
+    top = _decode(_tile(http, token, engine, "overlay", 4, 0, 0, layers="main,moved"))
+    assert numpy.all(top == PALETTE_RGB["main"][::-1], axis=2).sum() == 2  # both lone pixels survive the reduction
+    assert numpy.all(top == PALETTE_RGB["moved"][::-1], axis=2).sum() == 1
+
+
 def test_align_blocks_moves_a_block_of_the_newer_page_back_and_withholds_the_layers_over_it(http, token, world, make_pair, support) -> None:
     box = [200 * PPP3, 0.0, 300 * PPP3, 100 * PPP3]  # x 200..300, y 0..100 of level 3
     blocks = [{"box_a": box, "dx_pt": 100 * PPP3, "dy_pt": 0.0}]
@@ -189,10 +208,11 @@ def test_what_does_not_exist_is_not_found(http, token, world, make_pair, support
     unregistered = make_pair(status="needs_review", result={"how_compared": {"algo_version": "t", "dpi": 200, "tolerance_pt": 0.5}})
     assert _tile(http, token, unregistered, "overlay", 2, 0, 0).status_code == 404
     assert _tile(http, token, unregistered, "b", 2, 0, 0).content == _profile_tile(http, token, world.newer_pages[5], 2, 0, 0).content
-    # a different pair whose mask is missing: the layers cannot be drawn (404), the bare overlay still can
+    # a pair whose result has no mask (a difference in the annotations or the fields alone, `CMP-ENGINE-01`): the pages are
+    # drawn without layers, never an error
     no_mask = make_pair()
-    assert _tile(http, token, no_mask, "overlay", 2, 0, 0, layers="main").status_code == 404
-    assert _tile(http, token, no_mask, "overlay", 2, 0, 0).status_code == 200
+    assert _tile(http, token, no_mask, "overlay", 2, 0, 0, layers="main").status_code == 200
+    assert _decode(_tile(http, token, no_mask, "overlay", 2, 0, 0, layers="main")).shape[:2] == (512, 512)
     # a same pair has no mask and nothing to draw
     same = make_pair(status="same")
     assert _tile(http, token, same, "overlay", 2, 0, 0, layers="main,noise").status_code == 200
@@ -211,6 +231,7 @@ def test_a_damaged_result_or_mask_is_an_integrity_error_not_a_picture(http, toke
         "magic": pair_with(b"XXXX" + good[4:]),
         "format": pair_with(good[:4] + bytes([9]) + good[5:]),
         "layers": pair_with(good[:5] + bytes([3]) + good[6:]),
+        "reserved": pair_with(good[:6] + bytes([1, 0]) + good[8:]),
         "size": pair_with(support.mask_blob(numpy.zeros((8, 4, 16), bool))),  # a 16 x 4 mask for an A1 sheet
         "truncated": pair_with(good[: len(good) // 2]),
         "over_cap": pair_with(good[:16].replace(good[8:16], (50000).to_bytes(4, "little") + (50000).to_bytes(4, "little")) + good[16:]),
