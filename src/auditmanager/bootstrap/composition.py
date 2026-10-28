@@ -502,7 +502,7 @@ def build_application(
         comparison_matrices=ComparisonMatrixAdapter(sessions, blob_store=store),
         comparison_series=ComparisonSeriesAdapter(sessions, blob_store=store),
         comparison_pair_tiles=ComparisonPairTileAdapter(sessions, blob_store=store),
-        comparison_overview=ComparisonOverviewAdapter(),
+        comparison_overview=ComparisonOverviewAdapter(sessions, modules=comparison_modules),
         execution=ExecutionAdapter(sessions, runs=run_adapter),
         # `W55A-SEAL-01` sealed them; `W55A-SEARCH-01` serves them. The norms reads and the
         # designation over the same session factory, every search under the operator's

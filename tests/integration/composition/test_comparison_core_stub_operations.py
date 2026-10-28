@@ -73,6 +73,7 @@ WIRED: frozenset[str] = frozenset({
     "startComparisonSeries", "listComparisonSeries", "getComparisonSeries", "pauseComparisonSeries",
     "resumeComparisonSeries", "cancelComparisonSeries", "finishComparisonSeries", "listComparisonSheetPairs",
     "getComparisonSheetPair",
+    "getComparisonOverview", "getComparisonQueueSummary",  # `CMP-VC-OVERVIEW-01`
 })
 STUBS = sorted(set(REQUESTS) - WIRED)
 THE_THREE = ("approveSheetPairing", "withdrawSheetPairing", "generateComparisonSummary")

@@ -194,7 +194,13 @@ EXECUTION_COLLECTIONS = frozenset({"listExecutionQueue", "listExecutionJournal"}
 #: `CMP-SEAL-C1`: ``getComparisonQueueSummary`` names no parent and is not a page (the read of the comparison queue by
 #: state and kind); it answers `503 dependency_unavailable` until `CMP-VC-OVERVIEW-01` serves it, and then joins
 #: the aggregate operations above, which are objects and not pages.
-SEALED_STUB_COLLECTIONS: frozenset[str] = frozenset({"getComparisonQueueSummary"})
+#: `CMP-VC-OVERVIEW-01` serves it and empties this set: it joins :data:`COMPARISON_QUEUE_OPERATIONS`.
+SEALED_STUB_COLLECTIONS: frozenset[str] = frozenset()
+
+#: `CMP-VC-OVERVIEW-01`. ``getComparisonQueueSummary`` is an aggregate of the whole installation, not a page and not a
+#: dashboard: the module set, the pause, the items by state and by kind. Exempt from the page check, and checked for its
+#: own shape by :func:`test_the_comparison_queue_summary_answers_its_own_fixed_shape`.
+COMPARISON_QUEUE_OPERATIONS = frozenset({"getComparisonQueueSummary"})
 
 #: `W55A-SEAL-01`. Addressed ``GET`` operations whose port is a sealed stub: they cannot
 #: answer ``404`` for an absent identity until something reads the identity, so they are
@@ -223,9 +229,9 @@ SEALED_STUB_COLLECTIONS: frozenset[str] = frozenset({"getComparisonQueueSummary"
 #: `CMP-SERIES-01` serves ``listComparisonSeries``, ``getComparisonSeries``, ``listComparisonSheetPairs`` and
 #: ``getComparisonSheetPair`` and removes them: each joins the `404` sweep. The count of addressed operations
 #: (:data:`EXPECTED_ADDRESSED`) does not change: they are addressed whether stubbed or served.
-SEALED_STUB_ADDRESSED: frozenset[str] = frozenset({
-    "getComparisonOverview",
-})
+#: `CMP-VC-OVERVIEW-01` serves ``getComparisonOverview`` and empties this set: an absent project is `404 not_found`,
+#: never an empty overview.
+SEALED_STUB_ADDRESSED: frozenset[str] = frozenset()
 
 #: `W55A-SEAL-01`. ``searchNorms`` addresses no parent but is not a listing of everything:
 #: its ``q`` is required, so the bare path is ``422 validation_failed`` on ``q`` and never a
@@ -468,6 +474,7 @@ def test_a_collection_that_names_no_parent_answers_a_page(app: Composed) -> None
             or operation_id in SERVER_STATUS_OPERATIONS
             or operation_id in RELEASE_OPERATIONS
             or operation_id in SEALED_STUB_COLLECTIONS
+            or operation_id in COMPARISON_QUEUE_OPERATIONS
             or operation_id in QUERY_OPERATIONS
         ):
             continue
@@ -590,6 +597,25 @@ def test_the_one_unaddressed_aggregate_answers_its_own_fixed_shape(app: Composed
             "section_breakdown",
         ):
             assert panel in body, f"{operation_id} answered with no {panel!r} panel: {body}"
+
+
+def test_the_comparison_queue_summary_answers_its_own_fixed_shape(app: Composed) -> None:
+    """``getComparisonQueueSummary``, the operation :data:`COMPARISON_QUEUE_OPERATIONS` excuses from the page check.
+
+    Not a page and not empty: the module set, the pause, the nine counts and the kinds -- exempt from *paging*, not from
+    *shape*."""
+    unaddressed = _unaddressed(_get_routes(app))
+    reads = [(op, path) for op, path in unaddressed if op in COMPARISON_QUEUE_OPERATIONS]
+    assert {op for op, _ in reads} == COMPARISON_QUEUE_OPERATIONS
+    for operation_id, template in reads:
+        status, body = _get(app, template)
+        assert status == 200, f"{operation_id} answered {status}: {body}"
+        assert isinstance(body, dict) and "items" not in body and "page" not in body, body
+        for key in ("modules", "paused", "counts", "kinds"):
+            assert key in body, f"{operation_id} answered without {key!r}: {body}"
+        assert set(body["counts"]) == {
+            "queued", "leased", "running", "retry_wait", "paused", "spend_unknown", "succeeded", "failed", "cancelled",
+        }, body
 
 
 def test_the_callers_own_account_answers_its_own_shape(app: Composed) -> None:

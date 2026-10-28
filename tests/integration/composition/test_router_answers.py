@@ -74,9 +74,9 @@ _STUB_PAIR = "/comparison-sheet-pairs/ctp_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 #: absent project or document is `404`.
 #: `CMP-SERIES-01` serves the series of a document set, one series, the sheet pairs of a transition and one sheet pair and
 #: removes their four paths: an absent project, document, series, transition or pair is `404`.
-SEALED_STUB_GETS: frozenset[str] = frozenset({
-    f"/projects/{_PRJ}/comparison-overview", "/execution/comparison-queue",
-})
+#: `CMP-VC-OVERVIEW-01` serves the overview and the queue summary and empties this set: an absent project is `404`, and
+#: the queue summary answers `200`, like every other GET of the sweep.
+SEALED_STUB_GETS: frozenset[str] = frozenset()
 #: `CMP-PROFILE-01` serves the five page reads (`/versions/{ver}/page-profiles`, `/page-profiles/{cpr}` and
 #: its `preview`, `thumbnail` and `tile`) and removes them from the set above: an absent `cpr_` is `404`.
 #: The tile's `level`, `column` and `row` are required, so the sweep gives it a well-formed query that
