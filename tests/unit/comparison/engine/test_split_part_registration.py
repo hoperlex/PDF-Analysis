@@ -153,7 +153,9 @@ def test_the_two_areas_do_not_overlap_and_the_ink_coverage_of_the_split_is_compu
     first, second = (p.outcome["result"]["part"] for p in parts)
     assert _overlap(first["area_a_pt"], second["area_a_pt"]) == 0.0, (first, second)
     covered = first["coverage_a"] + second["coverage_a"]
-    assert 0.97 <= covered <= 1.0, covered
+    # Not all of the sheet: the strip where the two parts were cut lies in each part's margin (outside the frame the page
+    # profile now finds, `CMP-C1-FIX-A` item 8), and a margin is a service zone the comparison leaves out.
+    assert 0.95 <= covered <= 1.0, covered
 
 
 def test_the_series_accepts_the_two_areas_as_one_reliable_coverage(parts) -> None:
@@ -163,7 +165,7 @@ def test_the_series_accepts_the_two_areas_as_one_reliable_coverage(parts) -> Non
     facts = [PartFact(p.outcome["result"]["part"]["area_a_pt"], p.outcome["result"]["part"]["coverage_a"],
                       p.outcome["result"]["part"]["reliable"]) for p in parts]
     percent, reliable = group_coverage(60.71, facts)
-    assert reliable is True and 97.0 <= percent <= 100.0, (percent, reliable)
+    assert reliable is True and 95.0 <= percent <= 100.0 and percent != 60.71, (percent, reliable)
 
 
 def test_a_part_registered_in_its_own_region_has_the_differences_of_the_part_not_of_the_wrong_half(parts) -> None:

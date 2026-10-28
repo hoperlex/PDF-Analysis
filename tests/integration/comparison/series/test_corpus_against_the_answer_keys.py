@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 from auditmanager.comparison.series.verdict import verdict_codes
 
 from .support import build, drain, pair_rows, runner_with, start
@@ -79,7 +81,15 @@ def test_the_series_agrees_with_the_answer_key_sheet_by_sheet(
         # on the left half, overlapping the first, so that the ink figure was refused): the areas do not overlap, the ink
         # coverage of the split is computed from the two shares and is reliable, and it is not the matrix's text figure.
         assert row["parts"]["coverage_reliable"] is True
-        assert 97.0 <= shown["parts"]["covered_percent"] <= 100.0 and shown["parts"]["covered_percent"] != row["parts"]["text_percent"]
+        shares = lab.rows(
+            "SELECT sum((r.result->'part'->>'coverage_a')::numeric) AS share FROM comparison_sheet_pair p "
+            "JOIN comparison_transition t ON t.comparison_transition_id = p.comparison_transition_id "
+            "JOIN comparison_sheet_pair_result r ON r.comparison_sheet_pair_result_id = p.result_id "
+            "WHERE t.comparison_series_id = :s AND t.transition_no = :n AND p.parts->>'kind' = 'split'",
+            s=series["series_id"], n=row["transition_no"],
+        )[0]["share"]
+        assert shown["parts"]["covered_percent"] == pytest.approx(100 * float(shares), abs=0.01)
+        assert 95.0 <= shown["parts"]["covered_percent"] <= 100.0 and shown["parts"]["covered_percent"] != row["parts"]["text_percent"]
         assert "part" not in shown  # the engine's working member is not an API field
     # the duplicated sheet of V5 is the engine's review (DUPLICATE_SHEET), the scan of V4 is its NO_TEXT_LAYER
     by_sheet = {(r["transition_no"], sheet_of(vs1_key, vs1_key["transitions"][r["transition_no"] - 1]["to"], pages[r["b"]][1]) if r["b"] else "-"): r
