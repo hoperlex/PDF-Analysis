@@ -344,3 +344,32 @@ def worker_id(sessions: sessionmaker[Session]) -> str:
         registered = WorkerRegistry().register(session, version="cmp-series-01-test", slots=1)
         session.commit()
     return str(registered)
+
+
+@pytest.fixture(autouse=True)
+def _leave_no_live_item_behind(sessions: sessionmaker[Session]):
+    """The database is shared with the other integration directories of ``tests/integration/comparison`` (the work
+    queue's hosting tests refuse to start while an item of a kind they do not register is live, and the engine's queue tests
+    claim *any* queued item). A test of this directory starts series, and a series queues its items; at the end of every test
+    every live item of this directory's projects is ended: the ones at rest are cancelled, the ones a test left in flight
+    (a claimed item, an expired lease) are asked to stop, fenced and reclaimed."""
+    yield
+    from auditmanager.comparison.public import ComparisonWorkRepository
+
+    mine = "FROM project p WHERE p.project_uid = w.project_uid AND p.name LIKE 'Серия переходов%' AND w.terminal_at IS NULL"
+    with sessions() as session:
+        session.execute(text(
+            "UPDATE comparison_work w SET cancel_requested_at = clock_timestamp() " + mine + " AND w.state IN ('leased', 'running')"
+        ))
+        session.commit()
+    with sessions() as session:
+        session.execute(text(
+            "UPDATE comparison_work_attempt a SET lease_expires_at = clock_timestamp() - interval '1 hour' "
+            "FROM comparison_work w, project p WHERE a.comparison_work_id = w.comparison_work_id "
+            "AND p.project_uid = w.project_uid AND p.name LIKE 'Серия переходов%' AND w.terminal_at IS NULL "
+            "AND a.state IN ('leased', 'running')"))
+        ComparisonWorkRepository().reclaim_expired(session)
+        session.execute(text(
+            "UPDATE comparison_work w SET state = 'cancelled', terminal_at = clock_timestamp() " + mine +
+            " AND w.state IN ('queued', 'paused', 'retry_wait')"))
+        session.commit()
