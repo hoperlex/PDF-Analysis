@@ -118,7 +118,10 @@ describe('«Проекты и этапы»', () => {
     for (const header of ['Проект · следующий шаг', 'Версии', '1 Загрузка', '2 Разбор версий', '3 Сопоставление листов', '5 Сравнение соседних']) {
       expect(t, header).toContain(header);
     }
-    for (const missing of ['4 ИИ-проверка сомнительных пар', '6 ИИ-описание изменений', '7 Сводка и отчёт']) expect(t, missing).not.toContain(missing);
+    // the headers only: a chip may name a step of wave C2 in words («ИИ-проверка сомнительных пар») without being its column
+    const headers = (projects().match(/<th scope="col"[\s\S]*?<\/th>/g) ?? []).map(text).join('|');
+    for (const missing of ['4 ИИ-проверка сомнительных пар', '6 ИИ-описание изменений', '7 Сводка и отчёт']) expect(headers, missing).not.toContain(missing);
+    expect(headers).toContain('5 Сравнение соседних');
     expect(t).toContain('Шаги 4 «ИИ-проверка сомнительных пар», 6 «ИИ-описание изменений» и 7 «Сводка и отчёт» появятся позже');
   });
 
@@ -129,7 +132,13 @@ describe('«Проекты и этапы»', () => {
     }
     for (const next of ['upload', 'profile', 'matrix', 'ai_pairs', 'series']) expect(markup, next).toContain(`data-next-step="${next}"`);
     const t = text(markup);
-    for (const word of ['загружен', 'не сопост. 4', 'строк 31 · ✎ 2', 'по старому порядку', '2 из 3 · с изм. 1', 'Далее: Разобрать версии']) expect(t, word).toContain(word);
+    for (const word of ['загружен', 'не сопост. 4', 'строк 31 · ✎ 2', 'по старому порядку', '2 из 3 · с изм. 1']) expect(t, word).toContain(word);
+    // the chip is the original's sentence for the step it names and that step's state (OVERVIEW 6.2), with no «Далее:» in front
+    for (const sentence of [
+      'Идёт загрузка', 'Идёт разбор версий', 'Разбор версии с ошибкой — повторить', 'Идёт сопоставление листов',
+      'Несопоставленных листов: 4 — вручную', 'Сравнение соседних на паузе — продолжить', 'Одна версия — сравнивать не с чем', 'Готово',
+    ]) expect(t, sentence).toContain(sentence);
+    expect(t).not.toContain('Далее:');
   });
 
   it('shows the strip «В загрузке, ещё не в списке проектов:» with each unfinished upload', () => {
@@ -141,7 +150,7 @@ describe('«Проекты и этапы»', () => {
 
   it('offers the step buttons to an expert only', () => {
     const expert = projects();
-    for (const label of ['Повторить', 'Подготовить', 'Запустить', 'Пауза', 'Продолжить', 'Заново']) expect(text(expert), label).toContain(label);
+    for (const label of ['Повторить', 'Подготовить', 'Запустить', 'Пауза', 'Продолжить', 'Досчитать', 'Заново']) expect(text(expert), label).toContain(label);
     for (const action of ['prepare', 'start', 'pause', 'resume', 'finish', 'restart']) expect(expert, action).toContain(`data-step-action="${action}"`);
     const reader = projects({ mayAct: false });
     expect(reader).not.toContain('data-step-action');

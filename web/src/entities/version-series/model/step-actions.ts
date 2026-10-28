@@ -1,12 +1,18 @@
 /**
- * The buttons of a step's cell and when each is offered (`version-comparison-projects.js:460-530` `stageActs`).
+ * The buttons of a step's cell and when each is offered (`version-comparison-projects.js:460-530` `stageActs`;
+ * `CMP-VC-OVERVIEW-01` section 6.4). A button is offered only where the server accepts its command
+ * (`src/auditmanager/comparison/series/service.py`):
  *
- * * «2 Разбор версий»: «Повторить» when a version failed — it is `prepareComparisonMatrix`, which queues the
- *   profiles that are missing or failed (CMP-SEAL-C1 decision 7: there is no separate profile retry).
- * * «3 Сопоставление листов»: «Подготовить» when the matrix is not built, stale or failed.
- * * «5 Сравнение соседних»: «Запустить» (never started), «Пауза» (queued or running), «Продолжить» (paused: the
- *   series resumes; interrupted or failed: the series is finished — `finishComparisonSeries`, which the
- *   transitions block calls «Досчитать»), «Заново» (a finished or stale one: a new series that replaces it).
+ * * «2 Разбор версий»: «Повторить» when the step failed — it is `prepareComparisonMatrix`, which queues the
+ *   profiles that are missing or failed (CMP-SEAL-C1 decision 7: there is no separate profile retry). A step that
+ *   is running with a stored failure is a retry in progress and offers nothing.
+ * * «3 Сопоставление листов»: «Подготовить» when the matrix is not built or stale, «Повторить» when its build failed;
+ *   both are `prepareComparisonMatrix`.
+ * * «5 Сравнение соседних»: «Запустить» (never started; `startComparisonSeries`), «Пауза» (queued or running;
+ *   `pauseComparisonSeries`), «Продолжить» (a paused series only; `resumeComparisonSeries`), «Досчитать» (a failed or
+ *   interrupted series with a transition left, `done` below `total`; `finishComparisonSeries`, refused with nothing
+ *   left) and «Заново» (a finished, failed, interrupted or stale one: `startComparisonSeries` with `restart`, refused
+ *   with `comparison_series_active` while a series is queued, running or paused).
  *
  * Steps 1, 4, 6 and 7 offer none here. A `blocked` step waits for the one before it and offers nothing.
  */
@@ -26,25 +32,28 @@ export function stepActions(
   counts?: ComparisonStepCounts,
 ): readonly StepAction[] {
   if (step === 'profile') {
-    return state === 'failed' || (counts?.failed ?? 0) > 0 ? [{ id: 'prepare', label: 'Повторить' }] : [];
+    return state === 'failed' ? [{ id: 'prepare', label: 'Повторить' }] : [];
   }
   if (step === 'matrix') {
-    return state === 'not_started' || state === 'stale' || state === 'failed'
-      ? [{ id: 'prepare', label: 'Подготовить' }]
-      : [];
+    if (state === 'failed') return [{ id: 'prepare', label: 'Повторить' }];
+    return state === 'not_started' || state === 'stale' ? [{ id: 'prepare', label: 'Подготовить' }] : [];
   }
   if (step === 'series') {
     switch (state) {
       case 'not_started': return [{ id: 'start', label: 'Запустить' }];
       case 'queued':
       case 'running': return [{ id: 'pause', label: 'Пауза' }];
-      case 'paused': return [{ id: 'resume', label: 'Продолжить' }, { id: 'restart', label: 'Заново' }];
+      case 'paused': return [{ id: 'resume', label: 'Продолжить' }];
       case 'interrupted':
-      case 'failed': return [{ id: 'finish', label: 'Продолжить' }, { id: 'restart', label: 'Заново' }];
+      case 'failed': {
+        // `finishComparisonSeries` is refused unless a transition is left; both figures must be known to say there is one.
+        const left = counts?.done !== undefined && counts.total !== undefined && counts.done < counts.total;
+        return left
+          ? [{ id: 'finish', label: 'Досчитать' }, { id: 'restart', label: 'Заново' }]
+          : [{ id: 'restart', label: 'Заново' }];
+      }
       case 'done':
-      case 'stale':
-      case 'partial':
-      case 'attention': return [{ id: 'restart', label: 'Заново' }];
+      case 'stale': return [{ id: 'restart', label: 'Заново' }];
       default: return [];
     }
   }

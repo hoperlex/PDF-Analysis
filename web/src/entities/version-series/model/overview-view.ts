@@ -151,7 +151,7 @@ export function anythingRunning(sets: readonly ComparisonOverviewSet[], uploads:
   return uploads > 0 || sets.some((set) => groupOf(set) === 'running');
 }
 
-/** The proposed next step, as a chip says it. */
+/** The step a chip proposes, named: the fallback for a step and state the sentences below do not cover. */
 export const NEXT_STEP_LABELS: Readonly<Record<ComparisonStepId, string>> = {
   upload: 'Загрузить версии',
   profile: 'Разобрать версии',
@@ -161,3 +161,47 @@ export const NEXT_STEP_LABELS: Readonly<Record<ComparisonStepId, string>> = {
   ai_changes: 'ИИ-описание изменений',
   report: 'Сводка и отчёт',
 };
+
+/** «Одна версия — сравнивать не с чем» and «Готово»: a set with no proposed step (`OV:307-308`, `OV:327-331`). */
+export const ONE_VERSION_SENTENCE = 'Одна версия — сравнивать не с чем';
+export const READY_SENTENCE = 'Готово';
+
+const PREPARE_SENTENCE = 'Подготовить: разбор и сопоставление листов';
+
+/**
+ * The chip under the code of a row: the sentence of the step the server proposes and of that step's state (the
+ * original's, `overview.py:297-331`, quoted in `CMP-VC-OVERVIEW-01` section 6.2). The contract carries the step and its
+ * state, never the sentence, so the sentences are the client's; a step and state they do not cover read as the step's
+ * name, and no code is printed.
+ */
+export function nextStepSentence(set: ComparisonOverviewSet): string {
+  const step = set.next_step;
+  if (step === undefined) return set.version_count < 2 ? ONE_VERSION_SENTENCE : READY_SENTENCE;
+  const entry = set.steps.find((candidate) => candidate.step === step);
+  const state = entry?.state;
+  const running = state !== undefined && isRunningState(state);
+  switch (step) {
+    case 'upload':
+      return state === 'failed' ? 'Ошибка загрузки — открыть пакет' : 'Идёт загрузка';
+    case 'profile':
+      if (state === 'failed') return 'Разбор версии с ошибкой — повторить';
+      if (running) return 'Идёт разбор версий';
+      if (state === 'paused') return 'Разбор версий на паузе';
+      return state === 'not_started' || state === 'partial' ? PREPARE_SENTENCE : NEXT_STEP_LABELS[step];
+    case 'matrix':
+      if (state === 'failed') return 'Сопоставление листов не собрано — повторить';
+      if (running) return 'Идёт сопоставление листов';
+      if (state === 'paused') return 'Сопоставление листов на паузе';
+      if (state === 'attention') return `Несопоставленных листов: ${entry?.counts?.unmatched ?? 0} — вручную`;
+      return state === 'not_started' || state === 'stale' ? PREPARE_SENTENCE : NEXT_STEP_LABELS[step];
+    case 'series':
+      if (state === 'running') return 'Сравнение соседних: идёт';
+      if (state === 'queued') return 'Сравнение соседних: в очереди';
+      if (state === 'pausing') return 'Сравнение соседних: ставится на паузу';
+      if (state === 'paused') return 'Сравнение соседних на паузе — продолжить';
+      if (state === 'interrupted' || state === 'failed') return 'Сравнение соседних прервано — досчитать';
+      return state === 'not_started' || state === 'stale' ? 'Сравнение соседних — запустить' : NEXT_STEP_LABELS[step];
+    default:
+      return NEXT_STEP_LABELS[step];
+  }
+}
