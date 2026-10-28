@@ -19,9 +19,9 @@ def test_the_kind_is_pair_result_and_the_public_name_is_the_same() -> None:
 
 def test_the_shipped_tuple_has_one_handler_for_each_kind() -> None:
     kinds = [factory(WorkDependencies(None, None, None, None)).kind for factory in public.HANDLER_FACTORIES]  # type: ignore[arg-type]
-    assert sorted(kinds) == ["page_profile", "pair_result"]
+    assert sorted(kinds) == ["matrix_build", "page_profile", "pair_result"]
     registry = HandlerRegistry.build(public.HANDLER_FACTORIES, WorkDependencies(None, None, None, None))  # type: ignore[arg-type]
-    assert registry.kinds == {"page_profile", "pair_result"}
+    assert registry.kinds == {"matrix_build", "page_profile", "pair_result"}
 
 
 def test_the_payload_round_trips_and_sorts_the_reasons() -> None:
