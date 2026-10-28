@@ -144,3 +144,60 @@ Tool: a script outside the repository applies one replacement to the committed f
 
 Two of the fourteen first survived (P2b, P6): the guard beside each was tightened in the commit `test(web): two guards that survived their mutation`, and the mutation run again. Counts above are those of the files before the SERIES adaptation added tests.
 
+Seven more proofs for the SERIES adaptation and the polling guard, run the same way:
+
+| # | commitment | file mutated | guard | red | restored |
+| --- | --- | --- | --- | --- | --- |
+| P10 | **the matrix poll has an arm that ends it** (the first version of the guard survived; it now reads the option's own value) | `entities/version-series/api/use-matrix.ts` | `web/tests/unit/run/polling.test.ts` | 1 failed, 15 passed | 16 passed |
+| P11 | the series read has no timer of its own | `use-series.ts` | `polling.test.ts` | 1 failed | 16 passed |
+| P12 | the second part of a split sheet has its own pair | `model/matrix-view.ts` | `U/model.test.ts`, `U/screens.test.ts` | 4 failed, 94 passed | 98 passed |
+| P13 | «Листов» counts the sheets of the transition | `widgets/version-series/ui/transition-summary.tsx` | `U/screens.test.ts` | 1 failed | 57 passed |
+| P14 | «Досчитать» for a finished series with something left | `model/series-words.ts` | `U/model.test.ts`, `U/screens.test.ts` | 2 failed | 98 passed |
+| P15 | «Заново» only for a series that is not live | `series-words.ts` | `U/model.test.ts`, `U/screens.test.ts` | 2 failed | 98 passed |
+
+## 9. Enumerators and pins (plan §4.0 rule 2)
+
+`python3 tools/plan/pin_sweep.py route` lists 29 files. The new route reddened these, and each was edited in the lane's allowed paths, with its reason:
+
+| File | Reason |
+| --- | --- |
+| `web/src/shared/config/screen-registry.ts`, `web/src/shared/lib/routes.ts` | the row of `/version-comparison` (a menu item in «Работа», `any-role`) and `routes.versionComparison()` |
+| `tests/e2e/pc01/journey/manifest.json` | the route `version-comparison` (and `getProductVersion` among the calls of the route `comparison`, which A-12 now makes); `tests/e2e/test_pc01_journey_conformance.py` 135 passed |
+| `web/tests/unit/screens/route-screens.ts` | the seed of the new address (`screen-set.guard.test.ts` was red naming it) |
+| `web/tests/guards/screen-registry.guard.test.ts` | the registry holds 30 rows, the menu of «Работа» one more |
+| `web/tests/unit/shell/navigation.test.ts`, `web/tests/unit/qa_w50/r66-navigation.test.ts` | the ruled menu (`R-66`) written out by hand, one item longer |
+| `web/tests/unit/screens/routes.test.ts` | `D-94`: every address a builder builds is linked from a rendered screen — the frame draws the menu item |
+| `web/tests/unit/styles/screens.ts` | the census block (the contrast census was red until every rule of the lane's stylesheets was reached) |
+| `web/tests/guards/rendered-language.guard.test.ts` | the branches of the mandatory states, the 24 schemas and their markers, and the restored `needs_manual_review` expectation |
+| `web/tests/unit/run/polling.test.ts` | the guard "no second polling loop" read `refetchInterval` as a run poll; the four comparison reads are named as the second bounded exception, with assertions of their own (named interval ≥ 1 s, no timer, an arm that schedules nothing, never the run endpoint) |
+
+Green without an edit: `dashboard-invalidation`, `server-credential`, `lazy-boundary` (no sixth lazy widget is needed), `screen-guard`, `home`, `frame`, `screen-decision`, `current-screen`. **The four documents under `docs/program/**` that the sweep lists (`ALPHA_ROADMAP.md`, `CONTRACT_PIN_REGISTRY.md`, `CURRENT_STATE.md`, `P02_SEAMS.md`) and `tests/support/expected_facts.json` were not edited and no pin in them is red** (`tests/contract` is green; none of them states a number of screens or routes).
+
+## 10. Limits, risks, items for the FIX slot
+
+1. **STOP item and the viewer findings** — section 7 items 2 and 3 (the `data-layer` and `data-channel-state` markers; the Latin letters and engine words the widget prints). Also: the widget's `REASON_WORDS` knows eight reasons and prints «причина без описания (КОД)» for the series' (`SPLIT_SHEET`) and the unchecked channels; `pairReasonWords` in `entities/version-series` is the complete table, so the widget can import it (a widget may import an entity).
+2. **The menu entry when the module is off, and the mount of the queue block** — section 7 items 4 and 5.
+3. **No plain sheet view.** The original opens a sheet that has no pair as a zoomable page with «вместе» zoom sync and «Вывод ИИ по листу»; here a click on such a sheet says why there is nothing to open (`answerClick`). The page tile read (`streamVersionPageTile`) exists; a widget that shows one page is not built (wave C2 with the AI panel).
+4. **Hints of the AI (`ИИ ?`, «🌙 ИИ: вероятно стр. N»)** are answers the validator did not accept; contract 1.10.0 has no member for them (only accepted links, `ComparisonAiLink`). They arrive with wave C2.
+5. **Version labels are not editable and a column has no label.** `ComparisonMatrixColumn.label` is not set by the matrix lane and a version has no label column, so the dialog «Порядок версий» moves versions only (the original also edits labels), and the columns are «Версия №N» with the file name on hover (`CMP-MATRIX-01` §9 item 4 asks for a label or the column from the upload's confirmed proposal).
+6. **A file cannot move to another set** in the single upload («в проект…»), by the contract's `comparison_set_members`; the labels «Ожидает разбора» and «Сравнение версий» have no set state.
+7. **Hashing holds a whole file in memory** (up to the 250 MiB envelope, one file at a time) because the browser has no streaming SHA-256 without a package; a very large batch hashes for a while before the first byte is sent, and the dialog says «Считаем контрольные суммы: файл i из n…».
+8. **The state of the screen is not in the address**: the chosen project, tab and document set live in the page's state and a reload starts from the project chooser. A `?project=&tab=&set=` is a small follow-up; the journey needs none.
+9. **`useThumbnail` is the only place thumbnails are fetched** (a bounded store, six requests at a time, 300 kept, object URLs revoked); nothing is written to browser storage. A matrix of a thousand cells loads thumbnails as cells come within 200 px of the window.
+10. **Not run, by the brief and `R-135`:** `make gate`, the live journey `e2e:pc01` (no stand; the manifest conformance and the static checks are run), a browser: the pointer and drag handlers of the matrix, the transfer against a real server and the object URLs are code the static harness cannot fire. The model and the transfer are tested with an injected transport; the handlers are thin.
+
+## 11. For wave C2 (`CMP-VC-UI-02`)
+
+* Columns 4 «ИИ-проверка сомнительных пар», 6 «ИИ-описание изменений», 7 «Сводка и отчёт» of the table: `LATER_STEPS`, `STEP_LABELS`, `STEP_HINTS` and the next-step chip already name them; `stepActions` has no row for them; `stepView` has the generic words (the original's own for steps 4, 6, 7 are in `version-comparison-projects.js:65-115` and are not copied yet). The strip «Очередь запуска», the selection bar and the row checkboxes come with them.
+* The blocks of `SheetsTab` below «Сводка переходов»: «ИИ-описание изменений», «Полные спецификации (СО)», «Сводка MD и отчёт» go between `TransitionSummary` and `DraftPanel`; the panel «Изменения в листе» and «Вывод ИИ по листу» are slots of the viewer's page (`renderViewer`).
+* `ComparisonAiLink` (accepted links, `listComparisonAiLinks`) is not read by any screen: the matrix already marks an accepted link «ИИ» (`confidence: ai`); the history of links and their `superseded` state are for C2.
+* Register `ComparisonLayer` and `ComparisonChannelState` as soon as the viewer carries the markers (section 7 item 2).
+
+## 12. Contracts and hotspots
+
+* **New or changed contracts: none.** `git diff --name-only 9f5f4912..HEAD -- contracts db src pyproject.toml uv.lock docs/program/P02_LOCK.json web/package.json web/package-lock.json web/FRONTEND_LOCK.json web/openapi web/src/shared/api web/src/app/globals.css web/src/widgets/comparison-viewer web/src/entities/version-comparison infra Makefile` prints nothing; `web/src/shared/api/catalog-message.ts` and `errors.ts` are untouched (the reason sentences live in the entity, as those of the presets and the pairings do).
+* Outside the lane's own directories, by the brief: the registry and route builder, the journey manifest, and the tests listed in section 9. `web/node_modules` is the shared read-only symlink (vitest's transient files go to its `.vite-temp`); it is removed before the last commit.
+
+## 13. Checks
+
+(the commands and counts are in the next section as run on the last commit)
