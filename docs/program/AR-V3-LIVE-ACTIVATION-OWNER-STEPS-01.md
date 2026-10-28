@@ -2,6 +2,21 @@
 
 Written 2026-10-27 by the integrator (`R-146ba`, `R-146bb`; accepted risks `A-10`, `A-11`; debt `D-247`); the commands of steps 10b and 11, the rollback and the numeric sentence were corrected 2026-10-28 by `AR-V3-JUDGE-FIXES-01` after an independent read. **Nothing in this file has been run on a live host.** Everything before it was done on this development host and is recorded in `AR-V3-ACTIVATION-FEASIBILITY-01.md`, `AR-V3-ACTIVATION-PREP-01.md`, `AR-V3-PROMOTE-REHEARSAL-01.md` and `AR-V3-PROMOTE-01.md`: the decision file, the 22 query vectors (made in a hash-checked environment, the first batch byte-identical to the image-built vectors), the six scope maps, an independent second AI check of every input (AI to AI; **no subject-matter expert took part**; the norms were **not** compared with the official edition by a human), six rehearsed promotions with replay, a sealed pack and an offline `verify` — all on the local custody lane `auditmanager-ar-beta-custody`, which is NOT the live database. The sealed manifest names sets in that lane's database, so it is **not** the file to install.
 
+## The one-script path (owner choice `R-146be`, 2026-10-28)
+
+The owner chose to run one script instead of typing the steps below: `scripts/ar-v3/activate-live.sh`, in the deployed clone, as the operator who runs `docker compose` there. No agent has access to the live host. The script is the steps 10a, 10b and 11 below in code, with the same commands, expected lines and stops; **it was tested only against a stand-in `docker` (control flow), never against a live host.**
+
+```bash
+# 1. read only: tools present, six plans (a missing or different snapshot shows here)
+scripts/ar-v3/activate-live.sh --bundles /path/to/ar-v3-bundles.tar --check
+# 2. only after «CHECK OK»: promote, seal, install, restart (asks for the word PROMOTE, then INSTALL)
+scripts/ar-v3/activate-live.sh --bundles /path/to/ar-v3-bundles.tar
+# withdraw the pack (asks for the word ROLLBACK)
+scripts/ar-v3/activate-live.sh --rollback
+```
+
+It checks the archive digest (`4d91ad7a…`), takes the seal values from section 6a of `AR-V3-PROMOTE-01.md` (so there is one source) and refuses to seal if `sha256sum decisions.json` is not the digest named there. It edits `alpha.env` in place after keeping a backup (mode unchanged) and never prints it. Exit codes: 2 precondition, 3 tools missing from the image, 4 a plan did not match (for example the snapshot is not imported: `STAND-NORMS-IMPORT-RUNBOOK-01.md`), 5 a promotion was not verified, 6 seal or offline verify failed, 7 install or restart failed, 8 you declined. Step 12 (the live provider call) is not part of it.
+
 ## What the owner needs
 
 | Item | Where | Note |
