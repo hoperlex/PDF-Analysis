@@ -38,7 +38,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-HEAD = "0039_comparison_core"
+HEAD = "0040_comparison_ai_reports"
 
 #: Every base table of the schema at ``HEAD`` (``relkind`` ``r``, schema ``public``).
 TABLES = frozenset((
@@ -47,6 +47,10 @@ TABLES = frozenset((
     "comparison_upload", "comparison_upload_file", "comparison_upload_part", "comparison_upload_set", "comparison_version_order", "comparison_work", "comparison_work_attempt",
     "comparison_ai_link", "comparison_matrix", "comparison_matrix_edit", "comparison_series", "comparison_sheet_pair",
     "comparison_sheet_pair_result", "comparison_transition",
+    "comparison_ai_job", "comparison_ai_pair_answer", "comparison_ai_pair_question", "comparison_ai_sheet_item",
+    "comparison_launch_entry", "comparison_launch_queue", "comparison_report", "comparison_report_artifact",
+    "comparison_report_part", "comparison_sheet_description", "comparison_spec_comparison",
+    "comparison_spec_extraction",
     "contract_state_transition", "document",
     "document_version", "document_version_classification", "document_version_classification_correction",
     "execution_control", "executor_connection", "executor_connection_revision", "executor_probe",
@@ -165,6 +169,41 @@ TRIGGERS = (
     ("comparison_transition", "trg_comparison_transition_frozen_guard", "am_guard_frozen_columns", 19),
     ("comparison_transition", "trg_comparison_transition_state_edges", "am_guard_comparison_core_state_edges", 19),
     ("comparison_transition", "trg_comparison_transition_versions", "am_check_comparison_transition", 7),
+    # `0040_comparison_ai_reports`: the guards of the version comparison AI, specifications, reports and launch queue.
+    # 19 = ROW | BEFORE | UPDATE, 7 = ROW | BEFORE | INSERT, 27 = the append-only answers, descriptions, extractions
+    # and report files.
+    ("comparison_ai_job", "trg_comparison_ai_job_consent", "am_guard_comparison_ai_job_consent", 19),
+    ("comparison_ai_job", "trg_comparison_ai_job_document", "am_check_comparison_core_document", 7),
+    ("comparison_ai_job", "trg_comparison_ai_job_frozen_guard", "am_guard_frozen_columns", 19),
+    ("comparison_ai_job", "trg_comparison_ai_job_scope", "am_check_comparison_ai_job_scope", 7),
+    ("comparison_ai_job", "trg_comparison_ai_job_state_edges", "am_guard_comparison_ai_state_edges", 19),
+    ("comparison_ai_pair_answer", "trg_comparison_ai_pair_answer_immutable", "am_immutable_row", 27),
+    ("comparison_ai_pair_question", "trg_comparison_ai_pair_question_document", "am_check_comparison_core_document", 7),
+    ("comparison_ai_pair_question", "trg_comparison_ai_pair_question_frozen_guard", "am_guard_frozen_columns", 19),
+    ("comparison_ai_pair_question", "trg_comparison_ai_pair_question_pages", "am_check_comparison_ai_pair_question", 7),
+    ("comparison_ai_pair_question", "trg_comparison_ai_pair_question_state_edges", "am_guard_comparison_ai_state_edges", 19),
+    ("comparison_ai_sheet_item", "trg_comparison_ai_sheet_item_frozen_guard", "am_guard_frozen_columns", 19),
+    ("comparison_ai_sheet_item", "trg_comparison_ai_sheet_item_pair", "am_check_comparison_ai_sheet_item", 7),
+    ("comparison_ai_sheet_item", "trg_comparison_ai_sheet_item_state_edges", "am_guard_comparison_ai_state_edges", 19),
+    ("comparison_launch_entry", "trg_comparison_launch_entry_document", "am_check_comparison_core_document", 7),
+    ("comparison_launch_entry", "trg_comparison_launch_entry_frozen_guard", "am_guard_frozen_columns", 19),
+    ("comparison_launch_entry", "trg_comparison_launch_entry_state_edges", "am_guard_comparison_ai_state_edges", 19),
+    ("comparison_launch_queue", "trg_comparison_launch_queue_frozen_guard", "am_guard_frozen_columns", 19),
+    ("comparison_report", "trg_comparison_report_document", "am_check_comparison_core_document", 7),
+    ("comparison_report", "trg_comparison_report_frozen_guard", "am_guard_frozen_columns", 19),
+    ("comparison_report", "trg_comparison_report_inputs", "am_check_comparison_report", 7),
+    ("comparison_report", "trg_comparison_report_state_edges", "am_guard_comparison_ai_state_edges", 19),
+    ("comparison_report_artifact", "trg_comparison_report_artifact_immutable", "am_immutable_row", 27),
+    ("comparison_report_part", "trg_comparison_report_part_frozen_guard", "am_guard_frozen_columns", 19),
+    ("comparison_report_part", "trg_comparison_report_part_transition", "am_check_comparison_report_part", 7),
+    ("comparison_sheet_description", "trg_comparison_sheet_description_immutable", "am_immutable_row", 27),
+    ("comparison_sheet_description", "trg_comparison_sheet_description_subject", "am_check_comparison_sheet_description", 7),
+    ("comparison_spec_comparison", "trg_comparison_spec_comparison_document", "am_check_comparison_core_document", 7),
+    ("comparison_spec_comparison", "trg_comparison_spec_comparison_frozen_guard", "am_guard_frozen_columns", 19),
+    ("comparison_spec_comparison", "trg_comparison_spec_comparison_inputs", "am_check_comparison_spec_comparison", 7),
+    ("comparison_spec_comparison", "trg_comparison_spec_comparison_state_edges", "am_guard_comparison_ai_state_edges", 19),
+    ("comparison_spec_extraction", "trg_comparison_spec_extraction_immutable", "am_immutable_row", 27),
+    ("comparison_spec_extraction", "trg_comparison_spec_extraction_version", "am_check_comparison_spec_extraction", 7),
     ("contract_state_transition", "trg_contract_state_transition_immutable", "am_immutable_row", 31),
     ("document_version", "trg_document_version_immutable", "am_immutable_row", 27),
     ("document_version_classification", "trg_document_version_classification_immutable", "am_immutable_row", 27),
@@ -264,10 +303,10 @@ SEQUENCES = {
 
 #: ``pg_constraint.contype -> count`` in schema ``public`` at ``HEAD``: p primary key, u unique,
 #: f foreign key, c check, t constraint trigger. A restore that lost one is not the schema.
-CONSTRAINT_COUNTS = {"c": 811, "f": 203, "p": 82, "t": 9, "u": 75}
+CONSTRAINT_COUNTS = {"c": 955, "f": 256, "p": 94, "t": 9, "u": 89}
 
 #: Indexes in schema ``public`` at ``HEAD`` (primary-key and unique indexes included).
-INDEX_COUNT = 277
+INDEX_COUNT = 347
 
 #: Trigger functions that make a table immutable or append-only (the claim a restore must keep).
 GUARD_FUNCTIONS = frozenset((

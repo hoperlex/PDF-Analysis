@@ -117,7 +117,10 @@ MIXED_TABLES = frozenset(("audit_event", "blob", "command_record"))
 #: every table that references it are named in the same statement.
 PRODUCT_TABLES = frozenset((
     "analysis_artifact_publication", "ar_v3_run_group", "ar_v3_run_group_member", "attempt",
-    "audit_run", "comparison_ai_link", "comparison_matrix", "comparison_matrix_edit", "comparison_model_call",
+    "audit_run", "comparison_ai_job", "comparison_ai_link", "comparison_ai_pair_answer", "comparison_ai_pair_question",
+    "comparison_ai_sheet_item", "comparison_launch_entry", "comparison_launch_queue", "comparison_matrix",
+    "comparison_matrix_edit", "comparison_model_call", "comparison_report", "comparison_report_artifact",
+    "comparison_report_part", "comparison_sheet_description", "comparison_spec_comparison", "comparison_spec_extraction",
     "comparison_page_profile", "comparison_series", "comparison_sheet_link", "comparison_sheet_pair",
     "comparison_sheet_pair_result", "comparison_transition",
     "comparison_summary", "comparison_upload", "comparison_upload_file", "comparison_upload_part",
@@ -181,6 +184,18 @@ PRODUCT_COMMAND_TYPES = frozenset((
     "apply_comparison_matrix_edits", "cancel_comparison_series", "finish_comparison_series",
     "pause_comparison_series", "prepare_comparison_matrix", "resume_comparison_series",
     "start_comparison_series", "undo_comparison_matrix_edit",
+    # `0040_comparison_ai_reports` (`CMP-SEAL-C2`): the receipts of the twenty-seven keyed writes of the version comparison
+    # AI, specifications, launch queue and reports, named as the snake case of the operationId.
+    "start_comparison_ai_pair_check", "pause_comparison_ai_pair_check", "resume_comparison_ai_pair_check",
+    "cancel_comparison_ai_pair_check", "start_comparison_ai_sheet_changes", "pause_comparison_ai_sheet_changes",
+    "resume_comparison_ai_sheet_changes", "cancel_comparison_ai_sheet_changes",
+    "finish_comparison_ai_sheet_changes", "dequeue_comparison_ai_sheet_changes",
+    "retry_comparison_ai_sheet_changes", "start_comparison_sheet_description", "start_comparison_specification",
+    "cancel_comparison_specification", "enqueue_comparison_launch", "pause_comparison_launch_queue",
+    "resume_comparison_launch_queue", "clear_comparison_launch_queue", "remove_comparison_launch_entry",
+    "create_comparison_report", "upload_comparison_report_source", "start_comparison_report",
+    "cancel_comparison_report", "continue_comparison_report", "rebuild_comparison_report_pdf",
+    "delete_comparison_report", "prepare_comparison_client_report",
 ))
 
 #: Work that is mid-flight in a worker. Queued work is discarded with the rest; work a worker is

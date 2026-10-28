@@ -37,6 +37,8 @@ _SOURCES = frozenset({
     ("public", "comparison_page_profile", "thumbnail_blob_id"),
     # `0039_comparison_core`: the bit-packed difference mask of a sheet-pair result (not stored for a `same` pair).
     ("public", "comparison_sheet_pair_result", "mask_blob_id"),
+    # `0040_comparison_ai_reports`: a stored file of a report (the PDF, the exact MD, the report text).
+    ("public", "comparison_report_artifact", "blob_id"),
 })
 _CATALOG_EXPECTED = _SOURCES | {("public", "blob", "blob_id")}
 
@@ -113,6 +115,13 @@ _PAIR_MASKS = text("""
     SELECT comparison_sheet_pair_result_id AS owner_id, mask_blob_id
       FROM public.comparison_sheet_pair_result WHERE mask_blob_id IS NOT NULL
      ORDER BY comparison_sheet_pair_result_id COLLATE "C"
+""")
+
+
+_REPORT_ARTIFACTS = text("""
+    SELECT comparison_report_artifact_id AS owner_id, blob_id
+      FROM public.comparison_report_artifact
+     ORDER BY comparison_report_artifact_id COLLATE "C"
 """)
 
 
@@ -306,6 +315,11 @@ def audit_blob_references(session: Session) -> BlobReferenceAudit:
     for row in pair_masks:
         _require_available(blobs, row["mask_blob_id"], "comparison_sheet_pair_result")
     counts.append(("comparison_sheet_pair_result", len(pair_masks)))
+
+    report_artifacts = _rows(session, _REPORT_ARTIFACTS)
+    for row in report_artifacts:
+        _require_available(blobs, row["blob_id"], "comparison_report_artifact")
+    counts.append(("comparison_report_artifact", len(report_artifacts)))
 
     return BlobReferenceAudit(tuple(counts), tuple(sorted(available, key=lambda fact: fact.blob_id)))
 
