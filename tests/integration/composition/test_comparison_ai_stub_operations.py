@@ -317,12 +317,16 @@ def test_a_list_or_query_outside_its_bounds_is_refused_before_the_stub(on: TestC
     assert on.get(f"{estimate}?only_failed=true", headers=headers).status_code == 503
 
 
-def test_an_identity_that_is_not_the_pattern_is_refused_before_the_stub(on: TestClient) -> None:
+def test_an_identity_that_is_not_the_pattern_is_not_found_before_the_stub(on: TestClient) -> None:
+    """A path identity of the wrong shape or of another entity names nothing: ``404`` and never the stub's ``503``."""
     headers = {"Authorization": f"Bearer {static_token()}", "Idempotency-Key": KEY}
-    assert on.post("/comparison-ai-pair-checks/cai_x/pause", headers=headers).status_code == 422
-    assert on.post(f"/comparison-ai-pair-checks/{RPT}/pause", headers=headers).status_code == 422
-    assert on.get("/comparison-reports/crt_x", headers=headers).status_code == 422
-    assert on.post(f"/comparison-launch-entries/{JOB}/removal", headers=headers).status_code == 422
+    for response in (
+        on.post("/comparison-ai-pair-checks/cai_x/pause", headers=headers),
+        on.post(f"/comparison-ai-pair-checks/{RPT}/pause", headers=headers),
+        on.get("/comparison-reports/crt_x", headers=headers),
+        on.post(f"/comparison-launch-entries/{JOB}/removal", headers=headers),
+    ):
+        assert response.status_code == 404 and response.json()["error_code"] == "not_found", response.text
 
 
 def test_the_work_kinds_of_the_executor_routes_include_the_four_comparison_kinds() -> None:
