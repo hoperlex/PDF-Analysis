@@ -31,7 +31,6 @@ import re
 from collections import Counter, defaultdict
 from typing import Any, Final
 
-import cv2
 import numpy as np
 
 from auditmanager.comparison.matrix import settings
@@ -124,9 +123,6 @@ def _decisive(pro: float, con: float, n_pro: int, n_con: int) -> bool:
         and n_con <= settings.RESOLVE_MAX_AGAINST
         and n_pro / (n_pro + n_con) >= settings.RESOLVE_COUNT_FRAC
     )
-
-
-_ONES: Final[np.ndarray] = np.ones((3, 3), np.uint8)
 
 
 def _image_contest(a: PageFeatures, first: PageFeatures, other: PageFeatures) -> tuple[int, int] | None:
