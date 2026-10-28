@@ -17,6 +17,7 @@ import { buildNavigation } from '@/_app/navigation';
 import { VersionComparePage } from '@/_pages/version-compare';
 import { StageComparisonPage } from '@/_pages/stage-comparison';
 import { ExecutionQueue, ComparisonQueueBlock, ComparisonQueueBlockView } from '@/widgets/execution-queue';
+import { QueuePage } from '@/_pages/queue';
 import { ComparisonResult } from '@/widgets/version-comparison';
 import { UploadDialogView } from '@/widgets/comparison-upload';
 import type { UploadDialogViewProps } from '@/widgets/comparison-upload';
@@ -98,7 +99,15 @@ describe('«Проекты и этапы»', () => {
     expect(projects()).toContain('<span class="');
     const all = projects();
     expect(all).toMatch(/data-overview-filter="all"[^>]*><span[^>]*>13</);
-    expect(all).toMatch(/data-overview-filter="waiting"[^>]*><span[^>]*>5</);
+    expect(all).toMatch(/data-overview-filter="waiting"[^>]*><span[^>]*>6</);
+    expect(all).toMatch(/data-overview-filter="running"[^>]*><span[^>]*>3</);
+    expect(all).toMatch(/data-overview-filter="failed"[^>]*><span[^>]*>1</);
+    expect(all).toMatch(/data-overview-filter="ready"[^>]*><span[^>]*>3</);
+    // a search that lets every set through (the letter «к» is in every code and in the one title) recomputes the numbers the server sent
+    const everything = projects({ view: { ...INITIAL_VIEW, query: 'к' } });
+    for (const [filter, count] of [['all', 13], ['waiting', 6], ['running', 3], ['failed', 1], ['ready', 3]] as const) {
+      expect(everything, filter).toMatch(new RegExp(`data-overview-filter="${filter}"[^>]*><span[^>]*>${count}<`));
+    }
     const searched = projects({ view: { ...INITIAL_VIEW, query: '133/23-ГК-ЭМ1' } });
     expect(searched).toMatch(/data-overview-filter="all"[^>]*><span[^>]*>2</);
     expect(searched).toMatch(/data-overview-filter="waiting"[^>]*><span[^>]*>1</);
@@ -110,7 +119,10 @@ describe('«Проекты и этапы»', () => {
     for (const header of ['Проект · следующий шаг', 'Версии', '1 Загрузка', '2 Разбор версий', '3 Сопоставление листов', '5 Сравнение соседних']) {
       expect(t, header).toContain(header);
     }
-    for (const missing of ['4 ИИ-проверка сомнительных пар', '6 ИИ-описание изменений', '7 Сводка и отчёт']) expect(t, missing).not.toContain(missing);
+    // the headers only: a chip may name a step of wave C2 in words («ИИ-проверка сомнительных пар») without being its column
+    const headers = (projects().match(/<th scope="col"[\s\S]*?<\/th>/g) ?? []).map(text).join('|');
+    for (const missing of ['4 ИИ-проверка сомнительных пар', '6 ИИ-описание изменений', '7 Сводка и отчёт']) expect(headers, missing).not.toContain(missing);
+    expect(headers).toContain('5 Сравнение соседних');
     expect(t).toContain('Шаги 4 «ИИ-проверка сомнительных пар», 6 «ИИ-описание изменений» и 7 «Сводка и отчёт» появятся позже');
   });
 
@@ -121,7 +133,13 @@ describe('«Проекты и этапы»', () => {
     }
     for (const next of ['upload', 'profile', 'matrix', 'ai_pairs', 'series']) expect(markup, next).toContain(`data-next-step="${next}"`);
     const t = text(markup);
-    for (const word of ['загружен', 'не сопост. 4', 'строк 31 · ✎ 2', 'по старому порядку', '2 из 3 · с изм. 1', 'Далее: Разобрать версии']) expect(t, word).toContain(word);
+    for (const word of ['загружен', 'не сопост. 4', 'строк 31 · ✎ 2', 'по старому порядку', '2 из 3 · с изм. 1']) expect(t, word).toContain(word);
+    // the chip is the original's sentence for the step it names and that step's state (OVERVIEW 6.2), with no «Далее:» in front
+    for (const sentence of [
+      'Идёт загрузка', 'Идёт разбор версий', 'Разбор версии с ошибкой — повторить', 'Идёт сопоставление листов',
+      'Несопоставленных листов: 4 — вручную', 'Сравнение соседних на паузе — продолжить', 'Одна версия — сравнивать не с чем', 'Готово',
+    ]) expect(t, sentence).toContain(sentence);
+    expect(t).not.toContain('Далее:');
   });
 
   it('shows the strip «В загрузке, ещё не в списке проектов:» with each unfinished upload', () => {
@@ -133,7 +151,7 @@ describe('«Проекты и этапы»', () => {
 
   it('offers the step buttons to an expert only', () => {
     const expert = projects();
-    for (const label of ['Повторить', 'Подготовить', 'Запустить', 'Пауза', 'Продолжить', 'Заново']) expect(text(expert), label).toContain(label);
+    for (const label of ['Повторить', 'Подготовить', 'Запустить', 'Пауза', 'Продолжить', 'Досчитать', 'Заново']) expect(text(expert), label).toContain(label);
     for (const action of ['prepare', 'start', 'pause', 'resume', 'finish', 'restart']) expect(expert, action).toContain(`data-step-action="${action}"`);
     const reader = projects({ mayAct: false });
     expect(reader).not.toContain('data-step-action');
@@ -670,13 +688,24 @@ describe('the block «Сравнение» of «Очередь»', () => {
     expect(text(renderWith(broken, createElement(ComparisonQueueBlock)))).toContain('Сводка сравнения не открылась');
   });
 
-  it('is under the queue wherever there is a query provider, and absent where the list is rendered bare', () => {
+  it('is mounted by the page of «Очередь», beside the list of runs, and the list draws no block of its own', () => {
     const items = [] as never[];
     const props = { items, roles: [], asOf: null, busy: false, workerOf: () => ({ kind: 'none' }) as never, onCancel: noop, onReaudit: noop, onPriority: noop, onNext: null, onPrevious: null };
     const client = newClient();
     client.setQueryData(COMPARISON_KEYS.queue(), queueSummary());
-    expect(text(renderWith(client, createElement(ExecutionQueue, props as never)))).toContain('Включён модуль «Сравнение версий».');
+    // the list, inside a query provider that holds the summary, still draws no block
+    expect(renderWith(client, createElement(ExecutionQueue, props as never))).not.toContain('data-comparison-queue');
     expect(renderToStaticMarkup(createElement(ExecutionQueue, props as never))).not.toContain('data-comparison-queue');
+    // the page draws the block, from its own query, whatever the list of runs is doing
+    const page = newClient();
+    page.setQueryData(queryKeys.execution.queue(), { items: [], page: { next_cursor: null }, paused: false });
+    page.setQueryData(COMPARISON_KEYS.queue(), queueSummary());
+    const markup = renderWith(page, createElement(QueuePage));
+    expect(text(markup)).toContain('Включён модуль «Сравнение версий».');
+    expect(markup).toContain('data-comparison-queue');
+    expect(text(markup)).toContain('Очередь пуста');
+    const reading = newClient();
+    expect(text(renderWith(reading, createElement(QueuePage)))).toContain('Загрузка: сводку сравнения…');
   });
 });
 

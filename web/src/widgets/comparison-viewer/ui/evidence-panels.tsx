@@ -1,16 +1,21 @@
 /**
  * The evidence beside the sheet (`CMP-VIEWER-01`): the channel strip, the text changes, the service zones and «Как
  * сравнивалось». All of it is the engine's raw deterministic evidence, shown as it is (an AI layer never rewrites it).
+ *
+ * The reasons that force «Нужна проверка» are said by `pairReasonWords` of `entities/version-series`, the one complete table
+ * (the engine's reasons, the series' and the unchecked channels); a code it does not know reads «причина не описана».
  */
 
 import { Fragment } from 'react';
 
 import type {
+  ComparisonChannel,
   ComparisonChannels,
   ComparisonHowCompared,
   ComparisonServiceNote,
   ComparisonTextChange,
 } from '@/shared/api';
+import { pairReasonWords } from '@/entities/version-series';
 
 import {
   CHANNEL_LABELS,
@@ -18,7 +23,10 @@ import {
   TEXT_KIND_LABELS,
   UNKNOWN_TEXT_KIND_LABEL,
   WARNING_NOTE,
+  algorithmWords,
+  fieldWords,
   noteTitle,
+  zoneWords,
 } from '../model/labels';
 import { afterValues, beforeValues, markNumbers } from '../model/text-marks';
 import type { TextPart } from '../model/text-marks';
@@ -26,32 +34,42 @@ import type { TextPart } from '../model/text-marks';
 import { BeforeAfter } from './before-after';
 import styles from './comparison-viewer.module.css';
 
-/**
- * The reasons that force «Нужна проверка» (`status.py` of the original, listed in its inventory §4.1), in words. A
- * reason this table does not know is shown with its code in brackets and the sentence «причина без описания», so that
- * nothing is hidden and nothing is invented; `CMP-VC-UI-01` owns the full list of sentences.
- */
-export const REASON_WORDS: Readonly<Record<string, string>> = {
-  MATCH_LOW_CONFIDENCE: 'листы сопоставлены с низкой уверенностью',
-  MATCH_AMBIGUOUS: 'сопоставление неоднозначно',
-  ALIGNMENT_UNRELIABLE: 'совмещение листов ненадёжно',
-  DUPLICATE_SHEET: 'лист повторяется в комплекте',
-  RENDER_FAILED: 'лист не удалось отрисовать',
-  NO_TEXT_LAYER: 'нет текстового слоя',
-  STAMP_NOT_RECOGNIZED: 'штамп не распознан',
-  SPEC_NOT_PARSED: 'спецификация не разобрана',
-};
-
-export function reasonWords(code: string): string {
-  return REASON_WORDS[code] ?? `причина без описания (${code})`;
-}
-
 export interface ChannelStripProps {
   readonly channels: ComparisonChannels | undefined;
   readonly reasons: readonly string[];
 }
 
-/** «Проверено: … / Не проверено: …» and «причины: …» (`version-comparison-viewer.js:62-73`). */
+/** One channel as a chip: its name, what it found or why it could not look, and its state in `data-channel-state`. */
+function ChannelChip({ name, channel }: { readonly name: string; readonly channel: ComparisonChannel }) {
+  const detail =
+    channel.state === 'checked'
+      ? ` (${channel.diffs ?? 0})`
+      : channel.reason === undefined
+        ? ''
+        : ` — ${channel.reason}`;
+  return (
+    <span data-channel={name} data-channel-state={channel.state}>
+      {CHANNEL_LABELS[name]}
+      {detail}
+    </span>
+  );
+}
+
+/** The chips of one line, separated as the original separates them: «, » after a count, «; » after a reason. */
+function ChannelChips({ items, separator }: { readonly items: readonly { readonly name: string; readonly channel: ComparisonChannel }[]; readonly separator: string }) {
+  return (
+    <>
+      {items.map(({ name, channel }, index) => (
+        <Fragment key={name}>
+          {index === 0 ? '' : separator}
+          <ChannelChip name={name} channel={channel} />
+        </Fragment>
+      ))}
+    </>
+  );
+}
+
+/** «Проверено: … / Не проверено: … / Не применимо: …» and «причины: …» (`version-comparison-viewer.js:62-73`). */
 export function ChannelStrip({ channels, reasons }: ChannelStripProps) {
   const known = CHANNEL_ORDER.flatMap((name) => {
     const channel = channels?.[name as keyof ComparisonChannels];
@@ -59,6 +77,7 @@ export function ChannelStrip({ channels, reasons }: ChannelStripProps) {
   });
   const checked = known.filter(({ channel }) => channel.state === 'checked');
   const unchecked = known.filter(({ channel }) => channel.state === 'unchecked');
+  const notApplicable = known.filter(({ channel }) => channel.state === 'not_applicable');
   return (
     <section className={styles.panel} aria-label="Что проверено" data-channel-strip="">
       {known.length === 0 ? (
@@ -67,22 +86,21 @@ export function ChannelStrip({ channels, reasons }: ChannelStripProps) {
         <>
           <p className={styles.channelLine}>
             <span className={styles.channelLabel}>Проверено:</span>{' '}
-            {checked.length === 0
-              ? 'ничего'
-              : checked.map(({ name, channel }) => `${CHANNEL_LABELS[name]} (${channel.diffs ?? 0})`).join(', ')}
+            {checked.length === 0 ? 'ничего' : <ChannelChips items={checked} separator=", " />}
           </p>
           <p className={`${styles.channelLine} ${unchecked.length === 0 ? '' : styles.channelUnchecked}`.trim()}>
             <span className={styles.channelLabel}>Не проверено:</span>{' '}
-            {unchecked.length === 0
-              ? 'всё применимое проверено'
-              : unchecked
-                  .map(({ name, channel }) => `${CHANNEL_LABELS[name]}${channel.reason === undefined ? '' : ` — ${channel.reason}`}`)
-                  .join('; ')}
+            {unchecked.length === 0 ? 'всё применимое проверено' : <ChannelChips items={unchecked} separator="; " />}
           </p>
+          {notApplicable.length === 0 ? null : (
+            <p className={styles.channelLine}>
+              <span className={styles.channelLabel}>Не применимо:</span> <ChannelChips items={notApplicable} separator="; " />
+            </p>
+          )}
         </>
       )}
       {reasons.length === 0 ? null : (
-        <p className={styles.reasons}>причины: {reasons.map(reasonWords).join('; ')}</p>
+        <p className={styles.reasons}>причины: {reasons.map(pairReasonWords).join('; ')}</p>
       )}
     </section>
   );
@@ -168,8 +186,8 @@ export function ServiceNotes({ notes }: ServiceNotesProps) {
             <li key={index} className={styles.item}>
               <span className={styles.itemClass}>
                 {noteTitle(note.kind, note.change)}
-                {note.zone === undefined ? '' : `, зона «${note.zone}»`}
-                {note.field === undefined ? '' : `, поле «${note.field}»`}
+                {note.zone === undefined ? '' : `, зона «${zoneWords(note.zone)}»`}
+                {note.field === undefined ? '' : `, поле «${fieldWords(note.zone, note.field)}»`}
               </span>
               <BeforeAfter before={note.before} after={note.after} />
             </li>
@@ -184,13 +202,13 @@ export interface HowComparedProps {
   readonly how: ComparisonHowCompared | undefined;
 }
 
-/** «Как сравнивалось»: the transform of B onto A, the resolution, the tolerance and what was set aside. */
+/** «Как сравнивалось»: the transform of the newer sheet onto the older, the resolution, the tolerance and what was set aside. */
 export function HowCompared({ how }: HowComparedProps) {
   const rows: [string, string][] = how === undefined ? [] : [
-    ['Алгоритм', how.algo_version],
+    ['Алгоритм', algorithmWords(how.algo_version)],
     ['Разрешение', `${how.dpi} точек на дюйм`],
     ['Допуск', `${how.tolerance_pt} пт`],
-    ...(how.transform === undefined ? [] : [['Совмещение B на A', how.transform.map((n) => String(Math.round(n * 1000) / 1000)).join(', ')] as [string, string]]),
+    ...(how.transform === undefined ? [] : [['Совмещение нового листа на прежний', how.transform.map((n) => String(Math.round(n * 1000) / 1000)).join(', ')] as [string, string]]),
     ...(how.within_tolerance_count === undefined ? [] : [['В пределах допуска', String(how.within_tolerance_count)] as [string, string]]),
     ...(how.noise_count === undefined ? [] : [['Шум', String(how.noise_count)] as [string, string]]),
     ...(how.separated_objects === undefined ? [] : [['Отделённых объектов', String(how.separated_objects)] as [string, string]]),
@@ -206,7 +224,9 @@ export function HowCompared({ how }: HowComparedProps) {
           {rows.map(([term, value]) => (
             <Fragment key={term}>
               <dt className={styles.term}>{term}</dt>
-              <dd className={styles.value}>{value}</dd>
+              <dd className={styles.value} {...(term === 'Алгоритм' && how !== undefined ? { 'data-algo-version': how.algo_version } : {})}>
+                {value}
+              </dd>
             </Fragment>
           ))}
         </dl>

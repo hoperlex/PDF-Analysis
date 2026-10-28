@@ -4,8 +4,10 @@
  * `:310-319`, `:269`).
  *
  * The server sends one entry per document set with its seven steps and, beside them, the counters. The
- * screen filters and sorts what it has, so the group of a set is decided here, once, by a rule a test
- * pins; it is the rule the counters are assumed to follow (the report lists it for the integrator).
+ * counters cover every set of the project; the screen narrows the rows with the search and the mark and
+ * counts the rest again, so the group of a set is decided here by the rule the server counts with
+ * (`docs/program/CMP-VC-OVERVIEW-01.md` section 6.3, `rules.group_of`): a test over every combination of a
+ * proposed step and its state pins the two to each other.
  */
 
 import type { ComparisonOverviewCounters, ComparisonOverviewSet, ComparisonStepId, ComparisonStepState } from '@/shared/api';
@@ -27,15 +29,20 @@ function stateOf(set: ComparisonOverviewSet, step: ComparisonStepId): Comparison
   return set.steps.find((entry) => entry.step === step)?.state;
 }
 
+/** The steps whose failure turns the row red: a failed series is the reader's to finish, not an error of the row. */
+const RED_WHEN_FAILED: ReadonlySet<ComparisonStepId> = new Set<ComparisonStepId>(['upload', 'profile', 'matrix']);
+
 /**
- * The group of a set: an error in any step is «Ошибки»; else a step that is being computed is «Идут»;
- * else a proposed next step is «Ждут действия»; else «Готовы».
+ * The group of a set (`CMP-VC-OVERVIEW-01` section 6.3, the server's own rule): nothing proposed is «Готовы»; the step
+ * the chip proposes being computed is «Идут»; that step failed is «Ошибки» when it is the upload, the profile or the
+ * matrix; anything else is «Ждут действия» (a failed series among them, as in the original).
  */
 export function groupOf(set: ComparisonOverviewSet): OverviewGroup {
-  if (set.steps.some((entry) => entry.state === 'failed')) return 'failed';
-  if (set.steps.some((entry) => isRunningState(entry.state))) return 'running';
-  if (set.next_step !== undefined) return 'waiting';
-  return 'ready';
+  if (set.next_step === undefined) return 'ready';
+  const state = stateOf(set, set.next_step);
+  if (state !== undefined && isRunningState(state)) return 'running';
+  if (state === 'failed' && RED_WHEN_FAILED.has(set.next_step)) return 'failed';
+  return 'waiting';
 }
 
 /** The «шифр» a row is known by: the designation, else the title, else nothing a reader could use. */
@@ -144,7 +151,7 @@ export function anythingRunning(sets: readonly ComparisonOverviewSet[], uploads:
   return uploads > 0 || sets.some((set) => groupOf(set) === 'running');
 }
 
-/** The proposed next step, as a chip says it. */
+/** The step a chip proposes, named: the fallback for a step and state the sentences below do not cover. */
 export const NEXT_STEP_LABELS: Readonly<Record<ComparisonStepId, string>> = {
   upload: 'Загрузить версии',
   profile: 'Разобрать версии',
@@ -154,3 +161,47 @@ export const NEXT_STEP_LABELS: Readonly<Record<ComparisonStepId, string>> = {
   ai_changes: 'ИИ-описание изменений',
   report: 'Сводка и отчёт',
 };
+
+/** «Одна версия — сравнивать не с чем» and «Готово»: a set with no proposed step (`OV:307-308`, `OV:327-331`). */
+export const ONE_VERSION_SENTENCE = 'Одна версия — сравнивать не с чем';
+export const READY_SENTENCE = 'Готово';
+
+const PREPARE_SENTENCE = 'Подготовить: разбор и сопоставление листов';
+
+/**
+ * The chip under the code of a row: the sentence of the step the server proposes and of that step's state (the
+ * original's, `overview.py:297-331`, quoted in `CMP-VC-OVERVIEW-01` section 6.2). The contract carries the step and its
+ * state, never the sentence, so the sentences are the client's; a step and state they do not cover read as the step's
+ * name, and no code is printed.
+ */
+export function nextStepSentence(set: ComparisonOverviewSet): string {
+  const step = set.next_step;
+  if (step === undefined) return set.version_count < 2 ? ONE_VERSION_SENTENCE : READY_SENTENCE;
+  const entry = set.steps.find((candidate) => candidate.step === step);
+  const state = entry?.state;
+  const running = state !== undefined && isRunningState(state);
+  switch (step) {
+    case 'upload':
+      return state === 'failed' ? 'Ошибка загрузки — открыть пакет' : 'Идёт загрузка';
+    case 'profile':
+      if (state === 'failed') return 'Разбор версии с ошибкой — повторить';
+      if (running) return 'Идёт разбор версий';
+      if (state === 'paused') return 'Разбор версий на паузе';
+      return state === 'not_started' || state === 'partial' ? PREPARE_SENTENCE : NEXT_STEP_LABELS[step];
+    case 'matrix':
+      if (state === 'failed') return 'Сопоставление листов не собрано — повторить';
+      if (running) return 'Идёт сопоставление листов';
+      if (state === 'paused') return 'Сопоставление листов на паузе';
+      if (state === 'attention') return `Несопоставленных листов: ${entry?.counts?.unmatched ?? 0} — вручную`;
+      return state === 'not_started' || state === 'stale' ? PREPARE_SENTENCE : NEXT_STEP_LABELS[step];
+    case 'series':
+      if (state === 'running') return 'Сравнение соседних: идёт';
+      if (state === 'queued') return 'Сравнение соседних: в очереди';
+      if (state === 'pausing') return 'Сравнение соседних: ставится на паузу';
+      if (state === 'paused') return 'Сравнение соседних на паузе — продолжить';
+      if (state === 'interrupted' || state === 'failed') return 'Сравнение соседних прервано — досчитать';
+      return state === 'not_started' || state === 'stale' ? 'Сравнение соседних — запустить' : NEXT_STEP_LABELS[step];
+    default:
+      return NEXT_STEP_LABELS[step];
+  }
+}

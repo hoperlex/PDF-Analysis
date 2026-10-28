@@ -39,6 +39,17 @@ function text(markup: string): string {
   return markup.replace(/<[^>]*>/g, '|');
 }
 
+/** The same without a separator, so a line split into chips reads as one sentence. */
+function plain(markup: string): string {
+  return markup.replace(/<[^>]*>/g, '');
+}
+
+/** Everything a browser shows: the text nodes and the attributes that are shown (`title`, `aria-label`, `placeholder`). */
+function visible(markup: string): string {
+  const attributes = [...markup.matchAll(/\s(?:title|aria-label|placeholder)="([^"]*)"/g)].map((match) => match[1]);
+  return [text(markup), ...attributes].join('|');
+}
+
 function html(pair: ComparisonSheetPair, steps: ViewerAction[] = [], tiles: TileStatus = arrived, extra: object = {}): string {
   const context = contextOf(pair);
   let state: ViewerState = initialState(context, { width: 1000, height: 600 });
@@ -51,8 +62,8 @@ function html(pair: ComparisonSheetPair, steps: ViewerAction[] = [], tiles: Tile
 describe('the viewer of a compared pair', () => {
   it('names the sheets and the status in Russian', () => {
     const markup = html(comparedPair());
-    expect(markup).toContain('Лист A: л. 5 · План освещения. Корпус 1, этаж 1');
-    expect(markup).toContain('Лист B: л. 5 · План освещения. Корпус 1, этаж 1');
+    expect(markup).toContain('Было: л. 5 · План освещения. Корпус 1, этаж 1');
+    expect(markup).toContain('Стало: л. 5 · План освещения. Корпус 1, этаж 1');
     expect(markup).toContain('Есть отличия');
     expect(html(comparedPair({ status: 'same_zones_changed' }))).toContain('Совпадает, изменены служебные зоны');
   });
@@ -77,8 +88,8 @@ describe('the viewer of a compared pair', () => {
   it('draws the layers only in the overlay and not in «Рядом»', () => {
     const side = html(comparedPair(), [{ type: 'mode', mode: 'side' }]);
     expect(side).not.toContain('Основное');
-    expect(side).toContain('Лист A');
-    expect(side).toContain('data-pane="Лист B"');
+    expect(side).toContain('data-pane="Было"');
+    expect(side).toContain('data-pane="Стало"');
     expect(side).toContain('title="Шторка работает только в наложении"');
   });
 
@@ -89,7 +100,7 @@ describe('the viewer of a compared pair', () => {
     expect(markup).toContain('оформление линий: 1 — показать в списке');
     expect(markup).toContain('Текст');
     expect(markup).toContain('Щит ЩО-1');
-    expect(markup).toContain('Графика: добавлено (B)');
+    expect(markup).toContain('Графика: добавлено (стало)');
     expect(markup).toContain('Изменение цвета');
     expect(markup).not.toContain('Сдвиг надписи');
     expect(html(comparedPair(), [{ type: 'shifts', on: true }, { type: 'style-only', on: true }])).toContain('Отличия: 6');
@@ -117,12 +128,27 @@ describe('the viewer of a compared pair', () => {
   it('has the channel strip: what was checked with its counts, what was not with why, and the reasons', () => {
     const markup = html(comparedPair());
     expect(markup).toContain('Проверено:');
-    expect(markup).toContain('графика (4), цвет и оформление линий (1), текст (2), служебные зоны (1), предупреждения (1)');
+    expect(plain(markup)).toContain('Проверено: графика (4), цвет и оформление линий (1), текст (2), служебные зоны (1), предупреждения (1)');
     expect(markup).toContain('Не проверено:');
-    expect(markup).toContain('читаемость надписей — нет текстового слоя: надписи сравнены только графически');
+    expect(plain(markup)).toContain('Не проверено: читаемость надписей — нет текстового слоя: надписи сравнены только графически');
+    expect(plain(markup)).toContain('Не применимо: PDF-пометки; позиции СО');
     expect(markup).toContain('причины: нет текстового слоя');
-    expect(html(comparedPair({ reasons: ['NEW_REASON'] }))).toContain('причина без описания (NEW_REASON)');
+    // a code nobody described is said as such, and its code is never printed
+    const unknown = html(comparedPair({ reasons: ['NEW_REASON'] }));
+    expect(unknown).toContain('причины: причина не описана');
+    expect(text(unknown)).not.toContain('NEW_REASON');
     expect(html({ ...without(comparedPair(), 'channels'), reasons: [] })).toContain('Каналы сравнения неизвестны');
+  });
+
+  it('says the reasons of the series and the unchecked channels too, from the one table of the entity', () => {
+    // `SPLIT_SHEET` and `UNCHECKED_CHANNEL_<CHANNEL>` were missing from the viewer's own stopgap table
+    const markup = html(comparedPair({ reasons: ['SPLIT_SHEET', 'UNCHECKED_CHANNEL_SPEC_POSITIONS', 'AI_MATCH', 'TABLE_GROUP', 'ALIGNMENT_UNRELIABLE'] }));
+    expect(markup).toContain(
+      'причины: лист разделён между версиями: проверьте части; не проверено: позиции СО; пара опирается на связь, предложенную ИИ; ' +
+        'лист из группы листов таблицы; совмещение листов ненадёжно',
+    );
+    expect(markup).not.toContain('причина не описана');
+    expect(html(comparedPair({ reasons: ['UNCHECKED_CHANNEL_SOMETHING_NEW'] }))).toContain('причины: причина не описана');
   });
 
   it('shows «было → стало» with the numbers that changed marked', () => {
@@ -139,8 +165,8 @@ describe('the viewer of a compared pair', () => {
   it('lists the service zones and says that a vanished warning confirms no approval', () => {
     const markup = html(comparedPair());
     expect(markup).toContain('Служебные зоны и пометки: 2');
-    expect(markup).toContain('Предупреждение удалено, зона «stamp»');
-    expect(markup).toContain('Штамп изменён, зона «stamp», поле «revision»');
+    expect(markup).toContain('Предупреждение удалено, зона «штамп»');
+    expect(markup).toContain('Штамп изменён, зона «штамп», поле «номер последнего изменения»');
     expect(markup).toContain('Исчезновение предупреждения не подтверждает согласования.');
     expect(html(comparedPair({ service_notes: [{ kind: 'stamp', change: 'added' }] }))).not.toContain('Исчезновение предупреждения');
   });
@@ -148,9 +174,12 @@ describe('the viewer of a compared pair', () => {
   it('says how the sheets were compared', () => {
     const markup = html(comparedPair());
     expect(markup).toContain('Как сравнивалось');
-    for (const text of ['vc1.13', '200 точек на дюйм', '0.5 пт', '1, 0, 0, 1, -3.7, 2.1', 'В пределах допуска', 'Шум', 'Отделённых объектов', 'Совмещённых блоков']) {
+    for (const text of ['версия 1.13', '200 точек на дюйм', '0.5 пт', 'Совмещение нового листа на прежний', '1, 0, 0, 1, -3.7, 2.1', 'В пределах допуска', 'Шум', 'Отделённых объектов', 'Совмещённых блоков']) {
       expect(markup).toContain(text);
     }
+    // the engine's version string is machine text: it stays in an attribute and is not read out
+    expect(markup).toContain('data-algo-version="vc1.13"');
+    expect(text(markup)).not.toContain('vc1.13');
   });
 
   it('turns «Совмещать блоки» off when there is nothing to align, and on when there is', () => {
@@ -160,7 +189,7 @@ describe('the viewer of a compared pair', () => {
     expect(none).not.toContain('Совмещать блоки (');
     expect(none).toMatch(/<input type="checkbox" disabled=""\/>\s*Совмещать блоки/);
     expect(none).toContain('title="Движения блоков не найдено: совмещать нечего"');
-    expect(html(comparedPair())).toContain('title="Показать перемещённые блоки листа B на их местах, не меняя PDF"');
+    expect(html(comparedPair())).toContain('title="Показать перемещённые блоки нового листа на их местах, не меняя PDF"');
   });
 
   it('puts the swipe divider and the slider in when the swipe is on, the lower sheet under the overlay', () => {
@@ -170,7 +199,9 @@ describe('the viewer of a compared pair', () => {
     // the overlay is hidden left of the divider, which opens the lower sheet there (`version-comparison-viewer.js:120`)
     expect(markup).toContain('clip-path:inset(0 0 0 30%)');
     expect(markup).toContain('left:30%');
-    expect(markup).toContain('Шторка: слева лист A, справа наложение');
+    expect(markup).toContain('Шторка: слева — было, справа — наложение');
+    expect(markup).toContain('под ней — было');
+    expect(markup).toContain('под ней — стало');
     expect(markup.indexOf('data-sheet="a"')).toBeLessThan(markup.indexOf('data-sheet="overlay"'));
     expect(html(comparedPair(), [{ type: 'swipe', on: true }, { type: 'under', under: 'b' }])).toContain('data-sheet="b"');
     expect(html(comparedPair())).not.toContain('type="range"');
@@ -196,7 +227,7 @@ describe('the viewer of a compared pair', () => {
     const scanned = html(comparedPair({ page_a: { ...(comparedPair().page_a as object), scan: true } as NonNullable<ComparisonSheetPair['page_a']> }));
     expect(scanned).toContain('изображение без текста: надписи не читаются и сравниваются только как картинка');
     const part = html(comparedPair({ parts: { role: 'part', covered_percent: 72.4, parts: [] } }));
-    expect(part).toContain('Лист B — часть листа A; листы-части покрывают 72 % листа A');
+    expect(part).toContain('Новый лист — часть прежнего листа; листы-части покрывают 72 % прежнего листа');
     expect(html(comparedPair({ ai_dependent: true }))).toContain('пара связана с участием ИИ');
   });
 
@@ -209,6 +240,74 @@ describe('the viewer of a compared pair', () => {
   });
 });
 
+describe('the viewer carries the markers the language guard reads', () => {
+  const LAYERS = ['main', 'light_elements', 'color_change', 'line_style', 'moved', 'within_tolerance', 'noise', 'service_zones'];
+
+  it('puts data-layer on the toggle of each of the eight layers, in the overlay only', () => {
+    const markup = html(comparedPair());
+    const seen = [...markup.matchAll(/<label[^>]*\sdata-layer="([^"]*)"/g)].map((match) => match[1]);
+    expect(seen).toEqual(LAYERS);
+    // the attribute sits on the element that wraps the checkbox and the Russian name
+    expect(markup).toMatch(/<label[^>]*data-layer="noise"[^>]*><input type="checkbox"[^>]*\/>Шум<\/label>/);
+    expect(html(comparedPair(), [{ type: 'mode', mode: 'side' }])).not.toContain('data-layer=');
+  });
+
+  it('puts data-channel-state on the chip of each channel: checked, unchecked and not applicable', () => {
+    const markup = html(comparedPair());
+    const chips = [...markup.matchAll(/<span data-channel="([a-z_]+)" data-channel-state="([a-z_]+)">([^<]*)<\/span>/g)].map((match) => [match[1], match[2], match[3]]);
+    expect(chips).toEqual([
+      ['geometry', 'checked', 'графика (4)'],
+      ['color', 'checked', 'цвет и оформление линий (1)'],
+      ['text', 'checked', 'текст (2)'],
+      ['zones', 'checked', 'служебные зоны (1)'],
+      ['warnings', 'checked', 'предупреждения (1)'],
+      ['text_coverage', 'unchecked', 'читаемость надписей — нет текстового слоя: надписи сравнены только графически'],
+      ['annotations', 'not_applicable', 'PDF-пометки'],
+      ['spec_positions', 'not_applicable', 'позиции СО'],
+    ]);
+  });
+
+  it('carries no channel chip where the pair has no channels', () => {
+    expect(html({ ...without(comparedPair(), 'channels'), reasons: [] })).not.toContain('data-channel-state=');
+  });
+});
+
+describe('the viewer speaks Russian: no side letter, no engine word', () => {
+  const MODES: ViewerAction[][] = [[], [{ type: 'mode', mode: 'side' }], [{ type: 'swipe', on: true }], [{ type: 'swipe', on: true }, { type: 'under', under: 'b' }]];
+
+  it('names the sheets «было» and «стало» and prints no bare Latin letter in any mode', () => {
+    for (const steps of MODES) {
+      const words = visible(html(comparedPair({ parts: { role: 'part', covered_percent: 61.5, parts: [] } }), steps));
+      expect(words, JSON.stringify(steps)).not.toMatch(/(^|[^A-Za-zА-Яа-яЁё])[AB]($|[^A-Za-zА-Яа-яЁё])/);
+      expect(words, JSON.stringify(steps)).not.toMatch(/Лист [AB]|листа [AB]|лист [AB]/);
+    }
+  });
+
+  it('says the zone and the field of a service note in Russian and never prints the engine\'s word', () => {
+    const notes = [
+      { kind: 'stamp', change: 'changed', zone: 'stamp', field: 'sheet_title', before: 'План', after: 'План 1' },
+      { kind: 'stamp', change: 'changed', zone: 'release_stamp', field: 'date', before: '01.01.2026', after: '02.02.2026' },
+      { kind: 'qr', change: 'changed', zone: 'qr', field: 'qr', before: 'a', after: 'b' },
+      { kind: 'annotation', change: 'added', zone: 'annotations', field: 'Highlight', after: 'проверить' },
+      { kind: 'annotation', change: 'added', zone: 'annotations', field: 'SomeFutureSubtype', after: 'x' },
+      { kind: 'field', change: 'changed', zone: 'some_new_zone', field: 'some_new_field', before: 'a', after: 'b' },
+    ] as NonNullable<ComparisonSheetPair['service_notes']>;
+    const markup = html(comparedPair({ service_notes: notes }));
+    const words = text(markup);
+    for (const sentence of [
+      'Штамп изменён, зона «штамп», поле «название листа»',
+      'Штамп изменён, зона «отметка о выпуске», поле «дата»',
+      'Матричный код изменён, зона «матричный код», поле «содержимое кода»',
+      'PDF-пометка добавлена, зона «PDF-пометки», поле «выделение»',
+      'PDF-пометка добавлена, зона «PDF-пометки», поле «другое поле»',
+      'Поле изменено, зона «другая зона», поле «другое поле»',
+    ]) expect(words, sentence).toContain(sentence);
+    for (const machine of ['sheet_title', 'release_stamp', 'Highlight', 'SomeFutureSubtype', 'some_new_zone', 'some_new_field', 'QR']) {
+      expect(words, machine).not.toContain(machine);
+    }
+  });
+});
+
 describe('the viewer of a pair that cannot be laid over', () => {
   it('draws only the page that exists, with no overlay, when the pair was never compared', () => {
     const pair = addedPair();
@@ -216,7 +315,7 @@ describe('the viewer of a pair that cannot be laid over', () => {
     expect(geometry.raster).toBe(A1);
     const markup = html(pair, [], arrived);
     expect(markup).toContain('Лист нельзя показать');
-    expect(markup).toContain('Лист A: нет в этой версии');
+    expect(markup).toContain('Было: нет в этой версии');
     expect(markup).toContain('Лист добавлен');
   });
 
@@ -228,13 +327,17 @@ describe('the viewer of a pair that cannot be laid over', () => {
     const state = initialState(context, { width: 1000, height: 600 });
     const markup = renderToStaticMarkup(createElement(ComparisonViewerView, { pair, geometry, context, state, tiles: arrived, dispatch: () => {} }));
     expect(state.mode).toBe('side');
-    expect(markup).toContain('data-pane="Лист B"');
-    expect(markup).not.toContain('data-pane="Лист A"');
+    expect(markup).toContain('data-pane="Стало"');
+    expect(markup).not.toContain('data-pane="Было"');
     expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Наложение<\/button>/);
     expect(markup).toContain('title="Наложения нет: листы не были совмещены"');
   });
 
   it('says why a pair that failed cannot be shown', () => {
-    expect(html({ ...without(comparedPair(), 'canvas', 'how_compared'), state: 'failed', failure_reason: 'RENDER_FAILED' })).toContain('Сравнение листа не удалось: RENDER_FAILED.');
+    expect(html({ ...without(comparedPair(), 'canvas', 'how_compared'), state: 'failed', failure_reason: 'RENDER_FAILED' })).toContain('Сравнение листа не удалось: лист не удалось отрисовать.');
+    // an unknown code is not printed either
+    const unknown = html({ ...without(comparedPair(), 'canvas', 'how_compared'), state: 'failed', failure_reason: 'SOMETHING_NEW' });
+    expect(unknown).toContain('Сравнение листа не удалось: причина не описана.');
+    expect(unknown).not.toContain('SOMETHING_NEW');
   });
 });

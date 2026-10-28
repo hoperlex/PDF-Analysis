@@ -4,10 +4,11 @@
  * for the words, `:15-16` for the tones and icons).
  *
  * The contract gives each step a state code (`ComparisonStepState`) and the figures the original's
- * note quotes (`ComparisonStepCounts`); the Russian is this file's. A state a step has no word of its
- * own for gets the generic word of the state, so no code is ever printed. Steps 4, 6 and 7 belong to
- * wave C2: the table has no column for them (see {@link LATER_STEPS}), but the next-step chip may
- * still name them, so they have a label here.
+ * note quotes (`ComparisonStepCounts`); the Russian is this file's, and the words and tones are those
+ * of `CMP-VC-OVERVIEW-01` section 6.2. A state a step has no word of its own for gets the generic word
+ * of the state, so no code is ever printed. Steps 4, 6 and 7 belong to wave C2 and are always
+ * `not_applicable` («—», tone off): the table has no column for them (see {@link LATER_STEPS}), but the
+ * next-step chip may still name them, so they have a label here.
  */
 
 import type { ComparisonStepCounts, ComparisonStepId, ComparisonStepState } from '@/shared/api';
@@ -115,7 +116,7 @@ const STEP_WORDS: Readonly<Partial<Record<ComparisonStepId, Partial<Record<Compa
   upload: { done: 'загружен', not_started: 'не загружен' },
   profile: { done: 'готов', running: 'идёт', not_started: 'не начат', failed: 'ошибка' },
   matrix: { done: 'готово', stale: 'устарело', not_started: 'не собрано' },
-  series: { done: 'готово', not_started: 'не запускалось', stale: 'по старому порядку', interrupted: 'прервано', queued: 'идёт' },
+  series: { done: 'готово', not_started: 'не запускалось', stale: 'по старому порядку', interrupted: 'прервано' },
 };
 
 export interface StepView {
@@ -177,7 +178,8 @@ export function stepView(step: ComparisonStepId, state: ComparisonStepState, cou
       title = 'Сводка посчитана для прежнего порядка или состава версий — нужно «Заново» в столбце «Сравнение соседних».';
     }
   }
-  const tone = TONES[state];
+  // A failed series is amber, not red: the action is «Досчитать» (OVERVIEW 6.2; the original's tone is `bad`, `TONE` `:16`).
+  const tone = step === 'series' && state === 'failed' ? 'warn' : TONES[state];
   return { text, note, tone, icon: TONE_ICONS[tone], title };
 }
 

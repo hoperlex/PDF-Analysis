@@ -8,7 +8,7 @@ export { ComparisonViewer } from './ui/comparison-viewer';
 export type { ComparisonViewerProps } from './ui/comparison-viewer';
 export { ComparisonViewerView } from './ui/comparison-viewer-view';
 export type { ComparisonViewerViewProps, TileStatus, ViewerNavigation } from './ui/comparison-viewer-view';
-export { ChannelStrip, HowCompared, ServiceNotes, TextChanges, reasonWords } from './ui/evidence-panels';
+export { ChannelStrip, HowCompared, ServiceNotes, TextChanges } from './ui/evidence-panels';
 export { DifferenceList } from './ui/difference-list';
 
 export { canShowOverlay, viewerGeometry } from './model/geometry';

@@ -4,8 +4,9 @@
  *
  * The contract carries the reasons as codes (`^[A-Z][A-Z0-9_]{2,63}$`), the permit as four states and the parts as a role and a
  * percentage. The words are the client's. A reason this table does not know is «причина не описана», its code stays in a `data-`
- * attribute and is never printed. `widgets/comparison-viewer` has its own, shorter table for the same codes (the eight forcing
- * reasons of the engine); this one adds the series' (`SPLIT_SHEET`, `TABLE_GROUP`, `AI_MATCH`) and the unchecked channels.
+ * attribute and is never printed. This is the one complete table: the eight forcing reasons of the engine, the series'
+ * (`SPLIT_SHEET`, `TABLE_GROUP`, `AI_MATCH`) and the unchecked channels. `widgets/comparison-viewer` says its reasons with
+ * {@link pairReasonWords} too, instead of a table of its own.
  */
 
 import type { ComparisonPartRole, ComparisonPartsCoverage, ComparisonPermitState } from '@/shared/api';

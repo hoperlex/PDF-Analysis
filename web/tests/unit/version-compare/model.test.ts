@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import type { ComparisonMatrix, ComparisonSheetPair, ComparisonTransitionSummary } from '@/shared/api';
+import type { ComparisonMatrix, ComparisonOverviewSet, ComparisonSheetPair, ComparisonTransitionSummary } from '@/shared/api';
 import { ApiError } from '@/shared/api';
 import {
   ALREADY_THERE,
@@ -43,6 +43,7 @@ import {
   markOf,
   moveVersion,
   nextSort,
+  nextStepSentence,
   pairOfRow,
   parseDragged,
   rebase,
@@ -116,14 +117,14 @@ describe('the words of a step (version-comparison-projects.js:41-94)', () => {
   it('offers a button only where the original did, and only for the right state', () => {
     expect(stepActions('profile', 'failed')).toEqual([{ id: 'prepare', label: 'Повторить' }]);
     expect(stepActions('profile', 'done', { failed: 0 })).toEqual([]);
-    expect(stepActions('profile', 'done', { failed: 1 })).toEqual([{ id: 'prepare', label: 'Повторить' }]);
+    // a failure stored beside a running retry is a retry in progress (OVERVIEW 6.2): no second one is offered
+    expect(stepActions('profile', 'running', { failed: 1 })).toEqual([]);
     expect(stepActions('matrix', 'not_started')).toEqual([{ id: 'prepare', label: 'Подготовить' }]);
     expect(stepActions('matrix', 'stale')).toEqual([{ id: 'prepare', label: 'Подготовить' }]);
+    expect(stepActions('matrix', 'failed')).toEqual([{ id: 'prepare', label: 'Повторить' }]);
     expect(stepActions('matrix', 'done')).toEqual([]);
     expect(stepActions('series', 'not_started')).toEqual([{ id: 'start', label: 'Запустить' }]);
     expect(stepActions('series', 'running')).toEqual([{ id: 'pause', label: 'Пауза' }]);
-    expect(stepActions('series', 'paused')).toEqual([{ id: 'resume', label: 'Продолжить' }, { id: 'restart', label: 'Заново' }]);
-    expect(stepActions('series', 'interrupted')).toEqual([{ id: 'finish', label: 'Продолжить' }, { id: 'restart', label: 'Заново' }]);
     expect(stepActions('series', 'done')).toEqual([{ id: 'restart', label: 'Заново' }]);
     expect(stepActions('series', 'blocked')).toEqual([]);
     expect(stepActions('upload', 'failed')).toEqual([]);
@@ -131,9 +132,120 @@ describe('the words of a step (version-comparison-projects.js:41-94)', () => {
   });
 });
 
+describe('the step cells are OVERVIEW sections 6.2 and 6.4, state by state', () => {
+  const SIX = { ready: 20, total: 24, failed: 0, rows: 31, unmatched: 0, manual_edits: 0, done: 1, with_changes: 1 };
+
+  /** [state, word, tone]: section 6.2, written out for each step. */
+  const PROFILE = [
+    ['done', 'готов', 'ok'], ['running', 'идёт', 'run'], ['queued', 'в очереди', 'run'], ['paused', 'пауза', 'warn'],
+    ['partial', 'частично', 'warn'], ['not_started', 'не начат', 'todo'], ['failed', 'ошибка', 'bad'],
+  ] as const;
+  const MATRIX = [
+    ['done', 'готово', 'ok'], ['attention', 'не сопост. 0', 'warn'], ['stale', 'устарело', 'warn'], ['not_started', 'не собрано', 'todo'],
+    ['running', 'идёт', 'run'], ['queued', 'в очереди', 'run'], ['failed', 'ошибка', 'bad'], ['not_applicable', '—', 'off'],
+  ] as const;
+  const SERIES = [
+    ['done', 'готово', 'ok'], ['running', 'идёт', 'run'], ['queued', 'в очереди', 'run'], ['paused', 'пауза', 'warn'],
+    ['interrupted', 'прервано', 'warn'], ['failed', 'ошибка', 'warn'], ['stale', 'по старому порядку', 'warn'],
+    ['not_started', 'не запускалось', 'todo'], ['not_applicable', '—', 'off'],
+  ] as const;
+
+  it('says the word and the tone of every state of the profile, the matrix and the series', () => {
+    for (const [state, word, tone] of PROFILE) expect(stepView('profile', state, SIX), `profile/${state}`).toMatchObject({ text: word, tone });
+    for (const [state, word, tone] of MATRIX) expect(stepView('matrix', state, SIX), `matrix/${state}`).toMatchObject({ text: word, tone });
+    for (const [state, word, tone] of SERIES) expect(stepView('series', state, SIX), `series/${state}`).toMatchObject({ text: word, tone });
+  });
+
+  it('draws the steps of wave C2 as «—» with the tone off, and a failed series amber while a failed profile is red', () => {
+    for (const id of ['ai_pairs', 'ai_changes', 'report'] as const) {
+      expect(stepView(id, 'not_applicable'), id).toMatchObject({ text: '—', tone: 'off', note: '' });
+    }
+    expect(stepView('series', 'failed').tone).toBe('warn');
+    expect(stepView('profile', 'failed').tone).toBe('bad');
+    expect(stepView('matrix', 'failed').tone).toBe('bad');
+  });
+
+  it('reads the figures of section 6.1 and no other: pages ready of total, rows and manual edits, transitions done of total', () => {
+    expect(stepView('profile', 'failed', { ready: 20, total: 24, failed: 4 }).note).toBe('20 из 24 · ошибок 4');
+    expect(stepView('profile', 'done', { ready: 24, total: 24, failed: 0 }).note).toBe('24 из 24');
+    expect(stepView('matrix', 'attention', { rows: 31, unmatched: 4, manual_edits: 2 }).note).toBe('строк 31 · ✎ 2');
+    expect(stepView('matrix', 'attention', { rows: 31, unmatched: 4, manual_edits: 0 }).note).toBe('строк 31');
+    expect(stepView('matrix', 'stale', { rows: 31, unmatched: 0, manual_edits: 1 }).note).toBe('строк 31 · ✎ 1');
+    expect(stepView('series', 'done', { done: 3, total: 3, with_changes: 2 }).note).toBe('3 из 3 · с изм. 2');
+    expect(stepView('series', 'stale', { done: 3, total: 3, with_changes: 2 }).note).toBe('3 из 3');
+    expect(stepView('series', 'running', { done: 1, total: 3 }).note).toBe('1 из 3');
+  });
+
+  /** The chip of a set that proposes `step`, whose steps all have `state`: section 6.2. */
+  function chip(step: 'upload' | 'profile' | 'matrix' | 'series', state: string, counts: object = {}, versions = 3): string {
+    const entries = (['upload', 'profile', 'matrix', 'ai_pairs', 'series', 'ai_changes', 'report'] as const).map((id) => ({ step: id, state, counts }));
+    return nextStepSentence({ document_uid: 'doc', version_count: versions, next_step: step, steps: entries } as never);
+  }
+
+  it('says the chip by the step it names and that step\'s state', () => {
+    const PREPARE = 'Подготовить: разбор и сопоставление листов';
+    expect(chip('upload', 'running')).toBe('Идёт загрузка');
+    expect(chip('upload', 'failed')).toBe('Ошибка загрузки — открыть пакет');
+    expect(chip('profile', 'failed')).toBe('Разбор версии с ошибкой — повторить');
+    expect(chip('profile', 'running')).toBe('Идёт разбор версий');
+    expect(chip('profile', 'queued')).toBe('Идёт разбор версий');
+    expect(chip('profile', 'not_started')).toBe(PREPARE);
+    expect(chip('profile', 'partial')).toBe(PREPARE);
+    expect(chip('matrix', 'not_started')).toBe(PREPARE);
+    expect(chip('matrix', 'stale')).toBe(PREPARE);
+    expect(chip('matrix', 'running')).toBe('Идёт сопоставление листов');
+    expect(chip('matrix', 'queued')).toBe('Идёт сопоставление листов');
+    expect(chip('matrix', 'failed')).toBe('Сопоставление листов не собрано — повторить');
+    expect(chip('matrix', 'attention', { unmatched: 4 })).toBe('Несопоставленных листов: 4 — вручную');
+    expect(chip('series', 'running')).toBe('Сравнение соседних: идёт');
+    expect(chip('series', 'queued')).toBe('Сравнение соседних: в очереди');
+    expect(chip('series', 'paused')).toBe('Сравнение соседних на паузе — продолжить');
+    expect(chip('series', 'interrupted')).toBe('Сравнение соседних прервано — досчитать');
+    expect(chip('series', 'failed')).toBe('Сравнение соседних прервано — досчитать');
+    expect(chip('series', 'not_started')).toBe('Сравнение соседних — запустить');
+    expect(chip('series', 'stale')).toBe('Сравнение соседних — запустить');
+  });
+
+  it('says «Готово» for a set with nothing left and «Одна версия — сравнивать не с чем» for a set of one', () => {
+    const none = (versions: number) => nextStepSentence({ document_uid: 'doc', version_count: versions, steps: [] } as never);
+    expect(none(3)).toBe('Готово');
+    expect(none(1)).toBe('Одна версия — сравнивать не с чем');
+  });
+
+  it('never prints a Latin word or a code in a chip, whatever step and state the server names', () => {
+    const ids = ['upload', 'profile', 'matrix', 'ai_pairs', 'series', 'ai_changes', 'report'] as const;
+    const states = ['not_started', 'queued', 'running', 'pausing', 'paused', 'interrupted', 'done', 'partial', 'stale', 'attention', 'failed', 'blocked', 'not_applicable'];
+    for (const id of ids) {
+      for (const state of states) {
+        const entries = ids.map((candidate) => ({ step: candidate, state, counts: { unmatched: 2 } }));
+        const sentence = nextStepSentence({ document_uid: 'doc', version_count: 3, next_step: id, steps: entries } as never);
+        expect(sentence, `${id}/${state}`).not.toMatch(LATIN);
+        expect(sentence.length, `${id}/${state}`).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('offers «Продолжить» to a paused series only, «Досчитать» to a failed or interrupted one with a transition left, and «Заново» only where the server takes it', () => {
+    expect(stepActions('series', 'paused', { done: 1, total: 3 })).toEqual([{ id: 'resume', label: 'Продолжить' }]);
+    expect(stepActions('series', 'interrupted', { done: 1, total: 3 })).toEqual([{ id: 'finish', label: 'Досчитать' }, { id: 'restart', label: 'Заново' }]);
+    expect(stepActions('series', 'failed', { done: 2, total: 3 })).toEqual([{ id: 'finish', label: 'Досчитать' }, { id: 'restart', label: 'Заново' }]);
+    // with nothing left (or no figure to say so) finish is refused by the server (`comparison_series_state`): not offered
+    expect(stepActions('series', 'failed', { done: 3, total: 3 })).toEqual([{ id: 'restart', label: 'Заново' }]);
+    expect(stepActions('series', 'interrupted')).toEqual([{ id: 'restart', label: 'Заново' }]);
+    expect(stepActions('series', 'stale')).toEqual([{ id: 'restart', label: 'Заново' }]);
+    // a live series (queued, running, paused) refuses a restart (`comparison_series_active`), and nothing is paused twice
+    for (const state of ['queued', 'running', 'paused'] as const) {
+      expect(stepActions('series', state, { done: 1, total: 3 }).some((action) => action.id === 'restart'), state).toBe(false);
+    }
+    for (const state of ['pausing', 'blocked', 'partial', 'attention', 'not_applicable'] as const) {
+      expect(stepActions('series', state, { done: 1, total: 3 }), state).toEqual([]);
+    }
+  });
+});
+
 describe('the words of the series (CMP-SERIES-01 section 10)', () => {
-  it('says the series of step 5 in the integrator\'s words: queued and running are «идёт»', () => {
-    expect(stepView('series', 'queued').text).toBe('идёт');
+  it('says the series of step 5 in the words of OVERVIEW 6.2: queued is «в очереди», running is «идёт»', () => {
+    expect(stepView('series', 'queued').text).toBe('в очереди');
     expect(stepView('series', 'running').text).toBe('идёт');
     expect(stepView('series', 'paused').text).toBe('пауза');
     expect(stepView('series', 'interrupted').text).toBe('прервано');
@@ -175,19 +287,94 @@ describe('the words of the series (CMP-SERIES-01 section 10)', () => {
   });
 });
 
-describe('the groups, the search and the sorts of the overview', () => {
+describe('the group of a row as the screen reads it', () => {
   const sets = overview().sets;
 
-  it('groups a set by its steps: an error, then a running step, then a proposed next step, else ready', () => {
+  it('groups a set by the step it proposes and that step\'s state, as the server counts', () => {
     const byState = (state: string) => sets.find((set) => set.steps[1]?.state === state);
     expect(groupOf(byState('failed') as never)).toBe('failed');
-    expect(groupOf(byState('running') as never)).toBe('running');
     expect(groupOf(byState('queued') as never)).toBe('running');
-    expect(groupOf({ ...(byState('done') as never as object), next_step: 'series' } as never)).toBe('waiting');
-    const done = { ...(byState('done') as object) } as { next_step?: string };
-    delete done.next_step;
-    expect(groupOf(done as never)).toBe('ready');
+    expect(groupOf(byState('stale') as never)).toBe('waiting');
+    expect(groupOf(byState('done') as never)).toBe('ready');
+    // a failed step the set does not propose is not the row's colour, and a running step it does not propose is not "Идут"
+    const mixed = { ...(byState('done') as object), next_step: 'series' } as never as ComparisonOverviewSet;
+    const withStates = (states: Record<string, string>): ComparisonOverviewSet =>
+      ({ ...mixed, steps: mixed.steps.map((entry) => ({ ...entry, state: states[entry.step] ?? entry.state })) }) as never;
+    expect(groupOf(withStates({ profile: 'failed', matrix: 'running', series: 'stale' }))).toBe('waiting');
+    expect(groupOf(withStates({ profile: 'done', series: 'failed' }))).toBe('waiting');
+    expect(groupOf(withStates({ series: 'running' }))).toBe('running');
   });
+});
+
+describe('the group of a row and the counters are the server\'s rule (CMP-VC-OVERVIEW-01 section 6.3)', () => {
+  const STEP_IDS = ['upload', 'profile', 'matrix', 'ai_pairs', 'series', 'ai_changes', 'report'] as const;
+  const STATES = [
+    'not_started', 'queued', 'running', 'pausing', 'paused', 'interrupted', 'done', 'partial', 'stale', 'attention', 'failed', 'blocked',
+    'not_applicable',
+  ] as const;
+  type Group = 'waiting' | 'running' | 'failed' | 'ready';
+
+  /** The group by the state of the PROPOSED step, written out for the upload, the profile and the matrix (a failure there is red). */
+  const RED_STEPS: Readonly<Record<(typeof STATES)[number], Group>> = {
+    not_started: 'waiting', queued: 'running', running: 'running', pausing: 'running', paused: 'waiting', interrupted: 'waiting',
+    done: 'waiting', partial: 'waiting', stale: 'waiting', attention: 'waiting', failed: 'failed', blocked: 'waiting', not_applicable: 'waiting',
+  };
+  /** The same for every other step: a failed series is «Ждут действия», as in the original (`OV:321-322`). */
+  const OTHER_STEPS: Readonly<Record<(typeof STATES)[number], Group>> = { ...RED_STEPS, failed: 'waiting' };
+
+  /** A set whose proposed step has `state` and whose other six steps all have `others`: they must not matter. */
+  function setProposing(next: (typeof STEP_IDS)[number] | undefined, state: (typeof STATES)[number], others: (typeof STATES)[number], n: number): ComparisonOverviewSet {
+    return {
+      document_uid: uid('doc', n),
+      version_count: 3,
+      ...(next === undefined ? {} : { next_step: next }),
+      steps: STEP_IDS.map((step) => ({ step, state: step === next ? state : others })),
+    } as ComparisonOverviewSet;
+  }
+
+  it('puts every proposed step in every state in the group the server counts it in, whatever the other steps say', () => {
+    let n = 0;
+    for (const next of STEP_IDS) {
+      const table = next === 'upload' || next === 'profile' || next === 'matrix' ? RED_STEPS : OTHER_STEPS;
+      for (const state of STATES) {
+        for (const others of ['failed', 'running', 'done'] as const) {
+          n += 1;
+          expect(groupOf(setProposing(next, state, others, n)), `${next}/${state} among ${others}`).toBe(table[state]);
+        }
+      }
+    }
+    expect(n).toBe(7 * 13 * 3);
+  });
+
+  it('puts a set that proposes nothing in «Готовы», whatever its steps say', () => {
+    for (const state of STATES) {
+      expect(groupOf(setProposing(undefined, state, state, 1)), state).toBe('ready');
+    }
+  });
+
+  it('recomputes the counters over every state combination exactly as the server counts them', () => {
+    const rows: ComparisonOverviewSet[] = [];
+    for (const next of STEP_IDS) for (const state of STATES) rows.push(setProposing(next, state, 'failed', rows.length + 1));
+    for (const state of STATES) rows.push(setProposing(undefined, state, 'running', rows.length + 1));
+    // By hand: each of the 3 red-when-failed steps has 3 running states, 1 failed and 9 waiting; each of the other 4 has
+    // 3 running, 0 failed and 10 waiting; the 13 rows with nothing proposed are ready. 91 + 13 = 104.
+    const server = { all: 104, waiting: 3 * 9 + 4 * 10, running: 7 * 3, failed: 3, ready: 13 };
+    expect(server).toEqual({ all: 104, waiting: 67, running: 21, failed: 3, ready: 13 });
+    expect(countsOf(rows)).toEqual(server);
+    for (const group of ['waiting', 'running', 'failed', 'ready'] as const) {
+      expect(visibleSets(rows, { query: '', mark: '', filter: group, sort: { key: 'code', direction: 'asc' } }).length, group).toBe(server[group]);
+    }
+  });
+
+  it('recomputes the fixture overview\'s counters to the ones its read carries', () => {
+    const read = overview();
+    expect(countsOf(read.sets)).toEqual(read.counters);
+    expect(read.counters).toEqual({ all: 13, waiting: 6, running: 3, failed: 1, ready: 3 });
+  });
+});
+
+describe('the search, the mark and the sorts of the overview', () => {
+  const sets = overview().sets;
 
   it('takes the mark from the tail of the designation', () => {
     expect(markOf('133/23-ГК-ЭМ2')).toBe('ЭМ');

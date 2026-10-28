@@ -23,7 +23,6 @@ import type { ComparisonFailure, OverviewView, SortKey, StepActionId } from '@/e
 import {
   INITIAL_VIEW,
   LATER_STEPS_NOTE,
-  NEXT_STEP_LABELS,
   OVERVIEW_FILTERS,
   RESTART_CONFIRM_ACTION,
   RESTART_CONFIRM_TEXT,
@@ -42,6 +41,7 @@ import {
   inScope,
   marksOf,
   nextSort,
+  nextStepSentence,
   parseSort,
   sortValue,
   stepActions,
@@ -91,21 +91,13 @@ export interface ProjectsAndStagesViewProps {
 
 function Chip({ set }: { readonly set: ComparisonOverviewSet }) {
   const group = groupOf(set);
-  const text =
-    set.next_step !== undefined
-      ? `Далее: ${NEXT_STEP_LABELS[set.next_step]}`
-      : group === 'running'
-        ? 'Идёт расчёт'
-        : group === 'failed'
-          ? 'Есть ошибка'
-          : 'Готово';
   return (
     <span
       className={`am-badge am-badge--${GROUP_BADGES[group]}`}
       data-overview-group={group}
       {...(set.next_step === undefined ? {} : { 'data-next-step': set.next_step })}
     >
-      {text}
+      {nextStepSentence(set)}
     </span>
   );
 }

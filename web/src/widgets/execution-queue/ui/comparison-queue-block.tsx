@@ -9,10 +9,9 @@
  * to them and why a paused installation says so here too. Nothing in the block sends anything: a reader who wants to pause or resume a
  * comparison does it on «Сравнение версий». A queue that the module does not serve yet answers `503`, which is shown as the module's
  * state, not as a failure of «Очередь».
+ *
+ * The block has a query of its own and is mounted by the page of «Очередь» (`_pages/queue`), beside the list of runs, not inside it.
  */
-
-import { useContext } from 'react';
-import { QueryClientContext } from '@tanstack/react-query';
 
 import type { ComparisonQueueSummary } from '@/shared/api';
 import { formatInstant } from '@/shared/lib';
@@ -109,13 +108,4 @@ export function ComparisonQueueBlock() {
     );
   }
   return <ComparisonQueueBlockView summary={summary.data} />;
-}
-
-/**
- * The block, where the queue is drawn inside a query provider. The list above it is a pure view that several tests render with no
- * provider at all, so the block asks for the provider first and draws nothing without one; «Очередь» always has it.
- */
-export function ComparisonQueueSlot() {
-  const client = useContext(QueryClientContext);
-  return client === undefined ? null : <ComparisonQueueBlock />;
 }

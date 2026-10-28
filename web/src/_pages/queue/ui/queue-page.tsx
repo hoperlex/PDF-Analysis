@@ -15,7 +15,7 @@ import { useCancelRun } from '@/features/cancel-run';
 import { useReauditRun } from '@/features/reaudit-run';
 import { useSetJobPriority } from '@/features/set-job-priority';
 import { usePauseExecution } from '@/features/pause-execution';
-import { ExecutionQueue } from '@/widgets/execution-queue';
+import { ComparisonQueueBlock, ExecutionQueue } from '@/widgets/execution-queue';
 import { ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
 
 interface RunIntent {
@@ -162,6 +162,7 @@ export function QueuePage() {
           onNext={next === null ? null : () => setCursors((current) => [...current, next])}
         />
       ) : null}
+      <ComparisonQueueBlock />
       {intent !== null ? (
         <section role="group" aria-label="Подтверждение команды выполнения" data-execution-intent={intent.kind}>
           <p>{intentLabel(intent)}</p>
