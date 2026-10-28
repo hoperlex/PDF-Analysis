@@ -39,7 +39,7 @@ export interface ChannelStripProps {
   readonly reasons: readonly string[];
 }
 
-/** One channel as a chip: its name, and what it found or why it could not look. */
+/** One channel as a chip: its name, what it found or why it could not look, and its state in `data-channel-state`. */
 function ChannelChip({ name, channel }: { readonly name: string; readonly channel: ComparisonChannel }) {
   const detail =
     channel.state === 'checked'
@@ -48,7 +48,7 @@ function ChannelChip({ name, channel }: { readonly name: string; readonly channe
         ? ''
         : ` — ${channel.reason}`;
   return (
-    <span>
+    <span data-channel={name} data-channel-state={channel.state}>
       {CHANNEL_LABELS[name]}
       {detail}
     </span>

@@ -70,9 +70,13 @@ function sheetName(side: Side, page: ComparisonPairPageLike | undefined): string
 
 type ComparisonPairPageLike = NonNullable<ComparisonSheetPair['page_a']>;
 
-function Choice({ checked, disabled, title, onChange, children }: { checked: boolean; disabled?: boolean | undefined; title?: string | undefined; onChange: (on: boolean) => void; children: ReactNode }) {
+function Choice({ checked, disabled, title, layer, onChange, children }: { checked: boolean; disabled?: boolean | undefined; title?: string | undefined; layer?: ComparisonLayer | undefined; onChange: (on: boolean) => void; children: ReactNode }) {
   return (
-    <label className={disabled === true ? `${styles.choice} ${styles.choiceOff}` : styles.choice} title={title}>
+    <label
+      className={disabled === true ? `${styles.choice} ${styles.choiceOff}` : styles.choice}
+      title={title}
+      {...(layer === undefined ? {} : { 'data-layer': layer })}
+    >
       <input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} />
       {children}
     </label>
@@ -171,7 +175,7 @@ export function ComparisonViewerView({
             <fieldset className={styles.group}>
               <legend className={styles.groupTitle}>Слои</legend>
               {LAYER_ORDER.map((layer: ComparisonLayer) => (
-                <Choice key={layer} checked={state.layers.includes(layer)} onChange={(on) => dispatch({ type: 'layer', layer, on })}>
+                <Choice key={layer} layer={layer} checked={state.layers.includes(layer)} onChange={(on) => dispatch({ type: 'layer', layer, on })}>
                   {LAYER_LABELS[layer]}
                 </Choice>
               ))}

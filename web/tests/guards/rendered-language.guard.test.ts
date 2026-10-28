@@ -3512,7 +3512,7 @@ const TRANSLATED_SCHEMAS = [
   // `CMP-VC-UI-01`: «Сравнение версий» says every status, flag, state and reason of the comparison in Russian, with the contract
   // value in a `data-` attribute. Several are plain English words (`same`, `added`, `removed`, `manual`, `high`, `scan`,
   // `queued`, `running`, `stale`, `failed`, `done`), which must not be permitted bare. `ComparisonLayer` and `ComparisonChannelState`
-  // are rendered by `widgets/comparison-viewer` in Russian too; they join this list with the viewer's own markers (see the report).
+  // are rendered by `widgets/comparison-viewer` in Russian too, with `data-layer` and `data-channel-state` (`CMP-C1-FIX-B`).
   'ComparisonSheetStatus',
   'ComparisonCellConfidence',
   'ComparisonCellFlag',
@@ -3537,6 +3537,8 @@ const TRANSLATED_SCHEMAS = [
   'ComparisonQueueModule',
   'ComparisonPermitState',
   'ComparisonPartRole',
+  'ComparisonLayer',
+  'ComparisonChannelState',
 ] as const;
 
 function translatedVocabulary(): ReadonlySet<string> {
@@ -4136,6 +4138,16 @@ const SCHEMA_MARKERS: readonly {
     schema: 'ComparisonQueueModule',
     attribute: 'data-queue-module',
     why: '`widgets/execution-queue/ui/comparison-queue-block.tsx`, the module a kind of queued work belongs to, in the table of kinds.',
+  },
+  {
+    schema: 'ComparisonLayer',
+    attribute: 'data-layer',
+    why: '`widgets/comparison-viewer/ui/comparison-viewer-view.tsx`, the toggle of each of the eight layers of the overlay, said in Russian (Основное, Светлые элементы, Шум…).',
+  },
+  {
+    schema: 'ComparisonChannelState',
+    attribute: 'data-channel-state',
+    why: '`widgets/comparison-viewer/ui/evidence-panels.tsx`, the chip of each channel of the comparison: проверено, не проверено or не применимо, with the count or the reason.',
   },
 ];
 

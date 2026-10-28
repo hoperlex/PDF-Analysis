@@ -240,6 +240,38 @@ describe('the viewer of a compared pair', () => {
   });
 });
 
+describe('the viewer carries the markers the language guard reads', () => {
+  const LAYERS = ['main', 'light_elements', 'color_change', 'line_style', 'moved', 'within_tolerance', 'noise', 'service_zones'];
+
+  it('puts data-layer on the toggle of each of the eight layers, in the overlay only', () => {
+    const markup = html(comparedPair());
+    const seen = [...markup.matchAll(/<label[^>]*\sdata-layer="([^"]*)"/g)].map((match) => match[1]);
+    expect(seen).toEqual(LAYERS);
+    // the attribute sits on the element that wraps the checkbox and the Russian name
+    expect(markup).toMatch(/<label[^>]*data-layer="noise"[^>]*><input type="checkbox"[^>]*\/>Шум<\/label>/);
+    expect(html(comparedPair(), [{ type: 'mode', mode: 'side' }])).not.toContain('data-layer=');
+  });
+
+  it('puts data-channel-state on the chip of each channel: checked, unchecked and not applicable', () => {
+    const markup = html(comparedPair());
+    const chips = [...markup.matchAll(/<span data-channel="([a-z_]+)" data-channel-state="([a-z_]+)">([^<]*)<\/span>/g)].map((match) => [match[1], match[2], match[3]]);
+    expect(chips).toEqual([
+      ['geometry', 'checked', 'графика (4)'],
+      ['color', 'checked', 'цвет и оформление линий (1)'],
+      ['text', 'checked', 'текст (2)'],
+      ['zones', 'checked', 'служебные зоны (1)'],
+      ['warnings', 'checked', 'предупреждения (1)'],
+      ['text_coverage', 'unchecked', 'читаемость надписей — нет текстового слоя: надписи сравнены только графически'],
+      ['annotations', 'not_applicable', 'PDF-пометки'],
+      ['spec_positions', 'not_applicable', 'позиции СО'],
+    ]);
+  });
+
+  it('carries no channel chip where the pair has no channels', () => {
+    expect(html({ ...without(comparedPair(), 'channels'), reasons: [] })).not.toContain('data-channel-state=');
+  });
+});
+
 describe('the viewer speaks Russian: no side letter, no engine word', () => {
   const MODES: ViewerAction[][] = [[], [{ type: 'mode', mode: 'side' }], [{ type: 'swipe', on: true }], [{ type: 'swipe', on: true }, { type: 'under', under: 'b' }]];
 
