@@ -5971,3 +5971,298 @@ class ComparisonOverviewAdapter:
 
     def get_queue_summary(self) -> models.ComparisonQueueSummary:
         return models.ComparisonQueueSummary.model_validate(self._service.get_queue_summary(modules=self._modules))
+
+
+# --- version comparison AI, specifications, launch queue and reports (`CMP-SEAL-C2`, ADR-0025) -------
+#
+# The shipped adapters of the five ports below are stubs: each operation refuses with ``503
+# dependency_unavailable`` until the lane that owns it replaces the body (plan section 4.0 rule 1). A stub
+# refuses first when the versions module is off, naming ``comparison_modules`` (ADR-0025 decision 23 and
+# ``A-12``: drawings reach a model only when the owner has enabled the module), and then names its lane's
+# class. Nothing is read or written, and no model is called.
+
+#: The stable class name of an operation of a module the deployment does not serve.
+_COMPARISON_MODULES_DEPENDENCY = "comparison_modules"
+
+
+class _VersionsModuleGate:
+    """The module-flag refusal every C2 operation makes before anything else. ``comparison_modules`` is the
+    module set the deployment serves, parsed once by the composition root; a lane keeps the call when it
+    replaces the bodies."""
+
+    def __init__(self, *, comparison_modules: str = "none") -> None:
+        from auditmanager.comparison.public import MODULE_VERSIONS, enabled_modules
+
+        self._versions_module_on = MODULE_VERSIONS in enabled_modules(comparison_modules)
+
+    def _require_versions_module(self) -> None:
+        if not self._versions_module_on:
+            raise DomainError(
+                ErrorCode.DEPENDENCY_UNAVAILABLE, dependency=_COMPARISON_MODULES_DEPENDENCY
+            )
+
+
+class ComparisonAiPairAdapter(_VersionsModuleGate):
+    """`CMP-VC-AIPAIR-01` replaces the bodies."""
+
+    _DEPENDENCY = "comparison_ai_pairs"
+
+    def cancel_pair_check(self, *, job_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def estimate_pair_check(self, *, project_uid: str, document_uid: str) -> models.ComparisonAiEstimate:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def get_pair_check(self, *, project_uid: str, document_uid: str) -> models.ComparisonAiPairCheck:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def list_pair_hints(
+        self, *, project_uid: str, document_uid: str, cursor: str | None, limit: int
+    ) -> models.ComparisonAiPairHintPage:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def pause_pair_check(self, *, job_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def resume_pair_check(
+        self, *, job_id: str, consent: models.ComparisonAiConsent | None, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def start_pair_check(
+        self, *, project_uid: str, document_uid: str, consent: models.ComparisonAiConsent, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+
+class ComparisonAiSheetAdapter(_VersionsModuleGate):
+    """`CMP-VC-AISHEET-01` replaces the bodies."""
+
+    _DEPENDENCY = "comparison_ai_sheets"
+
+    def cancel_changes_job(self, *, job_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def dequeue_changes_job(self, *, job_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def estimate_series_changes(self, *, series_id: str, only_failed: bool) -> models.ComparisonAiEstimate:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def estimate_sheet_description(self, *, sheet_pair_id: str) -> models.ComparisonAiEstimate:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def finish_changes_job(self, *, job_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def get_series_changes(self, *, series_id: str) -> models.ComparisonAiSheetChanges:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def get_sheet_description(self, *, sheet_pair_id: str) -> models.ComparisonSheetDescription:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def list_review_sheets(
+        self, *, transition_id: str, cursor: str | None, limit: int
+    ) -> models.ComparisonReviewSheetPage:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def list_sheet_description_history(
+        self, *, sheet_pair_id: str, cursor: str | None, limit: int
+    ) -> models.ComparisonSheetDescriptionHistory:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def pause_changes_job(self, *, job_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def read_sheet_description_md(self, *, sheet_pair_id: str) -> bytes:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def resume_changes_job(
+        self, *, job_id: str, consent: models.ComparisonAiConsent | None, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def retry_changes_job(
+        self, *, job_id: str, consent: models.ComparisonAiConsent, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def start_series_changes(
+        self, *, series_id: str, consent: models.ComparisonAiConsent, restart: bool, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def start_sheet_description(
+        self, *, sheet_pair_id: str, consent: models.ComparisonAiConsent, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+
+class ComparisonSpecificationAdapter(_VersionsModuleGate):
+    """`CMP-VC-SPEC-01` replaces the bodies."""
+
+    _DEPENDENCY = "comparison_specification"
+
+    def cancel_specification(self, *, job_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def estimate_specification(self, *, transition_id: str) -> models.ComparisonAiEstimate:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def get_page_positions(self, *, page_profile_id: str) -> models.ComparisonSpecPage:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def get_pair_positions(self, *, sheet_pair_id: str) -> models.ComparisonSheetPairSpecPositions:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def get_specification(self, *, transition_id: str) -> models.ComparisonSpecification:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def list_changes(
+        self, *, transition_id: str, kind: models.ComparisonSpecChangeKind | None, cursor: str | None, limit: int
+    ) -> models.ComparisonSpecChangePage:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def list_specifications(
+        self, *, series_id: str, cursor: str | None, limit: int
+    ) -> models.ComparisonSpecificationPage:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def start_specification(
+        self, *, transition_id: str, consent: models.ComparisonAiConsent, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+
+class ComparisonLaunchQueueAdapter(_VersionsModuleGate):
+    """`CMP-VC-QUEUE-01` replaces the bodies."""
+
+    _DEPENDENCY = "comparison_launch_queue"
+
+    def clear_queue(self, *, project_uid: str, user_uid: str, idempotency_key: str) -> models.ComparisonLaunchQueue:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def enqueue(
+        self, *, project_uid: str, items: Sequence[models.ComparisonLaunchItem], restart: bool, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonLaunchQueue:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def get_ai_queue(self) -> models.ComparisonAiQueue:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def get_queue(self, *, project_uid: str) -> models.ComparisonLaunchQueue:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def pause_queue(self, *, project_uid: str, user_uid: str, idempotency_key: str) -> models.ComparisonLaunchQueue:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def remove_entry(self, *, entry_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonLaunchQueue:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def resume_queue(self, *, project_uid: str, user_uid: str, idempotency_key: str) -> models.ComparisonLaunchQueue:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+
+class ComparisonReportAdapter(_VersionsModuleGate):
+    """`CMP-VC-REPORT-01` replaces the bodies."""
+
+    _DEPENDENCY = "comparison_reports"
+
+    def cancel_report(self, *, report_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonReport:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def continue_report(
+        self, *, report_id: str, consent: models.ComparisonAiConsent | None, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonReport:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def create_report(
+        self, *, series_id: str, kind: models.ComparisonReportKind, reuse: bool, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonReport:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def delete_report(self, *, report_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonReport:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def get_report(self, *, report_id: str) -> models.ComparisonReport:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def list_reports(self, *, series_id: str, cursor: str | None, limit: int) -> models.ComparisonReportPage:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def prepare_client_report(
+        self, *, report_id: str, reuse: bool, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonReport:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def read_report_pdf(self, *, report_id: str) -> bytes:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def read_report_source_md(self, *, report_id: str) -> bytes:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def read_series_summary(self, *, series_id: str) -> bytes:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def rebuild_report_pdf(self, *, report_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonReport:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def start_report(
+        self, *, report_id: str, consent: models.ComparisonAiConsent, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonReport:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def upload_report_source(
+        self, *, series_id: str, kind: models.ComparisonReportKind, reuse: bool, content: bytes, source_name: str | None, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonReport:
+        self._require_versions_module()
+        return _comparison_unavailable(self._DEPENDENCY)

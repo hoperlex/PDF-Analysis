@@ -1,11 +1,10 @@
-"""The overview of a project for «Проекты и этапы» and the «Сравнение» block of «Очередь»,
-sealed as stubs (`CMP-SEAL-C1`, ADR-0025 decisions 4, 6 and 23).
+"""The overview of a project for «Проекты и этапы» and the «Сравнение» block of «Очередь»
+(`CMP-SEAL-C1` sealed them, `CMP-VC-OVERVIEW-01` serves them; ADR-0025 decisions 4, 6 and 23).
 
 ``getComparisonOverview`` reads, for every document set of a project, the state of the seven
 steps and the next step; ``getComparisonQueueSummary`` reads the comparison work items by state
 and kind. Both are read-only, start nothing and are open to any one role (the block is shown to
-an administrator). Both answer ``503 dependency_unavailable`` until `CMP-VC-OVERVIEW-01` wires
-the port.
+an administrator).
 """
 
 from __future__ import annotations

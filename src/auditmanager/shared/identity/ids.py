@@ -453,6 +453,50 @@ class ComparisonSheetPairResultId(OpaqueId, prefix="csp", entity="ComparisonShee
     """Identity of the content-keyed result of comparing two pages (`CMP-SEAL-C1`, migration ``0039``, ADR-0025 decision 15): a ULID id and a unique digest column that includes the project; the digest is never a foreign key."""
 
 
+class ComparisonAiJobId(OpaqueId, prefix="cai", entity="ComparisonAiJob"):
+    """Identity of one consented AI job of the version comparison: a pair check, a sheet description, a specification comparison or a report (`CMP-SEAL-C2`, migration ``0040``, ADR-0025 decision 19). The estimate it consented to is frozen with it."""
+
+
+class ComparisonAiPairAnswerId(OpaqueId, prefix="cpa", entity="ComparisonAiPairAnswer"):
+    """Identity of the content-keyed answer of the model to one question of the pair check (`CMP-SEAL-C2`, migration ``0040``, ADR-0025 decision 15): a ULID id and a unique digest column that includes the project, so an answered question is never sent again."""
+
+
+class ComparisonAiPairQuestionId(OpaqueId, prefix="cpq", entity="ComparisonAiPairQuestion"):
+    """Identity of one question of an AI pair-check job and the decision made of its answers (`CMP-SEAL-C2`, migration ``0040``)."""
+
+
+class ComparisonAiSheetItemId(OpaqueId, prefix="csi", entity="ComparisonAiSheetItem"):
+    """Identity of one sheet pair of an AI description job (`CMP-SEAL-C2`, migration ``0040``), with its outcome."""
+
+
+class ComparisonSheetDescriptionId(OpaqueId, prefix="csd", entity="ComparisonSheetDescription"):
+    """Identity of the content-keyed AI description of one result or one single page (`CMP-SEAL-C2`, migration ``0040``): keyed by content, prompt version and model, with a unique digest that includes the project."""
+
+
+class ComparisonSpecExtractionId(OpaqueId, prefix="cse", entity="ComparisonSpecExtraction"):
+    """Identity of the content-keyed reading of the whole specification of one version (`CMP-SEAL-C2`, migration ``0040``)."""
+
+
+class ComparisonSpecComparisonId(OpaqueId, prefix="cscp", entity="ComparisonSpecComparison"):
+    """Identity of the comparison of the specifications of one transition (`CMP-SEAL-C2`, migration ``0040``)."""
+
+
+class ComparisonReportId(OpaqueId, prefix="crt", entity="ComparisonReport"):
+    """Identity of one PDF report of a series (`CMP-SEAL-C2`, migration ``0040``, ADR-0025 decision 2)."""
+
+
+class ComparisonReportPartId(OpaqueId, prefix="crpt", entity="ComparisonReportPart"):
+    """Identity of the progress of one transition of a report (`CMP-SEAL-C2`, migration ``0040``)."""
+
+
+class ComparisonReportArtifactId(OpaqueId, prefix="cra", entity="ComparisonReportArtifact"):
+    """Identity of one stored file of a report (`CMP-SEAL-C2`, migration ``0040``)."""
+
+
+class ComparisonLaunchEntryId(OpaqueId, prefix="cle", entity="ComparisonLaunchEntry"):
+    """Identity of one selected step of one document set in the launch queue of a project (`CMP-SEAL-C2`, migration ``0040``)."""
+
+
 #: Every concrete identity type, keyed by contract entity name.
 IDENTITY_TYPES_BY_ENTITY: Final[dict[str, type[OpaqueId]]] = {
     identity.entity: identity for identity in _REGISTRY.values()

@@ -80,6 +80,11 @@ __all__ = [
     "ComparisonSeriesPort",
     "ComparisonPairTilePort",
     "ComparisonOverviewPort",
+    "ComparisonAiPairPort",
+    "ComparisonAiSheetPort",
+    "ComparisonSpecificationPort",
+    "ComparisonLaunchQueuePort",
+    "ComparisonReportPort",
     "AnalysisProfilePort",
     "OptimisationPort",
     "SectionSpecificationPort",
@@ -1647,3 +1652,292 @@ class ComparisonOverviewPort(Protocol):
 
     def get_queue_summary(self) -> models.ComparisonQueueSummary:
         """The comparison work items by state and kind."""
+
+
+# --- version comparison AI, specifications, reports and the launch queue (`CMP-SEAL-C2`) --------
+#
+# The five ports below are sealed as stubs. Every method that starts, resumes or changes anything
+# refuses first when the versions module is off (``dependency_unavailable``, ``comparison_modules``);
+# an AI start also refuses a stale estimate, a missing consent and a ceiling before it reads or writes
+# (ADR-0025 decision 19). A command is an expert's act and carries an ``Idempotency-Key``; a read is any
+# one role and starts nothing.
+
+
+@runtime_checkable
+class ComparisonAiPairPort(Protocol):
+    """The AI check of the doubtful pairs of a document set. `CMP-VC-AIPAIR-01` implements it
+    (ADR-0025 decisions 3, 14, 17 and 19). Accepted answers are written as accepted AI links by the
+    lane's rule, never by a client call."""
+
+    def estimate_pair_check(
+        self, *, project_uid: str, document_uid: str
+    ) -> models.ComparisonAiEstimate:
+        """The questions, pairs, images, image bytes, prompt size, routed model and USD estimate of a check
+        of the latest matrix. A matrix that is not ready is ``conflict`` (``comparison_matrix_stale``)."""
+
+    def start_pair_check(
+        self, *, project_uid: str, document_uid: str, consent: models.ComparisonAiConsent,
+        user_uid: str, idempotency_key: str,
+    ) -> models.ComparisonAiJob:
+        """Start a check that carries the estimate it consents to. An expert's act."""
+
+    def get_pair_check(
+        self, *, project_uid: str, document_uid: str
+    ) -> models.ComparisonAiPairCheck:
+        """The latest job and its counts «вопросов · пар · подсказок · против»."""
+
+    def pause_pair_check(
+        self, *, job_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonAiJob:
+        """Pause after the call in hand. An expert's act."""
+
+    def resume_pair_check(
+        self, *, job_id: str, consent: models.ComparisonAiConsent | None, user_uid: str,
+        idempotency_key: str,
+    ) -> models.ComparisonAiJob:
+        """Continue a paused job; after ``overrun`` or ``route_changed`` a consent is required."""
+
+    def cancel_pair_check(
+        self, *, job_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonAiJob:
+        """Cancel the unfinished questions. An expert's act."""
+
+    def list_pair_hints(
+        self, *, project_uid: str, document_uid: str, cursor: str | None, limit: int
+    ) -> models.ComparisonAiPairHintPage:
+        """The answers and hints per matrix cell, newest first."""
+
+
+@runtime_checkable
+class ComparisonAiSheetPort(Protocol):
+    """The AI description of changes: per series, per sheet pair and for added or removed sheets.
+    `CMP-VC-AISHEET-01` implements it (ADR-0025 decisions 3, 17, 19 and 20)."""
+
+    def estimate_series_changes(
+        self, *, series_id: str, only_failed: bool
+    ) -> models.ComparisonAiEstimate:
+        """The sheets, images, image bytes, prompt size, model and USD estimate; ``only_failed`` is the
+        estimate of «Повторить листы с ошибкой»."""
+
+    def start_series_changes(
+        self, *, series_id: str, consent: models.ComparisonAiConsent, restart: bool,
+        user_uid: str, idempotency_key: str,
+    ) -> models.ComparisonAiJob:
+        """Queue a job in the installation's AI queue. An expert's act."""
+
+    def get_series_changes(self, *, series_id: str) -> models.ComparisonAiSheetChanges:
+        """The latest job and the progress of each transition."""
+
+    def pause_changes_job(
+        self, *, job_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonAiJob:
+        """Pause after the call in hand. An expert's act."""
+
+    def resume_changes_job(
+        self, *, job_id: str, consent: models.ComparisonAiConsent | None, user_uid: str,
+        idempotency_key: str,
+    ) -> models.ComparisonAiJob:
+        """Continue a paused job; after ``overrun`` or ``route_changed`` a consent is required."""
+
+    def cancel_changes_job(
+        self, *, job_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonAiJob:
+        """«Отменить»: also the cancel of a single-sheet job. An expert's act."""
+
+    def finish_changes_job(
+        self, *, job_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonAiJob:
+        """«Досчитать»: queue the sheets of an interrupted or paused job that have no result."""
+
+    def dequeue_changes_job(
+        self, *, job_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonAiJob:
+        """«Убрать из очереди»: a job that has not started leaves the AI queue and is cancelled."""
+
+    def retry_changes_job(
+        self, *, job_id: str, consent: models.ComparisonAiConsent, user_uid: str,
+        idempotency_key: str,
+    ) -> models.ComparisonAiJob:
+        """«Повторить листы с ошибкой»: describe again only the sheets that failed, under the estimate of
+        ``estimate_series_changes(only_failed=True)``."""
+
+    def get_sheet_description(
+        self, *, sheet_pair_id: str
+    ) -> models.ComparisonSheetDescription:
+        """The stored description of one sheet pair. Reading it calls no model."""
+
+    def list_sheet_description_history(
+        self, *, sheet_pair_id: str, cursor: str | None, limit: int
+    ) -> models.ComparisonSheetDescriptionHistory:
+        """«История (N)», newest first."""
+
+    def estimate_sheet_description(
+        self, *, sheet_pair_id: str
+    ) -> models.ComparisonAiEstimate:
+        """«Описать этот лист…»: sheets, images, image bytes, prompt size, model and USD estimate. Serves
+        an added or removed sheet as well."""
+
+    def start_sheet_description(
+        self, *, sheet_pair_id: str, consent: models.ComparisonAiConsent, user_uid: str,
+        idempotency_key: str,
+    ) -> models.ComparisonAiJob:
+        """«Передать и описать». An expert's act."""
+
+    def read_sheet_description_md(self, *, sheet_pair_id: str) -> bytes:
+        """«MD листа» as UTF-8 Markdown."""
+
+    def list_review_sheets(
+        self, *, transition_id: str, cursor: str | None, limit: int
+    ) -> models.ComparisonReviewSheetPage:
+        """The «Проверить» list and the added and removed single sheets of a transition."""
+
+
+@runtime_checkable
+class ComparisonSpecificationPort(Protocol):
+    """Specifications: the deterministic positions of a sheet (part A) and the AI comparison of the whole
+    specifications of a transition (part B). `CMP-VC-SPEC-01` implements it (ADR-0025 decisions 3, 17
+    and 19)."""
+
+    def get_page_positions(self, *, page_profile_id: str) -> models.ComparisonSpecPage:
+        """Part A for one page of a version."""
+
+    def get_pair_positions(
+        self, *, sheet_pair_id: str
+    ) -> models.ComparisonSheetPairSpecPositions:
+        """«Спецификация по позициям» of a sheet pair."""
+
+    def list_specifications(
+        self, *, series_id: str, cursor: str | None, limit: int
+    ) -> models.ComparisonSpecificationPage:
+        """The block «Полные спецификации (СО)»: the transitions that have a specification."""
+
+    def get_specification(self, *, transition_id: str) -> models.ComparisonSpecification:
+        """Method, sheets A and B, coverage, totals and reason."""
+
+    def list_changes(
+        self, *, transition_id: str, kind: models.ComparisonSpecChangeKind | None,
+        cursor: str | None, limit: int,
+    ) -> models.ComparisonSpecChangePage:
+        """The changes of the whole-specification comparison."""
+
+    def estimate_specification(
+        self, *, transition_id: str
+    ) -> models.ComparisonAiEstimate:
+        """The versions to read, images, prompt size, model and USD estimate."""
+
+    def start_specification(
+        self, *, transition_id: str, consent: models.ComparisonAiConsent, user_uid: str,
+        idempotency_key: str,
+    ) -> models.ComparisonAiJob:
+        """Start the comparison. An expert's act."""
+
+    def cancel_specification(
+        self, *, job_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonAiJob:
+        """Cancel the unfinished versions. An expert's act."""
+
+
+@runtime_checkable
+class ComparisonLaunchQueuePort(Protocol):
+    """The launch queue of a project and the installation's AI queue. `CMP-VC-QUEUE-01` implements it
+    (ADR-0025 decisions 4, 6 and 19)."""
+
+    def get_queue(self, *, project_uid: str) -> models.ComparisonLaunchQueue:
+        """«Очередь запуска»: «готово N из M · пропущено K · ошибок E»."""
+
+    def enqueue(
+        self, *, project_uid: str, items: Sequence[models.ComparisonLaunchItem], restart: bool,
+        user_uid: str, idempotency_key: str,
+    ) -> models.ComparisonLaunchQueue:
+        """Queue the selected sets × steps. An expert's act."""
+
+    def pause_queue(
+        self, *, project_uid: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonLaunchQueue:
+        """«Пауза очереди»: the step in hand finishes."""
+
+    def resume_queue(
+        self, *, project_uid: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonLaunchQueue:
+        """«Продолжить очередь»."""
+
+    def clear_queue(
+        self, *, project_uid: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonLaunchQueue:
+        """«Очистить»: the waiting entries and the history leave; the running step continues."""
+
+    def remove_entry(
+        self, *, entry_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonLaunchQueue:
+        """«✕»: one waiting entry leaves."""
+
+    def get_ai_queue(self) -> models.ComparisonAiQueue:
+        """«Очередь «ИИ-описание изменений»» of the installation."""
+
+
+@runtime_checkable
+class ComparisonReportPort(Protocol):
+    """The MD summary of a series and the PDF reports built from it. `CMP-VC-REPORT-01` implements it
+    (ADR-0025 decisions 3, 17, 19 and 20)."""
+
+    def read_series_summary(self, *, series_id: str) -> bytes:
+        """The deterministic MD summary: the same bytes for the same data. Before a sheet is described or
+        a specification compared it is ``conflict`` (``comparison_summary_unavailable``)."""
+
+    def create_report(
+        self, *, series_id: str, kind: models.ComparisonReportKind, reuse: bool, user_uid: str,
+        idempotency_key: str,
+    ) -> models.ComparisonReport:
+        """A ``draft`` from the series' summary with its estimate. An expert's act; no model is called."""
+
+    def upload_report_source(
+        self, *, series_id: str, kind: models.ComparisonReportKind, reuse: bool, content: bytes,
+        source_name: str | None, user_uid: str, idempotency_key: str,
+    ) -> models.ComparisonReport:
+        """A ``draft`` from an uploaded MD file (UTF-8, at most 20 MiB) with its estimate."""
+
+    def list_reports(
+        self, *, series_id: str, cursor: str | None, limit: int
+    ) -> models.ComparisonReportPage:
+        """The report history, newest first."""
+
+    def get_report(self, *, report_id: str) -> models.ComparisonReport:
+        """State, stage, per-transition progress, usage and downloads."""
+
+    def start_report(
+        self, *, report_id: str, consent: models.ComparisonAiConsent, user_uid: str,
+        idempotency_key: str,
+    ) -> models.ComparisonReport:
+        """Start a ``draft`` under the estimate the consent carries. An expert's act."""
+
+    def cancel_report(
+        self, *, report_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonReport:
+        """«Отменить»."""
+
+    def continue_report(
+        self, *, report_id: str, consent: models.ComparisonAiConsent | None, user_uid: str,
+        idempotency_key: str,
+    ) -> models.ComparisonReport:
+        """«Продолжить»: an interrupted or paused report reuses its finished parts."""
+
+    def rebuild_report_pdf(
+        self, *, report_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonReport:
+        """«Пересобрать PDF»: no model call."""
+
+    def delete_report(
+        self, *, report_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonReport:
+        """«Удалить»: the report leaves the history; the stored bytes stay (no blob is deleted)."""
+
+    def prepare_client_report(
+        self, *, report_id: str, reuse: bool, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonReport:
+        """«Подготовить отчёт для заказчика» from a finished analytic report."""
+
+    def read_report_pdf(self, *, report_id: str) -> bytes:
+        """The report's PDF."""
+
+    def read_report_source_md(self, *, report_id: str) -> bytes:
+        """The exact MD the report was built from."""
