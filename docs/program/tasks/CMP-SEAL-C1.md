@@ -22,8 +22,20 @@ contract prose and reason registrations are done, and every pin these facts move
 - totality_query: the `tools/plan/pin_sweep.py` modes used by CMP-SEAL-C0 (see `docs/program/CMP-SEAL-C0.md` §6)
 
 ## Captured premise evidence
-- premise: print contract version, surface counts, head and VERSION before any edit; STOP if they differ from the
-  dispatch message
+- premise: contract `1.9.0`, 115 paths / 130 operations / 351 schemas, head `0038_comparison_foundation`, product
+  `0.9.0` on the integration tip; the lane prints the same before any edit and STOPs if they differ
+
+### P-01 — base facts of the integration tip before the seal
+- captured_at: 2026-10-28
+- command: `python3 -c "import json;d=json.load(open('contracts/api/v1/openapi.json'));print(d['info']['version'], len(d['paths']), sum(1 for p in d['paths'].values() for m in p if m in ('get','post','put','patch','delete')), len(d['components']['schemas']))"; ls db/migrations/versions/*.py | tail -1; cat VERSION`
+- captured_output:
+  ```text
+1.9.0 115 130 351
+db/migrations/versions/20261028_0038_comparison_foundation.py
+0.9.0
+  ```
+- interpretation: contract `1.9.0` with 115 paths / 130 operations / 351 schemas, head `0038_comparison_foundation`,
+  product `0.9.0`; the lane prints the same before any edit and STOPs if they differ
 
 ## Historical evidence
 - correction_mode: none
