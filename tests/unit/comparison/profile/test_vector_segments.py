@@ -66,8 +66,10 @@ def test_a_bezier_step_is_not_a_segment_but_the_path_goes_on_from_its_end() -> N
 def test_a_filled_path_and_a_long_path_are_left_out() -> None:
     area = curve([("m", (0.0, 0.0)), ("l", (50.0, 0.0)), ("l", (50.0, 50.0)), ("h",)], stroke=False)
     assert segments.curve_boxes(area) == []
-    figure = curve([("m", (0.0, 0.0))] + [("l", (float(i), float(i % 7))) for i in range(1, segments.MAX_PATH_STEPS + 5)])
-    assert segments.curve_boxes(figure) == []
+    figure = curve([("m", (0.0, 0.0))] + [("l", (float(i), float(i % 7))) for i in range(1, 201)])  # a figure of 201 steps
+    assert segments.MAX_PATH_STEPS < 200 and segments.curve_boxes(figure) == []
+    rule = curve([("m", (0.0, 0.0))] + [("l", (float(i), float(i % 7))) for i in range(1, segments.MAX_PATH_STEPS)])
+    assert len(segments.curve_boxes(rule)) == segments.MAX_PATH_STEPS - 1  # the longest path that is still a rule
 
 
 def test_the_lines_come_first_and_unchanged_then_the_rectangles_then_the_curves() -> None:
