@@ -117,7 +117,7 @@ missing field.
 `comparison_modules` stays `none` by default; the three `0035` operations keep working while the module is off.
 
 ## Handoff
-- changed files:
-- commands/results:
-- known limits:
-- integration notes:
+- changed files: `docs/program/CMP-SEAL-C1.md` §5 lists every pinned file moved and §2 the files outside the allowed paths with their reasons; the new files are the migration `db/migrations/versions/20261028_0039_comparison_core.py`, four router files (`comparison_matrix.py`, `comparison_series.py`, `comparison_pair_tiles.py`, `comparison_overview.py`) and four test files (`tests/integration/db/test_comparison_core_migration.py`, `tests/integration/composition/test_comparison_core_stub_operations.py`, `tests/integration/recovery/test_comparison_core_erase.py`, `tests/unit/comparison/test_sheet_pairing_module_guard.py`)
+- commands/results: report §6 (contract battery, web, the db/recovery/composition/p02_journey/foundation directories, the journey conformance test, the migration round trip with the data step) and §7 (eighteen mutation proofs)
+- known limits: report §8 (every operation is a stub; the module flag gates only the three `0035` operations; `compare_after_preparation` is refused when true; the engine result shapes are `[own design]` where the original's source stays unread; the seven tables are empty apart from the migrated edits)
+- integration notes: report §10 (merge without squashing, because `web/FRONTEND_LOCK.json` names `e49c4b00`; per-lane operations and tables in §9)
