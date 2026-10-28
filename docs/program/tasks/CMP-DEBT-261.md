@@ -1,7 +1,7 @@
 # Task CMP-DEBT-261 — the comparison-only mark on the five screens that pick a version or a set
 
 task_id: CMP-DEBT-261
-status: in progress (lane `agent/cmp-debt-261`, size S, web only; nothing pushed, merged or tagged)
+status: completed in development candidate (lane `agent/cmp-debt-261`, size S, web only; nothing pushed, merged or tagged)
 
 ## Outcome
 
@@ -157,7 +157,7 @@ Closes the check of `D-261`. A version admitted for comparison only (`upload_kin
 
 - the screens read `DocumentVersion.upload_kind` through `isComparisonOnly` and nothing else; `comparison_pdf` is the only value that changes any rendering
 - the exports of `@/entities/document-version` are used as they are; no new export is added there
-- `DocumentChooser` of `_pages/blocks` becomes an export of the slice file (not of its `index.ts` public API) for the instruments, as `VersionBlockViews` did
+- `DocumentChooser` of `_pages/blocks` becomes an export of the slice (`blocks-page.tsx` and its `index.ts`) for the instruments, as `VersionBlockViews` did
 
 ## Failure/idempotency/security cases
 
@@ -171,7 +171,7 @@ Not applicable: a presentation change over an optional field that is `portal_bun
 
 ## Handoff
 
-- changed files: to be filled at the last commit
-- commands/results: to be filled at the last commit
-- known limits: to be filled at the last commit
-- integration notes: to be filled at the last commit
+- changed files: `web/src/widgets/version-comparison/ui/version-comparison.tsx`, `web/src/_pages/stage-comparison/ui/{comparison-only-note.tsx (new), stage-comparison-page.tsx}`, `web/src/widgets/specification-prices/ui/specification-prices-section.tsx`, `web/src/widgets/optimisation-proposals/ui/optimisation-proposals.tsx`, `web/src/_pages/blocks/{index.ts, ui/blocks-page.tsx}`, `web/tests/unit/comparison-only-pickers/comparison-only-pickers.test.ts` (new), `web/tests/unit/styles/screens.ts` (imports and one block of five census screens), this task file and the report `docs/program/CMP-DEBT-261.md`
+- commands/results: new test file 48 passed; `tests/unit/styles` + new file 7 files / 119 tests passed; `tests/guards` 22 files / 313 tests passed; the whole web suite 218 files / 3560 tests passed (411 s, `--maxWorkers=4`); lint and typecheck clean; `git diff --check` clean; `pytest -q tests/contract` minus the three `D-220` files in the report (section 3, last line); the D-261 check lists a file under each of the five paths; seven mutations shown red and restored (report section 3)
+- known limits: the server refuses a comparison-only version by kind on the three run starts only, so the pass start and the two reads on the disabled screens answer other states, and `COMPARISON_ONLY_START_NOTE` is used verbatim on them (report section 6, item 1); the `optionLabel` and the chooser list are repeated in three and two widgets because the entity is outside the lane's paths; nothing shows in a running stand until a comparison PDF is confirmed into a set
+- integration notes: merge anywhere after `CMP-VERSION-MARK-01`; no wiring file touched; `screens.ts` has one block after the `VersionDetailPage comparison-only` entry; `DEBT_REGISTER.md` row `D-261` is closed by the integrator
