@@ -12,8 +12,9 @@ This module is the **reader** the brief asks the viewer to write against that te
 **Bounded.** A blob is stored data, but it is read in the API process on a viewer's request, so nothing in it is
 trusted to say how big it is: a wrong magic, format or layer count, a plane over 40 Mpx, and a body whose length after
 inflation differs from ``8 * height_px * ceil(width_px / 8)`` are refused, and the inflation itself is limited to that
-length plus one byte (``zlib.decompressobj().decompress(body, limit)``) -- never an unbounded ``zlib.decompress`` of a
-stored body, which a few kilobytes can turn into gigabytes.
+length (``zlib.decompressobj().decompress(body, chunk)``, 1 MiB at a time into a buffer of the declared size, stopped at
+the chunk that crosses it) -- never an unbounded ``zlib.decompress`` of a stored body, which a few kilobytes can turn
+into gigabytes.
 """
 
 from __future__ import annotations
@@ -47,6 +48,7 @@ LAYER_NAMES: Final[tuple[str, ...]] = (
     "service_zones",
 )
 _HEADER: Final[struct.Struct] = struct.Struct("<4sBBHII")
+_CHUNK_BYTES: Final[int] = 1024 * 1024
 
 
 class MaskRefused(ValueError):
@@ -95,15 +97,28 @@ def read_mask(blob: bytes) -> MaskPlanes:
         raise MaskRefused("plane_over_cap")
     row_bytes = (width + 7) // 8
     expected = MASK_LAYER_COUNT * height * row_bytes
+    # Inflate straight into the buffer the planes will live in, a megabyte at a time: the peak is the planes plus
+    # one chunk, not twice the planes, and a stream that produces more than declared is stopped at the chunk that
+    # crosses the declared length.
+    planes = numpy.empty(expected, dtype=numpy.uint8)
     inflater = zlib.decompressobj()
+    pending: bytes | memoryview = memoryview(blob)[MASK_HEADER_BYTES:]
+    filled = 0
     try:
-        # One byte more than expected: a body that inflates to more is told from one that fits exactly.
-        body = inflater.decompress(memoryview(blob)[MASK_HEADER_BYTES:], expected + 1)
+        while True:
+            chunk = inflater.decompress(pending, _CHUNK_BYTES)
+            if chunk:
+                if filled + len(chunk) > expected:
+                    raise MaskRefused("length")
+                planes[filled : filled + len(chunk)] = numpy.frombuffer(chunk, dtype=numpy.uint8)
+                filled += len(chunk)
+            pending = inflater.unconsumed_tail
+            if inflater.eof:
+                break
+            if not chunk and not pending:
+                raise MaskRefused("length")  # the stream ended before it said it had
     except zlib.error:
         raise MaskRefused("not_deflate") from None
-    if len(body) != expected:
+    if filled != expected or inflater.unused_data:
         raise MaskRefused("length")
-    if not inflater.eof or inflater.unused_data or inflater.unconsumed_tail:
-        raise MaskRefused("length")
-    data = numpy.frombuffer(body, dtype=numpy.uint8).reshape(MASK_LAYER_COUNT, height, row_bytes)
-    return MaskPlanes(width_px=int(width), height_px=int(height), data=data)
+    return MaskPlanes(width_px=int(width), height_px=int(height), data=planes.reshape(MASK_LAYER_COUNT, height, row_bytes))
