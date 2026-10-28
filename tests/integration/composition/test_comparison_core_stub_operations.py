@@ -64,7 +64,11 @@ EXPERT_WRITES = {name for name, (_m, _p, _b, keyed) in REQUESTS.items() if keyed
 DEPENDENCIES = {"comparison_matrix", "comparison_series", "comparison_pair_tiles", "comparison_overview"}
 #: Lanes that serve one of them remove it from the stub list below and add it here; the role, key and shape tests
 #: still judge it.
-WIRED: frozenset[str] = frozenset()
+#: `CMP-MATRIX-01` serves the six matrix operations.
+WIRED: frozenset[str] = frozenset({
+    "getComparisonMatrix", "prepareComparisonMatrix", "listComparisonMatrixEdits", "applyComparisonMatrixEdits",
+    "undoComparisonMatrixEdit", "listComparisonAiLinks",
+})
 STUBS = sorted(set(REQUESTS) - WIRED)
 THE_THREE = ("approveSheetPairing", "withdrawSheetPairing", "generateComparisonSummary")
 

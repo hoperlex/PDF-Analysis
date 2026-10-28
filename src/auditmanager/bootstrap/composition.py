@@ -499,7 +499,7 @@ def build_application(
         # `CMP-SEAL-C1`. The version comparison core, sealed as stubs answering `503
         # dependency_unavailable` until `CMP-MATRIX-01`, `CMP-SERIES-01`, `CMP-VIEWER-01` and
         # `CMP-VC-OVERVIEW-01` replace the four adapters (plan section 4.0 rule 1).
-        comparison_matrices=ComparisonMatrixAdapter(),
+        comparison_matrices=ComparisonMatrixAdapter(sessions, blob_store=store),
         comparison_series=ComparisonSeriesAdapter(),
         comparison_pair_tiles=ComparisonPairTileAdapter(),
         comparison_overview=ComparisonOverviewAdapter(),

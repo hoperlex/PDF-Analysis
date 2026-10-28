@@ -167,12 +167,25 @@ from auditmanager.comparison.profile_queue.handler import (
     page_profile_handler,
 )
 
+# `CMP-MATRIX-01`: the effective matrix of a document set (its service, its work kind, the pairs the series reads).
+from auditmanager.comparison.matrix.handler import MatrixBuildHandler, matrix_build_handler
+from auditmanager.comparison.matrix.model import PageRef as MatrixPageRef
+from auditmanager.comparison.matrix.pairs import AdjacentSheetPairs, SheetPairSpec, SplitSpec, TransitionPairs
+from auditmanager.comparison.matrix.service import (
+    MATRIX_BUILD_KIND,
+    ComparisonMatrixService,
+    EditInput as MatrixEditInput,
+    matrix_build_dedupe_key,
+    read_adjacent_sheet_pairs,
+)
+
 #: `CMP-WORK-01` (ADR-0025 decision 4). One tuple of handler factories, each
 #: ``Callable[[WorkDependencies], WorkHandler]``: ``build_worker_runtime`` builds one dependency
 #: bundle and applies every factory to it, and refuses to start on a duplicate ``kind``. A slice
 #: adds its handler by appending its factory here (plan section 4.0 rule 2).
 HANDLER_FACTORIES: tuple[HandlerFactory, ...] = (
     page_profile_handler,  # `CMP-PROFILE-QUEUE-01`: kind ``page_profile``
+    matrix_build_handler,  # `CMP-MATRIX-01`: kind ``matrix_build``
 )
 
 #: `CMP-WORK-01`. Called inside the reclaim transaction for each attempt whose lease was lost:
@@ -380,4 +393,16 @@ __all__ = [
     "page_profile_dedupe_key",
     "page_profile_handler",
     "registration_dpi",
+    "AdjacentSheetPairs",
+    "ComparisonMatrixService",
+    "MATRIX_BUILD_KIND",
+    "MatrixBuildHandler",
+    "MatrixEditInput",
+    "MatrixPageRef",
+    "SheetPairSpec",
+    "SplitSpec",
+    "TransitionPairs",
+    "matrix_build_dedupe_key",
+    "matrix_build_handler",
+    "read_adjacent_sheet_pairs",
 ]

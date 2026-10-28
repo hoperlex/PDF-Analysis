@@ -5716,40 +5716,118 @@ class VersionPageAdapter:
 # rule 1). Nothing is read or written. The ``dependency`` detail is a stable class name only.
 
 
-class ComparisonMatrixAdapter:
-    """`CMP-MATRIX-01` replaces the bodies."""
+class ComparisonMatrixAdapter(_SessionHolder):
+    """`CMP-MATRIX-01` serves the six matrix operations over
+    :class:`~auditmanager.comparison.matrix.service.ComparisonMatrixService` (ADR-0025 decisions 3, 13, 14, 16).
 
-    _DEPENDENCY = "comparison_matrix"
+    The adapter owns the mapping to the contract's models, the cursors, and the two reads the service does not make
+    itself: the actor's display label and roles (an edit is an expert's act, checked again in the transaction that
+    acts)."""
 
-    def apply_edits(
-        self, *, project_uid: str, document_uid: str, base_revision: models.ComparisonMatrixRevision, edits: Sequence[models.ComparisonMatrixEditInput], user_uid: str, idempotency_key: str
-    ) -> models.ComparisonMatrix:
-        return _comparison_unavailable(self._DEPENDENCY)
+    def __init__(self, session_factory: sessionmaker[Session], *, blob_store: Any = None, service: Any = None) -> None:
+        super().__init__(session_factory)
+        if service is None:
+            from auditmanager.comparison.public import ComparisonMatrixService
 
-    def get_matrix(
-        self, *, project_uid: str, document_uid: str
-    ) -> models.ComparisonMatrix:
-        return _comparison_unavailable(self._DEPENDENCY)
+            service = ComparisonMatrixService(session_factory=session_factory, blob_store=blob_store)
+        self._service = service
 
-    def list_ai_links(
-        self, *, project_uid: str, document_uid: str, cursor: str | None, limit: int
-    ) -> models.ComparisonAiLinkList:
-        return _comparison_unavailable(self._DEPENDENCY)
+    @staticmethod
+    def _ref(ref: models.ComparisonPageRef) -> Any:
+        from auditmanager.comparison.public import MatrixPageRef
 
-    def list_edits(
-        self, *, project_uid: str, document_uid: str, cursor: str | None, limit: int
-    ) -> models.ComparisonMatrixEditList:
-        return _comparison_unavailable(self._DEPENDENCY)
+        return MatrixPageRef(str(ref.version_uid), int(ref.page_number), None if ref.page_profile_id is None else str(ref.page_profile_id))
+
+    def get_matrix(self, *, project_uid: str, document_uid: str) -> models.ComparisonMatrix:
+        return models.ComparisonMatrix.model_validate(
+            self._service.get_matrix(project_uid=project_uid, document_uid=document_uid)
+        )
 
     def prepare_matrix(
         self, *, project_uid: str, document_uid: str, user_uid: str, idempotency_key: str
     ) -> models.ComparisonMatrixPreparation:
-        return _comparison_unavailable(self._DEPENDENCY)
+        _label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        return models.ComparisonMatrixPreparation.model_validate(
+            self._service.prepare_matrix(
+                project_uid=project_uid, document_uid=document_uid, user_uid=user_uid, actor_roles=roles,
+                idempotency_key=idempotency_key,
+            )
+        )
+
+    def list_edits(
+        self, *, project_uid: str, document_uid: str, cursor: str | None, limit: int
+    ) -> models.ComparisonMatrixEditList:
+        before: int | None = None
+        if cursor is not None:
+            parts = decode_cursor(cursor)
+            if len(parts) != 1 or not parts[0].isdigit():
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+            before = int(parts[0])
+        page = self._service.list_edits(
+            project_uid=project_uid, document_uid=document_uid, before_edit_no=before, limit=limit
+        )
+        return models.ComparisonMatrixEditList.model_validate(
+            {
+                "items": page.items,
+                "page": {
+                    "next_cursor": None if page.next_before_edit_no is None else encode_cursor((str(page.next_before_edit_no),))
+                },
+            }
+        )
+
+    def apply_edits(
+        self, *, project_uid: str, document_uid: str, base_revision: models.ComparisonMatrixRevision,
+        edits: Sequence[models.ComparisonMatrixEditInput], user_uid: str, idempotency_key: str,
+    ) -> models.ComparisonMatrix:
+        from auditmanager.comparison.public import MatrixEditInput
+
+        label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        batch = [
+            MatrixEditInput(
+                kind=str(_enum_text(item.kind)),
+                page=self._ref(item.page),
+                other_page=None if item.other_page is None else self._ref(item.other_page),
+                absent_version_uid=None if item.absent_version_uid is None else str(item.absent_version_uid),
+            )
+            for item in edits
+        ]
+        return models.ComparisonMatrix.model_validate(
+            self._service.apply_edits(
+                project_uid=project_uid, document_uid=document_uid, base_matrix_id=str(base_revision.matrix_id),
+                base_edit_no=int(base_revision.edit_no), edits=batch, user_uid=user_uid, actor_label=label,
+                actor_roles=roles, idempotency_key=idempotency_key,
+            )
+        )
 
     def undo_edit(
-        self, *, project_uid: str, document_uid: str, base_revision: models.ComparisonMatrixRevision, user_uid: str, idempotency_key: str
+        self, *, project_uid: str, document_uid: str, base_revision: models.ComparisonMatrixRevision,
+        user_uid: str, idempotency_key: str,
     ) -> models.ComparisonMatrix:
-        return _comparison_unavailable(self._DEPENDENCY)
+        label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        return models.ComparisonMatrix.model_validate(
+            self._service.undo_edit(
+                project_uid=project_uid, document_uid=document_uid, base_matrix_id=str(base_revision.matrix_id),
+                base_edit_no=int(base_revision.edit_no), user_uid=user_uid, actor_label=label, actor_roles=roles,
+                idempotency_key=idempotency_key,
+            )
+        )
+
+    def list_ai_links(
+        self, *, project_uid: str, document_uid: str, cursor: str | None, limit: int
+    ) -> models.ComparisonAiLinkList:
+        after: tuple[str, str] | None = None
+        if cursor is not None:
+            parts = decode_cursor(cursor)
+            if len(parts) != 2:
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+            after = (parts[0], parts[1])
+        page = self._service.list_ai_links(project_uid=project_uid, document_uid=document_uid, after=after, limit=limit)
+        return models.ComparisonAiLinkList.model_validate(
+            {
+                "items": page.items,
+                "page": {"next_cursor": None if page.next_after is None else encode_cursor(page.next_after)},
+            }
+        )
 
 
 class ComparisonSeriesAdapter:
