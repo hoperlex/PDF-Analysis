@@ -17,6 +17,7 @@ import { buildNavigation } from '@/_app/navigation';
 import { VersionComparePage } from '@/_pages/version-compare';
 import { StageComparisonPage } from '@/_pages/stage-comparison';
 import { ExecutionQueue, ComparisonQueueBlock, ComparisonQueueBlockView } from '@/widgets/execution-queue';
+import { QueuePage } from '@/_pages/queue';
 import { ComparisonResult } from '@/widgets/version-comparison';
 import { UploadDialogView } from '@/widgets/comparison-upload';
 import type { UploadDialogViewProps } from '@/widgets/comparison-upload';
@@ -687,13 +688,24 @@ describe('the block «Сравнение» of «Очередь»', () => {
     expect(text(renderWith(broken, createElement(ComparisonQueueBlock)))).toContain('Сводка сравнения не открылась');
   });
 
-  it('is under the queue wherever there is a query provider, and absent where the list is rendered bare', () => {
+  it('is mounted by the page of «Очередь», beside the list of runs, and the list draws no block of its own', () => {
     const items = [] as never[];
     const props = { items, roles: [], asOf: null, busy: false, workerOf: () => ({ kind: 'none' }) as never, onCancel: noop, onReaudit: noop, onPriority: noop, onNext: null, onPrevious: null };
     const client = newClient();
     client.setQueryData(COMPARISON_KEYS.queue(), queueSummary());
-    expect(text(renderWith(client, createElement(ExecutionQueue, props as never)))).toContain('Включён модуль «Сравнение версий».');
+    // the list, inside a query provider that holds the summary, still draws no block
+    expect(renderWith(client, createElement(ExecutionQueue, props as never))).not.toContain('data-comparison-queue');
     expect(renderToStaticMarkup(createElement(ExecutionQueue, props as never))).not.toContain('data-comparison-queue');
+    // the page draws the block, from its own query, whatever the list of runs is doing
+    const page = newClient();
+    page.setQueryData(queryKeys.execution.queue(), { items: [], page: { next_cursor: null }, paused: false });
+    page.setQueryData(COMPARISON_KEYS.queue(), queueSummary());
+    const markup = renderWith(page, createElement(QueuePage));
+    expect(text(markup)).toContain('Включён модуль «Сравнение версий».');
+    expect(markup).toContain('data-comparison-queue');
+    expect(text(markup)).toContain('Очередь пуста');
+    const reading = newClient();
+    expect(text(renderWith(reading, createElement(QueuePage)))).toContain('Загрузка: сводку сравнения…');
   });
 });
 
