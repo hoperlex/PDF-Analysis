@@ -92,6 +92,8 @@ _COMPARISON_ATTEMPTS = (
 _DOCUMENTS = "SELECT document_uid FROM document WHERE project_uid = :p"
 _SERIES = "SELECT comparison_series_id FROM comparison_series WHERE project_uid = :p"
 _TRANSITIONS = f"SELECT comparison_transition_id FROM comparison_transition WHERE comparison_series_id IN ({_SERIES})"
+# `0040_comparison_ai_reports` (`CMP-SEAL-C2`): a report's parts and files reach the project through the report.
+_REPORTS = "SELECT comparison_report_id FROM comparison_report WHERE project_uid = :p"
 SLICES: dict[str, str] = {
     "project": "project_uid = :p",
     "document": "project_uid = :p",
@@ -142,12 +144,27 @@ SLICES: dict[str, str] = {
     "comparison_transition": f"comparison_series_id IN ({_SERIES})",
     "comparison_sheet_pair_result": "project_uid = :p",
     "comparison_sheet_pair": f"comparison_transition_id IN ({_TRANSITIONS})",
+    # `0040_comparison_ai_reports` (`CMP-SEAL-C2`): the twelve tables of the version comparison AI, specifications, reports
+    # and launch queue reach the project directly, or through a report.
+    "comparison_ai_job": "project_uid = :p",
+    "comparison_ai_pair_answer": "project_uid = :p",
+    "comparison_ai_pair_question": "project_uid = :p",
+    "comparison_sheet_description": "project_uid = :p",
+    "comparison_ai_sheet_item": "project_uid = :p",
+    "comparison_spec_extraction": "project_uid = :p",
+    "comparison_spec_comparison": "project_uid = :p",
+    "comparison_report": "project_uid = :p",
+    "comparison_report_part": f"comparison_report_id IN ({_REPORTS})",
+    "comparison_report_artifact": f"comparison_report_id IN ({_REPORTS})",
+    "comparison_launch_queue": "project_uid = :p",
+    "comparison_launch_entry": "project_uid = :p",
 }
 _BLOB_SOURCES = (
     f"SELECT blob_id FROM input_manifest_entry WHERE version_uid IN ({_VERSIONS}) "
     "UNION SELECT blob_id FROM price_list_revision WHERE project_uid = :p "
     f"UNION SELECT blob_id FROM analysis_artifact_publication WHERE run_id IN ({_RUNS}) "
     f"UNION SELECT blob_id FROM comparison_upload_file WHERE comparison_upload_id IN ({_UPLOADS}) "
+    f"UNION SELECT blob_id FROM comparison_report_artifact WHERE comparison_report_id IN ({_REPORTS}) "
     f"UNION SELECT profile_blob_id FROM comparison_page_profile WHERE version_uid IN ({_VERSIONS}) "
     f"UNION SELECT preview_blob_id FROM comparison_page_profile WHERE version_uid IN ({_VERSIONS}) "
     f"UNION SELECT thumbnail_blob_id FROM comparison_page_profile WHERE version_uid IN ({_VERSIONS}) "
@@ -381,18 +398,24 @@ def test_the_closure_is_read_from_the_catalog_and_agrees_with_the_hand_written_s
     # `0038_comparison_foundation`: the nine comparison tables join the closure (33 -> 42); the batch, the
     # order revisions and the queue item reference the project directly. `0039_comparison_core`: the seven tables of
     # the version comparison core join it (42 -> 49); the builds, the edits, the series and the results reference the
-    # project directly.
-    assert tool.UNSCOPED_PRODUCT_TABLES == {"worker"} and len(closure.tables) == 49
+    # project directly. `0040_comparison_ai_reports`: the twelve tables of the version comparison AI, specifications, reports
+    # and launch queue join it (49 -> 61); the jobs, answers, questions, descriptions, sheet items, extractions, comparisons,
+    # reports and the launch queue reference the project directly.
+    assert tool.UNSCOPED_PRODUCT_TABLES == {"worker"} and len(closure.tables) == 61
     assert set(closure.direct) == {
-        "ar_v3_run_group", "audit_run", "comparison_matrix", "comparison_matrix_edit", "comparison_series",
-        "comparison_sheet_link", "comparison_sheet_pair_result", "comparison_summary", "comparison_upload",
+        "ar_v3_run_group", "audit_run", "comparison_ai_job", "comparison_ai_pair_answer", "comparison_ai_pair_question",
+        "comparison_ai_sheet_item", "comparison_launch_queue", "comparison_matrix", "comparison_matrix_edit",
+        "comparison_report", "comparison_series", "comparison_sheet_description", "comparison_sheet_link",
+        "comparison_sheet_pair_result", "comparison_spec_comparison", "comparison_spec_extraction",
+        "comparison_summary", "comparison_upload",
         "comparison_version_order", "comparison_work", "document", "finding", "optimisation_pass",
         "price_list_revision", "vendor_list_revision", "work_assignment",
     }
     # `0038_comparison_foundation`: an upload batch and an order revision carry the receipt of the write
     # that made them.
     assert {key.child for key in closure.receipt_edges} == {
-        "ar_v3_run_group", "audit_run", "comparison_matrix_edit", "comparison_series", "comparison_sheet_link",
+        "ar_v3_run_group", "audit_run", "comparison_ai_job", "comparison_launch_entry", "comparison_matrix_edit",
+        "comparison_report", "comparison_series", "comparison_sheet_link",
         "comparison_summary", "comparison_upload", "comparison_version_order", "expert_decision_event",
         "optimisation_proposal_decision",
     }

@@ -43,6 +43,18 @@ IN_FLIGHT: dict[str, tuple[str, str]] = {
 }
 
 
+#: The receipt each method's start leaves: product command types, as `product_purge.PRODUCT_COMMAND_TYPES` names them.
+START_COMMANDS = {
+    "pair_check": "start_comparison_ai_pair_check", "sheet_changes": "start_comparison_ai_sheet_changes",
+    "spec": "start_comparison_specification", "report": "start_comparison_report",
+}
+
+
+#: Rows of a table that one `_ai_project` writes, where it is not one: a job of each of the four methods, an extraction of each
+#: of the two versions.
+PER_PROJECT = {"comparison_ai_job": 4, "comparison_spec_extraction": 2}
+
+
 def _id(prefix: str) -> str:
     return f"{prefix}_{new_ulid()}"
 
@@ -61,7 +73,7 @@ def _job(stand: Stand, ids: dict[str, str], method: str, **scope: str) -> str:
                "estimate_digest, estimate_micros, ceiling_micros, consented_by_user_uid, command_id) "
                "VALUES (:j, :p, :d, :m, :cmx, :cser, :ctn, :rev, 'claude-opus-5', 'live', CAST(:e AS jsonb), :sha, 1, 10, :a, :c)",
         j=job, p=ids["p"], d=ids["d"], m=method, cmx=scope.get("matrix"), cser=scope.get("series"), ctn=scope.get("transition"),
-        rev=ids["rev"], e=json.dumps({"estimate_digest": SHA}), sha=SHA, a=ACTOR, c=_command(stand, f"start_{method}"))
+        rev=ids["rev"], e=json.dumps({"estimate_digest": SHA}), sha=SHA, a=ACTOR, c=_command(stand, START_COMMANDS[method]))
     for state in ("running", "completed"):
         extra = ", finished_at = now()" if state == "completed" else ""
         sql(stand, f"UPDATE comparison_ai_job SET state = '{state}'{extra} WHERE comparison_ai_job_id = :j", j=job)
@@ -71,14 +83,14 @@ def _job(stand: Stand, ids: dict[str, str], method: str, **scope: str) -> str:
 def _ai_project(stand: Stand) -> dict[str, str]:
     """A project whose AI work is finished: one row in each of the tables of ``0040`` but the report file."""
     ids = {k: _id(p) for k, p in (("p", "prj"), ("d", "doc"), ("v1", "ver"), ("v2", "ver"), ("m", "cmx"), ("s", "cser"),
-                                  ("t", "ctn"), ("r", "csp"), ("x", "ctp"), ("a", "cpr"), ("b", "cpr"), ("conn", "exc"),
+                                  ("t", "ctn"), ("r", "csp"), ("x", "ctp"), ("pa", "cpr"), ("pb", "cpr"), ("conn", "exc"),
                                   ("rev", "excr"))}
     sql(stand, "INSERT INTO project (project_uid, name) VALUES (:p, 'ai erase')", **ids)
     sql(stand, "INSERT INTO document (document_uid, project_uid, display_title) VALUES (:d, :p, 'D')", **ids)
     for number, key in ((1, "v1"), (2, "v2")):
         sql(stand, "INSERT INTO document_version (version_uid, document_uid, version_ordinal, media_type, byte_size, "
                    "sha256, page_count) VALUES (:v, :d, :n, 'application/pdf', 1, :sha, 3)", v=ids[key], d=ids["d"], n=number, sha=SHA)
-    for profile, version, key in (("a", "v1", "1" * 64), ("b", "v2", "2" * 64)):
+    for profile, version, key in (("pa", "v1", "1" * 64), ("pb", "v2", "2" * 64)):
         sql(stand, "INSERT INTO comparison_page_profile (comparison_page_profile_id, version_uid, page_number, content_key, "
                    "algo_version, status) VALUES (:i, :v, 1, :k, 'p1', 'ready')", i=ids[profile], v=ids[version], k=key)
     sql(stand, "INSERT INTO comparison_matrix (comparison_matrix_id, project_uid, document_uid, build_no, profile_signature, "
@@ -89,9 +101,18 @@ def _ai_project(stand: Stand) -> dict[str, str]:
     sql(stand, "INSERT INTO comparison_transition (comparison_transition_id, comparison_series_id, transition_no, source_version_uid, "
                "target_version_uid) VALUES (:t, :s, 1, :v1, :v2)", **ids)
     sql(stand, "INSERT INTO comparison_sheet_pair_result (comparison_sheet_pair_result_id, project_uid, content_key, algo_version, "
-               "status, page_a_profile_id, page_b_profile_id) VALUES (:r, :p, :sha, 'vc1', 'different', :a, :b)", sha=SHA, **ids)
+               "status, page_a_profile_id, page_b_profile_id) VALUES (:r, :p, :sha, 'vc1', 'different', :pa, :pb)", sha=SHA, **ids)
     sql(stand, "INSERT INTO comparison_sheet_pair (comparison_sheet_pair_id, comparison_transition_id, pair_no, page_a_profile_id, "
-               "page_b_profile_id) VALUES (:x, :t, 1, :a, :b)", **ids)
+               "page_b_profile_id) VALUES (:x, :t, 1, :pa, :pb)", **ids)
+    # the comparison itself is finished: a done pair, a completed transition and series (the erase refuses a live one)
+    sql(stand, "UPDATE comparison_sheet_pair SET state = 'computing' WHERE comparison_sheet_pair_id = :x", **ids)
+    sql(stand, "UPDATE comparison_sheet_pair SET state = 'done', status = 'different', result_id = :r "
+               "WHERE comparison_sheet_pair_id = :x", **ids)
+    sql(stand, "UPDATE comparison_transition SET state = 'running' WHERE comparison_transition_id = :t", **ids)
+    sql(stand, "UPDATE comparison_transition SET state = 'completed', summary = '{}'::jsonb, verdict = '[]'::jsonb "
+               "WHERE comparison_transition_id = :t", **ids)
+    sql(stand, "UPDATE comparison_series SET state = 'running' WHERE comparison_series_id = :s", **ids)
+    sql(stand, "UPDATE comparison_series SET state = 'completed' WHERE comparison_series_id = :s", **ids)
     sql(stand, "INSERT INTO executor_connection (connection_id, kind, display_name, created_by) VALUES (:conn, 'http_api', 'e', :a)",
         a=ACTOR, **ids)
     sql(stand, "INSERT INTO executor_connection_revision (revision_id, connection_id, revision_no, created_by, pin_id, gateway_model, "
@@ -187,16 +208,16 @@ def test_a_finished_project_is_erased_with_every_row_of_the_ai_tables(stand: Sta
     code, out, err = invoke(tool, stand, "--project", ids["p"])
     assert code == 0, err
     for table in AI_TABLES:
-        expected = 4 if table == "comparison_ai_job" else 1
+        expected = PER_PROJECT.get(table, 1)
         assert f"  {table}  ({expected} rows)" in out, (table, out)
     sha = _line(out, "plan-sha256")
     code, out, err = invoke(tool, stand, *apply_flags(ids["p"], sha, tmp_path / "dump"))
     assert code == 0, (out, err)
     for table in AI_TABLES:
-        removed = 4 if table == "comparison_ai_job" else 1
+        removed = PER_PROJECT.get(table, 1)
         assert count(stand, table) == before[table] - removed, table
     assert count(stand, "project", "project_uid = :p", p=ids["p"]) == 0
-    assert count(stand, "comparison_ai_job", "project_uid = :p", p=other["p"]) == 4
+    assert count(stand, "comparison_ai_job", "project_uid = :p", p=other["p"]) == PER_PROJECT["comparison_ai_job"]
     assert [e[0] for e in events(stand)][-2:] == ["erasure.requested", "erasure.completed"]
 
 
