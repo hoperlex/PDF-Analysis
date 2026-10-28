@@ -59,6 +59,13 @@ def test_a_kind_registered_twice_stops_the_worker_while_it_is_wiring(monkeypatch
 
 
 def test_one_dependency_bundle_is_built_once_and_every_factory_receives_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The root applies every shipped factory to one bundle; the kinds of other lanes are not this test's to list.
+
+    The comparison tuple is replaced by two recording factories and each factory of the batch tuple (appended by the
+    root, `CMP-INGEST-02`) is wrapped so that it records the bundle it is given and still builds its real handler. The
+    kinds are asserted as "the ones patched here are registered", not as the whole set: a later lane that appends a
+    factory registers one more kind and must not turn this test red (`CMP-PQ-ISOLATION-01`).
+    """
     seen: list[Any] = []
 
     def factory(kind: str):  # type: ignore[no-untyped-def]
@@ -67,11 +74,21 @@ def test_one_dependency_bundle_is_built_once_and_every_factory_receives_it(monke
             return Handler(kind)
         return build_handler
 
+    def recording(real):  # type: ignore[no-untyped-def]
+        def build_handler(dependencies: Any) -> Any:
+            seen.append(dependencies)
+            return real(dependencies)
+        return build_handler
+
+    batch = tuple(recording(real) for real in composition.BATCH_HANDLER_FACTORIES)
+    assert batch, "premise: the root appends the batch factories"
     monkeypatch.setattr(composition, "COMPARISON_HANDLER_FACTORIES", (factory("page_profile"), factory("pair_check")))
+    monkeypatch.setattr(composition, "BATCH_HANDLER_FACTORIES", batch)
     sessions, engine, store = object(), object(), object()
     runner = composition.build_comparison_work(sessions=sessions, engine=engine, blob_store=store, environ=_WORKER)  # type: ignore[arg-type]
-    assert runner.kinds == {"page_profile", "pair_check"}
-    assert len(seen) == 2 and seen[0] is seen[1]
+    assert {"page_profile", "pair_check"} <= runner.kinds
+    assert len(runner.kinds) >= 2 + len(batch), "every factory registered a kind of its own"
+    assert len(seen) == 2 + len(batch) and all(bundle is seen[0] for bundle in seen)
     assert (seen[0].engine, seen[0].session_factory, seen[0].blob_store) == (engine, sessions, store)
     assert seen[0].work is runner.repository
 

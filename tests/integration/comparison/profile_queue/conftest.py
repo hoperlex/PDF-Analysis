@@ -8,7 +8,15 @@ attempt of the projects it seeded, then the worker rows it registered; the versi
 run never meets another run's rows. The disposable lane database is dropped by ``make down``.
 
 A version is a published ``document_version`` whose source PDF is a real blob, seeded the way
-``tests/integration/comparison/profile`` seeds it; the claim is the real runner's, with the real gates.
+``tests/integration/comparison/profile`` seeds it; the claim is the real runner's.
+
+**The suite shares its database with other integration directories** and must not depend on what they leave in it
+(`CMP-PQ-ISOLATION-01`). The comparison queue yields to *any* claimable Run, picks the strongest queued item of *any*
+project and reclaims *every* expired lease, which is right for a worker and wrong for a test that asks about its own
+items. So the lane reads the queue through its own projects only: the runner's Run-priority gate is scoped to the
+lane's projects (the pause gate is the real one), :meth:`Lane.claim` leases only an item of the lane's projects, and
+:meth:`Lane.reclaim` counts only the lane's attempts. The strict priority of Runs over comparison work is not this
+suite's to prove; ``tests/integration/comparison/work/test_claim_gates.py`` proves it against the real gates.
 """
 
 from __future__ import annotations
@@ -17,6 +25,7 @@ import hashlib
 import os
 import uuid
 from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -25,20 +34,31 @@ import pytest
 from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
+from auditmanager.bootstrap.composition import build_comparison_work
 from auditmanager.comparison.profile.runner import ChildResult, ChildRunner, SubprocessChildRunner
 from auditmanager.comparison.public import (
+    ClaimGates,
     ComparisonWorkRepository,
     ComparisonWorkRunner,
     HandlerRegistry,
     PageProfileHandler,
     WorkDependencies,
     WorkItem,
+    default_gates,
 )
 from auditmanager.shared.db import session_scope
 from auditmanager.shared.db.config import DatabaseSettings, parse_database_url
 from auditmanager.shared.db.engine import create_database_engine
 from auditmanager.shared.db.session import create_session_factory
-from auditmanager.shared.identity import DocumentUid, ProjectUid, VersionUid
+from auditmanager.shared.identity import (
+    AnalysisProfileId,
+    DocumentUid,
+    JobId,
+    ProjectUid,
+    PromptBundleId,
+    RunId,
+    VersionUid,
+)
 from auditmanager.storage.public import S3BlobStore, S3StorageSettings, StorageError
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -140,6 +160,9 @@ class Lane:
         self.blob_store = blob_store
         self.repository = ComparisonWorkRepository()
         self.projects: list[str] = []
+        #: Projects of *foreign* data the isolation test plants (they are removed, never claimed, by the lane).
+        self.foreign_projects: list[str] = []
+        self.foreign_runs: list[str] = []
         self.workers: list[str] = []
         self._worker: str | None = None
 
@@ -200,15 +223,46 @@ class Lane:
             engine=self.engine, session_factory=self.sessions, blob_store=self.blob_store, work=self.repository,
         )
 
+    def gates(self) -> ClaimGates:
+        """The real pause gate and a Run-priority gate that reads the lane's own projects only.
+
+        ``default_gates().run_claimable`` is true while *any* Run of the database is claimable, and a database that
+        other integration directories have used holds such Runs. This gate asks the same question (a queued Job of a
+        Run that is queued or running and due) of the Runs of the projects this lane seeded: the lane seeds none, so
+        it stays open, and it shuts for a Run of the lane's own, which :func:`test_foreign_rows` proves.
+        """
+        return ClaimGates(paused=default_gates().paused, run_claimable=self._own_run_claimable)
+
+    def _own_run_claimable(self, session: Session) -> bool:
+        return bool(session.execute(text(
+            "SELECT EXISTS (SELECT 1 FROM job j JOIN audit_run r ON r.run_id = j.run_id "
+            "WHERE j.state = 'queued' AND r.state IN ('queued', 'running') "
+            "AND j.available_at <= statement_timestamp() AND r.project_uid = ANY (CAST(:p AS text[])))"
+        ), {"p": list(self.projects)}).scalar_one())
+
     def runner(
         self, child_runner: ChildRunner | None = None, *, heartbeat_seconds: float = 20.0,
     ) -> ComparisonWorkRunner:
-        """The real runner and gates, with the one handler of the kind over ``child_runner`` (the real one if None)."""
+        """The real runner with the one handler of the kind over ``child_runner`` (the real one if None)."""
         handler = PageProfileHandler(self.dependencies(), runner=child_runner)
         return ComparisonWorkRunner(
             self.sessions, registry=HandlerRegistry({handler.kind: handler}), modules=frozenset({"versions"}),
-            repository=self.repository, heartbeat_seconds=heartbeat_seconds,
+            repository=self.repository, gates=self.gates(), heartbeat_seconds=heartbeat_seconds,
         )
+
+    def worker_runner(self) -> ComparisonWorkRunner:
+        """The runner the worker builds (``build_comparison_work`` over the shipped handler tuples), module ``versions`` on.
+
+        ``build_comparison_work`` takes no gates, so the runner is built while the module's ``default_gates`` is this
+        lane's :meth:`gates`; nothing else about it is changed, and the patch ends with the build.
+        """
+        from unittest import mock
+
+        with mock.patch("auditmanager.comparison.work.runner.default_gates", self.gates):
+            return build_comparison_work(
+                sessions=self.sessions, engine=self.engine, blob_store=self.blob_store,
+                environ={"AUDITMANAGER_COMPARISON_MODULES": "versions"},
+            )
 
     def enqueue(self, seeded: Seeded, *, retry_failed: bool = False) -> Any:
         """The call ``CMP-INGEST-02`` makes after a set is confirmed, committed."""
@@ -222,10 +276,55 @@ class Lane:
             session.commit()
         return enqueued
 
+    @contextmanager
+    def _foreign_items_fenced(self) -> Iterator[None]:
+        """Lock every queued item of a project that is not the lane's, for the length of the block.
+
+        The pick is ``FOR UPDATE SKIP LOCKED`` of the strongest queued item of *any* project, so a foreign item that is
+        stronger or older would be leased instead of the lane's own. A lock held on the foreign rows by a connection
+        of its own makes the pick pass over them, and changes nothing in them (the transaction ends by a rollback).
+        """
+        with self.engine.connect() as fence:
+            fence.execute(text(
+                "SELECT comparison_work_id FROM comparison_work WHERE state = 'queued' "
+                "AND NOT (project_uid = ANY (CAST(:p AS text[]))) ORDER BY comparison_work_id "
+                "FOR UPDATE SKIP LOCKED"
+            ), {"p": list(self.projects)})
+            try:
+                yield
+            finally:
+                fence.rollback()
+
     def claim(self, runner: ComparisonWorkRunner) -> WorkItem:
-        item = runner.claim(self.worker_id())
-        assert item is not None, "the runner claimed nothing: a gate is shut or no item is due"
+        """The runner's claim, which can lease an item of the lane's projects only."""
+        with self._foreign_items_fenced():
+            item = runner.claim(self.worker_id())
+        if item is None:
+            with self.sessions() as session:
+                gates = self.gates()
+                shut = {"paused": gates.paused(session), "own run claimable": gates.run_claimable(session)}
+                session.rollback()
+            raise AssertionError(f"the runner claimed nothing of the lane's projects: gates {shut}, or no item is due")
+        assert item.project_uid in self.projects, f"the runner leased {item.work_id} of a foreign project"
         return item
+
+    def reclaim(self, runner: ComparisonWorkRunner) -> int:
+        """Run the runner's reclaim and answer how many of the lane's own attempts it ended.
+
+        The reclaim fences every expired lease of the database (the worker's job), so its own answer counts other
+        directories' attempts too; what the lane asks about is its own.
+        """
+        def live() -> set[str]:
+            with self.sessions() as session:
+                return {str(row[0]) for row in session.execute(text(
+                    "SELECT a.comparison_work_attempt_id FROM comparison_work_attempt a "
+                    "JOIN comparison_work w ON w.comparison_work_id = a.comparison_work_id "
+                    "WHERE w.project_uid = ANY (CAST(:p AS text[])) AND a.state IN ('leased', 'running')"
+                ), {"p": list(self.projects)})}
+
+        before = live()
+        runner.reclaim()
+        return len(before - live())
 
     def cancel(self, work_id: str) -> str:
         with self.sessions() as session:
@@ -273,6 +372,67 @@ class Lane:
             ), {"w": work_id})
             session.commit()
 
+    # -- rows of other directories (planted by the isolation test only) ------------------------------------------
+    def queue_run(self, session: Session, *, project_uid: str, version_uid: str) -> str:
+        """A Run in state ``queued`` with a due, queued Job, written in the caller's transaction."""
+        run, job = str(RunId.new()), str(JobId.new())
+        session.execute(text(
+            "INSERT INTO audit_run (run_id, project_uid, version_uid, analysis_profile_id, prompt_bundle_id, "
+            "provider_mode, frozen_input_digest) VALUES (:r, :p, :v, :a, :b, 'recorded', :d)"
+        ), {"r": run, "p": project_uid, "v": version_uid, "a": str(AnalysisProfileId.new()),
+            "b": str(PromptBundleId.new()), "d": "b" * 64})
+        session.execute(text("INSERT INTO job (job_id, run_id) VALUES (:j, :r)"), {"j": job, "r": run})
+        session.execute(text("UPDATE audit_run SET state = 'queued' WHERE run_id = :r"), {"r": run})
+        return run
+
+    def foreign_project(self) -> str:
+        project = str(ProjectUid.new())
+        with session_scope(self.sessions) as session:
+            session.execute(text("INSERT INTO project (project_uid, name) VALUES (:p, 'Чужой проект')"), {"p": project})
+        self.foreign_projects.append(project)
+        return project
+
+    def foreign_run(self) -> str:
+        """A committed queued Run of a project that is not the lane's: what makes the real Run-priority gate yield."""
+        project, document, version = self.foreign_project(), str(DocumentUid.new()), str(VersionUid.new())
+        with session_scope(self.sessions) as session:
+            session.execute(text(
+                "INSERT INTO document (document_uid, project_uid, display_title) VALUES (:d, :p, 'Чужой')"
+            ), {"d": document, "p": project})
+            session.execute(text(
+                "INSERT INTO document_version (version_uid, document_uid, version_ordinal, media_type, byte_size, "
+                "sha256, page_count) VALUES (:v, :d, 1, 'application/pdf', 1, :s, 1)"
+            ), {"v": version, "d": document, "s": "a" * 64})
+            run = self.queue_run(session, project_uid=project, version_uid=version)
+        self.foreign_runs.append(run)
+        return run
+
+    def foreign_item(self, *, priority: int = 100) -> str:
+        """A committed queued ``page_profile`` item of a foreign project, stronger than any item the lane makes."""
+        project = self.foreign_project()
+        with session_scope(self.sessions) as session:
+            return self.repository.enqueue(
+                session, project_uid=project, module="versions", kind="page_profile",
+                payload={"version_uid": str(VersionUid.new())}, priority=priority,
+            ).work_id
+
+    def foreign_expired_lease(self) -> tuple[str, str]:
+        """A foreign item leased and left with an expired lease -- what a worker killed in another suite leaves.
+
+        Answers ``(work_id, attempt_id)``. The item is the strongest in the database when it is claimed (priority 100).
+        """
+        work_id = self.foreign_item()
+        with self.sessions() as session:
+            claimed = self.repository.claim(
+                session, worker_id=self.worker_id(), modules=frozenset({"versions"}), kinds=frozenset({"page_profile"}),
+            )
+            session.commit()
+        assert claimed is not None and claimed.work_id == work_id, (
+            "the planted item was not the strongest queued one: another item of priority 100 is in the database"
+        )
+        self.expire_lease(claimed.attempt_id)
+        return work_id, claimed.attempt_id
+
     # -- the profiles ----------------------------------------------------------------------------------------
     def rows(self, version_uid: str) -> list[Any]:
         with session_scope(self.sessions) as session:
@@ -288,7 +448,10 @@ class Lane:
     # -- cleanup ---------------------------------------------------------------------------------------------
     def clean(self) -> None:
         with self.sessions() as session:
-            for project in self.projects:
+            for run in self.foreign_runs:
+                session.execute(text("DELETE FROM job WHERE run_id = :r"), {"r": run})
+                session.execute(text("DELETE FROM audit_run WHERE run_id = :r"), {"r": run})
+            for project in [*self.projects, *self.foreign_projects]:
                 session.execute(text(
                     "DELETE FROM comparison_work_attempt WHERE comparison_work_id IN "
                     "(SELECT comparison_work_id FROM comparison_work WHERE project_uid = :p)"
