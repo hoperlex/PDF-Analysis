@@ -5,7 +5,7 @@ process dies before ``comparison_upload_file.blob_id`` is written: the Blob row 
 nothing references it. ``audit_blob_references`` cannot see that (it starts from the references); the
 report does, and each rule is shown failing on a database made to break it:
 
-* a Blob that a source names -- each of the eleven registered columns in turn -- is never reported;
+* a Blob that a source names -- each of the thirteen registered columns in turn -- is never reported;
 * a Blob nothing names is reported, attributed to the comparison file whose declared bytes it has, or
   not attributed when no file explains it;
 * the report refuses a database whose set of blob-referencing columns is not the closed set (a new
@@ -62,6 +62,10 @@ SOURCES = [
     ("comparison_page_profile", "preview_blob_id"),
     ("comparison_page_profile", "profile_blob_id"),
     ("comparison_page_profile", "thumbnail_blob_id"),
+    # `0039_comparison_core` (the mask of a sheet-pair result; the integrator pinned it as 353cfac4) and
+    # `0040_comparison_ai_reports` (a stored file of a report): two more Blob references.
+    ("comparison_report_artifact", "blob_id"),
+    ("comparison_sheet_pair_result", "mask_blob_id"),
     ("comparison_upload_file", "blob_id"),
     ("input_manifest_entry", "blob_id"),
     ("norm_custody_admission", "blob_id"),
@@ -214,7 +218,7 @@ def _file(db: Session, upload: str, label: str, *, size: int = 100, blob: str | 
     return file
 
 
-def test_the_registered_sources_are_the_eleven_the_report_checks() -> None:
+def test_the_registered_sources_are_the_thirteen_the_report_checks() -> None:
     assert sorted((table, column) for _, table, column in audit._SOURCES) == SOURCES
     statement = str(audit._unreferenced_statement())
     for table, column in SOURCES:
