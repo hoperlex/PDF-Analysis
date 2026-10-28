@@ -78,6 +78,16 @@ def test_a_result_stored_under_the_first_version_of_the_engine_is_not_found_agai
     assert settings.ALGO_VERSION != "cmp-engine/1"
 
 
+def test_a_result_stored_before_the_split_parts_were_registered_in_their_own_region_is_not_found_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`CMP-C1-FIX-A` item 2: ``cmp-engine/2`` registered the second part of a split sheet onto the first part's region."""
+    from auditmanager.comparison.engine import key
+
+    current = content_key(PROJECT, A, B, part="split")
+    monkeypatch.setattr(key, "ALGO_VERSION", "cmp-engine/2")
+    assert content_key(PROJECT, A, B, part="split") != current
+    assert settings.ALGO_VERSION == "cmp-engine/3"
+
+
 def test_a_change_of_a_threshold_is_a_change_of_the_parameters_in_the_key(monkeypatch: pytest.MonkeyPatch) -> None:
     from auditmanager.comparison.engine import key
 
