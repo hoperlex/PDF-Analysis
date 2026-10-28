@@ -177,7 +177,7 @@ def compare_sheet_pair(
         computed = _compute(
             session_factory, blob_store, data_a, data_b, link_reasons, part, runner or engine_runner(), child_limits, work_dir)
         outcome, mask, child_end = computed.outcome, computed.mask, computed.end
-    validate_outcome(outcome["channels"], outcome["result"])
+    validate_outcome(outcome["channels"], outcome["result"], outcome["reasons"])
     if outcome["status"] == "same" and mask is not None:
         raise ValueError("a same result holds no mask")
     if (outcome["result"]["mask"] is None) != (mask is None):

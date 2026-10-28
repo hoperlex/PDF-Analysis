@@ -26,6 +26,7 @@ __all__ = [
     "decide",
     "not_applicable",
     "unchecked",
+    "unchecked_channel_reason",
 ]
 
 #: ``status.py:11``: the eight channels, in the order the contract lists them.
@@ -53,6 +54,14 @@ FORCING_REASONS: Final[frozenset[str]] = ORIGINAL_FORCING_REASONS | OWN_FORCING_
 STATUSES: Final[tuple[str, ...]] = ("same", "same_zones_changed", "different", "needs_review")
 
 _REASON_MAX: Final[int] = 128
+
+
+def unchecked_channel_reason(channel: str) -> str:
+    """The reason that names an unchecked channel, in the form of the contract's pattern ``^[A-Z][A-Z0-9_]{2,63}$``
+    (``ComparisonSheetPair.reasons``): ``UNCHECKED_CHANNEL_TEXT_COVERAGE``. The first version of the engine wrote
+    ``UNCHECKED_CHANNEL:text_coverage``, which the pattern refuses (``CMP-SERIES-01`` section 9 item 1); the series view still
+    maps a stored colon form, only as tolerance for rows written under ``cmp-engine/1``. The engine never writes a colon."""
+    return f"UNCHECKED_CHANNEL_{channel.upper()}"
 
 
 def _clip(text: str) -> str:
@@ -88,7 +97,7 @@ def decide(channels: dict[str, dict[str, Any]], reasons: list[str]) -> tuple[str
     kept = list(dict.fromkeys(reasons))
     unchecked_names = [name for name in CHANNELS if channels[name]["state"] == "unchecked"]
     for name in unchecked_names:
-        kept.append(f"UNCHECKED_CHANNEL:{name}")
+        kept.append(unchecked_channel_reason(name))
     main_diffs = sum(int(channels[n].get("diffs", 0)) for n in MAIN_CHANNELS if channels[n]["state"] == "checked")
     service_diffs = sum(int(channels[n].get("diffs", 0)) for n in SERVICE_CHANNELS if channels[n]["state"] == "checked")
     if any(reason.split(":")[0] in FORCING_REASONS for reason in kept):

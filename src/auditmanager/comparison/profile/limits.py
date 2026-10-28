@@ -52,7 +52,11 @@ MIB: Final[int] = 1024 * 1024
 #: Names the algorithm that makes a profile. It is part of the content key and of the unique key
 #: ``(version, page, algo_version)`` of the table: changing any rule below means a new value, and
 #: the profiles of the old one stay as they are. At most 64 characters (``ck_..._algo_version``).
-ALGO_VERSION: Final[str] = "cmp-profile/1"
+#: ``2``: the content Merkle covers the default visibility of the optional-content groups a page refers to
+#: (``CMP-C1-FIX-A`` item 7), so the profiles of ``1`` are not current and a new preparation builds them again. ``3``: the
+#: vector lines also hold the edges of rectangles and the straight segments of curves (``CMP-C1-FIX-A`` item 8; the
+#: ``counts`` of a profile say how many lines were drawn as lines, ``drawn_lines``, and how many segments are kept, ``lines``).
+ALGO_VERSION: Final[str] = "cmp-profile/3"
 
 STATUS_READY: Final[str] = "ready"
 STATUS_NEEDS_REVIEW: Final[str] = "needs_review"

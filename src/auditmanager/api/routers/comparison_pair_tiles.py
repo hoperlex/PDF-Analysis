@@ -16,7 +16,7 @@ from fastapi import APIRouter, Path, Query
 
 from auditmanager.api.routers.declarations import envelope_responses, success
 from auditmanager.api.routers.ports import ComparisonPairTilePort
-from auditmanager.api.routers.version_pages import MAX_TILE_INDEX, MAX_TILE_LEVEL
+from auditmanager.api.routers.version_pages import MAX_TILE_INDEX, MAX_TILE_LEVEL, tile_response
 from auditmanager.api.routers.wire import WireResponse
 from auditmanager.api.schemas import models
 
@@ -59,6 +59,8 @@ def build_comparison_pair_tile_routes(router: APIRouter, tiles: ComparisonPairTi
             sheet_pair_id=comparison_sheet_pair_id, mode=mode, level=level, column=column,
             row=row, layers=_parse_layers(layers), align_blocks=align_blocks,
         )
-        return WireResponse(
-            200, (("Content-Type", _PNG), ("Content-Length", str(len(content)))), content
+        # `CMP-C1-FIX-A` item 4: the pair id names its two pages and its result (a `done` pair is never rewritten), so with the
+        # tile parameters it names the bytes.
+        return tile_response(
+            content, "pair", comparison_sheet_pair_id, mode.value, level, column, row, layers or "", align_blocks
         )

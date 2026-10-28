@@ -5936,11 +5936,15 @@ class ComparisonPairTileAdapter:
     """
 
     def __init__(
-        self, session_factory: sessionmaker[Session], *, blob_store: Any, reader: Any = None
+        self, session_factory: sessionmaker[Session], *, blob_store: Any, reader: Any = None, tiles: Any = None
     ) -> None:
-        from auditmanager.comparison.public import PairTileReader
+        from auditmanager.comparison.public import PageProfileReader, PairTileReader
 
-        self._reader = reader or PairTileReader(session_factory, blob_store)
+        # `CMP-C1-FIX-A` item 5: ``tiles`` is the one tile renderer of the process (the composition root builds it and hands it
+        # to ``VersionPageAdapter`` as well), so that the API process runs at most ``TILE_SLOTS`` tile children, not two sets.
+        self._reader = reader or PairTileReader(
+            session_factory, blob_store, profile_reader=PageProfileReader(session_factory, blob_store, tiles=tiles)
+        )
 
     def read_tile(
         self, *, sheet_pair_id: str, mode: models.ComparisonPairTileMode, level: int, column: int, row: int, layers: Sequence[models.ComparisonLayer], align_blocks: bool

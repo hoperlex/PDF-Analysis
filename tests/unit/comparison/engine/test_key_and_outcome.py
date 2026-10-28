@@ -63,8 +63,29 @@ def test_a_change_of_the_algorithm_version_changes_the_key(monkeypatch: pytest.M
     from auditmanager.comparison.engine import key
 
     base = content_key(PROJECT, A, B)
-    monkeypatch.setattr(key, "ALGO_VERSION", "cmp-engine/2")
+    monkeypatch.setattr(key, "ALGO_VERSION", "cmp-engine/9")
     assert content_key(PROJECT, A, B) != base
+
+
+def test_a_result_stored_under_the_first_version_of_the_engine_is_not_found_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`CMP-C1-FIX-A` item 1: the first engine wrote ``UNCHECKED_CHANNEL:<channel>``. Its ``ALGO_VERSION`` is in the content
+    key, so the key a result of ``cmp-engine/1`` was stored under is not the key of today and the pair is compared again."""
+    from auditmanager.comparison.engine import key
+
+    current = content_key(PROJECT, A, B)
+    monkeypatch.setattr(key, "ALGO_VERSION", "cmp-engine/1")
+    assert content_key(PROJECT, A, B) != current
+    assert settings.ALGO_VERSION != "cmp-engine/1"
+
+
+def test_a_result_stored_before_the_split_parts_were_registered_in_their_own_region_is_not_found_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`CMP-C1-FIX-A` item 2: ``cmp-engine/2`` registered the second part of a split sheet onto the first part's region."""
+    from auditmanager.comparison.engine import key
+
+    current = content_key(PROJECT, A, B, part="split")
+    monkeypatch.setattr(key, "ALGO_VERSION", "cmp-engine/2")
+    assert content_key(PROJECT, A, B, part="split") != current
+    assert settings.ALGO_VERSION == "cmp-engine/3"
 
 
 def test_a_change_of_a_threshold_is_a_change_of_the_parameters_in_the_key(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -150,3 +171,14 @@ def test_a_difference_and_a_text_change_are_built_for_the_contract() -> None:
     c = res.text_change({"kind": "changed", "norm": "spaces", "before": "a b", "after": "ab", "numbers": [{"before": "1", "after": "2"}, {"before": "3", "after": ""}],
                          "a_bbox": [1, 2, 3, 4], "b_in_a_bbox": None})
     assert c["kind"] == "changed_spaces" and c["numbers"] == [{"before": "1", "after": "2"}] and c["box"]["width"] == 2.0
+
+
+def test_the_validator_refuses_a_reason_the_contract_cannot_carry_and_accepts_the_engines() -> None:
+    """`CMP-C1-FIX-A` item 1: ``UNCHECKED_CHANNEL:text`` (a colon, lower case) never reaches a stored row."""
+    outcome = res.failure_outcome("RENDER_FAILED", "x")
+    validate_outcome(outcome["channels"], outcome["result"], outcome["reasons"])
+    for bad in ("UNCHECKED_CHANNEL:text", "lower", "AB", "A" * 65, "1ABC", "ABC\n", ""):
+        with pytest.raises(ResultInvalid):
+            validate_outcome(outcome["channels"], outcome["result"], [*outcome["reasons"], bad])
+    with pytest.raises(ResultInvalid):
+        validate_outcome(outcome["channels"], outcome["result"], [f"REASON_{n}" for n in range(33)])

@@ -65,7 +65,8 @@ def test_the_status_and_the_channels_of_a_sheet_are_those_of_the_key(compare, na
     link_reasons = tuple(r for r in sheet["reasons"] if r == "DUPLICATE_SHEET")
     computed = compare(VERSIONS[a_id], sheet["from_page"], VERSIONS[b_id], to_page, reasons=link_reasons, part=part)
     outcome = computed.outcome
-    validate_outcome(outcome["channels"], outcome["result"])
+    validate_outcome(outcome["channels"], outcome["result"], outcome["reasons"])  # the reasons fit the contract's pattern
+    assert not any(":" in reason for reason in outcome["reasons"])
     sid = sheet["sheet_id"]
 
     if (name, sid, "status") in DISAGREEMENTS:

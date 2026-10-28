@@ -13,8 +13,11 @@ from typing import Final
 __all__ = ["ALGO_VERSION", "PARAMS"]
 
 #: Names the algorithm that makes a result. The original's is ``vc1.13`` (``settings.py:11``); this one is the
-#: engine's own and starts at 1.
-ALGO_VERSION: Final[str] = "cmp-engine/1"
+#: engine's own and starts at 1. ``2``: the reason of an unchecked channel is ``UNCHECKED_CHANNEL_<CHANNEL>``, the
+#: contract's form, where ``1`` wrote ``UNCHECKED_CHANNEL:<channel>`` (``CMP-C1-FIX-A`` item 1); it is in the content key,
+#: so the results stored under ``1`` are not found and the pair is compared again. ``3``: a part of a split sheet is
+#: registered by where its ink sits inside the older sheet (``CMP-C1-FIX-A`` item 2).
+ALGO_VERSION: Final[str] = "cmp-engine/3"
 
 # -- the raster and the tolerance -------------------------------------------------------------
 #: ``tolerance_pt()`` default, ``settings.py:37-38``: two lines closer than this are the same line.
@@ -71,6 +74,13 @@ WARNING_MIN_AREA_SHARE: Final[float] = 0.20
 #: The phase correlation of the 36 dpi masks runs on a mask of at most this many pixels (a 2A0 sheet is 4 Mpx and the
 #: transform needs 180 MiB of address space at that size): larger masks are reduced by an integer factor first.
 PHASE_MAX_PIXELS: Final[int] = 1_000_000
+#: A part of a split sheet (``part == "split"``) is a crop of the older sheet: its ink is looked for **inside** the ink of A
+#: by normalised cross-correlation (``registration.by_template``) and not by phase correlation, which assumes two views of
+#: the same extent. Engine's own numbers: a similarity of the ink patterns below one half is not a place (the Dice check of
+#: ``ALIGN_MIN_DICE`` then judges what is left), and A is padded by this many pixels of the reduced mask on every side so
+#: that a part a rounding larger than the sheet still has a position.
+TEMPLATE_MIN_SCORE: Final[float] = 0.5
+TEMPLATE_PAD_PX: Final[int] = 6
 #: Translation by the vector lines of the sheets: the search radius, the finest bin of the vote and the least votes.
 LINES_SEARCH_PT: Final[float] = 3.5
 LINES_BIN_PT: Final[float] = 0.1
@@ -99,6 +109,7 @@ PARAMS: Final[dict[str, float | int]] = {
     "region_close_mm": REGION_CLOSE_MM, "word_move_pt": WORD_MOVE_PT, "anchor_inliers": ANCHOR_MIN_INLIERS,
     "anchor_ratio": ANCHOR_MIN_RATIO, "anchor_residual_pt": ANCHOR_MAX_MEDIAN_RESIDUAL_PT,
     "anchor_ransac_pt": ANCHOR_RANSAC_PT, "align_dice": ALIGN_MIN_DICE, "align_switch": ALIGN_SWITCH_MARGIN,
+    "template_min_score": TEMPLATE_MIN_SCORE, "template_pad_px": TEMPLATE_PAD_PX,
     "phase_max_px": PHASE_MAX_PIXELS, "lines_search_pt": LINES_SEARCH_PT, "lines_bin_pt": LINES_BIN_PT,
     "lines_min_votes": LINES_MIN_VOTES, "lines_min_share": LINES_MIN_SHARE, "lines_peak_ratio": LINES_PEAK_RATIO,
     "pixel_cap": 40_000_000, "max_dpi": 200, "min_dpi": 72,

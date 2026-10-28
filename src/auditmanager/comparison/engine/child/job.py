@@ -171,7 +171,7 @@ def run(job: dict[str, Any]) -> dict[str, Any]:
         bool(b.get("stamp")), mask_b)
     early["zones"] = _vm_peak_mib()
     reg = register(a["words"], b["words"], [z["bbox"] for z in zones_a], [z["bbox"] for z in zones_b], mask_a, mask_b,
-                   settings.MASK_DPI, _lines(a), _lines(b))
+                   settings.MASK_DPI, _lines(a), _lines(b), crop=part_kind == "split")
     early["registration"] = _vm_peak_mib()
     m = numpy.array(reg["matrix"], dtype=numpy.float64)
     inv = invert(m)

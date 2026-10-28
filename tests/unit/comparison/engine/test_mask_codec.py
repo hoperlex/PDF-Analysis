@@ -231,3 +231,118 @@ def test_an_empty_mask_is_small() -> None:
     blob = encode_mask(planes)
     assert len(blob) < 100_000
     assert not decode_mask(blob).plane("main").any()
+
+
+# -- the decoder inflates a piece at a time into one buffer (`CMP-C1-FIX-A` item 6) ----------------------------------
+
+def _blob_of_body(width: int, height: int, body: bytes, level: int = 6) -> bytes:
+    return struct.pack("<4sBBHII", b"AMCM", 1, 8, 0, width, height) + zlib.compress(body, level)
+
+
+@pytest.mark.parametrize("width,height", [
+    (1024, 1024),  # the body is exactly one output piece (1 MiB)
+    (1024, 2048),  # exactly two
+    (1024, 1025),  # one byte row over
+    (1000, 1111),  # no multiple of anything
+    (4096, 700),   # several pieces
+])
+def test_a_body_spanning_several_pieces_decodes_to_the_same_planes(width: int, height: int) -> None:
+    """The piece is `OUT_CHUNK_BYTES` (1 MiB): bodies at, around and well over it round-trip bit for bit."""
+    rng = numpy.random.default_rng(width + height)
+    planes = rng.random((8, height, width)) < 0.05
+    decoded = decode_mask(encode_mask(planes))
+    assert mask_codec.body_bytes(width, height) >= mask_codec.OUT_CHUNK_BYTES
+    assert numpy.array_equal(decoded.planes(), planes)
+
+
+def test_a_body_that_does_not_compress_is_fed_in_slices() -> None:
+    """Random bytes compress to about their own size, so the compressed stream is many `IN_CHUNK_BYTES` slices long."""
+    width, height = 2048, 700
+    body = numpy.random.default_rng(3).integers(0, 256, mask_codec.body_bytes(width, height), dtype=numpy.uint8).tobytes()
+    blob = _blob_of_body(width, height, body)
+    assert len(blob) > 4 * mask_codec.IN_CHUNK_BYTES
+    assert decode_mask(blob).packed.tobytes() == body
+
+
+def test_a_decoded_mask_is_read_only_like_the_view_the_one_call_decoder_returned() -> None:
+    decoded = decode_mask(encode_mask(_planes(32, 16)))
+    assert decoded.packed.flags.writeable is False
+    with pytest.raises(ValueError):
+        decoded.packed[0, 0, 0] = 1
+
+
+def test_the_body_is_held_once_while_it_is_inflated() -> None:
+    """`CMP-VIEWER-01` section 12 item 3: the one-call decoder held the 40 MB of a 2A0 mask twice for a moment (+75 MiB of
+    resident set); the traced peak of the decode is now the body and a few pieces, not two bodies."""
+    width, height = 6000, 4000  # 24 Mpx a plane: a body of 24 MB (the planes are built packed, never unpacked)
+    row = mask_codec.packed_width(width)
+    planes = []
+    for index in range(8):
+        plane = numpy.zeros((height, row), dtype=numpy.uint8)
+        plane[index::7, ::5] = 0xA5
+        planes.append(plane)
+    blob = encode_packed_planes(planes, width, height)
+    body = mask_codec.body_bytes(width, height)
+    del planes, plane
+    tracemalloc.start()
+    try:
+        decoded = decode_mask(blob)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert decoded.packed.nbytes == body
+    assert peak < body + 4 * mask_codec.OUT_CHUNK_BYTES, f"peak {peak} for a body of {body}: the body was held more than once"
+
+
+def test_a_stream_that_is_one_byte_too_long_or_too_short_is_refused_in_every_piece_position() -> None:
+    """Bodies that end exactly on, one before and one after a piece boundary are refused with the same reason."""
+    width, height = 1024, 1024
+    expected = mask_codec.body_bytes(width, height)
+    for size in (expected - 1, expected + 1, expected + mask_codec.OUT_CHUNK_BYTES):
+        with pytest.raises(MaskFormatError, match="body_length"):
+            decode_mask(_blob_of_body(width, height, bytes(size)))
+    assert decode_mask(_blob_of_body(width, height, bytes(expected))).packed.nbytes == expected
+
+
+def test_a_stream_cut_off_inside_a_piece_or_followed_by_a_second_stream_is_refused() -> None:
+    width, height = 1024, 2048
+    good = _blob_of_body(width, height, numpy.random.default_rng(1).integers(0, 256, mask_codec.body_bytes(width, height), dtype=numpy.uint8).tobytes())
+    for cut in (len(good) // 2, len(good) - 1, mask_codec.HEADER_BYTES + 3):
+        with pytest.raises(MaskFormatError):
+            decode_mask(good[:cut])
+    with pytest.raises(MaskFormatError, match="body_length"):
+        decode_mask(good + zlib.compress(b"more"))
+
+
+def test_a_byte_after_a_stream_that_ends_exactly_where_a_slice_ends_is_refused() -> None:
+    """The byte is in a slice the decompressor never sees (its `unused_data` is empty), so the position of the reader is what
+    refuses it. A stored (level 0) stream of 589 768 bytes is 9 slices of 64 KiB to the byte (found by search)."""
+    width, height = 8, 73721
+    stream = zlib.compress(bytes(mask_codec.body_bytes(width, height)), 0)
+    assert len(stream) % mask_codec.IN_CHUNK_BYTES == 0, "the constants moved: search a grid again"
+    header = struct.pack("<4sBBHII", b"AMCM", 1, 8, 0, width, height)
+    assert decode_mask(header + stream).packed.nbytes == mask_codec.body_bytes(width, height)
+    with pytest.raises(MaskFormatError, match="body_length"):
+        decode_mask(header + stream + b"x")
+
+
+def test_a_blob_that_claims_a_large_grid_and_holds_nothing_allocates_nothing_large() -> None:
+    """The buffer is allocated when the first piece proves that the stream produces anything: a header of 40 Mpx over no
+    body, or over bytes that are not a stream, costs no 40 MB."""
+    header = struct.pack("<4sBBHII", b"AMCM", 1, 8, 0, 8000, 5000)
+    tracemalloc.start()
+    try:
+        for tail in (b"", b"\x00" * 64, zlib.compress(b"", 6)):
+            with pytest.raises(MaskFormatError):
+                decode_mask(header + tail)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert peak < 1 << 20, peak
+
+
+def test_a_bytearray_and_a_memoryview_decode_like_bytes() -> None:
+    blob = encode_mask(_planes(40, 40, seed=4))
+    reference = decode_mask(blob).packed
+    assert numpy.array_equal(decode_mask(bytearray(blob)).packed, reference)
+    assert numpy.array_equal(decode_mask(memoryview(blob)).packed, reference)
