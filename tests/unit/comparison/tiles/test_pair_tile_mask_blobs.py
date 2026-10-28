@@ -73,12 +73,15 @@ def test_a_blob_the_codec_refuses_reaches_the_viewer_as_an_integrity_error(suppo
         # 6325 x 6325 = 40 005 625 pixels, 5 625 over the cap of ADR-0025 decision 9 (written out so a changed cap is a changed test)
         "over_cap": struct.pack("<4sBBHII", b"AMCM", 1, 8, 0, 6325, 6325) + zlib.compress(b"\0" * 1000),
     }
+    reasons = {"short": "header_short", "magic": "magic", "format": "format", "layers": "layer_count", "reserved": "reserved",
+               "zero_width": "grid_empty", "zero_height": "grid_empty", "over_cap": "plane_over_cap"}
     store = _Store(blobs[case])
     with pytest.raises(DomainError) as refused:
         MaskStore(store).planes(store.id)
     assert refused.value.code is ErrorCode.STORAGE_INTEGRITY_ERROR
-    with pytest.raises(MaskFormatError):
+    with pytest.raises(MaskFormatError) as why:
         decode_mask(blobs[case])
+    assert why.value.args[0] == reasons[case]  # each header field refuses for its own reason, not for a later check
 
 
 def test_exactly_forty_megapixels_is_inside_the_cap() -> None:
