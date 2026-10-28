@@ -125,6 +125,18 @@ if ! cli -m auditmanager.norms.retrieval.promote_cli --help >/dev/null 2>&1 \
 fi
 say "TOOLS PRESENT"
 
+# --- seal values from the single source, section 6a of the promote record, read and checked BEFORE anything is planned or written
+sec6a() { awk '/^### 6a\./{f=1;next} f&&/^## /{exit} f' "$PROMOTE_DOC"; }
+field() { sec6a | awk -F'|' -v key="\`--$1\`" 'index($2,key){ n=split($3,a,"`"); if(n>=3){print a[2]; exit} }'; }
+REVIEWER="$(field reviewer)" CAPACITY="$(field capacity)" DECISION_REF="$(field decision-ref)" SCOPE_STATEMENT="$(field scope-statement)"
+for pair in REVIEWER CAPACITY DECISION_REF SCOPE_STATEMENT; do
+    [ -n "${!pair}" ] || die 2 "section 6a of AR-V3-PROMOTE-01.md holds no value for $pair: the tree is not the one this script was written for"
+done
+DECISIONS_SHA="$(sha256sum "$DECISIONS" | cut -d' ' -f1)"
+grep -qF "$DECISIONS_SHA" <<<"$DECISION_REF" \
+    || die 2 "sha256 of decisions.json ($DECISIONS_SHA) is not the digest in the decision-ref of section 6a: the decisions changed after the review"
+say "seal values read from section 6a; sha256 of decisions.json matches the decision-ref"
+
 # --- step 10a / 10b-1: read-only plans. A missing or different snapshot shows here, before anything is written.
 PROMOTE=(-m auditmanager.norms.retrieval.promote_cli)
 for s in "${SETS[@]}"; do
@@ -156,16 +168,7 @@ for s in "${SETS[@]}"; do
 done
 say "ALL SIX PROMOTED AND REPLAYED"
 
-# --- step 11: seal against the live database (read only), values from the single source, section 6a of the promote record
-sec6a() { awk '/^### 6a\./{f=1;next} f&&/^## /{exit} f' "$PROMOTE_DOC"; }
-field() { sec6a | awk -F'|' -v key="\`--$1\`" 'index($2,key){ n=split($3,a,"`"); if(n>=3){print a[2]; exit} }'; }
-REVIEWER="$(field reviewer)" CAPACITY="$(field capacity)" DECISION_REF="$(field decision-ref)" SCOPE_STATEMENT="$(field scope-statement)"
-for pair in REVIEWER CAPACITY DECISION_REF SCOPE_STATEMENT; do
-    [ -n "${!pair}" ] || die 6 "section 6a of AR-V3-PROMOTE-01.md holds no value for $pair: the tree is not the one this script was written for"
-done
-DECISIONS_SHA="$(sha256sum "$DECISIONS" | cut -d' ' -f1)"
-grep -qF "$DECISIONS_SHA" <<<"$DECISION_REF" \
-    || die 6 "sha256 of decisions.json ($DECISIONS_SHA) is not the digest in the decision-ref of section 6a: the decisions changed after the review"
+# --- step 11: seal against the live database (read only); its values were read and checked before step 10a above
 
 "${DC[@]}" run --rm --no-deps -T --user "$(id -u):$(id -g)" -v "$WORK:/work:ro" -v "$WORK/out:/out" \
     --entrypoint python api -m auditmanager.runs.v3_pack_cli seal --scopes /work/scopes.json \
