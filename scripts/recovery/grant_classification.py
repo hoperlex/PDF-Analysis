@@ -178,7 +178,7 @@ SEALED_NOT_YET_WRITTEN = frozenset((
     # `CMP-ENGINE-01` and `CMP-SERIES-01` write them. `comparison_matrix_edit` is written by migration 0039 alone
     # (the migrated approvals) and by no code yet.
     "comparison_ai_link", "comparison_matrix", "comparison_matrix_edit", "comparison_series",
-    "comparison_sheet_pair", "comparison_sheet_pair_result", "comparison_transition",
+    "comparison_sheet_pair", "comparison_transition",
 ))
 
 #: ``SELECT``.
