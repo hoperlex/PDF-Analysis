@@ -1,7 +1,7 @@
 # Task CMP-VC-UI-02 — the C2 screens of «Сравнение версий»: AI steps 4/6/7, the queue strips, the blocks of «Сравнение листов», the PDF report window and the side panel «Изменения в листе»
 
 task_id: CMP-VC-UI-02
-status: in progress (lane `agent/cmp-vc-ui-02`, wave C2, size L, web only; nothing pushed, merged or tagged)
+status: done (lane `agent/cmp-vc-ui-02`, wave C2, size L, web only; nothing pushed, merged or tagged)
 
 ## Outcome
 
@@ -145,4 +145,14 @@ Not applicable: no behaviour behind a flag (the module flag `ProductVersion.comp
 
 ## Handoff
 
-To be written as the last commit.
+Report: [`../CMP-VC-UI-02.md`](../CMP-VC-UI-02.md). Branch `agent/cmp-vc-ui-02`, base `901914a5`; nothing pushed, nothing merged, no tag.
+
+**Changed files** (`git diff --name-only 901914a5..HEAD`): under `web/src/` the entity `version-series` (model, api, ui), the widgets `version-series`, `comparison-report` (new), `comparison-viewer` (side panel and evidence banner), `execution-queue` (the AI queue block) and the page `_pages/version-compare`; under `web/tests/` the fixtures, shapes, seeds and tests of `unit/version-compare`, the census block of `unit/styles/screens.ts`, `guards/rendered-language.guard.test.ts` and `unit/run/polling.test.ts`; this file and the report.
+
+**Checks** (report section 11): `git diff --check`, `lint --quiet`, `typecheck`, `api:verify` exit 0; the whole web suite 219 files / 3651 tests in two invocations (a single run stops on the worker's RPC timeout after the three heaviest files); `tests/contract` without the three `D-220` files plus the journey conformance: see the report; mutation proofs M1–M10 each red then green (report section 7).
+
+**Contracts:** none new, none changed. **Forbidden hotspots:** `git diff --name-only 901914a5..HEAD -- contracts db src pyproject.toml uv.lock docs/program/P02_LOCK.json web/package.json web/package-lock.json web/FRONTEND_LOCK.json web/openapi web/src/shared web/src/app web/src/_app infra Makefile docs/program/CURRENT_STATE.md` prints nothing.
+
+**Known limits** (report section 8): a report has no pause in the contract («Отменить» instead); the overview serves steps 4/6/7 as `not_applicable`, so the cells read the AI layer per row; two guard hunks beyond appended names (`MD` in `NOT_DERIVABLE`, the polling allowlist); the census is about 30 % slower and the whole suite is run in two invocations.
+
+**For the integrator:** merge last among the wave's lanes. The shared files are `web/tests/guards/rendered-language.guard.test.ts` (23 names appended to `TRANSLATED_SCHEMAS`, 23 rows appended to `SCHEMA_MARKERS`, one `NOT_DERIVABLE` entry, the cap 20 to 21), `web/tests/unit/run/polling.test.ts` (one path) and `web/tests/unit/version-compare/shapes.ts`. The screens adapt to the backend lanes' notes through `web/src/entities/version-series/api/use-ai*.ts` and the confirmations in report section 9. No symlink or untracked file is left (`web/node_modules`, a link to the read-only `cmp-seal-c0` install, is removed before the last commit).
