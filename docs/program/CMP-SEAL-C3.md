@@ -16,6 +16,8 @@ A literal pin inventory found current `1.11.0` error envelopes in both proxy con
 
 The existing `comparison_pdf` upload service is PDF-only: `complete_file` publishes with `application/pdf` and validates one PDF before placing it into a set. C3 ZIP-set admission therefore needs its own stage upload command and durable candidate state, with 16 MiB chunk transport and the D-262 raw-byte, admission, disk and PDF checks at the first caller. The C3 seal must expose that boundary without routing ZIP bytes through the C0 PDF completion path.
 
+The task scope now names `comparison_stage_uploads.py` and its fifth stage port explicitly. The migration deliverable includes candidate state so a resumed upload and its cleanup can be reconciled across restarts; the stage-pair lane owns the actual reader call and all D-262 first-use controls.
+
 ## Seal result
 
 Pending. The real `1.12.0` operation list, `0041` table inventory, migrations, checks, rollback evidence, risks and forbidden-hotspot proof will be recorded here before integration.

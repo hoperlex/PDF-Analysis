@@ -1,7 +1,7 @@
 # Task CMP-SEAL-C3 — freeze the deterministic stage-comparison contract
 
 ## Outcome
-The API contract is `1.12.0` with C3 stage-pair, assembly, sheet-link, text-difference and chain-run operations sealed as typed `503 dependency_unavailable` stubs. Migration `0041_comparison_stage_core` creates the durable C3 tables and their project reachability. Generated clients, permissions and all version/table/head pins agree with the seal, so `CMP-STAGE-PAIR-01`, `CMP-STAGE-LINK-01` and `CMP-STAGE-TEXT-01` can implement against one frozen shape.
+The API contract is `1.12.0` with C3 stage-upload, stage-pair, assembly, sheet-link, text-difference and chain-run operations sealed as typed `503 dependency_unavailable` stubs. Migration `0041_comparison_stage_core` creates the durable C3 tables and their project reachability. Generated clients, permissions and all version/table/head pins agree with the seal, so `CMP-STAGE-PAIR-01`, `CMP-STAGE-LINK-01` and `CMP-STAGE-TEXT-01` can implement against one frozen shape.
 
 ## Depends on
 - CMP-SEAL-C2
@@ -62,7 +62,7 @@ The API contract is `1.12.0` with C3 stage-pair, assembly, sheet-link, text-diff
 - `contracts/analysis/**`, `contracts/events/**` (shared `contract_version` pins only; added after the disposable probe and literal `1.11.0` inventory)
 - `src/auditmanager/analysis/engine/result.py` (served analysis contract-version constant only)
 - `db/migrations/versions/20261029_0041_comparison_stage_core.py`
-- `src/auditmanager/api/routers/comparison_stage_pairs.py` (new), `src/auditmanager/api/routers/comparison_stage_links.py` (new), `src/auditmanager/api/routers/comparison_stage_text.py` (new), `src/auditmanager/api/routers/comparison_stage_runs.py` (new), `src/auditmanager/api/routers/__init__.py`, `src/auditmanager/api/routers/ports.py` (the four new stage-router protocols), `src/auditmanager/api/app.py`, `src/auditmanager/api/README.md`, `src/auditmanager/api/schemas/models.py`, `src/auditmanager/api/security.py`
+- `src/auditmanager/api/routers/comparison_stage_uploads.py` (new), `src/auditmanager/api/routers/comparison_stage_pairs.py` (new), `src/auditmanager/api/routers/comparison_stage_links.py` (new), `src/auditmanager/api/routers/comparison_stage_text.py` (new), `src/auditmanager/api/routers/comparison_stage_runs.py` (new), `src/auditmanager/api/routers/__init__.py`, `src/auditmanager/api/routers/ports.py` (the five new stage-router protocols), `src/auditmanager/api/app.py`, `src/auditmanager/api/README.md`, `src/auditmanager/api/schemas/models.py`, `src/auditmanager/api/security.py`
 - `src/auditmanager/bootstrap/adapters.py`, `src/auditmanager/bootstrap/composition.py`
 - `src/auditmanager/shared/identity/**`, `src/auditmanager/comparison/public.py`
 - `scripts/recovery/grant_classification.py`, `scripts/recovery/product_purge.py`, `scripts/recovery/project_erase.py`, `scripts/recovery/schema_coverage.py`, `infra/deploy/apply-grants.sh`
@@ -87,8 +87,8 @@ The API contract is `1.12.0` with C3 stage-pair, assembly, sheet-link, text-diff
 
 ## Deliverables
 1. A disposable contract/table/version probe that enumerates affected pins before the full seal; record its red checks and any scope amendment in `docs/program/CMP-SEAL-C3.md`.
-2. Additive API `1.12.0`: opaque-identity stage-pair catalog/workbench and assembly commands; stage upload/candidate reads; sheet-passport/suggestion/link-revision reads and expert edits; text-fragment/exclusion/difference/hint reads and commands; chain-run start/read/cancel and step state. Every write requires an idempotency key and expert role; reads follow the existing authenticated role policy. New operations answer typed `503` under `comparison_modules` when stages are off and their lane dependency while on.
-3. Migration `0041`: project-reachable stage-pair, assembly, sheet-link revision, fragment/exclusion/difference and chain-run storage. Immutable evidence and append-only expert/link history have schema guards; migration up/down and project erase are tested.
+2. Additive API `1.12.0`: opaque-identity stage-pair catalog/workbench and assembly commands; chunked stage upload and candidate confirmation separate from the C0 PDF-only completion path; sheet-passport/suggestion/link-revision reads and expert edits; text-fragment/exclusion/difference/hint reads and commands; chain-run start/read/cancel and step state. Every write requires an idempotency key and expert role; reads follow the existing authenticated role policy. New operations answer typed `503` under `comparison_modules` when stages are off and their lane dependency while on.
+3. Migration `0041`: project-reachable stage-upload candidate, stage-pair, assembly, sheet-link revision, fragment/exclusion/difference and chain-run storage. Immutable evidence and append-only expert/link history have schema guards; migration up/down and project erase are tested.
 4. Identifier prefixes, domain constraint notes, generated web client, API mirror and frontend lock; update every contract-version, operation-surface, table-count, migration-head, role and stub enumerator pinned by the probe.
 5. A seal report with exact operations/tables per C3 lane, migration/rollback evidence, test results, forbidden-hotspot proof and known limits.
 
