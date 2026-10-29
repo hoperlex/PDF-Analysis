@@ -85,13 +85,11 @@ _STUB_PAIR = "/comparison-sheet-pairs/ctp_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 _STUB_SERIES = "/comparison-series/cser_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 _STUB_TRANSITION = "/comparison-transitions/ctn_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 _STUB_REPORT = "/comparison-reports/crt_01ARZ3NDEKTSV4RRFFQ69G5FAV"
-SEALED_STUB_GETS: frozenset[str] = frozenset({
-    f"/projects/{_PRJ}/comparison-launch-queue",
-    "/execution/comparison-ai-queue",
-})
+SEALED_STUB_GETS: frozenset[str] = frozenset()
 #: The versions module is on in this sweep. The served sheet and report reads answer `404 not_found`
 #: for an absent identity; the companion absent-parent sweep checks their module-off refusal separately.
 MODULE_GATED_GETS: frozenset[str] = frozenset({
+    f"/projects/{_PRJ}/comparison-launch-queue",
     f"{_STUB_SERIES}/summary-md",
     f"{_STUB_SERIES}/reports",
     _STUB_REPORT,
@@ -115,7 +113,7 @@ SEALED_STUB_QUERY: dict[str, str] = {f"{_STUB_PROFILE}/tile": "?level=0&column=0
 #: leaves `SEALED_STUB_GETS`; the query stays, because the sweep still needs it to read the path and not the query.
 SEALED_STUB_QUERY[f"{_STUB_PAIR}/tile"] = "?mode=overlay&level=0&column=0&row=0"
 NORM_VERIFICATION_OF_AN_ABSENT_RUN = "/runs/run_01ARZ3NDEKTSV4RRFFQ69G5FAV/norm-verification"
-WORKER_GETS = frozenset({"/execution/workers"})
+WORKER_GETS = frozenset({"/execution/workers", "/execution/comparison-ai-queue"})
 
 _STATIC_TOKEN_CACHE: str | None = None
 

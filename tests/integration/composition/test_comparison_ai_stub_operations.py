@@ -132,6 +132,9 @@ WIRED: frozenset[str] = frozenset({
     "getComparisonReport", "startComparisonReport", "cancelComparisonReport", "continueComparisonReport",
     "rebuildComparisonReportPdf", "deleteComparisonReport", "prepareComparisonClientReport", "streamComparisonReportPdf",
     "streamComparisonReportSourceMd",
+    # `CMP-VC-QUEUE-01`: all seven launch and installation queue operations.
+    "getComparisonLaunchQueue", "enqueueComparisonLaunch", "pauseComparisonLaunchQueue",
+    "resumeComparisonLaunchQueue", "clearComparisonLaunchQueue", "removeComparisonLaunchEntry", "getComparisonAiQueue",
 })
 STUBS = sorted(set(REQUESTS) - WIRED)
 LANES = {
@@ -221,12 +224,14 @@ def test_every_operation_refuses_naming_the_module_while_the_versions_module_is_
 
 @pytest.mark.parametrize("value", ["none", "versions,stages"])
 def test_the_module_value_decides_which_class_a_stub_names(value: str) -> None:
-    """``none`` is off; ``versions,stages`` serves the versions module too."""
+    """The wired installation queue is gated by the module value."""
     client = _client(value)
-    name = STUBS[0]  # the first operation still sealed, whichever lanes have wired theirs
+    name = "getComparisonAiQueue"
     response = _call(client, name, token=static_token())
-    expected = "comparison_modules" if value == "none" else REQUESTS[name][4]
-    assert response.status_code == 503 and response.json()["details"]["dependency"] == expected, response.text
+    if value == "none":
+        assert response.status_code == 503 and response.json()["details"]["dependency"] == "comparison_modules"
+    else:
+        assert response.status_code == 200 and isinstance(response.json()["items"], list), response.text
 
 
 def test_the_dependencies_are_the_five_class_names_of_the_lanes() -> None:
@@ -265,14 +270,16 @@ def test_that_check_fails_when_a_write_is_opened_to_an_administrator(monkeypatch
 
 
 def test_that_check_fails_when_the_module_flag_is_ignored(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Mutation: a stub that skips the module flag would answer its lane class while the module is off."""
+    """Mutation: bypassing both independent module gates exposes the wired read."""
     from auditmanager.bootstrap import adapters
+    from auditmanager.comparison.queue.service import ComparisonLaunchQueueService
 
     monkeypatch.setattr(adapters._VersionsModuleGate, "_require_versions_module", lambda self: None)
+    monkeypatch.setattr(ComparisonLaunchQueueService, "_require_module", lambda self: None)
     client = _client(None)
-    response = _call(client, STUBS[0], token=static_token())
+    response = _call(client, "getComparisonAiQueue", token=static_token())
     with pytest.raises(AssertionError):
-        assert response.json()["details"]["dependency"] == "comparison_modules"
+        assert response.status_code == 503 and response.json()["details"]["dependency"] == "comparison_modules"
 
 
 # -- the shape of a request is judged before the stub ------------------------------------------------
@@ -311,8 +318,8 @@ def test_the_sheet_start_takes_restart_and_the_retry_takes_a_consent(on: TestCli
 def test_the_queue_request_is_bounded_and_names_a_queueable_step(on: TestClient) -> None:
     path = f"/projects/{PRJ}/comparison-launch-queue/entries"
     item = {"document_uid": DOC, "step": "series"}
-    assert _post(on, path, {"items": [item]}).status_code == 503
-    assert _post(on, path, {"items": [{**item, "step": "ai_changes", "consent": CONSENT}], "restart": True}).status_code == 503
+    assert _post(on, path, {"items": [item]}).status_code == 404
+    assert _post(on, path, {"items": [{**item, "step": "ai_changes", "consent": CONSENT}], "restart": True}).status_code == 404
     for bad in ({}, {"items": []}, {"items": [item] * 201}, {"items": [{**item, "step": "sideways"}]},
                 {"items": [{"step": "series"}]}, {"items": [{**item, "document_uid": "x"}]},
                 {"items": [item], "restart": "maybe"}):

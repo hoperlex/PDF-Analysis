@@ -6398,40 +6398,70 @@ class ComparisonSpecificationAdapter(_VersionsModuleGate):
         return models.ComparisonAiJob.model_validate(view.as_dict())
 
 
-class ComparisonLaunchQueueAdapter(_VersionsModuleGate):
-    """`CMP-VC-QUEUE-01` replaces the bodies."""
+class ComparisonLaunchQueueAdapter(_SessionHolder, _VersionsModuleGate):
+    """Maps the seven sealed queue operations to durable comparison commands."""
 
-    _DEPENDENCY = "comparison_launch_queue"
+    def __init__(self, session_factory: sessionmaker[Session], *, comparison_modules: str = "none",
+                 provider_mode: str = "live") -> None:
+        from auditmanager.comparison.queue.service import ComparisonLaunchQueueService
+
+        _SessionHolder.__init__(self, session_factory)
+        _VersionsModuleGate.__init__(self, comparison_modules=comparison_modules)
+        self._service = ComparisonLaunchQueueService(
+            session_factory, comparison_modules=comparison_modules, provider_mode=provider_mode,
+        )
+
+    def _actor(self, user_uid: str) -> tuple[str, frozenset[str]]:
+        from auditmanager.shared.db import session_scope
+
+        with session_scope(self._sessions) as session:
+            return _comparison_actor(session, user_uid)
 
     def clear_queue(self, *, project_uid: str, user_uid: str, idempotency_key: str) -> models.ComparisonLaunchQueue:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        _label, roles = self._actor(user_uid)
+        return models.ComparisonLaunchQueue.model_validate(self._service.clear_queue(
+            project_uid=project_uid, user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key,
+        ))
 
     def enqueue(
         self, *, project_uid: str, items: Sequence[models.ComparisonLaunchItem], restart: bool, user_uid: str, idempotency_key: str
     ) -> models.ComparisonLaunchQueue:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        label, roles = self._actor(user_uid)
+        return models.ComparisonLaunchQueue.model_validate(self._service.enqueue(
+            project_uid=project_uid, items=[item.model_dump(mode="json", exclude_unset=True) for item in items],
+            restart=restart, user_uid=user_uid, actor_label=label, actor_roles=roles, idempotency_key=idempotency_key,
+        ))
 
     def get_ai_queue(self) -> models.ComparisonAiQueue:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        return models.ComparisonAiQueue.model_validate(self._service.get_ai_queue())
 
     def get_queue(self, *, project_uid: str) -> models.ComparisonLaunchQueue:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        return models.ComparisonLaunchQueue.model_validate(self._service.get_queue(project_uid=project_uid))
 
     def pause_queue(self, *, project_uid: str, user_uid: str, idempotency_key: str) -> models.ComparisonLaunchQueue:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        _label, roles = self._actor(user_uid)
+        return models.ComparisonLaunchQueue.model_validate(self._service.pause_queue(
+            project_uid=project_uid, user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key,
+        ))
 
     def remove_entry(self, *, entry_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonLaunchQueue:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        _label, roles = self._actor(user_uid)
+        return models.ComparisonLaunchQueue.model_validate(self._service.remove_entry(
+            entry_id=entry_id, user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key,
+        ))
 
     def resume_queue(self, *, project_uid: str, user_uid: str, idempotency_key: str) -> models.ComparisonLaunchQueue:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        _label, roles = self._actor(user_uid)
+        return models.ComparisonLaunchQueue.model_validate(self._service.resume_queue(
+            project_uid=project_uid, user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key,
+        ))
 
 
 class ComparisonReportAdapter(_SessionHolder, _VersionsModuleGate):

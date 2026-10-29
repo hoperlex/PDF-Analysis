@@ -527,7 +527,8 @@ def build_application(
         ),
         comparison_specifications=ComparisonSpecificationAdapter(
             sessions, blob_store=store, comparison_modules=comparison_modules, provider_mode=_provenance_mode(resolved.provider_mode)),
-        comparison_launch_queue=ComparisonLaunchQueueAdapter(comparison_modules=comparison_modules),
+        comparison_launch_queue=ComparisonLaunchQueueAdapter(
+            sessions, comparison_modules=comparison_modules, provider_mode=_provenance_mode(resolved.provider_mode)),
         comparison_reports=ComparisonReportAdapter(
             sessions, blob_store=store, comparison_modules=comparison_modules,
             provider_mode=_provenance_mode(resolved.provider_mode),

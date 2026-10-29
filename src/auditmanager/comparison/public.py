@@ -293,6 +293,10 @@ from auditmanager.comparison.report.handler import (
 from auditmanager.comparison.report.service import ComparisonReportService, ReportPage
 from auditmanager.comparison.report.summary import build_summary as build_series_summary
 
+# `CMP-VC-QUEUE-01`: durable, per-project launch queue of selected comparison steps.
+from auditmanager.comparison.queue.handler import ComparisonLaunchHandler, comparison_launch_handler
+from auditmanager.comparison.queue.service import ComparisonLaunchQueueService
+
 #: `CMP-WORK-01` (ADR-0025 decision 4). One tuple of handler factories, each
 #: ``Callable[[WorkDependencies], WorkHandler]``: ``build_worker_runtime`` builds one dependency
 #: bundle and applies every factory to it, and refuses to start on a duplicate ``kind``. A slice
@@ -308,6 +312,7 @@ HANDLER_FACTORIES: tuple[HandlerFactory, ...] = (
     report_handler,  # `CMP-VC-REPORT-01`: kind ``comparison_report``
     sheet_changes_handler,  # `CMP-VC-AISHEET-01`: kind ``comparison_sheet_changes``
     spec_handler,  # `CMP-VC-SPEC-01`: kind ``comparison_spec``
+    comparison_launch_handler,  # `CMP-VC-QUEUE-01`: kind ``comparison_launch``
 )
 
 #: `CMP-WORK-01`. Called inside the reclaim transaction for each attempt whose lease was lost:
@@ -407,6 +412,9 @@ __all__ = [
     "Completed",
     "ComparisonWorkRepository",
     "ComparisonWorkRunner",
+    "ComparisonLaunchQueueService",
+    "ComparisonLaunchHandler",
+    "comparison_launch_handler",
     "Enqueued",
     "Failed",
     "HANDLER_FACTORIES",

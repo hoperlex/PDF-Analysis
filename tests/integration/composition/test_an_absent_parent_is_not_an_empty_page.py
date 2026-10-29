@@ -204,7 +204,7 @@ EXECUTION_COLLECTIONS = frozenset({"listExecutionQueue", "listExecutionJournal"}
 #: `CMP-VC-OVERVIEW-01` serves it and empties this set: it joins :data:`COMPARISON_QUEUE_OPERATIONS`.
 #: `CMP-SEAL-C2`: ``getComparisonAiQueue`` names no parent and is not a page (the AI jobs of the installation with their
 #: counts); it answers `503 dependency_unavailable` until `CMP-VC-QUEUE-01` serves it, and then it leaves this set.
-SEALED_STUB_COLLECTIONS: frozenset[str] = frozenset({"getComparisonAiQueue"})
+SEALED_STUB_COLLECTIONS: frozenset[str] = frozenset()
 
 #: `CMP-VC-OVERVIEW-01`. ``getComparisonQueueSummary`` is an aggregate of the whole installation, not a page and not a
 #: dashboard: the module set, the pause, the items by state and by kind. Exempt from the page check, and checked for its
@@ -249,6 +249,7 @@ COMPARISON_QUEUE_OPERATIONS = frozenset({"getComparisonQueueSummary"})
 #: `CMP-VC-AISHEET-01` and `CMP-VC-REPORT-01` serve these reads. The dedicated test below checks
 #: both the module gate and an absent parent.
 MODULE_GATED_ADDRESSED: frozenset[str] = frozenset({
+    "getComparisonLaunchQueue",
     "estimateComparisonAiSheetChanges",
     "getComparisonAiSheetChanges",
     "getComparisonSheetDescription",
@@ -262,9 +263,7 @@ MODULE_GATED_ADDRESSED: frozenset[str] = frozenset({
     "streamComparisonReportPdf",
     "streamComparisonReportSourceMd",
 })
-SEALED_STUB_ADDRESSED: frozenset[str] = frozenset({
-    "getComparisonLaunchQueue",
-})
+SEALED_STUB_ADDRESSED: frozenset[str] = frozenset()
 
 #: `W55A-SEAL-01`. ``searchNorms`` addresses no parent but is not a listing of everything:
 #: its ``q`` is required, so the bare path is ``422 validation_failed`` on ``q`` and never a

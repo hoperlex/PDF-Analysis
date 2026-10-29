@@ -20,6 +20,7 @@ def test_the_kind_is_pair_result_and_the_public_name_is_the_same() -> None:
 def test_the_shipped_tuple_has_one_handler_for_each_kind() -> None:
     kinds = [factory(WorkDependencies(None, None, None, None)).kind for factory in public.HANDLER_FACTORIES]  # type: ignore[arg-type]
     shipped = [
+        "comparison_launch",  # `CMP-VC-QUEUE-01`
         "comparison_pair_check",  # `CMP-VC-AIPAIR-01`
         "comparison_report",  # `CMP-VC-REPORT-01`
         "comparison_sheet_changes",  # `CMP-VC-AISHEET-01`
