@@ -19,7 +19,7 @@
     "sha256": "4a2c3bf4077838cc97d4922e6282fdd70d61064594e37252cd906dcf2c977e94",
     "content_commit": "6cb49165b583a255ac5ad62c056b7381bc632e47",
     "content_commit_subject": "CMP-SEAL-C3: close prose and recovery inventories",
-    "dispatch_named_commit": "6cb49165b583a255ac5ad62c056b7381bc632e47",
+    "dispatch_named_commit": "5f2eca64e93fa0cb971e35b561902a1dee3c7708",
     "commit_note": "CMP-SEAL-C3 adds 32 typed stage-comparison operations, 53 schemas, 28 paths and migration 0041 with fifteen project-reachable tables. The named commit holds these exact 1.12.0 OpenAPI bytes; preserve it when integrating.",
     "openapi_version": "3.1.0",
     "info_version": "1.12.0",

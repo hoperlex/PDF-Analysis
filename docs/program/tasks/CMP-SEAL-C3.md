@@ -113,8 +113,8 @@ The C3 lanes consume the sealed `1.12.0` schema and `0041` tables. They do not c
 `AUDITMANAGER_COMPARISON_MODULES=none` keeps C3 unavailable. The migration's downgrade is exercised on isolated empty C3 tables; no production rollback is claimed. Stubs have no external side effects.
 
 ## Handoff
-- changed files: pending
-- commands/results: pending
-- contracts: planned `1.12.0` / `0041`, not yet built
-- known limits: pending
-- integration notes: pending
+- changed files: the authored API/domain/analysis/events contract pins; migration `0041`; fourteen shared identity types; five C3 router files, their ports and gated composition adapters; recovery catalogs and grants; generated web client, mirror and frontend lock; C3 contract/DB/HTTP/Blob tests and live prose pins. The exact operation/table inventory is in `docs/program/CMP-SEAL-C3.md`.
+- commands/results: `api:verify` (230 operations), web lint/typecheck, focused contract seal/prose tests, 65 C3 HTTP stub cases, two over-limit part cases, migration and project-erase guards, two Blob reference cases, clean-install relation inventory and 135 journey-conformance cases pass. The complete contract suite and full Vitest are in progress or pending; the integration task owns `make gate`.
+- contracts: API and shared domain/analysis/events version `1.12.0`, 204 paths / 230 operations / 570 schemas; migration head `0041_comparison_stage_core`, fifteen additive tables; no new error code. The exact OpenAPI bytes are in commit `6cb49165b583a255ac5ad62c056b7381bc632e47`, named by `web/FRONTEND_LOCK.json`.
+- known limits: C3 routes remain typed module-gated stubs; no ZIP-set is first used by the seal. A populated `0041` refuses downgrade, and only an empty-table downgrade is tested. D-262 caller controls are required in `CMP-STAGE-PAIR-01`.
+- integration notes: preserve the `6cb49165` content commit when merging the seal; regenerate/verify the web client if any contract byte moves. Integrate on the checked C2 development tree after its `origin/dev` publication; this task has no remote authority. The separate `agent/cmp-zip-fix-01` review fix retains `__MACOSX/` rejection and is not yet in this branch. The report records the allowed-path and forbidden-hotspot audit.

@@ -332,7 +332,7 @@ def test_project_erase_deletes_a_nonempty_stage_graph_and_keeps_the_other_projec
                 "media_type, byte_size, sha256, page_count) "
                 "VALUES (:v, :d, 1, 'application/pdf', 1, :sha, 1)"),
                 {"v": version, "d": document, "sha": SHA})
-        upload, _file, _candidate = _upload(connection, project)
+        upload, file_id, _candidate = _upload(connection, project)
         connection.execute(text(
             "UPDATE stage_upload SET state = 'completed' WHERE stage_upload_id = :u"), {"u": upload})
         assembly, member, pair, revision, run, step = (
@@ -385,6 +385,11 @@ def test_project_erase_deletes_a_nonempty_stage_graph_and_keeps_the_other_projec
         assert not outside_scope
         assert all(len(scope[table]) == 1 for table in populated)
         assert not any(scope[table] for table in STAGE_TABLES - populated)
+        assert project_erase._state_counts(connection, closure, scope) == {"stage_upload_file": 1}
+        connection.execute(text(
+            "UPDATE stage_upload_file SET state = 'cancelled' WHERE stage_upload_file_id = :f"),
+            {"f": file_id})
+        assert project_erase._state_counts(connection, closure, scope) == {}
         receipts = project_erase.derive_receipts(connection, closure, scope)
         deleted = project_erase.delete_scope(connection, closure, scope)
         assert all(deleted[table] == 1 for table in populated)
