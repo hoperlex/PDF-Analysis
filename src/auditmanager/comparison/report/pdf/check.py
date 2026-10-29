@@ -5,13 +5,17 @@ reads the file with ``pypdf`` (BSD, pinned in ``pyproject.toml``). What is check
 portrait, the Cyrillic font **embedded**, every page carries the label that the text is model output not confirmed by an engineer and the
 recall line, every transition of the report is in the text, no service markup or identifier is in the text, no replacement character. A report
 whose PDF does not pass is failed with ``pdf_check_failed``; the file is not stored.
+
+**The check runs in the child**, after the render, under the same ceilings: the API process never loads a PDF library (the rule of
+``test_api_never_loads_pdfium.py``: ``pypdf`` is a PDF library), so this module is loaded by ``program.py`` by path and the parent only reads the
+child's verdict. It imports the standard library and ``pypdf`` and nothing of the product.
 """
 
 from __future__ import annotations
 
 import io
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping
 from typing import Any, Final
 
 from pypdf import PdfReader
@@ -31,10 +35,19 @@ def _squash(text: str) -> str:
     return re.sub(r"\s+", "", text or "")
 
 
-def check_pdf(
-    content: bytes, *, label: str, recall: str, transitions: Sequence[str], client: bool, code: str,
-) -> dict[str, Any]:
-    """``{"ok", "problems", "pages"}``; ``problems`` are plain sentences, never page content beyond the checked words."""
+def document_facts(document: Mapping[str, Any]) -> tuple[list[str], bool]:
+    """The transition labels the PDF must show and whether it is the client kind."""
+    if document["kind"] == "client":
+        return [r["label"] for r in document["view"]["rows"]], True
+    return [f"{t['from_version']}→{t['to_version']}" for t in document["report"]["transitions"]], False
+
+
+def check_pdf(content: bytes, document: Mapping[str, Any]) -> dict[str, Any]:
+    """``{"ok", "problems", "pages"}`` for the PDF written from ``document``; ``problems`` are plain sentences, never page content beyond the
+    checked words."""
+    transitions, client = document_facts(document)
+    label = document["label"] + (f". {document['recorded_label']}" if document.get("recorded_label") else "")
+    recall, code = document["recall"], document["code"]
     problems: list[str] = []
     reader = PdfReader(io.BytesIO(content))
     pages = len(reader.pages)

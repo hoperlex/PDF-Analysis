@@ -55,19 +55,29 @@ def test_the_package_holds_the_font_and_its_licence() -> None:
 
 
 def test_the_pdf_has_the_label_and_the_recall_line_on_every_page_and_the_font_embedded(written) -> None:
-    result = check_pdf(written.content, label=UNCONFIRMED_LABEL, recall=RECALL, transitions=["V1→V2", "V2→V3"], client=True, code=CODE)
-    assert result == {"ok": True, "problems": [], "pages": written.pages}
+    assert check_pdf(written.content, client_document(2)) == {"ok": True, "problems": [], "pages": written.pages}
+    assert written.problems == ()  # the child ran the same check and found nothing
     many = write_pdf(client_document(60))
-    assert many.pages >= 2
-    verdict = check_pdf(many.content, label=UNCONFIRMED_LABEL, recall=RECALL, transitions=[f"V{k}→V{k + 1}" for k in range(1, 61)], client=True, code=CODE)
+    assert many.pages >= 2 and many.problems == ()
+    verdict = check_pdf(many.content, client_document(60))
     assert verdict["ok"] is True and verdict["pages"] == many.pages  # the label and the recall line are checked page by page
 
 
 def test_a_pdf_without_the_label_or_with_service_words_is_not_fit(written) -> None:
-    other = check_pdf(written.content, label="Совсем другая подпись", recall=RECALL, transitions=["V1→V2"], client=True, code=CODE)
+    document = client_document(2)
+    other = check_pdf(written.content, {**document, "label": "Совсем другая подпись"})
     assert not other["ok"] and any("label is missing" in p for p in other["problems"])
-    wrong = check_pdf(written.content, label=UNCONFIRMED_LABEL, recall="изменённых листов 9", transitions=["V1→V2", "V7→V8"], client=True, code=CODE)
-    assert any("recall line is missing" in p for p in wrong["problems"]) and any("V7→V8" in p for p in wrong["problems"])
+    wrong = check_pdf(written.content, {**document, "recall": "изменённых листов 9"})
+    assert any("recall line is missing" in p for p in wrong["problems"])
+    other_rows = client_document(3)
+    assert any("V3→V4" in p for p in check_pdf(written.content, other_rows)["problems"])
+
+
+def test_the_child_reports_what_its_check_found_and_the_caller_decides() -> None:
+    document = client_document(2)
+    document["view"]["rows"][0]["points"][0]["object"] = "**Кабель**"  # service markup that must not reach a person
+    result = write_pdf(document)
+    assert any("service markup" in problem for problem in result.problems)
 
 
 def test_the_same_data_give_the_same_bytes_and_other_data_do_not(written) -> None:
@@ -77,8 +87,8 @@ def test_the_same_data_give_the_same_bytes_and_other_data_do_not(written) -> Non
 
 def test_a_recorded_answer_is_marked_on_the_page() -> None:
     result = write_pdf(client_document(2, recorded=True))
-    assert check_pdf(result.content, label=UNCONFIRMED_LABEL + ". " + RECORDED_LABEL, recall=RECALL, transitions=["V1→V2"], client=True, code=CODE)["ok"]
-    assert not check_pdf(write_pdf(client_document(2)).content, label=UNCONFIRMED_LABEL + ". " + RECORDED_LABEL, recall=RECALL, transitions=["V1→V2"], client=True, code=CODE)["ok"]
+    assert check_pdf(result.content, client_document(2, recorded=True))["ok"] and result.problems == ()
+    assert not check_pdf(write_pdf(client_document(2)).content, client_document(2, recorded=True))["ok"]
 
 
 class Recording:
@@ -155,6 +165,6 @@ def analytic_document() -> dict[str, Any]:
 def test_the_analytic_report_renders_with_its_registry_and_the_same_footer() -> None:
     document = analytic_document()
     result = write_pdf(document)
-    verdict = check_pdf(result.content, label=UNCONFIRMED_LABEL, recall=RECALL, transitions=["V1→V2", "V2→V3"], client=False, code=CODE)
-    assert verdict["ok"] is True, verdict
+    verdict = check_pdf(result.content, document)
+    assert verdict["ok"] is True and result.problems == (), verdict
     assert write_pdf(document).content == result.content

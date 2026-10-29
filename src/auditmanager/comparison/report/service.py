@@ -500,6 +500,8 @@ class ComparisonReportService:
                 written = write_pdf(document, runner=self._runner)
             except (PdfFailed, ChildStartError):
                 raise DomainError(ErrorCode.INTERNAL_ERROR, message="the PDF could not be written; the earlier PDF stays") from None
+            if written.problems:
+                raise DomainError(ErrorCode.INTERNAL_ERROR, message="the PDF did not pass its check; the earlier PDF stays")
             blob_id = self.publish(written.content, ROLE_PDF, _MEDIA[ARTIFACT_PDF])
             self._repo.add_artifact(
                 session, report_id, kind=ARTIFACT_PDF, blob_id=blob_id, sha256=hashlib.sha256(written.content).hexdigest(),

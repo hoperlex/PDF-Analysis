@@ -55,7 +55,6 @@ from auditmanager.comparison.report.model import (
     STAGE_VERIFICATION,
     WORK_KIND,
 )
-from auditmanager.comparison.report.pdf.check import check_pdf
 from auditmanager.comparison.report.pdf.runner import ChildStartError, PdfFailed, write_pdf
 from auditmanager.comparison.report.plan import ANALYTIC_RETRIES, CLIENT_RETRIES, MAX_TOKENS, SYSTEM_TEXT, SourceDoc, Unit
 from auditmanager.comparison.report.repository import PartRow, ReportRepository, ReportRow
@@ -498,11 +497,8 @@ class ReportHandler:
         except (PdfFailed, ChildStartError) as failure:
             _LOG.warning("comparison work %s: the PDF child ended without a result: %s", item.work_id, getattr(failure, "end", "no start"))
             return self._fail(item, run, FAIL_PDF)
-        labels, is_client = document_module.document_facts(document)
-        label = document["label"] + (f". {document['recorded_label']}" if document.get("recorded_label") else "")
-        verdict = check_pdf(written.content, label=label, recall=document["recall"], transitions=labels, client=is_client, code=code)
-        if not verdict["ok"]:
-            _LOG.warning("comparison work %s: the PDF did not pass its check: %s", item.work_id, "; ".join(verdict["problems"][:5]))
+        if written.problems:
+            _LOG.warning("comparison work %s: the PDF did not pass its check: %s", item.work_id, "; ".join(written.problems[:5]))
             return self._fail(item, run, FAIL_PDF_CHECK)
         text = json.dumps(document, ensure_ascii=False, sort_keys=True).encode("utf-8")
         text_blob = self._reports.publish(text, ROLE_TEXT, "application/json")

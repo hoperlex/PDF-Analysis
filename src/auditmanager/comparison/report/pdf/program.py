@@ -7,13 +7,13 @@ and the size of any file written (the settings' ``file_bytes``) are ceilings the
 report that needs more ends without a result, and the parent stores the failure of that report -- never a half-written PDF.
 
 **Nothing from the product is imported.** Started with ``-I``, no environment variable, user site or working directory reaches the import
-path; after the ceilings are set, ``render.py`` that lies beside this file is loaded by path under a private name (``_cmp_report_render``), and
-it imports the standard library and reportlab only. The input is a JSON file the parent wrote (``input_path``), the output a PDF at
+path; after the ceilings are set, ``render.py`` and ``check.py`` that lie beside this file are loaded by path under private names, and they import the
+standard library, reportlab and ``pypdf`` only. The input is a JSON file the parent wrote (``input_path``), the output a PDF at
 ``output_path``; the settings hold paths and numbers, not the report.
 
 The protocol is that of the other children: JSON lines on standard output, ``{"stage": "limits_set"}`` once the ceilings are in force, then one
-line with ``"status"``: ``ok`` with the number of pages and the size of the file and ``VmPeak`` / ``VmHWM`` / ``VmRSS`` in KiB, ``overrun`` (a
-``MemoryError``), or ``error:T``.
+line with ``"status"``: ``ok`` with the number of pages, the size of the file, the **problems** the check (``check.py``, ``pypdf``) found in
+it and ``VmPeak`` / ``VmHWM`` / ``VmRSS`` in KiB, ``overrun`` (a ``MemoryError``), or ``error:T``.
 """
 
 from __future__ import annotations
@@ -94,6 +94,9 @@ def main(argv: list[str]) -> int:
             document = json.load(handle)
         pages = render.render(document, settings["output_path"], font_dir=settings["font_dir"])
         size = os.path.getsize(settings["output_path"])
+        check = _load("_cmp_report_check", os.path.join(here, "check.py"))
+        with open(settings["output_path"], "rb") as handle:
+            problems = check.check_pdf(handle.read(), document)["problems"]
     except MemoryError:
         _say({"status": "overrun", "reason": "MemoryError", **_proc_status()})
         return EXIT_OVERRUN
@@ -103,7 +106,7 @@ def main(argv: list[str]) -> int:
             return EXIT_OVERRUN
         _say({"status": f"error:{type(failure).__name__}", **_proc_status()})
         return EXIT_ERROR
-    _say({"status": "ok", "pages": pages, "bytes": size, **_proc_status()})
+    _say({"status": "ok", "pages": pages, "bytes": size, "problems": problems[:20], **_proc_status()})
     return 0
 
 

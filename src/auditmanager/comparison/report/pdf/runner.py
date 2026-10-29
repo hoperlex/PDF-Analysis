@@ -53,10 +53,14 @@ class PdfFailed(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class PdfResult:
+    """The PDF and what the child's check found in it: ``problems`` empty means the file passed (A4, the font embedded, the label and the
+    recall line on every page, every transition in the text, nothing of the service in it)."""
+
     content: bytes
     pages: int
     wall_s: float
     max_rss_kib: int
+    problems: tuple[str, ...] = ()
 
 
 def pdf_runner() -> SubprocessChildRunner:
@@ -84,4 +88,7 @@ def write_pdf(
     pages = int(result.facts.get("pages") or 0)
     if not content.startswith(b"%PDF-") or pages < 1:
         raise PdfFailed("error:NotAPdf")
-    return PdfResult(content=content, pages=pages, wall_s=result.wall_s, max_rss_kib=result.max_rss_kib)
+    return PdfResult(
+        content=content, pages=pages, wall_s=result.wall_s, max_rss_kib=result.max_rss_kib,
+        problems=tuple(str(p) for p in result.facts.get("problems") or ()),
+    )

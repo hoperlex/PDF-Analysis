@@ -16,7 +16,7 @@ from typing import Any, Final
 from auditmanager.comparison.report import analytic, client
 from auditmanager.comparison.report.model import RECORDED_LABEL, UNCONFIRMED_LABEL
 
-__all__ = ["analytic_document", "client_document", "document_facts", "recall_line", "sheet_counts"]
+__all__ = ["analytic_document", "client_document", "recall_line", "sheet_counts"]
 
 _ENGINE_LINE: Final = re.compile(r"^Сравнение:")
 
@@ -82,10 +82,3 @@ def analytic_document(
         "report": dict(report), "distribution": analytic.distribution(dict(report)), "analysed_at": analysed_at, "sha256": sha256,
     })
     return document
-
-
-def document_facts(document: Mapping[str, Any]) -> tuple[list[str], bool]:
-    """The transition labels the PDF must show and whether it is the client kind (what ``check_pdf`` is asked)."""
-    if document["kind"] == "client":
-        return [r["label"] for r in document["view"]["rows"]], True
-    return [f"{t['from_version']}→{t['to_version']}" for t in document["report"]["transitions"]], False
