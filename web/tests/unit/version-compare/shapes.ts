@@ -352,6 +352,7 @@ function aiShapes(): ComparisonShape[] {
   push({ name: 'changes-panel-recorded', make: () => createElement(ChangesPanelView, panelProps({ description: description({ recorded: true }), copied: true })) });
   push({ name: 'changes-panel-estimate', make: () => createElement(ChangesPanelView, panelProps({ description: description({ state: 'not_processed', changes: undefined as never, unresolved: undefined as never, history_count: 1 }), estimate: createElement(EstimatePanel, estimateProps({ title: 'Описать этот лист', consentKind: 'sheet', confirmLabel: 'Передать и описать', estimate: estimate({ units: 1, sheets: 1, calls: 1, images: 2, image_bytes: 600_000, prompt_chars: 8_000 }), agreedDigest: null })) })) });
   push({ name: 'changes-panel-loading', make: () => createElement(ChangesPanelView, panelProps({ description: undefined, loading: true })) });
+  push({ name: 'changes-panel-failed-read', make: () => createElement(ChangesPanelView, panelProps({ description: undefined, failure: comparisonFailure(refusal('internal_error')) })) });
   push({ name: 'changes-panel-not-wired', make: () => createElement(ChangesPanelView, panelProps({ description: undefined, failure: comparisonFailure(NOT_WIRED) })) });
   push({
     name: 'evidence-banner-one',
@@ -415,6 +416,7 @@ function aiShapes(): ComparisonShape[] {
   push({ name: 'comparison-ai-queue-block-view', make: () => createElement(ComparisonAiQueueBlockView, { queue: aiQueue() }) });
   push({ name: 'comparison-ai-queue-block-loaded', make: () => createElement(ComparisonAiQueueBlock), seedClient: (c) => c.setQueryData(COMPARISON_KEYS.aiQueue(), aiQueue()) });
   push({ name: 'comparison-ai-queue-block-not-wired', make: () => createElement(ComparisonAiQueueBlock), seedClient: (c) => seedError(c, COMPARISON_KEYS.aiQueue(), refusal('dependency_unavailable', { dependency: 'comparison_launch_queue' })) });
+  push({ name: 'comparison-ai-queue-block-failed', make: () => createElement(ComparisonAiQueueBlock), seedClient: (c) => seedError(c, COMPARISON_KEYS.aiQueue(), refusal('internal_error')) });
   push({ name: 'comparison-ai-queue-block-cold', make: () => createElement(ComparisonAiQueueBlock) });
   for (const [name, members] of bundles) {
     out.push({
@@ -439,7 +441,7 @@ const BUNDLES: readonly (readonly [RegExp, string])[] = [
   [/^report-window-(upload|not-wired|every-stage)$/, 'report-windows-variants'],
   [/^changes-panel-(not_processed|running|done|stale|engine_same)$/, 'changes-panels-by-state'],
   [/^changes-panel-(recorded|estimate)$/, 'changes-panels-variants'],
-  [/^changes-panel-(loading|not-wired)$/, 'changes-panels-reads'],
+  [/^changes-panel-(loading|not-wired|failed-read)$/, 'changes-panels-reads'],
   [/^evidence-banner-/, 'evidence-banners'],
   [/^(ai-changes-block|specifications-block|summary-report-block|report-window)-container-cold$|^specification-changes-cold$|^ai-start-dialog-pending$|^report-draft-dialog-pending$/, 'ai-containers-cold'],
   [/^(ai-changes-block|specifications-block|summary-report-block|report-window)-container-loaded$/, 'ai-containers-loaded'],
