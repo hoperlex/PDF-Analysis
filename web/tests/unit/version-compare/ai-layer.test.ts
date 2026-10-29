@@ -263,6 +263,8 @@ describe('a recorded (test) answer is labelled as one', () => {
     const recorded = panel({ description: description({ recorded: true }) });
     expect(recorded).toContain('data-recorded-label=""');
     expect(recorded).toContain(RECORDED_LABEL);
+    // the passport of the panel says it once in a line of its own, besides the mark on each text
+    expect(recorded).toMatch(/<p[^>]*data-recorded-label=""/);
     const ordinary = panel({ description: description({ recorded: false }) });
     expect(ordinary).not.toContain('data-recorded-label');
     expect(ordinary).not.toContain(RECORDED_LABEL);
@@ -508,6 +510,12 @@ describe('the AI flags and hints in the matrix cells', () => {
     expect(row === undefined || cell === undefined).toBe(false);
     const mine = hintsFor(all, row as NonNullable<typeof row>, cell as NonNullable<typeof cell>);
     expect(mine.map((hint) => hint.decision)).toEqual(['link_accepted']);
+    // three hints stand on the cells of the first row, one per version: each lands on its own cell only
+    const first = (m.rows ?? [])[0];
+    expect(first).toBeDefined();
+    const byVersion = [V1, V2, V3].map((version) =>
+      hintsFor(all, first as NonNullable<typeof first>, (first?.cells.find((c) => c.version_uid === version)) as NonNullable<(typeof m.rows)>[number]['cells'][number]).map((hint) => hint.decision));
+    expect(byVersion).toEqual([['hint_table'], ['hint_confidence'], ['hint_taken']]);
     // a hint of another version's cell of the same row does not land here, nor does one for a sheet that is not in the row
     expect(hintsFor(all, (m.rows ?? [])[3] as never, (m.rows ?? [])[3]?.cells[0] as never)).toEqual([]);
   });
