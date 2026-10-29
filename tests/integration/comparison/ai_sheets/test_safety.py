@@ -195,6 +195,26 @@ def test_a_retry_describes_again_only_the_sheets_that_failed(lab: Any) -> None:
     assert lab.job(job["job_id"])["state"] == "completed"
 
 
+def test_a_retry_leaves_alone_the_sheets_that_were_cancelled_and_have_no_description(lab: Any) -> None:
+    lab.record("p1")  # p4 has no recorded answer: it fails; p5 and p6 are still waiting when the job is cancelled
+    job = lab.start_series()
+    for _ in range(3):
+        lab.run_next()
+    lab.service.cancel(job_id=job["job_id"], command=lab.command("cancel_comparison_ai_sheet_changes"))
+    assert lab.items(job["job_id"])["p4"] == "failed"
+    estimate = lab.service.estimate_series(series_id=lab.world.series, only_failed=True)
+    assert (estimate["units"], estimate["calls"]) == (1, 1), "the failed sheet only, not the two that were cancelled"
+    lab.record_single("p4")
+    asked = lab.answers.calls
+    lab.service.retry(job_id=job["job_id"], consent=lab.consent(estimate["estimate_digest"]),
+                      command=lab.command("retry_comparison_ai_sheet_changes"))
+    lab.drain()
+    assert lab.answers.calls == asked + 1
+    assert lab.items(job["job_id"]) == {"p1": "done", "p2": "done", "p4": "done", "p5": "cancelled", "p6": "cancelled"}
+    assert lab.service.get_description(sheet_pair_id=lab.world["p5"].pair)["state"] == "cancelled"
+    assert lab.service.get_description(sheet_pair_id=lab.world["p4"].pair)["state"] == "done"
+
+
 def test_a_retry_with_no_failed_sheet_has_nothing_to_do(lab: Any) -> None:
     for name in ("p1", "p6"):
         lab.record(name)

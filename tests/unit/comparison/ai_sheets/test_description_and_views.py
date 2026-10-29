@@ -191,6 +191,7 @@ def stored(state: str = "done", prompt: str = PROMPT, **over: Any) -> dict[str, 
     ({"item_state": "queued", "job_state": "failed"}, "failed"),
     ({"item_state": "cancelled", "job_state": "cancelled"}, "cancelled"),
     ({"item_state": "queued", "job_state": "cancelled"}, "cancelled"),
+    ({"item_state": "queued", "job_state": "completed"}, "cancelled"),
     ({**stored("done"), "item_state": "running", "job_state": "running"}, "running"),
     ({**stored("done"), "item_state": "failed", "job_state": "completed"}, "done"),
 ])

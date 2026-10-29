@@ -189,6 +189,14 @@ class SheetChangesMethod:
     def work_items(self, session: Session, job: AiJobRecord, mode: AiMode) -> list[AiWorkItemSpec]:
         scope = job.scope
         chosen, _keys, _stored = self.wanted(session, scope, mode, job.pinned_model, restart=job.restart)
+        if mode is AiMode.FAILED:
+            # «Повторить листы с ошибкой» describes the failed sheets and nothing else: a sheet that was waiting when the job was
+            # cancelled stays cancelled, so no row of this job says it is still to come.
+            wanted = {p.pair_id for p in chosen}
+            for item in self._repo.items_of_job(session, job.job_id):
+                if item.pair_id not in wanted and item.state in ("queued", "running"):
+                    self._repo.move_item(session, job_id=job.job_id, pair_id=item.pair_id, from_states=("queued", "running"),
+                                         to_state="cancelled")
         specs: list[AiWorkItemSpec] = []
         for pair in sorted(chosen, key=lambda p: (p.transition_no, p.pair_no)):
             self._repo.ensure_item(session, job_id=job.job_id, project_uid=job.project_uid, pair_id=pair.pair_id)

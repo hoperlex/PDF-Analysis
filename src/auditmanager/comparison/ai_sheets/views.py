@@ -81,8 +81,8 @@ def derive_state(ps: PairState, *, current_prompt: str) -> str:
         return "stale" if ps.description_prompt != current_prompt else str(ps.description_state)
     if ps.item_state == "failed" or (ps.item_state in ("queued", "running") and ps.job_state == "failed"):
         return "failed"
-    if ps.item_state == "cancelled" or (ps.item_state in ("queued", "running") and ps.job_state == "cancelled"):
-        return "cancelled"
+    if ps.item_state == "cancelled" or (ps.item_state in ("queued", "running") and ps.job_state in ("cancelled", "completed")):
+        return "cancelled"  # a sheet still waiting in a job that is over was never described: it was cancelled
     if ps.status in ENGINE_SAME:
         return "engine_same"
     return "not_processed"
