@@ -83,8 +83,15 @@ class Fake:
             "assert args[args.index('--output-format') + 1] == 'stream-json'\n"
             "sys.stdin.read()\n"
             f"STEPS = json.loads({json.dumps(json.dumps(steps))})\n"
+            "import atexit, stat\n"
+            "FILE = stat.S_ISREG(os.fstat(1).st_mode)  # the real CLI writes nothing to a regular file until it exits\n"
+            "HELD = []\n"
+            "atexit.register(lambda: (sys.stdout.write(''.join(HELD)), sys.stdout.flush()))\n"
             "def emit(text):\n"
-            " sys.stdout.write(text); sys.stdout.flush()\n"
+            " if FILE:\n"
+            "  HELD.append(text)\n"
+            " else:\n"
+            "  sys.stdout.write(text); sys.stdout.flush()\n"
             "for step in STEPS:\n"
             " kind = step[0]\n"
             " if kind == 'sleep':\n"
@@ -414,3 +421,26 @@ def test_report_still_refuses_a_line_that_is_not_a_result() -> None:
         claude_answer._report(b"not json", MODEL)
     with pytest.raises(claude_answer.TaskError, match="^unknown_claude_output$"):
         claude_answer._report(json.dumps({"type": "system"}).encode(), MODEL)
+
+
+def test_the_cli_is_read_through_a_pipe_because_it_writes_nothing_to_a_file_until_it_exits(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`AR-V3-LIVENESS-PIPE-01`: the real CLI buffers a file until exit (400 s, 0 bytes, measured); the first
+    live calls were cut at the stall window because the command watched a file.  This fake does the same and
+    streams only to a pipe: a stream that keeps writing for longer than the stall window must not be cut."""
+    monkeypatch.setattr(claude_answer, "STALL_SECONDS", 0.4)
+    steps: list[list] = [["line", init()]]
+    for _ in range(12):
+        steps += [["sleep", 0.1], ["line", delta("x")]]
+    steps.append(["line", result()])
+    fake = Fake(tmp_path, steps)
+    reply = json.loads(claude_answer.ssh_reply(ssh_task(), claude=str(fake)))
+    assert reply["output_text"] == '{"ok":true}'
+
+
+def test_a_prompt_and_a_stream_larger_than_the_pipe_buffers_do_not_deadlock(tmp_path: Path) -> None:
+    big = {"model": MODEL, "system": "Return JSON.", "user_text": "A page. " * 400_000, "output_schema": SCHEMA}
+    task = claude_answer.read_task(json.dumps(big).encode(), ssh=True)
+    fake = Fake(tmp_path, [["line", init()], ["flood", 40, 100_000], ["line", result()]])
+    reply = json.loads(claude_answer.ssh_reply(task, claude=str(fake)))
+    assert reply["output_text"] == '{"ok":true}'
