@@ -37,6 +37,7 @@ from auditmanager.analysis.public import (
     ProxyAdapter,
     ProxyDispatchError,
     ProxySettings,
+    with_wire_schema,
 )
 from auditmanager.executors.destinations import (
     DestinationPolicy,
@@ -191,7 +192,9 @@ class AnthropicMessagesAdapter:
         allowed = effective_timeout(self._timeout_seconds, self._context)
         if allowed is None:
             raise _no_time_left()
-        body = {**dict(request.body), "model": self._gateway_model}
+        # The provider is told the wire form of the response schema (`AR-V3-WIRE-SCHEMA-01`); the
+        # request's own body and its checksum are not changed.
+        body = {**with_wire_schema(request.body), "model": self._gateway_model}
         body.pop("images", None)
         if images:
             add_anthropic_images(body, images)
