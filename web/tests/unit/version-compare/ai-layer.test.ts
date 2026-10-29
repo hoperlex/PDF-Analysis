@@ -515,7 +515,7 @@ describe('the AI flags and hints in the matrix cells', () => {
     expect(first).toBeDefined();
     const byVersion = [V1, V2, V3].map((version) =>
       hintsFor(all, first as NonNullable<typeof first>, (first?.cells.find((c) => c.version_uid === version)) as NonNullable<(typeof m.rows)>[number]['cells'][number]).map((hint) => hint.decision));
-    expect(byVersion).toEqual([['hint_table'], ['hint_confidence'], ['hint_taken']]);
+    expect(byVersion).toEqual([['hint_confidence'], ['hint_taken'], ['hint_shared']]);
     // a hint of another version's cell of the same row does not land here, nor does one for a sheet that is not in the row
     expect(hintsFor(all, (m.rows ?? [])[3] as never, (m.rows ?? [])[3]?.cells[0] as never)).toEqual([]);
   });
