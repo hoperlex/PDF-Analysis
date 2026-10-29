@@ -171,10 +171,12 @@ class LevelJudge:
             if name.startswith(b"__MACOSX/"):
                 raise refuse_set("comparison_zip_member_kind")
             # The name a reader shows can differ from the header's (the Unicode Path field):
-            # it is held to the same rule, so a hint can never be a traversal.
+            # it is held to the same path and service-member rules.
             shown = decode_display_name(name, entry.flags, entry.extra)
             if is_unsafe_name(shown.encode("utf-8")):
                 raise refuse_set("comparison_zip_member_name")
+            if shown.startswith("__MACOSX/"):
+                raise refuse_set("comparison_zip_member_kind")
             if name.endswith(b"/"):
                 if entry.size != 0:
                     raise refuse_set("comparison_zip_member_kind")
