@@ -57,6 +57,7 @@ The merged C2 comparison modules pass one complete `make gate` on an exact clean
 - `docs/program/CMP-WAVE-C2-REPORT.md`
 - `docs/program/CURRENT_STATE.md`
 - `web/node_modules/**`
+- `.local/norms/**`
 
 ## Forbidden hotspots
 - `contracts/**`, `db/migrations/**`, root dependency and lock files, composition root, global styles, `infra/**`
@@ -69,7 +70,7 @@ The merged C2 comparison modules pass one complete `make gate` on an exact clean
 - no force push and no automatic merge into `origin/main`
 
 ## Deliverables
-- locally installed web dependencies from this tree's lockfile; complete `make gate` with literal `GATE OK` on an exact clean SHA
+- locally installed web dependencies from this tree's lockfile and the local norms-corpus link required by gate preflight; complete `make gate` with literal `GATE OK` on an exact clean SHA
 - `docs/program/CMP-WAVE-C2-REPORT.md` and the current-state header with evidence, known limits and forbidden-hotspot proof
 - fast-forward push of that exact checked SHA to `origin/dev`, with remote-ref verification; leave integration branch at that SHA
 
