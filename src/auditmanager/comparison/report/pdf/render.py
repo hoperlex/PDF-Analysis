@@ -288,6 +288,8 @@ def _build_analytic(document: dict[str, Any], tmp: Path, pages: int) -> int:
         s.append(Paragraph("Основание и границы вывода", st["h2"]))
         for line in report.get("limitations") or []:
             s.append(Paragraph("• " + _t(line), st["small"]))
+        for line in report.get("check_warnings") or []:
+            s.append(Paragraph("• " + _t("Проверка программы не подтвердила: " + line), st["small"]))
         if report.get("reference_warnings"):
             s.append(Paragraph("• " + _t(
                 f"Отброшено ссылок на факты, которых нет в реестре или которые относятся к другому переходу: {len(report['reference_warnings'])}."),

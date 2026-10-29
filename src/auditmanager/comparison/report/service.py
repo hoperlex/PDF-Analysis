@@ -24,7 +24,7 @@ from typing import Any, Final
 from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.comparison.ai_jobs.estimate import RouteReader, read_route
-from auditmanager.comparison.ai_jobs.model import AiConsentInput, AiMode, AiScope
+from auditmanager.comparison.ai_jobs.model import CONSENT_PAUSES, AiConsentInput, AiMode, AiScope
 from auditmanager.comparison.ai_jobs.service import AiJobCommand, ComparisonAiJobService
 from auditmanager.comparison.modules import MODULE_VERSIONS, enabled_modules, parse_modules
 from auditmanager.comparison.profile.publish import ProfileBlobPublisher
@@ -209,7 +209,21 @@ class ComparisonReportService:
         view = report_dict(row, self._repo.parts(session, report_id), self._repo.artifacts(session, report_id), job)
         if row.state == "draft" and row.deleted_at is None:
             view["estimate"] = self._draft_estimate(session, row)
+        elif job is not None and job.get("state") == "paused" and job.get("pause_reason") in CONSENT_PAUSES:
+            left = self._left_estimate(session, row, job["job_id"])
+            if left is not None:
+                view["estimate"] = left
         return view
+
+    def _left_estimate(self, session: Session, row: ReportRow, job_id: str) -> dict[str, Any] | None:
+        """The estimate of what a report **has left**, for the consent a resume carries after a pause for ``overrun`` or ``route_changed``: the
+        report shows it beside the job's consented one, so the client has the digest to consent to (a report that is paused for another reason
+        needs none). ``None`` when it cannot be computed now (no route)."""
+        core = self._core(self._method(session, row))
+        try:
+            return core.estimate_in(session, self._scope(row), AiMode.LEFT, job=core.job(session, job_id)).as_dict()
+        except DomainError:
+            return None
 
     def _draft_estimate(self, session: Session, row: ReportRow) -> dict[str, Any]:
         """The estimate of a draft **now**: the digest a client consents to is the one a start will compute. The stored estimate (and its frozen
@@ -281,7 +295,7 @@ class ComparisonReportService:
             summary = build_summary(data)
             report_id = self._draft(
                 session, series=series, kind=kind, source=SOURCE_SERIES_SUMMARY, raw=summary.text.encode("utf-8"),
-                filename=summary.filename, source_name=None, reuse=bool(reuse), prepared_from=None, records=summary.records,
+                filename=summary.filename, source_name=summary.filename, reuse=bool(reuse), prepared_from=None, records=summary.records,
                 unchanged=frozenset(), user_uid=user_uid, actor_label=actor_label, command_id=str(claim.command_id),
             )
             self._commands.succeed(session, claim.command_id, {"report_id": report_id})

@@ -222,7 +222,7 @@ class ReportAiMethod:
                 if part is None:
                     self._repo.add_part(session, spec.report_id, transition_id, **self._pending(unit))
                 else:
-                    self._repo.set_part(session, spec.report_id, transition_id, **self._pending(unit))
+                    self._repo.set_part(session, spec.report_id, transition_id, **self._pending(unit, part))
             items.append(AiWorkItemSpec(
                 unit_key=transition_unit(transition_id), priority=0,
                 payload={"report_id": spec.report_id, "unit": "transition", "transition_id": transition_id, "number": unit.number},
@@ -238,8 +238,14 @@ class ReportAiMethod:
             return {"selection": "failed", "facts": facts}
         return {"analysis": "failed", "verification": "pending", "facts": facts}
 
-    def _pending(self, unit: Unit) -> dict[str, Any]:
-        """A part that waits for its model: every mark of the kind ``pending``, the content key stored beside."""
+    def _pending(self, unit: Unit, part: PartRow | None = None) -> dict[str, Any]:
+        """A part that waits for its model: every mark of the kind ``pending``, the content key stored beside. A part of the analytic kind whose
+        analyst has answered keeps that answer (a continue goes on with the verifier and never asks the analyst again)."""
+        if part is not None and self._spec.kind == KIND_ANALYTIC and part.analysis == "done" and (part.facts or {}).get("analysis"):
+            return {
+                "analysis": "done", "verification": "pending", "selection": None, "warnings": None, "points": None, "questions": None,
+                "facts": {k: v for k, v in (part.facts or {}).items() if k != "error"},
+            }
         facts = {"content_key": unit.key}
         if self._spec.kind == KIND_CLIENT:
             return {"selection": "pending", "facts": facts, "analysis": None, "verification": None, "warnings": None, "points": None, "questions": None}

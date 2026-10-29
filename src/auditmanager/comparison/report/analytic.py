@@ -445,10 +445,11 @@ def verifier_prompt(
         + (f" (строки {', '.join(str(r['md_from']) + '–' + str(r['md_to']) for r in c['evidence'])})" if c.get("evidence") else "")
         for c in claims
     ]
+    # sorted keys: a result read back from the database has its keys in the order jsonb keeps them, and the same data must make the same prompt
     analyst_json = json.dumps({
         gid: {"transitions": answer.get("transitions"), "input_problems": answer.get("input_problems")}
         for gid, answer in results.items()
-    }, ensure_ascii=False)
+    }, ensure_ascii=False, sort_keys=True)
     prompt = render("verifier", {
         "UNIT_NOTE": "Все переходы единицы переданы целиком.", "RUN_ID": run_id, "UNIT_ID": unit["unit_id"],
         "SOURCE_METADATA": source_metadata(source, manifest), "UNIT_MANIFEST": "\n".join(unit_manifest),
@@ -660,7 +661,7 @@ def composer_prompt(
     fact_text = "\n".join(facts_mod.model_line(by_id[f]) for f in used) or "— фактов нет"
     return render("composer", {
         "RUN_ID": run_id, "SOURCE_METADATA": source_metadata(source, manifest),
-        "VERIFIED_COVERAGE": coverage_text(manifest, verified), "VERIFIED_RESULTS": json.dumps(data, ensure_ascii=False),
+        "VERIFIED_COVERAGE": coverage_text(manifest, verified), "VERIFIED_RESULTS": json.dumps(data, ensure_ascii=False, sort_keys=True),
         "FACTS": fact_text, "RETRY_NOTE": retry_note,
     }, f"{run_id}:C")
 

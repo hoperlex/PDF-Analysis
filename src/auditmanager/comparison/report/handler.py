@@ -113,12 +113,15 @@ class UnavailableModelSource:
 class StaticModelSource:
     """One adapter for every job (a test's ``RecordedAnswers`` or a scripted live adapter): the route names the job's own revision and model."""
 
-    def __init__(self, adapter: Any, *, pin: Any = None, expected_model: str | None = None, unmetered: bool = False) -> None:
-        self._adapter, self._pin, self._expected, self._unmetered = adapter, pin, expected_model, unmetered
+    def __init__(
+        self, adapter: Any, *, pin: Any = None, expected_model: str | None = None, unmetered: bool = False, revision_id: str | None = None,
+    ) -> None:
+        """``revision_id`` is the revision the calls travel on when it is not the one the job consented to (a test of «the route changed»)."""
+        self._adapter, self._pin, self._expected, self._unmetered, self._revision = adapter, pin, expected_model, unmetered, revision_id
 
     def route(self, session: Session, job: AiJobRecord) -> CallRoute:
         return CallRoute(
-            adapter=self._adapter, model_identity=job.pinned_model, connection_revision_id=job.connection_revision_id,
+            adapter=self._adapter, model_identity=job.pinned_model, connection_revision_id=self._revision or job.connection_revision_id,
             expected_model=self._expected, unmetered=self._unmetered, pin=self._pin,
         )
 
@@ -260,10 +263,15 @@ class ReportHandler:
         except (CallFailed, OutcomeUnknown, CallLost) as error:
             raise _Ended(error.as_outcome()) from None
 
-    def _pause_after(self, session: Session, run: _Run, result: CallResult) -> None:
-        """The call that took the job past 1.2 x its estimate was paid for and is kept; the job makes no further call."""
-        if result.pause is not None:
-            self._jobs.pause_for_spend(session, run.job.job_id, result.pause.reason)
+    def _pause_after(self, session: Session, run: _Run, item: WorkItem, result: CallResult) -> None:
+        """The call that took the job past 1.2 x its estimate was paid for and is kept; the job makes no further call. A job with no model work
+        left (the client kind's last transition; the PDF is no call) is not paused: a pause would hold back a file that costs nothing, and a resume
+        would have no work to take a new consent for."""
+        if result.pause is None:
+            return
+        if run.report.kind == KIND_CLIENT and not self._repo.other_live_units(session, run.job.job_id, item.work_id):
+            return
+        self._jobs.pause_for_spend(session, run.job.job_id, result.pause.reason)
 
     # -- a transition ----------------------------------------------------------------------------------
     def _transition(self, item: WorkItem, payload: Mapping[str, Any]) -> Outcome:
@@ -302,7 +310,7 @@ class ReportHandler:
                 facts=facts, warnings=warnings, points=points, questions=questions,
             )
             if result is not None:
-                self._pause_after(session, run, result)
+                self._pause_after(session, run, item, result)
             sync_report(session, self._repo, run.report.report_id, self._jobs.job(session, run.job.job_id), stage=stage)
             session.commit()
 
@@ -449,6 +457,16 @@ class ReportHandler:
     # -- the final item --------------------------------------------------------------------------------
     def _final(self, item: WorkItem, payload: Mapping[str, Any]) -> Outcome:
         run = self._begin(item, payload)
+        try:
+            return self._final_stage(item, run)
+        except _Ended as ended:
+            # The last item of a job has no other item to make the job's end: a failure that ends it for good (no retry) fails the report's job, so
+            # the report reads ``failed`` and «Продолжить» can finish it, never a job that stays ``running`` with nothing left to run.
+            if isinstance(ended.outcome, Failed) and not ended.outcome.retry:
+                return self._fail(item, run, ended.outcome.reason)
+            raise
+
+    def _final_stage(self, item: WorkItem, run: _Run) -> Outcome:
         report, job = run.report, run.job
         with self._sessions() as session:
             if self._repo.other_live_items(session, job.job_id, item.work_id):
@@ -591,6 +609,8 @@ class ReportHandler:
         if problems:
             _LOG.warning("comparison work %s: the report did not pass its checks: %s", item.work_id, "; ".join(problems[:5]))
             raise _Ended(self._fail(item, run, FAIL_CHECK))
+        if checked["fixable"]:  # accepted after the last attempt with only fixable remarks (runner.py:791-793): the report says so
+            report["check_warnings"] = list(checked["fixable"])
         rejected = sum(c["verdict"] == "rejected" for v in verified.values() for c in v["claims"])
         return report, rejected + len(report.get("reference_warnings") or [])
 

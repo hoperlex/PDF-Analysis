@@ -103,6 +103,10 @@ _ARTIFACTS = text(
 _OTHER_LIVE_ITEMS = text(
     "SELECT count(*) FROM comparison_work WHERE comparison_ai_job_id = :job AND terminal_at IS NULL AND comparison_work_id <> :me"
 )
+_OTHER_LIVE_UNITS = text(
+    "SELECT count(*) FROM comparison_work WHERE comparison_ai_job_id = :job AND terminal_at IS NULL AND comparison_work_id <> :me "
+    "AND payload ->> 'unit' = 'transition'"
+)
 _PROJECT_NAME = text("SELECT name FROM project WHERE project_uid = :project")
 _TRANSITIONS = text(
     "SELECT transition_no, comparison_transition_id FROM comparison_transition WHERE comparison_series_id = :series ORDER BY transition_no"
@@ -300,6 +304,10 @@ class ReportRepository:
         return found[-1] if found else None
 
     # -- the job's items (a read) -----------------------------------------------------------------
+    def other_live_units(self, session: Session, job_id: str, work_id: str) -> int:
+        """Live transition items of the job other than ``work_id``: the model work that is still to come (the final item makes no call of the client kind)."""
+        return int(session.execute(_OTHER_LIVE_UNITS, {"job": job_id, "me": work_id}).scalar_one())
+
     def other_live_items(self, session: Session, job_id: str, work_id: str) -> int:
         """Live work items of the job other than ``work_id`` (the final item waits for every other one to end)."""
         return int(session.execute(_OTHER_LIVE_ITEMS, {"job": job_id, "me": work_id}).scalar_one())
