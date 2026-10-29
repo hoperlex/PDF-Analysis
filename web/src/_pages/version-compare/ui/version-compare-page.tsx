@@ -9,7 +9,8 @@
  * со всеми версиями» opens the upload dialogs.
  *
  * **Composition only.** The tables and the matrix are `widgets/version-series`, the dialogs `widgets/comparison-upload`, the
- * viewer `widgets/comparison-viewer`; the viewer and the dialogs are sibling widgets, so this page is where they meet. What
+ * viewer `widgets/comparison-viewer` (with its side panel «Изменения в листе»), the window «Сформировать PDF-отчёт…»
+ * `widgets/comparison-report`; the viewer and the dialogs are sibling widgets, so this page is where they meet. What
  * is read and sent is `entities/version-series`.
  *
  * **The module.** `ProductVersion.comparison_modules` says whether «Сравнение версий» is served. A module that is off is
@@ -28,6 +29,7 @@ import { useProjectList } from '@/entities/project';
 import { useProductVersion } from '@/entities/release';
 import { codeOf, useComparisonOverview, versionsModuleOn } from '@/entities/version-series';
 import { ComparisonViewer } from '@/widgets/comparison-viewer';
+import { ReportWindow } from '@/widgets/comparison-report';
 import { UploadDialog } from '@/widgets/comparison-upload';
 import type { UploadMode } from '@/widgets/comparison-upload';
 import { ModuleOffState, ProjectsAndStages, SheetsTab } from '@/widgets/version-series';
@@ -172,7 +174,10 @@ export function VersionComparePage({ initial }: VersionComparePageProps) {
                 heading={heading}
                 mayEdit={mayAct}
                 renderViewer={({ pair, rasterSize, navigation }) => (
-                  <ComparisonViewer pair={pair} navigation={navigation} {...(rasterSize === undefined ? {} : { rasterSize })} />
+                  <ComparisonViewer pair={pair} navigation={navigation} changes={{ mayAct }} {...(rasterSize === undefined ? {} : { rasterSize })} />
+                )}
+                renderReport={({ series, names, mayAct: allowed, onClose }) => (
+                  <ReportWindow series={series} names={names} mayAct={allowed} onClose={onClose} />
                 )}
               />
             )}

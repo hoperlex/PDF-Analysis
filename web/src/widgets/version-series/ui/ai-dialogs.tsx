@@ -143,7 +143,7 @@ export function SelectionDialog({ projectUid, items, restart, queueNote, onDone,
   const send = (): void => {
     const body: ComparisonLaunchItem[] = items.map((item) => {
       const row = (estimates.data ?? []).find((entry) => entry.item.documentUid === item.documentUid && entry.item.step === item.step);
-      return row?.estimate == null
+      return row?.estimate === undefined || row.estimate === null
         ? { document_uid: item.documentUid, step: item.step }
         : { document_uid: item.documentUid, step: item.step, consent: consentOf(row.estimate) };
     });

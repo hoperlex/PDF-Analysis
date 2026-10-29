@@ -101,3 +101,18 @@
   border-bottom: 1px solid var(--am-line-soft);
   text-align: left;
 }
+
+/* `CMP-VC-UI-02`: the installation's AI queue «Очередь «ИИ-описание изменений»» under the block «Сравнение» */
+
+.aiQueue {
+  display: grid;
+  gap: var(--am-gap-xs);
+  margin-top: var(--am-gap-sm);
+}
+
+.aiQueueList {
+  display: grid;
+  gap: var(--am-gap-xs);
+  margin: 0;
+  padding-left: var(--am-gap);
+}
