@@ -1,7 +1,7 @@
 # Task AR-V3-WIRE-SCHEMA-01 — the AR v3 response schema in a form the model providers accept
 
 task_id: AR-V3-WIRE-SCHEMA-01
-status: dispatched 2026-10-29 (owner's direct choice «Я в этой сессии» after the first live AR v3 failure; the integrator holds the exception to AGENTS section 7.1 for this one task)
+status: completed in development candidate (lane `af5460ba`, merged `25cc1cdf`; report `docs/program/AR-V3-WIRE-SCHEMA-01.md`, written by the integrator from the lane's hand-back)
 
 ## Outcome
 
