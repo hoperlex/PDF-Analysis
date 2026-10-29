@@ -14,6 +14,17 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 
 KIND = "comparison_pair_check"
 STATES = ("queued", "running", "paused", "completed", "failed", "cancelled")
+#: The states each command may be taken from, written out from the contract's operation descriptions -- an oracle of its own,
+#: not the table under test («A job that is not queued or running is 409 comparison_ai_job_state», «only a job that has not
+#: started», «a paused job», ...).
+ALLOWED = {
+    "pause": {"queued", "running"},
+    "resume": {"paused"},
+    "cancel": {"queued", "running", "paused"},
+    "dequeue": {"queued"},
+    "finish": {"paused", "cancelled", "failed", "completed"},
+    "retry": {"completed", "failed", "cancelled"},
+}
 
 
 @pytest.fixture
@@ -318,7 +329,7 @@ def test_the_database_index_holds_the_scope_when_a_finish_races_past_the_look(db
 
 @pytest.mark.parametrize(
     ("command", "state"),
-    [(command, state) for command in sorted(COMMAND_EDGES) for state in STATES if state not in COMMAND_EDGES[command]],
+    [(command, state) for command in sorted(ALLOWED) for state in STATES if state not in ALLOWED[command]],
 )
 def test_a_command_from_a_state_it_may_not_be_taken_from_is_refused_and_changes_nothing(
     db: Any, h: Any, w: Any, command: str, state: str
@@ -330,6 +341,10 @@ def test_a_command_from_a_state_it_may_not_be_taken_from_is_refused_and_changes_
         call(db, w, command, **extra)
     assert h.conflict_reason(refused) == "comparison_ai_job_state"
     assert snapshot(db, w) == before
+
+
+def test_the_command_edges_are_the_ones_the_contract_describes() -> None:
+    assert {command: set(states) for command, states in COMMAND_EDGES.items()} == ALLOWED
 
 
 def test_the_command_edges_are_edges_the_database_declares() -> None:
