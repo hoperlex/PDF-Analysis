@@ -48,6 +48,7 @@ from auditmanager.analysis.public import (
     ModelResponse,
     ProviderMode,
     ProxyDispatchError,
+    to_wire_schema,
 )
 from auditmanager.executors.answers import SchemaNotSupported, check_supported
 from auditmanager.executors.image_input import ImageReferenceError, checked_descriptors
@@ -251,6 +252,9 @@ class PullAdapter:
             raise _error("not_sent", "executor_request",
                          "the output schema uses a keyword runners cannot be held to",
                          code=ErrorCode.ANALYSIS_INPUT_INVALID) from None
+        # What is written, served to the runner and held against its answer is the wire form
+        # (`AR-V3-WIRE-SCHEMA-01`); the refusal above was judged on the sealed schema, unchanged.
+        payload = {**payload, "output_schema": to_wire_schema(payload["output_schema"])}
         started = self._monotonic()
         task = self._write_task(payload, window)
         return self._await(task, started, window)

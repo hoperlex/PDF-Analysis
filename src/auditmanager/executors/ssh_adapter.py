@@ -18,7 +18,13 @@ import time
 from collections.abc import Mapping
 from typing import Any
 
-from auditmanager.analysis.public import ModelRequest, ModelResponse, ProviderMode, ProxyDispatchError
+from auditmanager.analysis.public import (
+    ModelRequest,
+    ModelResponse,
+    ProviderMode,
+    ProxyDispatchError,
+    to_wire_schema,
+)
 from auditmanager.executors.destinations import DestinationPolicy, DestinationRefused, DestinationUnresolvable
 from auditmanager.executors.http_adapter import effective_timeout
 from auditmanager.executors.image_input import checked_pngs
@@ -70,7 +76,8 @@ def _task(request: ModelRequest, model: str) -> bytes:
     if isinstance(output, Mapping) and isinstance(output.get("format"), Mapping):
         schema = output["format"].get("schema")
         if isinstance(schema, Mapping):
-            task["output_schema"] = schema
+            # The wire form (`AR-V3-WIRE-SCHEMA-01`): what the remote command may hand a provider.
+            task["output_schema"] = to_wire_schema(schema)
     envelopes = [{"media_type": "image/png", "data": base64.b64encode(image).decode("ascii")}
                  for image in images]
     if len(envelopes) == 1:
