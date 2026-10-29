@@ -94,6 +94,12 @@ _SERIES = "SELECT comparison_series_id FROM comparison_series WHERE project_uid 
 _TRANSITIONS = f"SELECT comparison_transition_id FROM comparison_transition WHERE comparison_series_id IN ({_SERIES})"
 # `0040_comparison_ai_reports` (`CMP-SEAL-C2`): a report's parts and files reach the project through the report.
 _REPORTS = "SELECT comparison_report_id FROM comparison_report WHERE project_uid = :p"
+_STAGE_UPLOADS = "SELECT stage_upload_id FROM stage_upload WHERE project_uid = :p"
+_STAGE_FILES = f"SELECT stage_upload_file_id FROM stage_upload_file WHERE stage_upload_id IN ({_STAGE_UPLOADS})"
+_STAGE_ASSEMBLIES = "SELECT stage_assembly_id FROM stage_assembly WHERE project_uid = :p"
+_STAGE_PAIRS = "SELECT stage_pair_id FROM stage_pair WHERE project_uid = :p"
+_STAGE_REVISIONS = f"SELECT stage_link_revision_id FROM stage_link_revision WHERE stage_pair_id IN ({_STAGE_PAIRS})"
+_STAGE_RUNS = f"SELECT stage_chain_run_id FROM stage_chain_run WHERE stage_pair_id IN ({_STAGE_PAIRS})"
 SLICES: dict[str, str] = {
     "project": "project_uid = :p",
     "document": "project_uid = :p",
@@ -158,6 +164,22 @@ SLICES: dict[str, str] = {
     "comparison_report_artifact": f"comparison_report_id IN ({_REPORTS})",
     "comparison_launch_queue": "project_uid = :p",
     "comparison_launch_entry": "project_uid = :p",
+    # `0041_comparison_stage_core`: the entire C3 closure, addressed through opaque parents.
+    "stage_upload": "project_uid = :p",
+    "stage_upload_file": f"stage_upload_id IN ({_STAGE_UPLOADS})",
+    "stage_upload_part": f"stage_upload_file_id IN ({_STAGE_FILES})",
+    "stage_upload_candidate": f"stage_upload_file_id IN ({_STAGE_FILES})",
+    "stage_assembly": "project_uid = :p",
+    "stage_assembly_member": f"stage_assembly_id IN ({_STAGE_ASSEMBLIES})",
+    "stage_pair": "project_uid = :p",
+    "stage_link_revision": f"stage_pair_id IN ({_STAGE_PAIRS})",
+    "stage_link_item": f"stage_link_revision_id IN ({_STAGE_REVISIONS})",
+    "stage_text_fragment": f"stage_pair_id IN ({_STAGE_PAIRS})",
+    "stage_text_exclusion": f"stage_pair_id IN ({_STAGE_PAIRS})",
+    "stage_text_difference": f"stage_pair_id IN ({_STAGE_PAIRS})",
+    "stage_text_hint": f"stage_pair_id IN ({_STAGE_PAIRS})",
+    "stage_chain_run": f"stage_pair_id IN ({_STAGE_PAIRS})",
+    "stage_chain_step": f"stage_chain_run_id IN ({_STAGE_RUNS})",
 }
 _BLOB_SOURCES = (
     f"SELECT blob_id FROM input_manifest_entry WHERE version_uid IN ({_VERSIONS}) "
@@ -165,6 +187,8 @@ _BLOB_SOURCES = (
     f"UNION SELECT blob_id FROM analysis_artifact_publication WHERE run_id IN ({_RUNS}) "
     f"UNION SELECT blob_id FROM comparison_upload_file WHERE comparison_upload_id IN ({_UPLOADS}) "
     f"UNION SELECT blob_id FROM comparison_report_artifact WHERE comparison_report_id IN ({_REPORTS}) "
+    f"UNION SELECT source_blob_id FROM stage_upload_file WHERE stage_upload_id IN ({_STAGE_UPLOADS}) "
+    f"UNION SELECT pdf_blob_id FROM stage_upload_candidate WHERE stage_upload_file_id IN ({_STAGE_FILES}) "
     f"UNION SELECT profile_blob_id FROM comparison_page_profile WHERE version_uid IN ({_VERSIONS}) "
     f"UNION SELECT preview_blob_id FROM comparison_page_profile WHERE version_uid IN ({_VERSIONS}) "
     f"UNION SELECT thumbnail_blob_id FROM comparison_page_profile WHERE version_uid IN ({_VERSIONS}) "
@@ -401,7 +425,7 @@ def test_the_closure_is_read_from_the_catalog_and_agrees_with_the_hand_written_s
     # project directly. `0040_comparison_ai_reports`: the twelve tables of the version comparison AI, specifications, reports
     # and launch queue join it (49 -> 61); the jobs, answers, questions, descriptions, sheet items, extractions, comparisons,
     # reports and the launch queue reference the project directly.
-    assert tool.UNSCOPED_PRODUCT_TABLES == {"worker"} and len(closure.tables) == 61
+    assert tool.UNSCOPED_PRODUCT_TABLES == {"worker"} and len(closure.tables) == 76
     assert set(closure.direct) == {
         "ar_v3_run_group", "audit_run", "comparison_ai_job", "comparison_ai_pair_answer", "comparison_ai_pair_question",
         "comparison_ai_sheet_item", "comparison_launch_queue", "comparison_matrix", "comparison_matrix_edit",
@@ -409,6 +433,7 @@ def test_the_closure_is_read_from_the_catalog_and_agrees_with_the_hand_written_s
         "comparison_sheet_pair_result", "comparison_spec_comparison", "comparison_spec_extraction",
         "comparison_summary", "comparison_upload",
         "comparison_version_order", "comparison_work", "document", "finding", "optimisation_pass",
+        "stage_upload", "stage_assembly", "stage_pair",
         "price_list_revision", "vendor_list_revision", "work_assignment",
     }
     # `0038_comparison_foundation`: an upload batch and an order revision carry the receipt of the write
@@ -418,6 +443,8 @@ def test_the_closure_is_read_from_the_catalog_and_agrees_with_the_hand_written_s
         "comparison_report", "comparison_series", "comparison_sheet_link",
         "comparison_summary", "comparison_upload", "comparison_version_order", "expert_decision_event",
         "optimisation_proposal_decision",
+        "stage_upload", "stage_assembly", "stage_assembly_member", "stage_pair",
+        "stage_link_revision", "stage_chain_run",
     }
 
 

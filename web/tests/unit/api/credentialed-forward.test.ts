@@ -157,7 +157,7 @@ describe('the browser calls this app, and this app calls the API with the creden
 
   it('returns the upstream status and body bytes verbatim, so a 401 arrives as a 401', async () => {
     const envelope =
-      '{"contract_version":"1.11.0","correlation_id":"cid-abc",' +
+      '{"contract_version":"1.12.0","correlation_id":"cid-abc",' +
       '"error_code":"authentication_required","message":"No valid authenticated subject was presented.",' +
       '"retryable":false}';
     const { fetch } = recordingFetch(
@@ -798,7 +798,7 @@ describe('the forward answers an ErrorEnvelope even when the API never did', () 
     expect(body.error_code).toBe('dependency_unavailable');
     // The catalog pins this one retryable, and the envelope is where the client reads it.
     expect(body.retryable).toBe(true);
-    expect(body.contract_version).toBe('1.11.0');
+    expect(body.contract_version).toBe('1.12.0');
     expect(body.correlation_id).toBe('cid-from-browser');
     // The credential must not appear in anything the browser can read.
     expect(JSON.stringify(body)).not.toContain(TOKEN);

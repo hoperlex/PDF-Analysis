@@ -1,9 +1,9 @@
 {
   "contract": "auditmanager.domain.errors",
-  "contract_version": "1.11.0",
-  "supersedes": "1.10.0",
-  "candidate_revision": 29,
-  "revision_note": "Candidate revision 29 by CMP-SEAL-C2: the AI check of the doubtful pairs of a document set, the AI description of changes, specifications, the launch queue and the MD summary and PDF reports (fifty operations), the four executor work kinds of the version comparison, and the additive members algorithm_changed, label_source and raster are an additive minor change of the API document, and family 1.11.0 seal. identifiers.json gains eleven identity prefixes (cai, cpa, cpq, csi, csd, cse, cscp, crt, crpt, cra, cle) for migration 0040; error-codes.json gains no code, only registered reasons under existing codes; state-machines.json gains no machine.",
+  "contract_version": "1.12.0",
+  "supersedes": "1.11.0",
+  "candidate_revision": 30,
+  "revision_note": "Candidate revision 30 by CMP-SEAL-C3: 32 additive stage-comparison operations for resumable PDF/ZIP upload, confirmed pairs and assemblies, full sheet-map revisions, immutable deterministic text evidence and seven-step chain runs; 15 durable tables in migration 0041_comparison_stage_core. ZIP-set use remains blocked until D-262 caller controls. The error-code vocabulary and existing state machines do not change; the family is sealed at 1.12.0.",
   "status": "frozen",
   "frozen": true,
   "envelope": {

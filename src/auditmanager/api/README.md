@@ -66,7 +66,7 @@ places in this package exist only because of that, and each says so at its own s
 | `routers/idempotency.py` | the required `Idempotency-Key`, as a declared parameter |
 | `routers/multipart.py` | the transport body cap, and the four rules a closed model cannot state |
 | `routers/ports.py` | the nine narrow ports a composition root satisfies |
-| `routers/{projects,documents,runs,findings,decisions,export,blocks,dashboard,auth,me,registrations,users,releases,execution,norms,sections,comparison,analysis_profiles,dispatch,optimisation,specification_prices,optimisation_proposals,section_specification,executors,runner}.py` | the 198 operations |
+| `routers/{projects,documents,runs,findings,decisions,export,blocks,dashboard,auth,me,registrations,users,releases,execution,norms,sections,comparison,analysis_profiles,dispatch,optimisation,specification_prices,optimisation_proposals,section_specification,executors,runner}.py` | the 230 operations |
 | `schemas/models.py` | the 286 `components.schemas`, as Pydantic models |
 | `schemas/{common,projects,documents,runs,findings,decisions}.py` | the view types the ports return, and the functions that render their bytes |
 | `schemas/content.py` | `W55A-SEAL-01`: one parsed `Range` and the `StreamedContent` a content port returns |

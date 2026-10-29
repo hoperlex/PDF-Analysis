@@ -1,9 +1,9 @@
 {
   "contract": "auditmanager.domain.identifiers",
-  "contract_version": "1.11.0",
-  "supersedes": "1.10.0",
-  "candidate_revision": 29,
-  "revision_note": "Candidate revision 29 by CMP-SEAL-C2: the AI check of the doubtful pairs of a document set, the AI description of changes, specifications, the launch queue and the MD summary and PDF reports (fifty operations), the four executor work kinds of the version comparison, and the additive members algorithm_changed, label_source and raster are an additive minor change of the API document, and family 1.11.0 seal. identifiers.json gains eleven identity prefixes (cai, cpa, cpq, csi, csd, cse, cscp, crt, crpt, cra, cle) for migration 0040; error-codes.json gains no code, only registered reasons under existing codes; state-machines.json gains no machine.",
+  "contract_version": "1.12.0",
+  "supersedes": "1.11.0",
+  "candidate_revision": 30,
+  "revision_note": "Candidate revision 30 by CMP-SEAL-C3: 32 additive stage-comparison operations for resumable PDF/ZIP upload, confirmed pairs and assemblies, full sheet-map revisions, immutable deterministic text evidence and seven-step chain runs; 15 durable tables in migration 0041_comparison_stage_core. ZIP-set use remains blocked until D-262 caller controls. The error-code vocabulary and existing state machines do not change; the family is sealed at 1.12.0.",
   "status": "frozen",
   "frozen": true,
   "format": "<prefix>_<ULID>",
@@ -102,7 +102,21 @@
     "comparison_report_id": "crt",
     "comparison_report_part_id": "crpt",
     "comparison_report_artifact_id": "cra",
-    "comparison_launch_entry_id": "cle"
+    "comparison_launch_entry_id": "cle",
+    "stage_upload_id": "stu",
+    "stage_upload_file_id": "suf",
+    "stage_upload_candidate_id": "suc",
+    "stage_pair_id": "stp",
+    "stage_assembly_id": "sas",
+    "stage_assembly_member_id": "sam",
+    "stage_link_revision_id": "slk",
+    "stage_link_item_id": "sli",
+    "stage_text_fragment_id": "stf",
+    "stage_text_exclusion_id": "ste",
+    "stage_text_difference_id": "std",
+    "stage_text_hint_id": "sth",
+    "stage_chain_run_id": "crn",
+    "stage_chain_step_id": "cst"
   },
   "external_identifiers": {
     "portal_block_id": {
@@ -192,7 +206,21 @@
     "ComparisonReport": "comparison_report_id",
     "ComparisonReportPart": "comparison_report_part_id",
     "ComparisonReportArtifact": "comparison_report_artifact_id",
-    "ComparisonLaunchEntry": "comparison_launch_entry_id"
+    "ComparisonLaunchEntry": "comparison_launch_entry_id",
+    "StageUpload": "stage_upload_id",
+    "StageUploadFile": "stage_upload_file_id",
+    "StageUploadCandidate": "stage_upload_candidate_id",
+    "StagePair": "stage_pair_id",
+    "StageAssembly": "stage_assembly_id",
+    "StageAssemblyMember": "stage_assembly_member_id",
+    "StageLinkRevision": "stage_link_revision_id",
+    "StageLinkItem": "stage_link_item_id",
+    "StageTextFragment": "stage_text_fragment_id",
+    "StageTextExclusion": "stage_text_exclusion_id",
+    "StageTextDifference": "stage_text_difference_id",
+    "StageTextHint": "stage_text_hint_id",
+    "StageChainRun": "stage_chain_run_id",
+    "StageChainStep": "stage_chain_step_id"
   },
   "distinct_identities": [
     {
@@ -419,6 +447,31 @@
       "evidence": [
         "CMP-SEAL-C2",
         "0040_comparison_ai_reports"
+      ]
+    },
+    {
+      "name": "comparison_stage_identity",
+      "identifiers": [
+        "stage_upload_id",
+        "stage_upload_file_id",
+        "stage_upload_candidate_id",
+        "stage_pair_id",
+        "stage_assembly_id",
+        "stage_assembly_member_id",
+        "stage_link_revision_id",
+        "stage_link_item_id",
+        "stage_text_fragment_id",
+        "stage_text_exclusion_id",
+        "stage_text_difference_id",
+        "stage_text_hint_id",
+        "stage_chain_run_id",
+        "stage_chain_step_id"
+      ],
+      "rule": "Stage uploads, files and candidate PDF members; expert-confirmed document pairs and assemblies; append-only assembly acts and full sheet-link revisions; immutable text fragments, exclusions, differences and hints; and pinned seven-step chain runs each have independent opaque identities. Paths, display names, sheet numbers and digests are not keys.",
+      "authority": "ADR-0025 decisions 2, 3, 5, 9, 12, 15, 16, 21, 23 and 25; CMP-SEAL-C3",
+      "evidence": [
+        "CMP-SEAL-C3",
+        "0041_comparison_stage_core"
       ]
     }
   ],

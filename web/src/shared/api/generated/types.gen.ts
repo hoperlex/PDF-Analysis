@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.11.0 (OpenAPI 3.1.0)
- *   sha256 44c565cf7bc8dd3211758ea0be03a7379af6608fd7964582019fde57a5191162
+ *   AuditManager PC-01 API 1.12.0 (OpenAPI 3.1.0)
+ *   sha256 a1f658a62e789f7b065d35b23902e3ab95bac2b7cb46c724d68945fba2f8980c
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.11.0';
+export const CONTRACT_VERSION = '1.12.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '44c565cf7bc8dd3211758ea0be03a7379af6608fd7964582019fde57a5191162';
+export const CONTRACT_DIGEST = 'a1f658a62e789f7b065d35b23902e3ab95bac2b7cb46c724d68945fba2f8980c';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -37,6 +37,7 @@ export const SCHEMA_NAMES = [
   'AppendDecisionRequest',
   'AppendDecisionResponse',
   'ApplyComparisonMatrixEditsRequest',
+  'ApplyStageSheetMapRequest',
   'ApproveRegistrationRequest',
   'ApproveSheetPairingRequest',
   'ApprovedDiffHunk',
@@ -256,6 +257,8 @@ export const SCHEMA_NAMES = [
   'ComparisonVersionOrderList',
   'ComparisonVersionOrderSource',
   'ConfirmComparisonUploadSetRequest',
+  'ConfirmStagePairRequest',
+  'ConfirmStageUploadCandidateRequest',
   'ConfirmedComparisonFile',
   'CorrectVersionClassificationRequest',
   'CorrelationId',
@@ -265,6 +268,8 @@ export const SCHEMA_NAMES = [
   'CreateComparisonUploadRequest',
   'CreateExecutorConnectionRequest',
   'CreateProjectRequest',
+  'CreateStageAssemblyRequest',
+  'CreateStageUploadRequest',
   'Cursor',
   'DashboardSummary',
   'DecideOptimisationProposalRequest',
@@ -445,6 +450,7 @@ export const SCHEMA_NAMES = [
   'ResetUserPasswordRequest',
   'ResumeComparisonAiJobRequest',
   'ReviseExecutorConnectionRequest',
+  'ReviseStageAssemblyRequest',
   'Role',
   'RunActivity',
   'RunActivitySpend',
@@ -478,6 +484,7 @@ export const SCHEMA_NAMES = [
   'SetGlobalVendorListRequest',
   'SetJobPriorityRequest',
   'SetProjectVendorListRequest',
+  'SetStagePairCompletenessRequest',
   'SetWorkerIntakeRequest',
   'Severity',
   'Sha256',
@@ -499,14 +506,60 @@ export const SCHEMA_NAMES = [
   'SpecificationSkipCounts',
   'SpecificationSkippedLine',
   'SpecificationTable',
+  'StageAssembly',
+  'StageAssemblyId',
+  'StageAssemblyMember',
+  'StageChainRun',
+  'StageChainRunId',
+  'StageChainRunPage',
+  'StageChainStep',
+  'StageChainStepId',
   'StageId',
+  'StageLinkInput',
+  'StageLinkItem',
+  'StageLinkItemId',
+  'StageLinkRevision',
+  'StageLinkRevisionId',
+  'StageLinkRevisionPage',
+  'StagePair',
+  'StagePairId',
+  'StagePairPage',
+  'StagePairSuggestion',
+  'StagePairSuggestionPage',
+  'StageSheetPassport',
+  'StageSheetPassportPage',
+  'StageSheetSuggestion',
+  'StageSheetSuggestionPage',
   'StageState',
   'StageStatus',
+  'StageTextDifference',
+  'StageTextDifferenceId',
+  'StageTextDifferencePage',
+  'StageTextExclusion',
+  'StageTextExclusionId',
+  'StageTextExclusionPage',
+  'StageTextFragment',
+  'StageTextFragmentId',
+  'StageTextFragmentPage',
+  'StageTextHint',
+  'StageTextHintId',
+  'StageTextHintPage',
+  'StageUpload',
+  'StageUploadCandidate',
+  'StageUploadCandidateId',
+  'StageUploadFile',
+  'StageUploadFileDeclaration',
+  'StageUploadFileId',
+  'StageUploadFileKind',
+  'StageUploadId',
+  'StageUploadPage',
+  'StageUploadPartReceipt',
   'StartArV3BetaGroupRequest',
   'StartComparisonAiJobRequest',
   'StartComparisonAiSheetChangesRequest',
   'StartComparisonSeriesRequest',
   'StartRunRequest',
+  'StartStageChainRunRequest',
   'SubmitExecutorTaskAnswerRequest',
   'SubmitRegistrationRequest',
   'SummaryStatement',
@@ -683,6 +736,11 @@ export type AppendDecisionResponse = {
 export type ApplyComparisonMatrixEditsRequest = {
   base_revision: ComparisonMatrixRevision;
   edits: Array<ComparisonMatrixEditInput>;
+};
+
+export type ApplyStageSheetMapRequest = {
+  base_revision_id?: StageLinkRevisionId;
+  items: Array<StageLinkInput>;
 };
 
 export type ApproveRegistrationRequest = {
@@ -3316,6 +3374,19 @@ export type ConfirmComparisonUploadSetRequest = {
   section_code?: ProjectSection;
 };
 
+export type ConfirmStagePairRequest = {
+  assembly_id?: StageAssemblyId;
+  left_document_uid: DocumentUid;
+  right_document_uid?: DocumentUid;
+};
+
+export type ConfirmStageUploadCandidateRequest = {
+  designation: string;
+  existing_document_uid?: DocumentUid;
+  section_code: string;
+  stage: "P" | "R";
+};
+
 export type ConfirmedComparisonFile = {
   file_id: ComparisonUploadFileId;
   version_label?: string;
@@ -3386,6 +3457,15 @@ export type CreateExecutorConnectionRequest = {
 export type CreateProjectRequest = {
   /** Display label. Not unique and not an identity. */
   name: string;
+};
+
+export type CreateStageAssemblyRequest = {
+  document_uids: Array<DocumentUid>;
+  label: string;
+};
+
+export type CreateStageUploadRequest = {
+  files: Array<StageUploadFileDeclaration>;
 };
 
 /** Opaque pagination token. It encodes the sort key of the last item on the page and nothing else; it is never a database row number or sequence value. */
@@ -3564,16 +3644,14 @@ export const ERROR_CODE_VALUES = [
 /** ErrorCode - the closed value set above. */
 export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
-/** The single externally visible failure shape, mirroring urn:auditmanager:domain:error-envelope:v1. `retryable` is pinned to the catalog value for the reported code; a caller never infers it from the HTTP status or the message. */
+/** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.11.0";
+  contract_version: "1.12.0";
   correlation_id: CorrelationId;
-  /** Safe scalar classifiers only, restricted to the safe_detail_keys the catalog declares for the reported code. The catalog's forbidden key set is rejected. */
   details?: {
     [key: string]: string | number | boolean | null;
   };
   error_code: ErrorCode;
-  /** Stable caller-safe sentence. No path, object key, URL, credential, token, prompt, payload, query or stack content. */
   message: string;
   retryable: boolean;
 };
@@ -5212,6 +5290,12 @@ export type ReviseExecutorConnectionRequest = {
   transport?: ExecutorTransport;
 };
 
+export type ReviseStageAssemblyRequest = {
+  add_document_uids: Array<DocumentUid>;
+  base_member_no: number;
+  remove_document_uids: Array<DocumentUid>;
+};
+
 /** One role an account may hold; an account holds a set of them (R-55, R-60). `expert` makes product changes -- projects, uploads, runs, verdicts, comments and the export. `admin` manages accounts and registration requests. Reading product data needs one of them (R-80): an active account whose role set is empty is suspended and reads only its own account, the product version and the release notes. */
 export const ROLE_VALUES = [
   'expert',
@@ -5595,6 +5679,10 @@ export type SetProjectVendorListRequest = {
   mode: VendorListMode;
 };
 
+export type SetStagePairCompletenessRequest = {
+  completeness: "full" | "partial";
+};
+
 export type SetWorkerIntakeRequest = {
   enabled: boolean;
 };
@@ -5837,6 +5925,63 @@ export type SpecificationTable = {
   status: "parsed" | "header_ambiguous";
 };
 
+export type StageAssembly = {
+  assembly_id: StageAssemblyId;
+  created_at: string;
+  label: string;
+  members: Array<StageAssemblyMember>;
+  project_uid: ProjectUid;
+};
+
+export type StageAssemblyId = string;
+
+/** The contract pattern for `StageAssemblyId`. Anchored; use with `new RegExp()`. */
+export const STAGE_ASSEMBLY_ID_PATTERN = "^sas_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageAssemblyMember = {
+  document_uid: DocumentUid;
+  member_no: number;
+};
+
+export type StageChainRun = {
+  created_at: string;
+  input_sha256: Sha256;
+  link_revision_id: StageLinkRevisionId;
+  pair_id: StagePairId;
+  pinned_version_uids: Array<VersionUid>;
+  run_id: StageChainRunId;
+  stale: boolean;
+  state: "queued" | "running" | "paused" | "completed" | "failed" | "cancelled";
+  steps: Array<StageChainStep>;
+  updated_at: string;
+};
+
+export type StageChainRunId = string;
+
+/** The contract pattern for `StageChainRunId`. Anchored; use with `new RegExp()`. */
+export const STAGE_CHAIN_RUN_ID_PATTERN = "^crn_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageChainRunPage = {
+  items: Array<StageChainRun>;
+  page: PageInfo;
+};
+
+export type StageChainStep = {
+  counts: {
+    [key: string]: number;
+  };
+  finished_at?: string;
+  started_at?: string;
+  state: "queued" | "running" | "paused" | "completed" | "failed" | "cancelled";
+  step_id: StageChainStepId;
+  step_no: number;
+};
+
+export type StageChainStepId = string;
+
+/** The contract pattern for `StageChainStepId`. Anchored; use with `new RegExp()`. */
+export const STAGE_CHAIN_STEP_ID_PATTERN = "^cst_[0-9A-HJKMNP-TV-Z]{26}$";
+
 /** A canonical stage identity from contracts/analysis/v1/stage-registry.json. PC-01 schedules the first four. */
 export const STAGE_ID_VALUES = [
   'source_preparation',
@@ -5852,6 +5997,111 @@ export const STAGE_ID_VALUES = [
 
 /** StageId - the closed value set above. */
 export type StageId = (typeof STAGE_ID_VALUES)[number];
+
+export type StageLinkInput = {
+  left_profile_id?: ComparisonPageProfileId;
+  relation: "paired" | "only_left" | "only_right";
+  right_profile_id?: ComparisonPageProfileId;
+};
+
+export type StageLinkItem = {
+  confidence: "high" | "manual" | "review" | "automatic_repair" | "unpaired";
+  item_id: StageLinkItemId;
+  left_profile_id?: ComparisonPageProfileId;
+  relation: "paired" | "only_left" | "only_right";
+  right_profile_id?: ComparisonPageProfileId;
+  row_no: number;
+};
+
+export type StageLinkItemId = string;
+
+/** The contract pattern for `StageLinkItemId`. Anchored; use with `new RegExp()`. */
+export const STAGE_LINK_ITEM_ID_PATTERN = "^sli_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageLinkRevision = {
+  base_revision_id?: StageLinkRevisionId;
+  created_at: string;
+  input_sha256: Sha256;
+  items: Array<StageLinkItem>;
+  pair_id: StagePairId;
+  revision_id: StageLinkRevisionId;
+  revision_no: number;
+  source: "expert" | "automatic";
+};
+
+export type StageLinkRevisionId = string;
+
+/** The contract pattern for `StageLinkRevisionId`. Anchored; use with `new RegExp()`. */
+export const STAGE_LINK_REVISION_ID_PATTERN = "^slk_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageLinkRevisionPage = {
+  items: Array<StageLinkRevision>;
+  page: PageInfo;
+};
+
+export type StagePair = {
+  assembly_id?: StageAssemblyId;
+  completeness: "unknown" | "full" | "partial";
+  confirmed_at?: string;
+  created_at: string;
+  left_document_uid: DocumentUid;
+  pair_id: StagePairId;
+  project_uid: ProjectUid;
+  right_document_uid?: DocumentUid;
+  state: "suggested" | "confirmed" | "archived";
+};
+
+export type StagePairId = string;
+
+/** The contract pattern for `StagePairId`. Anchored; use with `new RegExp()`. */
+export const STAGE_PAIR_ID_PATTERN = "^stp_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StagePairPage = {
+  items: Array<StagePair>;
+  page: PageInfo;
+};
+
+export type StagePairSuggestion = {
+  left_document_uid: DocumentUid;
+  reason: string;
+  right_document_uid: DocumentUid;
+  score: number;
+};
+
+export type StagePairSuggestionPage = {
+  items: Array<StagePairSuggestion>;
+  page: PageInfo;
+};
+
+export type StageSheetPassport = {
+  building?: string;
+  floor?: string;
+  level?: string;
+  page_number: number;
+  profile_id: ComparisonPageProfileId;
+  sheet_number?: string;
+  sheet_type?: string;
+  side: "left" | "right";
+  version_uid: VersionUid;
+};
+
+export type StageSheetPassportPage = {
+  items: Array<StageSheetPassport>;
+  page: PageInfo;
+};
+
+export type StageSheetSuggestion = {
+  confidence: "high" | "review";
+  left_profile_id: ComparisonPageProfileId;
+  reasons: Array<string>;
+  right_profile_id: ComparisonPageProfileId;
+  score: number;
+};
+
+export type StageSheetSuggestionPage = {
+  items: Array<StageSheetSuggestion>;
+  page: PageInfo;
+};
 
 export type StageState = {
   /** The typed reason a non-succeeded stage carries. Null exactly when the status is `succeeded`. */
@@ -5873,6 +6123,163 @@ export const STAGE_STATUS_VALUES = [
 
 /** StageStatus - the closed value set above. */
 export type StageStatus = (typeof STAGE_STATUS_VALUES)[number];
+
+export type StageTextDifference = {
+  difference_id: StageTextDifferenceId;
+  left_fragment_id?: StageTextFragmentId;
+  revision_id: StageLinkRevisionId;
+  right_fragment_id?: StageTextFragmentId;
+  status: "changed" | "removed" | "added";
+};
+
+export type StageTextDifferenceId = string;
+
+/** The contract pattern for `StageTextDifferenceId`. Anchored; use with `new RegExp()`. */
+export const STAGE_TEXT_DIFFERENCE_ID_PATTERN = "^std_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageTextDifferencePage = {
+  items: Array<StageTextDifference>;
+  page: PageInfo;
+};
+
+export type StageTextExclusion = {
+  exclusion_id: StageTextExclusionId;
+  left_fragment_id: StageTextFragmentId;
+  proof_kind: "same" | "moved";
+  revision_id: StageLinkRevisionId;
+  right_fragment_id: StageTextFragmentId;
+};
+
+export type StageTextExclusionId = string;
+
+/** The contract pattern for `StageTextExclusionId`. Anchored; use with `new RegExp()`. */
+export const STAGE_TEXT_EXCLUSION_ID_PATTERN = "^ste_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageTextExclusionPage = {
+  items: Array<StageTextExclusion>;
+  page: PageInfo;
+};
+
+export type StageTextFragment = {
+  box_anchor: {
+    [key: string]: number;
+  };
+  content_key: Sha256;
+  fragment_id: StageTextFragmentId;
+  pair_id: StagePairId;
+  profile_id: ComparisonPageProfileId;
+  side: "left" | "right";
+  text: string;
+};
+
+export type StageTextFragmentId = string;
+
+/** The contract pattern for `StageTextFragmentId`. Anchored; use with `new RegExp()`. */
+export const STAGE_TEXT_FRAGMENT_ID_PATTERN = "^stf_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageTextFragmentPage = {
+  items: Array<StageTextFragment>;
+  page: PageInfo;
+};
+
+export type StageTextHint = {
+  hint_id: StageTextHintId;
+  revision_id: StageLinkRevisionId;
+  source_fragment_id: StageTextFragmentId;
+  target_fragment_id: StageTextFragmentId;
+};
+
+export type StageTextHintId = string;
+
+/** The contract pattern for `StageTextHintId`. Anchored; use with `new RegExp()`. */
+export const STAGE_TEXT_HINT_ID_PATTERN = "^sth_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageTextHintPage = {
+  items: Array<StageTextHint>;
+  page: PageInfo;
+};
+
+export type StageUpload = {
+  candidates: Array<StageUploadCandidate>;
+  created_at: string;
+  files: Array<StageUploadFile>;
+  project_uid: ProjectUid;
+  state: "uploading" | "paused" | "admitting" | "completed" | "failed" | "cancelled";
+  updated_at: string;
+  upload_id: StageUploadId;
+};
+
+export type StageUploadCandidate = {
+  candidate_id: StageUploadCandidateId;
+  confirmed_section?: string;
+  confirmed_stage?: "P" | "R";
+  designation?: string;
+  display_name: string;
+  document_uid?: DocumentUid;
+  failure_reason?: string;
+  file_id: StageUploadFileId;
+  member_number: number;
+  proposed_section?: string;
+  proposed_stage?: "P" | "R";
+  state: "proposed" | "confirmed" | "admitting" | "published" | "rejected" | "failed";
+  version_uid?: VersionUid;
+};
+
+export type StageUploadCandidateId = string;
+
+/** The contract pattern for `StageUploadCandidateId`. Anchored; use with `new RegExp()`. */
+export const STAGE_UPLOAD_CANDIDATE_ID_PATTERN = "^suc_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageUploadFile = {
+  created_at: string;
+  declaration: StageUploadFileDeclaration;
+  failure_reason?: string;
+  file_id: StageUploadFileId;
+  received_bytes: number;
+  received_parts: number;
+  state: "declared" | "receiving" | "received" | "admitting" | "ready" | "failed" | "cancelled";
+  upload_id: StageUploadId;
+};
+
+export type StageUploadFileDeclaration = {
+  display_name: string;
+  media_kind: StageUploadFileKind;
+  sha256: Sha256;
+  size_bytes: number;
+};
+
+export type StageUploadFileId = string;
+
+/** The contract pattern for `StageUploadFileId`. Anchored; use with `new RegExp()`. */
+export const STAGE_UPLOAD_FILE_ID_PATTERN = "^suf_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** StageUploadFileKind. */
+export const STAGE_UPLOAD_FILE_KIND_VALUES = [
+  'pdf',
+  'zip',
+] as const;
+
+/** StageUploadFileKind - the closed value set above. */
+export type StageUploadFileKind = (typeof STAGE_UPLOAD_FILE_KIND_VALUES)[number];
+
+export type StageUploadId = string;
+
+/** The contract pattern for `StageUploadId`. Anchored; use with `new RegExp()`. */
+export const STAGE_UPLOAD_ID_PATTERN = "^stu_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageUploadPage = {
+  items: Array<StageUpload>;
+  page: PageInfo;
+};
+
+export type StageUploadPartReceipt = {
+  file_id: StageUploadFileId;
+  part_number: number;
+  received_bytes: number;
+  sha256: Sha256;
+  size_bytes: number;
+  upload_id: StageUploadId;
+};
 
 export type StartArV3BetaGroupRequest = {
   version_uid: VersionUid;
@@ -5912,6 +6319,11 @@ export type StartRunRequest = {
   /** Defaults to the server's configured mode. A client asking for `live` is asking to spend money against the OD-03 ceiling. */
   provider_mode?: ProviderMode;
   version_uid: VersionUid;
+};
+
+export type StartStageChainRunRequest = {
+  link_revision_id: StageLinkRevisionId;
+  restart?: boolean;
 };
 
 /**

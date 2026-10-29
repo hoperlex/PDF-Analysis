@@ -959,7 +959,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.11.0"]
+    contract_version: Literal["1.12.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -6541,3 +6541,318 @@ class PrepareComparisonClientReportRequest(_Object):
     reads the analytic report's verified facts."""
 
     reuse: bool = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+# --- deterministic stage comparison (`CMP-SEAL-C3`, ADR-0025) --------------------------
+
+StageUploadId = TypeAliasType("StageUploadId", Annotated[str, Field(pattern=rf"^stu_{_ULID}$")])
+StageUploadFileId = TypeAliasType("StageUploadFileId", Annotated[str, Field(pattern=rf"^suf_{_ULID}$")])
+StageUploadCandidateId = TypeAliasType(
+    "StageUploadCandidateId", Annotated[str, Field(pattern=rf"^suc_{_ULID}$")]
+)
+StagePairId = TypeAliasType("StagePairId", Annotated[str, Field(pattern=rf"^stp_{_ULID}$")])
+StageAssemblyId = TypeAliasType("StageAssemblyId", Annotated[str, Field(pattern=rf"^sas_{_ULID}$")])
+StageLinkRevisionId = TypeAliasType(
+    "StageLinkRevisionId", Annotated[str, Field(pattern=rf"^slk_{_ULID}$")]
+)
+StageLinkItemId = TypeAliasType("StageLinkItemId", Annotated[str, Field(pattern=rf"^sli_{_ULID}$")])
+StageTextFragmentId = TypeAliasType(
+    "StageTextFragmentId", Annotated[str, Field(pattern=rf"^stf_{_ULID}$")]
+)
+StageTextExclusionId = TypeAliasType(
+    "StageTextExclusionId", Annotated[str, Field(pattern=rf"^ste_{_ULID}$")]
+)
+StageTextDifferenceId = TypeAliasType(
+    "StageTextDifferenceId", Annotated[str, Field(pattern=rf"^std_{_ULID}$")]
+)
+StageTextHintId = TypeAliasType("StageTextHintId", Annotated[str, Field(pattern=rf"^sth_{_ULID}$")])
+StageChainRunId = TypeAliasType("StageChainRunId", Annotated[str, Field(pattern=rf"^crn_{_ULID}$")])
+StageChainStepId = TypeAliasType("StageChainStepId", Annotated[str, Field(pattern=rf"^cst_{_ULID}$")])
+
+
+class StageUploadFileKind(str, enum.Enum):
+    PDF = "pdf"
+    ZIP = "zip"
+
+
+class StageUploadFileDeclaration(_Object):
+    display_name: Annotated[str, Field(min_length=1, max_length=255)]
+    media_kind: StageUploadFileKind
+    size_bytes: Annotated[int, Field(ge=1, le=2_147_483_648)]
+    sha256: Sha256
+
+
+class CreateStageUploadRequest(_Object):
+    files: Annotated[list[StageUploadFileDeclaration], Field(min_length=1, max_length=1000)]
+
+
+class StageUploadFile(_Object):
+    file_id: StageUploadFileId
+    upload_id: StageUploadId
+    declaration: StageUploadFileDeclaration
+    state: Literal["declared", "receiving", "received", "admitting", "ready", "failed", "cancelled"]
+    received_parts: int
+    received_bytes: int
+    created_at: datetime
+    failure_reason: str = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class StageUploadCandidate(_Object):
+    candidate_id: StageUploadCandidateId
+    file_id: StageUploadFileId
+    member_number: Annotated[int, Field(ge=1, le=1000)]
+    display_name: Annotated[str, Field(min_length=1, max_length=255)]
+    state: Literal["proposed", "confirmed", "admitting", "published", "rejected", "failed"]
+    proposed_stage: Literal["P", "R"] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    proposed_section: str = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    designation: str = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    confirmed_stage: Literal["P", "R"] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    confirmed_section: str = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    document_uid: DocumentUid = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    version_uid: VersionUid = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    failure_reason: str = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class StageUpload(_Object):
+    upload_id: StageUploadId
+    project_uid: ProjectUid
+    state: Literal["uploading", "paused", "admitting", "completed", "failed", "cancelled"]
+    files: Annotated[list[StageUploadFile], Field(max_length=1000)]
+    candidates: Annotated[list[StageUploadCandidate], Field(max_length=1000)]
+    created_at: datetime
+    updated_at: datetime
+
+
+class StageUploadPage(_Object):
+    items: list[StageUpload]
+    page: PageInfo
+
+
+class StageUploadPartReceipt(_Object):
+    upload_id: StageUploadId
+    file_id: StageUploadFileId
+    part_number: Annotated[int, Field(ge=1, le=128)]
+    size_bytes: Annotated[int, Field(ge=1, le=16_777_216)]
+    sha256: Sha256
+    received_bytes: int
+
+
+class ConfirmStageUploadCandidateRequest(_Object):
+    stage: Literal["P", "R"]
+    section_code: Annotated[str, Field(pattern=r"^[A-Z]{2,3}$")]
+    designation: Annotated[str, Field(min_length=1, max_length=200)]
+    existing_document_uid: DocumentUid = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class StageAssemblyMember(_Object):
+    document_uid: DocumentUid
+    member_no: Annotated[int, Field(ge=1)]
+
+
+class StageAssembly(_Object):
+    assembly_id: StageAssemblyId
+    project_uid: ProjectUid
+    label: Annotated[str, Field(min_length=1, max_length=200)]
+    members: list[StageAssemblyMember]
+    created_at: datetime
+
+
+class CreateStageAssemblyRequest(_Object):
+    label: Annotated[str, Field(min_length=1, max_length=200)]
+    document_uids: Annotated[list[DocumentUid], Field(min_length=2, max_length=100)]
+
+
+class ReviseStageAssemblyRequest(_Object):
+    base_member_no: Annotated[int, Field(ge=0)]
+    add_document_uids: Annotated[list[DocumentUid], Field(max_length=100)]
+    remove_document_uids: Annotated[list[DocumentUid], Field(max_length=100)]
+
+
+class StagePair(_Object):
+    pair_id: StagePairId
+    project_uid: ProjectUid
+    left_document_uid: DocumentUid
+    state: Literal["suggested", "confirmed", "archived"]
+    completeness: Literal["unknown", "full", "partial"]
+    created_at: datetime
+    right_document_uid: DocumentUid = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    assembly_id: StageAssemblyId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    confirmed_at: datetime = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class StagePairPage(_Object):
+    items: list[StagePair]
+    page: PageInfo
+
+
+class StagePairSuggestion(_Object):
+    left_document_uid: DocumentUid
+    right_document_uid: DocumentUid
+    reason: str
+    score: Annotated[float, Field(ge=0, le=1)]
+
+
+class StagePairSuggestionPage(_Object):
+    items: list[StagePairSuggestion]
+    page: PageInfo
+
+
+class ConfirmStagePairRequest(_Object):
+    left_document_uid: DocumentUid
+    right_document_uid: DocumentUid = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    assembly_id: StageAssemblyId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class SetStagePairCompletenessRequest(_Object):
+    completeness: Literal["full", "partial"]
+
+
+class StageSheetPassport(_Object):
+    profile_id: ComparisonPageProfileId
+    version_uid: VersionUid
+    page_number: Annotated[int, Field(ge=1, le=500)]
+    side: Literal["left", "right"]
+    sheet_type: str = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    building: str = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    floor: str = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    level: str = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    sheet_number: str = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class StageSheetPassportPage(_Object):
+    items: list[StageSheetPassport]
+    page: PageInfo
+
+
+class StageSheetSuggestion(_Object):
+    left_profile_id: ComparisonPageProfileId
+    right_profile_id: ComparisonPageProfileId
+    score: Annotated[int, Field(ge=0)]
+    confidence: Literal["high", "review"]
+    reasons: list[str]
+
+
+class StageSheetSuggestionPage(_Object):
+    items: list[StageSheetSuggestion]
+    page: PageInfo
+
+
+class StageLinkItem(_Object):
+    item_id: StageLinkItemId
+    row_no: Annotated[int, Field(ge=1)]
+    relation: Literal["paired", "only_left", "only_right"]
+    confidence: Literal["high", "manual", "review", "automatic_repair", "unpaired"]
+    left_profile_id: ComparisonPageProfileId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    right_profile_id: ComparisonPageProfileId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class StageLinkRevision(_Object):
+    revision_id: StageLinkRevisionId
+    pair_id: StagePairId
+    revision_no: Annotated[int, Field(ge=1)]
+    source: Literal["expert", "automatic"]
+    input_sha256: Sha256
+    items: list[StageLinkItem]
+    created_at: datetime
+    base_revision_id: StageLinkRevisionId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class StageLinkRevisionPage(_Object):
+    items: list[StageLinkRevision]
+    page: PageInfo
+
+
+class StageLinkInput(_Object):
+    relation: Literal["paired", "only_left", "only_right"]
+    left_profile_id: ComparisonPageProfileId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    right_profile_id: ComparisonPageProfileId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class ApplyStageSheetMapRequest(_Object):
+    base_revision_id: StageLinkRevisionId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    items: Annotated[list[StageLinkInput], Field(min_length=1, max_length=1000)]
+
+
+class StageTextFragment(_Object):
+    fragment_id: StageTextFragmentId
+    pair_id: StagePairId
+    profile_id: ComparisonPageProfileId
+    side: Literal["left", "right"]
+    text: Annotated[str, Field(min_length=1, max_length=20000)]
+    box_anchor: dict[str, float]
+    content_key: Sha256
+
+
+class StageTextFragmentPage(_Object):
+    items: list[StageTextFragment]
+    page: PageInfo
+
+
+class StageTextExclusion(_Object):
+    exclusion_id: StageTextExclusionId
+    revision_id: StageLinkRevisionId
+    left_fragment_id: StageTextFragmentId
+    right_fragment_id: StageTextFragmentId
+    proof_kind: Literal["same", "moved"]
+
+
+class StageTextExclusionPage(_Object):
+    items: list[StageTextExclusion]
+    page: PageInfo
+
+
+class StageTextDifference(_Object):
+    difference_id: StageTextDifferenceId
+    revision_id: StageLinkRevisionId
+    status: Literal["changed", "removed", "added"]
+    left_fragment_id: StageTextFragmentId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    right_fragment_id: StageTextFragmentId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class StageTextDifferencePage(_Object):
+    items: list[StageTextDifference]
+    page: PageInfo
+
+
+class StageTextHint(_Object):
+    hint_id: StageTextHintId
+    revision_id: StageLinkRevisionId
+    source_fragment_id: StageTextFragmentId
+    target_fragment_id: StageTextFragmentId
+
+
+class StageTextHintPage(_Object):
+    items: list[StageTextHint]
+    page: PageInfo
+
+
+class StageChainStep(_Object):
+    step_id: StageChainStepId
+    step_no: Annotated[int, Field(ge=1, le=7)]
+    state: Literal["queued", "running", "paused", "completed", "failed", "cancelled"]
+    counts: dict[str, int]
+    started_at: datetime = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    finished_at: datetime = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+class StageChainRun(_Object):
+    run_id: StageChainRunId
+    pair_id: StagePairId
+    link_revision_id: StageLinkRevisionId
+    input_sha256: Sha256
+    pinned_version_uids: Annotated[list[VersionUid], Field(min_length=2, max_length=100)]
+    state: Literal["queued", "running", "paused", "completed", "failed", "cancelled"]
+    steps: Annotated[list[StageChainStep], Field(max_length=7)]
+    created_at: datetime
+    updated_at: datetime
+    stale: bool
+
+
+class StageChainRunPage(_Object):
+    items: list[StageChainRun]
+    page: PageInfo
+
+
+class StartStageChainRunRequest(_Object):
+    link_revision_id: StageLinkRevisionId
+    restart: bool = Field(**_NOT_GIVEN)  # type: ignore[assignment]

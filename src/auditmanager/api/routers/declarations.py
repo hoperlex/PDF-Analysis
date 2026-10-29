@@ -115,7 +115,7 @@ def success(status: int, description: str, **extra: Any) -> dict[int | str, dict
 #: **Declared, and deliberately not enforced.** The annotation is a plain ``str`` with the
 #: contract's schema attached, not ``models.CorrelationId``, because a constrained parameter
 #: is a *refusable* one -- FastAPI would answer 422 for a malformed value. Two things say
-#: that would be wrong. The contract: seventy-eight of the 198 operations declare no ``422`` at
+#: that would be wrong. The C2 contract: seventy-eight of its 198 operations declare no ``422`` at
 #: all, and every one of them carries this parameter. And the rule
 #: :mod:`auditmanager.api.routers.correlation` has held since `B6`: an unusable correlation
 #: id is **replaced, not refused**, because it addresses a diagnostic record and authorises

@@ -63,9 +63,11 @@ The API contract is `1.12.0` with C3 stage-upload, stage-pair, assembly, sheet-l
 - `src/auditmanager/analysis/engine/result.py` (served analysis contract-version constant only)
 - `db/migrations/versions/20261029_0041_comparison_stage_core.py`
 - `src/auditmanager/api/routers/comparison_stage_uploads.py` (new), `src/auditmanager/api/routers/comparison_stage_pairs.py` (new), `src/auditmanager/api/routers/comparison_stage_links.py` (new), `src/auditmanager/api/routers/comparison_stage_text.py` (new), `src/auditmanager/api/routers/comparison_stage_runs.py` (new), `src/auditmanager/api/routers/__init__.py`, `src/auditmanager/api/routers/ports.py` (the five new stage-router protocols), `src/auditmanager/api/app.py`, `src/auditmanager/api/README.md`, `src/auditmanager/api/schemas/models.py`, `src/auditmanager/api/security.py`
+- `src/auditmanager/api/health.py`, `src/auditmanager/api/routers/declarations.py`, `src/auditmanager/api/routers/errors.py`, `infra/deploy/serve.py`, `infra/deploy/README.md` (current API operation/path count prose pins only, exposed by the real surface inventory)
 - `src/auditmanager/bootstrap/adapters.py`, `src/auditmanager/bootstrap/composition.py`
 - `src/auditmanager/shared/identity/**`, `src/auditmanager/comparison/public.py`
 - `scripts/recovery/grant_classification.py`, `scripts/recovery/product_purge.py`, `scripts/recovery/project_erase.py`, `scripts/recovery/schema_coverage.py`, `infra/deploy/apply-grants.sh`
+- `scripts/recovery/blob_reference_audit.py`, `tests/integration/storage/test_unreferenced_comparison_blobs.py` (new C3 upload blob references in the lifecycle inventory; exposed by migration 0041)
 - `infra/deploy/proxy/nginx.conf`, `infra/deploy/proxy/tls-server.conf` (edge error-envelope version and current surface comments only)
 - `web/openapi/openapi.json`, `web/src/shared/api/**`, `web/FRONTEND_LOCK.json`, `web/src/app/bff/v1/[...path]/route.ts`
 - `tests/contract/api_v1/**`, `tests/contract/domain_p02/**`, `tests/integration/api/**`, `tests/integration/composition/**`, `tests/integration/db/**`, `tests/integration/recovery/**`, `tests/integration/p02_journey/journey.py`, `tests/e2e/test_pc01_journey_conformance.py`

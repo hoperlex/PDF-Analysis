@@ -84,7 +84,7 @@ __all__ = [
 #: So the four built-in routes are suppressed (``openapi_url=None`` and the three below it
 #: in :func:`_assemble`) and the same four routes are declared as ``APIRoute``s, which do
 #: carry the application's dependencies. They stay out of the document --
-#: ``include_in_schema=False`` -- because the contract declares 176 paths and these are
+#: ``include_in_schema=False`` -- because the contract declares 204 paths and these are
 #: not among them.
 OPENAPI_PATH: Final[str] = "/openapi.json"
 _DOCS_PATH: Final[str] = "/docs"
@@ -106,7 +106,7 @@ DOCUMENTATION_PATHS: Final[tuple[str, ...]] = (
 #: is the same string.
 _TITLE: Final[str] = "AuditManager API"
 _DESCRIPTION: Final[str] = (
-    "The 198 operations of the PC-01 surface. Every failure is one `ErrorEnvelope` "
+    "The 230 operations of the PC-01 surface. Every failure is one `ErrorEnvelope` "
     "carrying a catalog `error_code`, and every response carries `X-Correlation-Id`."
 )
 
@@ -155,7 +155,7 @@ def create_asgi_app(
     *,
     application: Application | None = None,
 ) -> FastAPI:
-    """The ASGI application: the 198 operations, the seam, and the four middlewares.
+    """The ASGI application: the 230 operations, the seam, and the four middlewares.
 
     ``application`` lets a caller that has already built one -- a test driving two
     applications in one process, for instance -- avoid building it twice. When it is omitted
@@ -371,7 +371,7 @@ def _declare_the_documentation_routes(app: FastAPI) -> None:
     ``app.router.dependencies``, instead of a ``starlette.routing.Route``, which carries
     nothing.
 
-    ``include_in_schema=False`` on all four. The contract declares 176 paths and
+    ``include_in_schema=False`` on all four. The contract declares 204 paths and
     these are not among them; a documentation route that described itself would be a
     twenty-eighth.
 

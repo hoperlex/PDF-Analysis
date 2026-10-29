@@ -107,6 +107,9 @@ IMMUTABLE_TABLES = {
     "comparison_sheet_description",
     "comparison_spec_extraction",
     "comparison_report_artifact",
+    # `0041_comparison_stage_core`: assembly acts, full maps and raw evidence are append-only.
+    "stage_assembly", "stage_assembly_member", "stage_link_revision", "stage_link_item",
+    "stage_text_fragment", "stage_text_exclusion", "stage_text_difference", "stage_text_hint",
 }
 
 
@@ -449,6 +452,33 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "page_profile_id": "cpr",
         "hint_version_uid": "ver",
         "consented_by_user_uid": "usr",
+        # `CMP-SEAL-C3`, migration 0041: all stage identities and their cross-row references.
+        "stage_upload_id": "stu",
+        "stage_upload_file_id": "suf",
+        "stage_upload_candidate_id": "suc",
+        "source_blob_id": "blob",
+        "pdf_blob_id": "blob",
+        "stage_assembly_id": "sas",
+        "stage_assembly_member_id": "sam",
+        "reverses_member_id": "sam",
+        "stage_pair_id": "stp",
+        "left_document_uid": "doc",
+        "right_document_uid": "doc",
+        "stage_link_revision_id": "slk",
+        "base_revision_id": "slk",
+        "stage_link_item_id": "sli",
+        "left_profile_id": "cpr",
+        "right_profile_id": "cpr",
+        "stage_text_fragment_id": "stf",
+        "stage_text_exclusion_id": "ste",
+        "stage_text_difference_id": "std",
+        "stage_text_hint_id": "sth",
+        "left_fragment_id": "stf",
+        "right_fragment_id": "stf",
+        "source_fragment_id": "stf",
+        "target_fragment_id": "stf",
+        "stage_chain_run_id": "crn",
+        "stage_chain_step_id": "cst",
     }
     assert set(prefix_by_column.values()) <= {
         identity.prefix for identity in IDENTITY_TYPES_BY_ENTITY.values()

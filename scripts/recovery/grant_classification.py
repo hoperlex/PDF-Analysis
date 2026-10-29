@@ -126,6 +126,9 @@ READ_WRITE = frozenset((
     # that implement them write them.
     "comparison_ai_job", "comparison_ai_pair_question", "comparison_ai_sheet_item", "comparison_launch_entry",
     "comparison_launch_queue", "comparison_report", "comparison_report_part", "comparison_spec_comparison",
+    # `0041_comparison_stage_core`: bounded intake receipts and chain progress change state.
+    "stage_upload", "stage_upload_file", "stage_upload_part", "stage_upload_candidate",
+    "stage_pair", "stage_chain_run", "stage_chain_step",
     "document",
     "execution_control",               # singleton upsert (jobs/repository.py)
     "executor_connection",
@@ -156,6 +159,9 @@ APPEND_ONLY = frozenset((
     # `0040_comparison_ai_reports`: the content-keyed answers, descriptions and extractions, and the report files.
     "comparison_ai_pair_answer", "comparison_report_artifact", "comparison_sheet_description",
     "comparison_spec_extraction",
+    # `0041_comparison_stage_core`: expert acts and deterministic evidence are immutable.
+    "stage_assembly", "stage_assembly_member", "stage_link_revision", "stage_link_item",
+    "stage_text_fragment", "stage_text_exclusion", "stage_text_difference", "stage_text_hint",
     "document_version",
     "document_version_classification", "document_version_classification_correction",
     "executor_connection_revision", "executor_route_event", "expert_decision_event",
@@ -188,6 +194,11 @@ SEALED_NOT_YET_WRITTEN = frozenset((
     # `0040_comparison_ai_reports` (`CMP-SEAL-C2`): the tables of the version comparison AI, specifications, reports and
     # launch queue, until `CMP-VC-AIPAIR-01`, `CMP-VC-AISHEET-01`, `CMP-VC-SPEC-01`, `CMP-VC-QUEUE-01` and
     # `CMP-VC-REPORT-01` write them.
+    # `0041_comparison_stage_core`: C3 tables remain unused until their stage lanes wire them.
+    "stage_upload", "stage_upload_file", "stage_upload_part", "stage_upload_candidate",
+    "stage_assembly", "stage_assembly_member", "stage_pair", "stage_link_revision",
+    "stage_link_item", "stage_text_fragment", "stage_text_exclusion",
+    "stage_text_difference", "stage_text_hint", "stage_chain_run", "stage_chain_step",
 ))
 
 #: ``SELECT``.
@@ -215,7 +226,9 @@ LOCK_ONLY_UPDATE = {
 #: Plain SQL functions (not triggers, not an extension's) that a constraint or an index calls with the
 #: invoker's rights: they are granted ``EXECUTE`` explicitly, so a ``REVOKE ... FROM PUBLIC`` somewhere
 #: cannot silently break a ``CHECK``.
-CALLABLE_FUNCTIONS = frozenset(("am_is_ascending_page_list", "norm_designation_tokens"))
+CALLABLE_FUNCTIONS = frozenset((
+    "am_is_ascending_page_list", "norm_designation_tokens", "am_stage_profile_in_pair",
+))
 
 #: Trigger functions: derived from the recovery tooling's trigger declaration, not listed again.
 TRIGGER_FUNCTIONS = frozenset(function for _, _, function, _ in coverage.TRIGGERS)

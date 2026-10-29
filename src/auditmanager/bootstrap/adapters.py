@@ -6599,3 +6599,223 @@ class ComparisonReportAdapter(_SessionHolder, _VersionsModuleGate):
     def read_report_source_md(self, *, report_id: str) -> bytes:
         self._require_versions_module()
         return self._service.read_report_source_md(report_id=report_id)
+
+
+class _StagesModuleGate:
+    """The C3 seal's first refusal, before any stage operation reads or writes."""
+
+    def __init__(self, *, comparison_modules: str = "none") -> None:
+        from auditmanager.comparison.public import MODULE_STAGES, enabled_modules
+
+        self._stages_module_on = MODULE_STAGES in enabled_modules(comparison_modules)
+
+    def _require_stages_module(self) -> None:
+        if not self._stages_module_on:
+            raise DomainError(
+                ErrorCode.DEPENDENCY_UNAVAILABLE, dependency=_COMPARISON_MODULES_DEPENDENCY
+            )
+
+
+class ComparisonStagePairAdapter(_StagesModuleGate):
+    """Sealed pair and assembly port; `CMP-STAGE-PAIR-01` replaces the bodies."""
+
+    _DEPENDENCY = "comparison_stage_pairs"
+
+    def list_pairs(
+        self, *, project_uid: str, cursor: str | None, limit: int
+    ) -> models.StagePairPage:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def get_pair(self, *, pair_id: str) -> models.StagePair:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def list_suggestions(
+        self, *, project_uid: str, cursor: str | None, limit: int
+    ) -> models.StagePairSuggestionPage:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def confirm_pair(
+        self, *, project_uid: str, body: models.ConfirmStagePairRequest,
+        user_uid: str, idempotency_key: str,
+    ) -> models.StagePair:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def create_assembly(
+        self, *, project_uid: str, body: models.CreateStageAssemblyRequest,
+        user_uid: str, idempotency_key: str,
+    ) -> models.StageAssembly:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def revise_assembly(
+        self, *, assembly_id: str, body: models.ReviseStageAssemblyRequest,
+        user_uid: str, idempotency_key: str,
+    ) -> models.StageAssembly:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def set_completeness(
+        self, *, pair_id: str, body: models.SetStagePairCompletenessRequest,
+        user_uid: str, idempotency_key: str,
+    ) -> models.StagePair:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+
+class ComparisonStageUploadAdapter(_StagesModuleGate):
+    """Sealed PDF/ZIP intake port; no bytes are stored or examined before its lane."""
+
+    _DEPENDENCY = "comparison_stage_uploads"
+
+    def create_upload(
+        self, *, project_uid: str, body: models.CreateStageUploadRequest,
+        user_uid: str, idempotency_key: str,
+    ) -> models.StageUpload:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def list_uploads(
+        self, *, project_uid: str, cursor: str | None, limit: int,
+    ) -> models.StageUploadPage:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def get_upload(self, *, upload_id: str) -> models.StageUpload:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def put_part(
+        self, *, upload_id: str, file_id: str, part_number: int, content: bytes,
+        user_uid: str, idempotency_key: str,
+    ) -> models.StageUploadPartReceipt:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def complete_file(
+        self, *, upload_id: str, file_id: str, user_uid: str, idempotency_key: str,
+    ) -> models.StageUploadFile:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def confirm_candidate(
+        self, *, candidate_id: str, body: models.ConfirmStageUploadCandidateRequest,
+        user_uid: str, idempotency_key: str,
+    ) -> models.StageUploadCandidate:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def reject_candidate(
+        self, *, candidate_id: str, user_uid: str, idempotency_key: str,
+    ) -> models.StageUploadCandidate:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def pause_upload(
+        self, *, upload_id: str, user_uid: str, idempotency_key: str,
+    ) -> models.StageUpload:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def resume_upload(
+        self, *, upload_id: str, user_uid: str, idempotency_key: str,
+    ) -> models.StageUpload:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def cancel_upload(
+        self, *, upload_id: str, user_uid: str, idempotency_key: str,
+    ) -> models.StageUpload:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+
+class ComparisonStageLinkAdapter(_StagesModuleGate):
+    """Sealed sheet mapping port with no automatic matching yet."""
+
+    _DEPENDENCY = "comparison_stage_links"
+
+    def list_passports(self, *, pair_id: str, cursor: str | None, limit: int) -> models.StageSheetPassportPage:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def list_suggestions(self, *, pair_id: str, cursor: str | None, limit: int) -> models.StageSheetSuggestionPage:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def get_current_map(self, *, pair_id: str) -> models.StageLinkRevision:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def apply_map(
+        self, *, pair_id: str, body: models.ApplyStageSheetMapRequest,
+        user_uid: str, idempotency_key: str,
+    ) -> models.StageLinkRevision:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def list_history(self, *, pair_id: str, cursor: str | None, limit: int) -> models.StageLinkRevisionPage:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def get_revision(self, *, revision_id: str) -> models.StageLinkRevision:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+
+class ComparisonStageTextAdapter(_StagesModuleGate):
+    """Sealed raw text evidence port; no AI may mutate this evidence."""
+
+    _DEPENDENCY = "comparison_stage_text"
+
+    def list_fragments(self, *, pair_id: str, cursor: str | None, limit: int) -> models.StageTextFragmentPage:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def list_exclusions(self, *, revision_id: str, cursor: str | None, limit: int) -> models.StageTextExclusionPage:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def list_differences(self, *, revision_id: str, cursor: str | None, limit: int) -> models.StageTextDifferencePage:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def list_hints(self, *, revision_id: str, cursor: str | None, limit: int) -> models.StageTextHintPage:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def recompute(
+        self, *, revision_id: str, user_uid: str, idempotency_key: str,
+    ) -> models.StageChainRun:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+
+class ComparisonStageRunAdapter(_StagesModuleGate):
+    """Sealed durable chain port; no in-memory run state."""
+
+    _DEPENDENCY = "comparison_stage_runs"
+
+    def start_run(
+        self, *, pair_id: str, body: models.StartStageChainRunRequest,
+        user_uid: str, idempotency_key: str,
+    ) -> models.StageChainRun:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def list_runs(self, *, pair_id: str, cursor: str | None, limit: int) -> models.StageChainRunPage:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def get_run(self, *, run_id: str) -> models.StageChainRun:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def cancel_run(
+        self, *, run_id: str, user_uid: str, idempotency_key: str,
+    ) -> models.StageChainRun:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)

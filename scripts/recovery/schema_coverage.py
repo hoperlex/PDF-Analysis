@@ -38,7 +38,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-HEAD = "0040_comparison_ai_reports"
+HEAD = "0041_comparison_stage_core"
 
 #: Every base table of the schema at ``HEAD`` (``relkind`` ``r``, schema ``public``).
 TABLES = frozenset((
@@ -51,6 +51,11 @@ TABLES = frozenset((
     "comparison_launch_entry", "comparison_launch_queue", "comparison_report", "comparison_report_artifact",
     "comparison_report_part", "comparison_sheet_description", "comparison_spec_comparison",
     "comparison_spec_extraction",
+    # `0041_comparison_stage_core`: upload, pair, link, raw evidence and chain storage.
+    "stage_upload", "stage_upload_file", "stage_upload_part", "stage_upload_candidate",
+    "stage_assembly", "stage_assembly_member", "stage_pair", "stage_link_revision",
+    "stage_link_item", "stage_text_fragment", "stage_text_exclusion",
+    "stage_text_difference", "stage_text_hint", "stage_chain_run", "stage_chain_step",
     "contract_state_transition", "document",
     "document_version", "document_version_classification", "document_version_classification_correction",
     "execution_control", "executor_connection", "executor_connection_revision", "executor_probe",
@@ -204,6 +209,35 @@ TRIGGERS = (
     ("comparison_spec_comparison", "trg_comparison_spec_comparison_state_edges", "am_guard_comparison_ai_state_edges", 19),
     ("comparison_spec_extraction", "trg_comparison_spec_extraction_immutable", "am_immutable_row", 27),
     ("comparison_spec_extraction", "trg_comparison_spec_extraction_version", "am_check_comparison_spec_extraction", 7),
+    # `0041_comparison_stage_core`: project scope, revision ordering and immutable evidence.
+    ("stage_upload_candidate", "trg_stage_upload_candidate_scope", "am_check_stage_upload_candidate_scope", 23),
+    ("stage_pair", "trg_stage_pair_project", "am_check_stage_pair_project", 23),
+    ("stage_assembly_member", "trg_stage_assembly_member_scope", "am_check_stage_assembly_member", 7),
+    ("stage_link_revision", "trg_stage_link_revision_chain", "am_check_stage_link_chain", 7),
+    ("stage_link_item", "trg_stage_link_item_scope", "am_check_stage_link_item_scope", 7),
+    ("stage_text_fragment", "trg_stage_text_fragment_scope", "am_check_stage_text_fragment_scope", 7),
+    ("stage_text_exclusion", "trg_stage_text_exclusion_scope", "am_check_stage_text_evidence_scope", 7),
+    ("stage_text_difference", "trg_stage_text_difference_scope", "am_check_stage_text_evidence_scope", 7),
+    ("stage_text_hint", "trg_stage_text_hint_scope", "am_check_stage_text_evidence_scope", 7),
+    ("stage_chain_run", "trg_stage_chain_scope", "am_check_stage_chain_scope", 23),
+    ("stage_assembly", "trg_stage_assembly_immutable", "am_immutable_row", 27),
+    ("stage_assembly_member", "trg_stage_assembly_member_immutable", "am_immutable_row", 27),
+    ("stage_link_revision", "trg_stage_link_revision_immutable", "am_immutable_row", 27),
+    ("stage_link_item", "trg_stage_link_item_immutable", "am_immutable_row", 27),
+    ("stage_text_fragment", "trg_stage_text_fragment_immutable", "am_immutable_row", 27),
+    ("stage_text_exclusion", "trg_stage_text_exclusion_immutable", "am_immutable_row", 27),
+    ("stage_text_difference", "trg_stage_text_difference_immutable", "am_immutable_row", 27),
+    ("stage_text_hint", "trg_stage_text_hint_immutable", "am_immutable_row", 27),
+    ("stage_upload", "trg_stage_upload_frozen_guard", "am_guard_frozen_columns", 19),
+    ("stage_upload_file", "trg_stage_upload_file_frozen_guard", "am_guard_frozen_columns", 19),
+    ("stage_upload_part", "trg_stage_upload_part_frozen_guard", "am_guard_frozen_columns", 19),
+    ("stage_upload_candidate", "trg_stage_upload_candidate_frozen_guard", "am_guard_frozen_columns", 19),
+    ("stage_pair", "trg_stage_pair_frozen_guard", "am_guard_frozen_columns", 19),
+    ("stage_chain_run", "trg_stage_chain_run_frozen_guard", "am_guard_frozen_columns", 19),
+    ("stage_chain_step", "trg_stage_chain_step_frozen_guard", "am_guard_frozen_columns", 19),
+    ("stage_upload_file", "trg_stage_upload_file_write_once", "am_guard_write_once_columns", 19),
+    ("stage_upload_candidate", "trg_stage_upload_candidate_write_once", "am_guard_write_once_columns", 19),
+    ("stage_pair", "trg_stage_pair_write_once", "am_guard_write_once_columns", 19),
     ("contract_state_transition", "trg_contract_state_transition_immutable", "am_immutable_row", 31),
     ("document_version", "trg_document_version_immutable", "am_immutable_row", 27),
     ("document_version_classification", "trg_document_version_classification_immutable", "am_immutable_row", 27),
@@ -303,10 +337,10 @@ SEQUENCES = {
 
 #: ``pg_constraint.contype -> count`` in schema ``public`` at ``HEAD``: p primary key, u unique,
 #: f foreign key, c check, t constraint trigger. A restore that lost one is not the schema.
-CONSTRAINT_COUNTS = {"c": 955, "f": 256, "p": 94, "t": 9, "u": 89}
+CONSTRAINT_COUNTS = {"c": 1073, "f": 300, "p": 109, "t": 9, "u": 104}
 
 #: Indexes in schema ``public`` at ``HEAD`` (primary-key and unique indexes included).
-INDEX_COUNT = 347
+INDEX_COUNT = 386
 
 #: Trigger functions that make a table immutable or append-only (the claim a restore must keep).
 GUARD_FUNCTIONS = frozenset((

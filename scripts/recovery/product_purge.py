@@ -126,6 +126,11 @@ PRODUCT_TABLES = frozenset((
     "comparison_summary", "comparison_upload", "comparison_upload_file", "comparison_upload_part",
     "comparison_upload_set", "comparison_version_order", "comparison_work",
     "comparison_work_attempt", "document", "document_version",
+    # `0041_comparison_stage_core`: every stage row belongs to a product project.
+    "stage_upload", "stage_upload_file", "stage_upload_part", "stage_upload_candidate",
+    "stage_assembly", "stage_assembly_member", "stage_pair", "stage_link_revision",
+    "stage_link_item", "stage_text_fragment", "stage_text_exclusion",
+    "stage_text_difference", "stage_text_hint", "stage_chain_run", "stage_chain_step",
     "document_version_classification", "document_version_classification_correction",
     "executor_task", "expert_decision_event", "finding", "finding_evidence", "finding_observation",
     "finding_observation_norm_citation", "input_manifest_entry", "job", "lease", "model_call",
@@ -196,6 +201,13 @@ PRODUCT_COMMAND_TYPES = frozenset((
     "create_comparison_report", "upload_comparison_report_source", "start_comparison_report",
     "cancel_comparison_report", "continue_comparison_report", "rebuild_comparison_report_pdf",
     "delete_comparison_report", "prepare_comparison_client_report",
+    # `CMP-SEAL-C3`: the sixteen keyed stage commands use product receipts.
+    "create_stage_upload", "upload_stage_upload_part", "complete_stage_upload_file",
+    "confirm_stage_upload_candidate", "reject_stage_upload_candidate", "pause_stage_upload",
+    "resume_stage_upload", "cancel_stage_upload", "confirm_stage_pair",
+    "create_stage_assembly", "revise_stage_assembly", "set_stage_pair_completeness",
+    "apply_stage_sheet_map", "recompute_stage_text_evidence", "start_stage_chain_run",
+    "cancel_stage_chain_run",
 ))
 
 #: Work that is mid-flight in a worker. Queued work is discarded with the rest; work a worker is
@@ -204,6 +216,11 @@ RUNNING_STATES = {
     "audit_run": ("running", "validating"),
     "job": ("leased", "running"),
     "attempt": ("leased", "running"),
+    "stage_upload": ("uploading", "admitting", "paused"),
+    "stage_upload_file": ("receiving", "admitting"),
+    "stage_upload_candidate": ("admitting",),
+    "stage_chain_run": ("queued", "running", "paused"),
+    "stage_chain_step": ("queued", "running", "paused"),
 }
 
 TEMPORARY_KEY_PREFIX = "temporary/"

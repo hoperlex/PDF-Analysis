@@ -30,7 +30,7 @@ from auditmanager.shared.errors import CONTRACT_VERSION as DOMAIN_CONTRACT_VERSI
 from tests.support.expected_facts import FACTS
 
 ROOT = Path(__file__).resolve().parents[3]
-SEALED = "1.11.0"
+SEALED = "1.12.0"
 DRAFT = "1.0.0-draft.1"
 PREVIOUS = "1.10.0"
 FAMILIES = ("analysis", "domain", "events")
