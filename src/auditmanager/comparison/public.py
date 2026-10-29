@@ -139,6 +139,7 @@ from auditmanager.comparison.stage.uploads import (
 )
 from auditmanager.comparison.stage_links.map import LinkInput, StageSheetMapService
 from auditmanager.comparison.stage_links.read import StageSheetReadService
+from auditmanager.comparison.stage_text.read import StageTextReadService
 from auditmanager.comparison.work.errors import (
     HandlerRegistryError,
     UnhandledKindError,
@@ -376,6 +377,7 @@ __all__ = [
     "LinkInput",
     "StageSheetMapService",
     "StageSheetReadService",
+    "StageTextReadService",
     "StageCandidateAdmissionService",
     "StageCandidateDecisionService",
     "StageCandidatePublicationService",

@@ -7083,25 +7083,87 @@ class ComparisonStageLinkAdapter(_StagesModuleGate):
 
 
 class ComparisonStageTextAdapter(_StagesModuleGate):
-    """Sealed raw text evidence port; no AI may mutate this evidence."""
+    """Stored immutable raw text evidence; recomputation remains sealed."""
 
     _DEPENDENCY = "comparison_stage_text"
 
+    def __init__(
+        self, sessions: sessionmaker[Session], *, comparison_modules: str = "none",
+    ) -> None:
+        super().__init__(comparison_modules=comparison_modules)
+        from auditmanager.comparison.public import StageTextReadService
+
+        self._reads = StageTextReadService(sessions)
+
+    @staticmethod
+    def _cursor(raw: str | None) -> str | None:
+        if raw is None:
+            return None
+        parts = decode_cursor(raw)
+        if len(parts) != 1 or not re.fullmatch(r"[0-9a-f]{64}", parts[0]):
+            raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+        return parts[0]
+
     def list_fragments(self, *, pair_id: str, cursor: str | None, limit: int) -> models.StageTextFragmentPage:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        rows, next_key = self._reads.fragments(
+            pair_id=pair_id, after=self._cursor(cursor), limit=limit,
+        )
+        return models.StageTextFragmentPage(
+            items=[models.StageTextFragment(
+                fragment_id=row["stage_text_fragment_id"], pair_id=pair_id,
+                profile_id=row["page_profile_id"], side=row["side"],
+                text=row["normalised_text"], box_anchor=row["box_anchor"],
+                content_key=row["content_key"],
+            ) for row in rows],
+            page=models.PageInfo(next_cursor=encode_cursor((next_key,)) if next_key else None),
+        )
 
     def list_exclusions(self, *, revision_id: str, cursor: str | None, limit: int) -> models.StageTextExclusionPage:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        rows, next_key = self._reads.revision_rows(
+            kind="exclusions", revision_id=revision_id,
+            after=self._cursor(cursor), limit=limit,
+        )
+        return models.StageTextExclusionPage(
+            items=[models.StageTextExclusion(
+                exclusion_id=row["stage_text_exclusion_id"], revision_id=revision_id,
+                left_fragment_id=row["left_fragment_id"],
+                right_fragment_id=row["right_fragment_id"], proof_kind=row["proof_kind"],
+            ) for row in rows],
+            page=models.PageInfo(next_cursor=encode_cursor((next_key,)) if next_key else None),
+        )
 
     def list_differences(self, *, revision_id: str, cursor: str | None, limit: int) -> models.StageTextDifferencePage:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        rows, next_key = self._reads.revision_rows(
+            kind="differences", revision_id=revision_id,
+            after=self._cursor(cursor), limit=limit,
+        )
+        return models.StageTextDifferencePage(
+            items=[models.StageTextDifference(
+                difference_id=row["stage_text_difference_id"], revision_id=revision_id,
+                status=row["status"],
+                **_unset_none(left_fragment_id=row["left_fragment_id"],
+                              right_fragment_id=row["right_fragment_id"]),
+            ) for row in rows],
+            page=models.PageInfo(next_cursor=encode_cursor((next_key,)) if next_key else None),
+        )
 
     def list_hints(self, *, revision_id: str, cursor: str | None, limit: int) -> models.StageTextHintPage:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        rows, next_key = self._reads.revision_rows(
+            kind="hints", revision_id=revision_id,
+            after=self._cursor(cursor), limit=limit,
+        )
+        return models.StageTextHintPage(
+            items=[models.StageTextHint(
+                hint_id=row["stage_text_hint_id"], revision_id=revision_id,
+                source_fragment_id=row["source_fragment_id"],
+                target_fragment_id=row["target_fragment_id"],
+            ) for row in rows],
+            page=models.PageInfo(next_cursor=encode_cursor((next_key,)) if next_key else None),
+        )
 
     def recompute(
         self, *, revision_id: str, user_uid: str, idempotency_key: str,

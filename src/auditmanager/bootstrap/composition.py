@@ -601,7 +601,9 @@ def build_application(
         comparison_stage_links=ComparisonStageLinkAdapter(
             sessions, comparison_modules=comparison_modules,
         ),
-        comparison_stage_text=ComparisonStageTextAdapter(comparison_modules=comparison_modules),
+        comparison_stage_text=ComparisonStageTextAdapter(
+            sessions, comparison_modules=comparison_modules,
+        ),
         comparison_stage_runs=ComparisonStageRunAdapter(comparison_modules=comparison_modules),
         execution=ExecutionAdapter(sessions, runs=run_adapter),
         # `W55A-SEAL-01` sealed them; `W55A-SEARCH-01` serves them. The norms reads and the
