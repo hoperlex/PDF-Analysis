@@ -106,3 +106,59 @@ class Drawn:
 @pytest.fixture(scope="session")
 def drawn() -> type[Drawn]:
     return Drawn
+
+
+# -- a model's answer, written the way a faithful model would, for the checks of part B ----------------------------------------
+
+from auditmanager.comparison.specification import check, source as source_module  # noqa: E402
+
+
+def faithful_answer(source: dict) -> dict:
+    """The answer a careful model gives for a packet: every pipe row a position (its whole line as evidence, its cells as the
+    fields), the header and separator lines ignored as such, a plain line a section title. The oracle of the checks."""
+    blocks = []
+    section = ""
+    for block in source["blocks"]:
+        rows, ignored = [], []
+        header: dict[int, str] | None = None
+        for line in block["lines"]:
+            cells = check._pipe_cells(line["text"])
+            if cells is None:
+                section = line["text"].strip()
+                ignored.append({"line": line["line"], "reason": "section"})
+                continue
+            recognized = check._table_header(cells)
+            if recognized is not None:
+                header = recognized
+                ignored.append({"line": line["line"], "reason": "header"})
+                continue
+            if check._separator_row(cells):
+                ignored.append({"line": line["line"], "reason": "separator"})
+                continue
+            assert header is not None
+            fields = {name: "" for name in check.FIELDS}
+            for index, field in header.items():
+                fields[field] = cells[index]
+            rows.append({"section": section, "parent": "", "fields": fields, "evidence": [{"line": line["line"], "quote": line["text"]}]})
+        blocks.append({"block_id": block["block_id"], "rows": rows, "ignored": ignored, "issues": []})
+    return {"blocks": blocks}
+
+
+def source_of(*pages: "Page") -> dict:  # noqa: F821
+    """The packet of one version from drawn pages (the parser's rows are the text)."""
+    parsed = []
+    for number, page in enumerate(pages, start=1):
+        result = page.parse()
+        assert result is not None and result["parsed"], result
+        parsed.append({"page": number, "sheet": str(number), "name": "Спецификация", "columns": result["columns"], "rows": result["rows"]})
+    return source_module.build_source(parsed)
+
+
+class Whole:
+    faithful_answer = staticmethod(faithful_answer)
+    source_of = staticmethod(source_of)
+
+
+@pytest.fixture(scope="session")
+def whole() -> type[Whole]:
+    return Whole
