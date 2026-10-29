@@ -517,7 +517,10 @@ def build_application(
         # answering `503 dependency_unavailable` (`comparison_modules` while the versions module is off) until
         # `CMP-VC-AIPAIR-01`, `CMP-VC-AISHEET-01`, `CMP-VC-SPEC-01`, `CMP-VC-QUEUE-01` and `CMP-VC-REPORT-01`
         # replace the five adapters (plan section 4.0 rule 1).
-        comparison_ai_pairs=ComparisonAiPairAdapter(comparison_modules=comparison_modules),
+        comparison_ai_pairs=ComparisonAiPairAdapter(
+            sessions, blob_store=store, comparison_modules=comparison_modules,
+            provider_mode=_provenance_mode(resolved.provider_mode),
+        ),
         comparison_ai_sheets=ComparisonAiSheetAdapter(comparison_modules=comparison_modules),
         comparison_specifications=ComparisonSpecificationAdapter(
             sessions, blob_store=store, comparison_modules=comparison_modules, provider_mode=_provenance_mode(resolved.provider_mode)),

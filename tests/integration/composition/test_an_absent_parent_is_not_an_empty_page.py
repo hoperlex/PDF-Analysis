@@ -244,10 +244,9 @@ COMPARISON_QUEUE_OPERATIONS = frozenset({"getComparisonQueueSummary"})
 #: that name a parent; `CMP-VC-AIPAIR-01`, `CMP-VC-AISHEET-01`, `CMP-VC-SPEC-01`, `CMP-VC-QUEUE-01` and `CMP-VC-REPORT-01`
 #: remove the ones they wire, and each then joins the `404` sweep (an absent project, document, series, transition,
 #: sheet pair, page profile or report is `404 not_found`).
+#: `CMP-VC-AIPAIR-01` serves ``estimateComparisonAiPairCheck``, ``getComparisonAiPairCheck`` and
+#: ``listComparisonAiPairHints`` and removes them: each joins the `404` sweep.
 SEALED_STUB_ADDRESSED: frozenset[str] = frozenset({
-    "estimateComparisonAiPairCheck",
-    "getComparisonAiPairCheck",
-    "listComparisonAiPairHints",
     "estimateComparisonAiSheetChanges",
     "getComparisonAiSheetChanges",
     "getComparisonSheetDescription",
@@ -335,6 +334,7 @@ def app() -> Composed:
     assert os.environ.get("DATABASE_URL"), "this suite needs the lane's .env loaded"
     # No reviewed pack is installed in this suite, whatever the process environment names:
     # `test_the_server_pack_status_answers_its_own_shape` asserts that state.
+    # `CMP-VC-AIPAIR-01`: the versions module is on (see `test_router_answers.py`): a wired C2 read is judged on its own `404`.
     environ = {k: v for k, v in os.environ.items() if k != PACK_MANIFEST_ENV} | {
         API_TOKEN_VARIABLE: DEPLOYMENT_SECRET,
         # A wired comparison read of wave C2 refuses first while the versions module is off (`CMP-SEAL-C2` section 8), so the sweep

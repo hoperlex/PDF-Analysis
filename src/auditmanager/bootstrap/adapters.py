@@ -6006,44 +6006,105 @@ class _VersionsModuleGate:
             )
 
 
-class ComparisonAiPairAdapter(_VersionsModuleGate):
-    """`CMP-VC-AIPAIR-01` replaces the bodies."""
+class ComparisonAiPairAdapter(_SessionHolder, _VersionsModuleGate):
+    """`CMP-VC-AIPAIR-01` serves the operations of the AI pair check over
+    :class:`~auditmanager.comparison.ai_pairs.service.ComparisonAiPairService` and the shared AI-job core
+    (ADR-0025 decisions 3, 14, 16, 19, 23).
+
+    The adapter owns the mapping to the contract's models, the cursor of the hint list and the actor's roles (a start and every
+    steering command is an expert's act, checked again in the transaction that acts). Every method begins with the module
+    flag: while the versions module is off nothing is read, written or sent to a model."""
 
     _DEPENDENCY = "comparison_ai_pairs"
 
+    def __init__(
+        self, session_factory: sessionmaker[Session], *, blob_store: Any = None, comparison_modules: str = "none",
+        provider_mode: str = "live", service: Any = None,
+    ) -> None:
+        _SessionHolder.__init__(self, session_factory)
+        _VersionsModuleGate.__init__(self, comparison_modules=comparison_modules)
+        if service is None:
+            from auditmanager.comparison.public import ComparisonAiPairService
+
+            service = ComparisonAiPairService(
+                session_factory, blob_store=blob_store, comparison_modules=comparison_modules, provider_mode=provider_mode,
+            )
+        self._service = service
+
+    @staticmethod
+    def _consent(consent: models.ComparisonAiConsent | None) -> Any:
+        from auditmanager.comparison.public import AiConsentInput
+
+        return None if consent is None else AiConsentInput(estimate_digest=str(consent.estimate_digest), confirmed=bool(consent.confirmed))
+
+    def _roles(self, user_uid: str) -> frozenset[str]:
+        return self._read(lambda session: _comparison_actor(session, user_uid))[1]
+
     def cancel_pair_check(self, *, job_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonAiJob:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        return models.ComparisonAiJob.model_validate(self._service.cancel(
+            job_id=job_id, user_uid=user_uid, actor_roles=self._roles(user_uid), idempotency_key=idempotency_key,
+        ))
 
     def estimate_pair_check(self, *, project_uid: str, document_uid: str) -> models.ComparisonAiEstimate:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        return models.ComparisonAiEstimate.model_validate(
+            self._service.estimate(project_uid=project_uid, document_uid=document_uid)
+        )
 
     def get_pair_check(self, *, project_uid: str, document_uid: str) -> models.ComparisonAiPairCheck:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        return models.ComparisonAiPairCheck.model_validate(
+            self._service.get(project_uid=project_uid, document_uid=document_uid)
+        )
 
     def list_pair_hints(
         self, *, project_uid: str, document_uid: str, cursor: str | None, limit: int
     ) -> models.ComparisonAiPairHintPage:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        after: tuple[datetime, str] | None = None
+        if cursor is not None:
+            parts = decode_cursor(cursor)
+            try:
+                if len(parts) != 2:
+                    raise ValueError
+                after = (datetime.fromisoformat(parts[0]), parts[1])
+            except ValueError:
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format") from None
+        page = self._service.hints(project_uid=project_uid, document_uid=document_uid, after=after, limit=limit)
+        return models.ComparisonAiPairHintPage.model_validate(
+            {
+                "items": page.items,
+                "page": {
+                    "next_cursor": None if page.next_after is None
+                    else encode_cursor((page.next_after[0].isoformat(), page.next_after[1]))
+                },
+            }
+        )
 
     def pause_pair_check(self, *, job_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonAiJob:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        return models.ComparisonAiJob.model_validate(self._service.pause(
+            job_id=job_id, user_uid=user_uid, actor_roles=self._roles(user_uid), idempotency_key=idempotency_key,
+        ))
 
     def resume_pair_check(
         self, *, job_id: str, consent: models.ComparisonAiConsent | None, user_uid: str, idempotency_key: str
     ) -> models.ComparisonAiJob:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        return models.ComparisonAiJob.model_validate(self._service.resume(
+            job_id=job_id, consent=self._consent(consent), user_uid=user_uid, actor_roles=self._roles(user_uid),
+            idempotency_key=idempotency_key,
+        ))
 
     def start_pair_check(
         self, *, project_uid: str, document_uid: str, consent: models.ComparisonAiConsent, user_uid: str, idempotency_key: str
     ) -> models.ComparisonAiJob:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        return models.ComparisonAiJob.model_validate(self._service.start(
+            project_uid=project_uid, document_uid=document_uid, consent=self._consent(consent), user_uid=user_uid,
+            actor_roles=self._roles(user_uid), idempotency_key=idempotency_key,
+        ))
 
 
 class ComparisonAiSheetAdapter(_VersionsModuleGate):

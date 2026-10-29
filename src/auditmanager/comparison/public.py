@@ -258,6 +258,16 @@ from auditmanager.comparison.ai_jobs.recorded import RecordedAnswers
 from auditmanager.comparison.ai_jobs.service import AiJobCommand, ComparisonAiJobService
 from auditmanager.comparison.ai_jobs.service import pause_reason_of as ai_pause_reason_of
 
+# `CMP-VC-AIPAIR-01`: the AI check of the doubtful sheet pairs (its service, its work kind and its handler).
+from auditmanager.comparison.ai_pairs.decide import decide as decide_pair_check
+from auditmanager.comparison.ai_pairs.handler import (
+    ModelBinder as AiPairModelBinder,
+    PairCheckHandler,
+    pair_check_handler,
+)
+from auditmanager.comparison.ai_pairs.model import PAIR_CHECK_KIND, PROMPT_VERSION as PAIR_CHECK_PROMPT_VERSION
+from auditmanager.comparison.ai_pairs.service import ComparisonAiPairService
+
 #: `CMP-WORK-01` (ADR-0025 decision 4). One tuple of handler factories, each
 #: ``Callable[[WorkDependencies], WorkHandler]``: ``build_worker_runtime`` builds one dependency
 #: bundle and applies every factory to it, and refuses to start on a duplicate ``kind``. A slice
@@ -269,6 +279,7 @@ HANDLER_FACTORIES: tuple[HandlerFactory, ...] = (
     series_pair_handler,  # `CMP-SERIES-01`: kind ``series_pair``
     series_drive_handler,  # `CMP-SERIES-01`: kind ``series_drive``
     series_after_preparation_handler,  # `CMP-SERIES-01`: kind ``series_after_preparation``
+    pair_check_handler,  # `CMP-VC-AIPAIR-01`: kind ``comparison_pair_check``
     spec_handler,  # `CMP-VC-SPEC-01`: kind ``comparison_spec``
 )
 
@@ -320,6 +331,13 @@ from auditmanager.comparison.tiles.reader import PairTileReader
 PAGE_PROFILE_WORK_KIND = "page_profile"
 
 __all__ = [
+    "PAIR_CHECK_KIND",
+    "PAIR_CHECK_PROMPT_VERSION",
+    "AiPairModelBinder",
+    "ComparisonAiPairService",
+    "PairCheckHandler",
+    "decide_pair_check",
+    "pair_check_handler",
     "ENGINE_ALGO_VERSION",
     "MASK_FORMAT",
     "MASK_LAYERS",

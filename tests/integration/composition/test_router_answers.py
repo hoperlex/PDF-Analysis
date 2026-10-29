@@ -86,9 +86,6 @@ _STUB_SERIES = "/comparison-series/cser_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 _STUB_TRANSITION = "/comparison-transitions/ctn_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 _STUB_REPORT = "/comparison-reports/crt_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 SEALED_STUB_GETS: frozenset[str] = frozenset({
-    f"{_STUB_DOCUMENT}/comparison-ai-pair-check/estimate",
-    f"{_STUB_DOCUMENT}/comparison-ai-pair-check",
-    f"{_STUB_DOCUMENT}/comparison-ai-pair-hints",
     f"{_STUB_SERIES}/ai-sheet-changes/estimate",
     f"{_STUB_SERIES}/ai-sheet-changes",
     f"{_STUB_PAIR}/description",
