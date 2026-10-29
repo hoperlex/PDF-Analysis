@@ -6125,9 +6125,22 @@ class ComparisonAiSheetAdapter(_VersionsModuleGate):
 
 
 class ComparisonSpecificationAdapter(_VersionsModuleGate):
-    """`CMP-VC-SPEC-01` replaces the bodies."""
+    """`CMP-VC-SPEC-01`. Part A -- the positions of a page and of a sheet pair -- is served over
+    :class:`~auditmanager.comparison.specification.reader.SpecificationReader` (deterministic, read-only, no model); the operations of
+    part B stay sealed until the AI-job core is wired to them. Every method keeps the module-flag refusal as its first statement."""
 
     _DEPENDENCY = "comparison_specification"
+
+    def __init__(
+        self, session_factory: sessionmaker[Session] | None = None, *, blob_store: Any = None,
+        comparison_modules: str = "none", reader: Any = None,
+    ) -> None:
+        super().__init__(comparison_modules=comparison_modules)
+        if reader is None and session_factory is not None:
+            from auditmanager.comparison.public import SpecificationReader
+
+            reader = SpecificationReader(session_factory, blob_store)
+        self._reader = reader
 
     def cancel_specification(self, *, job_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonAiJob:
         self._require_versions_module()
@@ -6139,11 +6152,15 @@ class ComparisonSpecificationAdapter(_VersionsModuleGate):
 
     def get_page_positions(self, *, page_profile_id: str) -> models.ComparisonSpecPage:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        if self._reader is None:
+            return _comparison_unavailable(self._DEPENDENCY)
+        return models.ComparisonSpecPage.model_validate(self._reader.page_view(page_profile_id))
 
     def get_pair_positions(self, *, sheet_pair_id: str) -> models.ComparisonSheetPairSpecPositions:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        if self._reader is None:
+            return _comparison_unavailable(self._DEPENDENCY)
+        return models.ComparisonSheetPairSpecPositions.model_validate(self._reader.pair_view(sheet_pair_id))
 
     def get_specification(self, *, transition_id: str) -> models.ComparisonSpecification:
         self._require_versions_module()

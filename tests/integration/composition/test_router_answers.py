@@ -96,8 +96,6 @@ SEALED_STUB_GETS: frozenset[str] = frozenset({
     f"{_STUB_PAIR}/description/estimate",
     f"{_STUB_PAIR}/description/md",
     f"{_STUB_TRANSITION}/review-sheets",
-    f"{_STUB_PROFILE}/spec-positions",
-    f"{_STUB_PAIR}/spec-positions",
     f"{_STUB_SERIES}/specifications",
     f"{_STUB_TRANSITION}/specification",
     f"{_STUB_TRANSITION}/specification/changes",

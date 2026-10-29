@@ -222,6 +222,9 @@ from auditmanager.comparison.series import (
 # `CMP-VC-OVERVIEW-01`: the overview of «Проекты и этапы» and the comparison queue summary (two reads, no work kind).
 from auditmanager.comparison.overview import ComparisonOverviewService
 
+# `CMP-VC-SPEC-01`: specifications of a version comparison (positions by GOST 21.110, the whole-specification comparison).
+from auditmanager.comparison.specification.reader import SpecificationReader
+
 #: `CMP-WORK-01` (ADR-0025 decision 4). One tuple of handler factories, each
 #: ``Callable[[WorkDependencies], WorkHandler]``: ``build_worker_runtime`` builds one dependency
 #: bundle and applies every factory to it, and refuses to start on a duplicate ``kind``. A slice
@@ -485,4 +488,5 @@ __all__ = [
     "series_drive_handler",
     "series_pair_handler",
     "ComparisonOverviewService",
+    "SpecificationReader",
 ]
