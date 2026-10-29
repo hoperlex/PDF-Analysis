@@ -224,7 +224,7 @@ the storage port, not a shortcut around it.
 
 `tests/integration/api` — real PostgreSQL, real MinIO, never a skip.
 
-The 198-operation assertion compares the router's `(operationId, METHOD, path)` set
+The 230-operation assertion compares the router's `(operationId, METHOD, path)` set
 against the frozen document itself, never against a list in the test. `build_router` also
 refuses a duplicate `operationId` at construction — FastAPI logs a warning and serves a
 document declaring the id twice, which leaves `len(routes) == 12` passing while one frozen

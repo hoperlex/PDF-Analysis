@@ -107,6 +107,12 @@ EXPECTED_TABLES = {
     "comparison_report_artifact",
     "comparison_launch_queue",
     "comparison_launch_entry",
+    # `0041_comparison_stage_core`: resumable stage intake, pairs, link revisions,
+    # immutable text evidence and pinned seven-step runs (`CMP-SEAL-C3`).
+    "stage_upload", "stage_upload_file", "stage_upload_part", "stage_upload_candidate",
+    "stage_assembly", "stage_assembly_member", "stage_pair", "stage_link_revision",
+    "stage_link_item", "stage_text_fragment", "stage_text_exclusion",
+    "stage_text_difference", "stage_text_hint", "stage_chain_run", "stage_chain_step",
     # `0019_execution_workers`: the worker registry.
     "worker",
     # `0020_norms_search`: the one current norms snapshot and its append-only history.

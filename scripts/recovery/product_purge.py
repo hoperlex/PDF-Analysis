@@ -210,15 +210,15 @@ PRODUCT_COMMAND_TYPES = frozenset((
     "cancel_stage_chain_run",
 ))
 
-#: Work that is mid-flight in a worker. Queued work is discarded with the rest; work a worker is
-#: executing right now is not something to pull the rows from under.
+#: Work that may be executing or resumed. The C3 upload and chain rows are kept from a
+#: destructive purge until admission and execution have been stopped or cancelled.
 RUNNING_STATES = {
     "audit_run": ("running", "validating"),
     "job": ("leased", "running"),
     "attempt": ("leased", "running"),
     "stage_upload": ("uploading", "admitting", "paused"),
-    "stage_upload_file": ("receiving", "admitting"),
-    "stage_upload_candidate": ("admitting",),
+    "stage_upload_file": ("declared", "receiving", "received", "admitting"),
+    "stage_upload_candidate": ("confirmed", "admitting"),
     "stage_chain_run": ("queued", "running", "paused"),
     "stage_chain_step": ("queued", "running", "paused"),
 }

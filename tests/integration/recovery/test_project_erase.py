@@ -482,6 +482,18 @@ def test_the_non_terminal_states_are_the_complement_of_the_schemas_terminal_chec
     every = states("ck_executor_task_state", "executor_task")
     assert set(tool.NON_TERMINAL_STATES["executor_task"]) == {"open", "claimed"}
     assert {"open", "claimed"} <= every and every - {"open", "claimed"} == {"answered", "failed", "expired", "cancelled"}
+    for table, terminal in (
+        ("stage_upload", {"completed", "failed", "cancelled"}),
+        ("stage_upload_file", {"ready", "failed", "cancelled"}),
+        ("stage_upload_candidate", {"proposed", "published", "rejected", "failed"}),
+        ("stage_chain_run", {"completed", "failed", "cancelled"}),
+        ("stage_chain_step", {"completed", "failed", "cancelled"}),
+    ):
+        every = states(f"ck_{table}_state", table)
+        nonterminal = every - terminal
+        assert terminal < every
+        assert set(tool.NON_TERMINAL_STATES[table]) == nonterminal, table
+        assert set(purge.RUNNING_STATES[table]) == nonterminal, table
 
 
 def test_the_purge_keeps_the_record_of_an_erasure_and_would_stop_without_the_prefix() -> None:

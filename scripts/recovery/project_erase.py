@@ -136,8 +136,8 @@ NON_TERMINAL_STATES = {
     "comparison_launch_entry": ("waiting", "running", "needs_consent"),
     # `0041_comparison_stage_core`: admission and chain execution must be stopped first.
     "stage_upload": ("uploading", "paused", "admitting"),
-    "stage_upload_file": ("receiving", "admitting"),
-    "stage_upload_candidate": ("admitting",),
+    "stage_upload_file": ("declared", "receiving", "received", "admitting"),
+    "stage_upload_candidate": ("confirmed", "admitting"),
     "stage_chain_run": ("queued", "running", "paused"),
     "stage_chain_step": ("queued", "running", "paused"),
 }

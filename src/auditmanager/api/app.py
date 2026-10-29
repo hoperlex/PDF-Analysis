@@ -169,7 +169,7 @@ def create_asgi_app(
 def create_documentation_app(environ: Mapping[str, str] | None = None) -> FastAPI:
     """The same application shape, with nothing wired behind the six ports.
 
-    The served document is a function of the 198 declarations and the 320 models and not
+    The served document is a function of the 230 route declarations and their models, not
     of what sits behind the ports, so this builds it without a database, an object store or
     a credential -- which is what lets the conformance gate read
     ``create_documentation_app().openapi()`` on any checkout. It **cannot serve a request**:
@@ -206,7 +206,7 @@ def _drop_the_422_this_surface_cannot_answer(document: dict[str, Any]) -> dict[s
     **Why this is not document surgery, and how you can tell.** `W13-CONF` measured that
     FastAPI's own 422 must be *displaced, not deleted*: declaring the contract's own
     ``422: {"model": ErrorEnvelope, ...}`` replaces it and keeps ``HTTPValidationError`` and
-    ``ValidationError`` out of ``components.schemas``. **One hundred and twenty** of the 198
+    ``ValidationError`` out of ``components.schemas``. **One hundred and forty-two** of the 230
     operations do exactly that -- measured from the contract, not recalled: this paragraph
     read *"Twelve of the seventeen"* until wave 39, and twelve plus the four below is
     sixteen, which was never the size of this surface. It was thirteen of seventeen before
@@ -476,7 +476,7 @@ def _assemble(
             ),
         ],
         # A model with a default would otherwise be emitted twice, as `X-Input` and
-        # `X-Output`. The 517 schema names are pinned by the contract and by the frontend's
+        # `X-Output`. The 570 schema names are pinned by the contract and by the frontend's
         # generated client, so the split is a conformance failure -- and the fix belongs
         # here, in the application, never in the gate's normalization. `W13-CONF` measured
         # it: `test_the_gate_catches_a_split_input_and_output_schema`.

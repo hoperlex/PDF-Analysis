@@ -243,6 +243,76 @@ def test_sheet_map_revision_refuses_a_stale_base_and_cannot_be_rewritten(
              {"revision": first}, "AM003")
 
 
+def test_raw_text_difference_is_immutable_and_its_fragments_follow_pair_sides(
+    at_this: tuple[Engine, str],
+) -> None:
+    engine, _ = at_this
+    with engine.begin() as connection:
+        project, _other_project, left, _outside = _world(connection)
+        right = _id("doc")
+        connection.execute(text(
+            "INSERT INTO document (document_uid, project_uid, display_title) "
+            "VALUES (:d, :p, 'R')"), {"d": right, "p": project})
+        profiles = []
+        for document in (left, right):
+            version, profile = _id("ver"), _id("cpr")
+            connection.execute(text(
+                "INSERT INTO document_version (version_uid, document_uid, version_ordinal, "
+                "media_type, byte_size, sha256, page_count) "
+                "VALUES (:v, :d, 1, 'application/pdf', 1, :sha, 1)"),
+                {"v": version, "d": document, "sha": SHA})
+            connection.execute(text(
+                "INSERT INTO comparison_page_profile (comparison_page_profile_id, version_uid, "
+                "page_number, content_key, algo_version, status) "
+                "VALUES (:profile, :version, 1, :sha, 'p1', 'ready')"),
+                {"profile": profile, "version": version, "sha": SHA})
+            profiles.append(profile)
+        pair, revision = _id("stp"), _id("slk")
+        connection.execute(text(
+            "INSERT INTO stage_pair (stage_pair_id, project_uid, left_document_uid, "
+            "right_document_uid, state, confirmed_by_user_uid, confirmed_at, command_id) "
+            "VALUES (:pair, :p, :left, :right, 'confirmed', :actor, now(), :command)"),
+            {"pair": pair, "p": project, "left": left, "right": right,
+             "actor": ACTOR, "command": _command(connection, "confirm_stage_pair")})
+        connection.execute(text(
+            "INSERT INTO stage_link_revision (stage_link_revision_id, stage_pair_id, "
+            "revision_no, source, input_sha256, actor_user_uid, command_id) "
+            "VALUES (:revision, :pair, 1, 'expert', :sha, :actor, :command)"),
+            {"revision": revision, "pair": pair, "sha": SHA, "actor": ACTOR,
+             "command": _command(connection, "apply_stage_sheet_map")})
+    fragment_sql = (
+        "INSERT INTO stage_text_fragment (stage_text_fragment_id, stage_pair_id, "
+        "page_profile_id, side, content_key, normalised_text, box_anchor) "
+        "VALUES (:fragment, :pair, :profile, :side, :key, 'text', '{}'::jsonb)"
+    )
+    _refused(engine, fragment_sql,
+             {"fragment": _id("stf"), "pair": pair, "profile": profiles[1],
+              "side": "left", "key": "c" * 64})
+    left_fragment, right_fragment = _id("stf"), _id("stf")
+    with engine.begin() as connection:
+        for fragment, profile, side, key in (
+            (left_fragment, profiles[0], "left", "a" * 64),
+            (right_fragment, profiles[1], "right", "b" * 64),
+        ):
+            connection.execute(text(fragment_sql),
+                               {"fragment": fragment, "pair": pair, "profile": profile,
+                                "side": side, "key": key})
+        difference = _id("std")
+        connection.execute(text(
+            "INSERT INTO stage_text_difference (stage_text_difference_id, stage_pair_id, "
+            "stage_link_revision_id, left_fragment_id, right_fragment_id, status, content_key) "
+            "VALUES (:difference, :pair, :revision, :left, :right, 'changed', :key)"),
+            {"difference": difference, "pair": pair, "revision": revision,
+             "left": left_fragment, "right": right_fragment, "key": "d" * 64})
+    _refused(engine,
+             "UPDATE stage_text_difference SET content_key = :key "
+             "WHERE stage_text_difference_id = :difference",
+             {"key": "e" * 64, "difference": difference}, "AM003")
+    _refused(engine,
+             "DELETE FROM stage_text_difference WHERE stage_text_difference_id = :difference",
+             {"difference": difference}, "AM003")
+
+
 def test_project_erase_deletes_a_nonempty_stage_graph_and_keeps_the_other_project(
     at_this: tuple[Engine, str],
 ) -> None:
