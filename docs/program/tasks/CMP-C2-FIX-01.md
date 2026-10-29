@@ -25,7 +25,12 @@ The C2 candidate passes its frozen contract check for the bundled report font, a
 ### P-01 — frozen API, migration and base
 - captured_at: 2026-10-29
 - command: `python3 -c 'import json;d=json.load(open("contracts/api/v1/openapi.json"));print(d["info"]["version"],len(d["paths"]),sum(k in {"get","post","put","patch","delete","head","options","trace"} for p in d["paths"].values() for k in p),len(d["components"]["schemas"]))' && git rev-parse --short HEAD && ls db/migrations/versions/*0040*`
-- captured_output: `1.11.0 176 198 517`; `8fcdda42`; `db/migrations/versions/20261029_0040_comparison_ai_reports.py`
+- captured_output:
+  ```text
+  1.11.0 176 198 517
+  8fcdda42
+  db/migrations/versions/20261029_0040_comparison_ai_reports.py
+  ```
 - interpretation: the C2 seal is unchanged at the start of FIX.
 
 ## Historical evidence
@@ -40,7 +45,7 @@ The C2 candidate passes its frozen contract check for the bundled report font, a
 - totality_query: `make gate-static`
 
 ## Publication authority
-- development_target: none; the later `CMP-WAVE-C2-INT` integration task owns `origin/dev`
+- development_target: none
 - origin_main_authority: none
 
 ## Allowed paths

@@ -34,13 +34,21 @@ The merged C2 comparison modules pass one complete `make gate` on an exact clean
 ### P-01 — sealed candidate and clean base
 - captured_at: 2026-10-29
 - command: `git rev-parse HEAD; git status --short; python3 -c 'import json;d=json.load(open("contracts/api/v1/openapi.json"));print(d["info"]["version"],len(d["paths"]),sum(k in {"get","post","put","patch","delete","head","options","trace"} for p in d["paths"].values() for k in p),len(d["components"]["schemas"]))'`
-- captured_output: `efeefe1f7452cad85adca3d2fd4d93e101a8178d`; no status lines; `1.11.0 176 198 517`
+- captured_output:
+  ```text
+  efeefe1f7452cad85adca3d2fd4d93e101a8178d
+  1.11.0 176 198 517
+  ```
 - interpretation: the C2 fix is recorded; the frozen API has not moved.
 
 ### P-02 — remote refs before integration
 - captured_at: 2026-10-29
 - command: `git ls-remote origin refs/heads/dev refs/heads/main`
-- captured_output: `0277e4ef507950e2e6bafe6aa5c77928acd94013 refs/heads/dev`; `2651cc7a5c00267faf9de2cf291f2419974f8a24 refs/heads/main`
+- captured_output:
+  ```text
+  0277e4ef507950e2e6bafe6aa5c77928acd94013 refs/heads/dev
+  2651cc7a5c00267faf9de2cf291f2419974f8a24 refs/heads/main
+  ```
 - interpretation: only `origin/dev` is this task's publication target; both refs must be checked again immediately before any push.
 
 ## Historical evidence
