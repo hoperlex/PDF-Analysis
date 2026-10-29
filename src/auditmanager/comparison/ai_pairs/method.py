@@ -55,6 +55,7 @@ from auditmanager.comparison.matrix.effective import effective_matrix
 from auditmanager.comparison.matrix.model import BuildRecord
 from auditmanager.comparison.matrix.repository import MatrixRepository
 from auditmanager.comparison.profile.limits import ALGO_VERSION as PAGE_PROFILE_ALGO_VERSION
+from auditmanager.comparison.spend.model import JOB_KEY as SPEND_JOB_KEY
 from auditmanager.comparison.work.repository import ComparisonWorkRepository
 from auditmanager.shared.errors import DomainError, ErrorCode
 
@@ -288,7 +289,10 @@ class PairCheckMethod:
         for payload in self._pairs.ask_payloads(session, job.job_id, _FAILED_ITEM_STATES):
             question_id = str(payload["question_id"])
             self._pairs.requeue_question(session, question_id)
-            specs.append(AiWorkItemSpec(unit_key=question_unit_key(question_id), payload=dict(payload)))
+            # the stored payload carries the job's identity, which the core writes itself and refuses in a spec
+            specs.append(AiWorkItemSpec(
+                unit_key=question_unit_key(question_id), payload={k: v for k, v in payload.items() if k != SPEND_JOB_KEY},
+            ))
         return specs
 
     def _enqueue_close(self, session: Session, job: AiJobRecord) -> None:

@@ -34,7 +34,7 @@ from auditmanager.comparison.ai_pairs.model import (
     QuestionPage,
 )
 
-__all__ = ["askable", "derive_questions", "facts_key", "is_multi_sheet_spec", "is_spec_page"]
+__all__ = ["askable", "derive_questions", "facts_key", "is_multi_sheet_spec", "is_spec_page", "paired_pages"]
 
 _SPEC_TITLE: Final[re.Pattern[str]] = re.compile(r"^спецификаци[яи]\b", re.IGNORECASE)
 _DRAWING_WORDS: Final[re.Pattern[str]] = re.compile(r"\b(план|схема|разрез|узел)\b", re.IGNORECASE)
@@ -72,6 +72,17 @@ def _page(cell: Mapping[str, Any]) -> QuestionPage:
     return QuestionPage(str(page["version_uid"]), int(page["page_number"]), str(page["page_profile_id"]))
 
 
+def paired_pages(rows: Sequence[Mapping[str, Any]], version_a: str, version_b: str) -> frozenset[int]:
+    """The pages of ``version_b`` that stand in a row with a sheet of ``version_a`` -- paired, by the algorithm, by the model
+    or by an expert (the original's ``taken_b``, ``sheet_match.py:135-136``). Not narrowed to a question's candidates: a page an
+    expert has paired since is gone from the candidates of the cell, and is still taken."""
+    cells = [_cells(row) for row in rows]
+    return frozenset(
+        int(c[version_b]["page"]["page_number"]) for c in cells
+        if c.get(version_b, {}).get("state") == "matched" and c.get(version_a, {}).get("state") == "matched"
+    )
+
+
 def derive_questions(
     *, order: Sequence[str], page_counts: Mapping[str, int], rows: Sequence[Mapping[str, Any]],
     facts: Mapping[tuple[str, int], PageFacts],
@@ -86,10 +97,7 @@ def derive_questions(
             if c.get(ia, {}).get("state") == "matched" and c.get(ib, {}).get("state") == "matched"
             and c[ib].get("confidence") == "group"
         ]
-        taken_b = {
-            int(c[ib]["page"]["page_number"]) for c in cells
-            if c.get(ib, {}).get("state") == "matched" and c.get(ia, {}).get("state") == "matched"
-        }
+        taken_b = paired_pages(rows, ia, ib)
         back = {
             int(c[ib]["page"]["page_number"]): tuple(int(x["page"]["page_number"]) for x in c[ia].get("candidates", ()))
             for c in cells if c.get(ib, {}).get("state") == "matched" and c.get(ia, {}).get("state") == "unmatched"

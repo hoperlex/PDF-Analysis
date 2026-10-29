@@ -67,6 +67,12 @@ def h() -> ModuleType:
 
 
 @pytest.fixture
+def core_support() -> ModuleType:
+    """The AI-job core's recorded-mode helpers (``ai_jobs_support.py``): routes, revisions, the scripted live adapter."""
+    return core
+
+
+@pytest.fixture
 def db(comparison_engine: Engine) -> Iterator[Harness]:
     connection = comparison_engine.connect()
     outer = connection.begin()

@@ -23,8 +23,8 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
-from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, replace
 from typing import Any, Final
 
 from sqlalchemy.orm import Session
@@ -53,6 +53,7 @@ from auditmanager.comparison.ai_pairs.model import (
 )
 from auditmanager.comparison.ai_pairs.plans import CallPlan, PlanContext, forward_plan, reverse_plan
 from auditmanager.comparison.ai_pairs.prompt import build_request, crop_ids, validate_answer
+from auditmanager.comparison.ai_pairs.questions import paired_pages
 from auditmanager.comparison.ai_pairs.repository import AiPairRepository, QuestionRow, StoredAnswer
 from auditmanager.comparison.matrix.repository import MatrixRepository
 from auditmanager.comparison.profile.limits import ALGO_VERSION as PAGE_PROFILE_ALGO_VERSION
@@ -175,6 +176,9 @@ class PairCheckHandler:
                 return self._close(item, payload)
         except _Stop as stop:
             return stop.outcome
+        except LookupError:  # a page of the question has no stored profile (a version re-profiled since the question was made)
+            _LOG.error("comparison work %s: a page of the pair_check question has no stored profile", item.work_id)
+            return Failed(REASON_PAGE_PROFILE_MISSING)
         except DomainError as refusal:
             if refusal.code in _LEASE_GONE:
                 item.lease_lost.set()
@@ -383,7 +387,7 @@ class PairCheckHandler:
                 continue
             forward = pairs.answer(session, row.answer_id)
             reverse = None if row.reverse_answer_id is None else pairs.answer(session, row.reverse_answer_id)
-            question = self._question_now(row, fresh)
+            question = self._question_now(row, fresh, snapshot.rows)
             choice = decide(
                 question, None if forward is None else answer_from_row(forward), None if reverse is None else answer_from_row(reverse),
             )
@@ -396,7 +400,9 @@ class PairCheckHandler:
                 continue
             link_id = None
             if decision == DECISION_LINK_ACCEPTED:
-                assert pick is not None and pick > 0 and forward is not None
+                if pick is None or pick <= 0 or forward is None:  # the rule cannot accept without a page; it is not a link
+                    pairs.settle(session, row.question_id, state="failed", decision=DECISION_FAILED, failure_reason="pair_answer_missing")
+                    continue
                 link_id = pairs.insert_link(
                     session, document_uid=job.document_uid, matrix_id=job.matrix_id, page_version_uid=question.a.version_uid,
                     page_number=question.a.page_number, other_version_uid=question.b_version_uid, other_page_number=pick,
@@ -411,21 +417,23 @@ class PairCheckHandler:
             pairs.settle(session, row.question_id, state="answered", decision=decision, hint=hint, link_id=link_id)
 
     @staticmethod
-    def _question_now(row: QuestionRow, fresh: Mapping[tuple[str, int, str], Question]) -> Question:
-        """The question as the matrix poses it now (``multi`` and ``taken_b`` are read again, so a link an expert made since
-        counts). A cell the matrix no longer asks about -- settled meanwhile by an expert or by an earlier check -- is a question
-        whose every candidate is taken: any page the model named can only be a hint."""
+    def _question_now(row: QuestionRow, fresh: Mapping[tuple[str, int, str], Question], rows: Sequence[Mapping[str, Any]]) -> Question:
+        """The question as the matrix poses it now. ``multi`` is read again, and ``taken_b`` is every page of B that stands in a
+        row with a sheet of A **now** -- not only the candidates the cell still offers: a page an expert paired meanwhile is gone
+        from the candidates and is still taken. A cell the matrix no longer asks about -- settled meanwhile by an expert or by an
+        earlier check -- is a question whose every candidate is taken: any page the model named can only be a hint."""
         key = (row.page_version_uid, row.page_number, row.version_uid)
         found = fresh.get(key)
+        paired = paired_pages(rows, row.page_version_uid, row.version_uid)
         if found is not None and found.kind == row.kind:
-            return found
+            return replace(found, taken_b=found.taken_b | paired)
         candidates = tuple(
             QuestionPage(row.version_uid, int(c["page_number"]), str(c["page_profile_id"])) for c in row.candidates
         )
         algo = next((int(c["page_number"]) for c in row.candidates if c.get("algo")), None)
         return Question(
             kind=row.kind, a=QuestionPage(row.page_version_uid, row.page_number, ""), b_version_uid=row.version_uid,
-            candidates=candidates, algo_b=algo, multi=False, taken_b=frozenset(p.page_number for p in candidates),
+            candidates=candidates, algo_b=algo, multi=False, taken_b=frozenset(p.page_number for p in candidates) | paired,
         )
 
     # -- the lease ---------------------------------------------------------------------------------------

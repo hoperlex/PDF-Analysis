@@ -298,13 +298,13 @@ class Rig:
 
 def make_rig(
     connection: Connection, sessions: "sessionmaker[Session]", world: World, *, modules: str = "versions", live_binder: Any = None,
-    engine: Any = None,
+    engine: Any = None, provider_mode: str = "recorded",
 ) -> Rig:
     from auditmanager.workers.public import WorkerRegistry
 
     answers = RecordedAnswers()
     work = ComparisonWorkRepository()
-    service = ComparisonAiPairService(sessions, blob_store=world.store, comparison_modules=modules, provider_mode="recorded")
+    service = ComparisonAiPairService(sessions, blob_store=world.store, comparison_modules=modules, provider_mode=provider_mode)
     dependencies = WorkDependencies(engine=engine, session_factory=sessions, blob_store=world.store, work=work)  # type: ignore[arg-type]
     rig_routes: list[CallRoute] = []
 
