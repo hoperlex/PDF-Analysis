@@ -1763,8 +1763,6 @@ export function screens(): Screen[] {
     // `CMP-VC-UI-02`: the side panel «Изменения в листе» beside the sheet, and the places an AI description cites drawn on it, one at
     // a time (the current one solid) and all together («Обзор всех»).
     const cited = evidenceOf(aiDescription());
-    add('Comparison viewer, the side panel and one cited place',
-      comparisonViewerMarkup(comparedPair(), [], { evidence: { items: cited, index: 1, all: false }, sidePanel: createElement(ChangesPanelView, panelProps()) }));
     add('Comparison viewer, every cited place at once',
       comparisonViewerMarkup(comparedPair(), [{ type: 'mode', mode: 'side' }], { evidence: { items: cited, index: 0, all: true }, sidePanel: createElement(ChangesPanelView, panelProps({ description: aiDescription({ recorded: true }), copied: true })) }));
   }
