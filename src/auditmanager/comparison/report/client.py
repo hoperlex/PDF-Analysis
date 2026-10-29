@@ -40,6 +40,8 @@ __all__ = [
     "row_of",
     "schema",
     "is_unchanged",
+    "SCOPE_UNDESCRIBED",
+    "UNDESCRIBED",
 ]
 
 #: `[own design]` the prompt version of this port; the original's is ``client-edit/3`` (``client_edit.py:23``).
@@ -57,6 +59,9 @@ SCOPES: Final[tuple[str, ...]] = (
 NO_CHANGES: Final[str] = "Технических изменений не выявлено."  # client.py:21
 SCOPE_NONE: Final[str] = "Без технических изменений"  # client.py:22
 SCOPE_NO_CONTENT: Final[str] = "Нет изменений содержания"
+#: A transition the summary does not describe (the source has a gap): never read as «no changes».
+SCOPE_UNDESCRIBED: Final[str] = "Описание не подготовлено"
+UNDESCRIBED: Final[str] = "Описание изменений для этого перехода не подготовлено."
 PROMPT_FILE: Final[Path] = Path(__file__).resolve().parent / "prompts" / "md_report_client_edit.md"
 
 _SPEC_HEAD = re.compile(r"^Старая:.*?;\s*новая:.*?(?:\)|—)\.\s+")
@@ -609,6 +614,9 @@ def row_of(transition: dict[str, Any], stored: dict[str, Any] | None) -> dict[st
         "scale": SCOPE_NONE, "lead": NO_CHANGES, "points": [], "impact": "", "questions": [],
     }
     if stored is None:
+        return row
+    if stored.get("undescribed"):
+        row.update(scale=SCOPE_UNDESCRIBED, lead=UNDESCRIBED)
         return row
     answer = stored["answer"]
     scope = answer.get("change_scope") or SCOPE_NO_CONTENT

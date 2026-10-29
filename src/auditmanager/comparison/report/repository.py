@@ -57,24 +57,20 @@ _MOVE = text(
 _SET_STAGE = text(
     "UPDATE comparison_report SET stage = :stage, updated_at = clock_timestamp() WHERE comparison_report_id = :id"
 )
-_SET_ESTIMATE = text(
-    "UPDATE comparison_report SET estimate = CAST(:estimate AS jsonb), estimate_digest = :digest, updated_at = clock_timestamp() "
-    "WHERE comparison_report_id = :id AND state = 'draft'"
-)
 _TOMBSTONE = text(
     "UPDATE comparison_report SET deleted_at = clock_timestamp(), updated_at = clock_timestamp() "
     "WHERE comparison_report_id = :id AND deleted_at IS NULL"
 )
 _PART_COLUMNS: Final[str] = (
-    "comparison_report_part_id AS part_id, comparison_report_id AS report_id, comparison_transition_id AS transition_id, "
-    "analysis, verification, selection, facts, warnings, points, questions, updated_at"
+    "p.comparison_report_part_id AS part_id, p.comparison_report_id AS report_id, p.comparison_transition_id AS transition_id, "
+    "p.analysis, p.verification, p.selection, p.facts, p.warnings, p.points, p.questions, p.updated_at"
 )
 _PARTS = text(
     f"SELECT {_PART_COLUMNS} FROM comparison_report_part p JOIN comparison_transition t "
     "ON t.comparison_transition_id = p.comparison_transition_id WHERE p.comparison_report_id = :id ORDER BY t.transition_no"
 )
 _PART = text(
-    f"SELECT {_PART_COLUMNS} FROM comparison_report_part WHERE comparison_report_id = :id AND comparison_transition_id = :transition"
+    f"SELECT {_PART_COLUMNS} FROM comparison_report_part p WHERE p.comparison_report_id = :id AND p.comparison_transition_id = :transition"
 )
 _ADD_PART = text(
     "INSERT INTO comparison_report_part (comparison_report_part_id, comparison_report_id, comparison_transition_id, analysis, "
@@ -227,12 +223,6 @@ class ReportRepository:
 
     def set_stage(self, session: Session, report_id: str, stage: str) -> None:
         session.execute(_SET_STAGE, {"id": report_id, "stage": stage})
-
-    def refresh_estimate(self, session: Session, report_id: str, estimate: Mapping[str, Any]) -> bool:
-        """A draft's estimate after the one it showed went stale (the route, the model or the work changed since)."""
-        return session.execute(_SET_ESTIMATE, {
-            "id": report_id, "estimate": json.dumps(dict(estimate), sort_keys=True, default=str), "digest": estimate["estimate_digest"],
-        }).rowcount == 1
 
     def tombstone(self, session: Session, report_id: str) -> bool:
         return session.execute(_TOMBSTONE, {"id": report_id}).rowcount == 1

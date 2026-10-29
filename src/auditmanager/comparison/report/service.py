@@ -68,7 +68,6 @@ ROLE_SOURCE: Final[str] = "comparison_report_source"
 ROLE_TEXT: Final[str] = "comparison_report_text"
 ROLE_PDF: Final[str] = "comparison_report_pdf"
 _MEDIA: Final[Mapping[str, str]] = {ARTIFACT_SOURCE_MD: "text/markdown", ARTIFACT_TEXT: "application/json", ARTIFACT_PDF: "application/pdf"}
-_CONFLICT_STALE: Final[str] = "comparison_estimate_stale"
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,12 +84,6 @@ def _require_expert(roles: frozenset[str]) -> None:
     """Every write of a report is an expert's act: an administrator alone is refused (the edge refuses it too; this is the command's own check)."""
     if "expert" not in roles:
         raise DomainError(ErrorCode.PERMISSION_DENIED, required_capability="role:expert")
-
-
-def _reason_of(error: DomainError) -> str | None:
-    fields = getattr(error, "detail_fields", None) or {}
-    value = fields.get("conflict_reason")
-    return str(value) if value is not None else None
 
 
 class ComparisonReportService:
@@ -213,7 +206,22 @@ class ComparisonReportService:
         if row is None:
             raise _not_found()
         job = None if row.job_id is None else self._core().view_in(session, row.job_id).as_dict()
-        return report_dict(row, self._repo.parts(session, report_id), self._repo.artifacts(session, report_id), job)
+        view = report_dict(row, self._repo.parts(session, report_id), self._repo.artifacts(session, report_id), job)
+        if row.state == "draft" and row.deleted_at is None:
+            view["estimate"] = self._draft_estimate(session, row)
+        return view
+
+    def _draft_estimate(self, session: Session, row: ReportRow) -> dict[str, Any]:
+        """The estimate of a draft **now**: the digest a client consents to is the one a start will compute. The stored estimate (and its frozen
+        digest) is what the draft showed when it was made; the route, the model or the earlier reports may have moved since, and a stale digest
+        is refused at the start, so a read that showed the old one would leave the client with no way to a digest that is accepted. A route that
+        is gone (``dependency_unavailable``) leaves the stored estimate: the start refuses by its own reason."""
+        try:
+            return self._core(self._method(session, row)).estimate_in(session, self._scope(row), AiMode.START).as_dict()
+        except DomainError as error:
+            if error.code is ErrorCode.DEPENDENCY_UNAVAILABLE:
+                return dict(row.estimate)
+            raise
 
     def _live_row(self, session: Session, report_id: str) -> ReportRow:
         row = self._repo.get(session, report_id)
@@ -415,30 +423,12 @@ class ComparisonReportService:
         command = AiJobCommand(
             command_type="start_comparison_report", idempotency_key=derived, user_uid=user_uid, actor_roles=actor_roles,
         )
-        try:
-            self._core(method).start(scope=self._scope(row), consent=consent, command=command)
-        except DomainError as error:
-            if error.code is ErrorCode.CONFLICT and _reason_of(error) == _CONFLICT_STALE:
-                self._refresh_draft(report_id)
-            raise
+        self._core(method).start(scope=self._scope(row), consent=consent, command=command)
         return self._after(report_id)
 
     def _claimed(self, session: Session, command_type: str, key: str) -> bool:
         """Whether the core already holds this key: a repeat replays, so the state the first call left behind is no reason to refuse it."""
         return self._commands.find(session, command_type=command_type, idempotency_key=IdempotencyKey(key)) is not None
-
-    def _refresh_draft(self, report_id: str) -> None:
-        """After a stale digest: the draft's stored estimate becomes the one now computed, so that the client's next read shows the digest a
-        start will accept. Best effort (a missing route leaves the old estimate; the start's own refusal stands)."""
-        try:
-            with session_scope(self._factory) as session:
-                row = self._repo.get(session, report_id, lock=True)
-                if row is None or row.state != "draft":
-                    return
-                estimate = self._core(self._method(session, row)).estimate_in(session, self._scope(row), AiMode.START).as_dict()
-                self._repo.refresh_estimate(session, report_id, estimate)
-        except DomainError:
-            return
 
     def cancel_report(self, *, report_id: str, user_uid: str, actor_roles: frozenset[str], idempotency_key: str) -> dict[str, Any]:
         """«Отменить»: a queued, running or paused report stops; its finished parts are kept."""

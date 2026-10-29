@@ -473,9 +473,7 @@ class ReportHandler:
         code = str(doc.manifest.get("project_code") or report.source_name or "серия")
         analysed_at = job.consented_at.strftime("%d.%m.%Y %H:%M")
         if report.kind == KIND_CLIENT:
-            stored = {
-                u.transition_id: (by_unit[u.transition_id].facts or {}).get("result") if u.editable else None for u in units
-            }
+            stored = {u.transition_id: self._stored_result(u, by_unit[u.transition_id]) for u in units}
             dropped = sum(len((r or {}).get("dropped") or []) for r in stored.values())
             document = document_module.client_document(
                 manifest=doc.manifest, registry=doc.registry, stored=stored, code=code, object_name=object_name, dropped=dropped,
@@ -517,6 +515,14 @@ class ReportHandler:
             self._complete_job(session, run)
             session.commit()
         return Completed()
+
+    @staticmethod
+    def _stored_result(unit: Unit, part: PartRow | None) -> dict[str, Any] | None:
+        """The stored result of a transition for the customer's table: the model's checked result, a mark for a transition the summary does not
+        describe, or nothing for the confirmed absence of changes."""
+        if unit.editable:
+            return (part.facts or {}).get("result") if part is not None else None
+        return {"undescribed": True} if unit.reason == "undescribed" else None
 
     def _complete_job(self, session: Session, run: _Run) -> None:
         """``running -> completed``. The core's ``complete_if_drained`` counts the item that is asking as live, so the last item of a job can

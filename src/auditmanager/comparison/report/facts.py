@@ -107,6 +107,14 @@ def build(manifest: dict[str, Any], lines: list[str], records: dict[str, dict[st
             kind = (record or {}).get("kind") or (
                 "question" if text.startswith("_Требует уточнения") else "gap" if re.match(r"^_.*_$", text) else "summary"
             )
+            # An item of the summary's own form «**объект** — суть» with no record (an uploaded file, or data that moved since the summary was
+            # made) is read as a described change whose values are its text: the client report can then write about it, and the check holds every
+            # value it cites to that text. `[own design]`: the original's uploaded file reached the client kind only through its own records.
+            inferred = None
+            if not record and kind == "summary":
+                shaped = re.match(r"^\*\*(.+?)\*\*\s+[—-]\s+(.+)$", re.sub(r"^\s*-\s+", "", raw.strip()))
+                if shaped:
+                    kind, inferred = "ai_change", {"object": shaped.group(1).strip()}
             pages_a = [p for p in [(sheet or {}).get("a_page")] if p]
             pages_b = [p for p in [(sheet or {}).get("b_page")] if p]
             sheet_a = sheet_b = [sheet["sheet"]] if sheet and sheet.get("sheet") else []
@@ -122,7 +130,7 @@ def build(manifest: dict[str, Any], lines: list[str], records: dict[str, dict[st
                     kind = "spec_entry"
                 text_conf = "spec_text" if record else "summary"
             elif kind == "ai_change":
-                text_conf = record.get("confirmation") or "text"  # type: ignore[union-attr]
+                text_conf = (record or {}).get("confirmation") or ("summary" if inferred else "text")
             elif kind == "ai_questions":
                 text_conf = "question"
             elif kind == "ai_single":
@@ -142,7 +150,7 @@ def build(manifest: dict[str, Any], lines: list[str], records: dict[str, dict[st
                 "sheet_title": (sheet or {}).get("title") or ((sheet or {}).get("heading") or "").lstrip("# ").strip() or None,
                 "pages_a": pages_a, "pages_b": pages_b, "kind": kind, "confirmation_code": text_conf,
                 "confirmation": confirmation, "text": text, "identity": _identity(record, raw),
-                "record": _record_ref(record), "details": _details(record),
+                "record": _record_ref(record), "details": _details(record) or inferred,
             })
     by_line = {f["md_line"]: f["fact_id"] for f in facts}
     return {"facts": facts, "by_line": by_line, "with_records": bool(records), "total": len(facts)}

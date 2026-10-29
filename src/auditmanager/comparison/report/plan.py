@@ -57,6 +57,8 @@ COMPOSER_MAX_CHARS: Final[int] = 300_000
 #: A transition longer than this is not sent: it would not fit a request (the original splits it into blocks, ``plan.py``; this port does not).
 MAX_UNIT_CHARS: Final[int] = 400_000  # md_report/settings.py:73-75 -- the upper limit of the original's block size
 _PLACEHOLDER_RUN: Final[str] = "crt_" + "0" * 26
+#: The facts the client kind writes about (client.packet): descriptions of sheets, questions and positions of the specification.
+USABLE_KINDS: Final[frozenset[str]] = frozenset({"ai_change", "ai_single", "ai_questions", "spec_entry"})
 
 
 def prompt_version_of(kind: str) -> str:
@@ -108,6 +110,9 @@ class Unit:
     key: str
     calls: tuple[tuple[str, int, int], ...] = field(default=())
     too_large: bool = False
+    #: why the program finishes a transition without a model: ``unchanged`` (the summary marks the absence of changes) or ``undescribed`` (the
+    #: client kind has no description, question or specification position of the transition to write about: nothing to select, so no call)
+    reason: str | None = None
 
     @property
     def transition_id(self) -> str:
@@ -150,7 +155,12 @@ def build_units(
         )
         editable = not client.is_unchanged(transition) and transition["transition_id"] not in unchanged
         if not editable:
-            out.append(Unit(transition, False, key))
+            out.append(Unit(transition, False, key, reason="unchanged"))
+            continue
+        if kind == KIND_CLIENT and not any(
+            f["transition_id"] == transition["transition_id"] and f["kind"] in USABLE_KINDS for f in doc.registry["facts"]
+        ):
+            out.append(Unit(transition, False, key, reason="undescribed"))
             continue
         too_large = transition["chars"] > MAX_UNIT_CHARS
         if too_large:

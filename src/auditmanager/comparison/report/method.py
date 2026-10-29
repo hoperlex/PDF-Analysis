@@ -102,7 +102,7 @@ def analysis_mark(part: PartRow | None, kind: str) -> str:
 def program_part(kind: str, unit: Unit) -> dict[str, Any]:
     """The part of a transition the program finishes without a model: the confirmed absence of changes. Every field of ``comparison_report_part``
     of the kind, as ``add_part`` takes them."""
-    facts: dict[str, Any] = {"content_key": unit.key, "program": True}
+    facts: dict[str, Any] = {"content_key": unit.key, "program": unit.reason or "unchanged"}
     if kind == KIND_CLIENT:
         return {"selection": "done", "facts": facts, "points": 0, "questions": 0}
     facts.update({"found": 0, "confirmed": 0, "contradicted": 0, "unconfirmed": 0})
