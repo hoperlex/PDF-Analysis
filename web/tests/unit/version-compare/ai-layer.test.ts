@@ -598,4 +598,3 @@ describe('the reasons of wave C2 are said in Russian', () => {
     }
   });
 });
-

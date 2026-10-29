@@ -282,4 +282,3 @@ async function sendQueue(command: QueueCommand, idempotencyKey: string): Promise
 export function useQueueCommand() {
   return useKeyedCommand<QueueCommand, ComparisonLaunchQueue>({ signatureOf: queueSignature, send: sendQueue });
 }
-

@@ -338,4 +338,3 @@ export function ChangesPanel({ pair, mayAct, onShow }: ChangesPanelProps) {
     />
   );
 }
-

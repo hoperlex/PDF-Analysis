@@ -636,4 +636,3 @@ export function SummaryReportBlock({ series, names, mayAct, summaryReady }: Summ
     />
   );
 }
-
