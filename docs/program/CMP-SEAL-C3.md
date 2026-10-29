@@ -12,6 +12,8 @@ Command: `PYTHONPATH=src .venv/bin/python -m pytest -c pyproject.toml --rootdir=
 
 Before writing a stage router, the integration inspection found its dependency protocols live in `src/auditmanager/api/routers/ports.py`; the seal task now grants that exact file for four new stage ports. This grant does not permit application logic in the router or changes to any C2 port.
 
+A literal pin inventory found current `1.11.0` error envelopes in both proxy configurations and existing web tests, plus the analysis result constant and `tests/support/expected_facts.json`. The task now grants only their version/surface/head pins. Historical statements about prior contracts are not targets of a mechanical replacement.
+
 ## Seal result
 
 Pending. The real `1.12.0` operation list, `0041` table inventory, migrations, checks, rollback evidence, risks and forbidden-hotspot proof will be recorded here before integration.

@@ -60,14 +60,18 @@ The API contract is `1.12.0` with C3 stage-pair, assembly, sheet-link, text-diff
 ## Allowed paths
 - `contracts/api/v1/**`, `contracts/domain/v1/**`
 - `contracts/analysis/**`, `contracts/events/**` (shared `contract_version` pins only; added after the disposable probe and literal `1.11.0` inventory)
+- `src/auditmanager/analysis/engine/result.py` (served analysis contract-version constant only)
 - `db/migrations/versions/20261029_0041_comparison_stage_core.py`
 - `src/auditmanager/api/routers/comparison_stage_pairs.py` (new), `src/auditmanager/api/routers/comparison_stage_links.py` (new), `src/auditmanager/api/routers/comparison_stage_text.py` (new), `src/auditmanager/api/routers/comparison_stage_runs.py` (new), `src/auditmanager/api/routers/__init__.py`, `src/auditmanager/api/routers/ports.py` (the four new stage-router protocols), `src/auditmanager/api/app.py`, `src/auditmanager/api/README.md`, `src/auditmanager/api/schemas/models.py`, `src/auditmanager/api/security.py`
 - `src/auditmanager/bootstrap/adapters.py`, `src/auditmanager/bootstrap/composition.py`
 - `src/auditmanager/shared/identity/**`, `src/auditmanager/comparison/public.py`
 - `scripts/recovery/grant_classification.py`, `scripts/recovery/product_purge.py`, `scripts/recovery/project_erase.py`, `scripts/recovery/schema_coverage.py`, `infra/deploy/apply-grants.sh`
+- `infra/deploy/proxy/nginx.conf`, `infra/deploy/proxy/tls-server.conf` (edge error-envelope version and current surface comments only)
 - `web/openapi/openapi.json`, `web/src/shared/api/**`, `web/FRONTEND_LOCK.json`, `web/src/app/bff/v1/[...path]/route.ts`
 - `tests/contract/api_v1/**`, `tests/contract/domain_p02/**`, `tests/integration/api/**`, `tests/integration/composition/**`, `tests/integration/db/**`, `tests/integration/recovery/**`, `tests/integration/p02_journey/journey.py`, `tests/e2e/test_pc01_journey_conformance.py`
+- `tests/support/expected_facts.json` (current contract version, surface and migration-head facts only)
 - `web/tests/contract/**`, `web/tests/guards/rendered-language.guard.test.ts`
+- `web/tests/**` (existing expected `1.11.0` error-envelope literals only; no behavior changes outside C3-specific tests)
 - `docs/program/tasks/CMP-SEAL-C3.md`, `docs/program/CMP-SEAL-C3.md`, `docs/program/P02_SEAMS.md`
 - `docs/program/CURRENT_STATE.md`, `docs/program/ALPHA_ROADMAP.md`, `docs/program/CONTRACT_PIN_REGISTRY.md`, `docs/manual-tests/PC-01_prototype.md`, `docs/manual-tests/README.md` (the probe exposed live API/head claims)
 - ignored local setup: `.venv`, `web/node_modules`, `.local/norms/**`
