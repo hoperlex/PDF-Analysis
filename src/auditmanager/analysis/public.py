@@ -164,6 +164,7 @@ from auditmanager.analysis.text.chunk_preflight import ChunkPreflightError
 from auditmanager.analysis.text.proxy import ProxyDispatchError
 from auditmanager.analysis.text.lock import ModelPin, pinned_models
 from auditmanager.analysis.text.recorded import RecordedAdapter
+from auditmanager.analysis.text.wire_schema import to_wire_schema, with_wire_schema  # AR-V3-WIRE-SCHEMA-01
 from auditmanager.analysis.text.stage import STAGE_VERSION as TEXT_STAGE_VERSION
 from auditmanager.analysis.text.anchors import BlockIndex, ResolvedAnchor
 from auditmanager.analysis.text.textlayer import TextLayer
@@ -241,6 +242,8 @@ __all__ = [
     "SavedTextCustodyRefused",
     "SuppliedTextSourceRefused",
     "TextLayer",
+    "to_wire_schema",
+    "with_wire_schema",
     "TEXT_STAGE_VERSION",
     "TEXT_WINDOW_PARAM_COUNT",
     "TEXT_WINDOW_PARAM_FIRST_PAGE",

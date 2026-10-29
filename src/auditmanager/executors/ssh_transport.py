@@ -11,7 +11,8 @@ What it does, and the rule each part serves:
   answer comes back on **stdout**. Neither the key nor the task is ever on a command line (a command
   line is visible in the process list). The remote side is a forced command
   (``tools/executor-runner/ssh-forced-command.sh`` or a ``custom_command`` script): the client names
-  no command at all, so a stolen admin session cannot choose what runs (plan T-6).
+  no command at all, so a stolen admin session cannot choose what runs (plan T-6). A command that
+  prints **heartbeat lines** on stderr (`AR-V3-LIVENESS-01`, see below) may run past ``timeout_s``.
 * ``open_tunnel`` -- a short-lived ``ssh -N -L`` to the remote HTTP model for ``http_api`` over
   ``transport: ssh_tunnel``. Local end on ``127.0.0.1`` only, closed when the context exits.
 * ``scan_host_key`` -- read the host key of a machine. **Probe only**: there is no TOFU in the call
@@ -34,6 +35,8 @@ outcome                meaning                                                  
 ``unreachable``        no route, DNS failure, connection refused, or no key observed          False
 ``timeout``            connect phase timed out (sent False), or the call outlived its         both
                        deadline / the server stopped answering after connecting (sent True)
+``stalled``            a live call (see below) was silent for longer than its stall window    True
+``hard_cap``           a live call reached its absolute ceiling while still signalling         True
 ``protocol_error``     anything else: unrecognised ssh failure, non-zero remote exit status,   True
                        output over the bound
 =====================  ====================================================================  =====
@@ -42,6 +45,16 @@ outcome                meaning                                                  
 already started that fails or times out is *outcome-unknown*: the model may have run and, for an
 API key, spent. A caller must not retry it three times over. ``sent`` is ``False`` only when the
 failure is one that ssh reports *before* authentication completed.
+
+Signs of life (`AR-V3-LIVENESS-01`). Until now ``timeout_s`` bounded the whole call, so a model
+that is thinking could not be told from one that hangs. With ``live_hard_cap_s`` given, a call
+whose remote command writes a **heartbeat line** to stderr is *live* from the first such line:
+``timeout_s`` stops applying, the call may run until ``live_hard_cap_s`` after it started, and it
+ends as ``stalled`` when ``live_stall_s`` passes without another heartbeat. A heartbeat is
+recognised **only** by :data:`HEARTBEAT_LINE` on a whole stderr line; any other byte of stderr
+(an ssh warning, a remote error, text that merely looks alike) is not a sign of life. A command
+that never prints one is bounded by ``timeout_s`` exactly as before, and so is every call made
+without ``live_hard_cap_s``. Heartbeat lines are not kept in the returned stderr.
 
 Classification is taken from ``ssh``'s exit status 255 and its stderr text. Exit status 255 is
 ssh's own failure code; any other non-zero status is the remote command's and is never read as an
@@ -65,11 +78,13 @@ import subprocess
 import tempfile
 import threading
 import time
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
 __all__ = [
+    "HEARTBEAT_LINE",
     "OUTCOMES",
     "HostKeyFormatError",
     "SshEndpoint",
@@ -95,6 +110,8 @@ OUTCOMES: tuple[str, ...] = (
     "unreachable",
     "timeout",
     "protocol_error",
+    "stalled",
+    "hard_cap",
 )
 
 #: Where a private key is written. tmpfs, so it never reaches a disk. A host without it (a
@@ -104,6 +121,19 @@ TMPFS_DIR = Path("/dev/shm")
 #: Stored stderr is bounded: remote stderr is attacker-influenced text.
 STDERR_LIMIT_CHARS = 500
 _STDERR_CAPTURE_BYTES = 64 * 1024
+
+#: The one stderr line that is a sign of life (`AR-V3-LIVENESS-01`, the frozen interface with
+#: ``tools/executor-runner/claude_answer.py``): three non-negative integers -- elapsed seconds,
+#: events read, output tokens -- and nothing else. Matched against a **whole** line without its
+#: terminator; never a substring, never a prefix.
+HEARTBEAT_LINE: Final = re.compile(rb"^pdf-analysis-forced-command: hb [0-9]+ [0-9]+ [0-9]+$")
+#: A heartbeat line is under a hundred bytes. A line longer than this is never one, and is not
+#: buffered whole while it is read.
+_HEARTBEAT_MAX_LINE_BYTES = 1024
+#: ``on_signal`` is called at most this often, however many heartbeat lines arrive.
+_SIGNAL_CALLBACK_INTERVAL_S = 1.0
+#: How often a live call looks at its limits while the process runs.
+_LIVE_TICK_S = 0.25
 
 _HOST_RE = re.compile(r"[A-Za-z0-9_](?:[A-Za-z0-9_.-]{0,251}[A-Za-z0-9_])?")
 _USER_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_.-]{0,63}")
@@ -470,6 +500,73 @@ class _Completed:
     stderr: bytes
     timed_out: bool
     stdout_overflow: bool
+    #: A live call (see :class:`_Liveness`) cut for silence / for reaching its ceiling.
+    stalled: bool = False
+    hard_capped: bool = False
+
+
+class _Liveness:
+    """The signs of life of one call and the two-phase deadline they govern.
+
+    Until the first heartbeat line the call is bounded by ``timeout_s``, as it always was. From
+    the first one it is bounded by ``hard_cap_s`` after the call started, and by ``stall_s`` after
+    the latest heartbeat. :meth:`sign` is called by the stderr reader thread, :meth:`verdict` and
+    :meth:`next_check` by the thread that waits for the process; one lock covers the three
+    instants they share.
+    """
+
+    def __init__(
+        self, *, started: float, timeout_s: float, hard_cap_s: float, stall_s: float | None,
+        on_signal: Callable[[], None] | None,
+    ) -> None:
+        self._started = started
+        self._timeout_s = timeout_s
+        self._hard_cap_s = hard_cap_s
+        self._stall_s = stall_s
+        self._on_signal = on_signal
+        self._lock = threading.Lock()
+        self._last: float | None = None
+        self._last_callback: float | None = None
+
+    def sign(self) -> None:
+        """A heartbeat line arrived. Calls ``on_signal`` at most once per interval."""
+        now = time.monotonic()
+        with self._lock:
+            self._last = now
+            call = self._on_signal is not None and (
+                self._last_callback is None or now - self._last_callback >= _SIGNAL_CALLBACK_INTERVAL_S
+            )
+            if call:
+                self._last_callback = now
+        if call:
+            assert self._on_signal is not None
+            try:
+                self._on_signal()
+            except Exception:  # noqa: BLE001 -- a failing callback must not end the reader
+                LOGGER.exception("ssh transport: the sign-of-life callback failed")
+
+    def verdict(self, now: float) -> str | None:
+        """``"timeout"``, ``"hard_cap"``, ``"stalled"`` or ``None`` (the call may go on)."""
+        with self._lock:
+            last = self._last
+        if last is None:
+            return "timeout" if now >= self._started + self._timeout_s else None
+        if now >= self._started + self._hard_cap_s:
+            return "hard_cap"
+        if self._stall_s is not None and now - last > self._stall_s:
+            return "stalled"
+        return None
+
+    def next_check(self, now: float) -> float:
+        """Seconds until the nearest instant at which :meth:`verdict` could change."""
+        with self._lock:
+            last = self._last
+        if last is None:
+            return self._started + self._timeout_s - now
+        nearest = self._started + self._hard_cap_s
+        if self._stall_s is not None:
+            nearest = min(nearest, last + self._stall_s)
+        return nearest - now
 
 
 def _drain(stream, sink: bytearray, cap: int, on_overflow) -> None:
@@ -490,6 +587,75 @@ def _drain(stream, sink: bytearray, cap: int, on_overflow) -> None:
         return
 
 
+def _drain_with_heartbeats(stream, sink: bytearray, cap: int, liveness: _Liveness) -> None:
+    """Read stderr as it arrives, line by line; a whole heartbeat line is a sign of life.
+
+    Every other byte is kept (bounded by ``cap``, as :func:`_drain` keeps it) and is **not** a sign
+    of life. A heartbeat line is dropped from ``sink``: over two hours there are hundreds of them,
+    and they would push the lines that explain a failure out of the bounded text. A line that grows
+    past :data:`_HEARTBEAT_MAX_LINE_BYTES` before its end is kept as it is and, with the rest of
+    that line, never recognised. A last line without a terminator is not whole.
+    """
+
+    pending = bytearray()
+    overlong = False
+
+    def keep(data: bytes) -> None:
+        room = cap - len(sink)
+        if room > 0:
+            sink.extend(data[:room])
+
+    try:
+        while True:
+            chunk = stream.read(65536)
+            if not chunk:
+                break
+            rest = chunk
+            while rest:
+                end = rest.find(b"\n")
+                if end < 0:
+                    pending.extend(rest)
+                    if len(pending) > _HEARTBEAT_MAX_LINE_BYTES:
+                        keep(bytes(pending))
+                        pending.clear()
+                        overlong = True
+                    break
+                pending.extend(rest[:end])
+                rest = rest[end + 1 :]
+                line = bytes(pending)
+                pending.clear()
+                was_overlong, overlong = overlong, False
+                if not was_overlong and HEARTBEAT_LINE.fullmatch(line):
+                    liveness.sign()
+                else:
+                    keep(line + b"\n")
+    except (OSError, ValueError):
+        pass
+    if pending:
+        keep(bytes(pending))
+
+
+def _wait_live(process: subprocess.Popen, liveness: _Liveness) -> str | None:
+    """Wait for ``process`` to exit or for the first limit of ``liveness``; kill it at a limit.
+
+    Returns which limit cut the call (``"timeout"``, ``"stalled"``, ``"hard_cap"``) or ``None``.
+    """
+
+    while True:
+        now = time.monotonic()
+        cut = liveness.verdict(now)
+        if cut is not None:
+            with contextlib.suppress(OSError):
+                process.kill()
+            process.wait()
+            return cut
+        try:
+            process.wait(timeout=max(0.001, min(_LIVE_TICK_S, liveness.next_check(now))))
+        except subprocess.TimeoutExpired:
+            continue
+        return None
+
+
 def _run_bounded(
     argv: Sequence[str],
     *,
@@ -497,6 +663,7 @@ def _run_bounded(
     timeout_s: float,
     max_stdout_bytes: int,
     environment: dict[str, str],
+    liveness: _Liveness | None = None,
 ) -> _Completed:
     try:
         process = subprocess.Popen(  # noqa: S603 -- argv is built from validated parts, shell is not used
@@ -534,22 +701,36 @@ def _run_bounded(
             with contextlib.suppress(OSError):
                 process.stdin.close()
 
+    if liveness is None:
+        stderr_thread = threading.Thread(
+            target=_drain, args=(process.stderr, stderr_sink, _STDERR_CAPTURE_BYTES, None), daemon=True,
+        )
+    else:
+        stderr_thread = threading.Thread(
+            target=_drain_with_heartbeats, args=(process.stderr, stderr_sink, _STDERR_CAPTURE_BYTES, liveness),
+            daemon=True,
+        )
     threads = [
         threading.Thread(target=feed, daemon=True),
         threading.Thread(target=_drain, args=(process.stdout, stdout_sink, max_stdout_bytes, stop_on_overflow), daemon=True),
-        threading.Thread(target=_drain, args=(process.stderr, stderr_sink, _STDERR_CAPTURE_BYTES, None), daemon=True),
+        stderr_thread,
     ]
     timed_out = False
+    cut: str | None = None
     try:
         for thread in threads:
             thread.start()
-        try:
-            process.wait(timeout=timeout_s)
-        except subprocess.TimeoutExpired:
-            timed_out = True
-            with contextlib.suppress(OSError):
-                process.kill()
-            process.wait()
+        if liveness is None:
+            try:
+                process.wait(timeout=timeout_s)
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                with contextlib.suppress(OSError):
+                    process.kill()
+                process.wait()
+        else:
+            cut = _wait_live(process, liveness)
+            timed_out = cut == "timeout"
     finally:
         if process.poll() is None:  # an exception (KeyboardInterrupt): never leave our child behind
             with contextlib.suppress(OSError):
@@ -560,7 +741,10 @@ def _run_bounded(
         for stream in (process.stdout, process.stderr):
             with contextlib.suppress(OSError):
                 stream.close()
-    return _Completed(process.returncode, bytes(stdout_sink), bytes(stderr_sink), timed_out, overflow.is_set())
+    return _Completed(
+        process.returncode, bytes(stdout_sink), bytes(stderr_sink), timed_out, overflow.is_set(),
+        stalled=cut == "stalled", hard_capped=cut == "hard_cap",
+    )
 
 
 # --------------------------------------------------------------------------------------------
@@ -581,16 +765,33 @@ def run_command(
     stdin_bytes: bytes,
     timeout_s: float,
     max_output_bytes: int,
+    *,
+    live_hard_cap_s: float | None = None,
+    live_stall_s: float | None = None,
+    on_signal: Callable[[], None] | None = None,
 ) -> tuple[bytes, str]:
     """Run the forced command once: ``stdin_bytes`` in, ``(stdout, scrubbed stderr)`` out.
 
     ``timeout_s`` bounds the whole call (connect, command, answer). Output beyond
     ``max_output_bytes`` kills the connection. Raises ``SshFailure``; see the module doc for
     ``outcome`` and ``sent``.
+
+    The three keyword parameters switch on the signs of life (`AR-V3-LIVENESS-01`; see the module
+    doc). With ``live_hard_cap_s`` the call is *live* from the first heartbeat line on stderr:
+    ``timeout_s`` no longer bounds it, it is cut as ``hard_cap`` ``live_hard_cap_s`` seconds after
+    it started, and -- when ``live_stall_s`` is given -- as ``stalled`` once more than
+    ``live_stall_s`` seconds pass since the latest heartbeat. ``on_signal`` is called for the
+    heartbeats, at most once a second, from the thread that reads stderr; it must be quick and
+    must not raise (a raise is logged and ignored). Without ``live_hard_cap_s`` the other two are
+    not read and the call is exactly what it was.
     """
 
     if timeout_s <= 0 or max_output_bytes <= 0:
         raise ValueError("timeout_s and max_output_bytes must be positive")
+    if live_hard_cap_s is not None and live_hard_cap_s < 0:
+        raise ValueError("live_hard_cap_s must not be negative")
+    if live_stall_s is not None and live_stall_s <= 0:
+        raise ValueError("live_stall_s must be positive")
     with _session_files(endpoint, private_key_pem, host_key_line) as files:
         argv = build_ssh_argv(
             endpoint,
@@ -599,16 +800,30 @@ def run_command(
             connect_timeout_s=_connect_timeout(timeout_s),
         )
         secrets = _key_secrets(private_key_pem, files.key_path)
+        liveness = None if live_hard_cap_s is None else _Liveness(
+            started=time.monotonic(), timeout_s=timeout_s, hard_cap_s=live_hard_cap_s,
+            stall_s=live_stall_s, on_signal=on_signal,
+        )
         completed = _run_bounded(
             argv,
             stdin_bytes=bytes(stdin_bytes),
             timeout_s=timeout_s,
             max_stdout_bytes=max_output_bytes,
             environment=_child_environment(files.key_path.parent),
+            liveness=liveness,
         )
     stderr = scrub_stderr(completed.stderr, secrets)
     if completed.timed_out:
         raise SshFailure("timeout", f"no answer within {timeout_s:g} s; the command may have run. {stderr}", sent=True)
+    if completed.stalled:
+        raise SshFailure(
+            "stalled", f"no sign of life for more than {live_stall_s:g} s; the command may have run. {stderr}", sent=True,
+        )
+    if completed.hard_capped:
+        raise SshFailure(
+            "hard_cap", f"the call reached its ceiling of {live_hard_cap_s:g} s; the command may have run. {stderr}",
+            sent=True,
+        )
     if completed.stdout_overflow:
         raise SshFailure("protocol_error", f"stdout exceeded {max_output_bytes} bytes. {stderr}", sent=True)
     if completed.status == 0:

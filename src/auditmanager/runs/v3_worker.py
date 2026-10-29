@@ -22,7 +22,10 @@ from auditmanager.storage.public import BlobMetadataRepository, BlobStore
 
 
 MAX_V3_SAVED_TEXT_BYTES = 16 * 1024 * 1024
-V3_BETA_SETTINGS = V3GenerationSettings(4096, "high", {"type": "adaptive"})
+# The output cap is the largest the settings class admits (16,000). The first live Runs (2026-10-29, a real АР package,
+# 65-70 thousand input tokens each) stopped at exactly 4,096 output tokens, status ``truncated``, and the citation stage
+# refuses a truncated reply (``saved_reply_incomplete``): the reply is never repaired. `D-284`.
+V3_BETA_SETTINGS = V3GenerationSettings(16_000, "high", {"type": "adaptive"})
 
 
 @dataclass(frozen=True, slots=True)

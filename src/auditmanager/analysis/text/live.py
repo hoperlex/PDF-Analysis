@@ -21,6 +21,7 @@ from typing import Any, Final
 from auditmanager.analysis.text.adapter import ModelRequest, ModelResponse
 from auditmanager.analysis.text.config import DEPENDENCY_NAME, ProviderMode
 from auditmanager.analysis.text.lock import STAGE_ID, provider_lock
+from auditmanager.analysis.text.wire_schema import with_wire_schema
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 
@@ -77,7 +78,9 @@ class LiveAdapter:
     def complete(self, request: ModelRequest) -> ModelResponse:
         started = time.monotonic()
         try:
-            message = self._client.messages.create(**dict(request.body))
+            # The provider is told the wire form of the response schema (`AR-V3-WIRE-SCHEMA-01`); the
+            # request's own body and its checksum are not changed.
+            message = self._client.messages.create(**with_wire_schema(request.body))
         except Exception as exc:  # noqa: BLE001 - mapped to the catalog below
             raise self._map_provider_failure(exc) from None
         latency_ms = int((time.monotonic() - started) * 1000)

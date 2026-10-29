@@ -43,11 +43,12 @@ What it does, in five threads
 Temporaries
 -----------
 A stage's temporary PDF is removed by a context manager, which a ``SIGKILL`` never reaches. The
-sweep at process start (``__main__``) takes what is older than the attempt watchdog plus a
+sweep at process start (``__main__``) takes what is older than the live attempt's ceiling plus a
 minute, and the files of the kill that *caused* the restart are younger than that, so they stay
 until a later start -- never, in a worker that is not restarted again. This thread repeats the
 sweep while the worker runs, with a margin of :data:`TEMPORARIES_LIVE_MARGIN_SECONDS` over the
-watchdog because this process's own attempts may be live. Housekeeping: a sweep that fails is
+live attempt's absolute ceiling (``ATTEMPT_HARD_CAP_SECONDS``, two hours, `AR-V3-LIVENESS-01`)
+because this process's own attempts may be live. Housekeeping: a sweep that fails is
 logged at error and tried again; it never stops the worker.
 
 Drain
@@ -73,7 +74,7 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.jobs.public import (
-    ATTEMPT_WATCHDOG_SECONDS,
+    ATTEMPT_HARD_CAP_SECONDS,
     JOB_WAKEUP_CHANNEL,
     ExecutionNotClaimed,
     JobRepository,
@@ -102,11 +103,11 @@ PROBE_POLL_SECONDS: Final[float] = 2.0
 #: (`DEBT-TEMP-SWEEP-01`). A pass lists one directory and removes nothing unless something
 #: stale is there.
 TEMPORARIES_SWEEP_SECONDS: Final[float] = 300.0
-#: What a running worker adds to the attempt watchdog before it calls a temporary stale. The sweep
-#: at process start runs before any attempt exists and adds a minute; here this process's own
+#: What a running worker adds to the live attempt's ceiling before it calls a temporary stale. The
+#: sweep at process start runs before any attempt exists and adds a minute; here this process's own
 #: attempts may hold a file, so the margin is five minutes. The file is made after the claim and
-#: the watchdog fences the attempt at its limit, so an older file belongs to an attempt that no
-#: longer holds authority.
+#: the heartbeat fences the attempt no later than its ceiling, so an older file belongs to an
+#: attempt that no longer holds authority.
 TEMPORARIES_LIVE_MARGIN_SECONDS: Final[float] = 300.0
 
 #: Files in the state directory. The identity is written once; the heartbeat file's
@@ -142,7 +143,7 @@ class ComparisonWork(Protocol):
 def sweep_running_temporaries() -> SweepReport:
     """The sweep of a worker that is running: the start sweep's rules, a longer margin."""
     return sweep_stale_temporaries(
-        older_than=float(ATTEMPT_WATCHDOG_SECONDS) + TEMPORARIES_LIVE_MARGIN_SECONDS,
+        older_than=float(ATTEMPT_HARD_CAP_SECONDS) + TEMPORARIES_LIVE_MARGIN_SECONDS,
     )
 
 

@@ -26,8 +26,10 @@ TASK = {
 }
 
 
-def fake_claude(tmp_path: Path, case: str = "ok", model: str = "claude-opus-5") -> str:
-    """A stand-in for ``claude -p`` that asserts the fixed boundary and prints one result."""
+def fake_claude(tmp_path: Path, case: str = "ok", model: str = "claude-opus-5",
+                effort: str | None = None) -> str:
+    """A stand-in for ``claude -p`` that asserts the fixed boundary and streams newline-delimited JSON
+    (``--output-format stream-json``) that ends with one ``result`` line."""
     path = tmp_path / "claude"
     path.write_text(
         f"#!{sys.executable}\n"
@@ -39,7 +41,14 @@ def fake_claude(tmp_path: Path, case: str = "ok", model: str = "claude-opus-5") 
         f"MODEL = {model!r}\n"
         "OTHER = 'claude-sonnet-5' if MODEL == 'claude-opus-5' else 'claude-opus-5'\n"
         "assert args[args.index('--model') + 1] == MODEL\n"
-        "assert args[args.index('--output-format') + 1] == 'json'\n"
+        "assert args[args.index('--output-format') + 1] == 'stream-json'\n"
+        "assert '--verbose' in args and '--include-partial-messages' in args\n"
+        f"EFFORT = {effort!r}\n"
+        "assert ('--effort' in args) == (EFFORT is not None), args\n"
+        "if EFFORT is not None:\n"
+        " assert args[args.index('--effort') + 1] == EFFORT\n"
+        "for banned in ('--max-turns', '--max-budget-usd', '--max-thinking-tokens', '--thinking'):\n"
+        " assert banned not in args, banned\n"
         "assert args[args.index('--tools') + 1] == ''\n"
         "assert args[args.index('--setting-sources') + 1] == ''\n"
         "if '--json-schema' in args:\n"
@@ -92,11 +101,21 @@ def fake_claude(tmp_path: Path, case: str = "ok", model: str = "claude-opus-5") 
         " report['structured_output'] = [1]\n"
         "if case == 'wrong_type':\n"
         " report['type'] = 'system'\n"
+        "def emit(line):\n"
+        " print(line, flush=True)\n"
+        "emit(json.dumps({'type': 'system', 'subtype': 'init', 'model': MODEL}))\n"
         "if case == 'garbage':\n"
-        " print('not json'); sys.exit(0)\n"
+        " emit('not json'); sys.exit(0)\n"
         "if case == 'exit_nonzero':\n"
         " sys.exit(3)\n"
-        "print(json.dumps(report))\n",
+        "for index in range(3):\n"
+        " emit(json.dumps({'type': 'stream_event', 'event': {'type': 'content_block_delta',\n"
+        "                                                    'delta': {'type': 'thinking_delta'}}}))\n"
+        "emit(json.dumps({'type': 'stream_event', 'event': {'type': 'message_delta',\n"
+        "                                                  'usage': {'output_tokens': 3}}}))\n"
+        "emit(json.dumps({'type': 'rate_limit_event', 'rate_limit_info': {'status': 'allowed'}}))\n"
+        "emit('{not a json line')\n"
+        "emit(json.dumps(report))\n",
         encoding="utf-8",
     )
     path.chmod(0o700)
@@ -128,8 +147,8 @@ def test_the_stored_login_location_reaches_the_cli(tmp_path: Path, monkeypatch: 
     ("denied", "claude_tool_denied"),
     ("no_answer", "claude_answer_missing"),
     ("not_object", "claude_answer_not_object"),
-    ("wrong_type", "unknown_claude_output"),
-    ("garbage", "invalid_claude_output"),
+    ("wrong_type", "claude_no_result"),
+    ("garbage", "claude_no_result"),
     ("exit_nonzero", "claude_failed"),
 ])
 def test_unusable_claude_turn_fails_closed(tmp_path: Path, case: str, reason: str) -> None:

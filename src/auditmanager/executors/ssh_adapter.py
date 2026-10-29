@@ -18,9 +18,15 @@ import time
 from collections.abc import Mapping
 from typing import Any
 
-from auditmanager.analysis.public import ModelRequest, ModelResponse, ProviderMode, ProxyDispatchError
+from auditmanager.analysis.public import (
+    ModelRequest,
+    ModelResponse,
+    ProviderMode,
+    ProxyDispatchError,
+    to_wire_schema,
+)
 from auditmanager.executors.destinations import DestinationPolicy, DestinationRefused, DestinationUnresolvable
-from auditmanager.executors.http_adapter import effective_timeout
+from auditmanager.executors.http_adapter import DEADLINE_MARGIN_SECONDS, effective_timeout
 from auditmanager.executors.image_input import checked_pngs
 from auditmanager.executors.model import RevisionRecord
 from auditmanager.executors.ssh_transport import SshEndpoint, SshFailure, run_command
@@ -31,14 +37,22 @@ MAX_TASK_BYTES = 24 << 20
 #: A task with several images: 32 MiB of PNG is about 42.7 MiB as base64, plus the text.
 MAX_MULTI_IMAGE_TASK_BYTES = 48 << 20
 MAX_ANSWER_BYTES = 2 << 20
+#: The efforts the remote command accepts in the task's ``effort`` member
+#: (`AR-V3-LIVENESS-01`). The sealed request's ``output_config.effort`` is passed on when it is
+#: one of these and left out otherwise; the command sets no other cap on the model's work.
+_EFFORTS = frozenset({"low", "medium", "high", "xhigh", "max"})
+#: The ``dependency`` a live call cut for silence / at its ceiling names. The error code
+#: ``dependency_unavailable`` declares ``dependency`` as its only detail key, so the reason is
+#: carried in the value, in the family of ``executor_deadline``.
+_LIVE_CUT_DEPENDENCY = {"stalled": "executor_stalled", "hard_cap": "executor_hard_cap"}
 
 
-def _refused(message: str, *, sent: bool = False) -> ProxyDispatchError:
+def _refused(message: str, *, sent: bool = False, dependency: str = "model_provider") -> ProxyDispatchError:
     return ProxyDispatchError(
         ErrorCode.DEPENDENCY_UNAVAILABLE,
         dispatch_class="outcome_unknown" if sent else "not_sent",
         retry_safe=not sent, message=message,
-        details={"dependency": "model_provider"},
+        details={"dependency": dependency},
     )
 
 
@@ -70,7 +84,12 @@ def _task(request: ModelRequest, model: str) -> bytes:
     if isinstance(output, Mapping) and isinstance(output.get("format"), Mapping):
         schema = output["format"].get("schema")
         if isinstance(schema, Mapping):
-            task["output_schema"] = schema
+            # The wire form (`AR-V3-WIRE-SCHEMA-01`): what the remote command may hand a provider.
+            task["output_schema"] = to_wire_schema(schema)
+    if isinstance(output, Mapping):
+        effort = output.get("effort")
+        if isinstance(effort, str) and effort in _EFFORTS:
+            task["effort"] = effort
     envelopes = [{"media_type": "image/png", "data": base64.b64encode(image).decode("ascii")}
                  for image in images]
     if len(envelopes) == 1:
@@ -137,13 +156,27 @@ class SshCommandAdapter:
         # Use the checked IP itself: another DNS lookup inside ssh must not re-aim the call.
         endpoint = SshEndpoint(addresses[0], settings.ssh_port, settings.ssh_user)
         started = time.monotonic()
+        live: dict[str, Any] = {}
+        context = self._context
+        if context is not None:
+            # A command that prints heartbeats lives until the Attempt's ceiling, less the margin
+            # the run keeps for what follows the call, and is cut after the Attempt's stall window
+            # of silence; `timeout` above bounds only a command that never prints one.
+            live = {
+                "live_hard_cap_s": max(0.0, float(context.hard_remaining_seconds()) - DEADLINE_MARGIN_SECONDS),
+                "live_stall_s": float(context.stall_seconds),
+                "on_signal": context.progress,
+            }
         try:
             raw, _stderr = run_command(
                 endpoint, self._key, settings.host_key, payload,
-                timeout_s=timeout, max_output_bytes=MAX_ANSWER_BYTES,
+                timeout_s=timeout, max_output_bytes=MAX_ANSWER_BYTES, **live,
             )
         except SshFailure as failure:
-            raise _refused(f"the SSH command failed ({failure.outcome})", sent=failure.sent) from None
+            raise _refused(
+                f"the SSH command failed ({failure.outcome})", sent=failure.sent,
+                dependency=_LIVE_CUT_DEPENDENCY.get(failure.outcome, "model_provider"),
+            ) from None
         return _reply(raw, int((time.monotonic() - started) * 1000))
 
 
