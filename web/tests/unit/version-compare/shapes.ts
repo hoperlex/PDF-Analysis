@@ -11,13 +11,40 @@
  */
 
 import type { QueryClient } from '@tanstack/react-query';
-import { createElement } from 'react';
+import { Fragment, createElement } from 'react';
 import type { ReactElement } from 'react';
 
 import type { ComparisonSeriesState, ComparisonUploadState } from '@/shared/api';
-import { COMPARISON_SERIES_STATE_VALUES, COMPARISON_UPLOAD_STATE_VALUES } from '@/shared/api';
-import { ComparisonViewer } from '@/widgets/comparison-viewer';
-import { ComparisonQueueBlock, ComparisonQueueBlockView } from '@/widgets/execution-queue';
+import {
+  COMPARISON_AI_PAUSE_REASON_VALUES,
+  COMPARISON_AI_SHEET_STATE_VALUES,
+  COMPARISON_LAUNCH_QUEUE_STATE_VALUES,
+  COMPARISON_REPORT_STAGE_VALUES,
+  COMPARISON_SERIES_STATE_VALUES,
+  COMPARISON_SPEC_PHASE_VALUES,
+  COMPARISON_UPLOAD_STATE_VALUES,
+} from '@/shared/api';
+import { ChangesPanelView, ComparisonViewer, EvidenceBanner } from '@/widgets/comparison-viewer';
+import { ReportWindow, ReportWindowView } from '@/widgets/comparison-report';
+import type { ReportWindowViewProps } from '@/widgets/comparison-report';
+import { ComparisonAiQueueBlock, ComparisonAiQueueBlockView, ComparisonQueueBlock, ComparisonQueueBlockView } from '@/widgets/execution-queue';
+import {
+  AiChangesBlock,
+  AiChangesBlockView,
+  AiQueueStrip,
+  LaunchQueueStrip,
+  SelectionDialog,
+  SpecificationChanges,
+  SpecificationChangesView,
+  SpecificationsBlock,
+  SpecificationsBlockView,
+  SummaryReportBlock,
+  SummaryReportBlockView,
+} from '@/widgets/version-series';
+import type { AiChangesBlockViewProps, SpecificationsBlockViewProps, SummaryReportBlockViewProps } from '@/widgets/version-series';
+import { AiStartDialog, ReportDraftDialog } from '@/widgets/version-series';
+import { EstimatePanel, evidenceOf } from '@/entities/version-series';
+import type { EstimatePanelProps } from '@/entities/version-series';
 import { ComparisonResult } from '@/widgets/version-comparison';
 import { UploadDialogView } from '@/widgets/comparison-upload';
 import type { UploadDialogViewProps } from '@/widgets/comparison-upload';
@@ -57,6 +84,23 @@ import {
   uid,
 } from './fixtures';
 import { READER, refusal, seedComparison } from './seed';
+import {
+  DIGEST,
+  DIGEST_NEW,
+  PAIR_ID as AI_PAIR_ID,
+  aiQueue,
+  description,
+  estimate,
+  job,
+  launchQueue,
+  report,
+  reportsInEveryShape,
+  reviewSheets,
+  sheetChanges,
+  specChanges,
+  specification,
+  specificationsInEveryState,
+} from './ai-fixtures';
 
 export interface ComparisonShape {
   readonly name: string;
@@ -78,10 +122,14 @@ const DRAFT: Draft = addEdit(
   { kind: 'mark_absent', page: page(V1, 6), absentVersionUid: V3 },
 ) as Draft;
 
-function projectsProps(over: Partial<ProjectsAndStagesViewProps> = {}): ProjectsAndStagesViewProps {
+export function projectsProps(over: Partial<ProjectsAndStagesViewProps> = {}): ProjectsAndStagesViewProps {
   return {
-    overview: overview(), view: INITIAL_VIEW, onView: noop, mayAct: true, busy: false, confirming: null, failure: null,
-    onRefresh: noop, onOpen: noop, onAct: noop, onConfirmRestart: noop, onCancelRestart: noop, ...over,
+    projectUid: PROJECT_UID, overview: overview(), view: INITIAL_VIEW, onView: noop, mayAct: true, busy: false, confirming: null, failure: null,
+    onRefresh: noop, onOpen: noop, onAct: noop, onConfirmRestart: noop, onCancelRestart: noop,
+    selected: new Set<string>(), onSelect: noop, onSelectColumn: noop, onClearSelection: noop, onRunSelected: noop,
+    selectableAi: new Set<string>(), onSelectable: noop, launchQueue: undefined, queueOpen: false, queueBusy: false, queueFailure: null,
+    onQueueToggle: noop, onQueueAct: noop, onQueueRemove: noop, onQueueConfirm: noop, aiQueue: undefined, onAiAct: noop, onSummary: noop, dialog: null,
+    ...over,
   };
 }
 
@@ -124,14 +172,318 @@ const uploadOf = (state: ComparisonUploadState): ComparisonShape => ({
     createElement(UploadDialogView, dialogProps({ mode: 'batch', phase: 'watching', upload: upload({ state }), sets: state === 'proposed' ? proposalSets() : [], fileNames: NAMES })),
 });
 
+// ====================================================================================== `CMP-VC-UI-02`
+
+const SERIES = series();
+const SET_NAMES = new Map<string, string>([[V1, '№1'], [V2, '№2'], [V3, '№3']]);
+
+function estimateProps(over: Partial<EstimatePanelProps> = {}): EstimatePanelProps {
+  return {
+    title: 'ИИ-описание изменений · 133/23-ГК-ЭМ1', consentKind: 'sheet_changes', confirmLabel: 'Запустить', estimate: estimate(), loading: false,
+    failure: null, agreedDigest: DIGEST, busy: false, onAgree: noop, onConfirm: noop, onCancel: noop, ...over,
+  };
+}
+
+function changesBlockProps(over: Partial<AiChangesBlockViewProps> = {}): AiChangesBlockViewProps {
+  return {
+    changes: sheetChanges(), series: SERIES, names: SET_NAMES, mayAct: true, busy: false, failure: null, folds: new Set<string>(),
+    review: new Map(), onFold: noop, onAct: noop, onOpenTransition: noop, onOpenReviewSheet: noop, dialog: null, ...over,
+  };
+}
+
+function specsBlockProps(over: Partial<SpecificationsBlockViewProps> = {}): SpecificationsBlockViewProps {
+  return {
+    specs: [specification(), specification({ transition_id: uid('ctn', 2), method: 'sheet_ai' })], transitions: SERIES.transitions ?? [], names: SET_NAMES,
+    mayAct: true, busy: false, failure: null, openChanges: null, changes: null, onOpenChanges: noop, onStart: noop, onCancel: noop,
+    onOpenTransition: noop, dialog: null, ...over,
+  };
+}
+
+function summaryProps(over: Partial<SummaryReportBlockViewProps> = {}): SummaryReportBlockViewProps {
+  return {
+    report: report(), summaryReady: true, transitions: SERIES.transitions ?? [], names: SET_NAMES, mayAct: true, busy: false, failure: null,
+    onPdf: noop, onMd: noop, onContinue: noop, ...over,
+  };
+}
+
+function windowProps(over: Partial<ReportWindowViewProps> = {}): ReportWindowViewProps {
+  return {
+    reports: reportsInEveryShape(), transitions: SERIES.transitions ?? [], names: SET_NAMES, summaryReady: true, mayAct: true, busy: false, failure: null,
+    source: 'series_summary', onSource: noop, kind: 'client', onKind: noop, reuse: true, onReuse: noop, fileName: null, onFile: noop,
+    onPrepareEstimate: noop, onAct: noop, onClose: noop, dialog: null, ...over,
+  };
+}
+
+export function panelProps(over: Partial<Parameters<typeof ChangesPanelView>[0]> = {}): Parameters<typeof ChangesPanelView>[0] {
+  return {
+    sheetTitle: 'л. 3 · Схема электроснабжения', description: description(), loading: false, failure: null, mayAct: true, busy: false, copied: false,
+    history: { items: [
+      { description_id: uid('csd', 1), state: 'done', changes_count: 3, unresolved_count: 1, recorded: false, created_at: '2026-10-28T10:15:30Z', model: 'Модель-эксперт-1' },
+      { description_id: uid('csd', 2), state: 'stale', changes_count: 2, unresolved_count: 0, recorded: true, created_at: '2026-10-27T10:15:30Z' },
+    ], page: { next_cursor: null } },
+    estimate: null, onDescribe: noop, onCancelJob: noop, onShow: noop, onCopy: noop, onMd: noop, ...over,
+  };
+}
+
+const NOT_WIRED = refusal('dependency_unavailable', { dependency: 'comparison_ai_sheets' });
+
+/** An overview of the first few sets: a table of thirteen rows is enough once, and the census pays for every element. */
+function fewSets(count: number): ReturnType<typeof overview> {
+  return overview({ sets: overview().sets.slice(0, count) });
+}
+
+/** Every AI screen state that one static pass reaches (the cells of steps 4/6/7, the dialogs, the strips, the blocks, the window, the panel). */
+function aiShapes(): ComparisonShape[] {
+  const doc = (n: number): string => uid('doc', n);
+  const out: ComparisonShape[] = [];
+  const bundles = new Map<string, ComparisonShape[]>();
+  // The census and the language guard pay for every screen they render, so the shapes that differ only in one member of an enum are
+  // rendered together, side by side, as one screen. A bundle never holds two shapes that seed the same cache entry differently.
+  const push = (shape: ComparisonShape): void => {
+    const group = BUNDLES.find(([pattern]) => pattern.test(shape.name))?.[1];
+    if (group === undefined) out.push(shape);
+    else bundles.set(group, [...(bundles.get(group) ?? []), shape]);
+  };
+
+  // «Проекты и этапы»: the cells in many states, the selection, the strips and a dialog
+  push({
+    name: 'projects-and-stages-ai-steps',
+    make: () =>
+      createElement(ProjectsAndStagesView, projectsProps({
+        selected: new Set([`${doc(1)}|ai_pairs`, `${doc(2)}|series`, `${doc(3)}|ai_changes`]),
+        selectableAi: new Set([`${doc(1)}|ai_pairs`, `${doc(3)}|ai_changes`, `${doc(4)}|report`]),
+        overview: fewSets(4), launchQueue: launchQueue(), queueOpen: true, aiQueue: aiQueue(), queueFailure: comparisonFailure(refusal('conflict', { conflict_reason: 'comparison_launch_queue_state' })),
+        dialog: createElement(EstimatePanel, estimateProps()),
+      })),
+    seedClient: (c) => {
+      seedAiRows(c);
+      // the fourth set's reads are refused: its cells say «ещё недоступно», the rest are drawn as above
+      seedError(c, COMPARISON_KEYS.aiPair(PROJECT_UID, doc(4)), refusal('dependency_unavailable', { dependency: 'comparison_ai_pairs' }));
+      seedError(c, COMPARISON_KEYS.seriesList(PROJECT_UID, doc(4)), refusal('dependency_unavailable', { dependency: 'comparison_series' }));
+    },
+  });
+  for (const state of COMPARISON_LAUNCH_QUEUE_STATE_VALUES) {
+    push({
+      name: `launch-queue-strip-${state}`,
+      make: () =>
+        createElement(LaunchQueueStrip, {
+          queue: state === 'running' ? launchQueue(state) : { ...launchQueue(state), entries: [] }, sets: overview().sets, mayAct: true, busy: false, open: state === 'running', failure: null,
+          onToggle: noop, onAct: noop, onRemove: noop, onConfirm: noop,
+        }),
+    });
+  }
+  push({ name: 'ai-queue-strip', make: () => createElement(AiQueueStrip, { queue: aiQueue(), sets: overview().sets }) });
+
+  // the estimate and the consent
+  push({ name: 'estimate-panel-agreed', make: () => createElement(EstimatePanel, estimateProps()) });
+  push({ name: 'estimate-panel-not-metered', make: () => createElement(EstimatePanel, estimateProps({ estimate: estimate({ estimate_micros: 0, ceiling_micros: 0, route: { ...estimate().route, billing: 'not_metered' } }), agreedDigest: null })) });
+  push({ name: 'estimate-panel-recorded', make: () => createElement(EstimatePanel, estimateProps({ estimate: estimate({ route: { ...estimate().route, provider_mode: 'recorded' } }), agreedDigest: null })) });
+  for (const blocked of ['job', 'day'] as const) {
+    push({ name: `estimate-panel-blocked-${blocked}`, make: () => createElement(EstimatePanel, estimateProps({ estimate: estimate({ blocked_by: blocked }), agreedDigest: null })) });
+  }
+  push({ name: 'estimate-panel-nothing-to-send', make: () => createElement(EstimatePanel, estimateProps({ estimate: estimate({ calls: 0, images: 0, reused: 12, units: 12 }), agreedDigest: null })) });
+  push({
+    name: 'estimate-panel-stale-asks-again',
+    make: () =>
+      createElement(EstimatePanel, estimateProps({
+        estimate: estimate({ estimate_digest: DIGEST_NEW }), agreedDigest: DIGEST,
+        failure: comparisonFailure(refusal('conflict', { conflict_reason: 'comparison_estimate_stale' })),
+      })),
+  });
+  push({ name: 'estimate-panel-unread', make: () => createElement(EstimatePanel, estimateProps({ estimate: undefined, agreedDigest: null, failure: comparisonFailure(refusal('dependency_unavailable', { dependency: 'executor_route_missing' })) })) });
+  push({ name: 'ai-start-dialog-pending', make: () => createElement(AiStartDialog, { title: 'ИИ-проверка сомнительных пар · 133/23-ГК-ЭМ1', scope: { kind: 'pair_check', projectUid: PROJECT_UID, documentUid: DOCUMENT_UID } as never, consentKind: 'pair_check', confirmLabel: 'Проверить', intro: 'ИИ смотрит листы с кандидатами.', onDone: noop, onCancel: noop }) });
+  push({ name: 'report-draft-dialog-pending', make: () => createElement(ReportDraftDialog, { title: 'PDF-отчёт · 133/23-ГК-ЭМ1', seriesId: SERIES_ID_, confirmLabel: 'Сформировать', onDone: noop, onCancel: noop }) });
+  push({
+    name: 'selection-dialog',
+    make: () => createElement(SelectionDialog, { projectUid: PROJECT_UID, items: [1, 2, 3, 4, 5].map((n) => ({ documentUid: doc(n), step: n % 2 === 0 ? 'ai_pairs' as const : 'series' as const, label: `133/23-ГК-ЭМ${n} · шаг` })), restart: false, queueNote: 'Очередь запуска сейчас остановлена — выбранное встанет в неё и начнётся после «Продолжить очередь».', onDone: noop, onCancel: noop }),
+    seedClient: (c) => c.setQueryData([...COMPARISON_KEYS.estimate(`selection|${PROJECT_UID}`), [1, 2, 3, 4, 5].map((n) => `${doc(n)}:${n % 2 === 0 ? 'ai_pairs' : 'series'}`).join(',')], [
+      { item: { documentUid: doc(2), step: 'ai_pairs' }, estimate: estimate({ method: 'pair_check' }), why: '' },
+      { item: { documentUid: doc(4), step: 'ai_pairs' }, estimate: null, why: 'Сравнение соседних версий ещё не посчитано: оценки пока нет.' },
+      { item: { documentUid: doc(1), step: 'series' }, estimate: null, why: '' },
+    ]),
+  });
+
+  // «Сравнение листов»: the three blocks
+  push({
+    name: 'ai-changes-block-folds',
+    make: () => createElement(AiChangesBlockView, changesBlockProps({ folds: new Set([TRANSITION_12_]), review: new Map([[TRANSITION_12_, reviewSheets()]]), dialog: createElement(EstimatePanel, estimateProps({ title: 'ИИ-описание изменений · листы с ошибкой' })) })),
+  });
+  push({
+    name: 'ai-changes-block-recorded',
+    make: () => createElement(AiChangesBlockView, changesBlockProps({ changes: sheetChanges({ job: job({ estimate: estimate({ route: { ...estimate().route, provider_mode: 'recorded' } }) }) }) })),
+  });
+  for (const reason of COMPARISON_AI_PAUSE_REASON_VALUES) {
+    push({ name: `ai-changes-block-paused-${reason}`, make: () => createElement(AiChangesBlockView, changesBlockProps({ changes: sheetChanges({ transitions: [], job: job({ state: 'paused', pause_reason: reason }) }) })) });
+  }
+  push({
+    name: 'ai-changes-block-not-wired',
+    make: () => createElement(AiChangesBlockView, changesBlockProps({ failure: comparisonFailure(NOT_WIRED) })),
+  });
+
+  push({ name: 'specifications-block', make: () => createElement(SpecificationsBlockView, specsBlockProps({ specs: specificationsInEveryState(), transitions: [...(SERIES.transitions ?? []), ...specificationsInEveryState().map((spec) => ({ ...(SERIES.transitions ?? [])[0] as NonNullable<typeof SERIES.transitions>[number], transition_id: spec.transition_id }))], openChanges: uid('ctn', 25), changes: createElement(SpecificationChangesView, { items: specChanges() }) })) });
+  for (const phase of COMPARISON_SPEC_PHASE_VALUES) {
+    push({ name: `specifications-block-phase-${phase}`, make: () => createElement(SpecificationsBlockView, specsBlockProps({ specs: [specification({ state: 'running', phase })] })) });
+  }
+  push({ name: 'summary-report-block-client', make: () => createElement(SummaryReportBlockView, summaryProps()) });
+  push({ name: 'summary-report-block-analytic', make: () => createElement(SummaryReportBlockView, summaryProps({ report: report({ kind: 'analytic', state: 'partial', failure_reason: 'model_failed', parts: reportsInEveryShape()[1]?.parts ?? [] }) })) });
+  // the PDF report window
+  push({ name: 'report-window', make: () => createElement(ReportWindowView, windowProps({ dialog: createElement(EstimatePanel, estimateProps({ title: 'PDF-отчёт', consentKind: 'report', confirmLabel: 'Сформировать', estimate: estimate({ method: 'report', transitions: 4, units: 4 }) })) })) });
+  push({ name: 'report-window-upload', make: () => createElement(ReportWindowView, windowProps({ source: 'uploaded_md', kind: 'analytic', reuse: false, fileName: 'сводка-изменений.md', summaryReady: false, reports: [] })) });
+  push({ name: 'report-window-not-wired', make: () => createElement(ReportWindowView, windowProps({ failure: comparisonFailure(refusal('dependency_unavailable', { dependency: 'comparison_reports' })), reports: [] })) });
+  push({
+    name: 'report-window-every-stage',
+    make: () => createElement(ReportWindowView, windowProps({
+      mayAct: false,
+      reports: COMPARISON_REPORT_STAGE_VALUES.map((stage, index) => report({ report_id: uid('crt', 70 + index), state: 'running', stage, parts: [], artifacts: [] })),
+    })),
+  });
+
+  // the side panel and the evidence banner
+  // the eleven states of the sheet: the rich 'done' panel lists them all in its history; the ones with a branch of their own follow
+  const history = COMPARISON_AI_SHEET_STATE_VALUES.map((state, index) => ({
+    description_id: uid('csd', 80 + index), state, changes_count: index, unresolved_count: index % 2, recorded: index === 3, created_at: '2026-10-27T10:15:30Z',
+  }));
+  push({ name: 'changes-panel-done', make: () => createElement(ChangesPanelView, panelProps({ description: description({ state: 'done', history_count: history.length }), history: { items: history, page: { next_cursor: null } } })) });
+  const bare = { changes: undefined as never, unresolved: undefined as never, declared: undefined as never, excluded: undefined as never, coverage: undefined as never, diagnostics: undefined as never, model: undefined as never, history_count: 1 };
+  push({ name: 'changes-panel-not_processed', make: () => createElement(ChangesPanelView, panelProps({ description: description({ state: 'not_processed', ...bare }) })) });
+  push({ name: 'changes-panel-running', make: () => createElement(ChangesPanelView, panelProps({ description: description({ state: 'running', ...bare, job_id: JOB_ID_ }) })) });
+  push({ name: 'changes-panel-stale', make: () => createElement(ChangesPanelView, panelProps({ description: description({ state: 'stale', ...bare }) })) });
+  push({ name: 'changes-panel-engine_same', make: () => createElement(ChangesPanelView, panelProps({ description: description({ state: 'engine_same', ...bare }) })) });
+  push({ name: 'changes-panel-recorded', make: () => createElement(ChangesPanelView, panelProps({ description: description({ recorded: true }), copied: true })) });
+  push({ name: 'changes-panel-estimate', make: () => createElement(ChangesPanelView, panelProps({ description: description({ state: 'not_processed', changes: undefined as never, unresolved: undefined as never, history_count: 1 }), estimate: createElement(EstimatePanel, estimateProps({ title: 'Описать этот лист', consentKind: 'sheet', confirmLabel: 'Передать и описать', estimate: estimate({ units: 1, sheets: 1, calls: 1, images: 2, image_bytes: 600_000, prompt_chars: 8_000 }), agreedDigest: null })) })) });
+  push({ name: 'changes-panel-loading', make: () => createElement(ChangesPanelView, panelProps({ description: undefined, loading: true })) });
+  push({ name: 'changes-panel-failed-read', make: () => createElement(ChangesPanelView, panelProps({ description: undefined, failure: comparisonFailure(refusal('internal_error')) })) });
+  push({ name: 'changes-panel-not-wired', make: () => createElement(ChangesPanelView, panelProps({ description: undefined, failure: comparisonFailure(NOT_WIRED) })) });
+  push({
+    name: 'evidence-banner-one',
+    make: () => createElement(EvidenceBanner, { evidence: { items: evidenceOf(description()), index: 0, all: false }, onAction: noop }),
+  });
+  push({
+    name: 'evidence-banner-all',
+    make: () => createElement(EvidenceBanner, { evidence: { items: evidenceOf(description()), index: 1, all: true }, onAction: noop }),
+  });
+  push({
+    name: 'viewer-with-the-side-panel',
+    make: () => createElement(ComparisonViewer, { pair: comparedPair({ sheet_pair_id: AI_PAIR_ID }), changes: { mayAct: true } }),
+    seedClient: (c) => c.setQueryData(COMPARISON_KEYS.description(AI_PAIR_ID), description()),
+  });
+  // the containers of the blocks and of the window: cold (the reads are on their way), loaded and refused
+  const containerProps = { series: SERIES, projectUid: PROJECT_UID, names: SET_NAMES, mayAct: true };
+  push({ name: 'ai-changes-block-container-cold', make: () => createElement(AiChangesBlock, { ...containerProps, onOpenTransition: noop, onOpenReviewSheet: noop }) });
+  push({
+    name: 'ai-changes-block-container-loaded',
+    make: () => createElement(AiChangesBlock, { ...containerProps, onOpenTransition: noop, onOpenReviewSheet: noop }),
+    seedClient: (c) => c.setQueryData(COMPARISON_KEYS.aiSheets(SERIES_ID), sheetChanges()),
+  });
+  push({
+    name: 'ai-changes-block-container-not-wired',
+    make: () => createElement(AiChangesBlock, { ...containerProps, onOpenTransition: noop, onOpenReviewSheet: noop }),
+    seedClient: (c) => seedError(c, COMPARISON_KEYS.aiSheets(SERIES_ID), NOT_WIRED),
+  });
+  push({ name: 'specifications-block-container-cold', make: () => createElement(SpecificationsBlock, { series: SERIES, names: SET_NAMES, mayAct: true, onOpenTransition: noop }) });
+  push({
+    name: 'specifications-block-container-loaded',
+    make: () => createElement(SpecificationsBlock, { series: SERIES, names: SET_NAMES, mayAct: true, onOpenTransition: noop }),
+    seedClient: (c) => c.setQueryData(COMPARISON_KEYS.specs(SERIES_ID), specificationsInEveryState()),
+  });
+  push({
+    name: 'specifications-block-container-not-wired',
+    make: () => createElement(SpecificationsBlock, { series: SERIES, names: SET_NAMES, mayAct: true, onOpenTransition: noop }),
+    seedClient: (c) => seedError(c, COMPARISON_KEYS.specs(SERIES_ID), refusal('dependency_unavailable', { dependency: 'comparison_specification' })),
+  });
+  push({ name: 'specification-changes-cold', make: () => createElement(SpecificationChanges, { transitionId: TRANSITION_12_ }) });
+  push({ name: 'summary-report-block-container-cold', make: () => createElement(SummaryReportBlock, { series: SERIES, names: SET_NAMES, mayAct: true, summaryReady: true }) });
+  // no seed of its own: it reads the reports that `report-window-container-loaded` seeds, in the same screen
+  push({ name: 'summary-report-block-container-loaded', make: () => createElement(SummaryReportBlock, { series: SERIES, names: SET_NAMES, mayAct: true, summaryReady: true }) });
+  push({
+    name: 'summary-report-block-container-not-wired',
+    make: () => createElement(SummaryReportBlock, { series: SERIES, names: SET_NAMES, mayAct: true, summaryReady: true }),
+    seedClient: (c) => seedError(c, COMPARISON_KEYS.reports(SERIES_ID), refusal('dependency_unavailable', { dependency: 'comparison_reports' })),
+  });
+  push({ name: 'report-window-container-cold', make: () => createElement(ReportWindow, { series: SERIES, names: SET_NAMES, mayAct: true, onClose: noop }) });
+  push({
+    name: 'report-window-container-loaded',
+    make: () => createElement(ReportWindow, { series: SERIES, names: SET_NAMES, mayAct: true, onClose: noop }),
+    seedClient: (c) => c.setQueryData(COMPARISON_KEYS.reports(SERIES_ID), reportsInEveryShape().slice(0, 3)),
+  });
+  push({
+    name: 'report-window-container-not-wired',
+    make: () => createElement(ReportWindow, { series: SERIES, names: SET_NAMES, mayAct: true, onClose: noop }),
+    seedClient: (c) => seedError(c, COMPARISON_KEYS.reports(SERIES_ID), refusal('dependency_unavailable', { dependency: 'comparison_reports' })),
+  });
+
+  // «Очередь»: the installation's AI queue under the block «Сравнение»
+  push({ name: 'comparison-ai-queue-block-view', make: () => createElement(ComparisonAiQueueBlockView, { queue: aiQueue() }) });
+  push({ name: 'comparison-ai-queue-block-loaded', make: () => createElement(ComparisonAiQueueBlock), seedClient: (c) => c.setQueryData(COMPARISON_KEYS.aiQueue(), aiQueue()) });
+  push({ name: 'comparison-ai-queue-block-not-wired', make: () => createElement(ComparisonAiQueueBlock), seedClient: (c) => seedError(c, COMPARISON_KEYS.aiQueue(), refusal('dependency_unavailable', { dependency: 'comparison_launch_queue' })) });
+  push({ name: 'comparison-ai-queue-block-failed', make: () => createElement(ComparisonAiQueueBlock), seedClient: (c) => seedError(c, COMPARISON_KEYS.aiQueue(), refusal('internal_error')) });
+  push({ name: 'comparison-ai-queue-block-cold', make: () => createElement(ComparisonAiQueueBlock) });
+  for (const [name, members] of bundles) {
+    out.push({
+      name,
+      make: () => createElement('div', null, ...members.map((member, index) => createElement(Fragment, { key: index }, member.make()))),
+      seedClient: (client) => members.forEach((member) => member.seedClient?.(client)),
+    });
+  }
+  return out;
+}
+
+/** Which shapes are rendered together (by name), and the name of the screen they make. */
+const BUNDLES: readonly (readonly [RegExp, string])[] = [
+  [/^launch-queue-strip-/, 'launch-queue-strips'],
+  [/^estimate-panel-(agreed|loading|not-metered|recorded|small-spend)$/, 'estimate-panels-of-the-estimate'],
+  [/^estimate-panel-(blocked-job|blocked-day|nothing-to-send|stale-asks-again|unread)$/, 'estimate-panels-that-cannot-start'],
+  [/^estimate-panel-refused-/, 'estimate-panels-refused'],
+  [/^ai-changes-block-(paused-.*|queued|running|paused|completed|failed|cancelled)$/, 'ai-changes-blocks-by-state'],
+  [/^ai-changes-block-(recorded|not-wired)$/, 'ai-changes-blocks-variants'],
+  [/^specifications-block-phase-.*$/, 'specifications-blocks-variants'],
+  [/^summary-report-block-(client|analytic)$/, 'summary-report-blocks'],
+  [/^report-window-(upload|not-wired|every-stage)$/, 'report-windows-variants'],
+  [/^changes-panel-(not_processed|running|done|stale|engine_same)$/, 'changes-panels-by-state'],
+  [/^changes-panel-(recorded|estimate)$/, 'changes-panels-variants'],
+  [/^changes-panel-(loading|not-wired|failed-read)$/, 'changes-panels-reads'],
+  [/^evidence-banner-/, 'evidence-banners'],
+  [/^(ai-changes-block|specifications-block|summary-report-block|report-window)-container-cold$|^specification-changes-cold$|^ai-start-dialog-pending$|^report-draft-dialog-pending$/, 'ai-containers-cold'],
+  [/^(ai-changes-block|specifications-block|summary-report-block|report-window)-container-loaded$/, 'ai-containers-loaded'],
+  [/^(ai-changes-block|specifications-block|summary-report-block|report-window)-container-not-wired$/, 'ai-containers-not-wired'],
+];
+
+const SERIES_ID_ = SERIES.series_id;
+const SERIES_ID = SERIES_ID_;
+const TRANSITION_12_ = uid('ctn', 1);
+const JOB_ID_ = job().job_id;
+
+/** The AI caches of each of the thirteen sets of the overview: a job in a different state in each cell. */
+function seedAiRows(client: QueryClient): void {
+  const states = ['queued', 'running', 'paused', 'completed', 'completed', 'failed', 'cancelled'] as const;
+  overview().sets.forEach((set, index) => {
+    const seriesId = uid('cser', index + 1);
+    const state = states[index % states.length] as (typeof states)[number];
+    const failed = index % 7 === 4 ? 2 : 0;
+    client.setQueryData(COMPARISON_KEYS.aiPair(PROJECT_UID, set.document_uid), {
+      document_uid: set.document_uid,
+      job: job({ job_id: uid('cai', 20 + index), method: 'pair_check', state, counts: { total: 6, done: 3, failed, unknown: 0 }, ...(state === 'paused' ? { pause_reason: 'overrun' as const } : {}) }),
+      counts: { questions: 6, answered: 5, pairs: 2, hints: 2, against: 1, failed, reused: 1 },
+    });
+    client.setQueryData(COMPARISON_KEYS.seriesList(PROJECT_UID, set.document_uid), series({ series_id: seriesId, document_uid: set.document_uid }));
+    const changesState = states[(index + 3) % states.length] as (typeof states)[number];
+    client.setQueryData(COMPARISON_KEYS.aiSheets(seriesId), sheetChanges({
+      series_id: seriesId,
+      job: job({ job_id: uid('cai', 40 + index), state: changesState, ...(changesState === 'queued' ? { queue_position: index + 1 } : {}), counts: { total: 12, done: 6, failed: index % 7 === 0 ? 1 : 0, unknown: 0 } }),
+    }));
+    const reportStates = ['running', 'completed', 'paused', 'partial', 'failed', 'cancelled', 'queued'] as const;
+    client.setQueryData(COMPARISON_KEYS.reports(seriesId), [report({ report_id: uid('crt', 50 + index), series_id: seriesId, state: reportStates[index % reportStates.length] as (typeof reportStates)[number] })]);
+  });
+}
+
 export const COMPARISON_SHAPES: readonly ComparisonShape[] = [
   // the page: the project, the tabs, the module
   { name: 'version-compare-projects', make: page_({ projectUid: PROJECT_UID }), seedClient: (c) => seedComparison(c) },
   { name: 'version-compare-module-not-wired', make: page_(PROJECT_AT), seedClient: (c) => seedComparison(c, { overview: 'wired-not' }) },
   { name: 'version-compare-read-failed', make: page_(PROJECT_AT), seedClient: (c) => seedComparison(c, { overview: 'error' }) },
   { name: 'version-compare-projects-read-failed', make: page_(undefined), seedClient: (c) => seedComparison(c, { projects: 'error', overview: 'none' }) },
-  { name: 'version-compare-module-off', make: page_(PROJECT_AT), seedClient: (c) => seedComparison(c, { modules: 'none' }) },
-  { name: 'version-compare-reader', make: page_(PROJECT_AT), seedClient: (c) => seedComparison(c, { account: READER }) },
+  { name: 'version-compare-module-off', make: page_(PROJECT_AT), seedClient: (c) => seedComparison(c, { modules: 'none', sets: 3 }) },
+  { name: 'version-compare-reader', make: page_(PROJECT_AT), seedClient: (c) => seedComparison(c, { account: READER, sets: 3 }) },
   { name: 'version-compare-sheets', make: page_(SHEETS_AT), seedClient: (c) => seedComparison(c, { sheets: true }) },
   {
     name: 'version-compare-sheets-not-wired',
@@ -142,8 +494,8 @@ export const COMPARISON_SHAPES: readonly ComparisonShape[] = [
     },
   },
   { name: 'version-compare-sheets-cold', make: page_(SHEETS_AT), seedClient: (c) => seedComparison(c) },
-  { name: 'version-compare-upload-single', make: page_({ ...PROJECT_AT, upload: 'single' }), seedClient: (c) => seedComparison(c) },
-  { name: 'version-compare-upload-batch', make: page_({ ...PROJECT_AT, upload: 'batch' }), seedClient: (c) => seedComparison(c) },
+  { name: 'version-compare-upload-single', make: page_({ ...PROJECT_AT, upload: 'single' }), seedClient: (c) => seedComparison(c, { sets: 3 }) },
+  { name: 'version-compare-upload-batch', make: page_({ ...PROJECT_AT, upload: 'batch' }), seedClient: (c) => seedComparison(c, { sets: 3 }) },
 
   // «Проекты и этапы»
   { name: 'projects-and-stages-filtered', make: () => createElement(ProjectsAndStagesView, projectsProps({ view: { ...INITIAL_VIEW, filter: 'waiting', query: '133' } })) },
@@ -248,6 +600,9 @@ export const COMPARISON_SHAPES: readonly ComparisonShape[] = [
   { name: 'comparison-queue-block-cold', make: () => createElement(ComparisonQueueBlock) },
   { name: 'comparison-queue-block-not-wired', make: () => createElement(ComparisonQueueBlock), seedClient: (c) => seedError(c, COMPARISON_KEYS.queue(), refusal('dependency_unavailable', { dependency: 'comparison_overview' })) },
   { name: 'comparison-queue-block-failed', make: () => createElement(ComparisonQueueBlock), seedClient: (c) => seedError(c, COMPARISON_KEYS.queue(), refusal('internal_error')) },
+
+  // ---- `CMP-VC-UI-02`: the AI layer
+  ...aiShapes(),
 
   // A-12: the version-scoped screen once the matrix holds the sheet pairs
   ...([false, true] as const).flatMap((handedOver) =>

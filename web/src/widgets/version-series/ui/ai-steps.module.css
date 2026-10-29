@@ -1,0 +1,195 @@
+/*
+ * The AI layer of «Проекты и этапы» and «Сравнение листов» (`CMP-VC-UI-02`): the cells of steps 4, 6 and 7 with their checkboxes,
+ * the selection bar, the strips «Очередь запуска» and «Очередь «ИИ-описание изменений»», and the blocks «ИИ-описание изменений»,
+ * «Полные спецификации (СО)» and «Сводка MD и отчёт для заказчика». Layout only: the tones come from the global `am-badge`,
+ * `am-button` and `am-note` classes, so both palettes reach every rule unchanged. No `:not()` and no custom property (the
+ * contrast census cannot read either); every rule is reached by a screen of `tests/unit/version-compare/shapes.ts`.
+ *
+ * A cell holds somebody's text (a designation, a model's sentence, a reason) of any length: every one of them wraps.
+ */
+
+.cellSelect {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--am-gap-xs);
+  font-size: var(--am-text-sm);
+}
+
+.columnSelect {
+  display: inline-flex;
+  align-items: center;
+  margin-right: var(--am-gap-xs);
+}
+
+.queueBadge {
+  display: inline-block;
+  padding: 0 var(--am-gap-xs);
+  border: 1px dashed var(--am-line-strong);
+  border-radius: var(--am-radius);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+  white-space: nowrap;
+}
+
+.bar {
+  display: block;
+  width: 100%;
+  max-width: 8rem;
+  height: 0.4rem;
+}
+
+.cellUnavailable {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.selectionBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap);
+  padding: var(--am-gap-sm) var(--am-gap);
+  border: 1px solid var(--am-accent);
+  border-radius: var(--am-radius);
+  background: var(--am-accent-light);
+}
+
+.spacer {
+  flex: 1 1 auto;
+}
+
+.strip {
+  display: grid;
+  gap: var(--am-gap-xs);
+  padding: var(--am-gap-sm) var(--am-gap);
+  border: 1px solid var(--am-line-strong);
+  border-radius: var(--am-radius);
+  min-width: 0;
+}
+
+.stripHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap);
+}
+
+.stripTitle {
+  font-weight: 600;
+}
+
+.stripList {
+  display: grid;
+  gap: var(--am-gap-xs);
+  margin: 0;
+  padding-left: var(--am-gap);
+}
+
+.stripEntry {
+  overflow-wrap: anywhere;
+}
+
+.entryState {
+  font-weight: 600;
+}
+
+.aiBlock {
+  display: grid;
+  gap: var(--am-gap-xs);
+  padding: var(--am-gap-sm) var(--am-gap);
+  border: 1px solid var(--am-line-strong);
+  border-radius: var(--am-radius);
+  min-width: 0;
+}
+
+.aiHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap);
+}
+
+.aiTitle {
+  margin: 0;
+  font-size: var(--am-text-md);
+}
+
+.numeric {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.errorCell {
+  color: var(--am-failed);
+  font-weight: 600;
+}
+
+.fold {
+  padding: 0 var(--am-gap-xs);
+  border: 1px solid var(--am-line-strong);
+  border-radius: var(--am-radius);
+  background: var(--am-surface);
+  color: var(--am-ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.foldRow {
+  background: var(--am-surface-sunken);
+}
+
+.single {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
+  padding: var(--am-gap-xs) 0;
+}
+
+.unit {
+  display: inline-block;
+  min-width: 1.2rem;
+  text-align: center;
+  font-weight: 600;
+}
+
+.unitFailed {
+  color: var(--am-failed);
+}
+
+.reportRow {
+  display: grid;
+  gap: var(--am-gap-xs);
+  padding: var(--am-gap-xs) 0;
+  border-bottom: 1px solid var(--am-line-soft);
+}
+
+.reportActions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-xs);
+}
+
+.warning {
+  margin: 0;
+  color: var(--am-failed);
+  overflow-wrap: anywhere;
+}
+
+.hint {
+  display: block;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.hintStale {
+  font-style: italic;
+}
+
+.sourceChoice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap);
+}

@@ -384,3 +384,123 @@
   color: var(--am-ink-muted);
   font-size: var(--am-text-sm);
 }
+
+/* ------------------------------------------------------------------- `CMP-VC-UI-02`: the side panel and the evidence banner */
+
+.layout {
+  display: grid;
+  gap: var(--am-gap);
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+.layoutWide {
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 26rem);
+}
+
+.main {
+  display: grid;
+  gap: var(--am-gap);
+  min-width: 0;
+}
+
+.side {
+  display: grid;
+  gap: var(--am-gap-sm);
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--am-line-strong);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
+  color: var(--am-ink);
+  overflow-wrap: anywhere;
+}
+
+.sideTitle {
+  margin: 0;
+  font-size: var(--am-text-md);
+}
+
+.passport {
+  display: grid;
+  gap: var(--am-gap-xs);
+}
+
+.changeList {
+  display: grid;
+  gap: var(--am-gap-sm);
+  margin: 0;
+  padding-left: var(--am-gap);
+}
+
+.change {
+  display: grid;
+  gap: var(--am-gap-xs);
+  min-width: 0;
+}
+
+.lead {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.tier {
+  display: inline-block;
+  margin-left: var(--am-gap-xs);
+  padding: 0 var(--am-gap-xs);
+  border: 1px solid var(--am-line-strong);
+  border-radius: var(--am-radius);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.tierWarn {
+  border-color: var(--am-failed);
+  color: var(--am-failed);
+}
+
+.details {
+  display: grid;
+  gap: var(--am-gap-xs);
+}
+
+.sideActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-xs);
+}
+
+.sideWarning {
+  margin: 0;
+  color: var(--am-failed);
+  overflow-wrap: anywhere;
+}
+
+.banner {
+  display: grid;
+  gap: var(--am-gap-xs);
+  padding: var(--am-gap-sm) var(--am-gap);
+  border: 1px solid var(--am-accent);
+  border-radius: var(--am-radius);
+  background: var(--am-accent-light);
+}
+
+.bannerNav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap);
+}
+
+.evidenceBox {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px dashed var(--am-accent-strong);
+  pointer-events: none;
+}
+
+.evidenceBoxCurrent {
+  border-style: solid;
+  background: var(--am-accent-light);
+}

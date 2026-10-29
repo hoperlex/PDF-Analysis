@@ -108,7 +108,7 @@ describe('the words of a step (version-comparison-projects.js:41-94)', () => {
     for (const state of ['not_started', 'queued', 'running', 'pausing', 'paused', 'interrupted', 'done', 'partial', 'stale', 'attention', 'failed', 'blocked', 'not_applicable'] as const) {
       for (const id of ['upload', 'profile', 'matrix', 'series', 'ai_pairs', 'ai_changes', 'report'] as const) {
         const view = stepView(id, state, { ready: 1, total: 2, failed: 0, rows: 1, unmatched: 0, done: 1, with_changes: 0 });
-        expect(view.text, `${id}/${state}`).not.toMatch(LATIN);
+        expect(view.text.replace(/PDF/g, ''), `${id}/${state}`).not.toMatch(LATIN);
         expect(view.text.length, `${id}/${state}`).toBeGreaterThan(0);
       }
     }
@@ -644,10 +644,14 @@ describe('the order of the versions', () => {
   });
 });
 
-describe('the sentences of the module\'s refusals (CMP-SEAL-C0, CMP-SEAL-C1)', () => {
+describe('the sentences of the module\'s refusals (CMP-SEAL-C0, CMP-SEAL-C1, CMP-SEAL-C2)', () => {
   const CONFLICT_REASONS = [
     'comparison_upload_active', 'comparison_upload_state', 'comparison_set_state', 'comparison_version_order_stale',
     'comparison_matrix_stale', 'comparison_edit_none', 'comparison_series_active', 'comparison_series_state',
+    // CMP-SEAL-C2
+    'comparison_estimate_stale', 'comparison_ceiling_job', 'comparison_ceiling_day', 'comparison_ai_job_active', 'comparison_ai_job_state',
+    'comparison_ai_nothing_to_do', 'comparison_description_missing', 'comparison_summary_unavailable', 'comparison_report_state',
+    'comparison_launch_entry_active', 'comparison_launch_entry_state', 'comparison_launch_queue_state',
   ];
   const CONSTRAINTS = [
     'comparison_files_limit', 'comparison_sets_limit', 'comparison_batch_bytes_limit', 'comparison_batch_pages_limit',
@@ -657,10 +661,14 @@ describe('the sentences of the module\'s refusals (CMP-SEAL-C0, CMP-SEAL-C1)', (
     'comparison_zip_encrypted_member', 'comparison_zip_compression_method', 'comparison_zip_duplicate_member',
     'comparison_zip_member_kind', 'comparison_zip_nested_depth', 'comparison_zip_member_size', 'comparison_zip_total_size',
     'comparison_zip_compression_ratio', 'comparison_zip_empty',
+    // CMP-SEAL-C2
+    'comparison_consent_required', 'comparison_step_not_queueable', 'comparison_report_source_invalid',
   ];
   const DEPENDENCIES = [
     'comparison_uploads', 'comparison_version_orders', 'version_pages', 'comparison_matrix', 'comparison_series',
     'comparison_pair_tiles', 'comparison_overview', 'comparison_modules', 'comparison_versions_module',
+    // CMP-SEAL-C2
+    'comparison_ai_pairs', 'comparison_ai_sheets', 'comparison_specification', 'comparison_launch_queue', 'comparison_reports',
   ];
 
   it('has a Russian sentence for every reason the two seals registered', () => {
@@ -690,7 +698,7 @@ describe('the sentences of the module\'s refusals (CMP-SEAL-C0, CMP-SEAL-C1)', (
     ];
     for (const sentence of all) {
       // `deflate` (the one compression method the archive reader allows) and `ZIP` are names, not words to translate.
-      const stripped = sentence.replace(/deflate|ZIP|PDF|МиБ|ГиБ/g, '');
+      const stripped = sentence.replace(/deflate|ZIP|PDF|UTF|МиБ|ГиБ/g, '');
       expect(stripped, sentence).not.toMatch(LATIN);
     }
   });

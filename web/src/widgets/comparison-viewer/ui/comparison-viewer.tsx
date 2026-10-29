@@ -18,6 +18,8 @@ import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { HTMLAttributes, PointerEvent as ReactPointerEvent } from 'react';
 
 import type { ComparisonSheetPair } from '@/shared/api';
+import { stepIndex } from '@/entities/version-series';
+import type { Evidence } from '@/entities/version-series';
 
 import { canShowOverlay, viewerGeometry } from '../model/geometry';
 import type { RasterSize } from '../model/pyramid';
@@ -26,7 +28,9 @@ import { shownKinds, sheetTiles, wantedRequests } from '../model/requests';
 import { useTileImages } from '../model/use-tile-images';
 import { type ViewerContext, initialState, paneOf, reduce } from '../model/viewer-state';
 
+import { ChangesPanel } from './changes-panel';
 import { ComparisonViewerView, type ViewerNavigation } from './comparison-viewer-view';
+import type { EvidenceAction, EvidenceState } from './evidence-banner';
 
 export interface ComparisonViewerProps {
   readonly pair: ComparisonSheetPair;
@@ -36,11 +40,16 @@ export interface ComparisonViewerProps {
    */
   readonly rasterSize?: RasterSize;
   readonly navigation?: ViewerNavigation;
+  /**
+   * `CMP-VC-UI-02`: draw the side panel «Изменения в листе» beside the sheet. `mayAct` is an expert on a module that is on: only
+   * then is «Описать этот лист…» offered. Absent: the viewer is what `CMP-VIEWER-01` made.
+   */
+  readonly changes?: { readonly mayAct: boolean };
 }
 
 const EMPTY_RASTER: RasterSize = { widthPx: 1, heightPx: 1 };
 
-export function ComparisonViewer({ pair, rasterSize, navigation }: ComparisonViewerProps) {
+export function ComparisonViewer({ pair, rasterSize, navigation, changes }: ComparisonViewerProps) {
   const geometry = useMemo(() => viewerGeometry(pair, rasterSize), [pair, rasterSize]);
   const context: ViewerContext = useMemo(
     () => ({
@@ -58,6 +67,30 @@ export function ComparisonViewer({ pair, rasterSize, navigation }: ComparisonVie
     context,
     (initial: ViewerContext) => initialState(initial),
   );
+
+  const [evidence, setEvidence] = useState<EvidenceState | null>(null);
+  const focusEvidence = (items: readonly Evidence[], index: number): void => {
+    const item = items[index];
+    if (item !== undefined) dispatch({ type: 'focus-box', box: item.box });
+  };
+  const onShow = (items: readonly Evidence[], id: string): void => {
+    const index = Math.max(0, items.findIndex((item) => item.id === id));
+    setEvidence({ items, index, all: false });
+    focusEvidence(items, index);
+  };
+  const onEvidence = (action: EvidenceAction): void => {
+    if (evidence === null) return;
+    if (action.type === 'close') return setEvidence(null);
+    if (action.type === 'step') {
+      const index = stepIndex(evidence.index, action.direction, evidence.items.length);
+      setEvidence({ ...evidence, index });
+      return focusEvidence(evidence.items, index);
+    }
+    const all = !evidence.all;
+    setEvidence({ ...evidence, all });
+    if (all) dispatch({ type: 'fit' });
+    else focusEvidence(evidence.items, evidence.index);
+  };
 
   const stage = useRef<HTMLDivElement | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -159,6 +192,9 @@ export function ComparisonViewer({ pair, rasterSize, navigation }: ComparisonVie
       stageRef={stage}
       paneHandlers={paneHandlers}
       dragging={dragging}
+      evidence={evidence}
+      onEvidence={onEvidence}
+      {...(changes === undefined ? {} : { sidePanel: <ChangesPanel pair={pair} mayAct={changes.mayAct} onShow={onShow} /> })}
       {...(navigation === undefined ? {} : { navigation })}
     />
   );
