@@ -86,9 +86,14 @@ export function costLine(estimate: ComparisonAiEstimate): string {
 export const CEILINGS_LINE = 'Потолки: 10 долл. на одно задание и 50 долл. в день на установку; если расход выйдет больше чем в 1,2 раза за оценку, задание встанет на паузу.';
 export const NO_CEILINGS_LINE = 'Потолки по деньгам на это подключение не действуют.';
 
+/** A sentence ends with one full stop: «долл.» already has its own. */
+function closed(text: string): string {
+  return text.endsWith('.') ? text : `${text}.`;
+}
+
 export function ceilingsLine(estimate: ComparisonAiEstimate): string {
   if (isNotMetered(estimate)) return NO_CEILINGS_LINE;
-  const left = estimate.day_remaining_micros === undefined ? '' : ` Сегодня ещё можно потратить ${formatUsd(estimate.day_remaining_micros)}.`;
+  const left = estimate.day_remaining_micros === undefined ? '' : ` ${closed(`Сегодня ещё можно потратить ${formatUsd(estimate.day_remaining_micros)}`)}`;
   return `${CEILINGS_LINE}${left}`;
 }
 
@@ -151,7 +156,7 @@ export function estimateLines(estimate: ComparisonAiEstimate): readonly Estimate
       muted: true,
     },
     { key: 'model', text: `Модель: ${estimate.route.pinned_model} · ${BILLING_LABELS[estimate.route.billing]}.` },
-    { key: 'cost', text: `Оценка стоимости: ${costLine(estimate)}.` },
+    { key: 'cost', text: closed(`Оценка стоимости: ${costLine(estimate)}`) },
     { key: 'ceilings', text: ceilingsLine(estimate), muted: true },
   ];
 }

@@ -77,7 +77,8 @@ export function consentFor(command: Pick<StartAiCommand, 'shown'>): ComparisonAi
   return consentOf(command.shown);
 }
 
-async function send(command: StartAiCommand, idempotencyKey: string): Promise<ComparisonAiJob | ComparisonReport> {
+/** The request an AI start sends. Exported so a test can pin that it carries the digest of the estimate that was shown. */
+export async function sendAiStart(command: StartAiCommand, idempotencyKey: string): Promise<ComparisonAiJob | ComparisonReport> {
   const consent = consentFor(command);
   const scope = command.scope;
   switch (scope.kind) {
@@ -121,7 +122,7 @@ export function useAiStart() {
     // The digest is in the signature: a new estimate is a new intent with a new key; the same estimate retried keeps its key.
     signatureOf: (command) =>
       ['ai-start', estimateScopeKey(command.scope), command.shown.estimate_digest, command.restart === true, command.retryJobId ?? ''].join('|'),
-    send,
+    send: sendAiStart,
   });
 }
 

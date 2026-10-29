@@ -43,6 +43,14 @@ export interface ConsentFlow {
   readonly confirm: () => void;
 }
 
+/**
+ * What follows a refused start. A stale estimate (`409 comparison_estimate_stale`) voids the agreement and reads the estimate
+ * again — the reader is asked again, and nothing is resent for them; any other refusal is shown and the agreement stands.
+ */
+export function refusalAction(failure: ComparisonFailure): 'ask-again' | 'show' {
+  return failure.estimateStale ? 'ask-again' : 'show';
+}
+
 export function useConsentFlow(scope: EstimateScope | null, options: ConsentFlowOptions = {}): ConsentFlow {
   const read = useAiEstimate(scope);
   const start = useAiStart();
@@ -72,7 +80,7 @@ export function useConsentFlow(scope: EstimateScope | null, options: ConsentFlow
         },
         onError: (failure: unknown): void => {
           // The digest the reader agreed to is no longer the one the server computes: ask again, never resend on their behalf.
-          if (comparisonFailure(failure).estimateStale) {
+          if (refusalAction(comparisonFailure(failure)) === 'ask-again') {
             setAgreedDigest(null);
             void read.refetch();
           }

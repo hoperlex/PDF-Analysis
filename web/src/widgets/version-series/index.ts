@@ -40,6 +40,7 @@ export type { AiChangesBlockViewProps, SpecificationsBlockViewProps, SummaryRepo
 export {
   AiChangesBlock,
   AiChangesBlockView,
+  SpecificationChanges,
   SpecificationChangesView,
   SpecificationsBlock,
   SpecificationsBlockView,

@@ -343,7 +343,7 @@ export function SpecificationsBlockView({
     <section className={aiStyles.aiBlock} aria-label="Полные спецификации (СО)" data-specifications={state}>
       <div className={aiStyles.aiHead}>
         <h3 className={aiStyles.aiTitle}>Полные спецификации (СО)</h3>
-        <span className="am-badge am-badge--active" data-spec-state={state}>
+        <span className="am-badge am-badge--active" data-spec-state={state} {...(running?.phase === undefined ? {} : { 'data-spec-phase': running.phase })}>
           {SPEC_STATE_LABELS[state]}
           {running?.phase === undefined ? '' : ` · ${SPEC_PHASE_LABELS[running.phase]}`}
         </span>

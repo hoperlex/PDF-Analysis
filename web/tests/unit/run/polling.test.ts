@@ -258,6 +258,7 @@ describe('this slice adds no second polling loop', () => {
     join('entities', 'version-series', 'api', 'use-overview.ts'),
     join('entities', 'version-series', 'api', 'use-matrix.ts'),
     join('entities', 'version-series', 'api', 'use-series.ts'),
+    join('entities', 'version-series', 'api', 'use-ai.ts'),
     join('widgets', 'comparison-upload', 'api', 'use-upload.ts'),
   ];
   const isAllowedComparisonPoll = ({ path }: { path: string }) =>

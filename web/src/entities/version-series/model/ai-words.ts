@@ -163,8 +163,8 @@ export const AI_SIDE_WORDS: Readonly<Record<ComparisonAiSide, string>> = {
 };
 
 export const AI_CEILING_LABELS: Readonly<Record<ComparisonAiCeiling, string>> = {
-  job: 'потолок одного задания (10 USD)',
-  day: 'потолок дня для установки (50 USD)',
+  job: 'потолок одного задания (10 долл.)',
+  day: 'потолок дня для установки (50 долл.)',
 };
 
 /** Why the program left an engine pointer out of the description («Не включено в сводку»). */
