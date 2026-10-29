@@ -90,8 +90,8 @@ The review is documentation of the frozen C0 reader, not a new security mechanis
 No runtime behavior changes. The comparison module flag remains off by default; if a first-use caller later violates the review conditions, it must stay disabled until repaired.
 
 ## Handoff
-- changed files: pending
-- commands/results: pending
-- contracts: unchanged
-- known limits: pending
-- integration notes: pending
+- changed files: this task, `docs/program/compare/CMP-ZIP-SECURITY-REVIEW.md`, and the D-262 row of `docs/program/DEBT_REGISTER.md` only.
+- commands/results: read-only code and call-site review; focused `tests/unit/ingest/comparison_zip/` 183 passed in 5.19 s after C2 gate release; governance 16 passed; `git diff --check` clean.
+- contracts: unchanged; API `1.11.0`, migration head `0040_comparison_ai_reports`.
+- known limits: static review, no archive upload to a running service; the Unicode Path alias of exact `__MACOSX/` remains a first-use blocker, and the future caller must bound raw bytes, admission and disk use and validate each PDF.
+- integration notes: merge this documentation after C2 publication. Give `CMP-ZIP-FIX-01` the separate source/test slot, then require `CMP-STAGE-PAIR-01` to satisfy the remaining first-use conditions. No remote publication is authorized here; forbidden source, contract, migration, root dependencies, composition root, styles and infrastructure are untouched.
