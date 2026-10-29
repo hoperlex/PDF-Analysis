@@ -84,7 +84,9 @@ def test_an_analytic_report_validates_with_its_parts_and_a_paused_one_shows_the_
 
 
 def test_the_module_flag_is_the_first_statement_of_every_adapter_method(db: Any, world: Any) -> None:
-    off = adapter_of(db, modules="none")
+    # the adapter is told the module is off and holds a service that would serve: only the adapter's own flag can refuse
+    off = ComparisonReportAdapter(db.sessions, blob_store=db.store, comparison_modules="none", provider_mode="recorded", service=db.service(modules="versions"))
+    off._actor = lambda user_uid: (_ for _ in ()).throw(AssertionError("the actor was read before the flag"))  # type: ignore[method-assign]
     calls = {
         "read_series_summary": dict(series_id=world["series"]),
         "create_report": dict(series_id=world["series"], kind=models.ComparisonReportKind.CLIENT, reuse=False, user_uid="x", idempotency_key="k"),
