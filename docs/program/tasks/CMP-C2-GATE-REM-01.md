@@ -92,8 +92,8 @@ This task owns only the two named tests. The integrator merges its repair into t
 Revert these test-only corrections if they hide a real failure; no runtime behaviour or feature flag changes. C2 remains off by default with `AUDITMANAGER_COMPARISON_MODULES=none`.
 
 ## Handoff
-- changed files: pending
-- commands/results: pending
-- contracts: unchanged
-- known limits: pending
-- integration notes: pending
+- changed files: `tests/integration/executors/test_executor_surface.py`, `tests/integration/runs/test_v3_saved_text_layer_probe.py`, this task and `docs/program/CMP-C2-GATE-REM-01.md` only.
+- commands/results: red focused executor 1 failed; red focused XLSX 1 setup error; focused HTTP repeat after SIGINT 1 passed; green executor 1 passed, XLSX module 12 passed, both edited modules together 28 passed; governance 16 passed before edit. Final governance and diff are checked with this Handoff.
+- contracts: unchanged API `1.11.0` (176/198/517), migration head `0040_comparison_ai_reports`.
+- known limits: the diagnostic gate was interrupted at about 15% of the canonical remainder and cannot certify its unexecuted tests; the next exact clean candidate needs a new complete gate. The HTTP `CancelledError` did not recur without SIGINT.
+- integration notes: bring these two test-only corrections into `CMP-WAVE-C2-INT`, update its report/Handoff, commit cleanly and rerun all of `make gate`; no remote action belongs to this task. Forbidden contracts, migrations, source, root dependency/lockfiles, composition root, styles and infrastructure were not touched (`git diff --name-only 531f9cb0..HEAD` plus the current diff names only this task's paths).
