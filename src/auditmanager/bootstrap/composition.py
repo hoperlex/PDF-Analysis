@@ -592,7 +592,9 @@ def build_application(
             sessions, blob_store=store, comparison_modules=comparison_modules,
             provider_mode=_provenance_mode(resolved.provider_mode),
         ),
-        comparison_stage_pairs=ComparisonStagePairAdapter(comparison_modules=comparison_modules),
+        comparison_stage_pairs=ComparisonStagePairAdapter(
+            sessions, comparison_modules=comparison_modules,
+        ),
         comparison_stage_uploads=ComparisonStageUploadAdapter(comparison_modules=comparison_modules),
         comparison_stage_links=ComparisonStageLinkAdapter(comparison_modules=comparison_modules),
         comparison_stage_text=ComparisonStageTextAdapter(comparison_modules=comparison_modules),

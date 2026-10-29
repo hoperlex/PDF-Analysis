@@ -6617,53 +6617,144 @@ class _StagesModuleGate:
 
 
 class ComparisonStagePairAdapter(_StagesModuleGate):
-    """Sealed pair and assembly port; `CMP-STAGE-PAIR-01` replaces the bodies."""
+    """The C3 pair catalog and expert acts, behind the stages module flag."""
 
     _DEPENDENCY = "comparison_stage_pairs"
+
+    def __init__(
+        self, sessions: sessionmaker[Session], *, comparison_modules: str = "none",
+    ) -> None:
+        super().__init__(comparison_modules=comparison_modules)
+        from auditmanager.comparison.stage.assemblies import StageAssemblyService
+        from auditmanager.comparison.stage.pairs import (
+            StagePairCommandService, StagePairReadRepository,
+        )
+
+        self._sessions = sessions
+        self._reads = StagePairReadRepository()
+        self._pairs = StagePairCommandService(sessions)
+        self._assemblies = StageAssemblyService(sessions)
+
+    @staticmethod
+    def _pair_view(row: Any) -> models.StagePair:
+        body: dict[str, Any] = {
+            "pair_id": row.pair_id, "project_uid": row.project_uid,
+            "left_document_uid": row.left_document_uid,
+            "state": row.state, "completeness": row.completeness,
+            "created_at": row.created_at,
+        }
+        if row.right_document_uid is not None:
+            body["right_document_uid"] = row.right_document_uid
+        if row.assembly_id is not None:
+            body["assembly_id"] = row.assembly_id
+        if row.confirmed_at is not None:
+            body["confirmed_at"] = row.confirmed_at
+        return models.StagePair(**body)
+
+    @staticmethod
+    def _assembly_view(row: Any) -> models.StageAssembly:
+        return models.StageAssembly(
+            assembly_id=row.assembly_id, project_uid=row.project_uid,
+            label=row.label, created_at=row.created_at,
+            members=[
+                models.StageAssemblyMember(document_uid=m.document_uid, member_no=m.member_no)
+                for m in row.members
+            ],
+        )
 
     def list_pairs(
         self, *, project_uid: str, cursor: str | None, limit: int
     ) -> models.StagePairPage:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        from auditmanager.shared.identity import IdentityError, StagePairId
+
+        after: str | None = None
+        if cursor is not None:
+            parts = decode_cursor(cursor)
+            if len(parts) != 1:
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+            try:
+                after = str(StagePairId.parse(parts[0]))
+            except IdentityError:
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format") from None
+        with self._sessions() as session:
+            rows, next_pair = self._reads.page(
+                session, project_uid=project_uid, after_pair_id=after, limit=limit,
+            )
+        return models.StagePairPage(
+            items=[self._pair_view(row) for row in rows],
+            page=models.PageInfo(
+                next_cursor=None if next_pair is None else encode_cursor((next_pair,))
+            ),
+        )
 
     def get_pair(self, *, pair_id: str) -> models.StagePair:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        with self._sessions() as session:
+            return self._pair_view(self._reads.get(session, pair_id))
 
     def list_suggestions(
         self, *, project_uid: str, cursor: str | None, limit: int
     ) -> models.StagePairSuggestionPage:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        with self._sessions() as session:
+            suggestions = self._reads.suggestions(session, project_uid=project_uid)
+        page = paginate(
+            suggestions, limit=limit, cursor=cursor,
+            sort_key=lambda row: (row.left_document_uid, row.right_document_uid),
+        )
+        return models.StagePairSuggestionPage(
+            items=[models.StagePairSuggestion(
+                left_document_uid=row.left_document_uid,
+                right_document_uid=row.right_document_uid,
+                reason=row.reason, score=row.score,
+            ) for row in page.items],
+            page=models.PageInfo(next_cursor=page.next_cursor),
+        )
 
     def confirm_pair(
         self, *, project_uid: str, body: models.ConfirmStagePairRequest,
         user_uid: str, idempotency_key: str,
     ) -> models.StagePair:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        return self._pair_view(self._pairs.confirm_pair(
+            project_uid=project_uid, left_document_uid=body.left_document_uid,
+            right_document_uid=body.right_document_uid, assembly_id=body.assembly_id,
+            user_uid=user_uid, idempotency_key=idempotency_key,
+        ))
 
     def create_assembly(
         self, *, project_uid: str, body: models.CreateStageAssemblyRequest,
         user_uid: str, idempotency_key: str,
     ) -> models.StageAssembly:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        return self._assembly_view(self._assemblies.create(
+            project_uid=project_uid, label=body.label,
+            document_uids=tuple(body.document_uids), user_uid=user_uid,
+            idempotency_key=idempotency_key,
+        ))
 
     def revise_assembly(
         self, *, assembly_id: str, body: models.ReviseStageAssemblyRequest,
         user_uid: str, idempotency_key: str,
     ) -> models.StageAssembly:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        return self._assembly_view(self._assemblies.revise(
+            assembly_id=assembly_id, base_member_no=body.base_member_no,
+            add_document_uids=tuple(body.add_document_uids),
+            remove_document_uids=tuple(body.remove_document_uids),
+            user_uid=user_uid, idempotency_key=idempotency_key,
+        ))
 
     def set_completeness(
         self, *, pair_id: str, body: models.SetStagePairCompletenessRequest,
         user_uid: str, idempotency_key: str,
     ) -> models.StagePair:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        return self._pair_view(self._pairs.set_completeness(
+            pair_id=pair_id, completeness=body.completeness,
+            user_uid=user_uid, idempotency_key=idempotency_key,
+        ))
 
 
 class ComparisonStageUploadAdapter(_StagesModuleGate):

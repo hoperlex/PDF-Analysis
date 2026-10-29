@@ -44,7 +44,7 @@ BODIES: dict[str, dict[str, Any]] = {
     "confirmStageUploadCandidate": {"stage": "P", "section_code": "AR", "designation": "AR-1"},
     "confirmStagePair": {"left_document_uid": DOC, "right_document_uid": DOC2},
     "createStageAssembly": {"label": "R", "document_uids": [DOC, DOC2]},
-    "reviseStageAssembly": {"base_member_no": 0, "add_document_uids": [], "remove_document_uids": []},
+    "reviseStageAssembly": {"base_member_no": 0, "add_document_uids": [DOC], "remove_document_uids": []},
     "setStagePairCompleteness": {"completeness": "full"},
     "applyStageSheetMap": {"items": [{"relation": "only_left", "left_profile_id": CPR}]},
     "startStageChainRun": {"link_revision_id": SLK},
@@ -84,6 +84,10 @@ DEPENDENCIES = {
     "getStageChainRun": "comparison_stage_runs",
     "cancelStageChainRun": "comparison_stage_runs",
 }
+SERVED_PAIR_OPERATIONS = frozenset({
+    "listStagePairs", "getStagePair", "listStagePairSuggestions", "confirmStagePair",
+    "createStageAssembly", "reviseStageAssembly", "setStagePairCompleteness",
+})
 
 
 def _client(modules: str) -> TestClient:
@@ -127,6 +131,10 @@ def test_every_stage_route_answers_a_typed_module_or_lane_refusal(
         kwargs["json"] = BODIES[name]
     response = app.request(method, path, headers=headers, **kwargs)
     body = response.json()
+    if modules == "versions,stages" and name in SERVED_PAIR_OPERATIONS:
+        assert response.status_code == 404, (name, response.status_code, body)
+        assert body["error_code"] == "not_found"
+        return
     assert response.status_code == 503, (name, modules, response.status_code, body)
     assert body["error_code"] == "dependency_unavailable"
     assert body["contract_version"] == "1.12.0"
