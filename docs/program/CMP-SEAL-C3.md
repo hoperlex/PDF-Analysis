@@ -14,6 +14,8 @@ Before writing a stage router, the integration inspection found its dependency p
 
 A literal pin inventory found current `1.11.0` error envelopes in both proxy configurations and existing web tests, plus the analysis result constant and `tests/support/expected_facts.json`. The task now grants only their version/surface/head pins. Historical statements about prior contracts are not targets of a mechanical replacement.
 
+The existing `comparison_pdf` upload service is PDF-only: `complete_file` publishes with `application/pdf` and validates one PDF before placing it into a set. C3 ZIP-set admission therefore needs its own stage upload command and durable candidate state, with 16 MiB chunk transport and the D-262 raw-byte, admission, disk and PDF checks at the first caller. The C3 seal must expose that boundary without routing ZIP bytes through the C0 PDF completion path.
+
 ## Seal result
 
 Pending. The real `1.12.0` operation list, `0041` table inventory, migrations, checks, rollback evidence, risks and forbidden-hotspot proof will be recorded here before integration.
