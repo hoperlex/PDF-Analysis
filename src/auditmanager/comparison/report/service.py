@@ -87,7 +87,7 @@ def _require_expert(roles: frozenset[str]) -> None:
 
 
 class ComparisonReportService:
-    """The thirteen operations over the report tables, the shared AI-job core and the blob store. Stateless between calls apart from a small cache
+    """The report operations over the report tables, the shared AI-job core and the blob store. Stateless between calls apart from a small cache
     of parsed sources (keyed by the sha-256 of the MD, so a stale entry is impossible)."""
 
     def __init__(
