@@ -33,6 +33,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -174,32 +175,27 @@ def _envelope(report: dict, text: str, model: str) -> dict:
 
 
 class _Stream:
-    """The CLI's newline-delimited JSON, read incrementally from the file it is writing.
+    """The CLI's newline-delimited JSON, fed chunk by chunk from the pipe it writes to.
 
     Every complete non-empty line is counted; a line that is not a JSON object is skipped (never a
-    report, never a token count).  The report is the last ``result`` line.
+    report, never a token count).  The report is the last ``result`` line.  Only the reader thread
+    feeds it; the main loop reads ``lines`` and ``output_tokens`` (plain integers) for the heartbeat.
     """
 
-    def __init__(self, source) -> None:
-        self._source = source
+    def __init__(self) -> None:
         self._partial = bytearray()
         self.lines = 0
         self.output_tokens = 0
         self.result: bytes | None = None
 
-    def advance(self) -> None:
-        while chunk := self._source.read(1 << 20):
-            self._feed(chunk)
-
     def finish(self) -> None:
-        """Read what is left once the process has exited; a last line may lack its newline."""
-        self.advance()
+        """Once the pipe is closed: a last line may lack its newline."""
         if self._partial:
             line = bytes(self._partial)
             self._partial.clear()
             self._line(line)
 
-    def _feed(self, chunk: bytes) -> None:
+    def feed(self, chunk: bytes) -> None:
         start = 0
         while True:
             cut = chunk.find(b"\n", start)
@@ -247,23 +243,57 @@ def _heartbeat(elapsed: float, events: int, output_tokens: int) -> None:
     sys.stderr.flush()
 
 
+def _drain(process: subprocess.Popen, stream: _Stream, clock: dict, failure: list) -> None:
+    """Reader thread: drain the CLI's stdout (a pipe) into ``stream``; every byte is a sign of life."""
+    descriptor = process.stdout.fileno()
+    try:
+        while True:
+            chunk = os.read(descriptor, 1 << 16)
+            if not chunk:
+                return
+            clock["last"] = time.monotonic()
+            clock["bytes"] += len(chunk)
+            if clock["bytes"] > MAX_STREAM_BYTES:
+                raise TaskError("claude_output_too_large")
+            stream.feed(chunk)
+    except Exception as error:  # noqa: BLE001 - handed to the main loop, which kills the CLI
+        failure.append(error)
+
+
+def _feed_prompt(process: subprocess.Popen, prompt: bytes) -> None:
+    """Writer thread: the whole prompt on the CLI's stdin, then close it.  A CLI that exits early
+    breaks the pipe; its exit code decides, not this."""
+    try:
+        process.stdin.write(prompt)
+    except OSError:
+        pass
+    finally:
+        try:
+            process.stdin.close()
+        except OSError:
+            pass
+
+
 def _run(task: dict, *, claude: str | None, timeout: float, model: str,
          stall: float | None = None, heartbeat: bool = False) -> dict:
     """Run the CLI on one task and return its accepted ``result`` report.
 
     ``timeout`` is the wall-clock ceiling of the call.  With ``stall`` the call also ends after that
-    many seconds without a new byte in the stream; with ``heartbeat`` a sign of life goes to stderr
-    at the start and every ``HEARTBEAT_SECONDS`` while the CLI runs.
+    many seconds without a new byte from the CLI; with ``heartbeat`` a sign of life goes to stderr at
+    the start and every ``HEARTBEAT_SECONDS`` while the CLI runs.
+
+    The CLI's stdout is a **pipe** read by a thread.  Measured 2026-10-29 on Claude Code 2.1.310: with
+    stdout redirected to a regular file the CLI writes nothing until it exits (0 bytes for 400 s), with a
+    pipe it streams every event as it happens, so a stall check on a file saw a silent call for the
+    whole time it worked and cut every call at the stall window.
     """
     executable = claude or shutil.which("claude")
     if executable is None:
         raise TaskError("claude_cli_missing")
     effort = _effort(task)
     prompt = json.dumps({"system": task["system"], "user_text": task["user_text"]},
-                        ensure_ascii=False)
+                        ensure_ascii=False).encode("utf-8")
     with tempfile.TemporaryDirectory(prefix="pdfa-claude-") as area:
-        root = Path(area)
-        stream_path = root / "stream.ndjson"
         command = [
             executable, "-p", "--output-format", "stream-json", "--verbose",
             "--include-partial-messages", "--model", model,
@@ -276,50 +306,51 @@ def _run(task: dict, *, claude: str | None, timeout: float, model: str,
             command += ["--json-schema", json.dumps(task["output_schema"], ensure_ascii=False)]
         if effort is not None:
             command += ["--effort", effort]
-        with stream_path.open("wb") as output, stream_path.open("rb") as source:
-            stream = _Stream(source)
-            process = subprocess.Popen(
-                command, stdin=subprocess.PIPE, stdout=output, stderr=subprocess.DEVNULL,
-                cwd=root, env=_environment(), start_new_session=True,
-            )
-            started = last_growth = next_beat = time.monotonic()
-            seen = 0
-            first = True
-            try:
-                while True:
-                    now = time.monotonic()
-                    if heartbeat and now >= next_beat:
-                        _heartbeat(now - started, stream.lines, stream.output_tokens)
-                        next_beat = now + HEARTBEAT_SECONDS
-                    try:
-                        process.communicate(input=prompt.encode("utf-8") if first else None,
-                                            timeout=POLL_SECONDS)
-                        break
-                    except subprocess.TimeoutExpired:
-                        first = False
-                    size = stream_path.stat().st_size
-                    if size > MAX_STREAM_BYTES:
-                        raise TaskError("claude_output_too_large")
-                    stream.advance()
-                    now = time.monotonic()
-                    if size > seen:
-                        seen, last_growth = size, now
-                    if stall is not None and now - last_growth >= stall:
-                        raise TaskError("claude_stalled")
-                    if now - started >= timeout:
-                        raise TaskError("claude_timeout")
-            finally:
-                if process.poll() is None:
-                    try:
-                        os.killpg(process.pid, signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass
-                    process.wait()
-            if process.returncode != 0:
-                raise TaskError("claude_failed")
-            if stream_path.stat().st_size > MAX_STREAM_BYTES:
-                raise TaskError("claude_output_too_large")
-            stream.finish()
+        process = subprocess.Popen(
+            command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            cwd=area, env=_environment(), start_new_session=True,
+        )
+        stream = _Stream()
+        started = time.monotonic()
+        clock = {"last": started, "bytes": 0}
+        failure: list = []
+        writer = threading.Thread(target=_feed_prompt, args=(process, prompt), daemon=True)
+        reader = threading.Thread(target=_drain, args=(process, stream, clock, failure), daemon=True)
+        try:
+            writer.start()
+            reader.start()
+            next_beat = started
+            while True:
+                now = time.monotonic()
+                if heartbeat and now >= next_beat:
+                    _heartbeat(now - started, stream.lines, stream.output_tokens)
+                    next_beat = now + HEARTBEAT_SECONDS
+                if failure:
+                    raise failure[0]
+                if process.poll() is not None and not reader.is_alive():
+                    break
+                if stall is not None and now - clock["last"] >= stall:
+                    raise TaskError("claude_stalled")
+                if now - started >= timeout:
+                    raise TaskError("claude_timeout")
+                if reader.is_alive():
+                    reader.join(POLL_SECONDS)
+                else:
+                    time.sleep(POLL_SECONDS)
+        finally:
+            if process.poll() is None:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            process.wait()
+            reader.join(5)
+            writer.join(5)
+        if failure:
+            raise failure[0]
+        if process.returncode != 0:
+            raise TaskError("claude_failed")
+        stream.finish()
         if stream.result is None:
             raise TaskError("claude_no_result")
         return _report(stream.result, model)
