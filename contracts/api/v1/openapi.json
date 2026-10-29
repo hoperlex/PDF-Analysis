@@ -16632,9 +16632,7 @@
       "ErrorEnvelope": {
         "properties": {
           "contract_version": {
-            "type": "string",
-            "const": "1.12.0",
-            "title": "Contract Version"
+            "const": "1.12.0"
           },
           "error_code": {
             "$ref": "#/components/schemas/ErrorCode"

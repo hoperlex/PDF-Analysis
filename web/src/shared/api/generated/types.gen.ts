@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.12.0 (OpenAPI 3.1.0)
- *   sha256 a1f658a62e789f7b065d35b23902e3ab95bac2b7cb46c724d68945fba2f8980c
+ *   sha256 7161d1682a67fbf96db2a5355dd2c0647a8362713f23a77778d1133398ff0aa9
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.12.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'a1f658a62e789f7b065d35b23902e3ab95bac2b7cb46c724d68945fba2f8980c';
+export const CONTRACT_DIGEST = '7161d1682a67fbf96db2a5355dd2c0647a8362713f23a77778d1133398ff0aa9';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [

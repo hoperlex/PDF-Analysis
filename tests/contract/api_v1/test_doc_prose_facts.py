@@ -544,6 +544,9 @@ KNOWN_HISTORICAL_TRIPLES: frozenset[tuple[str, str]] = frozenset(
         # two sentences before the note gives the current one ("so it is 15 paths / 18
         # operations / 51 schemas", which IS checked and currently agrees).
         ("docs/program/ALPHA_ROADMAP.md", "13 paths / 16 operations / 48 schemas"),
+        # CURRENT_STATE.md's C2 paragraph records the prior 1.11.0 seal. The C2 report
+        # (docs/program/CMP-SEAL-C2.md) measured this triple before C3's additive reseal.
+        ("docs/program/CURRENT_STATE.md", "176 paths / 198 operations / 517 schemas"),
     }
 )
 

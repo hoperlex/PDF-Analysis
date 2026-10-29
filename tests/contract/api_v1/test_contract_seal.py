@@ -32,7 +32,7 @@ from tests.support.expected_facts import FACTS
 ROOT = Path(__file__).resolve().parents[3]
 SEALED = "1.12.0"
 DRAFT = "1.0.0-draft.1"
-PREVIOUS = "1.10.0"
+PREVIOUS = "1.11.0"
 FAMILIES = ("analysis", "domain", "events")
 DOMAIN = ROOT / "contracts/domain/v1"
 CATALOGS = ("error-codes.json", "identifiers.json", "state-machines.json")
@@ -132,7 +132,7 @@ def test_a_domain_catalog_is_frozen_at_the_sealed_round(name: str) -> None:
     catalog = _json(DOMAIN / name)
     assert (catalog["contract_version"], catalog["supersedes"]) == (SEALED, PREVIOUS)
     assert (catalog["status"], catalog["frozen"]) == ("frozen", True)
-    assert catalog["candidate_revision"] == 29
+    assert catalog["candidate_revision"] == 30
 
 
 @pytest.mark.parametrize("name", SCHEMAS)
@@ -142,7 +142,7 @@ def test_a_domain_schema_refuses_a_catalog_that_is_not_frozen(name: str) -> None
     assert properties["supersedes"] == {"const": PREVIOUS}
     assert properties["status"] == {"const": "frozen"}
     assert properties["frozen"] == {"const": True}
-    assert properties["candidate_revision"]["const"] == 29
+    assert properties["candidate_revision"]["const"] == 30
 
 
 def test_the_envelope_schema_pins_the_sealed_version() -> None:

@@ -1,6 +1,6 @@
 # CMP-SEAL-C3 — deterministic stage-comparison seal
 
-Task: [`CMP-SEAL-C3`](tasks/CMP-SEAL-C3.md). The seal is in progress on a separate worktree. No C3 contract or migration from the disposable probe has been merged into this branch.
+Task: [`CMP-SEAL-C3`](tasks/CMP-SEAL-C3.md). The candidate is on `integration/cmp-seal-c3`, separate from the C2 integration worktree. The disposable probe was discarded before the real implementation.
 
 ## Disposable pin probe, 2026-10-29
 
@@ -20,7 +20,7 @@ The task scope now names `comparison_stage_uploads.py` and its fifth stage port 
 
 ## Boundary decisions for the real seal
 
-These are design inputs, not a claim that the `1.12.0` contract has been frozen:
+These decisions are implemented by the candidate contract and migration:
 
 | Family | Durable/contract boundary |
 | --- | --- |
@@ -30,8 +30,26 @@ These are design inputs, not a claim that the `1.12.0` contract has been frozen:
 | Deterministic text | Fragments, exclusions, differences and cross-sheet hints are separate immutable evidence. A later AI layer can reference them but cannot remove or rewrite a raw difference. |
 | Chain run | `crn_` pins exact version identities, the link revision and input digests for steps 01–07. New document versions mark a run stale by digest comparison. |
 
-The four established prefixes and the raw-evidence rule come from ADR-0025 decisions 2, 3 and 21; the upload boundary follows the C0 PDF-only implementation and the D-262 review. Exact operation and table inventories remain part of the pending seal result.
+The four established prefixes and the raw-evidence rule come from ADR-0025 decisions 2, 3 and 21; the upload boundary follows the C0 PDF-only implementation and the D-262 review.
 
-## Seal result
+## Candidate inventory
 
-Pending. The real `1.12.0` operation list, `0041` table inventory, migrations, checks, rollback evidence, risks and forbidden-hotspot proof will be recorded here before integration.
+The authored and served OpenAPI documents agree at `1.12.0`: **204 paths, 230 operations, 570 component schemas**. C3 adds **28 paths, 32 operations, 53 schemas** to C2's `1.11.0` surface. Seventeen C3 operations are reads; fifteen are keyed expert writes. Every new operation declares bearer security, the shared error envelope and a typed `503 dependency_unavailable` response. The five adapters refuse with `comparison_modules` while stages are disabled and with their own lane name when enabled but unwired. The module default remains `none`.
+
+| Lane | New operation IDs | `0041` tables |
+| --- | --- | --- |
+| Upload (10) | `createStageUpload`, `listStageUploads`, `getStageUpload`, `uploadStageUploadPart`, `completeStageUploadFile`, `confirmStageUploadCandidate`, `rejectStageUploadCandidate`, `pauseStageUpload`, `resumeStageUpload`, `cancelStageUpload` | `stage_upload`, `stage_upload_file`, `stage_upload_part`, `stage_upload_candidate` |
+| Pair and assembly (7) | `listStagePairs`, `getStagePair`, `listStagePairSuggestions`, `confirmStagePair`, `createStageAssembly`, `reviseStageAssembly`, `setStagePairCompleteness` | `stage_pair`, `stage_assembly`, `stage_assembly_member` |
+| Sheet map (6) | `listStageSheetPassports`, `listStageSheetSuggestions`, `getStageSheetMap`, `applyStageSheetMap`, `listStageSheetMapHistory`, `getStageSheetMapRevision` | `stage_link_revision`, `stage_link_item` |
+| Text evidence (5) | `listStageTextFragments`, `listStageTextExclusions`, `listStageRawDifferences`, `listStageTextHints`, `recomputeStageTextEvidence` | `stage_text_fragment`, `stage_text_exclusion`, `stage_text_difference`, `stage_text_hint` |
+| Seven-step chain (4) | `startStageChainRun`, `listStageChainRuns`, `getStageChainRun`, `cancelStageChainRun` | `stage_chain_run`, `stage_chain_step` |
+
+Fourteen new opaque identifier prefixes are registered in `contracts/domain/v1/identifiers.json` and the shared identity types. All fifteen tables have a foreign-key path to `project`; none depends on a job or attempt row. The migration's database triggers enforce project scope on pairs, candidates, assembly members, page profiles, text evidence and pinned chain versions. Sheet-map revisions reject a stale base under a pair-level transaction lock. Assemblies, link revisions, link items and raw text evidence are immutable after insertion; mutable aggregate rows freeze their identity columns. A populated `0041` database refuses downgrade. Empty-table downgrade and re-upgrade are exercised against PostgreSQL.
+
+The recovery inventories name all fifteen tables, their 28 triggers, the new upload Blob references, the product purge classification and nonterminal erase guards. A real PostgreSQL test fills upload, candidate, assembly, pair, map revision, chain run and step rows, derives the project scope from the catalog, deletes that scope through the project-erase implementation, and proves another project and document survive.
+
+## Candidate checks and limits
+
+Observed so far: focused C3 contract tests **241 passed**; focused schema/recovery inventories **89 passed** plus 33 declaration checks; migration/invariant tests **6 passed**, including populated downgrade refusal; populated C3 project erase **passed**; stale sheet-map revision and immutable update/delete **passed**; generated-client `api:verify` reports **230 operations**; web lint and typecheck pass; `git diff --check` passes. The complete contract suite and web Vitest run are still in progress; their results belong below before this seal is handed off. The integration task owns the later exact-candidate full `make gate`.
+
+The C3 ports remain stubs and do not admit a ZIP. `CMP-STAGE-PAIR-01` must enforce the D-262 first-use controls: raw compressed byte bound, admission and disk bound, and per-PDF validation before storage. The ZIP reader's agent code review and the decision to reject `__MACOSX/` are recorded separately in `docs/program/compare/CMP-ZIP-SECURITY-REVIEW.md`; that fix is on `agent/cmp-zip-fix-01`, awaiting the C2 publication boundary. The C3 branch has no remote publication authority. No `origin/main` action is implied by this seal.

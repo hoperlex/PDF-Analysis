@@ -46,6 +46,21 @@ def test_all_stage_routes_have_closed_roles_and_keyed_writes() -> None:
             assert status in operation["responses"]
 
 
+def test_stage_upload_part_contract_caps_the_binary_body_at_sixteen_mib() -> None:
+    document = create_documentation_app().openapi()
+    operation = next(
+        item for path in document["paths"].values()
+        for item in path.values()
+        if isinstance(item, dict) and item.get("operationId") == "uploadStageUploadPart"
+    )
+    media = operation["requestBody"]["content"]
+    assert set(media) == {"application/octet-stream"}
+    assert media["application/octet-stream"]["schema"] == {
+        "type": "string", "format": "binary", "maxLength": 16 * 1024 * 1024,
+        "title": "Content",
+    }
+
+
 @pytest.mark.parametrize("adapter,dependency", ADAPTERS)
 def test_every_sealed_port_method_refuses_before_work(adapter: type, dependency: str) -> None:
     methods = [name for name, value in vars(adapter).items()

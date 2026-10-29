@@ -199,6 +199,50 @@ def test_chain_run_pins_real_versions_of_both_sides_of_its_pair(at_this: tuple[E
                            {**base, "versions": json.dumps([versions[left], versions[right]])})
 
 
+def test_sheet_map_revision_refuses_a_stale_base_and_cannot_be_rewritten(
+    at_this: tuple[Engine, str],
+) -> None:
+    engine, _ = at_this
+    with engine.begin() as connection:
+        project, _other_project, left, _outside = _world(connection)
+        right = _id("doc")
+        connection.execute(text(
+            "INSERT INTO document (document_uid, project_uid, display_title) "
+            "VALUES (:d, :p, 'R')"), {"d": right, "p": project})
+        pair = _id("stp")
+        connection.execute(text(
+            "INSERT INTO stage_pair (stage_pair_id, project_uid, left_document_uid, "
+            "right_document_uid, state, confirmed_by_user_uid, confirmed_at, command_id) "
+            "VALUES (:pair, :p, :left, :right, 'confirmed', :actor, now(), :command)"),
+            {"pair": pair, "p": project, "left": left, "right": right,
+             "actor": ACTOR, "command": _command(connection, "confirm_stage_pair")})
+        first = _id("slk")
+        connection.execute(text(
+            "INSERT INTO stage_link_revision (stage_link_revision_id, stage_pair_id, "
+            "revision_no, source, input_sha256, actor_user_uid, command_id) "
+            "VALUES (:revision, :pair, 1, 'expert', :sha, :actor, :command)"),
+            {"revision": first, "pair": pair, "sha": SHA, "actor": ACTOR,
+             "command": _command(connection, "apply_stage_sheet_map")})
+        second, command = _id("slk"), _command(connection, "apply_stage_sheet_map")
+    append = (
+        "INSERT INTO stage_link_revision (stage_link_revision_id, stage_pair_id, "
+        "revision_no, base_revision_id, source, input_sha256, actor_user_uid, command_id) "
+        "VALUES (:revision, :pair, 2, :base, 'expert', :sha, :actor, :command)"
+    )
+    values = {"revision": second, "pair": pair, "sha": SHA, "actor": ACTOR,
+              "command": command}
+    _refused(engine, append, {**values, "base": None})
+    with engine.begin() as connection:
+        connection.execute(text(append), {**values, "base": first})
+    _refused(engine,
+             "UPDATE stage_link_revision SET input_sha256 = :sha "
+             "WHERE stage_link_revision_id = :revision",
+             {"sha": "b" * 64, "revision": first}, "AM003")
+    _refused(engine,
+             "DELETE FROM stage_link_revision WHERE stage_link_revision_id = :revision",
+             {"revision": first}, "AM003")
+
+
 def test_project_erase_deletes_a_nonempty_stage_graph_and_keeps_the_other_project(
     at_this: tuple[Engine, str],
 ) -> None:
