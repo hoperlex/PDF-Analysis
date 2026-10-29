@@ -59,8 +59,9 @@ The API contract is `1.12.0` with C3 stage-pair, assembly, sheet-link, text-diff
 
 ## Allowed paths
 - `contracts/api/v1/**`, `contracts/domain/v1/**`
+- `contracts/analysis/**`, `contracts/events/**` (shared `contract_version` pins only; added after the disposable probe and literal `1.11.0` inventory)
 - `db/migrations/versions/20261029_0041_comparison_stage_core.py`
-- `src/auditmanager/api/routers/comparison_stage_*.py` (new), `src/auditmanager/api/routers/__init__.py`, `src/auditmanager/api/app.py`, `src/auditmanager/api/README.md`, `src/auditmanager/api/schemas/models.py`, `src/auditmanager/api/security.py`
+- `src/auditmanager/api/routers/comparison_stage_pairs.py` (new), `src/auditmanager/api/routers/comparison_stage_links.py` (new), `src/auditmanager/api/routers/comparison_stage_text.py` (new), `src/auditmanager/api/routers/comparison_stage_runs.py` (new), `src/auditmanager/api/routers/__init__.py`, `src/auditmanager/api/app.py`, `src/auditmanager/api/README.md`, `src/auditmanager/api/schemas/models.py`, `src/auditmanager/api/security.py`
 - `src/auditmanager/bootstrap/adapters.py`, `src/auditmanager/bootstrap/composition.py`
 - `src/auditmanager/shared/identity/**`, `src/auditmanager/comparison/public.py`
 - `scripts/recovery/grant_classification.py`, `scripts/recovery/product_purge.py`, `scripts/recovery/project_erase.py`, `scripts/recovery/schema_coverage.py`, `infra/deploy/apply-grants.sh`
@@ -68,10 +69,11 @@ The API contract is `1.12.0` with C3 stage-pair, assembly, sheet-link, text-diff
 - `tests/contract/api_v1/**`, `tests/contract/domain_p02/**`, `tests/integration/api/**`, `tests/integration/composition/**`, `tests/integration/db/**`, `tests/integration/recovery/**`, `tests/integration/p02_journey/journey.py`, `tests/e2e/test_pc01_journey_conformance.py`
 - `web/tests/contract/**`, `web/tests/guards/rendered-language.guard.test.ts`
 - `docs/program/tasks/CMP-SEAL-C3.md`, `docs/program/CMP-SEAL-C3.md`, `docs/program/P02_SEAMS.md`
+- `docs/program/CURRENT_STATE.md`, `docs/program/ALPHA_ROADMAP.md`, `docs/program/CONTRACT_PIN_REGISTRY.md`, `docs/manual-tests/PC-01_prototype.md`, `docs/manual-tests/README.md` (the probe exposed live API/head claims)
 - ignored local setup: `.venv`, `web/node_modules`, `.local/norms/**`
 
 ## Forbidden hotspots
-- root dependency and lock files, `contracts/analysis/**`, `contracts/events/**`, global styles, stage UI, C2 runtime logic, `src/auditmanager/jobs/**`, `infra/deploy/compose.server.yml`, remote refs
+- root dependency and lock files, global styles, stage UI, C2 runtime logic, `src/auditmanager/jobs/**`, `infra/deploy/compose.server.yml`, remote refs
 - any unlisted pin discovered by the probe until this task is amended with its reason
 
 ## Non-goals
