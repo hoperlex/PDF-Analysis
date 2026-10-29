@@ -52,6 +52,7 @@ An expert can upload a plain PDF or ZIP set into a project, review the resulting
 - `src/auditmanager/api/routers/comparison_stage_uploads.py`
 - `src/auditmanager/api/routers/comparison_stage_pairs.py`
 - `src/auditmanager/comparison/public.py`
+- `scripts/recovery/product_purge.py`
 - `tests/unit/comparison/stage/**`
 - `tests/integration/comparison/stage/**`
 - `tests/integration/api/test_stage_pair_upload.py`
@@ -65,8 +66,13 @@ An expert can upload a plain PDF or ZIP set into a project, review the resulting
 - `web/src/widgets/stage-pair-catalog/**`
 - `web/src/entities/stage-pair/**`
 - `web/src/shared/config/screen-registry.ts`
+- `web/src/shared/lib/routes.ts`
+- `web/src/_pages/version-compare/ui/version-compare-page.tsx`
 - `web/tests/unit/stage-compare/**`
-- `web/tests/unit/screens/stage-comparison.test.ts`
+- `web/tests/unit/screens/stage-compare.test.ts`
+- `web/tests/unit/screens/route-screens.ts`
+- `web/tests/guards/screen-registry.guard.test.ts`
+- `tests/e2e/pc01/journey/manifest.json`
 - `.venv`
 - `web/node_modules`
 

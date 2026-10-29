@@ -208,6 +208,9 @@ PRODUCT_COMMAND_TYPES = frozenset((
     "create_stage_assembly", "revise_stage_assembly", "set_stage_pair_completeness",
     "apply_stage_sheet_map", "recompute_stage_text_evidence", "start_stage_chain_run",
     "cancel_stage_chain_run",
+    # Internal raw-multipart checkpoint of CMP-STAGE-PAIR-01. The public
+    # complete_stage_upload_file receipt follows PDF/ZIP admission later.
+    "stage_raw_completion",
 ))
 
 #: Work that may be executing or resumed. The C3 upload and chain rows are kept from a

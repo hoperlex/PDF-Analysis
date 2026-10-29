@@ -12,22 +12,49 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from typing import BinaryIO, Final
 
-from auditmanager.ingest.comparison_pdf.envelope import inspect_comparison_pdf
-from auditmanager.ingest.comparison_zip.policy import DEFAULT_SET_POLICY, SET_TOTAL_BYTES
-from auditmanager.ingest.comparison_zip.reader import ExtractedSet, extract_pdf_set
+from auditmanager.ingest.comparison_pdf.public import inspect_comparison_pdf
+from auditmanager.ingest.comparison_zip import (
+    DEFAULT_SET_POLICY, SET_TOTAL_BYTES, ExtractedSet, extract_pdf_set,
+)
 from auditmanager.shared.errors import DomainError, ErrorCode
+
+from .limits import RAW_BATCH_BYTES
 
 __all__ = [
     "MAX_RAW_ZIP_BYTES", "MIN_FREE_RESERVE_BYTES", "admit_stage_zip_stream",
     "open_stage_zip",
+    "ChunkReader",
 ]
 
-MAX_RAW_ZIP_BYTES: Final[int] = 2 * 1024 * 1024 * 1024
+MAX_RAW_ZIP_BYTES: Final[int] = RAW_BATCH_BYTES
 MIN_FREE_RESERVE_BYTES: Final[int] = 512 * 1024 * 1024
 _READ_CHUNK: Final[int] = 1024 * 1024
+
+
+class ChunkReader:
+    """Expose a verified Blob chunk iterator as a bounded, nonseekable read."""
+
+    def __init__(self, chunks: Iterable[bytes]) -> None:
+        self._chunks = iter(chunks)
+        self._pending = memoryview(b"")
+
+    def read(self, size: int) -> bytes:
+        if size < 1:
+            raise ValueError("read size must be positive")
+        output = bytearray()
+        while len(output) < size:
+            if not self._pending:
+                try:
+                    self._pending = memoryview(next(self._chunks))
+                except StopIteration:
+                    break
+            take = min(size - len(output), len(self._pending))
+            output.extend(self._pending[:take])
+            self._pending = self._pending[take:]
+        return bytes(output)
 
 
 def _refuse(constraint: str) -> DomainError:
@@ -85,7 +112,7 @@ def open_stage_zip(
 
 @contextlib.contextmanager
 def admit_stage_zip_stream(
-    source: BinaryIO,
+    source: BinaryIO | ChunkReader,
     *,
     declared_bytes: int,
     declared_sha256: str,

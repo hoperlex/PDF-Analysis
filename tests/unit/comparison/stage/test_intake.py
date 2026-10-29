@@ -16,8 +16,7 @@ from auditmanager.comparison.stage.intake import (
     admit_stage_zip_stream,
     open_stage_zip,
 )
-from auditmanager.ingest.comparison_zip.policy import SET_TOTAL_BYTES
-from auditmanager.ingest.comparison_zip.reader import SetMemberRefused
+from auditmanager.ingest.comparison_zip import SET_TOTAL_BYTES, SetMemberRefused
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 
