@@ -85,7 +85,28 @@ _STUB_PAIR = "/comparison-sheet-pairs/ctp_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 _STUB_SERIES = "/comparison-series/cser_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 _STUB_TRANSITION = "/comparison-transitions/ctn_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 _STUB_REPORT = "/comparison-reports/crt_01ARZ3NDEKTSV4RRFFQ69G5FAV"
-SEALED_STUB_GETS: frozenset[str] = frozenset()
+# `CMP-SEAL-C3`: the sixteen stage reads refuse through typed module stubs until
+# their lanes serve them. Probe each with a valid identity so a 422 cannot mask a stub.
+_STUB_STAGE_PAIR = "/stage-pairs/stp_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+_STUB_STAGE_REVISION = "/stage-link-revisions/slk_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+SEALED_STUB_GETS: frozenset[str] = frozenset({
+    f"/projects/{_PRJ}/stage-pair-suggestions",
+    f"/projects/{_PRJ}/stage-pairs",
+    f"/projects/{_PRJ}/stage-uploads",
+    "/stage-chain-runs/crn_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+    _STUB_STAGE_REVISION,
+    f"{_STUB_STAGE_REVISION}/raw-differences",
+    f"{_STUB_STAGE_REVISION}/text-exclusions",
+    f"{_STUB_STAGE_REVISION}/text-hints",
+    _STUB_STAGE_PAIR,
+    f"{_STUB_STAGE_PAIR}/chain-runs",
+    f"{_STUB_STAGE_PAIR}/sheet-map",
+    f"{_STUB_STAGE_PAIR}/sheet-map/revisions",
+    f"{_STUB_STAGE_PAIR}/sheet-passports",
+    f"{_STUB_STAGE_PAIR}/sheet-suggestions",
+    f"{_STUB_STAGE_PAIR}/text-fragments",
+    "/stage-uploads/stu_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+})
 #: The versions module is on in this sweep. The served sheet and report reads answer `404 not_found`
 #: for an absent identity; the companion absent-parent sweep checks their module-off refusal separately.
 MODULE_GATED_GETS: frozenset[str] = frozenset({
@@ -332,6 +353,11 @@ def _absent_identity(parameter: str) -> str:
         "comparison_ai_job_id": "cai",
         "comparison_report_id": "crt",
         "comparison_launch_entry_id": "cle",
+        # `CMP-SEAL-C3`: stage reads must reach their module stubs.
+        "stage_upload_id": "stu",
+        "stage_pair_id": "stp",
+        "stage_link_revision_id": "slk",
+        "stage_chain_run_id": "crn",
     }
     return f"{prefixes.get(parameter, 'prj')}_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 

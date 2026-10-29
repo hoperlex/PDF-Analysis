@@ -116,7 +116,9 @@ _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 # specifications of a series and the specification of a transition (with its changes and estimate), the launch queue of a
 # project, and the MD summary, the reports and one report of a series with its PDF and source. The installation's AI queue
 # names no parent. Seventy-five.
-EXPECTED_ADDRESSED = 75
+# `CMP-SEAL-C3`: all sixteen stage GETs address a project, pair, upload, link revision
+# or chain run; none is an unaddressed deployment collection.
+EXPECTED_ADDRESSED = 91
 
 #: Addressed ``GET`` operations with a required query parameter, and a well-formed value for
 #: it naming nothing. Without it the bare path would be ``422`` for the missing parameter --
@@ -263,7 +265,15 @@ MODULE_GATED_ADDRESSED: frozenset[str] = frozenset({
     "streamComparisonReportPdf",
     "streamComparisonReportSourceMd",
 })
-SEALED_STUB_ADDRESSED: frozenset[str] = frozenset()
+SEALED_STUB_ADDRESSED: frozenset[str] = frozenset({
+    # `CMP-SEAL-C3`: before the stage lanes wire their reads, an absent parent cannot
+    # be distinguished from an existing one. The module gate/stub must answer 503.
+    "getStageChainRun", "getStagePair", "getStageSheetMap", "getStageSheetMapRevision",
+    "getStageUpload", "listStageChainRuns", "listStagePairSuggestions", "listStagePairs",
+    "listStageRawDifferences", "listStageSheetMapHistory", "listStageSheetPassports",
+    "listStageSheetSuggestions", "listStageTextExclusions", "listStageTextFragments",
+    "listStageTextHints", "listStageUploads",
+})
 
 #: `W55A-SEAL-01`. ``searchNorms`` addresses no parent but is not a listing of everything:
 #: its ``q`` is required, so the bare path is ``422 validation_failed`` on ``q`` and never a

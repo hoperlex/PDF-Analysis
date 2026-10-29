@@ -849,6 +849,13 @@ SEALED_STUB_QUERY_OPERATIONS: frozenset[str] = frozenset({
     "listComparisonAiPairHints", "listComparisonSheetDescriptionHistory", "listComparisonReviewSheets",
     "listComparisonSpecifications", "listComparisonSpecificationChanges", "listComparisonReports",
     "estimateComparisonAiSheetChanges", "uploadComparisonReportSource",
+    # `CMP-SEAL-C3`: these eleven stage reads and the part upload have declared query
+    # parameters but remain typed 503 stubs. Each lane removes its entries when it can
+    # prove the parameter changes a real answer.
+    "listStageChainRuns", "listStagePairSuggestions", "listStagePairs",
+    "listStageRawDifferences", "listStageSheetMapHistory", "listStageSheetPassports",
+    "listStageSheetSuggestions", "listStageTextExclusions", "listStageTextFragments",
+    "listStageTextHints", "listStageUploads", "uploadStageUploadPart",
 })
 
 #: The four norms listings, driven over the shipped ``NormsSearchAdapter`` on this suite's

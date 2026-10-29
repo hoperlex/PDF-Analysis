@@ -12,7 +12,8 @@ The API contract is `1.12.0` with C3 stage-upload, stage-pair, assembly, sheet-l
 - API contract: `1.11.0`, 176 paths / 198 operations / 517 schemas
 - analysis/comparison/event contract: as sealed by `CMP-SEAL-C2`; deterministic raw evidence remains immutable to AI
 - migration head: `0040_comparison_ai_reports`; this seal takes `0041_comparison_stage_core`
-- base commit: `06c312a3f8d35b569019066fff9e47d38e69501c` on `integration/compare-modules`
+- base commit: `06c312a3f8d35b569019066fff9e47d38e69501c`
+- base branch: `integration/compare-modules`
 - product `VERSION`: `0.9.0`; module enum already includes `none`, `versions`, `versions,stages`
 
 ## Enumerator ownership
@@ -58,25 +59,68 @@ The API contract is `1.12.0` with C3 stage-upload, stage-pair, assembly, sheet-l
 - origin_main_authority: none
 
 ## Allowed paths
-- `contracts/api/v1/**`, `contracts/domain/v1/**`
-- `contracts/analysis/**`, `contracts/events/**` (shared `contract_version` pins only; added after the disposable probe and literal `1.11.0` inventory)
-- `src/auditmanager/analysis/engine/result.py` (served analysis contract-version constant only)
+- `contracts/api/v1/**`
+- `contracts/domain/v1/**`
+- `contracts/analysis/**`
+- `contracts/events/**`
+- `src/auditmanager/analysis/engine/result.py`
 - `db/migrations/versions/20261029_0041_comparison_stage_core.py`
-- `src/auditmanager/api/routers/comparison_stage_uploads.py` (new), `src/auditmanager/api/routers/comparison_stage_pairs.py` (new), `src/auditmanager/api/routers/comparison_stage_links.py` (new), `src/auditmanager/api/routers/comparison_stage_text.py` (new), `src/auditmanager/api/routers/comparison_stage_runs.py` (new), `src/auditmanager/api/routers/__init__.py`, `src/auditmanager/api/routers/ports.py` (the five new stage-router protocols), `src/auditmanager/api/app.py`, `src/auditmanager/api/README.md`, `src/auditmanager/api/schemas/models.py`, `src/auditmanager/api/security.py`
-- `src/auditmanager/api/health.py`, `src/auditmanager/api/routers/declarations.py`, `src/auditmanager/api/routers/errors.py`, `infra/deploy/serve.py`, `infra/deploy/README.md` (current API operation/path count prose pins only, exposed by the real surface inventory)
-- `src/auditmanager/bootstrap/adapters.py`, `src/auditmanager/bootstrap/composition.py`
-- `src/auditmanager/shared/identity/**`, `src/auditmanager/comparison/public.py`
-- `scripts/recovery/grant_classification.py`, `scripts/recovery/product_purge.py`, `scripts/recovery/project_erase.py`, `scripts/recovery/schema_coverage.py`, `infra/deploy/apply-grants.sh`
-- `scripts/recovery/blob_reference_audit.py`, `tests/integration/storage/test_unreferenced_comparison_blobs.py` (new C3 upload blob references in the lifecycle inventory; exposed by migration 0041)
-- `infra/deploy/proxy/nginx.conf`, `infra/deploy/proxy/tls-server.conf` (edge error-envelope version and current surface comments only)
-- `web/openapi/openapi.json`, `web/src/shared/api/**`, `web/FRONTEND_LOCK.json`, `web/src/app/bff/v1/[...path]/route.ts`
-- `tests/contract/api_v1/**`, `tests/contract/domain_p02/**`, `tests/integration/api/**`, `tests/integration/composition/**`, `tests/integration/db/**`, `tests/integration/recovery/**`, `tests/integration/p02_journey/journey.py`, `tests/e2e/test_pc01_journey_conformance.py`
-- `tests/support/expected_facts.json` (current contract version, surface and migration-head facts only)
-- `web/tests/contract/**`, `web/tests/guards/rendered-language.guard.test.ts`
-- `web/tests/**` (existing expected `1.11.0` error-envelope literals only; no behavior changes outside C3-specific tests)
-- `docs/program/tasks/CMP-SEAL-C3.md`, `docs/program/CMP-SEAL-C3.md`, `docs/program/P02_SEAMS.md`
-- `docs/program/CURRENT_STATE.md`, `docs/program/ALPHA_ROADMAP.md`, `docs/program/CONTRACT_PIN_REGISTRY.md`, `docs/manual-tests/PC-01_prototype.md`, `docs/manual-tests/README.md` (the probe exposed live API/head claims)
-- ignored local setup: `.venv`, `web/node_modules`, `.local/norms/**`
+- `src/auditmanager/api/routers/comparison_stage_uploads.py`
+- `src/auditmanager/api/routers/comparison_stage_pairs.py`
+- `src/auditmanager/api/routers/comparison_stage_links.py`
+- `src/auditmanager/api/routers/comparison_stage_text.py`
+- `src/auditmanager/api/routers/comparison_stage_runs.py`
+- `src/auditmanager/api/routers/__init__.py`
+- `src/auditmanager/api/routers/ports.py`
+- `src/auditmanager/api/app.py`
+- `src/auditmanager/api/README.md`
+- `src/auditmanager/api/schemas/models.py`
+- `src/auditmanager/api/security.py`
+- `src/auditmanager/api/health.py`
+- `src/auditmanager/api/routers/declarations.py`
+- `src/auditmanager/api/routers/errors.py`
+- `infra/deploy/serve.py`
+- `infra/deploy/README.md`
+- `src/auditmanager/bootstrap/adapters.py`
+- `src/auditmanager/bootstrap/composition.py`
+- `src/auditmanager/shared/identity/**`
+- `src/auditmanager/comparison/public.py`
+- `scripts/recovery/grant_classification.py`
+- `scripts/recovery/product_purge.py`
+- `scripts/recovery/project_erase.py`
+- `scripts/recovery/schema_coverage.py`
+- `infra/deploy/apply-grants.sh`
+- `scripts/recovery/blob_reference_audit.py`
+- `tests/integration/storage/test_unreferenced_comparison_blobs.py`
+- `infra/deploy/proxy/nginx.conf`
+- `infra/deploy/proxy/tls-server.conf`
+- `web/openapi/openapi.json`
+- `web/src/shared/api/**`
+- `web/FRONTEND_LOCK.json`
+- `web/src/app/bff/v1/[...path]/route.ts`
+- `tests/contract/api_v1/**`
+- `tests/contract/domain_p02/**`
+- `tests/integration/api/**`
+- `tests/integration/composition/**`
+- `tests/integration/db/**`
+- `tests/integration/recovery/**`
+- `tests/integration/p02_journey/journey.py`
+- `tests/e2e/test_pc01_journey_conformance.py`
+- `tests/support/expected_facts.json`
+- `web/tests/contract/**`
+- `web/tests/guards/rendered-language.guard.test.ts`
+- `web/tests/**`
+- `docs/program/tasks/CMP-SEAL-C3.md`
+- `docs/program/CMP-SEAL-C3.md`
+- `docs/program/P02_SEAMS.md`
+- `docs/program/CURRENT_STATE.md`
+- `docs/program/ALPHA_ROADMAP.md`
+- `docs/program/CONTRACT_PIN_REGISTRY.md`
+- `docs/manual-tests/PC-01_prototype.md`
+- `docs/manual-tests/README.md`
+- `.venv`
+- `web/node_modules`
+- `.local/norms/**`
 
 ## Forbidden hotspots
 - root dependency and lock files, global styles, stage UI, C2 runtime logic, `src/auditmanager/jobs/**`, `infra/deploy/compose.server.yml`, remote refs
@@ -114,7 +158,7 @@ The C3 lanes consume the sealed `1.12.0` schema and `0041` tables. They do not c
 
 ## Handoff
 - changed files: the authored API/domain/analysis/events contract pins; migration `0041`; fourteen shared identity types; five C3 router files, their ports and gated composition adapters; recovery catalogs and grants; generated web client, mirror and frontend lock; C3 contract/DB/HTTP/Blob tests and live prose pins. The exact operation/table inventory is in `docs/program/CMP-SEAL-C3.md`.
-- commands/results: `api:verify` (230 operations), web lint/typecheck, focused contract seal/prose tests, 65 C3 HTTP stub cases, two over-limit part cases, migration and project-erase guards, two Blob reference cases, clean-install relation inventory and 135 journey-conformance cases pass. The complete contract suite and full Vitest are in progress or pending; the integration task owns `make gate`.
+- commands/results: the exact gate contract battery passes (1317 tests and 19283 subtests; the three historical D-220 files are excluded by `Makefile`); full web Vitest passes (219 files, 3685 tests) under gate-equivalent local permissions; complete DB (951), recovery (531) and P02 journey (80) directories pass on a separate C3 PostgreSQL/S3 stack at `0041`; `api:verify` (230 operations), web lint/typecheck, 65 C3 HTTP stub cases, two over-limit part cases, migration and project-erase guards, two Blob reference cases, clean-install relation inventory, 18 synthetic recovery drills and 135 journey-conformance cases pass. API and composition directories are covered in ordered green segments after each enumerator correction, with no single whole-directory green invocation; the integration task owns `make gate`.
 - contracts: API and shared domain/analysis/events version `1.12.0`, 204 paths / 230 operations / 570 schemas; migration head `0041_comparison_stage_core`, fifteen additive tables; no new error code. The exact OpenAPI bytes are in commit `6cb49165b583a255ac5ad62c056b7381bc632e47`, named by `web/FRONTEND_LOCK.json`.
 - known limits: C3 routes remain typed module-gated stubs; no ZIP-set is first used by the seal. A populated `0041` refuses downgrade, and only an empty-table downgrade is tested. D-262 caller controls are required in `CMP-STAGE-PAIR-01`.
 - integration notes: preserve the `6cb49165` content commit when merging the seal; regenerate/verify the web client if any contract byte moves. Integrate on the checked C2 development tree after its `origin/dev` publication; this task has no remote authority. The separate `agent/cmp-zip-fix-01` review fix retains `__MACOSX/` rejection and is not yet in this branch. The report records the allowed-path and forbidden-hotspot audit.
