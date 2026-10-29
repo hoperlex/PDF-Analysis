@@ -117,6 +117,18 @@ def test_nothing_is_claimed_over_a_stream_with_a_hole(lab, reader, started, monk
     assert seen and view["is_specification"] is True and view["changes"] == [] and set(view["totals"].values()) == {0}
 
 
+def test_nothing_is_claimed_over_a_stream_with_a_hole_that_is_not_the_pairs_own_page(lab, reader, started, monkeypatch) -> None:
+    """The same rule for a page of the stream other than the pair's own (the first page of each version is taken for a specification
+    page whose header is found and whose table is not read): the positions of the hole would read as removed."""
+    _, series = started()
+    pair = _spec_pair(lab, series["series_id"], 2, SPEC_PAGE["vs1/v4.pdf"], SPEC_PAGE["vs1/v5.pdf"])
+    real_parse, real_candidates = reader_module.parse_data, reader_module.spec_candidates
+    monkeypatch.setattr(reader_module, "spec_candidates", lambda rows: real_candidates(rows) + [r for r in rows if r.page_number == 1])
+    monkeypatch.setattr(reader_module, "parse_data", lambda data: {"parsed": False, "reason": "нет линий строк таблицы"} if data.row.page_number == 1 else real_parse(data))
+    view = reader.pair_view(pair)
+    assert view["is_specification"] is True and view["changes"] == [] and set(view["totals"].values()) == {0}
+
+
 def test_a_page_move_is_not_a_change_across_a_stream(lab, reader, started) -> None:
     """V3 and V4 have the specification on page 6 and V5 on page 7; V3 to V4 (page 6 to page 6) and V4 to V5 (page 6 to page 7)
     differ only by the three changes of the key: the move of the sheet from page 6 to page 7 is none of them."""
