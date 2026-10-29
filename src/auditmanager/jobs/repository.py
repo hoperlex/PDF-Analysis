@@ -188,8 +188,8 @@ _CONNECTION_UNITS = text(
 #: `EXEC2-CAP-01`: the test is "units held < capacity" (``max_active_runs`` of the connection's current
 #: revision, one when absent), where it was "nothing held". ``held`` names each held *Run* (an active Job, or
 #: a submitted Run), once -- ``UNION`` removes a submitted Run whose Job is already active -- and ``loaded``
-#: counts them per connection. The hint counts Runs only, as it always did; the claim also counts the
-#: connection's active comparison calls, so at worst the hint offers a Run the claim then refuses.
+#: counts them per connection. `CMP-JOB-HINT-01` also counts each open comparison call of a live attempt
+#: as one unit, as the locked claim does; the distinct call identity keeps concurrent calls separate.
 #:
 #: `EXEC2-GROUP-RUN-01` (ADR-0026 decisions 14 and 15). A **pending** Run (admitted on a group, no connection yet: its revision is
 #: NULL, which for the old test below would read "never limited") is offered only when **nothing holds it back** -- its
@@ -212,8 +212,9 @@ _CONNECTION_UNITS = text(
 #: ``environment`` source never runs a ``pending`` Run, because it has no connection to bind one to). It is then offered
 #: no pending Run at all. Every other Run keeps the old shape, to the clause.
 #:
-#: ``held`` is built from the few active Jobs (the ``ix_job_dispatch`` prefix on ``state``) and the
-#: few submitted Runs, never from the history of a connection's Runs: written as a correlated
+#: ``held`` is built from the few active Jobs (the ``ix_job_dispatch`` prefix on ``state``),
+#: submitted Runs and open comparison calls (``ix_comparison_model_call_open``), never from
+#: the history of a connection's Runs: written as a correlated
 #: ``NOT EXISTS`` over ``audit_run`` the planner enumerated every Run ever frozen to the connection
 #: (5703 buffers against 10, 13.9 ms against 0.1 ms on 20 000 Runs), and that grows with the history.
 def _pool_slots_sql(pool: str) -> str:
@@ -257,7 +258,15 @@ _NEXT_JOB = text(
     "SELECT pool_connection.capacity_pool, bound_cell.run_id FROM audit_run_cell_binding bound_cell "
     "JOIN executor_connection_revision pool_rev ON pool_rev.revision_id = bound_cell.connection_revision_id "
     "JOIN executor_connection pool_connection ON pool_connection.connection_id = pool_rev.connection_id "
-    "WHERE bound_cell.run_id = ANY (CAST(:submitted AS text[]))), "
+    "WHERE bound_cell.run_id = ANY (CAST(:submitted AS text[])) "
+    "UNION "
+    "SELECT call_peer.connection_id, active_call.comparison_model_call_id FROM comparison_model_call active_call "
+    "JOIN comparison_work_attempt active_attempt "
+    "ON active_attempt.comparison_work_attempt_id = active_call.comparison_work_attempt_id "
+    "JOIN executor_connection_revision call_peer "
+    "ON call_peer.revision_id = active_call.connection_revision_id "
+    "WHERE active_call.state IN ('prepared', 'sent') "
+    "AND active_attempt.state IN ('created', 'leased', 'running')), "
     "loaded AS (SELECT capacity_key, count(*) AS units FROM held GROUP BY capacity_key) "
     "SELECT j.run_id FROM job j JOIN audit_run r ON r.run_id = j.run_id "
     "WHERE j.state = 'queued' AND r.state IN ('queued', 'running') "

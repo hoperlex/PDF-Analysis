@@ -46,6 +46,39 @@ def _run_claim_is_refused(sessions: Any, helpers: Any, revision: str | None) -> 
 
 
 @pytest.mark.parametrize(("state", "blocks"), [
+    ("prepared", True), ("sent", True), ("completed", False),
+    ("failed", False), ("unknown", False),
+])
+def test_run_dispatch_hint_skips_only_a_connection_with_an_active_comparison_call(
+    state: str, blocks: bool, queue: Any, journal: Any, sessions: Any,
+    helpers: Any, connection: tuple[str, str],
+) -> None:
+    item = queue.claimed()
+    journal.insert(item.work_id, item.attempt_id, state=state, estimate_micros=1,
+                   cost_micros=1, connection_revision_id=connection[1])
+    _other, free_revision = helpers.new_connection(sessions)
+    busy_run = helpers.queue_run(sessions, connection[1], priority=51)
+    free_run = helpers.queue_run(sessions, free_revision, priority=50)
+    try:
+        with sessions() as session:
+            offered = JobRepository().next_queued_run(session)
+        assert offered == (free_run if blocks else busy_run)
+        if blocks:
+            with sessions() as session:
+                session.execute(text(
+                    "UPDATE comparison_work_attempt SET state = 'lost', "
+                    "failure_reason = 'test', terminal_at = clock_timestamp() "
+                    "WHERE comparison_work_attempt_id = :attempt"
+                ), {"attempt": item.attempt_id})
+                session.commit()
+            with sessions() as session:
+                assert JobRepository().next_queued_run(session) == busy_run
+    finally:
+        helpers.cancel(sessions, busy_run)
+        helpers.cancel(sessions, free_run)
+
+
+@pytest.mark.parametrize(("state", "blocks"), [
     ("prepared", True), ("sent", True), ("completed", False), ("failed", False), ("unknown", False),
 ])
 def test_a_runs_claim_is_refused_exactly_while_a_comparison_call_is_open_on_its_connection(
