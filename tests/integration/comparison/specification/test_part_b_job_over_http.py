@@ -60,7 +60,7 @@ def admin(sessions) -> dict[str, str]:
 
 
 @pytest.fixture
-def transition_path(started, route, sessions):
+def transition_path(started, committed_route, sessions):
     doc, series = started()
     transition = next(t["transition_id"] for t in series["transitions"] if t["source_version_uid"] == doc.versions[1])
     return f"/comparison-transitions/{transition}/specification"

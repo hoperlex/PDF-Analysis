@@ -416,6 +416,27 @@ def route(iso: sessionmaker[Session]) -> dict[str, str]:
 
 
 @pytest.fixture
+def committed_route(sessions: sessionmaker[Session]) -> dict[str, str]:
+    """The same route, **committed**: the composed application of the HTTP tests reads it through connections of its own. A route
+    event is append-only and only the kind ``comparison_spec`` reads it."""
+    connection, revision, event = (f"{p}_{new_ulid()}" for p in ("exc", "excr", "ert"))
+    with sessions() as session:
+        session.execute(text("INSERT INTO executor_connection (connection_id, kind, display_name, created_by) VALUES (:id, 'http_api', 'recorded', :a)"),
+                        {"id": connection, "a": ACTOR})
+        session.execute(text(
+            "INSERT INTO executor_connection_revision (revision_id, connection_id, revision_no, created_by, pin_id, gateway_model, billing, "
+            "allow_client_documents, timeout_seconds, api_flavour, base_url, transport) VALUES (:r, :c, 1, :a, 'claude-opus-5', "
+            "'anthropic/claude-opus-5', 'metered', false, 60, 'openai_chat', 'https://recorded.test', 'direct')"),
+            {"r": revision, "c": connection, "a": ACTOR})
+        session.execute(text(
+            "INSERT INTO executor_route_event (route_event_id, work_kind, route_no, primary_connection_id, set_by) "
+            "SELECT :e, 'comparison_spec', COALESCE(MAX(route_no), 0) + 1, :c, :a FROM executor_route_event WHERE work_kind = 'comparison_spec'"),
+            {"e": event, "c": connection, "a": ACTOR})
+        session.commit()
+    return {"connection": connection, "revision": revision}
+
+
+@pytest.fixture
 def jobs(iso: sessionmaker[Session], blob_store: Any):
     """The core's service with the lane's method, in a recorded process, inside the test's rolled-back transaction."""
     from auditmanager.comparison.public import ComparisonAiJobService, SpecMethod
