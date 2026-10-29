@@ -206,3 +206,33 @@ def test_a_worker_that_cannot_bind_the_route_sends_nothing(world, sessions, blob
                                   gates=ClaimGates(paused=default_gates().paused, run_claimable=lambda session: False))
     ran = run_items(runner, worker_id, engine, world.scope.project_uid, limit=1)
     assert ran and ran[0][1] != "succeeded" and world.answers.calls == 0
+
+
+class _CancelsDuringTheSecondRequest(RecordedAnswers):
+    """A recorded model during whose second request the expert cancels the job."""
+
+    def __init__(self, on_second: Any) -> None:
+        super().__init__()
+        self._on_second = on_second
+
+    def complete(self, request):
+        response = super().complete(request)
+        if self.calls == 2:
+            self._on_second()
+        return response
+
+
+def test_a_job_cancelled_while_the_last_request_is_in_flight_records_nothing(world, runner_of, worker_id, engine) -> None:
+    """The mutation proof of the fence: the reply of the second side is paid for and kept, but the handler proves, in the transaction that
+    would write the comparison, that the job still runs -- it does not, so the comparison is not recorded."""
+    world.answers = _CancelsDuringTheSecondRequest(
+        lambda: world.jobs.cancel(job_id=job.record.job_id, method="spec",
+                                  command=_command(world.expert, f"cancel-mid-{world.scope.transition_id}", kind="cancel_comparison_specification")))
+    world.record_answers()
+    _estimate, job = world.start()
+    run_items(runner_of(world.binder), worker_id, engine, world.scope.project_uid, limit=1)
+    assert world.answers.calls == 2
+    with session_scope(world.sessions) as session:
+        whole = SpecificationRepository().whole(session, world.scope.transition_id)
+        state = world.jobs.state_of(session, job.record.job_id)
+    assert state == "cancelled" and whole.state == "running" and whole.totals is None and whole.changes == []
