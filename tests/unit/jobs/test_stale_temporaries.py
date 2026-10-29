@@ -25,7 +25,7 @@ import pytest
 from auditmanager.analysis.stages import source_preparation
 from auditmanager.ingest import bundle_archive
 from auditmanager.jobs import temporaries
-from auditmanager.jobs.lease import ATTEMPT_WATCHDOG_SECONDS
+from auditmanager.jobs.lease import ATTEMPT_HARD_CAP_SECONDS, ATTEMPT_WATCHDOG_SECONDS
 from auditmanager.jobs.temporaries import (
     DIRECTORY_NAME,
     FILE_NAME,
@@ -64,9 +64,28 @@ def make_bundle(directory: Path, name: str = BUNDLE) -> Path:
 # ---------------------------------------------------------------------------------------
 
 
-def test_the_threshold_is_the_attempt_watchdog_and_a_minute() -> None:
+def test_the_threshold_is_the_live_attempts_ceiling_and_a_minute() -> None:
+    """`AR-V3-LIVENESS-01`: the threshold was the 900 s watchdog plus a minute (960). A **live**
+    attempt (its model call shows signs of life) now runs until 7200 s, and the file it made after
+    its claim is its own until then; 960 would sweep it from under a call that is thinking."""
     assert ATTEMPT_WATCHDOG_SECONDS == 900
-    assert STALE_AFTER_SECONDS == 960.0
+    assert ATTEMPT_HARD_CAP_SECONDS == 7200
+    assert STALE_AFTER_SECONDS == 7260.0
+
+
+def test_a_file_a_live_attempt_could_still_hold_is_not_swept(tmp_path: Path) -> None:
+    """One minute past the old threshold (watchdog + 120 s) is young: the attempt may be live."""
+    make_file(tmp_path, SOURCE)
+    now = time.time()
+    old_threshold = float(ATTEMPT_WATCHDOG_SECONDS + 60)
+    assert sweep_stale_temporaries(directory=tmp_path, now=now + old_threshold + 60).removed == ()
+    assert (tmp_path / SOURCE).exists()
+    assert sweep_stale_temporaries(
+        directory=tmp_path, now=now + float(ATTEMPT_HARD_CAP_SECONDS) - 1,
+    ).removed == ()
+    assert sweep_stale_temporaries(
+        directory=tmp_path, now=now + STALE_AFTER_SECONDS + 5,
+    ).removed == (SOURCE,)
 
 
 def test_a_stale_stage_pdf_and_bundle_directory_are_removed(tmp_path: Path) -> None:
@@ -106,8 +125,8 @@ def test_the_names_are_the_ones_the_producers_write() -> None:
 
 
 def test_nothing_younger_than_the_watchdog_is_removed(tmp_path: Path) -> None:
-    """A live attempt's file is young: it is made after the claim and the watchdog fences the
-    attempt 900 s after it."""
+    """A live attempt's file is young: it is made after the claim and the heartbeat fences the
+    attempt no later than 7200 s after it (900 s for one that never shows a sign of life)."""
     make_file(tmp_path, SOURCE)
     make_bundle(tmp_path)
 

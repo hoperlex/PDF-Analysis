@@ -17,6 +17,8 @@ from auditmanager.jobs.repository import (
     UnresolvedProviderEffect,
 )
 from auditmanager.jobs.lease import (
+    ATTEMPT_HARD_CAP_SECONDS,
+    ATTEMPT_STALL_SECONDS,
     ATTEMPT_WATCHDOG_SECONDS,
     AttemptContext,
     start_for_current_thread,
@@ -40,6 +42,8 @@ def stop_attempt_lease_heartbeat() -> None:
     stop_for_current_thread()
 
 __all__ = [
+    "ATTEMPT_HARD_CAP_SECONDS",
+    "ATTEMPT_STALL_SECONDS",
     "ATTEMPT_WATCHDOG_SECONDS",
     "JOB_WAKEUP_CHANNEL",
     "AttemptAuthority",
