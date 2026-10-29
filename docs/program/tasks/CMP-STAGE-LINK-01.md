@@ -64,6 +64,7 @@ An expert can inspect the page passports of a confirmed П↔Р pair, see determ
 - `src/auditmanager/bootstrap/adapters.py`
 - `src/auditmanager/bootstrap/composition.py`
 - `web/src/widgets/stage-sheet-map/**`
+- `web/tests/unit/stage-sheet-map/**`
 - `web/src/_pages/stage-compare/**`
 - `tests/unit/comparison/stage_links/**`
 - `tests/integration/comparison/stage_links/**`
