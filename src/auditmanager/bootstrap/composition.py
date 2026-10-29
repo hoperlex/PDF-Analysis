@@ -598,7 +598,9 @@ def build_application(
         comparison_stage_uploads=ComparisonStageUploadAdapter(
             sessions, blob_store=store, comparison_modules=comparison_modules,
         ),
-        comparison_stage_links=ComparisonStageLinkAdapter(comparison_modules=comparison_modules),
+        comparison_stage_links=ComparisonStageLinkAdapter(
+            sessions, comparison_modules=comparison_modules,
+        ),
         comparison_stage_text=ComparisonStageTextAdapter(comparison_modules=comparison_modules),
         comparison_stage_runs=ComparisonStageRunAdapter(comparison_modules=comparison_modules),
         execution=ExecutionAdapter(sessions, runs=run_adapter),

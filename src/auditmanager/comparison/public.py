@@ -137,6 +137,8 @@ from auditmanager.comparison.stage.publication import StageCandidatePublicationS
 from auditmanager.comparison.stage.uploads import (
     StageDeclaredFile, StageUploadPartService, StageUploadService,
 )
+from auditmanager.comparison.stage_links.map import LinkInput, StageSheetMapService
+from auditmanager.comparison.stage_links.read import StageSheetReadService
 from auditmanager.comparison.work.errors import (
     HandlerRegistryError,
     UnhandledKindError,
@@ -371,6 +373,9 @@ from auditmanager.comparison.tiles.reader import PairTileReader
 PAGE_PROFILE_WORK_KIND = "page_profile"
 
 __all__ = [
+    "LinkInput",
+    "StageSheetMapService",
+    "StageSheetReadService",
     "StageCandidateAdmissionService",
     "StageCandidateDecisionService",
     "StageCandidatePublicationService",

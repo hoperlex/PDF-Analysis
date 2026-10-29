@@ -6947,36 +6947,139 @@ class ComparisonStageUploadAdapter(_StagesModuleGate):
 
 
 class ComparisonStageLinkAdapter(_StagesModuleGate):
-    """Sealed sheet mapping port with no automatic matching yet."""
+    """Stored passports, nonbinding hints and expert-owned sheet-map revisions."""
 
     _DEPENDENCY = "comparison_stage_links"
 
+    def __init__(
+        self, sessions: sessionmaker[Session], *, comparison_modules: str = "none",
+    ) -> None:
+        super().__init__(comparison_modules=comparison_modules)
+        from auditmanager.comparison.public import StageSheetMapService, StageSheetReadService
+
+        self._sessions = sessions
+        self._reads = StageSheetReadService(sessions)
+        self._maps = StageSheetMapService(sessions)
+
+    @staticmethod
+    def _after(items: Sequence[Any], cursor: str | None, key: Any) -> int:
+        if cursor is None:
+            return 0
+        parts = decode_cursor(cursor)
+        if len(parts) != 1:
+            raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+        for index, item in enumerate(items):
+            if key(item) == parts[0]:
+                return index + 1
+        raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+
+    @staticmethod
+    def _passport_view(row: Any) -> models.StageSheetPassport:
+        return models.StageSheetPassport(
+            profile_id=row.profile_id, version_uid=row.version_uid,
+            page_number=row.page_number, side=row.side,
+            **_unset_none(
+                sheet_type=row.sheet_type, building=row.building, floor=row.floor,
+                level=row.level, sheet_number=row.sheet_number,
+            ),
+        )
+
+    @staticmethod
+    def _revision_view(row: Any) -> models.StageLinkRevision:
+        return models.StageLinkRevision(
+            revision_id=row.revision_id, pair_id=row.pair_id,
+            revision_no=row.revision_no, source=row.source,
+            input_sha256=row.input_sha256, created_at=row.created_at,
+            items=[models.StageLinkItem(
+                item_id=item.item_id, row_no=item.row_no,
+                relation=item.relation, confidence=item.confidence,
+                **_unset_none(
+                    left_profile_id=item.left_profile_id,
+                    right_profile_id=item.right_profile_id,
+                ),
+            ) for item in row.items],
+            **_unset_none(base_revision_id=row.base_revision_id),
+        )
+
     def list_passports(self, *, pair_id: str, cursor: str | None, limit: int) -> models.StageSheetPassportPage:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        rows = self._reads.passports(pair_id=pair_id)
+        start = self._after(rows, cursor, lambda row: row.profile_id)
+        visible = rows[start:start + limit]
+        next_cursor = (
+            encode_cursor((visible[-1].profile_id,))
+            if visible and start + limit < len(rows) else None
+        )
+        return models.StageSheetPassportPage(
+            items=[self._passport_view(row) for row in visible],
+            page=models.PageInfo(next_cursor=next_cursor),
+        )
 
     def list_suggestions(self, *, pair_id: str, cursor: str | None, limit: int) -> models.StageSheetSuggestionPage:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        rows = self._reads.suggestions(pair_id=pair_id)
+        start = self._after(
+            rows, cursor, lambda row: f"{row.left_profile_id}:{row.right_profile_id}",
+        )
+        visible = rows[start:start + limit]
+        next_cursor = (
+            encode_cursor((f"{visible[-1].left_profile_id}:{visible[-1].right_profile_id}",))
+            if visible and start + limit < len(rows) else None
+        )
+        return models.StageSheetSuggestionPage(
+            items=[models.StageSheetSuggestion(
+                left_profile_id=row.left_profile_id, right_profile_id=row.right_profile_id,
+                score=row.score, confidence=row.confidence, reasons=list(row.reasons),
+            ) for row in visible], page=models.PageInfo(next_cursor=next_cursor),
+        )
 
     def get_current_map(self, *, pair_id: str) -> models.StageLinkRevision:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        return self._revision_view(self._maps.current(pair_id=pair_id))
 
     def apply_map(
         self, *, pair_id: str, body: models.ApplyStageSheetMapRequest,
         user_uid: str, idempotency_key: str,
     ) -> models.StageLinkRevision:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        from auditmanager.comparison.public import LinkInput
+
+        with self._sessions() as session:
+            _label, roles = _comparison_actor(session, user_uid)
+        row = self._maps.apply(
+            pair_id=pair_id, base_revision_id=body.base_revision_id,
+            items=tuple(LinkInput(
+                item.relation, item.left_profile_id, item.right_profile_id,
+            ) for item in body.items),
+            user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key,
+        )
+        return self._revision_view(row)
 
     def list_history(self, *, pair_id: str, cursor: str | None, limit: int) -> models.StageLinkRevisionPage:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        after_no: int | None = None
+        if cursor is not None:
+            parts = decode_cursor(cursor)
+            if len(parts) != 1:
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+            prior = self._maps.get(revision_id=parts[0])
+            if prior.pair_id != pair_id:
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+            after_no = prior.revision_no
+        rows, _next_no = self._maps.page(
+            pair_id=pair_id, after_revision_no=after_no, limit=limit,
+        )
+        next_cursor = (
+            encode_cursor((rows[-1].revision_id,)) if _next_no is not None else None
+        )
+        return models.StageLinkRevisionPage(
+            items=[self._revision_view(row) for row in rows],
+            page=models.PageInfo(next_cursor=next_cursor),
+        )
 
     def get_revision(self, *, revision_id: str) -> models.StageLinkRevision:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        return self._revision_view(self._maps.get(revision_id=revision_id))
 
 
 class ComparisonStageTextAdapter(_StagesModuleGate):

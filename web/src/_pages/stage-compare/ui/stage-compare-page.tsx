@@ -9,6 +9,7 @@ import { useMe } from '@/entities/account';
 import { useProjectList } from '@/entities/project';
 import { useProductVersion } from '@/entities/release';
 import { StagePairCatalog } from '@/widgets/stage-pair-catalog';
+import { StageSheetMap } from '@/widgets/stage-sheet-map';
 
 import { StageUploadPanel } from './stage-upload-panel';
 
@@ -17,6 +18,7 @@ export function StageComparePage() {
   const me = useMe();
   const product = useProductVersion(true);
   const [chosen, setChosen] = useState<ProjectUid | null>(null);
+  const [tab, setTab] = useState<'documentation' | 'sheets'>('documentation');
   const projectItems = projects.data?.items ?? [];
   const projectUid = chosen ?? (projectItems.length === 1 ? projectItems[0]!.project_uid : null);
   const moduleOn = product.data?.comparison_modules === 'versions,stages';
@@ -44,8 +46,14 @@ export function StageComparePage() {
       {projects.isSuccess && projectItems.length > 1 && projectUid === null && moduleOn ? <EmptyState title="Выберите проект" detail="Пары и предложения относятся к одному проекту." /> : null}
       {projectUid !== null && moduleOn ? (
         <div key={projectUid}>
-          <StageUploadPanel projectUid={projectUid} mayAct={mayAct} />
-          <StagePairCatalog projectUid={projectUid} mayAct={mayAct} />
+          <div role="tablist" aria-label="Разделы сравнения стадий">
+            <button type="button" role="tab" aria-selected={tab === 'documentation'} onClick={() => setTab('documentation')} className="am-button">1. Загрузка документации</button>
+            <button type="button" role="tab" aria-selected={tab === 'sheets'} onClick={() => setTab('sheets')} className="am-button">2. Сопоставление листов</button>
+          </div>
+          {tab === 'documentation' ? <>
+            <StageUploadPanel projectUid={projectUid} mayAct={mayAct} />
+            <StagePairCatalog projectUid={projectUid} mayAct={mayAct} />
+          </> : <StageSheetMap projectUid={projectUid} mayAct={mayAct} />}
         </div>
       ) : null}
     </PageShell>
