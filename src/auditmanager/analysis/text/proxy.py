@@ -52,6 +52,7 @@ from auditmanager.analysis.text.adapter import (
     ProviderMode,
 )
 from auditmanager.analysis.text.config import DEPENDENCY_NAME
+from auditmanager.analysis.text.wire_schema import to_wire_schema
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 #: The values the proxy reads as "I am not choosing a model". Any other string is a real
@@ -412,9 +413,13 @@ def _to_openai_body(request: ModelRequest, model: str) -> dict[str, Any]:
         else None
     )
     if schema is not None:
+        # The provider is told the wire form (`AR-V3-WIRE-SCHEMA-01`): the request's own body, and so its
+        # checksum, keep the sealed schema; the local parser still checks what the wire form no longer says.
         body["response_format"] = {
             "type": "json_schema",
-            "json_schema": {"name": "text_observations", "schema": schema, "strict": True},
+            "json_schema": {
+                "name": "text_observations", "schema": to_wire_schema(schema), "strict": True,
+            },
         }
     return {k: v for k, v in body.items() if v is not None}
 
