@@ -13,6 +13,7 @@ The merged C2 comparison modules pass one complete `make gate` on an exact clean
 - CMP-VC-QUEUE-01
 - CMP-VC-UI-02
 - CMP-C2-FIX-01
+- CMP-C2-GOV-01
 
 ## Frozen inputs
 - domain contract: ADR-0025 and the C2 seal
