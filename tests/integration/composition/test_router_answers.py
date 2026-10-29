@@ -103,6 +103,19 @@ SEALED_STUB_GETS: frozenset[str] = frozenset({
     f"{_STUB_REPORT}/pdf",
     f"{_STUB_REPORT}/source-md",
 })
+#: `CMP-VC-AISHEET-01` serves seven reads of the AI description of sheet changes and removes them from the set above. While the
+#: versions module is off, as it is in this sweep, a wired operation of the C2 wave still refuses first, naming `comparison_modules`
+#: (`A-12`); with the module on each answers `404 not_found` for an identity that names nothing
+#: (`test_an_absent_parent_is_not_an_empty_page.py`, `test_the_wired_sheet_reads_are_404_for_an_absent_parent_once_the_module_is_on`).
+MODULE_GATED_GETS: frozenset[str] = frozenset({
+    f"{_STUB_SERIES}/ai-sheet-changes/estimate",
+    f"{_STUB_SERIES}/ai-sheet-changes",
+    f"{_STUB_PAIR}/description",
+    f"{_STUB_PAIR}/description-history",
+    f"{_STUB_PAIR}/description/estimate",
+    f"{_STUB_PAIR}/description/md",
+    f"{_STUB_TRANSITION}/review-sheets",
+})
 #: `CMP-PROFILE-01` serves the five page reads (`/versions/{ver}/page-profiles`, `/page-profiles/{cpr}` and
 #: its `preview`, `thumbnail` and `tile`) and removes them from the set above: an absent `cpr_` is `404`.
 #: The tile's `level`, `column` and `row` are required, so the sweep gives it a well-formed query that
@@ -276,6 +289,7 @@ class TestNoOperationAnswersWithAServerFault:
         assert len(probes) >= 5, f"the sweep found too few GET routes: {probes}"
         assert RELEASE_GETS <= {path for _method, path in probes}
         assert SEALED_STUB_GETS <= {path for _method, path in probes}
+        assert MODULE_GATED_GETS <= {path for _method, path in probes}
         assert NORM_VERIFICATION_OF_AN_ABSENT_RUN in {path for _method, path in probes}
         assert WORKER_GETS <= {path for _method, path in probes}
         faults = []
@@ -292,6 +306,12 @@ class TestNoOperationAnswersWithAServerFault:
             elif path in SEALED_STUB_GETS:
                 if status != 503 or not isinstance(body, dict) or (
                     body.get("error_code") != "dependency_unavailable"
+                ):
+                    faults.append((path, status, body))
+            elif path in MODULE_GATED_GETS:
+                if status != 503 or not isinstance(body, dict) or (
+                    body.get("error_code") != "dependency_unavailable"
+                    or (body.get("details") or {}).get("dependency") != "comparison_modules"
                 ):
                     faults.append((path, status, body))
             elif status >= 500:

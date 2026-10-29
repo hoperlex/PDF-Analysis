@@ -125,7 +125,7 @@ Each safety guard is shown failing under a quoted mutation.
 ## Integration contract
 The adapter answers the contract's shapes; the job object, the estimate, the consent and every state edge are `CMP-AI-JOBS-01`'s. The handler's
 kind is `comparison_sheet_changes` (the executor work kind) and is appended to `HANDLER_FACTORIES`. `CMP-VC-REPORT-01` reads the stored
-descriptions through `comparison.public` names (`read_sheet_description_md`, `latest_descriptions_of_transition`); `CMP-VC-QUEUE-01` calls
+descriptions through `comparison.public.ComparisonAiSheetService` (`read_md`, `descriptions_of_transition`); `CMP-VC-QUEUE-01` calls
 the service's start for a series; `CMP-VC-UI-02` renders the eleven states and the three tiers. A lane that needs another field STOPs to the
 wave's FIX slot.
 
