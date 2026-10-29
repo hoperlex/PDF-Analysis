@@ -29,6 +29,7 @@ from __future__ import annotations
 import ast
 import pathlib
 from datetime import datetime, timezone
+from functools import cache
 from types import SimpleNamespace
 from typing import Any
 
@@ -187,7 +188,9 @@ def _python_files() -> list[pathlib.Path]:
     return found
 
 
+@cache
 def _parsed() -> dict[pathlib.Path, ast.Module]:
+    # A guard process reads a clean, immutable checkout; each port examines the same tree.
     trees: dict[pathlib.Path, ast.Module] = {}
     for path in _python_files():
         try:
@@ -274,6 +277,7 @@ def _resolve(tree: ast.Module, node: ast.expr) -> str | None | Any:
 UNRESOLVED = object()
 
 
+@cache
 def _wirings() -> list[tuple[str, int, str, str | None | Any]]:
     """``(file, line, port_argument, class)`` for every ``build_router`` call in the tree."""
     rows: list[tuple[str, int, str, str | None | Any]] = []
@@ -291,6 +295,11 @@ def _wirings() -> list[tuple[str, int, str, str | None | Any]]:
                         (where, node.lineno, keyword.arg, _resolve(tree, keyword.value))
                     )
     return rows
+
+
+@cache
+def _class_index() -> dict[str, list[tuple[str, ast.ClassDef]]]:
+    return _class_definitions(_parsed())
 
 
 def _declared(port_name: str) -> frozenset[str]:
@@ -381,7 +390,7 @@ def test_no_port_argument_is_beyond_this_guard_s_reading() -> None:
 @pytest.mark.parametrize("argument", sorted(PORT_FOR_ARGUMENT))
 def test_every_wired_implementation_carries_the_whole_port(argument: str) -> None:
     """The rule `D-74` is a row about: a method the router calls, on every implementation."""
-    classes = _class_definitions(_parsed())
+    classes = _class_index()
     required = _declared(PORT_FOR_ARGUMENT[argument])
     assert required, f"{PORT_FOR_ARGUMENT[argument]} declares no methods"
 

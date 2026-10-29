@@ -72,11 +72,11 @@ The composition guard still checks every discovered `build_router` wiring and ev
 
 ## Deliverables
 - cache the parsed source AST and derived class/wiring inventories within one test process, with the same live source scan at first use
-- focused guard results before and after, including every parametrized port and source-derived wiring control
+- the running full gate's measured baseline for this guard and a focused result after the change, including every parametrized port and source-derived wiring control
 - report of the measured gate cost, commands, diff scope and risks
 
 ## Required tests
-- focused guard before and after with the same environment, no parallel pytest competing with the running full gate
+- record the running full gate's baseline on the frozen code before the new guard is integrated; run the focused guard after the edit without competing with that gate
 - governance, `git diff --check`, and final complete `make gate` on the integration publication commit
 
 ## Integration contract
@@ -91,8 +91,8 @@ Merge this tests-only repair into the C2 integration branch before its final doc
 Tests only; revert the scoped commit if the guard's mutation proof changes. No runtime flag or migration.
 
 ## Handoff
-- changed files: pending
-- commands/results: pending
-- contracts: unchanged
-- known limits: pending
-- integration notes: pending
+- changed files: `tests/integration/composition/test_every_port_implementation_is_whole.py`, this task and `docs/program/CMP-C2-GATE-BE-01.md` only.
+- commands/results: original clean C2 battery 6,592 passed / 13 skipped; its port guard occupied roughly 43 observed minutes around 61%; repaired focused guard 44 passed in 17.16 s; disposable source mutation made the `decisions` port case fail at five wiring sites in 17.38 s; `py_compile`, governance 16 passed and `git diff --check` clean.
+- contracts: unchanged, API `1.11.0` and migration head `0040_comparison_ai_reports`.
+- known limits: the cache is valid for a guard process over an immutable checkout; it would need invalidation if a future test rewrote repository source during the same process. The overall initial C2 gate was red later in W13 and is not acceptance evidence.
+- integration notes: merge this tests-only commit into `CMP-WAVE-C2-INT` after its own focused check, then run a new complete gate on the exact final publication SHA. No remote publication right is held here; forbidden product source, contracts, migrations, root dependencies, composition root, global styles and infrastructure were untouched.
