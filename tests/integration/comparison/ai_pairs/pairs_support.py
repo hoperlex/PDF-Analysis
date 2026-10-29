@@ -173,9 +173,12 @@ def absent(world: World, index: int) -> dict[str, Any]:
     return {"version_uid": world.version(index), "state": "absent", "reason": "no_candidates"}
 
 
-def place_matrix(connection: Connection, world: World, rows: Sequence[Sequence[dict[str, Any]]], *, pages: int = PAGES) -> str:
+def place_matrix(
+    connection: Connection, world: World, rows: Sequence[Sequence[dict[str, Any]]], *, pages: int = PAGES, signature: str | None = None,
+) -> str:
     """Insert a matrix build holding ``rows`` (each a list of stored cells, one per version) that reads as ``ready``: its profile
-    signature is the digest of the profiles it read, computed by the matrix's own function."""
+    signature is the digest of the profiles it read, computed by the matrix's own function (``signature`` overrides it: a build
+    made of other profiles than the ones now stored, which reads as stale)."""
     matrix_id = new_id("cmx")
     sessions = sessionmaker(bind=connection, expire_on_commit=False, future=True)
     with sessions() as session:
@@ -187,7 +190,7 @@ def place_matrix(connection: Connection, world: World, rows: Sequence[Sequence[d
     x(connection, "INSERT INTO comparison_matrix (comparison_matrix_id, project_uid, document_uid, build_no, profile_signature, "
                   "rules_version, algo_version, rows, summary) VALUES (:m, :p, :d, :n, :sig, :rules, :algo, CAST(:rows AS jsonb), "
                   "CAST(:summary AS jsonb))",
-      m=matrix_id, p=world.project, d=world.document, n=number, sig=profile_digest(facts), rules=matrix_settings.RULES_VERSION,
+      m=matrix_id, p=world.project, d=world.document, n=number, sig=signature or profile_digest(facts), rules=matrix_settings.RULES_VERSION,
       algo=matrix_settings.ALGO_VERSION, rows=json.dumps([{"cells": list(cells)} for cells in rows]), summary=json.dumps(summary))
     world.matrix_id = matrix_id
     return matrix_id
@@ -273,10 +276,10 @@ class Rig:
         the closing item is made due first when ``until_close``)."""
         done: list[tuple[str, Any, str]] = []
         for _ in range(limit):
-            if until_close:
+            if until_close:  # a yield and a retry wait for a delay: make everything queued due
                 self.connection.execute(text(
                     "UPDATE comparison_work SET not_before = clock_timestamp() - interval '1 second' "
-                    "WHERE kind = :k AND state = 'queued' AND payload ->> 'step' = 'close'"), {"k": KIND})
+                    "WHERE kind = :k AND state = 'queued'"), {"k": KIND})
             ran = self.run_next()
             if ran is None:
                 break
