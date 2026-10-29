@@ -350,3 +350,27 @@ def test_the_closing_item_decides_nothing_while_a_question_is_still_live(db, h) 
     rig.drain()
     assert rig.scalar("SELECT state FROM comparison_ai_job WHERE comparison_ai_job_id = :j", j=job.job_id) == "completed"
     assert rig.scalar("SELECT count(*) FROM comparison_ai_pair_question WHERE comparison_ai_job_id = :j AND state = 'answered'", j=job.job_id) == 2
+
+
+def test_a_manual_unlink_of_the_page_an_ai_link_joined_wins_and_is_not_orphaned(one) -> None:
+    """Mutation M6: the AI layer applied after the manual layer (``matrix/effective.py``) -> the expert's unlink finds the page alone
+    (the link has not joined it yet), is orphaned, and the model's link then joins the rows again over the expert's act."""
+    world, rig, job, question = one
+    rig.say(job, rig.forward(job, question), 3)
+    rig.say(job, rig.reverse(job, question, 3), 2)
+    rig.drain()
+    matrix = ComparisonMatrixService(session_factory=rig.sessions)
+    before = matrix.get_matrix(project_uid=world.project, document_uid=world.document)
+    assert before["counts"]["ai"] == 1 and before["orphaned_edit_ids"] == []
+    matrix.apply_edits(
+        project_uid=world.project, document_uid=world.document, base_matrix_id=world.matrix_id,
+        base_edit_no=before["revision"]["edit_no"], edits=[EditInput("unlink", MatrixPageRef(world.version(2), 3))],
+        user_uid=USER, actor_label="Эксперт", actor_roles=EXPERT, idempotency_key="k-unlink",
+    )
+    after = matrix.get_matrix(project_uid=world.project, document_uid=world.document)
+    assert after["orphaned_edit_ids"] == [], "the unlink applied: the page was joined when the expert acted on it"
+    assert after["counts"]["ai"] == 0 and after["counts"]["manual"] == 1
+    row = next(r for r in after["rows"] if r["cells"][0]["page"]["page_number"] == 2)
+    assert row["cells"][1]["state"] != "matched", "sheet 2 has no B page any more: the expert's word"
+    listed = matrix.list_ai_links(project_uid=world.project, document_uid=world.document, after=None, limit=10)
+    assert [item["status"] for item in listed.items] == ["superseded"]
