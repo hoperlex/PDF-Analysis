@@ -1,7 +1,7 @@
 # Task AR-V3-LIVENESS-01 — a model call lives as long as its session shows signs of life
 
 task_id: AR-V3-LIVENESS-01
-status: dispatched 2026-10-29 (two lanes, A and B, on the owner's direct decisions below; the integrator holds the exception to AGENTS section 7.1 for this task)
+status: completed in development candidate (lanes `009ab1de` and `71a2efe5`, merged `8336e687`; report `docs/program/AR-V3-LIVENESS-01.md`, written by the integrator from the lanes' hand-backs)
 
 ## Outcome
 
