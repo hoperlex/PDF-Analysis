@@ -227,6 +227,36 @@ from auditmanager.comparison.specification.reader import SpecificationReader
 from auditmanager.comparison.specification.service import SpecificationService
 from auditmanager.comparison.specification.transition import TransitionRun
 
+# `CMP-AI-JOBS-01`: the shared core of consented AI jobs (estimate, keyed start with consent, the state edges, the spend pause,
+# the reads, recorded mode). The four method lanes build on `ComparisonAiJobService`; none writes `comparison_ai_job` itself.
+from auditmanager.comparison.ai_jobs.estimate import build_estimate as build_ai_estimate
+from auditmanager.comparison.ai_jobs.estimate import read_route as read_ai_route
+from auditmanager.comparison.ai_jobs.estimate import route_missing as ai_route_missing
+from auditmanager.comparison.ai_jobs.model import (
+    METHODS as AI_METHODS,
+    AiCallGroup,
+    AiConsentInput,
+    AiCounts,
+    AiEstimate,
+    AiEstimateRequest,
+    AiJobRecord,
+    AiJobSpend,
+    AiJobView,
+    AiMethod,
+    AiMode,
+    AiProgress,
+    AiRoute,
+    AiScope,
+    AiTotals,
+    AiWaitingJobs,
+    AiWorkItemSpec,
+)
+from auditmanager.comparison.ai_jobs.model import digest_of as ai_digest_of
+from auditmanager.comparison.ai_jobs.model import work_kind_of as ai_work_kind_of
+from auditmanager.comparison.ai_jobs.recorded import RecordedAnswers
+from auditmanager.comparison.ai_jobs.service import AiJobCommand, ComparisonAiJobService
+from auditmanager.comparison.ai_jobs.service import pause_reason_of as ai_pause_reason_of
+
 #: `CMP-WORK-01` (ADR-0025 decision 4). One tuple of handler factories, each
 #: ``Callable[[WorkDependencies], WorkHandler]``: ``build_worker_runtime`` builds one dependency
 #: bundle and applies every factory to it, and refuses to start on a duplicate ``kind``. A slice
@@ -490,6 +520,32 @@ __all__ = [
     "series_drive_handler",
     "series_pair_handler",
     "ComparisonOverviewService",
+    "AI_METHODS",
+    "AiCallGroup",
+    "AiConsentInput",
+    "AiCounts",
+    "AiEstimate",
+    "AiEstimateRequest",
+    "AiJobCommand",
+    "AiJobRecord",
+    "AiJobSpend",
+    "AiJobView",
+    "AiMethod",
+    "AiMode",
+    "AiProgress",
+    "AiRoute",
+    "AiScope",
+    "AiTotals",
+    "AiWaitingJobs",
+    "AiWorkItemSpec",
+    "ComparisonAiJobService",
+    "RecordedAnswers",
+    "ai_digest_of",
+    "ai_pause_reason_of",
+    "ai_route_missing",
+    "ai_work_kind_of",
+    "build_ai_estimate",
+    "read_ai_route",
     "SpecificationReader",
     "SpecificationService",
     "TransitionRun",
