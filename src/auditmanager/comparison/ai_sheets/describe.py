@@ -24,6 +24,7 @@ What is different from the original, each for a stated reason:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import time
@@ -38,16 +39,24 @@ from auditmanager.comparison.ai_jobs.model import (
     TOKENS_PER_IMAGE,
 )
 from auditmanager.comparison.ai_sheets import geometry as geo
+from auditmanager.comparison.ai_sheets.images import fit_total_bytes
 from auditmanager.comparison.ai_sheets import packet as pk
 from auditmanager.comparison.ai_sheets import schema as sc
 from auditmanager.comparison.ai_sheets.check import check, state_of
 from auditmanager.comparison.ai_sheets.description import build_description, build_single_description, check_single
 from auditmanager.comparison.ai_sheets.material import SheetMaterial
-from auditmanager.comparison.ai_sheets.model import IMAGE_MAX_PX, MAX_CONTEXT_REQUESTS, MAX_EXTRA_IMAGES, MAX_LAUNCHES, MAX_OUTPUT_TOKENS
+from auditmanager.comparison.ai_sheets.model import (
+    IMAGE_MAX_PX,
+    MAX_CONTEXT_REQUESTS,
+    MAX_EXTRA_IMAGES,
+    MAX_LAUNCHES,
+    MAX_OUTPUT_TOKENS,
+    SINGLE_TEXT_LIMIT,
+)
 from auditmanager.comparison.spend.errors import CallFailed, CallLost, CallRefused, OutcomeUnknown, SpendError
 from auditmanager.comparison.spend.model import CallEstimate, CallRoute, Consent
 from auditmanager.comparison.work.model import WorkItem
-from auditmanager.executors.public import MAX_IMAGES, CropImage, attach_images
+from auditmanager.executors.public import MAX_IMAGE_BYTES, MAX_IMAGES, MAX_TOTAL_IMAGE_BYTES, CropImage, attach_images
 
 __all__ = [
     "SheetInterrupted",
@@ -82,7 +91,11 @@ def build_request(
         "output_config": {"effort": "high", "format": {"type": "json_schema", "schema": schema}},
     }
     request = ModelRequest(model_id=model_id, body=body)
-    return attach_images(request, [CropImage(crop_id=name, data=data) for name, data in images])
+    if not images:
+        return request
+    # the limits of a request (16 MiB a picture, 32 MiB in all) are kept whatever the sheet looked like
+    fitted = fit_total_bytes([data for _name, data in images], per_image=MAX_IMAGE_BYTES, total=MAX_TOTAL_IMAGE_BYTES)
+    return attach_images(request, [CropImage(crop_id=name, data=data) for (name, _old), data in zip(images, fitted)])
 
 
 @dataclass(slots=True)
@@ -339,6 +352,7 @@ def describe_pair(
     run.description = build_description(document, checked, run.state, calls=run.calls, launches=run.launches, recorded=recorded,
                                         context=run.context)
     run.description["context_requests"] = requests
+    run.failure = None  # a later phase that failed after a usable answer does not make the sheet fail
     return run
 
 
@@ -353,11 +367,11 @@ def describe_single(
     """Describe an added or a removed sheet by itself (``single.py:73-102``, ``:117-197``): one call, up to ``MAX_LAUNCHES`` launches."""
     run = SheetRun()
     started = time.monotonic()
-    words_text = sheet_text[: sc.SINGLE_TEXT_LIMIT]
+    words_text = sheet_text[: SINGLE_TEXT_LIMIT]
     prompt = sc.SINGLE_PROMPT.format(
         what="появился новый лист" if kind == "added" else "лист удалён (был в прежней версии)",
         verb="добавлено" if kind == "added" else "убрано", title=title or "—", side=side, label=label, page=page,
-        project=project or "—", limit=sc.SINGLE_TEXT_LIMIT, text=words_text or "(текстового слоя нет)",
+        project=project or "—", limit=SINGLE_TEXT_LIMIT, text=words_text or "(текстового слоя нет)",
     )
     images = [("I1", image)] if image else []
     calls = _Caller(caller, item, route, consent, model_id, run, checkpoint)
@@ -373,7 +387,7 @@ def describe_single(
         run.failure = run.failure or "model_answer_invalid"
         return run
     checked = check_single(answer, sheet_text)
-    packet_id = __import__("hashlib").sha256(f"{material_tag}|{kind}|{prompt}".encode()).hexdigest()[:16]
+    packet_id = hashlib.sha256(f"{material_tag}|{kind}|{prompt}".encode()).hexdigest()[:16]
     run.state = "done"
     run.description = build_single_description(
         kind, checked, packet_id=packet_id, side=side, page=page, calls=run.calls, launches=run.launches, recorded=recorded,

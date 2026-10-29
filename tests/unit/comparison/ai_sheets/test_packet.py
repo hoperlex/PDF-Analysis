@@ -133,3 +133,17 @@ def test_the_pictures_are_held_to_the_limits_of_a_request() -> None:
     big = [pix.encode_png(__import__("PIL.Image", fromlist=["new"]).effect_noise((600, 600), 80)) for _ in range(3)]
     fitted = pix.fit_total_bytes(big, per_image=len(big[0]) // 2, total=len(big[0]) * 3)
     assert all(len(p) <= len(big[0]) // 2 for p in fitted) and len(fitted) == 3
+
+
+def test_a_request_holds_its_pictures_to_the_per_picture_and_total_limits(monkeypatch: pytest.MonkeyPatch) -> None:
+    from PIL import Image
+
+    from auditmanager.comparison.ai_sheets import describe as ds
+
+    big = [(f"I{n}", pix.encode_png(Image.effect_noise((500, 500), 90))) for n in range(1, 4)]
+    one = len(big[0][1])
+    monkeypatch.setattr(ds, "MAX_IMAGE_BYTES", one // 2)
+    monkeypatch.setattr(ds, "MAX_TOTAL_IMAGE_BYTES", one)
+    request = build_request("m", "p", {"type": "object"}, big)
+    sizes = [len(raw) for raw in request.images_bytes]
+    assert [d["crop_id"] for d in request.body["images"]] == ["I1", "I2", "I3"] and all(s <= one // 2 for s in sizes) and sum(sizes) <= one

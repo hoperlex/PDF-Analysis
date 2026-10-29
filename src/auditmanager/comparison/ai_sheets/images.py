@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import io
 from collections.abc import Sequence
-from typing import Any, Final
+from typing import Final
 
 from PIL import Image, ImageDraw
 
@@ -110,12 +110,14 @@ def estimate_bytes(width_px: int, height_px: int) -> int:
     return max(1024, int(width_px * height_px * BYTES_PER_PIXEL_ESTIMATE))
 
 
-def fit_total_bytes(pngs: Sequence[bytes], *, per_image: int, total: int, extra: dict[str, Any] | None = None) -> list[bytes]:
+def fit_total_bytes(pngs: Sequence[bytes], *, per_image: int, total: int) -> list[bytes]:
     """The pictures held to the limits of a request: each at most ``per_image`` bytes and all together at most ``total``. A picture
-    that is over is reduced by a fifth at a time until the limits hold; the order is kept. ``ValueError`` when one cannot be made to
-    fit (a picture of a few hundred pixels is never over a limit of MiB, so this means a defect)."""
-    images = [decode(data) for data in pngs]
+    that is over is reduced by a fifth at a time until the limits hold; the order is kept, and pictures already within the limits are
+    returned as they are (same bytes). ``ValueError`` when one cannot be made to fit."""
     out = list(pngs)
+    if all(len(d) <= per_image for d in out) and sum(len(d) for d in out) <= total:
+        return out
+    images = [decode(data) for data in pngs]
     for _ in range(40):
         sizes = [len(d) for d in out]
         if all(s <= per_image for s in sizes) and sum(sizes) <= total:

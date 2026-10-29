@@ -29,10 +29,14 @@ __all__ = [
 ROW_MAX_PT: Final[float] = 420.0  # above this it is not a table row but an area of the sheet (tables.py:18)
 CHAIN_GAP_PT: Final[float] = 3.0  # a gap between the segments of one ruling (tables.py:19)
 SAME_Y_PT: Final[float] = 0.8  # tables.py:20
+#: ``tables.py:21-22``, with the column words of an electrical load table added (`[own design]`): the synthetic corpus' sheet E03
+#: ("Схема электрическая принципиальная": «№ гр. Нагрузка, кВт Кабель Автомат,») has none of the original's words but «№», so the
+#: original's list would not find its header and the table would be read as a place on the drawing.
 HEADER_WORDS: Final = re.compile(
-    r"^(поз|обозначен|наименован|кол|марка|тип|примечан|площад|ед\.?|масса|№|номер|код|состав|схема|данные|материал)",
+    r"^(поз|обозначен|наименован|кол|марка|тип|примечан|площад|ед\.?|масса|№|номер|код|состав|схема|данные|материал|"
+    r"гр\.?$|нагрузк|кабел|автомат|мощност|длин|сечен|напряж)",
     re.IGNORECASE,
-)  # tables.py:21-22
+)
 MAX_ROWS: Final[int] = 40  # tables.py:23
 _MARK: Final = re.compile(r"^[A-Za-zА-Яа-яЁё]{1,4}[-.]?[0-9][0-9A-Za-zА-Яа-яЁё*/.\-]*$")  # tables.py:177
 
