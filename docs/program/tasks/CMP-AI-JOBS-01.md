@@ -119,7 +119,7 @@ Not applicable: the package is unreachable until a lane wires an operation, and 
 (`AUDITMANAGER_COMPARISON_MODULES`, default `none`).
 
 ## Handoff
-- changed files: (written with the report as the last commit)
-- commands/results: (written with the report)
-- known limits: (written with the report)
-- integration notes: (written with the report)
+- changed files: `src/auditmanager/comparison/ai_jobs/{__init__,model,estimate,repository,service,recorded}.py` (new); `src/auditmanager/comparison/public.py` (an import block and 27 names); `scripts/recovery/grant_classification.py` (`comparison_ai_job` out of `SEALED_NOT_YET_WRITTEN`); `tests/unit/comparison/ai_jobs/**` (2 files, 82 tests); `tests/integration/comparison/ai_jobs/**` (`conftest.py`, `ai_jobs_support.py`, 3 files, 99 tests); `docs/program/CMP-AI-JOBS-01.md`; this file
+- commands/results: `tests/unit/comparison/ai_jobs` 82 passed; `tests/integration/comparison/ai_jobs` 99 passed; `tests/integration/comparison` in one process 653 passed; `tests/integration/recovery/test_grant_classification.py` 35 passed; `tests/unit` 5044 passed, 76 skipped; `tests/contract` minus the three `D-220` files 1310 passed, 19283 subtests; `git diff --check` clean; 28 mutations, all red but one that survives by design (M4a), each restored green (report section 4)
+- known limits: nothing is wired (no adapter, composition or handler); the lock order is documented and not concurrency-tested; the token constants are `[own design]`; no pause reason of its own for a ceiling (contract); the route's probe result and the standby are not read (report section 6)
+- integration notes: merge first among the C2 wiring files; the report's section 2 is the API the four method lanes follow; FIX items 1 to 3 of report section 6 (`ComparisonWorkRepository.enqueue` cannot set the frozen job column and `counts` has no job filter; the contract has no pause reason for a ceiling; route usability is not checked by the estimate); the commits carry `Claude Sonnet 5.5` (the harness-given attribution), the integrator may rewrite the trailer

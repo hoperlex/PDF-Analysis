@@ -183,7 +183,8 @@ M5 first survived in the form «widen `dequeue`» because the matrix of refused 
 | this lane, integration | `tests/integration/comparison/ai_jobs` | **99 passed**, 4.1 s |
 | the whole comparison integration directory, **one process** | `tests/integration/comparison` | **653 passed**, 1 warning, 406 s |
 | the classification | `tests/integration/recovery/test_grant_classification.py`; `grant_classification.py --verify-script infra/deploy/apply-grants.sh` | **35 passed**; exit 0 |
-| the whole unit and contract batteries | `tests/unit`; `tests/contract` minus the three `D-220` files | (running) |
+| the whole unit battery, after the last code commit | `tests/unit` | **5044 passed**, 76 skipped (none of this lane's), 1 warning, 309 s |
+| the contract battery, after the last code commit | `tests/contract --ignore` of `test_cp00_candidate.py`, `test_validate_bootstrap.py`, `test_cp00_final_state.py` (`D-220`) | **1310 passed**, 19283 subtests passed, 160 s (includes the documentation and task-file guards and the import-boundary test) |
 
 Not run, by the brief and `R-135`: `make gate`, the web battery (no web change), the live journey. `AGENTS.md` §8 case 3 names any `conftest.py`: this lane adds `tests/integration/comparison/ai_jobs/conftest.py`, so the final gate covers it.
 
