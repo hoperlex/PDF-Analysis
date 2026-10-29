@@ -10,7 +10,7 @@ Command: `PYTHONPATH=src .venv/bin/python -m pytest -c pyproject.toml --rootdir=
 
 `python3 tools/plan/pin_sweep.py contract-version migration reseal-surface route table --check docs/program/tasks/CMP-SEAL-C3.md` also returned an advisory missing-path inventory. It includes broad pattern matches that may require no edit. The task was amended to name the proved live documentation claims, the shared `contracts/analysis/**` and `contracts/events/**` version pins found by literal search, and explicit router paths accepted by the checker. Any further real edit outside its grants requires another task amendment first. The product `VERSION` stays `0.9.0`; the probe has not established a reason to edit it.
 
-Before writing a stage router, the integration inspection found its dependency protocols live in `src/auditmanager/api/routers/ports.py`; the seal task now grants that exact file for four new stage ports. This grant does not permit application logic in the router or changes to any C2 port.
+Before writing a stage router, the integration inspection found its dependency protocols live in `src/auditmanager/api/routers/ports.py`; the seal task now grants that exact file for five new stage ports, including the separate upload port. This grant does not permit application logic in the router or changes to any C2 port.
 
 A literal pin inventory found current `1.11.0` error envelopes in both proxy configurations and existing web tests, plus the analysis result constant and `tests/support/expected_facts.json`. The task now grants only their version/surface/head pins. Historical statements about prior contracts are not targets of a mechanical replacement.
 
