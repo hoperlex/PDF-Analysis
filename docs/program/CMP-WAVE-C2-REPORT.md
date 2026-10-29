@@ -26,6 +26,7 @@ Task: `CMP-WAVE-C2-INT`. Branch: `integration/compare-modules`. Publication targ
 | Composition guard runtime repair | `acdbdedd` (merge) | `CMP-C2-GATE-BE-01.md` |
 | Canonical remainder test repair | `280f0d94` | `CMP-C2-GATE-REM-01.md` |
 | Executor list-boundary test repair | `77e5e673` | `CMP-C2-GATE-EXEC-01.md` |
+| Spend-call guard repair | `e35b2d0e` | `CMP-C2-GATE-SPEND-01.md` |
 
 ## Verification
 
@@ -33,7 +34,7 @@ The first complete gate on `adcac54f` passed frontend lint, typecheck and all 3,
 
 The subsequent gate on the clean code candidate `06c312a3` passed frontend lint, typecheck and **3,653 Vitest tests**, the contract suite (**1,310 passed**), foundation (**35 passed**) and the changed-context integration battery (**6,592 passed / 13 skipped / 244 subtests passed**). Its canonical remainder exposed twenty stale W13 historical response expectations (sixteen error-envelope version strings and four portal-version upload-kind fields). That already-red remainder was stopped for diagnosis; **this was not a `GATE OK`**. `CMP-C2-GATE-W13-01` kept every historical record byte and added a digest-pinned in-memory projection; its focused suite passed 73/73, including wrong-field and changed-record controls. The original composition port guard had reread every Python file for each port and held the first battery near 61% for roughly 43 observed minutes; `CMP-C2-GATE-BE-01` cached that static census per process, passed 44/44 focused cases in 17.16 s, and failed on a removed method in a disposable mutation copy.
 
-The publication candidate containing this report is accepted only after a new full `make gate` returns literal `GATE OK` on its exact clean SHA. Its commit-specific run and remote-ref verification are recorded out of tree under `.git/gate-runs/` and `/tmp/cmp-c2-gate-publication-4.log`; the final publication SHA is the verified `origin/dev` tip, since a commit cannot embed its own hash in this report.
+The publication candidate containing this report is accepted only after a new full `make gate` returns literal `GATE OK` on its exact clean SHA. Its commit-specific run and remote-ref verification are recorded out of tree under `.git/gate-runs/` and `/tmp/cmp-c2-gate-publication-5.log`; the final publication SHA is the verified `origin/dev` tip, since a commit cannot embed its own hash in this report.
 
 Before this documentation commit, the focused contract prose, surface-count and task-governance checks passed **93/93**, and `git diff --check` was clean.
 
@@ -46,6 +47,8 @@ Focused task-governance, process-acceleration, API prose and surface-count check
 The clean candidate `9d868e62` passed frontend **3,653**, contract **1,310**, foundation **35**, and **7,797 passed / 28 skipped / 244 subtests** in the changed-context integration battery, with two executor tests failing. A shared database accumulated more than 500 executor connections across repeated gates; the archived connection fell outside the bounded list page, and an import test counted the length of that saturated page. The canonical remainder did not run. `CMP-C2-GATE-EXEC-01` reproduced both failures before edit and passed both affected modules **35/35** after changing only those tests to use an ID-specific detail read and an unbounded table count. Task governance passed **16/16**. This candidate was not published; the next clean report-bearing commit needs a complete gate.
 
 The next gate on clean `8f23322d` passed the frontend, contract and foundation phases and reached about 54% of changed-context integration before the remote check found that `origin/dev` had moved to `e8567a19` (and `origin/main` to `34492653`). The remote development commit is not an ancestor of `8f23322d`, so the gate was deliberately interrupted; it has no `GATE OK` and proves no publication candidate. The moved development branch carries separately owned AR v3 wire, output-cap and liveness repairs. Its merge at `ce25d90d` overlaps the C2 tree only in `CURRENT_STATE.md`; the resolution keeps the C2 header and the remote branch's newer AR v3 history within the 120-line limit. No C2-owned application source changed during that merge. The combined tree needs its own complete gate and a fresh remote-ref check.
+
+The full gate on the clean merged candidate `a72d0d05` passed static/frontend/contract phases, then the unit battery ended with **9,882 passed, 83 skipped and two spend-call guard failures** (`/tmp/cmp-c2-gate-publication-4.log`, exit 2). Both failures counted the crop publisher's delegation to the underlying adapter as a second unjournalled call. `CMP-C2-GATE-SPEND-01` narrowed the AST exception to that one named delegation; its focused spend and route-binding checks passed **23/23**. This red gate authorizes no push. The repaired tree needs a new full exact-SHA gate.
 
 Focused final-code evidence before the complete gate: comparison unit/contract 106 passed, pull unit 76 passed, queue integration 5 passed, AI job/pair/sheet integration 196 passed, spend/work integration 147 passed, real-DB pull context 1 passed (`CMP-C2-FIX-01.md`). The gate is the final broad-suite check.
 
