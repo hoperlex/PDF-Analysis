@@ -14,6 +14,15 @@ published version it
    by running it again and nothing already stored is touched;
 4. reports, per page, what was written.
 
+**Bounded.** ``max_pages`` (`CMP-C1-FIX-C` item 2) limits one call to that many pages built by the children; the
+rest is reported as ``remaining`` and a later call (the queue's next attempt) continues after the stored pages. The
+queue's attempt is fenced after 900 s whatever its progress, so the size of a call is what keeps a long version
+inside it (``profile_queue/handler.py`` holds the number and the measurement it comes from).
+
+**Reused.** A version whose source bytes equal those of another version of the same project takes over that version's
+stored rows of the same algorithm version instead of rendering its pages again (`CMP-C1-FIX-C` item 3, ``reuse.py``);
+those pages are reported with ``reused_from`` in their timings and are not counted against ``max_pages``.
+
 **Idempotent.** The unique keys of the table make a second run a no-op (``skipped``), and two builds of
 one version at once cost duplicated work, not duplicated rows. **A page that failed does not stop the
 version**: it is stored ``needs_review`` / ``RENDER_FAILED`` (or ``refused`` / ``PAGE_TOO_LARGE``) and the
@@ -30,6 +39,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable, Collection
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy.orm import Session, sessionmaker
@@ -45,6 +55,7 @@ from auditmanager.comparison.profile.publish import (
     ProfileBlobPublisher,
 )
 from auditmanager.comparison.profile.repository import PageProfileRepository
+from auditmanager.comparison.profile.reuse import reuse_identical_pages
 from auditmanager.comparison.profile.runner import ChildRunner, SubprocessChildRunner
 from auditmanager.comparison.profile.source import load_source_version, materialised_source
 from auditmanager.shared.db import session_scope
@@ -75,14 +86,21 @@ class VersionBuildReport:
     skipped: int = 0
     #: Failed rows removed before this build because ``retry_failed`` was asked for.
     replaced_failed: int = 0
+    #: Pages without a row that this call left for a later one because ``max_pages`` was reached.
+    remaining: int = 0
 
     def count(self, status: str) -> int:
         return sum(1 for page in self.pages if page.status == status)
 
     @property
+    def reused(self) -> int:
+        """Pages whose row was taken over from a version of identical bytes (nothing was rendered for them)."""
+        return sum(1 for page in self.pages if "reused_from" in page.timings)
+
+    @property
     def complete(self) -> bool:
         """Every page of the version has a row (of any status) after this call."""
-        return len(self.pages) + self.skipped >= self.page_count
+        return self.remaining == 0 and len(self.pages) + self.skipped >= self.page_count
 
 
 def _store_page(
@@ -145,6 +163,8 @@ def build_version_page_profiles(
     runner: ChildRunner | None = None,
     pages: Collection[int] | None = None,
     retry_failed: bool = False,
+    retry_cutoff: datetime | None = None,
+    max_pages: int | None = None,
     on_page: Callable[[PageBuildReport], None] | None = None,
     render_limits: limits.ChildLimits = limits.RENDER_LIMITS,
     extract_limits: limits.ChildLimits = limits.EXTRACT_LIMITS,
@@ -153,12 +173,21 @@ def build_version_page_profiles(
     """Store the missing page profiles of ``version_uid``; see the module docstring.
 
     ``pages`` (1-based) limits the build to those pages; ``retry_failed`` first removes the rows of
-    pages that ended without a result so that they are built again.
+    pages that ended without a result so that they are built again (with ``retry_cutoff`` only those
+    written before that instant: the queue passes the instant its retry item was asked for, so that a page
+    which fails again while the item runs is not removed by the item's next attempt); ``max_pages`` bounds
+    the pages the children are started for in this call (``ValueError`` below one).
     """
+    if max_pages is not None and max_pages < 1:
+        raise ValueError("a build call profiles at least one page")
     repository = PageProfileRepository()
     with session_scope(session_factory) as session:
         source = load_source_version(session, version_uid)
-        replaced = repository.delete_failed(session, version_uid, limits.ALGO_VERSION) if retry_failed else 0
+        replaced = (
+            repository.delete_failed(session, version_uid, limits.ALGO_VERSION, created_before=retry_cutoff)
+            if retry_failed
+            else 0
+        )
         existing = repository.existing(session, version_uid, limits.ALGO_VERSION)
     wanted = [
         number
@@ -169,9 +198,36 @@ def build_version_page_profiles(
     if not wanted:
         return VersionBuildReport(version_uid, limits.ALGO_VERSION, source.page_count, (), skipped, replaced)
 
+    reports: list[PageBuildReport] = []
+    for reused in reuse_identical_pages(session_factory, repository, source, wanted):
+        report = PageBuildReport(
+            page_number=reused.page_number,
+            page_profile_id=reused.page_profile_id,
+            status=reused.status,
+            reason=reused.reason,
+            created=reused.created,
+            timings={"reused_from": reused.donor_version_uid},
+        )
+        reports.append(report)
+        _LOG.info(
+            "comparison_page_profile page=%s status=%s reused_from=%s", reused.page_number, reused.status,
+            reused.donor_version_uid,
+        )
+        if on_page is not None:
+            on_page(report)
+    taken = {report.page_number for report in reports}
+    wanted = [number for number in wanted if number not in taken]
+    remaining = 0
+    if max_pages is not None and len(wanted) > max_pages:
+        remaining = len(wanted) - max_pages
+        wanted = wanted[:max_pages]
+    if not wanted:
+        return VersionBuildReport(
+            version_uid, limits.ALGO_VERSION, source.page_count, tuple(reports), skipped, replaced, remaining
+        )
+
     runner = runner or SubprocessChildRunner()
     publisher = ProfileBlobPublisher(session_factory, blob_store)
-    reports: list[PageBuildReport] = []
     with materialised_source(blob_store, source) as path:
         for number in wanted:
             outcome = profile_page(
@@ -192,5 +248,5 @@ def build_version_page_profiles(
             if on_page is not None:
                 on_page(report)
     return VersionBuildReport(
-        version_uid, limits.ALGO_VERSION, source.page_count, tuple(reports), skipped, replaced
+        version_uid, limits.ALGO_VERSION, source.page_count, tuple(reports), skipped, replaced, remaining
     )

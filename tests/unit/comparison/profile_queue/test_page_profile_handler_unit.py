@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any
 
@@ -30,6 +31,7 @@ from auditmanager.comparison.public import (
 )
 from auditmanager.comparison.profile_queue.handler import (
     PAGE_PROFILE_KIND,
+    PAGES_PER_ATTEMPT,
     REASON_CHILD_START_FAILED,
     REASON_INCOMPLETE,
     REASON_PAYLOAD_INVALID,
@@ -42,6 +44,8 @@ from auditmanager.comparison.work.model import ItemAuthority, WorkItem
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 VERSION = "ver_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+#: When the fake queue says the item was asked for.
+ASKED_AT = datetime(2026, 10, 29, 4, 0, 0, tzinfo=timezone.utc)
 
 
 class FakeSession:
@@ -76,6 +80,9 @@ class FakeWork:
     def cancel_requested(self, session: Any, work_id: str) -> bool:
         self.cancel_reads += 1
         return self.cancel_from is not None and self.cancel_reads >= self.cancel_from
+
+    def get(self, session: Any, work_id: str) -> Any:
+        return SimpleNamespace(work_id=work_id, created_at=ASKED_AT)
 
 
 class FakeRepository:
@@ -112,7 +119,7 @@ def make_item(repository: FakeRepository, payload: dict[str, Any] | None = None)
 class Harness:
     """A handler over fakes, and a builder that stores ``page_count`` pages one at a time."""
 
-    def __init__(self, *, page_count: int = 6, skipped: int = 0) -> None:
+    def __init__(self, *, page_count: int = 6, skipped: int = 0, pages_per_attempt: int | None = None) -> None:
         self.log: list[str] = []
         self.work = FakeWork()
         self.repository = FakeRepository()
@@ -127,18 +134,25 @@ class Harness:
             session_factory=lambda: FakeSession(self.log), blob_store=object(), work=self.work,
         )
         self.runner = object()
-        self.handler = PageProfileHandler(dependencies, runner=self.runner, build=self.build)  # type: ignore[arg-type]
+        options: dict[str, Any] = {} if pages_per_attempt is None else {"pages_per_attempt": pages_per_attempt}
+        self.handler = PageProfileHandler(dependencies, runner=self.runner, build=self.build, **options)  # type: ignore[arg-type]
 
     def build(
         self, session_factory: Any, blob_store: Any, version_uid: str, *, runner: Any = None,
-        retry_failed: bool = False, on_page: Callable[[PageBuildReport], None] | None = None, **rest: Any,
+        retry_failed: bool = False, retry_cutoff: datetime | None = None, max_pages: int | None = None,
+        on_page: Callable[[PageBuildReport], None] | None = None, **rest: Any,
     ) -> VersionBuildReport:
+        """Stores the pages that have no row yet, at most ``max_pages`` of them, as the real builder does."""
         self.calls.append({"version_uid": version_uid, "runner": runner, "retry_failed": retry_failed,
-                           "on_page": on_page, "rest": rest})
+                           "retry_cutoff": retry_cutoff, "max_pages": max_pages, "on_page": on_page, "rest": rest})
         if self.raises is not None and self.raises_after is None:
             raise self.raises
+        before = len(self.stored)
+        wanted = [n for n in range(self.skipped + 1, self.page_count + 1) if n not in self.stored]
+        cap = len(wanted) if max_pages is None else max_pages
+        remaining = max(0, len(wanted) - cap)
         reports: list[PageBuildReport] = []
-        for number in range(self.skipped + 1, self.page_count + 1):
+        for number in wanted[:cap]:
             if self.report_pages is not None and len(reports) >= self.report_pages:
                 break
             self.stored.append(number)
@@ -148,7 +162,9 @@ class Harness:
                 raise self.raises
             if on_page is not None:
                 on_page(report)
-        return VersionBuildReport(version_uid, "cmp-profile/1", self.page_count, tuple(reports), self.skipped)
+        return VersionBuildReport(
+            version_uid, "cmp-profile/1", self.page_count, tuple(reports), self.skipped + before, 0, remaining
+        )
 
     def run(self, item: WorkItem | None = None) -> Any:
         return self.handler.run(item or make_item(self.repository))
@@ -216,6 +232,7 @@ def test_a_build_that_leaves_every_page_with_a_row_completes_the_item() -> None:
     (call,) = harness.calls
     assert call["version_uid"] == VERSION and call["retry_failed"] is False and call["runner"] is harness.runner
     assert call["rest"] == {}, "the handler passes the builder no page subset and no private limit"
+    assert call["max_pages"] == PAGES_PER_ATTEMPT and call["retry_cutoff"] is None
 
 
 def test_pages_that_were_stored_before_count_and_a_version_with_nothing_to_build_completes() -> None:
@@ -362,3 +379,74 @@ def test_the_flags_the_heartbeat_thread_sets_are_the_items_own_events() -> None:
     item = make_item(FakeRepository())
     assert isinstance(item.cancelled, threading.Event) and isinstance(item.lease_lost, threading.Event)
     assert not item.cancelled.is_set() and not item.lease_lost.is_set()
+
+
+# -- the two kinds of source (`CMP-C1-FIX-C` item 1) -------------------------------------------------------
+
+
+def test_a_source_that_cannot_be_read_retries_but_a_manifest_that_holds_two_sources_does_not() -> None:
+    """An unreadable source may be a storage outage, so the attempt budget is spent on it; a manifest that binds both source
+    roles does not become one by waiting, so the item ends at once with a reason of its own."""
+    from auditmanager.comparison.profile.source import REASON_AMBIGUOUS, REASON_UNREADABLE
+    from auditmanager.comparison.profile_queue.handler import REASON_SOURCE_AMBIGUOUS
+
+    unreadable = Harness()
+    unreadable.raises = DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, reason=REASON_UNREADABLE)
+    assert unreadable.run() == Failed(REASON_SOURCE_UNREADABLE, retry=True)
+
+    ambiguous = Harness()
+    ambiguous.raises = DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, reason=REASON_AMBIGUOUS)
+    assert ambiguous.run() == Failed(REASON_SOURCE_AMBIGUOUS)
+    assert Failed(REASON_SOURCE_AMBIGUOUS).retry is False
+
+
+# -- an attempt is bounded (`CMP-C1-FIX-C` item 2) ------------------------------------------------------------
+
+
+def test_the_bound_is_the_measured_thirty_pages_and_every_attempt_is_told_it() -> None:
+    assert PAGES_PER_ATTEMPT == 30
+    harness = Harness(page_count=5)
+    harness.run()
+    assert harness.calls[0]["max_pages"] == PAGES_PER_ATTEMPT
+    with pytest.raises(ValueError):
+        PageProfileHandler(SimpleNamespace(), pages_per_attempt=0)  # type: ignore[arg-type]
+
+
+def test_a_version_of_more_pages_than_an_attempt_holds_is_given_back_each_time_and_completes_on_the_last() -> None:
+    """A yield is not a failure: the item returns to the queue, and the next attempt continues after the stored pages."""
+    harness = Harness(page_count=10, pages_per_attempt=4)
+    outcomes = [harness.run(), harness.run(), harness.run()]
+    assert outcomes == [Yielded(), Yielded(), Completed()]
+    assert harness.stored == list(range(1, 11)), "every page once, in order, none twice"
+    assert [len(call["rest"]) for call in harness.calls] == [0, 0, 0]
+    assert all(call["max_pages"] == 4 for call in harness.calls)
+
+
+def test_a_version_of_exactly_one_attempts_pages_completes_without_a_yield() -> None:
+    assert Harness(page_count=4, pages_per_attempt=4).run() == Completed()
+    assert Harness(page_count=5, pages_per_attempt=4).run() == Yielded()
+
+
+def test_a_yield_for_a_bound_is_not_taken_for_an_incomplete_build() -> None:
+    """Pages left because of the bound are a continuation (a yield); pages missing without a reason are the retried fault."""
+    bounded = Harness(page_count=6, pages_per_attempt=2)
+    assert bounded.run() == Yielded() and bounded.stored == [1, 2]
+    broken = Harness(page_count=6)
+    broken.report_pages = 5
+    assert broken.run() == Failed(REASON_INCOMPLETE, retry=True)
+
+
+def test_a_retry_item_sweeps_only_what_failed_before_it_was_asked_for() -> None:
+    """The cutoff is the item's own ``created_at``: a continuation must not remove the page this item just failed to build."""
+    retry = Harness()
+    retry.run(make_item(retry.repository, page_profile_payload(VERSION, retry_failed=True)))
+    assert retry.calls[0]["retry_failed"] is True and retry.calls[0]["retry_cutoff"] == ASKED_AT
+    ordinary = Harness()
+    ordinary.run()
+    assert ordinary.calls[0]["retry_cutoff"] is None
+
+
+def test_a_cancel_wins_over_the_continuation_the_stop_between_pages_is_unchanged() -> None:
+    harness = Harness(page_count=10, pages_per_attempt=4)
+    harness.work.cancel_from = 3
+    assert harness.run() == Yielded() and harness.stored == [1, 2]

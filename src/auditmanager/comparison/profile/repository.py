@@ -12,12 +12,20 @@ The one delete is :meth:`PageProfileRepository.delete_failed`: a page that ended
 (``needs_review`` with reason ``RENDER_FAILED``) is **not evidence**, and an operator who has freed the
 host of what stopped it may build it again; a profile that is ``ready`` or ``refused`` is never deleted
 here, and a row that a later table already references is refused by that table's foreign key, not by
-this code.
+this code. A retry item sweeps only the rows that already existed when it was asked for
+(``created_before``), so a page that fails again while the item runs is a stored page of that item and a
+later attempt of the same item does not build it once more.
+
+:meth:`PageProfileRepository.reusable_rows` reads the rows of a version a byte-identical version may take
+over (`CMP-C1-FIX-C` item 3, ``reuse.py``): every row of the algorithm version except a page that ended
+without a result.
 """
 
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import text
@@ -57,7 +65,13 @@ _INSERT = text(
 )
 _DELETE_FAILED = text(
     "DELETE FROM comparison_page_profile WHERE version_uid = :version_uid AND algo_version = :algo "
-    "AND status = 'needs_review' AND reason = 'RENDER_FAILED'"
+    "AND status = 'needs_review' AND reason = 'RENDER_FAILED' "
+    "AND (CAST(:created_before AS timestamptz) IS NULL OR created_at < CAST(:created_before AS timestamptz))"
+)
+_REUSABLE = text(
+    f"SELECT {_COLUMNS} FROM comparison_page_profile "
+    "WHERE version_uid = :version_uid AND algo_version = :algo AND page_number = ANY(CAST(:pages AS integer[])) "
+    "AND NOT (status = 'needs_review' AND reason = 'RENDER_FAILED') ORDER BY page_number"
 )
 
 
@@ -145,6 +159,26 @@ class PageProfileRepository:
         ).first()
         return None if inserted is None else str(tuple(inserted)[0])
 
-    def delete_failed(self, session: Session, version_uid: str, algo_version: str) -> int:
-        """Remove the rows of pages that ended without a result; the count removed."""
-        return int(session.execute(_DELETE_FAILED, {"version_uid": version_uid, "algo": algo_version}).rowcount)
+    def delete_failed(
+        self, session: Session, version_uid: str, algo_version: str, *, created_before: datetime | None = None
+    ) -> int:
+        """Remove the rows of pages that ended without a result; the count removed.
+
+        With ``created_before`` only the rows written before that instant are removed (database time, both sides)."""
+        return int(
+            session.execute(
+                _DELETE_FAILED,
+                {"version_uid": version_uid, "algo": algo_version, "created_before": created_before},
+            ).rowcount
+        )
+
+    def reusable_rows(
+        self, session: Session, version_uid: str, algo_version: str, pages: Sequence[int]
+    ) -> list[PageProfileRow]:
+        """The rows of ``pages`` of ``version_uid`` that another version of the same bytes may take over."""
+        if not pages:
+            return []
+        rows = session.execute(
+            _REUSABLE, {"version_uid": version_uid, "algo": algo_version, "pages": [int(p) for p in pages]}
+        ).all()
+        return [_row(row) for row in rows]
