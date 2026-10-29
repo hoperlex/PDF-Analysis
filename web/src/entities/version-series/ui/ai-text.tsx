@@ -10,17 +10,22 @@ import { RECORDED_LABEL, RECORDED_NOTE, UNCONFIRMED_LABEL } from '../model/ai-wo
 
 import styles from './ai-ui.module.css';
 
+/** «тестовый ответ»: the mark of an answer that came from a recording, on a job or a report whose route records. */
+export function RecordedMark() {
+  return (
+    <span className={styles.recordedLabel} data-recorded-label="" title={RECORDED_NOTE}>
+      {RECORDED_LABEL}
+    </span>
+  );
+}
+
 export function AiLabel({ recorded }: { readonly recorded?: boolean | undefined }) {
   return (
     <>
       <span className={styles.aiLabel} data-ai-label="" title="Текст составлен ИИ. Инженер его не проверял и не подтверждал.">
         {UNCONFIRMED_LABEL}
       </span>
-      {recorded === true ? (
-        <span className={styles.recordedLabel} data-recorded-label="" title={RECORDED_NOTE}>
-          {RECORDED_LABEL}
-        </span>
-      ) : null}
+      {recorded === true ? <RecordedMark /> : null}
     </>
   );
 }

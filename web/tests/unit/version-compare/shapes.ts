@@ -324,6 +324,10 @@ function aiShapes(): ComparisonShape[] {
     make: () => createElement(AiChangesBlockView, changesBlockProps({ folds: new Set([TRANSITION_12_]), review: new Map([[TRANSITION_12_, reviewSheets()]]), dialog: createElement(EstimatePanel, estimateProps({ title: 'ИИ-описание изменений · листы с ошибкой' })) })),
   });
   push({ name: 'ai-changes-block-fold-empty', make: () => createElement(AiChangesBlockView, changesBlockProps({ folds: new Set([TRANSITION_12_]), review: new Map() })) });
+  push({
+    name: 'ai-changes-block-recorded',
+    make: () => createElement(AiChangesBlockView, changesBlockProps({ changes: sheetChanges({ job: job({ estimate: estimate({ route: { ...estimate().route, provider_mode: 'recorded' } }) }) }) })),
+  });
   push({ name: 'ai-changes-block-none', make: () => createElement(AiChangesBlockView, changesBlockProps({ changes: sheetChanges({ job: undefined as never, transitions: sheetChanges().transitions.map((row) => ({ ...row, done: 0, errors: 0, to_review: 0, changed: 0 })) }) })) });
   push({ name: 'ai-changes-block-reader', make: () => createElement(AiChangesBlockView, changesBlockProps({ mayAct: false, changes: sheetChanges({ job: job({ state: 'cancelled', counts: { total: 12, done: 5, failed: 1, unknown: 0 } }) }) })) });
   push({ name: 'ai-changes-block-refused', make: () => createElement(AiChangesBlockView, changesBlockProps({ failure: comparisonFailure(refusal('conflict', { conflict_reason: 'comparison_ai_nothing_to_do' })) })) });
@@ -348,6 +352,10 @@ function aiShapes(): ComparisonShape[] {
   }
   push({ name: 'summary-report-block-client', make: () => createElement(SummaryReportBlockView, summaryProps()) });
   push({ name: 'summary-report-block-analytic', make: () => createElement(SummaryReportBlockView, summaryProps({ report: report({ kind: 'analytic', state: 'partial', failure_reason: 'model_failed', parts: reportsInEveryShape()[1]?.parts ?? [] }) })) });
+  push({
+    name: 'summary-report-block-recorded',
+    make: () => createElement(SummaryReportBlockView, summaryProps({ report: report({ job: job({ method: 'report', estimate: estimate({ route: { ...estimate().route, provider_mode: 'recorded' } }) }) }) })),
+  });
   push({ name: 'summary-report-block-none', make: () => createElement(SummaryReportBlockView, summaryProps({ report: undefined, summaryReady: false })) });
   push({ name: 'summary-report-block-refused', make: () => createElement(SummaryReportBlockView, summaryProps({ mayAct: false, failure: comparisonFailure(refusal('conflict', { conflict_reason: 'comparison_summary_unavailable' })) })) });
   for (const stage of COMPARISON_REPORT_STAGE_VALUES) {

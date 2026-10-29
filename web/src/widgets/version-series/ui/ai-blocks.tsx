@@ -33,6 +33,7 @@ import {
   AI_SHEET_STATE_LABELS,
   AI_TEXT_NOTE,
   AiText,
+  RecordedMark,
   RETRY_FAILED_LABEL,
   REPORT_KIND_LABELS,
   REPORT_STAGE_LABELS,
@@ -50,6 +51,7 @@ import {
   coverageLine,
   coveragePercent,
   hasArtifact,
+  isRecordedRoute,
   pdfName,
   positionsLine,
   progressPercent,
@@ -137,6 +139,7 @@ export function AiChangesBlockView({
         ) : (
           <>
             <span className="am-badge am-badge--active" data-ai-job-state={job.state}>{stateText}</span>
+            {isRecordedRoute(job) ? <RecordedMark /> : null}
             <span className="am-note">
               листов готово: {n(totals.done)} из {n(totals.sheets)} · время {duration(totals.seconds)} · обращений {n(totals.calls)} · токены: вход {n(totals.inputTokens)}, выход {n(totals.outputTokens)}
             </span>
@@ -516,6 +519,7 @@ export function SummaryReportBlockView({ report, summaryReady, transitions, name
         ) : (
           <>
             <span className="am-badge am-badge--active" data-report-state={report.state}>{REPORT_STATE_LABELS[report.state]}</span>
+            {isRecordedRoute(report.job) ? <RecordedMark /> : null}
             <span className="am-note">
               {report.stage === undefined ? '' : <>шаг: <span data-report-stage={report.stage}>{REPORT_STAGE_LABELS[report.stage]}</span> · </>}
               {reportProgressLine(report)}

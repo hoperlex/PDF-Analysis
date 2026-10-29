@@ -293,6 +293,7 @@ export {
   UNIT_MARKS,
   aiJobStateLabel,
   descriptionHasContent,
+  isRecordedRoute,
   pauseNeedsConsent,
   specFieldLabel,
   specReasonWords,
@@ -388,7 +389,7 @@ export {
 } from './model/report-view';
 export type { Evidence } from './model/description-view';
 export { copyText, evidenceCounter, evidenceOf, focusIndexOf, leadLine, nowText, stepIndex, wasText } from './model/description-view';
-export { AiLabel, AiText } from './ui/ai-text';
+export { AiLabel, AiText, RecordedMark } from './ui/ai-text';
 export type { AiTextProps } from './ui/ai-text';
 export { EstimatePanel } from './ui/estimate-panel';
 export type { EstimatePanelProps } from './ui/estimate-panel';

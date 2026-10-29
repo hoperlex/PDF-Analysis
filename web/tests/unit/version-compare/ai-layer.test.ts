@@ -20,6 +20,9 @@ import { AiChangesBlockView, ProjectsAndStagesView, SpecificationsBlockView } fr
 import {
   COMPARISON_KEYS,
   AI_JOB_PARTIAL_LABEL,
+  AI_PAUSE_ADVICE,
+  AI_PAUSE_REASON_LABELS,
+  pauseNeedsConsent,
   AiLabel,
   AiText,
   EstimatePanel,
@@ -238,6 +241,23 @@ describe('every AI text carries «не подтверждено инженеро
   });
 });
 
+describe('the pauses of a job, as the job core stops them', () => {
+  it('says a day-ceiling stop (reason quota) and a job-ceiling stop (reason overrun) in words, and asks a new consent only after the second', () => {
+    expect(AI_PAUSE_REASON_LABELS.quota).toContain('дневной потолок');
+    expect(AI_PAUSE_REASON_LABELS.overrun).toContain('потолок одного задания');
+    expect(AI_PAUSE_ADVICE.overrun).toContain('новым подтверждением');
+    expect(pauseNeedsConsent('overrun')).toBe(true);
+    expect(pauseNeedsConsent('route_changed')).toBe(true);
+    expect(pauseNeedsConsent('quota')).toBe(false);
+    expect(pauseNeedsConsent(undefined)).toBe(false);
+  });
+
+  it('finishes a cancelled job under the consent it holds: «Досчитать» sends no estimate', () => {
+    const finish = aiStepCell(facts({ step: 'ai_changes', job: job({ state: 'cancelled', counts: { total: 12, done: 5, failed: 0, unknown: 0 } }) })).actions.find((a) => a.id === 'finish');
+    expect(finish).toMatchObject({ label: 'Продолжить', asksConsent: false });
+  });
+});
+
 describe('a recorded (test) answer is labelled as one', () => {
   it('says so on the panel and puts the label on the texts', () => {
     const recorded = panel({ description: description({ recorded: true }) });
@@ -247,6 +267,18 @@ describe('a recorded (test) answer is labelled as one', () => {
     expect(ordinary).not.toContain('data-recorded-label');
     expect(ordinary).not.toContain(RECORDED_LABEL);
     expect(recorded.match(/data-recorded-label=""/g)?.length ?? 0).toBeGreaterThan(count(recorded, 'data-ai-text') - 2);
+  });
+
+  it('marks a job or a report whose route records, by the provider mode of its route', () => {
+    const block = (provider: 'live' | 'recorded'): string =>
+      renderToStaticMarkup(createElement(AiChangesBlockView, {
+        changes: sheetChanges({ job: job({ estimate: estimate({ route: { ...estimate().route, provider_mode: provider } }) }) }), series: series(),
+        names: new Map(), mayAct: true, busy: false, failure: null, folds: new Set<string>(), review: new Map(), onFold: noop, onAct: noop,
+        onOpenTransition: noop, onOpenReviewSheet: noop, dialog: null,
+      }));
+    expect(block('recorded')).toContain('data-recorded-label=""');
+    expect(block('recorded')).toContain('тестовый ответ');
+    expect(block('live')).not.toContain('data-recorded-label');
   });
 
   it('says so in the history of the descriptions, and warns when the connection itself records', () => {

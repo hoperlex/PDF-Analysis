@@ -49,9 +49,14 @@ export const AI_TEXT_NOTE =
   'Текст составлен ИИ по изображению и тексту листа и инженером не подтверждён. Он не заменяет решение эксперта и не меняет результат сравнения листов.';
 
 /** What a recorded (test) answer says of itself (our counterpart of «ТЕСТОВЫЙ ОТВЕТ подменного исполнителя», `sheet-changes.js:12`). */
-export const RECORDED_LABEL = 'ТЕСТОВЫЙ ОТВЕТ: записанный ответ, а не описание модели';
+export const RECORDED_LABEL = 'тестовый ответ';
 export const RECORDED_NOTE =
-  'Этот текст взят из записи, сделанной для проверки программы. Модель его не писала; не показывайте его как описание изменений.';
+  'Это тестовый ответ: он взят из записи, сделанной для проверки программы (режим подключения «запись»). Модель его не писала; не показывайте его как описание изменений.';
+
+/** A job or a report whose route works in recorded mode answered from a recording (`ProviderMode`, `AI-JOBS-01` fact 5). */
+export function isRecordedRoute(job: { readonly estimate: { readonly route: { readonly provider_mode: string } } } | undefined): boolean {
+  return job?.estimate.route.provider_mode === 'recorded';
+}
 
 export const AI_METHOD_LABELS: Readonly<Record<ComparisonAiMethod, string>> = {
   pair_check: 'ИИ-проверка сомнительных пар',
@@ -78,9 +83,9 @@ export function aiJobStateLabel(job: Pick<ComparisonAiJob, 'state' | 'counts'>):
 
 export const AI_PAUSE_REASON_LABELS: Readonly<Record<ComparisonAiPauseReason, string>> = {
   user: 'остановлено по вашей просьбе',
-  quota: 'лимит подписки исчерпан',
+  quota: 'лимит исчерпан: подписки или дневной потолок установки (50 долл.)',
   auth: 'исполнитель отказал в доступе',
-  overrun: 'расход превысил оценку в 1,2 раза',
+  overrun: 'расход превысил оценку в 1,2 раза или потолок одного задания (10 долл.)',
   route_changed: 'назначение или ревизия подключения изменились после подтверждения',
   module_off: 'модуль «Сравнение версий» выключен',
 };
@@ -92,9 +97,9 @@ export function pauseNeedsConsent(reason: ComparisonAiPauseReason | undefined): 
 
 export const AI_PAUSE_ADVICE: Readonly<Record<ComparisonAiPauseReason, string>> = {
   user: '',
-  quota: 'Подождите, пока обновится лимит подписки, и продолжите.',
+  quota: 'Подождите, пока обновится лимит подписки или наступит следующий день (потолок дня), и продолжите.',
   auth: 'Проверьте подключение исполнителя в разделе «Подключения», затем продолжайте.',
-  overrun: 'Фактический расход превысил подтверждённую оценку больше чем в 1,2 раза. Продолжить можно только с новой оценкой и новым подтверждением.',
+  overrun: 'Фактический расход превысил подтверждённую оценку больше чем в 1,2 раза либо потолок одного задания. Продолжить можно только с новой оценкой и новым подтверждением.',
   route_changed: 'Назначение или ревизия подключения изменились: прежнее подтверждение к ним не относится. Продолжить можно только с новой оценкой и новым подтверждением.',
   module_off: 'Включите модуль, затем продолжайте.',
 };

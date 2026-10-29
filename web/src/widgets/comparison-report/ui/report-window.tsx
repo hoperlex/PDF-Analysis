@@ -23,6 +23,8 @@ import type { ComparisonFailure } from '@/entities/version-series';
 import {
   AiLabel,
   CONFIRM_LABELS,
+  RecordedMark,
+  isRecordedRoute,
   EstimatePanel,
   REPORT_KIND_LABELS,
   REPORT_KIND_TITLES,
@@ -215,6 +217,7 @@ export function ReportWindowView({
                   </td>
                   <td>
                     <span className="am-badge am-badge--active" data-report-state={report.state}>{REPORT_STATE_LABELS[report.state]}</span>
+                    {isRecordedRoute(report.job) ? <RecordedMark /> : null}
                     {report.stage === undefined || !isLiveReport(report) ? null : (
                       <div className={styles.muted} data-report-stage={report.stage}>{REPORT_STAGE_LABELS[report.stage]}</div>
                     )}
