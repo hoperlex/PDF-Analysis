@@ -1,7 +1,7 @@
 # Task CMP-WAVE-C2-INT — accept and publish the C2 development candidate
 
 ## Outcome
-The merged C2 comparison modules pass one complete `make gate` on an exact clean commit; the same commit is fast-forward published to `origin/dev`, and the wave report and current-state header identify that commit and its measured limits. No `origin/main` publication occurs.
+The merged C2 comparison modules pass one complete `make gate` on an exact clean commit; the same commit is fast-forward published to `origin/dev`. The wave report and current-state header identify the frozen C2 code commit, the verified publication ref and measured limits. The self-containing publication SHA is resolved by `origin/dev` and the out-of-tree gate record after the commit exists. No `origin/main` publication occurs.
 
 ## Depends on
 - CMP-SEAL-C2
@@ -14,6 +14,9 @@ The merged C2 comparison modules pass one complete `make gate` on an exact clean
 - CMP-VC-UI-02
 - CMP-C2-FIX-01
 - CMP-C2-GOV-01
+- CMP-C2-GATE-FE-01
+- CMP-C2-GATE-W13-01
+- CMP-C2-GATE-BE-01
 
 ## Frozen inputs
 - domain contract: ADR-0025 and the C2 seal
@@ -102,8 +105,8 @@ The C2 candidate contains all four AI method lanes, the launch queue and UI on t
 The default `AUDITMANAGER_COMPARISON_MODULES=none` prevents the comparison worker from claiming C2 work. Reversal of a development publication is a new reviewed fast-forward commit, never a force push. No automatic production rollback is claimed.
 
 ## Handoff
-- changed files: pending
-- commands/results: pending
-- contracts: unchanged; frozen `1.11.0` and `0040`
-- known limits: pending
-- integration notes: pending
+- changed files owned by this task: `docs/program/tasks/CMP-WAVE-C2-INT.md`, `docs/program/CMP-WAVE-C2-REPORT.md`, `docs/program/CURRENT_STATE.md`. The W13 and composition-guard test edits have their separate repair tasks and reports.
+- commands/results before the publication commit: `npm --prefix web ci` completed from the lockfile; code-candidate gate `06c312a3` passed frontend 3,653 tests, contract 1,310, foundation 35 and changed-context integration 6,592 / 13 skipped, then found twenty stale W13 baseline comparisons in the canonical remainder and was stopped red. W13 focused repair 73 passed; guard focused repair 44 passed with a red mutation copy; documentation prose/surface/governance focused 93 passed; `git diff --check` clean. The exact publication SHA's full-gate result and remote-ref proof must be recorded after this self-containing commit in `.git/gate-runs/` and `/tmp/cmp-c2-gate-final.log` before `origin/dev` is updated.
+- contracts: unchanged by this documentation step; frozen API `1.11.0` (176/198/517) and migration head `0040_comparison_ai_reports`.
+- known limits: no live model/runner call or browser journey claim; `needs_consent` launch entries lack renewal, pull crop blobs lack long-lived references, and overview steps 4/6/7 use per-row reads. The module flag defaults to `none`.
+- integration notes: commit these three files, prove a clean tree and full `GATE OK` on that exact SHA, recheck `origin/dev` and fast-forward only that SHA, then verify the remote ref. `origin/main` is outside this task. The documentation step touches no contract, migration, root dependency/lockfile, composition root, global styles, infrastructure, source or tests; the separate repair tasks authorize their exact test files.
