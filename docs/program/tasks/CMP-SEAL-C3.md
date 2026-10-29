@@ -71,7 +71,6 @@ The API contract is `1.12.0` with C3 stage-upload, stage-pair, assembly, sheet-l
 - `infra/deploy/proxy/nginx.conf`, `infra/deploy/proxy/tls-server.conf` (edge error-envelope version and current surface comments only)
 - `web/openapi/openapi.json`, `web/src/shared/api/**`, `web/FRONTEND_LOCK.json`, `web/src/app/bff/v1/[...path]/route.ts`
 - `tests/contract/api_v1/**`, `tests/contract/domain_p02/**`, `tests/integration/api/**`, `tests/integration/composition/**`, `tests/integration/db/**`, `tests/integration/recovery/**`, `tests/integration/p02_journey/journey.py`, `tests/e2e/test_pc01_journey_conformance.py`
-- `tests/contract/test_cp00_candidate.py` (the full contract suite exposed a CP-00 historical hash assertion reading live resealed C3 files; keep the recorded hashes and verify them against its named candidate commit)
 - `tests/support/expected_facts.json` (current contract version, surface and migration-head facts only)
 - `web/tests/contract/**`, `web/tests/guards/rendered-language.guard.test.ts`
 - `web/tests/**` (existing expected `1.11.0` error-envelope literals only; no behavior changes outside C3-specific tests)
