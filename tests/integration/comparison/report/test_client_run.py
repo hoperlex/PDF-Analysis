@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from auditmanager.comparison.report.model import UNCONFIRMED_LABEL
+from auditmanager.comparison.report.model import RECORDED_LABEL, UNCONFIRMED_LABEL
 from auditmanager.shared.errors import DomainError, ErrorCode
 from tests.integration.comparison.report.conftest import EXPERT, support
 from tests.integration.comparison.report.run_support import pdf_text, record_client, reread, run_client_report, source_of, start
@@ -32,6 +32,7 @@ def test_a_started_report_runs_to_a_pdf_with_one_recorded_call_per_transition_th
     assert pdf.startswith(b"%PDF-")
     text = pdf_text(pdf)
     assert all(UNCONFIRMED_LABEL.replace(" ", "") in page.replace(" ", "").replace("\n", "") for page in text)
+    assert all(RECORDED_LABEL.replace(" ", "") in page.replace(" ", "").replace("\n", "") for page in text)  # the answers were recorded ones, and the page says so
     assert "изменённых листов 3, описано 1, отброшено проверкой 0" in " ".join(text).replace("\n", " ")
     assert "V1→V2" in text[0] and "3×4" in text[0] and "Описание изменений для этого перехода не подготовлено." in text[0]
 

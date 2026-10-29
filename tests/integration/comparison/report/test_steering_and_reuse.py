@@ -47,9 +47,10 @@ def test_a_report_cancelled_between_two_items_keeps_its_finished_part_and_contin
     start(db, report)
     worker, handler = db.worker(), db.handler()
     item = db.claim(worker)
-    assert type(handler.run(item)).__name__ == "Completed"
+    outcome = handler.run(item)
+    assert type(outcome).__name__ == "Completed"
     with db.sessions() as session:
-        db.work.finish(session, item.authority, handler.run(item) if False else __import__("auditmanager.comparison.work.model", fromlist=["Completed"]).Completed())
+        db.work.finish(session, item.authority, outcome)
         session.commit()
     assert digests_of(db) == [first]
     cancelled = steer(db, "cancel_report", report, key="cancel-1")
@@ -97,19 +98,17 @@ def test_a_report_whose_every_part_is_reusable_has_nothing_to_send_and_is_refuse
     assert reread(db, again)["state"] == "draft"
 
 
-def test_the_content_key_names_the_project_the_model_the_prompt_and_the_text_of_the_transition(db: Any, world: Any, make: Any, route: Any, h: Any) -> None:
+def test_the_content_key_names_the_project_the_model_the_prompt_and_the_text_of_the_transition(db: Any, world: Any, make: Any, route: Any) -> None:
     from auditmanager.comparison.report import plan as plan_module
 
     report = make(world)
     doc = source_of(db, report["report_id"])
-    profile = {"key": "EM"}
     base = dict(kind="client", project_uid=world["project"], model="claude-opus-5", profile_key="EM", transition_sha=doc.manifest["transitions"][0]["sha256"], with_records=True)
     key = plan_module.content_key(**base)
     assert plan_module.content_key(**base) == key
     for name, value in (("project_uid", "prj_01ARZ3NDEKTSV4RRFFQ69G5FAV"), ("model", "other-model"), ("profile_key", "KZh"), ("transition_sha", "0" * 64),
                         ("kind", "analytic"), ("with_records", False)):
         assert plan_module.content_key(**{**base, name: value}) != key, name
-    assert profile["key"] == "EM"
 
 
 def test_a_failed_pdf_fails_the_report_without_losing_its_parts_and_continue_finishes_it_with_no_new_call(db: Any, world: Any, make: Any, route: Any) -> None:
@@ -240,3 +239,27 @@ def test_the_report_list_is_newest_first_pages_by_a_cursor_and_hides_the_deleted
     steer(db, "delete_report", {"report_id": made[1]}, key="d")
     assert [i["report_id"] for i in db.service().list_reports(series_id=world["series"], after=None, limit=10).items] == [made[2], made[0]]
     assert pytest.raises(DomainError, db.service().list_reports, series_id="cser_01ARZ3NDEKTSV4RRFFQ69G5FAV", after=None, limit=5).value.code is ErrorCode.NOT_FOUND
+
+
+def test_one_report_holds_one_live_job_even_when_the_services_own_check_is_bypassed(db: Any, world: Any, make: Any, route: Any) -> None:
+    """The service refuses a second start of a started report before anything is written. This test goes round it: it hands the shared core a method for
+    the report and a consent for the digest the core computes, and the one statement that links a job to a report (``draft -> queued``, once) is what refuses."""
+    from auditmanager.comparison.public import AiConsentInput, AiJobCommand, AiMode, AiScope
+    from auditmanager.comparison.report.repository import ReportRepository
+
+    report = make(world)
+    started = start(db, report)
+    service = db.service()
+    with db.sessions() as session:
+        row = ReportRepository().get(session, report["report_id"])
+        method = service._method(session, row)
+        scope = AiScope(method="report", project_uid=row.project_uid, document_uid=row.document_uid, series_id=row.series_id)
+    core = service._core(method)
+    digest = core.estimate(scope, AiMode.START).estimate_digest
+    jobs = db.state("SELECT count(*) FROM comparison_ai_job")
+    items = db.state("SELECT count(*) FROM comparison_work")
+    with pytest.raises(DomainError) as info:
+        core.start(scope=scope, consent=AiConsentInput(digest, True), command=AiJobCommand("start_comparison_report", "bypass-key", support.ACTOR, EXPERT))
+    assert info.value.code is ErrorCode.CONFLICT and info.value.detail_fields["conflict_reason"] == "comparison_report_state"
+    assert db.state("SELECT count(*) FROM comparison_ai_job") == jobs and db.state("SELECT count(*) FROM comparison_work") == items  # the second job was never made
+    assert db.state("SELECT comparison_ai_job_id FROM comparison_report WHERE comparison_report_id = :r", r=report["report_id"]) == started["job"]["job_id"]

@@ -289,8 +289,10 @@ class ReportHandler:
                 run.report.kind, doc, profile, project_uid=run.report.project_uid, model=run.job.pinned_model, unchanged=unchanged,
                 only=int(payload["number"]),
             )
-        if not units or not units[0].editable or part is None:
-            return Completed()
+        if part is None:  # a unit item of a report with no part for its transition is a defect of the job, never a quiet success
+            raise _Ended(Failed(REASON_NOT_FOUND))
+        if not units or not units[0].editable:
+            return Completed()  # finished by the program (no change, or nothing described): no call
         unit = units[0]
         if part_done(part, run.report.kind):
             return Completed()  # a finished part is never requested again
