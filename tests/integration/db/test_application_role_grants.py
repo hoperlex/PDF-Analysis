@@ -377,7 +377,7 @@ def test_the_application_role_cannot_truncate_any_table(applied: Stand) -> None:
             with pytest.raises(errors.InsufficientPrivilege):
                 connection.execute(f'TRUNCATE TABLE "{table}"')
             refused.append(table)
-    assert refused == sorted(coverage.TABLES) and len(refused) == 95  # 0040: the twelve tables of the version comparison AI, specifications, reports and launch queue (0039: the seven tables of the version comparison core (0038: the nine comparison tables (0037: analysis_preset_revision; 0035: comparison_sheet_link, comparison_summary))
+    assert refused == sorted(coverage.TABLES) and len(refused) == 110  # 0041: fifteen comparison-stage tables added to the 0040 inventory
 
 
 # --- (c) append-only is refused twice ------------------------------------------------------------------

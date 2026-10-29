@@ -4836,7 +4836,7 @@ class ACandidateIntegrityTests(unittest.TestCase):
         )
 
     def test_recorded_analysis_hashes_are_reproducible(self) -> None:
-        """The two artifacts the report names by hash still hash to those values."""
+        """The report's historical hashes reproduce from its reviewed candidate."""
         expected = {
             f"{ANALYSIS}/stage-registry.json": (
                 "2c7f952bd7e21d2f6b1015d759476d38126d2ed3b021202a4065a6384dfed1a5"
@@ -4848,12 +4848,12 @@ class ACandidateIntegrityTests(unittest.TestCase):
                 "7ba0c9c8febeabac4d1da4b7e2ff417e9f534c93976c8690b8fee44e65f29b07"
             ),
         }
-        actual = {
-            relative: hashlib.sha256(
-                (REPOSITORY_ROOT / relative).read_bytes()
-            ).hexdigest()
-            for relative in expected
-        }
+        actual = {}
+        for relative in expected:
+            blob = _candidate_blob(REPOSITORY_ROOT, relative)
+            if blob is None:
+                self.fail(f"reviewed candidate lacks {relative}")
+            actual[relative] = hashlib.sha256(blob).hexdigest()
         self.assertEqual(actual, expected)
 
 
