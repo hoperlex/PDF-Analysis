@@ -24,3 +24,7 @@ Compatibility: the new command against the old stand (stderr lines are ignored) 
 ## Limits (recorded as `D-285`..`D-288`)
 
 See the debt rows. In short: the command is installed by hand and the stand cannot update it; the new `dependency` values are not in the contract prose; a live Attempt has only its silence window between two calls; malformed stream lines still count as bytes for the stall window.
+
+## After the first live calls (2026-10-29, same evening)
+
+The stand side worked as designed but the command's stall check did not: it watched the growth of the file Claude Code writes to, and **Claude Code writes nothing to a regular file until it exits** (measured on 2.1.310: 0 bytes for 400 s; with a pipe the stream flows from the first second). Every call through `kzSonnet` therefore ended after exactly 10 min 01 s (`claude_stalled`) — the same wall the lanes were meant to remove, moved from 13 to 10 minutes. The lanes' fake CLI wrote to its stdout at once, so no test could see it. `AR-V3-LIVENESS-PIPE-01` (`9211b1af`, integrator) replaces the file by a pipe read by a thread (`_drain`) and teaches the test fake the real CLI's behaviour on a file; the new tests fail against the file reader (4 red) and pass now (283 passed). Until the fix was installed (17:50-17:57) the installed copy ran with the stall check effectively off. `D-289`.
