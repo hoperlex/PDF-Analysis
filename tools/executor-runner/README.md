@@ -287,12 +287,16 @@ route.
    Revoking the token or removing the route stops new work.
 
 The adapter sends the task through stdin (the task text is never on the command line) to
-`claude -p --output-format json --model <the served model> --tools "" --strict-mcp-config
---no-session-persistence --disable-slash-commands --setting-sources "" --json-schema <schema>`, in a
+`claude -p --output-format stream-json --verbose --include-partial-messages --model <the served model> --tools ""
+--strict-mcp-config --no-session-persistence --disable-slash-commands --setting-sources "" --json-schema <schema>`
+(plus `--effort <level>` when the task names one, see section F), in a
 private temporary directory outside any repository, with an environment reduced to `HOME`, `PATH`,
 locale, `CLAUDE_CONFIG_DIR`, proxy and certificate variables plus three switches that keep `CLAUDE.md`
 files, auto-memory and non-essential traffic out. An inherited `ANTHROPIC_API_KEY`,
 `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN` and the runner token never reach the CLI.
+The CLI writes newline-delimited JSON (`stream-json`); the command reads it as it grows and takes the last
+`result` line as the report. This channel keeps one wall-clock deadline of 510 seconds and prints no
+heartbeat; a stream that ends without a `result` line fails the task with `claude_no_result`.
 
 It accepts the result only when the CLI reports a successful, tool-free turn whose `modelUsage` names
 the served model (`claude-opus-5` or, with `--model`, `claude-sonnet-5`) and nothing else; a different or additional model, a denied tool, a failed or
@@ -323,8 +327,9 @@ connection to the API-key profile of section C.
    (a copy from this repository; re-install after every change to it).
 3. On the stand, in «Исполнители → Подключения», create an `ssh_command` connection: this machine's
    public name, port 22, user `pdfa`, profile `custom_command` (the `claude_code_headless` profile is
-   the API-key one), model/pin `claude-opus-5`, billing `not_metered`, timeout 840 seconds or less (the command stops its own CLI at 840 seconds,
-   below the stand's 900-second Attempt limit).
+   the API-key one), model/pin `claude-opus-5`, billing `not_metered`. With this command the connection's timeout
+   does not bound a call (see «A call lives while the session is alive» below): a stand that reads the command's
+   signs of life lets a call run up to 2 hours and cuts it after 10 minutes of silence.
    Generate the key: the application shows the public half and the line
    `restrict ssh-ed25519 AAAA… auditmanager:<connection id>`.
 4. Put that line in `~pdfa/.ssh/authorized_keys` with the forced command added to its options:
@@ -364,6 +369,29 @@ the connection is `not_metered`. A task with an image is refused (`image_input_u
 stage that sends crops is not active. (`ssh-forced-command.sh` reads the stand's `image` member
 as one `{"media_type","data"}` object, or a list of up to eight, 32 MiB of PNG together, and
 passes every image to the CLI as an image block; the reply envelope command above serves none.)
+
+**A call lives while the session is alive** (`AR-V3-LIVENESS-01`). Nothing limits the model's thinking,
+effort or turns. The command runs the CLI with `--output-format stream-json --verbose --include-partial-messages`
+and judges the call by its stream, not by one short deadline:
+
+- *Heartbeat.* In `--ssh-envelope` mode the command writes one line to **stderr** when the CLI starts and then
+  every `HEARTBEAT_SECONDS` (30) while it runs, exactly
+  `pdf-analysis-forced-command: hb <elapsed_seconds> <events> <output_tokens>`: three non-negative decimal
+  integers (seconds since start, stream lines read so far, the latest `output_tokens` of a `message_delta` or `0`)
+  and nothing else; never task text, schema, key or model output. A stand that knows the line takes it as a sign of
+  life; an older stand ignores stderr. If the line cannot be written (the stand hung up) the CLI is stopped.
+- *Stall.* No new byte in the stream for `STALL_SECONDS` (600) ends the call: `claude_stalled`.
+- *Hard cap.* `SSH_HARD_CAP_SECONDS` (7140, 60 seconds below the stand's 7200-second ceiling) ends the call at the
+  latest: `claude_timeout`. The old fixed 840-second deadline is gone. The stream file may reach 64 MiB
+  (`MAX_STREAM_BYTES`, thinking deltas are many), the `result` line 8 MiB; more is `claude_output_too_large`.
+- *Effort.* The task may carry `effort`, one of `low`, `medium`, `high`, `xhigh`, `max`; it is passed as
+  `--effort <value>`. Any other value fails the task with `invalid_effort`; with no `effort` the flag is not
+  passed and the CLI keeps its default. No `--max-turns`, `--max-budget-usd` or thinking cap is ever set.
+
+The acceptance rule is unchanged and applies to the last `result` line: a successful, completed, tool-free turn
+whose `modelUsage` names the served model and nothing else, with a `structured_output` object when the task has a
+schema. A stream with no `result` line is `claude_no_result`; lines that are not JSON objects are skipped and are
+never a report. The reasons the command prints on failure are fixed words.
 
 ## Known limits of the Claude profiles
 
