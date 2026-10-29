@@ -15,7 +15,6 @@ import { Fragment, createElement } from 'react';
 import type { ReactElement } from 'react';
 
 import type { ComparisonSeriesState, ComparisonUploadState } from '@/shared/api';
-import { ApiError } from '@/shared/api';
 import {
   COMPARISON_AI_PAUSE_REASON_VALUES,
   COMPARISON_AI_SHEET_STATE_VALUES,
@@ -258,16 +257,9 @@ function aiShapes(): ComparisonShape[] {
       })),
     seedClient: (c) => {
       seedAiRows(c);
-    },
-  });
-  push({
-    name: 'projects-and-stages-ai-not-wired',
-    make: () => createElement(ProjectsAndStagesView, projectsProps({ overview: fewSets(1) })),
-    seedClient: (c) => {
-      for (let n = 1; n <= 13; n += 1) {
-        seedError(c, COMPARISON_KEYS.aiPair(PROJECT_UID, doc(n)), refusal('dependency_unavailable', { dependency: 'comparison_ai_pairs' }));
-        seedError(c, COMPARISON_KEYS.seriesList(PROJECT_UID, doc(n)), refusal('dependency_unavailable', { dependency: 'comparison_series' }));
-      }
+      // the fourth set's reads are refused: its cells say «ещё недоступно», the rest are drawn as above
+      seedError(c, COMPARISON_KEYS.aiPair(PROJECT_UID, doc(4)), refusal('dependency_unavailable', { dependency: 'comparison_ai_pairs' }));
+      seedError(c, COMPARISON_KEYS.seriesList(PROJECT_UID, doc(4)), refusal('dependency_unavailable', { dependency: 'comparison_series' }));
     },
   });
   for (const state of COMPARISON_LAUNCH_QUEUE_STATE_VALUES) {
@@ -284,7 +276,6 @@ function aiShapes(): ComparisonShape[] {
 
   // the estimate and the consent
   push({ name: 'estimate-panel-agreed', make: () => createElement(EstimatePanel, estimateProps()) });
-  push({ name: 'estimate-panel-loading', make: () => createElement(EstimatePanel, estimateProps({ estimate: undefined, loading: true, agreedDigest: null })) });
   push({ name: 'estimate-panel-not-metered', make: () => createElement(EstimatePanel, estimateProps({ estimate: estimate({ estimate_micros: 0, ceiling_micros: 0, route: { ...estimate().route, billing: 'not_metered' } }), agreedDigest: null })) });
   push({ name: 'estimate-panel-recorded', make: () => createElement(EstimatePanel, estimateProps({ estimate: estimate({ route: { ...estimate().route, provider_mode: 'recorded' } }), agreedDigest: null })) });
   for (const blocked of ['job', 'day'] as const) {
@@ -300,19 +291,12 @@ function aiShapes(): ComparisonShape[] {
       })),
   });
   push({ name: 'estimate-panel-unread', make: () => createElement(EstimatePanel, estimateProps({ estimate: undefined, agreedDigest: null, failure: comparisonFailure(refusal('dependency_unavailable', { dependency: 'executor_route_missing' })) })) });
-  for (const [name, reason] of [['consent', 'comparison_consent_required'], ['ceiling-day', 'comparison_ceiling_day']] as const) {
-    const code = name === 'consent' ? 'validation_failed' : 'conflict';
-    push({
-      name: `estimate-panel-refused-${name}`,
-      make: () => createElement(EstimatePanel, estimateProps({ failure: comparisonFailure(new ApiError(code === 'conflict' ? 409 : 422, { contract_version: '1.11.0', error_code: code, message: 'A caller-safe sentence in English.', correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100', retryable: false, details: code === 'conflict' ? { conflict_reason: reason } : { constraint: reason } }, '0f0e9d8c-7b6a-4948-b726-150413021100')) })),
-    });
-  }
   push({ name: 'ai-start-dialog-pending', make: () => createElement(AiStartDialog, { title: 'ИИ-проверка сомнительных пар · 133/23-ГК-ЭМ1', scope: { kind: 'pair_check', projectUid: PROJECT_UID, documentUid: DOCUMENT_UID } as never, consentKind: 'pair_check', confirmLabel: 'Проверить', intro: 'ИИ смотрит листы с кандидатами.', onDone: noop, onCancel: noop }) });
   push({ name: 'report-draft-dialog-pending', make: () => createElement(ReportDraftDialog, { title: 'PDF-отчёт · 133/23-ГК-ЭМ1', seriesId: SERIES_ID_, confirmLabel: 'Сформировать', onDone: noop, onCancel: noop }) });
   push({
     name: 'selection-dialog',
-    make: () => createElement(SelectionDialog, { projectUid: PROJECT_UID, items: [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => ({ documentUid: doc(n), step: n % 2 === 0 ? 'ai_pairs' as const : 'series' as const, label: `133/23-ГК-ЭМ${n} · шаг` })), restart: false, queueNote: 'Очередь запуска сейчас остановлена — выбранное встанет в неё и начнётся после «Продолжить очередь».', onDone: noop, onCancel: noop }),
-    seedClient: (c) => c.setQueryData([...COMPARISON_KEYS.estimate(`selection|${PROJECT_UID}`), [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => `${doc(n)}:${n % 2 === 0 ? 'ai_pairs' : 'series'}`).join(',')], [
+    make: () => createElement(SelectionDialog, { projectUid: PROJECT_UID, items: [1, 2, 3, 4, 5].map((n) => ({ documentUid: doc(n), step: n % 2 === 0 ? 'ai_pairs' as const : 'series' as const, label: `133/23-ГК-ЭМ${n} · шаг` })), restart: false, queueNote: 'Очередь запуска сейчас остановлена — выбранное встанет в неё и начнётся после «Продолжить очередь».', onDone: noop, onCancel: noop }),
+    seedClient: (c) => c.setQueryData([...COMPARISON_KEYS.estimate(`selection|${PROJECT_UID}`), [1, 2, 3, 4, 5].map((n) => `${doc(n)}:${n % 2 === 0 ? 'ai_pairs' : 'series'}`).join(',')], [
       { item: { documentUid: doc(2), step: 'ai_pairs' }, estimate: estimate({ method: 'pair_check' }), why: '' },
       { item: { documentUid: doc(4), step: 'ai_pairs' }, estimate: null, why: 'Сравнение соседних версий ещё не посчитано: оценки пока нет.' },
       { item: { documentUid: doc(1), step: 'series' }, estimate: null, why: '' },
@@ -324,14 +308,10 @@ function aiShapes(): ComparisonShape[] {
     name: 'ai-changes-block-folds',
     make: () => createElement(AiChangesBlockView, changesBlockProps({ folds: new Set([TRANSITION_12_]), review: new Map([[TRANSITION_12_, reviewSheets()]]), dialog: createElement(EstimatePanel, estimateProps({ title: 'ИИ-описание изменений · листы с ошибкой' })) })),
   });
-  push({ name: 'ai-changes-block-fold-empty', make: () => createElement(AiChangesBlockView, changesBlockProps({ folds: new Set([TRANSITION_12_]), review: new Map() })) });
   push({
     name: 'ai-changes-block-recorded',
     make: () => createElement(AiChangesBlockView, changesBlockProps({ changes: sheetChanges({ job: job({ estimate: estimate({ route: { ...estimate().route, provider_mode: 'recorded' } }) }) }) })),
   });
-  push({ name: 'ai-changes-block-none', make: () => createElement(AiChangesBlockView, changesBlockProps({ changes: sheetChanges({ job: undefined as never, transitions: sheetChanges().transitions.map((row) => ({ ...row, done: 0, errors: 0, to_review: 0, changed: 0 })) }) })) });
-  push({ name: 'ai-changes-block-reader', make: () => createElement(AiChangesBlockView, changesBlockProps({ mayAct: false, changes: sheetChanges({ job: job({ state: 'cancelled', counts: { total: 12, done: 5, failed: 1, unknown: 0 } }) }) })) });
-  push({ name: 'ai-changes-block-refused', make: () => createElement(AiChangesBlockView, changesBlockProps({ failure: comparisonFailure(refusal('conflict', { conflict_reason: 'comparison_ai_nothing_to_do' })) })) });
   for (const reason of COMPARISON_AI_PAUSE_REASON_VALUES) {
     push({ name: `ai-changes-block-paused-${reason}`, make: () => createElement(AiChangesBlockView, changesBlockProps({ changes: sheetChanges({ transitions: [], job: job({ state: 'paused', pause_reason: reason }) }) })) });
   }
@@ -341,22 +321,14 @@ function aiShapes(): ComparisonShape[] {
   });
 
   push({ name: 'specifications-block', make: () => createElement(SpecificationsBlockView, specsBlockProps({ specs: specificationsInEveryState(), transitions: [...(SERIES.transitions ?? []), ...specificationsInEveryState().map((spec) => ({ ...(SERIES.transitions ?? [])[0] as NonNullable<typeof SERIES.transitions>[number], transition_id: spec.transition_id }))], openChanges: uid('ctn', 25), changes: createElement(SpecificationChangesView, { items: specChanges() }) })) });
-  push({ name: 'specifications-block-reader', make: () => createElement(SpecificationsBlockView, specsBlockProps({ mayAct: false, openChanges: TRANSITION_12_, changes: createElement(SpecificationChangesView, { items: [] }) })) });
   for (const phase of COMPARISON_SPEC_PHASE_VALUES) {
     push({ name: `specifications-block-phase-${phase}`, make: () => createElement(SpecificationsBlockView, specsBlockProps({ specs: [specification({ state: 'running', phase })] })) });
   }
   push({ name: 'summary-report-block-client', make: () => createElement(SummaryReportBlockView, summaryProps()) });
   push({ name: 'summary-report-block-analytic', make: () => createElement(SummaryReportBlockView, summaryProps({ report: report({ kind: 'analytic', state: 'partial', failure_reason: 'model_failed', parts: reportsInEveryShape()[1]?.parts ?? [] }) })) });
-  push({
-    name: 'summary-report-block-recorded',
-    make: () => createElement(SummaryReportBlockView, summaryProps({ report: report({ job: job({ method: 'report', estimate: estimate({ route: { ...estimate().route, provider_mode: 'recorded' } }) }) }) })),
-  });
-  push({ name: 'summary-report-block-none', make: () => createElement(SummaryReportBlockView, summaryProps({ report: undefined, summaryReady: false })) });
   // the PDF report window
   push({ name: 'report-window', make: () => createElement(ReportWindowView, windowProps({ dialog: createElement(EstimatePanel, estimateProps({ title: 'PDF-отчёт', consentKind: 'report', confirmLabel: 'Сформировать', estimate: estimate({ method: 'report', transitions: 4, units: 4 }) })) })) });
   push({ name: 'report-window-upload', make: () => createElement(ReportWindowView, windowProps({ source: 'uploaded_md', kind: 'analytic', reuse: false, fileName: 'сводка-изменений.md', summaryReady: false, reports: [] })) });
-  push({ name: 'report-window-reader', make: () => createElement(ReportWindowView, windowProps({ mayAct: false, reports: [report({ parts: [] })] })) });
-  push({ name: 'report-window-refused', make: () => createElement(ReportWindowView, windowProps({ reports: [], failure: comparisonFailure(refusal('conflict', { conflict_reason: 'comparison_report_state' })) })) });
   push({ name: 'report-window-not-wired', make: () => createElement(ReportWindowView, windowProps({ failure: comparisonFailure(refusal('dependency_unavailable', { dependency: 'comparison_reports' })), reports: [] })) });
   push({
     name: 'report-window-every-stage',
@@ -367,22 +339,20 @@ function aiShapes(): ComparisonShape[] {
   });
 
   // the side panel and the evidence banner
-  for (const state of COMPARISON_AI_SHEET_STATE_VALUES) {
-    const withContent = state === 'done' || state === 'needs_clarification' || state === 'partial' || state === 'no_construction_changes' || state === 'stale';
-    push({
-      name: `changes-panel-${state}`,
-      make: () => createElement(ChangesPanelView, panelProps({
-        description: state === 'done' ? description({ state }) : withContent ? description({ state, changes: undefined as never, unresolved: undefined as never, declared: undefined as never, excluded: undefined as never, coverage: undefined as never, diagnostics: undefined as never, history_count: 1 }) : description({ state, changes: undefined as never, unresolved: undefined as never, declared: undefined as never, excluded: undefined as never, coverage: undefined as never, diagnostics: undefined as never, model: undefined as never, history_count: 1, ...(state === 'queued' || state === 'running' ? { job_id: JOB_ID_ } : {}) }),
-      })),
-    });
-  }
+  // the eleven states of the sheet: the rich 'done' panel lists them all in its history; the ones with a branch of their own follow
+  const history = COMPARISON_AI_SHEET_STATE_VALUES.map((state, index) => ({
+    description_id: uid('csd', 80 + index), state, changes_count: index, unresolved_count: index % 2, recorded: index === 3, created_at: '2026-10-27T10:15:30Z',
+  }));
+  push({ name: 'changes-panel-done', make: () => createElement(ChangesPanelView, panelProps({ description: description({ state: 'done', history_count: history.length }), history: { items: history, page: { next_cursor: null } } })) });
+  const bare = { changes: undefined as never, unresolved: undefined as never, declared: undefined as never, excluded: undefined as never, coverage: undefined as never, diagnostics: undefined as never, model: undefined as never, history_count: 1 };
+  push({ name: 'changes-panel-not_processed', make: () => createElement(ChangesPanelView, panelProps({ description: description({ state: 'not_processed', ...bare }) })) });
+  push({ name: 'changes-panel-running', make: () => createElement(ChangesPanelView, panelProps({ description: description({ state: 'running', ...bare, job_id: JOB_ID_ }) })) });
+  push({ name: 'changes-panel-stale', make: () => createElement(ChangesPanelView, panelProps({ description: description({ state: 'stale', ...bare }) })) });
+  push({ name: 'changes-panel-engine_same', make: () => createElement(ChangesPanelView, panelProps({ description: description({ state: 'engine_same', ...bare }) })) });
   push({ name: 'changes-panel-recorded', make: () => createElement(ChangesPanelView, panelProps({ description: description({ recorded: true }), copied: true })) });
-  push({ name: 'changes-panel-whole-specification', make: () => createElement(ChangesPanelView, panelProps({ description: description({ source: 'whole_specification' }) })) });
   push({ name: 'changes-panel-estimate', make: () => createElement(ChangesPanelView, panelProps({ description: description({ state: 'not_processed', changes: undefined as never, unresolved: undefined as never, history_count: 1 }), estimate: createElement(EstimatePanel, estimateProps({ title: 'Описать этот лист', consentKind: 'sheet', confirmLabel: 'Передать и описать', estimate: estimate({ units: 1, sheets: 1, calls: 1, images: 2, image_bytes: 600_000, prompt_chars: 8_000 }), agreedDigest: null })) })) });
-  push({ name: 'changes-panel-reader', make: () => createElement(ChangesPanelView, panelProps({ mayAct: false, description: description({ state: 'not_processed', changes: undefined as never, unresolved: undefined as never, history_count: 1 }) })) });
   push({ name: 'changes-panel-loading', make: () => createElement(ChangesPanelView, panelProps({ description: undefined, loading: true })) });
   push({ name: 'changes-panel-not-wired', make: () => createElement(ChangesPanelView, panelProps({ description: undefined, failure: comparisonFailure(NOT_WIRED) })) });
-  push({ name: 'changes-panel-failed-read', make: () => createElement(ChangesPanelView, panelProps({ description: undefined, failure: comparisonFailure(refusal('internal_error')) })) });
   push({
     name: 'evidence-banner-one',
     make: () => createElement(EvidenceBanner, { evidence: { items: evidenceOf(description()), index: 0, all: false }, onAction: noop }),
@@ -396,12 +366,6 @@ function aiShapes(): ComparisonShape[] {
     make: () => createElement(ComparisonViewer, { pair: comparedPair({ sheet_pair_id: AI_PAIR_ID }), changes: { mayAct: true } }),
     seedClient: (c) => c.setQueryData(COMPARISON_KEYS.description(AI_PAIR_ID), description()),
   });
-  push({
-    name: 'viewer-with-the-side-panel-not-wired',
-    make: () => createElement(ComparisonViewer, { pair: comparedPair({ sheet_pair_id: AI_PAIR_ID }), changes: { mayAct: false } }),
-    seedClient: (c) => seedError(c, COMPARISON_KEYS.description(AI_PAIR_ID), NOT_WIRED),
-  });
-
   // the containers of the blocks and of the window: cold (the reads are on their way), loaded and refused
   const containerProps = { series: SERIES, projectUid: PROJECT_UID, names: SET_NAMES, mayAct: true };
   push({ name: 'ai-changes-block-container-cold', make: () => createElement(AiChangesBlock, { ...containerProps, onOpenTransition: noop, onOpenReviewSheet: noop }) });
@@ -449,10 +413,8 @@ function aiShapes(): ComparisonShape[] {
 
   // «Очередь»: the installation's AI queue under the block «Сравнение»
   push({ name: 'comparison-ai-queue-block-view', make: () => createElement(ComparisonAiQueueBlockView, { queue: aiQueue() }) });
-  push({ name: 'comparison-ai-queue-block-empty', make: () => createElement(ComparisonAiQueueBlockView, { queue: { items: [], queued: 0, running: 0, paused: 0 } }) });
   push({ name: 'comparison-ai-queue-block-loaded', make: () => createElement(ComparisonAiQueueBlock), seedClient: (c) => c.setQueryData(COMPARISON_KEYS.aiQueue(), aiQueue()) });
   push({ name: 'comparison-ai-queue-block-not-wired', make: () => createElement(ComparisonAiQueueBlock), seedClient: (c) => seedError(c, COMPARISON_KEYS.aiQueue(), refusal('dependency_unavailable', { dependency: 'comparison_launch_queue' })) });
-  push({ name: 'comparison-ai-queue-block-failed', make: () => createElement(ComparisonAiQueueBlock), seedClient: (c) => seedError(c, COMPARISON_KEYS.aiQueue(), refusal('internal_error')) });
   push({ name: 'comparison-ai-queue-block-cold', make: () => createElement(ComparisonAiQueueBlock) });
   for (const [name, members] of bundles) {
     out.push({
@@ -471,18 +433,17 @@ const BUNDLES: readonly (readonly [RegExp, string])[] = [
   [/^estimate-panel-(blocked-job|blocked-day|nothing-to-send|stale-asks-again|unread)$/, 'estimate-panels-that-cannot-start'],
   [/^estimate-panel-refused-/, 'estimate-panels-refused'],
   [/^ai-changes-block-(paused-.*|queued|running|paused|completed|failed|cancelled)$/, 'ai-changes-blocks-by-state'],
-  [/^ai-changes-block-(none|reader|refused|recorded|not-wired|fold-empty)$/, 'ai-changes-blocks-variants'],
-  [/^specifications-block-(phase-.*|reader)$/, 'specifications-blocks-variants'],
-  [/^summary-report-block-(client|analytic|recorded|none|refused)$/, 'summary-report-blocks'],
-  [/^report-window-(upload|reader|refused|not-wired|every-stage)$/, 'report-windows-variants'],
-  [/^changes-panel-(not_processed|queued|running|done|needs_clarification|partial|no_construction_changes|stale|failed|cancelled|engine_same)$/, 'changes-panels-by-state'],
-  [/^changes-panel-(recorded|whole-specification|estimate|reader)$/, 'changes-panels-variants'],
-  [/^changes-panel-(loading|not-wired|failed-read)$/, 'changes-panels-reads'],
+  [/^ai-changes-block-(recorded|not-wired)$/, 'ai-changes-blocks-variants'],
+  [/^specifications-block-phase-.*$/, 'specifications-blocks-variants'],
+  [/^summary-report-block-(client|analytic)$/, 'summary-report-blocks'],
+  [/^report-window-(upload|not-wired|every-stage)$/, 'report-windows-variants'],
+  [/^changes-panel-(not_processed|running|done|stale|engine_same)$/, 'changes-panels-by-state'],
+  [/^changes-panel-(recorded|estimate)$/, 'changes-panels-variants'],
+  [/^changes-panel-(loading|not-wired)$/, 'changes-panels-reads'],
   [/^evidence-banner-/, 'evidence-banners'],
   [/^(ai-changes-block|specifications-block|summary-report-block|report-window)-container-cold$|^specification-changes-cold$|^ai-start-dialog-pending$|^report-draft-dialog-pending$/, 'ai-containers-cold'],
   [/^(ai-changes-block|specifications-block|summary-report-block|report-window)-container-loaded$/, 'ai-containers-loaded'],
   [/^(ai-changes-block|specifications-block|summary-report-block|report-window)-container-not-wired$/, 'ai-containers-not-wired'],
-  [/^comparison-ai-queue-block-(view|empty)$/, 'comparison-ai-queue-views'],
 ];
 
 const SERIES_ID_ = SERIES.series_id;
