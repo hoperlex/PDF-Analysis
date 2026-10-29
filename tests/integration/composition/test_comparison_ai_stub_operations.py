@@ -106,7 +106,7 @@ REQUESTS: dict[str, tuple[str, str, Any, bool, str]] = {
 EXPERT_WRITES = {name for name, row in REQUESTS.items() if row[3]}
 DEPENDENCIES = {row[4] for row in REQUESTS.values()}
 #: Lanes that serve one of them remove it from the list of stubs by adding it here; the role, key and shape tests still
-#: judge it. Empty at the seal. `CMP-VC-AIPAIR-01` serves the seven operations of the AI pair check.
+#: judge it. Empty at the seal. `CMP-VC-AIPAIR-01` serves the operations of the AI pair check.
 WIRED: frozenset[str] = frozenset({
     "estimateComparisonAiPairCheck", "getComparisonAiPairCheck", "startComparisonAiPairCheck", "pauseComparisonAiPairCheck",
     "resumeComparisonAiPairCheck", "cancelComparisonAiPairCheck", "listComparisonAiPairHints",

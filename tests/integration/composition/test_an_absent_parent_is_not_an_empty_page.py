@@ -340,8 +340,9 @@ def app() -> Composed:
     assert os.environ.get("DATABASE_URL"), "this suite needs the lane's .env loaded"
     # No reviewed pack is installed in this suite, whatever the process environment names:
     # `test_the_server_pack_status_answers_its_own_shape` asserts that state.
+    # `CMP-VC-AIPAIR-01`: the versions module is on (see `test_router_answers.py`): a wired C2 read is judged on its own `404`.
     environ = {k: v for k, v in os.environ.items() if k != PACK_MANIFEST_ENV} | {
-        API_TOKEN_VARIABLE: DEPLOYMENT_SECRET
+        API_TOKEN_VARIABLE: DEPLOYMENT_SECRET, "AUDITMANAGER_COMPARISON_MODULES": "versions",
     }
     application = create_app(environ=environ)
     asgi = create_asgi_app(environ=environ, application=application)

@@ -1,4 +1,4 @@
-"""`CMP-VC-AIPAIR-01`: the seven operations over HTTP on the composed application -- the shipped routers, the roles of real credentials,
+"""`CMP-VC-AIPAIR-01`: the operations over HTTP on the composed application -- the shipped routers, the roles of real credentials,
 the keys, the registered reasons as a client reads them, and the module flag (real PostgreSQL; the data is committed, as the
 application reads it through connections of its own, and is left in the lane's disposable database)."""
 

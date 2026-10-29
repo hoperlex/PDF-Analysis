@@ -1,4 +1,4 @@
-"""`CMP-VC-AIPAIR-01`: the seven operations of the AI pair check at the service the adapter calls, on a real database, in recorded mode:
+"""`CMP-VC-AIPAIR-01`: the operations of the AI pair check at the service the adapter calls, on a real database, in recorded mode:
 the module gate, the role, the consent, the typed conflicts, the 404s, the key, the one live job, the steering, and the shapes the
 contract's models accept.
 

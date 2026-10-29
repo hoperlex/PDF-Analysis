@@ -4,7 +4,7 @@
 Statements only: every method takes the caller's session and **never commits**; the handler and the service own the transactions.
 It reads, and never writes, ``comparison_page_profile`` and ``blob`` (what a page shows), ``comparison_work`` (the state of a
 question's item) and ``comparison_ai_job`` (which job holds a document). The job row itself is written by
-:class:`~auditmanager.comparison.ai_jobs.repository.AiJobRepository` only; this module never says ``UPDATE comparison_ai_job``.
+:class:`~auditmanager.comparison.ai_jobs.repository.AiJobRepository` only; this module has no statement that changes it.
 
 The three tables are protected by the database as well: an answer is immutable (``UPDATE`` and ``DELETE`` are refused), a question
 moves along the edges of migration ``0040`` and keeps its cell, and a link is append-only with the unique key

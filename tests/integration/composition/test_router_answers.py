@@ -161,7 +161,9 @@ class Composed:
 @pytest.fixture(scope="module")
 def app() -> Composed:
     assert os.environ.get("DATABASE_URL"), "this suite needs the lane's .env loaded"
-    environ = dict(os.environ) | {API_TOKEN_VARIABLE: DEPLOYMENT_SECRET}
+    # `CMP-VC-AIPAIR-01`: the versions module is on, so that an operation a C2 lane has wired is judged on its own answer (an absent
+    # identity is `404`) and not on the module flag's `503` that every C2 operation gives first while the module is off.
+    environ = dict(os.environ) | {API_TOKEN_VARIABLE: DEPLOYMENT_SECRET, "AUDITMANAGER_COMPARISON_MODULES": "versions"}
     application = create_app(environ=environ)
     asgi = create_asgi_app(environ=environ, application=application)
     return Composed(application, TestClient(asgi, raise_server_exceptions=False))

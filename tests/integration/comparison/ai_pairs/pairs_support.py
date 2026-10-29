@@ -201,7 +201,7 @@ def place_matrix(
 
 @dataclass
 class Rig:
-    """Everything a test drives: the pair service (the seven operations), the work handler, the recorded adapter and the queue."""
+    """Everything a test drives: the pair service (the operations), the work handler, the recorded adapter and the queue."""
 
     connection: Connection
     sessions: "sessionmaker[Session]"

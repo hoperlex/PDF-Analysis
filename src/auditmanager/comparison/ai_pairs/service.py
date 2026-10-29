@@ -1,4 +1,4 @@
-"""The seven operations of the AI pair check over the shared AI-job core (`CMP-VC-AIPAIR-01`, ADR-0025 decisions 3, 14, 16, 19, 23).
+"""The operations of the AI pair check over the shared AI-job core (`CMP-VC-AIPAIR-01`, ADR-0025 decisions 3, 14, 16, 19, 23).
 
 :class:`ComparisonAiPairService` returns plain dictionaries in the contract's shapes; the bootstrap adapter maps them to the
 pydantic models, the cursors and the actor. It owns **no state edge** and writes **no job row**: every estimate, start, pause,

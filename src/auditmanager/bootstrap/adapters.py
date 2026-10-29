@@ -6007,7 +6007,7 @@ class _VersionsModuleGate:
 
 
 class ComparisonAiPairAdapter(_SessionHolder, _VersionsModuleGate):
-    """`CMP-VC-AIPAIR-01` serves the seven operations of the AI pair check over
+    """`CMP-VC-AIPAIR-01` serves the operations of the AI pair check over
     :class:`~auditmanager.comparison.ai_pairs.service.ComparisonAiPairService` and the shared AI-job core
     (ADR-0025 decisions 3, 14, 16, 19, 23).
 
