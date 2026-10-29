@@ -3,7 +3,8 @@ content that creates each difference. The real page children and the real engine
 
 Every disagreement between the keys and the engine is named here, with the reason, and the test fails if a disagreement
 the list does not name appears or one it names goes away: a key is read, not matched by adjusting the engine until it
-agrees. The four named disagreements are reported in `docs/program/CMP-ENGINE-01.md` section 5.
+agrees. The named disagreements are reported in `docs/program/CMP-ENGINE-01.md` section 5. (`CMP-VC-SPEC-01` built the `spec_positions` channel,
+so the fifth, V4 to V5 sheet E07, is gone: the channel reports the key's three position differences.)
 """
 
 from __future__ import annotations
@@ -25,8 +26,6 @@ DISAGREEMENTS = {
     # A duplicate of a sheet: the pages are byte-identical, so every channel is `checked` with no difference (the
     # original's fast path); the key wants `warnings` to report. `DUPLICATE_SHEET` is the reason that forces the status.
     ("V4->V5", "E03", "warnings"),
-    # The specification positions are the stage-2 work of the original too (`engine.py:996-998`): `unchecked`, not counted.
-    ("V4->V5", "E07", "spec_positions"),
     # A split sheet: the engine compares the part against the sheet; `needs_review` with `SPLIT_SHEET` is the series'
     # verdict from the coverage of all the parts (the original's `_parts_phase`), not a property of one pair.
     ("V4->V5", "E05", "status"),

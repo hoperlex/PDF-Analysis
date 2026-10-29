@@ -85,7 +85,18 @@ def test_a_result_stored_before_the_split_parts_were_registered_in_their_own_reg
     current = content_key(PROJECT, A, B, part="split")
     monkeypatch.setattr(key, "ALGO_VERSION", "cmp-engine/2")
     assert content_key(PROJECT, A, B, part="split") != current
-    assert settings.ALGO_VERSION == "cmp-engine/3"
+    assert settings.ALGO_VERSION not in ("cmp-engine/1", "cmp-engine/2")
+
+
+def test_a_result_stored_before_the_specification_positions_were_read_is_not_found_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`CMP-VC-SPEC-01`: ``cmp-engine/3`` left the channel ``spec_positions`` ``unchecked`` whenever the graphics of a specification
+    sheet differed. Its ``ALGO_VERSION`` is in the content key, so a result stored under it is compared again."""
+    from auditmanager.comparison.engine import key
+
+    current = content_key(PROJECT, A, B)
+    monkeypatch.setattr(key, "ALGO_VERSION", "cmp-engine/3")
+    assert content_key(PROJECT, A, B) != current
+    assert settings.ALGO_VERSION == "cmp-engine/4"
 
 
 def test_a_change_of_a_threshold_is_a_change_of_the_parameters_in_the_key(monkeypatch: pytest.MonkeyPatch) -> None:

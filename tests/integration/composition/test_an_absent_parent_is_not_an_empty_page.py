@@ -255,12 +255,6 @@ SEALED_STUB_ADDRESSED: frozenset[str] = frozenset({
     "estimateComparisonSheetDescription",
     "streamComparisonSheetDescriptionMd",
     "listComparisonReviewSheets",
-    "getVersionPageSpecPositions",
-    "getComparisonSheetPairSpecPositions",
-    "listComparisonSpecifications",
-    "getComparisonSpecification",
-    "listComparisonSpecificationChanges",
-    "estimateComparisonSpecification",
     "getComparisonLaunchQueue",
     "streamComparisonSeriesSummary",
     "listComparisonReports",
@@ -342,7 +336,10 @@ def app() -> Composed:
     # No reviewed pack is installed in this suite, whatever the process environment names:
     # `test_the_server_pack_status_answers_its_own_shape` asserts that state.
     environ = {k: v for k, v in os.environ.items() if k != PACK_MANIFEST_ENV} | {
-        API_TOKEN_VARIABLE: DEPLOYMENT_SECRET
+        API_TOKEN_VARIABLE: DEPLOYMENT_SECRET,
+        # A wired comparison read of wave C2 refuses first while the versions module is off (`CMP-SEAL-C2` section 8), so the sweep
+        # serves the module: its rule is the answer to an identity that names nothing, which a gate that came first would hide.
+        "AUDITMANAGER_COMPARISON_MODULES": "versions",
     }
     application = create_app(environ=environ)
     asgi = create_asgi_app(environ=environ, application=application)

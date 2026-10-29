@@ -107,7 +107,19 @@ EXPERT_WRITES = {name for name, row in REQUESTS.items() if row[3]}
 DEPENDENCIES = {row[4] for row in REQUESTS.values()}
 #: Lanes that serve one of them remove it from the list of stubs by adding it here; the role, key and shape tests still
 #: judge it. Empty at the seal.
-WIRED: frozenset[str] = frozenset()
+WIRED: frozenset[str] = frozenset({
+    # `CMP-VC-SPEC-01` part A: the deterministic positions of a page and of a sheet pair.
+    "getVersionPageSpecPositions",
+    "getComparisonSheetPairSpecPositions",
+    # `CMP-VC-SPEC-01` part B reads: the specifications of a series, of a transition and its changes.
+    "listComparisonSpecifications",
+    "getComparisonSpecification",
+    "listComparisonSpecificationChanges",
+    # `CMP-VC-SPEC-01` part B through the AI-job core: the estimate, the keyed start with consent and the cancel.
+    "estimateComparisonSpecification",
+    "startComparisonSpecification",
+    "cancelComparisonSpecification",
+})
 STUBS = sorted(set(REQUESTS) - WIRED)
 LANES = {
     "comparison_ai_pairs": "CMP-VC-AIPAIR-01", "comparison_ai_sheets": "CMP-VC-AISHEET-01",
@@ -308,10 +320,12 @@ def test_a_list_or_query_outside_its_bounds_is_refused_before_the_stub(on: TestC
                  f"/comparison-transitions/{TRN}/specification/changes", f"/comparison-series/{SER}/reports"):
         assert on.get(f"{path}?limit=0", headers=headers).status_code == 422, path
         assert on.get(f"{path}?limit=201", headers=headers).status_code == 422, path
-        assert on.get(path, headers=headers).status_code == 503, path
+        # `CMP-VC-SPEC-01` serves these two: an identity that names nothing is `404`, not the stub's `503`.
+        served = path in (f"/comparison-series/{SER}/specifications", f"/comparison-transitions/{TRN}/specification/changes")
+        assert on.get(path, headers=headers).status_code == (404 if served else 503), path
     changes = f"/comparison-transitions/{TRN}/specification/changes"
     assert on.get(f"{changes}?kind=sideways", headers=headers).status_code == 422
-    assert on.get(f"{changes}?kind=added", headers=headers).status_code == 503
+    assert on.get(f"{changes}?kind=added", headers=headers).status_code == 404
     estimate = f"/comparison-series/{SER}/ai-sheet-changes/estimate"
     assert on.get(f"{estimate}?only_failed=maybe", headers=headers).status_code == 422
     assert on.get(f"{estimate}?only_failed=true", headers=headers).status_code == 503

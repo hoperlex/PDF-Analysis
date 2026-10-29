@@ -222,6 +222,12 @@ from auditmanager.comparison.series import (
 # `CMP-VC-OVERVIEW-01`: the overview of «Проекты и этапы» and the comparison queue summary (two reads, no work kind).
 from auditmanager.comparison.overview import ComparisonOverviewService
 
+# `CMP-VC-SPEC-01`: specifications of a version comparison (positions by GOST 21.110, the whole-specification comparison).
+from auditmanager.comparison.specification.reader import SpecificationReader
+from auditmanager.comparison.specification.service import SpecificationService
+from auditmanager.comparison.specification.method import SpecMethod, spec_handler
+from auditmanager.comparison.specification.transition import TransitionRun
+
 # `CMP-AI-JOBS-01`: the shared core of consented AI jobs (estimate, keyed start with consent, the state edges, the spend pause,
 # the reads, recorded mode). The four method lanes build on `ComparisonAiJobService`; none writes `comparison_ai_job` itself.
 from auditmanager.comparison.ai_jobs.estimate import build_estimate as build_ai_estimate
@@ -263,6 +269,7 @@ HANDLER_FACTORIES: tuple[HandlerFactory, ...] = (
     series_pair_handler,  # `CMP-SERIES-01`: kind ``series_pair``
     series_drive_handler,  # `CMP-SERIES-01`: kind ``series_drive``
     series_after_preparation_handler,  # `CMP-SERIES-01`: kind ``series_after_preparation``
+    spec_handler,  # `CMP-VC-SPEC-01`: kind ``comparison_spec``
 )
 
 #: `CMP-WORK-01`. Called inside the reclaim transaction for each attempt whose lease was lost:
@@ -541,4 +548,9 @@ __all__ = [
     "ai_work_kind_of",
     "build_ai_estimate",
     "read_ai_route",
+    "SpecificationReader",
+    "SpecMethod",
+    "SpecificationService",
+    "TransitionRun",
+    "spec_handler",
 ]

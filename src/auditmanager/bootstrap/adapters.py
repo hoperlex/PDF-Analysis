@@ -6125,47 +6125,128 @@ class ComparisonAiSheetAdapter(_VersionsModuleGate):
 
 
 class ComparisonSpecificationAdapter(_VersionsModuleGate):
-    """`CMP-VC-SPEC-01` replaces the bodies."""
+    """`CMP-VC-SPEC-01`. Part A -- the positions of a page and of a sheet pair -- is served over
+    :class:`~auditmanager.comparison.specification.reader.SpecificationReader` (deterministic, read-only, no model); the operations of
+    part B stay sealed until the AI-job core is wired to them. Every method keeps the module-flag refusal as its first statement."""
 
     _DEPENDENCY = "comparison_specification"
 
+    def __init__(
+        self, session_factory: sessionmaker[Session] | None = None, *, blob_store: Any = None,
+        comparison_modules: str = "none", reader: Any = None, provider_mode: str = "live",
+    ) -> None:
+        super().__init__(comparison_modules=comparison_modules)
+        service = jobs = None
+        if session_factory is not None:
+            from auditmanager.comparison.public import (
+                ComparisonAiJobService,
+                SpecificationReader,
+                SpecificationService,
+                SpecMethod,
+            )
+
+            reader = reader or SpecificationReader(session_factory, blob_store)
+            service = SpecificationService(session_factory, blob_store, reader=reader)
+            jobs = ComparisonAiJobService(
+                session_factory, methods=[SpecMethod(session_factory, blob_store, reader=reader)],
+                comparison_modules=comparison_modules, provider_mode=provider_mode)
+        self._reader = reader
+        self._service = service
+        self._jobs = jobs
+        self._sessions = session_factory
+
+    def _command(self, command_type: str, user_uid: str, idempotency_key: str) -> Any:
+        from auditmanager.comparison.public import AiJobCommand
+
+        with self._sessions() as session:
+            _label, roles = _comparison_actor(session, user_uid)
+        return AiJobCommand(command_type=command_type, idempotency_key=idempotency_key, user_uid=user_uid, actor_roles=roles)
+
     def cancel_specification(self, *, job_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonAiJob:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        if self._jobs is None:
+            return _comparison_unavailable(self._DEPENDENCY)
+        view = self._jobs.cancel(
+            job_id=job_id, method="spec", command=self._command("cancel_comparison_specification", user_uid, idempotency_key))
+        self._service.close_cancelled(job_id)
+        return models.ComparisonAiJob.model_validate(view.as_dict())
 
     def estimate_specification(self, *, transition_id: str) -> models.ComparisonAiEstimate:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        if self._jobs is None:
+            return _comparison_unavailable(self._DEPENDENCY)
+        from auditmanager.comparison.specification.method import spec_scope
+
+        scope = self._service.scope_of(transition_id)
+        return models.ComparisonAiEstimate.model_validate(
+            self._jobs.estimate(spec_scope(scope.project_uid, scope.document_uid, transition_id)).as_dict())
 
     def get_page_positions(self, *, page_profile_id: str) -> models.ComparisonSpecPage:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        if self._reader is None:
+            return _comparison_unavailable(self._DEPENDENCY)
+        return models.ComparisonSpecPage.model_validate(self._reader.page_view(page_profile_id))
 
     def get_pair_positions(self, *, sheet_pair_id: str) -> models.ComparisonSheetPairSpecPositions:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        if self._reader is None:
+            return _comparison_unavailable(self._DEPENDENCY)
+        return models.ComparisonSheetPairSpecPositions.model_validate(self._reader.pair_view(sheet_pair_id))
 
     def get_specification(self, *, transition_id: str) -> models.ComparisonSpecification:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        if self._service is None:
+            return _comparison_unavailable(self._DEPENDENCY)
+        return models.ComparisonSpecification.model_validate(self._service.get_specification(transition_id=transition_id))
+
+    @staticmethod
+    def _after(cursor: str | None) -> int:
+        if cursor is None:
+            return 0
+        parts = decode_cursor(cursor)
+        if len(parts) != 1 or not parts[0].isdigit():
+            raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+        return int(parts[0])
 
     def list_changes(
         self, *, transition_id: str, kind: models.ComparisonSpecChangeKind | None, cursor: str | None, limit: int
     ) -> models.ComparisonSpecChangePage:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        if self._service is None:
+            return _comparison_unavailable(self._DEPENDENCY)
+        items, next_offset = self._service.list_changes(
+            transition_id=transition_id, kind=None if kind is None else str(_enum_text(kind)), offset=self._after(cursor), limit=limit,
+        )
+        return models.ComparisonSpecChangePage.model_validate(
+            {"items": items, "page": {"next_cursor": None if next_offset is None else encode_cursor((str(next_offset),))}}
+        )
 
     def list_specifications(
         self, *, series_id: str, cursor: str | None, limit: int
     ) -> models.ComparisonSpecificationPage:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        if self._service is None:
+            return _comparison_unavailable(self._DEPENDENCY)
+        page = self._service.list_specifications(series_id=series_id, after_no=self._after(cursor), limit=limit)
+        return models.ComparisonSpecificationPage.model_validate(
+            {"items": page.items, "page": {"next_cursor": None if page.next_after is None else encode_cursor((str(page.next_after),))}}
+        )
 
     def start_specification(
         self, *, transition_id: str, consent: models.ComparisonAiConsent, user_uid: str, idempotency_key: str
     ) -> models.ComparisonAiJob:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        if self._jobs is None:
+            return _comparison_unavailable(self._DEPENDENCY)
+        from auditmanager.comparison.public import AiConsentInput
+        from auditmanager.comparison.specification.method import spec_scope
+
+        scope = self._service.scope_of(transition_id)
+        view = self._jobs.start(
+            scope=spec_scope(scope.project_uid, scope.document_uid, transition_id),
+            consent=AiConsentInput(estimate_digest=consent.estimate_digest, confirmed=consent.confirmed),
+            command=self._command("start_comparison_specification", user_uid, idempotency_key))
+        return models.ComparisonAiJob.model_validate(view.as_dict())
 
 
 class ComparisonLaunchQueueAdapter(_VersionsModuleGate):
