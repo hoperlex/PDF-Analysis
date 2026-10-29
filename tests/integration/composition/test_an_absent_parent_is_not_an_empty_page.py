@@ -262,6 +262,13 @@ SEALED_STUB_ADDRESSED: frozenset[str] = frozenset({
     "listComparisonSpecificationChanges",
     "estimateComparisonSpecification",
     "getComparisonLaunchQueue",
+})
+
+#: `CMP-VC-REPORT-01` serves these five reads behind the module flag, which is the first statement of every adapter method of the
+#: wave (`CMP-SEAL-C2` section 8): in this sweep the versions module is off, so each answers `503 dependency_unavailable`
+#: naming `comparison_modules`; an absent series or report is `404 not_found` with the module on, which that lane's own tests
+#: prove (`tests/integration/comparison/report/**`). A later lane that serves a read behind the flag adds its operation here.
+MODULE_GATED_ADDRESSED: frozenset[str] = frozenset({
     "streamComparisonSeriesSummary",
     "listComparisonReports",
     "getComparisonReport",
@@ -452,6 +459,11 @@ def test_every_get_that_names_a_parent_refuses_an_identity_that_names_nothing(
         path = re.sub(r"\{(\w+)\}", lambda m: _absent_identity(m.group(1)), template)
         status, body = _get(app, path + REQUIRED_QUERY.get(operation_id, ""))
         code = body.get("error_code") if isinstance(body, dict) else None
+        if operation_id in MODULE_GATED_ADDRESSED:
+            named = (body.get("details") or {}).get("dependency") if isinstance(body, dict) else None
+            if (status, code, named) != (503, "dependency_unavailable", "comparison_modules"):
+                disagreements.append((operation_id, path, status, code))
+            continue
         if (status, code) != (404, "not_found"):
             disagreements.append((operation_id, path, status, code))
     assert disagreements == [], (

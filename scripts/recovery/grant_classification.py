@@ -190,8 +190,7 @@ SEALED_NOT_YET_WRITTEN = frozenset((
     # launch queue, until `CMP-VC-AIPAIR-01`, `CMP-VC-AISHEET-01`, `CMP-VC-SPEC-01`, `CMP-VC-QUEUE-01` and
     # `CMP-VC-REPORT-01` write them.
     "comparison_ai_pair_answer", "comparison_ai_pair_question", "comparison_ai_sheet_item",
-    "comparison_launch_entry", "comparison_launch_queue", "comparison_report", "comparison_report_artifact",
-    "comparison_report_part", "comparison_sheet_description", "comparison_spec_comparison",
+    "comparison_launch_entry", "comparison_launch_queue", "comparison_sheet_description", "comparison_spec_comparison",
     "comparison_spec_extraction",
 ))
 

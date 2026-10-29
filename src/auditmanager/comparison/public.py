@@ -252,6 +252,17 @@ from auditmanager.comparison.ai_jobs.recorded import RecordedAnswers
 from auditmanager.comparison.ai_jobs.service import AiJobCommand, ComparisonAiJobService
 from auditmanager.comparison.ai_jobs.service import pause_reason_of as ai_pause_reason_of
 
+# `CMP-VC-REPORT-01` (ADR-0025 decisions 3, 8, 10, 19, 24): the MD summary of a series and the PDF reports built from it, over the shared AI-job core.
+from auditmanager.comparison.report.handler import (
+    ModelSource as ReportModelSource,
+    ReportHandler,
+    StaticModelSource as ReportStaticModelSource,
+    UnavailableModelSource as ReportUnavailableModelSource,
+    report_handler,
+)
+from auditmanager.comparison.report.service import ComparisonReportService, ReportPage
+from auditmanager.comparison.report.summary import build_summary as build_series_summary
+
 #: `CMP-WORK-01` (ADR-0025 decision 4). One tuple of handler factories, each
 #: ``Callable[[WorkDependencies], WorkHandler]``: ``build_worker_runtime`` builds one dependency
 #: bundle and applies every factory to it, and refuses to start on a duplicate ``kind``. A slice
@@ -263,6 +274,7 @@ HANDLER_FACTORIES: tuple[HandlerFactory, ...] = (
     series_pair_handler,  # `CMP-SERIES-01`: kind ``series_pair``
     series_drive_handler,  # `CMP-SERIES-01`: kind ``series_drive``
     series_after_preparation_handler,  # `CMP-SERIES-01`: kind ``series_after_preparation``
+    report_handler,  # `CMP-VC-REPORT-01`: kind ``comparison_report``
 )
 
 #: `CMP-WORK-01`. Called inside the reclaim transaction for each attempt whose lease was lost:
@@ -534,11 +546,19 @@ __all__ = [
     "AiWaitingJobs",
     "AiWorkItemSpec",
     "ComparisonAiJobService",
+    "ComparisonReportService",
     "RecordedAnswers",
+    "ReportHandler",
+    "ReportModelSource",
+    "ReportPage",
+    "ReportStaticModelSource",
+    "ReportUnavailableModelSource",
     "ai_digest_of",
     "ai_pause_reason_of",
     "ai_route_missing",
     "ai_work_kind_of",
     "build_ai_estimate",
+    "build_series_summary",
     "read_ai_route",
+    "report_handler",
 ]

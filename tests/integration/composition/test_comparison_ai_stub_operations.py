@@ -107,7 +107,13 @@ EXPERT_WRITES = {name for name, row in REQUESTS.items() if row[3]}
 DEPENDENCIES = {row[4] for row in REQUESTS.values()}
 #: Lanes that serve one of them remove it from the list of stubs by adding it here; the role, key and shape tests still
 #: judge it. Empty at the seal.
-WIRED: frozenset[str] = frozenset()
+WIRED: frozenset[str] = frozenset({
+    # `CMP-VC-REPORT-01`: the thirteen report operations.
+    "streamComparisonSeriesSummary", "listComparisonReports", "createComparisonReport", "uploadComparisonReportSource",
+    "getComparisonReport", "startComparisonReport", "cancelComparisonReport", "continueComparisonReport",
+    "rebuildComparisonReportPdf", "deleteComparisonReport", "prepareComparisonClientReport", "streamComparisonReportPdf",
+    "streamComparisonReportSourceMd",
+})
 STUBS = sorted(set(REQUESTS) - WIRED)
 LANES = {
     "comparison_ai_pairs": "CMP-VC-AIPAIR-01", "comparison_ai_sheets": "CMP-VC-AISHEET-01",
@@ -294,8 +300,9 @@ def test_the_queue_request_is_bounded_and_names_a_queueable_step(on: TestClient)
 def test_a_report_upload_is_bounded_and_takes_a_kind(on: TestClient) -> None:
     path = f"/comparison-series/{SER}/reports/upload"
     md = "## 1. A → B\n".encode()
-    assert _post(on, path, md, media="text/markdown").status_code == 503
-    assert _post(on, path + "?kind=analytic&reuse=true&source_name=summary.md", md, media="text/markdown").status_code == 503
+    # `CMP-VC-REPORT-01` serves this upload: a well-formed file for a series that does not exist is `404`, no longer the stub's `503`.
+    assert _post(on, path, md, media="text/markdown").status_code == 404
+    assert _post(on, path + "?kind=analytic&reuse=true&source_name=summary.md", md, media="text/markdown").status_code == 404
     assert _post(on, path + "?kind=poster", md, media="text/markdown").status_code == 422
     assert _post(on, path + "?source_name=", md, media="text/markdown").status_code == 422
     assert _post(on, path, b"x" * (20 * 1024 * 1024 + 1), media="text/markdown").status_code in (413, 422)
@@ -308,7 +315,8 @@ def test_a_list_or_query_outside_its_bounds_is_refused_before_the_stub(on: TestC
                  f"/comparison-transitions/{TRN}/specification/changes", f"/comparison-series/{SER}/reports"):
         assert on.get(f"{path}?limit=0", headers=headers).status_code == 422, path
         assert on.get(f"{path}?limit=201", headers=headers).status_code == 422, path
-        assert on.get(path, headers=headers).status_code == 503, path
+        # `CMP-VC-REPORT-01` serves the report list: an absent series is `404` (the others are still stubs).
+        assert on.get(path, headers=headers).status_code == (404 if path.endswith("/reports") else 503), path
     changes = f"/comparison-transitions/{TRN}/specification/changes"
     assert on.get(f"{changes}?kind=sideways", headers=headers).status_code == 422
     assert on.get(f"{changes}?kind=added", headers=headers).status_code == 503

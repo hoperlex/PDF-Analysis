@@ -104,6 +104,14 @@ SEALED_STUB_GETS: frozenset[str] = frozenset({
     f"{_STUB_TRANSITION}/specification/estimate",
     f"/projects/{_PRJ}/comparison-launch-queue",
     "/execution/comparison-ai-queue",
+})
+#: `CMP-VC-REPORT-01` serves five reads (the MD summary, the report list, one report, its PDF and its source MD). Every
+#: operation of the wave keeps the module flag as the first statement of its adapter (`CMP-SEAL-C2` section 8; ADR-0025
+#: decision 23), so with the versions module off, as it is in this sweep, a served read still answers `503
+#: dependency_unavailable` and now names `comparison_modules` (never a lane's class). The served answers, `404` for an
+#: absent parent and `200` for a report, are proved with the module on by that lane's own tests
+#: (`tests/integration/comparison/report/**`). A later lane that serves a read behind the flag adds its path here.
+MODULE_GATED_GETS: frozenset[str] = frozenset({
     f"{_STUB_SERIES}/summary-md",
     f"{_STUB_SERIES}/reports",
     _STUB_REPORT,
@@ -283,6 +291,7 @@ class TestNoOperationAnswersWithAServerFault:
         assert len(probes) >= 5, f"the sweep found too few GET routes: {probes}"
         assert RELEASE_GETS <= {path for _method, path in probes}
         assert SEALED_STUB_GETS <= {path for _method, path in probes}
+        assert MODULE_GATED_GETS <= {path for _method, path in probes}
         assert NORM_VERIFICATION_OF_AN_ABSENT_RUN in {path for _method, path in probes}
         assert WORKER_GETS <= {path for _method, path in probes}
         faults = []
@@ -299,6 +308,12 @@ class TestNoOperationAnswersWithAServerFault:
             elif path in SEALED_STUB_GETS:
                 if status != 503 or not isinstance(body, dict) or (
                     body.get("error_code") != "dependency_unavailable"
+                ):
+                    faults.append((path, status, body))
+            elif path in MODULE_GATED_GETS:
+                if status != 503 or not isinstance(body, dict) or (
+                    body.get("error_code") != "dependency_unavailable"
+                    or (body.get("details") or {}).get("dependency") != "comparison_modules"
                 ):
                     faults.append((path, status, body))
             elif status >= 500:
