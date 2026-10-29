@@ -3,6 +3,9 @@
 Reading starts nothing: no job, no model, no PDF. The state of a transition is derived from the row of its whole-specification
 comparison and from the job that runs it:
 
+* no row, but the reading of **both** versions is already stored under its content key (another transition read the same text): the
+  comparison needs no request and no job, so it is made on the read -- ``completed``, computed from the stored readings, never
+  stored (a job that has nothing to send is the core's ``comparison_ai_nothing_to_do``);
 * no row, and no specification sheet in either version: ``not_applicable`` (method «листовой ИИ»: there is nothing to read as a whole);
 * no row, and a specification sheet: ``not_started``;
 * a row ``queued`` or ``running``: ``running``, or ``paused`` while its job is paused, with the phase it is in;
@@ -23,6 +26,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.comparison.specification.reader import SpecificationReader, spec_candidates
 from auditmanager.comparison.specification.repository import ComparisonRow, SpecificationRepository, TransitionScope
+from auditmanager.comparison.specification.transition import TransitionOutcome, TransitionRun
 from auditmanager.shared.db import session_scope
 from auditmanager.shared.errors import DomainError, ErrorCode
 
@@ -53,6 +57,15 @@ class SpecificationService:
         self._factory = session_factory
         self._repository = repository or SpecificationRepository()
         self._reader = reader or SpecificationReader(session_factory, blob_store)
+        self._run = TransitionRun(session_factory, blob_store, repository=self._repository, reader=self._reader)
+
+    def _free_outcome(self, scope: TransitionScope) -> TransitionOutcome | None:
+        """The comparison of a transition with no row whose two readings are both stored: made now, from the store, with no request
+        (``ask`` is ``None``, so nothing can be sent). ``None`` when a side is not stored or is not complete."""
+        old, new = self._run.read(scope, ask=None)
+        if not (old.complete and new.complete):
+            return None
+        return self._run.compare(scope, old, new)
 
     # -- one transition -------------------------------------------------------------------------------------------------
 
@@ -85,7 +98,12 @@ class SpecificationService:
             if self._repository.transition(session, transition_id) is None:
                 raise _not_found("ComparisonTransition")
             row = self._repository.whole(session, transition_id)
-        changes = [c for c in (row.changes if row is not None else []) if kind is None or c["kind"] == kind]
+        if row is not None:
+            stored = row.changes
+        else:
+            free = self._free_outcome(self.scope_of(transition_id))
+            stored = [] if free is None else free.changes
+        changes = [c for c in stored if kind is None or c["kind"] == kind]
         page = changes[offset : offset + bounded]
         more = offset + bounded < len(changes)
         return page, (offset + bounded) if more else None
@@ -138,11 +156,22 @@ class SpecificationService:
 
     def _view(self, scope: TransitionScope, row: ComparisonRow | None, sheets: tuple[int, int]) -> dict[str, Any]:
         state = self._state(row, sheets)
+        free = self._free_outcome(scope) if row is None and state == "not_started" else None
+        if free is not None:
+            state = "completed"
         out: dict[str, Any] = {
             "transition_id": scope.transition_id,
             "method": "sheet_ai" if state in ("not_applicable", "incomplete") else "whole",
             "state": state, "sheets_a": sheets[0], "sheets_b": sheets[1],
         }
+        if free is not None:
+            out["coverage_a"], out["coverage_b"], out["totals"] = free.coverage_a, free.coverage_b, free.totals
+            out["phase"] = "done"
+            if free.extraction_a_id:
+                out["extraction_a_id"] = free.extraction_a_id
+            if free.extraction_b_id:
+                out["extraction_b_id"] = free.extraction_b_id
+            return out
         if row is None:
             return out
         out["comparison_id"] = row.comparison_id

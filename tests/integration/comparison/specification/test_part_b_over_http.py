@@ -101,7 +101,10 @@ def test_the_specifications_of_a_series_list_the_transitions_that_have_one(on, c
     assert len(page["items"]) == 2  # V3 -> V4 and V4 -> V5 both have a specification sheet on each side
     assert {i["transition_id"] for i in page["items"]} >= {scope.transition_id}
     states = {i["transition_id"]: i["state"] for i in page["items"]}
-    assert states[scope.transition_id] == "completed" and "not_started" in states.values()
+    # V3 and V4 read the same text, so once V4 -> V5 is read both readings of V3 -> V4 are stored: it is read without a job
+    assert states[scope.transition_id] == "completed" and set(states.values()) == {"completed"}
+    free = next(i for i in page["items"] if i["transition_id"] != scope.transition_id)
+    assert "job_id" not in free and "comparison_id" not in free and free["totals"]["changed"] == 0
     one = on.get(f"/comparison-series/{series['series_id']}/specifications", params={"limit": 1}, headers=viewer).json()
     assert len(one["items"]) == 1 and one["page"]["next_cursor"]
 

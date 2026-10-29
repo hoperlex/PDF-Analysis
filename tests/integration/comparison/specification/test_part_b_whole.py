@@ -206,3 +206,22 @@ def test_the_states_of_a_transition_that_has_not_been_started(sessions, transiti
     assert failure.value.code is ErrorCode.NOT_FOUND
     with pytest.raises(DomainError):
         service.list_specifications(series_id="cser_01ARZ3NDEKTSV4RRFFQ69G5FAV", after_no=0, limit=5)
+
+
+def test_a_transition_whose_two_readings_are_already_stored_is_read_without_a_job(sessions, job_for, transition, run, service) -> None:
+    """V3 and V4 have the same specification text: once V4 -> V5 has been read, the readings of V3 -> V4 are both stored. That transition
+    has no row and no job (the core would refuse a job with nothing to send), and its comparison -- no change -- is made on the read."""
+    doc, series, scope = transition
+    repository = SpecificationRepository()
+    _open(sessions, job_for, scope)
+    run.run(scope, ask=Model())
+    with session_scope(sessions) as session:
+        earlier = repository.transition(session, next(t["transition_id"] for t in series["transitions"] if t["target_version_uid"] == doc.versions[1]))
+        assert repository.whole(session, earlier.transition_id) is None
+    view = service.get_specification(transition_id=earlier.transition_id)
+    assert view["state"] == "completed" and view["method"] == "whole" and view["phase"] == "done"
+    assert view["totals"] == {"changed": 0, "removed": 0, "added": 0, "unclear": 0, "renumbered": 0, "moved": 0}
+    assert view["extraction_a_id"] and view["extraction_b_id"] and "job_id" not in view and "comparison_id" not in view
+    assert service.list_changes(transition_id=earlier.transition_id, kind=None, offset=0, limit=10) == ([], None)
+    page = service.list_specifications(series_id=series["series_id"], after_no=0, limit=10)
+    assert {i["transition_id"]: i["state"] for i in page.items} == {earlier.transition_id: "completed", scope.transition_id: "completed"}
