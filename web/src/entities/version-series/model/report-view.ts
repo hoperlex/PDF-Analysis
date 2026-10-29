@@ -3,7 +3,7 @@
  * `version-comparison.js:277-333`): which controls a report offers in each state, what its progress says, and the specification
  * block's figures (`version-comparison.js:237-275`).
  *
- * The rules mirror what the server accepts (`CMP-SEAL-C2` §3 operation descriptions): «Отменить» for a queued, running or paused
+ * The rules mirror what the server accepts (`CMP-SEAL-C2` §3, the descriptions of the operations): «Отменить» for a queued, running or paused
  * report; «Продолжить» for a paused, partial, failed or cancelled one; «Пересобрать PDF» (no model call, nothing spent) for a
  * report whose text is complete — a completed one, or one that failed while writing the PDF; «Удалить» for a report that is not
  * live; «Подготовить отчёт для заказчика» for a finished analytic report; the downloads for the files it holds.
