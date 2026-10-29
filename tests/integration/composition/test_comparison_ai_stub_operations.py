@@ -106,8 +106,11 @@ REQUESTS: dict[str, tuple[str, str, Any, bool, str]] = {
 EXPERT_WRITES = {name for name, row in REQUESTS.items() if row[3]}
 DEPENDENCIES = {row[4] for row in REQUESTS.values()}
 #: Lanes that serve one of them remove it from the list of stubs by adding it here; the role, key and shape tests still
-#: judge it. Empty at the seal.
-WIRED: frozenset[str] = frozenset()
+#: judge it. Empty at the seal. `CMP-VC-AIPAIR-01` serves the seven operations of the AI pair check.
+WIRED: frozenset[str] = frozenset({
+    "estimateComparisonAiPairCheck", "getComparisonAiPairCheck", "startComparisonAiPairCheck", "pauseComparisonAiPairCheck",
+    "resumeComparisonAiPairCheck", "cancelComparisonAiPairCheck", "listComparisonAiPairHints",
+})
 STUBS = sorted(set(REQUESTS) - WIRED)
 LANES = {
     "comparison_ai_pairs": "CMP-VC-AIPAIR-01", "comparison_ai_sheets": "CMP-VC-AISHEET-01",
@@ -198,8 +201,9 @@ def test_every_operation_refuses_naming_the_module_while_the_versions_module_is_
 def test_the_module_value_decides_which_class_a_stub_names(value: str) -> None:
     """``none`` is off; ``versions,stages`` serves the versions module too."""
     client = _client(value)
-    response = _call(client, "startComparisonAiPairCheck", token=static_token())
-    expected = "comparison_modules" if value == "none" else "comparison_ai_pairs"
+    name = STUBS[0]  # the first operation still sealed, whichever lanes have wired theirs
+    response = _call(client, name, token=static_token())
+    expected = "comparison_modules" if value == "none" else REQUESTS[name][4]
     assert response.status_code == 503 and response.json()["details"]["dependency"] == expected, response.text
 
 
@@ -244,7 +248,7 @@ def test_that_check_fails_when_the_module_flag_is_ignored(monkeypatch: pytest.Mo
 
     monkeypatch.setattr(adapters._VersionsModuleGate, "_require_versions_module", lambda self: None)
     client = _client(None)
-    response = _call(client, "startComparisonAiPairCheck", token=static_token())
+    response = _call(client, STUBS[0], token=static_token())
     with pytest.raises(AssertionError):
         assert response.json()["details"]["dependency"] == "comparison_modules"
 
@@ -268,7 +272,9 @@ def test_a_consent_that_is_not_a_digest_and_a_boolean_is_refused_before_the_stub
         response = _post(on, start, bad)
         assert response.status_code == 422, (str(bad)[:80], response.status_code, response.text)
     # a consent with `confirmed` false is well formed: the lane refuses it with `comparison_consent_required`
-    assert _post(on, start, {"consent": {**CONSENT, "confirmed": False}}).status_code == 503
+    # (`CMP-VC-AIPAIR-01` serves this start, so the refusal is the lane's own `422`, not the stub's `503`)
+    refused = _post(on, start, {"consent": {**CONSENT, "confirmed": False}})
+    assert refused.status_code == 422 and refused.json()["details"]["constraint"] == "comparison_consent_required", refused.text
 
 
 def test_the_sheet_start_takes_restart_and_the_retry_takes_a_consent(on: TestClient) -> None:
@@ -303,7 +309,11 @@ def test_a_report_upload_is_bounded_and_takes_a_kind(on: TestClient) -> None:
 
 def test_a_list_or_query_outside_its_bounds_is_refused_before_the_stub(on: TestClient) -> None:
     headers = {"Authorization": f"Bearer {static_token()}"}
-    for path in (f"{DOCUMENT}/comparison-ai-pair-hints", f"/comparison-sheet-pairs/{PAIR}/description-history",
+    hints = f"{DOCUMENT}/comparison-ai-pair-hints"  # served by `CMP-VC-AIPAIR-01`: the bounds are judged, then the parent is not found
+    assert on.get(f"{hints}?limit=0", headers=headers).status_code == 422
+    assert on.get(f"{hints}?limit=201", headers=headers).status_code == 422
+    assert on.get(hints, headers=headers).status_code == 404
+    for path in (f"/comparison-sheet-pairs/{PAIR}/description-history",
                  f"/comparison-transitions/{TRN}/review-sheets", f"/comparison-series/{SER}/specifications",
                  f"/comparison-transitions/{TRN}/specification/changes", f"/comparison-series/{SER}/reports"):
         assert on.get(f"{path}?limit=0", headers=headers).status_code == 422, path

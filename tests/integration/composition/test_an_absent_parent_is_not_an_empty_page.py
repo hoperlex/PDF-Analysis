@@ -244,10 +244,9 @@ COMPARISON_QUEUE_OPERATIONS = frozenset({"getComparisonQueueSummary"})
 #: that name a parent; `CMP-VC-AIPAIR-01`, `CMP-VC-AISHEET-01`, `CMP-VC-SPEC-01`, `CMP-VC-QUEUE-01` and `CMP-VC-REPORT-01`
 #: remove the ones they wire, and each then joins the `404` sweep (an absent project, document, series, transition,
 #: sheet pair, page profile or report is `404 not_found`).
+#: `CMP-VC-AIPAIR-01` serves ``estimateComparisonAiPairCheck``, ``getComparisonAiPairCheck`` and
+#: ``listComparisonAiPairHints`` and removes them: each joins the `404` sweep.
 SEALED_STUB_ADDRESSED: frozenset[str] = frozenset({
-    "estimateComparisonAiPairCheck",
-    "getComparisonAiPairCheck",
-    "listComparisonAiPairHints",
     "estimateComparisonAiSheetChanges",
     "getComparisonAiSheetChanges",
     "getComparisonSheetDescription",

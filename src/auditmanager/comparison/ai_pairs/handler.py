@@ -340,8 +340,12 @@ class PairCheckHandler:
             item.require_current(session)
             state = jobs.state_of(session, job_id)
             if state in JOB_TERMINAL_STATES:
+                if state != "completed":  # cancelled or failed: nothing is decided, and what was not asked is not pending any more
+                    for row in self._pairs.questions_of_job(session, job_id):
+                        if row.state == "queued":
+                            self._pairs.settle(session, row.question_id, state="cancelled", decision=None)
                 session.commit()
-                return Completed()  # cancelled, failed or completed: nothing is decided
+                return Completed()
             if state != "running":
                 return Yielded(NOT_RUNNING_WAIT_SECONDS)
             progress = jobs.view_in(session, job_id).progress

@@ -184,13 +184,11 @@ APPEND_ONLY_BY_CODE_EVIDENCE = {
 SEALED_NOT_YET_WRITTEN = frozenset((
     # `0039_comparison_core` (`CMP-SEAL-C1`): the tables of the version comparison core, until `CMP-SERIES-01` and
     # wave C2 write them. `CMP-MATRIX-01` writes `comparison_matrix` and `comparison_matrix_edit` and only reads
-    # `comparison_ai_link`, which wave C2 writes; `CMP-ENGINE-01` writes `comparison_sheet_pair_result`.
-    "comparison_ai_link",
+    # `comparison_ai_link`, which `CMP-VC-AIPAIR-01` writes; `CMP-ENGINE-01` writes `comparison_sheet_pair_result`.
     # `0040_comparison_ai_reports` (`CMP-SEAL-C2`): the tables of the version comparison AI, specifications, reports and
     # launch queue, until `CMP-VC-AIPAIR-01`, `CMP-VC-AISHEET-01`, `CMP-VC-SPEC-01`, `CMP-VC-QUEUE-01` and
     # `CMP-VC-REPORT-01` write them.
-    "comparison_ai_pair_answer", "comparison_ai_pair_question", "comparison_ai_sheet_item",
-    "comparison_launch_entry", "comparison_launch_queue", "comparison_report", "comparison_report_artifact",
+    "comparison_ai_sheet_item", "comparison_launch_entry", "comparison_launch_queue", "comparison_report", "comparison_report_artifact",
     "comparison_report_part", "comparison_sheet_description", "comparison_spec_comparison",
     "comparison_spec_extraction",
 ))
