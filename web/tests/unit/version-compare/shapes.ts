@@ -11,7 +11,7 @@
  */
 
 import type { QueryClient } from '@tanstack/react-query';
-import { createElement } from 'react';
+import { Fragment, createElement } from 'react';
 import type { ReactElement } from 'react';
 
 import type { ComparisonSeriesState, ComparisonUploadState } from '@/shared/api';
@@ -243,7 +243,14 @@ function lean(state: (typeof COMPARISON_AI_SHEET_STATE_VALUES)[number]): ReturnT
 function aiShapes(): ComparisonShape[] {
   const doc = (n: number): string => uid('doc', n);
   const out: ComparisonShape[] = [];
-  const push = (shape: ComparisonShape): void => void out.push(shape);
+  const bundles = new Map<string, ComparisonShape[]>();
+  // The census and the language guard pay for every screen they render, so the shapes that differ only in one member of an enum are
+  // rendered together, side by side, as one screen. A bundle never holds two shapes that seed the same cache entry differently.
+  const push = (shape: ComparisonShape): void => {
+    const group = BUNDLES.find(([pattern]) => pattern.test(shape.name))?.[1];
+    if (group === undefined) out.push(shape);
+    else bundles.set(group, [...(bundles.get(group) ?? []), shape]);
+  };
 
   // «Проекты и этапы»: the cells in many states, the selection, the strips and a dialog
   push({
@@ -439,11 +446,8 @@ function aiShapes(): ComparisonShape[] {
   });
   push({ name: 'specification-changes-cold', make: () => createElement(SpecificationChanges, { transitionId: TRANSITION_12_ }) });
   push({ name: 'summary-report-block-container-cold', make: () => createElement(SummaryReportBlock, { series: SERIES, names: SET_NAMES, mayAct: true, summaryReady: true }) });
-  push({
-    name: 'summary-report-block-container-loaded',
-    make: () => createElement(SummaryReportBlock, { series: SERIES, names: SET_NAMES, mayAct: true, summaryReady: true }),
-    seedClient: (c) => c.setQueryData(COMPARISON_KEYS.reports(SERIES_ID), [report()]),
-  });
+  // no seed of its own: it reads the reports that `report-window-container-loaded` seeds, in the same screen
+  push({ name: 'summary-report-block-container-loaded', make: () => createElement(SummaryReportBlock, { series: SERIES, names: SET_NAMES, mayAct: true, summaryReady: true }) });
   push({
     name: 'summary-report-block-container-not-wired',
     make: () => createElement(SummaryReportBlock, { series: SERIES, names: SET_NAMES, mayAct: true, summaryReady: true }),
@@ -468,8 +472,36 @@ function aiShapes(): ComparisonShape[] {
   push({ name: 'comparison-ai-queue-block-not-wired', make: () => createElement(ComparisonAiQueueBlock), seedClient: (c) => seedError(c, COMPARISON_KEYS.aiQueue(), refusal('dependency_unavailable', { dependency: 'comparison_launch_queue' })) });
   push({ name: 'comparison-ai-queue-block-failed', make: () => createElement(ComparisonAiQueueBlock), seedClient: (c) => seedError(c, COMPARISON_KEYS.aiQueue(), refusal('internal_error')) });
   push({ name: 'comparison-ai-queue-block-cold', make: () => createElement(ComparisonAiQueueBlock) });
+  for (const [name, members] of bundles) {
+    out.push({
+      name,
+      make: () => createElement('div', null, ...members.map((member, index) => createElement(Fragment, { key: index }, member.make()))),
+      seedClient: (client) => members.forEach((member) => member.seedClient?.(client)),
+    });
+  }
   return out;
 }
+
+/** Which shapes are rendered together (by name), and the name of the screen they make. */
+const BUNDLES: readonly (readonly [RegExp, string])[] = [
+  [/^launch-queue-strip-/, 'launch-queue-strips'],
+  [/^estimate-panel-(agreed|loading|not-metered|recorded|small-spend)$/, 'estimate-panels-of-the-estimate'],
+  [/^estimate-panel-(blocked-job|blocked-day|nothing-to-send|stale-asks-again|unread)$/, 'estimate-panels-that-cannot-start'],
+  [/^estimate-panel-refused-/, 'estimate-panels-refused'],
+  [/^ai-changes-block-(paused-.*|queued|running|paused|completed|failed|cancelled)$/, 'ai-changes-blocks-by-state'],
+  [/^ai-changes-block-(none|reader|refused|recorded|not-wired|fold-empty)$/, 'ai-changes-blocks-variants'],
+  [/^specifications-block-(phase-.*|reader)$/, 'specifications-blocks-variants'],
+  [/^summary-report-block-(client|analytic|recorded|none|refused)$/, 'summary-report-blocks'],
+  [/^report-window-(upload|reader|refused|not-wired|every-stage)$/, 'report-windows-variants'],
+  [/^changes-panel-(not_processed|queued|running|done|needs_clarification|partial|no_construction_changes|stale|failed|cancelled|engine_same)$/, 'changes-panels-by-state'],
+  [/^changes-panel-(recorded|whole-specification|estimate|reader)$/, 'changes-panels-variants'],
+  [/^changes-panel-(loading|not-wired|failed-read)$/, 'changes-panels-reads'],
+  [/^evidence-banner-/, 'evidence-banners'],
+  [/^(ai-changes-block|specifications-block|summary-report-block|report-window)-container-cold$|^specification-changes-cold$|^ai-start-dialog-pending$|^report-draft-dialog-pending$/, 'ai-containers-cold'],
+  [/^(ai-changes-block|specifications-block|summary-report-block|report-window)-container-loaded$/, 'ai-containers-loaded'],
+  [/^(ai-changes-block|specifications-block|summary-report-block|report-window)-container-not-wired$/, 'ai-containers-not-wired'],
+  [/^comparison-ai-queue-block-(view|empty)$/, 'comparison-ai-queue-views'],
+];
 
 const SERIES_ID_ = SERIES.series_id;
 const SERIES_ID = SERIES_ID_;
