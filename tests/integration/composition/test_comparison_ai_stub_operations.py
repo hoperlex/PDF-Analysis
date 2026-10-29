@@ -107,7 +107,14 @@ EXPERT_WRITES = {name for name, row in REQUESTS.items() if row[3]}
 DEPENDENCIES = {row[4] for row in REQUESTS.values()}
 #: Lanes that serve one of them remove it from the list of stubs by adding it here; the role, key and shape tests still
 #: judge it. Empty at the seal.
-WIRED: frozenset[str] = frozenset()
+WIRED: frozenset[str] = frozenset({
+    # `CMP-VC-AISHEET-01`: the fifteen operations of `ComparisonAiSheetAdapter`.
+    "estimateComparisonAiSheetChanges", "getComparisonAiSheetChanges", "startComparisonAiSheetChanges",
+    "pauseComparisonAiSheetChanges", "resumeComparisonAiSheetChanges", "cancelComparisonAiSheetChanges",
+    "finishComparisonAiSheetChanges", "dequeueComparisonAiSheetChanges", "retryComparisonAiSheetChanges",
+    "getComparisonSheetDescription", "startComparisonSheetDescription", "listComparisonSheetDescriptionHistory",
+    "estimateComparisonSheetDescription", "streamComparisonSheetDescriptionMd", "listComparisonReviewSheets",
+})
 STUBS = sorted(set(REQUESTS) - WIRED)
 LANES = {
     "comparison_ai_pairs": "CMP-VC-AIPAIR-01", "comparison_ai_sheets": "CMP-VC-AISHEET-01",

@@ -252,6 +252,20 @@ from auditmanager.comparison.ai_jobs.recorded import RecordedAnswers
 from auditmanager.comparison.ai_jobs.service import AiJobCommand, ComparisonAiJobService
 from auditmanager.comparison.ai_jobs.service import pause_reason_of as ai_pause_reason_of
 
+# `CMP-VC-AISHEET-01`: the AI description of sheet changes (method ``sheet_changes``, work kind ``comparison_sheet_changes``).
+from auditmanager.comparison.ai_sheets.describe import build_request as sheet_changes_request
+from auditmanager.comparison.ai_sheets.description import sheet_markdown as sheet_description_markdown
+from auditmanager.comparison.ai_sheets.handler import (
+    ModelRoutes as SheetModelRoutes,
+    SheetChangesHandler,
+    sheet_changes_handler,
+)
+from auditmanager.comparison.ai_sheets.material import ProfileMaterial, SheetMaterial
+from auditmanager.comparison.ai_sheets.method import SheetChangesMethod
+from auditmanager.comparison.ai_sheets.model import WORK_KIND as SHEET_CHANGES_KIND
+from auditmanager.comparison.ai_sheets.schema import PROMPT_VERSION as SHEET_CHANGES_PROMPT_VERSION
+from auditmanager.comparison.ai_sheets.service import ComparisonAiSheetService
+
 #: `CMP-WORK-01` (ADR-0025 decision 4). One tuple of handler factories, each
 #: ``Callable[[WorkDependencies], WorkHandler]``: ``build_worker_runtime`` builds one dependency
 #: bundle and applies every factory to it, and refuses to start on a duplicate ``kind``. A slice
@@ -263,6 +277,7 @@ HANDLER_FACTORIES: tuple[HandlerFactory, ...] = (
     series_pair_handler,  # `CMP-SERIES-01`: kind ``series_pair``
     series_drive_handler,  # `CMP-SERIES-01`: kind ``series_drive``
     series_after_preparation_handler,  # `CMP-SERIES-01`: kind ``series_after_preparation``
+    sheet_changes_handler,  # `CMP-VC-AISHEET-01`: kind ``comparison_sheet_changes``
 )
 
 #: `CMP-WORK-01`. Called inside the reclaim transaction for each attempt whose lease was lost:
@@ -541,4 +556,15 @@ __all__ = [
     "ai_work_kind_of",
     "build_ai_estimate",
     "read_ai_route",
+    "ComparisonAiSheetService",
+    "ProfileMaterial",
+    "SHEET_CHANGES_KIND",
+    "SHEET_CHANGES_PROMPT_VERSION",
+    "SheetChangesHandler",
+    "SheetChangesMethod",
+    "SheetMaterial",
+    "SheetModelRoutes",
+    "sheet_changes_handler",
+    "sheet_changes_request",
+    "sheet_description_markdown",
 ]

@@ -6046,82 +6046,170 @@ class ComparisonAiPairAdapter(_VersionsModuleGate):
         return _comparison_unavailable(self._DEPENDENCY)
 
 
-class ComparisonAiSheetAdapter(_VersionsModuleGate):
-    """`CMP-VC-AISHEET-01` replaces the bodies."""
+class ComparisonAiSheetAdapter(_SessionHolder, _VersionsModuleGate):
+    """`CMP-VC-AISHEET-01` serves the fifteen operations of the AI description of sheet changes over
+    :class:`~auditmanager.comparison.ai_sheets.service.ComparisonAiSheetService` and the AI-job core (ADR-0025 decisions 3, 10, 11, 17-23).
 
-    _DEPENDENCY = "comparison_ai_sheets"
+    The adapter owns the mapping to the contract's models, the cursors and the one read the service does not make itself: the actor's
+    roles (a write is an expert's act, checked again in the transaction that acts). **Every method keeps the module-flag refusal as its
+    first statement**, so a deployment that does not serve the versions module reads nothing and writes nothing."""
 
-    def cancel_changes_job(self, *, job_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonAiJob:
-        self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+    def __init__(
+        self, session_factory: sessionmaker[Session], *, blob_store: Any = None, tiles: Any = None, comparison_modules: str = "none",
+        provider_mode: str = "live", service: Any = None,
+    ) -> None:
+        _SessionHolder.__init__(self, session_factory)
+        _VersionsModuleGate.__init__(self, comparison_modules=comparison_modules)
+        if service is None:
+            from auditmanager.comparison.public import (
+                ComparisonAiJobService,
+                ComparisonAiSheetService,
+                PageProfileReader,
+                ProfileMaterial,
+                SheetChangesMethod,
+            )
 
-    def dequeue_changes_job(self, *, job_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonAiJob:
-        self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+            method = SheetChangesMethod(lambda: ProfileMaterial(PageProfileReader(session_factory, blob_store, tiles=tiles)))
+            service = ComparisonAiSheetService(
+                session_factory,
+                jobs=ComparisonAiJobService(
+                    session_factory, methods=[method], comparison_modules=comparison_modules, provider_mode=provider_mode,
+                ),
+                method=method,
+            )
+        self._service = service
 
+    # -- the pieces of a call ---------------------------------------------------------------------------------------------
+    def _command(self, command_type: str, *, user_uid: str, idempotency_key: str) -> Any:
+        from auditmanager.comparison.public import AiJobCommand
+
+        _label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        return AiJobCommand(command_type=command_type, idempotency_key=idempotency_key, user_uid=user_uid, actor_roles=roles)
+
+    @staticmethod
+    def _consent(consent: models.ComparisonAiConsent | None) -> Any:
+        from auditmanager.comparison.public import AiConsentInput
+
+        return None if consent is None else AiConsentInput(estimate_digest=str(consent.estimate_digest), confirmed=bool(consent.confirmed))
+
+    @staticmethod
+    def _job(document: Any) -> models.ComparisonAiJob:
+        return models.ComparisonAiJob.model_validate(document)
+
+    # -- the series -------------------------------------------------------------------------------------------------------
     def estimate_series_changes(self, *, series_id: str, only_failed: bool) -> models.ComparisonAiEstimate:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
-
-    def estimate_sheet_description(self, *, sheet_pair_id: str) -> models.ComparisonAiEstimate:
-        self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
-
-    def finish_changes_job(self, *, job_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonAiJob:
-        self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        return models.ComparisonAiEstimate.model_validate(
+            self._service.estimate_series(series_id=series_id, only_failed=only_failed)
+        )
 
     def get_series_changes(self, *, series_id: str) -> models.ComparisonAiSheetChanges:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
-
-    def get_sheet_description(self, *, sheet_pair_id: str) -> models.ComparisonSheetDescription:
-        self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
-
-    def list_review_sheets(
-        self, *, transition_id: str, cursor: str | None, limit: int
-    ) -> models.ComparisonReviewSheetPage:
-        self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
-
-    def list_sheet_description_history(
-        self, *, sheet_pair_id: str, cursor: str | None, limit: int
-    ) -> models.ComparisonSheetDescriptionHistory:
-        self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
-
-    def pause_changes_job(self, *, job_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonAiJob:
-        self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
-
-    def read_sheet_description_md(self, *, sheet_pair_id: str) -> bytes:
-        self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
-
-    def resume_changes_job(
-        self, *, job_id: str, consent: models.ComparisonAiConsent | None, user_uid: str, idempotency_key: str
-    ) -> models.ComparisonAiJob:
-        self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
-
-    def retry_changes_job(
-        self, *, job_id: str, consent: models.ComparisonAiConsent, user_uid: str, idempotency_key: str
-    ) -> models.ComparisonAiJob:
-        self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        return models.ComparisonAiSheetChanges.model_validate(self._service.get_series(series_id=series_id))
 
     def start_series_changes(
         self, *, series_id: str, consent: models.ComparisonAiConsent, restart: bool, user_uid: str, idempotency_key: str
     ) -> models.ComparisonAiJob:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        command = self._command("start_comparison_ai_sheet_changes", user_uid=user_uid, idempotency_key=idempotency_key)
+        return self._job(self._service.start_series(
+            series_id=series_id, consent=self._consent(consent), restart=restart, command=command,
+        ))
+
+    # -- the controls of a job --------------------------------------------------------------------------------------------
+    def pause_changes_job(self, *, job_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        command = self._command("pause_comparison_ai_sheet_changes", user_uid=user_uid, idempotency_key=idempotency_key)
+        return self._job(self._service.pause(job_id=job_id, command=command))
+
+    def resume_changes_job(
+        self, *, job_id: str, consent: models.ComparisonAiConsent | None, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        command = self._command("resume_comparison_ai_sheet_changes", user_uid=user_uid, idempotency_key=idempotency_key)
+        return self._job(self._service.resume(job_id=job_id, consent=self._consent(consent), command=command))
+
+    def cancel_changes_job(self, *, job_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        command = self._command("cancel_comparison_ai_sheet_changes", user_uid=user_uid, idempotency_key=idempotency_key)
+        return self._job(self._service.cancel(job_id=job_id, command=command))
+
+    def finish_changes_job(self, *, job_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        command = self._command("finish_comparison_ai_sheet_changes", user_uid=user_uid, idempotency_key=idempotency_key)
+        return self._job(self._service.finish(job_id=job_id, command=command))
+
+    def dequeue_changes_job(self, *, job_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        command = self._command("dequeue_comparison_ai_sheet_changes", user_uid=user_uid, idempotency_key=idempotency_key)
+        return self._job(self._service.dequeue(job_id=job_id, command=command))
+
+    def retry_changes_job(
+        self, *, job_id: str, consent: models.ComparisonAiConsent, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        command = self._command("retry_comparison_ai_sheet_changes", user_uid=user_uid, idempotency_key=idempotency_key)
+        return self._job(self._service.retry(job_id=job_id, consent=self._consent(consent), command=command))
+
+    # -- a sheet pair -----------------------------------------------------------------------------------------------------
+    def get_sheet_description(self, *, sheet_pair_id: str) -> models.ComparisonSheetDescription:
+        self._require_versions_module()
+        return models.ComparisonSheetDescription.model_validate(self._service.get_description(sheet_pair_id=sheet_pair_id))
+
+    def estimate_sheet_description(self, *, sheet_pair_id: str) -> models.ComparisonAiEstimate:
+        self._require_versions_module()
+        return models.ComparisonAiEstimate.model_validate(self._service.estimate_description(sheet_pair_id=sheet_pair_id))
 
     def start_sheet_description(
         self, *, sheet_pair_id: str, consent: models.ComparisonAiConsent, user_uid: str, idempotency_key: str
     ) -> models.ComparisonAiJob:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        command = self._command("start_comparison_sheet_description", user_uid=user_uid, idempotency_key=idempotency_key)
+        return self._job(self._service.start_description(
+            sheet_pair_id=sheet_pair_id, consent=self._consent(consent), command=command,
+        ))
+
+    def list_sheet_description_history(
+        self, *, sheet_pair_id: str, cursor: str | None, limit: int
+    ) -> models.ComparisonSheetDescriptionHistory:
+        self._require_versions_module()
+        after: tuple[datetime, str] | None = None
+        if cursor is not None:
+            parts = decode_cursor(cursor)
+            try:
+                if len(parts) != 2:
+                    raise ValueError("two members")
+                after = (datetime.fromisoformat(parts[0]), parts[1])
+            except ValueError:
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format") from None
+        page = self._service.list_history(sheet_pair_id=sheet_pair_id, after=after, limit=limit)
+        return models.ComparisonSheetDescriptionHistory.model_validate({
+            "items": page.items,
+            "page": {
+                "next_cursor": None if page.next_after is None
+                else encode_cursor((page.next_after[0].isoformat(), page.next_after[1]))
+            },
+        })
+
+    def read_sheet_description_md(self, *, sheet_pair_id: str) -> bytes:
+        self._require_versions_module()
+        return self._service.read_md(sheet_pair_id=sheet_pair_id)
+
+    def list_review_sheets(
+        self, *, transition_id: str, cursor: str | None, limit: int
+    ) -> models.ComparisonReviewSheetPage:
+        self._require_versions_module()
+        after = 0
+        if cursor is not None:
+            parts = decode_cursor(cursor)
+            if len(parts) != 1 or not parts[0].isdigit():
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+            after = int(parts[0])
+        page = self._service.list_review_sheets(transition_id=transition_id, after=after, limit=limit)
+        return models.ComparisonReviewSheetPage.model_validate({
+            "items": page.items,
+            "page": {"next_cursor": None if page.next_after is None else encode_cursor((str(page.next_after),))},
+        })
 
 
 class ComparisonSpecificationAdapter(_VersionsModuleGate):

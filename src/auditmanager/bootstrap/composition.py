@@ -518,7 +518,10 @@ def build_application(
         # `CMP-VC-AIPAIR-01`, `CMP-VC-AISHEET-01`, `CMP-VC-SPEC-01`, `CMP-VC-QUEUE-01` and `CMP-VC-REPORT-01`
         # replace the five adapters (plan section 4.0 rule 1).
         comparison_ai_pairs=ComparisonAiPairAdapter(comparison_modules=comparison_modules),
-        comparison_ai_sheets=ComparisonAiSheetAdapter(comparison_modules=comparison_modules),
+        comparison_ai_sheets=ComparisonAiSheetAdapter(
+            sessions, blob_store=store, tiles=tile_renderer, comparison_modules=comparison_modules,
+            provider_mode=_provenance_mode(resolved.provider_mode),
+        ),
         comparison_specifications=ComparisonSpecificationAdapter(comparison_modules=comparison_modules),
         comparison_launch_queue=ComparisonLaunchQueueAdapter(comparison_modules=comparison_modules),
         comparison_reports=ComparisonReportAdapter(comparison_modules=comparison_modules),
