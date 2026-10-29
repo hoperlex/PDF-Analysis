@@ -246,7 +246,8 @@ COMPARISON_QUEUE_OPERATIONS = frozenset({"getComparisonQueueSummary"})
 #: sheet pair, page profile or report is `404 not_found`).
 #: `CMP-VC-AIPAIR-01` serves ``estimateComparisonAiPairCheck``, ``getComparisonAiPairCheck`` and
 #: ``listComparisonAiPairHints`` and removes them: each joins the `404` sweep.
-SEALED_STUB_ADDRESSED: frozenset[str] = frozenset({
+#: `CMP-VC-AISHEET-01` serves seven reads. The dedicated test below checks both the module gate and an absent parent.
+MODULE_GATED_ADDRESSED: frozenset[str] = frozenset({
     "estimateComparisonAiSheetChanges",
     "getComparisonAiSheetChanges",
     "getComparisonSheetDescription",
@@ -254,6 +255,8 @@ SEALED_STUB_ADDRESSED: frozenset[str] = frozenset({
     "estimateComparisonSheetDescription",
     "streamComparisonSheetDescriptionMd",
     "listComparisonReviewSheets",
+})
+SEALED_STUB_ADDRESSED: frozenset[str] = frozenset({
     "getComparisonLaunchQueue",
     "streamComparisonSeriesSummary",
     "listComparisonReports",
@@ -444,7 +447,7 @@ def test_every_get_that_names_a_parent_refuses_an_identity_that_names_nothing(
     """
     disagreements = []
     for operation_id, template in _addressed(_get_routes(app)):
-        if operation_id in SEALED_STUB_ADDRESSED or operation_id in RUNNER_ADDRESSED:
+        if operation_id in SEALED_STUB_ADDRESSED or operation_id in RUNNER_ADDRESSED or operation_id in MODULE_GATED_ADDRESSED:
             continue
         path = re.sub(r"\{(\w+)\}", lambda m: _absent_identity(m.group(1)), template)
         status, body = _get(app, path + REQUIRED_QUERY.get(operation_id, ""))
@@ -455,6 +458,24 @@ def test_every_get_that_names_a_parent_refuses_an_identity_that_names_nothing(
         "these operations answered something other than 404 not_found for an identity "
         f"that names nothing: {disagreements}"
     )
+
+
+def test_the_wired_sheet_reads_are_404_for_an_absent_parent_once_the_module_is_on(app: Composed) -> None:
+    """`CMP-VC-AISHEET-01`: the seven reads of the sheet descriptions, with the versions module on, answer `404 not_found` for an identity
+    that names nothing (never an empty description or an empty list); with it off, they refuse first."""
+    off_environ = {k: v for k, v in os.environ.items() if k != PACK_MANIFEST_ENV} | {
+        API_TOKEN_VARIABLE: DEPLOYMENT_SECRET, "AUDITMANAGER_COMPARISON_MODULES": "none",
+    }
+    application = create_app(environ=off_environ)
+    off = Composed(application, TestClient(create_asgi_app(environ=off_environ, application=application), raise_server_exceptions=False))
+    swept = [(op, path) for op, path in _addressed(_get_routes(app)) if op in MODULE_GATED_ADDRESSED]
+    assert {op for op, _ in swept} == MODULE_GATED_ADDRESSED
+    for operation_id, template in swept:
+        path = re.sub(r"\{(\w+)\}", lambda m: _absent_identity(m.group(1)), template) + REQUIRED_QUERY.get(operation_id, "")
+        status, body = _get(app, path)
+        assert (status, body.get("error_code")) == (404, "not_found"), (operation_id, status, body)
+        status, body = _get(off, path)
+        assert (status, body.get("error_code"), body["details"]["dependency"]) == (503, "dependency_unavailable", "comparison_modules"), operation_id
 
 
 def test_a_section_filter_answers_the_section_and_refuses_what_names_nothing(app: Composed) -> None:

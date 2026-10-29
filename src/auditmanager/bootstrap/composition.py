@@ -521,7 +521,10 @@ def build_application(
             sessions, blob_store=store, comparison_modules=comparison_modules,
             provider_mode=_provenance_mode(resolved.provider_mode),
         ),
-        comparison_ai_sheets=ComparisonAiSheetAdapter(comparison_modules=comparison_modules),
+        comparison_ai_sheets=ComparisonAiSheetAdapter(
+            sessions, blob_store=store, tiles=tile_renderer, comparison_modules=comparison_modules,
+            provider_mode=_provenance_mode(resolved.provider_mode),
+        ),
         comparison_specifications=ComparisonSpecificationAdapter(
             sessions, blob_store=store, comparison_modules=comparison_modules, provider_mode=_provenance_mode(resolved.provider_mode)),
         comparison_launch_queue=ComparisonLaunchQueueAdapter(comparison_modules=comparison_modules),

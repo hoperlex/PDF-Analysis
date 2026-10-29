@@ -121,6 +121,12 @@ WIRED: frozenset[str] = frozenset({
     "cancelComparisonSpecification",
     "estimateComparisonAiPairCheck", "getComparisonAiPairCheck", "startComparisonAiPairCheck", "pauseComparisonAiPairCheck",
     "resumeComparisonAiPairCheck", "cancelComparisonAiPairCheck", "listComparisonAiPairHints",
+    # `CMP-VC-AISHEET-01`: the fifteen operations of `ComparisonAiSheetAdapter`.
+    "estimateComparisonAiSheetChanges", "getComparisonAiSheetChanges", "startComparisonAiSheetChanges",
+    "pauseComparisonAiSheetChanges", "resumeComparisonAiSheetChanges", "cancelComparisonAiSheetChanges",
+    "finishComparisonAiSheetChanges", "dequeueComparisonAiSheetChanges", "retryComparisonAiSheetChanges",
+    "getComparisonSheetDescription", "startComparisonSheetDescription", "listComparisonSheetDescriptionHistory",
+    "estimateComparisonSheetDescription", "streamComparisonSheetDescriptionMd", "listComparisonReviewSheets",
 })
 STUBS = sorted(set(REQUESTS) - WIRED)
 LANES = {
@@ -290,11 +296,11 @@ def test_a_consent_that_is_not_a_digest_and_a_boolean_is_refused_before_the_stub
 
 def test_the_sheet_start_takes_restart_and_the_retry_takes_a_consent(on: TestClient) -> None:
     start = f"/comparison-series/{SER}/ai-sheet-changes"
-    assert _post(on, start, {"consent": CONSENT, "restart": True}).status_code == 503
+    assert _post(on, start, {"consent": CONSENT, "restart": True}).status_code == 404  # wired (`CMP-VC-AISHEET-01`): an absent series
     assert _post(on, start, {"consent": CONSENT, "restart": "later"}).status_code == 422
     assert _post(on, f"/comparison-ai-sheet-jobs/{JOB}/retry", {}).status_code == 422
     assert _post(on, f"/comparison-ai-sheet-jobs/{JOB}/resume", {"consent": {"confirmed": True}}).status_code == 422
-    assert _post(on, f"/comparison-ai-sheet-jobs/{JOB}/resume", {"consent": CONSENT}).status_code == 503
+    assert _post(on, f"/comparison-ai-sheet-jobs/{JOB}/resume", {"consent": CONSENT}).status_code == 404  # wired: an absent job
 
 
 def test_the_queue_request_is_bounded_and_names_a_queueable_step(on: TestClient) -> None:
@@ -324,20 +330,18 @@ def test_a_list_or_query_outside_its_bounds_is_refused_before_the_stub(on: TestC
     assert on.get(f"{hints}?limit=0", headers=headers).status_code == 422
     assert on.get(f"{hints}?limit=201", headers=headers).status_code == 422
     assert on.get(hints, headers=headers).status_code == 404
-    for path in (f"/comparison-sheet-pairs/{PAIR}/description-history",
-                 f"/comparison-transitions/{TRN}/review-sheets", f"/comparison-series/{SER}/specifications",
-                 f"/comparison-transitions/{TRN}/specification/changes", f"/comparison-series/{SER}/reports"):
+    wired = (f"/comparison-sheet-pairs/{PAIR}/description-history", f"/comparison-transitions/{TRN}/review-sheets",
+             f"/comparison-series/{SER}/specifications", f"/comparison-transitions/{TRN}/specification/changes")
+    for path in (*wired, f"/comparison-series/{SER}/reports"):
         assert on.get(f"{path}?limit=0", headers=headers).status_code == 422, path
         assert on.get(f"{path}?limit=201", headers=headers).status_code == 422, path
-        # `CMP-VC-SPEC-01` serves these two: an identity that names nothing is `404`, not the stub's `503`.
-        served = path in (f"/comparison-series/{SER}/specifications", f"/comparison-transitions/{TRN}/specification/changes")
-        assert on.get(path, headers=headers).status_code == (404 if served else 503), path
+        assert on.get(path, headers=headers).status_code == (404 if path in wired else 503), path
     changes = f"/comparison-transitions/{TRN}/specification/changes"
     assert on.get(f"{changes}?kind=sideways", headers=headers).status_code == 422
     assert on.get(f"{changes}?kind=added", headers=headers).status_code == 404
     estimate = f"/comparison-series/{SER}/ai-sheet-changes/estimate"
     assert on.get(f"{estimate}?only_failed=maybe", headers=headers).status_code == 422
-    assert on.get(f"{estimate}?only_failed=true", headers=headers).status_code == 503
+    assert on.get(f"{estimate}?only_failed=true", headers=headers).status_code == 404  # wired: an absent series
 
 
 def test_an_identity_that_is_not_the_pattern_is_not_found_before_the_stub(on: TestClient) -> None:
