@@ -114,7 +114,7 @@ def test_nothing_is_sent_before_the_consent_and_the_estimate_agree(scene) -> Non
         start(rig, world, digest="0" * 64)
     assert reason(stale) == "comparison_estimate_stale"
     assert rig.scalar("SELECT count(*) FROM comparison_ai_job WHERE document_uid = :d", d=world.document) == 0
-    assert rig.scalar("SELECT count(*) FROM comparison_work WHERE kind = 'comparison_pair_check'") == 0
+    assert rig.scalar("SELECT count(*) FROM comparison_work WHERE project_uid = :p", p=world.project) == 0
     assert rig.answers.calls == 0
 
 
@@ -138,9 +138,16 @@ def test_a_matrix_that_is_not_ready_is_comparison_matrix_stale(db, h) -> None:
 
 
 def test_no_route_in_the_assignments_is_executor_route_missing(db, h) -> None:
+    """The route is read by the core's ``read_route`` (its own suite shows what an unrouted kind answers); the lane's database may hold
+    a route committed by the HTTP tests, and a route event cannot be un-set, so the reader that finds none is injected here."""
+    from auditmanager.comparison.public import ai_route_missing
+
+    def unrouted(session, work_kind, provider_mode):
+        raise ai_route_missing()
+
     world = db.world(versions=2)
     h.place_matrix(db.connection, world, [[h.matched(world, 1, 2), h.unmatched(world, 2, [2], ref=1)], [h.absent(world, 1), h.matched(world, 2, 2)]])
-    rig = db.rig(world)
+    rig = db.rig(world, route_reader=unrouted)
     with pytest.raises(DomainError) as refused:
         estimate(rig, world)
     assert refused.value.code is ErrorCode.DEPENDENCY_UNAVAILABLE and refused.value.detail_fields["dependency"] == "executor_route_missing"
@@ -170,11 +177,12 @@ def test_a_start_with_the_same_key_and_the_same_consent_replays_the_job(scene) -
     world, rig = scene
     digest = estimate(rig, world)["estimate_digest"]
     first = start(rig, world, key="k-same", digest=digest)
-    items = rig.scalar("SELECT count(*) FROM comparison_work WHERE kind = 'comparison_pair_check'")
+    items = rig.scalar("SELECT count(*) FROM comparison_work WHERE project_uid = :p", p=world.project)
     again = start(rig, world, key="k-same", digest=digest)
     assert again["job_id"] == first["job_id"]
     assert rig.scalar("SELECT count(*) FROM comparison_ai_job WHERE document_uid = :d", d=world.document) == 1
-    assert rig.scalar("SELECT count(*) FROM comparison_work WHERE kind = 'comparison_pair_check'") == items == 3, "two questions and the closing item"
+    assert rig.scalar("SELECT count(*) FROM comparison_work WHERE project_uid = :p", p=world.project) == items == 3, (
+        "two questions and the closing item")
     with pytest.raises(DomainError) as reused:
         rig.service.start(
             project_uid=world.project, document_uid=world.document, consent=AiConsentInput("b" * 64, True), user_uid=USER,

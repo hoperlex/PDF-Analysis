@@ -155,11 +155,12 @@ def test_a_check_flows_from_the_estimate_to_a_cancelled_job_over_http(on: TestCl
     stale = _post(on, f"{base}/comparison-ai-pair-check", expert, {"consent": {"estimate_digest": "0" * 64, "confirmed": True}})
     assert stale.status_code == 409 and stale.json()["details"]["conflict_reason"] == "comparison_estimate_stale"
 
-    started = _post(on, f"{base}/comparison-ai-pair-check", expert, consent, key="http-pair-start")
+    key = f"http-pair-start-{new_ulid()}"
+    started = _post(on, f"{base}/comparison-ai-pair-check", expert, consent, key=key)
     assert started.status_code == 201, started.text
     job = started.json()
     assert job["state"] == "queued" and job["method"] == "pair_check" and job["estimate"]["units"] == 1
-    replay = _post(on, f"{base}/comparison-ai-pair-check", expert, consent, key="http-pair-start")
+    replay = _post(on, f"{base}/comparison-ai-pair-check", expert, consent, key=key)
     assert replay.status_code == 201 and replay.json()["job_id"] == job["job_id"]
     second = _post(on, f"{base}/comparison-ai-pair-check", expert, consent)
     assert second.status_code == 409 and second.json()["details"]["conflict_reason"] == "comparison_ai_job_active"
