@@ -4580,7 +4580,7 @@ describe('R-18: no Latin word reaches a reviewer that a contract did not put the
   });
 
   it('finds none at all', () => {
-    expect([...offencesOnScreens().keys()]).toEqual([]);
+    expect([...found.keys()]).toEqual([]);
   });
 });
 
