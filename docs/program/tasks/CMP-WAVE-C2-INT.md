@@ -57,6 +57,17 @@ The merged C2 comparison modules pass one complete `make gate` on an exact clean
   ```
 - interpretation: only `origin/dev` is this task's publication target; both refs must be checked again immediately before any push.
 
+### P-03 — development ref moved during the exact-candidate gate
+- captured_at: 2026-10-29
+- command: `git ls-remote origin refs/heads/dev refs/heads/main; git fetch origin refs/heads/dev:refs/remotes/origin/dev refs/heads/main:refs/remotes/origin/main; git merge-base --is-ancestor origin/dev 8f23322df1ced8aaa253b2b495e76993104e41af; printf 'dev_is_ancestor_of_candidate=%s\n' "$?"`
+- captured_output:
+  ```text
+  e8567a1981cbe35cf66bae4ce79b2877224df1be refs/heads/dev
+  3449265338e341e6f14e02fe55260030b38bdd14 refs/heads/main
+  dev_is_ancestor_of_candidate=1
+  ```
+- interpretation: `8f23322d` could no longer fast-forward `origin/dev`; its gate was interrupted at about 54% of the changed-context phase without `GATE OK`. The independent AR v3 dev work was merged into the clean integration tree at `ce25d90d`; a new exact merged candidate and full gate are required. This premise gives no `origin/main` authority.
+
 ## Historical evidence
 - correction_mode: none
 - source_record: not_applicable
@@ -108,7 +119,7 @@ The default `AUDITMANAGER_COMPARISON_MODULES=none` prevents the comparison worke
 
 ## Handoff
 - changed files owned by this task: `docs/program/tasks/CMP-WAVE-C2-INT.md`, `docs/program/CMP-WAVE-C2-REPORT.md`, `docs/program/CURRENT_STATE.md`. W13, composition-guard, canonical-remainder and executor-list test edits have separate repair tasks and reports.
-- commands/results before the publication commit: `npm --prefix web ci` completed from the lockfile. Gates on `06c312a3`, `56de5bef` and `531f9cb0` passed their earlier batteries but stopped red on, respectively, stale W13 expectations, a 121-line current-state document, and canonical executor/XLSX test assumptions; their separate repairs passed 73, 12 and 28 focused tests. The SIGINT-induced HTTP upload failure passed 1/1 alone. Candidate `9d868e62` passed frontend 3,653, contract 1,310, foundation 35 and changed-context integration 7,797 / 28 skipped / 244 subtests, except two executor tests that assumed the 500-row list was complete; no canonical remainder ran. `CMP-C2-GATE-EXEC-01` reproduced both failures and passed both edited modules 35/35 after repair; task governance passed 16/16. The exact publication SHA's full-gate result and remote-ref proof must be recorded after this self-containing commit in `.git/gate-runs/` and `/tmp/cmp-c2-gate-publication-3.log` before `origin/dev` is updated.
+- commands/results before the publication commit: `npm --prefix web ci` completed from the lockfile. Gates on `06c312a3`, `56de5bef` and `531f9cb0` passed their earlier batteries but stopped red on, respectively, stale W13 expectations, a 121-line current-state document, and canonical executor/XLSX test assumptions; their separate repairs passed 73, 12 and 28 focused tests. The SIGINT-induced HTTP upload failure passed 1/1 alone. Candidate `9d868e62` passed frontend 3,653, contract 1,310, foundation 35 and changed-context integration 7,797 / 28 skipped / 244 subtests, except two executor tests that assumed the 500-row list was complete; no canonical remainder ran. `CMP-C2-GATE-EXEC-01` reproduced both failures and passed both edited modules 35/35 after repair; task governance passed 16/16. The `8f23322d` gate was interrupted only after `origin/dev` moved to `e8567a19`; it has no `GATE OK` and cannot authorize publication. The exact merged publication SHA's full-gate result and remote-ref proof must be recorded after this self-containing commit in `.git/gate-runs/` and `/tmp/cmp-c2-gate-publication-4.log` before `origin/dev` is updated.
 - contracts: unchanged by this documentation step; frozen API `1.11.0` (176/198/517) and migration head `0040_comparison_ai_reports`.
 - known limits: no live model/runner call or browser journey claim; `needs_consent` launch entries lack renewal, pull crop blobs lack long-lived references, and overview steps 4/6/7 use per-row reads. The module flag defaults to `none`.
-- integration notes: commit these three files, prove a clean tree and full `GATE OK` on that exact SHA, recheck `origin/dev` and fast-forward only that SHA, then verify the remote ref. `origin/main` is outside this task. The documentation step touches no contract, migration, root dependency/lockfile, composition root, global styles, infrastructure, source or tests; the separate repair tasks authorize their exact test files.
+- integration notes: commit these three files on the merged tree, prove a clean tree and full `GATE OK` on that exact SHA, recheck `origin/dev` and fast-forward only that SHA, then verify the remote ref. `origin/main` is outside this task. The documentation step touches no contract, migration, root dependency/lockfile, composition root, global styles, infrastructure, source or tests; the separately owned AR v3 source commits arrived by the `origin/dev` merge, and the C2 repair tasks authorize their exact test files.
