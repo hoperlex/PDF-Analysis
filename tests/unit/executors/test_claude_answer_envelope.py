@@ -35,10 +35,24 @@ def fake_claude(tmp_path: Path, *, structured: dict | None, text: str) -> str:
     }
     if structured is not None:
         report["structured_output"] = structured
-    path.write_text(f"#!{sys.executable}\nimport sys\nsys.stdin.read()\nprint({json.dumps(report)!r})\n",
-                    encoding="utf-8")
+    path.write_text(_stream_script(report), encoding="utf-8")
     path.chmod(0o700)
     return str(path)
+
+
+def _stream_script(report: dict) -> str:
+    """A fake ``claude -p`` that streams newline-delimited JSON ending with the ``result`` line."""
+    return (
+        f"#!{sys.executable}\nimport sys\n"
+        "assert '--output-format' in sys.argv and sys.argv[sys.argv.index('--output-format') + 1] "
+        "== 'stream-json'\n"
+        "assert '--verbose' in sys.argv and '--include-partial-messages' in sys.argv\n"
+        "sys.stdin.read()\n"
+        "print('{\"type\":\"system\",\"subtype\":\"init\"}', flush=True)\n"
+        "print('{\"type\":\"stream_event\",\"event\":{\"type\":\"message_delta\","
+        "\"usage\":{\"output_tokens\":4}}}', flush=True)\n"
+        f"print({json.dumps(report)!r})\n"
+    )
 
 
 def stand_task(*, schema: dict | None) -> bytes:
@@ -84,8 +98,7 @@ def test_the_sonnet_connection_wire_agrees_with_the_stand_end_to_end(tmp_path: P
             "modelUsage": {model: {"inputTokens": 7, "outputTokens": 2,
                                    "cacheReadInputTokens": 0, "cacheCreationInputTokens": 0}},
         }
-        path.write_text(f"#!{sys.executable}\nimport sys\nsys.stdin.read()\nprint({json.dumps(report)!r})\n",
-                        encoding="utf-8")
+        path.write_text(_stream_script(report), encoding="utf-8")
         path.chmod(0o700)
         return str(path)
 

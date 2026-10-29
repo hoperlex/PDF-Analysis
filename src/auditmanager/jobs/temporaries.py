@@ -18,11 +18,13 @@ What makes it safe to delete in a directory other things write to:
 * **only the three exact names** -- :data:`FILE_NAME` and :data:`DIRECTORY_NAME` match what the
   producers' ``mkstemp``/``TemporaryDirectory`` write, random part included; nothing else in
   the directory is looked at, and a name that merely starts alike is not matched;
-* **only what is old** -- older than :data:`STALE_AFTER_SECONDS`, which is the attempt watchdog
-  plus a minute. A file is made after its attempt was claimed, and the watchdog
-  (``jobs.lease.ATTEMPT_WATCHDOG_SECONDS``) fences the attempt that long after the claim, so an
-  older file belongs to an attempt that no longer holds authority: its results cannot be
-  published, and a thread of it still reading the file keeps its open descriptor. Age is the
+* **only what is old** -- older than :data:`STALE_AFTER_SECONDS`, which is the attempt's absolute
+  ceiling plus a minute. A file is made after its attempt was claimed, and the heartbeat fences
+  the attempt no later than ``jobs.lease.ATTEMPT_HARD_CAP_SECONDS`` after the claim (a **live**
+  attempt, one whose model call shows signs of life, may run that long; one that never signals
+  is fenced at the shorter ``ATTEMPT_WATCHDOG_SECONDS``), so an older file belongs to an attempt
+  that no longer holds authority: its results cannot be published, and a thread of it still
+  reading the file keeps its open descriptor. Age is the
   later of the modification and the change time (a file touched, renamed or chmod-ed is
   young), and a directory is as young as its youngest member;
 * **only a regular file or a real directory, owned by this user** -- a symbolic link of that
@@ -47,7 +49,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-from auditmanager.jobs.lease import ATTEMPT_WATCHDOG_SECONDS
+from auditmanager.jobs.lease import ATTEMPT_HARD_CAP_SECONDS
 
 __all__ = [
     "DIRECTORY_NAME",
@@ -69,8 +71,9 @@ FILE_NAME: Final[re.Pattern[str]] = re.compile(rf"^am-(?:source|geometry)-{_RAND
 #: ``auditmanager-bundle-<random>`` (``ingest.bundle_archive``).
 DIRECTORY_NAME: Final[re.Pattern[str]] = re.compile(rf"^auditmanager-bundle-{_RANDOM}$")
 
-#: Older than the attempt watchdog by a minute (the lease length). See the module docstring.
-STALE_AFTER_SECONDS: Final[float] = float(ATTEMPT_WATCHDOG_SECONDS + 60)
+#: Older than the longest an attempt can hold a file -- the live attempt's ceiling -- by a minute
+#: (the lease length). See the module docstring.
+STALE_AFTER_SECONDS: Final[float] = float(ATTEMPT_HARD_CAP_SECONDS + 60)
 
 #: A bundle directory holds at most eight members; this bounds the walk of a directory that
 #: holds something else.

@@ -4,9 +4,9 @@
 The sweep itself (exact names, age, owner, links, errors) is proved in
 ``tests/unit/jobs/test_stale_temporaries.py``, and the two process starts that call it in
 ``tests/unit/runs/test_serving_start_sweeps_temporaries.py``. What neither can show: the sweep at
-start takes only what is older than the attempt watchdog plus a minute, and the files of the kill
-that *caused* the restart are younger, so they stay for as long as the worker is not restarted
-again. These tests show that a **started worker service** sweeps again and again while it runs,
+start takes only what is older than the live attempt's ceiling plus a minute, and the files of the
+kill that *caused* the restart are younger, so they stay for as long as the worker is not
+restarted again. These tests show that a **started worker service** sweeps again and again while it runs,
 keeps going when a sweep fails, stops when the service stops, refuses a zero interval, and --
 through the real sweep, with a clock moved forward -- removes the stale stage files, keeps a
 file younger than the live margin and a file it did not write.
@@ -30,7 +30,7 @@ from typing import Any, cast
 import pytest
 
 from auditmanager.jobs import temporaries
-from auditmanager.jobs.public import ATTEMPT_WATCHDOG_SECONDS, SweepReport
+from auditmanager.jobs.public import ATTEMPT_HARD_CAP_SECONDS, SweepReport
 from auditmanager.workers import service as service_module
 from auditmanager.workers.service import WorkerService, sweep_running_temporaries
 
@@ -207,8 +207,9 @@ def directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _Directory:
 
 def test_the_running_sweep_leaves_what_a_live_attempt_could_still_hold(directory: _Directory) -> None:
     directory.populate()
-    # 200 s past the watchdog: beyond the start sweep's minute, short of the live margin (300 s).
-    directory.advance_to(ATTEMPT_WATCHDOG_SECONDS + 200)
+    # 200 s past a live attempt's ceiling: beyond the start sweep's minute, short of the live
+    # margin (300 s).
+    directory.advance_to(ATTEMPT_HARD_CAP_SECONDS + 200)
 
     report = sweep_running_temporaries()
 
@@ -220,7 +221,7 @@ def test_the_running_sweep_removes_the_stale_stage_temporaries_and_only_those(
     directory: _Directory,
 ) -> None:
     directory.populate()
-    directory.advance_to(ATTEMPT_WATCHDOG_SECONDS + 400)
+    directory.advance_to(ATTEMPT_HARD_CAP_SECONDS + 400)
 
     report = sweep_running_temporaries()
 
@@ -234,7 +235,7 @@ def test_a_started_worker_with_the_default_sweep_reclaims_a_killed_stage_file(
 ) -> None:
     """The default wiring: no sweep is passed, and the started service still reclaims."""
     directory.populate()
-    directory.advance_to(ATTEMPT_WATCHDOG_SECONDS + 400)
+    directory.advance_to(ATTEMPT_HARD_CAP_SECONDS + 400)
     service = make_service(temporaries_sweep_seconds=0.02)
 
     service.start()
