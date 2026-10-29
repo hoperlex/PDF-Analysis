@@ -23,6 +23,7 @@ from auditmanager.storage.public import (
 )
 
 from .limits import PART_BYTES
+from .leases import upload_process_lease
 from .uploads import StageUploadFileRow, StageUploadService
 
 __all__ = ["StageRawCompletionService", "StageRawStore"]
@@ -57,6 +58,15 @@ class StageRawCompletionService:
         self, *, upload_id: str, file_id: str, user_uid: str, idempotency_key: str,
     ) -> StageUploadFileRow:
         """Publish only the measured raw object; no member or document is admitted here."""
+        with upload_process_lease(self._sessions, upload_id):
+            return self._complete_raw_under_lease(
+                upload_id=upload_id, file_id=file_id, user_uid=user_uid,
+                idempotency_key=idempotency_key,
+            )
+
+    def _complete_raw_under_lease(
+        self, *, upload_id: str, file_id: str, user_uid: str, idempotency_key: str,
+    ) -> StageUploadFileRow:
         fingerprint = payload_fingerprint({
             "command": "complete_stage_upload_file.raw.v1", "upload_id": upload_id,
             "file_id": file_id, "user_uid": user_uid,
@@ -71,7 +81,7 @@ class StageRawCompletionService:
             row = session.execute(
                 text(
                     "SELECT u.state, f.state, f.multipart_token, f.source_blob_id, "
-                    "f.declared_sha256, f.declared_size_bytes, f.media_kind "
+                    "f.declared_sha256, f.declared_size_bytes, f.media_kind, u.actor_user_uid "
                     "FROM stage_upload_file f JOIN stage_upload u ON u.stage_upload_id = f.stage_upload_id "
                     "WHERE u.stage_upload_id = :upload AND f.stage_upload_file_id = :file "
                     "FOR UPDATE OF u, f"
@@ -79,7 +89,9 @@ class StageRawCompletionService:
             ).first()
             if row is None:
                 raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="StageUploadFile")
-            upload_state, file_state, token, source_blob_id, digest, size, kind = row
+            upload_state, file_state, token, source_blob_id, digest, size, kind, owner = row
+            if str(owner) != user_uid:
+                raise DomainError(ErrorCode.PERMISSION_DENIED)
             if upload_state != "uploading" or file_state not in ("declared", "receiving", "received"):
                 raise DomainError(ErrorCode.CONFLICT, conflict_reason="stage_upload_state")
             if token is None:

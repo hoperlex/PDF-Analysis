@@ -23,7 +23,7 @@ from auditmanager.ingest.comparison_pdf.public import COMPARISON_POLICY, inspect
 from auditmanager.shared.db import session_scope
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import StageUploadCandidateId
-from auditmanager.storage.public import BlobStore, StorageError, parse_blob_id
+from auditmanager.storage.public import BlobStore, StorageError, new_multipart_token, parse_blob_id
 
 from .intake import ChunkReader, MIN_FREE_RESERVE_BYTES, admit_stage_zip_stream
 from .uploads import StageUploadCandidateRow, StageUploadService
@@ -182,7 +182,9 @@ class StageCandidateAdmissionService:
                         {
                             "candidate": str(StageUploadCandidateId.new()), "file": file_id,
                             "number": proposal.number, "name": proposal.display_name,
-                            "facts": json.dumps(proposal.facts),
+                            "facts": json.dumps({
+                                **proposal.facts, "publication_token": new_multipart_token(),
+                            }),
                         },
                     )
                 session.execute(

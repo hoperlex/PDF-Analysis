@@ -10,10 +10,13 @@ from __future__ import annotations
 import hashlib
 import re
 import unicodedata
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import text
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.ingest.public import CommandReplay, CommandRepository, payload_fingerprint
@@ -29,6 +32,7 @@ from auditmanager.storage.public import (
 from .limits import (
     MAX_ACTIVE_ACCOUNT, MAX_ACTIVE_INSTALLATION, MAX_FILES, PART_BYTES, RAW_BATCH_BYTES,
 )
+from .leases import upload_process_lease
 
 __all__ = [
     "StageDeclaredFile", "StageUploadCandidateRow", "StageUploadFileRow",
@@ -290,8 +294,46 @@ class StageUploadPartService:
         self._store = store
         self._blobs = blobs
         self._commands = CommandRepository()
+        bind = session_factory.kw.get("bind")
+        if bind is None:
+            raise ValueError("stage parts need a database bind for the process lease")
+        self._engine: Engine = bind.engine
+
+    @contextmanager
+    def _part_lease(self, file_id: str, part_number: int) -> Iterator[None]:
+        # A process lock spans the S3 write. A `declared` row with no live
+        # holder is an interrupted attempt and may be overwritten by a new
+        # keyed attempt using the same durable multipart token.
+        lock = f"stage_upload:part:{file_id}:{part_number}"
+        with self._engine.connect() as lease:
+            held = bool(lease.execute(
+                text("SELECT pg_try_advisory_lock(hashtext(:lock))"), {"lock": lock},
+            ).scalar_one())
+            lease.commit()
+            if not held:
+                raise DomainError(ErrorCode.CONFLICT, conflict_reason="stage_upload_part_in_progress")
+            try:
+                yield
+            finally:
+                released = bool(lease.execute(
+                    text("SELECT pg_advisory_unlock(hashtext(:lock))"), {"lock": lock},
+                ).scalar_one())
+                lease.commit()
+                if not released:
+                    raise RuntimeError("the stage part process lease was lost")
 
     def put_part(
+        self, *, upload_id: str, file_id: str, part_number: int, content: bytes,
+        user_uid: str, idempotency_key: str,
+    ) -> StagePartReceipt:
+        with upload_process_lease(self._sessions, upload_id):
+            with self._part_lease(file_id, part_number):
+                return self._put_part_under_lease(
+                    upload_id=upload_id, file_id=file_id, part_number=part_number,
+                    content=content, user_uid=user_uid, idempotency_key=idempotency_key,
+                )
+
+    def _put_part_under_lease(
         self, *, upload_id: str, file_id: str, part_number: int, content: bytes,
         user_uid: str, idempotency_key: str,
     ) -> StagePartReceipt:
@@ -313,6 +355,7 @@ class StageUploadPartService:
                 text(
                     "SELECT u.state, f.state, f.declared_size_bytes, f.declared_sha256, "
                     "f.media_kind, f.multipart_token, f.source_blob_id "
+                    ", u.actor_user_uid "
                     "FROM stage_upload_file f JOIN stage_upload u ON u.stage_upload_id = f.stage_upload_id "
                     "WHERE u.stage_upload_id = :upload AND f.stage_upload_file_id = :file "
                     "FOR UPDATE OF u, f"
@@ -321,7 +364,9 @@ class StageUploadPartService:
             ).first()
             if row is None:
                 raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="StageUploadFile")
-            upload_state, file_state, declared_size, declared_sha, kind, token, source_blob_id = row
+            upload_state, file_state, declared_size, declared_sha, kind, token, source_blob_id, owner = row
+            if str(owner) != user_uid:
+                raise DomainError(ErrorCode.PERMISSION_DENIED)
             if upload_state != "uploading" or file_state not in ("declared", "receiving") or source_blob_id is not None:
                 raise DomainError(ErrorCode.CONFLICT, conflict_reason="stage_upload_state")
             needed = (int(declared_size) + PART_BYTES - 1) // PART_BYTES
@@ -338,7 +383,16 @@ class StageUploadPartService:
                 {"file": file_id, "number": part_number},
             ).first()
             if existing is not None and existing[0] == "declared":
-                raise DomainError(ErrorCode.CONFLICT, conflict_reason="stage_upload_part_in_progress")
+                # The process lease is ours, so the prior writer died before
+                # committing its receipt. S3 may hold its bytes; the next
+                # upload of this part number replaces them atomically there.
+                session.execute(
+                    text(
+                        "DELETE FROM stage_upload_part WHERE stage_upload_file_id = :file "
+                        "AND part_number = :number AND state = 'declared'"
+                    ), {"file": file_id, "number": part_number},
+                )
+                existing = None
             if existing is not None and existing[0] == "staged" and existing[1] == size and existing[2] == digest:
                 received = self._received_bytes(session, file_id)
                 receipt = StagePartReceipt(upload_id, file_id, part_number, size, digest, received)

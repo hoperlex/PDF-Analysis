@@ -13,7 +13,10 @@ from auditmanager.comparison.stage.uploads import (
 )
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import new_ulid
-from auditmanager.storage.public import BlobMetadataRepository, TemporaryBlobLostError, UploadedPart
+from auditmanager.storage.public import (
+    BlobMetadataRepository, TemporaryBlobLostError, UploadedPart, declare_blob,
+    new_multipart_token, parse_blob_role,
+)
 
 
 def uid(prefix: str) -> str:
@@ -125,3 +128,60 @@ def test_storage_refusal_releases_part_for_a_new_key(comparison_session: Session
     ).scalar_one() == 0
     receipt = service.put_part(**(request | {"idempotency_key": f"stage-retry-{new_ulid()}"}))
     assert receipt.received_bytes == len(content)
+
+
+def test_new_key_replaces_a_stranded_declared_part_only_after_lease_is_free(
+    comparison_session: Session,
+) -> None:
+    project, actor = uid("prj"), uid("usr")
+    comparison_session.execute(
+        text("INSERT INTO project (project_uid, name) VALUES (:project, 'Stranded part')"),
+        {"project": project},
+    )
+    sessions = sessionmaker(
+        bind=comparison_session.connection(), expire_on_commit=False,
+        future=True, join_transaction_mode="create_savepoint",
+    )
+    content = b"new-stage-part"
+    digest = hashlib.sha256(content).hexdigest()
+    created = StageUploadService(sessions).create(
+        project_uid=project,
+        files=(StageDeclaredFile("Том.pdf", "pdf", len(content), digest),),
+        user_uid=actor, idempotency_key=f"stage-create-{new_ulid()}",
+    )
+    file_id = created.files[0].file_id
+    token = new_multipart_token()
+    BlobMetadataRepository().record_declared(
+        comparison_session,
+        declare_blob(
+            sha256=digest, size=len(content), role=parse_blob_role("comparison_stage_raw"),
+            media_type="application/pdf",
+        ),
+    )
+    comparison_session.execute(text(
+        "UPDATE stage_upload_file SET state = 'receiving', multipart_token = :token "
+        "WHERE stage_upload_file_id = :file"
+    ), {"token": token, "file": file_id})
+    comparison_session.execute(text(
+        "INSERT INTO stage_upload_part "
+        "(stage_upload_file_id, part_number, state, size_bytes, sha256) "
+        "VALUES (:file, 1, 'declared', :size, :digest)"
+    ), {"file": file_id, "size": len(content), "digest": digest})
+    store = RecordingStore(comparison_session, file_id)
+    service = StageUploadPartService(sessions, store, BlobMetadataRepository())
+    request = {
+        "upload_id": created.upload_id, "file_id": file_id, "part_number": 1,
+        "content": content, "user_uid": actor,
+        "idempotency_key": f"stage-retry-{new_ulid()}",
+    }
+    with service._part_lease(file_id, 1):
+        with pytest.raises(DomainError) as busy:
+            service.put_part(**request)
+    assert busy.value.code is ErrorCode.CONFLICT
+    assert store.calls == []
+    receipt = service.put_part(**request)
+    assert receipt.received_bytes == len(content)
+    assert store.calls == [("begin", 0), ("part", 1)]
+    assert comparison_session.execute(text(
+        "SELECT state FROM stage_upload_part WHERE stage_upload_file_id = :file"
+    ), {"file": file_id}).scalar_one() == "staged"
