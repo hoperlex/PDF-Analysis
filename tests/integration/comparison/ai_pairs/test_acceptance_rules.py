@@ -315,3 +315,38 @@ def test_a_paused_job_asks_nothing_until_it_is_resumed(one) -> None:
     assert resumed["state"] == "queued"
     rig.drain()
     assert [(r["page_number"], r["other_page_number"]) for r in links(rig, world)] == [(2, 3)]
+
+
+def test_the_closing_item_decides_nothing_while_a_question_is_still_live(db, h) -> None:
+    """Mutation M15: the wait for the questions deleted -> the decisions are made on the answers that happen to be there, and a
+    question asked a minute later is lost (the job is completed without it)."""
+    db.route()
+    world = db.world(versions=2)
+    h.place_matrix(db.connection, world, [
+        [h.matched(world, 1, 2), h.unmatched(world, 2, [3], ref=1)],
+        [h.matched(world, 1, 5), h.unmatched(world, 2, [4], ref=1)],
+        [h.absent(world, 1), h.matched(world, 2, 3)],
+        [h.absent(world, 1), h.matched(world, 2, 4)],
+    ])
+    rig = db.rig(world)
+    job = start(rig, world)
+    first, second = rig.questions(job)
+    for question in (first, second):
+        rig.say(job, rig.forward(job, question), question.candidates[0].page_number, "medium")
+    ran = rig.run_next()                                     # one question is asked: the job runs
+    assert ran is not None and ran[0].payload["step"] == "ask"
+    rig.connection.exec_driver_sql(                        # the other waits; the closing item is due
+        "UPDATE comparison_work SET not_before = clock_timestamp() + interval '1 hour' WHERE project_uid = %s AND state = 'queued' "
+        "AND payload ->> 'step' = 'ask'", (world.project,))
+    rig.connection.exec_driver_sql(
+        "UPDATE comparison_work SET not_before = clock_timestamp() - interval '1 second' WHERE project_uid = %s AND payload ->> 'step' = 'close'",
+        (world.project,))
+    closing = rig.run_next()
+    assert closing is not None and closing[0].payload["step"] == "close" and type(closing[1]).__name__ == "Yielded"
+    assert rig.scalar("SELECT state FROM comparison_ai_job WHERE comparison_ai_job_id = :j", j=job.job_id) == "running"
+    assert rig.scalar("SELECT count(*) FROM comparison_ai_pair_question WHERE comparison_ai_job_id = :j AND state = 'queued'", j=job.job_id) == 2
+    rig.connection.exec_driver_sql(
+        "UPDATE comparison_work SET not_before = clock_timestamp() - interval '1 second' WHERE project_uid = %s", (world.project,))
+    rig.drain()
+    assert rig.scalar("SELECT state FROM comparison_ai_job WHERE comparison_ai_job_id = :j", j=job.job_id) == "completed"
+    assert rig.scalar("SELECT count(*) FROM comparison_ai_pair_question WHERE comparison_ai_job_id = :j AND state = 'answered'", j=job.job_id) == 2
