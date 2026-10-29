@@ -267,6 +267,28 @@ def started(lab: Lab, matrix_service, series_service, expert_uid: str):
 
 
 @pytest.fixture(autouse=True)
+def _leave_no_live_job_behind(request: pytest.FixtureRequest, sessions: sessionmaker[Session], blob_store: S3BlobStore):
+    """A test that started a job with the product's own commit leaves it live; at the end it is cancelled through the core (the lane never
+    writes the job table), so no later directory finds a live job of this one's projects."""
+    yield
+    if "expert_uid" not in request.fixturenames and "started" not in request.fixturenames:
+        return
+    from auditmanager.comparison.public import AiJobCommand, ComparisonAiJobService, SpecMethod
+
+    with sessions() as session:
+        live = [str(r[0]) for r in session.execute(text(
+            "SELECT j.comparison_ai_job_id FROM comparison_ai_job j JOIN project p ON p.project_uid = j.project_uid "
+            "WHERE p.name = 'Спецификации' AND j.method = 'spec' AND j.state IN ('queued', 'running', 'paused')"))]
+    if not live:
+        return
+    service = ComparisonAiJobService(sessions, methods=[SpecMethod(sessions, blob_store)], comparison_modules="versions", provider_mode="recorded")
+    user = _account(sessions, "spec-expert", ("expert",))[0]
+    for job in live:
+        service.cancel(job_id=job, method="spec", command=AiJobCommand(
+            command_type="cancel_comparison_specification", idempotency_key=f"cleanup-{job}", user_uid=user, actor_roles=frozenset({"expert"})))
+
+
+@pytest.fixture(autouse=True)
 def _leave_no_live_item_behind(sessions: sessionmaker[Session]):
     """A test of this directory starts a series, which queues its items; at the end of every test the live items of this directory's
     projects are cancelled, so no other directory of ``tests/integration/comparison`` meets them."""
@@ -357,11 +379,27 @@ def job_for(sessions: sessionmaker[Session]):
 # -- part B on the AI-job core: a route, a service, a runner of the lane's handler --------------------------------------------
 
 @pytest.fixture
-def route(sessions: sessionmaker[Session]) -> dict[str, str]:
+def iso(engine: Engine):
+    """A session factory joined to one connection whose outer transaction is rolled back at the end of the test (the savepoint-joined
+    technique of the AI-job core's tests): the service commits as in production and nothing stays in the lane database. The tests of the
+    handler need it: a recorded request is journalled in ``comparison_model_call``, which is append-only, and the spend suite refuses to
+    run on a day on which another project has journalled a call."""
+    connection = engine.connect()
+    outer = connection.begin()
+    factory = sessionmaker(bind=connection, expire_on_commit=False, future=True, join_transaction_mode="create_savepoint")
+    try:
+        yield factory
+    finally:
+        outer.rollback()
+        connection.close()
+
+
+@pytest.fixture
+def route(iso: sessionmaker[Session]) -> dict[str, str]:
     """An executor connection with a current revision, **routed** to the work kind ``comparison_spec`` in «Назначения» (the append-only
-    route event is written; the latest wins). Nothing here can reach a provider."""
+    route event is written; the latest wins), inside the test's rolled-back transaction. Nothing here can reach a provider."""
     connection, revision, event = (f"{p}_{new_ulid()}" for p in ("exc", "excr", "ert"))
-    with session_scope(sessions) as session:
+    with iso() as session:
         session.execute(text("INSERT INTO executor_connection (connection_id, kind, display_name, created_by) VALUES (:id, 'http_api', 'recorded', :a)"),
                         {"id": connection, "a": ACTOR})
         session.execute(text(
@@ -373,16 +411,17 @@ def route(sessions: sessionmaker[Session]) -> dict[str, str]:
             "INSERT INTO executor_route_event (route_event_id, work_kind, route_no, primary_connection_id, set_by) "
             "SELECT :e, 'comparison_spec', COALESCE(MAX(route_no), 0) + 1, :c, :a FROM executor_route_event WHERE work_kind = 'comparison_spec'"),
             {"e": event, "c": connection, "a": ACTOR})
+        session.commit()
     return {"connection": connection, "revision": revision}
 
 
 @pytest.fixture
-def jobs(sessions: sessionmaker[Session], blob_store: Any):
-    """The core's service with the lane's method, in a recorded process."""
+def jobs(iso: sessionmaker[Session], blob_store: Any):
+    """The core's service with the lane's method, in a recorded process, inside the test's rolled-back transaction."""
     from auditmanager.comparison.public import ComparisonAiJobService, SpecMethod
 
     return ComparisonAiJobService(
-        sessions, methods=[SpecMethod(sessions, blob_store)], comparison_modules="versions", provider_mode="recorded")
+        iso, methods=[SpecMethod(iso, blob_store)], comparison_modules="versions", provider_mode="recorded")
 
 
 @pytest.fixture(scope="session")
@@ -395,36 +434,43 @@ def worker_id(sessions: sessionmaker[Session]) -> str:
     return str(registered)
 
 
-@pytest.fixture
-def runner_of(sessions: sessionmaker[Session], engine: Engine, blob_store: Any):
-    """``runner_of(binder)``: the comparison runner with the lane's handler (and no other) bound to ``binder``; the Run-priority gate reads
-    nothing, so a claim sees comparison work only."""
-    from auditmanager.comparison.public import ClaimGates, ComparisonWorkRepository, ComparisonWorkRunner, HandlerRegistry, WorkDependencies, default_gates
-    from auditmanager.comparison.specification.method import SpecHandler
+class Harness:
+    """The lane's handler and the queue's claim over the test's factory. The runner only claims here; the handler is called directly (no
+    heartbeat thread, so the one connection of the test is used by one thread)."""
 
-    def make(binder: Any) -> Any:
-        work = ComparisonWorkRepository()
-        registry = HandlerRegistry.build(
-            (lambda deps: SpecHandler(deps, binder=binder),), WorkDependencies(engine=engine, session_factory=sessions, blob_store=blob_store, work=work))
-        gates = ClaimGates(paused=default_gates().paused, run_claimable=lambda session: False)
-        return ComparisonWorkRunner(sessions, registry=registry, modules=frozenset({"versions"}), repository=work, gates=gates)
+    def __init__(self, runner: Any, handler: Any, engine: Engine) -> None:
+        self.runner, self.handler, self.engine = runner, handler, engine
 
-    return make
-
-
-def run_items(runner: Any, worker: str, engine: Engine, project: str, *, limit: int = 10) -> list[tuple[str, str | None]]:
-    """Claim and execute the project's items until none is claimable (other projects' items are fenced off)."""
-    ran: list[tuple[str, str | None]] = []
-    for _ in range(limit):
-        with engine.connect() as fence:
+    def claim(self, worker: str, project: str) -> Any:
+        with self.engine.connect() as fence:
             fence.execute(text(
                 "SELECT comparison_work_id FROM comparison_work WHERE state = 'queued' AND project_uid <> :p "
                 "ORDER BY comparison_work_id FOR UPDATE SKIP LOCKED"), {"p": project})
             try:
-                item = runner.claim(worker)
+                return self.runner.claim(worker)
             finally:
                 fence.rollback()
-        if item is None:
-            break
-        ran.append((item.kind, runner.execute(item)))
-    return ran
+
+    def run_next(self, worker: str, project: str) -> Any:
+        """The outcome of the handler on the next claimable item of the project, or ``None`` when there is none."""
+        item = self.claim(worker, project)
+        return None if item is None else self.handler.run(item)
+
+
+@pytest.fixture
+def harness_of(iso: sessionmaker[Session], engine: Engine, blob_store: Any):
+    """``harness_of(binder)``: the comparison runner (claims only) and the lane's handler bound to ``binder``."""
+    from auditmanager.comparison.public import ClaimGates, ComparisonWorkRepository, ComparisonWorkRunner, HandlerRegistry, WorkDependencies, default_gates
+    from auditmanager.comparison.specification.method import SpecHandler
+
+    def make(binder: Any, *, shipped: bool = False) -> Harness:
+        from auditmanager.comparison.public import spec_handler
+
+        work = ComparisonWorkRepository()
+        deps = WorkDependencies(engine=engine, session_factory=iso, blob_store=blob_store, work=work)
+        handler = spec_handler(deps) if shipped else SpecHandler(deps, binder=binder)
+        registry = HandlerRegistry.build((lambda _deps: handler,), deps)
+        gates = ClaimGates(paused=default_gates().paused, run_claimable=lambda session: False)
+        return Harness(ComparisonWorkRunner(iso, registry=registry, modules=frozenset({"versions"}), repository=work, gates=gates), handler, engine)
+
+    return make
