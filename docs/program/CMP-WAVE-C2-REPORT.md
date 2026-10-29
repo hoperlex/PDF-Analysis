@@ -25,6 +25,7 @@ Task: `CMP-WAVE-C2-INT`. Branch: `integration/compare-modules`. Publication targ
 | W13 characterization repair | `624e13a9` | `CMP-C2-GATE-W13-01.md` |
 | Composition guard runtime repair | `acdbdedd` (merge) | `CMP-C2-GATE-BE-01.md` |
 | Canonical remainder test repair | `280f0d94` | `CMP-C2-GATE-REM-01.md` |
+| Executor list-boundary test repair | `77e5e673` | `CMP-C2-GATE-EXEC-01.md` |
 
 ## Verification
 
@@ -32,7 +33,7 @@ The first complete gate on `adcac54f` passed frontend lint, typecheck and all 3,
 
 The subsequent gate on the clean code candidate `06c312a3` passed frontend lint, typecheck and **3,653 Vitest tests**, the contract suite (**1,310 passed**), foundation (**35 passed**) and the changed-context integration battery (**6,592 passed / 13 skipped / 244 subtests passed**). Its canonical remainder exposed twenty stale W13 historical response expectations (sixteen error-envelope version strings and four portal-version upload-kind fields). That already-red remainder was stopped for diagnosis; **this was not a `GATE OK`**. `CMP-C2-GATE-W13-01` kept every historical record byte and added a digest-pinned in-memory projection; its focused suite passed 73/73, including wrong-field and changed-record controls. The original composition port guard had reread every Python file for each port and held the first battery near 61% for roughly 43 observed minutes; `CMP-C2-GATE-BE-01` cached that static census per process, passed 44/44 focused cases in 17.16 s, and failed on a removed method in a disposable mutation copy.
 
-The publication candidate containing this report is accepted only after a new full `make gate` returns literal `GATE OK` on its exact clean SHA. Its commit-specific run and remote-ref verification are recorded out of tree under `.git/gate-runs/` and `/tmp/cmp-c2-gate-publication-2.log`; the final publication SHA is the verified `origin/dev` tip, since a commit cannot embed its own hash in this report.
+The publication candidate containing this report is accepted only after a new full `make gate` returns literal `GATE OK` on its exact clean SHA. Its commit-specific run and remote-ref verification are recorded out of tree under `.git/gate-runs/` and `/tmp/cmp-c2-gate-publication-3.log`; the final publication SHA is the verified `origin/dev` tip, since a commit cannot embed its own hash in this report.
 
 Before this documentation commit, the focused contract prose, surface-count and task-governance checks passed **93/93**, and `git diff --check` was clean.
 
@@ -41,6 +42,8 @@ The first report-bearing candidate `56de5bef` passed the frontend suite again (3
 The clean candidate `531f9cb0` passed frontend **3,653**, contract **1,310**, foundation **35**, and changed-context integration **6,593 passed / 12 skipped / 244 subtests**. Its canonical remainder showed an executor journey route-order assumption and twelve XLSX fixture setup errors because an Alembic child lacked this checkout's `src` import path. The already-red remainder was interrupted after **2 failed / 1,647 passed / 23 skipped / 12 errors**; the second failure, a `CancelledError` during HTTP upload, followed SIGINT and passed **1/1** in a focused repeat. `CMP-C2-GATE-REM-01` scoped the two confirmed test repairs: red focused cases reproduced both; afterwards the XLSX module passed **12/12** and both edited modules passed **28/28**. This candidate was not published. The next clean report-bearing commit requires its own full gate.
 
 Focused task-governance, process-acceleration, API prose and surface-count checks after this repair passed **105/105**; `CURRENT_STATE.md` remains at 120 lines and `git diff --check` is clean.
+
+The clean candidate `9d868e62` passed frontend **3,653**, contract **1,310**, foundation **35**, and **7,797 passed / 28 skipped / 244 subtests** in the changed-context integration battery, with two executor tests failing. A shared database accumulated more than 500 executor connections across repeated gates; the archived connection fell outside the bounded list page, and an import test counted the length of that saturated page. The canonical remainder did not run. `CMP-C2-GATE-EXEC-01` reproduced both failures before edit and passed both affected modules **35/35** after changing only those tests to use an ID-specific detail read and an unbounded table count. Task governance passed **16/16**. This candidate was not published; the next clean report-bearing commit needs a complete gate.
 
 Focused final-code evidence before the complete gate: comparison unit/contract 106 passed, pull unit 76 passed, queue integration 5 passed, AI job/pair/sheet integration 196 passed, spend/work integration 147 passed, real-DB pull context 1 passed (`CMP-C2-FIX-01.md`). The gate is the final broad-suite check.
 
