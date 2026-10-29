@@ -185,8 +185,18 @@ class ReportHandler:
         self, dependencies: WorkDependencies, *, model_source: ModelSource | None = None, caller: ComparisonModelCaller | None = None,
         pdf_runner: Any = None, service: ComparisonAiJobService | None = None,
     ) -> None:
-        #: Read when an item runs, not when the factory is applied (the registry builds a handler to learn its kind).
+        #: Nothing of the dependencies is read here: the registry builds a handler only to learn its kind (with an empty namespace in
+        #: a unit test), and a worker's dependencies are read when an item runs (``_wire``).
         self._deps = dependencies
+        self._given = (model_source, caller, pdf_runner, service)
+        self._wired = False
+
+    def _wire(self) -> None:
+        """Build the collaborators on the first item (the dependencies are complete by then)."""
+        if self._wired:
+            return
+        model_source, caller, pdf_runner, service = self._given
+        dependencies = self._deps
         self._sessions = dependencies.session_factory
         self._source = model_source or UnavailableModelSource()
         self._caller = caller or ComparisonModelCaller(self._sessions)
@@ -196,9 +206,11 @@ class ReportHandler:
         self._reports = ComparisonReportService(
             self._sessions, blob_store=dependencies.blob_store, comparison_modules="versions", provider_mode="live",
         )
+        self._wired = True
 
     # -- the entry ----------------------------------------------------------------------------------
     def run(self, item: WorkItem) -> Outcome:
+        self._wire()
         try:
             payload = read_payload(item.payload)
         except ValueError:
