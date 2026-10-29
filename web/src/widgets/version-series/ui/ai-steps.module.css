@@ -93,13 +93,6 @@
   font-weight: 600;
 }
 
-.refusal {
-  margin: 0;
-  color: var(--am-failed);
-  font-size: var(--am-text-sm);
-  overflow-wrap: anywhere;
-}
-
 .aiBlock {
   display: grid;
   gap: var(--am-gap-xs);

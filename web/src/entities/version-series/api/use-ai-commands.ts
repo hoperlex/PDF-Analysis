@@ -148,7 +148,7 @@ export const JOB_ACTS: Readonly<Record<AiJobMethod, readonly AiJobAct[]>> = {
 
 async function actOnJob(command: AiJobActCommand, idempotencyKey: string): Promise<ComparisonAiJob> {
   if (!JOB_ACTS[command.method].includes(command.act)) {
-    throw new Error(`The ${command.method} job has no control ${command.act}.`);
+    throw new Error(`У этого задания нет действия «${command.act}».`);
   }
   const path = { comparison_ai_job_id: command.jobId };
   const base = { path, idempotencyKey } as const;

@@ -79,7 +79,7 @@ export function aiJobStateLabel(job: Pick<ComparisonAiJob, 'state' | 'counts'>):
 export const AI_PAUSE_REASON_LABELS: Readonly<Record<ComparisonAiPauseReason, string>> = {
   user: 'остановлено по вашей просьбе',
   quota: 'лимит подписки исчерпан',
-  auth: 'нет входа в исполнитель',
+  auth: 'исполнитель отказал в доступе',
   overrun: 'расход превысил оценку в 1,2 раза',
   route_changed: 'назначение или ревизия подключения изменились после подтверждения',
   module_off: 'модуль «Сравнение версий» выключен',
@@ -93,7 +93,7 @@ export function pauseNeedsConsent(reason: ComparisonAiPauseReason | undefined): 
 export const AI_PAUSE_ADVICE: Readonly<Record<ComparisonAiPauseReason, string>> = {
   user: '',
   quota: 'Подождите, пока обновится лимит подписки, и продолжите.',
-  auth: 'Войдите в исполнитель заново («Подключения»), затем продолжайте.',
+  auth: 'Проверьте подключение исполнителя в разделе «Подключения», затем продолжайте.',
   overrun: 'Фактический расход превысил подтверждённую оценку больше чем в 1,2 раза. Продолжить можно только с новой оценкой и новым подтверждением.',
   route_changed: 'Назначение или ревизия подключения изменились: прежнее подтверждение к ним не относится. Продолжить можно только с новой оценкой и новым подтверждением.',
   module_off: 'Включите модуль, затем продолжайте.',

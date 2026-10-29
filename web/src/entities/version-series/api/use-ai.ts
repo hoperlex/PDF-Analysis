@@ -239,7 +239,7 @@ async function readEstimate(scope: EstimateScope): Promise<ComparisonAiEstimate>
       return (await estimateComparisonSpecification({ path: { comparison_transition_id: scope.transitionId } })).data;
     case 'report': {
       const report = (await getComparisonReport({ path: { comparison_report_id: scope.reportId } })).data;
-      if (report.estimate === undefined) throw new Error('A report that is not a draft has no estimate to consent to.');
+      if (report.estimate === undefined) throw new Error('У отчёта, который не черновик, нет оценки для подтверждения.');
       return report.estimate;
     }
   }

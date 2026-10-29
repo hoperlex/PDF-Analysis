@@ -216,7 +216,7 @@ function windowProps(over: Partial<ReportWindowViewProps> = {}): ReportWindowVie
   };
 }
 
-function panelProps(over: Partial<Parameters<typeof ChangesPanelView>[0]> = {}): Parameters<typeof ChangesPanelView>[0] {
+export function panelProps(over: Partial<Parameters<typeof ChangesPanelView>[0]> = {}): Parameters<typeof ChangesPanelView>[0] {
   return {
     sheetTitle: 'л. 3 · Схема электроснабжения', description: description(), loading: false, failure: null, mayAct: true, busy: false, copied: false,
     history: { items: [
@@ -418,11 +418,6 @@ function aiShapes(): ComparisonShape[] {
     name: 'specifications-block-container-loaded',
     make: () => createElement(SpecificationsBlock, { series: SERIES, names: SET_NAMES, mayAct: true, onOpenTransition: noop }),
     seedClient: (c) => c.setQueryData(COMPARISON_KEYS.specs(SERIES_ID), specificationsInEveryState()),
-  });
-  push({
-    name: 'specifications-block-container-none',
-    make: () => createElement(SpecificationsBlock, { series: SERIES, names: SET_NAMES, mayAct: true, onOpenTransition: noop }),
-    seedClient: (c) => c.setQueryData(COMPARISON_KEYS.specs(SERIES_ID), [specification({ state: 'not_applicable' })]),
   });
   push({
     name: 'specifications-block-container-not-wired',

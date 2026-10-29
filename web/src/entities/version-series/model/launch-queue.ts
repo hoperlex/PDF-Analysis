@@ -9,7 +9,6 @@
  */
 
 import type {
-  ComparisonAiMethod,
   ComparisonAiQueue,
   ComparisonAiQueueItem,
   ComparisonLaunchEntry,
@@ -133,7 +132,8 @@ export function aiQueueShown(queue: ComparisonAiQueue | undefined): queue is Com
 export function aiQueueItemLine(item: ComparisonAiQueueItem): string {
   const where = item.queue_position === undefined ? '' : `№${item.queue_position} · `;
   const progress = item.counts.total > 0 ? ` · ${item.counts.done} из ${item.counts.total}` : '';
-  return `${where}${AI_METHOD_LABELS[item.method as ComparisonAiMethod]} — ${AI_QUEUE_PHASES[item.state]}${progress}`;
+  const method = AI_METHOD_LABELS[item.method];
+  return `${where}${method} — ${AI_QUEUE_PHASES[item.state]}${progress}`;
 }
 
 export function queueStepLabel(step: ComparisonStepId): string {
