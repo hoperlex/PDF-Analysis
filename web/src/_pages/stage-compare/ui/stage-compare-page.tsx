@@ -10,6 +10,8 @@ import { useProjectList } from '@/entities/project';
 import { useProductVersion } from '@/entities/release';
 import { StagePairCatalog } from '@/widgets/stage-pair-catalog';
 
+import { StageUploadPanel } from './stage-upload-panel';
+
 export function StageComparePage() {
   const projects = useProjectList();
   const me = useMe();
@@ -40,7 +42,12 @@ export function StageComparePage() {
       ) : null}
       {projects.isSuccess && projectItems.length === 0 && moduleOn ? <EmptyState title="Проектов пока нет" detail="Создайте проект, затем добавьте документы П и Р." /> : null}
       {projects.isSuccess && projectItems.length > 1 && projectUid === null && moduleOn ? <EmptyState title="Выберите проект" detail="Пары и предложения относятся к одному проекту." /> : null}
-      {projectUid !== null && moduleOn ? <StagePairCatalog key={projectUid} projectUid={projectUid} mayAct={mayAct} /> : null}
+      {projectUid !== null && moduleOn ? (
+        <div key={projectUid}>
+          <StageUploadPanel projectUid={projectUid} mayAct={mayAct} />
+          <StagePairCatalog projectUid={projectUid} mayAct={mayAct} />
+        </div>
+      ) : null}
     </PageShell>
   );
 }

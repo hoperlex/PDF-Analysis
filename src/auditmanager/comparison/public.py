@@ -129,6 +129,14 @@ from auditmanager.comparison.spend.model import (
 )
 from auditmanager.comparison.spend.repository import ComparisonSpendRepository
 from auditmanager.comparison.spend.settler import settle_lost_attempt
+from auditmanager.comparison.stage.admission import StageCandidateAdmissionService
+from auditmanager.comparison.stage.candidates import StageCandidateDecisionService
+from auditmanager.comparison.stage.completion import StageRawCompletionService
+from auditmanager.comparison.stage.lifecycle import StageUploadLifecycleService
+from auditmanager.comparison.stage.publication import StageCandidatePublicationService
+from auditmanager.comparison.stage.uploads import (
+    StageDeclaredFile, StageUploadPartService, StageUploadService,
+)
 from auditmanager.comparison.work.errors import (
     HandlerRegistryError,
     UnhandledKindError,
@@ -363,6 +371,14 @@ from auditmanager.comparison.tiles.reader import PairTileReader
 PAGE_PROFILE_WORK_KIND = "page_profile"
 
 __all__ = [
+    "StageCandidateAdmissionService",
+    "StageCandidateDecisionService",
+    "StageCandidatePublicationService",
+    "StageDeclaredFile",
+    "StageRawCompletionService",
+    "StageUploadLifecycleService",
+    "StageUploadPartService",
+    "StageUploadService",
     "PAIR_CHECK_KIND",
     "PAIR_CHECK_PROMPT_VERSION",
     "AiPairModelBinder",

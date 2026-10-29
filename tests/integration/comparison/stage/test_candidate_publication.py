@@ -130,6 +130,10 @@ def test_plain_pdf_reuses_verified_raw_blob_and_publishes_once(
     service = StageCandidatePublicationService(sessions, store)
     published = service.publish(candidate_id=candidate.candidate_id)
     assert_version(comparison_session, candidate.candidate_id)
+    assert comparison_session.execute(text(
+        "SELECT b.state FROM stage_upload_candidate c JOIN blob b ON b.blob_id = c.pdf_blob_id "
+        "WHERE c.stage_upload_candidate_id = :candidate"
+    ), {"candidate": candidate.candidate_id}).scalar_one() == "available"
     assert service.publish(candidate_id=candidate.candidate_id) == published
     assert store.stages == 0
     assert comparison_session.execute(text(
@@ -147,8 +151,9 @@ def test_zip_member_publication_recovers_after_canonical_copy(
     with pytest.raises(RuntimeError, match="process stopped"):
         service.publish(candidate_id=candidate.candidate_id)
     assert comparison_session.execute(text(
-        "SELECT state FROM stage_upload_candidate WHERE stage_upload_candidate_id = :candidate"
-    ), {"candidate": candidate.candidate_id}).scalar_one() == "admitting"
+        "SELECT state, pdf_blob_id FROM stage_upload_candidate "
+        "WHERE stage_upload_candidate_id = :candidate"
+    ), {"candidate": candidate.candidate_id}).one() == ("admitting", None)
     published = service.publish(candidate_id=candidate.candidate_id)
     assert_version(comparison_session, candidate.candidate_id)
     assert store.stages == 1

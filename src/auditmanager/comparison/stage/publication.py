@@ -1,8 +1,9 @@
 """Resume a confirmed candidate through PDF custody and version publication.
 
-The candidate's immutable facts contain the temporary upload token. Its blob
-binding and a metadata row commit before any ZIP member reaches object storage.
-The candidate stays `admitting` until the version and classification commit.
+Immutable facts contain the temporary upload token and the source member's
+content identity. A Blob metadata declaration commits before any ZIP member
+reaches object storage. The candidate's Blob FK is set only after availability,
+with its version and classification, so reference audits see settled bindings.
 """
 
 from __future__ import annotations
@@ -128,9 +129,9 @@ class StageCandidatePublicationService:
             session.execute(
                 text(
                     "UPDATE stage_upload_candidate SET state = 'admitting', "
-                    "pdf_blob_id = :blob, updated_at = clock_timestamp() "
+                    "updated_at = clock_timestamp() "
                     "WHERE stage_upload_candidate_id = :candidate"
-                ), {"candidate": candidate_id, "blob": str(declaration.blob_id)},
+                ), {"candidate": candidate_id},
             )
             return _Work(
                 candidate_id, str(upload_id), str(project_uid), str(source_blob),
@@ -239,7 +240,7 @@ class StageCandidatePublicationService:
             ).one()
             if row[0] == "published":
                 return self._view(session, work.upload_id, work.candidate_id)
-            if row[0] != "admitting" or str(row[2]) != work.blob_id:
+            if row[0] != "admitting" or (row[2] is not None and str(row[2]) != work.blob_id):
                 raise DomainError(ErrorCode.CONFLICT, conflict_reason="stage_candidate_state")
             if not self._blobs.require(session, parse_blob_id(work.blob_id)).is_available:
                 raise DomainError(ErrorCode.STORAGE_INTEGRITY_ERROR, role="comparison_stage_pdf")
@@ -271,12 +272,12 @@ class StageCandidatePublicationService:
             session.execute(
                 text(
                     "UPDATE stage_upload_candidate SET state = 'published', "
-                    "document_uid = :document, version_uid = :version, "
+                    "document_uid = :document, version_uid = :version, pdf_blob_id = :blob, "
                     "updated_at = clock_timestamp() "
                     "WHERE stage_upload_candidate_id = :candidate"
                 ), {
                     "candidate": work.candidate_id, "document": str(document_uid),
-                    "version": str(version_uid),
+                    "version": str(version_uid), "blob": work.blob_id,
                 },
             )
             session.execute(

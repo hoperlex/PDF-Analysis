@@ -6758,70 +6758,192 @@ class ComparisonStagePairAdapter(_StagesModuleGate):
 
 
 class ComparisonStageUploadAdapter(_StagesModuleGate):
-    """Sealed PDF/ZIP intake port; no bytes are stored or examined before its lane."""
+    """Bounded PDF/ZIP intake; the module flag precedes every service call."""
 
     _DEPENDENCY = "comparison_stage_uploads"
+
+    def __init__(
+        self, sessions: sessionmaker[Session], *, blob_store: Any,
+        comparison_modules: str = "none",
+    ) -> None:
+        super().__init__(comparison_modules=comparison_modules)
+        from auditmanager.comparison.public import (
+            StageCandidateAdmissionService, StageCandidateDecisionService,
+            StageCandidatePublicationService, StageRawCompletionService,
+            StageUploadLifecycleService, StageUploadPartService, StageUploadService,
+        )
+        from auditmanager.storage.public import BlobMetadataRepository
+
+        self._sessions = sessions
+        self._uploads = StageUploadService(sessions)
+        self._parts = StageUploadPartService(sessions, blob_store, BlobMetadataRepository())
+        self._completion = StageRawCompletionService(sessions, blob_store, BlobMetadataRepository())
+        self._admission = StageCandidateAdmissionService(sessions, blob_store)
+        self._decisions = StageCandidateDecisionService(sessions)
+        self._publication = StageCandidatePublicationService(sessions, blob_store)
+        self._lifecycle = StageUploadLifecycleService(sessions, blob_store)
+
+    @staticmethod
+    def _file_view(row: Any) -> models.StageUploadFile:
+        declaration = row.declaration
+        return models.StageUploadFile(
+            file_id=row.file_id, upload_id=row.upload_id,
+            declaration=models.StageUploadFileDeclaration(
+                display_name=declaration.display_name, media_kind=declaration.media_kind,
+                size_bytes=declaration.size_bytes, sha256=declaration.sha256,
+            ),
+            state=row.state, received_parts=row.received_parts,
+            received_bytes=row.received_bytes, created_at=row.created_at,
+            **_unset_none(failure_reason=row.failure_reason),
+        )
+
+    @staticmethod
+    def _candidate_view(row: Any) -> models.StageUploadCandidate:
+        return models.StageUploadCandidate(
+            candidate_id=row.candidate_id, file_id=row.file_id,
+            member_number=row.member_number, display_name=row.display_name,
+            state=row.state,
+            **_unset_none(
+                proposed_stage=row.proposed_stage,
+                proposed_section=row.proposed_section,
+                designation=row.designation,
+                confirmed_stage=row.confirmed_stage,
+                confirmed_section=row.confirmed_section,
+                document_uid=row.document_uid,
+                version_uid=row.version_uid,
+                failure_reason=row.failure_reason,
+            ),
+        )
+
+    @classmethod
+    def _upload_view(cls, row: Any) -> models.StageUpload:
+        return models.StageUpload(
+            upload_id=row.upload_id, project_uid=row.project_uid, state=row.state,
+            files=[cls._file_view(item) for item in row.files],
+            candidates=[cls._candidate_view(item) for item in row.candidates],
+            created_at=row.created_at, updated_at=row.updated_at,
+        )
 
     def create_upload(
         self, *, project_uid: str, body: models.CreateStageUploadRequest,
         user_uid: str, idempotency_key: str,
     ) -> models.StageUpload:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        from auditmanager.comparison.public import StageDeclaredFile
+
+        return self._upload_view(self._uploads.create(
+            project_uid=project_uid,
+            files=tuple(StageDeclaredFile(
+                item.display_name, item.media_kind.value, item.size_bytes, item.sha256,
+            ) for item in body.files),
+            user_uid=user_uid, idempotency_key=idempotency_key,
+        ))
 
     def list_uploads(
         self, *, project_uid: str, cursor: str | None, limit: int,
     ) -> models.StageUploadPage:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        from auditmanager.shared.identity import IdentityError, StageUploadId
+
+        after: str | None = None
+        if cursor is not None:
+            parts = decode_cursor(cursor)
+            if len(parts) != 1:
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+            try:
+                after = str(StageUploadId.parse(parts[0]))
+            except IdentityError:
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format") from None
+        rows, next_id = self._uploads.page(
+            project_uid=project_uid, after_upload_id=after, limit=limit,
+        )
+        return models.StageUploadPage(
+            items=[self._upload_view(row) for row in rows],
+            page=models.PageInfo(
+                next_cursor=None if next_id is None else encode_cursor((next_id,))
+            ),
+        )
 
     def get_upload(self, *, upload_id: str) -> models.StageUpload:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        return self._upload_view(self._uploads.get(upload_id))
 
     def put_part(
         self, *, upload_id: str, file_id: str, part_number: int, content: bytes,
         user_uid: str, idempotency_key: str,
     ) -> models.StageUploadPartReceipt:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        row = self._parts.put_part(
+            upload_id=upload_id, file_id=file_id, part_number=part_number,
+            content=content, user_uid=user_uid, idempotency_key=idempotency_key,
+        )
+        return models.StageUploadPartReceipt(
+            upload_id=row.upload_id, file_id=row.file_id,
+            part_number=row.part_number, size_bytes=row.size_bytes,
+            sha256=row.sha256, received_bytes=row.received_bytes,
+        )
 
     def complete_file(
         self, *, upload_id: str, file_id: str, user_uid: str, idempotency_key: str,
     ) -> models.StageUploadFile:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        self._completion.complete_raw(
+            upload_id=upload_id, file_id=file_id,
+            user_uid=user_uid, idempotency_key=idempotency_key,
+        )
+        self._admission.admit(upload_id=upload_id, file_id=file_id)
+        row = self._uploads.get(upload_id)
+        return self._file_view(next(item for item in row.files if item.file_id == file_id))
 
     def confirm_candidate(
         self, *, candidate_id: str, body: models.ConfirmStageUploadCandidateRequest,
         user_uid: str, idempotency_key: str,
     ) -> models.StageUploadCandidate:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        with self._sessions() as session:
+            _label, roles = _comparison_actor(session, user_uid)
+        self._decisions.confirm(
+            candidate_id=candidate_id, stage=body.stage, section_code=body.section_code,
+            designation=body.designation,
+            existing_document_uid=body.existing_document_uid,
+            user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key,
+        )
+        return self._candidate_view(self._publication.publish(candidate_id=candidate_id))
 
     def reject_candidate(
         self, *, candidate_id: str, user_uid: str, idempotency_key: str,
     ) -> models.StageUploadCandidate:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        with self._sessions() as session:
+            _label, roles = _comparison_actor(session, user_uid)
+        return self._candidate_view(self._decisions.reject(
+            candidate_id=candidate_id, user_uid=user_uid,
+            actor_roles=roles, idempotency_key=idempotency_key,
+        ))
 
     def pause_upload(
         self, *, upload_id: str, user_uid: str, idempotency_key: str,
     ) -> models.StageUpload:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        return self._upload_view(self._lifecycle.pause(
+            upload_id=upload_id, user_uid=user_uid, idempotency_key=idempotency_key,
+        ))
 
     def resume_upload(
         self, *, upload_id: str, user_uid: str, idempotency_key: str,
     ) -> models.StageUpload:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        return self._upload_view(self._lifecycle.resume(
+            upload_id=upload_id, user_uid=user_uid, idempotency_key=idempotency_key,
+        ))
 
     def cancel_upload(
         self, *, upload_id: str, user_uid: str, idempotency_key: str,
     ) -> models.StageUpload:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        return self._upload_view(self._lifecycle.cancel(
+            upload_id=upload_id, user_uid=user_uid, idempotency_key=idempotency_key,
+        ))
 
 
 class ComparisonStageLinkAdapter(_StagesModuleGate):

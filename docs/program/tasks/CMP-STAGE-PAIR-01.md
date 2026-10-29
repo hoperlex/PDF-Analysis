@@ -53,6 +53,7 @@ An expert can upload a plain PDF or ZIP set into a project, review the resulting
 - `src/auditmanager/api/routers/comparison_stage_pairs.py`
 - `src/auditmanager/comparison/public.py`
 - `scripts/recovery/product_purge.py`
+- `scripts/recovery/stage_upload_cleanup.py`
 - `tests/unit/comparison/stage/**`
 - `tests/integration/comparison/stage/**`
 - `tests/integration/api/test_stage_pair_upload.py`
@@ -110,8 +111,8 @@ The integrator merges this branch only after C2 publication and C3 seal integrat
 `AUDITMANAGER_COMPARISON_MODULES=none` or `versions` keeps all stage operations unavailable and the stage menu hidden. If this lane cannot complete, leave its adapters as typed stubs; do not downgrade a populated `0041` database.
 
 ## Handoff
-- changed files: pending implementation
-- commands/results: pending
-- contracts: none; frozen API `1.12.0` and migration `0041`
-- known limits: pending
-- integration notes: merge only after the C3 seal; preserve the ZIP fix and its `__MACOSX/` decision
+- changed files: exact SHA-bound list and scope proof in `.local/handoff/CMP-STAGE-PAIR-01-evidence.md`; service, adapter, UI, recovery, focused test and programme-document paths are itemized in `docs/program/CMP-STAGE-PAIR-01.md`
+- commands/results: focused unit, PostgreSQL/MinIO HTTP, composition, web lint/typecheck/Vitest and generated-client checks in the report; the complete integrated `make gate` remains for the merge candidate
+- contracts: none; frozen API `1.12.0`, migration `0041` and generated client unchanged
+- known limits: browser selects one raw file per batch; interrupted cancellations need the recovery CLI; ZIP debt D-262 remains open until integration
+- integration notes: merge only after C2 publication and the C3 seal; preserve the ZIP fix and its `__MACOSX/` decision; no remote publication authority belongs to this lane

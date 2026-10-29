@@ -186,8 +186,8 @@ class StageUploadService:
             ids = session.execute(
                 text(
                     "SELECT stage_upload_id FROM stage_upload "
-                    "WHERE project_uid = :project AND stage_upload_id > :after "
-                    "ORDER BY stage_upload_id LIMIT :take"
+                    "WHERE project_uid = :project AND (:after = '' OR stage_upload_id < :after) "
+                    "ORDER BY stage_upload_id DESC LIMIT :take"
                 ),
                 {"project": project_uid, "after": after_upload_id or "", "take": limit + 1},
             ).scalars().all()

@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import io
 import hashlib
+import struct
 import tempfile
 import zipfile
+import zlib
 from pathlib import Path
 
 import pytest
@@ -104,6 +106,26 @@ def test_first_caller_rejects_service_members() -> None:
     assert raised.value.detail_fields["constraint"] == "comparison_zip_member_kind"
 
 
+def test_first_caller_rejects_macosx_unicode_path_alias() -> None:
+    raw_name = b"ordinary.pdf"
+    shown = "__MACOSX/._ordinary.pdf".encode("utf-8")
+    unicode_path = struct.pack("<BI", 1, zlib.crc32(raw_name)) + shown
+    output = io.BytesIO()
+    entry = zipfile.ZipInfo(raw_name.decode("ascii"))
+    entry.extra = struct.pack("<HH", 0x7075, len(unicode_path)) + unicode_path
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as writer:
+        writer.writestr(entry, PDF.read_bytes())
+    raw = output.getvalue()
+    with pytest.raises(DomainError) as raised:
+        with admit_stage_zip_stream(
+            NonSeekable(raw), declared_bytes=len(raw),
+            declared_sha256=hashlib.sha256(raw).hexdigest(),
+            active_admissions=0, free_bytes=budget(len(raw)),
+        ):
+            pytest.fail("a Unicode Path alias reached the candidate boundary")
+    assert raised.value.detail_fields["constraint"] == "comparison_zip_member_kind"
+
+
 class NonSeekable(io.BytesIO):
     def seek(self, *_args: object, **_kwargs: object) -> int:
         raise AssertionError("the staged object is a stream, not a seekable file")
@@ -121,6 +143,27 @@ def test_stream_caller_spools_a_bounded_verified_archive() -> None:
         assert member.facts is not None
         assert member.path.exists()
     assert not member.path.exists()
+
+
+def test_padded_zip_cannot_cross_raw_byte_cap_before_extraction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    raw = archive("site.pdf", PDF.read_bytes())
+    padded = raw + b"padding after ZIP directory"
+    monkeypatch.setattr("auditmanager.comparison.stage.intake.MAX_RAW_ZIP_BYTES", len(raw))
+
+    class Unread(NonSeekable):
+        def read(self, *_args: object, **_kwargs: object) -> bytes:
+            raise AssertionError("an oversized padded ZIP was read")
+
+    with pytest.raises(DomainError) as raised:
+        with admit_stage_zip_stream(
+            Unread(padded), declared_bytes=len(padded),
+            declared_sha256=hashlib.sha256(padded).hexdigest(),
+            active_admissions=0, free_bytes=budget(len(padded)),
+        ):
+            pytest.fail("an oversized padded ZIP reached extraction")
+    assert raised.value.detail_fields["constraint"] == f"raw_zip_bytes <= {len(raw)}"
 
 
 @pytest.mark.parametrize(

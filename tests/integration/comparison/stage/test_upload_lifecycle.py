@@ -116,6 +116,28 @@ def test_cancel_cleanup_failure_retries_from_cancelled_row(
     assert lifecycle.sweep_cancelled() >= 1
 
 
+def test_cleanup_sweeps_every_cancelled_page(comparison_session: Session) -> None:
+    store = Store()
+    lifecycle = None
+    for _ in range(3):
+        sessions, created, actor, content = setup(comparison_session)
+        StageUploadPartService(sessions, store, BlobMetadataRepository()).put_part(
+            upload_id=created.upload_id, file_id=created.files[0].file_id,
+            part_number=1, content=content, user_uid=actor,
+            idempotency_key=f"part-{new_ulid()}",
+        )
+        lifecycle = StageUploadLifecycleService(sessions, store)
+        store.refuse_abort_once = True
+        with pytest.raises(DomainError):
+            lifecycle.cancel(
+                upload_id=created.upload_id, user_uid=actor,
+                idempotency_key=f"cancel-{new_ulid()}",
+            )
+    assert lifecycle is not None
+    assert lifecycle.sweep_cancelled(limit=1) == 3
+    assert store.parts == {}
+
+
 def test_non_owner_cannot_pause_upload(comparison_session: Session) -> None:
     sessions, created, _actor, _content = setup(comparison_session)
     lifecycle = StageUploadLifecycleService(sessions, Store())

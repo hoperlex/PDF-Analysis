@@ -107,19 +107,26 @@ class StageUploadLifecycleService:
         return len(tokens)
 
     def sweep_cancelled(self, *, limit: int = 100) -> int:
-        """Retry cleanup from persisted cancelled batches after process restart."""
+        """Retry every persisted cancelled batch, in bounded database pages."""
         if not 1 <= limit <= 1000:
             raise ValueError("sweep limit must be from 1 to 1000")
-        with session_scope(self._sessions) as session:
-            ids = tuple(session.execute(text(
-                "SELECT DISTINCT u.stage_upload_id FROM stage_upload u "
-                "JOIN stage_upload_file f ON f.stage_upload_id = u.stage_upload_id "
-                "WHERE u.state = 'cancelled' AND f.multipart_token IS NOT NULL "
-                "AND f.source_blob_id IS NULL ORDER BY u.stage_upload_id LIMIT :limit"
-            ), {"limit": limit}).scalars())
-        for upload_id in ids:
-            self.reconcile_cancelled(upload_id=str(upload_id))
-        return len(ids)
+        after = ""
+        processed = 0
+        while True:
+            with session_scope(self._sessions) as session:
+                ids = tuple(session.execute(text(
+                    "SELECT DISTINCT u.stage_upload_id FROM stage_upload u "
+                    "JOIN stage_upload_file f ON f.stage_upload_id = u.stage_upload_id "
+                    "WHERE u.state = 'cancelled' AND f.multipart_token IS NOT NULL "
+                    "AND f.source_blob_id IS NULL AND u.stage_upload_id > :after "
+                    "ORDER BY u.stage_upload_id LIMIT :limit"
+                ), {"limit": limit, "after": after}).scalars())
+            if not ids:
+                return processed
+            for upload_id in ids:
+                self.reconcile_cancelled(upload_id=str(upload_id))
+                processed += 1
+            after = str(ids[-1])
 
     def _change(
         self, *, upload_id: str, user_uid: str, idempotency_key: str,

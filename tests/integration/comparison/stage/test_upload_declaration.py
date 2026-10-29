@@ -89,3 +89,49 @@ def test_stage_declaration_refuses_raw_total_before_any_row(
         text("SELECT count(*) FROM stage_upload WHERE project_uid = :project"),
         {"project": project},
     ).scalar_one() == 0
+
+
+def test_stage_upload_page_is_newest_first_and_cursor_is_stable(
+    comparison_session: Session,
+) -> None:
+    project, actor = uid("prj"), uid("usr")
+    comparison_session.execute(
+        text("INSERT INTO project (project_uid, name) VALUES (:project, 'Stage pages')"),
+        {"project": project},
+    )
+    sessions = sessionmaker(
+        bind=comparison_session.connection(), expire_on_commit=False,
+        future=True, join_transaction_mode="create_savepoint",
+    )
+    service = StageUploadService(sessions)
+    created = []
+    for number in range(3):
+        row = service.create(
+            project_uid=project,
+            files=(StageDeclaredFile(f"{number}.pdf", "pdf", 1, "a" * 64),),
+            user_uid=actor, idempotency_key=f"stage-page-{new_ulid()}",
+        )
+        created.append(row.upload_id)
+        comparison_session.execute(text(
+            "UPDATE stage_upload SET state = 'failed' WHERE stage_upload_id = :upload"
+        ), {"upload": row.upload_id})
+        comparison_session.execute(text(
+            "UPDATE stage_upload_file SET state = 'failed' WHERE stage_upload_id = :upload"
+        ), {"upload": row.upload_id})
+
+    first, cursor = service.page(project_uid=project, after_upload_id=None, limit=1)
+    assert [row.upload_id for row in first] == [created[2]]
+    assert cursor == created[2]
+    newcomer = service.create(
+        project_uid=project,
+        files=(StageDeclaredFile("new.pdf", "pdf", 1, "b" * 64),),
+        user_uid=actor, idempotency_key=f"stage-page-{new_ulid()}",
+    )
+    second, cursor = service.page(project_uid=project, after_upload_id=cursor, limit=1)
+    assert [row.upload_id for row in second] == [created[1]]
+    assert cursor == created[1]
+    third, cursor = service.page(project_uid=project, after_upload_id=cursor, limit=1)
+    assert [row.upload_id for row in third] == [created[0]]
+    assert cursor is None
+    newest, _ = service.page(project_uid=project, after_upload_id=None, limit=1)
+    assert [row.upload_id for row in newest] == [newcomer.upload_id]

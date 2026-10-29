@@ -88,6 +88,11 @@ SERVED_PAIR_OPERATIONS = frozenset({
     "listStagePairs", "getStagePair", "listStagePairSuggestions", "confirmStagePair",
     "createStageAssembly", "reviseStageAssembly", "setStagePairCompleteness",
 })
+SERVED_UPLOAD_OPERATIONS = frozenset({
+    "createStageUpload", "listStageUploads", "getStageUpload", "uploadStageUploadPart",
+    "completeStageUploadFile", "confirmStageUploadCandidate", "rejectStageUploadCandidate",
+    "pauseStageUpload", "resumeStageUpload", "cancelStageUpload",
+})
 
 
 def _client(modules: str) -> TestClient:
@@ -131,7 +136,7 @@ def test_every_stage_route_answers_a_typed_module_or_lane_refusal(
         kwargs["json"] = BODIES[name]
     response = app.request(method, path, headers=headers, **kwargs)
     body = response.json()
-    if modules == "versions,stages" and name in SERVED_PAIR_OPERATIONS:
+    if modules == "versions,stages" and name in SERVED_PAIR_OPERATIONS | SERVED_UPLOAD_OPERATIONS:
         assert response.status_code == 404, (name, response.status_code, body)
         assert body["error_code"] == "not_found"
         return
