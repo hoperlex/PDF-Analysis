@@ -3117,17 +3117,23 @@ class ComparisonAdapter(_SessionHolder):
         section_codes: frozenset[str],
         summary_model: Any = None,
         cost_ceiling_usd: float = 0.0,
+        comparison_modules: str = "none",
     ) -> None:
         from auditmanager.comparison.public import (
+            MODULE_VERSIONS,
             SheetLinkRepository,
             SheetPairingService,
             SummaryService,
             SummaryStore,
             VersionComparisonService,
+            enabled_modules,
         )
 
         super().__init__(session_factory)
         self._blob_store = blob_store
+        # `CMP-SEAL-C1` (ADR-0025 decision 13): while the versions module is on, the effective matrix is
+        # the only store of sheet pairs of versions, and the `0035` pairing and summary operations are withdrawn.
+        self._versions_module_on = MODULE_VERSIONS in enabled_modules(comparison_modules)
         links, store = SheetLinkRepository(), SummaryStore()
         self._service = VersionComparisonService(
             classifications=_ClassificationReader(),
@@ -3147,6 +3153,14 @@ class ComparisonAdapter(_SessionHolder):
             comparisons=self._service, links=links, summaries=store, model=summary_model,
             cost_gate=None if summary_model is None else (lambda: _MeterGate(cost_ceiling_usd)),
         )
+
+    def _refuse_while_the_versions_module_is_on(self) -> None:
+        """`CMP-SEAL-C1` (ADR-0025 decision 13). Before anything is read or written: ``503
+        dependency_unavailable`` naming the module. With the module off nothing changes."""
+        if self._versions_module_on:
+            raise DomainError(
+                ErrorCode.DEPENDENCY_UNAVAILABLE, dependency=_VERSIONS_MODULE_DEPENDENCY
+            )
 
     def compare_versions(
         self,
@@ -3308,6 +3322,7 @@ class ComparisonAdapter(_SessionHolder):
     ) -> models.SheetPairingEvent:
         """`COMPARE-PERSISTED-SUMMARY-01`. One write transaction: the actor's roles, the path,
         the receipt, the recomputed proposal, the row, its audit event (``comparison.public``)."""
+        self._refuse_while_the_versions_module_is_on()
         from auditmanager.access.public import AccountRepository
         from auditmanager.api.routers.correlation import current_correlation_id
         from auditmanager.comparison.public import ApproveSheetPairingRequest
@@ -3355,6 +3370,7 @@ class ComparisonAdapter(_SessionHolder):
         author_user_uid: str,
     ) -> models.SheetPairingEvent:
         """`COMPARE-PERSISTED-SUMMARY-01`. The same transaction shape, ending one link."""
+        self._refuse_while_the_versions_module_is_on()
         from auditmanager.access.public import AccountRepository
         from auditmanager.api.routers.correlation import current_correlation_id
         from auditmanager.comparison.public import WithdrawSheetPairingRequest
@@ -3398,6 +3414,7 @@ class ComparisonAdapter(_SessionHolder):
     ) -> models.GenerateComparisonSummaryResponse:
         """`COMPARE-PERSISTED-SUMMARY-01` (B2). One write transaction: the actor's roles, the path,
         the receipt, the sealed evidence, the cost meter, the model, the check, the row, its event."""
+        self._refuse_while_the_versions_module_is_on()
         from auditmanager.access.public import AccountRepository
         from auditmanager.api.routers.correlation import current_correlation_id
         from auditmanager.comparison.public import GenerateSummaryRequest
@@ -5274,6 +5291,9 @@ def _pull_channel_facts(session: Session, connection_id: str) -> dict[str, Any]:
     }
 
 
+#: `CMP-SEAL-C1`: the stable class name of the withdrawn `0035` operations while the versions module is on.
+_VERSIONS_MODULE_DEPENDENCY = "comparison_versions_module"
+
 # --- comparison modules (`CMP-SEAL-C0`, ADR-0025 decision 25) ----------------------------
 #
 # The shipped adapters of the three comparison ports are stubs: each operation refuses with
@@ -5328,6 +5348,7 @@ def _comparison_upload(view: Any) -> models.ComparisonUpload:
         declared_bytes=view.declared_bytes,
         created_at=view.created_at,
         updated_at=view.updated_at,
+        compare_after_preparation=view.compare_after_preparation,
         **({} if view.files is None else {"files": [_comparison_file(item) for item in view.files]}),
     )
 
@@ -5373,7 +5394,8 @@ class ComparisonUploadAdapter(_SessionHolder):
         self._batches = batches
 
     def create_upload(
-        self, *, project_uid: str, files: Sequence[models.ComparisonUploadFileDeclaration], user_uid: str, idempotency_key: str
+        self, *, project_uid: str, files: Sequence[models.ComparisonUploadFileDeclaration], user_uid: str, idempotency_key: str,
+        compare_after_preparation: bool = False,
     ) -> models.ComparisonUpload:
         from auditmanager.ingest.comparison_pdf.public import DeclaredFileRequest
 
@@ -5388,6 +5410,7 @@ class ComparisonUploadAdapter(_SessionHolder):
                 for item in files
             ],
             user_uid=user_uid, actor_label=label, idempotency_key=idempotency_key,
+            compare_after_preparation=compare_after_preparation,
         )
         self._batches.after_declaration(upload_id=view.upload_id)
         return _comparison_upload(view)
@@ -5681,3 +5704,274 @@ class VersionPageAdapter:
         self, *, page_profile_id: str, level: int, column: int, row: int
     ) -> bytes:
         return self._reader.read_tile(page_profile_id, level=level, column=column, row=row)
+
+
+# --- version comparison core (`CMP-SEAL-C1`, ADR-0025 decision 25) -----------------------
+#
+# The shipped adapters of the four ports below are stubs: each operation refuses with
+# ``503 dependency_unavailable`` until the lane that owns it replaces the body (plan section 4.0
+# rule 1). Nothing is read or written. The ``dependency`` detail is a stable class name only.
+
+
+class ComparisonMatrixAdapter(_SessionHolder):
+    """`CMP-MATRIX-01` serves the matrix operations over
+    :class:`~auditmanager.comparison.matrix.service.ComparisonMatrixService` (ADR-0025 decisions 3, 13, 14, 16).
+
+    The adapter owns the mapping to the contract's models, the cursors, and the two reads the service does not make
+    itself: the actor's display label and roles (an edit is an expert's act, checked again in the transaction that
+    acts)."""
+
+    def __init__(self, session_factory: sessionmaker[Session], *, blob_store: Any = None, service: Any = None) -> None:
+        super().__init__(session_factory)
+        if service is None:
+            from auditmanager.comparison.public import ComparisonMatrixService
+
+            service = ComparisonMatrixService(session_factory=session_factory, blob_store=blob_store)
+        self._service = service
+
+    @staticmethod
+    def _ref(ref: models.ComparisonPageRef) -> Any:
+        from auditmanager.comparison.public import MatrixPageRef
+
+        return MatrixPageRef(str(ref.version_uid), int(ref.page_number), None if ref.page_profile_id is None else str(ref.page_profile_id))
+
+    def get_matrix(self, *, project_uid: str, document_uid: str) -> models.ComparisonMatrix:
+        return models.ComparisonMatrix.model_validate(
+            self._service.get_matrix(project_uid=project_uid, document_uid=document_uid)
+        )
+
+    def prepare_matrix(
+        self, *, project_uid: str, document_uid: str, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonMatrixPreparation:
+        _label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        return models.ComparisonMatrixPreparation.model_validate(
+            self._service.prepare_matrix(
+                project_uid=project_uid, document_uid=document_uid, user_uid=user_uid, actor_roles=roles,
+                idempotency_key=idempotency_key,
+            )
+        )
+
+    def list_edits(
+        self, *, project_uid: str, document_uid: str, cursor: str | None, limit: int
+    ) -> models.ComparisonMatrixEditList:
+        before: int | None = None
+        if cursor is not None:
+            parts = decode_cursor(cursor)
+            if len(parts) != 1 or not parts[0].isdigit():
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+            before = int(parts[0])
+        page = self._service.list_edits(
+            project_uid=project_uid, document_uid=document_uid, before_edit_no=before, limit=limit
+        )
+        return models.ComparisonMatrixEditList.model_validate(
+            {
+                "items": page.items,
+                "page": {
+                    "next_cursor": None if page.next_before_edit_no is None else encode_cursor((str(page.next_before_edit_no),))
+                },
+            }
+        )
+
+    def apply_edits(
+        self, *, project_uid: str, document_uid: str, base_revision: models.ComparisonMatrixRevision,
+        edits: Sequence[models.ComparisonMatrixEditInput], user_uid: str, idempotency_key: str,
+    ) -> models.ComparisonMatrix:
+        from auditmanager.comparison.public import MatrixEditInput
+
+        label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        batch = [
+            MatrixEditInput(
+                kind=str(_enum_text(item.kind)),
+                page=self._ref(item.page),
+                other_page=None if item.other_page is None else self._ref(item.other_page),
+                absent_version_uid=None if item.absent_version_uid is None else str(item.absent_version_uid),
+            )
+            for item in edits
+        ]
+        return models.ComparisonMatrix.model_validate(
+            self._service.apply_edits(
+                project_uid=project_uid, document_uid=document_uid, base_matrix_id=str(base_revision.matrix_id),
+                base_edit_no=int(base_revision.edit_no), edits=batch, user_uid=user_uid, actor_label=label,
+                actor_roles=roles, idempotency_key=idempotency_key,
+            )
+        )
+
+    def undo_edit(
+        self, *, project_uid: str, document_uid: str, base_revision: models.ComparisonMatrixRevision,
+        user_uid: str, idempotency_key: str,
+    ) -> models.ComparisonMatrix:
+        label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        return models.ComparisonMatrix.model_validate(
+            self._service.undo_edit(
+                project_uid=project_uid, document_uid=document_uid, base_matrix_id=str(base_revision.matrix_id),
+                base_edit_no=int(base_revision.edit_no), user_uid=user_uid, actor_label=label, actor_roles=roles,
+                idempotency_key=idempotency_key,
+            )
+        )
+
+    def list_ai_links(
+        self, *, project_uid: str, document_uid: str, cursor: str | None, limit: int
+    ) -> models.ComparisonAiLinkList:
+        after: tuple[str, str] | None = None
+        if cursor is not None:
+            parts = decode_cursor(cursor)
+            if len(parts) != 2:
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+            after = (parts[0], parts[1])
+        page = self._service.list_ai_links(project_uid=project_uid, document_uid=document_uid, after=after, limit=limit)
+        return models.ComparisonAiLinkList.model_validate(
+            {
+                "items": page.items,
+                "page": {"next_cursor": None if page.next_after is None else encode_cursor(page.next_after)},
+            }
+        )
+
+
+class ComparisonSeriesAdapter(_SessionHolder):
+    """`CMP-SERIES-01` serves the nine series operations over
+    :class:`~auditmanager.comparison.series.service.ComparisonSeriesService` (ADR-0025 decisions 3, 4, 7, 14, 16, 20, 21).
+
+    The adapter owns the mapping to the contract's models, the cursors, and the one read the service does not make itself:
+    the actor's display label and roles (a series is started and steered by an expert, checked again in the transaction
+    that acts)."""
+
+    def __init__(self, session_factory: sessionmaker[Session], *, blob_store: Any = None, service: Any = None) -> None:
+        super().__init__(session_factory)
+        if service is None:
+            from auditmanager.comparison.public import ComparisonSeriesService
+
+            service = ComparisonSeriesService(session_factory=session_factory, blob_store=blob_store)
+        self._service = service
+
+    def start_series(
+        self, *, project_uid: str, document_uid: str, restart: bool, base_order_revision_no: int | None, user_uid: str,
+        idempotency_key: str,
+    ) -> models.ComparisonSeries:
+        label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        return models.ComparisonSeries.model_validate(
+            self._service.start_series(
+                project_uid=project_uid, document_uid=document_uid, restart=restart,
+                base_order_revision_no=base_order_revision_no, user_uid=user_uid, actor_label=label, actor_roles=roles,
+                idempotency_key=idempotency_key,
+            )
+        )
+
+    def list_series(
+        self, *, project_uid: str, document_uid: str, cursor: str | None, limit: int
+    ) -> models.ComparisonSeriesPage:
+        after: tuple[datetime, str] | None = None
+        if cursor is not None:
+            parts = decode_cursor(cursor)
+            try:
+                if len(parts) != 2:
+                    raise ValueError("two members")
+                after = (datetime.fromisoformat(parts[0]), parts[1])
+            except ValueError:
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format") from None
+        page = self._service.list_series(project_uid=project_uid, document_uid=document_uid, after=after, limit=limit)
+        return models.ComparisonSeriesPage.model_validate(
+            {
+                "items": page.items,
+                "page": {
+                    "next_cursor": None if page.next_after is None
+                    else encode_cursor((page.next_after[0].isoformat(), page.next_after[1]))
+                },
+            }
+        )
+
+    def get_series(self, *, series_id: str) -> models.ComparisonSeries:
+        return models.ComparisonSeries.model_validate(self._service.get_series(series_id=series_id))
+
+    def _steer(self, method: str, *, series_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonSeries:
+        _label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        return models.ComparisonSeries.model_validate(
+            getattr(self._service, method)(
+                series_id=series_id, user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key
+            )
+        )
+
+    def pause_series(self, *, series_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonSeries:
+        return self._steer("pause_series", series_id=series_id, user_uid=user_uid, idempotency_key=idempotency_key)
+
+    def resume_series(self, *, series_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonSeries:
+        return self._steer("resume_series", series_id=series_id, user_uid=user_uid, idempotency_key=idempotency_key)
+
+    def cancel_series(self, *, series_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonSeries:
+        return self._steer("cancel_series", series_id=series_id, user_uid=user_uid, idempotency_key=idempotency_key)
+
+    def finish_series(self, *, series_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonSeries:
+        return self._steer("finish_series", series_id=series_id, user_uid=user_uid, idempotency_key=idempotency_key)
+
+    def list_sheet_pairs(
+        self, *, transition_id: str, status: models.ComparisonSheetStatus | None, only_changes: bool, cursor: str | None,
+        limit: int,
+    ) -> models.ComparisonSheetPairPage:
+        after: int | None = None
+        if cursor is not None:
+            parts = decode_cursor(cursor)
+            if len(parts) != 1 or not parts[0].isdigit():
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+            after = int(parts[0])
+        page = self._service.list_sheet_pairs(
+            transition_id=transition_id, status=None if status is None else str(_enum_text(status)),
+            only_changes=only_changes, after_no=after, limit=limit,
+        )
+        return models.ComparisonSheetPairPage.model_validate(
+            {
+                "items": page.items,
+                "page": {"next_cursor": None if page.next_after is None else encode_cursor((str(page.next_after),))},
+            }
+        )
+
+    def get_sheet_pair(self, *, sheet_pair_id: str) -> models.ComparisonSheetPair:
+        return models.ComparisonSheetPair.model_validate(self._service.get_sheet_pair(sheet_pair_id=sheet_pair_id))
+
+
+class ComparisonPairTileAdapter:
+    """`CMP-VIEWER-01`. ``streamComparisonPairTile`` from what the worker stored.
+
+    The tiles of page A and page B are the page profile's (stored levels from the archive, levels 0 and 1 rendered by the
+    page-profile reader in a ceilinged child), the mask is bytes reduced with ``numpy``: the API process never loads
+    PDFium for a pair tile (ADR-0025 decision 9 and the addendum of 2026-10-27).
+    """
+
+    def __init__(
+        self, session_factory: sessionmaker[Session], *, blob_store: Any, reader: Any = None, tiles: Any = None
+    ) -> None:
+        from auditmanager.comparison.public import PageProfileReader, PairTileReader
+
+        # `CMP-C1-FIX-A` item 5: ``tiles`` is the one tile renderer of the process (the composition root builds it and hands it
+        # to ``VersionPageAdapter`` as well), so that the API process runs at most ``TILE_SLOTS`` tile children, not two sets.
+        self._reader = reader or PairTileReader(
+            session_factory, blob_store, profile_reader=PageProfileReader(session_factory, blob_store, tiles=tiles)
+        )
+
+    def read_tile(
+        self, *, sheet_pair_id: str, mode: models.ComparisonPairTileMode, level: int, column: int, row: int, layers: Sequence[models.ComparisonLayer], align_blocks: bool
+    ) -> bytes:
+        return self._reader.read_tile(
+            sheet_pair_id=sheet_pair_id, mode=mode.value, level=level, column=column, row=row,
+            layers=[layer.value for layer in layers], align_blocks=align_blocks,
+        )
+
+
+class ComparisonOverviewAdapter:
+    """`CMP-VC-OVERVIEW-01` serves the overview of «Проекты и этапы» and the comparison queue summary over
+    :class:`~auditmanager.comparison.overview.service.ComparisonOverviewService` (ADR-0025 decisions 4, 6, 23).
+
+    Both are reads in one read-only transaction: nothing is written, enqueued or sent to a model. ``modules`` is the module
+    set the deployment serves, parsed once by the composition root."""
+
+    def __init__(self, session_factory: sessionmaker[Session], *, modules: str = "none", service: Any = None) -> None:
+        if service is None:
+            from auditmanager.comparison.public import ComparisonOverviewService
+
+            service = ComparisonOverviewService(session_factory=session_factory)
+        self._service = service
+        self._modules = modules
+
+    def get_overview(self, *, project_uid: str) -> models.ComparisonOverview:
+        return models.ComparisonOverview.model_validate(self._service.get_overview(project_uid=project_uid))
+
+    def get_queue_summary(self) -> models.ComparisonQueueSummary:
+        return models.ComparisonQueueSummary.model_validate(self._service.get_queue_summary(modules=self._modules))

@@ -20,9 +20,10 @@ import time
 from typing import Any
 
 try:  # the product (a package) and the child program (top-level modules) both load this file
-    from . import page_merkle
+    from . import page_merkle, segments
 except ImportError:  # pragma: no cover - the child program's import path
     import page_merkle  # type: ignore[no-redef]
+    import segments  # type: ignore[no-redef]
 
 __all__ = ["run"]
 
@@ -74,8 +75,8 @@ def run(settings: dict[str, Any]) -> dict[str, Any]:
         words = page.extract_words()
         t_words = clock() - began
         began = clock()
-        lines = page.lines
-        rect_count, curve_count, char_count = len(page.rects), len(page.curves), len(page.chars)
+        raw_lines, raw_rects, raw_curves = page.lines, page.rects, page.curves
+        drawn_lines, rect_count, curve_count, char_count = len(raw_lines), len(raw_rects), len(raw_curves), len(page.chars)
         raw_images = list(page.images)
         t_lines = clock() - began
         width, height, rotation, offset_x, offset_y = pypdf_facts["displayed"]
@@ -85,11 +86,9 @@ def run(settings: dict[str, Any]) -> dict[str, Any]:
 
         words = [box(w["x0"], w["top"], w["x1"], w["bottom"]) + [w["text"]] for w in words]
         images = [box(i["x0"], i["top"], i["x1"], i["bottom"]) for i in raw_images]
-        lines = [
-            box(l["x0"], l["top"], l["x1"], l["bottom"])
-            + [_round(l.get("linewidth") or 0, 3), _color(l.get("stroking_color"))]
-            for l in lines
-        ]
+        # `CMP-C1-FIX-A` item 8: the lines, then the edges of rectangles and the straight segments of curves.
+        lines = segments.collect(raw_lines, raw_rects, raw_curves, box, _color)
+        del raw_lines, raw_rects, raw_curves
         body = {
             "page": {
                 "width_pt": _round(width),
@@ -111,6 +110,7 @@ def run(settings: dict[str, Any]) -> dict[str, Any]:
             "offset": [_round(offset_x), _round(offset_y)],
             "words": len(words),
             "lines": len(lines),
+            "drawn_lines": drawn_lines,
             "rects": rect_count,
             "curves": curve_count,
             "chars": char_count,

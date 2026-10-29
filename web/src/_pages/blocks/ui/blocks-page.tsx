@@ -35,6 +35,11 @@
  * answered it; nothing here is computed, rounded further or guessed at while data is
  * loading.
  *
+ * **A document admitted for comparison only** (`upload_kind` `comparison_pdf`, `Q-CMP-5`;
+ * `CMP-DEBT-261`) is listed in the chooser and marked as everywhere (`CMP-VERSION-MARK-01`), but its
+ * «Показать блоки» is disabled with the reason beside it: it has no portal bundle, so no block of a
+ * portal is read for it, and no version of it can be chosen here.
+ *
  * **Two tabs since `W55B-WEB-BLOCKS`** (plan §B3.9). Once a version is chosen the screen
  * shows «Блоки портала» — what the version's portal bundle brought, page by page
  * (`widgets/portal-blocks`) — and, as the second tab, «Строки текста», the text-line index
@@ -42,12 +47,17 @@
  * the choice of version, and like it does not survive a reload.
  */
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 
 import type { DocumentVersion, Project, ProjectUid } from '@/shared/api';
 import { EmptyState, ErrorState, LoadingState, PageShell } from '@/shared/ui';
 import { useProjectList } from '@/entities/project';
-import { useDocumentList } from '@/entities/document-version';
+import {
+  COMPARISON_ONLY_START_NOTE,
+  ComparisonOnlyMark,
+  isComparisonOnly,
+  useDocumentList,
+} from '@/entities/document-version';
 import { PortalBlocks } from '@/widgets/portal-blocks';
 
 import { DEFAULT_BLOCK_TAB } from '../model/tabs';
@@ -158,12 +168,18 @@ function VersionChooser({ projectUid, onChooseProject, onChooseVersion }: Versio
   return <DocumentChooser projectUid={projectUid} onChooseVersion={onChooseVersion} />;
 }
 
-interface DocumentChooserProps {
+export interface DocumentChooserProps {
   readonly projectUid: ProjectUid;
   readonly onChooseVersion: (version: DocumentVersion) => void;
 }
 
-function DocumentChooser({ projectUid, onChooseVersion }: DocumentChooserProps) {
+/**
+ * The project's documents, one «Показать блоки» each. Exported so the instruments that render one
+ * static pass (the `CMP-DEBT-261` tests, the census) render the list as this page does: one pass
+ * cannot click a project row first.
+ */
+export function DocumentChooser({ projectUid, onChooseVersion }: DocumentChooserProps) {
+  const noteId = useId();
   const documents = useDocumentList(projectUid);
 
   if (documents.isPending) return <LoadingState what="документы проекта" />;
@@ -179,26 +195,48 @@ function DocumentChooser({ projectUid, onChooseVersion }: DocumentChooserProps) 
     return <EmptyState title="В этом проекте нет опубликованных документов." />;
   }
 
+  const anyComparisonOnly = documents.data.items.some((doc: DocumentVersion) => isComparisonOnly(doc));
   return (
-    <ul>
-      {documents.data.items.map((doc: DocumentVersion) => (
-        <li key={doc.version_uid} className="am-state" style={{ marginBottom: '0.5rem' }}>
-          <p className="am-state__title">
-            {doc.display_title ?? doc.source_filename ?? doc.version_uid}
-          </p>
-          <div className="am-state__detail">
-            <p>
-              <code>{doc.version_uid}</code> · страниц {doc.page_count}
-            </p>
-          </div>
-          <div className="am-state__action">
-            <button type="button" className="am-button" onClick={() => onChooseVersion(doc)}>
-              Показать блоки
-            </button>
-          </div>
-        </li>
-      ))}
-    </ul>
+    <>
+      {anyComparisonOnly ? (
+        <p className="am-note" id={noteId} data-comparison-only-note="">
+          {COMPARISON_ONLY_START_NOTE}
+        </p>
+      ) : null}
+      <ul>
+        {documents.data.items.map((doc: DocumentVersion) => {
+          const comparisonOnly = isComparisonOnly(doc);
+          return (
+            <li key={doc.version_uid} className="am-state" style={{ marginBottom: '0.5rem' }}>
+              <p className="am-state__title">
+                {doc.display_title ?? doc.source_filename ?? doc.version_uid}
+              </p>
+              <div className="am-state__detail">
+                {comparisonOnly ? (
+                  <p>
+                    <ComparisonOnlyMark version={doc} />
+                  </p>
+                ) : null}
+                <p>
+                  <code>{doc.version_uid}</code> · страниц {doc.page_count}
+                </p>
+              </div>
+              <div className="am-state__action">
+                <button
+                  type="button"
+                  className="am-button"
+                  disabled={comparisonOnly}
+                  aria-describedby={comparisonOnly ? noteId : undefined}
+                  onClick={() => onChooseVersion(doc)}
+                >
+                  Показать блоки
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </>
   );
 }
 

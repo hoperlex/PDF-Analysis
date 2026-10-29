@@ -150,7 +150,7 @@ describe('a failure is absorbed or surfaced according to the envelope', () => {
         return Promise.resolve(
           new Response(
             JSON.stringify({
-              contract_version: '1.9.0',
+              contract_version: '1.10.0',
               error_code: 'dependency_unavailable',
               message: 'A caller-safe sentence.',
               correlation_id: 'corr-poll',
@@ -179,7 +179,7 @@ describe('a failure is absorbed or surfaced according to the envelope', () => {
       Promise.resolve(
         new Response(
           JSON.stringify({
-            contract_version: '1.9.0',
+            contract_version: '1.10.0',
             error_code: 'not_found',
             message: 'A caller-safe sentence.',
             correlation_id: 'corr-poll',
@@ -248,13 +248,52 @@ describe('this slice adds no second polling loop', () => {
   const isAllowedProbePoll = ({ path }: { path: string }) =>
     ALLOWED_BOUNDED_PROBE_POLL.some((allowed) => path.endsWith(allowed));
 
+  // The second named exception, `CMP-VC-UI-01`. «Сравнение версий» re-reads four things while they move, as the original does
+  // (`version-comparison-projects.js:296-300` the overview, 5 s while anything runs and 30 s otherwise; `version-comparison.js:785`
+  // the matrix while it is built, 1.5 s; `:828` the series while it runs, 2 s; the upload while it is read, 2 s). None of them is a run
+  // poll and none reaches the run endpoint, which the assertion below still polices. Each is bounded by what the assertion further down
+  // holds to the source: no timer of its own, an interval that is a named constant of at least a second, and a callback with an arm
+  // that returns `false`, so a read of something that is not moving schedules nothing.
+  const ALLOWED_COMPARISON_POLLS = [
+    join('entities', 'version-series', 'api', 'use-overview.ts'),
+    join('entities', 'version-series', 'api', 'use-matrix.ts'),
+    join('entities', 'version-series', 'api', 'use-series.ts'),
+    join('widgets', 'comparison-upload', 'api', 'use-upload.ts'),
+  ];
+  const isAllowedComparisonPoll = ({ path }: { path: string }) =>
+    ALLOWED_COMPARISON_POLLS.some((allowed) => path.endsWith(allowed));
+
   it('schedules no interval and no timer of its own', () => {
     const offenders = sources.filter(
       (file) =>
         /setInterval\s*\(|refetchInterval|refetchIntervalInBackground/.test(code(file)) &&
-        !isAllowedProbePoll(file),
+        !isAllowedProbePoll(file) &&
+        !isAllowedComparisonPoll(file),
     );
     expect(offenders.map((o) => o.path)).toEqual([]);
+  });
+
+  it('lets the comparison reads poll only while something moves, on a named interval, with no timer of their own', () => {
+    const named = sources.filter(isAllowedComparisonPoll);
+    // The allowlist must not rot into a path that no longer exists or no longer polls.
+    expect(named.map((f) => f.path)).toHaveLength(ALLOWED_COMPARISON_POLLS.length);
+    for (const file of named) {
+      const text = code(file);
+      expect(text, file.path).not.toMatch(/setInterval\s*\(|setTimeout\s*\(|refetchIntervalInBackground/);
+      expect(text.match(/refetchInterval/g)?.length ?? 0, file.path).toBeGreaterThan(0);
+      const constants = [...text.matchAll(/export const (\w+_POLL_MS) = ([\d_]+);/g)];
+      expect(constants.length, `${file.path} names no interval`).toBeGreaterThan(0);
+      for (const match of constants) expect(Number((match[2] ?? '').replaceAll('_', '')), match[1]).toBeGreaterThanOrEqual(1000);
+      // It can end: each use is a callback with an arm that schedules nothing (`: false`, `? false :` or `return false`).
+      for (const use of text.split('refetchInterval').slice(1)) {
+        // The value of the option only: up to the next option of the same query.
+        const value = use.split(/\n\s*(?:retry|enabled|queryKey|queryFn|staleTime):/)[0] ?? '';
+        expect(value, `${file.path}: a callback`).toMatch(/^:\s*(?:\([^)]*\)|\w+)?\s*=>/);
+        expect(value, `${file.path}: an arm that schedules nothing`).toMatch(/:\s*false\b|\?\s*false\b|return false\b/);
+      }
+      // And it never reaches the run endpoint.
+      expect(text, file.path).not.toMatch(/getRunStatus|pollRunStatus|listRuns/);
+    }
   });
 
   it('lets the named probe poll schedule only its bounded 3 s refetch, and nothing else', () => {

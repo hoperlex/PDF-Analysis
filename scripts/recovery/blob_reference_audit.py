@@ -35,6 +35,8 @@ _SOURCES = frozenset({
     ("public", "comparison_page_profile", "profile_blob_id"),
     ("public", "comparison_page_profile", "preview_blob_id"),
     ("public", "comparison_page_profile", "thumbnail_blob_id"),
+    # `0039_comparison_core`: the bit-packed difference mask of a sheet-pair result (not stored for a `same` pair).
+    ("public", "comparison_sheet_pair_result", "mask_blob_id"),
 })
 _CATALOG_EXPECTED = _SOURCES | {("public", "blob", "blob_id")}
 
@@ -104,6 +106,13 @@ _PAGE_PROFILES = text("""
     SELECT comparison_page_profile_id AS owner_id,
            profile_blob_id, preview_blob_id, thumbnail_blob_id
       FROM public.comparison_page_profile ORDER BY comparison_page_profile_id COLLATE "C"
+""")
+
+
+_PAIR_MASKS = text("""
+    SELECT comparison_sheet_pair_result_id AS owner_id, mask_blob_id
+      FROM public.comparison_sheet_pair_result WHERE mask_blob_id IS NOT NULL
+     ORDER BY comparison_sheet_pair_result_id COLLATE "C"
 """)
 
 
@@ -292,6 +301,11 @@ def audit_blob_references(session: Session) -> BlobReferenceAudit:
             if row[column] is not None:
                 _require_available(blobs, row[column], "comparison_page_profile")
     counts.append(("comparison_page_profile", len(page_profiles)))
+
+    pair_masks = _rows(session, _PAIR_MASKS)
+    for row in pair_masks:
+        _require_available(blobs, row["mask_blob_id"], "comparison_sheet_pair_result")
+    counts.append(("comparison_sheet_pair_result", len(pair_masks)))
 
     return BlobReferenceAudit(tuple(counts), tuple(sorted(available, key=lambda fact: fact.blob_id)))
 

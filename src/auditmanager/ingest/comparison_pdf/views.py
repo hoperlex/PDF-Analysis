@@ -46,6 +46,8 @@ class UploadView:
     updated_at: datetime
     #: ``None`` for a listing row (the files are read with the batch).
     files: tuple[FileView, ...] | None
+    #: `CMP-SERIES-01`: the flag the batch was declared with («После подготовки сравнить все соседние версии»).
+    compare_after_preparation: bool = False
 
 
 @dataclass(frozen=True, slots=True)

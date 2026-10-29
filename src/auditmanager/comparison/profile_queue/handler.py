@@ -25,20 +25,38 @@ How a build ends
 * a version the database does not know: ``Failed`` without a retry (waiting does not create it);
 * a source document that cannot be read, is missing from the manifest or does not match its recorded digest
   (``analysis_input_invalid`` or ``storage_integrity_error``): ``Failed`` with a retry (a storage outage is
-  transient; a corrupted object uses the attempt budget and then ends the item);
+  transient; a corrupted object uses the attempt budget and then ends the item); the source is the version's
+  ``source.document`` (portal) or ``comparison.source_pdf`` (plain-PDF upload), and a manifest that holds both is
+  ``Failed`` without a retry (``page_profile_source_ambiguous``);
 * a payload that is not the shape above: ``Failed`` without a retry;
 * anything else the builder raises reaches the runner, which ends the attempt with a retryable
   ``handler_error`` and logs it.
 
 A resumed or repeated item is cheap: the builder skips every page that has a row, so it costs time, not
-rows. An item that asked for ``retry_failed`` asks again at each attempt: a page that failed again in an
-earlier attempt of the same item is built once more, which is bounded by the item's attempt budget.
+rows.
+
+An attempt is bounded: :data:`PAGES_PER_ATTEMPT` (`CMP-C1-FIX-C` item 2)
+-----------------------------------------------------------------------
+The queue fences an attempt after 900 s whatever its progress (``comparison/work/heartbeat.py``,
+``ATTEMPT_WATCHDOG_SECONDS``): the heartbeat this handler beats between pages keeps the *lease*, not the watchdog,
+so a version of enough pages cannot be finished inside one attempt (`MEASURE-ENGINE-01.md` section 8.2 item 3: at the
+real set's 2.55 s a page a 500-page version needs about 1 276 s). An attempt therefore builds at most
+:data:`PAGES_PER_ATTEMPT` pages and, when pages are left, answers :class:`~auditmanager.comparison.work.model.Yielded`:
+the item goes back to the queue, **spends no attempt** (the queue gives the charge back), and keeps its identity, its
+dedupe key (``page_profile:<version_uid>``, ``...:retry_failed``) and its payload, so the callers that wait for
+the live item of a version (the matrix build, the upload batch, the overview) see one item as before. The next attempt
+skips the stored pages and continues. Each continuation makes progress (it stores at least one page), so the chain ends.
+
+A ``retry_failed`` item removes only the failed rows that existed when it was asked for (the item's ``created_at``);
+a page that fails again while the item runs is a stored page of the item, and a later attempt of the same item does not
+build it once more (it would otherwise be removed by every continuation and the chain would not end).
 """
 
 from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Mapping
+from datetime import datetime
 from typing import Any, Final
 
 from sqlalchemy.orm import Session, sessionmaker
@@ -49,6 +67,7 @@ from auditmanager.comparison.profile.builder import (
     build_version_page_profiles,
 )
 from auditmanager.comparison.profile.runner import ChildRunner, ChildStartError
+from auditmanager.comparison.profile.source import REASON_AMBIGUOUS
 from auditmanager.comparison.work.model import (
     Completed,
     Failed,
@@ -61,12 +80,14 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import VersionUid
 
 __all__ = [
+    "PAGES_PER_ATTEMPT",
     "PAGE_PROFILE_KIND",
     "PAYLOAD_KEYS",
     "PageProfileHandler",
     "REASON_CHILD_START_FAILED",
     "REASON_INCOMPLETE",
     "REASON_PAYLOAD_INVALID",
+    "REASON_SOURCE_AMBIGUOUS",
     "REASON_SOURCE_UNREADABLE",
     "REASON_VERSION_NOT_FOUND",
     "page_profile_handler",
@@ -80,9 +101,20 @@ _LOG = logging.getLogger(__name__)
 PAGE_PROFILE_KIND: Final[str] = "page_profile"
 PAYLOAD_KEYS: Final[frozenset[str]] = frozenset({"version_uid", "retry_failed"})
 
+#: The pages one attempt builds before it gives the item back. **From measurement** (`MEASURE-ENGINE-01.md` section 4.2,
+#: the real set of 85 pages, render plus extraction wall per page): 2.55 s on average, 8.30 s in the slowest size class
+#: (1680 x 1190 mm: 66.4 s for 8 pages), 16.6 s for the slowest single page (render 2.6 s + extraction 14.0 s, the two
+#: maxima), with the host at load 2.7 to 4.9. 30 pages are 77 s on average, 249 s in the slowest class (the aim was an
+#: attempt under about 300 s there) and 498 s even if every page were the slowest page measured: always inside the
+#: 900 s watchdog, with the margin for a loaded host. A smaller number only adds claims (about 0.8 s each, and one
+#: source stream); a larger one would leave the watchdog less than a loaded host needs. Not an ADR value: a tuning
+#: constant of this handler, recorded in `docs/program/CMP-C1-FIX-C.md`.
+PAGES_PER_ATTEMPT: Final[int] = 30
+
 REASON_PAYLOAD_INVALID: Final[str] = "page_profile_payload_invalid"
 REASON_VERSION_NOT_FOUND: Final[str] = "page_profile_version_not_found"
 REASON_SOURCE_UNREADABLE: Final[str] = "page_profile_source_unreadable"
+REASON_SOURCE_AMBIGUOUS: Final[str] = "page_profile_source_ambiguous"
 REASON_CHILD_START_FAILED: Final[str] = "page_profile_child_start_failed"
 REASON_INCOMPLETE: Final[str] = "page_profile_incomplete"
 
@@ -140,6 +172,7 @@ class PageProfileHandler:
         *,
         runner: ChildRunner | None = None,
         build: BuildFunction = build_version_page_profiles,
+        pages_per_attempt: int = PAGES_PER_ATTEMPT,
     ) -> None:
         #: Read when an item runs, not when the factory is applied: the registry builds a handler to learn
         #: its kind, and that must cost nothing and touch nothing.
@@ -147,6 +180,9 @@ class PageProfileHandler:
         #: ``None`` makes the builder start its own ``SubprocessChildRunner``; a test may supply one.
         self._runner = runner
         self._build = build
+        if pages_per_attempt < 1:
+            raise ValueError("an attempt builds at least one page")
+        self._pages_per_attempt = pages_per_attempt
 
     def run(self, item: WorkItem) -> Outcome:
         try:
@@ -166,6 +202,8 @@ class PageProfileHandler:
                 version_uid,
                 runner=self._runner,
                 retry_failed=retry_failed,
+                retry_cutoff=self._asked_at(item) if retry_failed else None,
+                max_pages=self._pages_per_attempt,
                 on_page=on_page,
             )
         except _StopBuild as stop:
@@ -185,8 +223,17 @@ class PageProfileHandler:
             if refusal.code is ErrorCode.NOT_FOUND:
                 return Failed(REASON_VERSION_NOT_FOUND)
             if refusal.code in _SOURCE_FAULTS:
+                if refusal.detail_fields.get("reason") == REASON_AMBIGUOUS:
+                    return Failed(REASON_SOURCE_AMBIGUOUS)  # waiting does not make a manifest choose
                 return Failed(REASON_SOURCE_UNREADABLE, retry=True)
             raise
+        if report.remaining:
+            _LOG.info(
+                "comparison work %s (page_profile, attempt %d): %d pages of %s built or taken over, %d left; "
+                "the item goes back to the queue",
+                item.work_id, item.attempt_no, len(report.pages), version_uid, report.remaining,
+            )
+            return Yielded()
         if not report.complete:
             _LOG.error(
                 "comparison work %s (page_profile): %s of %d pages have a row after the build",
@@ -194,6 +241,14 @@ class PageProfileHandler:
             )
             return Failed(REASON_INCOMPLETE, retry=True)
         return Completed()
+
+    def _asked_at(self, item: WorkItem) -> datetime:
+        """When the item was asked for (the queue's ``created_at``): the line a retry item does not sweep past."""
+        with self._dependencies.session_factory() as session:
+            record = self._dependencies.work.get(session, item.work_id)
+        if record is None:  # pragma: no cover - the item was claimed a moment ago
+            raise RuntimeError("the claimed work item is not in the queue")
+        return record.created_at
 
     def _checkpoint(self, item: WorkItem) -> None:
         """Between pages: prove the lease, extend it, and stop on a cancel or a lease that is gone."""

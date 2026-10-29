@@ -64,6 +64,7 @@ def build_comparison_upload_routes(router: APIRouter, uploads: ComparisonUploadP
         view = uploads.create_upload(
             project_uid=project_uid, files=body.files, user_uid=subject.user_uid,
             idempotency_key=idempotency_key,
+            compare_after_preparation=bool(body.compare_after_preparation),
         )
         return json_response(201, _body(view))
 

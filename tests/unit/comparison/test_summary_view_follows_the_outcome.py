@@ -44,6 +44,7 @@ def _answer(monkeypatch: pytest.MonkeyPatch, outcome: SummaryOutcome):
         roles_of=lambda session, uid: frozenset({"expert"})))
     monkeypatch.setattr(correlation, "current_correlation_id", lambda: None)
     adapter = object.__new__(ComparisonAdapter)
+    adapter._versions_module_on = False  # type: ignore[attr-defined]  # CMP-SEAL-C1 guard, module off
     adapter._summaries = _Summaries(outcome)  # type: ignore[attr-defined]
     adapter._write = lambda work: work(None)  # type: ignore[method-assign]
     return adapter.generate_comparison_summary(

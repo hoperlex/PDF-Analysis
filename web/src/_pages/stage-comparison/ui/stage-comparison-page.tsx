@@ -22,7 +22,9 @@
  * that puts `review` under the run that produced the findings.
  *
  * **Composition only.** The shell from `shared/ui`, the query inside the widget, the back
- * links from `shared/lib`'s route module. Nothing is computed here.
+ * links from `shared/lib`'s route module. Nothing is computed here. `CMP-DEBT-261` added one
+ * more part: the note of a version admitted for comparison only (`./comparison-only-note`),
+ * which reads the version the widget reads and draws nothing for any other version.
  *
  * **Reached from the version screen.** `routes.comparison()` exists and the version screen
  * links here twice: beside its runs («Сравнить два прогона») and beside its stage-and-section
@@ -38,7 +40,15 @@ import { looksLikeVersionUid } from '@/entities/document-version';
 
 import { VersionComparison } from '@/widgets/version-comparison';
 
+import { ComparisonOnlyNote } from './comparison-only-note';
 import { LazyStageComparison } from './lazy-stage-comparison';
+
+/**
+ * The heading of this screen. It read «Сравнение версий» before `CMP-VC-UI-01`; that is now the name of a menu item and of
+ * the module that compares the versions of a whole document set, so this screen — one version against another, and two
+ * runs of it — is called what it shows (heading only; the stage module is wave C3).
+ */
+export const VERSION_SCREEN_TITLE = 'Сравнение этой версии и её прогонов';
 
 export interface StageComparisonPageProps {
   readonly projectUid: string;
@@ -51,7 +61,7 @@ export function StageComparisonPage({ projectUid, versionUid }: StageComparisonP
   if (!wellFormed) {
     return (
       <PageShell
-        title="Сравнение версий"
+        title={VERSION_SCREEN_TITLE}
         actions={<Link href={routes.projects()}>Все проекты</Link>}
       >
         <UnsupportedState
@@ -64,7 +74,7 @@ export function StageComparisonPage({ projectUid, versionUid }: StageComparisonP
 
   return (
     <PageShell
-      title="Сравнение версий"
+      title={VERSION_SCREEN_TITLE}
       subtitle={<code>{versionUid}</code>}
       actions={
         <>
@@ -77,6 +87,7 @@ export function StageComparisonPage({ projectUid, versionUid }: StageComparisonP
         Эта версия сравнивается с другой версией того же комплекта: одной стадии и одного
         подтверждённого раздела, или стадии П с более поздней стадией Р.
       </p>
+      <ComparisonOnlyNote versionUid={versionUid} />
       <VersionComparison projectUid={projectUid} versionUid={versionUid} />
       <h2>Сравнение прогонов</h2>
       <p>

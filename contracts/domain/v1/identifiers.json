@@ -1,9 +1,9 @@
 {
   "contract": "auditmanager.domain.identifiers",
-  "contract_version": "1.9.0",
-  "supersedes": "1.8.0",
-  "candidate_revision": 27,
-  "revision_note": "Candidate revision 27 by CMP-SEAL-C0: the plain-PDF comparison upload, the order of the versions of a document set and the page reads (eighteen operations), the optional DocumentVersion.upload_kind, ProductVersion.comparison_modules and RunnerImage.crop_id are an additive minor change of the API document, and family 1.9.0 seal. identifiers.json gains eight identity prefixes (cbt, cus, cuf, cvo, cpr, cq, cqa, cmc) for migration 0038; error-codes.json gains no code, only registered reasons under existing codes; state-machines.json gains no machine.",
+  "contract_version": "1.10.0",
+  "supersedes": "1.9.0",
+  "candidate_revision": 28,
+  "revision_note": "Candidate revision 28 by CMP-SEAL-C1: the effective matrix of a document set and its manual edits, the series of adjacent transitions with their sheet pairs and pair tiles, the overview of a project and the comparison queue read (eighteen operations), and the optional CreateComparisonUploadRequest.compare_after_preparation are an additive minor change of the API document, and family 1.10.0 seal. identifiers.json gains seven identity prefixes (cmx, cme, cak, cser, ctn, ctp, csp) for migration 0039; error-codes.json gains no code, only registered reasons under existing codes; state-machines.json gains no machine.",
   "status": "frozen",
   "frozen": true,
   "format": "<prefix>_<ULID>",
@@ -84,7 +84,14 @@
     "comparison_page_profile_id": "cpr",
     "comparison_work_id": "cq",
     "comparison_work_attempt_id": "cqa",
-    "comparison_model_call_id": "cmc"
+    "comparison_model_call_id": "cmc",
+    "comparison_matrix_id": "cmx",
+    "comparison_matrix_edit_id": "cme",
+    "comparison_ai_link_id": "cak",
+    "comparison_series_id": "cser",
+    "comparison_transition_id": "ctn",
+    "comparison_sheet_pair_id": "ctp",
+    "comparison_sheet_pair_result_id": "csp"
   },
   "external_identifiers": {
     "portal_block_id": {
@@ -156,7 +163,14 @@
     "ComparisonPageProfile": "comparison_page_profile_id",
     "ComparisonWork": "comparison_work_id",
     "ComparisonWorkAttempt": "comparison_work_attempt_id",
-    "ComparisonModelCall": "comparison_model_call_id"
+    "ComparisonModelCall": "comparison_model_call_id",
+    "ComparisonMatrix": "comparison_matrix_id",
+    "ComparisonMatrixEdit": "comparison_matrix_edit_id",
+    "ComparisonAiLink": "comparison_ai_link_id",
+    "ComparisonSeries": "comparison_series_id",
+    "ComparisonTransition": "comparison_transition_id",
+    "ComparisonSheetPair": "comparison_sheet_pair_id",
+    "ComparisonSheetPairResult": "comparison_sheet_pair_result_id"
   },
   "distinct_identities": [
     {
@@ -343,6 +357,24 @@
       "evidence": [
         "CMP-SEAL-C0",
         "0038_comparison_foundation"
+      ]
+    },
+    {
+      "name": "comparison_core_identity",
+      "identifiers": [
+        "comparison_matrix_id",
+        "comparison_matrix_edit_id",
+        "comparison_ai_link_id",
+        "comparison_series_id",
+        "comparison_transition_id",
+        "comparison_sheet_pair_id",
+        "comparison_sheet_pair_result_id"
+      ],
+      "rule": "ComparisonMatrix identifies one algorithmic build of the matrix of a document set (the effective matrix is a read model over a build, accepted AI links and manual edits) and ComparisonMatrixEdit one event of the append-only manual edit history, whose pages are a version and a coordinate in it; a migrated 0035 approval keeps its cmp_ and sln_ ids in provenance and is not identified by them; ComparisonAiLink one accepted AI link, never an expert act; ComparisonSeries one series of adjacent transitions for one version order, ComparisonTransition one adjacent pair of versions of it (two version identities, never an ordinal) and ComparisonSheetPair one row of a transition that points at a result; ComparisonSheetPairResult the content-keyed result of comparing two pages (a ULID id and a unique digest column that includes the project; the digest is never a foreign key), shared by pairs of equal content within a project. Each is allocated independently and never parsed.",
+      "authority": "ADR-0025 decisions 2, 3, 13, 14, 15, 21; CMP-SEAL-C1",
+      "evidence": [
+        "CMP-SEAL-C1",
+        "0039_comparison_core"
       ]
     }
   ],

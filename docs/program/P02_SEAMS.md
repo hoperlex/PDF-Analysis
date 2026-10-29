@@ -806,6 +806,13 @@ list and `B8` downloads it.
 quoting. The BOM is there because the intended reader opens the file in Excel, which
 otherwise mis-decodes Cyrillic.
 
+**Formula injection.** A text cell is written with one leading apostrophe when a spreadsheet could read it as a
+formula: when the first character that is not a space, a no-break space, a byte-order mark, a zero-width character,
+a tab, a carriage return or a line feed is `=`, `+`, `-` or `@` (or its fullwidth form), or when the cell itself
+starts with a tab, a carriage return or a line feed. Every other text is written as it is, an apostrophe is never
+doubled, and a number or a date is never touched (`SMALL-HARDENING-02`, `R-146ax`, `D-246`, `D-253`;
+`src/auditmanager/shared/spreadsheet/formula_text.py`).
+
 **Granularity.** One row per evidence item. A finding with three quotations produces
 three rows sharing columns 1–11 and 14–19. When the finding has a canonical
 observation, only its evidence items are exported; the legacy null-canonical
@@ -834,7 +841,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-130 operations, sealed. `A5` generates the typed client from this document; `B6`
+148 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -898,6 +905,7 @@ revision and an archive are new rows, and each write has one audit event in its 
 `startRun` gains the optional `preset_id` (exclusive with `executor_connection_id`: the preset's
 connection is applied as if the caller had named it) and `RunStatus` the read-only `preset`.
 `CMP-SEAL-C0` (contract `1.9.0`) sealed these comparison-module endpoints as stubs on 2026-10-27 -- `createComparisonUpload`, `listComparisonUploads`, `getComparisonUpload`, `getComparisonUploadProposal`, `uploadComparisonUploadPart`, `completeComparisonUploadFile`, `confirmComparisonUploadSet`, `excludeComparisonUploadSet`, `retryComparisonUploadSet`, `pauseComparisonUpload`, `resumeComparisonUpload`, `cancelComparisonUpload`, `listComparisonVersionOrders`, `appendComparisonVersionOrder`, `listVersionPageProfiles`, `getVersionPageProfile`, `streamVersionPagePreview`, `streamVersionPageThumbnail` and `streamVersionPageTile`. Reads are any one role; every write is an expert's act and keyed. Each answers `503 dependency_unavailable` until its lane (`CMP-INGEST-01`, `CMP-INGEST-02`, `CMP-PROFILE-01`) wires it (`ADR-0025` decision 25). A page is addressed by the identity of its profile (`cpr_`) and never by its number. `DocumentVersion` gains `upload_kind`, `ProductVersion` gains `comparison_modules` (the module set, default `none`), `RunnerImage` no longer requires `portal_block_id` and may carry a `crop_id`, `ClaimedExecutorTask.images` may hold eight images and the claim request may declare `max_images`. Migration `0038_comparison_foundation` adds nine tables.
+`CMP-SEAL-C1` (contract `1.10.0`) sealed the version comparison core as stubs on 2026-10-28 -- the effective matrix of a document set (`getComparisonMatrix`, `prepareComparisonMatrix`, `listComparisonMatrixEdits`, `applyComparisonMatrixEdits`, `undoComparisonMatrixEdit`, `listComparisonAiLinks`), the series of adjacent transitions and their sheet pairs (`startComparisonSeries`, `listComparisonSeries`, `getComparisonSeries`, `pauseComparisonSeries`, `resumeComparisonSeries`, `cancelComparisonSeries`, `finishComparisonSeries`, `listComparisonSheetPairs`, `getComparisonSheetPair`, `streamComparisonPairTile`) and the read models `getComparisonOverview` and `getComparisonQueueSummary`. Reads are any one role; every write is an expert's act and keyed. Each answers `503 dependency_unavailable` until its lane (`CMP-MATRIX-01`, `CMP-SERIES-01`, `CMP-VIEWER-01`, `CMP-VC-OVERVIEW-01`) wires it. While the module «Сравнение версий» is on, `approveSheetPairing`, `withdrawSheetPairing` and `generateComparisonSummary` answer `503 dependency_unavailable`; migration `0039_comparison_core` adds seven tables and turns the active `0035` approvals into manual matrix edits (`ADR-0025` decision 13).
 `W57B-NORMS-CATALOGUE-XLSX-01` added `listNormDocuments` and `exportRunXlsx` on 2026-10-20:
 the current norms snapshot's documents as a catalogue with display names derived from the
 stored file names (any one role), and the run's W57b Excel workbook with `exportRunCsv`'s
@@ -1121,6 +1129,24 @@ could.
 | `streamVersionPagePreview` | `GET /page-profiles/{comparison_page_profile_id}/preview` |
 | `streamVersionPageThumbnail` | `GET /page-profiles/{comparison_page_profile_id}/thumbnail` |
 | `streamVersionPageTile` | `GET /page-profiles/{comparison_page_profile_id}/tile` |
+| `getComparisonMatrix` | `GET /projects/{project_uid}/documents/{document_uid}/comparison-matrix` |
+| `prepareComparisonMatrix` | `POST /projects/{project_uid}/documents/{document_uid}/comparison-matrix/preparation` |
+| `listComparisonMatrixEdits` | `GET /projects/{project_uid}/documents/{document_uid}/comparison-matrix/edits` |
+| `applyComparisonMatrixEdits` | `POST /projects/{project_uid}/documents/{document_uid}/comparison-matrix/edits` |
+| `undoComparisonMatrixEdit` | `POST /projects/{project_uid}/documents/{document_uid}/comparison-matrix/edits/undo` |
+| `listComparisonAiLinks` | `GET /projects/{project_uid}/documents/{document_uid}/comparison-ai-links` |
+| `startComparisonSeries` | `POST /projects/{project_uid}/documents/{document_uid}/comparison-series` |
+| `listComparisonSeries` | `GET /projects/{project_uid}/documents/{document_uid}/comparison-series` |
+| `getComparisonSeries` | `GET /comparison-series/{comparison_series_id}` |
+| `pauseComparisonSeries` | `POST /comparison-series/{comparison_series_id}/pause` |
+| `resumeComparisonSeries` | `POST /comparison-series/{comparison_series_id}/resume` |
+| `cancelComparisonSeries` | `POST /comparison-series/{comparison_series_id}/cancellation` |
+| `finishComparisonSeries` | `POST /comparison-series/{comparison_series_id}/finish` |
+| `listComparisonSheetPairs` | `GET /comparison-transitions/{comparison_transition_id}/sheet-pairs` |
+| `getComparisonSheetPair` | `GET /comparison-sheet-pairs/{comparison_sheet_pair_id}` |
+| `streamComparisonPairTile` | `GET /comparison-sheet-pairs/{comparison_sheet_pair_id}/tile` |
+| `getComparisonOverview` | `GET /projects/{project_uid}/comparison-overview` |
+| `getComparisonQueueSummary` | `GET /execution/comparison-queue` |
 
 Rules that hold across the whole surface:
 
@@ -1133,7 +1159,7 @@ Rules that hold across the whole surface:
   `setExecutorSecret`, `generateExecutorSshKey`, `requestExecutorProbe`,
   `setExecutorRoute`, `createAnalysisPreset`, `reviseAnalysisPreset`, `archiveAnalysisPreset`,
   `issueRunnerToken`, `revokeRunnerToken`,
-  `createComparisonUpload`, `uploadComparisonUploadPart`, `completeComparisonUploadFile`, `confirmComparisonUploadSet`, `excludeComparisonUploadSet`, `retryComparisonUploadSet`, `pauseComparisonUpload`, `resumeComparisonUpload`, `cancelComparisonUpload` and `appendComparisonVersionOrder`, and no others. A repeat of the decision carryover under another key
+  `createComparisonUpload`, `uploadComparisonUploadPart`, `completeComparisonUploadFile`, `confirmComparisonUploadSet`, `excludeComparisonUploadSet`, `retryComparisonUploadSet`, `pauseComparisonUpload`, `resumeComparisonUpload`, `cancelComparisonUpload`, `appendComparisonVersionOrder`, `prepareComparisonMatrix`, `applyComparisonMatrixEdits`, `undoComparisonMatrixEdit`, `startComparisonSeries`, `pauseComparisonSeries`, `resumeComparisonSeries`, `cancelComparisonSeries` and `finishComparisonSeries`, and no others. A repeat of the decision carryover under another key
   that names the same pair and decision answers the event already carried (`replayed: true`)
   and appends nothing.
   `setGlobalVendorList` and `setProjectVendorList` take no key: a repeat of the latest

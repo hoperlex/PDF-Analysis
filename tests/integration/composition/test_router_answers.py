@@ -63,12 +63,29 @@ _STUB_PROFILE = "/page-profiles/cpr_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 #: listing now answer the sweep's ordinary rule (an absent `cbt_` or `prj_` is `404`). `CMP-INGEST-02` serves the
 #: last of the upload reads (the project's batches, `listComparisonUploads`) and empties this set: an absent
 #: project is `404`, and the listing joins the sweep.
+#: `CMP-SEAL-C1` (ADR-0025 decision 25) names the ten reads of the version comparison core as sealed stubs, each
+#: answering exactly `503 dependency_unavailable` until its lane wires the port (`CMP-MATRIX-01`, `CMP-SERIES-01`,
+#: `CMP-VIEWER-01`, `CMP-VC-OVERVIEW-01`); the lane that wires one removes its path from this set, and the read then
+#: meets the sweep's ordinary rule. Each path is filled the way the sweep fills it: well-formed identities that name
+#: nothing.
+_STUB_DOCUMENT = f"/projects/{_PRJ}/documents/doc_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+_STUB_PAIR = "/comparison-sheet-pairs/ctp_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+#: `CMP-MATRIX-01` serves the matrix, its edit history and the accepted AI links and removes their three paths: an
+#: absent project or document is `404`.
+#: `CMP-SERIES-01` serves the series of a document set, one series, the sheet pairs of a transition and one sheet pair and
+#: removes their four paths: an absent project, document, series, transition or pair is `404`.
+#: `CMP-VC-OVERVIEW-01` serves the overview and the queue summary and empties this set: an absent project is `404`, and
+#: the queue summary answers `200`, like every other GET of the sweep.
 SEALED_STUB_GETS: frozenset[str] = frozenset()
 #: `CMP-PROFILE-01` serves the five page reads (`/versions/{ver}/page-profiles`, `/page-profiles/{cpr}` and
 #: its `preview`, `thumbnail` and `tile`) and removes them from the set above: an absent `cpr_` is `404`.
 #: The tile's `level`, `column` and `row` are required, so the sweep gives it a well-formed query that
 #: names nothing; without it the sweep would read a `422` about the query, not the path.
 SEALED_STUB_QUERY: dict[str, str] = {f"{_STUB_PROFILE}/tile": "?level=0&column=0&row=0"}
+#: `CMP-SEAL-C1`: the pair tile's `mode`, `level`, `column` and `row` are required, so the sweep gives it a well-formed
+#: query that names nothing, like the page tile above. `CMP-VIEWER-01` serves it (an absent `ctp_` is `404`) and it
+#: leaves `SEALED_STUB_GETS`; the query stays, because the sweep still needs it to read the path and not the query.
+SEALED_STUB_QUERY[f"{_STUB_PAIR}/tile"] = "?mode=overlay&level=0&column=0&row=0"
 NORM_VERIFICATION_OF_AN_ABSENT_RUN = "/runs/run_01ARZ3NDEKTSV4RRFFQ69G5FAV/norm-verification"
 WORKER_GETS = frozenset({"/execution/workers"})
 
@@ -274,6 +291,10 @@ def _absent_identity(parameter: str) -> str:
         "comparison_upload_id": "cbt",
         "comparison_page_profile_id": "cpr",
         "document_uid": "doc",
+        # `CMP-SEAL-C1`: so a core path reaches its stub, not the pattern's 422.
+        "comparison_series_id": "cser",
+        "comparison_transition_id": "ctn",
+        "comparison_sheet_pair_id": "ctp",
     }
     return f"{prefixes.get(parameter, 'prj')}_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 

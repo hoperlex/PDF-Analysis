@@ -49,7 +49,9 @@ import { AnalysisProfileTable } from '@/widgets/analysis-profile-table';
 import { ArV3BetaReview } from '@/widgets/ar-v3-beta-review';
 import { ArV3BetaPack } from '@/widgets/ar-v3-beta-pack';
 import { StartArV3GroupView, classifyArV3GroupStartFailure } from '@/features/start-ar-v3-group';
-import { SpecificationPricesAnswer } from '@/widgets/specification-prices';
+import { SpecificationPricesAnswer, SpecificationPricesChooser } from '@/widgets/specification-prices';
+import { ProposalSetChooser } from '@/widgets/optimisation-proposals';
+import { VersionComparison } from '@/widgets/version-comparison';
 import { NormReferencesAnswer } from '@/widgets/norm-references';
 import { SectionSpecificationAnswer } from '@/widgets/section-specification';
 import { NormSearchResults } from '@/widgets/norm-search';
@@ -57,6 +59,8 @@ import { NormCatalogueTable } from '@/widgets/norm-catalogue';
 import { NormDocumentFacts, NormParagraphList } from '@/widgets/norm-document';
 import { NormSnapshotHistory, NormSnapshotList } from '@/widgets/norm-snapshots';
 import { ExportPanel } from '@/widgets/export-panel';
+import { ComparisonViewerView, canShowOverlay, initialState, reduce, viewerGeometry } from '@/widgets/comparison-viewer';
+import type { TileStatus, ViewerAction, ViewerContext } from '@/widgets/comparison-viewer';
 import { FindingList } from '@/widgets/finding-list';
 import { ProjectList } from '@/widgets/project-list';
 import { RunList } from '@/widgets/run-list';
@@ -64,7 +68,7 @@ import { RunProgress } from '@/widgets/run-progress';
 import { UploadPanel } from '@/widgets/upload-panel';
 import { VersionList } from '@/widgets/version-list';
 import { CropFigureView } from '@/widgets/portal-blocks';
-import { VersionBlockViews } from '@/_pages/blocks';
+import { DocumentChooser, VersionBlockViews } from '@/_pages/blocks';
 import { ClassifyVersionFormView } from '@/features/classify-version';
 import { CorrectVersionClassificationFormView } from '@/features/correct-version-classification';
 import { ProjectStructureView } from '@/widgets/project-sections';
@@ -113,6 +117,8 @@ import {
   render,
   runStatus,
 } from '../review/fixtures';
+import { addedPair, comparedPair } from '../comparison/viewer/viewer-fixtures';
+import { COMPARISON_SHAPES } from '../version-compare/shapes';
 import { newClient, renderScreen, renderWith, seedError } from '../screens/harness';
 import { derivedScreens, malformedVariants, wellFormed } from '../screens/route-screens';
 import {
@@ -143,7 +149,7 @@ function withRouter(element: ReactElement): string {
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.9.0',
+    contract_version: '1.10.0',
     error_code: code,
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-contrast-1',
@@ -399,6 +405,32 @@ const REGISTRATION_REQUEST: RegistrationRequest = {
   status: 'pending',
   submitted_at: '2026-10-08T00:00:00Z',
 };
+
+/**
+ * `CMP-VIEWER-01`: the sheet viewer, one static pass in the state a step list leaves it in. `tiles` says what has
+ * arrived; the markup is {@link ComparisonViewerView}'s, which is what the reader gets.
+ */
+function comparisonViewerMarkup(
+  pair: ReturnType<typeof comparedPair>,
+  steps: ViewerAction[] = [],
+  options: { tiles?: Partial<TileStatus>; dragging?: boolean; navigation?: boolean } = {},
+): string {
+  const geometry = viewerGeometry(pair);
+  const context: ViewerContext = {
+    raster: geometry?.raster ?? { widthPx: 1, heightPx: 1 }, dpi: geometry?.dpi ?? 72, differences: pair.differences ?? [],
+    canOverlay: canShowOverlay(pair), hasA: pair.page_a !== undefined, hasB: pair.page_b !== undefined,
+  };
+  let state = initialState(context, { width: 1000, height: 600 });
+  for (const step of steps) state = reduce(state, step, context);
+  const tiles: TileStatus = {
+    urlOf: (request) => `blob:${request.mode}-${request.level}-${request.column}-${request.row}`,
+    failed: 0, pending: 0, retry: noop, ...options.tiles,
+  };
+  return render(createElement(ComparisonViewerView, {
+    pair, geometry, context, state, tiles, dispatch: noop, ...(options.dragging === true ? { dragging: true } : {}),
+    ...(options.navigation === true ? { navigation: { onPrevious: noop, onNext: noop, onClose: noop } } : {}),
+  }));
+}
 
 export function screens(): Screen[] {
   const out: Screen[] = [];
@@ -1195,6 +1227,43 @@ export function screens(): Screen[] {
       );
       add('VersionDetailPage comparison-only', atFlagged(createElement(VersionDetailPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID, roles: ['expert'] })));
     }
+    // `CMP-DEBT-261`: the five pickers that listed a version without the mark, over a comparison-only
+    // one: the version picker and the compared pair, the stage comparison page, the two set choosers
+    // (a disabled option, the badge list and the reason under the select) and the blocks document
+    // picker (the mark, the disabled «Показать блоки» and the reason). The badge, the note and the
+    // disabled controls are measured where these screens draw them.
+    {
+      const OTHER_SUFFIX = 'C';
+      const flaggedOther = {
+        ...version(),
+        version_uid: `${VERSION_UID.slice(0, -1)}${OTHER_SUFFIX}`,
+        version_ordinal: 2,
+        upload_kind: 'comparison_pdf' as const,
+        classification: { ...CONFIRMED, version_uid: `${VERSION_UID.slice(0, -1)}${OTHER_SUFFIX}` },
+      };
+      const classified = { ...version(), classification: CONFIRMED };
+      const flaggedSet = {
+        ...flaggedOther,
+        document_uid: `${DOCUMENT_UID.slice(0, -1)}${OTHER_SUFFIX}`,
+        version_ordinal: 1,
+      };
+      const onePage = { next_cursor: null } as { next_cursor: null };
+      const pickers = (): ReturnType<typeof populatedClient> => {
+        const client = populatedClient();
+        client.setQueryData(queryKeys.versions.list(DOCUMENT_UID, undefined, VERSION_PAGE_LIMIT), { items: [classified, flaggedOther], page: onePage });
+        client.setQueryData(queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT), { items: [classified, flaggedSet], page: onePage });
+        return client;
+      };
+      add('VersionComparison with a comparison-only version', renderScreen(pickers(), createElement(VersionComparison, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
+      add('SpecificationPricesChooser with a comparison-only set', render(createElement(SpecificationPricesChooser, { sets: [classified, flaggedSet], selected: classified.document_uid, onSelect: noop, partial: false })));
+      add('ProposalSetChooser with a comparison-only set', render(createElement(ProposalSetChooser, { sets: [classified, flaggedSet], selected: classified.document_uid, onSelect: noop, partial: false })));
+      add('DocumentChooser with a comparison-only document', renderScreen(pickers(), createElement(DocumentChooser, { projectUid: PROJECT_UID, onChooseVersion: noop })));
+      {
+        const client = pickers();
+        client.setQueryData(queryKeys.versions.detail(VERSION_UID), { ...classified, upload_kind: 'comparison_pdf' as const });
+        add('StageComparisonPage with a comparison-only version', renderScreen(client, createElement(StageComparisonPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
+      }
+    }
     // `W59-SECTION-UI-01`: the project structure with a classified and an unclassified
     // document, the confirmed panel with a profile-less section after a refused
     // confirmation, and the form carrying a refusal.
@@ -1657,6 +1726,50 @@ export function screens(): Screen[] {
           ),
       ),
     );
+  }
+
+  // `CMP-VIEWER-01`: the sheet viewer (plan §1.1). Every rule of `comparison-viewer.module.css` is reached below: the
+  // overlay with a selected difference, its boxes, the sheet being dragged and the neighbouring-sheet controls; the swipe
+  // with its divider and slider; «Рядом» with the controls that are off in it; tiles that failed and tiles still on
+  // their way; a pair with no evidence yet; the notes of a scan, a part of a sheet and a pair made with an AI link; and
+  // the shifts and the look of lines brought into the list.
+  {
+    const withAlignedBlocks = comparedPair();
+    add('Comparison viewer, the overlay: a selected difference, the boxes, the sheet dragged, the sheet controls',
+      comparisonViewerMarkup(withAlignedBlocks, [{ type: 'boxes', on: true }, { type: 'select', index: 1 }, { type: 'align', on: true }],
+        { dragging: true, navigation: true }));
+    add('Comparison viewer, the swipe: divider and slider',
+      comparisonViewerMarkup(comparedPair(), [{ type: 'swipe', on: true }, { type: 'swipe-position', position: 35 }, { type: 'under', under: 'b' }]));
+    add('Comparison viewer, side by side: the swipe and the layers are off',
+      comparisonViewerMarkup(comparedPair(), [{ type: 'mode', mode: 'side' }]));
+    add('Comparison viewer, the shifts and the look of lines in the list',
+      comparisonViewerMarkup(comparedPair(), [{ type: 'shifts', on: true }, { type: 'style-only', on: true }, { type: 'step', direction: 1 }]));
+    add('Comparison viewer, tiles that failed',
+      comparisonViewerMarkup(comparedPair(), [], { tiles: { failed: 3 } }));
+    add('Comparison viewer, tiles on their way',
+      comparisonViewerMarkup(comparedPair(), [], { tiles: { pending: 5, urlOf: () => null } }));
+    const bare = comparedPair({ differences: [], text_changes: [], service_notes: [], reasons: [], parts: { role: 'part', covered_percent: 61.5, parts: [] },
+      ai_dependent: true, page_a: { ...(comparedPair().page_a as object), scan: true } as NonNullable<ReturnType<typeof comparedPair>['page_a']> });
+    delete (bare as { channels?: unknown }).channels;
+    delete (bare as { how_compared?: unknown }).how_compared;
+    add('Comparison viewer, a pair with no evidence yet, a scan, a part of a sheet and an AI link',
+      comparisonViewerMarkup(bare, [], { tiles: { urlOf: () => null } }));
+    add('Comparison viewer, a pair the viewer cannot draw', comparisonViewerMarkup(addedPair()));
+  }
+
+  /*
+   * `CMP-VC-UI-01`: «Сравнение версий». Every state of its screens that one static pass reaches, from the one list the language
+   * guard renders too (`tests/unit/version-compare/shapes.ts`): the page with its tabs, the module that is off, not wired or refused,
+   * the table of document sets in every step state, the sheet matrix with its draft, its flags, its candidates, its stale and failed
+   * states, the transitions in every state, the order dialog, the opened pair with the viewer, the upload dialogs with the proposal
+   * and every set status, the block «Сравнение» of «Очередь» and the version-scoped screen before and after A-12. Every rule of
+   * `version-series.module.css`, `comparison-upload.module.css`, `version-compare-page.module.css` and the block's part of
+   * `execution-queue.module.css` is reached below.
+   */
+  for (const shape of COMPARISON_SHAPES) {
+    const client = newClient();
+    shape.seedClient?.(client);
+    add(`Comparison: ${shape.name}`, renderScreen(client, shape.make()));
   }
 
   /*

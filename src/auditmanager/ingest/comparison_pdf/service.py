@@ -233,8 +233,13 @@ class ComparisonUploadService:
         user_uid: str,
         actor_label: str,
         idempotency_key: str,
+        compare_after_preparation: bool = False,
     ) -> UploadView:
         """Declare a batch of plain PDFs under a project. Nothing is stored yet.
+
+        ``compare_after_preparation`` (`CMP-SERIES-01`) is stored with the batch: when it is true, every set of the batch
+        gets its matrix prepared and its series started as soon as the set's preparation has completed
+        (``comparison_batch`` ``BatchLifecycle.advance``). It is part of the payload a repeat of the key is held to.
 
         The limits of decision 9 are refused here, before the first part and before any row exists; an account
         that already has an active batch, or an installation that already has two, is ``conflict``
@@ -252,6 +257,7 @@ class ComparisonUploadService:
                 "command": "create_comparison_upload.v1",
                 "project_uid": project_uid,
                 "files": [[f.display_name, f.size_bytes, f.sha256, f.page_count] for f in files],
+                **({"compare_after_preparation": True} if compare_after_preparation else {}),
             }
         )
         with session_scope(self._factory) as session:
@@ -282,6 +288,7 @@ class ComparisonUploadService:
                 actor_user_uid=user_uid,
                 actor_label=label,
                 command_id=str(claim.command_id),
+                compare_after_preparation=compare_after_preparation,
             )
             for item in files:
                 self._repo.insert_file(
@@ -1015,6 +1022,7 @@ class ComparisonUploadService:
             created_at=upload.created_at,
             updated_at=upload.updated_at,
             files=files,
+            compare_after_preparation=upload.compare_after_preparation,
         )
 
     def _file_view(self, session: Session, file: FileRow) -> FileView:

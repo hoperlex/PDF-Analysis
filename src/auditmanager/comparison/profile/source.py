@@ -32,6 +32,8 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 __all__ = [
     "MAX_CACHED_BYTES",
     "MAX_CACHED_FILES",
+    "REASON_AMBIGUOUS",
+    "REASON_UNREADABLE",
     "SourceFileCache",
     "SourceVersion",
     "load_source_version",
@@ -40,7 +42,10 @@ __all__ = [
 
 MAX_CACHED_FILES: Final[int] = 3
 MAX_CACHED_BYTES: Final[int] = 512 * 1024 * 1024
-_REASON_UNREADABLE: Final[str] = "source_unreadable"
+REASON_UNREADABLE: Final[str] = "source_unreadable"
+#: A manifest that holds both source roles (a portal version's and a comparison version's): which of the two is the
+#: version's bytes is not decided by this code.
+REASON_AMBIGUOUS: Final[str] = "source_manifest_ambiguous"
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,18 +61,38 @@ class SourceVersion:
 
 
 def load_source_version(session: Session, version_uid: str) -> SourceVersion:
-    """The version and the blob of its source document. An unknown version is ``not_found``."""
-    from auditmanager.documents.public import MANIFEST_ROLE_SOURCE_DOCUMENT, DocumentRepository
+    """The version and the blob of its source PDF. An unknown version is ``not_found``.
+
+    A version's bytes are bound under one of two manifest roles and no other: ``source.document`` for a version a portal
+    bundle published, ``comparison.source_pdf`` for a plain PDF admitted for comparison (`CMP-INGEST-01`, ADR-0025 decision 11:
+    a distinct role, so that a run refuses it). A version holds one of the two; a manifest that holds both is refused
+    (:data:`REASON_AMBIGUOUS`) rather than answered with whichever comes first, and one that holds neither, or holds the
+    role under another media type, is :data:`REASON_UNREADABLE`. The roles are the ``documents.public`` names.
+    """
+    from auditmanager.documents.public import (
+        MANIFEST_ROLE_COMPARISON_PDF,
+        MANIFEST_ROLE_SOURCE_DOCUMENT,
+        DocumentRepository,
+    )
     from auditmanager.shared.identity import VersionUid
 
     record = DocumentRepository().get_version(session, VersionUid(version_uid))
-    entry = next((item for item in record.manifest if item.role == MANIFEST_ROLE_SOURCE_DOCUMENT), None)
+    roles = (MANIFEST_ROLE_SOURCE_DOCUMENT, MANIFEST_ROLE_COMPARISON_PDF)
+    entries = [item for item in record.manifest if item.role in roles]
+    if len(entries) > 1:
+        raise DomainError(
+            ErrorCode.ANALYSIS_INPUT_INVALID,
+            message="the version binds more than one source document",
+            stage_id="comparison_page_profile",
+            reason=REASON_AMBIGUOUS,
+        )
+    entry = entries[0] if entries else None
     if entry is None or entry.media_type != "application/pdf":
         raise DomainError(
             ErrorCode.ANALYSIS_INPUT_INVALID,
             message="the version has no source document the page profile can read",
             stage_id="comparison_page_profile",
-            reason=_REASON_UNREADABLE,
+            reason=REASON_UNREADABLE,
         )
     return SourceVersion(
         version_uid=str(record.version_uid),
@@ -97,7 +122,7 @@ def _stream_to(store: Any, source: SourceVersion, path: str) -> None:
             ErrorCode.ANALYSIS_INPUT_INVALID,
             message="the source document of the version is unreadable",
             stage_id="comparison_page_profile",
-            reason=_REASON_UNREADABLE,
+            reason=REASON_UNREADABLE,
         ) from failure
 
 

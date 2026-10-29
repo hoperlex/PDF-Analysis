@@ -117,7 +117,9 @@ MIXED_TABLES = frozenset(("audit_event", "blob", "command_record"))
 #: every table that references it are named in the same statement.
 PRODUCT_TABLES = frozenset((
     "analysis_artifact_publication", "ar_v3_run_group", "ar_v3_run_group_member", "attempt",
-    "audit_run", "comparison_model_call", "comparison_page_profile", "comparison_sheet_link",
+    "audit_run", "comparison_ai_link", "comparison_matrix", "comparison_matrix_edit", "comparison_model_call",
+    "comparison_page_profile", "comparison_series", "comparison_sheet_link", "comparison_sheet_pair",
+    "comparison_sheet_pair_result", "comparison_transition",
     "comparison_summary", "comparison_upload", "comparison_upload_file", "comparison_upload_part",
     "comparison_upload_set", "comparison_version_order", "comparison_work",
     "comparison_work_attempt", "document", "document_version",
@@ -173,6 +175,12 @@ PRODUCT_COMMAND_TYPES = frozenset((
     "confirm_comparison_upload_set", "create_comparison_upload", "exclude_comparison_upload_set",
     "pause_comparison_upload", "resume_comparison_upload", "retry_comparison_upload_set",
     "upload_comparison_upload_part",
+    # `0039_comparison_core` (`CMP-SEAL-C1`): the receipts of the eight keyed writes of the version comparison core,
+    # named as the snake case of the operationId. ``comparison_matrix_edit.command_id`` and
+    # ``comparison_series.command_id`` reference theirs.
+    "apply_comparison_matrix_edits", "cancel_comparison_series", "finish_comparison_series",
+    "pause_comparison_series", "prepare_comparison_matrix", "resume_comparison_series",
+    "start_comparison_series", "undo_comparison_matrix_edit",
 ))
 
 #: Work that is mid-flight in a worker. Queued work is discarded with the rest; work a worker is

@@ -105,6 +105,8 @@ describe('the seam operations', () => {
       // `CMP-SEAL-C0`: the ten keyed comparison writes (ADR-0025 decision 19) sit in this list in order.
       'appendComparisonVersionOrder',
       'appendDecision',
+      // `CMP-SEAL-C1`: the eight keyed writes of the version comparison core (ADR-0025 decision 19) sit in this list in order.
+      'applyComparisonMatrixEdits',
       'approveRegistration',
       // `COMPARE-PERSISTED-SUMMARY-01`: approving a sheet pairing appends a row of the
       // comparison's history, keyed like `carryOverDecision`.
@@ -114,6 +116,7 @@ describe('the seam operations', () => {
       // the contract, so this list follows it and does not lead it.
       'archiveAnalysisPreset',
       'archiveExecutorConnection',
+      'cancelComparisonSeries',
       'cancelComparisonUpload',
       'cancelRun',
       // `W59-DECISION-CARRYOVER-01`: the carryover appends a decision, keyed like `appendDecision`.
@@ -130,15 +133,19 @@ describe('the seam operations', () => {
       'decideOptimisationProposal',
       'excludeComparisonUploadSet',
       // `COMPARE-PERSISTED-SUMMARY-01` (B2): the summary command is keyed like the other expert writes.
+      'finishComparisonSeries',
       'generateComparisonSummary',
       'generateExecutorSshKey',
       // `EXEC-PULL-01`: issuing and revoking a runner token are administrator commands, keyed like
       // the other executor writes. The runner's own four operations (claim, extend, answer, fail)
       // are not keyed: the answer is idempotent on the task, and a claim repeats by design.
       'issueRunnerToken',
+      'pauseComparisonSeries',
       'pauseComparisonUpload',
+      'prepareComparisonMatrix',
       'reauditRun',
       'requestExecutorProbe',
+      'resumeComparisonSeries',
       'resumeComparisonUpload',
       'retryComparisonUploadSet',
       'reviseAnalysisPreset',
@@ -152,8 +159,10 @@ describe('the seam operations', () => {
       'setWorkerIntake',
       'startArV3BetaGroup',
       // `W60-OPT-PROPOSALS-01`: a pass stores a pass and its proposals, keyed like a run start.
+      'startComparisonSeries',
       'startOptimisationPass',
       'startRun',
+      'undoComparisonMatrixEdit',
       'uploadComparisonUploadPart',
       'uploadDocument',
       // `W59-VERSION-UPLOAD-01`: the next version of a document is keyed like the first.

@@ -167,12 +167,72 @@ from auditmanager.comparison.profile_queue.handler import (
     page_profile_handler,
 )
 
+# `CMP-ENGINE-01`: the per-sheet comparison engine (the pair result, its cache, its mask and the `pair_result` work kind).
+from auditmanager.comparison.engine import (
+    ENGINE_ALGO_VERSION,
+    PAIR_RESULT_KIND,
+    DecodedMask,
+    MaskFormatError,
+    PairOutcome,
+    PairResultHandler,
+    PairResultRepository,
+    StoredResult,
+    compare_sheet_pair,
+    decode_mask,
+    encode_mask,
+    encode_packed_planes,
+    enqueue_pair_result,
+    pair_result_dedupe_key,
+    pair_result_handler,
+    pair_result_payload,
+)
+from auditmanager.comparison.engine.mask_codec import (
+    LAYERS as MASK_LAYERS,
+    MASK_FORMAT,
+)
+
+# `CMP-MATRIX-01`: the effective matrix of a document set (its service, its work kind, the pairs the series reads).
+from auditmanager.comparison.matrix.handler import MatrixBuildHandler, matrix_build_handler
+from auditmanager.comparison.matrix.model import PageRef as MatrixPageRef
+from auditmanager.comparison.matrix.pairs import AdjacentSheetPairs, SheetPairSpec, SplitSpec, TransitionPairs
+from auditmanager.comparison.matrix.service import (
+    MATRIX_BUILD_KIND,
+    ComparisonMatrixService,
+    EditInput as MatrixEditInput,
+    matrix_build_dedupe_key,
+    read_adjacent_sheet_pairs,
+)
+
+# `CMP-SERIES-01`: the series of adjacent transitions (its service, its three work kinds, the follow-up of a prepared set).
+from auditmanager.comparison.series import (
+    SERIES_AFTER_PREPARATION_KIND,
+    SERIES_DRIVE_KIND,
+    SERIES_PAIR_KIND,
+    ComparisonSeriesService,
+    SeriesAfterPreparationHandler,
+    SeriesDriveHandler,
+    SeriesPairHandler,
+    enqueue_series_after_preparation,
+    follow_up_dedupe_key,
+    series_after_preparation_handler,
+    series_drive_handler,
+    series_pair_handler,
+)
+
+# `CMP-VC-OVERVIEW-01`: the overview of «Проекты и этапы» and the comparison queue summary (two reads, no work kind).
+from auditmanager.comparison.overview import ComparisonOverviewService
+
 #: `CMP-WORK-01` (ADR-0025 decision 4). One tuple of handler factories, each
 #: ``Callable[[WorkDependencies], WorkHandler]``: ``build_worker_runtime`` builds one dependency
 #: bundle and applies every factory to it, and refuses to start on a duplicate ``kind``. A slice
 #: adds its handler by appending its factory here (plan section 4.0 rule 2).
 HANDLER_FACTORIES: tuple[HandlerFactory, ...] = (
     page_profile_handler,  # `CMP-PROFILE-QUEUE-01`: kind ``page_profile``
+    pair_result_handler,  # `CMP-ENGINE-01`: kind ``pair_result``
+    matrix_build_handler,  # `CMP-MATRIX-01`: kind ``matrix_build``
+    series_pair_handler,  # `CMP-SERIES-01`: kind ``series_pair``
+    series_drive_handler,  # `CMP-SERIES-01`: kind ``series_drive``
+    series_after_preparation_handler,  # `CMP-SERIES-01`: kind ``series_after_preparation``
 )
 
 #: `CMP-WORK-01`. Called inside the reclaim transaction for each attempt whose lease was lost:
@@ -216,12 +276,31 @@ from auditmanager.comparison.profile.runner import (
     SubprocessChildRunner,
 )
 from auditmanager.comparison.profile.tiles import TileRenderer
+from auditmanager.comparison.tiles.reader import PairTileReader
 
 #: The name the queue can register `build_version_page_profiles` under; its payload is
 #: ``{"version_uid": "ver_..."}`` (`CMP-PROFILE-01`). The registry belongs to `CMP-WORK-01`.
 PAGE_PROFILE_WORK_KIND = "page_profile"
 
 __all__ = [
+    "ENGINE_ALGO_VERSION",
+    "MASK_FORMAT",
+    "MASK_LAYERS",
+    "DecodedMask",
+    "MaskFormatError",
+    "PAIR_RESULT_KIND",
+    "PairOutcome",
+    "PairResultHandler",
+    "PairResultRepository",
+    "StoredResult",
+    "compare_sheet_pair",
+    "decode_mask",
+    "encode_mask",
+    "encode_packed_planes",
+    "enqueue_pair_result",
+    "pair_result_dedupe_key",
+    "pair_result_handler",
+    "pair_result_payload",
     "CANCEL_REQUESTED",
     "CallEstimate",
     "CallFailed",
@@ -368,6 +447,7 @@ __all__ = [
     "PageProfileReader",
     "PageProfileRow",
     "PageWord",
+    "PairTileReader",
     "REASON_PAGE_TOO_LARGE",
     "REASON_RENDER_FAILED",
     "StampFields",
@@ -380,4 +460,29 @@ __all__ = [
     "page_profile_dedupe_key",
     "page_profile_handler",
     "registration_dpi",
+    "AdjacentSheetPairs",
+    "ComparisonMatrixService",
+    "MATRIX_BUILD_KIND",
+    "MatrixBuildHandler",
+    "MatrixEditInput",
+    "MatrixPageRef",
+    "SheetPairSpec",
+    "SplitSpec",
+    "TransitionPairs",
+    "matrix_build_dedupe_key",
+    "matrix_build_handler",
+    "read_adjacent_sheet_pairs",
+    "ComparisonSeriesService",
+    "SERIES_AFTER_PREPARATION_KIND",
+    "SERIES_DRIVE_KIND",
+    "SERIES_PAIR_KIND",
+    "SeriesAfterPreparationHandler",
+    "SeriesDriveHandler",
+    "SeriesPairHandler",
+    "enqueue_series_after_preparation",
+    "follow_up_dedupe_key",
+    "series_after_preparation_handler",
+    "series_drive_handler",
+    "series_pair_handler",
+    "ComparisonOverviewService",
 ]

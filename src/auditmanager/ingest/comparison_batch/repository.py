@@ -33,7 +33,8 @@ _CANCELLED_SET_STATES: Final[tuple[str, ...]] = (
 
 _UPLOAD_COLUMNS = (
     "comparison_upload_id, project_uid, state, declared_files, declared_bytes, declared_pages, "
-    "part_size_bytes, pause_requested, actor_user_uid, actor_label, command_id, created_at, updated_at"
+    "part_size_bytes, pause_requested, actor_user_uid, actor_label, command_id, created_at, updated_at, "
+    "compare_after_preparation"
 )
 
 
@@ -44,6 +45,7 @@ def _upload(row: Any) -> UploadRow:
         declared_bytes=int(values[4]), declared_pages=int(values[5]), part_size_bytes=int(values[6]),
         pause_requested=bool(values[7]), actor_user_uid=values[8], actor_label=values[9],
         command_id=values[10], created_at=values[11], updated_at=values[12],
+        compare_after_preparation=bool(values[13]),
     )
 
 
@@ -187,6 +189,19 @@ class ComparisonBatchRepository:
             {"id": set_id, "mark": json.dumps({"work": dict(work)}, sort_keys=True)},
         )
 
+    def mark_set_compared(self, session: Session, set_id: str, *, work_id: str) -> None:
+        """Record that the set's comparison follow-up (`CMP-SERIES-01`: the matrix, then the series) has been put on the
+        queue: ``proposal.comparison.work`` is the item. The mark is what stops a second follow-up (the lifecycle's
+        ``advance``, the hook and the drive all ask)."""
+        session.execute(
+            text(
+                "UPDATE comparison_upload_set SET proposal = jsonb_set(proposal, '{comparison}', "
+                "CAST(:mark AS jsonb), true), updated_at = clock_timestamp() "
+                "WHERE comparison_upload_set_id = :id"
+            ),
+            {"id": set_id, "mark": json.dumps({"work": work_id}, sort_keys=True)},
+        )
+
     def record_exclusion(self, session: Session, set_id: str, *, user_uid: str) -> None:
         """Who left the set out, kept in the set's own record beside what it held."""
         session.execute(
@@ -201,6 +216,11 @@ class ComparisonBatchRepository:
 def released(set_proposal: Mapping[str, Any]) -> bool:
     """Whether the set's profiles have been put on the queue."""
     return "processing" in set_proposal
+
+
+def compared(set_proposal: Mapping[str, Any]) -> bool:
+    """Whether the set's comparison follow-up has been put on the queue."""
+    return "comparison" in set_proposal
 
 
 def confirmed_versions(set_proposal: Mapping[str, Any]) -> Sequence[str]:

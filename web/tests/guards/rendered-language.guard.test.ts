@@ -183,6 +183,7 @@ import { CONTRACT_PATH, SEAMS_PATH, readJson, readText, repoRelative, walkFiles 
 import { join } from 'node:path';
 import { REPO_ROOT } from './lib/repo';
 import { newClient, renderScreen, seedError } from '../unit/screens/harness';
+import { COMPARISON_SHAPES } from '../unit/version-compare/shapes';
 import {
   NOT_INSTALLED_PACK, installedPackFixture, withoutMember,
 } from '../unit/analysis-settings/ar-v3-beta-pack-fixtures';
@@ -1017,7 +1018,7 @@ const record = (over: Partial<DecisionRecord> = {}): DecisionRecord => ({
 
 function apiError(status: number, code: ErrorCode): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.9.0',
+    contract_version: '1.10.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1029,7 +1030,7 @@ function apiError(status: number, code: ErrorCode): ApiError {
 /** A norms refusal with the one classifier the seal registered for it (`W55A-WEB-NORMS`). */
 function normsRefusal(code: ErrorCode, details: Readonly<Record<string, string>>): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.9.0',
+    contract_version: '1.10.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1839,7 +1840,7 @@ function startRefusal(
   details?: Record<string, string | number | boolean | null>,
 ): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.9.0',
+    contract_version: '1.10.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -2035,7 +2036,7 @@ function startRunExecutorShapes(): ReactElement {
     code: ErrorCode, status: number, retryable: boolean,
     details: Readonly<Record<string, string>>, message = 'Сообщение об отказе.',
   ): ApiError => new ApiError(status, {
-    contract_version: '1.9.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
+    contract_version: '1.10.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
     retryable, details,
   }, '0f0e9d8c-7b6a-4948-b726-150413021100');
   const cannotServe = (reason: string) =>
@@ -3187,6 +3188,8 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
 const SCREENS: readonly ScreenCase[] = [
   ...DERIVED_SCREENS,
   ...EXTRA_SHAPES,
+  // `CMP-VC-UI-01`: every state of «Сравнение версий» one static pass reaches (`tests/unit/version-compare/shapes.ts`).
+  ...COMPARISON_SHAPES,
 ];
 
 /**
@@ -3506,6 +3509,36 @@ const TRANSLATED_SCHEMAS = [
   'ExecutorIdentityBasis',
   'ExecutorRateCheck',
   'ExecutorWorkKind',
+  // `CMP-VC-UI-01`: «Сравнение версий» says every status, flag, state and reason of the comparison in Russian, with the contract
+  // value in a `data-` attribute. Several are plain English words (`same`, `added`, `removed`, `manual`, `high`, `scan`,
+  // `queued`, `running`, `stale`, `failed`, `done`), which must not be permitted bare. `ComparisonLayer` and `ComparisonChannelState`
+  // are rendered by `widgets/comparison-viewer` in Russian too, with `data-layer` and `data-channel-state` (`CMP-C1-FIX-B`).
+  'ComparisonSheetStatus',
+  'ComparisonCellConfidence',
+  'ComparisonCellFlag',
+  'ComparisonCellState',
+  'ComparisonMatrixState',
+  'ComparisonMatrixStaleReason',
+  'ComparisonMatrixEditKind',
+  'ComparisonMatrixEditStatus',
+  'ComparisonMatrixEditSource',
+  'ComparisonSeriesState',
+  'ComparisonSeriesStaleReason',
+  'ComparisonTransitionState',
+  'ComparisonVerdictCode',
+  'ComparisonStepId',
+  'ComparisonStepState',
+  'ComparisonUploadState',
+  'ComparisonUploadSetState',
+  'ComparisonUploadFileState',
+  'ComparisonProposalWarning',
+  'ComparisonVersionOrderSource',
+  'ComparisonModules',
+  'ComparisonQueueModule',
+  'ComparisonPermitState',
+  'ComparisonPartRole',
+  'ComparisonLayer',
+  'ComparisonChannelState',
 ] as const;
 
 function translatedVocabulary(): ReadonlySet<string> {
@@ -3621,7 +3654,9 @@ describe('the guard can tell an English label from a legitimate Latin string', (
     expect(unexplainedLatin('0f0e9d8c-7b6a-4948-b726-150413021100', VOCABULARY)).toEqual([]);
     // `W55B-WEB-BLOCKS`: the text-line block id in the contract's own shape, and only in it.
     expect(unexplainedLatin('b_000003', VOCABULARY)).toEqual([]);
-    expect(unexplainedLatin('блок b_12', VOCABULARY)).toEqual(['b']);
+    // `CMP-SEAL-C1` published `a` and `b` as the pages of `ComparisonPairTileMode`, so a stray `b` is a contract word
+    // now; the control keeps its meaning with a letter the contract does not use.
+    expect(unexplainedLatin('блок z_12', VOCABULARY)).toEqual(['z']);
   });
 
   it('reads every upload rule and every upload refusal as Russian prose (W55B-INGEST-01)', () => {
@@ -3644,7 +3679,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           422,
           {
-            contract_version: '1.9.0',
+            contract_version: '1.10.0',
             error_code: 'validation_failed',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -3666,7 +3701,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           503,
           {
-            contract_version: '1.9.0',
+            contract_version: '1.10.0',
             error_code: 'dependency_unavailable',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -3705,6 +3740,8 @@ describe('the guard can tell an English label from a legitimate Latin string', (
     // back in English. Silence from a guard is read as coverage, so a guard that cannot see
     // the class it was built for is worse than none.
     expect(unexplainedLatin('published', VOCABULARY)).toEqual(['published']);
+    // `CMP-SEAL-C1` published `manual` as a member of `ComparisonCellConfidence`; `CMP-VC-UI-01` renders that schema in the matrix
+    // and registered it above with its marker, so `manual` is a translated word again and the compound reddens in all three parts.
     expect(unexplainedLatin('needs_manual_review', VOCABULARY)).toEqual(['needs', 'manual', 'review']);
     expect(unexplainedLatin('→ accepted', VOCABULARY)).toEqual(['accepted']);
     expect(unexplainedLatin('internal_contradiction', VOCABULARY)).toEqual(['internal', 'contradiction']);
@@ -3733,7 +3770,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
     // were split into words, `review` alone would pass -- and a screen saying `review`
     // would stop being an offence.
     expect(unexplainedLatin('review', VOCABULARY)).toEqual(['review']);
-    expect(unexplainedLatin('manual', VOCABULARY)).toEqual(['manual']);
+    expect(unexplainedLatin('needs', VOCABULARY)).toEqual(['needs']);
     expect(unexplainedLatin('analysis', VOCABULARY)).toEqual(['analysis']);
   });
 });
@@ -3981,6 +4018,136 @@ const SCHEMA_MARKERS: readonly {
     schema: 'ExecutorWorkKind',
     attribute: 'data-executor-route',
     why: "`widgets/executor-routes/ui/executor-routes.tsx`, the summary of the route for one kind of model work, «Анализ текста».",
+  },
+  {
+    schema: 'ComparisonSheetStatus',
+    attribute: 'data-sheet-status',
+    why: '`widgets/version-series/ui/sheet-matrix.tsx`, the status badge of a matrix row once its pair in the chosen transition is compared.',
+  },
+  {
+    schema: 'ComparisonCellConfidence',
+    attribute: 'data-cell-confidence',
+    why: "`widgets/version-series/ui/matrix-cell.tsx`, a matched thumbnail: how the sheet was linked, said by the mark on it (?, ▤ группа, ✎, ИИ).",
+  },
+  {
+    schema: 'ComparisonCellFlag',
+    attribute: 'data-cell-flag',
+    why: '`widgets/version-series/ui/matrix-cell.tsx`, the flags of a matched thumbnail: ⧉ дубль, скан, ◫ and ⇉ for a split sheet, ↷ for a link across a missing version.',
+  },
+  {
+    schema: 'ComparisonCellState',
+    attribute: 'data-cell-state',
+    why: '`widgets/version-series/ui/matrix-cell.tsx`, every cell of the matrix: a thumbnail, «⁇ не сопоставлен» with its candidates, or «∅ нет в версии».',
+  },
+  {
+    schema: 'ComparisonMatrixState',
+    attribute: 'data-matrix-state',
+    why: "`widgets/version-series/ui/sheets-tab.tsx`, the root of the tab «Сравнение листов»; the banner above the matrix says the same in words when the matrix is not ready.",
+  },
+  {
+    schema: 'ComparisonMatrixStaleReason',
+    attribute: 'data-matrix-stale-reason',
+    why: "`widgets/version-series/ui/matrix-state.tsx`, why a stale matrix is stale: the order changed, or the pages and the rules did.",
+  },
+  {
+    schema: 'ComparisonMatrixEditKind',
+    attribute: 'data-edit-kind',
+    why: '`widgets/version-series/ui/draft-panel.tsx`, one line of the history of the matrix edits, and of the edits that no longer apply.',
+  },
+  {
+    schema: 'ComparisonMatrixEditStatus',
+    attribute: 'data-edit-status',
+    why: '`widgets/version-series/ui/draft-panel.tsx`, whether a saved edit applies, was undone, or lost its cells after a reorder.',
+  },
+  {
+    schema: 'ComparisonMatrixEditSource',
+    attribute: 'data-edit-source',
+    why: '`widgets/version-series/ui/draft-panel.tsx`, whether an edit is an expert\'s or was moved from an approved pair of the old screen.',
+  },
+  {
+    schema: 'ComparisonSeriesState',
+    attribute: 'data-series-state',
+    why: '`widgets/version-series/ui/transition-summary.tsx`, the state of the series of adjacent transitions above its table.',
+  },
+  {
+    schema: 'ComparisonSeriesStaleReason',
+    attribute: 'data-series-stale-reason',
+    why: '`widgets/version-series/ui/transition-summary.tsx`, why the stored summary is «для прежнего порядка версий».',
+  },
+  {
+    schema: 'ComparisonTransitionState',
+    attribute: 'data-transition-state',
+    why: '`widgets/version-series/ui/transition-summary.tsx`, one row per adjacent transition, its progress and whether it can be opened.',
+  },
+  {
+    schema: 'ComparisonVerdictCode',
+    attribute: 'data-verdict-code',
+    why: '`widgets/version-series/ui/transition-summary.tsx`, each part of the verdict sentence of a transition.',
+  },
+  {
+    schema: 'ComparisonStepId',
+    attribute: 'data-next-step',
+    why: '`widgets/version-series/ui/projects-and-stages.tsx`, the chip «Далее: …» of a document set names the step it proposes.',
+  },
+  {
+    schema: 'ComparisonStepState',
+    attribute: 'data-step-state',
+    why: '`widgets/version-series/ui/projects-and-stages.tsx`, every cell of the steps 1, 2, 3 and 5 of the table, said in the original\'s word.',
+  },
+  {
+    schema: 'ComparisonUploadState',
+    attribute: 'data-upload-state',
+    why: '`widgets/comparison-upload/ui/upload-dialog.tsx`, the state of the batch in the dialog and in the list of unfinished uploads; the strip of «Проекты и этапы» says it too.',
+  },
+  {
+    schema: 'ComparisonUploadSetState',
+    attribute: 'data-set-status',
+    why: '`widgets/comparison-upload/ui/set-editor.tsx`, the status label of each proposed set: Загрузка, Разбор PDF, Требуется проверка and the rest.',
+  },
+  {
+    schema: 'ComparisonUploadFileState',
+    attribute: 'data-file-state',
+    why: '`widgets/comparison-upload/ui/upload-dialog.tsx`, one row per file of the batch with its state and, while it is sent, its progress.',
+  },
+  {
+    schema: 'ComparisonProposalWarning',
+    attribute: 'data-proposal-warning',
+    why: '`widgets/comparison-upload/ui/set-editor.tsx`, the warnings of a proposed set (⚠), each in a sentence.',
+  },
+  {
+    schema: 'ComparisonVersionOrderSource',
+    attribute: 'data-order-source',
+    why: '`widgets/version-series/ui/version-order-dialog.tsx`, where the order in force came from: the stamps, or an expert.',
+  },
+  {
+    schema: 'ComparisonModules',
+    attribute: 'data-comparison-modules',
+    why: '`widgets/execution-queue/ui/comparison-queue-block.tsx`, the root of the block «Сравнение» of «Очередь», with the module set beside the sentence that says it.',
+  },
+  {
+    schema: 'ComparisonPermitState',
+    attribute: 'data-permit-state',
+    why: "`widgets/version-series/ui/sheet-matrix.tsx`, the row head of a compared pair: «Заявлено проектировщиком в разрешении» and how each declared change fared.",
+  },
+  {
+    schema: 'ComparisonPartRole',
+    attribute: 'data-part-role',
+    why: "`widgets/version-series/ui/sheet-matrix.tsx`, the row head of a pair of a sheet split across versions: the whole sheet, or one part of it, and how much of the older sheet the parts cover.",
+  },
+  {
+    schema: 'ComparisonQueueModule',
+    attribute: 'data-queue-module',
+    why: '`widgets/execution-queue/ui/comparison-queue-block.tsx`, the module a kind of queued work belongs to, in the table of kinds.',
+  },
+  {
+    schema: 'ComparisonLayer',
+    attribute: 'data-layer',
+    why: '`widgets/comparison-viewer/ui/comparison-viewer-view.tsx`, the toggle of each of the eight layers of the overlay, said in Russian (Основное, Светлые элементы, Шум…).',
+  },
+  {
+    schema: 'ComparisonChannelState',
+    attribute: 'data-channel-state',
+    why: '`widgets/comparison-viewer/ui/evidence-panels.tsx`, the chip of each channel of the comparison: проверено, не проверено or не применимо, with the count or the reason.',
   },
 ];
 

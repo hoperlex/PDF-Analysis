@@ -96,6 +96,11 @@ IMMUTABLE_TABLES = {
     # `0038_comparison_foundation`: an order revision of a document set is appended once and never
     # changed; the current order is a query.
     "comparison_version_order",
+    # `0039_comparison_core`: a build of the matrix, an edit event and an accepted AI link are appended once and
+    # never changed; the effective matrix is a read model over them.
+    "comparison_matrix",
+    "comparison_matrix_edit",
+    "comparison_ai_link",
 }
 
 
@@ -392,6 +397,27 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "preview_blob_id": "blob",
         "thumbnail_blob_id": "blob",
         "executor_task_id": "ext",
+        # `CMP-SEAL-C1`, migration 0039 (ADR-0025 decisions 2, 3, 14, 15, 21): the identities of the version
+        # comparison core and the columns that hold them -- a build of the matrix, an edit, an accepted AI link, a
+        # series, a transition, a sheet pair and its content-keyed result, the edit an undo reverses, the version
+        # order a build or an edit is bound to, the series a queue item belongs to and the series a series restarts.
+        "comparison_matrix_id": "cmx",
+        "comparison_matrix_edit_id": "cme",
+        "undoes_edit_id": "cme",
+        "comparison_ai_link_id": "cak",
+        "comparison_series_id": "cser",
+        "restarted_from_series_id": "cser",
+        "comparison_transition_id": "ctn",
+        "comparison_sheet_pair_id": "ctp",
+        "comparison_sheet_pair_result_id": "csp",
+        "result_id": "csp",
+        "order_id": "cvo",
+        "page_version_uid": "ver",
+        "other_version_uid": "ver",
+        "absent_version_uid": "ver",
+        "page_a_profile_id": "cpr",
+        "page_b_profile_id": "cpr",
+        "mask_blob_id": "blob",
     }
     assert set(prefix_by_column.values()) <= {
         identity.prefix for identity in IDENTITY_TYPES_BY_ENTITY.values()

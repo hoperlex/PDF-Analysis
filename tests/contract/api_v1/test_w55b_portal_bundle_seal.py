@@ -187,8 +187,8 @@ def test_portal_block_id_is_an_external_identifier_and_not_one_of_the_identities
     # W57a adds nrs_ beside the external blk_; W61-DISPATCHER-01 asg_; W60-PRICE-LIST-01 prl_,
     # prp_ and vnl_; W60-OPT-PROPOSALS-01 opp_, opr_ and opd_; EXEC-SEAL-01 exc_, excr_, exs_,
     # epb_ and ert_; EXEC-PULL-01 ern_ and ext_; CMP-SEAL-C0 cbt_, cus_, cuf_, cvo_, cpr_, cq_, cqa_
-    # and cmc_.
-    assert len(IDENTIFIERS["identifiers"]) == 56
+    # and cmc_; CMP-SEAL-C1 cmx_, cme_, cak_, cser_, ctn_, ctp_ and csp_.
+    assert len(IDENTIFIERS["identifiers"]) == 63
 
 
 # --- the error catalog --------------------------------------------------------------------

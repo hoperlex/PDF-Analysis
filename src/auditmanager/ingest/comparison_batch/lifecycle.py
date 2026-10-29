@@ -41,10 +41,12 @@ from auditmanager.comparison.public import (
     MODULE_VERSIONS,
     ComparisonWorkRepository,
     Enqueued,
+    enqueue_series_after_preparation,
     enqueue_version_page_profiles,
 )
 from auditmanager.ingest.comparison_batch.repository import (
     ComparisonBatchRepository,
+    compared,
     confirmed_versions,
     released,
 )
@@ -134,6 +136,42 @@ class BatchLifecycle:
         ]
         return sorted(rows, key=lambda row: (row.confirmed_at, row.set_id))
 
+    def prepared_sets(self, session: Session, upload_id: str) -> list[SetRow]:
+        """The ``done`` sets that were released and whose comparison follow-up is not on the queue, in the order they were
+        confirmed (`CMP-SERIES-01`)."""
+        rows = [
+            row for row in self._uploads.list_sets(session, upload_id)
+            if row.state == "done" and released(row.proposal) and not compared(row.proposal)
+        ]
+        return sorted(rows, key=lambda row: (row.confirmed_at, row.set_id))
+
+    def queue_comparison(self, session: Session, upload: UploadRow, row: SetRow) -> None:
+        """«После подготовки сравнить все соседние версии»: put the matrix preparation and then the series of the set's
+        document on the queue, once (the mark on the set is written in the same transaction). The follow-up is an item of
+        the batch -- a cancel reaches it, and the batch does not complete or release the next set while it waits -- and it
+        is the act of the person who declared the batch. Reached through ``comparison.public`` names only."""
+        if not upload.compare_after_preparation or row.document_uid is None or compared(row.proposal):
+            return
+        enqueued = enqueue_series_after_preparation(
+            session,
+            project_uid=upload.project_uid,
+            document_uid=row.document_uid,
+            set_id=row.set_id,
+            comparison_upload_id=upload.upload_id,
+            created_by_user_uid=row.confirmed_by_user_uid or upload.actor_user_uid,
+            actor_label=upload.actor_label,
+        )
+        self._batches.mark_set_compared(session, row.set_id, work_id=enqueued.work_id)
+
+    def release_remaining(self, session: Session, upload: UploadRow) -> None:
+        """A batch that is already ``completed`` has nothing more to wait for: every set not yet released is released, in
+        order, and every released set that asked for a comparison gets its follow-up (the follow-up waits for the
+        preparation by itself)."""
+        for pending in self.pending_sets(session, upload.upload_id):
+            self.release_set(session, upload, pending)
+        for prepared in self.prepared_sets(session, upload.upload_id):
+            self.queue_comparison(session, upload, prepared)
+
     def promote_if_confirmed(self, session: Session, upload: UploadRow) -> UploadRow:
         """A ``proposed`` batch that holds a ``done`` set is being processed: move it there (and give it its drive).
 
@@ -173,6 +211,12 @@ class BatchLifecycle:
         """Look at a ``processing`` batch (the caller holds its row lock): release the next set if none is in
         flight, complete the batch if nothing is left, else wait."""
         live = self.live_items(session, upload.upload_id)
+        if live == 0 and upload.compare_after_preparation:
+            # Nothing of the batch is in flight, so every released set has been prepared: queue its comparison
+            # (`CMP-SERIES-01`). The follow-up is an item of the batch, so the next set waits for it.
+            for prepared in self.prepared_sets(session, upload.upload_id):
+                self.queue_comparison(session, upload, prepared)
+            live = self.live_items(session, upload.upload_id)
         pending = self.pending_sets(session, upload.upload_id)
         if live == 0 and pending:
             self.release_set(session, upload, pending[0])
@@ -212,8 +256,7 @@ class BatchLifecycle:
             if state == "processing":
                 self.advance(session, upload)
         elif state == "completed":
-            for pending in self.pending_sets(session, upload_id):
-                self.release_set(session, upload, pending)
+            self.release_remaining(session, upload)
 
     # -- cancel ----------------------------------------------------------------------------------------
 
@@ -254,8 +297,7 @@ class BatchLifecycle:
         if upload.state == "completed":
             # ``CMP-INGEST-01`` completes a batch with its last confirmation; a set whose hook never ran is released
             # now, in order, and then the drive has nothing left to watch.
-            for pending in self.pending_sets(session, upload_id):
-                self.release_set(session, upload, pending)
+            self.release_remaining(session, upload)
             return Drive(done=True)
         upload = self.promote_if_confirmed(session, upload)
         if upload.state == "uploading":

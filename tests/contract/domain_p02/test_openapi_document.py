@@ -222,6 +222,27 @@ REQUIRED_OPERATIONS = {
     "streamVersionPagePreview",
     "streamVersionPageThumbnail",
     "streamVersionPageTile",
+    # `CMP-SEAL-C1` (ADR-0025). The version comparison core: the effective matrix and its edits, the series
+    # of adjacent transitions with their sheet pairs and pair tiles, and the overview and queue reads, sealed
+    # as stubs. Reads are any one role; every write is an expert's act and keyed.
+    "getComparisonMatrix",
+    "prepareComparisonMatrix",
+    "listComparisonMatrixEdits",
+    "applyComparisonMatrixEdits",
+    "undoComparisonMatrixEdit",
+    "listComparisonAiLinks",
+    "startComparisonSeries",
+    "listComparisonSeries",
+    "getComparisonSeries",
+    "pauseComparisonSeries",
+    "resumeComparisonSeries",
+    "cancelComparisonSeries",
+    "finishComparisonSeries",
+    "listComparisonSheetPairs",
+    "getComparisonSheetPair",
+    "streamComparisonPairTile",
+    "getComparisonOverview",
+    "getComparisonQueueSummary",
     # `EXEC-PULL-01` (R-143). The pull channel: an administrator issues and revokes a runner
     # token (shown once), and a runner calls four operations with one.
     "issueRunnerToken",
@@ -310,6 +331,15 @@ WRITE_OPERATIONS = {
     "resumeComparisonUpload",
     "cancelComparisonUpload",
     "appendComparisonVersionOrder",
+    # `CMP-SEAL-C1`. Every write of the version comparison core is keyed (ADR-0025 decision 19).
+    "prepareComparisonMatrix",
+    "applyComparisonMatrixEdits",
+    "undoComparisonMatrixEdit",
+    "startComparisonSeries",
+    "pauseComparisonSeries",
+    "resumeComparisonSeries",
+    "cancelComparisonSeries",
+    "finishComparisonSeries",
     # `EXEC-PULL-01`. The two administrator operations on runner tokens are keyed. The four a
     # runner calls are not: each is idempotent on the task's identity (a repeat of an accepted
     # answer is accepted, a different one is a conflict).
@@ -659,9 +689,10 @@ INPUT_LESS_OPERATIONS: frozenset[str] = frozenset(
     # `AR-V3-BETA-PACK-STATUS-API-01` adds ``getArV3BetaPackStatus``: it reads the server's own
     # installed pack and addresses no identity.
     # `ANALYSIS-PRESETS-01` adds ``listAnalysisPresets``: the list takes no input.
+    # `CMP-SEAL-C1` adds ``getComparisonQueueSummary``: the installation's comparison queue addresses no identity.
     {"getDashboardSummary", "getMe", "getProductVersion", "listReleases", "listAnalysisProfiles",
      "listExecutorConnections", "listExecutorRoutes", "getArV3BetaPackStatus",
-     "listAnalysisPresets"}
+     "listAnalysisPresets", "getComparisonQueueSummary"}
 )
 
 

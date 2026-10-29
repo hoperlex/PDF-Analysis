@@ -36,6 +36,7 @@ from auditmanager.comparison.public import (
     ComparisonWorkRepository,
     ComparisonWorkRunner,
     HandlerRegistry,
+    TileRenderer,
     WorkDependencies,
     WorkQueueError,
     enabled_modules as enabled_comparison_modules,
@@ -63,6 +64,10 @@ from auditmanager.bootstrap.adapters import (
     RegistrationAdapter,
     ReleasesAdapter,
     ComparisonUploadAdapter,
+    ComparisonMatrixAdapter,
+    ComparisonOverviewAdapter,
+    ComparisonPairTileAdapter,
+    ComparisonSeriesAdapter,
     ComparisonVersionOrderAdapter,
     VersionPageAdapter,
     RunAdapter,
@@ -449,6 +454,10 @@ def build_application(
     if isinstance(carrier, DurableCarrier):
         carrier.configure_runner(run_adapter._job)
 
+    # `CMP-C1-FIX-A` item 5: one tile renderer for the API process, shared by the page tiles and the pair tiles, so that the
+    # children it starts are bounded by its slots (``TILE_SLOTS``) and not by two renderers' worth.
+    tile_renderer = TileRenderer()
+
     router = build_router(
         projects=ProjectAdapter(ingest),
         documents=DocumentAdapter(ingest),
@@ -491,7 +500,14 @@ def build_application(
         comparison_version_orders=ComparisonVersionOrderAdapter(
             sessions, service=ComparisonVersionOrderService(session_factory=sessions)
         ),
-        version_pages=VersionPageAdapter(sessions, blob_store=store),
+        version_pages=VersionPageAdapter(sessions, blob_store=store, tiles=tile_renderer),
+        # `CMP-SEAL-C1`. The version comparison core, sealed as stubs answering `503
+        # dependency_unavailable` until `CMP-MATRIX-01`, `CMP-SERIES-01`, `CMP-VIEWER-01` and
+        # `CMP-VC-OVERVIEW-01` replace the four adapters (plan section 4.0 rule 1).
+        comparison_matrices=ComparisonMatrixAdapter(sessions, blob_store=store),
+        comparison_series=ComparisonSeriesAdapter(sessions, blob_store=store),
+        comparison_pair_tiles=ComparisonPairTileAdapter(sessions, blob_store=store, tiles=tile_renderer),
+        comparison_overview=ComparisonOverviewAdapter(sessions, modules=comparison_modules),
         execution=ExecutionAdapter(sessions, runs=run_adapter),
         # `W55A-SEAL-01` sealed them; `W55A-SEARCH-01` serves them. The norms reads and the
         # designation over the same session factory, every search under the operator's
@@ -518,6 +534,9 @@ def build_application(
             # mode, and the meter is the run ceiling; no live implementation is wired (`R-29`).
             summary_model=summary_model_for(resolved.provider_mode),
             cost_ceiling_usd=resolved.run_cost_ceiling_usd,
+            # `CMP-SEAL-C1` (ADR-0025 decision 13): the module set, so the three `0035` operations are
+            # withdrawn while the versions module is on.
+            comparison_modules=comparison_modules,
         ),
         # `W59-ANALYSIS-SETTINGS-01`. The same registry run start routes through, listed
         # read-only for «Настройки анализа», named from the reviewed section catalogue.

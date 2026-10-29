@@ -551,3 +551,32 @@ values this ADR marked «revisable by CMP-MEASURE-01»:
    `PAGE_ELEMENTS_MAX` = 400 000) would refuse the measured real set (one page has 536 426 elements). Comparison-only
    admission uses a comparison envelope policy whose per-page element limit is set from this measurement (the
    comparison path renders and extracts only in ceilinged children); the portal-bundle envelope is unchanged.
+
+## Addendum 2026-10-28 — identity prefixes added by CMP-SEAL-C1
+
+`ctn_` (a transition of a series) and `ctp_` (a sheet pair of a transition) join the prefixes of decision 2; the
+catalogue now holds 63 prefixes. ADR-0025 decision 7's wording «FOR SHARE on project» is replaced by what CMP-WORK-01
+proved necessary: the application role cannot lock a `project` row (no UPDATE), so the queue relies on item and attempt
+row locks plus `ON DELETE RESTRICT` on `fk_comparison_work_project`.
+
+## Addendum 2026-10-29 — values from CMP-MEASURE-01 (the whole deterministic chain on the real set)
+
+Measured by `CMP-MEASURE-01` (`docs/program/compare/MEASURE-ENGINE-01.md`, tool `tools/measure/comparison_chain.py`,
+tree `47f8da2d` = `cmp-engine/3`, `cmp-profile/3`; one real ЭМ set of four versions, 85 pages, A4…2A0; one worker
+slot; host load 2.7–4.9; behind a test-side shim for the source-role defect that `CMP-C1-FIX-C` fixes).
+
+1. **Decision 8 ceilings stay.** Worst children: render VmPeak 482.0 MiB of 768 (63 %), extraction 728.4 MiB of 1024
+   (71 %; a 768 MiB extraction ceiling would pass by only 39.6 MiB, so 1024 stays), engine 568.6 MiB of 768 (74 %),
+   tile 81 MiB of 768, upload reader 92.7 MiB; CPU and wall at most 14.0 s of 300 / 600 s.
+2. **Decision 9 caps stay.** The largest working raster was 39.59 Mpx of 40 (none refused); elements 536 426 of
+   1 000 000; the set stored 96.1 MB (1.1 % of 8 GiB). The per-project estimate of decision 9 is replaced by measured
+   per-page figures: 1.29 MB per page on average (0.83 MB vector, 3.6 MB scanned A4), masks 0.33 MB per masked pair;
+   1 200 pages of this mix ≈ 2.2 GB (26 % of 8 GiB); an all-scan set of 1 200 pages ≈ 4.3 GB is the case nearest the cap.
+3. **Throughput for decision 6 (one slot):** 1 333 pages per hour profiled, 658 engine pairs per hour, 1 248 pair
+   results per hour including the byte-identical fast path; a 4-version 85-page chain took 400 s wall.
+4. **The worker's own footprint is not bounded by a child ceiling** and is recorded here: 179 MiB idle, 310 MiB during a
+   matrix build (which runs in the worker, accepted for the beta: `CMP-WAVE-C1.md` §5 and the wave report), 363 MiB
+   preparing pairs, 284 MiB resident afterwards; worker plus the extraction child 912 MiB at one instant; with the API
+   process (315 MiB) ≈ 1.2 GiB of the production host's 4 GiB before PostgreSQL and MinIO.
+5. **A page-profile item is a whole version** (38.7–64.9 s here); against the 900 s attempt watchdog a 500-page version
+   would need two of its three attempts at the measured rate. `CMP-C1-FIX-C` bounds the work of one item.

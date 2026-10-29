@@ -12,6 +12,7 @@ no render slot was free, is ``503 dependency_unavailable``.
 
 from __future__ import annotations
 
+import hashlib
 from typing import Annotated, Final
 
 from fastapi import APIRouter, Path, Query
@@ -26,7 +27,13 @@ from auditmanager.api.routers.ports import VersionPagePort
 from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
 from auditmanager.api.schemas import models
 
-__all__ = ["MAX_TILE_INDEX", "MAX_TILE_LEVEL", "build_version_page_routes"]
+__all__ = [
+    "MAX_TILE_INDEX",
+    "MAX_TILE_LEVEL",
+    "TILE_CACHE_CONTROL",
+    "build_version_page_routes",
+    "tile_response",
+]
 
 _PNG: Final[str] = "image/png"
 _TAGS: Final[list[str]] = ["comparison"]
@@ -36,6 +43,36 @@ MAX_TILE_INDEX: Final[int] = 4095
 
 _ProfileId = Annotated[models.ComparisonPageProfileId, Path()]
 _PNG_CONTENT = {_PNG: {"schema": {"type": "string", "format": "binary"}}}
+
+#: `CMP-C1-FIX-A` item 4 (`CMP-VIEWER-01` section 12 item 1). A tile of a page and a tile of a pair are immutable for their
+#: inputs -- a page profile is a frozen row, a sheet pair that has an overlay is `done` and its result never changes -- so a
+#: browser may keep one for the hour: the original sends the same (`private, max-age=3600`). `private`: the tile is a page of
+#: a client's drawing, never for a shared cache.
+TILE_CACHE_CONTROL: Final[str] = "private, max-age=3600"
+#: Change this when the pixels of a tile change for the same inputs (the renderer, the palette of the overlay): the entity tag
+#: of every tile changes with it.
+_TILE_EPOCH: Final[str] = "1"
+
+
+def tile_response(content: bytes, *identity: object) -> WireResponse:
+    """A tile PNG with the headers of an immutable tile (`CMP-C1-FIX-A` item 4).
+
+    ``identity`` is what names the bytes: the kind of tile, the id of the page profile or of the sheet pair, and the tile
+    parameters. The entity tag is a hash of it, **weak** (``W/``): it says the tile is the same picture, not the same bytes
+    (the renderer of a later release may encode otherwise). The contract of these operations declares no ``304`` and no
+    ``If-None-Match``, so none is answered: the browser's copy is kept by ``Cache-Control`` and the tag only names it."""
+    token = "\0".join(("cmp-tile", _TILE_EPOCH, *(str(part) for part in identity)))
+    tag = 'W/"' + hashlib.sha256(token.encode("utf-8")).hexdigest()[:32] + '"'
+    return WireResponse(
+        200,
+        (
+            ("Content-Type", _PNG),
+            ("Content-Length", str(len(content))),
+            ("ETag", tag),
+            ("Cache-Control", TILE_CACHE_CONTROL),
+        ),
+        content,
+    )
 
 
 def _png(content: bytes) -> WireResponse:
@@ -105,8 +142,7 @@ def build_version_page_routes(router: APIRouter, pages: VersionPagePort) -> None
         column: Annotated[int, Query(ge=0, le=MAX_TILE_INDEX)],
         row: Annotated[int, Query(ge=0, le=MAX_TILE_INDEX)],
     ) -> WireResponse:
-        return _png(
-            pages.read_tile(
-                page_profile_id=comparison_page_profile_id, level=level, column=column, row=row
-            )
+        content = pages.read_tile(
+            page_profile_id=comparison_page_profile_id, level=level, column=column, row=row
         )
+        return tile_response(content, "page", comparison_page_profile_id, level, column, row)
