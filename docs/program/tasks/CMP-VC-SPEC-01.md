@@ -102,6 +102,7 @@ order-independently (`comparison_spec_comparison`, methods «полное сра
 - `tests/integration/comparison/specification/**`
 - `tests/unit/comparison/engine/test_against_the_answer_keys.py`
 - `tests/unit/comparison/engine/test_handler_unit.py`
+- `tests/unit/comparison/engine/test_key_and_outcome.py`
 - `tests/unit/comparison/engine/test_spec_positions_channel.py`
 - `tests/unit/comparison/work/test_composition_unit.py`
 - `tests/integration/composition/test_router_answers.py`
