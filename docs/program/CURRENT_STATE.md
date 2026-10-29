@@ -30,8 +30,7 @@ A graphical-analysis stage still needs W56b prompt and evidence policy before is
 
 ## Normative corpus (W54)
 
-The 674-document, 31,619-file source drop has complete file checksums and a
-restore-verified base dump with 348,777 paragraphs and 55,702 chunks
+The 674-document, 31,619-file source drop has complete file checksums and a restore-verified base dump with 348,777 paragraphs and 55,702 chunks
 (`W54-CORPUS-OPERATE-01`, `W54-CORPUS-PROMOTION-01`).
 
 Under `R-137`, 121 blocks containing the recognition model's own reasoning were re-read by Sonnet subagents of a Claude Code session. Their answers passed the unchanged two-read rule; the ignored ledger has 121 applied repairs, 0 unreliable blocks and no charge, and the real drop's ledger validation accepted it.
