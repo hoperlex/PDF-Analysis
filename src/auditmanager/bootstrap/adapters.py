@@ -6133,25 +6133,53 @@ class ComparisonSpecificationAdapter(_VersionsModuleGate):
 
     def __init__(
         self, session_factory: sessionmaker[Session] | None = None, *, blob_store: Any = None,
-        comparison_modules: str = "none", reader: Any = None,
+        comparison_modules: str = "none", reader: Any = None, provider_mode: str = "live",
     ) -> None:
         super().__init__(comparison_modules=comparison_modules)
-        service = None
+        service = jobs = None
         if session_factory is not None:
-            from auditmanager.comparison.public import SpecificationReader, SpecificationService
+            from auditmanager.comparison.public import (
+                ComparisonAiJobService,
+                SpecificationReader,
+                SpecificationService,
+                SpecMethod,
+            )
 
             reader = reader or SpecificationReader(session_factory, blob_store)
             service = SpecificationService(session_factory, blob_store, reader=reader)
+            jobs = ComparisonAiJobService(
+                session_factory, methods=[SpecMethod(session_factory, blob_store, reader=reader)],
+                comparison_modules=comparison_modules, provider_mode=provider_mode)
         self._reader = reader
         self._service = service
+        self._jobs = jobs
+        self._sessions = session_factory
+
+    def _command(self, command_type: str, user_uid: str, idempotency_key: str) -> Any:
+        from auditmanager.comparison.public import AiJobCommand
+
+        with self._sessions() as session:
+            _label, roles = _comparison_actor(session, user_uid)
+        return AiJobCommand(command_type=command_type, idempotency_key=idempotency_key, user_uid=user_uid, actor_roles=roles)
 
     def cancel_specification(self, *, job_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonAiJob:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        if self._jobs is None:
+            return _comparison_unavailable(self._DEPENDENCY)
+        view = self._jobs.cancel(
+            job_id=job_id, method="spec", command=self._command("cancel_comparison_specification", user_uid, idempotency_key))
+        self._service.close_cancelled(job_id)
+        return models.ComparisonAiJob.model_validate(view.as_dict())
 
     def estimate_specification(self, *, transition_id: str) -> models.ComparisonAiEstimate:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        if self._jobs is None:
+            return _comparison_unavailable(self._DEPENDENCY)
+        from auditmanager.comparison.specification.method import spec_scope
+
+        scope = self._service.scope_of(transition_id)
+        return models.ComparisonAiEstimate.model_validate(
+            self._jobs.estimate(spec_scope(scope.project_uid, scope.document_uid, transition_id)).as_dict())
 
     def get_page_positions(self, *, page_profile_id: str) -> models.ComparisonSpecPage:
         self._require_versions_module()
@@ -6208,7 +6236,17 @@ class ComparisonSpecificationAdapter(_VersionsModuleGate):
         self, *, transition_id: str, consent: models.ComparisonAiConsent, user_uid: str, idempotency_key: str
     ) -> models.ComparisonAiJob:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        if self._jobs is None:
+            return _comparison_unavailable(self._DEPENDENCY)
+        from auditmanager.comparison.public import AiConsentInput
+        from auditmanager.comparison.specification.method import spec_scope
+
+        scope = self._service.scope_of(transition_id)
+        view = self._jobs.start(
+            scope=spec_scope(scope.project_uid, scope.document_uid, transition_id),
+            consent=AiConsentInput(estimate_digest=consent.estimate_digest, confirmed=consent.confirmed),
+            command=self._command("start_comparison_specification", user_uid, idempotency_key))
+        return models.ComparisonAiJob.model_validate(view.as_dict())
 
 
 class ComparisonLaunchQueueAdapter(_VersionsModuleGate):

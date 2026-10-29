@@ -352,3 +352,79 @@ def job_for(sessions: sessionmaker[Session]):
         return job
 
     return make
+
+
+# -- part B on the AI-job core: a route, a service, a runner of the lane's handler --------------------------------------------
+
+@pytest.fixture
+def route(sessions: sessionmaker[Session]) -> dict[str, str]:
+    """An executor connection with a current revision, **routed** to the work kind ``comparison_spec`` in «Назначения» (the append-only
+    route event is written; the latest wins). Nothing here can reach a provider."""
+    connection, revision, event = (f"{p}_{new_ulid()}" for p in ("exc", "excr", "ert"))
+    with session_scope(sessions) as session:
+        session.execute(text("INSERT INTO executor_connection (connection_id, kind, display_name, created_by) VALUES (:id, 'http_api', 'recorded', :a)"),
+                        {"id": connection, "a": ACTOR})
+        session.execute(text(
+            "INSERT INTO executor_connection_revision (revision_id, connection_id, revision_no, created_by, pin_id, gateway_model, billing, "
+            "allow_client_documents, timeout_seconds, api_flavour, base_url, transport) VALUES (:r, :c, 1, :a, 'claude-opus-5', "
+            "'anthropic/claude-opus-5', 'metered', false, 60, 'openai_chat', 'https://recorded.test', 'direct')"),
+            {"r": revision, "c": connection, "a": ACTOR})
+        session.execute(text(
+            "INSERT INTO executor_route_event (route_event_id, work_kind, route_no, primary_connection_id, set_by) "
+            "SELECT :e, 'comparison_spec', COALESCE(MAX(route_no), 0) + 1, :c, :a FROM executor_route_event WHERE work_kind = 'comparison_spec'"),
+            {"e": event, "c": connection, "a": ACTOR})
+    return {"connection": connection, "revision": revision}
+
+
+@pytest.fixture
+def jobs(sessions: sessionmaker[Session], blob_store: Any):
+    """The core's service with the lane's method, in a recorded process."""
+    from auditmanager.comparison.public import ComparisonAiJobService, SpecMethod
+
+    return ComparisonAiJobService(
+        sessions, methods=[SpecMethod(sessions, blob_store)], comparison_modules="versions", provider_mode="recorded")
+
+
+@pytest.fixture(scope="session")
+def worker_id(sessions: sessionmaker[Session]) -> str:
+    from auditmanager.workers.public import WorkerRegistry
+
+    with sessions() as session:
+        registered = WorkerRegistry().register(session, version="cmp-vc-spec-01-test", slots=1)
+        session.commit()
+    return str(registered)
+
+
+@pytest.fixture
+def runner_of(sessions: sessionmaker[Session], engine: Engine, blob_store: Any):
+    """``runner_of(binder)``: the comparison runner with the lane's handler (and no other) bound to ``binder``; the Run-priority gate reads
+    nothing, so a claim sees comparison work only."""
+    from auditmanager.comparison.public import ClaimGates, ComparisonWorkRepository, ComparisonWorkRunner, HandlerRegistry, WorkDependencies, default_gates
+    from auditmanager.comparison.specification.method import SpecHandler
+
+    def make(binder: Any) -> Any:
+        work = ComparisonWorkRepository()
+        registry = HandlerRegistry.build(
+            (lambda deps: SpecHandler(deps, binder=binder),), WorkDependencies(engine=engine, session_factory=sessions, blob_store=blob_store, work=work))
+        gates = ClaimGates(paused=default_gates().paused, run_claimable=lambda session: False)
+        return ComparisonWorkRunner(sessions, registry=registry, modules=frozenset({"versions"}), repository=work, gates=gates)
+
+    return make
+
+
+def run_items(runner: Any, worker: str, engine: Engine, project: str, *, limit: int = 10) -> list[tuple[str, str | None]]:
+    """Claim and execute the project's items until none is claimable (other projects' items are fenced off)."""
+    ran: list[tuple[str, str | None]] = []
+    for _ in range(limit):
+        with engine.connect() as fence:
+            fence.execute(text(
+                "SELECT comparison_work_id FROM comparison_work WHERE state = 'queued' AND project_uid <> :p "
+                "ORDER BY comparison_work_id FOR UPDATE SKIP LOCKED"), {"p": project})
+            try:
+                item = runner.claim(worker)
+            finally:
+                fence.rollback()
+        if item is None:
+            break
+        ran.append((item.kind, runner.execute(item)))
+    return ran

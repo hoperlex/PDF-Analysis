@@ -37,11 +37,13 @@ from auditmanager.shared.db import session_scope
 __all__ = [
     "Answer",
     "Ask",
+    "PreparedSide",
     "REASON_NOT_PARSED",
     "Side",
     "TransitionOutcome",
     "TransitionRun",
     "compare_sides",
+    "prepare_side",
     "read_side",
 ]
 
@@ -105,6 +107,46 @@ def _coverage(raw: dict[str, Any] | None) -> dict[str, int] | None:
     return {key: int(raw.get(key, 0)) for key in COVERAGE_KEYS}
 
 
+@dataclass(slots=True)
+class PreparedSide:
+    """What is known of a side before anything is asked: the side as far as it is known, the text a request would carry, its key,
+    and the extraction that already answers it."""
+
+    side: Side
+    source: dict[str, Any] | None = None
+    key: str | None = None
+    stored: ExtractionRow | None = None
+
+    @property
+    def sendable(self) -> bool:
+        """A request is due: the text is complete and nothing is stored under its key."""
+        return self.source is not None and bool(self.source["complete"]) and self.stored is None
+
+
+def prepare_side(
+    session_factory: sessionmaker[Session], reader: SpecificationReader, repository: SpecificationRepository, *,
+    project_uid: str, version_uid: str,
+) -> PreparedSide:
+    """Read a version's specification pages and look the text up in the store. Asks nobody and writes nothing."""
+    stream = reader.version_stream(version_uid)
+    side = Side(version_uid=version_uid, sheets=len(stream.refs), complete=False, refs=dict(stream.refs))
+    if not stream.parsed_pages or stream.unparsed_pages:
+        side.reason = REASON_NOT_PARSED
+        side.issues.append("A specification page whose table could not be read" if stream.unparsed_pages else "No specification page")
+        return PreparedSide(side)
+    source = source_module.build_source(stream.parsed)
+    key = prompt.content_key(project_uid, source["source_sha256"])
+    with session_scope(session_factory) as session:
+        stored = repository.find_extraction(session, project_uid, key)
+    prepared = PreparedSide(side, source, key, stored)
+    if stored is not None:
+        _from_stored(side, stored)
+    elif not source["complete"]:
+        side.reason = check.REASON_SOURCE
+        side.issues = list(source["issues"])
+    return prepared
+
+
 def read_side(
     session_factory: sessionmaker[Session], reader: SpecificationReader, repository: SpecificationRepository, *,
     project_uid: str, version_uid: str, ask: Ask | None,
@@ -113,32 +155,22 @@ def read_side(
 
     ``ask`` is ``None`` for a read that must not request anything (an estimate, a replay): a side the store does not hold is then
     ``sent=False`` and ``complete=False`` with ``reason == "SPEC_NOT_READ"``."""
-    stream = reader.version_stream(version_uid)
-    side = Side(version_uid=version_uid, sheets=len(stream.refs), complete=False, refs=dict(stream.refs))
-    if not stream.parsed_pages or stream.unparsed_pages:
-        side.reason = REASON_NOT_PARSED
-        side.issues.append("A specification page whose table could not be read" if stream.unparsed_pages else "No specification page")
-        return side
-    source = source_module.build_source(stream.parsed)
-    key = prompt.content_key(project_uid, source["source_sha256"])
-    with session_scope(session_factory) as session:
-        stored = repository.find_extraction(session, project_uid, key)
-    if stored is not None:
-        return _from_stored(side, stored)
-    if not source["complete"]:
-        side.reason = check.REASON_SOURCE
-        side.issues = list(source["issues"])
+    prepared = prepare_side(session_factory, reader, repository, project_uid=project_uid, version_uid=version_uid)
+    side = prepared.side
+    if not prepared.sendable:
         return side
     if ask is None:
         side.reason = "SPEC_NOT_READ"
         return side
+    assert prepared.source is not None and prepared.key is not None
+    source = prepared.source
     answer = ask(prompt.prompt_for(source))
     side.sent = True
     checked = check.check_extraction(source, answer.payload)
     coverage = {**checked["coverage"], "issues": checked["issues"][:20], "reason": checked["reason"]}
     with session_scope(session_factory) as session:
         row = repository.insert_extraction(
-            session, project_uid=project_uid, version_uid=version_uid, content_key=key,
+            session, project_uid=project_uid, version_uid=version_uid, content_key=prepared.key,
             state="complete" if checked["complete"] else "partial", prompt_version=prompt.PROMPT_VERSION,
             model_identity=answer.model_identity, recorded=answer.recorded, source_sha256=source["source_sha256"],
             positions=checked["rows"], coverage=coverage, model_call_id=answer.model_call_id,
@@ -195,10 +227,13 @@ class TransitionRun:
     def compare(self, scope: TransitionScope, old: Side, new: Side) -> TransitionOutcome:
         return compare_sides(old, new, versions=(scope.source_version_uid, scope.target_version_uid))
 
-    def finish(self, scope: TransitionScope, outcome: TransitionOutcome) -> bool:
+    def finish(self, scope: TransitionScope, outcome: TransitionOutcome, *, fence: Callable[[Session], None] | None = None) -> bool:
         """Record the outcome on the transition's row. ``False`` when the row is not ``running`` (the job was cancelled or the row was
-        taken back): nothing is written."""
+        taken back): nothing is written. ``fence`` runs in the same transaction first (the handler proves its lease and the job's
+        state there); whatever it raises, nothing is written."""
         with session_scope(self._factory) as session:
+            if fence is not None:
+                fence(session)
             return self._repository.finish_whole(
                 session, scope.transition_id, state=outcome.state, extraction_a_id=outcome.extraction_a_id,
                 extraction_b_id=outcome.extraction_b_id, coverage_a=outcome.coverage_a, coverage_b=outcome.coverage_b,

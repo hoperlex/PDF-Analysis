@@ -56,6 +56,20 @@ class SpecificationService:
 
     # -- one transition -------------------------------------------------------------------------------------------------
 
+    def scope_of(self, transition_id: str) -> TransitionScope:
+        """The project, document and versions of a transition; an unknown one is ``not_found``."""
+        with session_scope(self._factory) as session:
+            scope = self._repository.transition(session, transition_id)
+        if scope is None:
+            raise _not_found("ComparisonTransition")
+        return scope
+
+    def close_cancelled(self, job_id: str) -> bool:
+        """The job was cancelled: its transition's comparison row, if it is still waiting or running, is cancelled with it (an
+        item still in flight finds the row no longer ``running`` and writes nothing)."""
+        with session_scope(self._factory) as session:
+            return self._repository.cancel_of_job(session, job_id)
+
     def get_specification(self, *, transition_id: str) -> dict[str, Any]:
         with session_scope(self._factory) as session:
             scope = self._repository.transition(session, transition_id)

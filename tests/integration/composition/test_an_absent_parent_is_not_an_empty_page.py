@@ -255,7 +255,6 @@ SEALED_STUB_ADDRESSED: frozenset[str] = frozenset({
     "estimateComparisonSheetDescription",
     "streamComparisonSheetDescriptionMd",
     "listComparisonReviewSheets",
-    "estimateComparisonSpecification",
     "getComparisonLaunchQueue",
     "streamComparisonSeriesSummary",
     "listComparisonReports",

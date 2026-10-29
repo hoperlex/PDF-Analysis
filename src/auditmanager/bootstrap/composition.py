@@ -519,7 +519,8 @@ def build_application(
         # replace the five adapters (plan section 4.0 rule 1).
         comparison_ai_pairs=ComparisonAiPairAdapter(comparison_modules=comparison_modules),
         comparison_ai_sheets=ComparisonAiSheetAdapter(comparison_modules=comparison_modules),
-        comparison_specifications=ComparisonSpecificationAdapter(sessions, blob_store=store, comparison_modules=comparison_modules),
+        comparison_specifications=ComparisonSpecificationAdapter(
+            sessions, blob_store=store, comparison_modules=comparison_modules, provider_mode=_provenance_mode(resolved.provider_mode)),
         comparison_launch_queue=ComparisonLaunchQueueAdapter(comparison_modules=comparison_modules),
         comparison_reports=ComparisonReportAdapter(comparison_modules=comparison_modules),
         execution=ExecutionAdapter(sessions, runs=run_adapter),

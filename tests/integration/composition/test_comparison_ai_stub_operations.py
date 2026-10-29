@@ -115,6 +115,10 @@ WIRED: frozenset[str] = frozenset({
     "listComparisonSpecifications",
     "getComparisonSpecification",
     "listComparisonSpecificationChanges",
+    # `CMP-VC-SPEC-01` part B through the AI-job core: the estimate, the keyed start with consent and the cancel.
+    "estimateComparisonSpecification",
+    "startComparisonSpecification",
+    "cancelComparisonSpecification",
 })
 STUBS = sorted(set(REQUESTS) - WIRED)
 LANES = {

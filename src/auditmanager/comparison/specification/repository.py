@@ -75,6 +75,10 @@ _SET_STATE = text(
     "UPDATE comparison_spec_comparison SET state = :to_state, phase = :phase, reason = :reason, updated_at = clock_timestamp() "
     "WHERE comparison_transition_id = :transition AND source = 'whole' AND state = ANY (CAST(:from_states AS text[]))"
 )
+_CANCEL_OF_JOB = text(
+    "UPDATE comparison_spec_comparison SET state = 'cancelled', phase = 'done', updated_at = clock_timestamp() "
+    "WHERE comparison_ai_job_id = :job AND source = 'whole' AND state IN ('queued', 'running')"
+)
 _FINISH = text(
     "UPDATE comparison_spec_comparison SET state = :to_state, phase = 'done', extraction_a_id = :a, extraction_b_id = :b, "
     "coverage_a = CAST(:coverage_a AS jsonb), coverage_b = CAST(:coverage_b AS jsonb), totals = CAST(:totals AS jsonb), "
@@ -228,6 +232,9 @@ class SpecificationRepository:
             "transition": transition_id, "to_state": to_state, "from_states": list(from_states), "phase": phase, "reason": reason,
         })
         return bool(done.rowcount)
+
+    def cancel_of_job(self, session: Session, job_id: str) -> bool:
+        return bool(session.execute(_CANCEL_OF_JOB, {"job": job_id}).rowcount)
 
     def finish_whole(
         self, session: Session, transition_id: str, *, state: str, extraction_a_id: str | None, extraction_b_id: str | None,
