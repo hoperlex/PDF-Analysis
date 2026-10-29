@@ -505,8 +505,8 @@ export const COMPARISON_SHAPES: readonly ComparisonShape[] = [
   { name: 'version-compare-module-not-wired', make: page_(PROJECT_AT), seedClient: (c) => seedComparison(c, { overview: 'wired-not' }) },
   { name: 'version-compare-read-failed', make: page_(PROJECT_AT), seedClient: (c) => seedComparison(c, { overview: 'error' }) },
   { name: 'version-compare-projects-read-failed', make: page_(undefined), seedClient: (c) => seedComparison(c, { projects: 'error', overview: 'none' }) },
-  { name: 'version-compare-module-off', make: page_(PROJECT_AT), seedClient: (c) => seedComparison(c, { modules: 'none' }) },
-  { name: 'version-compare-reader', make: page_(PROJECT_AT), seedClient: (c) => seedComparison(c, { account: READER }) },
+  { name: 'version-compare-module-off', make: page_(PROJECT_AT), seedClient: (c) => seedComparison(c, { modules: 'none', sets: 3 }) },
+  { name: 'version-compare-reader', make: page_(PROJECT_AT), seedClient: (c) => seedComparison(c, { account: READER, sets: 3 }) },
   { name: 'version-compare-sheets', make: page_(SHEETS_AT), seedClient: (c) => seedComparison(c, { sheets: true }) },
   {
     name: 'version-compare-sheets-not-wired',
@@ -517,8 +517,8 @@ export const COMPARISON_SHAPES: readonly ComparisonShape[] = [
     },
   },
   { name: 'version-compare-sheets-cold', make: page_(SHEETS_AT), seedClient: (c) => seedComparison(c) },
-  { name: 'version-compare-upload-single', make: page_({ ...PROJECT_AT, upload: 'single' }), seedClient: (c) => seedComparison(c) },
-  { name: 'version-compare-upload-batch', make: page_({ ...PROJECT_AT, upload: 'batch' }), seedClient: (c) => seedComparison(c) },
+  { name: 'version-compare-upload-single', make: page_({ ...PROJECT_AT, upload: 'single' }), seedClient: (c) => seedComparison(c, { sets: 3 }) },
+  { name: 'version-compare-upload-batch', make: page_({ ...PROJECT_AT, upload: 'batch' }), seedClient: (c) => seedComparison(c, { sets: 3 }) },
 
   // «Проекты и этапы»
   { name: 'projects-and-stages-filtered', make: () => createElement(ProjectsAndStagesView, projectsProps({ view: { ...INITIAL_VIEW, filter: 'waiting', query: '133' } })) },

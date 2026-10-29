@@ -68,6 +68,8 @@ export interface Seed {
   readonly modules?: ProductVersion['comparison_modules'] | null;
   readonly projects?: boolean | 'error';
   readonly overview?: 'ok' | 'wired-not' | 'error' | 'none';
+  /** How many of the thirteen sets of the overview are read: a page that is not about the table needs a few (the census pays per element). */
+  readonly sets?: number;
   readonly sheets?: boolean;
 }
 
@@ -85,7 +87,7 @@ export function seedComparison(client: QueryClient, seed: Seed = {}): void {
   }
   const mode = seed.overview ?? 'ok';
   if (mode === 'ok') {
-    client.setQueryData(COMPARISON_KEYS.overview(PROJECT_UID), overview());
+    client.setQueryData(COMPARISON_KEYS.overview(PROJECT_UID), seed.sets === undefined ? overview() : overview({ sets: overview().sets.slice(0, seed.sets) }));
     seedQueues(client);
   }
   else if (mode === 'wired-not') seedError(client, COMPARISON_KEYS.overview(PROJECT_UID), refusal('dependency_unavailable', { dependency: 'comparison_overview' }));
