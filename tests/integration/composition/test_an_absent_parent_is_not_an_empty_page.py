@@ -246,7 +246,8 @@ COMPARISON_QUEUE_OPERATIONS = frozenset({"getComparisonQueueSummary"})
 #: sheet pair, page profile or report is `404 not_found`).
 #: `CMP-VC-AIPAIR-01` serves ``estimateComparisonAiPairCheck``, ``getComparisonAiPairCheck`` and
 #: ``listComparisonAiPairHints`` and removes them: each joins the `404` sweep.
-#: `CMP-VC-AISHEET-01` serves seven reads. The dedicated test below checks both the module gate and an absent parent.
+#: `CMP-VC-AISHEET-01` and `CMP-VC-REPORT-01` serve these reads. The dedicated test below checks
+#: both the module gate and an absent parent.
 MODULE_GATED_ADDRESSED: frozenset[str] = frozenset({
     "estimateComparisonAiSheetChanges",
     "getComparisonAiSheetChanges",
@@ -255,14 +256,14 @@ MODULE_GATED_ADDRESSED: frozenset[str] = frozenset({
     "estimateComparisonSheetDescription",
     "streamComparisonSheetDescriptionMd",
     "listComparisonReviewSheets",
-})
-SEALED_STUB_ADDRESSED: frozenset[str] = frozenset({
-    "getComparisonLaunchQueue",
     "streamComparisonSeriesSummary",
     "listComparisonReports",
     "getComparisonReport",
     "streamComparisonReportPdf",
     "streamComparisonReportSourceMd",
+})
+SEALED_STUB_ADDRESSED: frozenset[str] = frozenset({
+    "getComparisonLaunchQueue",
 })
 
 #: `W55A-SEAL-01`. ``searchNorms`` addresses no parent but is not a listing of everything:
@@ -452,6 +453,11 @@ def test_every_get_that_names_a_parent_refuses_an_identity_that_names_nothing(
         path = re.sub(r"\{(\w+)\}", lambda m: _absent_identity(m.group(1)), template)
         status, body = _get(app, path + REQUIRED_QUERY.get(operation_id, ""))
         code = body.get("error_code") if isinstance(body, dict) else None
+        if operation_id in MODULE_GATED_ADDRESSED:
+            named = (body.get("details") or {}).get("dependency") if isinstance(body, dict) else None
+            if (status, code, named) != (503, "dependency_unavailable", "comparison_modules"):
+                disagreements.append((operation_id, path, status, code))
+            continue
         if (status, code) != (404, "not_found"):
             disagreements.append((operation_id, path, status, code))
     assert disagreements == [], (
@@ -460,9 +466,9 @@ def test_every_get_that_names_a_parent_refuses_an_identity_that_names_nothing(
     )
 
 
-def test_the_wired_sheet_reads_are_404_for_an_absent_parent_once_the_module_is_on(app: Composed) -> None:
-    """`CMP-VC-AISHEET-01`: the seven reads of the sheet descriptions, with the versions module on, answer `404 not_found` for an identity
-    that names nothing (never an empty description or an empty list); with it off, they refuse first."""
+def test_the_wired_c2_reads_are_404_for_an_absent_parent_once_the_module_is_on(app: Composed) -> None:
+    """The sheet and report reads answer `404 not_found` for an absent identity with versions on;
+    with the module off, they refuse first."""
     off_environ = {k: v for k, v in os.environ.items() if k != PACK_MANIFEST_ENV} | {
         API_TOKEN_VARIABLE: DEPLOYMENT_SECRET, "AUDITMANAGER_COMPARISON_MODULES": "none",
     }

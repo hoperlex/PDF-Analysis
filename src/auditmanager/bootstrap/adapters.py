@@ -6434,69 +6434,138 @@ class ComparisonLaunchQueueAdapter(_VersionsModuleGate):
         return _comparison_unavailable(self._DEPENDENCY)
 
 
-class ComparisonReportAdapter(_VersionsModuleGate):
-    """`CMP-VC-REPORT-01` replaces the bodies."""
+class ComparisonReportAdapter(_SessionHolder, _VersionsModuleGate):
+    """`CMP-VC-REPORT-01` serves the thirteen report operations over
+    :class:`~auditmanager.comparison.report.service.ComparisonReportService` (ADR-0025 decisions 3, 8, 10, 11, 16, 19, 24).
 
-    _DEPENDENCY = "comparison_reports"
+    The adapter owns the mapping to the contract's models, the cursors and the actor's label and roles (a report is made, started and steered by an
+    expert, checked again in the transaction that acts). The module flag stays the first statement of every method, so it precedes any read, write
+    or model call; a model is never called here (the worker's handler calls it, through the spend wrapper)."""
 
-    def cancel_report(self, *, report_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonReport:
+    def __init__(
+        self, session_factory: sessionmaker[Session], *, blob_store: Any = None, comparison_modules: str = "none",
+        provider_mode: str = "live", service: Any = None,
+    ) -> None:
+        _SessionHolder.__init__(self, session_factory)
+        _VersionsModuleGate.__init__(self, comparison_modules=comparison_modules)
+        if service is None:
+            from auditmanager.comparison.public import ComparisonReportService
+
+            service = ComparisonReportService(
+                session_factory, blob_store=blob_store, comparison_modules=comparison_modules, provider_mode=provider_mode
+            )
+        self._service = service
+
+    def _actor(self, user_uid: str) -> tuple[str, frozenset[str]]:
+        return self._read(lambda session: _comparison_actor(session, user_uid))
+
+    @staticmethod
+    def _consent(consent: models.ComparisonAiConsent | None) -> Any:
+        from auditmanager.comparison.public import AiConsentInput
+
+        return None if consent is None else AiConsentInput(estimate_digest=str(consent.estimate_digest), confirmed=consent.confirmed)
+
+    def read_series_summary(self, *, series_id: str) -> bytes:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
-
-    def continue_report(
-        self, *, report_id: str, consent: models.ComparisonAiConsent | None, user_uid: str, idempotency_key: str
-    ) -> models.ComparisonReport:
-        self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        return self._service.read_series_summary(series_id=series_id)
 
     def create_report(
         self, *, series_id: str, kind: models.ComparisonReportKind, reuse: bool, user_uid: str, idempotency_key: str
     ) -> models.ComparisonReport:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        label, roles = self._actor(user_uid)
+        return models.ComparisonReport.model_validate(self._service.create_report(
+            series_id=series_id, kind=kind.value, reuse=reuse, user_uid=user_uid, actor_label=label, actor_roles=roles,
+            idempotency_key=idempotency_key,
+        ))
 
-    def delete_report(self, *, report_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonReport:
+    def upload_report_source(
+        self, *, series_id: str, kind: models.ComparisonReportKind, reuse: bool, content: bytes, source_name: str | None,
+        user_uid: str, idempotency_key: str,
+    ) -> models.ComparisonReport:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
-
-    def get_report(self, *, report_id: str) -> models.ComparisonReport:
-        self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        label, roles = self._actor(user_uid)
+        return models.ComparisonReport.model_validate(self._service.upload_report_source(
+            series_id=series_id, kind=kind.value, reuse=reuse, content=content, source_name=source_name, user_uid=user_uid,
+            actor_label=label, actor_roles=roles, idempotency_key=idempotency_key,
+        ))
 
     def list_reports(self, *, series_id: str, cursor: str | None, limit: int) -> models.ComparisonReportPage:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        after: tuple[datetime, str] | None = None
+        if cursor is not None:
+            parts = decode_cursor(cursor)
+            try:
+                if len(parts) != 2:
+                    raise ValueError("two members")
+                after = (datetime.fromisoformat(parts[0]), parts[1])
+            except ValueError:
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format") from None
+        page = self._service.list_reports(series_id=series_id, after=after, limit=limit)
+        return models.ComparisonReportPage.model_validate({
+            "items": page.items,
+            "page": {
+                "next_cursor": None if page.next_after is None
+                else encode_cursor((page.next_after[0].isoformat(), page.next_after[1]))
+            },
+        })
 
-    def prepare_client_report(
-        self, *, report_id: str, reuse: bool, user_uid: str, idempotency_key: str
-    ) -> models.ComparisonReport:
+    def get_report(self, *, report_id: str) -> models.ComparisonReport:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
-
-    def read_report_pdf(self, *, report_id: str) -> bytes:
-        self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
-
-    def read_report_source_md(self, *, report_id: str) -> bytes:
-        self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
-
-    def read_series_summary(self, *, series_id: str) -> bytes:
-        self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
-
-    def rebuild_report_pdf(self, *, report_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonReport:
-        self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        return models.ComparisonReport.model_validate(self._service.get_report(report_id=report_id))
 
     def start_report(
         self, *, report_id: str, consent: models.ComparisonAiConsent, user_uid: str, idempotency_key: str
     ) -> models.ComparisonReport:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        _label, roles = self._actor(user_uid)
+        return models.ComparisonReport.model_validate(self._service.start_report(
+            report_id=report_id, consent=self._consent(consent), user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key,
+        ))
 
-    def upload_report_source(
-        self, *, series_id: str, kind: models.ComparisonReportKind, reuse: bool, content: bytes, source_name: str | None, user_uid: str, idempotency_key: str
+    def cancel_report(self, *, report_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonReport:
+        self._require_versions_module()
+        _label, roles = self._actor(user_uid)
+        return models.ComparisonReport.model_validate(self._service.cancel_report(
+            report_id=report_id, user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key,
+        ))
+
+    def continue_report(
+        self, *, report_id: str, consent: models.ComparisonAiConsent | None, user_uid: str, idempotency_key: str
     ) -> models.ComparisonReport:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        _label, roles = self._actor(user_uid)
+        return models.ComparisonReport.model_validate(self._service.continue_report(
+            report_id=report_id, consent=self._consent(consent), user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key,
+        ))
+
+    def rebuild_report_pdf(self, *, report_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonReport:
+        self._require_versions_module()
+        _label, roles = self._actor(user_uid)
+        return models.ComparisonReport.model_validate(self._service.rebuild_report_pdf(
+            report_id=report_id, user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key,
+        ))
+
+    def delete_report(self, *, report_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonReport:
+        self._require_versions_module()
+        _label, roles = self._actor(user_uid)
+        return models.ComparisonReport.model_validate(self._service.delete_report(
+            report_id=report_id, user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key,
+        ))
+
+    def prepare_client_report(
+        self, *, report_id: str, reuse: bool, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonReport:
+        self._require_versions_module()
+        label, roles = self._actor(user_uid)
+        return models.ComparisonReport.model_validate(self._service.prepare_client_report(
+            report_id=report_id, reuse=reuse, user_uid=user_uid, actor_label=label, actor_roles=roles, idempotency_key=idempotency_key,
+        ))
+
+    def read_report_pdf(self, *, report_id: str) -> bytes:
+        self._require_versions_module()
+        return self._service.read_report_pdf(report_id=report_id)
+
+    def read_report_source_md(self, *, report_id: str) -> bytes:
+        self._require_versions_module()
+        return self._service.read_report_source_md(report_id=report_id)

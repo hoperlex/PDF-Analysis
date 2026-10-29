@@ -127,6 +127,11 @@ WIRED: frozenset[str] = frozenset({
     "finishComparisonAiSheetChanges", "dequeueComparisonAiSheetChanges", "retryComparisonAiSheetChanges",
     "getComparisonSheetDescription", "startComparisonSheetDescription", "listComparisonSheetDescriptionHistory",
     "estimateComparisonSheetDescription", "streamComparisonSheetDescriptionMd", "listComparisonReviewSheets",
+    # `CMP-VC-REPORT-01`: the thirteen report operations.
+    "streamComparisonSeriesSummary", "listComparisonReports", "createComparisonReport", "uploadComparisonReportSource",
+    "getComparisonReport", "startComparisonReport", "cancelComparisonReport", "continueComparisonReport",
+    "rebuildComparisonReportPdf", "deleteComparisonReport", "prepareComparisonClientReport", "streamComparisonReportPdf",
+    "streamComparisonReportSourceMd",
 })
 STUBS = sorted(set(REQUESTS) - WIRED)
 LANES = {
@@ -317,8 +322,9 @@ def test_the_queue_request_is_bounded_and_names_a_queueable_step(on: TestClient)
 def test_a_report_upload_is_bounded_and_takes_a_kind(on: TestClient) -> None:
     path = f"/comparison-series/{SER}/reports/upload"
     md = "## 1. A → B\n".encode()
-    assert _post(on, path, md, media="text/markdown").status_code == 503
-    assert _post(on, path + "?kind=analytic&reuse=true&source_name=summary.md", md, media="text/markdown").status_code == 503
+    # `CMP-VC-REPORT-01` serves this upload: a well-formed file for a series that does not exist is `404`, no longer the stub's `503`.
+    assert _post(on, path, md, media="text/markdown").status_code == 404
+    assert _post(on, path + "?kind=analytic&reuse=true&source_name=summary.md", md, media="text/markdown").status_code == 404
     assert _post(on, path + "?kind=poster", md, media="text/markdown").status_code == 422
     assert _post(on, path + "?source_name=", md, media="text/markdown").status_code == 422
     assert _post(on, path, b"x" * (20 * 1024 * 1024 + 1), media="text/markdown").status_code in (413, 422)
@@ -335,7 +341,7 @@ def test_a_list_or_query_outside_its_bounds_is_refused_before_the_stub(on: TestC
     for path in (*wired, f"/comparison-series/{SER}/reports"):
         assert on.get(f"{path}?limit=0", headers=headers).status_code == 422, path
         assert on.get(f"{path}?limit=201", headers=headers).status_code == 422, path
-        assert on.get(path, headers=headers).status_code == (404 if path in wired else 503), path
+        assert on.get(path, headers=headers).status_code == 404, path
     changes = f"/comparison-transitions/{TRN}/specification/changes"
     assert on.get(f"{changes}?kind=sideways", headers=headers).status_code == 422
     assert on.get(f"{changes}?kind=added", headers=headers).status_code == 404

@@ -528,7 +528,10 @@ def build_application(
         comparison_specifications=ComparisonSpecificationAdapter(
             sessions, blob_store=store, comparison_modules=comparison_modules, provider_mode=_provenance_mode(resolved.provider_mode)),
         comparison_launch_queue=ComparisonLaunchQueueAdapter(comparison_modules=comparison_modules),
-        comparison_reports=ComparisonReportAdapter(comparison_modules=comparison_modules),
+        comparison_reports=ComparisonReportAdapter(
+            sessions, blob_store=store, comparison_modules=comparison_modules,
+            provider_mode=_provenance_mode(resolved.provider_mode),
+        ),
         execution=ExecutionAdapter(sessions, runs=run_adapter),
         # `W55A-SEAL-01` sealed them; `W55A-SEARCH-01` serves them. The norms reads and the
         # designation over the same session factory, every search under the operator's

@@ -88,16 +88,15 @@ _STUB_REPORT = "/comparison-reports/crt_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 SEALED_STUB_GETS: frozenset[str] = frozenset({
     f"/projects/{_PRJ}/comparison-launch-queue",
     "/execution/comparison-ai-queue",
+})
+#: The versions module is on in this sweep. The served sheet and report reads answer `404 not_found`
+#: for an absent identity; the companion absent-parent sweep checks their module-off refusal separately.
+MODULE_GATED_GETS: frozenset[str] = frozenset({
     f"{_STUB_SERIES}/summary-md",
     f"{_STUB_SERIES}/reports",
     _STUB_REPORT,
     f"{_STUB_REPORT}/pdf",
     f"{_STUB_REPORT}/source-md",
-})
-#: `CMP-VC-AISHEET-01` serves seven reads of the AI description of sheet changes and removes them from the set above. The
-#: versions module is on in this sweep, so an absent identity answers `404 not_found`
-#: (`test_an_absent_parent_is_not_an_empty_page.py`, `test_the_wired_sheet_reads_are_404_for_an_absent_parent_once_the_module_is_on`).
-MODULE_GATED_GETS: frozenset[str] = frozenset({
     f"{_STUB_SERIES}/ai-sheet-changes/estimate",
     f"{_STUB_SERIES}/ai-sheet-changes",
     f"{_STUB_PAIR}/description",

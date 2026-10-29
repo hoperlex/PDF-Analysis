@@ -21,6 +21,7 @@ def test_the_shipped_tuple_has_one_handler_for_each_kind() -> None:
     kinds = [factory(WorkDependencies(None, None, None, None)).kind for factory in public.HANDLER_FACTORIES]  # type: ignore[arg-type]
     shipped = [
         "comparison_pair_check",  # `CMP-VC-AIPAIR-01`
+        "comparison_report",  # `CMP-VC-REPORT-01`
         "comparison_sheet_changes",  # `CMP-VC-AISHEET-01`
         "comparison_spec",  # `CMP-VC-SPEC-01`
         "matrix_build", "page_profile", "pair_result", "series_after_preparation", "series_drive", "series_pair",

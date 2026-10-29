@@ -188,8 +188,7 @@ SEALED_NOT_YET_WRITTEN = frozenset((
     # `0040_comparison_ai_reports` (`CMP-SEAL-C2`): the tables of the version comparison AI, specifications, reports and
     # launch queue, until `CMP-VC-AIPAIR-01`, `CMP-VC-AISHEET-01`, `CMP-VC-SPEC-01`, `CMP-VC-QUEUE-01` and
     # `CMP-VC-REPORT-01` write them.
-    "comparison_launch_entry", "comparison_launch_queue", "comparison_report", "comparison_report_artifact",
-    "comparison_report_part",
+    "comparison_launch_entry", "comparison_launch_queue",
 ))
 
 #: ``SELECT``.
