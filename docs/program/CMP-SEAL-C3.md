@@ -18,6 +18,20 @@ The existing `comparison_pdf` upload service is PDF-only: `complete_file` publis
 
 The task scope now names `comparison_stage_uploads.py` and its fifth stage port explicitly. The migration deliverable includes candidate state so a resumed upload and its cleanup can be reconciled across restarts; the stage-pair lane owns the actual reader call and all D-262 first-use controls.
 
+## Boundary decisions for the real seal
+
+These are design inputs, not a claim that the `1.12.0` contract has been frozen:
+
+| Family | Durable/contract boundary |
+| --- | --- |
+| Stage upload | Separate resumable batch, file and candidate identities. File names only suggest labels. The caller checks raw compressed bytes, admission and disk before extraction; each PDF is validated before publication. |
+| Pair and assembly | `stp_` binds one П `DocumentUid` to one Р `DocumentUid` or a `sas_` assembly. Suggestions do not bind documents; an expert's keyed confirmation does. Completeness is explicit. |
+| Sheet map | `slk_` revisions append the expert's full map, including explicit unpaired sheets. A stale base revision is refused. Page-profile identities address evidence; sheet numbers are display values. |
+| Deterministic text | Fragments, exclusions, differences and cross-sheet hints are separate immutable evidence. A later AI layer can reference them but cannot remove or rewrite a raw difference. |
+| Chain run | `crn_` pins exact version identities, the link revision and input digests for steps 01–07. New document versions mark a run stale by digest comparison. |
+
+The four established prefixes and the raw-evidence rule come from ADR-0025 decisions 2, 3 and 21; the upload boundary follows the C0 PDF-only implementation and the D-262 review. Exact operation and table inventories remain part of the pending seal result.
+
 ## Seal result
 
 Pending. The real `1.12.0` operation list, `0041` table inventory, migrations, checks, rollback evidence, risks and forbidden-hotspot proof will be recorded here before integration.
