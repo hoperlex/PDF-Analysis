@@ -15,6 +15,7 @@ import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import type {
+  ComparisonAiPairHint,
   ComparisonMatrix,
   ComparisonMatrixCell,
   ComparisonMatrixEdit,
@@ -48,6 +49,8 @@ import {
   requestOf,
   touchedPages,
   transitionOf,
+  useAiPairHints,
+  useAiSheetChanges,
   useAppendOrder,
   useApplyMatrixEdits,
   useComparisonEdits,
@@ -59,11 +62,13 @@ import {
   useSeriesAct,
   useSheetPair,
   useSheetPairs,
+  useDownload,
   useStartSeries,
   useUndoMatrixEdit,
   validSides,
 } from '@/entities/version-series';
 
+import { AiChangesBlock, SpecificationsBlock, SummaryReportBlock } from './ai-blocks';
 import { DraftPanel, EditHistory } from './draft-panel';
 import { MatrixState } from './matrix-state';
 import { FailureState } from './module-state';
@@ -85,6 +90,18 @@ export interface ViewerSlotProps {
 }
 
 export type RenderViewer = (props: ViewerSlotProps) => ReactNode;
+
+/** What the page hands in to draw the window «Сформировать PDF-отчёт…»: the widget is a sibling, so the page composes it. */
+export interface ReportSlotProps {
+  readonly projectUid: ProjectUid;
+  readonly documentUid: DocumentUid;
+  readonly series: ComparisonSeries;
+  readonly names: ReadonlyMap<string, string>;
+  readonly mayAct: boolean;
+  readonly onClose: () => void;
+}
+
+export type RenderReport = (props: ReportSlotProps) => ReactNode;
 
 export interface SheetsTabViewProps {
   readonly heading: string;
@@ -126,6 +143,17 @@ export interface SheetsTabViewProps {
   readonly onAskRestart: () => void;
   readonly onConfirmRestart: () => void;
   readonly onCancelRestart: () => void;
+  // ---- wave C2
+  /** The hints of the AI check of doubtful pairs, joined to cells by `(version_uid, page)` in the matrix. */
+  readonly hints?: readonly ComparisonAiPairHint[];
+  /** The three AI blocks («ИИ-описание изменений», «Полные спецификации (СО)», «Сводка MD и отчёт для заказчика»). */
+  readonly aiBlocks?: ReactNode;
+  /** The window «Сформировать PDF-отчёт…», when it is open. */
+  readonly reportWindow?: ReactNode;
+  /** «Сформировать PDF-отчёт…» in the header; absent while the set has no series. */
+  readonly onOpenReport?: () => void;
+  /** «Сводка изменений (MD)» in the header; absent while there is no summary. */
+  readonly onSummary?: () => void;
 }
 
 export function SheetsTabView(props: SheetsTabViewProps) {
@@ -162,6 +190,20 @@ export function SheetsTabView(props: SheetsTabViewProps) {
               Отменить последнюю правку
             </button>
           ) : null}
+          {props.onSummary === undefined ? (
+            <button
+              type="button"
+              className="am-button am-button--quiet"
+              disabled
+              title="Сводка станет доступна после описания листов или сравнения полных спецификаций."
+            >
+              Сводка изменений (MD)
+            </button>
+          ) : (
+            <button type="button" className="am-button am-button--quiet" data-summary-md="" title="Скачать «Сводку изменений (MD)»: все изменения комплекта одним файлом." onClick={props.onSummary}>
+              Сводка изменений (MD)
+            </button>
+          )}
           {mayEdit ? (
             <button
               type="button"
@@ -173,10 +215,16 @@ export function SheetsTabView(props: SheetsTabViewProps) {
               Порядок версий
             </button>
           ) : null}
+          {props.onOpenReport === undefined ? null : (
+            <button type="button" className="am-button am-button--quiet" data-report-window-open="" title="Отчёт PDF по «Сводке изменений (MD)»: источник, вид отчёта, ход и скачивание." onClick={props.onOpenReport}>
+              Сформировать PDF-отчёт…
+            </button>
+          )}
         </span>
       </header>
 
       {props.orderDialog}
+      {props.reportWindow}
 
       <MatrixState matrix={matrix} mayPrepare={mayEdit} busy={props.prepareBusy} onPrepare={props.onPrepare} />
 
@@ -197,6 +245,8 @@ export function SheetsTabView(props: SheetsTabViewProps) {
         onConfirmRestart={props.onConfirmRestart}
         onCancelRestart={props.onCancelRestart}
       />
+
+      {props.aiBlocks}
 
       <DraftPanel
         draft={draft}
@@ -230,6 +280,7 @@ export function SheetsTabView(props: SheetsTabViewProps) {
           onGesture={props.onGesture}
           onSheet={props.onSheet}
           onOpenPair={props.onOpenPair}
+          {...(props.hints === undefined ? {} : { hints: props.hints })}
         />
       ) : matrix.state === 'ready' ? (
         <EmptyState title="В сопоставлении нет листов." detail="В версиях комплекта нет страниц, которые можно сопоставить." />
@@ -254,6 +305,8 @@ export interface SheetsTabProps {
   /** An expert on a module that is on: the controls that change anything are drawn. */
   readonly mayEdit: boolean;
   readonly renderViewer: RenderViewer;
+  /** Draws the window «Сформировать PDF-отчёт…» (a sibling widget, handed in by the page). */
+  readonly renderReport?: RenderReport;
 }
 
 function profileIdOf(pair: ComparisonSheetPair): string | null {
@@ -302,7 +355,7 @@ export function PairViewerSlot({
   );
 }
 
-export function SheetsTab({ projectUid, documentUid, heading, mayEdit, renderViewer }: SheetsTabProps) {
+export function SheetsTab({ projectUid, documentUid, heading, mayEdit, renderViewer, renderReport }: SheetsTabProps) {
   const matrix = useComparisonMatrix(projectUid, documentUid);
   const edits = useComparisonEdits(projectUid, documentUid);
   const versions = useVersionList(documentUid);
@@ -314,6 +367,7 @@ export function SheetsTab({ projectUid, documentUid, heading, mayEdit, renderVie
   const start = useStartSeries();
   const seriesAct = useSeriesAct();
   const append = useAppendOrder();
+  const download = useDownload();
 
   const [chosen, setChosen] = useState<{ a?: string; b?: string }>({});
   const [onlyChanged, setOnlyChanged] = useState(false);
@@ -324,6 +378,7 @@ export function SheetsTab({ projectUid, documentUid, heading, mayEdit, renderVie
   const [openPairId, setOpenPairId] = useState<string | null>(null);
   const [clickNote, setClickNote] = useState<string | null>(null);
   const [restartAsked, setRestartAsked] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
 
   const matrixData = matrix.data;
   const columns = matrixData?.columns ?? [];
@@ -345,6 +400,10 @@ export function SheetsTab({ projectUid, documentUid, heading, mayEdit, renderVie
   const transition =
     sides.a !== null && sides.b !== null ? transitionOf(series?.transitions, sides.a, sides.b) : null;
   const pairs = useSheetPairs(transition?.transition_id ?? null);
+  const matrixReady = matrixData?.state === 'ready' || matrixData?.state === 'stale';
+  const hints = useAiPairHints(projectUid, documentUid, matrixReady);
+  const described = useAiSheetChanges(series?.series_id ?? null);
+  const summaryReady = (described.data?.transitions ?? []).some((row) => row.done > 0);
 
   // The matrix moved under the draft: rebase it on the matrix just read, and say what could not follow.
   const revision = matrixData?.revision;
@@ -497,6 +556,49 @@ export function SheetsTab({ projectUid, documentUid, heading, mayEdit, renderVie
         )
       }
       clickNote={clickNote}
+      hints={hints.data ?? []}
+      aiBlocks={
+        series === null ? null : (
+          <>
+            <AiChangesBlock
+              series={series}
+              projectUid={projectUid}
+              names={names}
+              mayAct={mayEdit}
+              onOpenTransition={(item) => {
+                setChosen({ a: item.source_version_uid, b: item.target_version_uid });
+                setClickNote(null);
+                setOpenPairId(null);
+              }}
+              onOpenReviewSheet={(item, sheet) => {
+                setChosen({ a: item.source_version_uid, b: item.target_version_uid });
+                setClickNote(null);
+                setOpenPairId(sheet.sheet_pair_id);
+              }}
+            />
+            <SpecificationsBlock
+              series={series}
+              names={names}
+              mayAct={mayEdit}
+              onOpenTransition={(item) => {
+                setChosen({ a: item.source_version_uid, b: item.target_version_uid });
+                setClickNote(null);
+                setOpenPairId(null);
+              }}
+            />
+            <SummaryReportBlock series={series} names={names} mayAct={mayEdit} summaryReady={summaryReady} />
+          </>
+        )
+      }
+      reportWindow={
+        reportOpen && series !== null && renderReport !== undefined
+          ? renderReport({ projectUid, documentUid, series, names, mayAct: mayEdit, onClose: () => setReportOpen(false) })
+          : null
+      }
+      {...(series === null || renderReport === undefined ? {} : { onOpenReport: () => setReportOpen(true) })}
+      {...(series === null || !summaryReady
+        ? {}
+        : { onSummary: () => download.mutate({ kind: 'summary-md', seriesId: series.series_id, fileName: 'svodka-izmeneniy.md' }) })}
       onPrepare={() => prepare.mutate({ projectUid, documentUid })}
       onApply={onApply}
       onUndo={onUndo}

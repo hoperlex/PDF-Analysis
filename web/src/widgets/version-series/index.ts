@@ -9,7 +9,7 @@
 
 export type { ProjectsAndStagesProps, ProjectsAndStagesViewProps } from './ui/projects-and-stages';
 export { ProjectsAndStages, ProjectsAndStagesView, clockOf } from './ui/projects-and-stages';
-export type { RenderViewer, SheetsTabProps, SheetsTabViewProps, ViewerSlotProps } from './ui/sheets-tab';
+export type { RenderReport, RenderViewer, ReportSlotProps, SheetsTabProps, SheetsTabViewProps, ViewerSlotProps } from './ui/sheets-tab';
 export { ModuleOffState, PairViewerSlot, SheetsTab, SheetsTabView } from './ui/sheets-tab';
 export type { FailureStateProps } from './ui/module-state';
 export { CommandRefusal, FailureState, MODULE_UNAVAILABLE_TITLE } from './ui/module-state';
@@ -30,3 +30,20 @@ export type { MatrixStateProps } from './ui/matrix-state';
 export { MatrixState } from './ui/matrix-state';
 export type { OrderRow, VersionOrderDialogProps, VersionOrderDialogViewProps } from './ui/version-order-dialog';
 export { VersionOrderDialog, VersionOrderDialogView } from './ui/version-order-dialog';
+export type { AiActRequest, AiRow, AiStepCellViewProps } from './ui/ai-step-cell';
+export { AiStepCellView, SelectBox, UNAVAILABLE_CELL, UNREAD_CELL, useAiRow } from './ui/ai-step-cell';
+export type { AiStartDialogProps, ReportDraftDialogProps, SelectionDialogProps } from './ui/ai-dialogs';
+export { AiStartDialog, ReportDraftDialog, SelectionDialog } from './ui/ai-dialogs';
+export type { AiQueueStripProps, LaunchQueueStripProps } from './ui/queue-strips';
+export { AiQueueStrip, LaunchQueueStrip } from './ui/queue-strips';
+export type { AiChangesBlockViewProps, SpecificationsBlockViewProps, SummaryReportBlockViewProps } from './ui/ai-blocks';
+export {
+  AiChangesBlock,
+  AiChangesBlockView,
+  SpecificationChangesView,
+  SpecificationsBlock,
+  SpecificationsBlockView,
+  SummaryReportBlock,
+  SummaryReportBlockView,
+  duration,
+} from './ui/ai-blocks';

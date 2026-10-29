@@ -12,6 +12,7 @@
  */
 
 import type {
+  ComparisonAiPairHint,
   ComparisonMatrix,
   ComparisonMatrixCandidate,
   ComparisonMatrixCell,
@@ -39,6 +40,7 @@ import {
   rowHeading,
   unlinkSheet,
   dragPayload,
+  hintsFor,
 } from '@/entities/version-series';
 
 import { MatrixCellView, Thumb } from './matrix-cell';
@@ -66,6 +68,8 @@ export interface SheetMatrixProps {
   readonly onGesture: (result: GestureResult) => void;
   readonly onSheet: (row: ComparisonMatrixRow, cell: ComparisonMatrixCell) => void;
   readonly onOpenPair: (pair: ComparisonSheetPair) => void;
+  /** All the hints of the document set; each cell takes those that concern it (`hintsFor`). */
+  readonly hints?: readonly ComparisonAiPairHint[];
 }
 
 function UnassignedRow({
@@ -208,6 +212,7 @@ export function SheetMatrix({
   onGesture,
   onSheet,
   onOpenPair,
+  hints = [],
 }: SheetMatrixProps) {
   const columns = matrix.columns ?? [];
   const allRows = matrix.rows ?? [];
@@ -285,6 +290,7 @@ export function SheetMatrix({
                     touched={touched}
                     mayEdit={mayEdit}
                     side={cell.version_uid === sides.a ? 'a' : cell.version_uid === sides.b ? 'b' : null}
+                    hints={hintsFor(hints, row, cell)}
                     onSheet={onSheet}
                     onUnlink={(r, c) => (c.page === undefined ? undefined : onGesture(unlinkSheet(r, c.page)))}
                     onLink={(r, c, candidate: ComparisonMatrixCandidate) => onGesture(linkCandidate(r, c.version_uid, candidate))}

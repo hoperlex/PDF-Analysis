@@ -39,10 +39,10 @@ export { useComparisonQueueSummary, usePageProfile } from './api/use-extras';
 export { classifyThumbnailFailure, useThumbnail } from './api/use-thumbnail';
 
 export { MODULE_OFF_DETAIL, MODULE_OFF_TITLE, versionsModuleOn } from './model/module';
-export type { ShownStep, StepTone, StepView } from './model/steps';
+export type { AiStepId, SelectableStep, ShownStep, StepTone, StepView } from './model/steps';
 export {
-  LATER_STEPS,
-  LATER_STEPS_NOTE,
+  AI_STEP_IDS,
+  SELECTABLE_STEPS,
   SHOWN_STEPS,
   STEP_HINTS,
   STEP_LABELS,
@@ -52,6 +52,7 @@ export {
   isRunningState,
   stepRank,
   stepView,
+  toneOfState,
 } from './model/steps';
 export type { OverviewFilter, OverviewGroup, OverviewView, Sort, SortDirection, SortKey } from './model/overview-view';
 export {
@@ -221,3 +222,173 @@ export {
 } from './model/queue-words';
 export type { ThumbnailSnapshot, ThumbnailState } from './model/thumbnail-store';
 export { ThumbnailStore } from './model/thumbnail-store';
+
+// ------------------------------------------------------------------------------ wave C2 (`CMP-VC-UI-02`): the AI layer
+
+export { AI_POLL_MS, AI_QUEUE_POLL_MS } from './api/use-ai';
+export type { EstimateScope } from './api/use-ai';
+export {
+  estimateScopeKey,
+  useAiEstimate,
+  useAiPairCheck,
+  useAiPairHints,
+  useAiQueue,
+  useAiSheetChanges,
+  useDescriptionHistory,
+  useLaunchQueue,
+  useReports,
+  useReviewSheets,
+  useSheetDescription,
+  useSpecificationChanges,
+  useSpecifications,
+} from './api/use-ai';
+export type { AiJobAct, AiJobActCommand, AiJobMethod, QueueCommand, ReportCommand, StartAiCommand } from './api/use-ai-commands';
+export { JOB_ACTS, consentFor, useAiJobAct, useAiStart, useQueueCommand, useReportCommand } from './api/use-ai-commands';
+export type { ConsentFlow, ConsentFlowOptions } from './api/use-consent-flow';
+export { useConsentFlow } from './api/use-consent-flow';
+export type { SelectionEstimate, SelectionItem } from './api/use-selection-estimates';
+export { useSelectionEstimates } from './api/use-selection-estimates';
+export type { DownloadTarget } from './api/use-download';
+export { useDownload } from './api/use-download';
+
+export {
+  AI_CEILING_LABELS,
+  AI_CERTAINTY_LABELS,
+  AI_CONFIDENCE_LABELS,
+  AI_EXCLUDE_REASON_LABELS,
+  AI_JOB_PARTIAL_LABEL,
+  AI_JOB_STATE_LABELS,
+  AI_METHOD_LABELS,
+  AI_PAUSE_ADVICE,
+  AI_PAUSE_REASON_LABELS,
+  AI_SHEET_STATE_LABELS,
+  AI_SHEET_STATE_TONES,
+  AI_SIDE_WORDS,
+  AI_TEXT_NOTE,
+  AI_TIER_LABELS,
+  AI_TIER_TITLES,
+  LAUNCH_ENTRY_STATE_LABELS,
+  LAUNCH_QUEUE_STATE_LABELS,
+  PAIR_DECISION_LABELS,
+  PAIR_QUESTION_KIND_LABELS,
+  RECORDED_LABEL,
+  RECORDED_NOTE,
+  REPORT_ARTIFACT_LABELS,
+  REPORT_KIND_LABELS,
+  REPORT_KIND_TITLES,
+  REPORT_SOURCE_LABELS,
+  REPORT_STAGE_LABELS,
+  REPORT_STATE_LABELS,
+  REVIEW_SHEET_KIND_LABELS,
+  REVIEW_SHEET_KIND_TITLES,
+  SPEC_CHANGE_KIND_LABELS,
+  SPEC_FIELD_LABELS,
+  SPEC_METHOD_LABELS,
+  SPEC_METHOD_TITLES,
+  SPEC_PHASE_LABELS,
+  SPEC_REASON_UNDESCRIBED,
+  SPEC_REASON_WORDS,
+  SPEC_STATE_LABELS,
+  UNCONFIRMED_LABEL,
+  UNIT_MARKS,
+  aiJobStateLabel,
+  descriptionHasContent,
+  pauseNeedsConsent,
+  specFieldLabel,
+  specReasonWords,
+} from './model/ai-words';
+export type { ConsentKind, EstimateLine } from './model/estimate';
+export {
+  BILLING_LABELS,
+  BLOCKED_SENTENCES,
+  CEILINGS_LINE,
+  CONFIRM_LABELS,
+  CONSENT_LINES,
+  NOTHING_TO_SEND_SENTENCE,
+  NOT_METERED_LABEL,
+  NOT_METERED_TITLE,
+  NO_CEILINGS_LINE,
+  RECONSENT_NOTE,
+  RESTART_CONFIRM_LABELS,
+  RETRY_FAILED_LABEL,
+  agreementStands,
+  ceilingsLine,
+  consentKindOf,
+  consentOf,
+  costLine,
+  estimateLines,
+  formatUsd,
+  isBlocked,
+  isNotMetered,
+  isNothingToSend,
+  megabytes,
+  reconsentRequired,
+} from './model/estimate';
+export type { AiStepAction, AiStepActionId, AiStepCell, AiStepFacts, ColumnState, QueueBadge, SelectContext, SheetTotals } from './model/ai-steps';
+export {
+  COLUMN_SELECT_TITLE,
+  NOT_NEEDED_TITLE,
+  ROW_SELECT_TITLE,
+  aiStepActions,
+  aiStepCell,
+  aiStepState,
+  canSelect,
+  columnState,
+  pairNote,
+  queueBadge,
+  reportNote,
+  selectionKey,
+  sheetTotals,
+  sheetsNote,
+} from './model/ai-steps';
+export {
+  AI_QUEUE_TITLE,
+  LAUNCH_QUEUE_TITLE,
+  LAUNCH_QUEUE_TONES,
+  PREVIEW_LIMIT,
+  QUEUE_ENQUEUE_LABEL,
+  SELECTION_CLEAR_LABEL,
+  SELECTION_RUN_LABEL,
+  SELECTION_RUN_TITLE,
+  aiQueueItemLine,
+  aiQueueName,
+  aiQueueShown,
+  aiQueueText,
+  canRemoveEntry,
+  entryLabel,
+  launchControls,
+  launchCountsLine,
+  launchQueueShown,
+  previewLines,
+  queueStepLabel,
+  selectionTitle,
+} from './model/launch-queue';
+export type { HintMark } from './model/hints';
+export { MOON, hintMark, hintText, hintTitle, hintsFor, newestHint } from './model/hints';
+export {
+  canCancelReport,
+  canContinueReport,
+  canDeleteReport,
+  canPrepareClientReport,
+  canRebuildReport,
+  canStartReport,
+  coverageLine,
+  coveragePercent,
+  hasArtifact,
+  isLiveReport,
+  pdfName,
+  positionsLine,
+  reportKindLine,
+  reportProgressLine,
+  sourceMdName,
+  specMethodsLine,
+  specSheetsLine,
+  unitMark,
+  usageLine,
+} from './model/report-view';
+export type { Evidence } from './model/description-view';
+export { copyText, evidenceCounter, evidenceOf, focusIndexOf, leadLine, nowText, stepIndex, wasText } from './model/description-view';
+export { AiLabel, AiText } from './ui/ai-text';
+export type { AiTextProps } from './ui/ai-text';
+export { EstimatePanel } from './ui/estimate-panel';
+export type { EstimatePanelProps } from './ui/estimate-panel';

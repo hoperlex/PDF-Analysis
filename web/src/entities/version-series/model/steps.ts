@@ -6,9 +6,9 @@
  * The contract gives each step a state code (`ComparisonStepState`) and the figures the original's
  * note quotes (`ComparisonStepCounts`); the Russian is this file's, and the words and tones are those
  * of `CMP-VC-OVERVIEW-01` section 6.2. A state a step has no word of its own for gets the generic word
- * of the state, so no code is ever printed. Steps 4, 6 and 7 belong to wave C2 and are always
- * `not_applicable` («—», tone off): the table has no column for them (see {@link LATER_STEPS}), but the
- * next-step chip may still name them, so they have a label here.
+ * of the state, so no code is ever printed. Steps 4, 6 and 7 belong to wave C2: while the overview does not serve them they are
+ * `not_applicable` («—», tone off) and the AI layer (`ai-steps.ts`) draws their cells from the AI jobs and the reports; the
+ * words of the original's `stageView` (`:65-115`) are below.
  */
 
 import type { ComparisonStepCounts, ComparisonStepId, ComparisonStepState } from '@/shared/api';
@@ -46,15 +46,17 @@ export const STEP_HINTS: Readonly<Record<ComparisonStepId, string>> = {
   report: '«Сводка изменений (MD)» — все изменения комплекта одним файлом; PDF-отчёт — короткий анализ по этой сводке.',
 };
 
-/** The columns the table draws: steps 1, 2, 3 and 5. */
-export const SHOWN_STEPS = ['upload', 'profile', 'matrix', 'series'] as const satisfies readonly ComparisonStepId[];
+/** The columns the table draws: all seven steps, in the original's order (`STAGES`, `:6-16`). */
+export const SHOWN_STEPS = ['upload', 'profile', 'matrix', 'ai_pairs', 'series', 'ai_changes', 'report'] as const satisfies readonly ComparisonStepId[];
 export type ShownStep = (typeof SHOWN_STEPS)[number];
 
-/** The steps of wave C2 (4, 6, 7): no column, and the screen says so. */
-export const LATER_STEPS = ['ai_pairs', 'ai_changes', 'report'] as const satisfies readonly ComparisonStepId[];
+/** The steps of wave C2 (4, 6, 7): their cells are drawn by the AI layer (`ai-steps.ts`), from the AI jobs and the reports. */
+export const AI_STEP_IDS = ['ai_pairs', 'ai_changes', 'report'] as const satisfies readonly ComparisonStepId[];
+export type AiStepId = (typeof AI_STEP_IDS)[number];
 
-export const LATER_STEPS_NOTE =
-  'Шаги 4 «ИИ-проверка сомнительных пар», 6 «ИИ-описание изменений» и 7 «Сводка и отчёт» появятся позже: в таблице их столбцов пока нет.';
+/** The steps a row checkbox can queue (`SELECTABLE`, `projects.js:355`): the four after the matrix, without the upload and the profile. */
+export const SELECTABLE_STEPS = ['ai_pairs', 'series', 'ai_changes', 'report'] as const satisfies readonly ComparisonStepId[];
+export type SelectableStep = (typeof SELECTABLE_STEPS)[number];
 
 export type StepTone = 'ok' | 'warn' | 'run' | 'todo' | 'bad' | 'off';
 
@@ -94,6 +96,11 @@ const TONES: Readonly<Record<ComparisonStepState, StepTone>> = {
   not_applicable: 'off',
 };
 
+/** The tone of a state (`TONE`, `:15-16`). */
+export function toneOfState(state: ComparisonStepState): StepTone {
+  return TONES[state];
+}
+
 /** The word of a state when the step has none of its own. */
 const GENERIC_WORDS: Readonly<Record<ComparisonStepState, string>> = {
   not_started: 'не запускалось',
@@ -117,6 +124,10 @@ const STEP_WORDS: Readonly<Partial<Record<ComparisonStepId, Partial<Record<Compa
   profile: { done: 'готов', running: 'идёт', not_started: 'не начат', failed: 'ошибка' },
   matrix: { done: 'готово', stale: 'устарело', not_started: 'не собрано' },
   series: { done: 'готово', not_started: 'не запускалось', stale: 'по старому порядку', interrupted: 'прервано' },
+  // `projects.js:65-115` `stageView`: «проверено», «не проверялось»; «готово», «ждёт сравнения»; «PDF готов», «PDF строится».
+  ai_pairs: { done: 'проверено', partial: 'проверено', attention: 'проверено', not_started: 'не проверялось', interrupted: 'прервано' },
+  ai_changes: { done: 'готово', partial: 'готово', not_started: 'не запускалось', blocked: 'ждёт сравнения', interrupted: 'прервано' },
+  report: { done: 'PDF готов', running: 'PDF строится', failed: 'ошибка PDF', interrupted: 'прервано' },
 };
 
 export interface StepView {
