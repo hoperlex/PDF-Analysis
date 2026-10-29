@@ -217,6 +217,19 @@ def test_the_prepared_row_is_committed_before_the_adapter_is_called_and_the_adap
     assert log.at("complete")[0] > call and any(i > log.at("complete")[0] for i in log.at("commit"))
 
 
+def test_the_attempt_context_is_bound_to_the_prepared_call_before_dispatch() -> None:
+    log = Log()
+
+    class Context:
+        def bind(self, item: FakeItem, call_id: str) -> None:
+            log.append(("bind_context", item.attempt_id, call_id))
+
+    adapter = Adapter(log, reply=_reply())
+    _call(_make(log), FakeItem(log), _route(adapter, call_context=Context()))
+    assert log.at("prepare")[0] < log.at("bind_context")[0] < log.at("mark_sent")[0] < log.at("adapter")[0]
+    assert log[log.at("bind_context")[0]] == ("bind_context", "cqa_01", "cmc_01")
+
+
 def test_a_stale_attempt_is_refused_before_anything_is_prepared() -> None:
     log = Log()
     adapter = Adapter(log, reply=_reply())

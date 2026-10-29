@@ -399,4 +399,4 @@ def _is_recorded(route: CallRoute) -> bool:
 def sheet_changes_handler(dependencies: WorkDependencies) -> SheetChangesHandler:
     """The factory ``comparison.public.HANDLER_FACTORIES`` holds (a ``HandlerFactory``). Built with no seams of its own: a process whose
     composition root supplies a route source builds the handler with it (see the module note)."""
-    return SheetChangesHandler(dependencies)
+    return SheetChangesHandler(dependencies, routes=getattr(dependencies, "routes", None))

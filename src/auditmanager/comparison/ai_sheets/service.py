@@ -1,4 +1,4 @@
-"""The fifteen operations of the AI description of sheet changes (`CMP-VC-AISHEET-01`), over the AI-job core.
+"""The AI description of sheet changes (`CMP-VC-AISHEET-01`), over the AI-job core.
 
 The service answers the contract's shapes as plain dictionaries; the adapter in the composition root validates them with the generated
 models and owns the cursors. **Every job object, estimate, consent and state edge is** ``ComparisonAiJobService``'s: this service

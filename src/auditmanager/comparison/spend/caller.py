@@ -145,6 +145,8 @@ class ComparisonModelCaller:
             request_sha256=request.request_sha256, estimate_micros=estimate_micros,
             consent=consent, job_key=job_key,
         )
+        if route.call_context is not None:
+            route.call_context.bind(item, call_id)
         self._mark_sent(item, call_id)
         response = self._dispatch(call_id, route, request, mode=mode, unmetered=unmetered)
         cost_basis, cost_micros = self._cost(response, route, unmetered=unmetered)

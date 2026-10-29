@@ -24,6 +24,8 @@ if TYPE_CHECKING:  # pragma: no cover
 
     from auditmanager.comparison.work.repository import ComparisonWorkRepository
     from auditmanager.storage.public import BlobStore
+    from auditmanager.comparison.ai_jobs.model import AiJobRecord
+    from auditmanager.comparison.spend.model import CallRoute
 
 __all__ = [
     "ATTEMPT_STATES",
@@ -48,6 +50,7 @@ __all__ = [
     "TERMINAL_STATES",
     "WORK_STATES",
     "WorkDependencies",
+    "ComparisonRoutes",
     "WorkHandler",
     "WorkItem",
     "Yielded",
@@ -206,6 +209,16 @@ class WorkDependencies:
     session_factory: "sessionmaker[Session]"
     blob_store: BlobStore
     work: "ComparisonWorkRepository"
+    #: The worker-only binding of a job's frozen executor revision; absent in registry tests.
+    routes: "ComparisonRoutes | None" = None
+
+
+class ComparisonRoutes(Protocol):
+    """The route the worker opens for a consented comparison job, never the API process."""
+
+    def route(self, session: "Session", job: "AiJobRecord") -> "CallRoute": ...
+
+    def route_for(self, session: "Session", job: "AiJobRecord") -> "CallRoute": ...
 
 
 #: A slice adds a handler by appending a factory to ``comparison.public.HANDLER_FACTORIES``.

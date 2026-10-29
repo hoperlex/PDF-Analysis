@@ -180,6 +180,8 @@ class CallRoute:
     check_identity: bool = True
     unmetered: bool = False
     pin: "ModelPin | None" = None
+    #: Worker-only mutable attempt context, filled after the journal's prepared row exists.
+    call_context: Any | None = None
 
     def __post_init__(self) -> None:
         if not self.model_identity:

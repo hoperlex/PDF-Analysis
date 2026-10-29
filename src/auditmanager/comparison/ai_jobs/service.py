@@ -203,6 +203,10 @@ class ComparisonAiJobService:
         """The estimate of a start (or of what a job has left) in a unit of work of its own: no model call, no write."""
         self._require_versions_module()
         with session_scope(self._factory) as session:
+            if mode is AiMode.START:
+                live = self._repo.live_on_scope(session, scope)
+                if live is not None and live.state == "paused" and live.pause_reason in ("overrun", "route_changed"):
+                    return self.estimate_in(session, live.scope, AiMode.LEFT, job=live)
             return self.estimate_in(session, scope, mode)
 
     def estimate_in(

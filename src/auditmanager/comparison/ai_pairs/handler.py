@@ -262,7 +262,10 @@ class PairCheckHandler:
                 raise _Stop(Yielded(NOT_RUNNING_WAIT_SECONDS))
             if self._binder is None:
                 raise _Stop(Failed(REASON_BINDER_MISSING))
-            route = self._binder(session, job)
+            try:
+                route = self._binder(session, job)
+            except DomainError:
+                raise _Stop(Failed(REASON_BINDER_MISSING)) from None
             consent = jobs.consent_for_calls(session, job.job_id)
         request = self._request(job, plan)
         input_tokens = AiCallGroup(
@@ -448,4 +451,5 @@ class PairCheckHandler:
 def pair_check_handler(dependencies: WorkDependencies) -> PairCheckHandler:
     """The factory ``comparison.public.HANDLER_FACTORIES`` holds (a ``HandlerFactory``). The binder of a live route is the
     composition root's; until it hands one in, a live item fails with ``model_binder_missing``."""
-    return PairCheckHandler(dependencies)
+    routes = getattr(dependencies, "routes", None)
+    return PairCheckHandler(dependencies, binder=None if routes is None else routes.route)

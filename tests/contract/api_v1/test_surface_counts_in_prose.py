@@ -47,7 +47,7 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 #: scanner beside this module, and migration source is immutable history. A new top-level runtime,
 #: operator or generator directory therefore enters without changing this file.
 NON_LIVE_PATH_PARTS = frozenset({"artifacts", "contracts", "docs", "fixtures", "tests"})
-NON_LIVE_PREFIXES = ("db/migrations/", "web/openapi/")
+NON_LIVE_PREFIXES = ("db/migrations/", "web/openapi/", "src/auditmanager/comparison/report/fonts/")
 NON_LIVE_FILES = frozenset({"web/FRONTEND_LOCK.json"})
 #: P02_SEAMS is a maintained implementation input, not a wave/history report, so it is the one
 #: documentation role explicitly admitted after the role exclusions above (`D-100`).

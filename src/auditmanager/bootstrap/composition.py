@@ -35,6 +35,7 @@ from auditmanager.comparison.public import (
     SPEND_SETTLERS as COMPARISON_SPEND_SETTLERS,
     ComparisonWorkRepository,
     ComparisonWorkRunner,
+    CallRoute,
     HandlerRegistry,
     TileRenderer,
     WorkDependencies,
@@ -194,8 +195,55 @@ class WorkerRuntime:
     comparison_work: ComparisonWorkRunner | None = None
 
 
+class _ComparisonRoutes:
+    """Worker-only binding of the revision a comparison AI job consented to."""
+
+    def __init__(self, *, ring: Any, policy: Any, runtime: Any, blob_store: Any = None) -> None:
+        self._ring, self._policy, self._runtime, self._blob_store = ring, policy, runtime, blob_store
+
+    def route(self, session: Session, job: Any) -> CallRoute:
+        from auditmanager.executors.public import SecretUnreadableError, pinned_models
+        from auditmanager.executors.runtime import bind_connection, route_missing
+        from auditmanager.comparison.spend.pull_images import ComparisonCallContext, PublishedPullAdapter
+        from auditmanager.shared.errors import DomainError, ErrorCode
+
+        # Recorded jobs are served only by an explicitly injected recorded route in a test.
+        # A worker holding live credentials must never turn their replay into a live call.
+        if job.provider_mode != "live":
+            raise route_missing()
+        context = ComparisonCallContext(self._runtime.session_factory)
+        try:
+            bound = bind_connection(
+                session, job.connection_revision_id, ring=self._ring, policy=self._policy,
+                context=context, runtime=self._runtime,
+            )
+        except SecretUnreadableError:
+            raise DomainError(ErrorCode.DEPENDENCY_CREDENTIAL_REFUSED, dependency="model_provider") from None
+        settings = bound.revision.settings
+        pin = next((value for value in pinned_models() if value.model_id == job.pinned_model), None)
+        if pin is None or settings.pin_id != job.pinned_model or bound.revision.revision_id != job.connection_revision_id:
+            raise route_missing()
+        adapter = bound.adapter
+        if getattr(getattr(bound, "connection", None), "kind", None) == "pull":
+            from auditmanager.comparison.profile.publish import ProfileBlobPublisher
+
+            adapter = PublishedPullAdapter(
+                adapter, ProfileBlobPublisher(self._runtime.session_factory, self._blob_store),
+            )
+        return CallRoute(
+            adapter=adapter, model_identity=job.pinned_model,
+            connection_revision_id=bound.revision.revision_id,
+            expected_model=settings.gateway_model, check_identity=True,
+            unmetered=settings.billing == "not_metered", pin=pin, call_context=context,
+        )
+
+    def route_for(self, session: Session, job: Any) -> CallRoute:
+        return self.route(session, job)
+
+
 def build_comparison_work(
     *, sessions: sessionmaker[Session], engine: Any, blob_store: Any, environ: Mapping[str, str],
+    ring: Any = None,
 ) -> ComparisonWorkRunner:
     """`CMP-WORK-01` (ADR-0025 decisions 4, 6, 23): the comparison loop's brain, or a refusal.
 
@@ -211,13 +259,19 @@ def build_comparison_work(
         raise ConfigurationError(str(exc)) from exc
     work = ComparisonWorkRepository()
     try:
+        from auditmanager.executors.runtime import DestinationPolicy, KindRuntime
+
+        routes = _ComparisonRoutes(
+            ring=ring, policy=DestinationPolicy.from_environment(dict(environ)),
+            runtime=KindRuntime(session_factory=sessions, engine=engine), blob_store=blob_store,
+        )
         # `CMP-INGEST-02`: the two work kinds of the batch operations are appended here, not in
         # ``comparison.public`` (a ``comparison`` module may not import ``ingest``); the registry
         # still refuses a duplicate kind.
         registry = HandlerRegistry.build(
             (*COMPARISON_HANDLER_FACTORIES, *BATCH_HANDLER_FACTORIES),
             WorkDependencies(
-                engine=engine, session_factory=sessions, blob_store=blob_store, work=work,
+                engine=engine, session_factory=sessions, blob_store=blob_store, work=work, routes=routes,
             ),
         )
     except WorkQueueError as exc:
@@ -312,7 +366,7 @@ def build_worker_runtime(
         state_dir=None if resolved.worker_state_dir is None else Path(resolved.worker_state_dir),
         probe_runner=probe_runner,
         comparison_work=build_comparison_work(
-            sessions=sessions, engine=engine, blob_store=store, environ=env,
+            sessions=sessions, engine=engine, blob_store=store, environ=env, ring=resolved.secrets_private_ring,
         ),
     )
 

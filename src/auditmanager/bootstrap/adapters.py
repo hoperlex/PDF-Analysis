@@ -6108,7 +6108,7 @@ class ComparisonAiPairAdapter(_SessionHolder, _VersionsModuleGate):
 
 
 class ComparisonAiSheetAdapter(_SessionHolder, _VersionsModuleGate):
-    """`CMP-VC-AISHEET-01` serves the fifteen operations of the AI description of sheet changes over
+    """`CMP-VC-AISHEET-01` serves the sheet-change operations over
     :class:`~auditmanager.comparison.ai_sheets.service.ComparisonAiSheetService` and the AI-job core (ADR-0025 decisions 3, 10, 11, 17-23).
 
     The adapter owns the mapping to the contract's models, the cursors and the one read the service does not make itself: the actor's

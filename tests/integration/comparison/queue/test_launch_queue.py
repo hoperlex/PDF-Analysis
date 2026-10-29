@@ -13,9 +13,10 @@ from auditmanager.comparison.queue.handler import ComparisonLaunchHandler
 from auditmanager.comparison.queue.service import ComparisonLaunchQueueService
 from auditmanager.comparison.work.model import WorkDependencies, Yielded
 from auditmanager.comparison.work.repository import ComparisonWorkRepository
+from auditmanager.ingest.public import CommandRepository, payload_fingerprint
 from auditmanager.shared.db import session_scope
 from auditmanager.shared.errors import DomainError, ErrorCode
-from auditmanager.shared.identity import DocumentUid, ProjectUid
+from auditmanager.shared.identity import ComparisonMatrixId, ComparisonSeriesId, DocumentUid, IdempotencyKey, ProjectUid
 from tests.support.accounts import SUITE_DISPLAY_LABEL, complete_expert_account
 from auditmanager.workers.public import WorkerRegistry
 
@@ -102,6 +103,45 @@ def test_moved_consent_waits_and_the_next_entry_can_finish(scene: Scene, monkeyp
     assert after["entries"][1]["state"] == "needs_consent"  # profile is first by step order
     assert after["entries"][1]["entry_id"] == queued["entries"][1]["entry_id"]
     assert after["counts"]["done"] == 1 and after["counts"]["needs_consent"] == 1
+
+
+def test_series_ai_entries_keep_the_series_used_for_consent(scene: Scene, monkeypatch: pytest.MonkeyPatch) -> None:
+    matrix_id, series_id = str(ComparisonMatrixId.new()), str(ComparisonSeriesId.new())
+    with session_scope(scene.sessions) as session:
+        claim = CommandRepository().begin(
+            session, command_type="queue_test_series", idempotency_key=IdempotencyKey("queue-test-series"),
+            fingerprint=payload_fingerprint({"series_id": series_id}),
+        )
+        session.execute(text(
+            "INSERT INTO comparison_matrix (comparison_matrix_id, project_uid, document_uid, build_no, "
+            "profile_signature, rules_version, algo_version, rows) "
+            "VALUES (:matrix, :project, :document, 1, :digest, 'test', 'test', '[]'::jsonb)"
+        ), {"matrix": matrix_id, "project": scene.project, "document": scene.document, "digest": "a" * 64})
+        session.execute(text(
+            "INSERT INTO comparison_series (comparison_series_id, project_uid, document_uid, "
+            "comparison_matrix_id, matrix_edit_no, input_sha256, actor_user_uid, actor_label, command_id) "
+            "VALUES (:series, :project, :document, :matrix, 0, :digest, :actor, :label, :command)"
+        ), {"series": series_id, "project": scene.project, "document": scene.document,
+            "matrix": matrix_id, "digest": "b" * 64, "actor": scene.user,
+            "label": SUITE_DISPLAY_LABEL, "command": str(claim.command_id)})
+    scene.enqueue(["ai_changes", "report"], "series-ai-consent")
+    with session_scope(scene.sessions) as session:
+        item = scene.work.claim(session, worker_id=scene.worker, modules={"versions"}, kinds={"comparison_launch"})
+    assert item is not None
+    handler = ComparisonLaunchHandler(WorkDependencies(None, scene.sessions, None, scene.work))  # type: ignore[arg-type]
+    monkeypatch.setattr(handler, "_latest_series", lambda _entry: series_id)
+
+    def estimate(entry):
+        assert entry["comparison_series_id"] == series_id
+        return {"estimate_digest": "c" * 64}
+
+    monkeypatch.setattr(handler, "_estimate", estimate)
+    assert isinstance(handler.run(item), Yielded)
+    assert isinstance(handler.run(item), Yielded)
+    entries = scene.service.get_queue(project_uid=scene.project)["entries"]
+    assert [(entry["step"], entry["state"], entry["series_id"]) for entry in entries] == [
+        ("ai_changes", "needs_consent", series_id), ("report", "needs_consent", series_id),
+    ]
 
 
 def test_pause_resume_remove_clear_and_module_gate(scene: Scene) -> None:

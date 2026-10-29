@@ -631,4 +631,4 @@ class ReportHandler:
 
 def report_handler(dependencies: WorkDependencies) -> ReportHandler:
     """The factory ``comparison.public.HANDLER_FACTORIES`` holds (a ``HandlerFactory``)."""
-    return ReportHandler(dependencies)
+    return ReportHandler(dependencies, model_source=getattr(dependencies, "routes", None))

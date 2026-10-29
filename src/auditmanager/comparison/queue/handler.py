@@ -43,6 +43,12 @@ class ComparisonLaunchHandler:
 
     def __init__(self, dependencies: WorkDependencies) -> None:
         self._deps = dependencies
+        self._wired = False
+
+    def _wire(self) -> None:
+        if self._wired:
+            return
+        dependencies = self._deps
         self._repo = LaunchQueueRepository()
         self._factory = dependencies.session_factory
         self._matrix = ComparisonMatrixService(session_factory=self._factory, blob_store=dependencies.blob_store)
@@ -56,10 +62,12 @@ class ComparisonLaunchHandler:
                                                 comparison_modules="versions")
         self._jobs = ComparisonAiJobService(self._factory, methods=[], comparison_modules="versions")
         self._overview = ComparisonOverviewService(session_factory=self._factory)
+        self._wired = True
 
     def run(self, item: WorkItem) -> Outcome:
         if item.kind != self.kind or item.payload != {"project_uid": item.project_uid}:
             return Failed("comparison_launch_payload_invalid")
+        self._wire()
         try:
             return self._run(item)
         except DomainError as error:
@@ -88,6 +96,13 @@ class ComparisonLaunchHandler:
                 phase = "start"
         if phase == "start":
             if entry["step"] in ("ai_pairs", "ai_changes", "report"):
+                if entry["step"] in ("ai_changes", "report") and entry["comparison_series_id"] is None:
+                    series_id = self._latest_series(entry)
+                    with session_scope(self._factory) as session:
+                        item.require_current(session)
+                        if not self._repo.attach_waiting_series(session, entry["comparison_launch_entry_id"], series_id):
+                            return Yielded()
+                    entry = {**entry, "comparison_series_id": series_id}
                 try:
                     estimate = self._estimate(entry)
                 except DomainError as error:
@@ -195,7 +210,9 @@ class ComparisonLaunchHandler:
         step = entry["step"]
         if step == "ai_pairs":
             return self._pairs.estimate(project_uid=entry["project_uid"], document_uid=entry["document_uid"])
-        series_id = self._latest_series(entry)
+        series_id = entry["comparison_series_id"]
+        if series_id is None:
+            raise DomainError(ErrorCode.CONFLICT, conflict_reason="comparison_series_state")
         if step == "ai_changes":
             return self._sheets.estimate_series(series_id=series_id, only_failed=False)
         report = self._reports.create_report(
@@ -218,15 +235,20 @@ class ComparisonLaunchHandler:
                                          idempotency_key=key)
                 job_id = view["job_id"]
             elif step == "ai_changes":
-                series_id = self._latest_series(entry)
+                series_id = entry["comparison_series_id"]
+                if series_id is None:
+                    raise DomainError(ErrorCode.CONFLICT, conflict_reason="comparison_series_state")
                 view = self._sheets.start_series(
                     series_id=series_id, consent=consent, restart=entry["restart"],
                     command=AiJobCommand("start_comparison_ai_sheet_changes", key, entry["actor_user_uid"], roles),
                 )
                 job_id = view["job_id"]
             else:
+                series_id = entry["comparison_series_id"]
+                if series_id is None:
+                    raise DomainError(ErrorCode.CONFLICT, conflict_reason="comparison_series_state")
                 report = self._reports.create_report(
-                    series_id=self._latest_series(entry), kind="client", reuse=True,
+                    series_id=series_id, kind="client", reuse=True,
                     user_uid=entry["actor_user_uid"], actor_label=entry["actor_label"], actor_roles=roles,
                     idempotency_key=f"launch-{entry['comparison_launch_entry_id']}-draft",
                 )

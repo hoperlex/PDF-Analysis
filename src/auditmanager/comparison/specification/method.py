@@ -223,7 +223,7 @@ class SpecHandler:
                 try:
                     route = self._binder(session, job)
                 except DomainError as refusal:
-                    if refusal.code is ErrorCode.DEPENDENCY_UNAVAILABLE:
+                    if refusal.code in (ErrorCode.DEPENDENCY_UNAVAILABLE, ErrorCode.DEPENDENCY_CREDENTIAL_REFUSED):
                         return Failed(REASON_ROUTE_UNBOUND, retry=True)
                     raise
         except _Stop as stop:
@@ -319,4 +319,5 @@ def _recorded(route: CallRoute) -> bool:
 
 def spec_handler(dependencies: WorkDependencies) -> SpecHandler:
     """The factory ``comparison.public.HANDLER_FACTORIES`` holds (a ``HandlerFactory``)."""
-    return SpecHandler(dependencies)
+    routes = getattr(dependencies, "routes", None)
+    return SpecHandler(dependencies, binder=unbound_binder if routes is None else routes.route)

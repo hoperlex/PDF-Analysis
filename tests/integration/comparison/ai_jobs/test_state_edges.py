@@ -10,6 +10,7 @@ import pytest
 
 from auditmanager.comparison.public import AiMode, AiScope, Completed, Failed
 from auditmanager.comparison.ai_jobs.service import COMMAND_EDGES
+from auditmanager.comparison.spend.pull_images import ComparisonCallContext
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 KIND = "comparison_pair_check"
@@ -109,6 +110,15 @@ def test_a_pause_stops_the_job_and_its_waiting_items_and_a_resume_gives_them_bac
     assert item_states(db, w) == ["queued"] * 3
 
 
+def test_a_pull_call_context_reads_the_claimed_attempt_watchdog(db: Any, h: Any, w: Any) -> None:
+    item = db.claim(db.worker(), KIND)
+    assert item is not None
+    context = ComparisonCallContext(db.sessions)
+    context.bind(item, "cmc_prepared")
+    assert context.comparison_attempt_id == item.attempt_id and context.call_id == "cmc_prepared"
+    assert 0.0 < context.remaining_seconds() <= 900.0
+
+
 def test_a_pause_leaves_the_item_in_flight_to_finish(db: Any, h: Any, w: Any) -> None:
     worker = db.worker()
     held = db.claim(worker, KIND)
@@ -146,7 +156,8 @@ def test_a_resume_after_overrun_or_route_change_needs_a_new_consent_for_what_is_
         call(db, w, "resume", consent=db.consent("a" * 64))
     assert h.conflict_reason(stale) == "comparison_estimate_stale"
     assert snapshot(db, w) == before
-    left = w.service.estimate_in(db.sessions(), w.scope, AiMode.LEFT, job=w.service.job(db.sessions(), w.job))
+    # The public estimate GET uses this read; its digest must be the one resume accepts.
+    left = w.service.estimate(w.scope)
     assert left.totals.calls == 4
     view = call(db, w, "resume", consent=db.consent(left.estimate_digest))
     assert (view.record.state, view.record.consent_no, view.record.estimate_digest) == ("queued", 2, left.estimate_digest)

@@ -91,6 +91,15 @@ class LaunchQueueRepository:
             "WHERE comparison_launch_entry_id = :entry AND state = 'running'"
         ), {"entry": entry_id, "job_id": job_id, "series_id": series_id})
 
+    def attach_waiting_series(self, session: Session, entry_id: str, series_id: str) -> bool:
+        """Freeze the series used for consent before a waiting AI step advances."""
+        return session.execute(text(
+            "UPDATE comparison_launch_entry SET comparison_series_id = :series_id, "
+            "updated_at = statement_timestamp() WHERE comparison_launch_entry_id = :entry "
+            "AND state = 'waiting' AND step IN ('ai_changes', 'report') "
+            "AND (comparison_series_id IS NULL OR comparison_series_id = :series_id)"
+        ), {"entry": entry_id, "series_id": series_id}).rowcount == 1
+
     def delete_not_running(self, session: Session, project_uid: str) -> None:
         session.execute(text(
             "DELETE FROM comparison_launch_entry WHERE project_uid = :project AND state <> 'running'"
