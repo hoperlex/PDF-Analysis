@@ -171,7 +171,7 @@ lane: the operations then answer the sealed `503`; the engine's new `ALGO_VERSIO
 (the key changes), which is the intended effect.
 
 ## Handoff
-- changed files: (written with the report as the last commit)
-- commands/results: (written with the report)
-- known limits: (written with the report)
-- integration notes: (written with the report)
+- changed files: `src/auditmanager/comparison/specification/**` (new: `table.py`, `diff.py`, `views.py`, `reader.py`, `source.py`, `prompt.py`, `check.py`, `whole.py`, `repository.py`, `transition.py`, `service.py`, `method.py`); `src/auditmanager/comparison/engine/child/{job,program,settings}.py` (the channel `spec_positions`, the loading of the two pure modules, `ALGO_VERSION` `cmp-engine/4`); `bootstrap/adapters.py` (the body of `ComparisonSpecificationAdapter`), `bootstrap/composition.py` (its constructor line), `comparison/public.py`, `scripts/recovery/grant_classification.py`; the registers `test_router_answers.py`, `test_an_absent_parent_is_not_an_empty_page.py`, `test_comparison_ai_stub_operations.py`, `tests/unit/comparison/engine/{test_handler_unit,test_against_the_answer_keys,test_key_and_outcome}.py`; tests `tests/unit/comparison/specification/**`, `tests/unit/comparison/engine/test_spec_positions_channel.py`, `tests/integration/comparison/specification/**`; `docs/program/CMP-VC-SPEC-01.md`; this file. One allowed merge of `0f6a008d` (the AI-job core) into the branch.
+- commands/results: section 6 of `docs/program/CMP-VC-SPEC-01.md`; mutation proofs in its section 5 (twenty rows, each red and green).
+- known limits: section 9 of the report (twelve items; FIX items 1 to 3 are the wave's: the live binder of a routed connection in the worker, the core's `complete_if_drained` for a single-item job, the missing `reason` members of two part-A schemas).
+- integration notes: merge order AI-JOBS (contained), SPEC, AIPAIR, AISHEET, REPORT; the shared hunks are in section 8 of the report, including the identical `AUDITMANAGER_COMPARISON_MODULES=versions` line of the two sweeps' `app` fixtures that every C2 lane needs; a lane whose tests journal a model call must roll its transaction back (section 9, item 7).
