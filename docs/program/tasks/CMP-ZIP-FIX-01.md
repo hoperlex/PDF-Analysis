@@ -92,8 +92,8 @@ Merge after C2 publication and the review record. `CMP-STAGE-PAIR-01` must cite 
 Revert the scoped policy commit if it causes a regression; keep the comparison module disabled until an equivalent safe policy is restored. No data migration occurs.
 
 ## Handoff
-- changed files: pending
-- commands/results: pending
-- contracts: unchanged
-- known limits: pending
-- integration notes: pending
+- changed files: `src/auditmanager/ingest/comparison_zip/policy.py`, `tests/unit/ingest/comparison_zip/test_adversarial_archives.py`, this task, `docs/program/CMP-ZIP-FIX-01.md`, and the D-262 row of `docs/program/DEBT_REGISTER.md` only.
+- commands/results: two new outer/nested Unicode Path cases failed before the source edit because the archive was accepted; full focused ZIP reader suite then passed 185/185 in 4.76 s, including portal-policy differential tests; governance 16 passed and `git diff --check` clean.
+- contracts: unchanged; API `1.11.0` (176/198/517), migration head `0040_comparison_ai_reports`.
+- known limits: no first-use caller, live upload or fuzzing; D-262 stays open until raw-upload/admission/disk/PDF checks are implemented at the C3 caller. The owner chose exact `__MACOSX/` rejection; case variants are outside this task.
+- integration notes: merge after C2 publication, preserving the review record and the first-use block for `CMP-STAGE-PAIR-01`. No remote publication is authorized here. Forbidden portal/shared parser, contracts, migrations, root dependencies, composition root, styles and infrastructure were untouched.
