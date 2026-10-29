@@ -277,3 +277,78 @@ def _leave_no_live_item_behind(sessions: sessionmaker[Session]):
             "UPDATE comparison_work w SET state = 'cancelled', terminal_at = clock_timestamp() " + mine +
             " AND w.state IN ('queued', 'paused', 'retry_wait')"))
         session.commit()
+
+
+# -- part B: a job row of the transition, and the model a careful reader of the text would be ---------------------------------
+
+import json  # noqa: E402
+
+from auditmanager.comparison.specification import check  # noqa: E402
+
+ACTOR = "usr_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+SHA = "a" * 64
+
+
+def faithful_answer(source: dict[str, Any]) -> dict[str, Any]:
+    """The answer a careful model gives for a packet: every pipe row a position (its whole line as evidence, its cells as the
+    fields), the header and separator lines ignored as such, a plain line a section title."""
+    blocks = []
+    section = ""
+    for block in source["blocks"]:
+        rows, ignored = [], []
+        header: dict[int, str] | None = None
+        for line in block["lines"]:
+            cells = check._pipe_cells(line["text"])
+            if cells is None:
+                text_line = line["text"].strip()
+                if text_line.lower().startswith("примечание"):  # a substantive note is a position of its own, with the field note
+                    fields = {name: "" for name in check.FIELDS}
+                    fields["note"] = text_line
+                    rows.append({"section": section, "parent": "", "fields": fields, "evidence": [{"line": line["line"], "quote": line["text"]}]})
+                    continue
+                section = text_line
+                ignored.append({"line": line["line"], "reason": "section"})
+                continue
+            recognized = check._table_header(cells)
+            if recognized is not None:
+                header = recognized
+                ignored.append({"line": line["line"], "reason": "header"})
+                continue
+            if check._separator_row(cells):
+                ignored.append({"line": line["line"], "reason": "separator"})
+                continue
+            fields = {name: "" for name in check.FIELDS}
+            for index, field in (header or {}).items():
+                fields[field] = cells[index]
+            rows.append({"section": section, "parent": "", "fields": fields, "evidence": [{"line": line["line"], "quote": line["text"]}]})
+        blocks.append({"block_id": block["block_id"], "rows": rows, "ignored": ignored, "issues": []})
+    return {"blocks": blocks}
+
+
+@pytest.fixture
+def job_for(sessions: sessionmaker[Session]):
+    """``job_for(scope)``: a ``spec`` job of the transition with the connection revision it needs; the AI-job core is the writer of
+    this table in the product, the tests write the row they need."""
+
+    def make(scope: Any) -> str:
+        connection, revision, command, job = (f"{p}_{new_ulid()}" for p in ("exc", "excr", "cmd", "cai"))
+        with session_scope(sessions) as session:
+            session.execute(text("INSERT INTO executor_connection (connection_id, kind, display_name, created_by) VALUES (:id, 'http_api', 'test', :a)"),
+                            {"id": connection, "a": ACTOR})
+            session.execute(text(
+                "INSERT INTO executor_connection_revision (revision_id, connection_id, revision_no, created_by, pin_id, gateway_model, billing, "
+                "allow_client_documents, timeout_seconds, api_flavour, base_url, transport) VALUES (:r, :c, 1, :a, 'claude-opus-5', "
+                "'anthropic/claude-opus-5', 'metered', false, 60, 'openai_chat', 'https://proxy.test', 'direct')"),
+                {"r": revision, "c": connection, "a": ACTOR})
+            session.execute(text("INSERT INTO command_record (command_id, command_type, idempotency_key, payload_fingerprint) VALUES (:c, 'start_comparison_spec', :k, :f)"),
+                            {"c": command, "k": command[:20], "f": SHA})
+            session.execute(text(
+                "INSERT INTO comparison_ai_job (comparison_ai_job_id, project_uid, document_uid, method, "
+                "comparison_transition_id, connection_revision_id, pinned_model, provider_mode, estimate, estimate_digest, estimate_micros, "
+                "ceiling_micros, consented_by_user_uid, command_id) VALUES (:j, :p, :d, 'spec', :t, :rev, 'claude-opus-5', 'recorded', "
+                "CAST(:est AS jsonb), :dig, 0, 0, :a, :c)"),
+                {"j": job, "p": scope.project_uid, "d": scope.document_uid, "t": scope.transition_id, "rev": revision,
+                 "est": json.dumps({"estimate_digest": SHA, "units": 2}), "dig": SHA, "a": ACTOR, "c": command})
+        return job
+
+    return make

@@ -97,6 +97,8 @@ class VersionStream:
     parsed_pages: set[int] = field(default_factory=set)
     #: Candidate pages whose header was found and whose table was not read.
     unparsed_pages: set[int] = field(default_factory=set)
+    #: The pages that were read, in page order, as :func:`~.source.build_source` takes them: ``{"page", "sheet", "name", "columns", "rows"}``.
+    parsed: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def readable(self) -> bool:
@@ -159,6 +161,11 @@ class SpecificationReader:
                 continue
             stream.parsed_pages.add(number)
             parsed_pages.append({"page": number, "rows": parsed["rows"]})
+            stamp = row.summary.get("stamp") or {}
+            stream.parsed.append({
+                "page": number, "sheet": stamp.get("sheet_number") or "", "name": stamp.get("sheet_name") or "",
+                "columns": parsed["columns"], "rows": parsed["rows"],
+            })
         stream.items = table.assemble(parsed_pages)["items"] if parsed_pages else []
         return stream
 

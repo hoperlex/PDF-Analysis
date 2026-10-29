@@ -96,9 +96,6 @@ SEALED_STUB_GETS: frozenset[str] = frozenset({
     f"{_STUB_PAIR}/description/estimate",
     f"{_STUB_PAIR}/description/md",
     f"{_STUB_TRANSITION}/review-sheets",
-    f"{_STUB_SERIES}/specifications",
-    f"{_STUB_TRANSITION}/specification",
-    f"{_STUB_TRANSITION}/specification/changes",
     f"{_STUB_TRANSITION}/specification/estimate",
     f"/projects/{_PRJ}/comparison-launch-queue",
     "/execution/comparison-ai-queue",
@@ -162,7 +159,8 @@ class Composed:
 @pytest.fixture(scope="module")
 def app() -> Composed:
     assert os.environ.get("DATABASE_URL"), "this suite needs the lane's .env loaded"
-    environ = dict(os.environ) | {API_TOKEN_VARIABLE: DEPLOYMENT_SECRET}
+    # The versions module is served (`CMP-SEAL-C2` section 8): a wired comparison read of wave C2 refuses first while it is off.
+    environ = dict(os.environ) | {API_TOKEN_VARIABLE: DEPLOYMENT_SECRET, "AUDITMANAGER_COMPARISON_MODULES": "versions"}
     application = create_app(environ=environ)
     asgi = create_asgi_app(environ=environ, application=application)
     return Composed(application, TestClient(asgi, raise_server_exceptions=False))

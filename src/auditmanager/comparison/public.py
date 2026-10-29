@@ -224,6 +224,8 @@ from auditmanager.comparison.overview import ComparisonOverviewService
 
 # `CMP-VC-SPEC-01`: specifications of a version comparison (positions by GOST 21.110, the whole-specification comparison).
 from auditmanager.comparison.specification.reader import SpecificationReader
+from auditmanager.comparison.specification.service import SpecificationService
+from auditmanager.comparison.specification.transition import TransitionRun
 
 #: `CMP-WORK-01` (ADR-0025 decision 4). One tuple of handler factories, each
 #: ``Callable[[WorkDependencies], WorkHandler]``: ``build_worker_runtime`` builds one dependency
@@ -489,4 +491,6 @@ __all__ = [
     "series_pair_handler",
     "ComparisonOverviewService",
     "SpecificationReader",
+    "SpecificationService",
+    "TransitionRun",
 ]

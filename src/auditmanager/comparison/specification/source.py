@@ -114,8 +114,9 @@ def packet_chars(source: dict[str, Any]) -> int:
 
 
 def source_sha256(source: dict[str, Any]) -> str:
-    """The digest of the text the model reads: the blocks, their pages and their numbered lines."""
+    """The digest of the text the model reads: the blocks, their pages, sheets and titles and their numbered lines."""
     document = [
-        [b["block_id"], b["page"], b["kind"], [[ln["line"], ln["text"]] for ln in b["lines"]]] for b in source["blocks"]
+        [b["block_id"], b["page"], b["kind"], b.get("sheet", ""), b.get("name", ""), [[ln["line"], ln["text"]] for ln in b["lines"]]]
+        for b in source["blocks"]
     ]
     return hashlib.sha256(json.dumps(document, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()

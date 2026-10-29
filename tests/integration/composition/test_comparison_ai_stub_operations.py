@@ -111,6 +111,10 @@ WIRED: frozenset[str] = frozenset({
     # `CMP-VC-SPEC-01` part A: the deterministic positions of a page and of a sheet pair.
     "getVersionPageSpecPositions",
     "getComparisonSheetPairSpecPositions",
+    # `CMP-VC-SPEC-01` part B reads: the specifications of a series, of a transition and its changes.
+    "listComparisonSpecifications",
+    "getComparisonSpecification",
+    "listComparisonSpecificationChanges",
 })
 STUBS = sorted(set(REQUESTS) - WIRED)
 LANES = {
@@ -312,10 +316,12 @@ def test_a_list_or_query_outside_its_bounds_is_refused_before_the_stub(on: TestC
                  f"/comparison-transitions/{TRN}/specification/changes", f"/comparison-series/{SER}/reports"):
         assert on.get(f"{path}?limit=0", headers=headers).status_code == 422, path
         assert on.get(f"{path}?limit=201", headers=headers).status_code == 422, path
-        assert on.get(path, headers=headers).status_code == 503, path
+        # `CMP-VC-SPEC-01` serves these two: an identity that names nothing is `404`, not the stub's `503`.
+        served = path in (f"/comparison-series/{SER}/specifications", f"/comparison-transitions/{TRN}/specification/changes")
+        assert on.get(path, headers=headers).status_code == (404 if served else 503), path
     changes = f"/comparison-transitions/{TRN}/specification/changes"
     assert on.get(f"{changes}?kind=sideways", headers=headers).status_code == 422
-    assert on.get(f"{changes}?kind=added", headers=headers).status_code == 503
+    assert on.get(f"{changes}?kind=added", headers=headers).status_code == 404
     estimate = f"/comparison-series/{SER}/ai-sheet-changes/estimate"
     assert on.get(f"{estimate}?only_failed=maybe", headers=headers).status_code == 422
     assert on.get(f"{estimate}?only_failed=true", headers=headers).status_code == 503

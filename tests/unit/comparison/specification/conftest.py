@@ -124,7 +124,13 @@ def faithful_answer(source: dict) -> dict:
         for line in block["lines"]:
             cells = check._pipe_cells(line["text"])
             if cells is None:
-                section = line["text"].strip()
+                text_line = line["text"].strip()
+                if text_line.lower().startswith("примечание"):  # a substantive note is a position of its own, with the field note
+                    fields = {name: "" for name in check.FIELDS}
+                    fields["note"] = text_line
+                    rows.append({"section": section, "parent": "", "fields": fields, "evidence": [{"line": line["line"], "quote": line["text"]}]})
+                    continue
+                section = text_line
                 ignored.append({"line": line["line"], "reason": "section"})
                 continue
             recognized = check._table_header(cells)

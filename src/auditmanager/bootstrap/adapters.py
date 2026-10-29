@@ -6136,11 +6136,14 @@ class ComparisonSpecificationAdapter(_VersionsModuleGate):
         comparison_modules: str = "none", reader: Any = None,
     ) -> None:
         super().__init__(comparison_modules=comparison_modules)
-        if reader is None and session_factory is not None:
-            from auditmanager.comparison.public import SpecificationReader
+        service = None
+        if session_factory is not None:
+            from auditmanager.comparison.public import SpecificationReader, SpecificationService
 
-            reader = SpecificationReader(session_factory, blob_store)
+            reader = reader or SpecificationReader(session_factory, blob_store)
+            service = SpecificationService(session_factory, blob_store, reader=reader)
         self._reader = reader
+        self._service = service
 
     def cancel_specification(self, *, job_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonAiJob:
         self._require_versions_module()
@@ -6164,19 +6167,42 @@ class ComparisonSpecificationAdapter(_VersionsModuleGate):
 
     def get_specification(self, *, transition_id: str) -> models.ComparisonSpecification:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        if self._service is None:
+            return _comparison_unavailable(self._DEPENDENCY)
+        return models.ComparisonSpecification.model_validate(self._service.get_specification(transition_id=transition_id))
+
+    @staticmethod
+    def _after(cursor: str | None) -> int:
+        if cursor is None:
+            return 0
+        parts = decode_cursor(cursor)
+        if len(parts) != 1 or not parts[0].isdigit():
+            raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+        return int(parts[0])
 
     def list_changes(
         self, *, transition_id: str, kind: models.ComparisonSpecChangeKind | None, cursor: str | None, limit: int
     ) -> models.ComparisonSpecChangePage:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        if self._service is None:
+            return _comparison_unavailable(self._DEPENDENCY)
+        items, next_offset = self._service.list_changes(
+            transition_id=transition_id, kind=None if kind is None else str(_enum_text(kind)), offset=self._after(cursor), limit=limit,
+        )
+        return models.ComparisonSpecChangePage.model_validate(
+            {"items": items, "page": {"next_cursor": None if next_offset is None else encode_cursor((str(next_offset),))}}
+        )
 
     def list_specifications(
         self, *, series_id: str, cursor: str | None, limit: int
     ) -> models.ComparisonSpecificationPage:
         self._require_versions_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        if self._service is None:
+            return _comparison_unavailable(self._DEPENDENCY)
+        page = self._service.list_specifications(series_id=series_id, after_no=self._after(cursor), limit=limit)
+        return models.ComparisonSpecificationPage.model_validate(
+            {"items": page.items, "page": {"next_cursor": None if page.next_after is None else encode_cursor((str(page.next_after),))}}
+        )
 
     def start_specification(
         self, *, transition_id: str, consent: models.ComparisonAiConsent, user_uid: str, idempotency_key: str
