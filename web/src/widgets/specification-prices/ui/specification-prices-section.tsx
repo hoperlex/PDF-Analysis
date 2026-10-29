@@ -28,7 +28,7 @@ import { failureMessage } from '@/shared/api/failure-message';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import {
   COMPARISON_ONLY_MARK,
-  COMPARISON_ONLY_START_NOTE,
+  COMPARISON_ONLY_SPECIFICATION_NOTE,
   ComparisonOnlyMark,
   isComparisonOnly,
   useDocumentList,
@@ -111,7 +111,7 @@ export function SpecificationPricesChooser({ sets, selected, onSelect, partial }
             ))}
           </ul>
           <p className="am-note" id={noteId}>
-            {COMPARISON_ONLY_START_NOTE}
+            {COMPARISON_ONLY_SPECIFICATION_NOTE}
           </p>
         </div>
       ) : null}

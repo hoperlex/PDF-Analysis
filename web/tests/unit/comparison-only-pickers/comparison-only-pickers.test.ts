@@ -26,7 +26,10 @@ import type { DocumentVersion, VersionClassification, VersionUploadKind } from '
 import { queryKeys } from '@/shared/api';
 import {
   COMPARISON_ONLY_DETAIL,
+  COMPARISON_ONLY_BLOCKS_NOTE,
   COMPARISON_ONLY_MARK,
+  COMPARISON_ONLY_OPTIMISATION_NOTE,
+  COMPARISON_ONLY_SPECIFICATION_NOTE,
   COMPARISON_ONLY_START_NOTE,
   DOCUMENT_PAGE_LIMIT,
   VERSION_PAGE_LIMIT,
@@ -242,6 +245,7 @@ describe('the stage comparison page', () => {
 interface ChooserCase {
   readonly name: string;
   readonly attribute: string;
+  readonly note: string;
   readonly draw: (sets: readonly DocumentVersion[], selected: string | null) => string;
 }
 
@@ -249,6 +253,7 @@ const CHOOSERS: readonly ChooserCase[] = [
   {
     name: 'specification-prices',
     attribute: 'data-spec-chooser',
+    note: COMPARISON_ONLY_SPECIFICATION_NOTE,
     draw: (sets, selected) =>
       renderToStaticMarkup(
         createElement(SpecificationPricesChooser, {
@@ -262,6 +267,7 @@ const CHOOSERS: readonly ChooserCase[] = [
   {
     name: 'optimisation-proposals',
     attribute: 'data-proposal-set-chooser',
+    note: COMPARISON_ONLY_OPTIMISATION_NOTE,
     draw: (sets, selected) =>
       renderToStaticMarkup(
         createElement(ProposalSetChooser, {
@@ -297,7 +303,8 @@ for (const chooser of CHOOSERS) {
       const markup = chooser.draw([PORTAL, FLAGGED], PORTAL.document_uid);
       expect(countOf(markup, BADGE)).toBe(1);
       expect(markup).toContain('data-comparison-only-sets="1"');
-      expect(countOf(markup, COMPARISON_ONLY_START_NOTE)).toBe(1);
+      expect(countOf(markup, chooser.note)).toBe(1);
+      expect(markup).not.toContain(COMPARISON_ONLY_START_NOTE);
       const list = markup.slice(markup.indexOf('<ul>'), markup.indexOf('</ul>'));
       expect(list).toContain('Только для сравнения');
       expect(list).not.toContain('Комплект портала');
@@ -307,7 +314,7 @@ for (const chooser of CHOOSERS) {
       const markup = chooser.draw([PORTAL, FLAGGED], PORTAL.document_uid);
       const describedBy = /<select[^>]*aria-describedby="([^"]+)"/.exec(markup);
       expect(describedBy).not.toBeNull();
-      expect(markup).toContain(`<p class="am-note" id="${describedBy![1]}">${COMPARISON_ONLY_START_NOTE}</p>`);
+      expect(markup).toContain(`<p class="am-note" id="${describedBy![1]}">${chooser.note}</p>`);
     });
 
     it('counts every set it lists, comparison-only ones included', () => {
@@ -316,7 +323,7 @@ for (const chooser of CHOOSERS) {
       expect(markup).toContain(`${chooser.attribute}="3"`);
       expect(markup).toContain('data-comparison-only-sets="2"');
       expect(countOf(markup, BADGE)).toBe(2);
-      expect(countOf(markup, COMPARISON_ONLY_START_NOTE)).toBe(1);
+      expect(countOf(markup, chooser.note)).toBe(1);
     });
 
     it('is a chooser with every option disabled when every set is comparison-only', () => {
@@ -324,7 +331,7 @@ for (const chooser of CHOOSERS) {
       expect(markup).toContain(`${chooser.attribute}="1"`);
       expect(optionOf(markup, FLAGGED)).toContain('disabled=""');
       expect(markup).not.toContain('selected');
-      expect(countOf(markup, COMPARISON_ONLY_START_NOTE)).toBe(1);
+      expect(countOf(markup, chooser.note)).toBe(1);
     });
 
     for (const [name, over] of NOT_COMPARISON_ONLY) {
@@ -334,7 +341,7 @@ for (const chooser of CHOOSERS) {
         expect(markup).not.toContain('disabled');
         expect(markup).not.toContain('aria-describedby');
         expect(markup).not.toContain('data-comparison-only-sets');
-        expect(markup).not.toContain(COMPARISON_ONLY_START_NOTE);
+        expect(markup).not.toContain(chooser.note);
       });
     }
 
@@ -376,7 +383,8 @@ describe('the set chosen by specification-prices', () => {
     expect(markup).not.toContain('Загрузка: спецификации и цен…');
     expect(markup).not.toContain('data-spec-state');
     expect(asked.some((key) => key.includes('specification-prices') && key.includes(DOCUMENT_PREFIX))).toBe(false);
-    expect(countOf(markup, COMPARISON_ONLY_START_NOTE)).toBe(1);
+    expect(countOf(markup, COMPARISON_ONLY_SPECIFICATION_NOTE)).toBe(1);
+    expect(markup).not.toContain(COMPARISON_ONLY_START_NOTE);
     expect(countOf(markup, BADGE)).toBe(2);
   });
 
@@ -424,7 +432,8 @@ describe('the set chosen by optimisation-proposals', () => {
     expect(markup).toContain(START_DISABLED);
     expect(markup).not.toContain(START_ENABLED);
     expect(asked.some((key) => key.includes(DOCUMENT_PREFIX) && key.includes('passes'))).toBe(false);
-    expect(countOf(markup, COMPARISON_ONLY_START_NOTE)).toBe(1);
+    expect(countOf(markup, COMPARISON_ONLY_OPTIMISATION_NOTE)).toBe(1);
+    expect(markup).not.toContain(COMPARISON_ONLY_START_NOTE);
     expect(countOf(markup, BADGE)).toBe(2);
   });
 
@@ -481,7 +490,8 @@ describe('the document picker of the blocks page', () => {
 
   it('says the reason once and points the disabled button at it', () => {
     const markup = picker([PORTAL, FLAGGED, flagged('R')]);
-    expect(countOf(markup, COMPARISON_ONLY_START_NOTE)).toBe(1);
+    expect(countOf(markup, COMPARISON_ONLY_BLOCKS_NOTE)).toBe(1);
+    expect(markup).not.toContain(COMPARISON_ONLY_START_NOTE);
     const id = /<p class="am-note" id="([^"]+)" data-comparison-only-note="">/.exec(markup);
     expect(id).not.toBeNull();
     expect(countOf(markup, `aria-describedby="${id![1]}"`)).toBe(2);
@@ -519,7 +529,11 @@ describe('the words the five screens say', () => {
     expect(COMPARISON_ONLY_MARK).toBe(MARK_TEXT);
     // The run start is no longer refused for such a version, so the mark must not say it is.
     expect(`${COMPARISON_ONLY_MARK} ${COMPARISON_ONLY_DETAIL}`).not.toContain('только для сравнения');
-    for (const sentence of [COMPARISON_ONLY_MARK, COMPARISON_ONLY_DETAIL, COMPARISON_ONLY_START_NOTE]) {
+    for (const sentence of [
+      COMPARISON_ONLY_MARK, COMPARISON_ONLY_DETAIL, COMPARISON_ONLY_START_NOTE,
+      COMPARISON_ONLY_SPECIFICATION_NOTE, COMPARISON_ONLY_OPTIMISATION_NOTE,
+      COMPARISON_ONLY_BLOCKS_NOTE,
+    ]) {
       expect(/[A-Za-z]/.test(sentence.replaceAll('PDF', ''))).toBe(false);
       expect(sentence).toMatch(/[Ѐ-ӿ]/);
     }

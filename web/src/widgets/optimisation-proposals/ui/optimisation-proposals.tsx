@@ -42,7 +42,7 @@ import { formatInstant, routes, useAddressState } from '@/shared/lib';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import {
   COMPARISON_ONLY_MARK,
-  COMPARISON_ONLY_START_NOTE,
+  COMPARISON_ONLY_OPTIMISATION_NOTE,
   ComparisonOnlyMark,
   isComparisonOnly,
   useDocumentList,
@@ -154,7 +154,7 @@ export function ProposalSetChooser({ sets, selected, onSelect, partial }: Propos
             ))}
           </ul>
           <p className="am-note" id={noteId}>
-            {COMPARISON_ONLY_START_NOTE}
+            {COMPARISON_ONLY_OPTIMISATION_NOTE}
           </p>
         </div>
       ) : null}

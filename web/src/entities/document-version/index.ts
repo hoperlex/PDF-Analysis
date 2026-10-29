@@ -25,7 +25,10 @@ export { looksLikeDocumentUid, looksLikeVersionUid } from './model/address';
 
 export {
   COMPARISON_ONLY_DETAIL,
+  COMPARISON_ONLY_BLOCKS_NOTE,
   COMPARISON_ONLY_MARK,
+  COMPARISON_ONLY_OPTIMISATION_NOTE,
+  COMPARISON_ONLY_SPECIFICATION_NOTE,
   COMPARISON_ONLY_START_NOTE,
   isComparisonOnly,
 } from './model/upload-kind';

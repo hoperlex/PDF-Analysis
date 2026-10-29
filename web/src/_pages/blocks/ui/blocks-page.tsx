@@ -69,7 +69,7 @@ import { pageSelectionOf } from '@/entities/block';
 import type { PageSelection } from '@/entities/block';
 import { looksLikeProjectUid, useProjectList } from '@/entities/project';
 import {
-  COMPARISON_ONLY_START_NOTE,
+  COMPARISON_ONLY_BLOCKS_NOTE,
   ComparisonOnlyMark,
   isComparisonOnly,
   looksLikeVersionUid,
@@ -300,7 +300,7 @@ export function DocumentChooser({ projectUid, onChooseVersion }: DocumentChooser
     <>
       {anyComparisonOnly ? (
         <p className="am-note" id={noteId} data-comparison-only-note="">
-          {COMPARISON_ONLY_START_NOTE}
+          {COMPARISON_ONLY_BLOCKS_NOTE}
         </p>
       ) : null}
       <ul>

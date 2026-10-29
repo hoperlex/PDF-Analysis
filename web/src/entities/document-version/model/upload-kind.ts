@@ -24,6 +24,21 @@ export const COMPARISON_ONLY_START_NOTE =
   'Для этой операции нужны структурированные данные пакета портала. ' +
   'Исходный PDF остаётся доступен для анализа раздела и сравнения.';
 
+/** A specification read needs analysis data that a comparison-only upload cannot supply. */
+export const COMPARISON_ONLY_SPECIFICATION_NOTE =
+  'Спецификация и цены для этого комплекта недоступны: текущая версия загружена только для ' +
+  'сравнения без пакета портала и не содержит данных анализа для этой страницы.';
+
+/** An optimisation pass needs analysis data, rather than a comparison-only PDF. */
+export const COMPARISON_ONLY_OPTIMISATION_NOTE =
+  'Предложения по оптимизации для этого комплекта не запускаются: текущая версия загружена ' +
+  'только для сравнения без пакета портала и не содержит данных анализа для прохода.';
+
+/** The blocks reader has no analysis text for a comparison-only PDF. */
+export const COMPARISON_ONLY_BLOCKS_NOTE =
+  'Блоки этого документа недоступны: версия загружена только для сравнения без пакета портала ' +
+  'и не содержит текста анализа для этой страницы.';
+
 /**
  * Whether the version was admitted for comparison only. `upload_kind` is read, and nothing
  * else: a file name, a missing manifest entry or a missing classification says nothing here.
