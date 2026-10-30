@@ -21,3 +21,10 @@ Full gate, complete integration/web batteries, browser journey execution, exposu
 Single/batch seven-step chains, graphic engine evidence/crops, AI bounded windows, repair/undo, cards/verdicts/journal and four page tabs are integrated. Root fixed work-before-run command locking, cancellation of child read models and fresh child receipts on resume. Focused lifecycle/repair/positive-port scenarios:10 passed; registry29; C4 HTTP47 plus the served C3 missing-scope cases; polling16; frontend lock8; release note29. The new expert action and AI label fields are sealed at228/254/614. Migration0043 preserves frozen AI units over explicit recovery generations; its private apply/downgrade/reapply passed. Full gates remain deferred.
 
 Remote refs moved independently: fetched dev99b337fb and main2c162f76 (owner hotfix publication). Root must preserve and merge completed dev hotfixes before its own fast-forward publication; no main operation is authorised. The new limit switches are existing owner work, not a new default grant by this integrator.
+
+
+## Final integration stitching
+
+Owner dev99b337fb was merged in725fbbc5, preserving raised-limit behavior and reconciling every live contract family to1.13.0. Exact combined surface228/254/614;0043. Contract seal21 passed; typecheck/client verification passed; ten lifecycle/repair/positive-port cases passed after atomic child creation. Final AI recoveryceb7b508 is merged, including run-wide uncertain-spend fences and failure persistence. Cancellation now also ends child read models and queued batch drive work. Expanded C4 HTTP+scoped lifecycle run55 passed. Release note0.9.0 revision4 form29 passed; frontend lock/polling24 passed before the final contract repin, which is verified again only for those changed bytes.
+
+D-262 and D-263 are code-closed; D-290 records deferred acceptance. No complete gate/GATE OK, browser execution or live call is claimed. The direct beta owner poll of2026-10-30 asks only unresolved scope/product choices (D-119/D-160/D-184/D-185/D-253 and optional directions); pending answers do not stop the existing CMP work.

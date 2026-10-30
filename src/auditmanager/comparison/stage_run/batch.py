@@ -150,6 +150,11 @@ class StageBatchService:
                     "WHERE stage_chain_batch_id = :batch"
                 ), {"batch": batch_id, "state": state})
                 if action == "cancel":
+                    for work_id in session.execute(text(
+                        "SELECT comparison_work_id FROM comparison_work WHERE kind = 'stage_chain_batch' "
+                        "AND payload->>'batch_id' = :batch AND terminal_at IS NULL ORDER BY comparison_work_id"
+                    ), {"batch": batch_id}).scalars():
+                        self.chains.work.cancel(session, str(work_id))
                     runs = session.execute(text(
                         "SELECT stage_chain_run_id FROM stage_chain_batch_item "
                         "WHERE stage_chain_batch_id = :batch AND stage_chain_run_id IS NOT NULL "
@@ -160,6 +165,7 @@ class StageBatchService:
                             self.chains.ai.cancel(session, run_id=str(run_id), user_uid=user_uid)
                         for work_id in self.chains._work_ids(session, str(run_id)):
                             self.chains.work.cancel(session, work_id)
+                        self.chains.cancel_child_runs(session, str(run_id))
                         session.execute(text(
                             "UPDATE stage_chain_run SET state = 'cancelled', updated_at = clock_timestamp() "
                             "WHERE stage_chain_run_id = :run AND state <> 'completed'"

@@ -269,6 +269,25 @@ class StageChainService:
         ), {"runs": [run_id, *(str(uid) for uid in children if uid)]}).scalars().all()
         return tuple(str(uid) for uid in ids)
 
+    @staticmethod
+    def cancel_child_runs(session: Session, run_id: str) -> None:
+        children = list(session.execute(text(
+            "SELECT c.outcome->>'run_id' FROM command_record c JOIN stage_chain_run r "
+            "ON r.stage_chain_run_id = c.outcome->>'run_id' WHERE c.command_type = 'recompute_stage_text_evidence' "
+            "AND c.idempotency_key LIKE :prefix AND r.state IN ('queued','running')"
+        ), {"prefix": f"stage-chain-text:{run_id}:%"}).scalars())
+        if not children:
+            return
+        session.execute(text(
+            "UPDATE stage_chain_step SET state = 'cancelled', finished_at = clock_timestamp(), "
+            "updated_at = clock_timestamp() WHERE stage_chain_run_id = ANY(CAST(:runs AS text[])) "
+            "AND state <> 'completed'"
+        ), {"runs": children})
+        session.execute(text(
+            "UPDATE stage_chain_run SET state = 'cancelled', updated_at = clock_timestamp() "
+            "WHERE stage_chain_run_id = ANY(CAST(:runs AS text[])) AND state IN ('queued','running')"
+        ), {"runs": children})
+
     def lock_command(self, session: Session, run_id: str) -> None:
         """Commands and workers acquire work before run rows; serialize command generations."""
         session.execute(text("SELECT pg_advisory_xact_lock(hashtextextended('stage_chain_command:' || :run, 0))"),
@@ -314,12 +333,7 @@ class StageChainService:
                     "updated_at = clock_timestamp() WHERE stage_chain_run_id = :run "
                     "AND state <> 'completed'"
                 ), {"run": run_id})
-                session.execute(text(
-                    "UPDATE stage_chain_run SET state = 'cancelled', updated_at = clock_timestamp() "
-                    "WHERE stage_chain_run_id IN (SELECT outcome->>'run_id' FROM command_record "
-                    "WHERE command_type = 'recompute_stage_text_evidence' AND idempotency_key LIKE :prefix) "
-                    "AND state IN ('queued','running')"
-                ), {"prefix": f"stage-chain-text:{run_id}:%"})
+                self.cancel_child_runs(session, run_id)
                 self._event(session, run_id, "stage.chain_cancelled", {"actor_uid": user_uid})
             self.commands.succeed(session, claim.command_id, {"run_id": run_id})
             return self.record(session, run_id)

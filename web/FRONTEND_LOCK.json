@@ -1,7 +1,7 @@
 {
   "lock_version": 1,
   "purpose": "Everything a later regeneration needs to prove the committed API client matches its input: the toolchain pins, the exact generator invocation, and the exact OpenAPI bytes the client was generated from. Verified by web/tests/guards/frontend-lock.guard.test.ts, which recomputes every digest here and fails if one has moved.",
-  "owner": "CMP-STAGE-ESCALATE-SEAL-01 additive C4 expert review and detail labels",
+  "owner": "CMP-INT-HOTFIX-RECONCILE-1030 combined C4 and owner limit hotfixes",
   "toolchain": {
     "node": "22.23.1",
     "npm": "10.9.8",
@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "afe53a80dde669c98c15abb1be3b971893f2fa78d9b91ceafbe4aab90116a207",
-    "content_commit": "703661f4fe889b425b035cd18c64c99d20524577",
-    "content_commit_subject": "feat(comparison): seal expert review escalation and AI detail labels",
+    "sha256": "29df290762867fb53ebefc31394e3358b91333f791c69bdc52e5568d7b80b282",
+    "content_commit": "725fbbc5818fc52eb573118dddfba346803b9c48",
+    "content_commit_subject": "merge: preserve owner raised-limit hotfixes in complete comparison candidate",
     "dispatch_named_commit": "9fa035029a3422b1c3e63d108fbe8c5fdde5dd8e",
-    "commit_note": "Additive R3-02 expert action and actual AI detail labels in unpublished C4 contract; 228/254/614.",
+    "commit_note": "Combined owner hotfixes and C4 expert review/AI labels; promotion accepts400 atomic evidence IDs. Current surface228/254/614.",
     "openapi_version": "3.1.0",
     "info_version": "1.13.0",
     "paths": 228,
     "operations": 254,
     "component_schemas": 614,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "afe53a80dde669c98c15abb1be3b971893f2fa78d9b91ceafbe4aab90116a207",
+    "snapshot_sha256": "29df290762867fb53ebefc31394e3358b91333f791c69bdc52e5568d7b80b282",
     "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "1e081eacc56d11d90f84bd6244b10cc1a202f96f2f2605808d368ce9ee084f69",
-      "index.ts": "8408f048a64ea4397950997f6e0d5b6a16cc593cfcb17bf64f2092b6de3cb536",
-      "operations.gen.ts": "b9dbcbdc3288720052b2a35755d581cec371bf204507c2eef70f1636d586790a",
-      "types.gen.ts": "896a9c99676ed6950a888268c9a1e04153dbaed362d579f8665460961bd338ad"
+      "client.gen.ts": "afb5da154dd3760835b08d0b46a1c0a129462c2050de7bd806e8ddb314a6ea63",
+      "index.ts": "54dce91f06db21e98df68ebfa3a4f2ec21e75fb45b7413aaa6b9e3a02ca0ae90",
+      "operations.gen.ts": "82a4b5bab9f4c7d0e7bb52d547ac16855ad12839766abd4d72017585895aabf6",
+      "types.gen.ts": "9fcbcd4a5c5a440eb77e3c9f96799653bb58d8b4ba2556e40438e54cc6851d7c"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

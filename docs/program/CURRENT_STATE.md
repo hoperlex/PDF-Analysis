@@ -1,5 +1,7 @@
 # Current state
 
+**Updated 2026-10-30 by `CMP-INT-CODE-1030` (integrated development candidate; publication proof in its report).** CMP C2–C4 runtime now includes stage intake/pairs/assemblies, sheet maps and stored text, registered graphic evidence, bounded consented AI review/classification/synthesis, one-cycle recorded repair/undo, durable single/batch seven-step chains, expert cards/verdicts/escalation and grouped XLSX/PDF/HTML journals. Four stage tabs and immutable evidence navigation are integrated; the final expert-action UI/journey code is tracked in their lane reports. Contract `1.13.0` has 228 paths / 254 operations / 614 schemas, migration head `0043_stage_ai_generations`. The owner’s independently published dev hotfixes `99b337fb`/`06b94745` are preserved, including both default-off raised-limit controls and navigation. Root fixed command/worker lock order, atomic child creation, cancellation and fresh child receipts; AI generations retain paid replies and refuse uncertain resends. Full gates, heavy batteries, browser execution, exposure acceptance and live spend remain deferred by the owner to 2026-10-31. No main publication is authorised. The paragraphs below retain historical measurements and earlier candidates.
+
 **Updated 2026-10-30 by `HOTFIX-SECTION-LIMITS-INT-20261030` (development
 candidate only; no deployment claim).** The default-off «Повышенные лимиты
 ИИ-анализа» switch now covers ordinary `startRun` for all 14 text-profile
