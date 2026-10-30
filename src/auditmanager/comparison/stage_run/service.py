@@ -61,6 +61,8 @@ class ChainRun:
     ai_job_id: str | None
     pause_reason: str | None
     repair_cycle_count: int
+    batch_id: str | None = None
+    failure_reason: str | None = None
 
 
 def conflict(reason: str) -> DomainError:
@@ -119,7 +121,7 @@ class StageChainService:
             "SELECT stage_chain_run_id, stage_pair_id, stage_link_revision_id, "
             "effective_link_revision_id, input_sha256, pinned_version_uids, state, "
             "created_at, updated_at, kind, with_ai, comparison_ai_job_id, pause_reason, "
-            "repair_cycle_count FROM stage_chain_run WHERE stage_chain_run_id = :run"
+            "repair_cycle_count, stage_chain_batch_id, failure_reason FROM stage_chain_run WHERE stage_chain_run_id = :run"
         ), {"run": run_id}).mappings().first()
         if row is None:
             raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="StageChainRun")
@@ -139,7 +141,7 @@ class StageChainService:
                           step[4], step[5]) for step in steps),
             row["created_at"], row["updated_at"], stale, str(row["kind"]),
             bool(row["with_ai"]), row["comparison_ai_job_id"], row["pause_reason"],
-            int(row["repair_cycle_count"]),
+            int(row["repair_cycle_count"]), row["stage_chain_batch_id"], row["failure_reason"],
         )
 
     @staticmethod

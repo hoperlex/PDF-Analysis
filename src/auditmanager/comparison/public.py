@@ -142,6 +142,13 @@ from auditmanager.comparison.stage.uploads import (
 )
 from auditmanager.comparison.stage_links.map import LinkInput, StageSheetMapService
 from auditmanager.comparison.stage_links.read import StageSheetReadService
+from auditmanager.comparison.stage_graphic.service import StageGraphicService
+from auditmanager.comparison.stage_ai.runtime import StageAiRuntime
+from auditmanager.comparison.stage_run.service import StageChainService
+from auditmanager.comparison.stage_run.batch import StageBatchService
+from auditmanager.comparison.stage_run.factories import stage_chain_handler, stage_chain_batch_handler
+from auditmanager.comparison.stage_repair.service import StageRepairService
+from auditmanager.comparison.stage_review.service import StageReviewService
 from auditmanager.comparison.stage_text.read import StageTextReadService
 from auditmanager.comparison.stage_text.recompute import StageTextRecomputeService
 from auditmanager.comparison.stage_text.handler import stage_text_recompute_handler
@@ -329,6 +336,8 @@ HANDLER_FACTORIES: tuple[HandlerFactory, ...] = (
     sheet_changes_handler,  # `CMP-VC-AISHEET-01`: kind ``comparison_sheet_changes``
     spec_handler,  # `CMP-VC-SPEC-01`: kind ``comparison_spec``
     comparison_launch_handler,  # `CMP-VC-QUEUE-01`: kind ``comparison_launch``
+    stage_chain_handler,
+    stage_chain_batch_handler,
     stage_text_recompute_handler,  # `CMP-STAGE-TEXT-RECOMPUTE-01`: deterministic C3 evidence
 )
 
@@ -386,6 +395,9 @@ __all__ = [
     "StageSheetReadService",
     "StageTextReadService",
     "StageTextRecomputeService",
+    "StageGraphicService", "StageAiRuntime", "StageChainService", "StageBatchService",
+    "StageRepairService", "StageReviewService",
+    "stage_chain_handler", "stage_chain_batch_handler",
     "stage_text_recompute_handler",
     "StageCandidateAdmissionService",
     "StageCandidateDecisionService",

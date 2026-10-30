@@ -16,6 +16,8 @@ import { StageEstimateConsent } from './estimate-consent';
 import { StageRepairHistory } from './stage-repair-history';
 import styles from './stage-run-controls.module.css';
 
+export const STAGE_REVIEW_POLL_MS = 1500;
+
 export interface StageRunControlsProps {
   readonly pairId: string;
   readonly linkRevisionId?: string;
@@ -37,13 +39,13 @@ function StageRunBody({ pairId, linkRevisionId, runId, mayAct, compact = false, 
     enabled: linkRevisionId === undefined, retry: false });
   const revisionId = linkRevisionId ?? map.data?.revision_id;
   const runs = useQuery({ queryKey: STAGE_RUN_KEYS.list(pairId), queryFn: () => readRuns(pairId),
-    retry: false, refetchInterval: (query) => query.state.data?.some(runActive) ? 5000 : false });
+    retry: false, refetchInterval: (query) => query.state.data?.some(runActive) ? STAGE_REVIEW_POLL_MS : false });
   const [startedId, setStartedId] = useState<string | null>(null);
   const selectedId = startedId ?? runId ?? latestFullRun(runs.data ?? [])?.run_id;
   const current = useQuery({ queryKey: STAGE_RUN_KEYS.run(selectedId ?? ''),
     queryFn: async () => (await getStageChainRun({ path: { stage_chain_run_id: selectedId! } })).data,
     enabled: selectedId !== undefined, retry: false,
-    refetchInterval: (query) => runActive(query.state.data) ? 1500 : false });
+    refetchInterval: (query) => runActive(query.state.data) ? STAGE_REVIEW_POLL_MS : false });
   const run = current.data ?? runs.data?.find((item) => item.run_id === selectedId);
   const counts = useQuery({ queryKey: ['stage-run-card-counts', selectedId],
     queryFn: async () => (await listStageChangeCards({ path: { stage_chain_run_id: selectedId! }, query: { limit: 1 } })).data.counts,

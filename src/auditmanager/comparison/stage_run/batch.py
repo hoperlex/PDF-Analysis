@@ -175,7 +175,7 @@ class StageBatchHandler:
 
     def __init__(self, dependencies: WorkDependencies, *, ai: StagePipeline | None = None) -> None:
         self.deps = dependencies
-        self.chains = StageChainService(dependencies.session_factory,
+        self.chains = StageChainService(getattr(dependencies, "session_factory", None),
                                         comparison_modules="versions,stages", ai=ai)
 
     def run(self, item: WorkItem) -> Outcome:

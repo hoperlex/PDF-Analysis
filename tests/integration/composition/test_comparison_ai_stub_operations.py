@@ -375,7 +375,7 @@ def test_the_work_kinds_of_the_executor_routes_include_the_four_comparison_kinds
     from auditmanager.executors.model import SERVES, WORK_KINDS
 
     kinds = ("comparison_pair_check", "comparison_sheet_changes", "comparison_spec", "comparison_report")
-    assert WORK_KINDS == ("text_analysis", *kinds)
+    assert WORK_KINDS == ("text_analysis", *kinds, "comparison_stage_review")
     assert {kind.value for kind in models.ExecutorWorkKind} == set(WORK_KINDS)
     assert set(SERVES) == set(WORK_KINDS) and all(SERVES[kind] for kind in WORK_KINDS)
-    assert "comparison_stage_review" not in WORK_KINDS  # SEAL-C4
+    assert "comparison_stage_review" in WORK_KINDS  # SEAL-C4

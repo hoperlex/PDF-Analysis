@@ -12,6 +12,8 @@ import { readSyntheses } from '../api/reads';
 import type { OpenStageEvidence } from './stage-changes';
 import styles from './stage-changes.module.css';
 
+export const STAGE_REVIEW_POLL_MS = 1500;
+
 const SECTIONS = [
   { decision: 'REAL_CHANGE', label: 'Изменения высокого уровня', collapsed: false },
   { decision: 'DETAIL_ONLY', label: 'Детализация увеличена', collapsed: false },
@@ -24,7 +26,7 @@ export function StageHighLevelChanges({ runId, cards, running, completed, onOpen
   readonly completed: boolean; readonly onOpenEvidence: OpenStageEvidence;
 }) {
   const synthesis = useQuery({ queryKey: ['stage-high-level', runId], queryFn: () => readSyntheses(runId), retry: false,
-    refetchInterval: running ? 3000 : false });
+    refetchInterval: () => running ? STAGE_REVIEW_POLL_MS : false });
   useEffect(() => { if (completed) void synthesis.refetch(); }, [completed, synthesis.refetch]);
   const failure = synthesis.error === null ? null : failureMessage(synthesis.error);
   return <section aria-label="Обобщение проектных изменений">

@@ -31,9 +31,9 @@ class StageChainHandler:
                  repair: StageAction | None = None, review: StageAction | None = None,
                  graphics: StageAction | None = None) -> None:
         self.deps = dependencies
-        self.service = StageChainService(dependencies.session_factory,
+        self.service = StageChainService(getattr(dependencies, "session_factory", None),
                                          comparison_modules="versions,stages", ai=ai)
-        self.text = StageTextRecomputeService(dependencies.session_factory)
+        self.text = StageTextRecomputeService(getattr(dependencies, "session_factory", None))
         self.ai, self.repair, self.review, self.graphics = ai, repair, review, graphics
 
     def _authority(self, session: Any, item: WorkItem, run_id: str) -> None:
