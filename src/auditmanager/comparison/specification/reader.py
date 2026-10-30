@@ -21,7 +21,7 @@ gives ``is_specification: true`` and no change -- never a claim of removals.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Final
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
@@ -34,9 +34,6 @@ from auditmanager.shared.db import session_scope
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = ["PagePositions", "PairPositions", "SpecificationReader", "VersionStream", "page_ref", "spec_candidates"]
-
-#: ``version_reader.MAX_VERSION_PAGES``: a version has at most this many pages.
-_MAX_PAGES: Final[int] = 500
 
 _PAIR = text(
     "SELECT p.comparison_sheet_pair_id, p.page_a_profile_id, p.page_b_profile_id, t.source_version_uid, t.target_version_uid "
@@ -99,6 +96,10 @@ class VersionStream:
     unparsed_pages: set[int] = field(default_factory=set)
     #: The pages that were read, in page order, as :func:`~.source.build_source` takes them: ``{"page", "sheet", "name", "columns", "rows"}``.
     parsed: list[dict[str, Any]] = field(default_factory=list)
+    catalogue_complete: bool = True
+    catalogue_reason: str | None = None
+    profile_pages_expected: int | None = None
+    profile_pages_present: int = 0
 
     @property
     def readable(self) -> bool:
@@ -138,19 +139,41 @@ class SpecificationReader:
 
     def version_rows(self, version_uid: str) -> list[PageProfileRow]:
         """The ready-or-not profiles of the version, in page order (the current algorithm's)."""
-        rows, _more = self._profiles.list_profiles(version_uid, after_page=0, limit=_MAX_PAGES)
-        return rows
+        return self._profiles.read_version_rows(version_uid)
 
     def version_stream(self, version_uid: str, *, extra: list[PageProfileRow] | None = None, rows: list[PageProfileRow] | None = None) -> VersionStream:
         """The stream of positions over the specification pages of a version, in page order."""
         rows = rows if rows is not None else self.version_rows(version_uid)
+        expected = self._profiles.version_page_count(version_uid)
         pages = {row.page_number: row for row in spec_candidates(rows)}
         for row in extra or ():
+            if row.version_uid != version_uid:
+                raise DomainError(ErrorCode.STORAGE_INTEGRITY_ERROR, role="comparison.page_profile")
             pages.setdefault(row.page_number, row)
         stream = VersionStream(version_uid)
+        stream.profile_pages_expected = expected
+        stream.profile_pages_present = len(rows)
+        if (len(rows) != expected or any(type(row.page_number) is not int or row.page_number != index + 1
+                or row.version_uid != version_uid or not row.is_ready for index, row in enumerate(rows))):
+            stream.catalogue_complete = False
+            stream.catalogue_reason = "page_profiles_not_complete"
+        for row in rows:
+            stamp = row.summary.get("stamp") or {}
+            declared_spec = table.is_spec_stamp(stamp.get("designation"), stamp.get("sheet_name"))
+            unreadable = not row.is_ready or not row.summary.get("text_layer") or bool(row.summary.get("scan"))
+            if declared_spec and unreadable:
+                stream.refs[row.page_number] = page_ref(row)
+                stream.unparsed_pages.add(row.page_number)
+            if row.summary.get("scan") and not (stamp.get("designation") or stamp.get("sheet_name")):
+                stream.catalogue_complete = False
+                stream.catalogue_reason = "scan_specification_scope_unconfirmed"
         parsed_pages: list[dict[str, Any]] = []
         for number in sorted(pages):
             row = pages[number]
+            if not row.is_ready or not row.summary.get("text_layer") or row.summary.get("scan"):
+                stream.refs[number] = page_ref(row)
+                stream.unparsed_pages.add(number)
+                continue
             data = self._profiles.open_profile(row)
             parsed = parse_data(data)
             if parsed is None:
@@ -200,7 +223,7 @@ class SpecificationReader:
                 return PairPositions(sheet_pair_id, True, [], refs)
         # A stream with a hole (a specification page whose table was not read) would show the positions of the hole as removed or
         # added: nothing is claimed over it. The contract has no member for the reason; it is a FIX item (report section 9).
-        if any(not stream.readable or stream.unparsed_pages for stream in streams.values()):
+        if any(not stream.readable or stream.unparsed_pages or not stream.catalogue_complete for stream in streams.values()):
             return PairPositions(sheet_pair_id, True, [], refs)
         result = diff.compare(streams["a"].items, streams["b"].items)
         wanted: set[str] = set()

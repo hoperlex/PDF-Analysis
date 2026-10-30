@@ -96,6 +96,31 @@ class PageProfileReader:
             raise _not_found()
         return row
 
+    def version_page_count(self, version_uid: str) -> int:
+        """Immutable source metadata only; no PDF bytes, renderer or model."""
+        with session_scope(self._factory) as session:
+            return load_source_version(session, version_uid).page_count
+
+    def read_version_rows(self, version_uid: str) -> list[PageProfileRow]:
+        """Every stored metadata row, never a first-page prefix of the catalogue."""
+        found = []
+        after = 0
+        identities = set()
+        while True:
+            rows, more = self.list_profiles(version_uid, after_page=after, limit=500)
+            if more and not rows:
+                raise DomainError(ErrorCode.STORAGE_INTEGRITY_ERROR, role="comparison.page_profile")
+            for row in rows:
+                if (row.version_uid != version_uid or row.algo_version != limits.ALGO_VERSION
+                        or type(row.page_number) is not int or row.page_number <= after
+                        or row.page_profile_id in identities):
+                    raise DomainError(ErrorCode.STORAGE_INTEGRITY_ERROR, role="comparison.page_profile")
+                identities.add(row.page_profile_id)
+                found.append(row)
+                after = row.page_number
+            if not more:
+                return found
+
     # -- the bytes --------------------------------------------------------------------------
 
     def _blob(self, blob_id: str) -> bytes:
@@ -204,11 +229,4 @@ class PageProfileReader:
     def read_version_profiles(self, version_uid: str) -> list[PageProfileData]:
         """Every stored profile of a version, by page number, archives opened (for the lanes that
         compare whole versions). An unknown version is ``not_found``."""
-        profiles: list[PageProfileData] = []
-        after = 0
-        while True:
-            rows, more = self.list_profiles(version_uid, after_page=after, limit=100)
-            profiles.extend(self.open_profile(row) for row in rows)
-            if not more:
-                return profiles
-            after = rows[-1].page_number
+        return [self.open_profile(row) for row in self.read_version_rows(version_uid)]

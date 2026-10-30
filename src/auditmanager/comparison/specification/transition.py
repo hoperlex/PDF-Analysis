@@ -131,9 +131,11 @@ def prepare_side(
     """Read a version's specification pages and look the text up in the store. Asks nobody and writes nothing."""
     stream = reader.version_stream(version_uid)
     side = Side(version_uid=version_uid, sheets=len(stream.refs), complete=False, refs=dict(stream.refs))
-    if not stream.parsed_pages or stream.unparsed_pages:
+    if not stream.parsed_pages or stream.unparsed_pages or not stream.catalogue_complete:
         side.reason = REASON_NOT_PARSED
-        side.issues.append("A specification page whose table could not be read" if stream.unparsed_pages else "No specification page")
+        side.issues.append("Specification source catalogue is incomplete: " + str(stream.catalogue_reason)
+            if not stream.catalogue_complete else "A specification page whose table could not be read"
+            if stream.unparsed_pages else "No specification page")
         return PreparedSide(side)
     source = source_module.build_source(stream.parsed,batched=True)
     try:
