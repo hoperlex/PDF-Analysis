@@ -20,6 +20,7 @@ export async function readSavedResult(runId: RunId, versionUid: VersionUid, sign
     let cursor: Cursor | undefined;
     const visited = new Set<string>();
     const ids = new Set<string>();
+    const observationIds = new Set<string>();
     let pages = 0;
     for (;;) {
       signal.throwIfAborted();
@@ -27,6 +28,10 @@ export async function readSavedResult(runId: RunId, versionUid: VersionUid, sign
       const page = (await listRunFindings({ path: { run_id: runId }, query: { limit: 100, ...(cursor === undefined ? {} : { cursor }) } }, { signal })).data;
       for (const row of page.items) {
         if (row.run_id !== runId || row.version_uid !== versionUid || row.project_uid !== before.project_uid || ids.has(row.finding_uid)) throw new SavedResultReadError('Идентичность находок изменилась или повторилась при чтении. Обновите данные и повторите.');
+        for (const observation of [row.observation, ...(row.merged_observations ?? [])]) {
+          if (observation.run_id !== runId || observationIds.has(observation.finding_observation_id)) throw new SavedResultReadError('Исходное или объединённое наблюдение относится к другому прогону либо повторяется. Сравнение не построено.');
+          observationIds.add(observation.finding_observation_id);
+        }
         ids.add(row.finding_uid); findings.push(row); account(row);
         if (findings.length > MAX_FINDINGS) throw new SavedResultReadError('Получено более 20000 находок. Неполное сравнение не построено.');
       }

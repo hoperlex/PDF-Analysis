@@ -8,7 +8,7 @@ import { LoadingState } from '@/shared/ui';
 import { readSavedResult, SavedResultReadError } from '../api/read-saved-results';
 import { compareSavedResults, hasSavedPreliminary, savedObject, savedResultPages, savedResultText } from '../model/saved-results';
 import type { SavedResultRow, SavedResultSide } from '../model/saved-results';
-import { SAVED_COMPARISON_LABELS, savedResultsReport } from '../model/saved-results-report';
+import { SAVED_COMPARISON_LABELS, SAVED_MATCH_LABELS, savedExpertStateText, savedResultsReport } from '../model/saved-results-report';
 import styles from './stage-comparison.module.css';
 
 function RecordSide({ row, side }: { readonly row: SavedResultRow['left']; readonly side: SavedResultSide }) {
@@ -17,6 +17,7 @@ function RecordSide({ row, side }: { readonly row: SavedResultRow['left']; reado
   const observation = savedObject(row.observation);
   return <div>
     <p className={styles.savedText}>{savedResultText(row)}</p>
+    {observation !== null ? <p>ID находки: <code>{String(row.finding_uid ?? '')}</code>. {savedExpertStateText(row)}</p> : null}
     {pages.length > 0 ? <p>Физические страницы PDF: {pages.join(', ')}.</p> : <p>Привязка к странице не передана.</p>}
     {observation !== null && typeof observation.recommendation_text === 'string' && observation.recommendation_text ? <p className={styles.savedText}>Рекомендация: {observation.recommendation_text}</p> : null}
     <a href={`${routes.run(side.run.project_uid, side.run.run_id)}#${observation === null ? 'extended-analysis' : 'findings'}`}>Открыть прогон и источники</a>
@@ -56,7 +57,7 @@ export function SavedResultsComparison({ versionUid, left, right }: {
       } finally { controller.abort(); signal.removeEventListener('abort', cancel); }
     }, retry: false, staleTime: Infinity });
   const rows = useMemo(() => query.data === undefined ? [] : compareSavedResults(query.data[0]!, query.data[1]!), [query.data]);
-  const filtered = rows.filter((row) => filter === 'all' || (filter === 'differences' ? row.comparison !== 'same' : row.kind === filter));
+  const filtered = rows.filter((row) => filter === 'all' || (filter === 'differences' ? row.comparison !== 'same' || row.expertStateChanged === true : row.kind === filter));
   const pages = Math.max(1, Math.ceil(filtered.length / 25));
   const current = Math.min(page, pages - 1);
   const start = () => { setRequested(true); setProgress({ left: 0, right: 0 }); if (requested) void query.refetch(); };
@@ -83,11 +84,13 @@ export function SavedResultsComparison({ versionUid, left, right }: {
     {query.isError ? <p role="alert">{query.error instanceof SavedResultReadError ? query.error.message : 'Не удалось прочитать оба результата. Сравнение по неполным данным не построено; повторите чтение.'}</p> : null}
     {query.data === undefined ? null : <>
       <SourceStatus side={query.data[0]!} label="Слева" /><SourceStatus side={query.data[1]!} label="Справа" />
-      <p>Находки сопоставляются по устойчивой идентичности. Предварительные наблюдения — по точному тексту и источникам, с сохранением повторов. Похожие формулировки могут остаться отдельными. Экспертные состояния в исходных записях отражают момент чтения, а не историческое решение для каждой даты запуска.</p>
+      <p>Каждый прогон получает новые ID находок. При разных ID соответствие требует точных текстов, рекомендаций, значений и полного набора исходных привязок, включая объединённые наблюдения. Предварительные наблюдения также сопоставляются по точному тексту и источникам. Повторы сохранены один к одному, похожие формулировки могут остаться отдельными. Экспертные состояния отражают момент чтения, а не историческое решение на дату запуска.</p>
       <label>Показать <select value={filter} onChange={(event) => { setFilter(event.target.value); setPage(0); }}><option value="all">Все записи</option><option value="differences">Различия</option><option value="finding">Канонические находки</option><option value="preliminary">Предварительные наблюдения</option></select></label>
       <p>По фильтру {filtered.length} из {rows.length} записей. Выгрузка включает весь полученный набор.</p>
       {filtered.length === 0 ? <p>В доступных для сопоставления данных нет записей выбранного вида. Недоступные результаты не считались пустыми.</p> : <ol className={styles.savedRows} start={current * 25 + 1}>{filtered.slice(current * 25, (current + 1) * 25).map((row) => <li key={row.key}>
         <h4>{row.kind === 'finding' ? 'Каноническая находка' : 'Предварительное наблюдение'} · {SAVED_COMPARISON_LABELS[row.comparison]}</h4>
+        {row.matchBasis === null ? null : <p>Основание: {SAVED_MATCH_LABELS[row.matchBasis]}.{row.matchBasis === 'exact_source_content' ? ' ID находок и их истории остаются раздельными.' : ''}</p>}
+        {row.expertStateChanged === null ? null : <p>Текущий вердикт и экспертная критичность {row.expertStateChanged ? 'различаются' : 'совпадают'}; решения не переносятся.</p>}
         <div className={styles.savedSides}><section aria-label="Запись слева"><h5>Слева</h5><RecordSide row={row.left} side={query.data![0]!} /></section><section aria-label="Запись справа"><h5>Справа</h5><RecordSide row={row.right} side={query.data![1]!} /></section></div>
       </li>)}</ol>}
       {filtered.length > 25 ? <nav className={styles.choosers} aria-label="Страницы сравнения результатов"><button type="button" className="am-button am-button--quiet" disabled={current === 0} onClick={() => setPage(current - 1)}>Назад</button><span>{current + 1} из {pages}</span><button type="button" className="am-button am-button--quiet" disabled={current + 1 >= pages} onClick={() => setPage(current + 1)}>Далее</button></nav> : null}
