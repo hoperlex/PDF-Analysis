@@ -1,0 +1,11 @@
+# CMP-STAGE-AI-DETAILS-01 — model classification hints
+
+Task: [`CMP-STAGE-AI-DETAILS-01`](tasks/CMP-STAGE-AI-DETAILS-01.md). Owned input `7203521f`; root's additive transport seal consumed at `dc4eef71`. No shared contract, migration or service is authored by this lane.
+
+`ClassifiedCard` now carries genuine model fields `materiality` (`material/non_material/unknown`), `importance` (`high/normal/unknown`) and `detail_increased` (strict boolean). Older recorded/stored answers omit them and receive neutral defaults `unknown/unknown/false`; immutable historical JSON is not rewritten. Current schema and Russian prompt explicitly request all three as provisional AI hints, require source support and prohibit inferring high importance merely from a category. They do not authorize expert verdicts or canonical engineering conclusions.
+
+Classifier prompt version is `stage-classifier/2`; schema, prompt and content keys change together. Parsers reject foreign values, null/list/numeric/string flag substitutes and extra keys such as expert verdicts. Existing card/title/evidence bounds remain. Evidence digests and card identity retain their prior semantics. Graphical page aggregation preserves matching hints and neutrally resolves conflicting hints; it never promotes a conflicting page into high importance.
+
+Focused verification: **75 Stage AI unit tests passed**, including present/missing hints, strict invalid metadata, existing caps, updated prompt/schema identity and graphical disagreement. **7 recorded PostgreSQL tests passed**, including exact root-generated DTO validation of genuinely supplied material/high/true and neutral legacy answers, persistence/replay, graphical windows, repaired-source consent, auth/cancel and raw immutability. Compile and whitespace checks pass. No full gate/heavy suite or live model window ran.
+
+Root consumes this local commit after its additive transport provider. The review materializer reads these same fields from immutable classification JSON; defaults support earlier rows. Categories, raw evidence, verdict rules and digest semantics are unchanged. All authored files fit this task's allowlist, excluding parent-owned provider merges from the path proof. No remote ref was updated.

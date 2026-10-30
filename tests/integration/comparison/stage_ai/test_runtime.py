@@ -145,6 +145,9 @@ def test_recorded_runtime_uses_shared_job_and_spend_once(comparison_session, sce
                     if step is None:
                         continue
                     answer = _answer(plan)
+                    if scenario == "plain" and phase == "classify":
+                        for card in answer["cards"]:
+                            card.update(materiality="material", importance="high", detail_increased=True)
                     if with_context and phase == "review" and step.kind in {"main", "context"}:
                         answer["decisions"] = []
                         if step.kind == "main":
@@ -185,6 +188,10 @@ def test_recorded_runtime_uses_shared_job_and_spend_once(comparison_session, sce
         page, cursor = runtime.page(run_id=run_id, kind=kind, limit=1)
         assert len(page) == 1 and cursor is None
         schema.model_validate(page[0])
+        if kind == "classify":
+            card = page[0]["cards"][0]
+            assert (card["materiality"], card["importance"], card["detail_increased"]) == (
+                ("material", "high", True) if scenario == "plain" else ("unknown", "unknown", False))
         identity = {"review": "review_id", "classify": "classification_id", "synthesize": "synthesis_id"}[kind]
         assert runtime.page(run_id=run_id, kind=kind, after=page[0][identity], limit=1) == ((), None)
         with pytest.raises(DomainError):
