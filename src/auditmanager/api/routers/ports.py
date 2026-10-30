@@ -106,7 +106,8 @@ class ExecutionPort(Protocol):
         self, *, run_id: str, user_uid: str, idempotency_key: str
     ) -> RunStatusView: ...
     def reaudit_run(
-        self, *, run_id: str, user_uid: str, idempotency_key: str
+        self, *, run_id: str, user_uid: str, idempotency_key: str,
+        cost_consent: dict[str, Any] | None = None,
     ) -> RunStatusView: ...
     def set_job_priority(
         self, *, job_id: str, priority: int, user_uid: str, idempotency_key: str
@@ -545,6 +546,7 @@ class RunPort(Protocol):
     """
 
     def estimate_run_cost(self, *, version_uid: str, executor_connection_id: str | None = None,
+                          reaudit_of_run_id: str | None = None,
                           preset_id: str | None = None, relaxed_limits: bool = False) -> models.RunCostEstimate: ...
 
     def start_run(

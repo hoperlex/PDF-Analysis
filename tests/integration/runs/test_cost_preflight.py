@@ -98,3 +98,40 @@ def test_changed_classification_digest_refuses_before_any_run_or_call(session, w
         start(session, world, "cost-stale", consent)
     assert error.value.code is ErrorCode.CONFLICT
     assert counters(session) == before
+
+
+def test_reaudit_demands_new_source_bound_consent_and_replays_it(session, world):
+    from auditmanager.runs.commands import reaudit_run
+    from auditmanager.runs.repository import RunRepository
+    version, registry, preflight, actor = world
+    old = preflight.estimate_run(session, version_uid=str(version))
+    old_consent = {"estimate_digest": old.estimate_digest,
+        "ceiling_micros": old.as_dict()["recommended_ceiling_micros"], "confirmed": True}
+    source = start(session, world, "cost-source", old_consent)
+    runs = RunRepository()
+    runs.advance(session, run_id=source.run_id, from_state="created", to_state="queued")
+    runs.advance(session, run_id=source.run_id, from_state="queued", to_state="running")
+    runs.terminate(session, run_id=source.run_id, from_state="running", to_state="failed",
+        terminal_reason=ErrorCode.ANALYSIS_FAILED.value)
+    fresh = preflight.estimate_reaudit(session, run_id=source.run_id)
+    assert fresh.estimate_digest != old.estimate_digest
+    before = counters(session)
+    kwargs = dict(source_run_id=source.run_id, roles=frozenset({"expert"}), provider_mode="recorded",
+        section_profiles=registry.section_profiles(), input_budget_characters=100,
+        norms_snapshot=lambda _: None, cost_preflight=preflight, cost_actor_uid=actor)
+    for consent in [None, old_consent]:
+        with pytest.raises(DomainError):
+            reaudit_run(session, idempotency_key="cost-reaudit-refuse", cost_consent=consent, **kwargs)
+        assert counters(session) == before
+    consent = {"estimate_digest": fresh.estimate_digest,
+        "ceiling_micros": fresh.as_dict()["recommended_ceiling_micros"], "confirmed": True}
+    new = reaudit_run(session, idempotency_key="cost-reaudit-ok", cost_consent=consent, **kwargs)
+    assert runs.get(session, new.run_id).reaudit_of_run_id == source.run_id
+    assert runs.get(session, new.run_id).state == "queued"
+    policy = read_run_cost_policy(session, run_id=new.run_id, default_ceiling_usd=1.)
+    assert policy.approved and policy.ceiling_usd == consent["ceiling_micros"]/1_000_000
+    accepted = counters(session)
+    preflight.prices = lambda: ()
+    replay = reaudit_run(session, idempotency_key="cost-reaudit-ok", cost_consent=consent, **kwargs)
+    assert replay.replayed and replay.run_id == new.run_id
+    assert counters(session) == accepted

@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.13.0 (OpenAPI 3.1.0)
- *   sha256 383cdba713ea107ceaaf16fe943e946db4ab60ff510bfe17124d9daeafa431e2
+ *   sha256 1b0074fc8ad7c003efa244b21f4f1cb759fa675e33f76bb9088331a5316049fa
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.13.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '383cdba713ea107ceaaf16fe943e946db4ab60ff510bfe17124d9daeafa431e2';
+export const CONTRACT_DIGEST = '1b0074fc8ad7c003efa244b21f4f1cb759fa675e33f76bb9088331a5316049fa';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -440,6 +440,7 @@ export const SCHEMA_NAMES = [
   'ProposalPosition',
   'ProposalVerdict',
   'ProviderMode',
+  'ReauditRunRequest',
   'RegistrationRequest',
   'RegistrationRequestId',
   'RegistrationRequestPage',
@@ -5229,6 +5230,10 @@ export const PROVIDER_MODE_VALUES = [
 /** ProviderMode - the closed value set above. */
 export type ProviderMode = (typeof PROVIDER_MODE_VALUES)[number];
 
+export type ReauditRunRequest = {
+  cost_consent?: RunCostConsent;
+};
+
 /** One registration request, as an administrator reads it. No credential material. */
 export type RegistrationRequest = {
   /** The account an approval created. Null while pending, on a rejected request, and after that account was purged. */
@@ -5417,6 +5422,7 @@ export type RunCostEstimate = {
 export type RunCostEstimateRequest = {
   executor_connection_id?: ExecutorConnectionId;
   preset_id?: PresetId;
+  reaudit_of_run_id?: RunId;
   relaxed_limits?: boolean;
   version_uid: VersionUid;
 };
@@ -6750,7 +6756,7 @@ export type StageUploadPartReceipt = {
 export type StartArV3BetaGroupRequest = {
   /** The expert confirms a fresh estimate and a sufficient explicit ceiling before this start may spend. The approved cap applies independently of the raised output-limit choice. */
   cost_consent?: RunCostConsent;
-  /** Temporary AR v3 option. Absent or false keeps the deployment cost ceiling and a 16,000-token output request. True omits the per-Run cost halt and requests up to 64,000 output tokens; the provider may enforce a lower maximum. The choice is part of the idempotency payload and persists for all six Runs. */
+  /** Default off. False requests up to16,000 output tokens per scope; true requests up to64,000. Fresh approved group cost is allocated among its six Runs and applies in either mode. Historical accepted commands retain their original policy; provider bounds still apply. */
   relaxed_limits?: boolean;
   version_uid: VersionUid;
 };
@@ -6788,9 +6794,9 @@ export type StartRunRequest = {
   executor_connection_id?: ExecutorConnectionId;
   /** ANALYSIS-PRESETS-01: a saved preset (listAnalysisPresets) to start the run with. Absent: the run is what it was. Present: the preset's current revision is read in the start's transaction and its executor connection is applied exactly as if executor_connection_id had named it (same usability test, same refusals, no fallback to the standby or to another connection), and the run records the preset revision. Exclusive with executor_connection_id. Part of the payload the idempotency key is compared by, as the preset and not as the connection it resolved to. */
   preset_id?: PresetId;
-  /** Defaults to the server's configured mode. A client asking for `live` is asking to spend money; the OD-03 ceiling applies unless relaxed_limits is true. */
+  /** Defaults to the configured mode. A new served paid start requires fresh confirmed cost consent; the approved cap applies in both output-limit modes. */
   provider_mode?: ProviderMode;
-  /** Temporary section-analysis option. Absent or false keeps the deployment cost ceiling and a 16,000-token output request. True omits the per-Run cost halt and requests up to 64,000 output tokens under a distinct immutable profile and bundle identity. The 12-window operational document-size limit remains. The provider may enforce a lower output maximum. The choice is part of the idempotency payload and persists for the Run. */
+  /** Default off. False requests up to16,000 output tokens; true requests up to64,000 using a distinct immutable profile/bundle. A fresh approved cost cap applies in either mode. Explicit consent may approve more than12 whole-page windows. Historical accepted commands retain their original policy; provider context/output bounds still apply. */
   relaxed_limits?: boolean;
   version_uid: VersionUid;
 };

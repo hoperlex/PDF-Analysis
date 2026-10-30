@@ -27,6 +27,7 @@ def test_cost_requests_preserve_default_off_raised_limit_and_do_not_require_cons
 def test_both_estimates_have_the_same_expert_guard_as_their_starts():
     assert OPERATION_ROLES["estimateRunCost"] == OPERATION_ROLES["startRun"]
     assert OPERATION_ROLES["estimateArV3GroupCost"] == OPERATION_ROLES["startArV3BetaGroup"]
+    assert models.ReauditRunRequest().cost_consent is None
 
 
 def test_new_unit_algorithm_keeps_historical_v1_records_readable():

@@ -59,6 +59,7 @@ Before ordinary section analysis or the six-check AR v3 group starts, the applic
 - `src/auditmanager/analysis/public.py`
 - `src/auditmanager/api/schemas/**`
 - `src/auditmanager/api/routers/runs.py`
+- `src/auditmanager/api/routers/execution.py`
 - `src/auditmanager/api/routers/ar_v3_groups.py`
 - `src/auditmanager/api/routers/ports.py`
 - `src/auditmanager/api/security.py`
@@ -119,6 +120,8 @@ Before ordinary section analysis or the six-check AR v3 group starts, the applic
 - compile/whitespace; no complete gate or whole-suite execution
 
 ## Integration contract
+Parent followup grant after working start SHA3621092d: reaudit is also a new paid start, so POST `/runs/cost-estimate` with optional reaudit_of_run_id derives the current source/route on the server and POST reaudit requires fresh cost consent for a new command. Historical accepted replay is preserved. No preset is reapplied on reaudit; original explicitly named executor is retained as before.
+
 Estimate and start share immutable route/source/profile/preset inputs. Start validates confirmed fresh consent before enqueue, then records approval in the durable command outcome. PDF executor owner consumes the public persisted cost-policy seam. Explicit approved caps apply to new starts while raised mode retains its token/window choice; historical commands without approval keep prior semantics. Parent alone integrates/publishes.
 
 ## Failure/idempotency/security cases
