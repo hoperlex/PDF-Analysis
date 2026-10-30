@@ -1,5 +1,13 @@
 # Current state
 
+**Updated 2026-10-30 by `DESIGN-M08-ACCESS` (development candidate only).**
+Login, registration, submitted and forbidden screens now use the shared
+light/dark palette and responsive form/notice cards. Existing server forms,
+exchange, guard, role requirement and refusal branches remain unchanged.
+Typecheck, lint and 41 focused tests pass. No API, contract, migration or
+`origin/main` change is included. Publication is to `origin/dev` only;
+M09–M10 remain.
+
 **Updated 2026-10-30 by `DESIGN-M07-SYSTEM` (development candidate only).**
 Logs, worker tabs, analysis settings and execution queue now use responsive
 two-theme panels and contained lists. The `/optimisation` redirect to projects

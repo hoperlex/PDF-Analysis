@@ -22,6 +22,7 @@ import { roleLabels } from '@/entities/account';
 import type { Role } from '@/shared/api';
 import { HOME_SCREEN } from '@/shared/config';
 import { PageShell, UnsupportedState } from '@/shared/ui';
+import styles from './forbidden-page.module.css';
 
 export interface ForbiddenPageProps {
   /** The roles the asked-for screen requires, any one of which opens it; `null` when unknown. */
@@ -41,10 +42,12 @@ function requirement(requiredRoles: readonly Role[] | null): string {
 export function ForbiddenPage({ requiredRoles }: ForbiddenPageProps) {
   return (
     <PageShell title="Доступ закрыт" actions={<Link href={HOME_SCREEN}>На главную</Link>}>
-      <UnsupportedState
-        title={requirement(requiredRoles)}
-        detail="Роли учётным записям назначает администратор. Повторная попытка ничего не изменит, пока роль не назначена."
-      />
+      <div className={styles.card}>
+        <UnsupportedState
+          title={requirement(requiredRoles)}
+          detail="Роли учётным записям назначает администратор. Повторная попытка ничего не изменит, пока роль не назначена."
+        />
+      </div>
     </PageShell>
   );
 }
