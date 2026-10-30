@@ -10,7 +10,7 @@ API 1.13.0 and migration 0042 provide typed module-gated contracts and durable p
 - domain: ADR-0025 decisions 2–7, 16–19, 21–26; COMPARE-MODULES-PLAN C4
 - API: additive successor to 1.12.0 (204 paths, 230 operations, 570 schemas)
 - migration head: 0041_comparison_stage_core
-- base commit: 9fa035029a3422b1c3e63d108fbe8c5fdde5dd8e
+- base commit: `9fa035029a3422b1c3e63d108fbe8c5fdde5dd8e`
 - owner override 2026-10-30: write functional code today; full gates and heavy verification tomorrow; root remains sole integrator and origin/dev writer
 
 ## Enumerator ownership

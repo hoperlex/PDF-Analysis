@@ -15936,6 +15936,17 @@
             }
           },
           {
+            "name": "stage_chain_run_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(?:crn_[0-9A-HJKMNP-TV-Z]{26})?$",
+              "default": "",
+              "title": "Stage Chain Run Id"
+            }
+          },
+          {
             "name": "X-Correlation-Id",
             "in": "header",
             "required": false,
@@ -37861,6 +37872,11 @@
             "type": "array",
             "title": "Members"
           },
+          "member_revision_no": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Member Revision No"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -37874,6 +37890,7 @@
           "project_uid",
           "label",
           "members",
+          "member_revision_no",
           "created_at"
         ],
         "title": "StageAssembly"

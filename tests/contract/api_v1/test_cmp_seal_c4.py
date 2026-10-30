@@ -40,9 +40,11 @@ def test_c4_surface_is_additive_and_authorized() -> None:
 @pytest.mark.parametrize("modules,dependency",[("none","comparison_modules"),("versions","comparison_modules"),
                                                ("versions,stages","comparison_stage_c4")])
 def test_every_c4_stub_refuses_before_touching_its_arguments(modules: str, dependency: str) -> None:
-    adapter = ComparisonStageC4Adapter(comparison_modules=modules)
+    adapter = ComparisonStageC4Adapter(None, comparison_modules=modules)
     for name,method in inspect.getmembers(adapter, predicate=inspect.ismethod):
         if name.startswith("_"):
+            continue
+        if modules == "versions,stages" and name in {"get_profile_text", "get_assembly"}:
             continue
         params = inspect.signature(method).parameters
         with pytest.raises(DomainError) as error:

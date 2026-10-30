@@ -16,8 +16,13 @@ __all__ = ["build_comparison_stage_c4_routes"]
 def build_comparison_stage_c4_routes(router: APIRouter, stage: ComparisonStageC4Port) -> None:
     @router.get("/stage-link-revisions/{stage_link_revision_id}/chain-estimate", operation_id="estimateStageChainRun", tags=["comparison"], status_code=200, response_model=models.ComparisonAiEstimate,
         responses={**success(200, "The frozen stage result or keyed replay."), **envelope_responses(401,403,404,409,422,500,503)})
-    def estimate_run(stage_link_revision_id: Annotated[models.StageLinkRevisionId, Path()]) -> WireResponse:
-        result = stage.estimate_run(revision_id=stage_link_revision_id)
+    def estimate_run(
+        stage_link_revision_id: Annotated[models.StageLinkRevisionId, Path()],
+        subject: CurrentSubject,
+        stage_chain_run_id: Annotated[str, Query(pattern=r"^(?:crn_[0-9A-HJKMNP-TV-Z]{26})?$")] = "",
+    ) -> WireResponse:
+        result = stage.estimate_run(revision_id=stage_link_revision_id,
+                                    user_uid=subject.user_uid, run_id=stage_chain_run_id or None)
         return json_response(200, encode_json(result.model_dump(mode="json", exclude_unset=True)))
 
     @router.post("/stage-chain-runs/{stage_chain_run_id}/resume", operation_id="resumeStageChainRun", tags=["comparison"], status_code=200, response_model=models.StageChainRun,

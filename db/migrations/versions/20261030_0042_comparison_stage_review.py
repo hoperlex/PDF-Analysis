@@ -146,6 +146,7 @@ def upgrade() -> None:
         source_sha256 text NOT NULL CHECK(source_sha256 ~ '{SHA}'),
         state text NOT NULL DEFAULT 'queued' CHECK(state IN ('queued','running','completed','failed','cancelled')),
         payload jsonb NOT NULL DEFAULT '{{}}'::jsonb CHECK(jsonb_typeof(payload)='object'),
+        progress jsonb NOT NULL DEFAULT '{{}}'::jsonb CHECK(jsonb_typeof(progress)='object'),
         failure_reason text NULL,
         updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
         UNIQUE(stage_chain_run_id,kind,group_id,source_sha256),

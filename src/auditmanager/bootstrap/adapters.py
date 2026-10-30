@@ -6625,8 +6625,8 @@ class ComparisonStagePairAdapter(_StagesModuleGate):
         self, sessions: sessionmaker[Session], *, comparison_modules: str = "none",
     ) -> None:
         super().__init__(comparison_modules=comparison_modules)
-        from auditmanager.comparison.stage.assemblies import StageAssemblyService
-        from auditmanager.comparison.stage.pairs import (
+        from auditmanager.comparison.public import StageAssemblyService
+        from auditmanager.comparison.public import (
             StagePairCommandService, StagePairReadRepository,
         )
 
@@ -6656,6 +6656,7 @@ class ComparisonStagePairAdapter(_StagesModuleGate):
         return models.StageAssembly(
             assembly_id=row.assembly_id, project_uid=row.project_uid,
             label=row.label, created_at=row.created_at,
+            member_revision_no=row.member_revision_no,
             members=[
                 models.StageAssemblyMember(document_uid=m.document_uid, member_no=m.member_no)
                 for m in row.members
@@ -7221,7 +7222,14 @@ class ComparisonStageC4Adapter(_StagesModuleGate):
     """Typed C4 stubs until their runtime lanes wire them."""
 
     _DEPENDENCY = "comparison_stage_c4"
-    def estimate_run(self, *, revision_id: str) -> models.ComparisonAiEstimate:
+    def __init__(self, sessions: sessionmaker[Session], *, blob_store: Any = None,
+                 comparison_modules: str = "none") -> None:
+        super().__init__(comparison_modules=comparison_modules)
+        from auditmanager.comparison.public import PageProfileReader, StageAssemblyService, StageProfileTextService
+
+        self._assemblies = StageAssemblyService(sessions)
+        self._profile_text = StageProfileTextService(PageProfileReader(sessions, blob_store))
+    def estimate_run(self, *, revision_id: str, user_uid: str, run_id: str | None = None) -> models.ComparisonAiEstimate:
         self._require_stages_module()
         return _comparison_unavailable(self._DEPENDENCY)
 
@@ -7307,8 +7315,8 @@ class ComparisonStageC4Adapter(_StagesModuleGate):
 
     def get_profile_text(self, *, profile_id: str, query: str | None) -> models.StageProfileText:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        return models.StageProfileText(**self._profile_text.get(profile_id=profile_id, query=query))
 
     def get_assembly(self, *, assembly_id: str) -> models.StageAssembly:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        return ComparisonStagePairAdapter._assembly_view(self._assemblies.get(assembly_id))
