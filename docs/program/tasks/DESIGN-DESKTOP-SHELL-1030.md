@@ -70,7 +70,7 @@ This is the single integration/style slot for the shared desktop shell, `web/src
 
 - A stored compact choice is applied after hydration, like the existing theme choice, so one expanded frame may appear briefly on a cold load.
 - Browser screenshots and pointer interaction on a live stand were not available in this workspace; static rendering, CSS parse and focused behavior checks cover the implementation.
-- Repository-wide lint has two existing `eqeqeq` failures in `web/src/widgets/version-series/ui/specification-panel.tsx`; changed-file lint passes. This task does not own that feature file.
+- Repository-wide lint passed after integration with `CMP-ACTIVATE-1030`; this task did not edit the comparison feature file.
 
 ## Handoff
 
