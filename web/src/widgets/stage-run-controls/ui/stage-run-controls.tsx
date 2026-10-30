@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 
 import type { StageChainRun } from '@/shared/api';
-import { cancelStageChainRun, estimateStageChainRun, failureMessage, getStageChainRun,
+import { ApiError, cancelStageChainRun, estimateStageChainRun, failureMessage, getStageChainRun,
   getStageSheetMap, listStageChangeCards, newIdempotencyKey, resumeStageChainRun, startStageChainRun } from '@/shared/api';
 import { agreementStands, comparisonFailure, consentOf, isBlocked } from '@/entities/version-series';
 import { formatInstant } from '@/shared/lib';
@@ -37,7 +37,13 @@ export function StageRunControls(props: StageRunControlsProps) {
 function StageRunBody({ pairId, linkRevisionId, runId, mayAct, compact = false, onRunChange, onOpenBatch }: StageRunControlsProps) {
   const cache = useQueryClient();
   const map = useQuery({ queryKey: STAGE_RUN_KEYS.map(pairId),
-    queryFn: async () => (await getStageSheetMap({ path: { stage_pair_id: pairId } })).data,
+    queryFn: async () => {
+      try { return (await getStageSheetMap({ path: { stage_pair_id: pairId } })).data; }
+      catch (failure) {
+        if (failure instanceof ApiError && failure.status === 404) return null;
+        throw failure;
+      }
+    },
     enabled: linkRevisionId === undefined, retry: false });
   const revisionId = linkRevisionId ?? map.data?.revision_id;
   const runs = useQuery({ queryKey: STAGE_RUN_KEYS.list(pairId), queryFn: () => readRuns(pairId),
@@ -122,6 +128,8 @@ function StageRunBody({ pairId, linkRevisionId, runId, mayAct, compact = false, 
       {run.batch_id === undefined || onOpenBatch === undefined ? null : <button type="button" className="am-button" onClick={() => onOpenBatch(run.batch_id!)}>Открыть очередь</button>}
     </>}
     {map.isPending && linkRevisionId === undefined ? <LoadingState what="карту связей" /> : null}
+    {linkRevisionId === undefined && map.isSuccess && map.data === null
+      ? <p role="status">Сначала откройте «2. Сопоставление листов» и нажмите «Сохранить решение эксперта». После этого сравнение можно запустить.</p> : null}
     {message === null ? null : <ErrorState title="Сравнение не открыто или команда не выполнена" detail={message.detail} correlationId={message.correlationId} />}
     <button type="button" className="am-button" disabled={busy} onClick={() => { void runs.refetch(); if (selectedId !== undefined) void current.refetch(); if (linkRevisionId === undefined) void map.refetch(); }}>Обновить состояние</button>
     {mayAct ? <div className={styles.actions}>

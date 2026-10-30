@@ -44,6 +44,20 @@ describe('stage launch intent', () => {
 });
 
 describe('stage run controls', () => {
+  it('waits for an expert-saved sheet map and unlocks the same pair after it is saved', () => {
+    const cache = newClient();
+    const pairId = uid('stp', 40);
+    cache.setQueryData(STAGE_RUN_KEYS.list(pairId), []);
+    cache.setQueryData(STAGE_RUN_KEYS.map(pairId), null);
+    const screen = () => renderScreen(cache, createElement(StageRunControls, { pairId, mayAct: true }));
+    expect(STAGE_RUN_KEYS.map(pairId)).toEqual(['stage-sheet-map', pairId, 'current']);
+    expect(screen()).toContain('Сначала откройте «2. Сопоставление листов»');
+    expect(screen()).toMatch(/disabled=""[^>]*>Запустить полное сравнение/);
+    cache.setQueryData(STAGE_RUN_KEYS.map(pairId), { revision_id: uid('slr', 41) });
+    const saved = screen();
+    expect(saved).not.toContain('Сначала откройте «2. Сопоставление листов»');
+    expect(saved).toMatch(/class="am-button"[^>]*>Запустить полное сравнение/);
+  });
   it('keeps classic as default and names the native-text V3 bounds before a new launch', () => {
     const cache = newClient();
     const value = run();
