@@ -67,10 +67,10 @@ _LOCK_TIMEOUT = text("SET LOCAL lock_timeout = '2s'")
 _INSERT = text(
     "INSERT INTO comparison_work (comparison_work_id, project_uid, module, kind, payload, "
     "dedupe_key, priority, not_before, max_attempts, comparison_upload_id, comparison_series_id, "
-    "created_by_user_uid) "
+    "created_by_user_uid, comparison_ai_job_id) "
     "VALUES (:work_id, :project_uid, :module, :kind, CAST(:payload AS jsonb), :dedupe_key, "
     ":priority, clock_timestamp() + make_interval(secs => :delay), :max_attempts, "
-    ":upload_id, :series_id, :created_by) "
+    ":upload_id, :series_id, :created_by, :ai_job_id) "
     "ON CONFLICT (project_uid, kind, dedupe_key) "
     "WHERE dedupe_key IS NOT NULL AND terminal_at IS NULL DO NOTHING "
     "RETURNING comparison_work_id"
@@ -297,7 +297,7 @@ class ComparisonWorkRepository:
         payload: Mapping[str, Any] | None = None, dedupe_key: str | None = None,
         priority: int = 0, delay_seconds: float = 0.0, max_attempts: int = 3,
         comparison_upload_id: str | None = None, comparison_series_id: str | None = None,
-        created_by_user_uid: str | None = None,
+        created_by_user_uid: str | None = None, comparison_ai_job_id: str | None = None,
     ) -> Enqueued:
         """Create an item in the caller's transaction and hint the workers.
 
@@ -320,6 +320,15 @@ class ComparisonWorkRepository:
         if dedupe_key is not None and not 1 <= len(dedupe_key) <= 256:
             raise DomainError(ErrorCode.VALIDATION_FAILED, field="dedupe_key", constraint="length")
         body = {} if payload is None else dict(payload)
+        if comparison_ai_job_id is not None:
+            if body.get("ai_job_id", comparison_ai_job_id) != comparison_ai_job_id:
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="ai_job_id", constraint="scope")
+            job = session.execute(text(
+                "SELECT project_uid, method FROM comparison_ai_job WHERE comparison_ai_job_id = :job"
+            ), {"job": comparison_ai_job_id}).first()
+            if job is None or job[0] != project_uid or module != ("stages" if job[1] == "stage_review" else "versions"):
+                raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="ComparisonAiJob")
+            body["ai_job_id"] = comparison_ai_job_id
         for _ in range(3):
             work_id = str(ComparisonWorkId.new())
             inserted = session.execute(_INSERT, {
@@ -327,7 +336,7 @@ class ComparisonWorkRepository:
                 "payload": json.dumps(body, sort_keys=True), "dedupe_key": dedupe_key,
                 "priority": priority, "delay": float(delay_seconds), "max_attempts": max_attempts,
                 "upload_id": comparison_upload_id, "series_id": comparison_series_id,
-                "created_by": created_by_user_uid,
+                "created_by": created_by_user_uid, "ai_job_id": comparison_ai_job_id,
             }).scalar_one_or_none()
             if inserted is not None:
                 _wake_workers(session)

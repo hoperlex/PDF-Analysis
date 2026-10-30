@@ -131,6 +131,7 @@ PRODUCT_TABLES = frozenset((
     "stage_assembly", "stage_assembly_member", "stage_pair", "stage_link_revision",
     "stage_link_item", "stage_text_fragment", "stage_text_exclusion",
     "stage_text_difference", "stage_text_hint", "stage_chain_run", "stage_chain_step",
+    'stage_ai_unit', 'stage_chain_batch', 'stage_chain_batch_item', 'stage_ai_review', 'stage_ai_classification', 'stage_ai_synthesis', 'stage_graphic_evidence', 'stage_link_repair', 'stage_link_repair_event', 'stage_change_card', 'stage_card_evidence', 'stage_card_verdict',
     "document_version_classification", "document_version_classification_correction",
     "executor_task", "expert_decision_event", "finding", "finding_evidence", "finding_observation",
     "finding_observation_norm_citation", "input_manifest_entry", "job", "lease", "model_call",

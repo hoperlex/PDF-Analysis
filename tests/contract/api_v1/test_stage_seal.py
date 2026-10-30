@@ -10,18 +10,19 @@ from auditmanager.api.app import create_documentation_app
 from auditmanager.api.security import OPERATION_ROLES
 from auditmanager.bootstrap.adapters import (
     ComparisonStageLinkAdapter, ComparisonStagePairAdapter, ComparisonStageRunAdapter,
-    ComparisonStageTextAdapter, ComparisonStageUploadAdapter,
+    ComparisonStageTextAdapter, ComparisonStageUploadAdapter, ComparisonStageC4Adapter, _StagesModuleGate,
 )
 from auditmanager.shared.errors import DomainError, ErrorCode
 from tests.support.expected_facts import FACTS
 
-STAGE_OPERATIONS = frozenset(name for _method, _path, name in FACTS.operations[-32:])
+STAGE_OPERATIONS = frozenset(name for _method,path,name in FACTS.operations if "/stage-" in path or path.endswith("/stage-text"))
 ADAPTERS = (
     (ComparisonStagePairAdapter, "comparison_stage_pairs"),
     (ComparisonStageUploadAdapter, "comparison_stage_uploads"),
     (ComparisonStageLinkAdapter, "comparison_stage_links"),
     (ComparisonStageTextAdapter, "comparison_stage_text"),
     (ComparisonStageRunAdapter, "comparison_stage_runs"),
+    (ComparisonStageC4Adapter, "comparison_stage_c4"),
 )
 
 
@@ -30,7 +31,7 @@ def test_all_stage_routes_have_closed_roles_and_keyed_writes() -> None:
     operations = {operation["operationId"]: (method, operation)
                   for item in document["paths"].values()
                   for method, operation in item.items() if method in {"get", "post", "put"}}
-    assert len(STAGE_OPERATIONS) == 32
+    assert len(STAGE_OPERATIONS) == 55
     assert STAGE_OPERATIONS <= operations.keys()
     for name in STAGE_OPERATIONS:
         method, operation = operations[name]
@@ -69,7 +70,10 @@ def test_every_sealed_port_method_refuses_before_work(adapter: type, dependency:
     for modules, expected in (("none", "comparison_modules"),
                               ("versions", "comparison_modules"),
                               ("versions,stages", dependency)):
-        port = adapter(comparison_modules=modules)
+        if modules == "versions,stages" and adapter is not ComparisonStageC4Adapter:
+            continue  # C3 operations are served; runtime tests own their domain behavior.
+        port = adapter.__new__(adapter)
+        _StagesModuleGate.__init__(port, comparison_modules=modules)
         for name in methods:
             signature = inspect.signature(getattr(port, name))
             arguments = {parameter.name: None for parameter in signature.parameters.values()}

@@ -86,6 +86,7 @@ from auditmanager.api.routers.comparison_stage_uploads import build_comparison_s
 from auditmanager.api.routers.comparison_stage_links import build_comparison_stage_link_routes
 from auditmanager.api.routers.comparison_stage_text import build_comparison_stage_text_routes
 from auditmanager.api.routers.comparison_stage_runs import build_comparison_stage_run_routes
+from auditmanager.api.routers.comparison_stage_c4 import build_comparison_stage_c4_routes
 from auditmanager.api.routers.multipart import (
     MAX_BODY,
     MAX_CONCURRENT_UPLOADS,
@@ -116,6 +117,7 @@ from auditmanager.api.routers.ports import (
     ComparisonStageLinkPort,
     ComparisonStageTextPort,
     ComparisonStageRunPort,
+    ComparisonStageC4Port,
     DispatchPort,
     CredentialPort,
     CsvExportPort,
@@ -253,7 +255,7 @@ BASE_PATH: Final[str] = "/api/v1"
 
 #: ``info.version`` of the frozen document, and the ``ErrorEnvelope.contract_version``
 #: const. The two are one value on purpose.
-CONTRACT_VERSION: Final[str] = "1.12.0"
+CONTRACT_VERSION: Final[str] = "1.13.0"
 
 
 def build_router(
@@ -302,6 +304,7 @@ def build_router(
     comparison_stage_links: ComparisonStageLinkPort | None = None,
     comparison_stage_text: ComparisonStageTextPort | None = None,
     comparison_stage_runs: ComparisonStageRunPort | None = None,
+    comparison_stage_c4: ComparisonStageC4Port | None = None,
 ) -> Router:
     """Assemble the 230 operations, from the router modules -- ``me``,
     ``registrations`` and ``users`` are `W49-SEAL-01`'s three, ``sections``
@@ -432,6 +435,7 @@ def build_router(
     build_comparison_stage_link_routes(router, comparison_stage_links)  # type: ignore[arg-type]
     build_comparison_stage_text_routes(router, comparison_stage_text)  # type: ignore[arg-type]
     build_comparison_stage_run_routes(router, comparison_stage_runs)  # type: ignore[arg-type]
+    build_comparison_stage_c4_routes(router, comparison_stage_c4)  # type: ignore[arg-type]
     _refuse_a_duplicate_operation_id(router)
     return router
 

@@ -87,7 +87,8 @@ METHOD_PAIR_CHECK: Final[str] = "pair_check"
 METHOD_SHEET_CHANGES: Final[str] = "sheet_changes"
 METHOD_SPEC: Final[str] = "spec"
 METHOD_REPORT: Final[str] = "report"
-METHODS: Final[tuple[str, ...]] = (METHOD_PAIR_CHECK, METHOD_SHEET_CHANGES, METHOD_SPEC, METHOD_REPORT)
+METHOD_STAGE_REVIEW: Final[str] = "stage_review"
+METHODS: Final[tuple[str, ...]] = (METHOD_PAIR_CHECK, METHOD_SHEET_CHANGES, METHOD_SPEC, METHOD_REPORT, METHOD_STAGE_REVIEW)
 
 #: The states of ``comparison_ai_job`` (the CHECK of migration ``0040``).
 JOB_STATES: Final[tuple[str, ...]] = ("queued", "running", "paused", "completed", "failed", "cancelled")
@@ -164,6 +165,8 @@ class AiScope:
     transition_id: str | None = None
     sheet_pair_id: str | None = None
     restart: bool = False
+    stage_chain_run_id: str | None = None
+    stage_link_revision_id: str | None = None
 
     def __post_init__(self) -> None:
         if self.method not in METHODS:
@@ -174,7 +177,11 @@ class AiScope:
             METHOD_SPEC: (False, False, True, False),
             METHOD_REPORT: (False, True, False, False),
         }
-        if self.method == METHOD_SHEET_CHANGES:
+        if self.method == METHOD_STAGE_REVIEW:
+            fits = self.stage_link_revision_id is not None and not any(value is not None for value in named)
+        elif self.stage_chain_run_id is not None or self.stage_link_revision_id is not None:
+            fits = False
+        elif self.method == METHOD_SHEET_CHANGES:
             fits = (
                 self.matrix_id is None and self.transition_id is None
                 and (self.series_id is None) != (self.sheet_pair_id is None)
@@ -196,6 +203,7 @@ class AiScope:
             "method": self.method, "project_uid": self.project_uid, "document_uid": self.document_uid,
             "matrix_id": self.matrix_id, "series_id": self.series_id, "transition_id": self.transition_id,
             "sheet_pair_id": self.sheet_pair_id, "restart": self.restart,
+            **({"stage_link_revision_id": self.stage_link_revision_id} if self.method == METHOD_STAGE_REVIEW else {}),
         }
 
 
@@ -481,13 +489,16 @@ class AiJobRecord:
     created_at: datetime
     updated_at: datetime
     finished_at: datetime | None
+    stage_chain_run_id: str | None = None
+    stage_link_revision_id: str | None = None
 
     @property
     def scope(self) -> AiScope:
         return AiScope(
             method=self.method, project_uid=self.project_uid, document_uid=self.document_uid, matrix_id=self.matrix_id,
             series_id=self.series_id, transition_id=self.transition_id, sheet_pair_id=self.sheet_pair_id,
-            restart=self.restart,
+            restart=self.restart, stage_chain_run_id=self.stage_chain_run_id,
+            stage_link_revision_id=self.stage_link_revision_id,
         )
 
     @property

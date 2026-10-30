@@ -27,6 +27,7 @@ from auditmanager.comparison.ai_jobs.model import (
     METHOD_REPORT,
     METHOD_SHEET_CHANGES,
     METHOD_SPEC,
+    METHOD_STAGE_REVIEW,
     AiEstimate,
     AiScope,
     AiJobRecord,
@@ -43,22 +44,24 @@ __all__ = ["AiJobRepository", "LIVE_SCOPE_INDEXES", "WorkItemRow"]
 #: one of them is the race the service's own look-before-insert lost.
 LIVE_SCOPE_INDEXES: Final[tuple[str, ...]] = (
     "uq_comparison_ai_job_live_pair_check", "uq_comparison_ai_job_live_series", "uq_comparison_ai_job_live_sheet",
-    "uq_comparison_ai_job_live_spec",
+    "uq_comparison_ai_job_live_spec", "uq_comparison_ai_job_live_stage",
 )
 _COLUMNS = (
     "comparison_ai_job_id AS job_id, project_uid, document_uid, method, state, pause_reason, failure_reason, "
     "comparison_matrix_id AS matrix_id, comparison_series_id AS series_id, comparison_transition_id AS transition_id, "
     "comparison_sheet_pair_id AS sheet_pair_id, restart, connection_revision_id, pinned_model, provider_mode, estimate, "
     "estimate_digest, estimate_micros, ceiling_micros, consent_no, consented_by_user_uid, consented_at, command_id, "
-    "created_at, updated_at, finished_at"
+    "created_at, updated_at, finished_at, stage_chain_run_id, "
+    "(SELECT coalesce(r.effective_link_revision_id,r.stage_link_revision_id) FROM stage_chain_run r "
+    "WHERE r.stage_chain_run_id = comparison_ai_job.stage_chain_run_id) AS stage_link_revision_id"
 )
 _INSERT = text(
     "INSERT INTO comparison_ai_job (comparison_ai_job_id, project_uid, document_uid, method, comparison_matrix_id, "
     "comparison_series_id, comparison_transition_id, comparison_sheet_pair_id, restart, connection_revision_id, "
     "pinned_model, provider_mode, estimate, estimate_digest, estimate_micros, ceiling_micros, consent_no, "
-    "consented_by_user_uid, command_id) VALUES (:job_id, :project_uid, :document_uid, :method, :matrix_id, :series_id, "
+    "consented_by_user_uid, command_id, stage_chain_run_id) VALUES (:job_id, :project_uid, :document_uid, :method, :matrix_id, :series_id, "
     ":transition_id, :sheet_pair_id, :restart, :revision_id, :pinned_model, :provider_mode, CAST(:estimate AS jsonb), "
-    ":digest, :estimate_micros, :ceiling_micros, 1, :user_uid, :command_id)"
+    ":digest, :estimate_micros, :ceiling_micros, 1, :user_uid, :command_id, :stage_chain_run_id)"
 )
 _GET = text(f"SELECT {_COLUMNS} FROM comparison_ai_job WHERE comparison_ai_job_id = :job_id")
 _GET_LOCKED = text(f"SELECT {_COLUMNS} FROM comparison_ai_job WHERE comparison_ai_job_id = :job_id FOR UPDATE")
@@ -68,11 +71,13 @@ _GET_LOCKED = text(f"SELECT {_COLUMNS} FROM comparison_ai_job WHERE comparison_a
 _LIVE_ON_SCOPE = {
     METHOD_PAIR_CHECK: "method = 'pair_check' AND document_uid = :document_uid",
     METHOD_SPEC: "method = 'spec' AND comparison_transition_id = :transition_id",
+    METHOD_STAGE_REVIEW: "method = 'stage_review' AND stage_chain_run_id = :stage_chain_run_id",
 }
 _LIVE = "state IN ('queued', 'running', 'paused')"
 _LATEST_ON_SCOPE = {
     METHOD_PAIR_CHECK: "method = 'pair_check' AND document_uid = :document_uid",
     METHOD_SPEC: "method = 'spec' AND comparison_transition_id = :transition_id",
+    METHOD_STAGE_REVIEW: "method = 'stage_review' AND stage_chain_run_id = :stage_chain_run_id",
     METHOD_REPORT: "method = 'report' AND comparison_series_id = :series_id",
 }
 _MOVE = text(
@@ -100,7 +105,7 @@ _ITEMS = text(
 _INSERT_ITEM = text(
     "INSERT INTO comparison_work (comparison_work_id, project_uid, module, kind, payload, dedupe_key, priority, not_before, "
     "max_attempts, created_by_user_uid, comparison_ai_job_id) "
-    "VALUES (:work_id, :project_uid, 'versions', :kind, CAST(:payload AS jsonb), :dedupe_key, :priority, "
+    "VALUES (:work_id, :project_uid, :module, :kind, CAST(:payload AS jsonb), :dedupe_key, :priority, "
     "clock_timestamp() + make_interval(secs => :delay), :max_attempts, :created_by, :job_id) "
     "ON CONFLICT (project_uid, kind, dedupe_key) WHERE dedupe_key IS NOT NULL AND terminal_at IS NULL DO NOTHING "
     "RETURNING comparison_work_id"
@@ -114,7 +119,8 @@ _PROGRESS = text(
     "ORDER BY coalesce(dedupe_key, comparison_work_id), created_at DESC, comparison_work_id DESC) latest GROUP BY state"
 )
 _LIVE_ITEMS = text(
-    "SELECT count(*) FROM comparison_work WHERE comparison_ai_job_id = :job_id AND terminal_at IS NULL"
+    "SELECT count(*) FROM comparison_work WHERE comparison_ai_job_id = :job_id AND terminal_at IS NULL "
+    "AND (CAST(:excluding_work_id AS text) IS NULL OR comparison_work_id <> :excluding_work_id)"
 )
 _SPEND_COLUMNS = (
     "coalesce(sum(c.cost_micros) FILTER (WHERE c.state IN ('completed', 'failed')), 0) AS spent, "
@@ -178,6 +184,7 @@ class AiJobRepository:
             "job_id": job_id, "project_uid": scope.project_uid, "document_uid": scope.document_uid,
             "method": scope.method, "matrix_id": scope.matrix_id, "series_id": scope.series_id,
             "transition_id": scope.transition_id, "sheet_pair_id": scope.sheet_pair_id, "restart": scope.restart,
+            "stage_chain_run_id": scope.stage_chain_run_id,
             "revision_id": estimate.route.revision_id, "pinned_model": estimate.route.pinned_model,
             "provider_mode": estimate.route.provider_mode,
             "estimate": json.dumps(estimate.as_dict(with_state=False), sort_keys=True),
@@ -226,6 +233,7 @@ class AiJobRepository:
             raise ValueError("a priority is -100 to 100, attempts 1 to 10 and a delay is not negative")
         inserted = session.execute(_INSERT_ITEM, {
             "work_id": str(ComparisonWorkId.new()), "project_uid": job.project_uid, "kind": kind,
+            "module": "stages" if job.method == METHOD_STAGE_REVIEW else "versions",
             "payload": json.dumps(dict(payload), sort_keys=True), "dedupe_key": dedupe_key, "priority": priority,
             "delay": float(delay_seconds), "max_attempts": max_attempts, "created_by": user_uid, "job_id": job.job_id,
         }).scalar_one_or_none()
@@ -280,7 +288,7 @@ class AiJobRepository:
     def _scope_parameters(scope: AiScope) -> dict[str, Any]:
         return {
             "document_uid": scope.document_uid, "series_id": scope.series_id, "transition_id": scope.transition_id,
-            "sheet_pair_id": scope.sheet_pair_id,
+            "sheet_pair_id": scope.sheet_pair_id, "stage_chain_run_id": scope.stage_chain_run_id,
         }
 
     def queue_position(self, session: Session, job_id: str) -> int | None:
@@ -302,8 +310,8 @@ class AiJobRepository:
             for row in session.execute(_ITEMS, {"job_id": job_id}).mappings()
         ]
 
-    def live_item_count(self, session: Session, job_id: str) -> int:
-        return int(session.execute(_LIVE_ITEMS, {"job_id": job_id}).scalar_one())
+    def live_item_count(self, session: Session, job_id: str, *, excluding_work_id: str | None = None) -> int:
+        return int(session.execute(_LIVE_ITEMS, {"job_id": job_id, "excluding_work_id": excluding_work_id}).scalar_one())
 
     def progress(self, session: Session, job_id: str) -> AiProgress:
         by_state = {str(state): int(n) for state, n in session.execute(_PROGRESS, {"job_id": job_id}).all()}

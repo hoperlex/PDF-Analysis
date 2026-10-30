@@ -33,7 +33,7 @@ const ENGLISH = 'The upstream said something in English';
 
 function apiError(code: ErrorEnvelope['error_code'], details: Record<string, string> = {}): ApiError {
   return new ApiError(409, {
-    contract_version: '1.12.0',
+    contract_version: '1.13.0',
     error_code: code,
     message: ENGLISH,
     correlation_id: 'cid-c23',
