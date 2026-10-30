@@ -51,29 +51,31 @@ export interface CostApprovalProps {
   readonly ceiling: string;
   readonly approved: boolean;
   readonly disabled: boolean;
+  readonly uncapped?: boolean;
   readonly onCeilingChange: (value: string) => void;
   readonly onApprovedChange: (value: boolean) => void;
 }
 
-export function CostApproval({ estimate, ceiling, approved, disabled, onCeilingChange, onApprovedChange }: CostApprovalProps) {
-  const sufficient = ceilingMicros(ceiling, Math.max(estimate.billing === 'metered' ? 1 : 0, estimate.estimated_cost_micros)) !== null;
+export function CostApproval({ estimate, ceiling, approved, disabled, uncapped = false, onCeilingChange, onApprovedChange }: CostApprovalProps) {
+  const sufficient = uncapped || ceilingMicros(ceiling, Math.max(estimate.billing === 'metered' ? 1 : 0, estimate.estimated_cost_micros)) !== null;
   return <fieldset disabled={disabled} data-cost-approval>
     <legend>Стоимость перед запуском</legend>
     <p>{estimate.billing === 'unmetered'
       ? 'Подключение без тарификации в приложении. Денежная оценка не отражает внешний счёт провайдера.'
       : `Предварительная оценка: ${microsAsUsd(estimate.estimated_cost_micros)} USD.`}</p>
     {estimate.provider_mode === 'recorded' ? <p className="am-note">Тестовый режим (recorded): сохранённые ответы. Оценка не является фактическим расходом.</p> : null}
-    <p>Модель: {estimate.model_id}. Страниц: {estimate.page_count}; символов: {estimate.text_characters}; окон: {estimate.windows}; вызовов: {estimate.calls}.</p>
-    <p>Токены: вход — {estimate.input_tokens}, ответ — до {estimate.output_tokens}.</p>
-    <label>Лимит стоимости, USD
+    <p>Модель: {estimate.model_id}. Страниц: {estimate.page_count}; символов: {estimate.text_characters}; окон: {estimate.windows}; {uncapped ? 'начальная оценка вызовов' : 'вызовов'}: {estimate.calls}.</p>
+    <p>Токены: вход — {estimate.input_tokens}, ответ — до {estimate.output_tokens}{uncapped ? ' в начальной оценке' : ''}.</p>
+    {uncapped ? <p className="am-note">Денежный потолок не применяется. Подтверждение разрешает фактические расходы без предела приложения.</p> : <label>Лимит стоимости, USD
       <input type="text" inputMode="decimal" maxLength={24} value={ceiling} aria-invalid={!sufficient}
         onChange={(event) => onCeilingChange(event.currentTarget.value)} />
-    </label>
-    <p className="am-note">Рекомендуемый лимит: {microsAsUsd(estimate.recommended_ceiling_micros)} USD. Лимит должен покрывать оценку; окончательный расход зависит от ответа провайдера.</p>
+    </label>}
+    {uncapped ? null : <p className="am-note">Рекомендуемый лимит: {microsAsUsd(estimate.recommended_ceiling_micros)} USD. Лимит должен покрывать оценку; окончательный расход зависит от ответа провайдера.</p>}
     {sufficient ? null : <p role="alert">Введите конечный лимит не ниже оценки, до шести знаков после запятой. Для тарифицируемого подключения лимит должен быть положительным.</p>}
     <label><input type="checkbox" checked={approved && sufficient} disabled={disabled || !sufficient}
       onChange={(event) => onApprovedChange(event.currentTarget.checked)} />
-      Подтверждаю оценку и лимит для выбранных параметров
+      {uncapped ? 'Подтверждаю запуск без денежного потолка для сбора статистики'
+        : 'Подтверждаю оценку и лимит для выбранных параметров'}
     </label>
   </fieldset>;
 }

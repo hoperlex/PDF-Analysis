@@ -100,9 +100,11 @@ class Jobs:
         return dict(self.calls)
 
 
-def _custody(store: Store, jobs: Jobs, mode: ProviderMode = ProviderMode.LIVE, provider: str = "anthropic"):
+def _custody(store: Store, jobs: Jobs, mode: ProviderMode = ProviderMode.LIVE, provider: str = "anthropic",
+             max_reply_bytes: int | None = MAX_REPLY_BYTES):
     return WindowReplyCustody(
         session=object(), jobs=jobs, authority=AUTHORITY, store=store, mode=mode, provider=provider,  # type: ignore[arg-type]
+        max_reply_bytes=max_reply_bytes,
     )
 
 
@@ -116,7 +118,8 @@ def _response(text: str = '{"observations": []}', stop_reason: str = "end_turn",
 class Case:
     """One finished window: preserved by the custody, and the row the reader would return for it."""
 
-    def __init__(self, *, response: ModelResponse | None = None, mode: ProviderMode = ProviderMode.LIVE) -> None:
+    def __init__(self, *, response: ModelResponse | None = None, mode: ProviderMode = ProviderMode.LIVE,
+                 max_reply_bytes: int | None = MAX_REPLY_BYTES) -> None:
         self.plan = _plan()
         self.window = self.plan.windows[1]
         self.request = build_window_request(
@@ -132,8 +135,9 @@ class Case:
         self.response = response or _response()
         self.store, self.jobs = Store(), Jobs()
         self.mode = mode
+        self.max_reply_bytes = max_reply_bytes
         self.call_id = ModelCallId.new()
-        self.refs = _custody(self.store, self.jobs, mode).preserve(
+        self.refs = _custody(self.store, self.jobs, mode, max_reply_bytes=max_reply_bytes).preserve(
             model_call_id=self.call_id, window=self.identity, request=self.request, response=self.response
         )
         self.row = CompletedWindowCall(
@@ -150,7 +154,7 @@ class Case:
 
     def recover(self, **changes: Any):
         self.jobs.calls = {self.key: replace(self.row, **changes)}
-        return _custody(self.store, self.jobs, self.mode).recover(self.key)
+        return _custody(self.store, self.jobs, self.mode, max_reply_bytes=self.max_reply_bytes).recover(self.key)
 
     def rewrite_blob(self, edit) -> dict[str, Any]:
         """Replace the saved bytes with an edited envelope, keeping the row's references consistent with them."""
@@ -315,6 +319,12 @@ def test_a_reply_larger_than_the_custody_limit_is_refused() -> None:
             response=_response("x" * (MAX_REPLY_BYTES + 1)),
         )
     assert refused.value.detail_fields["reason"] == "window_reply_too_large" and store.blobs == {}
+
+
+def test_statistics_mode_preserves_and_recovers_reply_above_legacy_limit() -> None:
+    answer = "x" * (MAX_REPLY_BYTES + 1)
+    case = Case(response=_response(answer), max_reply_bytes=None)
+    assert case.recover().response.output_text == answer
 
 
 def test_a_store_that_is_down_is_a_dependency_failure_not_a_lost_reply_swallowed() -> None:

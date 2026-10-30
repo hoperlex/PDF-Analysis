@@ -1163,7 +1163,7 @@ class DocumentVersion(_Object):
     media_type: Literal["application/pdf"]
     byte_size: Annotated[int, Field(ge=0)]
     sha256: Sha256
-    page_count: Annotated[int, Field(ge=1, le=500)]
+    page_count: Annotated[int, Field(ge=1)]
     published_at: datetime
     input_manifest: list[InputManifestEntry]
     #: `CMP-SEAL-C0`. How the version reached the product; see :class:`VersionUploadKind`.
@@ -2026,7 +2026,7 @@ class NormReferenceCounts(_Object):
 class NormReferenceAnchor(_Object):
     """One occurrence of a citation: the PDF page and the offsets inside that page's text."""
 
-    page_number: Annotated[int, Field(ge=1, le=500)]
+    page_number: Annotated[int, Field(ge=1)]
     char_start: Annotated[int, Field(ge=0)]
     char_end: Annotated[int, Field(ge=1)]
     quote: Annotated[str, Field(min_length=1, max_length=300)]
@@ -2089,7 +2089,7 @@ class RunNormReferences(_Object):
     run_id: RunId
     version_uid: VersionUid
     state: _NormReferenceState
-    page_count: Annotated[int, Field(ge=1, le=500)]
+    page_count: Annotated[int, Field(ge=1)]
     norms_snapshot_id: NormsSnapshotId = Field(
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
@@ -2105,7 +2105,7 @@ class RunNormReferences(_Object):
     occurrence_count: Annotated[int, Field(ge=0)] = Field(
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
-    unread_pages: Annotated[list[Annotated[int, Field(ge=1, le=500)]], Field(max_length=500)] = Field(
+    unread_pages: list[Annotated[int, Field(ge=1)]] = Field(
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
     items: Annotated[list[NormReferenceItem], Field(max_length=1000)] = Field(
@@ -2566,7 +2566,7 @@ class RejectRegistrationRequest(_Object):
 # is a proposal; nothing here is an approved SheetLink, a finding match or a decision. The
 # closed vocabularies are ``Literal`` enums so they stay inline and the schema count small.
 
-_PageNumber = Annotated[int, Field(ge=1, le=500)]
+_PageNumber = Annotated[int, Field(ge=1)]
 _LineIndex = Annotated[int, Field(ge=0, le=1000)]
 
 
@@ -3323,7 +3323,7 @@ class SetProjectVendorListRequest(_Object):
 
 _SpecificationDecimal = Annotated[str, Field(pattern=r"^-?[0-9]+(\.[0-9]+)?$", max_length=48)]
 _SpecificationCurrency = Annotated[str, Field(pattern=r"^[A-Z]{3}$")]
-_SpecificationPage = Annotated[int, Field(ge=1, le=500)]
+_SpecificationPage = Annotated[int, Field(ge=1)]
 _SpecificationLine = Annotated[int, Field(ge=1)]
 _SpecificationCount = Annotated[int, Field(ge=0)]
 _SpecificationUnit = Literal["шт", "м", "м2", "м3", "кг", "т", "компл", "п.м"]
@@ -4452,7 +4452,7 @@ class ComparisonUploadFileDeclaration(_Object):
     display_name: Annotated[str, Field(min_length=1, max_length=255)]
     size_bytes: Annotated[int, Field(ge=1)]
     sha256: Sha256
-    page_count: Annotated[int, Field(ge=1, le=500)] = Field(
+    page_count: Annotated[int, Field(ge=1)] = Field(
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
 
@@ -4664,7 +4664,7 @@ class VersionPageProfile(_Object):
 
     page_profile_id: ComparisonPageProfileId
     version_uid: VersionUid
-    page_number: Annotated[int, Field(ge=1, le=500)]
+    page_number: Annotated[int, Field(ge=1)]
     status: PageProfileStatus
     algo_version: Annotated[str, Field(min_length=1, max_length=64)]
     content_key: Sha256
@@ -4728,7 +4728,7 @@ class ComparisonPageRef(_Object):
     stored profile once there is one; the cells of a built matrix always carry it."""
 
     version_uid: VersionUid
-    page_number: Annotated[int, Field(ge=1, le=500)]
+    page_number: Annotated[int, Field(ge=1)]
     page_profile_id: ComparisonPageProfileId = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
@@ -4860,7 +4860,7 @@ class ComparisonMatrixColumn(_Object):
     client then writes «Версия №N» for the N-th column (`CMP-SEAL-C2`, from `CMP-MATRIX-01`)."""
 
     version_uid: VersionUid
-    page_count: Annotated[int, Field(ge=0, le=500)]
+    page_count: Annotated[int, Field(ge=0)]
     label: Annotated[str, Field(min_length=1, max_length=80)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
@@ -6635,12 +6635,12 @@ class StageUploadFileKind(str, enum.Enum):
 class StageUploadFileDeclaration(_Object):
     display_name: Annotated[str, Field(min_length=1, max_length=255)]
     media_kind: StageUploadFileKind
-    size_bytes: Annotated[int, Field(ge=1, le=2_147_483_648)]
+    size_bytes: Annotated[int, Field(ge=1)]
     sha256: Sha256
 
 
 class CreateStageUploadRequest(_Object):
-    files: Annotated[list[StageUploadFileDeclaration], Field(min_length=1, max_length=1000)]
+    files: Annotated[list[StageUploadFileDeclaration], Field(min_length=1)]
 
 
 class StageUploadFile(_Object):
@@ -6657,7 +6657,7 @@ class StageUploadFile(_Object):
 class StageUploadCandidate(_Object):
     candidate_id: StageUploadCandidateId
     file_id: StageUploadFileId
-    member_number: Annotated[int, Field(ge=1, le=1000)]
+    member_number: Annotated[int, Field(ge=1, le=2**31 - 1)]
     display_name: Annotated[str, Field(min_length=1, max_length=255)]
     state: Literal["proposed", "confirmed", "admitting", "published", "rejected", "failed"]
     proposed_stage: Literal["P", "R"] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
@@ -6674,8 +6674,8 @@ class StageUpload(_Object):
     upload_id: StageUploadId
     project_uid: ProjectUid
     state: Literal["uploading", "paused", "admitting", "completed", "failed", "cancelled"]
-    files: Annotated[list[StageUploadFile], Field(max_length=1000)]
-    candidates: Annotated[list[StageUploadCandidate], Field(max_length=1000)]
+    files: list[StageUploadFile]
+    candidates: list[StageUploadCandidate]
     created_at: datetime
     updated_at: datetime
 
@@ -6688,7 +6688,7 @@ class StageUploadPage(_Object):
 class StageUploadPartReceipt(_Object):
     upload_id: StageUploadId
     file_id: StageUploadFileId
-    part_number: Annotated[int, Field(ge=1, le=128)]
+    part_number: Annotated[int, Field(ge=1, le=10000)]
     size_bytes: Annotated[int, Field(ge=1, le=16_777_216)]
     sha256: Sha256
     received_bytes: int
@@ -6768,7 +6768,7 @@ class SetStagePairCompletenessRequest(_Object):
 class StageSheetPassport(_Object):
     profile_id: ComparisonPageProfileId
     version_uid: VersionUid
-    page_number: Annotated[int, Field(ge=1, le=500)]
+    page_number: Annotated[int, Field(ge=1)]
     side: Literal["left", "right"]
     sheet_type: str = Field(**_NOT_GIVEN)  # type: ignore[assignment]
     building: str = Field(**_NOT_GIVEN)  # type: ignore[assignment]

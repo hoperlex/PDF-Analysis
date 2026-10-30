@@ -5,15 +5,15 @@
  * Only PDFs go (`Q-CMP-5`: a plain PDF is admitted for comparison; a ZIP of a whole stage is the reader of a later
  * wave), and the name a file carries is a **hint** for the grouping proposal, never an identity: the declared name is
  * the relative path the browser reports (`webkitRelativePath`), cut to the contract's 255 characters. The limits are
- * ADR-0025 decisions 9 and 10 and the PDF envelope's 250 MiB; the server refuses all of them with a typed reason, and
- * this check only spares a reader the wait.
+ * The temporary statistics intake checks only that files are nonempty; the
+ * server still checks PDF integrity and multipart framing.
  */
 
 export const PART_SIZE_BYTES = 16 * 1024 * 1024;
-export const MAX_FILES = 10_000;
-export const MAX_SETS = 100;
-export const MAX_FILE_BYTES = 250 * 1024 * 1024;
-export const MAX_BATCH_BYTES = 8 * 1024 * 1024 * 1024;
+export const MAX_FILES = Number.MAX_SAFE_INTEGER;
+export const MAX_SETS = Number.MAX_SAFE_INTEGER;
+export const MAX_FILE_BYTES = Number.MAX_SAFE_INTEGER;
+export const MAX_BATCH_BYTES = Number.MAX_SAFE_INTEGER;
 export const MAX_NAME_LENGTH = 255;
 
 /** One picked PDF and the project folder it was picked as part of (a hint for the reader, not sent as an identity). */
@@ -98,21 +98,17 @@ export type PrecheckProblem = 'nothing' | 'too_many_files' | 'too_many_projects'
 
 export const PRECHECK_SENTENCES: Readonly<Record<PrecheckProblem, string>> = {
   nothing: 'Выберите папку с PDF или отдельные файлы.',
-  too_many_files: 'Файлов больше 10 000. Разделите загрузку.',
-  too_many_projects: 'Папок-проектов больше 100. Разделите загрузку.',
-  file_too_large: 'Один из файлов больше 250 МиБ: так много система не принимает.',
+  too_many_files: 'Число файлов превышает технический предел.',
+  too_many_projects: 'Число комплектов превышает технический предел.',
+  file_too_large: 'Размер файла превышает технический предел.',
   empty_file: 'Один из файлов пуст.',
-  batch_too_large: 'Вместе файлы больше 8 ГиБ. Разделите загрузку.',
+  batch_too_large: 'Общий размер файлов превышает технический предел.',
 };
 
 /** What a browser can honestly know before sending: counts and sizes; the server checks the rest. */
 export function precheck(files: readonly PickedFile[]): PrecheckProblem | null {
   if (files.length === 0) return 'nothing';
-  if (files.length > MAX_FILES) return 'too_many_files';
-  if (groupsOf(files).length > MAX_SETS) return 'too_many_projects';
   if (files.some((picked) => picked.file.size === 0)) return 'empty_file';
-  if (files.some((picked) => picked.file.size > MAX_FILE_BYTES)) return 'file_too_large';
-  if (files.reduce((sum, picked) => sum + picked.file.size, 0) > MAX_BATCH_BYTES) return 'batch_too_large';
   return null;
 }
 

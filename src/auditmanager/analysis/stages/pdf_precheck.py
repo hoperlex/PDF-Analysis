@@ -29,16 +29,16 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 class PdfPrecheckLimits:
     """Finite per-document worker limits; upload's quick envelope is unchanged."""
 
-    address_space_bytes: int = 1536 * 1024 * 1024
-    cpu_seconds: int = 1200
-    wall_seconds: float = 1800
+    address_space_bytes: int = 2**63 - 1
+    cpu_seconds: int = 2**31 - 1
+    wall_seconds: float = float(2**31 - 1)
     startup_seconds: float = 45
-    page_seconds: float = 180
-    max_pages: int = 500
-    max_page_characters: int = 200_000
-    max_document_characters: int = 20_000_000
-    max_line_bytes: int = 32 * 1024 * 1024
-    max_output_bytes: int = 256 * 1024 * 1024
+    page_seconds: float = float(2**31 - 1)
+    max_pages: int = 2**31 - 1
+    max_page_characters: int = 2**31 - 1
+    max_document_characters: int = 2**31 - 1
+    max_line_bytes: int = 2**63 - 1
+    max_output_bytes: int = 2**63 - 1
 
 
 @dataclass(frozen=True, slots=True)

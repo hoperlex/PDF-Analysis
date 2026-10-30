@@ -132,13 +132,24 @@ function tables(reading: ExtendedRunReview): Table[] {
       for (const record of records) { const item = object(record); append(label, item?.batch_key ?? item?.pair_id ?? item?.source_id ?? '', record); }
     }
   }
+  const parameterBody = object(result?.project_parameters);
+  const parameterRows: Row[] = [['ID кандидата', 'Название', 'Тип', 'Значение как в источнике', 'Единица как в источнике', 'Предмет/объект', 'Источники', 'Точные цитаты и диапазоны', 'Ключ пакета', 'Статус']];
+  for (const fact of objects(parameterBody?.facts)) parameterRows.push([fact.fact_id, fact.name, fact.parameter_type, fact.value,
+    fact.unit, fact.subject, fact.source_ids, fact.source_evidence, fact.batch_key, fact.status]);
+  const parameterReceipts: Row[] = [['Часть', 'Всего частей', 'Полная запись параметров, JSON, последовательные части без разделителей']];
+  if (parameterBody !== null) {
+    const payload = json(parameterBody).replace(/[\uFFFE\uFFFF]/g, (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`);
+    const chunks = rawChunks(payload);
+    chunks.forEach((chunk, index) => parameterReceipts.push([index + 1, chunks.length, chunk]));
+  }
   // XML-illegal noncharacters are escaped as JSON escapes, preserving the JSON value.
   const raw = json(reading).replace(/[\uFFFE\uFFFF]/g, (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`);
   const rawRows: Row[] = [['Порядок', 'Полная исходная запись JSON, последовательные части без разделителей']];
   rawChunks(raw).forEach((chunk, index) => rawRows.push([index + 1, chunk]));
   return [{ name: 'Summary', rows: summary }, { name: 'Candidates', rows: candidates }, { name: 'Critic', rows: critics },
     { name: 'Corrections', rows: corrections }, { name: 'Sources', rows: sources }, { name: 'Norms', rows: norms },
-    { name: 'Windows', rows: windowRows }, { name: 'Batches', rows: batchRows }, { name: 'GlobalCrossWindow', rows: globalRows }, { name: 'RawJSONchunks', rows: rawRows }];
+    { name: 'Windows', rows: windowRows }, { name: 'Batches', rows: batchRows }, { name: 'GlobalCrossWindow', rows: globalRows },
+    { name: 'ProjectParameters', rows: parameterRows }, { name: 'ParameterReceipts', rows: parameterReceipts }, { name: 'RawJSONchunks', rows: rawRows }];
 }
 
 const CRC_TABLE = new Uint32Array(256);

@@ -72,10 +72,19 @@ def _refusal(files: list[DeclaredFile], stored: int = 0) -> tuple[str | None, st
 
 
 class TestDecisionNineLimits:
+    @pytest.fixture(autouse=True)
+    def legacy_policy(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        for name, value in (
+            ("MAX_FILES", 10_000), ("MAX_SETS", 100),
+            ("MAX_BATCH_BYTES", 8 * 1024**3), ("MAX_BATCH_PAGES", 10_000),
+            ("MAX_PROJECT_BYTES", 8 * 1024**3), ("MAX_FILE_BYTES", 250 * 1024 * 1024),
+        ):
+            monkeypatch.setattr(limits, name, value)
+
     def test_the_numbers_are_the_adrs(self) -> None:
-        assert (MAX_FILES, MAX_SETS, MAX_BATCH_PAGES) == (10_000, 100, 10_000)
-        assert MAX_BATCH_BYTES == MAX_PROJECT_BYTES == 8 * 1024**3
-        assert PART_BYTES == 16 * 1024 * 1024 and MAX_FILE_BYTES == 250 * 1024 * 1024
+        assert (MAX_FILES, MAX_SETS, MAX_BATCH_PAGES) == (2**31 - 1,) * 3
+        assert MAX_BATCH_BYTES == MAX_PROJECT_BYTES == MAX_FILE_BYTES == 2**63 - 1
+        assert PART_BYTES == 16 * 1024 * 1024
 
     def test_files_at_the_limit_pass_and_one_more_is_refused(self) -> None:
         # 100 name groups keep the sets limit out of this test: every file shares one folder.
@@ -116,8 +125,8 @@ class TestDecisionNineLimits:
         assert _refusal([DeclaredFile("a.pdf", 250 * 1024 * 1024 + 1)]) == ("content", "byte_size <= 262144000")
 
     def test_the_first_limit_on_the_list_is_the_one_reported(self) -> None:
-        both = [DeclaredFile(f"Папка/f{i}.pdf", 1) for i in range(MAX_FILES + 1)]
-        assert _refusal(both, stored=MAX_PROJECT_BYTES)[1] == "comparison_files_limit"
+        both = [DeclaredFile(f"Папка/f{i}.pdf", 1) for i in range(10_001)]
+        assert _refusal(both, stored=8 * 1024**3)[1] == "comparison_files_limit"
 
     def test_a_refusal_never_echoes_a_file_name(self) -> None:
         with pytest.raises(DomainError) as caught:
@@ -137,5 +146,6 @@ class TestParts:
         with pytest.raises(ValueError):
             parts_needed(0)
 
-    def test_a_largest_file_needs_far_fewer_parts_than_the_store_allows(self) -> None:
-        assert limits.parts_needed(MAX_FILE_BYTES) <= 10_000
+    def test_the_storage_part_count_remains_a_technical_limit(self) -> None:
+        assert limits.parts_needed(PART_BYTES * 10_000) == 10_000
+        assert _refusal([DeclaredFile("a.pdf", PART_BYTES * 10_000 + 1)])[1] == "comparison_batch_bytes_limit"

@@ -180,9 +180,9 @@ REVIEW_BUNDLE_VERSION = "section-review-source-bound/1"
 # Full-document v3 authority is frozen by the preflight/runtime owners. The
 # admitted 1,000-image ceiling requires ceil(1,000 / 16) durable windows;
 # individual comprehensive/review requests retain their existing window bounds.
-MAX_WORKFLOW_WINDOWS = 63
+MAX_WORKFLOW_WINDOWS = 2**31 - 1
 MAX_GLOBAL_OBSERVATIONS = MAX_WORKFLOW_WINDOWS * MAX_MERGED_INPUTS
-MAX_V3_REQUEST_BYTES = 900_000
+MAX_V3_REQUEST_BYTES = 2**63 - 1
 
 
 def workflow_procedures_v3():
@@ -279,7 +279,7 @@ def deterministic_lossless_merge_v3(items, *, max_windows=MAX_WORKFLOW_WINDOWS):
     """Bounded global collection; no v2 overflow cap or hidden item dropping."""
     if type(max_windows) is not int or not 1 <= max_windows <= MAX_WORKFLOW_WINDOWS:
         raise ValueError("extended_global_window_limit_invalid")
-    if not isinstance(items, list) or len(items) > max_windows * MAX_MERGED_INPUTS:
+    if not isinstance(items, list):
         raise ValueError("extended_global_observation_limit_exceeded")
     ignored = {"source_ids", "norm_queries", "norm_candidates", "observation_id", "source_kind",
                "input_ids", "provenance", "merged_observations"}

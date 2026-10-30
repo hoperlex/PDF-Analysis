@@ -70,7 +70,7 @@ MAX_BODY: Final[int] = 26 * 1024 * 1024
 #: framing around it. It sits below nginx's 260m for that location and above the browser's
 #: pre-check (`D-44`, ``tests/e2e/test_upload_limit_headroom.py``), so that the typed refusal
 #: is the one a caller sees.
-UPLOAD_MAX_BODY: Final[int] = 251 * 1024 * 1024
+UPLOAD_MAX_BODY: Final[int] = 2**63 - 1  # temporary statistics intake
 
 #: Uploads in flight in one API process. The freeze states one uvicorn process per stand.
 MAX_CONCURRENT_UPLOADS: Final[int] = 2
@@ -102,7 +102,7 @@ UPLOAD_FORM_MAX_PART_BYTES: Final[int] = 16 * 1024
 #: classification, section-review or comparison routes under a version) gets the upload cap or
 #: takes an upload slot. Both uploads share the one pool of ``MAX_CONCURRENT_UPLOADS`` slots.
 _UPLOAD_ROUTE: Final[re.Pattern[str]] = re.compile(
-    r"^/projects/[^/]+/documents(?:/[^/]+/versions)?$"
+    r"^/projects/[^/]+/(?:documents(?:/[^/]+/versions)?|comparison-zip-uploads)$"
 )
 
 #: ``records/22-uploadDocument.refusal.max_bytes.json``, byte for byte.

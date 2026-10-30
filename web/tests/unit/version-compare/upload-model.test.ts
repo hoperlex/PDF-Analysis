@@ -84,19 +84,19 @@ describe('which files go, and under which project', () => {
     expect(declaredName('a/b.pdf')).toBe('a/b.pdf');
   });
 
-  it('refuses before sending what the contract would refuse, in the contract\'s numbers', () => {
+  it('keeps the temporary intake open for large files and batches', () => {
     const one = (size: number, name = 'a.pdf') => pickFiles([fakeFile(name, size)], 'files').files;
     expect(precheck([])).toBe('nothing');
     expect(precheck(one(100))).toBeNull();
     expect(precheck(one(0))).toBe('empty_file');
-    expect(precheck(one(250 * MIB + 1))).toBe('file_too_large');
+    expect(precheck(one(250 * MIB + 1))).toBeNull();
     expect(precheck(one(250 * MIB))).toBeNull();
     const many = Array.from({ length: 10_001 }, (_, n) => fakeFile(`f${n}.pdf`, 1));
-    expect(precheck(pickFiles(many, 'files').files)).toBe('too_many_files');
+    expect(precheck(pickFiles(many, 'files').files)).toBeNull();
     const projects = Array.from({ length: 101 }, (_, n) => fakeFile('a.pdf', 1, `P/${n}/a.pdf`));
-    expect(precheck(pickFiles(projects, 'one').files)).toBe('too_many_projects');
+    expect(precheck(pickFiles(projects, 'one').files)).toBeNull();
     const huge = Array.from({ length: 33 }, (_, n) => fakeFile(`h${n}.pdf`, 250 * MIB));
-    expect(precheck(pickFiles(huge, 'files').files)).toBe('batch_too_large');
+    expect(precheck(pickFiles(huge, 'files').files)).toBeNull();
     for (const sentence of Object.values(PRECHECK_SENTENCES)) expect(sentence).toMatch(/[А-Яа-я]/);
   });
 

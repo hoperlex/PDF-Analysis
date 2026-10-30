@@ -210,6 +210,7 @@ class StageUploadService:
         )
         if any(
             item.media_kind not in ("pdf", "zip") or not 1 <= item.size_bytes <= RAW_BATCH_BYTES
+            or (item.size_bytes + PART_BYTES - 1) // PART_BYTES > 10_000
             or _SHA.fullmatch(item.sha256) is None
             for item in declared
         ) or sum(item.size_bytes for item in declared) > RAW_BATCH_BYTES:

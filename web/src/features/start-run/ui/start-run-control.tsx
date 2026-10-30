@@ -198,11 +198,11 @@ export function StartRunControl({ projectUid, versionUid, onStarted }: StartRunC
             cost.reset();
           }}
         />
-        Повышенные лимиты ИИ-анализа
+        Временный режим сбора статистики
       </label>
       <p className="am-note">
         {relaxedLimits
-          ? 'Запрос на ответ до 64 000 токенов. Провайдер может установить меньший предел. Технический предел объёма входного текста сохраняется. Лимит стоимости подтверждается отдельно.'
+          ? 'Прикладной денежный потолок отключён; фактические вызовы и расход записываются. Ответ до 64 000 токенов за вызов, предел провайдера может быть ниже.'
           : 'Запрос на ответ до 16 000 токенов. Лимит стоимости подтверждается отдельно.'}
       </p>
       <button type="button" className="am-button" disabled={locked} onClick={() => { mutation.reset(); cost.request(); }}>
@@ -221,6 +221,7 @@ export function StartRunControl({ projectUid, versionUid, onStarted }: StartRunC
       </p> : null}
       {staleEstimate ? <p role="alert">Оценка стоимости устарела. Получите новую оценку и подтвердите лимит снова.</p> : null}
       {cost.estimate === null ? null : <CostApproval estimate={cost.estimate} ceiling={cost.ceiling} approved={cost.approved}
+        uncapped={relaxedLimits}
         disabled={locked} onCeilingChange={cost.setCeiling} onApprovedChange={cost.setApproved} />}
       <button type="button" className="am-button" onClick={send} disabled={locked || cost.consent === undefined}>
         Запустить прогон

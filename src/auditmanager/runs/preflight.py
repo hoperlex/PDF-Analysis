@@ -64,16 +64,20 @@ class RunCostEstimateValue:
         cap = consent["ceiling_micros"]
         if type(cap) is not int or not 0 <= cap <= MAX_SAFE_MICROS:
             raise _invalid("ceiling_micros", "nonnegative_integer")
-        if cap < self.as_dict()["estimated_cost_micros"]:
-            raise _invalid("ceiling_micros", "below_estimate")
         authority = json.loads(self.authority_json)
-        if authority["billing"] == "metered" and cap == 0:
+        uncapped_stats = (authority["scope"] == "run" and authority["relaxed_limits"] is True
+                          and cap == 0)
+        if not uncapped_stats and cap < self.as_dict()["estimated_cost_micros"]:
+            raise _invalid("ceiling_micros", "below_estimate")
+        if authority["billing"] == "metered" and cap == 0 and not uncapped_stats:
             raise _invalid("ceiling_micros", "positive_metered_limit")
         result = {"estimate_digest": self.estimate_digest, "ceiling_micros": cap,
             "billing": authority["billing"], "model_id": authority["model_id"],
             "rate_sha256": authority["rate_sha256"], "connection_revision_id": authority.get("connection_revision_id"),
             "window_characters": authority.get("window_characters"), "max_windows": authority.get("max_windows"),
             "source_sha256": authority["source_sha256"], "format": FORMAT}
+        if uncapped_stats:
+            result["uncapped_stats"] = True
         if actor_user_uid is not None:
             result["approved_by_user_uid"] = actor_user_uid
         if "extended_review" in authority:
@@ -169,7 +173,8 @@ class RunCostPreflight:
                 0 if pricing["billing"] == "unmetered" else estimated_micros(pin, input_tokens, output_tokens))
         source_sha = _digest(source)
         authority = dict(pricing, format=FORMAT, source_sha256=source_sha,
-            window_characters=window_characters, max_windows=max(12, windows) if scope == "run" else None,
+            window_characters=window_characters,
+            max_windows=(max(12, version.page_count) if relaxed else max(12, windows)) if scope == "run" else None,
             relaxed_limits=relaxed, scope=scope, windows=windows, calls=calls,
             input_tokens=input_tokens, output_tokens=output_tokens)
         if scope_costs is not None:
@@ -225,8 +230,8 @@ class RunCostPreflight:
                 coverage_mode = os.environ.get("AUDITMANAGER_EXTENDED_COVERAGE", "batched-v1").strip().lower()
                 if coverage_mode in {"batched-v1", "batched-fixed-v1"}:
                     from auditmanager.analysis.public import extended_coverage_policy
-                    extended.update(extended_coverage_policy(**({"text_characters": chars}
-                        if coverage_mode == "batched-v1" else {})))
+                    extended.update(extended_coverage_policy(**({"text_characters": chars,
+                        "unbounded_stats": relaxed_limits} if coverage_mode == "batched-v1" else {})))
                     limits = extended["phase_call_limits"]
                     per_window_calls = sum(limits.values())
                     per_window_output = sum(limits[phase] * tokens for phase, tokens in (
@@ -257,6 +262,13 @@ class RunCostPreflight:
                     output_tokens += visual["max_windows"] * 72_000
                 else:
                     raise _invalid("analysis_coverage", "unsupported_plan")
+                if chars > 0 and os.environ.get("AUDITMANAGER_PROJECT_PARAMETERS", "1").strip().lower() not in {"0", "false", "off"}:
+                    from auditmanager.analysis.public import project_parameters_policy
+                    parameters = project_parameters_policy(section)
+                    extended["project_parameters_policy"] = parameters
+                    extra_calls += parameters["max_calls"]
+                    input_tokens += parameters["max_calls"] * 100_000
+                    output_tokens += parameters["max_calls"] * parameters["output_tokens"]
                 source["visual_scope"] = visual
             elif requested in {"v2", "extended-review-v2"}:
                 extended = {"enabled": True, "max_blocks": "all", "plan_version": "extended-review-v2"}

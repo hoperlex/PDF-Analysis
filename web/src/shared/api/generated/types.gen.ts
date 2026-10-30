@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.14.0 (OpenAPI 3.1.0)
- *   sha256 05397fad027834c0f037d0890e4a059207b7881445b810cbc0bac2137b7233dd
+ *   sha256 11db634e3a35f9e94c1a5b1d18aa42f675ce0a32327b82f1d2c12d2bb002b466
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.14.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '05397fad027834c0f037d0890e4a059207b7881445b810cbc0bac2137b7233dd';
+export const CONTRACT_DIGEST = '11db634e3a35f9e94c1a5b1d18aa42f675ce0a32327b82f1d2c12d2bb002b466';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -6923,7 +6923,7 @@ export type UpdateUserRequest = {
 export type UploadDocumentRequest = {
   /** Optional display label. When absent the server derives one for presentation. Neither this nor the uploaded file name is ever an identity. */
   display_title?: string;
-  /** One portal bundle: a ZIP holding the PDF, its portal block list and its recognised-text markdown, and optionally the portal HTML and the stamp audit. At most 250 MiB; the PDF at most 500 pages. */
+  /** One portal bundle: a ZIP holding the PDF, its portal block list and its recognised-text markdown, and optionally the portal HTML and the stamp audit. Temporary statistics intake removes application size and page-count ceilings. */
   file: Blob;
   /** One of the fifteen project sections, or absent when the document has not been classified. */
   section?: ProjectSection;
@@ -6931,7 +6931,7 @@ export type UploadDocumentRequest = {
 
 /** The next version of an existing document: one portal bundle and nothing else. There is no title and no section, because a further version takes neither; an undeclared part is refused like any other. */
 export type UploadDocumentVersionRequest = {
-  /** One portal bundle: a ZIP holding the PDF, its portal block list and its recognised-text markdown, and optionally the portal HTML and the stamp audit. At most 250 MiB; the PDF at most 500 pages. */
+  /** One portal bundle: a ZIP holding the PDF, its portal block list and its recognised-text markdown, and optionally the portal HTML and the stamp audit. Temporary statistics intake removes application size and page-count ceilings. */
   file: Blob;
 };
 
@@ -7134,7 +7134,8 @@ export const VERSION_UID_PATTERN = "^ver_[0-9A-HJKMNP-TV-Z]{26}$";
 
 /**
  * How a version reached the product. ``comparison_pdf`` is a plain PDF admitted through
- * comparison without a portal bundle. Ordinary section analysis uses its native text and pages.
+ * comparison without a portal bundle. Ordinary section analysis can use its native PDF text and pages;
+ * portal-dependent operations still require a bundle.
  */
 export const VERSION_UPLOAD_KIND_VALUES = [
   'portal_bundle',

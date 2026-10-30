@@ -14,6 +14,7 @@ import { ReportPackage } from './report-package';
 import { ConsolidatedObservations } from './consolidated-observations';
 import { CoverageBudget } from './coverage-budget';
 import { CrossWindowReview } from './cross-window-review';
+import { ProjectParameters } from './project-parameters';
 import { extendedCandidateCounts } from './extended-review-summary';
 import styles from './extended-review.module.css';
 
@@ -54,6 +55,8 @@ export function extendedReviewDefinitive(reading: ExtendedRunReview | undefined)
   const result = object(reading.result);
   const procedures = objects(result?.procedures);
   const global = object(result?.global_cross_window);
+  const parameters = object(result?.project_parameters);
+  if (parameters !== null && !FINAL_STATES.has(text(parameters.status))) return false;
   if (global !== null && (!FINAL_STATES.has(text(global.status)) || objects(global.procedures).some((item) => !FINAL_STATES.has(text(item.status))))) return false;
   if (procedures.some((item) => !FINAL_STATES.has(text(item.status)))) return false;
   if (objects(result?.windows).some((window) => !FINAL_STATES.has(text(window.status))
@@ -157,7 +160,7 @@ export function ExtendedReviewView({ reading, projectUid }: { reading: ExtendedR
     <p><strong>{labels[reading.status] ?? 'Состояние неизвестно'}</strong>. {fullWindow ? 'План включает все доступные блоки; текст страниц обрабатывается по частям.' : 'Изображения и текст проверяются в ограниченном одобренном окне.'} Это наблюдения для экспертной сверки, а не подтверждённые нарушения или решения эксперта.</p>
     {Array.isArray(result?.observations) ? <dl className={styles.digest} data-extended-analysis-counts=""><div><dt>Предварительные кандидаты</dt><dd>{counts.candidates}</dd></div><div><dt>Рекомендации машинного критика</dt><dd>{counts.criticRecommendations}</dd></div><div><dt>Предложенные исправленные кандидаты</dt><dd>{counts.correctionProposals}</dd></div><div><dt>Источники в текущем своде</dt><dd>{sources.length}</dd></div></dl> : <p>Записи кандидатов и рекомендаций ещё не переданы. Их отсутствие в ответе не подтверждает пустой результат анализа.</p>}
     <p>Эти счётчики относятся к расширенному машинному анализу. Канонические находки и сохранённые решения эксперта рассматриваются отдельно в «Разборе».</p>
-    <nav className={styles.toolbar} aria-label="Разделы предварительного отчёта"><a href="#extended-observations">Наблюдения и источники</a>{v3 ? <a href="#extended-window-progress">Прогресс обработки</a> : null}{object(result?.global_cross_window) === null ? null : <a href="#extended-global-cross-window">Сверка между окнами</a>}{report === null ? null : <a href="#extended-saved-report">Сохранённый отчёт</a>}<a href="#extended-downloads">Полные выгрузки</a></nav>
+    <nav className={styles.toolbar} aria-label="Разделы предварительного отчёта"><a href="#extended-observations">Наблюдения и источники</a>{v3 ? <a href="#extended-window-progress">Прогресс обработки</a> : null}{object(result?.global_cross_window) === null ? null : <a href="#extended-global-cross-window">Сверка между окнами</a>}{object(result?.project_parameters) === null ? null : <a href="#extended-project-parameters">Параметры проекта</a>}{report === null ? null : <a href="#extended-saved-report">Сохранённый отчёт</a>}<a href="#extended-downloads">Полные выгрузки</a></nav>
     {text(result?.section) ? <p>Раздел: <strong>{text(result?.section)}</strong>.</p> : null}
     {v2 ? <p>{fullWindow ? 'Этот прогон принят по плану V2 с обработкой полного документа по частям.' : 'Этот прогон принят по прежнему плану расширенного анализа.'} Новые критика, исправление и подготовка отчёта V3 ему не приписываются; для нового плана нужна свежая оценка и согласие в новом прогоне.</p> : null}
     {v3 ? <p>Рубрики учитывают специфику раздела. Числовые пороги и ссылки из исторических материалов — контекст, а не подтверждённые действующие нормы. Критика и исправление — рекомендации модели, решение остаётся за экспертом.</p> : null}
@@ -176,6 +179,7 @@ export function ExtendedReviewView({ reading, projectUid }: { reading: ExtendedR
     {result?.coverage_version === 'batched-v1' ? <BatchProgress batches={result?.batches} coverage={result?.phase_coverage} /> : null}
     {result?.coverage_version === 'batched-v1' ? <CoverageBudget mode={result?.coverage_budget_mode} limits={result?.phase_call_limits} estimatedText={result?.estimated_text_characters} pieceCharacters={result?.comprehensive_piece_characters} /> : null}
     <CrossWindowReview key={reading.run_id} value={result?.global_cross_window} observations={observations} sources={sources} fallbackVersion={text(result?.version_uid)} {...(projectUid === undefined ? {} : { projectUid })} />
+    <ProjectParameters key={`parameters:${reading.run_id}`} value={result?.project_parameters} fallbackVersion={text(result?.version_uid)} {...(projectUid === undefined ? {} : { projectUid })} />
     {v3 && result?.primary_text_status === 'pending' ? <p>Базовый текстовый анализ ещё выполняется. {result.visual_phase_complete === true ? 'Визуальный проход сохранён; свод и последующие проверки ожидают текстовый результат.' : 'Сохранённые визуальные результаты ещё не означают завершения анализа раздела.'}</p> : null}
     {coverage && <p>Исследовано блоков: <strong>{count(coverage.blocks_processed)}</strong> из {count(coverage.blocks_total)}. {fullWindow ? 'В плане' : 'В одобренном окне'}: {count(coverage.blocks_selected)}. Ещё не исследовано или недоступно: <strong>{count(coverage.blocks_remaining)}</strong>.</p>}
     {textCoverage === null ? null : <section data-extended-text-coverage=""><p>Комплексная сверка текста: успешно обработано страниц <strong>{count(textCoverage.pages_processed)}</strong> из {count(textCoverage.pages_total)}. В плане: {count(textCoverage.pages_selected)}. Ещё не обработано или недоступно: <strong>{count(textCoverage.pages_remaining)}</strong>.</p>{typeof textCoverage.characters_total === 'number' ? <p>Известный текстовый объём: {count(textCoverage.characters_processed)} из {count(textCoverage.characters_total)} символов обработано; осталось {count(textCoverage.characters_remaining)}. План может уточняться после подготовки следующих окон.</p> : null}<p>Эти счётчики не подтверждают отсутствие ошибок или экспертную проверку.</p></section>}

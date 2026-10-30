@@ -135,7 +135,7 @@ type StreamingRequestInit = RequestInit & { duplex?: 'half' };
 
 function mustStream(request: Request): boolean {
   const type = (request.headers.get('content-type') ?? '').trim().toLowerCase();
-  if (type.startsWith('multipart/form-data')) return true;
+  if (type.startsWith('multipart/form-data') || type.startsWith('application/zip')) return true;
   return Number(request.headers.get('content-length') ?? 0) > STREAM_FROM_BYTES;
 }
 
@@ -313,7 +313,8 @@ export async function forwardWithCredential(
   // The deadline belongs to a request that sends a body; a read has none (see the header note).
   const sendsBody = init.body !== undefined;
   if (sendsBody) {
-    init.signal = AbortSignal.any([request.signal, AbortSignal.timeout(UPSTREAM_DEADLINE_MS)]);
+    const uploadPath = /^\/bff\/v1\/projects\/[^/]+\/(?:documents(?:\/[^/]+\/versions)?|comparison-zip-uploads)$/.test(new URL(request.url).pathname);
+    init.signal = AbortSignal.any([request.signal, AbortSignal.timeout(uploadPath ? 86_400_000 : UPSTREAM_DEADLINE_MS)]);
   }
 
   let upstream: Response;

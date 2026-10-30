@@ -5444,10 +5444,9 @@ def _comparison_set(view: Any) -> models.ComparisonProposalSet:
 
 
 class ComparisonUploadAdapter(_SessionHolder):
-    def import_zip(self, *, project_uid: str, content: bytes, user_uid: str, idempotency_key: str, archive_name: str | None = None) -> models.ComparisonUpload:
-        import io
+    def import_zip(self, *, project_uid: str, content: BinaryIO, user_uid: str, idempotency_key: str, archive_name: str | None = None) -> models.ComparisonUpload:
         label, _roles = self._read(lambda session: _comparison_actor(session, user_uid))
-        view = self._service.import_zip(project_uid=project_uid, source=io.BytesIO(content), user_uid=user_uid, actor_label=label, idempotency_key=idempotency_key, archive_name=archive_name)
+        view = self._service.import_zip(project_uid=project_uid, source=content, user_uid=user_uid, actor_label=label, idempotency_key=idempotency_key, archive_name=archive_name)
         self._batches.after_declaration(upload_id=view.upload_id)
         return _comparison_upload(view)
 

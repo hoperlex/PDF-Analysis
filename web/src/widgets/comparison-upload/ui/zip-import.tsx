@@ -26,9 +26,9 @@ export function ZipImport({ projectUid, disabled, onImported }: {
     <label>ZIP с PDF версий <input type="file" accept=".zip,application/zip" disabled={disabled || call.isPending} onChange={(event) => {
       const chosen = event.target.files?.[0] ?? null;
       key.current = newIdempotencyKey(); call.reset(); setFile(chosen);
-      setProblem(chosen !== null && (chosen.size === 0 || chosen.size > 16 * 1024 * 1024) ? 'Выберите непустой ZIP размером до 16 МиБ.' : null);
+      setProblem(chosen !== null && chosen.size === 0 ? 'Выберите непустой ZIP.' : null);
     }} /></label>
-    <p className="am-note">ZIP до 16 МиБ: до 100 PDF, после распаковки до 256 МиБ. Допустим один уровень вложенных ZIP. Посторонние файлы и __MACOSX отклоняются; все PDF проверяются до импорта. ZIP и отдельные PDF загружаются раздельно.</p>
+    <p className="am-note">Временный режим сбора статистики: прикладные лимиты объёма ZIP и количества PDF сняты. Допустим один уровень вложенных ZIP. Посторонние файлы и __MACOSX отклоняются; все PDF проверяются до импорта. ZIP и отдельные PDF загружаются раздельно.</p>
     <button type="button" className="am-button am-button--quiet am-button--small" disabled={disabled || file === null || problem !== null || call.isPending} onClick={() => call.mutate()}>Импортировать ZIP</button>
     {call.isPending ? <p role="status">Проверяем архив и PDF, затем создаём предложение комплектов…</p> : null}
     {problem === null ? null : <p role="alert">{problem}</p>}

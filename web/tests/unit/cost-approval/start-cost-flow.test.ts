@@ -20,6 +20,7 @@ import { mountLive } from '../analysis-settings/live-render';
 import type { LiveRender } from '../analysis-settings/live-render';
 
 const SINGLE = 'Запустить прогон';
+const UNCAPPED_APPROVAL = 'Подтверждаю запуск без денежного потолка для сбора статистики';
 const GROUP = 'Запустить шесть проверок АР v3';
 const OTHER_VERSION = 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q8C';
 let live: LiveRender | null = null;
@@ -46,27 +47,27 @@ describe('ordinary section start preflight', () => {
       createElement(StartRunControl, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
     expect(await live.press(SINGLE)).toBe(false);
     await live.change('Исполнитель', READY.connection.connection_id);
-    await live.check('Повышенные лимиты ИИ-анализа', true);
+    await live.check('Временный режим сбора статистики', true);
     await live.press('Оценить стоимость');
     expect(estimateRunCost).toHaveBeenCalledWith({ body: {
       version_uid: VERSION_UID, executor_connection_id: READY.connection.connection_id, relaxed_limits: true,
     } });
     expect(await live.press(SINGLE)).toBe(false);
-    await live.check(APPROVE_COST, true);
+    await live.check(UNCAPPED_APPROVAL, true);
     await live.press(SINGLE);
     const first = vi.mocked(startRun).mock.calls[0]![0];
     expect(first.body).toEqual({ version_uid: VERSION_UID, executor_connection_id: READY.connection.connection_id,
-      relaxed_limits: true, cost_consent: COST_CONSENT });
+      relaxed_limits: true, cost_consent: { ...COST_CONSENT, ceiling_micros: 0 } });
     await live.press(SINGLE);
     expect(vi.mocked(startRun).mock.calls[1]![0].idempotencyKey).toBe(first.idempotencyKey);
-    await live.check(APPROVE_COST, false);
+    await live.check(UNCAPPED_APPROVAL, false);
     expect(await live.press(SINGLE)).toBe(false);
-    await live.check(APPROVE_COST, true);
+    await live.check(UNCAPPED_APPROVAL, true);
     await live.press(SINGLE);
     expect(vi.mocked(startRun).mock.calls[2]![0].idempotencyKey).toBe(first.idempotencyKey);
     await live.press('Оценить стоимость');
     expect(await live.press(SINGLE)).toBe(false);
-    await live.check(APPROVE_COST, true);
+    await live.check(UNCAPPED_APPROVAL, true);
     await live.press(SINGLE);
     expect(vi.mocked(startRun).mock.calls[3]![0].idempotencyKey).toBe(first.idempotencyKey);
   });
