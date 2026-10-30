@@ -539,6 +539,8 @@ class ArV3GroupPort(Protocol):
 
 @runtime_checkable
 class RunPort(Protocol):
+    def get_extended_review(self, *, run_id: str) -> models.ExtendedRunReview: ...
+
     """Run status and the W57a refusing normative report seam. Produced by ``B5``.
 
     The success terminal is ``published``; an implementation that reported
@@ -1447,6 +1449,8 @@ class OptimisationProposalPort(Protocol):
 
 @runtime_checkable
 class ComparisonUploadPort(Protocol):
+    def import_zip(self, *, project_uid: str, content: bytes, user_uid: str, idempotency_key: str, archive_name: str | None = None) -> models.ComparisonUpload: ...
+
     """The twelve upload operations. `CMP-INGEST-01` (create, part, complete, proposal, confirm)
     and `CMP-INGEST-02` (list, exclude, retry, pause, resume, cancel) implement them over
     `CMP-STORAGE-PARTS-01`'s multipart staging."""
@@ -1891,6 +1895,8 @@ class ComparisonLaunchQueuePort(Protocol):
 
 @runtime_checkable
 class ComparisonReportPort(Protocol):
+    def technical_report(self, *, series_id: str, format: str) -> Any: ...
+
     """The MD summary of a series and the PDF reports built from it. `CMP-VC-REPORT-01` implements it
     (ADR-0025 decisions 3, 17, 19 and 20)."""
 
@@ -2098,7 +2104,7 @@ class ComparisonStageRunPort(Protocol):
 @runtime_checkable
 class ComparisonStageC4Port(Protocol):
     """Frozen C4 stage services; reads never compute or mutate evidence."""
-    def estimate_run(self, *, revision_id: str, user_uid: str, run_id: str | None = None) -> models.ComparisonAiEstimate: ...
+    def estimate_run(self, *, revision_id: str, user_uid: str, run_id: str | None = None, engine: str = "classic") -> models.ComparisonAiEstimate: ...
     def resume_run(self, *, run_id: str, body: models.ResumeStageChainRunRequest, user_uid: str, idempotency_key: str) -> models.StageChainRun: ...
     def start_batch(self, *, project_uid: str, body: models.StartStageChainBatchRequest, user_uid: str, idempotency_key: str) -> models.StageChainBatch: ...
     def get_batch(self, *, batch_id: str) -> models.StageChainBatch: ...

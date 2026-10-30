@@ -1,5 +1,7 @@
 # Current state
 
+**Updated 2026-10-30 by `HOTFIX-PRESENTATION-INT-1030` (emergency development candidate).** All fifteen ordinary section profiles now share a bounded preliminary block/image/context review, lossless observation merge and local-corpus citation assessment. Fresh cost consent includes at most three additional calls for sixteen blocks; existing accepted commands retain their old policy. Missing source/corpus coverage stays explicit. Version comparison exposes whole-specification runs with separate consent, PDF-only ZIP import and technical XLSX/HTML ZIP downloads. Stage comparison adds a separate native-text experimental V3 procedure, copied with provenance from PDF-proverka `3c994817`; classic stays default. V3 requires fresh consent before every next model call and retains independent parameter-verification status. API `1.14.0` has 233 paths / 259 operations / 620 schemas; migration remains `0043_stage_ai_generations`. Synthetic ZIP inputs and the operator sequence are in `fixtures/presentation-hotfix/README.md`. Production build and scoped recorded/unit checks passed; full gates, browser execution and deep acceptance remain deferred. See `HOTFIX-PRESENTATION-INT-1030.md` for limits, provider prerequisites and publication evidence. No main publication is authorised.
+
 **Updated 2026-10-30 by `HOTFIX-DASHBOARD-SHOWCASE-INT-20261030`
 (development candidate only).** `/dashboard` now uses an isolated presentation
 palette in both light and dark appearances; the existing system choice follows

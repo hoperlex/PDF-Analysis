@@ -59,3 +59,12 @@ Root is sole Git writer/integrator/publisher. All contributors edit shared cmp-i
 
 ## Handoff
 - In progress; root alone commits/publishes dev.
+
+### Backend handoff 2026-10-30 09:38 UTC
+- Ready for integration: isolated copied original Mapper/Miner/unmatched/lossless Dedupe/independent parameter verifier, engine-pinned durable execution, explicit one-request fresh-consent windows, typed preliminary REVIEW projection and schema-valid classic artifact-reader envelopes.
+- Exact changed backend/test paths, public shapes, hard limits and provenance are in `docs/program/HOTFIX-STAGE-V3-1030.md`.
+- Focused pure/recorded checks: 95 passed. No full gate/build/browser/live model run. PostgreSQL smoke was attempted on the assigned existing stack but is not claimed passing; automatic-review rejection, rollback proof and fixture defect are recorded in the report. Stack slot released; no further DB execution by this lane.
+- Contracts/migrations/root locks/bootstrap/UI were not edited by the backend owner; root and delegated UI owner retain their slots. Root alone performs Git operations and publishes `origin/dev`.
+
+## Ownership transfer
+2026-10-30 root takes all UI paths in this task exclusively, agent owns backend only; no parallel writes. Engine=classic|v3_native_text_experimental; StageChainRun has engine/experimental_progress; StageChangeCard.experimental carries parameters+quality.

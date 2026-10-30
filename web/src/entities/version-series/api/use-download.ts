@@ -15,16 +15,22 @@ import {
   streamComparisonReportSourceMd,
   streamComparisonSeriesSummary,
   streamComparisonSheetDescriptionMd,
+  streamComparisonTechnicalReport,
 } from '@/shared/api';
 
 export type DownloadTarget =
   | { readonly kind: 'report-pdf'; readonly reportId: ComparisonReportId; readonly fileName: string }
   | { readonly kind: 'report-md'; readonly reportId: ComparisonReportId; readonly fileName: string }
   | { readonly kind: 'summary-md'; readonly seriesId: ComparisonSeriesId; readonly fileName: string }
-  | { readonly kind: 'sheet-md'; readonly pairId: ComparisonSheetPairId; readonly fileName: string };
+  | { readonly kind: 'sheet-md'; readonly pairId: ComparisonSheetPairId; readonly fileName: string }
+  | { readonly kind: 'technical'; readonly seriesId: ComparisonSeriesId; readonly format: 'xlsx' | 'html'; readonly fileName: string };
 
 async function bytesOf(target: DownloadTarget): Promise<Blob> {
   switch (target.kind) {
+    case 'technical': {
+      const body = (await streamComparisonTechnicalReport({ path: { comparison_series_id: target.seriesId }, query: { format: target.format } })).data;
+      return body instanceof Blob ? body : new Blob([body]);
+    }
     case 'report-pdf': {
       const body = (await streamComparisonReportPdf({ path: { comparison_report_id: target.reportId } })).data;
       return body instanceof Blob ? body : new Blob([body], { type: 'application/pdf' });

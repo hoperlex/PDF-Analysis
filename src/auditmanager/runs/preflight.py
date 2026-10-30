@@ -7,6 +7,7 @@ from fractions import Fraction
 import hashlib
 import json
 import math
+import os
 
 from auditmanager.analysis.public import model_rate_sha256, pinned_models, relaxed_window_characters
 from auditmanager.documents.public import DocumentRepository
@@ -74,6 +75,8 @@ class RunCostEstimateValue:
             "source_sha256": authority["source_sha256"], "format": FORMAT}
         if actor_user_uid is not None:
             result["approved_by_user_uid"] = actor_user_uid
+        if "extended_review" in authority:
+            result["extended_review"] = authority["extended_review"]
         if "scope_costs_micros" in authority:
             result["scope_costs_micros"] = authority["scope_costs_micros"]
         return result
@@ -128,7 +131,8 @@ class RunCostPreflight:
         return pin, facts, frozen, chosen
 
     def _value(self, *, version, chars, source, pricing, pin, frozen, chosen, relaxed, scope,
-               windows, calls, input_tokens, output_tokens, window_characters=None, scope_costs=None):
+               windows, calls, input_tokens, output_tokens, window_characters=None, scope_costs=None,
+               extended_review=None):
         cost = (sum(scope_costs.values()) if scope_costs is not None else
                 0 if pricing["billing"] == "unmetered" else estimated_micros(pin, input_tokens, output_tokens))
         source_sha = _digest(source)
@@ -138,6 +142,8 @@ class RunCostPreflight:
             input_tokens=input_tokens, output_tokens=output_tokens)
         if scope_costs is not None:
             authority["scope_costs_micros"] = scope_costs
+        if extended_review is not None:
+            authority["extended_review"] = extended_review
         digest = _digest(authority)
         public = {"estimate_digest": digest, "scope": scope, "version_uid": str(version.version_uid),
             "provider_mode": self.mode, "billing": pricing["billing"], "model_id": pin.model_id,
@@ -169,11 +175,23 @@ class RunCostPreflight:
         fixed = len(bundle.system_prompt) + len(_json(bundle.response_schema)) + 12_000
         input_tokens = math.ceil(Fraction((2 * chars + fixed * windows) * 5, 7))
         output_tokens = windows * (64_000 if relaxed_limits else bundle.max_output_tokens)
+        # HOTFIX-PRESENTATION: fresh consent covers two bounded image batches and
+        # one semantic merge. Historical accepted commands lack this authority and
+        # cannot acquire extra paid calls merely because the worker was upgraded.
+        extended = None
+        extra_calls = 0
+        if os.environ.get("AUDITMANAGER_EXTENDED_ANALYSIS", "1").strip().lower() not in {"0", "false", "off"}:
+            extended = {"enabled": True, "max_blocks": 16, "plan_version": "extended-review-v1"}
+            extra_calls = 3
+            input_tokens += 300_000
+            output_tokens += 36_000
         source.update(profile_sha256=profile.content_sha256, preset_id=preset_id,
-            executor_connection_id=executor_connection_id, relaxed_limits=relaxed_limits)
+            executor_connection_id=executor_connection_id, relaxed_limits=relaxed_limits,
+            extended_review=extended)
         return self._value(version=version, chars=chars, source=source, pricing=pricing, pin=pin,
-            frozen=frozen, chosen=chosen, relaxed=relaxed_limits, scope="run", windows=windows, calls=windows,
-            input_tokens=input_tokens, output_tokens=output_tokens, window_characters=window)
+            frozen=frozen, chosen=chosen, relaxed=relaxed_limits, scope="run", windows=windows, calls=windows+extra_calls,
+            input_tokens=input_tokens, output_tokens=output_tokens, window_characters=window,
+            extended_review=extended)
 
     def estimate_reaudit(self, session, *, run_id, version_record=None):
         from .repository import RunRepository

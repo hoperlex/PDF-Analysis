@@ -60,7 +60,7 @@ import re
 import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Final, Protocol
+from typing import Any, BinaryIO, Final, Protocol
 
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -225,6 +225,17 @@ class ComparisonUploadService:
 
     # -- declare ---------------------------------------------------------------------------------------
 
+    def import_zip(
+        self, *, project_uid: str, source: BinaryIO, user_uid: str, actor_label: str,
+        idempotency_key: str, archive_name: str | None = None,
+    ) -> UploadView:
+        """Import a bounded, fully validated ZIP through the ordinary durable PDF receipts."""
+        from .zip_import import import_zip
+        return import_zip(
+            self, project_uid=project_uid, source=source, user_uid=user_uid,
+            actor_label=actor_label, idempotency_key=idempotency_key, archive_name=archive_name,
+        )
+
     def create_upload(
         self,
         *,
@@ -234,6 +245,7 @@ class ComparisonUploadService:
         actor_label: str,
         idempotency_key: str,
         compare_after_preparation: bool = False,
+        source_sha256: str | None = None,
     ) -> UploadView:
         """Declare a batch of plain PDFs under a project. Nothing is stored yet.
 
@@ -258,6 +270,7 @@ class ComparisonUploadService:
                 "project_uid": project_uid,
                 "files": [[f.display_name, f.size_bytes, f.sha256, f.page_count] for f in files],
                 **({"compare_after_preparation": True} if compare_after_preparation else {}),
+                **({"import_source_sha256": source_sha256} if source_sha256 is not None else {}),
             }
         )
         with session_scope(self._factory) as session:

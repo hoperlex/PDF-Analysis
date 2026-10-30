@@ -109,7 +109,7 @@ describe('ordinary section start preflight', () => {
   });
 
   it('a server-reported stale digest clears approval and requires a new estimate', async () => {
-    vi.mocked(startRun).mockRejectedValueOnce(new ApiError(409, { contract_version: '1.13.0',
+    vi.mocked(startRun).mockRejectedValueOnce(new ApiError(409, { contract_version: '1.14.0',
       error_code: 'conflict', message: 'stale estimate', correlation_id: 'cost-stale', retryable: false,
       details: { conflict_reason: 'run_cost_estimate_stale' } }, 'cost-stale'));
     live = await mountLive(createElement(QueryClientProvider, { client: client() },

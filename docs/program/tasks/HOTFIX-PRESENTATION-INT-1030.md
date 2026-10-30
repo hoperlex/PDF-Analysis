@@ -45,6 +45,15 @@ Integrate maximum feasible functional convergence within90min, build and publish
 - docs/program/HOTFIX-PRESENTATION-INT-1030.md
 - docs/program/tasks/HOTFIX-PRESENTATION-INT-1030.md
 
+- src/auditmanager/runs/public.py
+- src/auditmanager/analysis/ports/artifacts.py
+- src/auditmanager/analysis/engine/result.py
+- tests/unit/runs/test_cost_preflight.py
+- web/src/widgets/stage-run-controls/**
+- web/src/widgets/stage-changes/**
+- web/src/widgets/stage-v3-experimental/**
+- web/src/_pages/stage-compare/**
+
 ## Forbidden hotspots
 - Other lane files; data volumes; origin/main and force pushes; root dependencies/lockfiles, migration head, global styles. Root alone owns contracts/API/ports/adapters/BFF/generated/lock/bootstrap. Preserve completed incoming owner changes.
 
@@ -67,4 +76,13 @@ Root is sole Git writer/integrator/publisher. All contributors edit shared cmp-i
 - Additive experiment with classic fallback; disable new feature for fresh runs while preserving accepted command policy. Forward fix/revert, no forced refs.
 
 ## Handoff
-- In progress; root alone commits/publishes dev.
+- Implementation and scoped checks completed; final owner-dev merge, frontend lock pin and dev publication belong to root. Exact receipt is recorded in the ignored integrator handoff.
+
+## Recorded seams and ownership transfer
+Root exclusively takes StageV3 UI directories listed above from HOTFIX-STAGE-V3-1030, whose agent now owns backend only. Analysis roles analysis.extended_review/extended_reply already map via generic blob_role_for, no newrole registry orDDL needed. Root GET getExtendedRunReview returns run_id/status/result. New ordinary costconsent freezes extended_review(enabled,max_blocks16,plan_versionextended-review-v1), conservatively3extra calls300kinput/36koutput; old accepted commands skip. ZIPimport and technicalexport methods are adapter-only delegates to owned domain services.
+
+Root seal scope: exact API-version literals in infra/deploy/proxy/nginx.conf and tls-server.conf, web test fixtures, shared analysis/domain/event families and source constants move to1.14.0 under the exclusive root slot; no migration/dependency/globalstyle change. Generic binary technical endpoint declares/sends application/octet-stream, actual filename identifies xlsx/zip.
+
+FinalUIownership: root delegated all StageV3UI paths to HOTFIX-STAGE-V3-UI-1030 (c4_seal_plan) after itsversionshandback; neitherrootnorbackendV3agenteditsUIinparallel.
+
+SSH helper ownership: HOTFIX-SSH-IMAGES-1030 exclusively owns tools/executor-runner/claude_answer.py and tests/unit/executor_runner/** plus its task/report; root integrates only after lane handback. Installed /opt helper is outside this source change.

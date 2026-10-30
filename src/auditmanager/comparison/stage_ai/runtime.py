@@ -73,7 +73,10 @@ class StageAiRuntime:
         self._now = now or time
         self._graphics = graphic_source
 
-    def _method(self):
+    def _method(self, engine="classic"):
+        if engine == "v3_native_text_experimental":
+            from auditmanager.comparison.stage_v3.bridge import V3Method
+            return V3Method(self._repo, sessions=self._sessions, blob_store=self._store, profile_reader=self._profile_reader)
         return StageAiMethod(self._repo, sessions=self._sessions, blob_store=self._store,
                              profile_reader=self._profile_reader, graphic_source=self._graphics)
 
@@ -118,8 +121,8 @@ class StageAiRuntime:
         require_expert(roles)
         return roles
 
-    def estimate(self, *, revision_id: str, user_uid: str):
-        method = self._method()
+    def estimate(self, *, revision_id: str, user_uid: str, engine="classic"):
+        method = self._method(engine)
         with session_scope(self._sessions) as session:
             self._roles(session, user_uid)
             snapshot = self._repo.revision(session, revision_id)
@@ -133,11 +136,11 @@ class StageAiRuntime:
         with session_scope(self._sessions) as session:
             self._roles(session, user_uid)
             run = self._repo.run(session, run_id)
-            jobs = self._jobs()
+            jobs = self._jobs(self._method(run.get("engine", "classic")))
             if not run.get("comparison_ai_job_id"):
                 return jobs.estimate_in(session, self._scope(run, run_id=run_id))
             job = jobs.job(session, str(run["comparison_ai_job_id"]))
-            jobs = self._jobs(provider_mode=job.provider_mode)
+            jobs = self._jobs(self._method(run.get("engine", "classic")), provider_mode=job.provider_mode)
             return jobs.estimate_in(session, self._scope(run, run_id=run_id), AiMode.LEFT, job=job)
 
     def cancel(self, session, *, run_id: str, user_uid: str) -> str | None:
@@ -158,12 +161,12 @@ class StageAiRuntime:
                command=AiJobCommand("cancel_stage_review_ai", f"stage-ai-cancel-{run_id}-{job_id}", user_uid, roles))
         return str(job_id)
 
-    def prepare(self, session, *, run_id: str, user_uid: str, consent) -> str | None:
+    def prepare(self, session, *, run_id: str, user_uid: str, consent, engine=None) -> str | None:
         roles = self._roles(session, user_uid)
         run = self._repo.run(session, run_id)
         if run.get("comparison_ai_job_id"):
             return str(run["comparison_ai_job_id"])
-        method = self._method()
+        method = self._method(engine or run.get("engine", "classic"))
         jobs = self._jobs(method)
         scope = self._scope(run, run_id=run_id)
         estimate = jobs.estimate_in(session, scope)
@@ -195,7 +198,7 @@ class StageAiRuntime:
         job_id = run.get("comparison_ai_job_id")
         if not job_id:
             return self.prepare(session, run_id=run_id, user_uid=user_uid, consent=consent)
-        jobs = self._jobs()
+        jobs = self._jobs(self._method(run.get("engine", "classic")))
         resume = getattr(jobs, "resume_in_session", None)
         if resume is None:
             raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="comparison_stage_ai_resume")
@@ -203,10 +206,10 @@ class StageAiRuntime:
         if record.state in {"queued", "running"}:
             return str(job_id)
         chosen = _consent(consent)
-        jobs = self._jobs(provider_mode=record.provider_mode)
+        jobs = self._jobs(self._method(run.get("engine", "classic")), provider_mode=record.provider_mode)
         resume = jobs.resume_in_session
         if record.state in {"completed", "cancelled", "failed"}:
-            method = self._method()
+            method = self._method(run.get("engine", "classic"))
             jobs = self._jobs(method, provider_mode=record.provider_mode)
             scope = self._scope(run, run_id=run_id)
             estimate = jobs.estimate_in(session, scope, AiMode.LEFT, job=record)
@@ -290,6 +293,9 @@ class StageAiRuntime:
         return run, snapshot
 
     def _bundles(self, session, *, run_id, snapshot, phase, model):
+        if self._repo.run(session, run_id).get("engine") == "v3_native_text_experimental":
+            from auditmanager.comparison.stage_v3.bridge import bundles
+            return bundles(self, session, run_id=run_id, snapshot=snapshot, phase=phase, model=model)
         raw_groups = build_source_groups(snapshot)
         reviews = self._repo.latest_answers(session, run_id=run_id, kind="review")
         matching = {}
@@ -374,6 +380,9 @@ class StageAiRuntime:
         try:
             with session_scope(self._sessions) as session:
                 run, snapshot = self._checked(session, item, run_id)
+                engine = run.get("engine", "classic")
+                method = self._method(engine)
+                jobs = self._jobs(method)
                 job_id = run.get("comparison_ai_job_id")
                 if phase == "review" and self._graphics is None:
                     graphics = self._repo.not_checked_graphics(session, run_id=run_id, snapshot=snapshot)
@@ -404,7 +413,7 @@ class StageAiRuntime:
                 pending = []
                 for group, plans, source_sha, key in bundles:
                     payload = {"content_key": key, "pinned_model": job.pinned_model,
-                               "prompt_bundle_version": self._method().bundle_version,
+                               "prompt_bundle_version": method.bundle_version, "engine": engine,
                                "plan_keys": [plan.content_key for plan in plans], "responses": {},
                                "technical_retries": {}, "immutable_source": {
                                    "sources": [plan.payload for plan in plans],
@@ -429,7 +438,11 @@ class StageAiRuntime:
                 self._repo.update_unit(session, unit["stage_ai_unit_id"], payload=unit["payload"], state="running", job_id=job_id)
                 waiting = None
                 for plan in plans:
-                    waiting = next_step(plan, unit["payload"].get("responses", {}).get(plan.content_key), snapshot)
+                    if engine == "v3_native_text_experimental":
+                        from auditmanager.comparison.stage_v3.procedures import next_step as procedure_next
+                        waiting = procedure_next(plan, unit["payload"].get("responses", {}).get(plan.content_key), snapshot)
+                    else:
+                        waiting = next_step(plan, unit["payload"].get("responses", {}).get(plan.content_key), snapshot)
                     if waiting is not None:
                         break
                 if waiting is not None:
@@ -445,6 +458,24 @@ class StageAiRuntime:
                             self._repo.update_unit(session, unit["stage_ai_unit_id"], payload=unit["payload"], state="queued", job_id=job_id)
                             self._pause(session, jobs, run_id=run_id, job_id=job_id, reason="overrun", spend=False)
                             return Yielded(30)
+                    if engine == "v3_native_text_experimental":
+                        # One request per explicit consent revision, across ALL
+                        # procedure units. A technical retry of the same request
+                        # still passes the caller's existing spend/unknown fences.
+                        from auditmanager.comparison.stage_v3.procedures import BUNDLE
+                        window = self._repo.unit(session, run_id=run_id, kind="review",
+                            group_id="v3:window:consent", source_sha256=BUNDLE, job_id=job_id,
+                            payload={"content_key": BUNDLE, "engine": engine,
+                                     "immutable_source": {"engine": engine, "bundle": BUNDLE}})
+                        wp = dict(window["payload"])
+                        if (wp.get("consent_no") == job.consent_no
+                                and wp.get("request_key") != waiting.plan.content_key):
+                            self._pause(session, jobs, run_id=run_id, job_id=job_id,
+                                        reason="overrun", spend=False)
+                            return Yielded(30)
+                        wp.update(consent_no=job.consent_no, request_key=waiting.plan.content_key)
+                        self._repo.update_unit(session, window["stage_ai_unit_id"], payload=wp,
+                                               state="completed", job_id=job_id)
                     route_source = self._routes
                     if route_source is None:
                         return self._fail_in(session, unit, jobs, job_id, "executor_route_missing")
@@ -564,7 +595,10 @@ class StageAiRuntime:
             responses = unit["payload"].get("responses", {})
             if any(value["stop_reason"] == "max_tokens" for value in responses.values()):
                 return self._failed(item, run_id, unit, jobs, job_id, "stage_ai_response_truncated")
-            if phase == "review":
+            if engine == "v3_native_text_experimental":
+                from auditmanager.comparison.stage_v3.bridge import finish
+                value = finish(phase, plans, responses, snapshot, unit)
+            elif phase == "review":
                 parsed = accept_review_group(group.review, plans, {
                     plan.unit_key: final_document(plan, responses[plan.content_key])[0] for plan in plans
                 })

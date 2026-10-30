@@ -239,6 +239,8 @@ class ProxyAdapter(ModelAdapter):
 
     def complete(self, request: ModelRequest) -> ModelResponse:
         body = _to_openai_body(request, self._settings.model)
+        from auditmanager.executors.public import request_with_provider_images
+        body = request_with_provider_images(body, request, "openai")
         payload = json.dumps(body, ensure_ascii=False, sort_keys=True).encode("utf-8")
 
         http = urllib.request.Request(

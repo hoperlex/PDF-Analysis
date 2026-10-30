@@ -113,6 +113,9 @@ class StageAiRepository:
                     field: row[field], "model_identity": row["model_identity"], "created_at": row["created_at"]}
             if kind != "synthesize":
                 item.update(group_id=row["group_id"], source_sha256=row["source_sha256"])
+            if row["group_id"].startswith("v3:"):
+                from auditmanager.comparison.stage_v3.bridge import public_answer
+                item = public_answer(kind, item, group_id=row["group_id"], source_sha256=row["source_sha256"])
             result.append(item)
         return tuple(result), (rows[limit - 1][identity] if len(rows) > limit else None)
 
@@ -125,6 +128,8 @@ class StageAiRepository:
         if row is None:
             raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="StageChainRun")
         result = dict(row)
+        from auditmanager.comparison.stage_v3.mode import engine_for_run
+        result["engine"] = engine_for_run(session, run_id)
         result["revision_id"] = result.get("effective_link_revision_id") or result["stage_link_revision_id"]
         return result
 

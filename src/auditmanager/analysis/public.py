@@ -317,3 +317,26 @@ __all__ = [
     "PdfiumDocument",
     "page_raster_size",
 ]
+
+# HOTFIX-ANALYSIS-1030: bounded preliminary review method.
+from auditmanager.analysis.extended import (
+    PLAN_VERSION as EXTENDED_REVIEW_VERSION,
+    REPLY_ROLE as EXTENDED_REPLY_ROLE,
+    RESULT_ROLE as EXTENDED_REVIEW_ROLE,
+    block_payload as extended_block_payload,
+    build_request as build_extended_request,
+    canonical as extended_canonical,
+    digest as extended_digest,
+    enabled as extended_review_enabled,
+    finalize_items as finalize_extended_items,
+    parse_reply as parse_extended_reply,
+    plan_inputs as plan_extended_inputs,
+)
+from auditmanager.analysis.ports.artifacts import envelope as extended_artifact_envelope
+
+__all__.extend([
+    "EXTENDED_REVIEW_VERSION", "EXTENDED_REPLY_ROLE", "EXTENDED_REVIEW_ROLE",
+    "extended_block_payload", "build_extended_request", "extended_canonical",
+    "extended_digest", "extended_review_enabled", "finalize_extended_items",
+    "parse_extended_reply", "plan_extended_inputs", "extended_artifact_envelope",
+])

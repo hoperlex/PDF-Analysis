@@ -15,7 +15,7 @@ write is an expert's act (`R-60`) and keyed. All thirteen answer ``503 dependenc
 
 from __future__ import annotations
 
-from typing import Annotated, Final
+from typing import Annotated, Final, Literal
 
 from fastapi import APIRouter, Body, Path, Query
 from pydantic import BaseModel, WithJsonSchema
@@ -58,6 +58,12 @@ def _download(content: bytes, media_type: str) -> WireResponse:
 
 
 def build_comparison_report_routes(router: APIRouter, reports: ComparisonReportPort) -> None:
+    @router.get('/comparison-series/{comparison_series_id}/technical-report', operation_id='streamComparisonTechnicalReport', tags=_TAGS, status_code=200, response_class=WireResponse,
+        responses={**success(200, 'Technical comparison workbook or HTML source bundle.', content={'application/octet-stream':{'schema':{'type':'string','format':'binary'}}}), **envelope_responses(401,403,404,409,422,500,503)})
+    def stream_technical_report(comparison_series_id: _SeriesId, format: Annotated[Literal['xlsx','html'], Query()] = 'xlsx') -> WireResponse:
+        view = reports.technical_report(series_id=comparison_series_id, format=format)
+        return WireResponse(200, (('Content-Type','application/octet-stream'),('Content-Length',str(len(view.content))),('Content-Disposition',f'attachment; filename="{view.filename}"')), view.content)
+
     @router.get(
         "/comparison-series/{comparison_series_id}/summary-md",
         operation_id="streamComparisonSeriesSummary", tags=_TAGS, status_code=200,

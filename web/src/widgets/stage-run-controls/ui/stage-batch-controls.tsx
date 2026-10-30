@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import type { ComparisonAiEstimate, StageChainBatch, StageChainBatchSelection, StagePair } from '@/shared/api';
 import { cancelStageChainBatch, estimateStageChainRun, failureMessage, getStageChainBatch,
@@ -9,6 +9,8 @@ import { cancelStageChainBatch, estimateStageChainRun, failureMessage, getStageC
 import { agreementStands, comparisonFailure, consentOf, isBlocked } from '@/entities/version-series';
 import { formatInstant } from '@/shared/lib';
 import { ErrorState } from '@/shared/ui';
+import { StageEngineSelector } from '@/widgets/stage-v3-experimental';
+import type { StageEngine } from '@/widgets/stage-v3-experimental';
 
 import { IntentKey, RUN_WORDS } from '../model/runs';
 import { StageEstimateConsent } from './estimate-consent';
@@ -26,10 +28,10 @@ export interface StageBatchControlsProps {
   readonly onOpenRun?: (runId: string, pairId: string) => void;
 }
 
-async function preparePairs(pairs: readonly StagePair[], withAi: boolean): Promise<PreparedPair[]> {
+async function preparePairs(pairs: readonly StagePair[], withAi: boolean, engine: StageEngine): Promise<PreparedPair[]> {
   return Promise.all(pairs.map(async (pair) => {
     const map = (await getStageSheetMap({ path: { stage_pair_id: pair.pair_id } })).data;
-    const estimate = withAi ? (await estimateStageChainRun({ path: { stage_link_revision_id: map.revision_id } })).data : undefined;
+    const estimate = withAi ? (await estimateStageChainRun({ path: { stage_link_revision_id: map.revision_id }, query: { engine } })).data : undefined;
     return { pair, revisionId: map.revision_id, ...(estimate === undefined ? {} : { estimate }) };
   }));
 }
@@ -40,6 +42,7 @@ export function StageBatchControls(props: StageBatchControlsProps) {
 
 function StageBatchBody({ projectUid, selectedPairs, mayAct, onOpenRun, batchId: suppliedBatchId, onBatchChange }: StageBatchControlsProps) {
   const [withAi, setWithAi] = useState(true);
+  const [engine, setEngine] = useState<StageEngine>('classic');
   const [preparing, setPreparing] = useState(false);
   const [agreed, setAgreed] = useState<Record<string, string | null>>({});
   const [batchId, setBatchId] = useState<string | null>(suppliedBatchId ?? null);
@@ -48,20 +51,23 @@ function StageBatchBody({ projectUid, selectedPairs, mayAct, onOpenRun, batchId:
   const [error, setError] = useState<unknown>(null);
   const held = useRef(new IntentKey(newIdempotencyKey));
   const selectionIds = selectedPairs.map((pair) => pair.pair_id).sort();
-  const prepared = useQuery({ queryKey: ['stage-batch-prepare', projectUid, selectionIds, withAi],
-    queryFn: () => preparePairs(selectedPairs, withAi), enabled: preparing && selectedPairs.length > 0, retry: false, staleTime: 0 });
+  const prepared = useQuery({ queryKey: ['stage-batch-prepare', projectUid, selectionIds, withAi, engine],
+    queryFn: () => preparePairs(selectedPairs, withAi, engine), enabled: preparing && selectedPairs.length > 0, retry: false, staleTime: 0 });
+  useEffect(() => {
+    if (prepared.error !== null) { setAgreed({}); held.current.clear(); }
+  }, [prepared.error]);
   const status = useQuery({ queryKey: ['stage-batch', batchId],
     queryFn: async () => (await getStageChainBatch({ path: { stage_chain_batch_id: batchId! } })).data,
     enabled: batchId !== null, retry: false,
     refetchInterval: (query) => query.state.data !== undefined && (['queued', 'running'].includes(query.state.data.state) || query.state.data.items.some((item) => item.state === 'running')) ? STAGE_REVIEW_POLL_MS : false });
   const batch = status.data ?? started;
-  const canStart = prepared.data !== undefined && prepared.data.length === selectedPairs.length &&
+  const canStart = prepared.error === null && !prepared.isFetching && prepared.data !== undefined && prepared.data.length === selectedPairs.length &&
     prepared.data.every((item) => !withAi || (item.estimate !== undefined && !isBlocked(item.estimate) && agreementStands(agreed[item.pair.pair_id] ?? null, item.estimate)));
   const start = async () => {
     if (!mayAct || busy || !canStart || prepared.data === undefined || selectedPairs.length > 100) return;
     const selections: StageChainBatchSelection[] = prepared.data.map((item) => ({ pair_id: item.pair.pair_id,
       link_revision_id: item.revisionId, ...(withAi && item.estimate !== undefined ? { consent: consentOf(item.estimate) } : {}) }));
-    const body = { selections, with_ai: withAi };
+    const body = { selections, with_ai: withAi, engine };
     setBusy(true); setError(null);
     try {
       const result = await startStageChainBatch({ path: { project_uid: projectUid }, body, idempotencyKey: held.current.for(['start', projectUid, body]) });
@@ -88,7 +94,8 @@ function StageBatchBody({ projectUid, selectedPairs, mayAct, onOpenRun, batchId:
     <h3>Сравнить выбранные пары</h3>
     <p>Выбрано: {selectedPairs.length}. Пары выполнятся по очереди.</p>
     {mayAct ? <div className={styles.actions}>
-      <label><input type="checkbox" checked={withAi} disabled={busy} onChange={(event) => { setWithAi(event.target.checked); setAgreed({}); }} />С описанием изменений ИИ</label>
+      <StageEngineSelector value={engine} disabled={busy} onChange={(value) => { setEngine(value); if (value === 'v3_native_text_experimental') setWithAi(true); setAgreed({}); setPreparing(false); setError(null); held.current.clear(); }} />
+      <label><input type="checkbox" checked={withAi} disabled={busy || engine === 'v3_native_text_experimental'} onChange={(event) => { setWithAi(event.target.checked); setAgreed({}); setPreparing(false); held.current.clear(); }} />С описанием изменений ИИ</label>
       <button type="button" className="am-button" disabled={busy || selectedPairs.length === 0 || selectedPairs.length > 100}
         onClick={() => { setPreparing(true); setAgreed({}); setError(null); void prepared.refetch(); }}>Подготовить запуск</button>
     </div> : null}

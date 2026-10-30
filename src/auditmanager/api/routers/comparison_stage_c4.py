@@ -19,10 +19,11 @@ def build_comparison_stage_c4_routes(router: APIRouter, stage: ComparisonStageC4
     def estimate_run(
         stage_link_revision_id: Annotated[models.StageLinkRevisionId, Path()],
         subject: CurrentSubject,
+        engine: Annotated[Literal["classic", "v3_native_text_experimental"], Query()] = "classic",
         stage_chain_run_id: Annotated[str, Query(pattern=r"^(?:crn_[0-9A-HJKMNP-TV-Z]{26})?$")] = "",
     ) -> WireResponse:
         result = stage.estimate_run(revision_id=stage_link_revision_id,
-                                    user_uid=subject.user_uid, run_id=stage_chain_run_id or None)
+                                    user_uid=subject.user_uid, run_id=stage_chain_run_id or None, engine=engine)
         return json_response(200, encode_json(result.model_dump(mode="json", exclude_unset=True)))
 
     @router.post("/stage-chain-runs/{stage_chain_run_id}/resume", operation_id="resumeStageChainRun", tags=["comparison"], status_code=200, response_model=models.StageChainRun,

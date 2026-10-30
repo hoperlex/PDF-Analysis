@@ -12,6 +12,8 @@ Everything else in this package stays private to it.
 
 from __future__ import annotations
 
+from auditmanager.comparison.report.technical_export import TechnicalReport, export_comparison_technical_report
+
 from auditmanager.comparison.modules import (
     COMPARISON_MODULES_ENV,
     DEFAULT_MODULES,
@@ -389,6 +391,8 @@ from auditmanager.comparison.tiles.reader import PairTileReader
 PAGE_PROFILE_WORK_KIND = "page_profile"
 
 __all__ = [
+    "TechnicalReport",
+    "export_comparison_technical_report",
     "StageAssemblyService", "StageProfileTextService", "StagePairCommandService", "StagePairReadRepository",
     "LinkInput",
     "StageSheetMapService",

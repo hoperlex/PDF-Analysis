@@ -835,6 +835,10 @@ class _Uploaded:
 
 
 class RunAdapter(_SessionHolder):
+    def get_extended_review(self, *, run_id: str) -> models.ExtendedRunReview:
+        from auditmanager.runs.public import read_extended_review
+        return models.ExtendedRunReview.model_validate(read_extended_review(self._sessions, self._blob_store, run_id))
+
     """Starts and reports runs. Starting one does not execute it.
 
     `D-20`. This adapter used to import ``execute_run`` and call it inside the same
@@ -5440,6 +5444,13 @@ def _comparison_set(view: Any) -> models.ComparisonProposalSet:
 
 
 class ComparisonUploadAdapter(_SessionHolder):
+    def import_zip(self, *, project_uid: str, content: bytes, user_uid: str, idempotency_key: str, archive_name: str | None = None) -> models.ComparisonUpload:
+        import io
+        label, _roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        view = self._service.import_zip(project_uid=project_uid, source=io.BytesIO(content), user_uid=user_uid, actor_label=label, idempotency_key=idempotency_key, archive_name=archive_name)
+        self._batches.after_declaration(upload_id=view.upload_id)
+        return _comparison_upload(view)
+
     """`CMP-INGEST-01` serves ``createComparisonUpload``, ``getComparisonUpload``, ``getComparisonUploadProposal``,
     ``uploadComparisonUploadPart``, ``completeComparisonUploadFile`` and ``confirmComparisonUploadSet`` over
     :class:`~auditmanager.ingest.comparison_pdf.public.ComparisonUploadService`; `CMP-INGEST-02` serves the other six
@@ -6529,6 +6540,11 @@ class ComparisonLaunchQueueAdapter(_SessionHolder, _VersionsModuleGate):
 
 
 class ComparisonReportAdapter(_SessionHolder, _VersionsModuleGate):
+    def technical_report(self, *, series_id: str, format: str) -> Any:
+        self._require_versions_module()
+        from auditmanager.comparison.public import export_comparison_technical_report
+        return export_comparison_technical_report(self._sessions, series_id=series_id, format=format, blob_store=self._technical_blob_store)
+
     """`CMP-VC-REPORT-01` serves the thirteen report operations over
     :class:`~auditmanager.comparison.report.service.ComparisonReportService` (ADR-0025 decisions 3, 8, 10, 11, 16, 19, 24).
 
@@ -6549,6 +6565,7 @@ class ComparisonReportAdapter(_SessionHolder, _VersionsModuleGate):
                 session_factory, blob_store=blob_store, comparison_modules=comparison_modules, provider_mode=provider_mode
             )
         self._service = service
+        self._technical_blob_store = blob_store
 
     def _actor(self, user_uid: str) -> tuple[str, frozenset[str]]:
         return self._read(lambda session: _comparison_actor(session, user_uid))
@@ -7260,6 +7277,7 @@ def _stage_run_view(row: Any) -> models.StageChainRun:
         run_id=row.run_id, pair_id=row.pair_id, link_revision_id=row.revision_id,
         input_sha256=row.input_sha256, pinned_version_uids=list(row.pinned_version_uids),
         state=row.state, stale=row.stale, kind=row.kind, with_ai=row.with_ai,
+        engine=getattr(row, "engine", "classic"), experimental_progress=getattr(row, "experimental_progress", None),
         steps=[models.StageChainStep(step_id=step.step_id, step_no=step.step_no,
                state=step.state, counts=step.counts,
                **_unset_none(started_at=step.started_at, finished_at=step.finished_at)) for step in row.steps],
@@ -7307,7 +7325,7 @@ class ComparisonStageRunAdapter(_StagesModuleGate):
             pair_id=pair_id, revision_id=body.link_revision_id, user_uid=user_uid,
             actor_roles=self._roles(user_uid), idempotency_key=idempotency_key,
             with_ai=values.get("with_ai", True), consent=values.get("consent"),
-            restart=values.get("restart", False)))
+            restart=values.get("restart", False), engine=body.engine))
 
     def list_runs(self, *, pair_id: str, cursor: str | None, limit: int) -> models.StageChainRunPage:
         self._require_stages_module()
@@ -7344,7 +7362,7 @@ class ComparisonStageC4Adapter(_StagesModuleGate):
         self._graphics = StageGraphicService(sessions, blob_store=blob_store)
         self._assemblies = StageAssemblyService(sessions)
         self._profile_text = StageProfileTextService(PageProfileReader(sessions, blob_store))
-    def estimate_run(self, *, revision_id: str, user_uid: str, run_id: str | None = None) -> models.ComparisonAiEstimate:
+    def estimate_run(self, *, revision_id: str, user_uid: str, run_id: str | None = None, engine: str = "classic") -> models.ComparisonAiEstimate:
         self._require_stages_module()
         if run_id is not None:
             run = self._runs.get(run_id)
@@ -7352,7 +7370,7 @@ class ComparisonStageC4Adapter(_StagesModuleGate):
                 raise DomainError(ErrorCode.VALIDATION_FAILED, field="stage_chain_run_id", constraint="scope")
             estimate = self._ai.estimate_resume(run_id=run_id, user_uid=user_uid)
         else:
-            estimate = self._ai.estimate(revision_id=revision_id, user_uid=user_uid)
+            estimate = self._ai.estimate(revision_id=revision_id, user_uid=user_uid, engine=engine)
         return models.ComparisonAiEstimate.model_validate(estimate.as_dict())
 
     def resume_run(self, *, run_id: str, body: models.ResumeStageChainRunRequest, user_uid: str, idempotency_key: str) -> models.StageChainRun:
@@ -7369,7 +7387,7 @@ class ComparisonStageC4Adapter(_StagesModuleGate):
             roles = _comparison_actor(session, user_uid)[1]
         return models.StageChainBatch.model_validate(self._batches.start(project_uid=project_uid,
             selections=[s.model_dump(mode="json", exclude_unset=True) for s in body.selections],
-            user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key, with_ai=body.with_ai))
+            user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key, with_ai=body.with_ai, engine=body.engine))
 
     def get_batch(self, *, batch_id: str) -> models.StageChainBatch:
         self._require_stages_module()

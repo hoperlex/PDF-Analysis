@@ -9,6 +9,8 @@ import { cancelStageChainRun, estimateStageChainRun, failureMessage, getStageCha
 import { agreementStands, comparisonFailure, consentOf, isBlocked } from '@/entities/version-series';
 import { formatInstant } from '@/shared/lib';
 import { ErrorState, LoadingState } from '@/shared/ui';
+import { StageEngineSelector, StageExperimentalProgress } from '@/widgets/stage-v3-experimental';
+import type { StageEngine } from '@/widgets/stage-v3-experimental';
 
 import { readRuns } from '../api/reads';
 import { IntentKey, latestFullRun, RUN_WORDS, runActive, STAGE_RUN_KEYS, STEP_WORDS } from '../model/runs';
@@ -51,6 +53,7 @@ function StageRunBody({ pairId, linkRevisionId, runId, mayAct, compact = false, 
     queryFn: async () => (await listStageChangeCards({ path: { stage_chain_run_id: selectedId! }, query: { limit: 1 } })).data.counts,
     enabled: selectedId !== undefined && run?.state === 'completed', retry: false });
   const [withAi, setWithAi] = useState(true);
+  const [engine, setEngine] = useState<StageEngine>('classic');
   const [restart, setRestart] = useState(false);
   const [retryFailed, setRetryFailed] = useState(false);
   const [intent, setIntent] = useState<'start' | 'resume' | null>(null);
@@ -59,11 +62,15 @@ function StageRunBody({ pairId, linkRevisionId, runId, mayAct, compact = false, 
   const [commandError, setCommandError] = useState<unknown>(null);
   const held = useRef(new IntentKey(newIdempotencyKey));
   const estimateRevision = intent === 'resume' ? run?.effective_link_revision_id ?? run?.link_revision_id : revisionId;
-  const needsAi = intent === 'resume' ? run?.with_ai === true : withAi;
-  const estimate = useQuery({ queryKey: ['stage-run-estimate', estimateRevision, intent, intent === 'resume' ? run?.run_id : null],
+  const needsAi = intent === 'resume' ? run?.with_ai === true || run?.engine === 'v3_native_text_experimental' : withAi || engine === 'v3_native_text_experimental';
+  const estimateEngine = intent === 'resume' ? run?.engine ?? 'classic' : engine;
+  const estimate = useQuery({ queryKey: ['stage-run-estimate', estimateRevision, estimateEngine, intent, intent === 'resume' ? run?.run_id : null],
     queryFn: async () => (await estimateStageChainRun({ path: { stage_link_revision_id: estimateRevision! },
-      ...(intent === 'resume' && run !== undefined ? { query: { stage_chain_run_id: run.run_id } } : {}) })).data,
+      query: { engine: estimateEngine, ...(intent === 'resume' && run !== undefined ? { stage_chain_run_id: run.run_id } : {}) } })).data,
     enabled: intent !== null && needsAi && estimateRevision !== undefined, retry: false, staleTime: 0 });
+  useEffect(() => {
+    if (estimate.error !== null) { setAgreedDigest(null); held.current.clear(); }
+  }, [estimate.error]);
   const callback = useRef(onRunChange);
   callback.current = onRunChange;
   useEffect(() => {
@@ -72,15 +79,15 @@ function StageRunBody({ pairId, linkRevisionId, runId, mayAct, compact = false, 
 
   const command = async (action: 'start' | 'resume' | 'cancel') => {
     if (!mayAct || busy || (action === 'start' && revisionId === undefined) || (action !== 'start' && run === undefined)) return;
-    if (action !== 'cancel' && needsAi && (estimate.data === undefined || isBlocked(estimate.data) || !agreementStands(agreedDigest, estimate.data))) return;
+    if (action !== 'cancel' && needsAi && (estimate.isFetching || estimate.error !== null || estimate.data === undefined || isBlocked(estimate.data) || !agreementStands(agreedDigest, estimate.data))) return;
     const consent = action !== 'cancel' && needsAi && estimate.data !== undefined ? consentOf(estimate.data) : undefined;
-    const body = action === 'start' ? { link_revision_id: revisionId!, with_ai: withAi, restart,
+    const body = action === 'start' ? { link_revision_id: revisionId!, with_ai: withAi, engine, restart,
       ...(consent === undefined ? {} : { consent }) } : { retry_failed: retryFailed, ...(consent === undefined ? {} : { consent }) };
     const key = held.current.for([action, action === 'start' ? pairId : run!.run_id, action === 'cancel' ? null : body]);
     setBusy(true); setCommandError(null);
     try {
       const result = action === 'start'
-        ? await startStageChainRun({ path: { stage_pair_id: pairId }, body: { link_revision_id: revisionId!, with_ai: withAi, restart,
+        ? await startStageChainRun({ path: { stage_pair_id: pairId }, body: { link_revision_id: revisionId!, with_ai: withAi, engine, restart,
           ...(consent === undefined ? {} : { consent }) }, idempotencyKey: key })
         : action === 'resume'
           ? await resumeStageChainRun({ path: { stage_chain_run_id: run!.run_id }, body: { retry_failed: retryFailed,
@@ -99,17 +106,17 @@ function StageRunBody({ pairId, linkRevisionId, runId, mayAct, compact = false, 
   const message = failure === null ? null : failureMessage(failure);
   const sameActive = runActive(run) && run?.link_revision_id === revisionId;
   const openIntent = (next: 'start' | 'resume') => { setIntent(next); setAgreedDigest(null); setCommandError(null); };
-  const allowed = !needsAi || (estimate.data !== undefined && !isBlocked(estimate.data) && agreementStands(agreedDigest, estimate.data));
+  const allowed = !needsAi || (!estimate.isFetching && estimate.error === null && estimate.data !== undefined && !isBlocked(estimate.data) && agreementStands(agreedDigest, estimate.data));
   return <section className={styles.controls} aria-label="Полное сравнение стадий">
     {run === undefined ? <p>Полное сравнение ещё не запускалось.</p> : <>
       <p><strong>{RUN_WORDS[run.state]}</strong> · {formatInstant(run.created_at)}</p>
-      <p>Метод: Цепочка{run.with_ai === false ? ' · без ИИ' : run.with_ai === true ? ' · с ИИ' : ''}</p>
+      <p>Метод: {run.engine === 'v3_native_text_experimental' ? 'V3 · эксперимент, только текст PDF' : 'Классическая цепочка'}{run.with_ai === false ? ' · без ИИ' : run.with_ai === true ? ' · с ИИ' : ''}</p>
       <p>Изменений проектных решений: {counts.data?.project_changes ?? '—'} · Требуют проверки: {counts.data?.review ?? '—'}</p>
-      <p>Шаги: {run.steps.filter((step) => step.state === 'completed').length} / {run.steps.length}</p>
+      {run.engine === 'v3_native_text_experimental' ? <StageExperimentalProgress progress={run.experimental_progress} state={run.state} /> : <p>Шаги: {run.steps.filter((step) => step.state === 'completed').length} / {run.steps.length}</p>}
       {run.stale ? <p role="status">Результат устарел. Запустите сравнение для текущей карты связей.</p> : null}
       {run.pause_reason === undefined ? null : <p>Причина остановки: {run.pause_reason}</p>}
       {run.failure_reason === undefined ? null : <p role="alert">{run.failure_reason}</p>}
-      {!compact ? <ol>{run.steps.map((step) => <li key={step.step_id}>{String(step.step_no).padStart(2, '0')} {STEP_WORDS[step.step_no] ?? 'Шаг сравнения'} · {RUN_WORDS[step.state]}
+      {!compact && run.engine !== 'v3_native_text_experimental' ? <ol>{run.steps.map((step) => <li key={step.step_id}>{String(step.step_no).padStart(2, '0')} {STEP_WORDS[step.step_no] ?? 'Шаг сравнения'} · {RUN_WORDS[step.state]}
         {Object.entries(step.counts).map(([name, count]) => <span key={name}> · {name}: {count}</span>)}</li>)}</ol> : null}
       {onRunChange === undefined ? null : <button type="button" className="am-button" onClick={() => onRunChange(run)}>Открыть результат</button>}
       {run.batch_id === undefined || onOpenBatch === undefined ? null : <button type="button" className="am-button" onClick={() => onOpenBatch(run.batch_id!)}>Открыть очередь</button>}
@@ -118,7 +125,8 @@ function StageRunBody({ pairId, linkRevisionId, runId, mayAct, compact = false, 
     {message === null ? null : <ErrorState title="Сравнение не открыто или команда не выполнена" detail={message.detail} correlationId={message.correlationId} />}
     <button type="button" className="am-button" disabled={busy} onClick={() => { void runs.refetch(); if (selectedId !== undefined) void current.refetch(); if (linkRevisionId === undefined) void map.refetch(); }}>Обновить состояние</button>
     {mayAct ? <div className={styles.actions}>
-      <label><input type="checkbox" checked={withAi} disabled={busy || intent !== null} onChange={(event) => setWithAi(event.target.checked)} />С описанием изменений ИИ</label>
+      <StageEngineSelector value={engine} disabled={busy || intent !== null} onChange={(value) => { setEngine(value); if (value === 'v3_native_text_experimental') setWithAi(true); setAgreedDigest(null); setIntent(null); setCommandError(null); held.current.clear(); }} />
+      <label><input type="checkbox" checked={withAi} disabled={busy || intent !== null || engine === 'v3_native_text_experimental'} onChange={(event) => { setWithAi(event.target.checked); setAgreedDigest(null); held.current.clear(); }} />С описанием изменений ИИ</label>
       <label><input type="checkbox" checked={restart} disabled={busy} onChange={(event) => setRestart(event.target.checked)} />Пересчитать заново</label>
       <button type="button" className="am-button" disabled={busy || revisionId === undefined || sameActive || intent !== null}
         onClick={() => openIntent('start')}>Запустить полное сравнение</button>
@@ -135,6 +143,6 @@ function StageRunBody({ pairId, linkRevisionId, runId, mayAct, compact = false, 
       <div className={styles.actions}><button type="button" className="am-button" disabled={busy || !allowed} onClick={() => void command(intent)}>Подтвердить</button>
         <button type="button" className="am-button" disabled={busy} onClick={() => setIntent(null)}>Отмена</button></div>
     </div> : null}
-    {!compact && run !== undefined ? <StageRepairHistory run={run} mayAct={mayAct} /> : null}
+    {!compact && run !== undefined && run.engine !== 'v3_native_text_experimental' ? <StageRepairHistory run={run} mayAct={mayAct} /> : null}
   </section>;
 }

@@ -14,7 +14,7 @@
   ],
   "properties": {
     "contract_version": {
-      "const": "1.13.0"
+      "const": "1.14.0"
     },
     "error_code": {
       "type": "string",

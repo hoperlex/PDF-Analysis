@@ -23,6 +23,7 @@ class RunCostPolicy:
     model_id: str | None = None
     rate_sha256: str | None = None
     connection_revision_id: str | None = None
+    extended_review: dict | None = None
 
 
 def read_run_cost_policy(session, *, run_id: str, default_ceiling_usd: float,
@@ -45,6 +46,14 @@ def read_run_cost_policy(session, *, run_id: str, default_ceiling_usd: float,
         window, maximum = consent.get("window_characters"), consent.get("max_windows")
         model, rates = consent["model_id"], consent["rate_sha256"]
         revision = consent.get("connection_revision_id")
+        extended = consent.get("extended_review")
+        if extended is not None and (
+            not isinstance(extended, dict) or extended.get("enabled") is not True
+            or extended.get("plan_version") != "extended-review-v1"
+            or type(extended.get("max_blocks")) is not int
+            or not 1 <= extended["max_blocks"] <= 16
+        ):
+            raise ValueError()
         if (not isinstance(digest, str) or len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest)
                 or billing not in {"metered", "unmetered"} or type(ceiling) is not int or ceiling < 0
                 or billing == "metered" and ceiling == 0
@@ -58,4 +67,4 @@ def read_run_cost_policy(session, *, run_id: str, default_ceiling_usd: float,
     if revision != getattr(run, "connection_revision_id", None):
         raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis", reason="cost_estimate_binding_changed")
     return RunCostPolicy(True, ceiling / 1_000_000 if ceiling else float(default_ceiling_usd),
-                         billing == "metered", window, maximum, digest, model, rates, revision)
+                         billing == "metered", window, maximum, digest, model, rates, revision, extended)

@@ -125,6 +125,7 @@ __all__ = [
     "CropImage",
     "ImageLoad",
     "attach_images",
+    "request_with_provider_images",
     "checked_descriptors",
     "checked_pngs",
     "claimed_image",
@@ -280,3 +281,13 @@ def record_probe_result(
         rate_check=rate_check, observed_host_key=observed_host_key,
         detail=None if detail is None else detail[:500],
     )
+
+
+def request_with_provider_images(body, request, provider):
+    from auditmanager.executors.image_input import checked_pngs, add_anthropic_images, add_openai_images
+    images = checked_pngs(request)
+    clean = dict(body)
+    clean.pop("images", None)
+    if images:
+        clean = add_anthropic_images(clean, images) if provider == "anthropic" else add_openai_images(clean, images)
+    return clean

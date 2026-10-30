@@ -41,6 +41,12 @@ __all__ = ["build_run_routes"]
 
 
 def build_run_routes(router: APIRouter, runs: RunPort) -> None:
+    @router.get('/runs/{run_id}/extended-review', operation_id='getExtendedRunReview', tags=['runs'], status_code=200, response_model=models.ExtendedRunReview,
+        responses={**success(200, 'Source-bound preliminary extended analysis and explicit coverage.'), **envelope_responses(401,403,404,500,503)})
+    def get_extended_run_review(run_id: Annotated[models.RunId, Path()]) -> WireResponse:
+        view = runs.get_extended_review(run_id=run_id)
+        return json_response(200, encode_json(view.model_dump(mode='json')))
+
     @router.post(
         "/runs/cost-estimate", operation_id="estimateRunCost", tags=["runs"], status_code=200,
         response_model=models.RunCostEstimate,

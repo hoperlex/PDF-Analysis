@@ -75,7 +75,7 @@ function envelope(code: ApiError['errorCode'], details: Record<string, string>, 
   return new ApiError(
     code === 'dependency_unavailable' ? 503 : code === 'conflict' ? 409 : 422,
     {
-      contract_version: '1.13.0',
+      contract_version: '1.14.0',
       error_code: code,
       message: 'A caller-safe sentence in English.',
       correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',

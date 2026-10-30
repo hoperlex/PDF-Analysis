@@ -22,6 +22,8 @@ from auditmanager.shared.identity import AuditEventId, IdempotencyKey, StageChai
 WORK_KIND = "stage_chain"
 BATCH_WORK_KIND = "stage_chain_batch"
 
+from auditmanager.comparison.stage_v3.mode import CLASSIC, ENGINE, ORIGINAL_SHA, validate_engine, engine_for_run, experimental_progress
+
 
 class StagePipeline(Protocol):
     def estimate(self, *, revision_id: str, user_uid: str) -> Any: ...
@@ -63,6 +65,8 @@ class ChainRun:
     repair_cycle_count: int
     batch_id: str | None = None
     failure_reason: str | None = None
+    engine: str = CLASSIC
+    experimental_progress: dict[str, Any] | None = None
 
 
 def conflict(reason: str) -> DomainError:
@@ -142,6 +146,7 @@ class StageChainService:
             row["created_at"], row["updated_at"], stale, str(row["kind"]),
             bool(row["with_ai"]), row["comparison_ai_job_id"], row["pause_reason"],
             int(row["repair_cycle_count"]), row["stage_chain_batch_id"], row["failure_reason"],
+            engine_for_run(session, run_id), experimental_progress(session, run_id),
         )
 
     @staticmethod
@@ -152,7 +157,7 @@ class StageChainService:
         ), {"id": str(AuditEventId.new()), "event": event, "run": run_id,
             "payload": json.dumps(dict(payload), sort_keys=True)})
 
-    def estimate(self, *, pair_id: str, revision_id: str, user_uid: str) -> Any:
+    def estimate(self, *, pair_id: str, revision_id: str, user_uid: str, engine: str = CLASSIC) -> Any:
         self._enabled()
         with session_scope(self.sessions) as session:
             self._pair(session, pair_id)
@@ -160,17 +165,23 @@ class StageChainService:
                 raise conflict("stage_link_revision_stale")
         if self.ai is None:
             raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="comparison_stage_ai")
-        return self.ai.estimate(revision_id=revision_id, user_uid=user_uid)
+        return self.ai.estimate(revision_id=revision_id, user_uid=user_uid,
+                                **({"engine": validate_engine(engine)} if engine != CLASSIC else {}))
 
     def start(self, *, pair_id: str, revision_id: str, user_uid: str,
               actor_roles: frozenset[str], idempotency_key: str,
               with_ai: bool = True, consent: Mapping[str, Any] | None = None,
-              restart: bool = False, batch_id: str | None = None) -> ChainRun:
+              restart: bool = False, batch_id: str | None = None, engine: str = CLASSIC) -> ChainRun:
         self._enabled()
         require_expert(actor_roles)
+        validate_engine(engine)
+        if engine == ENGINE and not with_ai:
+            raise DomainError(ErrorCode.VALIDATION_FAILED, field="with_ai", constraint="v3_requires_ai")
         payload = {"pair_id": pair_id, "revision_id": revision_id,
                    "user_uid": user_uid, "with_ai": with_ai, "consent": dict(consent or {}),
                    "restart": restart, "batch_id": batch_id}
+        if engine != CLASSIC:
+            payload["engine"] = engine
         with session_scope(self.sessions) as session:
             claim = self.commands.begin(session, command_type="start_stage_chain_run",
                                         idempotency_key=IdempotencyKey(idempotency_key),
@@ -190,9 +201,9 @@ class StageChainService:
             ), {"pair": pair_id}).scalar_one_or_none()
             if live is not None:
                 existing = self.record(session, str(live))
-                if restart or existing.stale or existing.with_ai != with_ai:
+                if restart or existing.stale or existing.with_ai != with_ai or existing.engine != engine:
                     raise conflict("stage_chain_run_active")
-                self.commands.succeed(session, claim.command_id, {"run_id": existing.run_id})
+                self.commands.succeed(session, claim.command_id, {"run_id": existing.run_id, "engine": engine})
                 return existing
             passports = self.sheets.passports(pair_id=pair_id)
             pins = tuple(dict.fromkeys(page.version_uid for page in passports))
@@ -204,6 +215,9 @@ class StageChainService:
             input_sha = payload_fingerprint({"revision_id": revision_id,
                                              "profiles": [p.profile_id for p in passports],
                                              "versions": list(pins), "with_ai": with_ai})
+            if engine != CLASSIC:
+                from auditmanager.comparison.stage_v3.procedures import BUNDLE
+                input_sha = payload_fingerprint({"base": str(input_sha), "engine": engine, "original": ORIGINAL_SHA, "bundle": BUNDLE})
             session.execute(text(
                 "INSERT INTO stage_chain_run "
                 "(stage_chain_run_id, stage_pair_id, stage_link_revision_id, input_sha256, "
@@ -221,7 +235,8 @@ class StageChainService:
             job_id = None
             if with_ai:
                 assert self.ai is not None and consent is not None
-                job_id = self.ai.prepare(session, run_id=run_id, user_uid=user_uid, consent=consent)
+                job_id = self.ai.prepare(session, run_id=run_id, user_uid=user_uid, consent=consent,
+                                         **({"engine": engine} if engine != CLASSIC else {}))
                 session.execute(text(
                     "UPDATE stage_chain_run SET comparison_ai_job_id = :job WHERE stage_chain_run_id = :run"
                 ), {"run": run_id, "job": job_id})
@@ -233,7 +248,8 @@ class StageChainService:
             self._event(session, run_id, "stage.chain_started",
                         {"actor_uid": user_uid, "command_id": str(claim.command_id),
                          "revision_id": revision_id, "with_ai": with_ai})
-            self.commands.succeed(session, claim.command_id, {"run_id": run_id})
+            self.commands.succeed(session, claim.command_id, {"run_id": run_id, "engine": engine,
+                **({"original_source": ORIGINAL_SHA} if engine != CLASSIC else {})})
             return self.record(session, run_id)
 
     def get(self, run_id: str) -> ChainRun:

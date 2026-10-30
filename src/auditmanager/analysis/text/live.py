@@ -80,7 +80,9 @@ class LiveAdapter:
         try:
             # The provider is told the wire form of the response schema (`AR-V3-WIRE-SCHEMA-01`); the
             # request's own body and its checksum are not changed.
-            message = self._client.messages.create(**with_wire_schema(request.body))
+            from auditmanager.executors.public import request_with_provider_images
+            body = request_with_provider_images(with_wire_schema(request.body), request, "anthropic")
+            message = self._client.messages.create(**body)
         except Exception as exc:  # noqa: BLE001 - mapped to the catalog below
             raise self._map_provider_failure(exc) from None
         latency_ms = int((time.monotonic() - started) * 1000)

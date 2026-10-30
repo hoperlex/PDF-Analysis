@@ -57,4 +57,17 @@ Root is sole Git writer/integrator/publisher. All contributors edit shared cmp-i
 - Additive experiment with classic fallback; disable new feature for fresh runs while preserving accepted command policy. Forward fix/revert, no forced refs.
 
 ## Handoff
-- In progress; root alone commits/publishes dev.
+- Backend and mounted UI implementation ready for root integration; root alone commits/publishes dev. Detailed changed files, limits and focused proof: `docs/program/HOTFIX-ANALYSIS-1030.md`.
+
+## Analysis lane integration addendum
+- Exact worker opt-in is immutable accepted `RunCostPolicy.extended_review = {enabled:true,max_blocks:16,plan_version:'extended-review-v1'}`. Historical missing policy skips every extra call. Root owns the cost estimate/consent authority and conservative three-call allowance.
+- Public read implementation is `runs.extended_review.read_extended_review(sessions,blob_store,run_id)` exported by root through `runs.public`; exact DTO `{run_id,status,result}`. Root-owned API operation is `getExtendedRunReview`, API1.14.0.
+- Existing artifact custody carries `analysis.extended_review` and `analysis.extended_reply`, with generic Blob roles `analysis_extended_review` / `analysis_extended_reply`; no DDL or role-registry mutation required.
+- At most16 real saved crops, eight images/request, two block calls plus one semantic merge. Explicit coverage/skipped sources; source-bound corpus candidates only. Saved unit replies reuse without resend; ambiguous paid effects refuse retries.
+- Focused results: 12 unit tests PASS; real SQL58050 recorded custody/replay/fence/read proof PASS with transaction rollback; web typecheck PASS; scoped compile and whitespace PASS. No real provider calls or heavy gates. Lane handback advanced to09:40UTC by integrator.
+
+## Normative review followup grant and result
+- Integrator explicitly authorized a bounded followup within the same owned files, same three-extra-call authority and no API/DDL/Git changes: move corpus lookup before semantic merge and perform actual provisional model review of the supplied paragraph quotes.
+- Implemented per-input candidate IDs plus deduplicated immutable paragraph context in the existing third call. Merge output `norm_assessment` has closed `supports|contradicts|insufficient`, explanation and exact ID/quote citations. Foreign IDs, altered/missing quotes and assessments without corpus context refuse. Original observations survive bad merges; expert authority and unavailable statuses remain explicit.
+- UI labels the output “Модельная сверка по цитате; нужна проверка эксперта” and links candidates to the existing norm document viewer. No fourth call or edition/applicability verdict.
+- Focused followup result: 19 unit tests PASS and web typecheck PASS; final scoped compile/whitespace verification is recorded in the report. Handback before09:45UTC.

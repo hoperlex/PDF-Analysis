@@ -140,3 +140,8 @@ __all__ = [
     "run_to_terminal",
     "start_serving_carrier",
 ]
+
+
+def read_extended_review(sessions, blob_store, run_id: str):
+    from auditmanager.runs.extended_review import read_extended_review as read
+    return read(sessions, blob_store, run_id)
