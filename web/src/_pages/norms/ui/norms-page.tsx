@@ -264,6 +264,7 @@ export function NormsPage({ roles, query = null, catalogue = null }: NormsPagePr
       title="Нормы"
       subtitle="Поиск по тексту нормативных документов текущего снимка: по обозначению, номеру пункта и словам."
       actions={<button className="am-button am-button--quiet" type="button" onClick={() => void snapshots.refetch()}>Обновить</button>}
+      surface="canvas"
     >
       <section className={styles.panel} aria-label="Текущий снимок норм">
         {snapshots.isPending ? <LoadingState what="снимки норм" /> : null}
