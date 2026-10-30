@@ -130,6 +130,12 @@
   text-align: center;
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  .pipelineStage {
+    transition: border-color var(--am-motion-base) var(--am-ease), background var(--am-motion-base) var(--am-ease);
+  }
+}
+
 .pipelineStage[data-pipeline-status='succeeded'] {
   border-color: var(--am-ok);
   background: var(--am-ok-light);

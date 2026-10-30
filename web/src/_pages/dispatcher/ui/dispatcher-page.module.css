@@ -37,6 +37,17 @@
   margin-top: 0;
 }
 
+.panel:focus-within {
+  border-color: var(--am-line-strong);
+  box-shadow: var(--am-shadow-2);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .panel {
+    transition: border-color var(--am-motion-base) var(--am-ease), box-shadow var(--am-motion-base) var(--am-ease);
+  }
+}
+
 @media (min-width: 1400px) {
   .layout {
     grid-template-columns: minmax(300px, 0.7fr) minmax(0, 1.6fr);

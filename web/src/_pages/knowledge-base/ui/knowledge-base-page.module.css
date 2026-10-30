@@ -30,6 +30,19 @@
   margin-top: 4px;
 }
 
+.filters:focus-within,
+.results:focus-within {
+  border-color: var(--am-line-strong);
+  box-shadow: var(--am-shadow-2);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .filters,
+  .results {
+    transition: border-color var(--am-motion-base) var(--am-ease), box-shadow var(--am-motion-base) var(--am-ease);
+  }
+}
+
 @media (max-width: 780px) {
   .filters,
   .results {

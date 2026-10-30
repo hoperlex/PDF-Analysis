@@ -23,6 +23,19 @@
   padding: 10px 14px;
 }
 
+.create:focus-within,
+.list:focus-within {
+  border-color: var(--am-line-strong);
+  box-shadow: var(--am-shadow-2);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .create,
+  .list {
+    transition: border-color var(--am-motion-base) var(--am-ease), box-shadow var(--am-motion-base) var(--am-ease);
+  }
+}
+
 @media (min-width: 1280px) {
   .layout {
     grid-template-columns: minmax(0, 1.8fr) minmax(300px, 0.8fr);
