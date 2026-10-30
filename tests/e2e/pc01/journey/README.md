@@ -20,6 +20,12 @@ The closed `approve_run_cost` action supports `run` and `ar_v3_group`; the latte
 pending status is preserved; this compatibility update does not invent an executed six-check AR v3 journey or
 activate those older steps. Browser execution of these new approval actions remains **UNVERIFIED**.
 
+The existing queue re-audit step uses that same `run` cost scope with an explicit captured source Run. Selecting
+«Повторный аудит» automatically reads the selected Run and estimates its version with `reaudit_of_run_id`; the
+driver observes both responses, checks the source/version and the absence of client routing overrides, then
+presses the previously unchecked cost agreement. The subsequent «Подтвердить» must send fresh digest/cap consent
+to that same source's re-audit endpoint with a new command key. A parent's old approval is never substituted.
+
 `CMP-JOURNEY-CODE-01` adds six concrete version-module steps over `fixtures/comparison/vs1`: upload five PDFs,
 confirm grouping/order, prepare the matrix, compare all four adjacent transitions, open real viewer tiles,
 consent to the recorded AI route, and download the resulting Markdown. The steps are part of the existing write half,
