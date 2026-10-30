@@ -108,6 +108,23 @@ describe('ordinary section start preflight', () => {
     expect(startRun).not.toHaveBeenCalled();
   });
 
+  it('explains a comparison-only PDF refusal and stops repeat cost requests', async () => {
+    vi.mocked(estimateRunCost).mockRejectedValue(new ApiError(422, {
+      contract_version: '1.14.0', error_code: 'analysis_input_invalid', message: 'comparison-only PDF',
+      correlation_id: 'cid-comparison-only', retryable: false,
+      details: { reason: 'comparison_only_version' },
+    }, 'cid-comparison-only'));
+    live = await mountLive(createElement(QueryClientProvider, { client: client() },
+      createElement(StartRunControl, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
+    await live.press('Оценить стоимость');
+    expect(live.markup()).toContain('Этот PDF загружен только для сравнения');
+    expect(live.markup()).toContain('href="/stage-comparison"');
+    expect(live.markup()).toContain('cid-comparison-only');
+    expect(await live.press('Оценить стоимость')).toBe(false);
+    expect(await live.press(SINGLE)).toBe(false);
+    expect(estimateRunCost).toHaveBeenCalledTimes(1);
+  });
+
   it('a server-reported stale digest clears approval and requires a new estimate', async () => {
     vi.mocked(startRun).mockRejectedValueOnce(new ApiError(409, { contract_version: '1.14.0',
       error_code: 'conflict', message: 'stale estimate', correlation_id: 'cost-stale', retryable: false,

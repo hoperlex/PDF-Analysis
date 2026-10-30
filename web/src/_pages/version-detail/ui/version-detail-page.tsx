@@ -107,10 +107,9 @@ export function VersionDetailPage({ projectUid, versionUid, roles }: VersionDeta
                 roles={roles}
               />
               <p className="am-note">
-                <Link href={routes.comparison(ownerProjectUid, versionUid)}>
-                  Сравнить с другой версией комплекта
-                </Link>{' '}
-                — пары листов, построчные различия и соответствие замечаний.
+                <Link href={routes.versionComparison()}>Сравнение версий</Link>{' · '}
+                <Link href={routes.stageComparison()}>Сравнение стадий</Link>
+                {' — откройте нужный модуль для сопоставления PDF.'}
               </p>
             </>
           )}
@@ -118,17 +117,19 @@ export function VersionDetailPage({ projectUid, versionUid, roles }: VersionDeta
 
         <section className={styles.panel} aria-labelledby="version-runs-title">
           <h2 id="version-runs-title">Прогоны</h2>
-          <p className="am-note">
-            <Link href={routes.comparison(ownerProjectUid, versionUid)}>Сравнить два прогона</Link> —
-            что изменилось в анализе одной и той же версии.
-          </p>
-          <RunList
-            projectUid={ownerProjectUid}
-            versionUid={versionUid}
-            sectionCode={version.data?.classification?.section_code}
-            uploadKind={version.data?.upload_kind}
-            onRunStarted={(run: RunStatus) => router.push(routes.run(run.project_uid, run.run_id))}
-          />
+          {version.data === undefined ? null : <>
+            {version.data.upload_kind === 'comparison_pdf' ? null : <p className="am-note">
+              <Link href={routes.comparison(ownerProjectUid, versionUid)}>Сравнить два прогона</Link> —
+              что изменилось в анализе одной и той же версии.
+            </p>}
+            <RunList
+              projectUid={ownerProjectUid}
+              versionUid={versionUid}
+              sectionCode={version.data.classification?.section_code}
+              uploadKind={version.data.upload_kind}
+              onRunStarted={(run: RunStatus) => router.push(routes.run(run.project_uid, run.run_id))}
+            />
+          </>}
         </section>
       </div>
     </PageShell>
