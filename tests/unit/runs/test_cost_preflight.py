@@ -130,3 +130,34 @@ def test_next_full_request_must_fit_accepted_limit_and_model_rate_revision_are_p
         require_approved_model(config, ModelPin(MODEL, 30., 15.), NS(connection_revision_id="rev1"))
     with pytest.raises(DomainError):
         require_approved_model(config, pin, NS(connection_revision_id="rev2"))
+
+
+def test_six_scope_group_prices_all_calls_and_pins_each_verified_set(monkeypatch, registry):
+    from auditmanager.runs import v3_group
+    scopes = tuple(NS(scope_id=scope, identity=scope, chunking_profile="chunk-v1",
+        set_id="set-"+scope, set_sha256=str(index)*64) for index, scope in enumerate(v3_group.SCOPES, 1))
+    pack = NS(scopes=scopes, sha256="e"*64)
+    profile = NS(snapshot_id="snapshot", content_sha256="p"*64,
+                 system_prompt="rules", response_schema_json="{}")
+    monkeypatch.setattr(v3_group, "_validate_pack", lambda _: profile)
+    monkeypatch.setattr(preflight, "current_snapshot", lambda _: NS(norms_snapshot_id="snapshot"))
+    monkeypatch.setattr(preflight, "qualification", lambda *_: NS(build_complete=True, sources_confirmed=True))
+    refs = {scope.scope_id: NS(set_id=scope.set_id, set_sha256=scope.set_sha256,
+                              set_size_bytes=10_000 + index) for index, scope in enumerate(scopes)}
+    monkeypatch.setattr(preflight, "select_verified_retrieval_set", lambda _s, *, identity, **_: refs[identity])
+    route = NS(revision_id="rev", model_id=MODEL, billing="metered", input_budget_characters=1)
+    policy = service(registry, pack_registry=NS(select_beta=lambda: pack), connection_route=lambda _: route)
+    value = policy.estimate_group(None, version_uid=VERSION, version_record=version("AR"))
+    view, authority = value.as_dict(), value.approve(consent(value))
+    assert view["calls"] == view["windows"] == 6
+    assert view["output_tokens"] == 6*16_000
+    assert view["estimated_cost_micros"] == sum(authority["scope_costs_micros"].values())
+    raised = policy.estimate_group(None, version_uid=VERSION, version_record=version("AR"), relaxed_limits=True)
+    assert raised.as_dict()["output_tokens"] == 6*64_000
+    assert raised.as_dict()["estimated_cost_micros"] > view["estimated_cost_micros"]
+    refs[scopes[0].scope_id].set_size_bytes += 1
+    changed = policy.estimate_group(None, version_uid=VERSION, version_record=version("AR"))
+    assert changed.estimate_digest != value.estimate_digest
+    route.billing = "unmetered"
+    free = policy.estimate_group(None, version_uid=VERSION, version_record=version("AR"))
+    assert free.as_dict()["estimated_cost_micros"] == 0 and free.approve(consent(free))["billing"] == "unmetered"

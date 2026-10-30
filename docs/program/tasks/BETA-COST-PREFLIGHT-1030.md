@@ -134,7 +134,7 @@ Estimate and start share immutable route/source/profile/preset inputs. Start val
 Keep workers capable of reading accepted approvals until those Runs are terminal. UI controls can be hidden first; historical commands and owner relaxed-limit flags retain their prior meanings.
 
 ## Handoff
-- changed files: pending
-- commands/results: pending
+- changed files: exact committed inventory in `docs/program/BETA-COST-PREFLIGHT-1030.md`; backend/API/generated transport only, feature UI belongs to sibling lanes
+- commands/results:71 focused unit/DTO/contract cases PASS;4 SQL acceptance/replay cases PASS; served/authored semantic conformance PASS; generated-client verification PASS; compile/whitespace PASS. Inherited wider prose/C4-stub drift reported to root for its final metadata pass.
 - known limits: estimates use pinned rates and conservative token/output bounds, not a promise of measured spend
 - integration notes: root sole integrator, serial API slot released only on handoff
