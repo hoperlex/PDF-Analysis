@@ -49,6 +49,14 @@ def test_the_budget_is_two_gibibytes_a_stage() -> None:
     assert MAX_CROP_BYTES < 1_000 * 11.4 * 1024**2 / 4  # a quarter of the worst case
 
 
+def test_unbounded_statistics_mode_counts_without_refusing() -> None:
+    inner = RecordingStore()
+    store = CropByteBudget(inner, stage_id="page_geometry_extraction", budget=None)
+    assert put(store, MAX_CROP_BYTES + 1) == "published-1"
+    assert put(store, MAX_CROP_BYTES + 1) == "published-2"
+    assert store.used == 2 * (MAX_CROP_BYTES + 1)
+
+
 def test_crops_up_to_the_budget_are_published_and_the_one_past_it_is_not() -> None:
     inner = RecordingStore()
     budget = CropByteBudget(inner, stage_id="page_geometry_extraction", budget=100)
