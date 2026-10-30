@@ -115,29 +115,33 @@ class TestTheCorpusAgainstItsAnswerKey:
 
 
 class TestThePolicy:
-    def test_the_portal_envelope_is_unchanged(self) -> None:
-        assert portal.PAGE_ELEMENTS_MAX == 400_000
-        assert portal.PAGE_CHARACTERS_MAX == 200_000
-        assert portal.DOCUMENT_ELEMENTS_MAX == 8_000_000
-        assert portal.DOCUMENT_CHARACTERS_MAX == 20_000_000
-        assert portal.READER_ADDRESS_SPACE == 512 * MiB and portal.READER_SECONDS == 60
-        assert portal.MAX_BYTES == 250 * MiB and (portal.MIN_PAGES, portal.MAX_PAGES) == (1, 500)
+    def test_the_portal_envelope_has_the_temporary_statistics_limits(self) -> None:
+        assert portal.PAGE_ELEMENTS_MAX == portal.DOCUMENT_ELEMENTS_MAX == 2**63 - 1
+        assert portal.PAGE_CHARACTERS_MAX == portal.DOCUMENT_CHARACTERS_MAX == 2**31 - 1
+        assert portal.READER_ADDRESS_SPACE == portal.MAX_BYTES == 2**63 - 1
+        assert portal.READER_SECONDS == portal.MAX_PAGES == 2**31 - 1
+        assert portal.MIN_PAGES == 1
 
     def test_the_comparison_figures_are_the_recorded_ones(self) -> None:
         policy = COMPARISON_POLICY
-        assert policy.page_elements == 1_000_000  # 1.86 x the real set's 536 426
-        assert policy.page_elements > 536_426 > portal.PAGE_ELEMENTS_MAX
-        assert policy.address_space == 768 * MiB  # decision 8's default ceiling
-        assert (policy.max_bytes, policy.min_pages, policy.max_pages) == (250 * MiB, 1, 500)
+        assert policy.page_elements == 2**63 - 1
+        assert policy.page_elements > 536_426
+        assert policy.address_space == 2**63 - 1
+        assert (policy.max_bytes, policy.min_pages, policy.max_pages) == (2**63 - 1, 1, 2**31 - 1)
         assert policy.page_characters == portal.PAGE_CHARACTERS_MAX
         assert policy.document_elements == portal.DOCUMENT_ELEMENTS_MAX
         assert policy.document_characters == portal.DOCUMENT_CHARACTERS_MAX
 
-    def test_a_page_of_450000_elements_is_admitted_here_and_refused_by_the_portal(self) -> None:
+    def test_a_page_of_450000_elements_is_admitted_by_both_paths(self) -> None:
         data = _pdf(1, PATHS_450K)
-        assert _refusal(lambda: portal.inspect_pdf(data, require_text=False))["constraint"] == "pdf_page_content"
+        assert portal.inspect_pdf(data, require_text=False).page_count == 1
         facts = inspect_comparison_pdf(data)
         assert facts.page_count == 1 and facts.page_has_layer == (False,)
+
+    def test_the_temporary_intake_accepts_more_than_500_pages(self) -> None:
+        data = _pdf(501, _TEXT)
+        assert portal.inspect_pdf(data, require_text=False).page_count == 501
+        assert inspect_comparison_pdf(data).page_count == 501
 
     def test_the_element_limit_is_the_policys_not_a_constant_of_the_reader(self) -> None:
         tight = ComparisonEnvelopePolicy(**{**_fields(COMPARISON_POLICY), "page_elements": 1_000})
@@ -156,6 +160,11 @@ def _fields(policy: ComparisonEnvelopePolicy) -> dict[str, Any]:
     return {name: getattr(policy, name) for name in policy.__slots__}
 
 
+LEGACY_POLICY = ComparisonEnvelopePolicy(max_bytes=250 * MiB, min_pages=1, max_pages=500,
+    page_elements=1_000_000, page_characters=200_000, document_elements=8_000_000,
+    document_characters=20_000_000, address_space=768 * MiB, seconds=120)
+
+
 class TestRefusalsKeepTheirWords:
     """A refusal is the portal's own: one fault, one wording, whichever door it came through."""
 
@@ -166,9 +175,8 @@ class TestRefusalsKeepTheirWords:
             lambda: (NEGATIVE / "not_a_pdf.txt").read_bytes(),
             lambda: b"",
             lambda: _pdf(1, b"")[:200],
-            lambda: _pdf(501, _TEXT),
         ],
-        ids=["encrypted", "not-a-pdf", "empty", "truncated", "501-pages"],
+        ids=["encrypted", "not-a-pdf", "empty", "truncated"],
     )
     def test_the_same_field_constraint_and_message_as_the_portal(self, make: Any) -> None:
         data = make()
@@ -179,9 +187,9 @@ class TestRefusalsKeepTheirWords:
         path = tmp_path / "huge.pdf"
         with path.open("wb") as out:
             out.write(b"%PDF-1.7\n")
-            out.truncate(COMPARISON_POLICY.max_bytes + 1)
+            out.truncate(LEGACY_POLICY.max_bytes + 1)
         with path.open("rb") as handle:
-            found = _refusal(lambda: inspect_comparison_pdf(handle))
+            found = _refusal(lambda: inspect_comparison_pdf(handle, policy=LEGACY_POLICY))
         assert (found["field"], found["constraint"]) == ("content", f"byte_size <= {250 * MiB}")
 
     def test_the_encrypted_document_is_refused_by_the_stamp_reader_too(self) -> None:
@@ -191,18 +199,18 @@ class TestRefusalsKeepTheirWords:
 
 class TestTheChildren:
     def test_a_text_bomb_over_the_element_limit_is_refused_by_that_rule_in_seconds(self) -> None:
-        bomb = b"BT /F1 1 Tf 0 0 Td " + b"(AAAAAAAAAAAAAAAA) Tj " * (COMPARISON_POLICY.page_elements + 1) + b"ET"
+        bomb = b"BT /F1 1 Tf 0 0 Td " + b"(AAAAAAAAAAAAAAAA) Tj " * (LEGACY_POLICY.page_elements + 1) + b"ET"
         started = time.monotonic()
-        found = _refusal(lambda: inspect_comparison_pdf(_pdf(30, bomb)))
+        found = _refusal(lambda: inspect_comparison_pdf(_pdf(30, bomb), policy=LEGACY_POLICY))
         assert found["constraint"] == "pdf_page_content" and time.monotonic() - started < 30
 
     def test_a_page_of_240000_characters_is_refused_by_the_character_ceiling_whatever_its_elements(self) -> None:
         """15 000 strings (15 000 elements, far under the element limit) hold 240 000 characters: the page-character
         ceiling (200 000, unchanged from the portal's) is a rule of its own."""
         dense = b"BT /F1 1 Tf 0 0 Td " + b"(AAAAAAAAAAAAAAAA) Tj " * 15_000 + b"ET"
-        found = _refusal(lambda: inspect_comparison_pdf(_pdf(30, dense)))
+        found = _refusal(lambda: inspect_comparison_pdf(_pdf(30, dense), policy=LEGACY_POLICY))
         assert found["constraint"] == "pdf_page_content"
-        assert portal.PAGE_CHARACTERS_MAX == COMPARISON_POLICY.page_characters == 200_000
+        assert LEGACY_POLICY.page_characters == 200_000 < COMPARISON_POLICY.page_characters
 
     def test_a_text_bomb_under_the_element_limit_is_stopped_by_the_ceiling_not_by_the_api(self) -> None:
         """500 000 strings pass the element rule (1 000 000 here, 400 000 for the portal), and the 8 M characters
@@ -212,13 +220,13 @@ class TestTheChildren:
 
         before = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
         started = time.monotonic()
-        found = _refusal(lambda: inspect_comparison_pdf(_pdf(30, TEXT_BOMB)))
+        found = _refusal(lambda: inspect_comparison_pdf(_pdf(30, TEXT_BOMB), policy=LEGACY_POLICY))
         assert found["constraint"] in ("pdf_reader_limits", "pdf_page_content")
         assert time.monotonic() - started < 60
         assert resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024 - before < 64
 
     def test_a_short_clock_stops_a_slow_document(self) -> None:
-        short = ComparisonEnvelopePolicy(**{**_fields(COMPARISON_POLICY), "seconds": 1})
+        short = ComparisonEnvelopePolicy(**{**_fields(LEGACY_POLICY), "seconds": 1})
         found = _refusal(lambda: inspect_comparison_pdf(_pdf(500, PATHS), policy=short))
         assert found["constraint"] == "pdf_reader_limits"
 
@@ -261,8 +269,10 @@ class TestTheChildren:
         monkeypatch.setattr("auditmanager.ingest.comparison_pdf.envelope.run_child", spy)
         read_pdf((CORPUS / "vs1" / "v1.pdf").read_bytes())
         assert [item["program"] for item in seen] == ["pdf_reader.py", "stamp_reader.py"]
-        assert all(item["address_space"] == 768 * MiB and item["cpu_seconds"] == 120 and item["wall"] == 120 for item in seen)
-        assert seen[0]["page_elements"] == 1_000_000 and seen[0]["require_text"] is False
+        assert all(item["address_space"] == COMPARISON_POLICY.address_space
+                   and item["cpu_seconds"] == COMPARISON_POLICY.seconds
+                   and item["wall"] == COMPARISON_POLICY.seconds for item in seen)
+        assert seen[0]["page_elements"] == COMPARISON_POLICY.page_elements and seen[0]["require_text"] is False
 
 
 class TestTheStampZoneFollowsTheDisplayedPage:

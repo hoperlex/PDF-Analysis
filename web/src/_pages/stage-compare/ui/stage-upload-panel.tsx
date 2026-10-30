@@ -17,7 +17,6 @@ import { hashStageFile } from '../model/hash';
 import styles from './stage-upload-panel.module.css';
 
 const PART_BYTES = 16 * 1024 * 1024;
-const MAX_BYTES = 2 * 1024 * 1024 * 1024;
 const queryKey = (projectUid: string, cursor: string) => ['comparison', 'stage-uploads', projectUid, cursor] as const;
 class LocalProblem extends Error {}
 
@@ -215,8 +214,8 @@ export function StageUploadPanel({ projectUid, mayAct }: {
     let createdAction: string | null = null;
     try {
       const kind = kindOf(file);
-      if (kind === null || file.size < 1 || file.size > MAX_BYTES) {
-        throw new LocalProblem('Выберите PDF или ZIP размером от 1 байта до 2 ГиБ.');
+      if (kind === null || file.size < 1) {
+        throw new LocalProblem('Выберите непустой PDF или ZIP.');
       }
       setProgress('Расчёт SHA-256');
       const digest = await hashStageFile(file, (read) => setProgress(`Хэширование: ${read} / ${file.size} байт`));

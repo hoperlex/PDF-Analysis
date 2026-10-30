@@ -90,15 +90,15 @@ __all__ = [
 # density over the 500-page ceiling would be about 2 150 blocks and 783 IMAGE blocks.
 
 #: Blocks of any type on one page: eleven times the densest real page (9).
-MAX_BLOCKS_PER_PAGE: Final[int] = 100
+MAX_BLOCKS_PER_PAGE: Final[int] = 2**31 - 1
 #: Blocks of any type in one bundle: six times the largest real list (500), and above the
 #: export's density carried to 500 pages (about 2 150).
-MAX_BLOCKS: Final[int] = 3_000
+MAX_BLOCKS: Final[int] = 2**31 - 1
 #: IMAGE blocks -- the crops a run cuts -- in one bundle: twenty-one times the real maximum
 #: (47), above the export's density carried to 500 pages (about 783). At the measured cost of
 #: a worst-case crop (0.42 s and 11.4 MiB of PNG at the pixel cap, `W55B-JUDGE-X` p7) this
 #: keeps a run's crops inside the stage watchdog's 900 s.
-MAX_IMAGE_BLOCKS: Final[int] = 1_000
+MAX_IMAGE_BLOCKS: Final[int] = 2**31 - 1
 
 # -- the pinned schema, in code ---------------------------------------------------------
 #
@@ -108,7 +108,7 @@ MAX_IMAGE_BLOCKS: Final[int] = 1_000
 SCHEMA_REQUIRED_TOP: Final[tuple[str, ...]] = ("schema_version", "coordinate_space", "pages", "blocks")
 SCHEMA_VERSION: Final[int] = 1
 COORDINATE_SPACE: Final[str] = "normalized_page_top_left"
-PAGES_MIN, PAGES_MAX = 1, 500
+PAGES_MIN, PAGES_MAX = 1, 2**31 - 1
 PAGE_REQUIRED: Final[tuple[str, ...]] = ("page_index", "width_px", "height_px", "rotation")
 ROTATIONS: Final[tuple[int, ...]] = (0, 90, 180, 270)
 BLOCK_REQUIRED: Final[tuple[str, ...]] = (

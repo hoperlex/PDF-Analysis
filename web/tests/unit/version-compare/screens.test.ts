@@ -563,7 +563,7 @@ describe('the upload dialogs', () => {
   });
 
   it('says what is wrong before sending, and that a read-only reader may not send', () => {
-    expect(text(dialog({ problem: 'file_too_large' }))).toContain('Один из файлов больше 250 МиБ');
+    expect(text(dialog({ problem: 'file_too_large' }))).toContain('Размер файла превышает технический предел');
     expect(dialog({ mayAct: false })).toContain('data-upload-readonly');
     expect(dialog({ mayAct: false })).toMatch(/<button[^>]*disabled=""[^>]*>Загрузить и разобрать/);
   });

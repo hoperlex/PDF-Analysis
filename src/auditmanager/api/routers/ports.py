@@ -1449,7 +1449,7 @@ class OptimisationProposalPort(Protocol):
 
 @runtime_checkable
 class ComparisonUploadPort(Protocol):
-    def import_zip(self, *, project_uid: str, content: bytes, user_uid: str, idempotency_key: str, archive_name: str | None = None) -> models.ComparisonUpload: ...
+    def import_zip(self, *, project_uid: str, content: BinaryIO, user_uid: str, idempotency_key: str, archive_name: str | None = None) -> models.ComparisonUpload: ...
 
     """The twelve upload operations. `CMP-INGEST-01` (create, part, complete, proposal, confirm)
     and `CMP-INGEST-02` (list, exclude, retry, pause, resume, cancel) implement them over

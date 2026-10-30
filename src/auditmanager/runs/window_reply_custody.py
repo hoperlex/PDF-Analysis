@@ -51,7 +51,7 @@ from auditmanager.storage.public import (
 
 REPLY_FORMAT: Final[str] = "text-window-reply/1"
 REPLY_BLOB_ROLE: Final[str] = "analysis_text_window_reply"
-#: A reply is at most the output ceiling's worth of text (16 000 tokens); a megabyte is a wide margin.
+#: Historical custody ceiling; fresh statistics runs pass None for the 64k-token profile.
 MAX_REPLY_BYTES: Final[int] = 1_048_576
 
 _FIELDS: Final[frozenset[str]] = frozenset({
@@ -84,7 +84,7 @@ def _reject_constant(value: str) -> object:
 class WindowReplyCustody:
     """The executor's :class:`~auditmanager.analysis.public.WindowCustody` for one Attempt of one Run."""
 
-    __slots__ = ("_session", "_jobs", "_authority", "_store", "_mode", "_provider")
+    __slots__ = ("_session", "_jobs", "_authority", "_store", "_mode", "_provider", "_max_reply_bytes")
 
     def __init__(
         self,
@@ -95,13 +95,17 @@ class WindowReplyCustody:
         store: BlobStore,
         mode: ProviderMode,
         provider: str,
+        max_reply_bytes: int | None = MAX_REPLY_BYTES,
     ) -> None:
+        if max_reply_bytes is not None and (type(max_reply_bytes) is not int or max_reply_bytes < 1):
+            raise ValueError("window reply limit must be positive or None")
         self._session = session
         self._jobs = jobs
         self._authority = authority
         self._store = store
         self._mode = mode
         self._provider = provider
+        self._max_reply_bytes = max_reply_bytes
 
     # -- preserve --------------------------------------------------------------------------
 
@@ -145,7 +149,7 @@ class WindowReplyCustody:
                 "window_reply_unserialisable", "the provider answer cannot be kept"
             ) from exc
         data = payload.encode("utf-8")
-        if len(data) > MAX_REPLY_BYTES:
+        if self._max_reply_bytes is not None and len(data) > self._max_reply_bytes:
             raise _refuse(
                 "window_reply_too_large", "the provider answer exceeds the window custody limit"
             )
@@ -196,7 +200,8 @@ class WindowReplyCustody:
         except (StorageError, IdentityError) as exc:
             raise _refuse("window_reply_unreadable") from exc
         if (
-            len(data) != call.reply_blob_size or len(data) > MAX_REPLY_BYTES
+            len(data) != call.reply_blob_size
+            or self._max_reply_bytes is not None and len(data) > self._max_reply_bytes
             or hashlib.sha256(data).hexdigest() != call.reply_blob_sha256
         ):
             raise _refuse("window_reply_blob_digest_mismatch")

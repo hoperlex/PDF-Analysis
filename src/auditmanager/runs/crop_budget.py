@@ -51,7 +51,9 @@ class CropByteBudget:
 
     __slots__ = ("_store", "_stage_id", "_budget", "_used")
 
-    def __init__(self, store: Any, *, stage_id: str, budget: int = MAX_CROP_BYTES) -> None:
+    def __init__(self, store: Any, *, stage_id: str, budget: int | None = MAX_CROP_BYTES) -> None:
+        if budget is not None and (type(budget) is not int or budget < 0):
+            raise ValueError("crop budget must be a nonnegative integer or None")
         self._store = store
         self._stage_id = stage_id
         self._budget = budget
@@ -72,7 +74,7 @@ class CropByteBudget:
         media_type: str,
     ) -> Any:
         if role == _CROP_ROLE:
-            if self._used + declared_size > self._budget:
+            if self._budget is not None and self._used + declared_size > self._budget:
                 raise DomainError(
                     ErrorCode.ANALYSIS_INPUT_INVALID,
                     message=(

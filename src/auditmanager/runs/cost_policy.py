@@ -43,6 +43,7 @@ def read_run_cost_policy(session, *, run_id: str, default_ceiling_usd: float,
     try:
         digest, billing = consent["estimate_digest"], consent["billing"]
         ceiling = consent.get("run_limits_micros", {}).get(run_id, consent["ceiling_micros"])
+        uncapped_stats = consent.get("uncapped_stats", False)
         window, maximum = consent.get("window_characters"), consent.get("max_windows")
         model, rates = consent["model_id"], consent["rate_sha256"]
         revision = consent.get("connection_revision_id")
@@ -61,10 +62,10 @@ def read_run_cost_policy(session, *, run_id: str, default_ceiling_usd: float,
                 section = extended.get("section_code")
                 if (not isinstance(section, str) or not 1 <= len(section) <= 8
                         or any(character not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_" for character in section)
-                        or type(blocks) is not int or not 1 <= blocks <= 1000
+                        or type(blocks) is not int or not 1 <= blocks <= 2**31 - 1
                         or type(extended.get("window_size")) is not int or extended["window_size"] != 16
                         or type(extended.get("max_windows")) is not int
-                        or type(text_limit) is not int or not 1 <= text_limit <= 500
+                        or type(text_limit) is not int or not 1 <= text_limit <= 2**31 - 1
                         or extended["max_windows"] != max((blocks + 15) // 16, (text_limit + 15) // 16)
                         or extended.get("review") is not True
                         or not isinstance(rules, str) or len(rules) != 64
@@ -87,7 +88,9 @@ def read_run_cost_policy(session, *, run_id: str, default_ceiling_usd: float,
                 raise ValueError()
         if (not isinstance(digest, str) or len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest)
                 or billing not in {"metered", "unmetered"} or type(ceiling) is not int or ceiling < 0
-                or billing == "metered" and ceiling == 0
+                or type(uncapped_stats) is not bool
+                or uncapped_stats and (not outcome.get("relaxed_limits", False) or ceiling != 0)
+                or billing == "metered" and ceiling == 0 and not uncapped_stats
                 or not isinstance(model, str) or not model or not isinstance(rates, str) or len(rates) != 64
                 or window is not None and (type(window) is not int or window <= 0)
                 or maximum is not None and (type(maximum) is not int or maximum < 1)):
@@ -98,4 +101,5 @@ def read_run_cost_policy(session, *, run_id: str, default_ceiling_usd: float,
     if revision != getattr(run, "connection_revision_id", None):
         raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis", reason="cost_estimate_binding_changed")
     return RunCostPolicy(True, ceiling / 1_000_000 if ceiling else float(default_ceiling_usd),
-                         billing == "metered", window, maximum, digest, model, rates, revision, extended)
+                         billing == "metered" and not uncapped_stats, window, maximum,
+                         digest, model, rates, revision, extended)

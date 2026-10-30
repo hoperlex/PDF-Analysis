@@ -17,7 +17,7 @@ from typing import BinaryIO, Final
 
 from auditmanager.ingest.comparison_pdf.public import inspect_comparison_pdf
 from auditmanager.ingest.comparison_zip import (
-    DEFAULT_SET_POLICY, SET_TOTAL_BYTES, ExtractedSet, extract_pdf_set,
+    DEFAULT_SET_POLICY, ExtractedSet, extract_pdf_set,
 )
 from auditmanager.shared.errors import DomainError, ErrorCode
 
@@ -70,9 +70,9 @@ def _check_budget(*, declared_bytes: int, active_admissions: int, free_bytes: in
         raise DomainError(
             ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="comparison_stage_zip_admission"
         )
-    # The raw spool and the reader's extracted files can coexist on the same
-    # filesystem. Reserve both maxima before the reader creates a temp dir.
-    if free_bytes < declared_bytes + SET_TOTAL_BYTES + MIN_FREE_RESERVE_BYTES:
+    # Reserve the raw spool and a fixed free-space floor. The temporary
+    # expansion is no longer capped by an application quota.
+    if free_bytes < declared_bytes + MIN_FREE_RESERVE_BYTES:
         raise DomainError(
             ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="comparison_stage_zip_disk"
         )

@@ -1,51 +1,9 @@
-"""The set policy: what a ZIP of many PDFs may hold.
+"""ZIP set structure and temporary statistics intake ceilings.
 
-`CMP-INGEST-ZIP-01` (ADR-0025 decision 12, plan `R3-17`, `Q-CMP-10`). The original's «ZIP-комплект»
-(``docs/program/compare/ORIGINAL-STAGE-COMPARISON-INVENTORY.md`` §3.1) is one archive holding the
-PDFs of a stage, optionally with ZIPs of projects inside it. It refused an unsafe path, a
-corrupt archive and an archive over its size guards; this policy refuses the same and more,
-with the shared reader's mechanics under it.
-
-The figures
------------
-=========================== ================ =====================================================
-bound                       value            basis
-=========================== ================ =====================================================
-entries (``N``)             1 000            the batch holds at most 10 000 files and 100 sets
-                                             (ADR-0025 decision 9): a set of whole stages averages
-                                             100 files, so one archive may hold ten times that;
-                                             and a PDF is read in a child process of its own, so
-                                             the number of entries is a bound on time. **Decided
-                                             by this slice**; the ADR left it to the slice
-total uncompressed          2 GiB            ADR-0025 decision 12; the original's archive guard
-one member                  250 MiB          the existing envelope's PDF bound (``MAX_BYTES``)
-ratio                       100              the portal reader's (``MAX_RATIO``)
-central directory           4 MiB            1 000 entries of 4 KiB each; the reader's own bound
-                                             (``entries x 196 KiB``) would let 1 000 entries
-                                             make the API read 196 MiB
-nesting                     one level        an archive inside the archive, none inside that
-=========================== ================ =====================================================
-
-**The entry count and the total are counted over every level together**: the entries of a
-nested archive take from the budget the first level left, and so do its bytes -- the nested
-archive's own bytes included, because they are unpacked to disk before they are read. So the
-disk a set can use is the total, at the moment of the largest nesting, and no nesting makes
-the budget larger.
-
-What a member is
-----------------
-A file member is a PDF (a name ending ``.pdf``, any case) or, at the first level, a ZIP (a name
-ending ``.zip``). Anything else is refused (``comparison_zip_member_kind``) -- a document of
-another format, a ``__MACOSX/`` file, a ``.pdf.exe``. A directory entry (a name ending ``/``,
-no bytes) is structure: it is judged for its name and counted, and nothing is unpacked from it.
-A name decides nothing but a member's kind: the content is judged by the PDF envelope, so a ZIP
-named ``.pdf`` is a PDF that fails it.
-
-The name rules are the portal reader's (:func:`~auditmanager.ingest.bundle_archive.is_unsafe_name`:
-absolute, drive-letter, backslash, ``..``) applied to the raw bytes **and to the name a reader
-would show**, which an Info-ZIP Unicode Path field can set to anything; a name is also unique
-after case folding and NFC (:func:`~auditmanager.ingest.bundle_archive.duplicate_key`). Two members
-of different folders may share a base name: a name is never an identity.
+Names, member kinds, encryption, symlinks, compression methods, duplicate
+entries and one nesting level are still checked. Numeric counts and byte
+ceilings are raised to representation limits for the temporary statistics
+intake. ADR-0025 records the earlier production thresholds for rollback.
 """
 
 from __future__ import annotations
@@ -83,15 +41,15 @@ MiB: Final[int] = 1024 * 1024
 GiB: Final[int] = 1024 * MiB
 
 #: ``N``: the entries of a set over all its levels (see the module docstring).
-SET_MAX_ENTRIES: Final[int] = 1_000
+SET_MAX_ENTRIES: Final[int] = 2**31 - 1
 #: ADR-0025 decision 12: the uncompressed bytes of a set over all its levels.
-SET_TOTAL_BYTES: Final[int] = 2 * GiB
+SET_TOTAL_BYTES: Final[int] = 2**63 - 1
 #: One member: the existing envelope's bound for a PDF.
 SET_MEMBER_BYTES: Final[int] = MAX_BYTES
 #: The ratio of a member and of an archive: the portal reader's.
 SET_MAX_RATIO: Final[int] = MAX_RATIO
 #: The central directory the reader will load, whatever its entries claim.
-SET_DIRECTORY_BYTES: Final[int] = 4 * MiB
+SET_DIRECTORY_BYTES: Final[int] = 2**63 - 1
 #: Archives inside the archive: one, ADR-0025 decision 12.
 SET_MAX_NESTING: Final[int] = 1
 

@@ -122,6 +122,17 @@ def test_raised_output_price_and_route_rate_preset_changes_are_bound(registry):
     assert estimate(policy, source, preset_id="preset1").estimate_digest != old.estimate_digest
 
 
+def test_section_stats_consent_accepts_zero_ceiling_and_keeps_source_binding(registry):
+    value = estimate(service(registry), version("AR", 300_000, 30), relaxed_limits=True)
+    approved = value.approve(consent(value, 0))
+    assert approved["uncapped_stats"] is True
+    assert approved["ceiling_micros"] == 0
+    assert approved["max_windows"] >= 30
+    normal = estimate(service(registry), version("AR", 300_000, 30))
+    with pytest.raises(DomainError):
+        normal.approve(consent(normal, 0))
+
+
 @pytest.mark.parametrize("payload", [None, {}, {"confirmed": False}, {"confirmed": "true"}])
 def test_missing_or_unconfirmed_consent_refuses(registry, payload):
     with pytest.raises(DomainError) as failure:

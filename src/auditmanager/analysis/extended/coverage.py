@@ -34,7 +34,7 @@ def validate_cross_window_policy(value):
     return True
 
 
-def coverage_policy(*, text_characters=None):
+def coverage_policy(*, text_characters=None, unbounded_stats=False):
     """Freeze enough comprehensive pieces for a long source, up to a finite cap.
 
     This is a conservative per-window allowance, not a completeness promise.
@@ -42,6 +42,10 @@ def coverage_policy(*, text_characters=None):
     """
     limits = dict(_PHASE_LIMITS)
     policy = {'coverage_version': COVERAGE_VERSION, 'phase_call_limits': limits}
+    if type(unbounded_stats) is not bool:
+        raise ValueError('extended_coverage_stats_flag_invalid')
+    if unbounded_stats:
+        policy['unbounded_stats'] = True
     if text_characters is not None:
         if type(text_characters) is not int or text_characters < 0:
             raise ValueError('extended_coverage_source_size_invalid')
@@ -56,6 +60,8 @@ def validate_coverage_policy(policy):
     if not isinstance(policy, dict) or 'coverage_version' not in policy:
         return False
     limits = policy.get('phase_call_limits')
+    if 'unbounded_stats' in policy and policy['unbounded_stats'] is not True:
+        raise ValueError('extended_coverage_stats_flag_invalid')
     if (policy.get('coverage_version') != COVERAGE_VERSION or not isinstance(limits, dict)
             or set(limits) != set(_PHASE_LIMITS)
             or any(type(value) is not int or not 1 <= value <= 128 for value in limits.values())
@@ -152,12 +158,14 @@ def _comprehensive_batches(items, contexts, sources):
 
 
 def plan_extended_coverage(*, kind, items, limit, contexts=None, sources=None):
-    if kind not in _PHASE_LIMITS or type(limit) is not int or not 1 <= limit <= 128 or not isinstance(items, list):
+    if kind not in _PHASE_LIMITS or (limit is not None and (type(limit) is not int or limit < 1)) or not isinstance(items, list):
         raise ValueError('extended_coverage_plan_invalid')
     if kind == 'comprehensive_analysis':
         batches, oversized = _comprehensive_batches(items, contexts or [], sources or [])
     else:
         batches, oversized = _observation_batches(items)
+    if limit is None:
+        limit = len(batches)
     selected, remainder = batches[:limit], batches[limit:]
     for index, batch in enumerate(batches):
         references = {key for row in batch['items'] for key in row['item']['source_ids']}

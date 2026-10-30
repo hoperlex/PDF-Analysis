@@ -37,6 +37,15 @@ def test_new_approved_cap_is_enforced_even_with_raised_output_choice(monkeypatch
     assert policy.model_id == "selected-model"
 
 
+def test_new_section_statistics_consent_tracks_cost_without_monetary_halt(monkeypatch):
+    data = consent() | {"ceiling_micros": 0, "uncapped_stats": True}
+    policy = read(monkeypatch, {"relaxed_limits": True, "cost_consent": data})
+    assert policy.approved and not policy.enforce_ceiling
+    assert policy.max_windows == 24
+    with pytest.raises(DomainError):
+        read(monkeypatch, {"cost_consent": data})
+
+
 def test_group_member_gets_only_its_share_of_approved_group_limit(monkeypatch):
     data = consent() | {"run_limits_micros": {"run": 750_000}}
     assert read(monkeypatch, {"cost_consent": data}).ceiling_usd == 0.75

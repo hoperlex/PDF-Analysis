@@ -18,7 +18,7 @@ from auditmanager.comparison.stage.intake import (
     admit_stage_zip_stream,
     open_stage_zip,
 )
-from auditmanager.ingest.comparison_zip import SET_TOTAL_BYTES, SetMemberRefused
+from auditmanager.ingest.comparison_zip import SetMemberRefused
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 
@@ -33,7 +33,7 @@ def archive(name: str, content: bytes) -> bytes:
 
 
 def budget(raw_bytes: int) -> int:
-    return raw_bytes + SET_TOTAL_BYTES + MIN_FREE_RESERVE_BYTES
+    return raw_bytes + MIN_FREE_RESERVE_BYTES
 
 
 @pytest.mark.parametrize(
@@ -41,7 +41,7 @@ def budget(raw_bytes: int) -> int:
     [
         (MAX_RAW_ZIP_BYTES + 1, 0, 10**12, f"raw_zip_bytes <= {MAX_RAW_ZIP_BYTES}", None),
         (1, 1, 10**12, None, "comparison_stage_zip_admission"),
-        (1, 0, SET_TOTAL_BYTES + MIN_FREE_RESERVE_BYTES, None, "comparison_stage_zip_disk"),
+        (1, 0, MIN_FREE_RESERVE_BYTES, None, "comparison_stage_zip_disk"),
     ],
 )
 def test_admission_refuses_before_reading_archive(

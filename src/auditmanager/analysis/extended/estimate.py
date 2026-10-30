@@ -7,8 +7,8 @@ from auditmanager.analysis.recognised.portal import IMAGE, read_block_list
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.storage.public import parse_blob_id
 
-MAX_VISUAL_SOURCES = 1000
-MAX_TEXT_PAGES = 500
+MAX_VISUAL_SOURCES = 2**31 - 1
+MAX_TEXT_PAGES = 2**31 - 1
 VISUAL_WINDOW_SIZE = 16
 
 

@@ -599,7 +599,8 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
             kind={"blocks":"block_analysis"}.get(raw_kind,raw_kind)
             index=int(raw_index.removeprefix("b"))
             keys=used_batches.setdefault(kind,set())
-            if identity not in keys and len(keys)>=window_context["policy"]["phase_call_limits"][kind]:
+            if (identity not in keys and not window_context["policy"].get("unbounded_stats")
+                    and len(keys)>=window_context["policy"]["phase_call_limits"][kind]):
                 raise _refuse("approved_phase_call_limit")
             keys.add(identity)
             key=f'{window_context["window_id"]}:{kind}:b{index:03d}'
@@ -1376,7 +1377,8 @@ def _comprehensive_batched_v3(*, run, binding, state, contexts, block_items, pha
     plan = plan_extended_coverage(kind=kind,
         items=[{'kind': 'visual', 'item': item} for item in block_items] +
             [{'kind': 'text', 'item': item} for item in state['text_items']],
-        contexts=contexts, sources=state['sources'], limit=window_context['policy']['phase_call_limits'][kind])
+        contexts=contexts, sources=state['sources'], limit=None if window_context['policy'].get('unbounded_stats')
+            else window_context['policy']['phase_call_limits'][kind])
     _coverage_plan_receipts(state, kind=kind, plan=plan, window_id=window_context['window_id'])
     phase(kind, 'running')
     output = []
@@ -1430,7 +1432,8 @@ def _norm_batched_v3(*, session, run, binding, state, snapshot_id, phase, call, 
         item['norm_candidates']=canonical_candidates
     candidates = [item for item in state['observations'] if item.get('norm_candidates')]
     plan = plan_extended_coverage(kind=kind, items=candidates,
-        limit=window_context['policy']['phase_call_limits'][kind])
+        limit=None if window_context['policy'].get('unbounded_stats')
+            else window_context['policy']['phase_call_limits'][kind])
     _coverage_plan_receipts(state, kind=kind, plan=plan, window_id=window_context['window_id'])
     for item in candidates:
         item.update(norm_review_status='not_reviewed', norm_review_reason='approved_phase_call_limit')
@@ -1475,7 +1478,8 @@ def _review_batched_v3(*, run, binding, state, phase, call, window_context, cont
     for item in state['observations']:
         item.update(review_status='not_reviewed', review_reason='approved_phase_call_limit')
     kind = 'finding_review'
-    plan = plan_extended_coverage(kind=kind, items=state['observations'], limit=limits[kind])
+    plan = plan_extended_coverage(kind=kind, items=state['observations'],
+        limit=None if window_context['policy'].get('unbounded_stats') else limits[kind])
     _coverage_plan_receipts(state, kind=kind, plan=plan, window_id=window_id)
     critic_cut = False
     correction_targets = []
@@ -1513,7 +1517,8 @@ def _review_batched_v3(*, run, binding, state, phase, call, window_context, cont
         phase(kind, 'partial' if deferred or critic_cut else 'completed',
             'approved_phase_call_limit' if deferred else 'context_window_truncated' if critic_cut else None)
     kind = 'finding_correction'
-    plan = plan_extended_coverage(kind=kind, items=correction_targets, limit=limits[kind])
+    plan = plan_extended_coverage(kind=kind, items=correction_targets,
+        limit=None if window_context['policy'].get('unbounded_stats') else limits[kind])
     _coverage_plan_receipts(state, kind=kind, plan=plan, window_id=window_id)
     if not correction_targets:
         phase(kind, 'completed', 'no_corrections_requested')

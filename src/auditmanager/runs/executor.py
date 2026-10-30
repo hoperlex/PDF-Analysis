@@ -131,7 +131,7 @@ from auditmanager.jobs.public import (
     start_attempt_lease_heartbeat,
     stop_attempt_lease_heartbeat,
 )
-from auditmanager.runs.crop_budget import CropByteBudget
+from auditmanager.runs.crop_budget import MAX_CROP_BYTES, CropByteBudget
 from auditmanager.runs.provider import ProviderBinding, ProviderResolver
 from auditmanager.runs.repository import (
     INITIAL_STATE,
@@ -147,7 +147,7 @@ from auditmanager.runs.retry import (
 )
 from auditmanager.runs.section_recognised_input import load_section_recognised_pages
 from auditmanager.runs.v3_group import TrustedPackRegistry
-from auditmanager.runs.window_reply_custody import WindowReplyCustody
+from auditmanager.runs.window_reply_custody import MAX_REPLY_BYTES, WindowReplyCustody
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import (
     CommandId,
@@ -1143,7 +1143,8 @@ def _execute_run_body(
     for stage_id, roles in deterministic:
         run_repo.stage_started(session, run_id=run_id, stage_id=stage_id)
         session.commit()
-        # `RUN-ROBUSTNESS-01` (D-177): a stage may publish at most `MAX_CROP_BYTES` of crops.
+        # Fresh statistics runs count crop bytes without the historical 2 GiB refusal.
+        # Previously accepted commands retain their frozen relaxed_limits value.
         stage_store = CropByteBudget(
             _publication_store(
                 session,
@@ -1155,6 +1156,7 @@ def _execute_run_body(
                 checkpoint=effect_checkpoint,
             ),
             stage_id=stage_id,
+            budget=None if relaxed_limits else MAX_CROP_BYTES,
         )
         result = run_stage(
             stage_id,
@@ -1368,6 +1370,7 @@ def _execute_run_body(
                     session=session, jobs=job_repo, authority=authority, store=text_store,
                     mode=binding.adapter.provider_mode,
                     provider="anthropic" if binding.call is None else binding.call.provider_label,
+                    max_reply_bytes=None if relaxed_limits else MAX_REPLY_BYTES,
                 )),
             )
         _persist_and_bind(

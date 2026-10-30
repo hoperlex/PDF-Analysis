@@ -61,6 +61,16 @@ from tests.unit.ingest.comparison_zip.zip_builders import (  # noqa: F401  (the 
 
 #: A policy low enough to cross its bounds with real bytes.
 LOW = SetPolicy(member_bytes=2 * MiB, total_bytes=3 * MiB)
+LEGACY = SetPolicy(entries=1000, total_bytes=2 * 1024 * MiB,
+    member_bytes=250 * MiB, ratio=100, directory_bytes=4 * MiB)
+
+
+def refusal(archive: bytes, *, policy: SetPolicy = LEGACY, **kwargs):
+    return z.refusal(archive, policy=policy, **kwargs)
+
+
+def accept(archive: bytes, *, policy: SetPolicy = LEGACY, **kwargs):
+    return z.accept(archive, policy=policy, **kwargs)
 
 RATIO = "comparison_zip_compression_ratio"
 MEMBER_SIZE = "comparison_zip_member_size"
@@ -116,12 +126,11 @@ def test_a_bomb_inside_a_nested_archive_is_refused_by_the_same_rule() -> None:
 
 
 def test_the_production_bounds_are_the_ruled_figures() -> None:
-    assert SET_TOTAL_BYTES == 2 * 1024 * MiB, "ADR-0025 decision 12: 2 GiB in all"
-    assert SET_MEMBER_BYTES == 250 * MiB, "the existing envelope's PDF bound"
-    assert SET_MAX_ENTRIES == 1000
+    assert SET_TOTAL_BYTES == SET_MEMBER_BYTES == 2**63 - 1
+    assert SET_MAX_ENTRIES == 2**31 - 1
     assert DEFAULT_SET_POLICY == SetPolicy(
-        entries=1000, total_bytes=2 * 1024 * MiB, member_bytes=250 * MiB, ratio=100,
-        directory_bytes=4 * MiB, nesting_levels=1,
+        entries=2**31 - 1, total_bytes=2**63 - 1, member_bytes=2**63 - 1,
+        ratio=2**63 - 1, directory_bytes=2**63 - 1, nesting_levels=1,
     )
 
 
@@ -143,7 +152,7 @@ def test_the_total_bound_is_inclusive_to_the_byte() -> None:
     """Exactly 2 GiB declared passes the total rule (and then meets the ratio rule, because the
     headers lie about nine bytes); one byte more is the total rule's."""
     sizes = [250 * MiB] * 8 + [48 * MiB]
-    assert sum(sizes) == SET_TOTAL_BYTES
+    assert sum(sizes) == LEGACY.total_bytes
     at = build(*[entry(f"s{i}.pdf", PDF_HEADER, declared_size=s) for i, s in enumerate(sizes)])
     assert refusal(at) == RATIO
     sizes[-1] += 1
@@ -583,7 +592,7 @@ def test_no_portal_constraint_name_ever_leaves_the_set_reader() -> None:
         build(entry("a.pdf", b"x", flags=1)), build(entry("a.pdf", b"x", method=12)),
         build(entry("a.pdf", b"x", external_attr=zw.SYMLINK)), build(entry("a.txt", b"x")),
         b"not a zip at all", build(), z.with_entry_count(build(pdf("a.pdf")), 5000),
-        build(*[pdf(f"{i}.pdf") for i in range(SET_MAX_ENTRIES + 1)]),
+        build(*[pdf(f"{i}.pdf") for i in range(LEGACY.entries + 1)]),
         build(entry("a.pdf", PDF_HEADER, declared_size=250 * MiB + 1)),
     ]
     seen = {refusal(archive) for archive in hostile}

@@ -30,8 +30,11 @@ export function useRunCostApproval(intent: StartRunIntent) {
   const current = estimate !== null && approval?.signature === intent.signature && approval.digest === estimate.estimate_digest ? approval : null;
   const ceiling = current?.ceiling ?? '';
   const approved = current?.approved === true;
-  const amount = estimate === null ? null : ceilingMicros(ceiling, Math.max(estimate.billing === 'metered' ? 1 : 0, estimate.estimated_cost_micros));
-  const draftAmount = approval?.signature === intent.signature ? ceilingMicros(approval.ceiling, approval.minimum) : null;
+  const uncapped = estimate?.relaxed_limits === true;
+  const amount = estimate === null ? null : uncapped ? 0
+    : ceilingMicros(ceiling, Math.max(estimate.billing === 'metered' ? 1 : 0, estimate.estimated_cost_micros));
+  const draftAmount = approval?.signature === intent.signature
+    ? uncapped ? 0 : ceilingMicros(approval.ceiling, approval.minimum) : null;
   const draftConsent: RunCostConsent | undefined = draftAmount === null || approval === null ? undefined
     : { estimate_digest: approval.digest, ceiling_micros: draftAmount, confirmed: true };
   const consent: RunCostConsent | undefined = estimate !== null && approved && amount !== null
@@ -47,7 +50,8 @@ export function useRunCostApproval(intent: StartRunIntent) {
       reading.reset();
       reading.mutate({ signature: intent.signature, body: startRunBody(intent.command('estimate-only')) }, {
         onSuccess: ({ signature, estimate: value }) => setApproval({ signature, digest: value.estimate_digest,
-          minimum: Math.max(value.billing === 'metered' ? 1 : 0, value.estimated_cost_micros), ceiling: microsAsUsd(value.recommended_ceiling_micros), approved: false }),
+          minimum: value.relaxed_limits ? 0 : Math.max(value.billing === 'metered' ? 1 : 0, value.estimated_cost_micros),
+          ceiling: value.relaxed_limits ? '0' : microsAsUsd(value.recommended_ceiling_micros), approved: false }),
       });
     },
     setCeiling: (value: string) => setApproval((previous) => previous === null ? null : { ...previous, ceiling: value, approved: false }),
