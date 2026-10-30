@@ -119,6 +119,7 @@ from auditmanager.findings.public import (
     run_grounding_gate,
     select_terminal,
 )
+from auditmanager.ingest.public import CommandRepository
 from auditmanager.jobs.public import (
     AttemptAuthority,
     AttemptContext,
@@ -145,6 +146,7 @@ from auditmanager.runs.v3_group import TrustedPackRegistry
 from auditmanager.runs.window_reply_custody import WindowReplyCustody
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import (
+    CommandId,
     ModelCallId,
     RunId,
     VersionUid,
@@ -481,6 +483,7 @@ def _run_text_analysis_stage(
     text_character_count: int | None = None,
     window_custody: Any = None,
     textless_pages: tuple[int, ...] | None = None,
+    relaxed_limits: bool = False,
 ) -> tuple[StageResult, Mapping[str, Any] | None, AttemptSummary]:
     """Run ``text_analysis``, retrying transport failures, and publish its artifact.
 
@@ -582,6 +585,7 @@ def _run_text_analysis_stage(
         recognised_characters=recognised_total_characters(recognised_pages),
         # `SECTION-JUDGE-FIXES-01`: the call carries this profile's own prompt and schema, not the АР v1 pair.
         bundle=profile.prompt_bundle,
+        relaxed_limits=relaxed_limits,
     )
 
     while True:
@@ -798,6 +802,20 @@ def _bind_provider(
     return binding
 
 
+def _section_relaxed_limits(session: Session, run: RunRow) -> bool:
+    """Read a section Run's accepted choice from its command after any restart."""
+    if run.command_id is None:
+        return False  # Legacy in-process Runs predate command custody.
+    command = CommandRepository().get(session, CommandId.parse(run.command_id))
+    if command.command_type not in {"start_audit_run", "reaudit_run"} or command.state != "succeeded":
+        raise DomainError(ErrorCode.INTERNAL_ERROR, message="section Run has no accepted command")
+    outcome = command.outcome
+    if (outcome is None or outcome.get("run_id") != run.run_id
+            or type(outcome.get("relaxed_limits", False)) is not bool):
+        raise DomainError(ErrorCode.INTERNAL_ERROR, message="section Run limit policy is invalid")
+    return outcome.get("relaxed_limits", False)
+
+
 def _execute_run_body(
     session: Session,
     run_id: str,
@@ -882,6 +900,8 @@ def _execute_run_body(
     v3_profile = run.analysis_profile_id == str(AR_V3_BETA_PROFILE_ID)
     v3_bundle = run.prompt_bundle_id == str(AR_V3_BETA_BUNDLE_ID)
     v3_exact = v3_profile and v3_bundle
+    relaxed_limits = False if v3_exact else _section_relaxed_limits(session, run)
+    meter.enforce_ceiling = not relaxed_limits
     if (v3_profile or v3_bundle) and (
         not v3_exact
         or not isinstance(ar_v3_pack_registry, TrustedPackRegistry)
@@ -895,6 +915,10 @@ def _execute_run_body(
             prompt_bundle_id=run.prompt_bundle_id,
         )
     text_profile = None if v3_exact else _pinned_text_profile(run, text_profiles)
+    if text_profile is not None:
+        output_cap = text_profile.prompt_bundle.max_output_tokens
+        if (relaxed_limits and output_cap != 64_000) or (not relaxed_limits and output_cap == 64_000):
+            raise DomainError(ErrorCode.INTERNAL_ERROR, message="section Run limit policy and bundle disagree")
 
     # The run declares a provider mode; the adapter *is* one. Nothing compared them, so a
     # run started with provider_mode="live" and executed entirely by the recorded adapter
@@ -1145,6 +1169,7 @@ def _execute_run_body(
                 call=binding.call,
                 text_character_count=version.text_character_count,
                 textless_pages=version.textless_pages,
+                relaxed_limits=relaxed_limits,
                 window_custody=None if version.text_character_count is None else WindowReplyCustody(
                     session=session, jobs=job_repo, authority=authority, store=text_store,
                     mode=binding.adapter.provider_mode,

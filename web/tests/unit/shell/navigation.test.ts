@@ -24,19 +24,15 @@ import {
   UNKNOWN_ROLE,
 } from './subjects';
 
-/** The menu as plain text: `Главная`, then `Группа: пункт, пункт`. */
+/** The menu as plain text: `Группа: пункт, пункт`. The brand links home separately. */
 function outline(navigation: Navigation): string[] {
-  return [
-    ...(navigation.home === null ? [] : [`${navigation.home.label} ${navigation.home.address}`]),
-    ...navigation.groups.map(
-      (group) => `${group.label}: ${group.items.map((item) => `${item.label} ${item.address}`).join(', ')}`,
-    ),
-  ];
+  return navigation.groups.map(
+    (group) => `${group.label}: ${group.items.map((item) => `${item.label} ${item.address}`).join(', ')}`,
+  );
 }
 
 /** `R-66`, written out by hand from the ruling — never derived from the registry it checks. */
 const R66 = [
-  'Главная /',
   'Работа: Проекты /projects, Дашборд /dashboard, Оптимизация разделов /section-optimisation, Диспетчер /dispatcher, Сравнение версий /version-comparison',
   'Знания: База знаний /knowledge-base, Блоки /blocks, Нормы /norms',
   'Система: Журнал выполнения /logs, Исполнители /workers, Настройки анализа /analysis-settings, Очередь /queue',
@@ -44,7 +40,7 @@ const R66 = [
 const ADMIN_MENU = 'Администрирование: Пользователи /admin/users, Заявки на регистрацию /admin/registrations';
 
 describe('the live registry gives exactly R-66', () => {
-  it('to a complete expert: Главная, then Работа, Знания, Система, in that order and with those items', () => {
+  it('to a complete expert: Работа, Знания, Система, in that order and with those items', () => {
     expect(outline(buildNavigation(EXPERT))).toEqual(R66);
   });
 
@@ -53,9 +49,9 @@ describe('the live registry gives exactly R-66', () => {
     expect(outline(buildNavigation(UNKNOWN_ROLE)), UNKNOWN_ROLE.displayLabel).toEqual(R66);
   });
 
-  it('R-80: offers a complete session with no role Главная alone', () => {
-    expect(outline(buildNavigation(NO_ROLES))).toEqual(['Главная /']);
-    expect(outline(buildNavigation({ ...NO_ROLES, roles: ['auditor'] }))).toEqual(['Главная /']);
+  it('R-80: offers a complete session with no role no product navigation', () => {
+    expect(outline(buildNavigation(NO_ROLES))).toEqual([]);
+    expect(outline(buildNavigation({ ...NO_ROLES, roles: ['auditor'] }))).toEqual([]);
   });
 
   it('adds the two administrator links last only for a complete admin', () => {
@@ -87,7 +83,7 @@ describe('the live registry gives exactly R-66', () => {
 
   it('offers no row of a group the bar does not show', () => {
     for (const screen of SCREEN_REGISTRY.filter((entry) => entry.inMenu)) {
-      expect(['home', ...MENU_GROUPS], screen.address).toContain(screen.group);
+      expect(MENU_GROUPS, screen.address).toContain(screen.group);
       expect(screen.address, 'a menu row is an address a link can carry').not.toContain('[');
     }
   });
@@ -95,12 +91,12 @@ describe('the live registry gives exactly R-66', () => {
 
 describe('a session that may open no session screen sees no group', () => {
   it('a guest', () => {
-    expect(buildNavigation(null)).toEqual({ home: null, groups: [] });
+    expect(buildNavigation(null)).toEqual({ groups: [] });
   });
 
   it('a default credential, and an incomplete profile — whose account menu is how they move on', () => {
-    expect(buildNavigation(DEFAULT_CREDENTIAL)).toEqual({ home: null, groups: [] });
-    expect(buildNavigation(INCOMPLETE_PROFILE)).toEqual({ home: null, groups: [] });
+    expect(buildNavigation(DEFAULT_CREDENTIAL)).toEqual({ groups: [] });
+    expect(buildNavigation(INCOMPLETE_PROFILE)).toEqual({ groups: [] });
   });
 
   it('renders no navigation landmark at all for an empty menu', () => {
@@ -207,9 +203,10 @@ describe('the current group and item', () => {
     expect(currentLinks(markup)).toEqual([]);
   });
 
-  it('marks Главная as the page, and nothing on an unregistered address or without a pathname', () => {
-    expect(currentLinks(draw('/'))).toEqual(['/', '/']);
-    expect(currentButtons(draw('/'))).toEqual(['Меню']);
+  it('offers no duplicate home link, and marks nothing current on home or an unknown address', () => {
+    expect(currentLinks(draw('/'))).toEqual([]);
+    expect(currentButtons(draw('/'))).toEqual([]);
+    expect(draw('/')).not.toContain('href="/"');
     for (const pathname of ['/no-such-screen', null]) {
       const markup = draw(pathname);
       expect(markup).not.toContain('aria-current');

@@ -30,7 +30,7 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import type { UseMutationResult } from '@tanstack/react-query';
-import { useCallback, useSyncExternalStore } from 'react';
+import { useCallback, useState, useSyncExternalStore } from 'react';
 
 import type { ArV3BetaGroup, VersionUid } from '@/shared/api';
 import { useIntentKey } from '@/shared/lib';
@@ -45,6 +45,8 @@ export interface ArV3GroupStartIntent {
   readonly inFlight: boolean;
   /** The start's observer, held by the caller; the control sends through it and reads it. */
   readonly mutation: UseMutationResult<ArV3BetaGroup, unknown, StartArV3GroupCommand>;
+  readonly relaxedLimits: boolean;
+  readonly setRelaxedLimits: (value: boolean) => void;
 }
 
 /**
@@ -69,8 +71,19 @@ function useStartPending(versionUid: VersionUid): boolean {
 }
 
 export function useArV3GroupStartIntent(versionUid: VersionUid): ArV3GroupStartIntent {
-  const idempotencyKey = useIntentKey(`start-ar-v3-group:${versionUid}`);
+  const [relaxedLimits, setRelaxedLimits] = useState(false);
+  const idempotencyKey = useIntentKey(`start-ar-v3-group:${versionUid}:${relaxedLimits ? 'relaxed' : 'standard'}`);
   const mutation = useStartArV3Group();
   const inFlight = useStartPending(versionUid);
-  return { idempotencyKey, inFlight, mutation };
+  return {
+    idempotencyKey,
+    inFlight,
+    mutation,
+    relaxedLimits,
+    setRelaxedLimits: (value) => {
+      if (inFlight || mutation.isPending) return;
+      mutation.reset();
+      setRelaxedLimits(value);
+    },
+  };
 }

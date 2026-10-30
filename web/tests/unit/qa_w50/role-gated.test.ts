@@ -79,10 +79,7 @@ const BOTH = subject(['expert', 'admin']);
 const NONE = subject([]);
 
 function addressesIn(navigation: ReturnType<typeof buildNavigation>): string[] {
-  return [
-    ...(navigation.home === null ? [] : [navigation.home.address]),
-    ...navigation.groups.flatMap((group) => group.items.map((item) => item.address)),
-  ];
+  return navigation.groups.flatMap((group) => group.items.map((item) => item.address));
 }
 
 // ------------------------------------------------------------------- 6. absent from the menu
@@ -132,7 +129,6 @@ describe('6 (fixture): admin screens are absent from the menu for an expert', ()
     for (const changes of [{ isDefaultCredential: true }, { profileComplete: false }]) {
       const navigation = buildNavigation({ ...BOTH, ...changes }, FIXTURE);
       expect(navigation.groups, JSON.stringify(changes)).toEqual([]);
-      expect(navigation.home, JSON.stringify(changes)).toBeNull();
     }
   });
 });
@@ -150,9 +146,8 @@ describe('6 (live): the administrator rows are role-gated in the real registry',
     for (const who of [EXPERT, NONE]) {
       expect(buildNavigation(who).groups.map((group) => group.group)).not.toContain('admin');
     }
-    // `R-80`: an empty role set sees no product group at all — only Главная.
+    // `R-80`: an empty role set sees no product group; the brand still links home.
     expect(buildNavigation(NONE).groups).toEqual([]);
-    expect(buildNavigation(NONE).home?.address).toBe('/');
     for (const who of [ADMIN, BOTH]) {
       expect(buildNavigation(who).groups.at(-1)?.items.map((item) => item.address)).toEqual([
         '/admin/users', '/admin/registrations',

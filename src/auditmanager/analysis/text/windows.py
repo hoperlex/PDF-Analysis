@@ -24,7 +24,7 @@ Nothing here touches the database, the blob store or a provider.
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Final, Mapping, Protocol, Sequence
 
 from auditmanager.analysis.text.adapter import ModelRequest, ModelResponse, build_request
@@ -35,7 +35,7 @@ from auditmanager.analysis.text.chunk_preflight import (
     partition_text_layer,
 )
 from auditmanager.analysis.text.lock import STAGE_ID, ProviderLock
-from auditmanager.analysis.text.prompt import PAGE_BANNER, PromptBundle, canonical_json
+from auditmanager.analysis.text.prompt import MAX_OUTPUT_TOKENS, PAGE_BANNER, PromptBundle, canonical_json
 from auditmanager.analysis.text.recognised_input import (
     NOTICE,
     RecognisedPage,
@@ -96,6 +96,25 @@ class WindowPolicy:
             raise ValueError("a windowed policy takes at least two windows")
 
 
+RELAXED_WINDOW_SIZING_USD_V1 = 1.0
+
+
+def relaxed_window_characters(
+    model_id: str, bundle: PromptBundle, *, lock: ProviderLock | None = None,
+) -> int:
+    """Stable operational window size, independent of a mutable cost ceiling.
+
+    The 1.0-USD baseline is a versioned sizing calibration, not a spending halt.
+    Its 16k reserve matches the old safe one-call window size; the actual request
+    uses the immutable 64k bundle and the provider can still reject its context.
+    """
+    return input_budget_characters(
+        model_id, RELAXED_WINDOW_SIZING_USD_V1,
+        lock=lock,
+        bundle=replace(bundle, max_output_tokens=MAX_OUTPUT_TOKENS),
+    )
+
+
 def text_window_policy(
     *,
     text_character_count: int | None,
@@ -105,6 +124,7 @@ def text_window_policy(
     max_windows: int = MAX_ANALYSIS_WINDOWS,
     recognised_characters: int = 0,
     bundle: PromptBundle | None = None,
+    relaxed_limits: bool = False,
 ) -> WindowPolicy | None:
     """The policy for a run, or ``None`` when the run is analysed in one call exactly as before.
 
@@ -121,6 +141,10 @@ def text_window_policy(
     ``bundle`` (`SECTION-JUDGE-FIXES-01`) is the run's own prompt bundle: the one-call figure, and with it the
     size of a window, subtracts that bundle's system prompt and schema instead of the АР v1 bundle's. A volume
     between the section's figure and the АР figure used to be sent whole and is now windowed.
+
+    In temporary raised-limit mode the monetary ceiling no longer chooses a window size. The fixed V1
+    sizing baseline above and the normal output reserve keep the partition stable across worker restarts;
+    the actual request uses the Run's distinct 64k bundle. The 12-window watchdog bound still applies.
     """
     if text_character_count is None:
         return None
@@ -130,7 +154,12 @@ def text_window_policy(
         raise ValueError("max_windows must be a positive whole number")
     if type(recognised_characters) is not int or recognised_characters < 0:
         raise ValueError("recognised_characters must be a non-negative whole number")
-    call_budget = input_budget_characters(model_id, ceiling_usd, lock=lock, bundle=bundle)
+    if relaxed_limits:
+        if bundle is None:
+            raise ValueError("a relaxed window policy requires the pinned bundle")
+        call_budget = relaxed_window_characters(model_id, bundle, lock=lock)
+    else:
+        call_budget = input_budget_characters(model_id, ceiling_usd, lock=lock, bundle=bundle)
     if text_character_count + recognised_characters <= call_budget or max_windows == 1:
         return None
     return WindowPolicy(window_characters=call_budget, max_windows=max_windows)

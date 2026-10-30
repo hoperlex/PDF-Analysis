@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:auditmanager:analysis:stage-registry:v1",
   "title": "AnalysisStageRegistry v1",
-  "contract_version": "1.10.0",
+  "contract_version": "1.12.0",
   "description": "Sole target source of truth for canonical analysis stage identity, version, dependencies, required input/output roles, execution scope and status semantics. No legacy stage list is authoritative.",
   "type": "object",
   "additionalProperties": false,
@@ -25,7 +25,7 @@
       "const": "auditmanager.analysis.stage_registry"
     },
     "contract_version": {
-      "const": "1.10.0"
+      "const": "1.12.0"
     },
     "status": {
       "const": "candidate"
@@ -127,7 +127,7 @@
           "const": "auditmanager.analysis.legacy_stage_name_map"
         },
         "name_map_contract_version": {
-          "const": "1.10.0"
+          "const": "1.12.0"
         },
         "site_map_contract": {
           "const": "auditmanager.analysis.legacy_stage_map"

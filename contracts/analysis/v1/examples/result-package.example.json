@@ -1,5 +1,5 @@
 {
-  "contract_version": "1.10.0",
+  "contract_version": "1.12.0",
   "attempt_authority": {
     "run_id": "run_NC8B8QARV9SZPKVF59QSXCV53K",
     "job_id": "job_HHDBVZETDEPXT3WKNRV16PAW6S",
@@ -8,11 +8,11 @@
   },
   "stage_registry": {
     "contract": "auditmanager.analysis.stage_registry",
-    "contract_version": "1.10.0"
+    "contract_version": "1.12.0"
   },
   "stage_results": [
     {
-      "contract_version": "1.10.0",
+      "contract_version": "1.12.0",
       "stage_id": "source_preparation",
       "stage_version": "1.0.0",
       "status": "succeeded",
@@ -38,7 +38,7 @@
       }
     },
     {
-      "contract_version": "1.10.0",
+      "contract_version": "1.12.0",
       "stage_id": "page_geometry_extraction",
       "stage_version": "1.0.0",
       "status": "succeeded",
@@ -64,7 +64,7 @@
       }
     },
     {
-      "contract_version": "1.10.0",
+      "contract_version": "1.12.0",
       "stage_id": "document_context_build",
       "stage_version": "1.0.0",
       "status": "succeeded",
@@ -83,7 +83,7 @@
       }
     },
     {
-      "contract_version": "1.10.0",
+      "contract_version": "1.12.0",
       "stage_id": "text_analysis",
       "stage_version": "1.0.0",
       "status": "succeeded",
@@ -102,7 +102,7 @@
       }
     },
     {
-      "contract_version": "1.10.0",
+      "contract_version": "1.12.0",
       "stage_id": "block_analysis",
       "stage_version": "1.0.0",
       "status": "partial",
@@ -130,7 +130,7 @@
       }
     },
     {
-      "contract_version": "1.10.0",
+      "contract_version": "1.12.0",
       "stage_id": "finding_merge",
       "stage_version": "1.0.0",
       "status": "succeeded",
@@ -149,7 +149,7 @@
       }
     },
     {
-      "contract_version": "1.10.0",
+      "contract_version": "1.12.0",
       "stage_id": "finding_review",
       "stage_version": "1.0.0",
       "status": "succeeded",
@@ -167,7 +167,7 @@
       }
     },
     {
-      "contract_version": "1.10.0",
+      "contract_version": "1.12.0",
       "stage_id": "finding_correction",
       "stage_version": "1.0.0",
       "status": "skipped",
@@ -182,7 +182,7 @@
       }
     },
     {
-      "contract_version": "1.10.0",
+      "contract_version": "1.12.0",
       "stage_id": "norm_verification",
       "stage_version": "1.0.0",
       "status": "succeeded",

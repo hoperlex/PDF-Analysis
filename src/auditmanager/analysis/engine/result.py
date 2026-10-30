@@ -32,7 +32,7 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 
 #: The one contract version this package speaks. A consumer reading anything else
 #: fails closed rather than guessing.
-CONTRACT_VERSION: Final[str] = "1.10.0"
+CONTRACT_VERSION: Final[str] = "1.12.0"
 
 _METRIC_KEY: Final[re.Pattern[str]] = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _ARTIFACT_ROLE: Final[re.Pattern[str]] = re.compile(

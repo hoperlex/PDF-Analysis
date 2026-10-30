@@ -56,6 +56,8 @@ const KEY = 'ik-one-intent';
 const intent = () => ({
   idempotencyKey: KEY,
   inFlight: false,
+  relaxedLimits: false,
+  setRelaxedLimits: () => undefined,
   mutation: {
     ...settled.mutation,
     mutate: (...args: unknown[]) => settled.mutate.push(args),
@@ -64,7 +66,7 @@ const intent = () => ({
 const GROUP = { group_id: GROUP_ID, project_uid: PROJECT_UID, version_uid: VERSION_UID } as ArV3BetaGroup;
 
 type Captured = {
-  mutationFn: (input: { versionUid: string; idempotencyKey: string }) => Promise<ArV3BetaGroup>;
+  mutationFn: (input: { versionUid: string; idempotencyKey: string; relaxedLimits?: boolean }) => Promise<ArV3BetaGroup>;
   onSuccess: (result: ArV3BetaGroup) => void;
 };
 
@@ -89,6 +91,16 @@ describe('the start command', () => {
       [{ body: { version_uid: VERSION_UID }, idempotencyKey: KEY }],
       [{ body: { version_uid: VERSION_UID }, idempotencyKey: KEY }],
     ]);
+  });
+
+  it('sends the temporary choice only when enabled', async () => {
+    settled.identity = true;
+    vi.mocked(startArV3BetaGroup).mockResolvedValue({ data: GROUP } as never);
+    const command = useStartArV3Group() as unknown as Captured;
+    await command.mutationFn({ versionUid: VERSION_UID, idempotencyKey: KEY, relaxedLimits: true });
+    expect(vi.mocked(startArV3BetaGroup)).toHaveBeenCalledWith({
+      body: { version_uid: VERSION_UID, relaxed_limits: true }, idempotencyKey: KEY,
+    });
   });
 
   it('an accepted start invalidates the run lists, the dashboard and every execution read', () => {

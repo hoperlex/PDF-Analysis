@@ -257,7 +257,7 @@ function ports(script: (call: Call, attempt: number) => unknown = () => undefine
 function refusal(code: 'dependency_unavailable' | 'conflict' | 'storage_integrity_error', retryable: boolean): ApiError {
   return new ApiError(
     code === 'conflict' ? 409 : code === 'dependency_unavailable' ? 503 : 422,
-    { contract_version: '1.10.0', error_code: code, message: 'm', correlation_id: 'c', retryable },
+    { contract_version: '1.12.0', error_code: code, message: 'm', correlation_id: 'c', retryable },
     'c',
   );
 }

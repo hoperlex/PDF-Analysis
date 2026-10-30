@@ -37,7 +37,7 @@ export const EXPERT: Account = {
 export const READER: Account = { ...EXPERT, roles: ['admin'], login: 'a@suite.invalid' };
 
 export function product(modules: ProductVersion['comparison_modules']): ProductVersion {
-  return { build_id: 'build-1', contract_version: '1.10.0', product_version: '0.9.0', ...(modules === undefined ? {} : { comparison_modules: modules }) };
+  return { build_id: 'build-1', contract_version: '1.12.0', product_version: '0.9.0', ...(modules === undefined ? {} : { comparison_modules: modules }) };
 }
 
 export function version(uidOf: string, ordinal: number, file: string): DocumentVersion {
@@ -52,7 +52,7 @@ export function refusal(code: 'dependency_unavailable' | 'conflict' | 'internal_
   return new ApiError(
     code === 'dependency_unavailable' ? 503 : code === 'conflict' ? 409 : 500,
     {
-      contract_version: '1.10.0', error_code: code, message: 'A caller-safe sentence in English.',
+      contract_version: '1.12.0', error_code: code, message: 'A caller-safe sentence in English.',
       correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100', retryable: code !== 'conflict', details,
     },
     '0f0e9d8c-7b6a-4948-b726-150413021100',

@@ -913,7 +913,9 @@ class RunAdapter(_SessionHolder):
         # does not.
         self._input_budget_characters = input_budget_characters
 
-    def start_ar_v3_group(self, *, version_uid: str, idempotency_key: str) -> models.ArV3BetaGroup:
+    def start_ar_v3_group(
+        self, *, version_uid: str, idempotency_key: str, relaxed_limits: bool = False,
+    ) -> models.ArV3BetaGroup:
         """Create the six pinned Runs, queue them, and hand them to the carrier (`PROD-11D`).
 
         The ordinary ``start_run`` does three things after its command and this method did
@@ -935,6 +937,7 @@ class RunAdapter(_SessionHolder):
                 session,
                 version_uid=version_uid,
                 idempotency_key=idempotency_key,
+                relaxed_limits=relaxed_limits,
                 provider_mode=self._provider_mode,
                 pack=(None if self._ar_v3_pack_registry is None
                       else self._ar_v3_pack_registry.select_beta()),
@@ -1002,6 +1005,7 @@ class RunAdapter(_SessionHolder):
         provider_mode: str | None = None,
         executor_connection_id: str | None = None,
         preset_id: str | None = None,
+        relaxed_limits: bool = False,
     ) -> Any:
         """A caller-supplied provider mode is refused, never silently overridden.
 
@@ -1058,6 +1062,9 @@ class RunAdapter(_SessionHolder):
                 executor_connection_id=executor_connection_id,
                 preset_id=preset_id,
                 preset_resolver=self._preset_resolver,
+                relaxed_limits=relaxed_limits,
+                text_profiles=self._text_profiles,
+                operational_model_id=self._provider_config.model_id,
             )
             if not started.replayed:
                 # `D-20`. `created -> queued` happens here, in the transaction that

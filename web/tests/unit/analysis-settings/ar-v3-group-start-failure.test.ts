@@ -37,7 +37,7 @@ function refusal(
   options: { details?: Record<string, string | number | boolean | null>; retryable?: boolean } = {},
 ): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.10.0',
+    contract_version: '1.12.0',
     error_code: code,
     message: 'A caller-safe sentence.',
     correlation_id: 'cid-group',
@@ -171,18 +171,21 @@ function view(failure: ArV3GroupStartFailure | null, pending = false): string {
       pending,
       failure,
       onSend: () => undefined,
+      relaxedLimits: false,
+      onRelaxedLimitsChange: () => undefined,
     }),
   );
 }
 
 describe('the control shows each refusal with only the actions that can help', () => {
-  it('idle: one button, the fixed note, no selector and no failure', () => {
+  it('idle: one button, the limit switch and no failure', () => {
     const markup = view(null);
     expect(markup).toContain('>Запустить шесть проверок АР v3</button>');
     expect(markup).toContain('Шесть отдельных прогонов; результат — предварительные цитаты для проверки экспертом, без числовых выводов.');
     expect(markup).not.toContain('<select');
     expect(markup).not.toContain('type="radio"');
-    expect(markup).not.toContain('<input');
+    expect(markup).toContain('type="checkbox"');
+    expect(markup).toContain('Стандартный бюджет стоимости; ответ до 16 000 токенов.');
     expect(markup).not.toContain('data-ar-v3-group-failure');
     expect(markup.match(/<button\b/g)).toHaveLength(1);
     expect(markup).not.toContain('disabled');

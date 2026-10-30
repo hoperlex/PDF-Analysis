@@ -11,6 +11,25 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
+## Version `1.12.0`
+
+`HOTFIX-SECTION-LIMITS-BACKEND-20261030` adds optional `relaxed_limits` to
+`startRun` for all 14 non-AR sections. True selects a separate immutable
+profile/bundle pair with a 64,000-token output request and disables the
+application's per-Run cost halt. The 12-window operational size bound remains.
+Absent or false keeps the old behavior. This is an additive minor change:
+131 paths, 148 operations and 432 schemas remain.
+
+## Version `1.11.0`
+
+`HOTFIX-AI-LIMITS-20261030` adds the optional `relaxed_limits` boolean to
+`startArV3BetaGroup`. Absent or false preserves the current cost ceiling and
+16,000-token output request. True selects no application cost halt for the six
+created Runs and requests up to 64,000 output tokens; provider limits can still
+refuse the request. The flag is part of the command fingerprint and is saved with
+the group command so workers retain it after a restart. This is an additive
+minor change: 131 paths, 148 operations and 432 schemas remain.
+
 ## Version `1.10.0`
 
 `CMP-SEAL-C1` (wave C1 of the comparison modules, `docs/architecture/adr/ADR-0025-comparison-modules.md`)

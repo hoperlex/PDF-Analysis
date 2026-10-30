@@ -3,7 +3,7 @@
 /**
  * The navigation in the bar — `W50-PLAN.md` §3.5.
  *
- * `Главная` is a link; each group the session may open (`buildNavigation`) is a `Disclosure`
+ * Each group the session may open (`buildNavigation`) is a `Disclosure`
  * — the APG disclosure pattern from `@/shared/ui`, because its items are links and not menu
  * items. The group holding the page being shown carries `aria-current="true"`, and the item
  * that is that page `aria-current="page"`.
@@ -26,14 +26,13 @@
  * any pathname without a router.
  */
 
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ComponentType } from 'react';
 
 import type { DisclosureProps } from '@/shared/ui';
 import { Disclosure } from '@/shared/ui';
 
-import type { CurrentScreen, Navigation, NavigationGroup, NavigationItem } from './navigation';
+import type { CurrentScreen, Navigation, NavigationGroup } from './navigation';
 import { currentScreen } from './navigation';
 import styles from './app-frame.module.css';
 
@@ -60,40 +59,22 @@ function links(group: NavigationGroup, current: CurrentScreen | null) {
   }));
 }
 
-function HomeLink({ home, current }: { readonly home: NavigationItem; readonly current: CurrentScreen | null }) {
-  return (
-    <Link
-      className={`am-app__nav ${styles.home}`}
-      href={home.address}
-      aria-current={current?.address === home.address ? 'page' : undefined}
-    >
-      {home.label}
-    </Link>
-  );
-}
-
 export function FrameNavigationView({ navigation, pathname, disclosure = Disclosure }: FrameNavigationViewProps) {
   const Group = disclosure;
-  const { home, groups } = navigation;
-  if (home === null && groups.length === 0) return null;
+  const { groups } = navigation;
+  if (groups.length === 0) return null;
   const current = currentScreen(pathname);
   const inGroup = (group: NavigationGroup): boolean => current?.group === group.group;
   return (
     <nav className={styles.nav} aria-label="Разделы">
       <div className={styles.row} data-nav-state="row">
-        {home !== null ? <HomeLink home={home} current={current} /> : null}
         {groups.map((group) => (
           <Group key={group.group} label={group.label} current={inGroup(group)} links={links(group, current)} />
         ))}
       </div>
       <div className={styles.stacked} data-nav-state="stacked">
-        <Group label="Меню" current={current !== null && (current.address === home?.address || groups.some(inGroup))}>
+        <Group label="Меню" current={current !== null && groups.some(inGroup)}>
           <ul className={styles.stackedList}>
-            {home !== null ? (
-              <li className={styles.stackedItem}>
-                <HomeLink home={home} current={current} />
-              </li>
-            ) : null}
             {groups.map((group) => (
               <li className={styles.stackedItem} key={group.group}>
                 <Group label={group.label} layout="inline" current={inGroup(group)} links={links(group, current)} />

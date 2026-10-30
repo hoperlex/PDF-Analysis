@@ -31,6 +31,7 @@ def build_ar_v3_group_routes(router: APIRouter, groups: ArV3GroupPort) -> None:
     ) -> WireResponse:
         group = groups.start_ar_v3_group(
             version_uid=body.version_uid, idempotency_key=idempotency_key,
+            relaxed_limits=body.relaxed_limits is True,
         )
         return json_response(202, encode_json(group.model_dump(mode="json")))
 
