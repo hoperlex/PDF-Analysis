@@ -21,6 +21,16 @@ ANSWER_TABLES = {
 
 
 class StageAiRepository:
+    def cancel_pending_units(self, session: Session, run_id: str, *, excluding_job_id: str | None = None,
+                             excluding_unit_id: str | None = None) -> int:
+        """Retire mutable scheduling state without altering saved source or reply data."""
+        return int(session.execute(text(
+            "UPDATE stage_ai_unit SET state='cancelled',updated_at=clock_timestamp() "
+            "WHERE stage_chain_run_id=:run AND state IN ('queued','running') "
+            "AND (CAST(:job AS text) IS NULL OR comparison_ai_job_id IS DISTINCT FROM :job) "
+            "AND (CAST(:unit AS text) IS NULL OR stage_ai_unit_id<>:unit)"
+        ), {"run": run_id, "job": excluding_job_id, "unit": excluding_unit_id}).rowcount)
+
     def generation(self, session: Session, run_id: str, job_id: str | None) -> int:
         if job_id is None:
             return 0
