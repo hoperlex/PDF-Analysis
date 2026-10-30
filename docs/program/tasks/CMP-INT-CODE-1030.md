@@ -71,6 +71,7 @@ The remaining C3/C4 functional roadmap is implemented, integrated by one owner a
 - `web/tests/unit/run/polling.test.ts`
 - `tests/integration/composition/**`
 - `tests/integration/comparison/stage_run/**` (runtime integration regression)
+- Final serial metadata reconciliation after `BETA-COST-PREFLIGHT-1030`: current surface prose in `src/auditmanager/api/**`, `infra/deploy/**`, `web/src/app/api/**`, `docs/program/P02_SEAMS.md`; focused API surface assertions in `tests/contract/api_v1/**`; obsolete stub assertion in `tests/integration/composition/test_comparison_stage_c4_wiring.py`. Historical measurements remain unchanged. No functional API, migration, dependency or deployment change is authorised by this metadata pass.
 
 ## Forbidden hotspots
 - `origin/main`, force-push, deployment, unrelated worktree changes and owner files

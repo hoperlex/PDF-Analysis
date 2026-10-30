@@ -1,4 +1,4 @@
-"""The C3 routes are keyed expert commands and typed module-gated stubs."""
+"""The stage routes are keyed expert commands behind a module gate."""
 
 from __future__ import annotations
 
@@ -70,8 +70,8 @@ def test_every_sealed_port_method_refuses_before_work(adapter: type, dependency:
     for modules, expected in (("none", "comparison_modules"),
                               ("versions", "comparison_modules"),
                               ("versions,stages", dependency)):
-        if modules == "versions,stages" and adapter is not ComparisonStageC4Adapter:
-            continue  # C3 operations are served; runtime tests own their domain behavior.
+        if modules == "versions,stages":
+            continue  # C3/C4 are served; composition/runtime tests own their domain behavior.
         port = adapter.__new__(adapter)
         _StagesModuleGate.__init__(port, comparison_modules=modules)
         for name in methods:

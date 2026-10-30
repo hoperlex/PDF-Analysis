@@ -11,7 +11,7 @@ from auditmanager.comparison.ai_jobs.model import AiScope
 from auditmanager.shared.errors import DomainError
 
 OPS = {
-"estimateStageChainRun","resumeStageChainRun","startStageChainBatch","getStageChainBatch",
+"createStageReviewCard","estimateStageChainRun","resumeStageChainRun","startStageChainBatch","getStageChainBatch",
 "pauseStageChainBatch","resumeStageChainBatch","cancelStageChainBatch","listStageAiReviews",
 "listStageClassifications","getStageSynthesis","listStageGraphicEvidence","listStageLinkRepairs",
 "undoStageLinkRepair","listStageChangeCards","getStageChangeCard","applyStageCardVerdicts",
@@ -26,8 +26,8 @@ def test_c4_surface_is_additive_and_authorized() -> None:
     assert doc["info"]["version"] == frozen["info"]["version"] == "1.13.0"
     actual = {op["operationId"] for item in doc["paths"].values() for key,op in item.items()
               if key in {"get","post","put","delete","patch"}}
-    assert OPS <= actual and len(actual) == 253
-    assert len(doc["paths"]) == 227
+    assert OPS <= actual and len(actual) == 256
+    assert len(doc["paths"]) == 230
     assert set(doc["components"]["schemas"]) == set(frozen["components"]["schemas"])
     for item in doc["paths"].values():
         for method,op in item.items():
@@ -37,19 +37,16 @@ def test_c4_surface_is_additive_and_authorized() -> None:
             assert "503" in op["responses"]
 
 
-@pytest.mark.parametrize("modules,dependency",[("none","comparison_modules"),("versions","comparison_modules"),
-                                               ("versions,stages","comparison_stage_c4")])
-def test_every_c4_stub_refuses_before_touching_its_arguments(modules: str, dependency: str) -> None:
+@pytest.mark.parametrize("modules", ["none", "versions"])
+def test_disabled_c4_module_refuses_before_touching_its_arguments(modules: str) -> None:
     adapter = ComparisonStageC4Adapter(None, comparison_modules=modules)
     for name,method in inspect.getmembers(adapter, predicate=inspect.ismethod):
         if name.startswith("_"):
             continue
-        if modules == "versions,stages" and name in {"get_profile_text", "get_assembly"}:
-            continue
         params = inspect.signature(method).parameters
         with pytest.raises(DomainError) as error:
             method(**{key:None for key in params})
-        assert error.value.detail_fields["dependency"] == dependency
+        assert error.value.detail_fields["dependency"] == "comparison_modules"
 
 
 def test_stage_estimate_binds_source_before_the_run_identity_exists() -> None:
