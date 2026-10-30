@@ -170,6 +170,24 @@ class StageAiRepository:
         ), {"job": job_id, "sha": request_sha256}).mappings().first()
         return None if row is None else dict(row)
 
+    def authorize_refusal_retry(self, session: Session, *, run_id: str, job_id: str) -> None:
+        """An explicit resume can retry only a saved proven pre-processing refusal."""
+        rows = session.execute(text(
+            "SELECT stage_ai_unit_id,progress,state FROM stage_ai_unit "
+            "WHERE stage_chain_run_id=:run AND comparison_ai_job_id=:job FOR UPDATE"
+        ), {"run": run_id, "job": job_id}).mappings()
+        for row in rows:
+            progress = dict(row["progress"])
+            refusal = progress.get("provider_refusal", {})
+            if refusal.get("kind") not in {"auth", "quota"} or not (
+                refusal.get("dispatch_class") == "definite_refusal" or refusal.get("retry_safe") is True
+            ):
+                continue
+            progress["manual_resume_retry"] = {
+                "request_key": refusal["request_key"], "call_id": refusal["call_id"],
+            }
+            self.update_unit(session, row["stage_ai_unit_id"], payload=progress, state=row["state"])
+
     def pause_run(self, session: Session, run_id: str, reason: str) -> None:
         session.execute(text(
             "UPDATE stage_chain_run SET state='paused',pause_reason=:reason,updated_at=clock_timestamp() "

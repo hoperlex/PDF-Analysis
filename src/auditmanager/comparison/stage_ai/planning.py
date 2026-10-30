@@ -12,6 +12,7 @@ from auditmanager.comparison.stage_text.fragments import extract_fragments
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 from . import classifier, reviewer, synthesis
+from .loop import CONTEXT_SCHEMA, FOLLOWUP_RESERVE_CHARS, INSTRUCTIONS, VERSION
 from .source import link_components
 from .validation import digest
 
@@ -34,6 +35,7 @@ class StageAiMethod:
             "review": [reviewer.PROMPT_VERSION, reviewer.SYSTEM_PROMPT, reviewer.REVIEW_SCHEMA],
             "classify": [classifier.PROMPT_VERSION, classifier.SYSTEM_PROMPT, classifier.CLASSIFICATION_SCHEMA],
             "synthesize": [synthesis.PROMPT_VERSION, synthesis.SYSTEM_PROMPT, synthesis.SYNTHESIS_SCHEMA],
+            "loop": [VERSION, INSTRUCTIONS, CONTEXT_SCHEMA],
         })
 
     def _profiles(self):
@@ -86,15 +88,20 @@ class StageAiMethod:
             synthesis_chars = chars * 2 + count * 1_000 + 8_000
             if max(review_chars, classification_chars, synthesis_chars) > 240_000:
                 raise DomainError(ErrorCode.VALIDATION_FAILED, field="stage_pair_id", constraint="stage_ai_group_budget")
-            if ("review", group_id) not in completed:
-                call_groups.append(AiCallGroup(calls=review_calls,
-                    prompt_chars=review_chars, output_tokens=16_000))
-            if ("classify", group_id) not in completed:
-                call_groups.append(AiCallGroup(calls=1, prompt_chars=classification_chars,
-                                               output_tokens=12_000))
-            if ("synthesize", group_id) not in completed:
-                call_groups.append(AiCallGroup(calls=1, prompt_chars=synthesis_chars,
-                                               output_tokens=4_000))
+            for kind, calls, prompt_chars, output_tokens in (
+                ("review", review_calls, review_chars, 16_000),
+                ("classify", 1, classification_chars, 12_000),
+                ("synthesize", 1, synthesis_chars, 4_000),
+            ):
+                if (kind, group_id) in completed:
+                    continue
+                # Main, at most one context pass and one coverage pass, plus
+                # one proven-safe technical retry shared by that plan's calls.
+                call_groups.append(AiCallGroup(calls=calls, prompt_chars=prompt_chars,
+                                               output_tokens=output_tokens))
+                call_groups.append(AiCallGroup(calls=calls * 3,
+                    prompt_chars=min(240_000, prompt_chars + FOLLOWUP_RESERVE_CHARS),
+                    output_tokens=output_tokens))
         return AiCounts(groups=tuple(call_groups), units=groups, reused=0,
                         sheets=len(snapshot["all_profiles"]), pairs=len(snapshot["links"]),
                         versions=len({row["version_uid"] for row in snapshot["all_profiles"]}))
