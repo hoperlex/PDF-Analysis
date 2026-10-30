@@ -217,7 +217,7 @@ describe('the control keeps the select and the start beside a refusal', () => {
     expect(markup).toContain('>Запустить прогон</button>');
     expect(markup.match(new RegExp(RETRY, 'g'))).toHaveLength(1);
     // The start button, the retry, and the select’s own «Прочитать список снова» is absent here.
-    expect(markup.match(/<button\b/g)).toHaveLength(2);
+    expect(markup.match(/<button\b/g)).toHaveLength(3); // estimate, start and same-key retry
   });
 
   it('shows nothing of a refusal before one has happened', () => {

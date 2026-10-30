@@ -28,7 +28,7 @@
  * (`RunList` does): the observer holds one version's answer.
  */
 
-import { useQueryClient } from '@tanstack/react-query';
+import { notifyManager, useQueryClient } from '@tanstack/react-query';
 import type { UseMutationResult } from '@tanstack/react-query';
 import { useCallback, useState, useSyncExternalStore } from 'react';
 
@@ -37,6 +37,8 @@ import { useIntentKey } from '@/shared/lib';
 
 import type { StartArV3GroupCommand } from './use-start-ar-v3-group';
 import { START_AR_V3_GROUP_MUTATION_KEY, useStartArV3Group } from './use-start-ar-v3-group';
+import { useArV3CostApproval } from './use-ar-v3-cost-approval';
+import type { ArV3CostApproval } from './use-ar-v3-cost-approval';
 
 export interface ArV3GroupStartIntent {
   /** The caller's key for starting this version's six checks; the same on every retry. */
@@ -47,6 +49,7 @@ export interface ArV3GroupStartIntent {
   readonly mutation: UseMutationResult<ArV3BetaGroup, unknown, StartArV3GroupCommand>;
   readonly relaxedLimits: boolean;
   readonly setRelaxedLimits: (value: boolean) => void;
+  readonly cost: ArV3CostApproval;
 }
 
 /**
@@ -56,7 +59,10 @@ export interface ArV3GroupStartIntent {
  */
 function useStartPending(versionUid: VersionUid): boolean {
   const cache = useQueryClient().getMutationCache();
-  const subscribe = useCallback((notify: () => void) => cache.subscribe(() => notify()), [cache]);
+  // A sibling's new preflight observer can publish options during its render.
+  // Schedule cache notifications as TanStack's own observers do; the snapshot
+  // still reads the current version immediately on every render.
+  const subscribe = useCallback((notify: () => void) => cache.subscribe(notifyManager.batchCalls(() => notify())), [cache]);
   return useSyncExternalStore(
     subscribe,
     () =>
@@ -72,7 +78,9 @@ function useStartPending(versionUid: VersionUid): boolean {
 
 export function useArV3GroupStartIntent(versionUid: VersionUid): ArV3GroupStartIntent {
   const [relaxedLimits, setRelaxedLimits] = useState(false);
-  const idempotencyKey = useIntentKey(`start-ar-v3-group:${versionUid}:${relaxedLimits ? 'relaxed' : 'standard'}`);
+  const cost = useArV3CostApproval(versionUid, relaxedLimits);
+  const consent = cost.draftConsent;
+  const idempotencyKey = useIntentKey(`start-ar-v3-group:${versionUid}:${relaxedLimits ? 'relaxed' : 'standard'}:${consent === undefined ? 'awaiting-cost-approval' : `${consent.estimate_digest}:${consent.ceiling_micros}`}`);
   const mutation = useStartArV3Group();
   const inFlight = useStartPending(versionUid);
   return {
@@ -80,9 +88,11 @@ export function useArV3GroupStartIntent(versionUid: VersionUid): ArV3GroupStartI
     inFlight,
     mutation,
     relaxedLimits,
+    cost,
     setRelaxedLimits: (value) => {
       if (inFlight || mutation.isPending) return;
       mutation.reset();
+      cost.reset();
       setRelaxedLimits(value);
     },
   };

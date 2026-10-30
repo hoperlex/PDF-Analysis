@@ -176,7 +176,9 @@ describe('the control takes its key and its request from the same choice', () =>
   it('clears a refusal when the choice changes, because it was about the old choice', () => {
     expect(code).toMatch(/setChosen\(next\);\s*mutation\.reset\(\);/);
     expect(code).toMatch(/setRelaxedLimits\(event\.currentTarget\.checked\);\s*mutation\.reset\(\);/);
-    expect(code).toContain('disabled={mutation.isPending}');
+    expect(code).toContain('const locked = mutation.isPending || cost.pending');
+    expect(code).toContain('disabled={locked}');
+    expect(code).toContain('cost.consent === undefined');
   });
 
   it('never changes the choice itself: only the person’s change does, and a refusal changes nothing', () => {
@@ -191,7 +193,9 @@ describe('the control takes its key and its request from the same choice', () =>
     expect(code.match(/setChosen\(null\)/g)).toHaveLength(1);
     expect(code).toMatch(/setChosenPreset\(next\);[\s\S]{0,200}?setChosen\(null\);\s*mutation\.reset\(\);/);
     expect(code.match(/setChosenPreset\(/g)).toHaveLength(1);
-    expect(code).not.toMatch(/onError/);
+    // A stale cost reading clears only its approval. The option setters remain exclusively
+    // in the change handlers counted above; no refusal may select another executor/preset.
+    expect(code).toContain("error.details?.conflict_reason === 'run_cost_estimate_stale'");
   });
 
   it('writes no intent signature or request body of its own', () => {

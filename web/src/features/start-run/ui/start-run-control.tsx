@@ -33,7 +33,8 @@
 import { useId, useState } from 'react';
 
 import type { ExecutorConnectionId, PresetId, ProjectUid, RunStatus, VersionUid } from '@/shared/api';
-import { LoadingState } from '@/shared/ui';
+import { ApiError } from '@/shared/api';
+import { CostApproval, ErrorState, LoadingState } from '@/shared/ui';
 import { useIntentKey } from '@/shared/lib';
 import type { RunFailure } from '@/entities/audit-run';
 import { classifyRunFailure } from '@/entities/audit-run';
@@ -52,6 +53,7 @@ import {
 
 import { startRunIntent } from '../model/start-run-intent';
 import { useStartRun } from '../model/use-start-run';
+import { useRunCostApproval } from '../model/use-run-cost-approval';
 
 import type { ExecutorListReading } from './executor-select';
 import { ExecutorSelectView } from './executor-select';
@@ -119,7 +121,9 @@ export function StartRunControl({ projectUid, versionUid, onStarted }: StartRunC
   const [chosen, setChosen] = useState<ExecutorConnectionId | null>(null);
   const [chosenPreset, setChosenPreset] = useState<PresetId | null>(null);
   const [relaxedLimits, setRelaxedLimits] = useState(false);
-  const intent = startRunIntent(versionUid, chosen, chosenPreset, relaxedLimits);
+  const optionsIntent = startRunIntent(versionUid, chosen, chosenPreset, relaxedLimits);
+  const cost = useRunCostApproval(optionsIntent);
+  const intent = startRunIntent(versionUid, chosen, chosenPreset, relaxedLimits, cost.draftConsent);
   const idempotencyKey = useIntentKey(intent.signature);
   const mutation = useStartRun();
   const selectId = useId();
@@ -133,8 +137,17 @@ export function StartRunControl({ projectUid, versionUid, onStarted }: StartRunC
   const presetExecutor = presetName?.executorConnectionId ?? null;
 
   const send = () => {
-    mutation.mutate(intent.command(idempotencyKey), { onSuccess: (run) => onStarted?.(run) });
+    if (cost.consent === undefined || cost.pending || mutation.isPending) return;
+    mutation.mutate(intent.command(idempotencyKey), {
+      onSuccess: (run) => onStarted?.(run),
+      onError: (error) => {
+        if (error instanceof ApiError && error.details?.conflict_reason === 'run_cost_estimate_stale') cost.reset();
+      },
+    });
   };
+  const costFailure = cost.error === null || cost.error === undefined ? null : executionFailure(cost.error, false);
+  const locked = mutation.isPending || cost.pending;
+  const staleEstimate = mutation.error instanceof ApiError && mutation.error.details?.conflict_reason === 'run_cost_estimate_stale';
 
   const failure: RunFailure | null =
     mutation.error === null || mutation.error === undefined
@@ -147,22 +160,24 @@ export function StartRunControl({ projectUid, versionUid, onStarted }: StartRunC
         id={presetSelectId}
         reading={presetReading}
         value={chosenPreset}
-        disabled={mutation.isPending}
+        disabled={locked}
         onChange={(next) => {
           setChosenPreset(next);
           // A preset fills the executor; a hand choice would be a second way to say the same thing.
           setChosen(null);
           mutation.reset();
+          cost.reset();
         }}
       />
       <ExecutorSelectView
         id={selectId}
         reading={reading}
         value={chosenPreset === null ? chosen : presetExecutor}
-        disabled={mutation.isPending}
+        disabled={locked}
         onChange={(next) => {
           setChosen(next);
           mutation.reset();
+          cost.reset();
         }}
         lockedBy={
           chosenPreset === null
@@ -174,20 +189,29 @@ export function StartRunControl({ projectUid, versionUid, onStarted }: StartRunC
         <input
           type="checkbox"
           checked={relaxedLimits}
-          disabled={mutation.isPending}
+          disabled={locked}
           onChange={(event) => {
             setRelaxedLimits(event.currentTarget.checked);
             mutation.reset();
+            cost.reset();
           }}
         />
         Повышенные лимиты ИИ-анализа
       </label>
       <p className="am-note">
         {relaxedLimits
-          ? 'Бюджет стоимости приложения отключён; запрос на ответ до 64 000 токенов. Провайдер может установить меньший предел. Технический предел объёма входного текста сохраняется.'
-          : 'Бюджет стоимости приложения действует; запрос на ответ до 16 000 токенов.'}
+          ? 'Запрос на ответ до 64 000 токенов. Провайдер может установить меньший предел. Технический предел объёма входного текста сохраняется. Лимит стоимости подтверждается отдельно.'
+          : 'Запрос на ответ до 16 000 токенов. Лимит стоимости подтверждается отдельно.'}
       </p>
-      <button type="button" className="am-button" onClick={send} disabled={mutation.isPending}>
+      <button type="button" className="am-button" disabled={locked} onClick={() => { mutation.reset(); cost.request(); }}>
+        Оценить стоимость
+      </button>
+      {cost.pending ? <LoadingState what="оценка стоимости" /> : null}
+      {costFailure === null ? null : <ErrorState title="Стоимость не оценена" detail={costFailure.detail} correlationId={costFailure.correlationId} />}
+      {staleEstimate ? <p role="alert">Оценка стоимости устарела. Получите новую оценку и подтвердите лимит снова.</p> : null}
+      {cost.estimate === null ? null : <CostApproval estimate={cost.estimate} ceiling={cost.ceiling} approved={cost.approved}
+        disabled={locked} onCeilingChange={cost.setCeiling} onApprovedChange={cost.setApproved} />}
+      <button type="button" className="am-button" onClick={send} disabled={locked || cost.consent === undefined}>
         Запустить прогон
       </button>
       <p className="am-note">

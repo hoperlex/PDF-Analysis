@@ -60,15 +60,16 @@ describe('the selector is on the control', () => {
     expect(first?.[0]).toContain('selected');
   });
 
-  it('keeps the start button beside it, enabled', () => {
+  it('offers preflight and keeps start disabled until explicit cost approval', () => {
     const markup = control(seeded());
-    expect(markup).toMatch(/<button type="button" class="am-button">Запустить прогон<\/button>/);
+    expect(markup).toMatch(/<button type="button" class="am-button">Оценить стоимость<\/button>/);
+    expect(markup).toMatch(/<button type="button" class="am-button" disabled="">Запустить прогон<\/button>/);
   });
 
   it('offers raised AI limits off by default and explains the standard request', () => {
     const markup = control(seeded());
     expect(markup).toMatch(/<input type="checkbox"\/>Повышенные лимиты ИИ-анализа/);
-    expect(markup).toContain('Бюджет стоимости приложения действует; запрос на ответ до 16 000 токенов.');
+    expect(markup).toContain('Запрос на ответ до 16 000 токенов. Лимит стоимости подтверждается отдельно.');
     expect(markup).not.toContain('relaxed_limits');
   });
 });
@@ -147,15 +148,16 @@ describe('a connection whose settings were not read is not offered', () => {
   });
 });
 
-describe('while the list loads, and when it cannot be read, the default start still works', () => {
+describe('while the list loads or fails, the default route can still be estimated', () => {
   it('shows the loading state under a select that already holds the default', () => {
     const markup = control(newClient());
     expect(markup).toContain('Загрузка: исполнители…');
     expect(options(markup)).toEqual([[' value="" selected=""', DEFAULT_EXECUTOR_LABEL]]);
-    expect(markup).toMatch(/<button type="button" class="am-button">Запустить прогон<\/button>/);
+    expect(markup).toMatch(/<button type="button" class="am-button">Оценить стоимость<\/button>/);
+    expect(markup).toMatch(/<button type="button" class="am-button" disabled="">Запустить прогон<\/button>/);
   });
 
-  it('says the list is not read, offers to read it again, and leaves the start enabled', () => {
+  it('says the list is not read and keeps default-route estimation available', () => {
     const client = newClient();
     seedError(client, queryKeys.execution.connections(), new ApiError(503, {
       contract_version: '1.13.0', error_code: 'dependency_unavailable', message: 'm',
@@ -169,7 +171,8 @@ describe('while the list loads, and when it cannot be read, the default start st
     expect(markup).toContain('Прочитать список снова');
     expect(options(markup)).toEqual([[' value="" selected=""', DEFAULT_EXECUTOR_LABEL]]);
     expect(markup).not.toContain('Загрузка: исполнители');
-    expect(markup).toMatch(/<button type="button" class="am-button">Запустить прогон<\/button>/);
+    expect(markup).toMatch(/<button type="button" class="am-button">Оценить стоимость<\/button>/);
+    expect(markup).toMatch(/<button type="button" class="am-button" disabled="">Запустить прогон<\/button>/);
   });
 
   it('says there is nothing to choose when no connection exists', () => {

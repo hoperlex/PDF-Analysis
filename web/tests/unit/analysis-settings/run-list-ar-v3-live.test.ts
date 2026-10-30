@@ -30,11 +30,12 @@ vi.mock('@/shared/api', async (importOriginal) => {
     getArV3BetaPackStatus: vi.fn(),
     listRuns: vi.fn(),
     startArV3BetaGroup: vi.fn(),
+    estimateArV3GroupCost: vi.fn(),
     startRun: vi.fn(),
   };
 });
 
-import { ApiError, getArV3BetaPackStatus, listRuns, queryKeys, startArV3BetaGroup } from '@/shared/api';
+import { ApiError, getArV3BetaPackStatus, listRuns, queryKeys, startArV3BetaGroup, estimateArV3GroupCost } from '@/shared/api';
 import type { ApiResponse, ArV3BetaGroup, ErrorCode, RunStatusPage } from '@/shared/api';
 import { RUN_PAGE_LIMIT, arV3GroupReviewAddress } from '@/entities/audit-run';
 import { useArV3GroupStartIntent, useStartArV3Group } from '@/features/start-ar-v3-group';
@@ -45,6 +46,7 @@ import { runStatus } from '../review/fixtures';
 import { GROUP_ID } from './ar-v3-beta-review-fixtures';
 import { NOT_INSTALLED_PACK, installedPackFixture } from './ar-v3-beta-pack-fixtures';
 import { mountLive } from './live-render';
+import { approveCost, costEstimate } from './cost-estimate-fixtures';
 import type { LiveRender } from './live-render';
 
 const PROJECT_UID = 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
@@ -116,6 +118,7 @@ let live: LiveRender | null = null;
 beforeEach(() => {
   navigation.pushed.length = 0;
   vi.resetAllMocks();
+  vi.mocked(estimateArV3GroupCost).mockImplementation(async ({ body }) => ({ data: costEstimate(body, 'ar_v3_group') }) as never);
   // Whatever re-reads the tree triggers (an accepted start invalidates `runs`) find the pack
   // installed and no runs, unless a test says otherwise.
   packStatus.mockResolvedValue({ data: installedPackFixture() } as never);
@@ -151,6 +154,7 @@ describe('the harness itself can see what these tests rely on', () => {
     expect(live.markup()).toContain(CONTROL);
     expect(live.count(SIX_CHECKS)).toBe(1);
     start.mockReturnValueOnce(deferred<Accepted>().promise);
+    await approveCost(live);
     await live.press(SIX_CHECKS);
     expect(start).toHaveBeenCalledTimes(1);
     expect(live.markup()).toContain('запрос на шесть проверок');
@@ -173,6 +177,7 @@ describe('a start in flight when the pack status stops being readable', () => {
     live = await mountLive(tree(client));
     const reply = deferred<Accepted>();
     start.mockReturnValueOnce(reply.promise);
+    await approveCost(live);
     await live.press(SIX_CHECKS);
 
     await failPackRead(client);
@@ -188,6 +193,7 @@ describe('a start in flight when the pack status stops being readable', () => {
     live = await mountLive(tree(client));
     const reply = deferred<Accepted>();
     start.mockReturnValueOnce(reply.promise);
+    await approveCost(live);
     await live.press(SIX_CHECKS);
     await failPackRead(client);
 
@@ -204,6 +210,7 @@ describe('a start in flight when the pack status stops being readable', () => {
     live = await mountLive(tree(client));
     const reply = deferred<Accepted>();
     start.mockReturnValueOnce(reply.promise);
+    await approveCost(live);
     await live.press(SIX_CHECKS);
     const first = keyOfCall(0);
 
@@ -219,6 +226,7 @@ describe('a start in flight when the pack status stops being readable', () => {
     expect(live.markup()).toContain(CONTROL);
 
     start.mockResolvedValueOnce(ACCEPTED);
+    await approveCost(live);
     await live.press(SIX_CHECKS);
     expect(start).toHaveBeenCalledTimes(2);
     expect(keyOfCall(1), 'a new key would make a second group of six runs').toBe(first);
@@ -230,6 +238,7 @@ describe('a list mounted while a start is still on its way', () => {
     const client = newClient();
     live = await mountLive(tree(client));
     start.mockReturnValueOnce(deferred<Accepted>().promise);
+    await approveCost(live);
     await live.press(SIX_CHECKS);
     await live.unmount();
 
@@ -254,6 +263,7 @@ describe('a pending start leaves its button disabled, and a disabled button take
     const client = newClient();
     live = await mountLive(tree(client));
     start.mockReturnValueOnce(deferred<Accepted>().promise);
+    await approveCost(live);
     expect(await live.press(SIX_CHECKS)).toBe(true);
     expect(live.markup()).toMatch(DISABLED_SIX_CHECKS);
 
@@ -268,6 +278,7 @@ describe('a pending start leaves its button disabled, and a disabled button take
     const client = pagedClient();
     live = await mountLive(tree(client));
     start.mockReturnValueOnce(deferred<Accepted>().promise);
+    await approveCost(live);
     await live.press(SIX_CHECKS);
     await recoverPackRead(client);
     await live.update(tree(client));
@@ -281,9 +292,11 @@ describe('a pending start leaves its button disabled, and a disabled button take
     const client = newClient();
     live = await mountLive(tree(client));
     start.mockRejectedValueOnce(envelopeError(503, 'dependency_unavailable', true));
+    await approveCost(live);
     await live.press(SIX_CHECKS);
     expect(live.markup()).not.toMatch(DISABLED_SIX_CHECKS);
     start.mockResolvedValueOnce(ACCEPTED);
+    await approveCost(live);
     expect(await live.press(SIX_CHECKS)).toBe(true);
     expect(start).toHaveBeenCalledTimes(2);
   });
@@ -311,6 +324,7 @@ describe('a start in flight when the run list itself stops showing the list', ()
     live = await mountLive(tree(client));
     const reply = deferred<Accepted>();
     start.mockReturnValueOnce(reply.promise);
+    await approveCost(live);
     await live.press(SIX_CHECKS);
 
     vi.mocked(listRuns).mockReturnValueOnce(deferred<{ data: RunStatusPage }>().promise as never);
@@ -328,6 +342,7 @@ describe('a start in flight when the run list itself stops showing the list', ()
     live = await mountLive(tree(client));
     const reply = deferred<Accepted>();
     start.mockReturnValueOnce(reply.promise);
+    await approveCost(live);
     await live.press(SIX_CHECKS);
 
     vi.mocked(listRuns).mockRejectedValueOnce(envelopeError(503, 'dependency_unavailable', true));
@@ -344,6 +359,7 @@ describe('a start in flight when the run list itself stops showing the list', ()
     live = await mountLive(tree(client));
     const reply = deferred<Accepted>();
     start.mockReturnValueOnce(reply.promise);
+    await approveCost(live);
     await live.press(SIX_CHECKS);
     const first = keyOfCall(0);
 
@@ -368,6 +384,7 @@ describe('a start in flight when the run list itself stops showing the list', ()
     live = await mountLive(tree(client));
     const reply = deferred<Accepted>();
     start.mockReturnValueOnce(reply.promise);
+    await approveCost(live);
     await live.press(SIX_CHECKS);
 
     const nextPage = deferred<{ data: RunStatusPage }>();
@@ -426,6 +443,7 @@ describe('a fresh visit draws no six-check control while the list is not showing
     vi.mocked(listRuns).mockResolvedValue({ data: FIRST_PAGE } as never);
     live = await mountLive(tree(client));
     start.mockResolvedValueOnce(ACCEPTED);
+    await approveCost(live);
     await live.press(SIX_CHECKS);
     expect(navigation.pushed).toEqual([arV3GroupReviewAddress(GROUP_ID)]);
 
@@ -441,12 +459,14 @@ describe('the key of one intent', () => {
     const client = newClient();
     live = await mountLive(tree(client));
     start.mockRejectedValueOnce(envelopeError(503, 'dependency_unavailable', true));
+    await approveCost(live);
     await live.press(SIX_CHECKS);
     expect(live.count(RETRY)).toBe(1);
 
     start.mockRejectedValueOnce(envelopeError(503, 'dependency_unavailable', true));
     await live.press(RETRY);
     start.mockResolvedValueOnce(ACCEPTED);
+    await approveCost(live);
     await live.press(SIX_CHECKS);
 
     expect(start).toHaveBeenCalledTimes(3);
@@ -459,14 +479,16 @@ describe('the key of one intent', () => {
     const client = newClient();
     live = await mountLive(tree(client));
     start.mockRejectedValueOnce(envelopeError(503, 'dependency_unavailable', true));
+    await approveCost(live);
     await live.press(SIX_CHECKS);
     const forFirstVersion = keyOfCall(0);
 
     await live.update(tree(client, OTHER_VERSION_UID));
-    // No start is pending for the other version, so nothing about its control says one is.
-    expect(live.markup()).not.toMatch(DISABLED_SIX_CHECKS);
+    // A new version requires its own estimate/approval, but has no pending start.
+    expect(live.markup()).toMatch(DISABLED_SIX_CHECKS);
     expect(live.markup()).not.toContain('запрос на шесть проверок');
     start.mockRejectedValueOnce(envelopeError(503, 'dependency_unavailable', true));
+    await approveCost(live);
     await live.press(SIX_CHECKS);
     const forSecondVersion = keyOfCall(1);
     expect(forSecondVersion).not.toBe(forFirstVersion);
@@ -483,17 +505,20 @@ describe('a start pending for one version says nothing about another', () => {
   // change, so production never changes the version of a mounted list; the live harness's
   // `update()` does, and `useIsMutating` kept answering for the first version until a
   // mutation-cache event happened.
-  it('keeps the other version\'s button enabled when the list switches version', async () => {
+  it('allows an independent estimate and approved start when the list switches version', async () => {
     const client = newClient();
     live = await mountLive(tree(client));
     start.mockReturnValueOnce(deferred<Accepted>().promise);
+    await approveCost(live);
     await live.press(SIX_CHECKS);
     expect(live.markup()).toMatch(DISABLED_SIX_CHECKS);
 
     await live.update(tree(client, OTHER_VERSION_UID));
-    expect(live.markup(), 'the other version shows a start it never sent').not.toMatch(DISABLED_SIX_CHECKS);
+    // The new version is disabled for missing cost approval, not for the old pending start.
+    expect(live.markup()).toMatch(DISABLED_SIX_CHECKS);
     expect(live.markup()).not.toContain('запрос на шесть проверок');
     start.mockResolvedValueOnce(ACCEPTED);
+    await approveCost(live);
     expect(await live.press(SIX_CHECKS)).toBe(true);
     expect(start).toHaveBeenCalledTimes(2);
   });
