@@ -195,6 +195,7 @@ describe('the two layout states, and the width at the 780 px floor', () => {
     const markup = frame(EXPERT);
     expect(markup).toContain(`<div class="${styles.row}" data-nav-state="row">`);
     expect(markup).toContain(`<div class="${styles.stacked}" data-nav-state="stacked">`);
+    expect(markup.slice(markup.indexOf('data-nav-state="row"'), markup.indexOf('data-nav-state="stacked"'))).toContain('aria-expanded="true"');
     expect(markup).toMatch(/aria-expanded="false"[^>]*>Меню<\/button>/);
   });
 
@@ -208,10 +209,13 @@ describe('the two layout states, and the width at the 780 px floor', () => {
     expect(media?.[2]).toMatch(/\.stacked\s*\{\s*display\s*:\s*block;?\s*\}/);
   });
 
-  it('keeps the bar wrapping rather than widening (the rule the width instrument relies on)', () => {
-    expect(declarations(GLOBALS, '.am-app__bar')).toMatch(/flex-wrap\s*:\s*wrap/);
-    expect(declarations(FRAME_CSS, '.row')).toMatch(/flex-wrap\s*:\s*wrap/);
+  it('gives desktop content a bounded sidebar and lets the compact bar wrap', () => {
+    expect(declarations(GLOBALS, '.am-app')).toMatch(/grid-template-columns\s*:\s*260px minmax\(0, 1fr\)/);
+    expect(declarations(FRAME_CSS, '.row')).toMatch(/display\s*:\s*grid/);
     expect(declarations(FRAME_CSS, '.nav')).toMatch(/min-width\s*:\s*0/);
+    const globalCss = readFileSync(fileURLToPath(new URL(GLOBALS, import.meta.url)), 'utf8');
+    expect(globalCss).toMatch(/\.am-app__bar\s*\{\s*position:\s*sticky;[^}]*flex-direction:\s*column/);
+    expect(globalCss).toMatch(/@media\s*\(max-width:\s*1159\.98px\)[\s\S]*?\.am-app__bar\s*\{[^}]*flex-wrap:\s*wrap/);
   });
 
   it('holds a 66-character name and a 254-character address whole, in a header that breaks them anywhere', () => {

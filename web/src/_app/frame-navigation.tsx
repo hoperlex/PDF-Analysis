@@ -10,8 +10,8 @@
  *
  * ## Two states, one at a time
  *
- * Wide, the groups sit in the bar in one row. Below the frame's breakpoint they collapse into
- * one stacked list behind a «Меню» disclosure, in which each group is an inline disclosure.
+ * Wide, the groups stay open in the sidebar, and a reader may collapse any of them. Below
+ * the frame's breakpoint they collapse into one stacked list behind a «Меню» disclosure.
  * Both are in the markup and the frame's CSS module shows exactly one
  * (`app-frame.module.css`), so neither depends on script to exist and an instrument that
  * renders the frame once sees both. A hidden state is `display: none`, which also takes it
@@ -44,7 +44,7 @@ export interface FrameNavigationViewProps extends FrameNavigationProps {
   /** The browser's pathname; `null` when it is not known, and then nothing is marked. */
   readonly pathname: string | null;
   /**
-   * What draws «Меню» and each group. In the bar it is the `Disclosure` island, which holds its
+   * What draws «Меню» and each group. In the shell it is the `Disclosure` island, which holds its
    * own open state. An instrument that renders one static pass cannot click, so it passes a
    * view drawn open instead — the contrast census does — and measures the same tree.
    */
@@ -69,7 +69,7 @@ export function FrameNavigationView({ navigation, pathname, disclosure = Disclos
     <nav className={styles.nav} aria-label="Разделы">
       <div className={styles.row} data-nav-state="row">
         {groups.map((group) => (
-          <Group key={group.group} label={group.label} current={inGroup(group)} links={links(group, current)} />
+          <Group key={group.group} label={group.label} current={inGroup(group)} links={links(group, current)} layout="inline" defaultOpen />
         ))}
       </div>
       <div className={styles.stacked} data-nav-state="stacked">
