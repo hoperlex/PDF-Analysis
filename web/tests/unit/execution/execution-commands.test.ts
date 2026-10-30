@@ -31,6 +31,7 @@ import { useReauditRun } from '@/features/reaudit-run';
 import { useSetJobPriority } from '@/features/set-job-priority';
 import { usePauseExecution } from '@/features/pause-execution';
 import { useStartRun } from '@/features/start-run';
+import { COST_CONSENT } from '../analysis-settings/cost-estimate-fixtures';
 
 const RUN_ID = 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
 const JOB_ID = 'job_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
@@ -69,9 +70,9 @@ describe('sealed execution commands', () => {
 
   it('uses a distinct re-audit operation and the same cache invalidation boundary', async () => {
     vi.mocked(reauditRun).mockResolvedValue({ data: RUN } as never);
-    const command = useReauditRun() as unknown as Captured<{ runId: string; idempotencyKey: string }, typeof RUN>;
-    const answer = await command.mutationFn({ runId: RUN_ID, idempotencyKey: KEY });
-    expect(reauditRun).toHaveBeenCalledWith({ path: { run_id: RUN_ID }, idempotencyKey: KEY });
+    const command = useReauditRun() as unknown as Captured<{ runId: string; idempotencyKey: string; costConsent: typeof COST_CONSENT }, typeof RUN>;
+    const answer = await command.mutationFn({ runId: RUN_ID, idempotencyKey: KEY, costConsent: COST_CONSENT });
+    expect(reauditRun).toHaveBeenCalledWith({ path: { run_id: RUN_ID }, body: { cost_consent: COST_CONSENT }, idempotencyKey: KEY });
     command.onSuccess(answer);
     expect(calls.invalidations).toContainEqual([{ queryKey: queryKeys.execution.all() }]);
     expect(calls.invalidations).toContainEqual([{ queryKey: queryKeys.dashboard.summary() }]);

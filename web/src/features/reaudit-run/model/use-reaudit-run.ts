@@ -2,14 +2,14 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import type { RunStatus } from '@/shared/api';
+import type { RunCostConsent, RunStatus } from '@/shared/api';
 import { queryKeys, reauditRun } from '@/shared/api';
 
 export function useReauditRun() {
   const client = useQueryClient();
-  return useMutation<RunStatus, unknown, { runId: string; idempotencyKey: string }>({
-    mutationFn: async ({ runId, idempotencyKey }) =>
-      (await reauditRun({ path: { run_id: runId }, idempotencyKey })).data,
+  return useMutation<RunStatus, unknown, { runId: string; idempotencyKey: string; costConsent: RunCostConsent }>({
+    mutationFn: async ({ runId, idempotencyKey, costConsent }) =>
+      (await reauditRun({ path: { run_id: runId }, body: { cost_consent: costConsent }, idempotencyKey })).data,
     retry: false,
     onSuccess: (run) => {
       client.setQueryData(queryKeys.runs.detail(run.run_id), run);

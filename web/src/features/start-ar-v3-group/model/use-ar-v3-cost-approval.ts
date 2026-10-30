@@ -30,7 +30,7 @@ export function useArV3CostApproval(versionUid: VersionUid, relaxedLimits: boole
   const current = estimate !== null && approval?.signature === signature && approval.digest === estimate.estimate_digest ? approval : null;
   const ceiling = current?.ceiling ?? '';
   const approved = current?.approved === true;
-  const amount = estimate === null ? null : ceilingMicros(ceiling, estimate.estimated_cost_micros);
+  const amount = estimate === null ? null : ceilingMicros(ceiling, Math.max(estimate.billing === 'metered' ? 1 : 0, estimate.estimated_cost_micros));
   const draftAmount = approval?.signature === signature ? ceilingMicros(approval.ceiling, approval.minimum) : null;
   const draftConsent: ArV3CostConsent | undefined = draftAmount === null || approval === null ? undefined
     : { estimate_digest: approval.digest, ceiling_micros: draftAmount, confirmed: true };
@@ -46,7 +46,7 @@ export function useArV3CostApproval(versionUid: VersionUid, relaxedLimits: boole
       reading.reset();
       reading.mutate({ signature, body: { version_uid: versionUid, ...(relaxedLimits ? { relaxed_limits: true } : {}) } }, {
         onSuccess: ({ signature: requestSignature, estimate: value }) => setApproval({ signature: requestSignature,
-          digest: value.estimate_digest, minimum: value.estimated_cost_micros,
+          digest: value.estimate_digest, minimum: Math.max(value.billing === 'metered' ? 1 : 0, value.estimated_cost_micros),
           ceiling: microsAsUsd(value.recommended_ceiling_micros), approved: false }),
       });
     },
