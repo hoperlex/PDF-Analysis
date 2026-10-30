@@ -99,82 +99,91 @@ class StageTextRecomputeService:
         self, *, revision_id: str, user_uid: str,
         actor_roles: frozenset[str], idempotency_key: str,
     ) -> TextRun:
+        with session_scope(self._sessions) as session:
+            return self.start_in_session(
+                session, revision_id=revision_id, user_uid=user_uid,
+                actor_roles=actor_roles, idempotency_key=idempotency_key,
+            )
+
+    def start_in_session(
+        self, session: Session, *, revision_id: str, user_uid: str,
+        actor_roles: frozenset[str], idempotency_key: str,
+    ) -> TextRun:
         require_expert(actor_roles)
         command_fingerprint = payload_fingerprint({
             "command": "recompute_stage_text_evidence.v1",
             "revision_id": revision_id, "user_uid": user_uid,
         })
-        with session_scope(self._sessions) as session:
-            claim = self._commands.begin(
-                session, command_type=_COMMAND,
-                idempotency_key=IdempotencyKey(idempotency_key),
-                fingerprint=command_fingerprint,
-            )
-            if isinstance(claim, CommandReplay):
-                return self._row(session, str(claim.outcome["run_id"]))
-            pair_id = session.execute(text(
-                "SELECT stage_pair_id FROM stage_link_revision "
-                "WHERE stage_link_revision_id = :revision"
-            ), {"revision": revision_id}).scalar_one_or_none()
-            if pair_id is None:
-                raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="StageLinkRevision")
+        claim = self._commands.begin(
+            session, command_type=_COMMAND,
+            idempotency_key=IdempotencyKey(idempotency_key),
+            fingerprint=command_fingerprint,
+        )
+        if isinstance(claim, CommandReplay):
+            return self._row(session, str(claim.outcome["run_id"]))
+        pair_id = session.execute(text(
+            "SELECT stage_pair_id FROM stage_link_revision "
+            "WHERE stage_link_revision_id = :revision"
+        ), {"revision": revision_id}).scalar_one_or_none()
+        if pair_id is None:
+            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="StageLinkRevision")
+        session.execute(text(
+            "SELECT pg_advisory_xact_lock(hashtextextended('stage_link:' || :pair, 0))"
+        ), {"pair": pair_id})
+        pair = session.execute(text(
+            "SELECT project_uid, state FROM stage_pair WHERE stage_pair_id = :pair"
+        ), {"pair": pair_id}).first()
+        latest = session.execute(text(
+            "SELECT stage_link_revision_id FROM stage_link_revision "
+            "WHERE stage_pair_id = :pair ORDER BY revision_no DESC LIMIT 1"
+        ), {"pair": pair_id}).scalar_one_or_none()
+        if pair is None or pair[1] != "confirmed" or latest != revision_id:
+            raise DomainError(ErrorCode.CONFLICT,
+                              conflict_reason="stage_link_revision_stale")
+        live = session.execute(text(
+            "SELECT r.stage_chain_run_id FROM stage_chain_run r "
+            "JOIN command_record c ON c.command_id = r.command_id "
+            "WHERE r.stage_link_revision_id = :revision AND r.state IN ('queued', 'running') "
+            "AND c.command_type = 'recompute_stage_text_evidence' "
+            "ORDER BY r.created_at DESC LIMIT 1"
+        ), {"revision": revision_id}).scalar_one_or_none()
+        if live is not None:
+            self._commands.succeed(session, claim.command_id, {"run_id": str(live)})
+            return self._row(session, str(live))
+        passports = self._sheets.passports(pair_id=str(pair_id))
+        if len(passports) > _MAX_PAGES:
+            raise DomainError(ErrorCode.VALIDATION_FAILED,
+                              field="stage_pair_id", constraint="stage_text_page_budget")
+        pins = tuple(dict.fromkeys(page.version_uid for page in passports))
+        if not 2 <= len(pins) <= 100:
+            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE,
+                              dependency="comparison_stage_profiles")
+        input_sha = payload_fingerprint({
+            "revision_id": revision_id,
+            "profiles": [page.profile_id for page in passports],
+            "versions": list(pins),
+        })
+        run_id = str(StageChainRunId.new())
+        session.execute(text(
+            "INSERT INTO stage_chain_run "
+            "(stage_chain_run_id, stage_pair_id, stage_link_revision_id, input_sha256, "
+            "pinned_version_uids, state, actor_user_uid, command_id) "
+            "VALUES (:run, :pair, :revision, :sha, CAST(:pins AS jsonb), "
+            "'queued', :actor, :command)"
+        ), {"run": run_id, "pair": pair_id, "revision": revision_id,
+            "sha": str(input_sha), "pins": json.dumps(pins),
+            "actor": user_uid, "command": str(claim.command_id)})
+        for step_no in (2, 3):
             session.execute(text(
-                "SELECT pg_advisory_xact_lock(hashtextextended('stage_link:' || :pair, 0))"
-            ), {"pair": pair_id})
-            pair = session.execute(text(
-                "SELECT project_uid, state FROM stage_pair WHERE stage_pair_id = :pair"
-            ), {"pair": pair_id}).first()
-            latest = session.execute(text(
-                "SELECT stage_link_revision_id FROM stage_link_revision "
-                "WHERE stage_pair_id = :pair ORDER BY revision_no DESC LIMIT 1"
-            ), {"pair": pair_id}).scalar_one_or_none()
-            if pair is None or pair[1] != "confirmed" or latest != revision_id:
-                raise DomainError(ErrorCode.CONFLICT,
-                                  conflict_reason="stage_link_revision_stale")
-            live = session.execute(text(
-                "SELECT r.stage_chain_run_id FROM stage_chain_run r "
-                "JOIN command_record c ON c.command_id = r.command_id "
-                "WHERE r.stage_link_revision_id = :revision AND r.state IN ('queued', 'running') "
-                "AND c.command_type = 'recompute_stage_text_evidence' "
-                "ORDER BY r.created_at DESC LIMIT 1"
-            ), {"revision": revision_id}).scalar_one_or_none()
-            if live is not None:
-                self._commands.succeed(session, claim.command_id, {"run_id": str(live)})
-                return self._row(session, str(live))
-            passports = self._sheets.passports(pair_id=str(pair_id))
-            if len(passports) > _MAX_PAGES:
-                raise DomainError(ErrorCode.VALIDATION_FAILED,
-                                  field="stage_pair_id", constraint="stage_text_page_budget")
-            pins = tuple(dict.fromkeys(page.version_uid for page in passports))
-            if not 2 <= len(pins) <= 100:
-                raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE,
-                                  dependency="comparison_stage_profiles")
-            input_sha = payload_fingerprint({
-                "revision_id": revision_id,
-                "profiles": [page.profile_id for page in passports],
-                "versions": list(pins),
-            })
-            run_id = str(StageChainRunId.new())
-            session.execute(text(
-                "INSERT INTO stage_chain_run "
-                "(stage_chain_run_id, stage_pair_id, stage_link_revision_id, input_sha256, "
-                "pinned_version_uids, state, actor_user_uid, command_id) "
-                "VALUES (:run, :pair, :revision, :sha, CAST(:pins AS jsonb), "
-                "'queued', :actor, :command)"
-            ), {"run": run_id, "pair": pair_id, "revision": revision_id,
-                "sha": str(input_sha), "pins": json.dumps(pins),
-                "actor": user_uid, "command": str(claim.command_id)})
-            for step_no in (2, 3):
-                session.execute(text(
-                    "INSERT INTO stage_chain_step (stage_chain_step_id, stage_chain_run_id, step_no) "
-                    "VALUES (:step, :run, :number)"
-                ), {"step": str(StageChainStepId.new()), "run": run_id,
-                    "number": step_no})
-            self._work.enqueue(
-                session, project_uid=str(pair[0]), module=MODULE_STAGES,
-                kind=WORK_KIND, payload={"run_id": run_id},
-                dedupe_key=f"stage_text:{run_id}",
-                created_by_user_uid=user_uid,
-            )
-            self._commands.succeed(session, claim.command_id, {"run_id": run_id})
-            return self._row(session, run_id)
+                "INSERT INTO stage_chain_step (stage_chain_step_id, stage_chain_run_id, step_no) "
+                "VALUES (:step, :run, :number)"
+            ), {"step": str(StageChainStepId.new()), "run": run_id,
+                "number": step_no})
+        self._work.enqueue(
+            session, project_uid=str(pair[0]), module=MODULE_STAGES,
+            kind=WORK_KIND, payload={"run_id": run_id},
+            dedupe_key=f"stage_text:{run_id}",
+            created_by_user_uid=user_uid,
+        )
+        self._commands.succeed(session, claim.command_id, {"run_id": run_id})
+        return self._row(session, run_id)
