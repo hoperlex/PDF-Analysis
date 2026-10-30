@@ -31,9 +31,9 @@ function outline(navigation: Navigation): string[] {
   );
 }
 
-/** `R-66`, written out by hand from the ruling — never derived from the registry it checks. */
+/** `R-66` with the two comparison modules added in their menu order, written independently of the registry. */
 const R66 = [
-  'Работа: Проекты /projects, Дашборд /dashboard, Оптимизация разделов /section-optimisation, Диспетчер /dispatcher, Сравнение версий /version-comparison',
+  'Работа: Проекты /projects, Дашборд /dashboard, Оптимизация разделов /section-optimisation, Диспетчер /dispatcher, Сравнение версий /version-comparison, Сравнение стадий /stage-comparison',
   'Знания: База знаний /knowledge-base, Блоки /blocks, Нормы /norms',
   'Система: Журнал выполнения /logs, Исполнители /workers, Настройки анализа /analysis-settings, Очередь /queue',
 ];

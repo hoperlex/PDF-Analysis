@@ -226,6 +226,24 @@ rather than configure anything. `bootstrap/settings.py` records the same reasoni
 `AUDITMANAGER_PROVIDER_MODE`. `env/alpha.env.example` is its channel, and
 `tests/integration/composition/test_api_token_channel.py` pins all of it.
 
+### Comparison modules
+
+The deployment-wide `AUDITMANAGER_COMPARISON_MODULES` value belongs in
+`infra/deploy/env/alpha.env` (start from `alpha.env.example`), not in the
+developer `.env`. The supported values are `none`, `versions`, and
+`versions,stages`. `compose.server.yml` passes the same value to `api` and
+`worker`; this deploy candidate defaults to `versions,stages` when the value is
+empty or unset. The API reports it as
+`ProductVersion.comparison_modules`, and both comparison pages state when their
+module is off. There is no account-administration switch for this deployment
+setting.
+
+After updating the stand's `alpha.env`, recreate both services with the normal
+`infra/deploy/deploy.sh` path and check the authenticated product-version read
+and the worker's configured environment. `versions,stages` makes both screens
+available; setting `none` and recreating both services pauses new comparison
+work without deleting its stored evidence. An unknown value stops startup.
+
 ## The health plane
 
 Two ports on the API container, from **one built application**:
