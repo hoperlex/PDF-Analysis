@@ -104,6 +104,10 @@ class StageAiRuntime:
             snapshot = self._repo.revision(session, revision_id)
             return self._jobs(method).estimate_in(session, self._scope(snapshot))
 
+    def page(self, *, run_id: str, kind: str, after: str | None = None, limit: int = 50):
+        with session_scope(self._sessions) as session:
+            return self._repo.page(session, run_id=run_id, kind=kind, after=after, limit=limit)
+
     def estimate_resume(self, *, run_id: str, user_uid: str):
         with session_scope(self._sessions) as session:
             self._roles(session, user_uid)

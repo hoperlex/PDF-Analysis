@@ -180,6 +180,15 @@ def test_recorded_runtime_uses_shared_job_and_spend_once(comparison_session, sce
                 ), {"run": run_id})
     expected_calls = 5 if with_context else 3
     assert adapter.calls == expected_calls
+    from auditmanager.api.schemas.models import StageAiReview, StageAiClassification, StageAiSynthesis
+    for kind, schema in (("review", StageAiReview), ("classify", StageAiClassification), ("synthesize", StageAiSynthesis)):
+        page, cursor = runtime.page(run_id=run_id, kind=kind, limit=1)
+        assert len(page) == 1 and cursor is None
+        schema.model_validate(page[0])
+        identity = {"review": "review_id", "classify": "classification_id", "synthesize": "synthesis_id"}[kind]
+        assert runtime.page(run_id=run_id, kind=kind, after=page[0][identity], limit=1) == ((), None)
+        with pytest.raises(DomainError):
+            runtime.page(run_id=run_id, kind=kind, after=_id("sarev"), limit=1)
     for phase in ("review", "classify", "synthesize"):
         assert isinstance(runtime.advance(item, run_id=run_id, phase=phase), dict)
     assert adapter.calls == expected_calls

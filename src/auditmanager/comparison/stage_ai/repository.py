@@ -21,6 +21,32 @@ ANSWER_TABLES = {
 
 
 class StageAiRepository:
+    def page(self, session: Session, *, run_id: str, kind: str, after: str | None,
+             limit: int) -> tuple[tuple[dict[str, Any], ...], str | None]:
+        self.run(session, run_id)
+        if kind not in ANSWER_TABLES or type(limit) is not int or not 1 <= limit <= 100:
+            raise DomainError(ErrorCode.VALIDATION_FAILED, field="limit", constraint="range")
+        table, _prefix, field = ANSWER_TABLES[kind]
+        identity = table + "_id"
+        if after is not None and not session.execute(text(
+            f"SELECT 1 FROM {table} WHERE stage_chain_run_id=:run AND {identity}=:after"
+        ), {"run": run_id, "after": after}).first():
+            raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+        rows = [dict(row) for row in session.execute(text(
+            f"SELECT * FROM {table} WHERE stage_chain_run_id=:run "
+            f"AND (CAST(:after AS text) IS NULL OR {identity}>:after) ORDER BY {identity} LIMIT :limit"
+        ), {"run": run_id, "after": after, "limit": limit + 1}).mappings()]
+        result = []
+        output_id = {"review": "review_id", "classify": "classification_id", "synthesize": "synthesis_id"}[kind]
+        for row in rows[:limit]:
+            item = {output_id: row[identity], "run_id": row["stage_chain_run_id"],
+                    "unit_id": row["stage_ai_unit_id"], "content_key": row["content_key"],
+                    field: row[field], "model_identity": row["model_identity"], "created_at": row["created_at"]}
+            if kind != "synthesize":
+                item.update(group_id=row["group_id"], source_sha256=row["source_sha256"])
+            result.append(item)
+        return tuple(result), (rows[limit - 1][identity] if len(rows) > limit else None)
+
     def run(self, session: Session, run_id: str) -> dict[str, Any]:
         row = session.execute(text(
             "SELECT r.*, p.project_uid, p.left_document_uid AS document_uid "
