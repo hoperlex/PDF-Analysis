@@ -1,7 +1,7 @@
 {
   "lock_version": 1,
   "purpose": "Everything a later regeneration needs to prove the committed API client matches its input: the toolchain pins, the exact generator invocation, and the exact OpenAPI bytes the client was generated from. Verified by web/tests/guards/frontend-lock.guard.test.ts, which recomputes every digest here and fails if one has moved.",
-  "owner": "CMP-SEAL-C3 reseal",
+  "owner": "CMP-SEAL-C4 reseal",
   "toolchain": {
     "node": "22.23.1",
     "npm": "10.9.8",
@@ -16,19 +16,19 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "4a2c3bf4077838cc97d4922e6282fdd70d61064594e37252cd906dcf2c977e94",
-    "content_commit": "6cb49165b583a255ac5ad62c056b7381bc632e47",
-    "content_commit_subject": "CMP-SEAL-C3: close prose and recovery inventories",
-    "dispatch_named_commit": "5f2eca64e93fa0cb971e35b561902a1dee3c7708",
-    "commit_note": "CMP-SEAL-C3 adds 32 typed stage-comparison operations, 53 schemas, 28 paths and migration 0041 with fifteen project-reachable tables. The named commit holds these exact 1.12.0 OpenAPI bytes; preserve it when integrating.",
+    "sha256": "494f13a23a4f30a1b58883a1664799a6c73d935b0cffca1199bf436fae22f9ac",
+    "content_commit": "558f8cc507ea912d19a85c9772db77a5688b0635",
+    "content_commit_subject": "CMP-SEAL-C4: seal stage AI review and full chain contracts",
+    "dispatch_named_commit": "9fa035029a3422b1c3e63d108fbe8c5fdde5dd8e",
+    "commit_note": "CMP-SEAL-C4 adds23 typed operations and12 project-reachable tables under1.13.0. Preserve this exact content commit when integrating.",
     "openapi_version": "3.1.0",
-    "info_version": "1.12.0",
-    "paths": 204,
-    "operations": 230,
-    "component_schemas": 570,
+    "info_version": "1.13.0",
+    "paths": 227,
+    "operations": 253,
+    "component_schemas": 613,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "4a2c3bf4077838cc97d4922e6282fdd70d61064594e37252cd906dcf2c977e94",
-    "read_only": "The generated client and mirror come from the authored C3 contract; regenerate them from the exact contract bytes and compare digests before integration."
+    "snapshot_sha256": "494f13a23a4f30a1b58883a1664799a6c73d935b0cffca1199bf436fae22f9ac",
+    "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
     "script": "web/scripts/generate-api-client.mjs",
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "6b5131033c40cf659b96fb56a338001a5d9fc61f4d9eff383cce5312c5a4005f",
-      "index.ts": "e350b526e586711e4813a2df520b8fc38856d6dc2602a39d8762baad906a3f74",
-      "operations.gen.ts": "ebf6e061885a8492c2a63ae63959f87ba4b6f420414c8aeb54cd615285b7e099",
-      "types.gen.ts": "673f70479813b75c9469f9e79b5817aff06bce6de2d6dd14f9b34d201bad26a4"
+      "client.gen.ts": "3ac5d2d813aabe65813778c38ead4956f79501eda1c0df6c203f6499c26267a2",
+      "index.ts": "bd824adadf5d6cba71ed55bf0b050df06083bf2e4c492ec39204db1409f5ca64",
+      "operations.gen.ts": "161769e8d59625bc0dfcf7e68940b1b7cf5a3c78d6c8f6a4b5b90e8d54eaa213",
+      "types.gen.ts": "46b27c14ff3651021670bc61ee7be33c4d9c2a2d860419fe91d5e9ad76d685b7"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },
