@@ -14,7 +14,7 @@ from auditmanager.analysis.public import (ModelCallRecord, ModelRequest, ModelRe
 from auditmanager.documents.public import DocumentRepository
 from auditmanager.executors.public import CropImage, attach_images
 from auditmanager.jobs.public import extended_unit
-from auditmanager.norms.public import search_norms
+from auditmanager.norms.public import SEARCH_WINDOW, search_norms
 from auditmanager.runs.repository import RunRepository
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import ModelCallId
@@ -143,46 +143,94 @@ def _call(session, *, run_id, authority, jobs, journal, binding, request, phase,
 
 
 def _norms(session, observations: list[dict], snapshot_id: str | None,
-           *, full_document: bool = False, checkpoint=None) -> list[str]:
+           *, full_document: bool = False, checkpoint=None, lookup_receipts=None) -> list[str]:
     # Candidate retrieval is deterministic corpus lookup, never edition validation.
     available = snapshot_id is not None
     cache: dict[str, list[dict]] = {}
+    cache_receipts: dict[str, dict] = {}
+    lookup_pass = 1 + max((row.get("lookup_pass_ordinal", 0) for row in (lookup_receipts or [])), default=0)
     calls = 0
     warnings = []
-    for item in observations:
+    for ordinal, item in enumerate(observations):
         queries = item.pop("norm_queries", [])
+        receipt = None
+        if lookup_receipts is not None:
+            receipt = {"version": "norm-search-receipt-v1", "observation_id": item.get("observation_id"),
+                "lookup_pass_ordinal": lookup_pass,
+                "observation_ordinal": ordinal, "title": item.get("title"), "source_ids": deepcopy(item.get("source_ids", [])),
+                "requested_snapshot_id": snapshot_id, "proposed_queries": deepcopy(queries), "queries": [],
+                "status": "running", "search_page_limit": 3, "additional_search_performed": False,
+                "search_result_window_limit": SEARCH_WINDOW, "exhaustive_search_claimed": False,
+                "edition_applicability_verified": False, "document_absence_proved": False}
+            lookup_receipts.append(receipt)
+        def finish_receipt():
+            if receipt is None:
+                return
+            answered = [query for query in receipt["queries"] if query.get("status") == "completed"]
+            receipt.update(status=item.get("norm_status"), reason=item.get("norm_reason"),
+                selected_candidate_ids=[candidate["paragraph_id"] for candidate in item.get("norm_candidates", [])],
+                selected_candidate_count=len(item.get("norm_candidates", [])),
+                queries_answered=len(answered), queries_without_answer=max(0, len(queries) - len(answered)),
+                search_calls_started=sum(query.get("search_started") is True for query in receipt["queries"]),
+                reused_query_answers=sum(query.get("cache_reused") is True for query in answered),
+                search_tail_not_read=any(query.get("has_more") is True for query in answered))
         if not available or not queries:
             item["norm_status"] = "unavailable"
             item["norm_reason"] = "corpus_unavailable" if not available else "query_not_proposed"
+            finish_receipt()
             continue
         candidates = []
+        active_query = None
         try:
             for query in (queries if full_document else queries[:2]):
                 key = " ".join(query.casefold().split())
+                if receipt is not None:
+                    active_query = {"query": query, "normalized_query": key, "status": "not_searched",
+                        "search_started": False, "cache_reused": key in cache}
+                    receipt["queries"].append(active_query)
                 if key not in cache:
                     if not full_document and calls >= 12:
                         item["norm_reason"] = "lookup_window_exhausted"
                         warnings.append("norm_lookup_window_exhausted")
+                        if active_query is not None:
+                            active_query["reason"] = "lookup_window_exhausted"
                         break
                     if checkpoint is not None:
                         checkpoint("extended_norm_lookup")
                     calls += 1
+                    if active_query is not None:
+                        active_query["search_started"] = True
                     page = search_norms(session, q=query, norms_snapshot_id=snapshot_id,
                         cursor=None, limit=3, timeout_ms=1200)
                     cache[key] = [{"snapshot_id": hit.norms_snapshot_id, "document_id": hit.norm_document_id,
                         "paragraph_id": hit.norm_paragraph_id, "designation": hit.designation,
                         "clause_number": hit.clause_number, "quote": hit.fragment.text[:2000],
                         "page_label": hit.page_label, "status": "candidate_not_verified"} for hit in page.items]
+                    if receipt is not None:
+                        cache_receipts[key] = {"has_more": page.next_cursor is not None, "received_hits": len(page.items),
+                            "hits": [{"snapshot_id": hit.norms_snapshot_id, "document_id": hit.norm_document_id,
+                                "paragraph_id": hit.norm_paragraph_id, "designation": hit.designation,
+                                "clause_number": hit.clause_number, "page_label": hit.page_label,
+                                "received_fragment_characters": len(hit.fragment.text),
+                                "candidate_quote_characters": min(2000, len(hit.fragment.text)),
+                                "candidate_quote_truncated": len(hit.fragment.text) > 2000,
+                                "candidate_quote_sha256": hashlib.sha256(hit.fragment.text[:2000].encode("utf-8")).hexdigest()}
+                                for hit in page.items]}
+                if active_query is not None:
+                    active_query.update(deepcopy(cache_receipts[key]), status="completed")
                 for candidate in cache[key]:
                     if any(c["paragraph_id"] == candidate["paragraph_id"] for c in candidates):
                         continue
                     candidates.append(candidate)
             item["norm_status"] = "candidates" if candidates else "unavailable" if item.get("norm_reason") == "lookup_window_exhausted" else "not_found"
             item["norm_candidates"] = candidates if full_document else candidates[:6]
-        except DomainError:
+        except DomainError as error:
             session.rollback()
             item["norm_status"] = "unavailable"
             item["norm_reason"] = "lookup_unavailable"
+            if active_query is not None:
+                active_query.update(status="failed", error_code=error.code.value, reason="lookup_unavailable")
+        finish_receipt()
     return sorted(set(warnings))
 
 
@@ -1123,6 +1171,12 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
                 for record in records for identity, receipt in record.get("project_parameter_context_receipts", {}).items()]
         state["sources"]=list(source_index.values())
         state["observations"]=observations
+        if policy.get("coverage_version") == "batched-v1":
+            state["norm_lookup_receipts"] = [{"window_id": record["window_id"], **receipt}
+                for record in records for receipt in record.get("norm_lookup_receipts", [])]
+            if isinstance(global_review, dict):
+                state["norm_lookup_receipts"].extend({"window_id": "global-cross-window", **receipt}
+                    for receipt in global_review.get("norm_lookup_receipts", []))
         if "norm_paragraph_context_policy" in policy:
             state["norm_paragraph_context_policy"] = deepcopy(policy["norm_paragraph_context_policy"])
             state["normative_context_receipts"] = [{"window_id": record["window_id"], "batch_index": identity, **receipt}
@@ -1485,7 +1539,7 @@ def _norm_batched_v3(*, session, run, binding, state, snapshot_id, phase, call, 
     # Retrieval is local corpus work. Every observation remains present even if
     # its quote assessment is outside the separately accepted model-call limit.
     state['warnings'].extend(_norms(session, state['observations'], snapshot_id,
-        full_document=True, checkpoint=checkpoint))
+        full_document=True, checkpoint=checkpoint, lookup_receipts=state.setdefault('norm_lookup_receipts', [])))
     registry={}
     quote_variants=False
     context_incomplete=False

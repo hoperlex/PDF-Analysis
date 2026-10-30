@@ -16,6 +16,7 @@ import { CoverageBudget } from './coverage-budget';
 import { CrossWindowReview } from './cross-window-review';
 import { ProjectParameters } from './project-parameters';
 import { NormativeContext } from './normative-context';
+import { NormativeSearches } from './normative-searches';
 import { extendedCandidateCounts } from './extended-review-summary';
 import styles from './extended-review.module.css';
 
@@ -184,6 +185,7 @@ export function ExtendedReviewView({ reading, projectUid }: { reading: ExtendedR
     <CrossWindowReview key={reading.run_id} value={result?.global_cross_window} observations={observations} sources={sources} fallbackVersion={text(result?.version_uid)} {...(projectUid === undefined ? {} : { projectUid })} />
     <ProjectParameters key={`parameters:${reading.run_id}`} value={result?.project_parameters} fallbackVersion={text(result?.version_uid)} {...(projectUid === undefined ? {} : { projectUid })} />
     <NormativeContext key={`norm-context:${reading.run_id}`} policy={result?.norm_paragraph_context_policy} receipts={result?.normative_context_receipts} />
+    <NormativeSearches key={`norm-searches:${reading.run_id}`} value={result?.norm_lookup_receipts} />
     {v3 && result?.primary_text_status === 'pending' ? <p>Базовый текстовый анализ ещё выполняется. {result.visual_phase_complete === true ? 'Визуальный проход сохранён; свод и последующие проверки ожидают текстовый результат.' : 'Сохранённые визуальные результаты ещё не означают завершения анализа раздела.'}</p> : null}
     {coverage && <p>Исследовано блоков: <strong>{count(coverage.blocks_processed)}</strong> из {count(coverage.blocks_total)}. {fullWindow ? 'В плане' : 'В одобренном окне'}: {count(coverage.blocks_selected)}. Ещё не исследовано или недоступно: <strong>{count(coverage.blocks_remaining)}</strong>.</p>}
     {textCoverage === null ? null : <section data-extended-text-coverage=""><p>Комплексная сверка текста: успешно обработано страниц <strong>{count(textCoverage.pages_processed)}</strong> из {count(textCoverage.pages_total)}. В плане: {count(textCoverage.pages_selected)}. Ещё не обработано или недоступно: <strong>{count(textCoverage.pages_remaining)}</strong>.</p>{typeof textCoverage.characters_total === 'number' ? <p>Известный текстовый объём: {count(textCoverage.characters_processed)} из {count(textCoverage.characters_total)} символов обработано; осталось {count(textCoverage.characters_remaining)}. План может уточняться после подготовки следующих окон.</p> : null}<p>Эти счётчики не подтверждают отсутствие ошибок или экспертную проверку.</p></section>}
