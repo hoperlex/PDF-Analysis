@@ -225,7 +225,8 @@ class ExecutionAdapter(_SessionHolder):
             return _run_status_view(session, run_id)
         return self._write(write)
 
-    def reaudit_run(self, *, run_id: str, user_uid: str, idempotency_key: str) -> RunStatusView:
+    def reaudit_run(self, *, run_id: str, user_uid: str, idempotency_key: str,
+                    cost_consent: dict[str, Any] | None = None) -> RunStatusView:
         from auditmanager.runs.commands import reaudit_run
 
         profile, bundle, mode = self._runs.current_configuration()
@@ -251,6 +252,8 @@ class ExecutionAdapter(_SessionHolder):
                                  idempotency_key=idempotency_key,
                                  provider_mode=mode, input_budget_characters=budget,
                                  connection_route=self._runs.route_freezer,
+                                 cost_preflight=self._runs.cost_preflight if self._runs.require_cost_consent or cost_consent is not None else None,
+                                 cost_consent=cost_consent, cost_actor_uid=user_uid,
                                  **explicit)
             return result.run_id, result.replayed, _run_status_view(session, result.run_id)
         new_id, replayed, view = self._write(write)
@@ -925,11 +928,21 @@ class RunAdapter(_SessionHolder):
             raise ValueError("served analysis starts require a cost preflight policy")
 
     def estimate_run_cost(self, *, version_uid: str, executor_connection_id: str | None = None,
+                          reaudit_of_run_id: str | None = None,
                           preset_id: str | None = None, relaxed_limits: bool = False) -> models.RunCostEstimate:
         if self._cost_preflight is None:
             raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
-        value = self._read(lambda session: self._cost_preflight.estimate_run(session, version_uid=version_uid,
-            executor_connection_id=executor_connection_id, preset_id=preset_id, relaxed_limits=relaxed_limits))
+        def estimate(session):
+            if reaudit_of_run_id is not None:
+                if executor_connection_id is not None or preset_id is not None or relaxed_limits:
+                    raise DomainError(ErrorCode.VALIDATION_FAILED, field="reaudit_of_run_id", constraint="server_selected_route")
+                value = self._cost_preflight.estimate_reaudit(session, run_id=reaudit_of_run_id)
+                if value.as_dict()["version_uid"] != version_uid:
+                    raise DomainError(ErrorCode.VALIDATION_FAILED, field="version_uid", constraint="reaudit_source_version")
+                return value
+            return self._cost_preflight.estimate_run(session, version_uid=version_uid,
+                executor_connection_id=executor_connection_id, preset_id=preset_id, relaxed_limits=relaxed_limits)
+        value = self._read(estimate)
         return models.RunCostEstimate.model_validate(value.as_dict())
 
     def estimate_ar_v3_group_cost(self, *, version_uid: str, relaxed_limits: bool = False) -> models.RunCostEstimate:
@@ -1196,6 +1209,14 @@ class RunAdapter(_SessionHolder):
         """`EXEC-HTTP-01`: the run-start freezer of the ``database`` source, or ``None``.
         ``ExecutionAdapter.reaudit_run`` passes it so a re-audit freezes today's route."""
         return self._route_freezer
+
+    @property
+    def cost_preflight(self) -> Any:
+        return self._cost_preflight
+
+    @property
+    def require_cost_consent(self) -> bool:
+        return self._require_cost_consent
 
     @property
     def section_profiles(self) -> Mapping[str, tuple[str, str]] | None:

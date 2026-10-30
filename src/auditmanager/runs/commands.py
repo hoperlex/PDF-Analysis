@@ -906,6 +906,9 @@ def reaudit_run(
     input_budget_characters: int | None = None,
     section_profiles: SectionProfiles | None = None,
     connection_route: RouteFreezer | None = None,
+    cost_preflight: Any = None,
+    cost_consent: Mapping[str, Any] | None = None,
+    cost_actor_uid: str | None = None,
 ) -> StartedRun:
     """Create one new run of a terminal source's document version, on today's configuration.
 
@@ -958,7 +961,9 @@ def reaudit_run(
     source_version = document_repo.get_version(session, VersionUid.parse(source.version_uid))
     refuse_comparison_only_version(source_version)
     frozen: FrozenRoute | None = None
-    if (section_profiles is not None or budget is not None or connection_route is not None) and ledger.find(
+    approved_cost = None
+    if (section_profiles is not None or budget is not None or connection_route is not None
+            or cost_preflight is not None or cost_consent is not None) and ledger.find(
         session, command_type="reaudit_run", idempotency_key=IdempotencyKey(idempotency_key)
     ) is None:
         if section_profiles is not None:
@@ -968,10 +973,17 @@ def reaudit_run(
         chosen_connection_id = repository.chosen_executor_connection(session, source_run_id)
         if chosen_connection_id is not None and connection_route is None:
             raise _chosen_executor_unserved()
-        if connection_route is not None:
+        if cost_preflight is not None:
+            estimate = cost_preflight.estimate_reaudit(session, run_id=source_run_id, version_record=source_version)
+            approved_cost = estimate.approve(None if cost_consent is None else dict(cost_consent), actor_user_uid=cost_actor_uid)
+            frozen = estimate.frozen_route
+            budget = approved_cost["window_characters"]
+        elif cost_consent is not None:
+            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
+        elif connection_route is not None:
             frozen = _freeze_for(session, connection_route, chosen_connection_id)
             budget = frozen.input_budget_characters
-        if budget is not None:
+        if budget is not None and approved_cost is None:
             _refuse_over_window_budget(source_version.text_character_count, budget)
     claimed = ledger.begin(
         session, command_type="reaudit_run",
@@ -979,6 +991,7 @@ def reaudit_run(
         fingerprint=payload_fingerprint({
             "reaudit_of_run_id": source_run_id,
             "frozen_input_digest": source.frozen_input_digest,
+            **({"cost_consent": dict(cost_consent)} if cost_consent is not None else {}),
         }),
     )
     if isinstance(claimed, CommandReplay):
@@ -1041,7 +1054,8 @@ def reaudit_run(
     _journal_executor_choice(session, new_id, frozen)
     repository.advance(session, run_id=new_id, from_state="created", to_state="queued")
     (jobs or JobRepository()).enqueue(session, run_id=new_id)
-    ledger.succeed(session, claimed.command_id, {"run_id": new_id})
+    ledger.succeed(session, claimed.command_id, {"run_id": new_id,
+        **({"cost_consent": approved_cost} if approved_cost is not None else {})})
     return StartedRun(new_id, str(claimed.command_id), False)
 
 

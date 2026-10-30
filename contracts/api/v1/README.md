@@ -14,7 +14,7 @@ Minimum conventions:
 ## Combined current contract `1.13.0`
 
 The serial CMP integrator reconciles C2–C4 with owner hotfixes06b94745/99b337fb.
-The current API has230paths/256operations/618schemas; migration head0043.
+The current API has230paths/256operations/619schemas; migration head0043.
 The additive cost preflight slice supplies source-bound estimates and explicit ceiling consent.
 Both StartRunRequest and StartArV3BetaGroupRequest retain optional relaxed_limits.
 Comparison evidence, spend consent, expert review and the stage APIs remain present.

@@ -175,6 +175,20 @@ class RunCostPreflight:
             frozen=frozen, chosen=chosen, relaxed=relaxed_limits, scope="run", windows=windows, calls=windows,
             input_tokens=input_tokens, output_tokens=output_tokens, window_characters=window)
 
+    def estimate_reaudit(self, session, *, run_id, version_record=None):
+        from .repository import RunRepository
+        runs = RunRepository()
+        source_run = runs.get(session, run_id)
+        executor = runs.chosen_executor_connection(session, run_id)
+        value = self.estimate_run(session, version_uid=source_run.version_uid,
+            executor_connection_id=executor, version_record=version_record)
+        authority = json.loads(value.authority_json)
+        # A fresh approval is for this new re-audit, never the parent's paid work.
+        authority["reaudit_of_run_id"] = run_id
+        public = value.as_dict()
+        public["estimate_digest"] = _digest(authority)
+        return RunCostEstimateValue(_json(public), _json(authority), value.frozen_route)
+
     def estimate_group(self, session, *, version_uid, relaxed_limits=False, version_record=None):
         from .v3_group import _validate_pack
         if type(relaxed_limits) is not bool:

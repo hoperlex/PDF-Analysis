@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Path, Query
+from fastapi import APIRouter, Body, Path, Query
 from pydantic import WithJsonSchema
 
 from auditmanager.api.routers.declarations import CursorParam, LimitParam, envelope_responses, success
@@ -81,9 +81,12 @@ def build_execution_routes(router: APIRouter, execution: ExecutionPort) -> None:
     def reaudit_run(
         subject: CurrentSubject, run_id: Annotated[models.RunId, Path()],
         idempotency_key: RequiredIdempotencyKey,
+        body: models.ReauditRunRequest = Body(default=None),
     ) -> WireResponse:
         view = execution.reaudit_run(
-            run_id=run_id, user_uid=subject.user_uid, idempotency_key=idempotency_key
+            run_id=run_id, user_uid=subject.user_uid, idempotency_key=idempotency_key,
+            **({"cost_consent": body.cost_consent.model_dump(mode="json")}
+                if body is not None and body.cost_consent is not None else {}),
         )
         return json_response(202, encode_json(run_status_body(view)))
 

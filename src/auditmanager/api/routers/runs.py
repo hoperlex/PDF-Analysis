@@ -50,6 +50,7 @@ def build_run_routes(router: APIRouter, runs: RunPort) -> None:
     def estimate_run_cost(body: models.RunCostEstimateRequest) -> WireResponse:
         estimate = runs.estimate_run_cost(version_uid=body.version_uid,
             executor_connection_id=body.executor_connection_id, preset_id=body.preset_id,
+            **({"reaudit_of_run_id": body.reaudit_of_run_id} if body.reaudit_of_run_id is not None else {}),
             relaxed_limits=body.relaxed_limits is True)
         return json_response(200, encode_json(estimate.model_dump(mode="json")))
 

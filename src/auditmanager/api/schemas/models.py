@@ -209,6 +209,7 @@ __all__ = [
     "RunCostEstimateRequest",
     "ArV3GroupCostEstimateRequest",
     "RunCostEstimate",
+    "ReauditRunRequest",
     "SubmitRegistrationRequest",
     "UpdateMyProfileRequest",
     "UpdateUserRequest",
@@ -1295,6 +1296,7 @@ class RunCostConsent(_Object):
 
 class RunCostEstimateRequest(_Object):
     version_uid: VersionUid
+    reaudit_of_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     executor_connection_id: ExecutorConnectionId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     preset_id: PresetId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     relaxed_limits: bool = Field(default=None, strict=True, json_schema_extra=optional_property)  # type: ignore[assignment]
@@ -1341,6 +1343,10 @@ class StartRunRequest(_Object):
     preset_id: PresetId = Field(
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
+
+
+class ReauditRunRequest(_Object):
+    cost_consent: RunCostConsent = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class StartArV3BetaGroupRequest(_Object):
