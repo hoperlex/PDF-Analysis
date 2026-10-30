@@ -32,6 +32,8 @@ const reasonLabels: Record<string, string> = {
   provider_binding_unavailable: 'Исполнитель для принятого задания недоступен.',
   provider_outcome_unknown: 'Результат обращения к исполнителю неизвестен. Повторная оплата автоматически не выполняется.',
   missing_artifact: 'Финальная запись результата ещё не получена.',
+  corpus_unavailable: 'В этом прогоне нет доступного нормативного корпуса. Проверка ссылок не выполнена.',
+  candidate_context_unavailable: 'Для наблюдений не найдены цитаты нормативного корпуса, пригодные для модельной сверки.',
 };
 const FINAL_STATES = new Set(['completed', 'partial', 'failed', 'unavailable', 'skipped']);
 export const MAX_TERMINAL_REVIEW_READS = 8;
@@ -62,6 +64,7 @@ const warningLabels: Record<string, string> = {
   merge_omitted_sources_retained: 'Не включённые в модельный свод исходные наблюдения сохранены отдельно.',
   text_observations_outside_merge_window: 'Часть текстовых наблюдений находится за пределами окна свода.',
   page_context_truncated: 'Текстовый контекст страниц ограничен по размеру; обзор не охватывает весь текст страницы.',
+  visual_context_bounded_full_text_reviewed: 'Контекст отдельных изображений сокращён; полный текст страниц передан в комплексную сверку по частям.',
   norm_lookup_window_exhausted: 'Исчерпано окно поиска по корпусу; часть нормативных оснований не проверялась.',
   merge_context_truncated: 'Для свода использованы сокращённые описания; подробные источники требуют экспертной сверки.',
 };
@@ -106,11 +109,12 @@ export function ExtendedReviewView({ reading, projectUid }: { reading: ExtendedR
   const procedures = objects(result?.procedures);
   const v2 = result?.workflow_version === 'extended-review-v2';
   const coverage = object(result?.coverage);
+  const fullWindow = result?.review_scope === 'full_document';
   const sources = objects(result?.sources);
   const observations = objects(result?.observations);
   return <section aria-label={v2 ? 'Полная цепочка анализа' : 'Предварительный обзор блоков'} data-extended-review={reading.status} data-workflow-version={text(result?.workflow_version)}>
     <h2>{v2 ? 'Полная цепочка анализа · расширенные процедуры' : 'Предварительный обзор блоков'}</h2>
-    <p><strong>{labels[reading.status] ?? 'Состояние неизвестно'}</strong>. Изображения и текст проверяются в ограниченном одобренном окне. Это наблюдения для экспертной сверки, а не подтверждённые нарушения или решения эксперта.</p>
+    <p><strong>{labels[reading.status] ?? 'Состояние неизвестно'}</strong>. {fullWindow ? 'План включает все доступные блоки; текст страниц обрабатывается по частям.' : 'Изображения и текст проверяются в ограниченном одобренном окне.'} Это наблюдения для экспертной сверки, а не подтверждённые нарушения или решения эксперта.</p>
     {typeof result?.reason === 'string' ? <p role="status">{reasonLabels[result.reason] ?? 'Сервер сообщил ограничение выполнения; полное завершение не подтверждено.'}</p> : null}
     {v2 ? <>
       <p>Продолжение базовых этапов. Ход расширенных процедур показан ниже.</p>
@@ -121,7 +125,7 @@ export function ExtendedReviewView({ reading, projectUid }: { reading: ExtendedR
         </li>)}
       </ol>}
     </> : procedures.length === 0 && result?.reason === undefined ? <p>Полная цепочка для этого прогона не подтверждена сервером. Историческим прогонам новые процедуры не приписываются.</p> : null}
-    {coverage && <p>Исследовано блоков: <strong>{count(coverage.blocks_processed)}</strong> из {count(coverage.blocks_total)}. В одобренном окне: {count(coverage.blocks_selected)}. Ещё не исследовано или недоступно: <strong>{count(coverage.blocks_remaining)}</strong>.</p>}
+    {coverage && <p>Исследовано блоков: <strong>{count(coverage.blocks_processed)}</strong> из {count(coverage.blocks_total)}. В плане: {count(coverage.blocks_selected)}. Ещё не исследовано или недоступно: <strong>{count(coverage.blocks_remaining)}</strong>.</p>}
     {Array.isArray(result?.warnings) && result.warnings.length > 0 && <ul>{result.warnings.map((warning, i) => <li key={i}>{warningLabels[text(warning)] ?? 'Обзор имеет ограничение или ошибку; проверьте источники и состояние прогона.'}</li>)}</ul>}
     {observations.length === 0 ? <p>Предварительные наблюдения не получены. Это не подтверждение отсутствия проблем в документе.</p> : <ol>{observations.map((item, index) => <li key={text(item.observation_id) || index}>
       <h3>{text(item.title)}</h3><p>{text(item.description)}</p>

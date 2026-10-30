@@ -12,8 +12,8 @@ import hashlib
 
 
 def prepare_native_page_sources(*, version_uid, source_ref, blob_store, max_pages=16, checkpoint=None):
-    """Publish at most16 genuine whole-page PNGs; never mint portal block identities."""
-    if type(max_pages) is not int or not 1 <= max_pages <= 16:
+    """Publish the requested genuine page PNGs; never mint portal block identities."""
+    if type(max_pages) is not int or not 1 <= max_pages <= 500:
         raise ValueError("native_page_limit_invalid")
     bid = parse_blob_id(source_ref.blob_id)
     recorded = blob_store.inspect(bid)

@@ -114,6 +114,91 @@ def test_v2_runtime_true_phases_four_call_cap_and_originals_survive_bad_norm(mon
     assert all(p['status']=='queued' for p in saved[0][1]['procedures'])
 
 
+def test_fresh_full_document_policy_reviews_all_forty_seven_blocks_and_pages(monkeypatch):
+    portal, manifest, blobs = documents(47)
+    docs = {'geometry.portal_blocks': portal, 'geometry.page_crops': manifest,
+        'prepared.text_layer': {'pages': [{'page_number': i, 'text': 'Настоящий текст страницы'}
+            for i in range(1, 48)]}, 'context.document_graph': {'sections': []}}
+    for role, doc in docs.items():
+        blobs[role] = json.dumps(doc).encode()
+    monkeypatch.setattr(runtime, 'DocumentRepository', lambda: NS(get_version=lambda *_: NS(
+        classification=NS(section_code='AR'), page_count=47)))
+    import auditmanager.analysis.public as public
+    monkeypatch.setattr(public, 'read_artifact', lambda _store, bid, **_: (docs[str(bid)], 'a'*64))
+    monkeypatch.setattr(runtime, 'parse_blob_id', lambda value: value)
+    monkeypatch.setattr(runtime, 'extended_unit', lambda *_args, **_kw: None)
+    monkeypatch.setattr(runtime, 'search_norms', lambda _session, **kwargs: NS(items=(NS(
+        norms_snapshot_id='snapshot', norm_document_id='doc', norm_paragraph_id='paragraph',
+        designation='СП', clause_number='1', fragment=NS(text='Реальная цитата'), page_label=1),)))
+    adapter = WorkflowAdapter()
+    saved = []
+    def publish(_role, doc):
+        raw = json.dumps(doc).encode()
+        key = 'reply' + str(len(blobs))
+        blobs[key] = raw
+        return NS(blob_id=key, sha256=sha256(raw).hexdigest(), size_bytes=len(raw))
+    result = runtime.run_extended_review(Session(), run=NS(run_id='run', version_uid=VERSION),
+        authority=NS(), jobs=Jobs(), journal=Journal(),
+        binding=NS(adapter=adapter, config=ProviderConfig(ProviderMode.RECORDED, 'claude-opus-5', 50., None, False), call=None),
+        outputs=NS(refs={k: NS(blob_id=k) for k in docs}), store=Store(blobs), meter=CostMeter(50.),
+        publish=publish, progress=lambda status, value: saved.append(status), checkpoint=lambda _: None,
+        observations_document=None, snapshot_id='snapshot',
+        policy={'enabled': True, 'max_blocks': 'all', 'plan_version': 'extended-review-v2'})
+    assert result['coverage']['blocks_processed'] == result['coverage']['blocks_selected'] == 47
+    assert result['coverage']['blocks_remaining'] == 0
+    assert not result['coverage']['skipped']
+    assert len([r for r in adapter.requests if r.images_bytes]) == 6
+    assert len([r for r in adapter.requests if json.loads(r.body['messages'][0]['content']).get('procedure') == 'comprehensive_analysis']) == 6
+    assert {p['status'] for p in result['procedures']} == {'completed'}
+    assert saved[-1] == 'completed'
+
+
+def test_full_comprehensive_batches_cover_every_character_without_provider_truncation():
+    pages = [{'page_number': 1, 'text': 'A' * 90_001}, {'page_number': 2, 'text': 'B' * 19_001}]
+    state = {'sources': [], 'text_items': [], 'source_sha256': 'a'*64, 'coverage': {'blocks_total': 0}}
+    seen = []
+    def answer(request, _phase):
+        payload = json.loads(request.body['messages'][0]['content'])
+        assert payload['context_coverage']['truncated'] is False
+        seen.extend(payload['native_context'])
+        return NS(output_text='{"observations":[]}')
+    assert runtime._full_comprehensive_review(run=NS(run_id='run', version_uid=VERSION),
+        model_id='claude-opus-5', section='AR', state=state, pages=pages,
+        block_items=[], call=answer) == []
+    for page in pages:
+        assert ''.join(context['text'] for context in seen if context['page_number'] == page['page_number']) == page['text']
+    assert len(seen) == 4
+
+
+def test_full_norm_review_processes_all_observations_in_multiple_calls(monkeypatch):
+    sources = [{'source_id': f'source-{index}', 'kind': 'text', 'page_number': index}
+        for index in range(41)]
+    observations = [{'title': f'Наблюдение {index}', 'description': 'Сверить',
+        'source_ids': [source['source_id']], 'norm_queries': ['СП 1'], 'norm_candidates': []}
+        for index, source in enumerate(sources)]
+    state = {'sources': sources, 'observations': observations, 'source_sha256': 'a'*64, 'warnings': []}
+    monkeypatch.setattr(runtime, 'search_norms', lambda _session, **kwargs: NS(items=(NS(
+        norms_snapshot_id='snapshot', norm_document_id='doc', norm_paragraph_id='paragraph',
+        designation='СП', clause_number='1', fragment=NS(text='Реальная цитата'), page_label=1),)))
+    calls, phases = [], []
+    def answer(request, identity):
+        calls.append(identity)
+        payload = json.loads(request.body['messages'][0]['content'])
+        values = []
+        for original in payload['observations']:
+            values.append({k: original[k] for k in ('title', 'description', 'source_ids')} |
+                {'norm_queries': [], 'input_ids': [original['input_id']], 'norm_assessment': {
+                    'relation': 'insufficient', 'explanation': 'Требует проверки',
+                    'citations': [{'paragraph_id': 'paragraph', 'quote': 'Реальная цитата'}]}})
+        return NS(output_text=json.dumps({'observations': values}))
+    runtime._full_norm_verification(session=Session(), run=NS(run_id='run'),
+        model_id='claude-opus-5', section='AR', state=state, snapshot_id='snapshot',
+        call=answer, phase=lambda *args: phases.append(args), checkpoint=lambda _: None)
+    assert len(calls) == 2
+    assert phases == [('norm_verification', 'completed')]
+    assert all(item['norm_assessment']['relation'] == 'insufficient' for item in observations)
+
+
 def test_planned_v2_receipt_has_queued_phases_and_terminal_skip_reason():
     queued=runtime.planned_workflow_result()
     assert len(queued['procedures'])==4 and all(p['status']=='queued' for p in queued['procedures'])

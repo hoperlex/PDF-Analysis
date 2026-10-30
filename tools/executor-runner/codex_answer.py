@@ -8,8 +8,9 @@ dedicated local account whose Codex CLI was signed in with ChatGPT interactively
 
 from __future__ import annotations
 
-import json
+import copy
 import hashlib
+import json
 import os
 import re
 import shutil
@@ -157,6 +158,34 @@ def _environment() -> dict[str, str]:
     return {name: os.environ[name] for name in allowed if name in os.environ}
 
 
+def _codex_output_schema(schema: dict) -> dict:
+    """Give Codex two complete shapes for a section observation's optional omission claim.
+
+    Codex strict output requires every property of an object in ``required``. The task's
+    section schema deliberately leaves ``omission`` optional: only a documentation
+    observation may need that claim. Splitting the item into absent/present alternatives
+    preserves both valid answers while satisfying Codex. The stand still validates the
+    answer against its original task schema; this copy is only a generation constraint.
+    """
+    result = copy.deepcopy(schema)
+    observations = result.get("properties", {}).get("observations", {})
+    item = observations.get("items", {}) if isinstance(observations, dict) else {}
+    properties = item.get("properties", {}) if isinstance(item, dict) else {}
+    required = item.get("required", []) if isinstance(item, dict) else []
+    if not isinstance(properties, dict) or "omission" not in properties:
+        return result
+    if not isinstance(required, list) or "omission" in required:
+        return result
+    if (item.get("type") != "object" or item.get("additionalProperties") is not False
+            or set(required) != set(properties) - {"omission"}):
+        raise TaskError("codex_schema_unsupported")
+    without = {**item, "properties": {name: value for name, value in properties.items()
+                                      if name != "omission"}}
+    with_omission = {**item, "required": [*required, "omission"]}
+    observations["items"] = {"anyOf": [without, with_omission]}
+    return result
+
+
 def answer(task: dict, *, codex: str | None = None) -> str:
     executable = codex or shutil.which("codex")
     if executable is None:
@@ -173,7 +202,7 @@ def answer(task: dict, *, codex: str | None = None) -> str:
         root = Path(area)
         schema_path, answer_path, events_path = (
             root / "schema.json", root / "answer.json", root / "events.jsonl")
-        schema_path.write_text(json.dumps(task["output_schema"], ensure_ascii=False),
+        schema_path.write_text(json.dumps(_codex_output_schema(task["output_schema"]), ensure_ascii=False),
                                encoding="utf-8")
         schema_path.chmod(0o600)
         image_args: list[str] = []
