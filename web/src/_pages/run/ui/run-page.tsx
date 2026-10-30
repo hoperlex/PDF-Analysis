@@ -14,6 +14,7 @@ import { PageShell } from '@/shared/ui';
 import { routes } from '@/shared/lib';
 
 import { LazyRunProgress } from './lazy-run-progress';
+import styles from './run-page.module.css';
 
 export interface RunPageProps {
   readonly projectUid: string;
@@ -37,7 +38,9 @@ export function RunPage({ projectUid, runId }: RunPageProps) {
         </>
       }
     >
-      <LazyRunProgress projectUid={projectUid} runId={runId} />
+      <div className={styles.content}>
+        <LazyRunProgress projectUid={projectUid} runId={runId} />
+      </div>
     </PageShell>
   );
 }

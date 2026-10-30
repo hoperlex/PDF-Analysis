@@ -1,5 +1,13 @@
 # Current state
 
+**Updated 2026-10-30 by `DESIGN-M04-RUN` (development candidate only).**
+Dispatcher assignments, Run facts and Review list/detail/export now use
+responsive panels in the shared two-theme palette. Run stage rail and outcome
+retain their existing semantic statuses and progress polling; Review retains
+finding admission, evidence, decision and export behavior. Typecheck, lint and
+128 focused tests pass. No API, contract, migration or `origin/main` change is
+included. Publication is to `origin/dev` only; M05–M10 remain.
+
 **Updated 2026-10-30 by `DESIGN-M03-PROJECT` (development candidate only).**
 The project, document and version routes now group their existing tabs,
 sections, upload panels, version list, classification and run list in responsive
