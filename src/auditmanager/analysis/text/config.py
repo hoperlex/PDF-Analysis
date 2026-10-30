@@ -83,6 +83,12 @@ class ProviderConfig:
     #: ``True`` when the operator set the ceiling rather than inheriting the
     #: stand-in above. Recorded so a run report can say which number was in force.
     ceiling_is_explicit: bool
+    approved_window_characters: int | None = None
+    approved_max_windows: int | None = None
+    approved_cost_ceiling: bool = False
+    approved_model_id: str | None = None
+    approved_rate_sha256: str | None = None
+    approved_connection_revision_id: str | None = None
 
 
 def _read_ceiling(environ: Mapping[str, str]) -> tuple[float, bool]:

@@ -31,7 +31,7 @@ from auditmanager.analysis.public import (
     input_budget_characters,
 )
 from auditmanager.analysis.text import CallBinding, ModelRequest, ModelResponse, ProviderMode
-from auditmanager.executors.public import SecretUnreadableError
+from auditmanager.executors.public import ExecutorRepository, SecretUnreadableError
 from auditmanager.executors.runtime import (
     DestinationPolicy,
     KindRuntime,
@@ -169,6 +169,9 @@ class DatabaseProviders(ProviderSource):
             freeze_connection(session, WORK_KIND) if connection_id is None
             else freeze_connection(session, WORK_KIND, connection_id=connection_id)
         )
+        revision = ExecutorRepository().get_revision(session, frozen.revision_id)
+        if revision is None:
+            raise route_missing()
         return FrozenRoute(
             revision_id=frozen.revision_id,
             # The budget follows the revision's pinned model, not the model the process
@@ -179,6 +182,7 @@ class DatabaseProviders(ProviderSource):
             standby_connection_id=frozen.standby_connection_id if frozen.used_standby else None,
             standby_reason=frozen.reason,
             chosen_connection_id=frozen.connection_id if frozen.explicit else None,
+            billing="unmetered" if revision.settings.billing == "not_metered" else "metered",
         )
 
     def resolve(self, session: Session, run: Any, context: Any) -> ProviderBinding:
