@@ -32,8 +32,11 @@ class StageAiMethod:
 
     @property
     def prompt_version(self) -> str:
+        return digest({"source": self.source_signature, "bundle": self.bundle_version})
+
+    @property
+    def bundle_version(self) -> str:
         return digest({
-            "source": self.source_signature,
             "review": [reviewer.PROMPT_VERSION, reviewer.SYSTEM_PROMPT, reviewer.REVIEW_SCHEMA],
             "classify": [classifier.PROMPT_VERSION, classifier.SYSTEM_PROMPT, classifier.CLASSIFICATION_SCHEMA],
             "synthesize": [synthesis.PROMPT_VERSION, synthesis.SYSTEM_PROMPT, synthesis.SYNTHESIS_SCHEMA],
@@ -73,7 +76,9 @@ class StageAiMethod:
             units = [dict(row) for row in session.execute(text(
                 "SELECT kind,group_id,state,progress AS payload FROM stage_ai_unit WHERE stage_chain_run_id=:run"
             ), {"run": request.scope.stage_chain_run_id}).mappings()]
-        completed = {(row["kind"], row["group_id"]) for row in units if row["state"] == "completed"}
+        completed = {(row["kind"], row["group_id"]) for row in units if row["state"] == "completed"
+                     and row["payload"].get("prompt_bundle_version") == self.bundle_version
+                     and not row["payload"].get("not_checked")}
         groups, call_groups = 0, []
         for component in link_components(snapshot["links"]):
             group_id = "grp:" + digest([link["stage_link_item_id"] for link in component])[:24]
@@ -109,9 +114,12 @@ class StageAiMethod:
             raw_graphics = (self._graphics.evidence(request.scope.stage_chain_run_id)
                             if request.scope.stage_chain_run_id and request.mode is not AiMode.START else ())
             by_pair = {(row["left_profile_id"], row["right_profile_id"]): row for row in raw_graphics}
+            checked = (self._repo.graphic_receipts(session, request.scope.stage_chain_run_id, revision)
+                       if request.scope.stage_chain_run_id and request.mode is not AiMode.START else set())
             for link in graphic.eligible_links(snapshot):
                 raw = by_pair.get((link["left_profile_id"], link["right_profile_id"]))
-                if request.mode is not AiMode.START and (raw is None or raw["status"] != "reliable" or not raw["regions"]):
+                if request.mode is not AiMode.START and ((raw is None and (link["left_profile_id"], link["right_profile_id"]) in checked)
+                        or raw is not None and (raw["status"] != "reliable" or not raw["regions"])):
                     continue
                 gid = graphic.group_id(raw["evidence_id"]) if raw else None
                 groups += 1

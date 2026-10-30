@@ -204,12 +204,63 @@ class StageAiRuntime:
         chosen = _consent(consent)
         jobs = self._jobs(provider_mode=record.provider_mode)
         resume = jobs.resume_in_session
+        if record.state in {"completed", "cancelled", "failed"}:
+            method = self._method()
+            jobs = self._jobs(method, provider_mode=record.provider_mode)
+            scope = self._scope(run, run_id=run_id)
+            estimate = jobs.estimate_in(session, scope, AiMode.LEFT, job=record)
+            if estimate.totals.calls == 0:
+                return str(job_id)  # only deterministic/cached work remains
+            if chosen is None or not chosen.confirmed:
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="consent", constraint="comparison_consent_required")
+            if chosen.estimate_digest != estimate.estimate_digest:
+                raise DomainError(ErrorCode.CONFLICT, conflict_reason="comparison_estimate_stale")
+            self._recovery_guard(session, run=run, job_id=str(job_id), model=estimate.route.pinned_model)
+            key = digest({"previous_job_id": job_id, "source": method.source_signature, "consent": chosen.estimate_digest})
+            view = jobs.start_in_session(session, scope=scope, consent=chosen, queue_items=False,
+                estimate_mode=AiMode.LEFT, estimate_job=record,
+                command=AiJobCommand("start_stage_review_ai", "stage-ai-recover-" + key, user_uid, roles))
+            new_id = str(view.record.job_id)
+            session.execute(text("UPDATE stage_chain_run SET comparison_ai_job_id=:job WHERE stage_chain_run_id=:run"),
+                            {"job": new_id, "run": run_id})
+            self._repo.source_consent(session, run_id=run_id, job_id=new_id, revision_id=run["revision_id"],
+                profiles=method.source_profiles, consent_no=view.record.consent_no, approved=True)
+            return new_id
         key = digest({"run_id": run_id, "consent": None if chosen is None else chosen.estimate_digest,
                       "pause_updated_at": record.updated_at.isoformat(), "consent_no": record.consent_no})
         view = resume(session, job_id=str(job_id), method="stage_review", consent=chosen, queue_items=False,
                       command=AiJobCommand("resume_stage_review_ai", "stage-ai-resume-" + key, user_uid, roles))
         self._repo.authorize_refusal_retry(session, run_id=run_id, job_id=str(job_id))
         return str(view.record.job_id)
+
+    def _recovery_guard(self, session, *, run, job_id, model):
+        snapshot = self._repo.revision(session, run["revision_id"])
+        for phase in ANSWER_TABLES:
+            try:
+                bundles = self._bundles(session, run_id=run["stage_chain_run_id"], snapshot=snapshot, phase=phase, model=model)
+            except StageAiValidationError:
+                continue  # no dependent plan exists before its prerequisite answer
+            for group, plans, sha, key in bundles:
+                progress = self._repo.previous_progress(session, run_id=run["stage_chain_run_id"], kind=phase,
+                    group_id=group.review.group_id, source_sha256=sha, content_key=key) or {}
+                saved = {event["request_sha256"] for row in progress.get("responses", {}).values()
+                         for event in list(row.get("history", ())) + [row]}
+                pins = dict(progress.get("request_pins", {}))
+                for plan in plans:
+                    if plan.payload.get("graphic") is None:
+                        pins.setdefault(plan.content_key, {"request_sha256": request_for_plan(plan).request_sha256})
+                for request_key, pin in pins.items():
+                    sha = pin["request_sha256"]
+                    if sha in saved:
+                        continue
+                    prior = self._repo.prior_call(session, job_id=job_id, request_sha256=sha)
+                    if prior is None:
+                        continue
+                    proof = progress.get("last_failure") or progress.get("provider_refusal", {})
+                    safe = (prior["state"] == "failed" and proof.get("call_id") == prior["comparison_model_call_id"]
+                            and (proof.get("retry_safe") is True or proof.get("dispatch_class") == "definite_refusal"))
+                    if not safe:
+                        raise DomainError(ErrorCode.CONFLICT, conflict_reason="stage_ai_recovery_call_not_retryable")
 
     def _checked(self, session, item, run_id):
         item.require_current(session)
@@ -289,7 +340,7 @@ class StageAiRuntime:
             jobs.pause_system(session, job_id, reason)
         self._repo.pause_run(session, run_id, reason)
 
-    def _failed(self, item, run_id, unit, jobs, job_id, reason):
+    def _failed(self, item, run_id, unit, jobs, job_id, reason, *, phase=None):
         try:
             with session_scope(self._sessions) as session:
                 item.require_current(session)
@@ -302,6 +353,7 @@ class StageAiRuntime:
                 if unit is not None:
                     self._repo.update_unit(session, unit["stage_ai_unit_id"], payload=unit["payload"],
                                            state="failed", reason=reason, job_id=actual_job)
+                self._repo.fail_run(session, run_id=run_id, phase=phase or (None if unit is None else unit["kind"]), reason=reason)
                 if actual_job:
                     jobs.fail(session, actual_job, reason)
         except DomainError as error:
@@ -329,7 +381,7 @@ class StageAiRuntime:
                     return {"groups": 0, "text_not_checked": 1, "graphic_not_checked": graphics}
                 job_id = str(job_id)
                 state = jobs.mark_running(session, job_id)
-                if state not in {"running", "completed"}:
+                if state not in {"running", "completed", "failed", "cancelled"}:
                     return Yielded(30) if state in {"queued", "paused"} else Failed("stage_ai_job_not_active")
                 job = jobs.job(session, job_id)
                 if "revision_id" in run and not self._repo.source_consent(session,
@@ -339,7 +391,7 @@ class StageAiRuntime:
                     self._pause(session, jobs, run_id=run_id, job_id=job_id, reason="overrun", spend=False)
                     return Yielded(30)
                 bundles = self._bundles(session, run_id=run_id, snapshot=snapshot, phase=phase, model=job.pinned_model)
-                if state == "completed":
+                if state != "running":
                     if all(self._repo.answer(session, run_id=run_id, kind=phase, content_key=key) is not None
                            for _group, _plans, _source_sha, key in bundles):
                         return {"groups": len(bundles), "completed": len(bundles), "graphic_not_checked": graphics}
@@ -347,6 +399,7 @@ class StageAiRuntime:
                 pending = []
                 for group, plans, source_sha, key in bundles:
                     payload = {"content_key": key, "pinned_model": job.pinned_model,
+                               "prompt_bundle_version": self._method().bundle_version,
                                "plan_keys": [plan.content_key for plan in plans], "responses": {},
                                "technical_retries": {}, "immutable_source": {
                                    "sources": [plan.payload for plan in plans],
@@ -436,6 +489,10 @@ class StageAiRuntime:
                 except CallLost:
                     return Yielded()
                 except CallFailed as error:
+                    unit["payload"]["last_failure"] = {"call_id": error.call_id,
+                        "request_key": waiting.plan.content_key, "request_sha256": request.request_sha256,
+                        "retry_safe": error.retry_safe, "dispatch_class": error.dispatch_class,
+                        "provider_failure_kind": error.provider_failure_kind}
                     failure_kind = getattr(error, "provider_failure_kind", None)
                     if failure_kind in {"quota", "auth"}:
                         unit["payload"]["provider_refusal"] = {
@@ -520,17 +577,17 @@ class StageAiRuntime:
                 value = asdict(parsed)
             with session_scope(self._sessions) as session:
                 self._checked(session, item, run_id)
+                call_ids = [event["call_id"] for row in responses.values()
+                            for event in list(row.get("history", ())) + [row]]
                 self._repo.save_answer(session, run_id=run_id, kind=phase, unit=unit, content_key=key,
                                        value=value, model_identity={"model": job.pinned_model,
-                                       "connection_revision_id": job.connection_revision_id,
-                                       "provider_mode": job.provider_mode,
-                                       "calls": [event["call_id"] for row in responses.values()
-                                                 for event in list(row.get("history", ())) + [row]]})
+                                       "accepted_under_job_id": job_id, "provider_mode": job.provider_mode,
+                                       "call_identities": self._repo.call_identities(session, call_ids), "calls": call_ids})
                 self._repo.update_unit(session, unit["stage_ai_unit_id"], payload=unit["payload"], state="completed", job_id=job_id)
             return Yielded()
         except (StageAiValidationError, ValueError):
             reason = "stage_ai_answer_invalid" if "unit" in locals() else "stage_ai_source_invalid"
-            return self._failed(item, run_id, locals().get("unit"), jobs, locals().get("job_id"), reason)
+            return self._failed(item, run_id, locals().get("unit"), jobs, locals().get("job_id"), reason, phase=phase)
         except DomainError as error:
             if error.code in {ErrorCode.STALE_ATTEMPT, ErrorCode.EXECUTION_TOKEN_INVALID}:
                 return Yielded()
@@ -540,10 +597,11 @@ class StageAiRuntime:
                 reason = "stage_ai_dependency_unavailable"
             if error.code is ErrorCode.NOT_FOUND:
                 return Failed(reason)
-            return self._failed(item, run_id, locals().get("unit"), jobs, locals().get("job_id"), reason)
+            return self._failed(item, run_id, locals().get("unit"), jobs, locals().get("job_id"), reason, phase=phase)
 
     def _fail_in(self, session, unit, jobs, job_id, reason):
         self._repo.update_unit(session, unit["stage_ai_unit_id"], payload=unit["payload"],
                                state="failed", reason=reason, job_id=job_id)
+        self._repo.fail_run(session, run_id=unit["stage_chain_run_id"], phase=unit["kind"], reason=reason)
         jobs.fail(session, job_id, reason)
         return Failed(reason)

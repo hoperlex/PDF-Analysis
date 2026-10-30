@@ -21,6 +21,41 @@ ANSWER_TABLES = {
 
 
 class StageAiRepository:
+    def generation(self, session: Session, run_id: str, job_id: str | None) -> int:
+        if job_id is None:
+            return 0
+        return int(session.execute(text(
+            "SELECT count(*)-1 FROM comparison_ai_job a JOIN comparison_ai_job target "
+            "ON target.comparison_ai_job_id=:job WHERE a.stage_chain_run_id=:run "
+            "AND (a.created_at,a.comparison_ai_job_id)<=(target.created_at,target.comparison_ai_job_id)"
+        ), {"run": run_id, "job": job_id}).scalar_one())
+
+    def previous_progress(self, session: Session, *, run_id: str, kind: str, group_id: str,
+                          source_sha256: str, content_key: str) -> dict[str, Any] | None:
+        rows = session.execute(text(
+            "SELECT progress FROM stage_ai_unit WHERE stage_chain_run_id=:run AND kind=:kind "
+            "AND group_id=:group AND source_sha256=:sha ORDER BY generation DESC,created_at DESC"
+        ), {"run": run_id, "kind": kind, "group": group_id, "sha": source_sha256}).scalars()
+        return next((dict(value) for value in rows if value.get("content_key") == content_key), None)
+
+    def fail_run(self, session: Session, *, run_id: str, phase: str | None, reason: str) -> None:
+        session.execute(text(
+            "UPDATE stage_chain_run SET state='failed',failure_reason=:reason,pause_reason=NULL,"
+            "updated_at=clock_timestamp() WHERE stage_chain_run_id=:run AND state IN ('queued','running','paused')"
+        ), {"run": run_id, "reason": reason})
+        if phase in ANSWER_TABLES:
+            session.execute(text(
+                "UPDATE stage_chain_step SET state='failed',failure_reason=:reason,finished_at=clock_timestamp(),"
+                "updated_at=clock_timestamp() WHERE stage_chain_run_id=:run AND step_no=:step AND state<>'completed'"
+            ), {"run": run_id, "step": {"review": 4, "classify": 5, "synthesize": 6}[phase], "reason": reason})
+
+    def graphic_receipts(self, session: Session, run_id: str, revision_id: str) -> set[tuple[str, str]]:
+        return set(session.execute(text(
+            "SELECT e.left_profile_id,e.right_profile_id FROM stage_graphic_evidence e "
+            "JOIN stage_link_item i ON i.stage_link_item_id=e.stage_link_item_id "
+            "WHERE e.stage_chain_run_id=:run AND i.stage_link_revision_id=:revision"
+        ), {"run": run_id, "revision": revision_id}).all())
+
     def source_consent(self, session: Session, *, run_id: str, job_id: str, revision_id: str,
                        profiles, consent_no: int, approved: bool = False) -> bool:
         source = {"revision_id": revision_id, "profiles": [
@@ -41,7 +76,8 @@ class StageAiRepository:
     def graphic_progress(self, session: Session, run_id: str) -> dict[str, dict[str, Any]]:
         return {row["group_id"]: dict(row) for row in session.execute(text(
             "SELECT group_id,state,progress FROM stage_ai_unit WHERE stage_chain_run_id=:run "
-            "AND kind='classify' AND group_id LIKE 'graphic:%'"
+            "AND kind='classify' AND group_id LIKE 'graphic:%' AND comparison_ai_job_id="
+            "(SELECT comparison_ai_job_id FROM stage_chain_run WHERE stage_chain_run_id=:run)"
         ), {"run": run_id}).mappings()}
 
     def page(self, session: Session, *, run_id: str, kind: str, after: str | None,
@@ -147,17 +183,28 @@ class StageAiRepository:
         unit_id = f"saunit_{new_ulid()}"
         progress = dict(payload)
         source_payload = progress.pop("immutable_source", {})
+        generation = self.generation(session, run_id, job_id)
+        previous = self.previous_progress(session, run_id=run_id, kind=kind, group_id=group_id,
+            source_sha256=source_sha256, content_key=progress.get("content_key", ""))
+        if previous is not None:
+            for key in ("responses", "request_pins", "history", "last_failure", "provider_refusal"):
+                if key in previous:
+                    progress[key] = previous[key]
+            progress["inherited_generations"] = generation
+            proof = previous.get("last_failure") or previous.get("provider_refusal", {})
+            if proof.get("retry_safe") is True or proof.get("dispatch_class") == "definite_refusal":
+                progress["manual_resume_retry"] = {"request_key": proof.get("request_key"), "call_id": proof.get("call_id")}
         session.execute(text(
-            "INSERT INTO stage_ai_unit(stage_ai_unit_id,stage_chain_run_id,comparison_ai_job_id,kind,group_id,source_sha256,payload,progress) "
-            "VALUES(:unit,:run,:job,:kind,:group,:sha,CAST(:payload AS jsonb),CAST(:progress AS jsonb)) "
-            "ON CONFLICT(stage_chain_run_id,kind,group_id,source_sha256) DO NOTHING"
+            "INSERT INTO stage_ai_unit(stage_ai_unit_id,stage_chain_run_id,comparison_ai_job_id,kind,group_id,source_sha256,payload,progress,generation) "
+            "VALUES(:unit,:run,:job,:kind,:group,:sha,CAST(:payload AS jsonb),CAST(:progress AS jsonb),:generation) "
+            "ON CONFLICT(stage_chain_run_id,kind,group_id,source_sha256,generation) DO NOTHING"
         ), {"unit": unit_id, "run": run_id, "kind": kind, "group": group_id,
             "sha": source_sha256, "payload": canonical_json(source_payload),
-            "progress": canonical_json(progress), "job": job_id})
+            "progress": canonical_json(progress), "job": job_id, "generation": generation})
         row = session.execute(text(
             "SELECT * FROM stage_ai_unit WHERE stage_chain_run_id=:run AND kind=:kind "
-            "AND group_id=:group AND source_sha256=:sha FOR UPDATE"
-        ), {"run": run_id, "kind": kind, "group": group_id, "sha": source_sha256}).mappings().one()
+            "AND group_id=:group AND source_sha256=:sha AND generation=:generation FOR UPDATE"
+        ), {"run": run_id, "kind": kind, "group": group_id, "sha": source_sha256, "generation": generation}).mappings().one()
         result = dict(row)
         if result["comparison_ai_job_id"] != job_id:
             raise DomainError(ErrorCode.CONFLICT, conflict_reason="stage_ai_unit_job_pin_mismatch")
@@ -214,10 +261,21 @@ class StageAiRepository:
         row = session.execute(text(
             "SELECT c.comparison_model_call_id,c.state,c.error_code FROM comparison_model_call c "
             "JOIN comparison_work w ON w.comparison_work_id=c.comparison_work_id "
-            "WHERE w.comparison_ai_job_id=:job AND c.request_sha256=:sha "
-            "ORDER BY c.prepared_at DESC LIMIT 1"
+            "JOIN comparison_ai_job j ON j.comparison_ai_job_id=w.comparison_ai_job_id "
+            "WHERE j.stage_chain_run_id=(SELECT stage_chain_run_id FROM comparison_ai_job WHERE comparison_ai_job_id=:job) "
+            "AND c.request_sha256=:sha ORDER BY CASE WHEN c.state IN ('unknown','prepared','sent') THEN 0 "
+            "WHEN c.state='completed' THEN 1 ELSE 2 END,c.prepared_at DESC LIMIT 1"
         ), {"job": job_id, "sha": request_sha256}).mappings().first()
         return None if row is None else dict(row)
+
+    def call_identities(self, session: Session, call_ids: list[str]) -> list[dict[str, Any]]:
+        return [dict(row) for row in session.execute(text(
+            "SELECT c.comparison_model_call_id AS call_id,c.connection_revision_id,c.provider_mode,c.model_identity,"
+            "j.comparison_ai_job_id AS job_id,j.pinned_model FROM comparison_model_call c "
+            "JOIN comparison_work w ON w.comparison_work_id=c.comparison_work_id "
+            "JOIN comparison_ai_job j ON j.comparison_ai_job_id=w.comparison_ai_job_id "
+            "WHERE c.comparison_model_call_id=ANY(CAST(:ids AS text[])) ORDER BY c.prepared_at,c.comparison_model_call_id"
+        ), {"ids": call_ids}).mappings()]
 
     def authorize_refusal_retry(self, session: Session, *, run_id: str, job_id: str) -> None:
         """An explicit resume can retry only a saved proven pre-processing refusal."""
