@@ -16,6 +16,8 @@ import { SYSTEM_WORDS } from '../model/cards';
 import type { StageReviewProps } from './stage-changes';
 import styles from './stage-journal.module.css';
 
+export const STAGE_REVIEW_POLL_MS = 1500;
+
 type Grouping = 'designation' | 'section' | 'system';
 type Format = 'xlsx' | 'pdf' | 'html';
 
@@ -26,13 +28,13 @@ export function StageJournal({ runId, onOpenEvidence }: StageReviewProps) {
   const run = useQuery({ queryKey: ['stage-review-run', runId ?? ''],
     queryFn: async () => (await getStageChainRun({ path: { stage_chain_run_id: runId! } })).data,
     enabled: Boolean(runId), retry: false,
-    refetchInterval: (query) => query.state.data !== undefined && ['queued', 'running'].includes(query.state.data.state) ? 1500 : false });
+    refetchInterval: (query) => query.state.data !== undefined && ['queued', 'running'].includes(query.state.data.state) ? STAGE_REVIEW_POLL_MS : false });
   const journal = useQuery({ queryKey: [...STAGE_REVIEW_KEYS.journal(runId ?? ''), grouping],
     queryFn: async () => {
       const result = (await getStageChangeJournal({ path: { stage_chain_run_id: runId! }, query: { grouping } })).data;
       return { result, groups: journalGroups(result) };
     }, enabled: Boolean(runId), retry: false,
-    refetchInterval: run.data !== undefined && ['queued', 'running'].includes(run.data.state) ? 3000 : false });
+    refetchInterval: () => run.data !== undefined && ['queued', 'running'].includes(run.data.state) ? STAGE_REVIEW_POLL_MS : false });
   useEffect(() => {
     if (run.data?.state === 'completed') void journal.refetch();
   }, [run.data?.state, run.data?.run_id, journal.refetch]);

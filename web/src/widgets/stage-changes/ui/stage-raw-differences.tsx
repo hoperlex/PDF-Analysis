@@ -10,6 +10,8 @@ import { ErrorState } from '@/shared/ui';
 
 import styles from './stage-journal.module.css';
 
+export const STAGE_REVIEW_POLL_MS = 1500;
+
 export type OpenStageRawDifference = (difference: StageTextDifference,
   left: StageTextFragment | undefined, right: StageTextFragment | undefined) => void;
 
@@ -19,12 +21,12 @@ export function StageRawDifferences({ runId, onOpen }: { readonly runId: string;
   const run = useQuery({ queryKey: ['stage-review-run', runId],
     queryFn: async () => (await getStageChainRun({ path: { stage_chain_run_id: runId } })).data,
     enabled: open, retry: false,
-    refetchInterval: (query) => query.state.data !== undefined && ['queued', 'running'].includes(query.state.data.state) ? 1500 : false });
+    refetchInterval: (query) => query.state.data !== undefined && ['queued', 'running'].includes(query.state.data.state) ? STAGE_REVIEW_POLL_MS : false });
   const revisionId = run.data?.effective_link_revision_id ?? run.data?.link_revision_id;
   const evidence = useQuery({ queryKey: ['stage-review-raw', runId, revisionId],
     queryFn: () => loadStageTextEvidence(run.data!.pair_id, revisionId!),
     enabled: open && revisionId !== undefined, retry: false,
-    refetchInterval: run.data !== undefined && ['queued', 'running'].includes(run.data.state) ? 3000 : false });
+    refetchInterval: () => run.data !== undefined && ['queued', 'running'].includes(run.data.state) ? STAGE_REVIEW_POLL_MS : false });
   useEffect(() => {
     if (open && run.data?.state === 'completed' && revisionId !== undefined) void evidence.refetch();
   }, [open, run.data?.state, run.data?.run_id, revisionId, evidence.refetch]);

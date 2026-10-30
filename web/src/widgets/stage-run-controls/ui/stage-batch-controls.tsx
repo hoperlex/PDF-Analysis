@@ -14,6 +14,8 @@ import { IntentKey, RUN_WORDS } from '../model/runs';
 import { StageEstimateConsent } from './estimate-consent';
 import styles from './stage-run-controls.module.css';
 
+export const STAGE_REVIEW_POLL_MS = 1500;
+
 interface PreparedPair { pair: StagePair; revisionId: string; estimate?: ComparisonAiEstimate }
 export interface StageBatchControlsProps {
   readonly projectUid: string;
@@ -51,7 +53,7 @@ function StageBatchBody({ projectUid, selectedPairs, mayAct, onOpenRun, batchId:
   const status = useQuery({ queryKey: ['stage-batch', batchId],
     queryFn: async () => (await getStageChainBatch({ path: { stage_chain_batch_id: batchId! } })).data,
     enabled: batchId !== null, retry: false,
-    refetchInterval: (query) => query.state.data !== undefined && ['queued', 'running', 'paused'].includes(query.state.data.state) ? 1500 : false });
+    refetchInterval: (query) => query.state.data !== undefined && (['queued', 'running'].includes(query.state.data.state) || query.state.data.items.some((item) => item.state === 'running')) ? STAGE_REVIEW_POLL_MS : false });
   const batch = status.data ?? started;
   const canStart = prepared.data !== undefined && prepared.data.length === selectedPairs.length &&
     prepared.data.every((item) => !withAi || (item.estimate !== undefined && !isBlocked(item.estimate) && agreementStands(agreed[item.pair.pair_id] ?? null, item.estimate)));

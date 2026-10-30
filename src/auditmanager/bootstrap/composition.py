@@ -605,9 +605,13 @@ def build_application(
         comparison_stage_text=ComparisonStageTextAdapter(
             sessions, comparison_modules=comparison_modules,
         ),
-        comparison_stage_runs=ComparisonStageRunAdapter(comparison_modules=comparison_modules),
+        comparison_stage_runs=ComparisonStageRunAdapter(
+            sessions, blob_store=store, comparison_modules=comparison_modules,
+            provider_mode=_provenance_mode(resolved.provider_mode),
+        ),
         comparison_stage_c4=ComparisonStageC4Adapter(
             sessions, blob_store=store, comparison_modules=comparison_modules,
+            provider_mode=_provenance_mode(resolved.provider_mode),
         ),
         execution=ExecutionAdapter(sessions, runs=run_adapter),
         # `W55A-SEAL-01` sealed them; `W55A-SEARCH-01` serves them. The norms reads and the

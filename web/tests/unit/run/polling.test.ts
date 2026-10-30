@@ -261,6 +261,12 @@ describe('this slice adds no second polling loop', () => {
     join('entities', 'version-series', 'api', 'use-ai.ts'),
     join('widgets', 'comparison-upload', 'api', 'use-upload.ts'),
     join('widgets', 'stage-text-evidence', 'ui', 'stage-text-evidence.tsx'),
+    join('widgets', 'stage-changes', 'ui', 'stage-raw-differences.tsx'),
+    join('widgets', 'stage-changes', 'ui', 'stage-changes.tsx'),
+    join('widgets', 'stage-changes', 'ui', 'stage-high-level-changes.tsx'),
+    join('widgets', 'stage-changes', 'ui', 'stage-journal.tsx'),
+    join('widgets', 'stage-run-controls', 'ui', 'stage-batch-controls.tsx'),
+    join('widgets', 'stage-run-controls', 'ui', 'stage-run-controls.tsx'),
   ];
   const isAllowedComparisonPoll = ({ path }: { path: string }) =>
     ALLOWED_COMPARISON_POLLS.some((allowed) => path.endsWith(allowed));

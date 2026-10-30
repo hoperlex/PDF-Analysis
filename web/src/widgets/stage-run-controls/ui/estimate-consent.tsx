@@ -13,6 +13,7 @@ export function StageEstimateConsent({ estimate, agreedDigest, disabled, onAgree
   const blocked = isBlocked(estimate);
   return <div data-stage-estimate={estimate.estimate_digest}>
     <ul>{estimateLines(estimate).map((line) => <li key={line.key}>{line.text}</li>)}</ul>
+    <p>Графические области обрабатываются окнами до 4 областей (8 изображений). Оценка относится к текущему окну; для оставшихся областей может потребоваться новое согласие.</p>
     {estimate.route.provider_mode === 'recorded' ? <p role="status">Подключение использует записанные тестовые ответы.</p> : null}
     {blocked ? <p role="alert">Запуск превышает допустимый бюджет. Измените объём или обратитесь к администратору.</p> : null}
     {estimate.calls === 0 ? <p>Новых обращений к модели не требуется. Сохранённые ответы будут использованы повторно.</p> : null}

@@ -6,6 +6,7 @@ import json
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
+import pytest
 from sqlalchemy import text
 
 from auditmanager.comparison.ai_jobs.model import AiConsentInput
@@ -14,10 +15,12 @@ from auditmanager.comparison.profile.models import PageProfileData, PageProfileR
 from auditmanager.comparison.spend.model import CallRoute
 from auditmanager.comparison.stage_ai import StageAiRuntime
 from auditmanager.comparison.stage_ai.runtime import request_for_plan
+from auditmanager.comparison.stage_ai.loop import next_step
 from auditmanager.comparison.work.model import Completed, Failed, Yielded
 from auditmanager.comparison.work.repository import ComparisonWorkRepository
 from auditmanager.shared.db import session_scope
 from auditmanager.shared.identity import new_ulid
+from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.workers.public import WorkerRegistry
 from tests.integration.comparison.ai_jobs.ai_jobs_support import recorded_route
 from tests.integration.comparison.stage_text.test_store import _batch, _command, _seed
@@ -63,11 +66,27 @@ def _answer(plan):
             "title": "Требуется проверка", "reason": "Контекста недостаточно."}
 
 
-def test_recorded_runtime_uses_shared_job_and_spend_once(comparison_session):
+@pytest.mark.parametrize("scenario", ["plain", "context", "auth"])
+def test_recorded_runtime_uses_shared_job_and_spend_once(comparison_session, scenario):
+    with_context = scenario == "context"
     store, pair, revision, _actor, left, right = _seed(comparison_session)
     actor = str(complete_expert_account(comparison_session, "stage-ai-runtime").user_uid)
     route = recorded_route(comparison_session.connection(), "comparison_stage_review")
-    adapter = RecordedAnswers()
+    class AuthRefusal(DomainError):
+        dispatch_class = "definite_refusal"
+        provider_failure_kind = "auth"
+        http_status = 401
+
+    class Answers(RecordedAnswers):
+        refused = False
+
+        def complete(self, request):
+            if scenario == "auth" and not self.refused:
+                self.refused = True
+                raise AuthRefusal(ErrorCode.DEPENDENCY_CREDENTIAL_REFUSED)
+            return super().complete(request)
+
+    adapter = Answers()
     routes = SimpleNamespace(route_for=lambda _session, job: CallRoute(
         adapter, job.pinned_model, connection_revision_id=job.connection_revision_id,
         expected_model=None, check_identity=False, unmetered=True,
@@ -75,7 +94,7 @@ def test_recorded_runtime_uses_shared_job_and_spend_once(comparison_session):
     runtime = StageAiRuntime(store._sessions, routes=routes, provider_mode="recorded",
                              profile_reader=_profiles(comparison_session, left, right))
     estimate = runtime.estimate(revision_id=revision, user_uid=actor)
-    assert estimate.totals.calls == 3
+    assert estimate.totals.calls == 12
     fragments, manifest, raw = _batch(left, right)
     store.write(pair_id=pair, revision_id=revision, fragments=fragments,
                 expected_keys=manifest, raw=raw, hints=())
@@ -115,22 +134,64 @@ def test_recorded_runtime_uses_shared_job_and_spend_once(comparison_session):
             source = runtime._repo.revision(session, run["revision_id"])
             bundles = runtime._bundles(session, run_id=run_id, snapshot=source,
                                        phase=phase, model=route.pinned_model)
-        for _group, plans, _sha, _key in bundles:
-            for plan in plans:
-                adapter.record(request_for_plan(plan), json.dumps(_answer(plan), ensure_ascii=False))
-        for _attempt in range(4):
+        for _attempt in range(12):
+            for _group, plans, _sha, _key in bundles:
+                with session_scope(store._sessions) as session:
+                    saved = session.execute(text(
+                        "SELECT progress FROM stage_ai_unit WHERE stage_chain_run_id=:run AND kind=:kind"
+                    ), {"run": run_id, "kind": phase}).scalar_one_or_none() or {}
+                for plan in plans:
+                    step = next_step(plan, saved.get("responses", {}).get(plan.content_key), source)
+                    if step is None:
+                        continue
+                    answer = _answer(plan)
+                    if with_context and phase == "review" and step.kind in {"main", "context"}:
+                        answer["decisions"] = []
+                        if step.kind == "main":
+                            answer["context_requests"] = [{"kind": "mark", "value": "Нагрузка", "side": "both"}]
+                    adapter.record(request_for_plan(step.plan), json.dumps(answer, ensure_ascii=False))
             outcome = runtime.advance(item, run_id=run_id, phase=phase)
             assert not isinstance(outcome, Failed), outcome
+            with session_scope(store._sessions) as session:
+                job = runtime._jobs().job(session, job_id)
+                if job.state == "paused" and job.pause_reason == "auth":
+                    assert scenario == "auth" and adapter.calls == 0
+                    assert runtime.resume(session, run_id=run_id, user_uid=actor) == job_id
+                    session.execute(text(
+                        "UPDATE stage_chain_run SET state='running',pause_reason=NULL WHERE stage_chain_run_id=:run"
+                    ), {"run": run_id})
             if isinstance(outcome, dict):
                 assert outcome["completed"] == 1
                 break
             assert isinstance(outcome, Yielded)
         else:
             raise AssertionError("phase did not finish")
-    assert adapter.calls == 3
+        if with_context and phase == "review":
+            with session_scope(store._sessions) as session:
+                runtime._jobs().pause_system(session, job_id, "overrun")
+                runtime._repo.pause_run(session, run_id, "overrun")
+            remaining = runtime.estimate_resume(run_id=run_id, user_uid=actor)
+            assert remaining.totals.calls == 8
+            with session_scope(store._sessions) as session:
+                assert runtime.resume(session, run_id=run_id, user_uid=actor,
+                    consent=AiConsentInput(remaining.estimate_digest, True)) == job_id
+                session.execute(text(
+                    "UPDATE stage_chain_run SET state='running',pause_reason=NULL WHERE stage_chain_run_id=:run"
+                ), {"run": run_id})
+    expected_calls = 5 if with_context else 3
+    assert adapter.calls == expected_calls
+    from auditmanager.api.schemas.models import StageAiReview, StageAiClassification, StageAiSynthesis
+    for kind, schema in (("review", StageAiReview), ("classify", StageAiClassification), ("synthesize", StageAiSynthesis)):
+        page, cursor = runtime.page(run_id=run_id, kind=kind, limit=1)
+        assert len(page) == 1 and cursor is None
+        schema.model_validate(page[0])
+        identity = {"review": "review_id", "classify": "classification_id", "synthesize": "synthesis_id"}[kind]
+        assert runtime.page(run_id=run_id, kind=kind, after=page[0][identity], limit=1) == ((), None)
+        with pytest.raises(DomainError):
+            runtime.page(run_id=run_id, kind=kind, after=_id("sarev"), limit=1)
     for phase in ("review", "classify", "synthesize"):
         assert isinstance(runtime.advance(item, run_id=run_id, phase=phase), dict)
-    assert adapter.calls == 3
+    assert adapter.calls == expected_calls
     for table in ("stage_ai_review", "stage_ai_classification", "stage_ai_synthesis"):
         assert comparison_session.execute(text(
             f"SELECT count(*) FROM {table} WHERE stage_chain_run_id=:run"
@@ -138,7 +199,17 @@ def test_recorded_runtime_uses_shared_job_and_spend_once(comparison_session):
     assert comparison_session.execute(text(
         "SELECT count(*) FROM comparison_model_call c JOIN comparison_work w "
         "ON w.comparison_work_id=c.comparison_work_id WHERE w.comparison_ai_job_id=:job AND c.state='completed'"
-    ), {"job": job_id}).scalar_one() == 3
+    ), {"job": job_id}).scalar_one() == expected_calls
+    assert comparison_session.execute(text(
+        "SELECT count(*) FROM comparison_model_call c JOIN comparison_work w "
+        "ON w.comparison_work_id=c.comparison_work_id WHERE w.comparison_ai_job_id=:job AND c.state='failed'"
+    ), {"job": job_id}).scalar_one() == (1 if scenario == "auth" else 0)
+    if with_context:
+        progress = comparison_session.execute(text(
+            "SELECT progress FROM stage_ai_unit WHERE stage_chain_run_id=:run AND kind='review'"
+        ), {"run": run_id}).scalar_one()
+        final = next(iter(progress["responses"].values()))
+        assert len(final["history"]) == 2 and final["step"] == "coverage"
     assert comparison_session.execute(text(
         "SELECT state FROM comparison_ai_job WHERE comparison_ai_job_id=:job"
     ), {"job": job_id}).scalar_one() == "completed"
@@ -195,3 +266,46 @@ def test_no_text_records_source_pins_without_job_or_ai_verdict(comparison_sessio
     ), {"run": run_id}).scalar_one() is None
     with session_scope(store._sessions) as session:
         assert work.finish(session, item.authority, Completed()) == "succeeded"
+
+
+def test_cancel_is_caller_owned_and_stops_calls_after_work_cancel_request(comparison_session):
+    store, pair, revision, _actor, left, right = _seed(comparison_session)
+    actor = str(complete_expert_account(comparison_session, "stage-ai-cancel").user_uid)
+    recorded_route(comparison_session.connection(), "comparison_stage_review")
+    adapter = RecordedAnswers()
+    runtime = StageAiRuntime(store._sessions, routes=SimpleNamespace(route_for=lambda _session, job: CallRoute(
+        adapter, job.pinned_model, connection_revision_id=job.connection_revision_id,
+        expected_model=None, check_identity=False, unmetered=True)),
+        profile_reader=_profiles(comparison_session, left, right))
+    estimate = runtime.estimate(revision_id=revision, user_uid=actor)
+    run_id = _id("crn")
+    pins = comparison_session.execute(text(
+        "SELECT version_uid FROM comparison_page_profile WHERE comparison_page_profile_id=ANY(CAST(:ids AS text[]))"
+    ), {"ids": [left, right]}).scalars().all()
+    work = ComparisonWorkRepository()
+    with session_scope(store._sessions) as session:
+        session.execute(text(
+            "INSERT INTO stage_chain_run(stage_chain_run_id,stage_pair_id,stage_link_revision_id,input_sha256, "
+            "pinned_version_uids,state,actor_user_uid,command_id,kind,with_ai) "
+            "VALUES(:run,:pair,:revision,:sha,CAST(:pins AS jsonb),'running',:actor,:command,'full',true)"
+        ), {"run": run_id, "pair": pair, "revision": revision, "sha": "f" * 64,
+            "pins": json.dumps(pins), "actor": actor, "command": _command(session, "start_stage_chain_run")})
+        job_id = runtime.prepare(session, run_id=run_id, user_uid=actor,
+                                 consent=AiConsentInput(estimate.estimate_digest, True))
+        session.execute(text("UPDATE stage_chain_run SET comparison_ai_job_id=:job WHERE stage_chain_run_id=:run"),
+                        {"job": job_id, "run": run_id})
+        work.enqueue(session, project_uid=estimate.scope.project_uid, module="stages", kind="stage_chain",
+                     payload={"run_id": run_id}, comparison_ai_job_id=job_id, created_by_user_uid=actor)
+        worker_id = WorkerRegistry().register(session, version="stage-ai-test", slots=1)
+    with session_scope(store._sessions) as session:
+        item = work.claim(session, worker_id=worker_id, modules={"stages"}, kinds={"stage_chain"})
+        savepoint = session.begin_nested()
+        assert runtime.cancel(session, run_id=run_id, user_uid=actor) == job_id
+        savepoint.rollback()
+        assert runtime._jobs().job(session, job_id).state == "queued"
+        assert runtime.cancel(session, run_id=run_id, user_uid=actor) == job_id
+        assert runtime._jobs().job(session, job_id).state == "cancelled"
+    assert isinstance(runtime.advance(item, run_id=run_id, phase="review"), Yielded)
+    assert adapter.calls == 0
+    with session_scope(store._sessions) as session:
+        assert work.finish(session, item.authority, Yielded()) == "cancelled"

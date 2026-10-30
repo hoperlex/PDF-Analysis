@@ -18,6 +18,8 @@ import type { OpenStageRawDifference } from './stage-raw-differences';
 import { StageHighLevelChanges } from './stage-high-level-changes';
 import styles from './stage-changes.module.css';
 
+export const STAGE_REVIEW_POLL_MS = 1500;
+
 export type OpenStageEvidence = (evidence: StageCardEvidence, card: StageChangeCard) => void;
 export interface StageReviewProps {
   readonly runId: string | null | undefined;
@@ -107,10 +109,10 @@ function StageChangesBody({ runId, mayAct, onOpenEvidence, onOpenRawDifference }
   const run = useQuery({ queryKey: ['stage-review-run', runId ?? ''],
     queryFn: async () => (await getStageChainRun({ path: { stage_chain_run_id: runId! } })).data,
     enabled: Boolean(runId), retry: false,
-    refetchInterval: (query) => query.state.data !== undefined && ['queued', 'running'].includes(query.state.data.state) ? 1500 : false });
+    refetchInterval: (query) => query.state.data !== undefined && ['queued', 'running'].includes(query.state.data.state) ? STAGE_REVIEW_POLL_MS : false });
   const cards = useQuery({ queryKey: STAGE_REVIEW_KEYS.cards(runId ?? ''),
     queryFn: () => readCards(runId!), enabled: Boolean(runId), retry: false,
-    refetchInterval: run.data !== undefined && ['queued', 'running'].includes(run.data.state) ? 3000 : false });
+    refetchInterval: () => run.data !== undefined && ['queued', 'running'].includes(run.data.state) ? STAGE_REVIEW_POLL_MS : false });
   useEffect(() => {
     if (run.data?.state === 'completed') void cards.refetch();
   }, [run.data?.state, run.data?.run_id, cards.refetch]);

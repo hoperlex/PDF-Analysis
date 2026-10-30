@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from time import time
 from typing import Any, Mapping
 
 from sqlalchemy import text
@@ -11,7 +12,7 @@ from auditmanager.access.public import AccountRepository
 from auditmanager.analysis.public import ModelRequest
 from auditmanager.comparison.ai_jobs.estimate import read_route
 from auditmanager.comparison.ai_jobs.model import (
-    AiConsentInput, AiScope, CHARS_PER_TOKEN_NUMERATOR, CHARS_PER_TOKEN_DENOMINATOR,
+    AiConsentInput, AiMode, AiScope, CHARS_PER_TOKEN_NUMERATOR, CHARS_PER_TOKEN_DENOMINATOR,
 )
 from auditmanager.comparison.ai_jobs.service import AiJobCommand, ComparisonAiJobService
 from auditmanager.comparison.spend.caller import ComparisonModelCaller
@@ -24,12 +25,13 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 
 from .classifier import build_classification_request, parse_classification
 from .model import ClassifiedCard, SynthesisGroup
+from .loop import final_document, next_step, with_loop
 from .planning import StageAiMethod
 from .repository import ANSWER_TABLES, StageAiRepository
 from .reviewer import accept_review_group, build_review_requests
 from .source import build_source_groups
 from .synthesis import build_synthesis_request, parse_synthesis
-from .validation import StageAiValidationError, canonical_json, digest
+from .validation import StageAiValidationError, digest
 
 __all__ = ["StageAiRuntime", "request_for_plan"]
 
@@ -55,7 +57,8 @@ class StageAiRuntime:
     """No I/O in construction. Root owns chain scheduling and shared registry wiring."""
 
     def __init__(self, session_factory, *, blob_store=None, routes=None, provider_mode="recorded",
-                 repository=None, caller=None, jobs_factory=None, route_reader=read_route, profile_reader=None):
+                 repository=None, caller=None, jobs_factory=None, route_reader=read_route, profile_reader=None,
+                 now=None):
         self._sessions = session_factory
         self._store = blob_store
         self._routes = routes
@@ -65,6 +68,7 @@ class StageAiRuntime:
         self._jobs_factory = jobs_factory
         self._route_reader = route_reader
         self._profile_reader = profile_reader
+        self._now = now or time
 
     def _method(self):
         return StageAiMethod(self._repo, sessions=self._sessions, blob_store=self._store,
@@ -99,6 +103,37 @@ class StageAiRuntime:
             self._roles(session, user_uid)
             snapshot = self._repo.revision(session, revision_id)
             return self._jobs(method).estimate_in(session, self._scope(snapshot))
+
+    def page(self, *, run_id: str, kind: str, after: str | None = None, limit: int = 50):
+        with session_scope(self._sessions) as session:
+            return self._repo.page(session, run_id=run_id, kind=kind, after=after, limit=limit)
+
+    def estimate_resume(self, *, run_id: str, user_uid: str):
+        with session_scope(self._sessions) as session:
+            self._roles(session, user_uid)
+            run = self._repo.run(session, run_id)
+            jobs = self._jobs()
+            if not run.get("comparison_ai_job_id"):
+                return jobs.estimate_in(session, self._scope(run, run_id=run_id))
+            job = jobs.job(session, str(run["comparison_ai_job_id"]))
+            return jobs.estimate_in(session, self._scope(run, run_id=run_id), AiMode.LEFT, job=job)
+
+    def cancel(self, session, *, run_id: str, user_uid: str) -> str | None:
+        roles = self._roles(session, user_uid)
+        run = self._repo.run(session, run_id)
+        job_id = run.get("comparison_ai_job_id")
+        if not job_id:
+            return None
+        jobs = self._jobs()
+        job = jobs.job(session, str(job_id))
+        if job.state in {"completed", "failed", "cancelled"}:
+            return str(job_id)
+        cancel = getattr(jobs, "cancel_in_session", None)
+        if cancel is None:
+            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="comparison_stage_ai_cancel")
+        cancel(session, job_id=str(job_id), method="stage_review",
+               command=AiJobCommand("cancel_stage_review_ai", f"stage-ai-cancel-{run_id}", user_uid, roles))
+        return str(job_id)
 
     def prepare(self, session, *, run_id: str, user_uid: str, consent) -> str | None:
         roles = self._roles(session, user_uid)
@@ -138,14 +173,24 @@ class StageAiRuntime:
         resume = getattr(jobs, "resume_in_session", None)
         if resume is None:
             raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="comparison_stage_ai_resume")
+        record = jobs.job(session, str(job_id))
+        if record.state in {"queued", "running"}:
+            return str(job_id)
         chosen = _consent(consent)
-        key = digest({"run_id": run_id, "consent": None if chosen is None else chosen.estimate_digest})
+        key = digest({"run_id": run_id, "consent": None if chosen is None else chosen.estimate_digest,
+                      "pause_updated_at": record.updated_at.isoformat(), "consent_no": record.consent_no})
         view = resume(session, job_id=str(job_id), method="stage_review", consent=chosen, queue_items=False,
                       command=AiJobCommand("resume_stage_review_ai", "stage-ai-resume-" + key, user_uid, roles))
+        self._repo.authorize_refusal_retry(session, run_id=run_id, job_id=str(job_id))
         return str(view.record.job_id)
 
     def _checked(self, session, item, run_id):
         item.require_current(session)
+        cancelled = session.execute(text(
+            "SELECT cancel_requested_at IS NOT NULL FROM comparison_work WHERE comparison_work_id=:work"
+        ), {"work": item.work_id}).scalar_one()
+        if cancelled:
+            raise DomainError(ErrorCode.EXECUTION_TOKEN_INVALID)
         run = self._repo.run(session, run_id)
         if run["project_uid"] != item.project_uid or run["state"] not in {"queued", "running", "paused"}:
             raise DomainError(ErrorCode.CONFLICT, conflict_reason="stage_ai_run_scope_or_state")
@@ -199,6 +244,7 @@ class StageAiRuntime:
                         group.evidence.source_link_uncertain,
                     ), model=model)
                     plans, source_sha = (plan,), plan.source_sha256
+            plans = tuple(with_loop(plan) for plan in plans)
             key = digest({"phase": phase, "source_sha256": source_sha,
                           "plans": [plan.content_key for plan in plans]})
             bundles.append((group, plans, source_sha, key))
@@ -282,34 +328,76 @@ class StageAiRuntime:
                 group, plans, key, unit = pending[0]
                 unit["payload"] = dict(unit["payload"])
                 self._repo.update_unit(session, unit["stage_ai_unit_id"], payload=unit["payload"], state="running", job_id=job_id)
-                route_source = self._routes
-                if route_source is None:
-                    return self._fail_in(session, unit, jobs, job_id, "executor_route_missing")
-                route = (route_source.route_for(session, job) if hasattr(route_source, "route_for")
-                         else route_source.route(session, job))
-                consent = jobs.consent_for_calls(session, job_id)
-                waiting = next((plan for plan in plans if plan.content_key not in unit["payload"].get("responses", {})), None)
+                waiting = None
+                for plan in plans:
+                    waiting = next_step(plan, unit["payload"].get("responses", {}).get(plan.content_key), snapshot)
+                    if waiting is not None:
+                        break
                 if waiting is not None:
-                    request = request_for_plan(waiting)
+                    route_source = self._routes
+                    if route_source is None:
+                        return self._fail_in(session, unit, jobs, job_id, "executor_route_missing")
+                    route = (route_source.route_for(session, job) if hasattr(route_source, "route_for")
+                             else route_source.route(session, job))
+                    consent = jobs.consent_for_calls(session, job_id)
+                    request = request_for_plan(waiting.plan)
                     prior = self._repo.prior_call(session, job_id=job_id, request_sha256=request.request_sha256)
-                    retries = unit["payload"].get("technical_retries", {}).get(waiting.content_key, 0)
-                    if prior is not None and not (prior["state"] == "failed" and retries == 1):
+                    retry = unit["payload"].get("technical_retries", {}).get(waiting.base_key)
+                    rate = unit["payload"].get("rate_waits", {}).get(waiting.base_key, {})
+                    same_rate = rate.get("request_key") == waiting.plan.content_key
+                    if same_rate and rate.get("not_before", 0) > self._now():
+                        return Yielded(rate["not_before"] - self._now())
+                    rate_safe = same_rate and prior is not None and rate.get("call_id") == prior["comparison_model_call_id"]
+                    manual = unit["payload"].get("manual_resume_retry", {})
+                    manual_safe = (prior is not None and manual.get("request_key") == waiting.plan.content_key
+                                   and manual.get("call_id") == prior["comparison_model_call_id"])
+                    if prior is not None and not (prior["state"] == "failed" and (
+                        retry == waiting.plan.content_key or rate_safe or manual_safe
+                    )):
                         return self._fail_in(session, unit, jobs, job_id, "stage_ai_response_lost")
             if waiting is not None:
                 if item.lease_lost.is_set() or item.cancelled.is_set():
                     return Yielded()
+                with session_scope(self._sessions) as session:
+                    self._checked(session, item, run_id)
                 caller = self._caller or ComparisonModelCaller(self._sessions)
                 try:
                     result = caller.call(item, route, request,
-                                         estimate=CallEstimate(input_tokens=-(-waiting.prompt_chars * CHARS_PER_TOKEN_NUMERATOR
+                                         estimate=CallEstimate(input_tokens=-(-waiting.plan.prompt_chars * CHARS_PER_TOKEN_NUMERATOR
                                                                               // CHARS_PER_TOKEN_DENOMINATOR),
-                                                               output_tokens=waiting.max_output_tokens), consent=consent)
+                                                               output_tokens=waiting.plan.max_output_tokens), consent=consent)
                 except CallLost:
                     return Yielded()
                 except CallFailed as error:
-                    retries = unit["payload"].get("technical_retries", {}).get(waiting.content_key, 0)
-                    if error.retry_safe and retries == 0:
-                        unit["payload"].setdefault("technical_retries", {})[waiting.content_key] = 1
+                    failure_kind = getattr(error, "provider_failure_kind", None)
+                    if failure_kind in {"quota", "auth"}:
+                        unit["payload"]["provider_refusal"] = {
+                            "request_key": waiting.plan.content_key, "call_id": error.call_id,
+                            "kind": failure_kind, "retry_safe": error.retry_safe,
+                            "dispatch_class": getattr(error, "dispatch_class", None),
+                        }
+                        with session_scope(self._sessions) as session:
+                            self._checked(session, item, run_id)
+                            self._repo.update_unit(session, unit["stage_ai_unit_id"], payload=unit["payload"], state="queued", job_id=job_id)
+                            self._pause(session, jobs, run_id=run_id, job_id=job_id, reason=failure_kind, spend=False)
+                        return Yielded(30)
+                    if getattr(error, "dispatch_class", None) == "rate_limited" and error.retry_safe:
+                        rate = unit["payload"].get("rate_waits", {}).get(waiting.base_key, {})
+                        attempt = rate.get("attempts", 0)
+                        if attempt >= 5:
+                            return self._failed(item, run_id, unit, jobs, job_id, "stage_ai_rate_limit")
+                        delay = (20, 60, 120, 300, 600)[attempt]
+                        unit["payload"].setdefault("rate_waits", {})[waiting.base_key] = {
+                            "attempts": attempt + 1, "request_key": waiting.plan.content_key,
+                            "call_id": error.call_id, "not_before": self._now() + delay,
+                        }
+                        with session_scope(self._sessions) as session:
+                            self._checked(session, item, run_id)
+                            self._repo.update_unit(session, unit["stage_ai_unit_id"], payload=unit["payload"], state="queued", job_id=job_id)
+                        return Yielded(delay)
+                    retry = unit["payload"].get("technical_retries", {}).get(waiting.base_key)
+                    if error.retry_safe and retry is None:
+                        unit["payload"].setdefault("technical_retries", {})[waiting.base_key] = waiting.plan.content_key
                         with session_scope(self._sessions) as session:
                             self._checked(session, item, run_id)
                             self._repo.update_unit(session, unit["stage_ai_unit_id"], payload=unit["payload"], state="queued", job_id=job_id)
@@ -328,32 +416,37 @@ class StageAiRuntime:
                             if isinstance(outcome, Failed) else outcome)
                 with session_scope(self._sessions) as session:
                     self._checked(session, item, run_id)
-                    unit["payload"].setdefault("responses", {})[waiting.content_key] = {
+                    responses = unit["payload"].setdefault("responses", {})
+                    previous = responses.get(waiting.base_key)
+                    history = [] if previous is None else (list(previous.get("history", ())) + [
+                        {key: value for key, value in previous.items() if key != "history"}])
+                    responses[waiting.base_key] = {
                         "output_text": result.response.output_text, "call_id": result.call_id,
                         "stop_reason": result.response.stop_reason, "request_sha256": request.request_sha256,
-                        "model_identity": route.model_identity,
+                        "model_identity": route.model_identity, "step": waiting.kind,
+                        "request_content_key": waiting.plan.content_key, "context": waiting.context,
+                        "history": history,
                     }
                     self._repo.update_unit(session, unit["stage_ai_unit_id"], payload=unit["payload"], state="running", job_id=job_id)
                     if result.pause is not None:
                         self._pause(session, jobs, run_id=run_id, job_id=job_id, reason=result.pause.reason)
                         return Yielded(30)
-                if len(unit["payload"]["responses"]) < len(plans):
-                    return Yielded()
+                return Yielded()
             responses = unit["payload"].get("responses", {})
             if any(value["stop_reason"] == "max_tokens" for value in responses.values()):
                 return self._failed(item, run_id, unit, jobs, job_id, "stage_ai_response_truncated")
             if phase == "review":
                 parsed = accept_review_group(group.review, plans, {
-                    plan.unit_key: responses[plan.content_key]["output_text"] for plan in plans
+                    plan.unit_key: final_document(plan, responses[plan.content_key])[0] for plan in plans
                 })
                 value = [asdict(decision) for decision in parsed.decisions]
                 if len(value) > 800:
                     raise StageAiValidationError("stage_ai_review_result_budget")
             elif phase == "classify":
-                parsed = parse_classification(plans[0], responses[plans[0].content_key]["output_text"])
+                parsed = parse_classification(plans[0], final_document(plans[0], responses[plans[0].content_key])[0])
                 value = [asdict(card) for card in parsed.cards]
             else:
-                parsed = parse_synthesis(plans[0], responses[plans[0].content_key]["output_text"])
+                parsed = parse_synthesis(plans[0], final_document(plans[0], responses[plans[0].content_key])[0])
                 value = asdict(parsed)
             with session_scope(self._sessions) as session:
                 self._checked(session, item, run_id)
@@ -361,7 +454,8 @@ class StageAiRuntime:
                                        value=value, model_identity={"model": job.pinned_model,
                                        "connection_revision_id": job.connection_revision_id,
                                        "provider_mode": job.provider_mode,
-                                       "calls": [row["call_id"] for row in responses.values()]})
+                                       "calls": [event["call_id"] for row in responses.values()
+                                                 for event in list(row.get("history", ())) + [row]]})
                 self._repo.update_unit(session, unit["stage_ai_unit_id"], payload=unit["payload"], state="completed", job_id=job_id)
             return Yielded()
         except (StageAiValidationError, ValueError):
