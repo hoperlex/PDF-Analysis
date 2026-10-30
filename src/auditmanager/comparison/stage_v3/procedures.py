@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import math
+import re
 from copy import deepcopy
 from pathlib import Path
 
 from auditmanager.comparison.stage_ai.loop import CallStep
 from auditmanager.comparison.stage_ai.requests import make_plan
 from auditmanager.comparison.stage_ai.validation import StageAiValidationError, digest, parse_document
+from auditmanager.comparison.stage_text.fragments import canonical_text
 from .mode import ENGINE, ORIGINAL_SHA
 from .original import schemas, validate, coverage, supplemental, dedupe, quality, verification
 
@@ -22,6 +24,27 @@ PROMPTS = {name: (Path(__file__).parent / "original" / "prompts" / f"{name}_PROM
            for name in ("MAPPER", "MINER", "UNMATCHED", "DEDUPE", "VERIFY")}
 BUNDLE = digest({"version": VERSION, "original": ORIGINAL_SHA, "prompts": PROMPTS,
                  "schemas": [schemas.MAP_SCHEMA, schemas.MINER_SCHEMA, schemas.DEDUPE_SCHEMA, schemas.VERIFICATION_SCHEMA]})
+
+_VALUE_TOKEN = re.compile(r"(?<!\w)[+\-±−]\s*\d+(?:[.,]\d+)*|\d+(?:[.,]\d+)*|[^\W\d_]+|[^\s]")
+
+
+def _native_value_tokens(text):
+    tokens = [re.sub(r"^([+\-±−])\s+", r"\1", token)
+              for token in _VALUE_TOKEN.findall(canonical_text(text))]
+    # A label can introduce a displayed measurement with a comma ("склад,
+    # 12,4"). Decimal/grouping punctuation remains INSIDE its number token;
+    # standalone separators between numbers and all signs/operators survive.
+    return [token for index, token in enumerate(tokens) if not (
+        token == "," and 0 < index < len(tokens) - 1 and tokens[index - 1].isalpha()
+        and len(tokens[index - 1]) > 1 and tokens[index + 1][0].isdigit())]
+
+
+def value_in_native_text(value, text):
+    wanted, source = _native_value_tokens(value), _native_value_tokens(text)
+    return bool(wanted) and any(
+        not (offset and source[offset - 1] in {"+", "-", "±", "−"})
+        and source[offset:offset + len(wanted)] == wanted
+        for offset in range(len(source) - len(wanted) + 1))
 
 
 def check_schema(value, schema):
@@ -142,7 +165,7 @@ def parse(plan, row, snapshot):
                     value = result[field]
                     text = "\n".join(src["structured_md"] for src in item["sources"]
                         if src["side"] == side and (side, src["physical_page"], src["block_id"]) in cited)
-                    if value and value not in text:
+                    if value and not value_in_native_text(value, text):
                         raise ValueError("verified parameter absent from cited native text")
         elif procedure == "dedupe":
             dedupe.apply_dedupe(pair, metadata["changes"], answer, lossless=True)

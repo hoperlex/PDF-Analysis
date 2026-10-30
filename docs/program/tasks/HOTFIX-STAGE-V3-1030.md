@@ -68,3 +68,10 @@ Root is sole Git writer/integrator/publisher. All contributors edit shared cmp-i
 
 ## Ownership transfer
 2026-10-30 root takes all UI paths in this task exclusively, agent owns backend only; no parallel writes. Engine=classic|v3_native_text_experimental; StageChainRun has engine/experimental_progress; StageChangeCard.experimental carries parameters+quality.
+
+## Post-development focused forward-fix grant
+Owner authorised at most4 real local signed-in Codex `gpt-6-sol` calls after dev3037749d, without DB/production/Git/tracked edits. All4 helper turns returned; initial verifier parse refused punctuation/NFKC formatting in a source-bound compound parameter. Root then explicitly granted a narrow parser/tests/task/report correction and replay of the exact saved replies, with no new model calls. Numeric/sign/separator semantics, cited-reference binding and exact Miner quotes must remain.
+
+The resulting lexical native-value matcher and negative controls are described in the backend report. Exact4reply offline replay PASS:2 preliminary REVIEW cards,2 machine-CONFIRMED parameters and5 parser mutation controls refused. Scope is2 selected complete native SP1 pages, not a full SP1/runtime/deployment benchmark. Evidence lives only in ignored `.local/handoff/hotfix-codex-v3-smoke/`; root alone commits/publishes the forward fix.
+
+Final forward-fix checks:126 scoped tests PASS, py_compile PASS; exact4reply replay PASS with0 new calls. Independent sign-boundary finding was fixed and covered by tight-word and range negatives. Backend files frozen for root integration.

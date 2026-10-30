@@ -162,3 +162,31 @@ def test_invented_quote_and_verified_value_are_refused():
     bad["results"][0]["new_value"] = "9999999"
     with pytest.raises(StageAiValidationError):
         p.parse(plan, {"output_text": json.dumps(bad), "stop_reason": "end_turn"}, source)
+
+
+@pytest.mark.parametrize("value,text", [
+    ("105 склад, 12,4 м²", "104 лестничная клетка 14,8 м2 105 склад 12,4 м2"),
+    ("106 ТАМБУР, 4,2 м²", "106 тамбур 4,2 м2"),
+    ("24,5", "101 холл 24,5 м2"),
+    ("-12,4", "температура - 12,4 °c"),
+])
+def test_verifier_native_value_display_normalisation(value, text):
+    assert p.value_in_native_text(value, text)
+
+
+@pytest.mark.parametrize("value,text", [
+    ("1,24", "12,4"), ("12,4", "1,24"), ("24,5", "124,5"),
+    ("12 4", "124"), ("12,4", "12 4"), ("1, 24", "1 24"),
+    ("-12,4", "12,4"), ("+12,4", "12,4"), ("24.5", "24,5"),
+    ("12,4", "-12,4"), ("12,4", "+12,4"), ("12,4", "±12,4"), ("12,4", "−12,4"),
+    ("12,4", "- 12,4"), ("12,4", "+ 12,4"), ("12,4", "± 12,4"),
+    ("12,4", "температура−12,4 °c"), ("12,4", "температура-12,4 °c"),
+    ("12,4", "температура+12,4 °c"), ("12,4", "температура±12,4 °c"),
+    ("20", "10-20"),
+    ("-20", "10-20"), ("12,4", "12,45"),
+    ("105 склад, 12,4 м²", "106 склад 12,4 м2"),
+    ("105 склад, 12,4 м²", "105 склад 12,5 м2"),
+    ("А-105", "А105"), ("м,2", "м2"),
+])
+def test_verifier_native_value_preserves_numbers_and_significant_separators(value, text):
+    assert not p.value_in_native_text(value, text)
