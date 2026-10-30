@@ -129,3 +129,29 @@ def test_ai_start_requires_explicit_consent(comparison_session: Session) -> None
                       actor_roles=frozenset({"expert"}), with_ai=True,
                       idempotency_key=f"stage-chain-{new_ulid()}")
     assert error.value.code is ErrorCode.CONFLICT
+
+
+def test_graphic_failure_finishes_run_in_failed_state(comparison_session: Session) -> None:
+    from auditmanager.comparison.work.model import Failed
+
+    class RefusedGraphics:
+        def advance(self, item, *, run_id):
+            return Failed('stage_graphic_evidence_unavailable')
+
+    store, service, work, worker, pair, revision, actor, left, right = _scene(comparison_session)
+    run = service.start(pair_id=pair, revision_id=revision, user_uid=actor,
+        actor_roles=frozenset({'expert'}), with_ai=False, idempotency_key='graphic-failure-'+new_ulid())
+    item = _claim(store._sessions, work, worker, WORK_KIND)
+    deps = WorkDependencies(None, store._sessions, None, work)
+    handler = StageChainHandler(deps, graphics=RefusedGraphics())
+    handler.run(item)
+    handler.run(item)
+    child = _claim(store._sessions, work, worker, TEXT_KIND)
+    assert isinstance(StageTextRecomputeHandler(deps, profile_reader=_profiles(
+        comparison_session, left, right, empty=False)).run(child), Completed)
+    with session_scope(store._sessions) as session:
+        work.finish(session, child.authority, Completed())
+    outcome = handler.run(item)
+    assert isinstance(outcome, Failed)
+    final = service.get(run.run_id)
+    assert final.state == 'failed' and final.steps[2].state == 'failed'

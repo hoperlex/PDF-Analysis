@@ -169,6 +169,7 @@ PRODUCT_COMMAND_TYPES = frozenset((
     "resume_stage_chain_run", "start_stage_chain_batch", "pause_stage_chain_batch",
     "resume_stage_chain_batch", "cancel_stage_chain_batch", "undo_stage_link_repair",
     "apply_stage_card_verdicts",
+    "create_stage_review_card",
     "append_decision", "approve_sheet_pairing", "cancel_audit_run", "carry_over_decision",
     "create_project", "generate_comparison_summary",
     "decide_optimisation_proposal", "reaudit_run", "set_execution_paused", "set_job_priority",

@@ -20448,6 +20448,210 @@
           }
         }
       }
+    },
+    "/stage-chain-runs/{stage_chain_run_id}/review-cards": {
+      "post": {
+        "tags": [
+          "comparison"
+        ],
+        "summary": "Create Review Card",
+        "operationId": "createStageReviewCard",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "stage_chain_run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/StageChainRunId"
+            }
+          },
+          {
+            "name": "X-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/CorrelationId"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/IdempotencyKey"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateStageReviewCardRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "An expert-requested REVIEW card or keyed replay; raw evidence is unchanged.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StageChangeCard"
+                }
+              }
+            },
+            "headers": {
+              "X-Correlation-Id": {
+                "required": true,
+                "schema": {
+                  "$ref": "#/components/schemas/CorrelationId"
+                },
+                "description": "The correlation id for this request, assigned when the caller supplied none."
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Correlation-Id": {
+                "required": true,
+                "schema": {
+                  "$ref": "#/components/schemas/CorrelationId"
+                },
+                "description": "The correlation id for this request, assigned when the caller supplied none."
+              }
+            },
+            "description": "No credential was presented, or the deployment does not accept it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Correlation-Id": {
+                "required": true,
+                "schema": {
+                  "$ref": "#/components/schemas/CorrelationId"
+                },
+                "description": "The correlation id for this request, assigned when the caller supplied none."
+              }
+            },
+            "description": "The authenticated subject is not permitted this operation on this resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Correlation-Id": {
+                "required": true,
+                "schema": {
+                  "$ref": "#/components/schemas/CorrelationId"
+                },
+                "description": "The correlation id for this request, assigned when the caller supplied none."
+              }
+            },
+            "description": "The addressed aggregate does not exist or is not visible to this caller.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "headers": {
+              "X-Correlation-Id": {
+                "required": true,
+                "schema": {
+                  "$ref": "#/components/schemas/CorrelationId"
+                },
+                "description": "The correlation id for this request, assigned when the caller supplied none."
+              }
+            },
+            "description": "The idempotency key was already used with a different payload fingerprint.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Correlation-Id": {
+                "required": true,
+                "schema": {
+                  "$ref": "#/components/schemas/CorrelationId"
+                },
+                "description": "The correlation id for this request, assigned when the caller supplied none."
+              }
+            },
+            "description": "The request was refused by a declared rule. `details` names which.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Correlation-Id": {
+                "required": true,
+                "schema": {
+                  "$ref": "#/components/schemas/CorrelationId"
+                },
+                "description": "The correlation id for this request, assigned when the caller supplied none."
+              }
+            },
+            "description": "A server-side fault. Nothing was created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "headers": {
+              "X-Correlation-Id": {
+                "required": true,
+                "schema": {
+                  "$ref": "#/components/schemas/CorrelationId"
+                },
+                "description": "The correlation id for this request, assigned when the caller supplied none."
+              }
+            },
+            "description": "A required dependency is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -39752,6 +39956,28 @@
           "stale": {
             "type": "boolean",
             "title": "Stale"
+          },
+          "materiality": {
+            "type": "string",
+            "enum": [
+              "material",
+              "non_material",
+              "unknown"
+            ],
+            "title": "Materiality"
+          },
+          "importance": {
+            "type": "string",
+            "enum": [
+              "high",
+              "normal",
+              "unknown"
+            ],
+            "title": "Importance"
+          },
+          "detail_increased": {
+            "type": "boolean",
+            "title": "Detail Increased"
           }
         },
         "additionalProperties": false,
@@ -39931,6 +40157,28 @@
             },
             "type": "array",
             "title": "Policy Reasons"
+          },
+          "materiality": {
+            "type": "string",
+            "enum": [
+              "material",
+              "non_material",
+              "unknown"
+            ],
+            "title": "Materiality"
+          },
+          "importance": {
+            "type": "string",
+            "enum": [
+              "high",
+              "normal",
+              "unknown"
+            ],
+            "title": "Importance"
+          },
+          "detail_increased": {
+            "type": "boolean",
+            "title": "Detail Increased"
           }
         },
         "additionalProperties": false,
@@ -40365,6 +40613,32 @@
           "base_revision_id"
         ],
         "title": "UndoStageLinkRepairRequest"
+      },
+      "CreateStageReviewCardRequest": {
+        "properties": {
+          "source_ids": {
+            "items": {
+              "$ref": "#/components/schemas/StageAtomicEvidenceId"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Source Ids"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source_ids",
+          "reason"
+        ],
+        "title": "CreateStageReviewCardRequest"
       }
     }
   }

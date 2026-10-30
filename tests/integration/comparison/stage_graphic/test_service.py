@@ -15,7 +15,7 @@ from auditmanager.comparison.stage_graphic import StageGraphicService
 from auditmanager.comparison.work.model import Yielded
 from auditmanager.shared.db import session_scope
 from auditmanager.shared.errors import DomainError
-from tests.integration.comparison.stage_text.test_store import _seed, _id
+from tests.integration.comparison.stage_text.test_store import _seed, _id, _command
 from tests.integration.comparison.stage_review.test_service import _run
 
 
@@ -90,3 +90,28 @@ def test_reliable_real_result_reference_replay_and_native_crops(comparison_sessi
         service.crop(run, evidence["evidence_id"], "invented", "right")
     with pytest.raises(DomainError):
         service.crop_plan(_id("crn"), evidence["evidence_id"])
+    # Repair creates a new map for the same run. Prior graphics remain immutable
+    # history but must not be fed to either AI or review as current evidence.
+    pair, actor = comparison_session.execute(text("SELECT stage_pair_id,actor_user_uid FROM stage_chain_run "
+        "WHERE stage_chain_run_id=:run"), {"run": run}).one()
+    repaired = _id("slk")
+    comparison_session.execute(text("INSERT INTO stage_link_revision(stage_link_revision_id,stage_pair_id,revision_no,base_revision_id,"
+        "source,input_sha256,actor_user_uid,command_id) VALUES(:id,:pair,2,:base,'expert',:sha,:actor,:command)"),
+        {"id": repaired, "pair": pair, "base": revision, "sha": "c" * 64, "actor": actor,
+         "command": _command(comparison_session, "apply_stage_sheet_map")})
+    comparison_session.execute(text("INSERT INTO stage_link_item(stage_link_item_id,stage_link_revision_id,row_no,"
+        "left_profile_id,right_profile_id,relation,confidence) VALUES(:id,:revision,1,:left,:right,'paired','manual')"),
+        {"id": _id("sli"), "revision": repaired, "left": left, "right": right})
+    comparison_session.execute(text("UPDATE stage_chain_run SET effective_link_revision_id=:revision WHERE stage_chain_run_id=:run"),
+                               {"revision": repaired, "run": run})
+    assert service.evidence(run) == () and len(service.page(run)[0]) == 1
+    assert service.advance(item, run)["graphic_reliable"] == 1
+    current = service.evidence(run)
+    assert len(current) == 1 and current[0]["evidence_id"] != evidence["evidence_id"]
+    assert len(service.page(run)[0]) == 2
+    with pytest.raises(DomainError):
+        service.crop(run, evidence["evidence_id"], plan[0]["region_key"], "left")
+    from auditmanager.comparison.stage_review import StageReviewService
+    with session_scope(store._sessions) as opened:
+        sources = StageReviewService._sources(opened, repaired, run)
+    assert set(sources) == {current[0]["evidence_id"]}

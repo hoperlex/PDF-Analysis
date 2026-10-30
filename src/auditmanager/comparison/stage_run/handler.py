@@ -122,7 +122,10 @@ class StageChainHandler:
                 self._finish(item, record.run_id, step.step_no, step.counts)
         if self.graphics is not None:
             result = self.graphics.advance(item, run_id=record.run_id)
-            if isinstance(result, (Completed, Failed, Yielded)):
+            if isinstance(result, Failed):
+                self._state(item, record.run_id, "failed", result.reason, step_no=3)
+                return result
+            if isinstance(result, (Completed, Yielded)):
                 return result
             self._finish(item, record.run_id, 3, {
                 **next((step.counts for step in child.steps if step.step_no == 3), {}),
