@@ -29,11 +29,23 @@ describe('stage review drafts', () => {
   it('uses explicit classes/categories without inferring importance from the title', () => {
     const sections = groupedCards([card({ class_name: 'SERVICE_STRUCTURE', title: 'Очень важное изменение' }),
       card({ card_id: uid('ccd', 2), class_name: 'REVIEW' }), card({ card_id: uid('ccd', 3) })]);
-    expect(sections.map((section) => [section.className, section.collapsed])).toEqual([
+    expect(sections.map((section) => [section.cards[0]?.class_name, section.collapsed])).toEqual([
       ['PROJECT_CHANGE', false], ['REVIEW', false], ['SERVICE_STRUCTURE', true],
     ]);
     const service = card({ class_name: 'SERVICE_STRUCTURE' });
     expect(verdictUpdates([service], { [service.card_id]: editVerdict(service, undefined, 'accepted') })).toEqual([]);
+  });
+
+  it('orders explicit detail/materiality sections and retains unknown old metadata', () => {
+    const values = [card({ card_id: 'service', class_name: 'SERVICE_STRUCTURE' }),
+      card({ card_id: 'unknown', class_name: 'REVIEW' }),
+      card({ card_id: 'non', class_name: 'REVIEW', materiality: 'non_material' }),
+      card({ card_id: 'material', class_name: 'REVIEW', materiality: 'material' }),
+      card({ card_id: 'detail', class_name: 'REVIEW', detail_increased: true }), card({ card_id: 'project' })];
+    const sections = groupedCards(values);
+    expect(sections.map((section) => section.kind)).toEqual(['project', 'detail', 'material', 'non_material', 'unknown', 'service']);
+    expect(sections.find((section) => section.kind === 'non_material')?.collapsed).toBe(true);
+    expect(sections.flatMap((section) => section.cards.map((value) => value.card_id))).toHaveLength(values.length);
   });
 });
 

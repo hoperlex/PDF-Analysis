@@ -3,13 +3,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 
-import type { ComparisonBox, StageChainRun } from '@/shared/api';
+import type { ComparisonBox, StageChainRun, StageChangeCard } from '@/shared/api';
 import { failureMessage, getStageChainRun, newIdempotencyKey, recomputeStageTextEvidence } from '@/shared/api';
 import { ErrorState } from '@/shared/ui';
 
 import { fragmentBox, fragmentLookup } from '../model/evidence';
 import type { StageTextEvidenceData } from '../model/evidence';
 import styles from './stage-text-evidence.module.css';
+import { StageReviewRequest } from './stage-review-request';
 
 export const STAGE_TEXT_POLL_MS = 1500;
 
@@ -26,6 +27,9 @@ export interface StageTextEvidenceProps {
   readonly onFocus: (leftProfileId?: string, rightProfileId?: string,
     leftBox?: ComparisonBox, rightBox?: ComparisonBox) => void;
   readonly onHint: (leftProfileId: string, rightProfileId: string, mode: 'add' | 'replace') => void;
+  readonly runId?: string;
+  readonly maskedFragmentIds?: readonly string[];
+  readonly onReviewCreated?: (card: StageChangeCard) => void;
 }
 
 const RUN_WORDS: Readonly<Record<StageChainRun['state'], string>> = {
@@ -34,11 +38,12 @@ const RUN_WORDS: Readonly<Record<StageChainRun['state'], string>> = {
 };
 
 export function StageTextEvidence({ revisionId, mayAct, dirty, evidence, loading,
-  needsRecompute, error, names, onCompleted, onFocus, onHint }: StageTextEvidenceProps) {
+  needsRecompute, error, names, onCompleted, onFocus, onHint, runId, maskedFragmentIds, onReviewCreated }: StageTextEvidenceProps) {
   const [requested, setRequested] = useState<StageChainRun | null>(null);
   const [sending, setSending] = useState(false);
   const [commandError, setCommandError] = useState<unknown>(null);
   const [visible, setVisible] = useState(50);
+  const [maskedVisible, setMaskedVisible] = useState(50);
   const intent = useRef<{ revision: string; key: string } | null>(null);
   const completed = useRef(onCompleted);
   completed.current = onCompleted;
@@ -67,6 +72,10 @@ export function StageTextEvidence({ revisionId, mayAct, dirty, evidence, loading
     finally { setSending(false); }
   };
   const rows = fragmentLookup(evidence);
+  const masked = [...new Set(maskedFragmentIds ?? [])].flatMap((id) => {
+    const fragment = rows.get(id);
+    return fragment === undefined ? [] : [fragment];
+  });
   const stale = dirty || run.data?.stale === true
     || (run.data !== undefined && run.data.link_revision_id !== revisionId);
   const failure = commandError ?? run.error ?? (needsRecompute ? null : error);
@@ -75,6 +84,18 @@ export function StageTextEvidence({ revisionId, mayAct, dirty, evidence, loading
     && ['queued', 'running'].includes(run.data?.state ?? ''));
   return <section className={styles.panel} aria-labelledby="stage-text-heading">
     <h3 id="stage-text-heading">Текстовые свидетельства</h3>
+    {masked.length === 0 ? null : <details><summary>Совпадающий текст · {masked.length}</summary>
+      <ul className={styles.masked}>{masked.slice(0, maskedVisible).map((fragment) => <li key={fragment.fragment_id} data-stage-masked-fragment={fragment.fragment_id}>
+        <p>{names.get(fragment.profile_id) ?? (fragment.side === 'left' ? 'Лист П' : 'Лист Р')}</p><p>{fragment.text}</p>
+        <button type="button" className="am-button" onClick={() => onFocus(
+          fragment.side === 'left' ? fragment.profile_id : undefined, fragment.side === 'right' ? fragment.profile_id : undefined,
+          fragment.side === 'left' ? fragmentBox(fragment) ?? undefined : undefined,
+          fragment.side === 'right' ? fragmentBox(fragment) ?? undefined : undefined)}>Открыть ↗</button>
+        {runId === undefined ? null : <StageReviewRequest runId={runId} sourceIds={[fragment.fragment_id]} mayAct={mayAct && !dirty}
+          label="На экспертную проверку" {...(onReviewCreated === undefined ? {} : { onCreated: onReviewCreated })} />}
+      </li>)}</ul>
+      {maskedVisible < masked.length ? <button type="button" className="am-button" onClick={() => setMaskedVisible((value) => value + 50)}>Показать ещё совпадения</button> : null}
+    </details>}
     {stale ? <p className={styles.stale} role="status">Связи листов изменились — сравнение нужно обновить.</p> : null}
     {revisionId === undefined ? <p>Сохраните карту листов, чтобы начать сравнение текста.</p> : null}
     {needsRecompute ? <p>Нужно пересчитать сравнение, чтобы открыть текст и доказанные совпадения.</p> : null}

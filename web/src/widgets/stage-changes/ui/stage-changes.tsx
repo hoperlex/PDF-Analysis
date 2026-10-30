@@ -5,12 +5,13 @@ import { useEffect, useRef, useState } from 'react';
 
 import type { StageCardEvidence, StageChangeCard } from '@/shared/api';
 import { applyStageCardVerdicts, failureMessage, getStageChainRun, newIdempotencyKey } from '@/shared/api';
-import { AiLabel } from '@/entities/version-series';
+import { UNCONFIRMED_LABEL } from '@/entities/version-series';
 import { formatInstant } from '@/shared/lib';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
+import { StageReviewRequest } from '@/widgets/stage-text-evidence';
 
 import { readCards, readVerdicts, STAGE_REVIEW_KEYS } from '../api/reads';
-import { CARRYOVER_WORDS, CLASS_WORDS, CATEGORY_WORDS, SYSTEM_WORDS,
+import { CARRYOVER_WORDS, CLASS_WORDS, CATEGORY_WORDS, SYSTEM_WORDS, IMPORTANCE_WORDS, MATERIALITY_WORDS,
   editVerdict, groupedCards, rejectionReasonsMissing, verdictUpdates } from '../model/cards';
 import type { VerdictDraft } from '../model/cards';
 import { StageRawDifferences } from './stage-raw-differences';
@@ -29,6 +30,7 @@ export interface StageReviewProps {
 
 export interface StageChangesProps extends StageReviewProps {
   readonly onOpenRawDifference?: OpenStageRawDifference;
+  readonly focusCardId?: string;
 }
 
 function CardSide({ side, card, onOpenEvidence }: { readonly side: 'left' | 'right'; readonly card: StageChangeCard;
@@ -62,22 +64,26 @@ function VerdictHistory({ card }: { readonly card: StageChangeCard }) {
   </details>;
 }
 
-export function StageCardView({ card, draft, mayAct, onDraft, onOpenEvidence }: {
+export function StageCardView({ card, draft, mayAct, mayRequestReview = mayAct, onDraft, onOpenEvidence, onReviewCreated }: {
   readonly card: StageChangeCard; readonly draft: VerdictDraft | undefined; readonly mayAct: boolean;
   readonly onDraft: (decision: 'accepted' | 'rejected', reason?: string) => void;
   readonly onOpenEvidence: OpenStageEvidence;
+  readonly mayRequestReview?: boolean;
+  readonly onReviewCreated?: (card: StageChangeCard) => void;
 }) {
   const decision = draft?.decision ?? card.verdict?.decision;
   const reason = draft?.reason ?? card.verdict?.reason ?? '';
   const editable = mayAct && !card.stale && card.class_name !== 'SERVICE_STRUCTURE';
-  return <article className={styles.card} aria-labelledby={`stage-card-${card.card_id}`}>
+  return <article className={styles.card} aria-labelledby={`stage-card-${card.card_id}`} data-stage-card-id={card.card_id}
+    data-stage-card-class={card.class_name} data-stage-card-importance={card.importance ?? 'unknown'}>
     <header className={styles.cardHeader}>
       <div><span className="am-badge">{CLASS_WORDS[card.class_name]}</span> <span>{CATEGORY_WORDS[card.category]}</span></div>
       <code>{card.card_id}</code>
     </header>
     <h4 id={`stage-card-${card.card_id}`}>{card.title}</h4>
-    {card.verdict?.decision === 'accepted' ? <p>Принято экспертом.</p> : <p><AiLabel /></p>}
+    {card.verdict?.decision === 'accepted' ? <p>Принято экспертом.</p> : <p><span className="am-badge am-badge--inert" data-stage-unconfirmed="">{UNCONFIRMED_LABEL}</span></p>}
     <p>Система: {SYSTEM_WORDS[card.system]}</p>
+    <p>{MATERIALITY_WORDS[card.materiality ?? 'unknown']} · Важность: {IMPORTANCE_WORDS[card.importance ?? 'unknown']}</p>
     <div className={styles.sides}>
       <CardSide side="left" card={card} onOpenEvidence={onOpenEvidence} />
       <CardSide side="right" card={card} onOpenEvidence={onOpenEvidence} />
@@ -97,6 +103,9 @@ export function StageCardView({ card, draft, mayAct, onDraft, onOpenEvidence }: 
     </fieldset> : card.class_name === 'SERVICE_STRUCTURE' ? <p>Служебная карточка. Экспертная оценка не требуется.</p>
       : <p>Решение: {decision === undefined ? 'не сохранено' : decision === 'accepted' ? 'Принято' : 'Не принято'}{reason === '' ? '' : ` · ${reason}`}</p>}
     {card.class_name === 'SERVICE_STRUCTURE' ? null : <VerdictHistory card={card} />}
+    {card.class_name === 'SERVICE_STRUCTURE' ? <StageReviewRequest runId={card.run_id} sourceIds={card.evidence_ids}
+      mayAct={mayRequestReview && !card.stale} label="Отправить на проверку"
+      {...(onReviewCreated === undefined ? {} : { onCreated: onReviewCreated })} /> : null}
   </article>;
 }
 
@@ -104,7 +113,7 @@ export function StageChanges(props: StageChangesProps) {
   return <StageChangesBody key={props.runId ?? ''} {...props} />;
 }
 
-function StageChangesBody({ runId, mayAct, onOpenEvidence, onOpenRawDifference }: StageChangesProps) {
+function StageChangesBody({ runId, mayAct, onOpenEvidence, onOpenRawDifference, focusCardId }: StageChangesProps) {
   const cache = useQueryClient();
   const run = useQuery({ queryKey: ['stage-review-run', runId ?? ''],
     queryFn: async () => (await getStageChainRun({ path: { stage_chain_run_id: runId! } })).data,
@@ -120,10 +129,17 @@ function StageChangesBody({ runId, mayAct, onOpenEvidence, onOpenRawDifference }
   const [expertMode, setExpertMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [promotedCardId, setPromotedCardId] = useState<string | undefined>();
   const [commandError, setCommandError] = useState<unknown>(null);
   const held = useRef(new Map<string, string>());
   useEffect(() => { setDrafts({}); setSaved(false); setCommandError(null); held.current.clear(); }, [runId]);
   const updates = verdictUpdates(cards.data?.cards ?? [], drafts);
+  const focusedCard = promotedCardId ?? focusCardId;
+  useEffect(() => {
+    if (focusedCard !== undefined && cards.data?.cards.some((card) => card.card_id === focusedCard)) {
+      document.getElementById(`stage-card-${focusedCard}`)?.scrollIntoView?.({ block: 'center' });
+    }
+  }, [focusedCard, cards.data]);
   const missingReasons = rejectionReasonsMissing(updates);
   const save = async () => {
     if (!runId || !mayAct || run.data?.stale || updates.length === 0 || missingReasons) return;
@@ -167,6 +183,7 @@ function StageChangesBody({ runId, mayAct, onOpenEvidence, onOpenRawDifference }
       <div><dt>Нужно проверить</dt><dd>{counts.review ?? '—'}</dd></div>
       <div><dt>Конфликты</dt><dd>{counts.conflicts ?? '—'}</dd></div>
       <div><dt>Высокая важность</dt><dd>{counts.high_importance ?? '—'}</dd></div>
+      <div><dt>Важность не определена</dt><dd>{counts.importance_unknown ?? '—'}</dd></div>
     </dl>}
     {cards.isPending ? <LoadingState what="изменения проекта" /> : null}
     {message === null ? null : <ErrorState title="Изменения не открылись или решение не сохранено" detail={message.detail} correlationId={message.correlationId} />}
@@ -177,7 +194,9 @@ function StageChangesBody({ runId, mayAct, onOpenEvidence, onOpenRawDifference }
     {groupedCards(cards.data?.cards ?? []).map((section) => <details key={section.key} open={!section.collapsed}>
       <summary>{section.title} · {section.cards.length}</summary>
       <div className={styles.cards}>{section.cards.map((card) => <StageCardView key={card.card_id} card={card}
-        draft={drafts[card.card_id]} mayAct={mayAct && expertMode && !saving && !run.data?.stale} onOpenEvidence={onOpenEvidence}
+        draft={drafts[card.card_id]} mayAct={mayAct && expertMode && !saving && !run.data?.stale}
+        mayRequestReview={mayAct && !saving && !run.data?.stale} onOpenEvidence={onOpenEvidence}
+        onReviewCreated={(created) => { if (created.run_id === runId) setPromotedCardId(created.card_id); }}
         onDraft={(decision, reason) => {
           setDrafts((heldDrafts) => ({ ...heldDrafts,
             [card.card_id]: editVerdict(card, heldDrafts[card.card_id], decision, reason) }));

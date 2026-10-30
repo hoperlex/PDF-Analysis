@@ -5,7 +5,7 @@
 .sides, .counts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
 .sides section { min-width: 0; border-left: .2rem solid var(--am-border, #d5dce3); padding-left: .7rem; }
 .sides p { white-space: pre-wrap; }
-.counts { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.counts { grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); }
 .counts dd { font-size: 1.4rem; margin: .4rem 0; }
 .verdict { display: grid; gap: .7rem; margin-top: 1rem; }
 .verdict label { display: flex; gap: .4rem; }

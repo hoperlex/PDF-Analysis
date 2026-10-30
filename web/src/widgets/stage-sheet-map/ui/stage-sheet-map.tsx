@@ -3,7 +3,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 
-import type { ComparisonBox, ProjectUid, StageLinkInput, StageLinkRevision, StageSheetPassport, VersionPageProfile } from '@/shared/api';
+import type { ComparisonBox, ProjectUid, StageChangeCard, StageLinkInput, StageLinkRevision, StageSheetPassport, VersionPageProfile } from '@/shared/api';
 import {
   ApiError, applyStageSheetMap, failureMessage, getStageChainRun, getStageSheetMap, getStageSheetMapRevision, getVersionPageProfile,
   listStageSheetMapHistory, listStageSheetPassports, listStageSheetSuggestions,
@@ -49,9 +49,10 @@ function label(page: StageSheetPassport): string {
     + `${page.floor === undefined ? '' : ` · ${page.floor}`}`;
 }
 
-function PairMap({ pairId, mayAct, textProvider, runId, focus: externalFocus, onClearFocus }: {
+function PairMap({ pairId, mayAct, textProvider, runId, focus: externalFocus, onClearFocus, onReviewCreated }: {
   readonly pairId: string; readonly mayAct: boolean; readonly textProvider: PageTextProvider | undefined;
   readonly runId: string | undefined; readonly focus: StageMapFocus | undefined; readonly onClearFocus: (() => void) | undefined;
+  readonly onReviewCreated: ((card: StageChangeCard) => void) | undefined;
 }) {
   const cache = useQueryClient();
   const passports = useQuery({
@@ -108,6 +109,11 @@ function PairMap({ pairId, mayAct, textProvider, runId, focus: externalFocus, on
   const text = useStageTextEvidence(pairId, evidenceRevisionId);
   const aiCurrent = aiReady && !run.data?.stale && (run.data?.effective_link_revision_id ?? run.data?.link_revision_id) === evidenceRevisionId;
   const aiIds = aiCurrent ? acceptedSameFragments(text.data?.fragments ?? [], reviews.data ?? []) : [];
+  const maskedIds = dirty || run.data?.stale === true ? [] : [...new Set([
+    ...(text.data?.exclusions.flatMap((item) => [item.left_fragment_id, item.right_fragment_id]) ?? []), ...aiIds,
+  ])];
+  const reviewRunId = !historical && !dirty && run.data?.pair_id === pairId && run.data.kind === 'full' && !run.data.stale
+    && (run.data.effective_link_revision_id ?? run.data.link_revision_id) === evidenceRevisionId ? run.data.run_id : undefined;
   const viewerEvidence = text.data === undefined ? undefined : { ...text.data, aiSameFragmentIds: aiIds };
   const beforeExternal = useRef<{ left: string; right: string } | null>(null);
   const rowNodes = useRef(new Map<number, HTMLLIElement>());
@@ -282,6 +288,8 @@ function PairMap({ pairId, mayAct, textProvider, runId, focus: externalFocus, on
     {aiIds.length === 0 ? null : <p>Совпадения после ИИ-ревизии: {aiIds.length} фрагментов. Исходные различия доступны ниже.</p>}
     <StageTextEvidence revisionId={evidenceRevisionId} mayAct={mayAct && !historical} dirty={dirty || historical}
       evidence={text.data} loading={text.isFetching} needsRecompute={evidenceNeedsRecompute(text.error)}
+      maskedFragmentIds={maskedIds} {...(reviewRunId === undefined ? {} : { runId: reviewRunId })}
+      {...(onReviewCreated === undefined ? {} : { onReviewCreated })}
       error={text.error} names={names}
       onCompleted={() => { void cache.invalidateQueries({ queryKey: STAGE_TEXT_KEYS.evidence(pairId, current.data?.revision_id) }); }}
       onFocus={focusPages}
@@ -302,9 +310,10 @@ export interface StageSheetMapProps {
   readonly runId?: string;
   readonly focus?: StageMapFocus;
   readonly onClearFocus?: () => void;
+  readonly onReviewCreated?: (card: StageChangeCard) => void;
 }
 
-export function StageSheetMap({ projectUid, mayAct, textProvider, pairId: controlledPairId, onPairChange, runId, focus, onClearFocus }: StageSheetMapProps) {
+export function StageSheetMap({ projectUid, mayAct, textProvider, pairId: controlledPairId, onPairChange, runId, focus, onClearFocus, onReviewCreated }: StageSheetMapProps) {
   const [pages, setPages] = useState<string[]>([]);
   const [selected, setSelected] = useState('');
   const pairs = useStagePairs(controlledPairId === undefined ? projectUid : null, pages.at(-1));
@@ -332,6 +341,6 @@ export function StageSheetMap({ projectUid, mayAct, textProvider, pairId: contro
     {focus !== undefined && (focus.pairId !== pairId || (runId !== undefined && focus.runId !== runId))
       ? <ErrorState title="Свидетельство относится к другому сравнению" detail="Выберите запуск и откройте место заново." /> : null}
     {pairId === '' ? <EmptyState title="Выберите пару стадий" detail="Карта листов относится к одной подтверждённой паре." />
-      : <PairMap key={pairId} pairId={pairId} mayAct={mayAct} textProvider={textProvider} runId={runId} focus={focus?.pairId === pairId && (runId === undefined || focus.runId === runId) ? focus : undefined} onClearFocus={onClearFocus} />}
+      : <PairMap key={pairId} pairId={pairId} mayAct={mayAct} textProvider={textProvider} runId={runId} focus={focus?.pairId === pairId && (runId === undefined || focus.runId === runId) ? focus : undefined} onClearFocus={onClearFocus} onReviewCreated={onReviewCreated} />}
   </section>;
 }
