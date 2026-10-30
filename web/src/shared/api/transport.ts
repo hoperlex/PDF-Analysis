@@ -26,6 +26,7 @@ const IDEMPOTENCY_HEADER = 'Idempotency-Key';
 const CORRELATION_HEADER = 'X-Correlation-Id';
 const JSON_MEDIA_TYPE = 'application/json';
 const MULTIPART_MEDIA_TYPE = 'multipart/form-data';
+const BINARY_MEDIA_TYPES = ['application/zip', 'application/octet-stream'] as const;
 
 /** What the generated `OPERATIONS` table supplies for one operation. */
 export interface OperationDescriptor {
@@ -169,10 +170,18 @@ function buildBody(descriptor: OperationDescriptor, input: OperationInput, heade
     return form;
   }
 
+  if (BINARY_MEDIA_TYPES.some((type) => type === descriptor.requestMediaType)) {
+    if (!(input.body instanceof Blob)) {
+      throw new ClientUsageError(`${descriptor.operationId}: тело бинарного запроса должно быть Blob.`);
+    }
+    headers.set('Content-Type', descriptor.requestMediaType);
+    return input.body;
+  }
+
   throw new ClientUsageError(
     `${descriptor.operationId}: тип содержимого запроса ` +
       `«${descriptor.requestMediaType}» не поддерживается. Транспорт знает ${JSON_MEDIA_TYPE} и ` +
-      `${MULTIPART_MEDIA_TYPE}.`,
+      `${MULTIPART_MEDIA_TYPE}, ${BINARY_MEDIA_TYPES.join(' и ')}.`,
   );
 }
 
