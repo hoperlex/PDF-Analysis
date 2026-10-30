@@ -4,7 +4,7 @@ The owner's direct instruction on 2026-10-30 authorises finishing the roadmap's 
 
 This addendum supersedes the earlier `CMP-WAVE-C2-INT` requirement for a green full gate before this development-code publication. It does not rewrite or claim success for earlier gate evidence. After the interrupted session, the old temporary gate log is absent and no `GATE OK` is available. The C2 local candidate was `97c8dcf2ced12ceea9a7c924e297aa397e7da612`; remote dev was `e8567a1981cbe35cf66bae4ce79b2877224df1be`, main `3449265338e341e6f14e02fe55260030b38bdd14`.
 
-## In progress
+## Earlier integration work
 
 - Integrate completed C3 pair, sheet map and text evidence/recompute code. Current text recompute candidate: `a1fb6a2b37fd06bdcd68ef4dcb97602b39fccd11`, focused checks 33 unit and 78 DB/HTTP/composition passed.
 - Parallel isolated lanes: C4 seal, Stage AI method core, deterministic repair core. Shared wiring is integrated serially.
@@ -35,3 +35,22 @@ D-262 and D-263 are code-closed; D-290 records deferred acceptance. No complete 
 R-148a…g are direct2026-10-30 answers in OWNER_RULINGS. New beta code tasks are BETA-COST-PREFLIGHT-1030 / BETA-COST-WEB-1030 (pre-start estimate and accepted sufficient cap), BETA-PDF-PRECHECK-1030 / BETA-PDF-PROGRESS-WEB-1030 (background complete page interpretation before the model), and BETA-UNIT-ALIASES-1030 (factor1 running metres). Expanded directions and model optimisation are post-beta; pinned MinIO and bounded graphical consent windows are retained.
 
 Unit alias implementation:86 unit plus23 real saved-pass DB/S3 scenarios passed. The cost API provider7fcbeb37 is merged at230/256/618, including historical/new price-match versions; its runtime is still being completed and must land before publication. PDF progress UI49b4018e has109 focused checks and typecheck; producer is being completed in the worker lane. The code-only C4 journey694afa6c is integrated with135 conformance cases and56-operation static exposure census; browser/worker execution remains explicitly unverified.
+
+## Final code handoff — 2026-10-30
+
+The agreed beta implementation is integrated. Every R-148 answer has an implementation or an explicit post-beta scope decision; no further owner product choice blocks this development candidate.
+
+| Area | Integrated result / report |
+| --- | --- |
+| Version comparison | Upload/group/order, sheet matrix, deterministic comparisons and adjacent series, viewer, consented AI checks/descriptions/specification comparison, overview/Markdown/report and durable queue. C2 needs a configured executor or source-bound recording for its AI steps. |
+| Stage comparison | C3 intake/assemblies/maps/text and C4 seven-step single/batch chains, real graphic evidence, bounded AI review/repair/recovery, expert cards and decisions, navigation and three grouped journal exports. |
+| Cost before execution | Backend through `20585849`, start/journey UI through `43db4802`, re-audit UI `639f9d09` and journey compatibility `dc597c06`: fresh source-bound estimate, explicit sufficient finite cap, stale rejection before queue/spend, immutable accepted worker policy. See `BETA-COST-PREFLIGHT-1030.md`, `BETA-COST-WEB-1030.md` and `BETA-REAUDIT-COST-WEB-1030.md`. |
+| Full PDF interpretation | Worker `66460f0f` plus progress UI `49b4018e`: bounded background child before model binding, durable page progress, cancellation and explicit failure. See `BETA-PDF-PRECHECK-1030.md` and `BETA-PDF-PROGRESS-WEB-1030.md`. |
+| Running metres | `п.м` and `м` match at exact factor1, original units retained; algorithm v2 coexists with historical v1. See `BETA-UNIT-ALIASES-1030.md`. |
+| Presentation | `CMP-PRESENTATION-1030.md` provides the VS-1/SP-1 seven-minute script and preparation commands. Stage model replies in that local route are explicitly synthetic; no actual browser/stand execution is claimed. |
+
+The exact final contract is `1.13.0`: **230 paths / 256 operations / 619 schemas**, migration `0043_stage_ai_generations`. The API SHA256 is `71380d022cfd144f55611f92d43ec3ddb8948bb05a7f6a411605848040168de8`; the generated client and frontend lock match. Both optimisation algorithm schemas permit historical v1 and new v2 without the obsolete v1-only `const`. The reviewed MinIO source build is retained for beta. Additional norms/cross-volume/standalone AI drawing analysis and model-generated optimisation proposals remain post-beta by direct owner choice.
+
+Final combined-tree checks: TypeScript and generated API verification PASS; 57 cost-preflight/PDF-precheck/C4 HTTP tests PASS on the assigned existing private DB/S3. Focused implementation runs also cover the source-bound start and re-audit dialogs, PDF progress parsing, module gates, terminal polling, contract lock and maintained journey source conformance. A first focused pass exposed stale operation-count/stub expectations and the newly intentional one-shot source read in the polling inventory; these test expectations were corrected without adding a polling loop. Remaining metadata and final guard results are recorded in the closing verification below. No complete gate, whole battery, browser journey, live model or deployment is claimed.
+
+Publication is authorised only to `origin/dev`, after a clean-tree and remote fast-forward check. The exact pushed SHA and before/after refs are recorded after publication in `.local/handoff/integrator-2026-10-30-cmp-dev.md`. `origin/main` is not a publication target. D-290 retains tomorrow's postponed acceptance windows; this code handoff does not close them.

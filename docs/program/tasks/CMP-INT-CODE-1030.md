@@ -71,7 +71,7 @@ The remaining C3/C4 functional roadmap is implemented, integrated by one owner a
 - `web/tests/unit/run/polling.test.ts`
 - `tests/integration/composition/**`
 - `tests/integration/comparison/stage_run/**` (runtime integration regression)
-- Final serial metadata reconciliation after `BETA-COST-PREFLIGHT-1030`: current surface prose in `src/auditmanager/api/**`, `infra/deploy/**`, `web/src/app/api/**`, `docs/program/P02_SEAMS.md`; focused API surface assertions in `tests/contract/api_v1/**`; obsolete stub assertion in `tests/integration/composition/test_comparison_stage_c4_wiring.py`. Historical measurements remain unchanged. No functional API, migration, dependency or deployment change is authorised by this metadata pass.
+- Final serial metadata reconciliation after `BETA-COST-PREFLIGHT-1030`: current surface prose in `src/auditmanager/api/**`, `infra/deploy/**`, `web/src/app/bff/v1/[...path]/route.ts`, `docs/program/P02_SEAMS.md`; focused API surface assertions in `tests/contract/api_v1/**`; obsolete stub assertion in `tests/integration/composition/test_comparison_stage_c4_wiring.py`. Historical measurements remain unchanged. No functional API, migration, dependency or deployment change is authorised by this metadata pass.
 
 ## Forbidden hotspots
 - `origin/main`, force-push, deployment, unrelated worktree changes and owner files
@@ -102,8 +102,8 @@ Root is the sole integrator and dev writer. Subagents implement independent owne
 Comparison modules can be disabled with `AUDITMANAGER_COMPARISON_MODULES=none`; immutable data remains. A rollback is a forward commit, never a forced ref rewrite.
 
 ## Handoff
-- changed files: pending
-- checks/results: pending; full acceptance deferred by owner
-- contracts: C3 and serial C4 seal outputs
+- changed files: integrated lane manifests/reports linked in `docs/program/CMP-INT-CODE-1030.md`, plus the final metadata and focused guard corrections within the paths above
+- checks/results: focused implementation and final combined smoke results in the integration report; full acceptance deferred by owner
+- contracts: `1.13.0`, 230 paths / 256 operations / 619 schemas; migration `0043_stage_ai_generations`; final API SHA256 `71380d022cfd144f55611f92d43ec3ddb8948bb05a7f6a411605848040168de8`
 - known limits: tomorrow's full gate, exposure and browser journey remain required
 - integration notes: origin/dev only

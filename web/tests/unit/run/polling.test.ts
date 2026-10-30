@@ -347,7 +347,12 @@ describe('this slice adds no second polling loop', () => {
     // now lives beside the key it fills, as `runStatusQueryOptions`, and the screen calls
     // that. This assertion reddened on the move, which is the guard working -- the list is
     // where the run endpoint is reached, and that place changed.
-    const ALLOWED_ONE_SHOT = [join('entities', 'audit-run', 'api', 'run-status-query.ts')];
+    // Re-audit also reads the selected terminal source once, before requesting its
+    // fresh cost estimate; it uses a separate confirmation key and no poll schedule.
+    const ALLOWED_ONE_SHOT = [
+      join('entities', 'audit-run', 'api', 'run-status-query.ts'),
+      join('features', 'reaudit-run', 'model', 'use-reaudit-cost-approval.ts'),
+    ];
 
     const direct = sources.filter((file) => /\bgetRunStatus\s*\(/.test(code(file)));
     const unexpected = direct.filter(
@@ -357,7 +362,9 @@ describe('this slice adds no second polling loop', () => {
 
     // The allowlist must not rot into a list of files that no longer exist.
     for (const allowed of ALLOWED_ONE_SHOT) {
-      expect(direct.some((file) => file.path.includes(allowed))).toBe(true);
+      const file = direct.find((candidate) => candidate.path.includes(allowed));
+      expect(file).toBeDefined();
+      expect(code(file!), allowed).not.toMatch(/setInterval\s*\(|setTimeout\s*\(|refetchInterval/);
     }
   });
 });

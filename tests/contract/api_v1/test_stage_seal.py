@@ -31,7 +31,7 @@ def test_all_stage_routes_have_closed_roles_and_keyed_writes() -> None:
     operations = {operation["operationId"]: (method, operation)
                   for item in document["paths"].values()
                   for method, operation in item.items() if method in {"get", "post", "put"}}
-    assert len(STAGE_OPERATIONS) == 55
+    assert len(STAGE_OPERATIONS) == 56
     assert STAGE_OPERATIONS <= operations.keys()
     for name in STAGE_OPERATIONS:
         method, operation = operations[name]
