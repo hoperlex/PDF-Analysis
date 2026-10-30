@@ -93,6 +93,13 @@ describe('the structure as a reader sees it', () => {
     expect(group(markup, 'unclassified')).toContain('data-section-documents="1"');
   });
 
+  it('shows the original-style section cards and opens those containing documents', () => {
+    expect(group(markup, 'AR')).toContain('>AR</span>');
+    expect(group(markup, 'AR')).toMatch(/<details[^>]*open=""/);
+    expect(group(markup, 'GP')).toContain('<details');
+    expect(group(markup, 'GP')).not.toMatch(/<details[^>]*open=""/);
+  });
+
   it('carries the stage on every classified row, and «Раздел не подтверждён» on the rest', () => {
     const kj = group(markup, 'KJ');
     expect(kj).toContain('Стадия: Р');

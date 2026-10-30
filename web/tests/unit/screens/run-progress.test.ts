@@ -52,6 +52,17 @@ function screen(overrides: Partial<RunStatus> = {}): string {
 }
 
 describe('the harness reaches this widget at all', () => {
+  it('shows a horizontal rail from actual Run stages and retains the detailed table', () => {
+    const markup = screen({
+      stages: [{ stage_id: 'text_analysis', status: 'succeeded', error_code: null }],
+    });
+    expect(markup).toContain('data-run-pipeline=""');
+    expect(markup).toMatch(/data-pipeline-stage="text_analysis"[^>]*data-pipeline-status="succeeded"/);
+    expect(markup).not.toContain('data-pipeline-stage="block_analysis"');
+    expect(markup).toContain('data-stage-id="text_analysis"');
+    expect(markup).toContain('Подробности этапов');
+  });
+
   it('shows an in-flight v3 Run with no fabricated PC-01 stages', () => {
     const markup = screen({ state: 'queued', analysis_profile_id: AR_V3_BETA_PROFILE_ID, stages: [] });
     expect(markup).toContain('Сведения об этапах пока не поступили.');

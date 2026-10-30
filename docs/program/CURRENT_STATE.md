@@ -1,5 +1,29 @@
 # Current state
 
+**Updated 2026-10-30 by `HOTFIX-DASHBOARD-SHOWCASE-INT-20261030`
+(development candidate only).** `/dashboard` now uses an isolated presentation
+palette in both light and dark appearances; the existing system choice follows
+the dark block exactly. Its hero, panel cards and responsive section-card grid
+still show only the existing dashboard summary and retain its loading/error
+states. `docs/program/DESIGN-31-SCREEN-PLAN.md` inventories all 31 routes and
+stages the remaining work; those routes are not yet redesigned. This task
+changes no API, analysis behavior, contract or migration. The baseline still
+contains styling-layer and undefined-token failures in the comparison CSS,
+outside this dashboard pilot. Publication is to `origin/dev` only.
+
+**Updated 2026-10-30 by `HOTFIX-SECTION-PRESENTATION-INT-20261030`
+(development candidate only).** The home and dashboard now lead with an
+original-inspired overview of all fifteen sections: compact code badges, names
+and the server's confirmed document counts. A project shows its section groups
+as expandable cards. A Run shows a horizontal rail of the stages it actually
+schedules or reports, followed by the detailed stage table and existing result.
+This is a visual adaptation of `PDF-proverka`'s overview, project cards and
+pipeline. The current API has no per-section project, finding or expert-decision
+totals, so the UI does not invent them. This task changes no analysis behavior,
+contract, migration or `origin/main`; the integrated development candidate has
+contract `1.13.0` and migration head `0043_stage_ai_generations`.
+The owner requested focused checks and publication to `origin/dev` only.
+
 **Updated 2026-10-30 by `CMP-INT-CODE-1030` (integrated development candidate; publication record in its report).** CMP C2–C4 runtime includes version comparison and stage intake/pairs/assemblies, sheet maps and stored text, registered graphic evidence, bounded consented AI review/classification/synthesis, one-cycle recorded repair/undo, durable single/batch seven-step chains, expert cards/verdicts/escalation and grouped XLSX/PDF/HTML journals. Four stage tabs and immutable evidence navigation are integrated. R-148 beta choices are implemented: fresh cost preflight/finite-cap approval for ordinary, AR v3 and repeated Runs; background complete PDF interpretation with durable progress/error; and `п.м`↔`м` at factor1. Accepted metered consent enforces its cap even with raised limits; old accepted commands retain historical policy. Contract `1.13.0` has 230 paths / 256 operations / 619 schemas, migration head `0043_stage_ai_generations`. Owner dev hotfixes `99b337fb`/`06b94745`, their default-off controls and navigation are preserved. Root fixed command/worker locking, atomic child creation, cancellation and fresh receipts; AI generations retain paid replies and refuse uncertain resends. The presentation script is `CMP-PRESENTATION-1030.md`; its browser run is unverified. Full gates, heavy batteries, browser execution, exposure acceptance and live spend remain deferred to 2026-10-31 (D-290). No main publication is authorised. The paragraphs below retain historical measurements and earlier candidates.
 
 **Updated 2026-10-30 by `HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030` (development

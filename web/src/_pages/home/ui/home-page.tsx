@@ -1,7 +1,7 @@
 /**
  * `/` — the application's front door (`W50-PLAN.md` §3.6, `W50-HOME-01`).
  *
- * It greets the account by name, says which roles it holds, and shows three tiles: the five
+ * It greets the account by name, says which roles it holds, shows the section overview and three tiles: the five
  * most recent projects, the summary the dashboard reads, and — for a session holding `admin`
  * only — how many registration requests wait for a decision. A session holding `expert` also
  * gets «Мои задачи» (`W61-DISPATCHER-01`): its open assignments, with their moves and links.
@@ -45,6 +45,7 @@ import { screenRolesAdmit } from '@/shared/config/screen-registry';
 import { ErrorState } from '@/shared/ui';
 import { UnknownRoleError, roleLabels } from '@/entities/account';
 import { MyTasks } from '@/widgets/my-tasks';
+import { HomeSectionsOverview } from '@/widgets/dashboard';
 import {
   PendingRegistrationsTile,
   RecentProjectsTile,
@@ -121,6 +122,7 @@ export function HomePage({ displayLabel, roles }: HomePageProps) {
         ) : projects || summary || registrations || tasks ? (
           <>
             {tasks ? <MyTasks roles={roles} listHref={DISPATCHER_SCREEN} /> : null}
+            {summary ? <div className={styles.sections}><HomeSectionsOverview /></div> : null}
             {projects || summary || registrations ? (
               <div className={styles.tiles}>
                 {projects ? <RecentProjectsTile /> : null}

@@ -1,40 +1,174 @@
-/*
- * Layout for the four-panel dashboard. Colour is deliberately absent, same discipline as
- * `widgets/project-sections/ui/project-sections.module.css`: every panel's content already
- * renders through `am-state` (border and surface both come from there), so a border or a
- * background declared again in this collocated module would be a second, unreached
- * declaration of a colour the census already measures on the class that actually carries
- * it. This file places panels; it does not repaint them.
- *
- * `R-33`/`R-18`'s width case, `D-93`: a dashboard is the widest thing this product has, so
- * this is the one screen that needs its own responsive rule rather than relying on the
- * page shell's prose width. Four panels sit in a grid that never exceeds one column below
- * 780px, and every length is a global token.
- */
+/* A bounded dashboard presentation. Its light and dark tokens live in globals.css. */
+.showcase {
+  min-width: 0;
+  padding: clamp(16px, 2.4vw, 32px);
+  border: 1px solid var(--am-line);
+  border-radius: 24px;
+  background: var(--am-surface);
+  color: var(--am-ink);
+  box-shadow: var(--am-shadow-2);
+}
+
+.hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 240px;
+  align-items: center;
+  min-height: 220px;
+  overflow: hidden;
+  margin-bottom: var(--am-gap-lg);
+  padding: clamp(24px, 3vw, 40px);
+  border: 1px solid var(--am-line);
+  border-radius: 22px;
+  background: radial-gradient(circle at 84% 50%, var(--am-accent-light), transparent 38%), var(--am-paper);
+}
+
+.heroCopy {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
+.eyebrow {
+  margin: 0 0 var(--am-gap);
+  color: var(--am-accent-strong);
+  font-size: var(--am-text-xs);
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.heroTitle {
+  max-width: 17ch;
+  margin: 0 0 var(--am-gap-sm);
+  padding: 0;
+  border: 0;
+  color: var(--am-ink);
+  font-size: clamp(28px, 3.2vw, 44px);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1.08;
+}
+
+.heroDescription {
+  max-width: 42ch;
+  margin: 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-base);
+}
+
+.heroArt {
+  position: relative;
+  width: 220px;
+  height: 220px;
+  justify-self: end;
+  background: radial-gradient(circle, var(--am-accent-light) 0 22%, transparent 69%);
+}
+
+.orbitOuter,
+.orbitMiddle,
+.orbitInner,
+.orbitCore {
+  position: absolute;
+  display: block;
+  border-radius: 50%;
+}
+
+.orbitOuter {
+  inset: 7px;
+  border: 1px solid var(--am-line);
+}
+
+.orbitMiddle {
+  inset: 35px;
+  border: 1px solid var(--am-line);
+  transform: rotateX(58deg) rotate(-26deg);
+}
+
+.orbitInner {
+  inset: 62px;
+  border: 1px solid var(--am-accent);
+  transform: rotateY(57deg) rotate(32deg);
+}
+
+.orbitCore {
+  inset: 84px;
+  background: var(--am-accent);
+  box-shadow: 0 0 38px var(--am-accent);
+}
 
 .grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--am-gap-lg);
-  align-items: start;
+  gap: var(--am-gap);
+  align-items: stretch;
+}
+
+.panel {
+  min-width: 0;
+  padding: clamp(18px, 2vw, 28px);
+  border: 1px solid var(--am-line);
+  border-radius: 20px;
+  background: var(--am-paper);
+  box-shadow: var(--am-shadow-1);
+}
+
+.sections,
+.runs {
+  grid-column: 1 / -1;
+}
+
+.showcase .panel > h2 {
+  margin: 0 0 var(--am-gap);
+  padding-bottom: var(--am-gap);
+  border-color: var(--am-line-soft);
+  color: var(--am-ink);
+  font-size: var(--am-text-xl);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+.panel :global(li.am-state) {
+  background: var(--am-surface-sunken);
+  border-color: var(--am-line);
+  box-shadow: none;
+}
+
+.panel :global(tbody tr:hover) {
+  background: var(--am-surface-sunken);
+}
+
+/* Tables inside a panel cannot force a narrow grid column wider than the viewport. */
+.panel table {
+  width: 100%;
+  table-layout: fixed;
 }
 
 @media (max-width: 780px) {
+  .hero {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+  }
+
+  .heroArt {
+    position: absolute;
+    top: -60px;
+    right: -65px;
+    opacity: 0.3;
+  }
+
   .grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
-.panel {
-  min-width: 0;
-}
+@media (prefers-reduced-motion: no-preference) {
+  .panel,
+  .hero {
+    transition: box-shadow var(--am-motion-base) var(--am-ease);
+  }
 
-.panel > h2 {
-  margin-top: 0;
-}
-
-/* Tables inside a narrow panel must not force the grid column wider than 780px allows. */
-.panel table {
-  width: 100%;
-  table-layout: fixed;
+  .panel:hover {
+    box-shadow: var(--am-shadow-2);
+  }
 }

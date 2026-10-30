@@ -262,6 +262,16 @@ function expectedNumberTokens(summary: DashboardSummary): ReadonlySet<string> {
 }
 
 describe('every number the dashboard renders is the fixture, and nothing else is a number', () => {
+  it('opens with the section overview and its original-style code badges', () => {
+    const markup = render(SUMMARY);
+    expect(markup).toContain('data-dashboard-showcase="true"');
+    expect(markup).toContain('>Сводка по проектам</h2>');
+    expect(markup.indexOf('dashboard-sections-heading')).toBeLessThan(markup.indexOf('dashboard-documents-heading'));
+    expect(markup).toContain('>Разделы проекта</h2>');
+    expect(markup).toContain('>AR</span>');
+    expect(markup).toContain('>Документы</span>');
+  });
+
   it('renders exactly the fixture’s numbers, nothing invented', () => {
     const markup = render(SUMMARY);
     const expected = expectedNumberTokens(SUMMARY);
