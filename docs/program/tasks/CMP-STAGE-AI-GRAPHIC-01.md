@@ -12,7 +12,7 @@ Stage AI exposes bounded immutable answer pages and can estimate/interpret relia
 - API contract: C4 `1.13.0` existing StageAiReview/Classification/Synthesis pages
 - migration head: `0042`; no shared edits in this lane
 - graphical provider: negotiated StageGraphicService evidence/crop/crop_plan, real sge IDs, reliable1:1 registration and canonical source boxes
-- base commit: `db576e4527afbd469227f60e7a6487e190dd413d`
+- base commit: `5a449308cb2b3c144b9e513699dbd49a588f8c47`
 
 ## Enumerator ownership
 - enumerated_set_changed: no
@@ -22,6 +22,17 @@ Stage AI exposes bounded immutable answer pages and can estimate/interpret relia
 
 ## Captured premise evidence
 - premise: root assigned GRAPHIC wiring after completed D-3; graphical provider is serially integrated by root before SQL replay.
+
+### P-01 — initial read seam and serial root providers
+- captured_at: 2026-10-30
+- command: `git log -3 --oneline`
+- captured_output:
+  ```text
+  5a449308 merge: consume effective-map graphic evidence and anchors
+  c6267061 fix(comparison): isolate graphic evidence by effective repair revision
+  93645da4 fix(comparison): bind graphic card carryover to engine evidence and source boxes
+  ```
+- interpretation: owned read milestone `263c90a5` preceded parent-owned graphical provider merges; final path proof begins after those merges, preserving their separate ownership.
 
 ## Historical evidence
 - correction_mode: none
@@ -50,6 +61,7 @@ Stage AI exposes bounded immutable answer pages and can estimate/interpret relia
 - public immutable answer keyset page seam for existing C4 API
 - conservative potential graphical preflight, graphic-only classifier/synthesis groups
 - verified image attachment bounded to at most8images/request, cursor traversal without dropped remaining regions
+- rolling one-page consent window, explicit fresh LEFT consent before a remainder window or repaired effective source; no estimated maximum2000-region block
 - recorded focused tests and report
 
 ## Required tests
@@ -69,7 +81,7 @@ Root provides StageGraphicService and advances it before AI step4. Constructor a
 Root stages module scheduling flag remains the rollback boundary; immutable source/answers retained.
 
 ## Handoff
-- changed files: pending
-- commands/results: pending
-- known limits: pending
+- changed files: stage_ai graphic/runtime/planning/repository/reviewer, scoped unit/SQL tests, this task/report; earlier read milestone263c90a5
+- commands/results:59ownedunit tests PASS;7recordedSQL tests PASS on assigned PostgreSQL58050; compile/whitespace PASS
+- known limits: recorded model interpretation and injected PNG material; this lane does not claim live provider or actual renderer acceptance, which belong to the graphical provider's separate smoke evidence
 - integration notes: root sole integrator and publisher

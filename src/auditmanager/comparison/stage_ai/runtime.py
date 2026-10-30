@@ -13,6 +13,7 @@ from auditmanager.analysis.public import ModelRequest
 from auditmanager.comparison.ai_jobs.estimate import read_route
 from auditmanager.comparison.ai_jobs.model import (
     AiConsentInput, AiMode, AiScope, CHARS_PER_TOKEN_NUMERATOR, CHARS_PER_TOKEN_DENOMINATOR,
+    TOKENS_PER_IMAGE,
 )
 from auditmanager.comparison.ai_jobs.service import AiJobCommand, ComparisonAiJobService
 from auditmanager.comparison.spend.caller import ComparisonModelCaller
@@ -26,6 +27,7 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 from .classifier import build_classification_request, parse_classification
 from .model import ClassifiedCard, SynthesisGroup
 from .loop import final_document, next_step, with_loop
+from . import graphic
 from .planning import StageAiMethod
 from .repository import ANSWER_TABLES, StageAiRepository
 from .reviewer import accept_review_group, build_review_requests
@@ -58,7 +60,7 @@ class StageAiRuntime:
 
     def __init__(self, session_factory, *, blob_store=None, routes=None, provider_mode="recorded",
                  repository=None, caller=None, jobs_factory=None, route_reader=read_route, profile_reader=None,
-                 now=None):
+                 now=None, graphic_source=None):
         self._sessions = session_factory
         self._store = blob_store
         self._routes = routes
@@ -69,18 +71,37 @@ class StageAiRuntime:
         self._route_reader = route_reader
         self._profile_reader = profile_reader
         self._now = now or time
+        self._graphics = graphic_source
 
     def _method(self):
         return StageAiMethod(self._repo, sessions=self._sessions, blob_store=self._store,
-                             profile_reader=self._profile_reader)
+                             profile_reader=self._profile_reader, graphic_source=self._graphics)
 
-    def _jobs(self, method=None):
+    def graphic_window_info(self, *, revision_id: str, run_id: str | None = None):
+        with session_scope(self._sessions) as session:
+            snapshot = self._repo.revision(session, revision_id)
+            remaining = None
+            if run_id is not None and self._graphics is not None:
+                run = self._repo.run(session, run_id)
+                if run["revision_id"] != revision_id:
+                    raise DomainError(ErrorCode.CONFLICT, conflict_reason="stage_ai_input_stale")
+                progress = self._repo.graphic_progress(session, run_id)
+                remaining = 0
+                for row in self._graphics.evidence(run_id):
+                    unit = progress.get(graphic.group_id(row["evidence_id"]), {})
+                    if row["status"] == "reliable" and unit.get("state") != "completed":
+                        remaining += unit.get("progress", {}).get("graphic_remaining_regions", len(row["regions"]))
+            return {"partial_window": self._graphics is not None, "regions_per_request": 4,
+                    "max_images": 8, "eligible_links": len(graphic.eligible_links(snapshot)),
+                    "remaining_regions": remaining, "requires_more_consent": remaining is None or remaining > 4}
+
+    def _jobs(self, method=None, *, provider_mode=None):
         method = method or self._method()
         if self._jobs_factory is not None:
             return self._jobs_factory(method)
         return ComparisonAiJobService(
             self._sessions, methods=[method], comparison_modules="versions,stages",
-            provider_mode=self._mode, route_reader=self._route_reader,
+            provider_mode=provider_mode or self._mode, route_reader=self._route_reader,
         )
 
     def _scope(self, snapshot, *, run_id=None):
@@ -116,6 +137,7 @@ class StageAiRuntime:
             if not run.get("comparison_ai_job_id"):
                 return jobs.estimate_in(session, self._scope(run, run_id=run_id))
             job = jobs.job(session, str(run["comparison_ai_job_id"]))
+            jobs = self._jobs(provider_mode=job.provider_mode)
             return jobs.estimate_in(session, self._scope(run, run_id=run_id), AiMode.LEFT, job=job)
 
     def cancel(self, session, *, run_id: str, user_uid: str) -> str | None:
@@ -161,6 +183,9 @@ class StageAiRuntime:
             raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="comparison_stage_ai_seal")
         view = start(session, scope=scope, consent=chosen, queue_items=False,
                      command=AiJobCommand("start_stage_review_ai", f"stage-ai-prepare-{run_id}", user_uid, roles))
+        self._repo.source_consent(session, run_id=run_id, job_id=str(view.record.job_id),
+            revision_id=run["revision_id"], profiles=method.source_profiles,
+            consent_no=view.record.consent_no, approved=True)
         return str(view.record.job_id)
 
     def resume(self, session, *, run_id: str, user_uid: str, consent=None) -> str | None:
@@ -177,6 +202,8 @@ class StageAiRuntime:
         if record.state in {"queued", "running"}:
             return str(job_id)
         chosen = _consent(consent)
+        jobs = self._jobs(provider_mode=record.provider_mode)
+        resume = jobs.resume_in_session
         key = digest({"run_id": run_id, "consent": None if chosen is None else chosen.estimate_digest,
                       "pause_updated_at": record.updated_at.isoformat(), "consent_no": record.consent_no})
         view = resume(session, job_id=str(job_id), method="stage_review", consent=chosen, queue_items=False,
@@ -248,6 +275,11 @@ class StageAiRuntime:
             key = digest({"phase": phase, "source_sha256": source_sha,
                           "plans": [plan.content_key for plan in plans]})
             bundles.append((group, plans, source_sha, key))
+        if self._graphics is not None:
+            unchecked = {gid for gid, row in self._repo.graphic_progress(session, run_id).items()
+                         if row["progress"].get("not_checked")}
+            bundles.extend(graphic.bundles(self._graphics, run_id=run_id, snapshot=snapshot,
+                                           phase=phase, model=model, classes=classes, unchecked=unchecked))
         return bundles
 
     def _pause(self, session, jobs, *, run_id, job_id, reason, spend=True):
@@ -286,10 +318,13 @@ class StageAiRuntime:
             with session_scope(self._sessions) as session:
                 run, snapshot = self._checked(session, item, run_id)
                 job_id = run.get("comparison_ai_job_id")
-                if phase == "review":
+                if phase == "review" and self._graphics is None:
                     graphics = self._repo.not_checked_graphics(session, run_id=run_id, snapshot=snapshot)
                 else:
                     graphics = 0
+                if self._graphics is not None:
+                    graphics = sum(bool(row["progress"].get("not_checked"))
+                                   for row in self._repo.graphic_progress(session, run_id).values())
                 if not job_id:
                     return {"groups": 0, "text_not_checked": 1, "graphic_not_checked": graphics}
                 job_id = str(job_id)
@@ -297,6 +332,12 @@ class StageAiRuntime:
                 if state not in {"running", "completed"}:
                     return Yielded(30) if state in {"queued", "paused"} else Failed("stage_ai_job_not_active")
                 job = jobs.job(session, job_id)
+                if "revision_id" in run and not self._repo.source_consent(session,
+                        run_id=run_id, job_id=job_id, revision_id=run["revision_id"],
+                        profiles=snapshot["all_profiles"], consent_no=job.consent_no,
+                        approved=not run.get("effective_link_revision_id")):
+                    self._pause(session, jobs, run_id=run_id, job_id=job_id, reason="overrun", spend=False)
+                    return Yielded(30)
                 bundles = self._bundles(session, run_id=run_id, snapshot=snapshot, phase=phase, model=job.pinned_model)
                 if state == "completed":
                     if all(self._repo.answer(session, run_id=run_id, kind=phase, content_key=key) is not None
@@ -334,6 +375,18 @@ class StageAiRuntime:
                     if waiting is not None:
                         break
                 if waiting is not None:
+                    graphic_page = waiting.plan.payload.get("graphic")
+                    if graphic_page is not None:
+                        window = unit["payload"].get("graphic_window", {})
+                        if window.get("consent_no") != job.consent_no:
+                            window = {"consent_no": job.consent_no, "allowed_page": graphic_page["page_no"]}
+                            unit["payload"]["graphic_window"] = window
+                        if graphic_page["page_no"] > window["allowed_page"]:
+                            unit["payload"]["graphic_remaining_regions"] = max(0, graphic_page["total_regions"] - (graphic_page["page_no"] - 1) * 4)
+                            unit["payload"]["graphic_next_region_key"] = graphic_page["regions"][0]["region_key"]
+                            self._repo.update_unit(session, unit["stage_ai_unit_id"], payload=unit["payload"], state="queued", job_id=job_id)
+                            self._pause(session, jobs, run_id=run_id, job_id=job_id, reason="overrun", spend=False)
+                            return Yielded(30)
                     route_source = self._routes
                     if route_source is None:
                         return self._fail_in(session, unit, jobs, job_id, "executor_route_missing")
@@ -341,6 +394,20 @@ class StageAiRuntime:
                              else route_source.route(session, job))
                     consent = jobs.consent_for_calls(session, job_id)
                     request = request_for_plan(waiting.plan)
+                    try:
+                        request, crop_receipts = graphic.attach(self._graphics, run_id=run_id, plan=waiting.plan, request=request)
+                    except DomainError as error:
+                        if error.code is not ErrorCode.DEPENDENCY_UNAVAILABLE or error.detail_fields.get("dependency") != "stage_graphic_crop":
+                            raise
+                        unit["payload"]["not_checked"] = "stage_graphic_crop_unavailable"
+                        self._repo.update_unit(session, unit["stage_ai_unit_id"], payload=unit["payload"], state="completed", job_id=job_id)
+                        return Yielded()
+                    pins = unit["payload"].setdefault("request_pins", {})
+                    pin = {"request_sha256": request.request_sha256, "crops": list(crop_receipts)}
+                    if waiting.plan.content_key in pins and pins[waiting.plan.content_key] != pin:
+                        return self._fail_in(session, unit, jobs, job_id, "stage_ai_request_pin_changed")
+                    pins[waiting.plan.content_key] = pin
+                    self._repo.update_unit(session, unit["stage_ai_unit_id"], payload=unit["payload"], state="running", job_id=job_id)
                     prior = self._repo.prior_call(session, job_id=job_id, request_sha256=request.request_sha256)
                     retry = unit["payload"].get("technical_retries", {}).get(waiting.base_key)
                     rate = unit["payload"].get("rate_waits", {}).get(waiting.base_key, {})
@@ -364,7 +431,7 @@ class StageAiRuntime:
                 try:
                     result = caller.call(item, route, request,
                                          estimate=CallEstimate(input_tokens=-(-waiting.plan.prompt_chars * CHARS_PER_TOKEN_NUMERATOR
-                                                                              // CHARS_PER_TOKEN_DENOMINATOR),
+                                                                              // CHARS_PER_TOKEN_DENOMINATOR) + len(crop_receipts) * TOKENS_PER_IMAGE,
                                                                output_tokens=waiting.plan.max_output_tokens), consent=consent)
                 except CallLost:
                     return Yielded()
@@ -443,8 +510,11 @@ class StageAiRuntime:
                 if len(value) > 800:
                     raise StageAiValidationError("stage_ai_review_result_budget")
             elif phase == "classify":
-                parsed = parse_classification(plans[0], final_document(plans[0], responses[plans[0].content_key])[0])
-                value = [asdict(card) for card in parsed.cards]
+                if plans[0].payload.get("graphic") is not None:
+                    value = graphic.aggregate(plans, responses)
+                else:
+                    parsed = parse_classification(plans[0], final_document(plans[0], responses[plans[0].content_key])[0])
+                    value = [asdict(card) for card in parsed.cards]
             else:
                 parsed = parse_synthesis(plans[0], final_document(plans[0], responses[plans[0].content_key])[0])
                 value = asdict(parsed)
