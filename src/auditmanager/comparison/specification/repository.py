@@ -169,6 +169,30 @@ def _comparison(row: Any) -> ComparisonRow:
 
 
 class SpecificationRepository:
+    def pin_plan(self,session:Session,transition_id:str,keys:list[str|None])->None:
+        session.execute(text("UPDATE comparison_spec_comparison SET "
+            "coverage_a=coalesce(coverage_a,'{}'::jsonb)||CAST(:a AS jsonb), "
+            "coverage_b=coalesce(coverage_b,'{}'::jsonb)||CAST(:b AS jsonb) "
+            "WHERE comparison_transition_id=:id AND source='whole'"),
+            {"id":transition_id,"a":json.dumps({'planning_revision':'spec-batches-v1','source_key':keys[0]}),
+                "b":json.dumps({'planning_revision':'spec-batches-v1','source_key':keys[1]})})
+
+    def progress(self,session:Session,transition_id:str,side:str,coverage:dict)->None:
+        column='coverage_a' if side=='a' else 'coverage_b'
+        session.execute(text(f"UPDATE comparison_spec_comparison SET {column}=CAST(:coverage AS jsonb), "
+            "updated_at=clock_timestamp() WHERE comparison_transition_id=:id AND source='whole' AND state='running'"),
+            {'id':transition_id,'coverage':json.dumps(coverage,ensure_ascii=False)})
+
+    def paid_dispatch_fence(self,session:Session,*,project_uid:str,job_id:str,request_sha256:str)->str|None:
+        value=session.execute(text("SELECT c.state FROM comparison_model_call c JOIN comparison_work w "
+            "ON w.comparison_work_id=c.comparison_work_id WHERE w.project_uid=:project AND "
+            "((w.payload->>'ai_job_id'=:job AND c.state IN ('prepared','sent','unknown')) OR "
+            "(c.request_sha256=:sha AND (c.state IN ('prepared','sent','unknown','completed') OR "
+            "(c.state='failed' AND (c.response_sha256 IS NOT NULL OR c.cost_micros>0))))) "
+            "ORDER BY CASE c.state WHEN 'unknown' THEN 0 WHEN 'prepared' THEN 1 WHEN 'sent' THEN 1 ELSE 2 END LIMIT 1"),
+            {'project':project_uid,'job':job_id,'sha':request_sha256}).scalar_one_or_none()
+        return None if value is None else str(value)
+
     # -- scope ----------------------------------------------------------------------------------------------------------
 
     def transition(self, session: Session, transition_id: str) -> TransitionScope | None:

@@ -474,10 +474,10 @@ __all__.append("run_document_context_with_visual_pages")
 
 
 
-def extended_coverage_policy():
+def extended_coverage_policy(**kwargs):
     """Fresh source-bound allowance for durable extended-review batches."""
     from auditmanager.analysis.extended.coverage import coverage_policy
-    return coverage_policy()
+    return coverage_policy(**kwargs)
 
 
 def validate_extended_coverage_policy(policy):

@@ -75,6 +75,9 @@ def _number(value: Any) -> str:
 
 def _value(row: dict[str, Any], field: str) -> str:
     raw = (row.get("fields") or {}).get(field, "")
+    if field=="unit":
+        from .units import unit_identity
+        return _text(unit_identity(raw))
     return _number(raw) if field in NUMERIC_FIELDS else _text(raw)
 
 

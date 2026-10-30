@@ -1,0 +1,10 @@
+{
+  "repository": "https://github.com/SU10KAZ/PDF-proverka",
+  "commit": "3c99481719218b9cfa7560886529916646c61939",
+  "files": {
+    "features.py": "backend/app/services/project_change_consolidator/features.py",
+    "CONSOLIDATOR_PROMPT.txt": "backend/app/services/project_change_consolidator/prompts/CONSOLIDATOR_PROMPT.txt"
+  },
+  "adaptation": "Pure original lexical features rank cross-batch candidates; original prompt is followed by the current closed pair-decision/source schema. No original filesystem, provider, job or store implementation is imported. Full original event/hint/verification records are retained; no model prose replaces them.",
+  "limitations": "Candidate ranking and pair-window policy are authored adaptations, not a claim of identical original Consolidator runtime or global semantic completeness."
+}

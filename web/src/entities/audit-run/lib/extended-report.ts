@@ -69,7 +69,9 @@ export function formatExtendedRunReport(reading: ExtendedRunReview, format: Exte
   const disclaimer = 'Предварительный машинный анализ. Рекомендации критика и исправленные кандидаты не являются решениями эксперта. Нормативные значения из исторических рубрик не подтверждены; редакция и применимость цитат требуют отдельной проверки. Все переданные записи сохранены, без фильтра по модельному принятию или отклонению.';
   const metadata = { run_id: reading.run_id, status: reading.status, workflow_version: result?.workflow_version,
     section: result?.section, version_uid: result?.version_uid, rules_sha256: result?.rules_sha256, source_provenance: result?.source_provenance,
-    coverage: result?.coverage, text_coverage: result?.text_coverage, consolidation: result?.consolidation, coverage_version: result?.coverage_version, phase_coverage: result?.phase_coverage, phase_call_limits: result?.phase_call_limits,
+    coverage: result?.coverage, text_coverage: result?.text_coverage, consolidation: result?.consolidation, coverage_version: result?.coverage_version,
+    coverage_budget_mode: result?.coverage_budget_mode, estimated_text_characters: result?.estimated_text_characters, comprehensive_piece_characters: result?.comprehensive_piece_characters,
+    phase_coverage: result?.phase_coverage, phase_call_limits: result?.phase_call_limits,
     window_progress: result?.window_progress, primary_text_status: result?.primary_text_status,
     visual_phase_complete: result?.visual_phase_complete, report: result?.report };
   const pendingPrimary = result?.primary_text_status === 'pending'

@@ -30,6 +30,10 @@ export const VERIFICATION_WORDS: Readonly<Record<string, string>> = {
   CONFIRMED: 'Подтверждено машинной сверкой', CORRECTED: 'Уточнено машинной сверкой',
   CONFLICT: 'Противоречие — нужна проверка', UNREADABLE: 'Не удалось прочитать',
 };
+export const GLOBAL_DECISION_WORDS: Readonly<Record<string, string>> = {
+  DUPLICATE: 'Повтор', RELATED: 'Связанные события', SEPARATE: 'Отдельные события', NEEDS_CONTEXT: 'Нужен дополнительный контекст',
+  RELATED_CONFLICT: 'Конфликт значений — объединение заблокировано',
+};
 
 export interface V3Source {
   readonly sourceId: string;
@@ -129,15 +133,23 @@ export function reportSources(cards: readonly StageChangeCard[], run: StageChain
 export function reportCoverage(run: StageChainRun | undefined): JsonObject[] {
   return objects(object(object(object(run?.experimental_progress)?.source_report)?.coverage)?.pages);
 }
+export function reportGlobalConsolidation(run: StageChainRun | undefined): JsonObject | null {
+  return object(object(object(run?.experimental_progress)?.source_report)?.global_consolidation);
+}
 
 export function reportSnapshot(runId: string, cards: readonly StageChangeCard[], run: StageChainRun | undefined) {
   const selected = v3Cards(cards);
   const progress = object(run?.experimental_progress);
+  const global = reportGlobalConsolidation(run);
   return { report_version: V3_REPORT_VERSION, run_id: runId,
     engine: V3_ENGINE, scope: 'all_saved_v3_cards',
     plan_version: progress?.plan_version ?? null, limits: progress?.limits ?? null,
     known_units: { planned: progress?.planned_units ?? null, completed: progress?.completed_units ?? null, pending: progress?.pending_units ?? null },
     display_excerpt_cards: selected.filter((card) => { const display = stageV3DisplayText(card); return display?.before.excerpt || display?.after.excerpt; }).length,
+    global_consolidation_summary: global === null ? null : { version: global.version, manifest_sha256: global.manifest_sha256,
+      coverage: global.coverage, groups: objects(global.groups).length, decisions: objects(global.decisions).length,
+      original_events: objects(global.original_events).length, original_hints: objects(global.original_hints).length,
+      parameter_verifications: objects(global.parameter_verifications).length },
     status: run?.state ?? null, stale: run?.stale ?? selected.some((card) => card.stale),
     experimental_progress: run?.experimental_progress ?? null,
     source_catalogue: reportSources(cards, run), coverage_pages: reportCoverage(run),
@@ -214,6 +226,8 @@ export function reportHtml(runId: string, cards: readonly StageChangeCard[], run
   const raw = html(JSON.stringify(snapshot, null, 2));
   const coverage = snapshot.coverage_pages.map((page) => `<tr><td>${html(string(page.side) === 'left' ? 'П' : string(page.side) === 'right' ? 'Р' : string(page.side))}</td><td>${html(String(page.page_number ?? 'Не передано'))}</td><td>${html(string(page.version_uid))}</td><td>${html(string(page.mapping_status))}</td><td>${html(string(page.analysis_status))}</td><td>${html(string(page.exclusion_reason))}</td></tr>`).join('');
   const catalogue = snapshot.source_catalogue.map((source) => `<li><code>${html(string(source.source_id))}</code> · ${html(string(source.side))} · стр.${html(String(source.page_number ?? 'Не передано'))}<br>${html(string(source.version_uid))}<blockquote>${html(string(source.quote))}</blockquote></li>`).join('');
+  const global = reportGlobalConsolidation(run);
+  const globalHtml = global === null ? '' : `<section><h2>Межпакетная сверка событий</h2><p>Рекомендации модели и применение к группировке не являются решением эксперта. Кандидатный поиск ограничен; глобальная смысловая полнота не подтверждена. Все исходные события, классификации и сверки находятся в полном снимке ниже.</p><pre>${html(JSON.stringify(snapshot.global_consolidation_summary, null, 2) ?? 'null')}</pre><h3>Группы</h3><ul>${objects(global.groups).map((group) => `<li>${html(string(group.group_id))}: ${html(strings(group.event_ids).join(', '))}</li>`).join('')}</ul><h3>Сохранённые рекомендации и применение</h3>${objects(global.decisions).map((decision) => `<article><p>Пара: ${html(string(decision.pair_id))}; модель: ${html(GLOBAL_DECISION_WORDS[string(decision.model_decision)] ?? 'Требует проверки')}; применение к группировке: ${html(GLOBAL_DECISION_WORDS[string(decision.applied_decision)] ?? 'Не передано')}.</p><p>${html(string(decision.reason))}</p><p>Конфликтов значений: ${html(String(decision.typed_conflict_count ?? 'Не передано'))}.${decision.typed_conflicts_truncated === true ? ' Показан сокращённый перечень; полные исходные значения и сверки сохранены.' : ''}</p><pre>${html(JSON.stringify(decision, null, 2) ?? 'null')}</pre></article>`).join('')}</section>`;
   return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'none'; base-uri 'none'; form-action 'none'"><title>V3 — параметры и источники</title>
     <style>body{font:15px system-ui,sans-serif;margin:2rem;max-width:1200px;line-height:1.5}table{border-collapse:collapse;width:100%}td,th{border:1px solid #aaa;padding:.5rem;text-align:left;white-space:pre-wrap}article{border-top:2px solid #777;margin-top:2rem}blockquote,pre{white-space:pre-wrap;overflow-wrap:anywhere}code{overflow-wrap:anywhere}@media print{details>summary{display:none}details>*{display:block}article{break-before:page}}</style></head><body><h1>V3 — параметры и источники</h1>
     <p>Запуск: <code>${html(runId)}</code> · состояние: ${html(snapshot.status ?? 'Не передано')} · сохранённых карточек: ${snapshot.saved_cards} · параметров: ${snapshot.parameters}</p>
@@ -221,6 +235,6 @@ export function reportHtml(runId: string, cards: readonly StageChangeCard[], run
     <details><summary>Закреплённые границы плана</summary><pre>${html(JSON.stringify(snapshot.limits, null, 2) ?? 'null')}</pre></details>
     <ul>${snapshot.limitations.map((item) => `<li>${html(item)}</li>`).join('')}</ul><p>Для PDF используйте печать браузера и «Сохранить как PDF».</p>
     <h2>Покрытие исходных страниц</h2>${coverage === '' ? '<p>Постраничное покрытие не сохранено.</p>' : `<table><thead><tr><th>Сторона</th><th>Физическая страница PDF</th><th>Версия</th><th>Сопоставление</th><th>Обработка</th><th>Причина исключения</th></tr></thead><tbody>${coverage}</tbody></table>`}
-    ${sections}<details><summary>Полный каталог сохранённых источников · ${snapshot.source_catalogue.length}</summary><ul>${catalogue}</ul></details>
+    ${globalHtml}${sections}<details><summary>Полный каталог сохранённых источников · ${snapshot.source_catalogue.length}</summary><ul>${catalogue}</ul></details>
     <details><summary>Полный сохранённый снимок</summary><pre>${raw}</pre></details></body></html>`;
 }

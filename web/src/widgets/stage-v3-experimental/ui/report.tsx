@@ -10,6 +10,7 @@ import { object, parameterCsv, parameterRows, reportCoverage, reportHtml, report
 import type { V3Parameter, V3Source } from '../model/report';
 import { formatStageV3Xlsx } from '../model/xlsx';
 import { packageSources } from '../model/package';
+import { StageGlobalConsolidation } from './global-consolidation';
 
 type OpenEvidence = (evidence: StageCardEvidence, card: StageChangeCard) => void;
 
@@ -139,6 +140,7 @@ export function StageV3Report({ runId, cards, run, onOpenEvidence }: { readonly 
     <p>В файл входят все сохранённые карточки и решения. Фильтр ниже и несохранённые экспертные оценки на файл не влияют. HTML можно распечатать в PDF.</p>
     <p>CSV содержит строки параметров и наблюдений. Полный каталог источников и постраничное покрытие входят в XLSX, JSON и HTML.</p>
     {failure === null ? null : <p role="alert">{failure}</p>}
+    <StageGlobalConsolidation value={object(savedProgress?.source_report)?.global_consolidation} />
     {coverage.length === 0 ? <p>Постраничное покрытие в сохранённом результате не передано.</p> : <details>
       <summary>Покрытие исходных страниц · {coverage.length}</summary>
       <p>Сопоставление страницы и выполнение её разбора — разные сведения. Это учёт текстовых процедур, без подтверждения полноты инженерной проверки.</p>

@@ -29,7 +29,7 @@ from typing import Any, Final
 
 from sqlalchemy.orm import Session, sessionmaker
 
-from auditmanager.comparison.specification import check, prompt, source as source_module, views, whole
+from auditmanager.comparison.specification import check, prompt, source as source_module, views, whole, batches
 from auditmanager.comparison.specification.reader import SpecificationReader
 from auditmanager.comparison.specification.repository import ExtractionRow, SpecificationRepository, TransitionScope
 from auditmanager.shared.db import session_scope
@@ -116,6 +116,7 @@ class PreparedSide:
     source: dict[str, Any] | None = None
     key: str | None = None
     stored: ExtractionRow | None = None
+    batches: tuple[dict[str, Any], ...] = ()
 
     @property
     def sendable(self) -> bool:
@@ -134,11 +135,25 @@ def prepare_side(
         side.reason = REASON_NOT_PARSED
         side.issues.append("A specification page whose table could not be read" if stream.unparsed_pages else "No specification page")
         return PreparedSide(side)
-    source = source_module.build_source(stream.parsed)
-    key = prompt.content_key(project_uid, source["source_sha256"])
+    source = source_module.build_source(stream.parsed,batched=True)
+    try:
+        planned=batches.plan(source) if source['complete'] else ()
+    except ValueError as error:
+        source['issues'].append(str(error));source['complete']=False;planned=()
+    key = prompt.content_key(project_uid,batches.digest({'source':source['source_sha256'],
+        'plan':[row['batch_id'] for row in planned]}),batches.PROMPT_VERSION)
     with session_scope(session_factory) as session:
         stored = repository.find_extraction(session, project_uid, key)
-    prepared = PreparedSide(side, source, key, stored)
+    enriched=[]
+    if stored is None:
+        with session_scope(session_factory) as session:
+            for batch in planned:
+                batch_key=prompt.content_key(project_uid,batch['batch_id'],batches.CHECKED_VERSION)
+                raw_key=prompt.content_key(project_uid,batch['batch_id'],batches.RAW_VERSION)
+                enriched.append({**batch,'key':batch_key,'raw_key':raw_key,
+                    'stored':repository.find_extraction(session,project_uid,batch_key),
+                    'raw':repository.find_extraction(session,project_uid,raw_key)})
+    prepared = PreparedSide(side, source, key, stored,tuple(enriched))
     if stored is not None:
         _from_stored(side, stored)
     elif not source["complete"]:
@@ -149,7 +164,7 @@ def prepare_side(
 
 def read_side(
     session_factory: sessionmaker[Session], reader: SpecificationReader, repository: SpecificationRepository, *,
-    project_uid: str, version_uid: str, ask: Ask | None,
+    project_uid: str, version_uid: str, ask: Ask | None, ask_batch: Callable | None = None, progress: Callable | None = None,
 ) -> Side:
     """One version's specification: from the store if it was read under this text, else by one request (see the module).
 
@@ -159,23 +174,85 @@ def read_side(
     side = prepared.side
     if not prepared.sendable:
         return side
-    if ask is None:
-        side.reason = "SPEC_NOT_READ"
-        return side
     assert prepared.source is not None and prepared.key is not None
     source = prepared.source
-    answer = ask(prompt.prompt_for(source))
-    side.sent = True
-    checked = check.check_extraction(source, answer.payload)
-    coverage = {**checked["coverage"], "issues": checked["issues"][:20], "reason": checked["reason"]}
+    records=[]
+    last_answer=None
+    for batch in prepared.batches:
+        record=batch['stored']
+        if record is None:
+            raw=batch['raw']
+            if raw is not None:
+                from auditmanager.analysis.public import ModelResponse
+                packet=raw.coverage
+                if packet.get('prompt_sha256')!=prompt.prompt_sha256(prompt.prompt_for(batch['source'])):
+                    side.reason=check.REASON_SOURCE;side.issues=['Saved paid input changed'];return side
+                try:
+                    response=ModelResponse(**packet['response'])
+                    if response.response_sha256!=packet.get('response_sha256'):raise ValueError()
+                except (ValueError,KeyError,TypeError):
+                    side.reason=check.REASON_ANSWER;side.issues=['Saved paid reply integrity mismatch'];return side
+                payload=None if response.truncated else batches.parse_reply(response.output_text)
+                answer=Answer(payload,raw.model_identity,raw.recorded,raw.model_call_id)
+            elif ask_batch is not None or ask is not None:
+                text=prompt.prompt_for(batch['source'])
+                metadata={'project_uid':project_uid,'version_uid':version_uid,'raw_key':batch['raw_key'],
+                    'source_sha256':batch['source_sha256'],'batch_id':batch['batch_id'],
+                    'source_key':prepared.key,'prompt_sha256':prompt.prompt_sha256(text)}
+                answer=ask_batch(text,metadata) if ask_batch is not None else ask(text)
+                side.sent=True
+            else:
+                side.reason='SPEC_NOT_READ';return side
+            last_answer=answer
+            checked=check.check_extraction(batch['source'],answer.payload)
+            detail={**checked['coverage'],'record_kind':'checked_batch','planning_revision':batches.REVISION,
+                'issues':checked['issues'],'reason':checked['reason'],'batch_id':batch['batch_id'],
+                'owned_line_ids':batch['owned_line_ids'],'context_line_ids':batch['context_line_ids']}
+            if ask is None and ask_batch is None:
+                record=_BatchRecord('complete' if checked['complete'] else 'partial',checked['rows'],detail)
+            else:
+                with session_scope(session_factory) as session:
+                    record=repository.insert_extraction(session,project_uid=project_uid,version_uid=version_uid,
+                        content_key=batch['key'],state='complete' if checked['complete'] else 'partial',
+                        prompt_version=batches.CHECKED_VERSION,model_identity=answer.model_identity,recorded=answer.recorded,
+                        source_sha256=batch['source_sha256'],positions=checked['rows'],coverage=detail,
+                        model_call_id=answer.model_call_id)
+        records.append(record)
+        if progress is not None:
+            _,_,current=batches.aggregate(source,prepared.batches,records)
+            progress(version_uid,{**current,'source_key':prepared.key})
+        if record.state!='complete':break
+    # Every unrequested tail has a real plan entry, never an invented successful row.
+    for batch in prepared.batches[len(records):]:
+        records.append(_BatchRecord('pending',[],{'issues':['Not requested after incomplete batch']},None))
+    complete,positions,coverage=batches.aggregate(source,prepared.batches,records)
+    coverage['source_key']=prepared.key
+    coverage['model_identities']=sorted({record.model_identity for record in records
+        if getattr(record,'model_identity',None)})
+    coverage['model_call_ids']=list(dict.fromkeys(record.model_call_id for record in records
+        if getattr(record,'model_call_id',None)))
+    if ask is None and ask_batch is None:
+        side.coverage=_coverage(coverage);side.rows=positions;side.complete=complete
+        side.issues=coverage['issues'];side.reason=coverage['reason'];side.reused=True
+        return side
     with session_scope(session_factory) as session:
         row = repository.insert_extraction(
             session, project_uid=project_uid, version_uid=version_uid, content_key=prepared.key,
-            state="complete" if checked["complete"] else "partial", prompt_version=prompt.PROMPT_VERSION,
-            model_identity=answer.model_identity, recorded=answer.recorded, source_sha256=source["source_sha256"],
-            positions=checked["rows"], coverage=coverage, model_call_id=answer.model_call_id,
+            state="complete" if complete else "partial", prompt_version=batches.PROMPT_VERSION,
+            model_identity=last_answer.model_identity if last_answer else records[0].model_identity,
+            recorded=all(getattr(record,'recorded',False) for record in records if record.state!='pending'),
+            source_sha256=source["source_sha256"],
+            positions=positions, coverage=coverage, model_call_id=last_answer.model_call_id if last_answer else None,
         )
     return _from_stored(side, row, sent=True)
+
+
+@dataclass
+class _BatchRecord:
+    state: str
+    positions: list
+    coverage: dict
+    extraction_id: str | None = None
 
 
 def _from_stored(side: Side, stored: ExtractionRow, *, sent: bool = False) -> Side:
@@ -183,7 +260,7 @@ def _from_stored(side: Side, stored: ExtractionRow, *, sent: bool = False) -> Si
     side.coverage = _coverage(stored.coverage)
     side.issues = list(stored.coverage.get("issues") or [])
     side.reused = not sent
-    if stored.state == "complete" and stored.positions:
+    if stored.state == "complete":
         side.complete, side.rows = True, list(stored.positions)
     else:
         side.reason = stored.coverage.get("reason") or REASON_STORED_UNUSABLE
@@ -219,9 +296,13 @@ class TransitionRun:
         self._repository = repository or SpecificationRepository()
         self._reader = reader or SpecificationReader(session_factory, blob_store)
 
-    def read(self, scope: TransitionScope, *, ask: Ask | None) -> tuple[Side, Side]:
-        old = read_side(self._factory, self._reader, self._repository, project_uid=scope.project_uid, version_uid=scope.source_version_uid, ask=ask)
-        new = read_side(self._factory, self._reader, self._repository, project_uid=scope.project_uid, version_uid=scope.target_version_uid, ask=ask)
+    def prepared(self,scope:TransitionScope):
+        return tuple(prepare_side(self._factory,self._reader,self._repository,project_uid=scope.project_uid,version_uid=version)
+            for version in (scope.source_version_uid,scope.target_version_uid))
+
+    def read(self, scope: TransitionScope, *, ask: Ask | None, ask_batch: Callable | None = None,progress:Callable|None=None) -> tuple[Side, Side]:
+        old = read_side(self._factory, self._reader, self._repository, project_uid=scope.project_uid, version_uid=scope.source_version_uid, ask=ask,ask_batch=ask_batch,progress=progress)
+        new = read_side(self._factory, self._reader, self._repository, project_uid=scope.project_uid, version_uid=scope.target_version_uid, ask=ask if old.complete else None,ask_batch=ask_batch if old.complete else None,progress=progress)
         return old, new
 
     def compare(self, scope: TransitionScope, old: Side, new: Side) -> TransitionOutcome:

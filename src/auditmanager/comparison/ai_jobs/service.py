@@ -288,7 +288,7 @@ class ComparisonAiJobService:
             raise _conflict(CONFLICT_AI_JOB_ACTIVE)
         estimate = self.estimate_in(session, scope, estimate_mode, job=estimate_job)
         self._require_consentable(estimate, consent,
-            allow_zero_calls=scope.method == "report" and getattr(method, "can_run_without_model", False) is True)
+            allow_zero_calls=scope.method in {"report", "spec"} and getattr(method, "can_run_without_model", False) is True)
         try:
             job_id = self._repo.insert(
                 session, estimate=estimate, user_uid=command.user_uid, command_id=str(claim.command_id),
@@ -485,7 +485,7 @@ class ComparisonAiJobService:
         estimate = self.estimate_in(session, job.scope, mode, job=job)
         method = self._method_of(job.scope.method)
         self._require_consentable(estimate, consent,
-            allow_zero_calls=job.scope.method == "report" and getattr(method, "can_run_without_model", False) is True)
+            allow_zero_calls=job.scope.method in {"report", "spec"} and getattr(method, "can_run_without_model", False) is True)
         if not self._repo.renew_consent(
             session, job.job_id, estimate=estimate, user_uid=user_uid, consent_no=job.consent_no,
             from_states=(job.state,),

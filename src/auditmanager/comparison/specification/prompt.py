@@ -111,6 +111,16 @@ def _dump(value: Any) -> str:
 def prompt_for(source: dict[str, Any]) -> str:
     """The text of the request: the rules and the packet (``specification_run.prompt_for``, ``:108-110``)."""
     packet = {key: source.get(key) for key in ("label", "document", "source_sha256", "blocks")}
+    if source.get("planning_revision")=="spec-batches-v1":
+        packet.update({key:source[key] for key in
+            ("planning_revision","batch_id","selection","whole_source_sha256")})
+        return RULES + ("\nПРОГРАММНАЯ ГРАНИЦА НОВОГО ПЛАНА. Сейчас передана реальная ограниченная часть одной "
+            "спецификации, а не весь документ. Обработай все переданные блоки и строки, включая настоящий контекст. "
+            "selection.owned_line_ids определяет непересекающийся охват части; context_line_ids служит для шапок, "
+            "разделов и продолжений. Верни полный реестр позиций всех переданных строк, сохраняя источники "
+            "продолжений и исходного владельца строки. Программа объединит одинаковые доказательства по глобальным "
+            "номерам строк, сохранив разные реальные повторы. Не сравнивай версии и не меняй единицы или количество. "
+            "Не объявляй полной всю спецификацию по одной части.\nВходные данные (JSON):\n")+_dump(packet)
     return RULES + "\nВходные данные (JSON):\n" + _dump(packet)
 
 

@@ -1,5 +1,5 @@
 import type { StageChainRun, StageChangeCard } from '@/shared/api';
-import { parameterRows, reportCoverage, reportSnapshot, reportSources, v3Cards } from './report';
+import { parameterRows, reportCoverage, reportGlobalConsolidation, reportSnapshot, reportSources, v3Cards } from './report';
 
 /** ZIP STORE/CRC32/OOXML writer copied and adapted from this repository's
  * entities/audit-run/lib/extended-xlsx.ts (SPRINT2-SECTION-1030 source).
@@ -49,6 +49,7 @@ function tables(runId: string, cards: readonly StageChangeCard[], run: StageChai
     ['Версия отчёта', snapshot.report_version], ['Закреплённый план', snapshot.plan_version], ['Границы плана', snapshot.limits], ['Известные единицы работы', snapshot.known_units], ['Исходная версия PDF-proverka', progress?.source_version],
     ['SHA256 источников', sourceReport?.source_sha256], ['Сохранённых карточек', snapshot.saved_cards], ['Параметров', snapshot.parameters], ['Карточек с экранными фрагментами', snapshot.display_excerpt_cards],
     ['Покрытие', progress?.coverage], ['Процедуры', progress?.procedures], ['Ограничения', snapshot.limitations],
+    ['Межпакетная сверка, краткие сведения', snapshot.global_consolidation_summary],
     ['Значения', 'Исходные значения Miner и значения независимой машинной сверки находятся в разных столбцах.'],
     ['Решения', 'Сохранённые экспертные решения показаны отдельно; несохранённые оценки не включены.'],
     ['Страницы', 'Физическая страница PDF (с 1) получена из сохранённого профиля; имя файла и ID не используются как номер листа.'],
@@ -80,11 +81,22 @@ function tables(runId: string, cards: readonly StageChangeCard[], run: StageChai
   for (const page of reportCoverage(run)) coverage.push([page.side, page.page_number, page.version_uid, page.profile_id,
     page.mapping_status, page.analysis_status, page.region_ids, page.analysed_region_ids, page.block_count,
     page.requires_unmatched_review, page.exclusion_reason]);
+  const global = reportGlobalConsolidation(run);
+  const globalRows: Row[] = [['Вид сохранённой записи', 'ID', 'Часть', 'Всего частей', 'Полный JSON записи, последовательные части без разделителей']];
+  if (global !== null) {
+    const append = (kind: string, id: unknown, value: unknown) => { const payload = json(value).replace(/[\uFFFE\uFFFF]/g, (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`); const chunks = rawChunks(payload); chunks.forEach((chunk, index) => globalRows.push([kind, id, index + 1, chunks.length, chunk])); };
+    append('Манифест и покрытие', global.manifest_sha256, snapshot.global_consolidation_summary);
+    for (const [key, label] of [['groups', 'Группа'], ['decisions', 'Модельная рекомендация и применение'], ['original_events', 'Исходное событие'], ['original_hints', 'Исходная классификация'], ['parameter_verifications', 'Исходная машинная сверка']] as const) {
+      const value = global[key];
+      const records = Array.isArray(value) ? value : [];
+      for (const record of records) { const row = object(record); append(label, row?.group_id ?? row?.pair_id ?? row?.event_id ?? row?.projectchange_id ?? row?.work_item_id ?? row?.parameter_id ?? row?.hint_id ?? '', record); }
+    }
+  }
   const raw = json(snapshot).replace(/[\uFFFE\uFFFF]/g, (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`);
   const rawRows: Row[] = [['Порядок', 'Полный исходный JSON, последовательные части без разделителей']];
   rawChunks(raw).forEach((chunk, ordinal) => rawRows.push([ordinal + 1, chunk]));
   return [{ name: 'Summary', rows: summary }, { name: 'Cards', rows: cardRows }, { name: 'Parameters', rows: parameters },
-    { name: 'Sources', rows: sources }, { name: 'Coverage', rows: coverage }, { name: 'RawJSONchunks', rows: rawRows }];
+    { name: 'Sources', rows: sources }, { name: 'Coverage', rows: coverage }, { name: 'GlobalReceipts', rows: globalRows }, { name: 'RawJSONchunks', rows: rawRows }];
 }
 
 const CRC_TABLE = new Uint32Array(256);
