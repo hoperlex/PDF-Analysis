@@ -439,6 +439,8 @@ def planned_workflow_result(*, reason=None, terminal=False, policy=None):
         parameter_result = {"project_parameters": planned_parameters(policy["project_parameters_policy"], reason=reason, terminal=terminal)}
     return {"format":version,"workflow_version":version,"preliminary":True,
         **parameter_result,
+        **({"project_parameter_context_policy": deepcopy(policy["project_parameter_context_policy"])}
+           if v3 and "project_parameter_context_policy" in policy else {}),
         **({"global_cross_window": _planned_global_cross_window(policy["global_cross_window_policy"], reason=reason, terminal=terminal)}
            if v3 and "global_cross_window_policy" in policy else {}),
         **({"windows":[],"window_progress":{"completed":0,"total":policy["max_windows"],"current":None,"window_size":16},
@@ -576,6 +578,8 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
     # The separately accepted global budget belongs only to the parent Run;
     # a local 16-source window must never advertise or acquire its own copy.
     state.pop("global_cross_window", None)
+    if v3 and "project_parameter_context_policy" in window_context["policy"]:
+        state.pop("project_parameters", None)
     if v3:
         state["window_id"]=window_context["window_id"]
         state["primary_text_status"]=window_context.get("primary_text_status","pending")
@@ -594,6 +598,18 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
         save("running")
     def call(request, identity):
         receipt=None
+        parameter_context_receipt=None
+        if (v3 and identity.startswith("blocks:")
+                and "project_parameter_context_policy" in window_context["policy"]):
+            from auditmanager.analysis.public import attach_project_parameter_context
+            request, provided_context = attach_project_parameter_context(request,
+                parameters=window_context["project_parameters"],
+                accepted=window_context["policy"]["project_parameter_context_policy"],
+                parameters_policy=window_context["policy"]["project_parameters_policy"])
+            parameter_context_receipt = {**provided_context, "request_sha256": request.request_sha256,
+                "request_prepared": True, "response_received": False}
+            state.setdefault("project_parameter_context_receipts", {})[identity] = parameter_context_receipt
+            save("running")
         if batched:
             raw_kind, raw_index=identity.split(":",1)
             kind={"blocks":"block_analysis"}.get(raw_kind,raw_kind)
@@ -624,6 +640,9 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
             binding=binding,request=request,phase=("v3:"+window_context["window_id"]+":" if v3 else "v2:")+identity,
             source_sha256=state["source_sha256"],meter=meter,store=store,publish=publish,checkpoint=checkpoint,
             global_unknown_fence=v3)
+        if parameter_context_receipt is not None:
+            parameter_context_receipt.update(response_received=True, replayed=replayed,
+                response_sha256=response.response_sha256)
         if receipt is not None:
             receipt.update(response_received=True,replayed=replayed)
             counts=state.setdefault("phase_call_counts",{}).setdefault(kind,{"completed_calls":0,"replayed":0})
@@ -1058,6 +1077,21 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
     def save(status):
         state["status"]=status
         progress(status,state)
+    def parameter_work():
+        if "project_parameters_policy" not in policy:
+            return
+        from .project_parameters import run_project_parameters
+        accepted_parameters = policy["project_parameters_policy"]
+        def parameter_call(request, index):
+            if type(index) is not int or not 0 <= index < accepted_parameters["max_calls"]:
+                raise _refuse("project_parameters_approved_call_limit")
+            return _call(session, run_id=run.run_id, authority=authority, jobs=jobs, journal=journal,
+                binding=binding, request=request, phase=f"v3:project-parameters:b{index:03d}",
+                source_sha256=state["source_sha256"], meter=meter, store=store, publish=publish,
+                checkpoint=checkpoint, global_unknown_fence=True)
+        run_project_parameters(run=run, model_id=binding.config.model_id, outputs=outputs, store=store,
+            state=state, accepted=accepted_parameters, durable_call=parameter_call,
+            checkpoint=checkpoint, aggregate=aggregate, save=save)
     def aggregate():
         records=state["windows"]
         source_index={}
@@ -1080,6 +1114,11 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
             if previous is not None and previous != source:
                 raise _refuse("project_parameters_source_identity_conflict")
             source_index[source["source_id"]] = source
+        parameters = state.get("project_parameters")
+        if isinstance(parameters, dict) and "project_parameter_context_policy" in policy:
+            parameters["visual_context_policy"] = deepcopy(policy["project_parameter_context_policy"])
+            parameters["visual_context_receipts"] = [{"window_id": record["window_id"], "phase_key": identity, **receipt}
+                for record in records for identity, receipt in record.get("project_parameter_context_receipts", {}).items()]
         state["sources"]=list(source_index.values())
         state["observations"]=observations
         if policy.get("coverage_version")=="batched-v1":
@@ -1190,6 +1229,27 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
             "procedures":extended_workflow_procedures_v3(),"observations":[],"sources":[]}
             for index in range(count)]
         aggregate();save("running")
+        if "project_parameter_context_policy" in policy:
+            from auditmanager.analysis.public import (validate_project_parameter_context_policy,
+                validate_project_parameters_policy)
+            try:
+                if not validate_project_parameters_policy(policy["project_parameters_policy"], section=section):
+                    raise ValueError("project_parameters_policy_required")
+                if not validate_project_parameter_context_policy(policy["project_parameter_context_policy"],
+                        parameters_policy=policy["project_parameters_policy"]):
+                    raise ValueError("project_parameter_context_policy_required")
+            except ValueError as error:
+                reason = str(error)
+                if reason not in {"project_parameters_changed_requires_consent", "project_parameters_policy_required",
+                        "project_parameter_context_changed_requires_consent", "project_parameter_context_policy_required"}:
+                    reason = "project_parameter_context_policy_required"
+                raise _refuse(reason) from None
+            if (state["project_parameters"].get("status") == "failed"
+                    and state["project_parameters"].get("source_sha256") == global_sha):
+                state["project_parameters"]["failed_context_retained_without_retry"] = True
+                aggregate(); save("running")
+            else:
+                parameter_work()
         for index,record in enumerate(state["windows"]):
             checkpoint("extended_v3_window")
             window_id=record["window_id"]
@@ -1217,6 +1277,7 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
                 checkpoint=checkpoint,observations_document=window_observations,snapshot_id=snapshot_id,
                 profile_sha256=profile_sha256,bind_native=bind_native,window_context={"window_id":window_id,
                     "offset":index*16,"policy":policy,"global_sha256":global_sha,"visual_only":visual_only,
+                    "project_parameters": state.get("project_parameters"),
                     "primary_text_status":state["primary_text_status"],"saved_visual":visual_windows.get(window_id),
                     "page_count":version.page_count,"known_visual_refusals":known_visual_refusals})
             budget_exhausted=any("cost_budget_exceeded" in str(warning) for warning in record.get("warnings",[]))
@@ -1247,19 +1308,8 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
                 checkpoint=checkpoint, snapshot_id=snapshot_id, state=state, policy=policy,
                 aggregate=aggregate, save=save)
             aggregate()
-        if "project_parameters_policy" in policy:
-            from .project_parameters import run_project_parameters
-            accepted_parameters = policy["project_parameters_policy"]
-            def parameter_call(request, index):
-                if type(index) is not int or not 0 <= index < accepted_parameters["max_calls"]:
-                    raise _refuse("project_parameters_approved_call_limit")
-                return _call(session, run_id=run.run_id, authority=authority, jobs=jobs, journal=journal,
-                    binding=binding, request=request, phase=f"v3:project-parameters:b{index:03d}",
-                    source_sha256=state["source_sha256"], meter=meter, store=store, publish=publish,
-                    checkpoint=checkpoint, global_unknown_fence=True)
-            run_project_parameters(run=run, model_id=binding.config.model_id, outputs=outputs, store=store,
-                state=state, accepted=accepted_parameters, durable_call=parameter_call,
-                checkpoint=checkpoint, aggregate=aggregate, save=save)
+        if "project_parameter_context_policy" not in policy:
+            parameter_work()
         _retain_primary_observations_v3(state,observations_document=observations_document)
         state.update(_attach_consolidation(state, version_uid=run.version_uid))
         for procedure in state["procedures"]:

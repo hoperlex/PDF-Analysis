@@ -269,6 +269,13 @@ class RunCostPreflight:
                     extra_calls += parameters["max_calls"]
                     input_tokens += parameters["max_calls"] * 100_000
                     output_tokens += parameters["max_calls"] * parameters["output_tokens"]
+                    if os.environ.get("AUDITMANAGER_PROJECT_PARAMETER_CONTEXT", "1").strip().lower() not in {"0", "false", "off"}:
+                        from auditmanager.analysis.public import project_parameter_context_policy
+                        parameter_context = project_parameter_context_policy(parameters)
+                        extended["project_parameter_context_policy"] = parameter_context
+                        # At most two8-image requests in each16-source local window.
+                        # Context adds input only; the parameter/visual call counts do not grow.
+                        input_tokens += visual["max_windows"] * 2 * parameter_context["input_tokens_per_call"]
                 source["visual_scope"] = visual
             elif requested in {"v2", "extended-review-v2"}:
                 extended = {"enabled": True, "max_blocks": "all", "plan_version": "extended-review-v2"}

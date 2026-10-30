@@ -580,3 +580,21 @@ def parse_project_parameters_reply(text, **kwargs):
 
 __all__.extend(["project_parameters_policy", "validate_project_parameters_policy", "plan_project_parameters",
     "build_project_parameters_request", "parse_project_parameters_reply"])
+
+
+def project_parameter_context_policy(parameters_policy):
+    from auditmanager.analysis.extended.parameter_context import policy
+    return policy(parameters_policy)
+
+
+def validate_project_parameter_context_policy(value, *, parameters_policy, compare_bundle=True):
+    from auditmanager.analysis.extended.parameter_context import validate_policy
+    return validate_policy(value, parameters_policy=parameters_policy, compare_bundle=compare_bundle)
+
+
+def attach_project_parameter_context(request, **kwargs):
+    from auditmanager.analysis.extended.parameter_context import attach
+    return attach(request, **kwargs)
+
+
+__all__.extend(["project_parameter_context_policy", "validate_project_parameter_context_policy", "attach_project_parameter_context"])

@@ -20,21 +20,28 @@ export function ProjectParameters({ value, fallbackVersion, projectUid }: {
   const [kind, setKind] = useState('all');
   const [page, setPage] = useState(0);
   const [source, setSource] = useState<RecordValue | null>(null);
+  const [showContext, setShowContext] = useState(false);
+  const [contextPage, setContextPage] = useState(0);
   const body = object(value);
   if (body === null) return null;
   const coverage = object(body.coverage);
   const policy = object(body.policy);
+  const contextPolicy = object(body.visual_context_policy);
+  const contextReceipts = objects(body.visual_context_receipts);
+  const contextPages = Math.max(1, Math.ceil(contextReceipts.length / 25));
+  const currentContextPage = Math.min(contextPage, contextPages - 1);
   const facts = objects(body.facts);
   const sources = new Map(objects(body.sources).map((entry) => [text(entry.source_id), entry] as const));
   const needle = search.trim().toLocaleLowerCase('ru');
   const filtered = facts.filter((fact) => (kind === 'all' || fact.parameter_type === kind) && (!needle ||
-    [fact.name, fact.value, fact.unit, fact.subject].map(text).join('\n').toLocaleLowerCase('ru').includes(needle)));
+    [fact.fact_id, fact.name, fact.value, fact.unit, fact.subject].map(text).join('\n').toLocaleLowerCase('ru').includes(needle)));
   const pages = Math.max(1, Math.ceil(filtered.length / 25));
   const current = Math.min(page, pages - 1);
   return <section id="extended-project-parameters" className={styles.batchPanel} aria-label="Параметры проекта из источников">
     <h3>Параметры проекта из источников</h3>
     <p><strong>{STATUS[text(body.status)] ?? 'Состояние ещё не получено'}</strong>. Это предварительно извлечённые значения, а не утверждённый паспорт или проверка норм. Разные объекты и значения сохраняются отдельно; единицы не пересчитывались.</p>
     <p>Обращений по принятому плану: до {count(policy?.max_calls)} на весь прогон. Завершено: {count(coverage?.calls_completed)}. Сохранено кандидатов: {facts.length}.</p>
+    {contextPolicy === null ? null : <section aria-label="Контекст параметров для изображений"><p>По принятой политике параметры подготавливаются перед визуальным проходом. В один запрос изображений может войти до {count(contextPolicy.max_facts)} полных кандидатов, в пределах {count(contextPolicy.max_characters)} символов контекста. Новые модельные шаги ради передачи контекста не добавляются.</p><p>Подготовлено квитанций контекста: {contextReceipts.length}; сохранён ответ на запрос: {contextReceipts.filter((receipt) => receipt.response_received === true).length}. Переданный контекст не является визуальным подтверждением или решением эксперта.</p><details onToggle={(event) => setShowContext(event.currentTarget.open)}><summary>Фактически подготовленный контекст и ответы</summary>{showContext ? <><p>Квитанции {currentContextPage + 1} из {contextPages}; до25 на странице. Все записи доступны в полной выгрузке.</p><pre>{JSON.stringify(contextReceipts.slice(currentContextPage * 25, (currentContextPage + 1) * 25), null, 2)}</pre>{contextReceipts.length > 25 ? <nav className={styles.toolbar} aria-label="Страницы визуального контекста"><button type="button" className="am-button am-button--quiet" disabled={currentContextPage === 0} onClick={() => setContextPage(currentContextPage - 1)}>Предыдущие</button><button type="button" className="am-button am-button--quiet" disabled={currentContextPage + 1 >= contextPages} onClick={() => setContextPage(currentContextPage + 1)}>Следующие</button></nav> : null}</> : null}</details></section>}
     <dl className={styles.coverageGrid}>
       <div><dt>Известных фрагментов</dt><dd>{count(coverage?.pieces_total_known)}</dd></div>
       <div><dt>Отобрано фрагментов</dt><dd>{count(coverage?.pieces_selected)}</dd></div>
