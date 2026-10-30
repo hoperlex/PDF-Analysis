@@ -106,8 +106,10 @@ class RunCostPreflight:
                 raise ValueError()
             document = json.loads(raw)
             blocks = document["blocks"]
+            # The portal contract also admits stamp blocks. They are not image
+            # inputs for the model and must not make the cost estimate fail.
             if not isinstance(blocks, list) or any(not isinstance(block, dict)
-                    or block.get("block_type") not in {"image", "text"} for block in blocks):
+                    or block.get("block_type") not in {"image", "text", "stamp"} for block in blocks):
                 raise ValueError()
             return sum(block["block_type"] == "image" for block in blocks)
         except (KeyError, TypeError, ValueError):

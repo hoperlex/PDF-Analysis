@@ -60,19 +60,25 @@ def test_all_fourteen_sections_price_before_start_and_large_normal_inputs_get_ex
         assert accepted["approved_by_user_uid"] == "expert"
 
 
-def test_fresh_full_review_prices_exact_immutable_image_count_when_companion_is_available(registry):
-    raw = json.dumps({'blocks': [{'block_type': 'image'} for _ in range(47)] +
-        [{'block_type': 'text'} for _ in range(12)]}).encode()
+def test_fresh_full_review_prices_images_without_rejecting_portal_stamps(registry, monkeypatch):
+    kinds = ['image'] * 47 + ['text'] * 12 + ['stamp']
+    raw = json.dumps({'pages': [{} for _ in range(30)], 'blocks': [
+        {'block_id': f'blk_{index:032x}', 'block_type': kind, 'page_index': index % 30}
+        for index, kind in enumerate(kinds)
+    ]}).encode()
     digest = sha256(raw).hexdigest()
-    source = version('AI', 300_000, 30)
+    source = version('AR', 300_000, 30)
     source.manifest += (NS(role='source.structured_companion',
         blob_id=str(derive_blob_id(sha256=digest, size=len(raw))), sha256=digest, size_bytes=len(raw)),)
     precise = service(registry, blob_store=NS(read=lambda *_args, **_kw: raw))
     assert precise._image_block_count(source) == 47
+    monkeypatch.setenv('AUDITMANAGER_EXTENDED_ANALYSIS_PLAN', 'v2')
     exact = estimate(precise, source)
     fallback = estimate(service(registry), source)
     assert exact.as_dict()['calls'] < fallback.as_dict()['calls']
     assert exact.as_dict()['estimated_cost_micros'] < fallback.as_dict()['estimated_cost_micros']
+    monkeypatch.setenv('AUDITMANAGER_EXTENDED_ANALYSIS_PLAN', 'v3')
+    assert estimate(precise, source).as_dict()['estimated_cost_micros'] > 0
     with pytest.raises(DomainError) as failure:
         estimate(service(registry, blob_store=NS(read=lambda *_args, **_kw: b'bad')), source)
     assert failure.value.detail_fields['reason'] == 'cost_blocks_source_invalid'
