@@ -26,6 +26,8 @@ _SAFE_KEYS = frozenset({
     # `EXEC-HTTP-01`: why a run started on the standby (``primary_archived``,
     # ``primary_not_probed``, ``primary_kind_not_served``): a controlled classifier.
     "reason",
+    # BETA-PDF-PRECHECK-1030: scalar page progress of the existing source stage.
+    "completed_pages", "total_pages", "phase",
 })
 # `EXEC-PULL-01`: a runner token is addressed by its identity, never by its value, its prefix
 # or its hash.

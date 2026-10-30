@@ -66,8 +66,8 @@ outbox delivery remain out of scope.
 from __future__ import annotations
 
 import time
-from functools import wraps
-from dataclasses import dataclass, field
+from functools import partial, wraps
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from typing import Any, Callable, Mapping, Protocol
 
@@ -82,11 +82,13 @@ from auditmanager.analysis.public import (
     ROLE_SOURCE_STRUCTURED_COMPANION,
     ROLE_TEXT_LAYER,
     ArtifactRef,
+    PdfPrecheckProgress,
     StageError,
     StageResult,
     StageStatus,
     read_artifact,
     run_stage,
+    run_source_preparation_with_progress,
 )
 from auditmanager.analysis.public import publish_artifact
 from auditmanager.analysis.public import (
@@ -94,6 +96,7 @@ from auditmanager.analysis.public import (
     AR_V3_BETA_PROFILE_ID,
     ARTIFACT_ROLE as ROLE_TEXT_OBSERVATIONS,
     CostMeter,
+    MAX_ANALYSIS_WINDOWS,
     ModelAdapter,
     ModelCallJournal,
     ModelCallRecord,
@@ -124,6 +127,7 @@ from auditmanager.jobs.public import (
     AttemptAuthority,
     AttemptContext,
     JobRepository,
+    append_execution_event,
     start_attempt_lease_heartbeat,
     stop_attempt_lease_heartbeat,
 )
@@ -586,6 +590,8 @@ def _run_text_analysis_stage(
         # `SECTION-JUDGE-FIXES-01`: the call carries this profile's own prompt and schema, not the АР v1 pair.
         bundle=profile.prompt_bundle,
         relaxed_limits=relaxed_limits,
+        approved_window_characters=provider_config.approved_window_characters,
+        max_windows=provider_config.approved_max_windows or MAX_ANALYSIS_WINDOWS,
     )
 
     while True:
@@ -799,6 +805,17 @@ def _bind_provider(
                 "provide; a recorded run is never presented as a live one"
             ),
         )
+    if config.approved_cost_ceiling:
+        # A database route contributes its model/credentials, while the accepted
+        # run command retains the cost/window authority after binding that route.
+        binding = replace(binding, config=replace(
+            binding.config, run_cost_ceiling_usd=config.run_cost_ceiling_usd,
+            approved_window_characters=config.approved_window_characters,
+            approved_max_windows=config.approved_max_windows, approved_cost_ceiling=True,
+            approved_model_id=config.approved_model_id,
+            approved_rate_sha256=config.approved_rate_sha256,
+            approved_connection_revision_id=config.approved_connection_revision_id,
+        ))
     return binding
 
 
@@ -902,6 +919,25 @@ def _execute_run_body(
     v3_exact = v3_profile and v3_bundle
     relaxed_limits = False if v3_exact else _section_relaxed_limits(session, run)
     meter.enforce_ceiling = not relaxed_limits
+    # Cost preflight owns the accepted immutable consent. Import the public seam
+    # at execution time because runs.public also exports this executor.
+    from auditmanager.runs.public import read_run_cost_policy
+
+    cost_policy = read_run_cost_policy(
+        session, run_id=run_id, default_ceiling_usd=config.run_cost_ceiling_usd,
+        runs=run_repo,
+    )
+    meter.enforce_ceiling = cost_policy.enforce_ceiling
+    if cost_policy.approved:
+        meter.ceiling_usd = cost_policy.ceiling_usd
+        config = replace(
+            config, run_cost_ceiling_usd=cost_policy.ceiling_usd,
+            approved_window_characters=cost_policy.window_characters,
+            approved_max_windows=cost_policy.max_windows, approved_cost_ceiling=True,
+            approved_model_id=cost_policy.model_id,
+            approved_rate_sha256=cost_policy.rate_sha256,
+            approved_connection_revision_id=cost_policy.connection_revision_id,
+        )
     if (v3_profile or v3_bundle) and (
         not v3_exact
         or not isinstance(ar_v3_pack_registry, TrustedPackRegistry)
@@ -1024,6 +1060,49 @@ def _execute_run_body(
 
     observations_document: Mapping[str, Any] | None = None
 
+    # Full interpretation belongs to this durable background Attempt, before
+    # either model branch. Page receipts are actual progress, never a heartbeat
+    # masquerading as work. Do not hold a DB transaction while a page interprets.
+    last_pdf_check = 0.0
+    last_pdf_event = float("-inf")
+    last_pdf_pages = 0
+
+    def pdf_checkpoint() -> None:
+        nonlocal last_pdf_check
+        now = time.monotonic()
+        if now - last_pdf_check < 1.0:
+            return
+        job_repo.check_current_unlocked(session, authority)
+        session.commit()
+        last_pdf_check = now
+
+    def pdf_progress(receipt: PdfPrecheckProgress) -> None:
+        nonlocal last_pdf_event, last_pdf_pages, last_pdf_check
+        now = time.monotonic()
+        if receipt.completed_pages > last_pdf_pages:
+            attempt_context.progress()
+            last_pdf_pages = receipt.completed_pages
+        if (receipt.phase == "checking" and receipt.completed_pages < receipt.total_pages
+                and now - last_pdf_event < 1.0):
+            return
+        # This fence also suppresses a failed-progress write from a cancelled or
+        # superseded Attempt. A read-only checkpoint alone cannot authorise writes.
+        job_repo.require_current(session, authority)
+        payload: dict[str, str | int | bool | None] = {
+            "stage_id": "source_preparation", "phase": receipt.phase,
+            "completed_pages": receipt.completed_pages, "total_pages": receipt.total_pages,
+        }
+        if receipt.error_code is not None:
+            payload["error_code"] = receipt.error_code
+        if receipt.reason is not None:
+            payload["reason"] = receipt.reason
+        append_execution_event(
+            session, event_type="stage.pdf_precheck", aggregate_type="AuditRun",
+            aggregate_id=run_id, run_id=run_id, payload=payload,
+        )
+        session.commit()
+        last_pdf_event = last_pdf_check = now
+
     # -- the three deterministic stages, in registry dependency order ---------
     deterministic = (
         (
@@ -1060,6 +1139,11 @@ def _execute_run_body(
             version_uid=run.version_uid,
             inputs=outputs.blob_inputs(*roles),
             blob_store=stage_store,
+            handler=(
+                partial(run_source_preparation_with_progress, progress=pdf_progress,
+                        checkpoint=pdf_checkpoint, expected_page_count=version.page_count)
+                if stage_id == "source_preparation" else None
+            ),
             clock=clock,
         )
         _persist_and_bind(

@@ -72,9 +72,11 @@ from auditmanager.analysis.stages.extraction import (
     NORMALIZATION_DESCRIPTION,
     NORMALIZATION_ID,
     ExtractedDocument,
-    extract_document,
     extractor_version,
     options_sha256,
+)
+from auditmanager.analysis.stages.pdf_precheck import (
+    Checkpoint, PdfPrecheckProgress, Progress, extract_document,
 )
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.storage.public import BlobId, BlobStore
@@ -87,27 +89,58 @@ REASON_PORTAL_INCOMPLETE: Final[str] = "portal_inputs_incomplete"
 REASON_PORTAL_UNREADABLE: Final[str] = "portal_input_unreadable"
 
 
-def run(context: StageContext) -> StageProduction:
+def run(
+    context: StageContext, *, progress: Progress | None = None,
+    checkpoint: Checkpoint | None = None, expected_page_count: int | None = None,
+) -> StageProduction:
     """Extract the source document and publish the prepared artifacts."""
     source_blob = context.blob(ROLE_SOURCE_DOCUMENT)
 
-    with _source_file(context.blob_store, source_blob) as (path, source_sha256):
-        document = extract_document(path)
+    completed_pages, total_pages = 0, expected_page_count or 0
 
-    portal_members = _portal_members(context)
-    portal = (
-        None
-        if portal_members is None
-        else read_portal(
-            portal_members[0],
-            portal_members[1],
-            page_count=document.page_count,
-            stage_id=STAGE_ID,
+    def on_page(receipt: PdfPrecheckProgress) -> None:
+        nonlocal completed_pages, total_pages
+        completed_pages, total_pages = receipt.completed_pages, receipt.total_pages
+        if progress is not None:
+            progress(receipt)
+
+    if progress is not None:
+        progress(PdfPrecheckProgress("started", 0, total_pages))
+    try:
+        with _source_file(context.blob_store, source_blob, checkpoint=checkpoint) as (path, source_sha256):
+            # Retain the one-argument seam for direct stage callers/spies. Both
+            # paths use the bounded full interpreter; there is no legacy fallback.
+            document = (
+                extract_document(path)
+                if progress is None and checkpoint is None and expected_page_count is None
+                else extract_document(path, progress=on_page, checkpoint=checkpoint,
+                                      expected_page_count=expected_page_count)
+            )
+        portal_members = _portal_members(context)
+        portal = (
+            None
+            if portal_members is None
+            else read_portal(
+                portal_members[0], portal_members[1],
+                page_count=document.page_count, stage_id=STAGE_ID,
+            )
         )
-    )
-    _refuse_pages_without_text(
-        document, frozenset() if portal is None else portal.pages_with_block
-    )
+        _refuse_pages_without_text(
+            document, frozenset() if portal is None else portal.pages_with_block
+        )
+        if checkpoint is not None:
+            checkpoint()
+    except DomainError as exc:
+        if progress is not None:
+            # Do not project exception messages or arbitrary detail fields into
+            # the journal. The actual typed failure remains in StageResult.
+            reason = exc.detail_fields.get("reason")
+            safe = reason if isinstance(reason, str) and reason in _PROGRESS_REASONS else "pdf_precheck_failed"
+            progress(PdfPrecheckProgress("failed", completed_pages, total_pages,
+                                         exc.code.value, safe))
+        raise
+    if progress is not None:
+        progress(PdfPrecheckProgress("completed", document.page_count, document.page_count))
 
     inventory = _build_page_inventory(
         document,
@@ -143,8 +176,28 @@ def run(context: StageContext) -> StageProduction:
     return StageProduction(artifacts=artifacts, metrics=metrics)
 
 
+_PROGRESS_REASONS = frozenset({
+    "source_unreadable", "source_encrypted", "page_count_disagreement",
+    "line_traversal_disagreement", "normalization_disagreement",
+    "pdf_precheck_limits", "pdf_precheck_timeout", "pdf_precheck_page_timeout",
+    "pdf_precheck_unavailable", "pdf_precheck_receipt_invalid", "pdf_precheck_incomplete",
+    REASON_PORTAL_INCOMPLETE, REASON_PORTAL_UNREADABLE,
+})
+
+
+def run_source_preparation_with_progress(
+    context: StageContext, *, progress: Progress, checkpoint: Checkpoint,
+    expected_page_count: int,
+) -> StageProduction:
+    """Public worker handler seam; the caller owns durable authority and progress."""
+    return run(context, progress=progress, checkpoint=checkpoint,
+               expected_page_count=expected_page_count)
+
+
 @contextmanager
-def _source_file(store: BlobStore, blob_id: BlobId) -> Iterator[tuple[str, str]]:
+def _source_file(
+    store: BlobStore, blob_id: BlobId, *, checkpoint: Checkpoint | None = None,
+) -> Iterator[tuple[str, str]]:
     """The source PDF in a temporary file, as ``(path, sha256)``; removed on the way out.
 
     The digest the stream is held to is the one the store recorded when the bytes were
@@ -163,6 +216,8 @@ def _source_file(store: BlobStore, blob_id: BlobId) -> Iterator[tuple[str, str]]
                     expected_sha256=recorded.sha256,
                     expected_size=recorded.size,
                 ):
+                    if checkpoint is not None:
+                        checkpoint()
                     handle.write(chunk)
         except DomainError:
             raise
