@@ -20,9 +20,20 @@ export function MarkFaultView() {
 export function UpdateBannerView({ onUpdate, onLater }: { readonly onUpdate: () => void; readonly onLater: () => void }) {
   return (
     <aside className={styles.banner} role="status" data-update-banner="">
-      <span>Доступна новая версия</span>
-      <button type="button" className="am-button" onClick={onUpdate}>Обновить</button>
-      <button type="button" className="am-button" onClick={onLater}>Позже</button>
+      <span className={styles.bannerIcon} aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M20 7v5h-5M4 17v-5h5" />
+          <path d="M5.8 9a7 7 0 0 1 12.2-2l2 5M4 12l2 5a7 7 0 0 0 12.2-2" />
+        </svg>
+      </span>
+      <div className={styles.bannerCopy}>
+        <strong>Доступна новая версия</strong>
+        <span>Обновите страницу, чтобы увидеть изменения.</span>
+      </div>
+      <div className={styles.bannerActions}>
+        <button type="button" className={`am-button ${styles.updateButton}`} onClick={onUpdate}>Обновить <span aria-hidden="true">↗</span></button>
+        <button type="button" className={styles.laterButton} onClick={onLater}>Позже</button>
+      </div>
     </aside>
   );
 }
@@ -34,15 +45,17 @@ export function WhatsNewView({ listing, newest, onClose }: {
 }) {
   return (
     <aside className={styles.whatsNew} role="dialog" aria-label="Что нового" aria-modal="false" data-whats-new="">
-      <h2>Что нового</h2>
-      <p>Версия {newest}</p>
+      <header className={styles.whatsNewHead}>
+        <h2>Что нового</h2>
+        <p>Версия {newest}</p>
+      </header>
       {listing.items.filter((item) => listing.whats_new.includes(item.version)).map((entry) => (
         <section key={entry.version}>
           <h3>{entry.title} · {entry.version}</h3>
           <ul>{entry.items.map((item, index) => <li key={`${entry.version}-${index}`}>{item.text}</li>)}</ul>
         </section>
       ))}
-      <button type="button" className="am-button" onClick={onClose}>Закрыть</button>
+      <button type="button" className={`am-button ${styles.closeButton}`} onClick={onClose}>Закрыть</button>
     </aside>
   );
 }
