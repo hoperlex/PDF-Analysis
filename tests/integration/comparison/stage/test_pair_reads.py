@@ -159,6 +159,7 @@ def test_two_R_documents_form_an_append_only_assembly_and_pair(
     }
     created = assemblies.create(**request)
     assert assemblies.create(**request) == created
+    assert created.member_revision_no == 2
     assert [(m.document_uid, m.member_no) for m in created.members] == [(right, 1), (other, 2)]
     assert comparison_session.execute(
         text("SELECT count(DISTINCT command_id) FROM stage_assembly_member WHERE stage_assembly_id = :id"),
@@ -181,6 +182,21 @@ def test_two_R_documents_form_an_append_only_assembly_and_pair(
     with pytest.raises(DomainError) as stale:
         assemblies.revise(**(revision | {"idempotency_key": f"stage-stale-{new_ulid()}"}))
     assert stale.value.code is ErrorCode.CONFLICT
+
+    fourth = add_classified_document(comparison_session, project, actor, "R", "Fourth 04")
+    added = assemblies.revise(
+        assembly_id=created.assembly_id, base_member_no=revised.member_revision_no,
+        add_document_uids=(fourth,), remove_document_uids=(), user_uid=actor,
+        idempotency_key=f"stage-add-fourth-{new_ulid()}",
+    )
+    removed = assemblies.revise(
+        assembly_id=created.assembly_id, base_member_no=added.member_revision_no,
+        add_document_uids=(), remove_document_uids=(fourth,), user_uid=actor,
+        idempotency_key=f"stage-remove-fourth-{new_ulid()}",
+    )
+    assert removed.member_revision_no == 6
+    assert max(member.member_no for member in removed.members) == 4
+    assert assemblies.get(created.assembly_id).member_revision_no == 6
 
     pair = StagePairCommandService(sessions).confirm_pair(
         project_uid=project, left_document_uid=left, right_document_uid=None,

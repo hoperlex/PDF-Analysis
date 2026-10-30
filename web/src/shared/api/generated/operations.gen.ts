@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.13.0 (OpenAPI 3.1.0)
- *   sha256 494f13a23a4f30a1b58883a1664799a6c73d935b0cffca1199bf436fae22f9ac
+ *   sha256 d52a9b8f9f5f6760c1ba0d8c72703aac3a70bd6d85e1b829cf8307ea5b314904
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -1883,6 +1883,10 @@ export type EstimateStageChainRunInput = {
   /** Path parameters, substituted into `/stage-link-revisions/{stage_link_revision_id}/chain-estimate`. */
   path: {
     stage_link_revision_id: StageLinkRevisionId;
+  };
+  /** Query string parameters. */
+  query?: {
+    stage_chain_run_id?: string;
   };
   /**
    * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
@@ -7759,7 +7763,7 @@ export const OPERATIONS = {
     method: 'GET',
     path: '/stage-link-revisions/{stage_link_revision_id}/chain-estimate',
     pathParams: ['stage_link_revision_id'],
-    queryParams: [],
+    queryParams: ['stage_chain_run_id'],
     headerParams: [],
     requiresIdempotencyKey: false,
     requestMediaType: null,
