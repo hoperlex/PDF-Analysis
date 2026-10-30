@@ -211,21 +211,41 @@
   margin: 0;
 }
 
-/* The right-hand cluster: instance label, theme control, then the account menu or «Вход». */
+.screenContext {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: var(--am-text-md);
+}
+
+.contextGroup,
+.contextDivider {
+  color: var(--am-ink-muted);
+}
+
+.contextCurrent {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--am-ink);
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Existing controls occupy the right edge of the content toolbar. */
 .end {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 14px;
-  margin-top: auto;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  margin-left: auto;
   min-width: 0;
-  padding-top: var(--am-gap);
-  border-top: 1px solid var(--am-line-soft);
 }
 
 .end :global(.am-theme),
 .end :global(.am-app__instance + .am-theme) {
-  align-self: flex-start;
+  align-self: center;
   margin-left: 0;
 }
 
@@ -244,10 +264,10 @@
 }
 
 .end :global(.am-menu__popup) {
-  left: 0;
-  right: auto;
-  top: auto;
-  bottom: calc(100% + 6px);
+  left: auto;
+  right: 0;
+  top: calc(100% + 6px);
+  bottom: auto;
 }
 
 .accountMenu {
@@ -301,29 +321,6 @@
     align-content: start;
   }
 
-  :global(.am-app[data-sidebar='compact']) .end {
-    align-items: center;
-    gap: 10px;
-  }
-
-  :global(.am-app[data-sidebar='compact']) .end :global(.am-app__instance) {
-    display: none;
-  }
-
-  :global(.am-app[data-sidebar='compact']) .end :global(.am-theme) {
-    flex-direction: column;
-    align-self: center;
-  }
-
-  :global(.am-app[data-sidebar='compact']) .end :global(.am-theme__option) {
-    padding: 5px;
-  }
-
-  :global(.am-app[data-sidebar='compact']) .end :global(.am-menu__popup) {
-    left: calc(100% + 8px);
-    right: auto;
-    bottom: 0;
-  }
 }
 
 @media (max-width: 1023.98px) {
@@ -354,28 +351,14 @@
     right: 0;
   }
 
-  .end {
-    flex-direction: row;
-    align-items: center;
-    gap: 8px;
-    margin-top: 0;
-    margin-left: auto;
-    padding-top: 0;
-    border-top: 0;
-  }
-
-  .end :global(.am-menu__popup) {
-    left: auto;
-    right: 0;
-    top: calc(100% + 6px);
-    bottom: auto;
-  }
 }
 
 @media (max-width: 590px) {
+  .screenContext {
+    max-width: 100%;
+  }
+
   .end {
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    width: 100%;
+    gap: 6px;
   }
 }
