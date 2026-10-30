@@ -21,6 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import hashlib
 import json
+import math
 
 from auditmanager.analysis.text.lock import ModelPin
 from auditmanager.shared.errors import DomainError, ErrorCode
@@ -67,6 +68,20 @@ def require_approved_model(config, pin: ModelPin, call=None) -> None:
             or getattr(config, "approved_rate_sha256", None) != model_rate_sha256(pin)
             or expected_revision is not None and getattr(call, "connection_revision_id", None) != expected_revision):
         raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis", reason="cost_estimate_binding_changed")
+
+
+def request_cost_upper_usd(pin: ModelPin, request) -> float:
+    """Price the actual complete request and its full output cap before dispatch.
+
+    The character/token allowance is the same conservative 7/5 ratio used by
+    analysis input budgeting. It is an estimate, while measured spend remains
+    authoritative after the response.
+    """
+    characters = len(json.dumps(request.body, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+    output = request.body.get("max_tokens")
+    if type(output) is not int or output < 1:
+        raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis", reason="cost_request_cap_invalid")
+    return pin.cost_usd(input_tokens=math.ceil(characters * 5 / 7), output_tokens=output)
 
 
 @dataclass(slots=True)
@@ -134,9 +149,12 @@ class CostMeter:
         self.unmetered_calls += 1
         return 0.0
 
-    def check_before_call(self) -> None:
-        """Halt before spending anything more once the ceiling is reached."""
-        if self.enforce_ceiling and self.spent_usd >= self.ceiling_usd:
+    def check_before_call(self, *, pending_cost_usd: float = 0.0) -> None:
+        """Require room for an approved request before its provider effect."""
+        if not math.isfinite(pending_cost_usd) or pending_cost_usd < 0:
+            raise ValueError("pending cost must be finite and nonnegative")
+        if self.enforce_ceiling and (self.spent_usd >= self.ceiling_usd
+                or self.spent_usd + pending_cost_usd > self.ceiling_usd + 1e-12):
             raise cost_budget_exceeded()
 
     def charge(

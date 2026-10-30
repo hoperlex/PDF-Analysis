@@ -41,7 +41,7 @@ from auditmanager.analysis.text.artifact import Observation, build_text_observat
 from auditmanager.analysis.text.binding import CallBinding
 from auditmanager.analysis.text.chunk_preflight import ChunkPreflightError, TextChunk
 from auditmanager.analysis.text.config import ProviderConfig, ProviderMode, load_provider_config
-from auditmanager.analysis.text.cost import BUDGET_SCOPE_RUN, CostMeter, require_approved_model
+from auditmanager.analysis.text.cost import BUDGET_SCOPE_RUN, CostMeter, require_approved_model, request_cost_upper_usd
 from auditmanager.analysis.text.lock import STAGE_ID, ProviderLock, provider_lock
 from auditmanager.analysis.text.omission import OmissionTally, decide, quotes_of
 from auditmanager.analysis.text.profile import AnalysisProfile
@@ -413,7 +413,8 @@ def run_text_analysis_windows(
             response, model_call_id = recovered.response, recovered.model_call_id
         else:
             try:
-                cost_meter.check_before_call()
+                cost_meter.check_before_call(pending_cost_usd=(
+                    request_cost_upper_usd(pin, request) if resolved_config.approved_cost_ceiling else 0.0))
             except DomainError:
                 return _failure(
                     DomainError(

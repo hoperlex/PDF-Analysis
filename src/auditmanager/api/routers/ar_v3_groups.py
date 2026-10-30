@@ -11,6 +11,7 @@ from auditmanager.api.routers.idempotency import RequiredIdempotencyKey
 from auditmanager.api.routers.ports import ArV3GroupPort
 from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
 from auditmanager.api.schemas import models
+from auditmanager.api.security import CurrentSubject
 
 
 def build_ar_v3_group_routes(router: APIRouter, groups: ArV3GroupPort) -> None:
@@ -38,11 +39,13 @@ def build_ar_v3_group_routes(router: APIRouter, groups: ArV3GroupPort) -> None:
     def start_ar_v3_beta_group(
         body: models.StartArV3BetaGroupRequest,
         idempotency_key: RequiredIdempotencyKey,
+        subject: CurrentSubject,
     ) -> WireResponse:
         group = groups.start_ar_v3_group(
             version_uid=body.version_uid, idempotency_key=idempotency_key,
             relaxed_limits=body.relaxed_limits is True,
-            **({"cost_consent": body.cost_consent.model_dump(mode="json")} if body.cost_consent is not None else {}),
+            **({"cost_consent": body.cost_consent.model_dump(mode="json"), "cost_actor_uid": subject.user_uid}
+               if body.cost_consent is not None else {}),
         )
         return json_response(202, encode_json(group.model_dump(mode="json")))
 
