@@ -53,3 +53,7 @@ Read-only export enhancement; revert these exact files without mutating stored c
 ## Handoff
 
 Changed paths, no-check status, unchanged contracts, archive/resource/cached-origin limits, publication receipt; all acceptance D-290.
+
+## Incoming owner authority adopted during integration
+
+Preserve `af581631`, `adaf93d4`, `afc0f482` from origin/dev. Their SECTION-STATS-UNCAPPED-1030 explicitly owns contract numeric-limit and migration slots. Integration now adopts migration0044_section_stats_uncapped / API1.14.0 without editing or executing that migration. Incoming tests/generated/proxy/composition changes belong to that owner task, not this export slot. Combined candidate remains unverified under the current no-checks instruction; owner deploys.
