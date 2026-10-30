@@ -520,3 +520,34 @@ def consolidate_extended_observations(observations, *, sources, version_uid):
 
 
 __all__.append("consolidate_extended_observations")
+
+
+def extended_cross_window_policy():
+    from auditmanager.analysis.extended.coverage import cross_window_policy
+    return cross_window_policy()
+
+
+def validate_extended_cross_window_policy(value):
+    from auditmanager.analysis.extended.coverage import validate_cross_window_policy
+    return validate_cross_window_policy(value)
+
+
+__all__.extend(["extended_cross_window_policy", "validate_extended_cross_window_policy"])
+
+
+def plan_global_cross_window(**kwargs):
+    from auditmanager.analysis.extended.cross_window import plan_global_cross_window as plan
+    return plan(**kwargs)
+
+
+def build_global_cross_window_request(**kwargs):
+    from auditmanager.analysis.extended.cross_window_review import build_global_cross_window_request as build
+    return build(**kwargs)
+
+
+def parse_global_cross_window_reply(text, **kwargs):
+    from auditmanager.analysis.extended.cross_window_review import parse_global_cross_window_reply as parse
+    return parse(text, **kwargs)
+
+
+__all__.extend(["plan_global_cross_window", "build_global_cross_window_request", "parse_global_cross_window_reply"])

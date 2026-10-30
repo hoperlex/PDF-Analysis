@@ -50,7 +50,19 @@ Changed files, no-check status, contracts, known limits, integrator instructions
 - `src/auditmanager/runs/preflight.py`
 - `src/auditmanager/runs/cost_policy.py`
 
+## Integration takeover after lane interruption
+
+All three delegated BLOCK5 sessions stopped with a provider usage-limit error on 2026-10-30 before final handback. No delegated writer remains active. The sole integrator takes exclusive ownership of their exact remaining paths to complete the already authorised block; no runtime/checks or new scope is implied.
+
+- `src/auditmanager/analysis/extended/cross_window.py`
+- `src/auditmanager/analysis/extended/cross_window_review.py`
+- `src/auditmanager/analysis/extended/workflow.py`
+- `src/auditmanager/analysis/extended/core.py`
+- `src/auditmanager/runs/extended_review.py`
+- `web/src/widgets/extended-review/**`
+- `web/src/entities/audit-run/lib/**`
+
 ## Deliverables
 
-Root owns nested global_cross_window_policy={version:'cross-window-comprehensive-v1',piece_characters:20000,call_limits:{comprehensive_analysis:8,norm_verification:8,finding_review:8,finding_correction:8}}. Public lazy helpers extended_cross_window_policy() and validate_extended_cross_window_policy(value) accept the whole nested value (None=>False). Fresh batched plans with max_windows>1 opt in by default; env0 rolls back new starts. Reserve 32 global calls, each 100000 input tokens; outputs 8*6000+24*12000, in addition to existing local budgets. Actual calls remain metered and consent-bound. Preserve incoming owner changes, source-only docs, exact clean FF publication/readback; continue next feasible block.
+Root owns nested global_cross_window_policy={version:'cross-window-comprehensive-v1',piece_characters:20000,call_limits:{comprehensive_analysis:8,norm_verification:8,finding_review:8,finding_correction:8}}. Public lazy helpers extended_cross_window_policy() and validate_extended_cross_window_policy(value) accept the whole nested value (None=>False). Fresh batched plans with more than16 actual source pages opt in by default; many image blocks on a single page do not create distant text-page windows. Env0 rolls back new starts. Reserve 32 global calls, each 100000 input tokens; outputs 8*6000+24*12000, in addition to existing local budgets. Actual calls remain metered and consent-bound. Preserve incoming owner changes, source-only docs, exact clean FF publication/readback; continue next feasible block.
 

@@ -35,9 +35,14 @@ def enabled(policy: object) -> bool:
     if not isinstance(policy, dict) or policy.get("enabled") is not True:
         return False
     if policy.get("plan_version") == PLAN_VERSION_V3:
-        from .coverage import validate_coverage_policy
+        from .coverage import validate_coverage_policy, validate_cross_window_policy
         try:
             validate_coverage_policy(policy)
+            if "global_cross_window_policy" in policy:
+                if (not validate_cross_window_policy(policy["global_cross_window_policy"])
+                        or policy.get("coverage_version") != "batched-v1"
+                        or type(policy.get("text_page_limit")) is not int or policy["text_page_limit"] <= 16):
+                    return False
         except ValueError:
             return False
         maximum=policy.get("max_blocks");windows=policy.get("max_windows");rules=policy.get("rules_sha256")
@@ -48,6 +53,8 @@ def enabled(policy: object) -> bool:
             and windows == max((maximum+15)//16,(text_pages+15)//16) and policy.get("review") is True
             and isinstance(policy.get("section_code"),str) and bool(policy["section_code"].strip())
             and isinstance(rules,str) and len(rules)==64 and all(c in "0123456789abcdef" for c in rules))
+    if "global_cross_window_policy" in policy:
+        return False
     if policy.get("plan_version") == PLAN_VERSION:
         return type(policy.get("max_blocks")) is int and policy["max_blocks"] == MAX_BLOCKS
     return (policy.get("plan_version") == PLAN_VERSION_V2

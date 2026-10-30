@@ -117,3 +117,38 @@
   color: var(--am-ink-muted);
   font-size: var(--am-text-xs);
 }
+
+.savedPanel {
+  margin-top: var(--am-gap-lg);
+  padding: var(--am-gap);
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
+}
+
+.savedRows {
+  display: grid;
+  gap: var(--am-gap-lg);
+  padding-inline-start: var(--am-gap-lg);
+}
+
+.savedSides {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--am-gap);
+}
+
+.savedText, .savedRaw {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.savedRaw {
+  max-height: 24rem;
+  overflow: auto;
+  font-size: var(--am-text-xs);
+}
+
+@media (max-width: 48rem) {
+  .savedSides { grid-template-columns: minmax(0, 1fr); }
+}

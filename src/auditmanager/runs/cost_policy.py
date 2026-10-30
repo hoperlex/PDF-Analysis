@@ -74,6 +74,11 @@ def read_run_cost_policy(session, *, run_id: str, default_ceiling_usd: float,
                     from auditmanager.analysis.public import validate_extended_coverage_policy
                     if not validate_extended_coverage_policy(extended):
                         raise ValueError()
+                if "global_cross_window_policy" in extended:
+                    from auditmanager.analysis.public import validate_extended_cross_window_policy
+                    if (extended.get("coverage_version") != "batched-v1"
+                            or not validate_extended_cross_window_policy(extended["global_cross_window_policy"])):
+                        raise ValueError()
             else:
                 raise ValueError()
         if (not isinstance(digest, str) or len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest)

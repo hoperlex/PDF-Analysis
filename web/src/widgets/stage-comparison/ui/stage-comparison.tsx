@@ -8,21 +8,19 @@
  * it prints is a figure one of the two readings carries, and where the readings carry
  * nothing it prints nothing and says so.
  *
- * ## One request, and no second cadence
+ * ## Saved status and explicitly requested result reads
  *
  * It reads `useRunList` — the runs of this version, which `listRuns` answers *newest
  * first* and each item of which is the whole `RunStatus`, byte-identical to what
  * `getRunStatus` answers for that run (`W18-SEAL` asserts that equality server-side). So
- * comparing two runs needs no per-run request and adds no polling loop: `useRunStatus` on
- * the run screen remains the one polling loop in this application.
+ * comparing status facts adds no polling loop. BLOCK5 also offers an explicit, cancellable
+ * read of saved findings and preliminary observations of the selected pair.
  *
  * ## What it does NOT say to a reviewer
  *
  * `R-18`, and `D-58` was closed by deleting exactly this: a finished application does not
- * explain its own transport to the person using it. So the screen says *«полное сравнение
- * этапов появится позже»* and never *"this operation does not return that"*. Which
- * operation carries which field is a fact about this programme and belongs in comments
- * like this one and in `docs/program/W43-COMPARE.md`.
+ * explain its own transport to the person using it. The saved-result view explains exact
+ * correspondence, unavailable evidence and the difference between analysis and source edits.
  *
  * The machine vocabulary keeps its home in `data-` attributes throughout — `data-run-id`,
  * `data-run-state`, `data-stage-id`, `data-comparison` — which is the convention `D-62`
@@ -44,7 +42,7 @@
 
 import { useState } from 'react';
 
-import type { RunStatus, StageStatus, VersionUid } from '@/shared/api';
+import type { Cursor, RunStatus, StageStatus, VersionUid } from '@/shared/api';
 import type { ComparedFact, ComparedStage, Comparison, FactId } from '@/entities/audit-run';
 import {
   COST_BASIS_LABELS,
@@ -75,6 +73,7 @@ import {
 } from '@/entities/audit-run';
 
 import styles from './stage-comparison.module.css';
+import { SavedResultsComparison } from './saved-results';
 
 export interface StageComparisonProps {
   readonly versionUid: VersionUid;
@@ -252,7 +251,14 @@ function Chooser({
 }
 
 export function StageComparison({ versionUid }: StageComparisonProps) {
-  const query = useRunList(versionUid);
+  return <VersionStageComparison key={versionUid} versionUid={versionUid} />;
+}
+
+function VersionStageComparison({ versionUid }: StageComparisonProps) {
+  const [cursor, setCursor] = useState<Cursor | undefined>(undefined);
+  const [previousRuns, setPreviousRuns] = useState<readonly RunStatus[]>([]);
+  const [seenCursors, setSeenCursors] = useState<ReadonlySet<string>>(new Set());
+  const query = useRunList(versionUid, cursor);
   const [chosen, setChosen] = useState<readonly [string, string] | null>(null);
 
   if (query.isPending) return <LoadingState what="прогоны этой версии" />;
@@ -274,7 +280,10 @@ export function StageComparison({ versionUid }: StageComparisonProps) {
     );
   }
 
-  const runs = query.data.items;
+  const runs = [...previousRuns, ...query.data.items];
+  const nextCursor = query.data.page.next_cursor;
+  const repeatedPage = new Set(runs.map((run) => run.run_id)).size !== runs.length;
+  if (repeatedPage) return <ErrorState title="Список прогонов изменился при чтении." detail="Получены повторные записи. Откройте сравнение заново, чтобы выбрать согласованную пару." />;
 
   if (runs.some((run) => !hasKnownRunVocabulary(run))) {
     return (
@@ -284,6 +293,7 @@ export function StageComparison({ versionUid }: StageComparisonProps) {
           detail="Состояние прогона или этапа нельзя показать достоверно — сравнение скрыто."
         />
       </div>
+
     );
   }
 
@@ -339,6 +349,10 @@ export function StageComparison({ versionUid }: StageComparisonProps) {
           onSelect={(runId) => setChosen([left.run_id, runId])}
         />
       </div>
+
+      {nextCursor === null || nextCursor === undefined ? null : seenCursors.has(nextCursor) || runs.length >= 10000 ? <p role="alert">Дальнейшее чтение списка остановлено: повторный курсор или ресурсный предел. Показаны только полученные прогоны.</p> : <button type="button" className="am-button am-button--quiet" onClick={() => {
+        setPreviousRuns(runs); setSeenCursors(new Set([...seenCursors, nextCursor])); setCursor(nextCursor);
+      }}>Показать более ранние прогоны</button>}
 
       {sameRun ? (
         <p className={styles.summary} data-same-run="true">
@@ -436,12 +450,7 @@ export function StageComparison({ versionUid }: StageComparisonProps) {
         </table>
       </div>
 
-      <p className="am-note">
-        Здесь сравниваются те признаки прогона, которые система уже записывает. Разбор того,{' '}
-        <em>что именно</em> изменилось внутри этапа — какие находки появились, исчезли или
-        поменяли формулировку — появится позже. Пустая клетка означает, что прогон этого не
-        сообщил: это честнее, чем правдоподобное число.
-      </p>
+      <SavedResultsComparison key={`${left.run_id}:${right.run_id}`} versionUid={versionUid} left={left} right={right} />
     </div>
   );
 }

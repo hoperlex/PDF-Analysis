@@ -4,6 +4,7 @@ from dataclasses import asdict
 import hashlib
 import json
 import math
+from copy import deepcopy
 from typing import Any
 
 from auditmanager.analysis.public import (ModelCallRecord, ModelRequest, ModelResponse, ProviderMode,
@@ -400,6 +401,26 @@ def read_extended_review(sessions, blob_store, run_id: str) -> dict:
         raise DomainError(ErrorCode.STORAGE_INTEGRITY_ERROR, role=EXTENDED_REVIEW_ROLE) from None
 
 
+def _planned_global_cross_window(policy, *, reason=None, terminal=False):
+    result = {"version": "cross-window-comprehensive-v1", "status": "queued", "policy": deepcopy(policy),
+        "source_sha256": None, "manifest_sha256": None, "coverage": {"global_semantic_complete": False},
+        "phase_coverage": {}, "phase_call_counts": {}, "batches": [], "omitted": [],
+        "observations": [], "original_observations": [], "sources": [], "warnings": [],
+        "report": {"status": "queued", "preliminary": True, "expert_decisions_written": False},
+        "procedures": [{"id": identity, "title": title, "status": "queued"} for identity, title in (
+            ("comprehensive_analysis", "Межоконная комплексная сверка"),
+            ("norm_verification", "Нормативная сверка межоконных наблюдений"),
+            ("finding_review", "Критик межоконных наблюдений"),
+            ("finding_correction", "Предложения по уточнению межоконных наблюдений"),
+            ("report_generation", "Межоконный отчёт"))]}
+    if terminal:
+        result.update(status="skipped", reason=reason or "source_preparation_failed")
+        result["report"].update(status="skipped", reason=result["reason"])
+        for procedure in result["procedures"]:
+            procedure.update(status="skipped", reason=result["reason"])
+    return result
+
+
 def planned_workflow_result(*, reason=None, terminal=False, policy=None):
     from auditmanager.analysis.public import extended_workflow_procedures
     v3=isinstance(policy,dict) and policy.get("plan_version")=="extended-review-v3"
@@ -413,6 +434,8 @@ def planned_workflow_result(*, reason=None, terminal=False, policy=None):
             procedure.update(status="skipped" if terminal else "queued", reason=reason)
     version="extended-review-v3" if v3 else "extended-review-v2"
     return {"format":version,"workflow_version":version,"preliminary":True,
+        **({"global_cross_window": _planned_global_cross_window(policy["global_cross_window_policy"], reason=reason, terminal=terminal)}
+           if v3 and "global_cross_window_policy" in policy else {}),
         **({"windows":[],"window_progress":{"completed":0,"total":policy["max_windows"],"current":None,"window_size":16},
             "rules_sha256":policy["rules_sha256"],"section":policy.get("section_code"),"primary_text_status":"pending",
             "review_scope":"full_document",
@@ -545,6 +568,9 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
     v3=window_context is not None
     batched=v3 and window_context["policy"].get("coverage_version")=="batched-v1"
     state = planned_workflow_result(policy=None if not v3 else window_context["policy"])
+    # The separately accepted global budget belongs only to the parent Run;
+    # a local 16-source window must never advertise or acquire its own copy.
+    state.pop("global_cross_window", None)
     if v3:
         state["window_id"]=window_context["window_id"]
         state["primary_text_status"]=window_context.get("primary_text_status","pending")
@@ -1012,6 +1038,10 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
         extended_review_bundle_digest,extended_workflow_procedures_v3)
     from auditmanager.jobs.public import has_ambiguous_provider_effect
     state=planned_workflow_result(policy=policy)
+    if (resume_state is not None and "global_cross_window_policy" in policy
+            and isinstance(resume_state.get("global_cross_window"), dict)
+            and resume_state["global_cross_window"].get("policy") == policy["global_cross_window_policy"]):
+        state["global_cross_window"] = deepcopy(resume_state["global_cross_window"])
     state["primary_text_status"]=("pending" if visual_only else "unavailable" if
         isinstance(observations_document,dict) and observations_document.get("input_disposition")=="image_only_no_native_text"
         else "completed" if observations_document is not None else "failed")
@@ -1026,6 +1056,15 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
             for source in record.get("sources",[]):source_index[source["source_id"]]=source
             for observation in record.get("observations",[]):
                 observations.append({**observation,"window_id":record["window_id"]})
+        global_review = state.get("global_cross_window")
+        if isinstance(global_review, dict):
+            for source in global_review.get("sources", []):
+                previous = source_index.get(source["source_id"])
+                if previous is not None and previous != source:
+                    raise _refuse("global_cross_window_source_identity_conflict")
+                source_index[source["source_id"]] = source
+            observations.extend({**observation, "window_id": "global-cross-window",
+                "origin_scope": "global_cross_window"} for observation in global_review.get("observations", []))
         state["sources"]=list(source_index.values())
         state["observations"]=observations
         if policy.get("coverage_version")=="batched-v1":
@@ -1187,6 +1226,12 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
             state["window_progress"]["visual_completed"]=sum(record.get("visual_phase_complete",False) for record in state["windows"])
             save("failed" if "extended_provider_outcome_unknown" in state["warnings"] else "running")
             return state
+        if "global_cross_window_policy" in policy:
+            _run_global_cross_window(session, run=run, authority=authority, jobs=jobs, journal=journal,
+                binding=binding, outputs=outputs, store=store, meter=meter, publish=publish,
+                checkpoint=checkpoint, snapshot_id=snapshot_id, state=state, policy=policy,
+                aggregate=aggregate, save=save)
+            aggregate()
         _retain_primary_observations_v3(state,observations_document=observations_document)
         state.update(_attach_consolidation(state, version_uid=run.version_uid))
         for procedure in state["procedures"]:
@@ -1197,7 +1242,8 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
         next(p for p in state["procedures"] if p["id"]=="report_generation").update(status="completed")
         degraded=(state["coverage"]["blocks_remaining"]>0 or state["text_coverage"]["pages_remaining"]>0
             or any(record["status"]!="completed" for record in state["windows"])
-            or bool(state.get("unreviewed_primary_observations")))
+            or bool(state.get("unreviewed_primary_observations"))
+            or isinstance(state.get("global_cross_window"), dict) and state["global_cross_window"]["status"] != "completed")
         state["report"]["status"]="partial" if degraded else "completed"
         save("partial" if degraded else "completed")
         return state
@@ -1501,3 +1547,182 @@ def _coverage_text_stats(records):
     return {'complete_pages': complete_pages, 'characters_total': total,
         'characters_processed': processed, 'characters_remaining': max(0, total - processed),
         'known_page_contexts': len(pages)}
+
+
+def _run_global_cross_window(session, *, run, authority, jobs, journal, binding, outputs, store,
+        meter, publish, checkpoint, snapshot_id, state, policy, aggregate, save):
+    """A separate consent-bound virtual window; local originals are never replaced."""
+    from auditmanager.analysis.public import (read_artifact, plan_global_cross_window,
+        build_global_cross_window_request, parse_global_cross_window_reply,
+        validate_extended_cross_window_policy)
+    accepted = policy.get("global_cross_window_policy")
+    if not validate_extended_cross_window_policy(accepted):
+        raise _refuse("global_cross_window_authority_invalid")
+    global_state = state["global_cross_window"]
+    source_sha = state["source_sha256"]
+    if global_state.get("source_sha256") not in {None, source_sha}:
+        raise _refuse("global_cross_window_saved_source_changed")
+    if (global_state.get("status") in {"completed", "partial", "unavailable"}
+            and global_state.get("manifest_sha256") and global_state.get("policy") == accepted
+            and all(row.get("status") in {"completed", "partial", "unavailable", "skipped", "failed"}
+                    for row in global_state.get("procedures", []))):
+        global_state["reused_saved_result"] = True
+        aggregate(); save("running")
+        return
+    global_state.update(status="running", source_sha256=source_sha, section=state["section"],
+        version_uid=run.version_uid, coverage_version="batched-v1", window_id="global-cross-window")
+    used = {}
+    active = None
+
+    def update_coverage():
+        completed = [row for row in global_state.get("batches", [])
+            if row.get("procedure") == "comprehensive_analysis" and row.get("status") == "completed"]
+        coverage = global_state["coverage"]
+        coverage.update(pairs_completed=len(completed), source_pages_compared=len({page
+            for row in completed for page in row.get("page_numbers", [])}),
+            windows_compared=len({window for row in completed for window in row.get("window_ids", [])}),
+            global_semantic_complete=False)
+        candidate_count = coverage.get("candidate_pairs_eligible")
+        if type(candidate_count) is int:
+            coverage["pairs_remaining"] = max(0, candidate_count - len(completed))
+
+    def persist():
+        update_coverage(); aggregate(); save("running")
+
+    def phase(identity, status, reason=None):
+        nonlocal active
+        active = identity
+        row = next(row for row in global_state["procedures"] if row["id"] == identity)
+        row.update(status=status)
+        row.pop("reason", None)
+        if reason: row["reason"] = reason
+        persist()
+
+    def call(request, identity):
+        kind, ordinal = identity.rsplit(":", 1)
+        index = int(ordinal.removeprefix("b"))
+        if kind not in accepted["call_limits"] or not 0 <= index < accepted["call_limits"][kind]:
+            raise _refuse("global_cross_window_call_identity_invalid")
+        visited = used.setdefault(kind, set())
+        if identity not in visited and len(visited) >= accepted["call_limits"][kind]:
+            raise _refuse("global_cross_window_approved_phase_call_limit")
+        visited.add(identity)
+        receipt = next(row for row in global_state["batches"] if row["procedure"] == kind and row["index"] == index)
+        receipt.update(status="running", request_sha256=request.request_sha256)
+        persist()
+        response, replayed = _call(session, run_id=run.run_id, authority=authority, jobs=jobs,
+            journal=journal, binding=binding, request=request,
+            phase="v3:global-cross-window:" + identity, source_sha256=source_sha,
+            meter=meter, store=store, publish=publish, checkpoint=checkpoint, global_unknown_fence=True)
+        receipt.update(response_received=True, replayed=replayed, response_sha256=response.response_sha256)
+        counts = global_state.setdefault("phase_call_counts", {}).setdefault(kind, {"completed_calls": 0, "replayed": 0})
+        counts["replayed" if replayed else "completed_calls"] += 1
+        if response.truncated: raise _refuse("extended_response_truncated")
+        return response
+
+    try:
+        checkpoint("global_cross_window_source_plan")
+        text_ref = outputs.refs.get("prepared.text_layer")
+        if text_ref is None: raise _refuse("global_cross_window_text_source_unavailable")
+        text_layer, _ = read_artifact(store, parse_blob_id(text_ref.blob_id), expected_role="prepared.text_layer")
+        recognised_ref = outputs.refs.get("prepared.recognised_text")
+        recognised = {}
+        if recognised_ref is not None:
+            recognised, _ = read_artifact(store, parse_blob_id(recognised_ref.blob_id), expected_role="prepared.recognised_text")
+        plan = plan_global_cross_window(version_uid=run.version_uid, text_layer=text_layer, recognised=recognised,
+            windows=state["windows"], sources=state["sources"], source_sha256=source_sha,
+            max_calls=accepted["call_limits"]["comprehensive_analysis"], piece_characters=accepted["piece_characters"],
+            text_layer_sha256=text_ref.sha256,
+            recognised_sha256=None if recognised_ref is None else recognised_ref.sha256)
+        if (plan.get("version") != accepted["version"] or plan.get("version_uid") != run.version_uid
+                or plan.get("source_sha256") != source_sha
+                or len(plan["batches"]) > accepted["call_limits"]["comprehensive_analysis"]
+                or not isinstance(plan.get("manifest_sha256"), str) or len(plan["manifest_sha256"]) != 64):
+            raise _refuse("global_cross_window_plan_invalid")
+        if global_state.get("manifest_sha256") not in {None, plan["manifest_sha256"]}:
+            raise _refuse("global_cross_window_saved_manifest_changed")
+        global_state.update(manifest_sha256=plan["manifest_sha256"], sources=deepcopy(plan["sources"]),
+            pieces=deepcopy(plan.get("pieces", [])), pending_batches=deepcopy(plan.get("pending_batches", [])),
+            omitted=deepcopy(plan.get("omitted", [])), coverage=deepcopy(plan["coverage"]),
+            batches=[], phase_coverage={}, phase_call_counts={})
+        global_state["coverage"].update(global_semantic_complete=False)
+        selected_keys = {batch["batch_key"] for batch in plan["batches"]}
+        originals = global_state.setdefault("original_observations", [])
+        if any(item.get("cross_window_batch_key") not in selected_keys for item in originals):
+            raise _refuse("global_cross_window_saved_observation_scope_changed")
+        global_state["observations"] = deepcopy(originals)
+        known_batches = [*plan["batches"], *plan.get("pending_batches", [])]
+        indexed_pieces = {row["source_id"]: row for row in plan.get("pieces", [])}
+        for ordinal, batch in enumerate(known_batches):
+            index = batch.get("index", ordinal)
+            rows = batch.get("sources") or [indexed_pieces[key] for key in batch.get("source_ids", []) if key in indexed_pieces]
+            receipt = {"batch_key": f"global-cross-window:comprehensive_analysis:b{index:03d}",
+                "planner_batch_key": batch.get("batch_key"), "window_id": "global-cross-window",
+                "procedure": "comprehensive_analysis", "index": index,
+                "status": "queued" if ordinal < len(plan["batches"]) else "pending",
+                "input_ids": [], "source_ids": list(batch.get("source_ids", [])),
+                "page_numbers": list(batch.get("page_numbers", [])), "window_ids": list(batch.get("window_ids", [])),
+                "input_count": len(batch.get("source_ids", [])),
+                "input_characters": sum(row["character_end"] - row["character_start"] for row in rows),
+                "plan_sha256": batch.get("batch_sha256"), "context_ranges": [
+                    {key: row[key] for key in ("source_id", "page_number", "window_id", "character_field", "character_start", "character_end")
+                     if key in row} for row in rows]}
+            if ordinal >= len(plan["batches"]): receipt["reason"] = "approved_global_phase_call_limit"
+            global_state["batches"].append(receipt)
+        global_state["phase_coverage"]["comprehensive_analysis"] = {"planned": len(known_batches), "completed": 0,
+            "remaining": len(known_batches), "limit": accepted["call_limits"]["comprehensive_analysis"],
+            "processed_items": 0, "total_items": sum(row["input_count"] for row in global_state["batches"]),
+            "characters_processed": 0, "characters_total": sum(row["input_characters"] for row in global_state["batches"])}
+        phase("comprehensive_analysis", "running" if plan["batches"] else "completed",
+              None if plan["batches"] else "no_cross_window_candidates")
+        for batch in plan["batches"]:
+            checkpoint("global_cross_window_batch")
+            request = build_global_cross_window_request(model_id=binding.config.model_id, run_id=run.run_id,
+                section=state["section"], batch=batch, source_sha256=source_sha, policy=accepted)
+            response = call(request, f'comprehensive_analysis:b{batch["index"]:03d}')
+            parsed = parse_global_cross_window_reply(response.output_text, batch=batch)
+            finalized = finalize_extended_items(parsed, global_state["sources"])
+            previous = [item for item in originals if item["cross_window_batch_key"] == batch["batch_key"]]
+            if previous and extended_digest(previous) != extended_digest(finalized):
+                raise _refuse("global_cross_window_saved_original_changed")
+            originals[:] = [item for item in originals if item["cross_window_batch_key"] != batch["batch_key"]] + finalized
+            global_state["observations"] = deepcopy(originals)
+            _coverage_complete(global_state, kind="comprehensive_analysis", index=batch["index"])
+            phase("comprehensive_analysis", "running")
+        deferred = bool(plan.get("pending_batches") or plan.get("omitted") or plan["coverage"].get("truncated"))
+        phase("comprehensive_analysis", "partial" if deferred else "completed",
+              "approved_global_phase_call_limit_or_source_selection" if deferred else None)
+        virtual_context = {"window_id": "global-cross-window", "policy": {"phase_call_limits": accepted["call_limits"]}}
+        contexts = [{"source_id": source["source_id"], "page_number": source["page_number"],
+            "text": source["quote"] if source["character_field"] == "text" else "",
+            "recognised_context": source["quote"] if source["character_field"] == "recognised_context" else ""}
+            for source in global_state["sources"]]
+        _norm_batched_v3(session=session, run=run, binding=binding, state=global_state, snapshot_id=snapshot_id,
+            phase=phase, call=call, checkpoint=checkpoint, window_context=virtual_context)
+        _review_batched_v3(run=run, binding=binding, state=global_state, phase=phase, call=call,
+            window_context=virtual_context, contexts=contexts)
+        next(row for row in global_state["procedures"] if row["id"] == "report_generation").update(status="completed")
+        incomplete = deferred or any(row["status"] in {"partial", "unavailable", "failed", "skipped"}
+                                    for row in global_state["procedures"])
+        global_state["status"] = "partial" if incomplete else "completed"
+        global_state["report"] = {"status": global_state["status"], "preliminary": True,
+            "observation_count": len(global_state["observations"]),
+            "coverage": deepcopy(global_state["coverage"]),
+            "expert_decisions_written": False, "canonical_findings_unchanged": True}
+        persist()
+    except (DomainError, ValueError, TypeError, KeyError) as error:
+        if isinstance(error, DomainError) and error.code in {ErrorCode.STALE_ATTEMPT, ErrorCode.EXECUTION_TOKEN_INVALID}:
+            raise
+        reason = getattr(error, "detail_fields", {}).get("reason") if isinstance(error, DomainError) else "global_cross_window_input_or_reply_invalid"
+        reason = str(reason or "global_cross_window_failed")
+        global_state.update(status="failed", reason=reason)
+        global_state.setdefault("report", {}).update(status="failed", reason=reason)
+        global_state.setdefault("warnings", []).append(reason)
+        state["warnings"].append(reason)
+        for procedure in global_state["procedures"]:
+            if procedure["status"] == "running": procedure.update(status="failed", reason=reason)
+            elif procedure["status"] == "queued": procedure.update(status="skipped", reason="dependency_failed")
+        if active is not None:
+            for receipt in global_state.get("batches", []):
+                if receipt.get("status") == "running": receipt.update(status="failed", reason=reason)
+        persist()
