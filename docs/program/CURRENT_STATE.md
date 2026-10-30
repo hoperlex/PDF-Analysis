@@ -1,5 +1,12 @@
 # Current state
 
+**Updated 2026-10-30 by `DESIGN-M03-PROJECT` (development candidate only).**
+The project, document and version routes now group their existing tabs,
+sections, upload panels, version list, classification and run list in responsive
+cards. Project's section cards use the shared large radius. No read order,
+conditional mount, identity rule, API, contract, migration or `origin/main`
+changed. Publication is to `origin/dev` only; M04–M10 remain.
+
 **Updated 2026-10-30 by `DESIGN-M02-ENTRY` (development candidate only).**
 The home route now presents its greeting, section overview and existing
 role-filtered tiles as a responsive hierarchy. The projects route groups the

@@ -1,0 +1,23 @@
+.stack {
+  display: grid;
+  gap: var(--am-gap-lg);
+  min-width: 0;
+}
+
+.panel {
+  min-width: 0;
+  padding: var(--am-gap-lg);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-lg);
+  background: var(--am-surface);
+}
+
+.panel > h2:first-child {
+  margin-top: 0;
+}
+
+@media (max-width: 780px) {
+  .panel {
+    padding: var(--am-gap);
+  }
+}
