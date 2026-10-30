@@ -421,7 +421,7 @@
         "DW-04"
       ],
       "notes": [
-        "reason comparison_only_version (CMP-SEAL-C0, ADR-0025 decision 11, Q-CMP-5): startRun, reauditRun and the group start refuse a version whose upload_kind is comparison_pdf -- a plain PDF admitted for comparison only, which has no portal bundle -- because a section analysis needs one. Nothing was created. The client renders its Russian sentence from the catalogue; the code is unchanged and the catalogue stays at 27 codes.",
+        "reason comparison_only_version: portal-dependent operations such as the legacy six-check AR group refuse a version whose upload_kind is comparison_pdf because it has no portal bundle. Ordinary startRun and reauditRun accept a classified comparison PDF and analyse its native PDF text and pages. The error-code set remains unchanged.",
         "Cost preflight reasons (BETA-COST-PREFLIGHT-1030): cost_text_count_unavailable, cost_estimate_binding_changed and cost_request_cap_invalid refuse before provider spend when input counts, accepted model/rate/revision authority or the request output cap cannot be verified."
       ]
     },

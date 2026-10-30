@@ -4,8 +4,7 @@
  * read-only panel for a published version, and (`W59-SECTION-UI-01`) the version's
  * expert-confirmed stage and section with the review that offers them; (`W59-DECISION-
  * CARRYOVER-01`) which comparison rows could carry a decision, and its refusals in Russian;
- * (`CMP-VERSION-MARK-01`) the mark of a version uploaded for comparison only and the disabled
- * run start that goes with it.
+ * (`CMP-VERSION-MARK-01`) the mark of a PDF uploaded without portal annotations.
  */
 
 export type { ChosenFile, UploadPrecheckProblem } from './model/upload-envelope';
@@ -31,7 +30,7 @@ export {
   isComparisonOnly,
 } from './model/upload-kind';
 export type { ComparisonOnlyMarkProps } from './ui/comparison-only-mark';
-export { ComparisonOnlyMark, ComparisonOnlyStart } from './ui/comparison-only-mark';
+export { ComparisonOnlyMark } from './ui/comparison-only-mark';
 
 export type {
   ClassificationFailure,

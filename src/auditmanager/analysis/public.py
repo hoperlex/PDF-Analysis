@@ -90,7 +90,7 @@ from auditmanager.analysis.stages.extraction import (
     NORMALIZATION_ID,
 )
 from auditmanager.analysis.stages.source_preparation import (
-    document_text, run_source_preparation_with_progress,
+    count_native_text_characters, document_text, run_source_preparation_with_progress,
 )
 from auditmanager.analysis.stages.pdf_precheck import PdfPrecheckProgress
 from auditmanager.analysis.text import (
@@ -284,6 +284,7 @@ __all__ = [
     "V3RequestRefused",
     "V3SetInputRefused",
     "default_registry",
+    "count_native_text_characters",
     "document_text",
     "input_budget_characters",
     "load_provider_config",

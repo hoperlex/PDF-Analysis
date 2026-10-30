@@ -9,14 +9,14 @@ import json
 import math
 import os
 
-from auditmanager.analysis.public import model_rate_sha256, pinned_models, relaxed_window_characters
-from auditmanager.documents.public import DocumentRepository
+from auditmanager.analysis.public import count_native_text_characters, model_rate_sha256, pinned_models, relaxed_window_characters
+from auditmanager.documents.public import DocumentRepository, UPLOAD_KIND_COMPARISON_PDF
 from auditmanager.norms.public import PromotionRefused, current_snapshot, qualification, select_verified_retrieval_set
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import VersionUid
 from auditmanager.storage.public import parse_blob_id
 
-from .commands import _freeze_for, refuse_comparison_only_version, route_classified_version
+from .commands import _freeze_for, analysis_source_entry, route_classified_version
 
 
 FORMAT = "analysis-cost-preflight/1"
@@ -116,14 +116,22 @@ class RunCostPreflight:
 
     def _source(self, session, version_uid, version=None):
         version = version or DocumentRepository().get_version(session, VersionUid.parse(version_uid))
-        refuse_comparison_only_version(version)
         if version.classification is None:
             raise DomainError(ErrorCode.VERSION_CLASSIFICATION_REQUIRED)
-        if type(version.text_character_count) is not int or version.text_character_count < 0:
+        native_characters = version.text_character_count
+        if native_characters is None and version.upload_kind == UPLOAD_KIND_COMPARISON_PDF:
+            if self.blob_store is None:
+                raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_source")
+            source = analysis_source_entry(version)
+            native_characters = count_native_text_characters(
+                self.blob_store, parse_blob_id(str(source.blob_id)),
+                expected_sha256=source.sha256, expected_page_count=version.page_count,
+            )
+        if type(native_characters) is not int or native_characters < 0:
             raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis", reason="cost_text_count_unavailable")
-        chars = version.text_character_count + (version.recognised_character_count or 0)
+        chars = native_characters + (version.recognised_character_count or 0)
         facts = {"version_uid": str(version.version_uid), "sha256": version.sha256,
-            "native_characters": version.text_character_count, "recognised_characters": version.recognised_character_count,
+            "native_characters": native_characters, "recognised_characters": version.recognised_character_count,
             "page_count": version.page_count,
             "classification": {"section": version.classification.section_code,
                 "stage": version.classification.project_stage, "revision": version.classification.revision},

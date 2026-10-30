@@ -192,14 +192,14 @@ class TestProposeAndConfirm:
         again = _json(self._confirm(api, expert, upload_id, proposal["sets"][0], project_stage="R", section_code="EOM"), 200)
         assert again["document_uid"] == done["document_uid"]
 
-    def test_a_run_cannot_be_started_on_a_comparison_version(self, api, expert, project, batch) -> None:
+    def test_a_comparison_version_gets_an_ordinary_run_cost_estimate(self, api, expert, project, batch) -> None:
         upload_id, _files, _ids = batch
         proposal = _json(api.get(f"/comparison-uploads/{upload_id}/proposal", headers=expert), 200)
         done = _json(self._confirm(api, expert, upload_id, proposal["sets"][0], project_stage="R", section_code="EOM"), 200)
         version = _json(api.get(f"/projects/{project.project_uid}/documents", headers=expert), 200)["items"][0]["version_uid"]
-        refused = api.post("/runs", headers={**expert, **_key("run")}, json={"version_uid": version})
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["error_code"] == "analysis_input_invalid" and refused.json()["details"]["reason"] == "comparison_only_version"
+        estimated = api.post("/runs/cost-estimate", headers=expert, json={"version_uid": version})
+        assert estimated.status_code == 200, estimated.text
+        assert estimated.json()["estimated_cost_micros"] > 0
         assert done["state"] == "done"
 
     def test_an_administrator_without_the_expert_role_reads_and_confirms_nothing(self, api, expert, admin, batch) -> None:

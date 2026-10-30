@@ -18,13 +18,8 @@
  * АР now has an ordinary text profile sourced from the original application. The six-check
  * beta control is no longer offered as the default start; its API and old Run readers remain.
  *
- * `CMP-VERSION-MARK-01`: a version admitted for comparison only (`upload_kind` `comparison_pdf`) has
- * no portal bundle, so no analysis reads it, and the server refuses both starts
- * (`analysis_input_invalid`, `comparison_only_version`). The list draws the start disabled, with the
- * sentence that says why, in place of the ordinary control and of the six checks alike — and in place
- * of the АР sentence for a version classified АР, whose reason is the less basic one. The kind comes
- * from the version the page has read; until it arrives (`undefined`) the list is what it always was.
- * Runs already listed stay listed.
+ * A `comparison_pdf` has no portal companion. Ordinary section analysis now reads its native
+ * PDF text and pages; portal-specific operations remain separate.
  */
 
 import { useState } from 'react';
@@ -39,7 +34,6 @@ import type {
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import { classifyListingFailure, routes } from '@/shared/lib';
 import { RunRow, useRunList } from '@/entities/audit-run';
-import { ComparisonOnlyStart } from '@/entities/document-version';
 import { StartRunControl } from '@/features/start-run';
 
 export interface RunListProps {
@@ -51,8 +45,8 @@ export interface RunListProps {
    */
   readonly sectionCode?: ProjectSection | null | undefined;
   /**
-   * How the version reached the product, once the page has read it. `'comparison_pdf'` draws the
-   * start disabled with its reason; anything else, and `undefined`, the start as before.
+   * How the version reached the product, once the page has read it. A comparison PDF uses
+   * native-only analysis, so the start explains that portal annotations are absent.
    */
   readonly uploadKind?: VersionUploadKind | undefined;
   /** Called with the 202 reading so the screen can move to run progress. */
@@ -74,14 +68,15 @@ function VersionRunList({
   const query = useRunList(versionUid, cursor);
   const comparisonOnly = uploadKind === 'comparison_pdf';
   const isAr = sectionCode === 'AR';
-  const startControl = comparisonOnly ? (
-    <ComparisonOnlyStart />
-  ) : (
-    <StartRunControl
+  const startControl = (
+    <>
+      {comparisonOnly ? <p className="am-note">Анализ будет выполнен по исходному PDF без разметки портала.</p> : null}
+      <StartRunControl
       projectUid={projectUid}
       versionUid={versionUid}
       {...(onRunStarted === undefined ? {} : { onStarted: onRunStarted })}
-    />
+      />
+    </>
   );
 
   if (query.isPending) {

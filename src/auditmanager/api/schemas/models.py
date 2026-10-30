@@ -1135,8 +1135,9 @@ class ComparisonModules(str, enum.Enum):
 
 
 class VersionUploadKind(str, enum.Enum):
-    """How a version reached the product. ``comparison_pdf`` is a plain PDF admitted for
-    comparison only (`Q-CMP-5`): no section analysis can start on it."""
+    """How a version reached the product. ``comparison_pdf`` is a plain PDF admitted through
+    comparison without a portal bundle. Ordinary section analysis can use its native PDF text and pages;
+    portal-dependent operations still require a bundle."""
 
     PORTAL_BUNDLE = "portal_bundle"
     COMPARISON_PDF = "comparison_pdf"
