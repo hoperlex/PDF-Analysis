@@ -25,8 +25,10 @@ from typing import Any, Final
 from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.comparison.specification.reader import SpecificationReader, spec_candidates
+from auditmanager.comparison.specification.check import REASON_ANSWER, REASON_SOURCE
 from auditmanager.comparison.specification.repository import ComparisonRow, SpecificationRepository, TransitionScope
-from auditmanager.comparison.specification.transition import TransitionOutcome, TransitionRun
+from auditmanager.comparison.specification.transition import (REASON_NOT_PARSED, REASON_STORED_UNUSABLE,
+    TransitionOutcome, TransitionRun)
 from auditmanager.shared.db import session_scope
 from auditmanager.shared.errors import DomainError, ErrorCode
 
@@ -61,9 +63,15 @@ class SpecificationService:
 
     def _free_outcome(self, scope: TransitionScope) -> TransitionOutcome | None:
         """The comparison of a transition with no row whose two readings are both stored: made now, from the store, with no request
-        (``ask`` is ``None``, so nothing can be sent). ``None`` when a side is not stored or is not complete."""
+        (``ask`` is ``None``, so nothing can be sent). Known unusable source/saved-answer states are
+        diagnostics, not an empty comparison; ready text awaiting a model remains ``None``."""
         old, new = self._run.read(scope, ask=None)
         if not (old.complete and new.complete):
+            blocked = next((side for side in (old, new) if not side.complete and side.reason in
+                {REASON_NOT_PARSED, REASON_SOURCE, REASON_ANSWER, REASON_STORED_UNUSABLE}), None)
+            if blocked is not None:
+                return TransitionOutcome("incomplete", blocked.reason, None, [], old.coverage, new.coverage,
+                    old.extraction_id, new.extraction_id)
             return None
         return self._run.compare(scope, old, new)
 
@@ -158,15 +166,20 @@ class SpecificationService:
         state = self._state(row, sheets)
         free = self._free_outcome(scope) if row is None and state == "not_started" else None
         if free is not None:
-            state = "completed"
+            state = free.state
         out: dict[str, Any] = {
             "transition_id": scope.transition_id,
             "method": "sheet_ai" if state in ("not_applicable", "incomplete") else "whole",
             "state": state, "sheets_a": sheets[0], "sheets_b": sheets[1],
         }
         if free is not None:
-            out["coverage_a"], out["coverage_b"], out["totals"] = free.coverage_a, free.coverage_b, free.totals
-            out["phase"] = "done"
+            for member, value in (("coverage_a", free.coverage_a), ("coverage_b", free.coverage_b), ("totals", free.totals)):
+                if value is not None:
+                    out[member] = value
+            if free.state == "completed":
+                out["phase"] = "done"
+            if free.reason:
+                out["reason"] = free.reason
             if free.extraction_a_id:
                 out["extraction_a_id"] = free.extraction_a_id
             if free.extraction_b_id:

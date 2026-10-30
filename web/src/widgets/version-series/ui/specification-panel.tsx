@@ -17,12 +17,19 @@ import { formatSpecificationReport } from '../model/specification-report';
 import type { SpecificationReportFormat } from '../model/specification-report';
 
 const STATE: Readonly<Record<string, string>> = {
-  not_started: 'Не запускалось', not_applicable: 'Спецификаций нет', running: 'Выполняется',
+  not_started: 'Не запускалось', not_applicable: 'Полные СО не определены', running: 'Выполняется',
   queued: 'В очереди', paused: 'Приостановлено', completed: 'Готово', incomplete: 'Неполный результат',
   failed: 'Ошибка', cancelled: 'Отменено',
 };
 const KINDS: Readonly<Record<string, string>> = {
   changed: 'Изменено', added: 'Добавлено', removed: 'Удалено', unclear: 'Неясно', renumbered: 'Перенумеровано', moved: 'Перемещено',
+};
+const REASON: Readonly<Record<string, string>> = {
+  SPEC_NOT_PARSED: 'Полный читаемый источник СО не подтверждён. Дождитесь готовности профилей страниц и проверьте таблицы или сканы. Выводов об удалённых позициях нет.',
+  SPEC_SOURCE_INCOMPLETE: 'Исходный текст или структура СО неполны. Полное сравнение, добавления и удаления не подтверждены.',
+  SPEC_ANSWER_UNCONFIRMED: 'Извлечённые позиции не прошли программную сверку с источником. Подтверждённого полного результата нет.',
+  SPEC_STORED_ANSWER_UNCONFIRMED: 'Сохранённое извлечение неполно или не подтверждено. Его нельзя считать полной спецификацией.',
+  SPEC_NOT_READ: 'Полное извлечение позиций ещё не выполнено. Отсутствие готового результата не означает отсутствие изменений.',
 };
 
 function SpecificationSource({ page, side, onClose }: { readonly page: ComparisonPageRef; readonly side: string; readonly onClose: () => void }) {
@@ -67,7 +74,7 @@ function SpecificationExports({ item }: { readonly item: ComparisonSpecification
   </section>;
 }
 
-function ChangeList({ transitionId }: { readonly transitionId: ComparisonTransitionId }) {
+function ChangeList({ transitionId, complete }: { readonly transitionId: ComparisonTransitionId; readonly complete: boolean }) {
   const [cursor, setCursor] = useState<Cursor | undefined>();
   const [source, setSource] = useState<{ readonly page: ComparisonPageRef; readonly side: string } | null>(null);
   const query = useQuery({
@@ -86,7 +93,7 @@ function ChangeList({ transitionId }: { readonly transitionId: ComparisonTransit
       </li>)}</ul>}
       <details><summary>Сохранённые позиции и исходные страницы</summary>{([['A · было', change.old], ['B · стало', change.new]] as const).map(([side, position]) => <section key={side}><h6>{side}</h6>{position === undefined ? <p>Позиция этой стороны не передана.</p> : <><p>{position.pos ? `Поз. ${position.pos} · ` : ''}{position.name}</p><p>Марка: {position.mark ?? '—'} · количество: {position.quantity ?? '—'} {position.unit ?? ''}.</p>{position.ambiguous ? <p>Тип строки неоднозначен; требуется проверка исходного документа.</p> : null}{position.page === undefined ? <p>Привязка к исходной странице отсутствует.</p> : <button type="button" className="am-button am-button--quiet am-button--small" onClick={() => setSource({ page: position.page!, side })}>Открыть PDF {side}, стр. {position.page.page_number}</button>}</>}</section>)}</details>
     </li>)}</ul>
-    {query.data?.items.length === 0 ? <p>В сохранённом результате нет изменений позиций.</p> : null}
+    {query.data?.items.length === 0 ? <p>{complete ? 'В сохранённом полном сравнении изменения позиций не выявлены.' : 'Подтверждённый полный результат не получен. Пустой список не означает отсутствие изменений позиций.'}</p> : null}
     {cursor === undefined ? null : <button type="button" className="am-button am-button--quiet am-button--small" onClick={() => setCursor(undefined)}>К началу</button>}
     {nextCursor === null || nextCursor === undefined ? null : <button type="button" className="am-button am-button--quiet am-button--small" onClick={() => setCursor(nextCursor)}>Следующие позиции</button>}
   </div>;
@@ -128,7 +135,9 @@ function SpecificationRow({ item, mayAct }: { readonly item: ComparisonSpecifica
       return <p key={String(side)} className="am-note">Охват {String(side)}: блоков {value.blocks_covered}/{value.blocks_total}, строк {value.rows_total}, не разобрано {value.rows_unresolved}.</p>;
     })}
     <p className="am-note">Охват показывает сохранённые блоки и строки. Большой источник свежего плана разбирается по частям; отдельные счётчики пакетов этим API не передаются. Незавершённые блоки и строки не объявляются отсутствующими.</p>
-    {item.reason === undefined ? null : <p className="am-note">Ограничение: <code>{item.reason}</code>. Полнота результата не подтверждена.</p>}
+    {item.state === 'not_applicable' ? <p className="am-note">В текущих профилях не определены читаемые страницы полной СО. Это не подтверждает отсутствие спецификации в сканах или ещё не подготовленных страницах.</p> : null}
+    {item.reason === undefined ? null : <><p className="am-note">{REASON[item.reason] ?? 'Сохранено ограничение обработки. Полнота результата не подтверждена.'}</p><details><summary>Техническая причина</summary><code>{item.reason}</code></details></>}
+    {item.state === 'incomplete' && item.comparison_id === undefined ? <p>Новое задание не создавалось. Показана готовность сохранённых источников и извлечений; при этом чтении новых обращений к модели не выполнялось. <button type="button" className="am-button am-button--quiet am-button--small" onClick={() => { void client.invalidateQueries({ queryKey: COMPARISON_KEYS.all }); }}>Обновить готовность источников</button></p> : null}
     {item.totals === undefined ? null : <p>{Object.entries(item.totals).map(([kind, count]) => `${KINDS[kind] ?? kind}: ${count}`).join(' · ')}</p>}
     <p className="am-note">ИИ-результат не подтверждён инженером. В сравнение входят распознанные позиции; неполные стороны не объявляются отсутствующими.</p>
     {mayAct && !active && item.state !== 'not_applicable' ? <button type="button" className="am-button am-button--small" onClick={() => void readEstimate()} disabled={estimateCall.isPending}>Оценить сравнение СО</button> : null}
@@ -142,7 +151,7 @@ function SpecificationRow({ item, mayAct }: { readonly item: ComparisonSpecifica
       onConfirm={() => start.mutate()} onCancel={() => { setDialog(false); setAgreed(null); }}
       intro={<p>Отдельное задание сравнит целые спецификации этого перехода. Сохранённые совместимые ответы используются повторно.</p>} /> : null}
     {item.state === 'completed' || item.state === 'incomplete' ? <SpecificationExports item={item} /> : null}
-    {changes ? <ChangeList key={item.comparison_id ?? item.transition_id} transitionId={item.transition_id} /> : null}
+    {changes ? <ChangeList key={item.comparison_id ?? item.transition_id} transitionId={item.transition_id} complete={item.state === 'completed'} /> : null}
   </section>;
 }
 

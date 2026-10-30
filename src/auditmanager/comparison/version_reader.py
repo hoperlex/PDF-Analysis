@@ -24,8 +24,8 @@ from auditmanager.shared.identity import (
 
 
 _SHA256: Final[re.Pattern[str]] = re.compile(r"[0-9a-f]{64}\Z")
-# W55B-SEAL-01 and migration 0021 admit 1..500 pages per published version.
-MAX_VERSION_PAGES: Final[int] = 500
+# Owner migration0044 removes the former500-page quota; this is the DB integer representation.
+MAX_VERSION_PAGES: Final[int] = 2**31 - 1
 _VERSIONS = text("""
     SELECT v.version_uid, v.document_uid AS version_document_uid,
            d.document_uid AS set_document_uid, d.project_uid,
