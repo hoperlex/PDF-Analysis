@@ -1503,6 +1503,13 @@ input[type='file']::file-selector-button:hover {
   box-shadow: var(--am-shadow-2);
 }
 
+.am-page__body--canvas {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 /* ---- the five mandatory states --------------------------------------------------- */
 
 .am-state {

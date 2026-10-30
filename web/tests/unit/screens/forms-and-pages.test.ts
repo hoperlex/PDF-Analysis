@@ -93,10 +93,10 @@ describe('the start-run control', () => {
   const control = () =>
     renderWith(newClient(), createElement(StartRunControl, { projectUid: PROJECT_UID, versionUid: VERSION_UID }));
 
-  it('offers one button and no provider-mode selector', () => {
+  it('offers cost estimate and run actions, with no provider-mode selector', () => {
     const markup = control();
     expect(markup).toContain('>Запустить прогон</button>');
-    expect(markup.match(/<button\b/g)).toHaveLength(1);
+    expect(markup.match(/<button\b/g)).toHaveLength(2);
     // `EXEC-PAR-WEB-01`: the executor's select. `ANALYSIS-PRESETS-01`: and the preset's, which fills it.
     // Neither names a provider mode, and nothing else on the control is a choice.
     expect(markup.match(/<select\b/g)).toHaveLength(2);
@@ -181,7 +181,7 @@ describe('the application frame', () => {
     expect(markup).toContain('AuditManager');
     // `W50-SHELL-FRAME`: the brand goes to the registry's `/` (it went to `/projects` before
     // the home page existed); a guest's only other link is the way in.
-    expect(markup).toContain('<a class="am-app__brand" href="/">AuditManager</a>');
+    expect(markup).toMatch(/<a class="am-app__brand"[^>]*href="\/"[^>]*>.*AuditManager<\/span><\/a>/);
     expect(markup).toContain('the screen');
     // `PC-01` was asserted here until 2026-09-22. It is the programme's own checkpoint
     // code: it told a reviewer nothing and named the thing `R-18` says the alpha must

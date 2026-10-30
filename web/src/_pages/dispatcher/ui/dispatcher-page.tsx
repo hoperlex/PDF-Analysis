@@ -39,7 +39,7 @@ function AdministratorTools({ roles, viewerUid }: { readonly roles: readonly Rol
   const users = useUsers({ includeArchived: false, limit: USER_PAGE_LIMIT });
   const experts = users.isSuccess ? expertOptions(users.data.items) : [];
   return (
-    <>
+    <div className={styles.layout}>
       <section className={`am-section ${styles.panel}`} data-dispatcher-create="">
         <h2>Назначить работу</h2>
         {users.isError ? (
@@ -53,7 +53,7 @@ function AdministratorTools({ roles, viewerUid }: { readonly roles: readonly Rol
         <h2>Назначения</h2>
         <AssignmentBoard roles={roles} viewerUid={viewerUid} experts={experts} />
       </section>
-    </>
+    </div>
   );
 }
 
@@ -71,7 +71,7 @@ export function DispatcherPage({ roles }: DispatcherPageProps) {
             : 'Работа, назначенная вам: возьмите её в работу, отметьте выполненной или верните с причиной.'}
         </p>
       </header>
-      <div className="am-page__body">
+      <div className="am-page__body am-page__body--canvas">
         {admin ? (
           <AdministratorTools roles={roles} viewerUid={viewerUid} />
         ) : (

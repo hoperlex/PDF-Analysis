@@ -120,6 +120,7 @@ export function KnowledgeBasePage() {
   return (
     <PageShell
       title="База знаний"
+      surface="canvas"
       subtitle="Все решения проверяющего по находкам, новые сверху. Это проекция над журналом решений: ничего не хранится отдельно и всё пересчитывается из событий."
     >
       <div className={`am-kb__filters ${styles.filters}`} role="group" aria-label="Отбор решений">

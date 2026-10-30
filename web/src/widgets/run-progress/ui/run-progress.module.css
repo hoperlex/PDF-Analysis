@@ -19,26 +19,45 @@
   min-width: 0;
 }
 
-.progress > dl {
+.overviewGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  min-width: 0;
+  margin-bottom: var(--am-gap-lg);
+}
+
+.factsPanel,
+.resultPanel {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-lg);
+  background: var(--am-paper);
+  box-shadow: var(--am-shadow-1);
+}
+
+.resultPanel > h2 {
+  margin-top: 0;
+}
+
+.factsPanel > dl {
   display: grid;
   grid-template-columns: minmax(110px, 0.42fr) minmax(0, 1fr);
   gap: var(--am-gap-sm) var(--am-gap);
   min-width: 0;
   margin: var(--am-gap) 0 var(--am-gap-lg);
-  padding: var(--am-gap-lg);
-  border: 1px solid var(--am-line);
-  border-radius: var(--am-radius-lg);
-  background: var(--am-surface);
+  padding: 0;
 }
 
-.progress > dl dt,
-.progress > dl dd {
+.factsPanel > dl dt,
+.factsPanel > dl dd {
   min-width: 0;
   margin: 0;
   overflow-wrap: anywhere;
 }
 
-.progress > dl dt {
+.factsPanel > dl dt {
   color: var(--am-ink-muted);
 }
 
@@ -47,13 +66,24 @@
 }
 
 @media (max-width: 780px) {
-  .progress > dl {
-    grid-template-columns: minmax(0, 1fr);
+  .factsPanel,
+  .resultPanel {
     padding: var(--am-gap);
   }
 
-  .progress > dl dt {
+  .factsPanel > dl {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .factsPanel > dl dt {
     margin-top: var(--am-gap-sm);
+  }
+}
+
+@media (min-width: 1280px) {
+  .overviewGrid {
+    grid-template-columns: minmax(300px, 0.8fr) minmax(0, 1.6fr);
+    align-items: start;
   }
 }
 

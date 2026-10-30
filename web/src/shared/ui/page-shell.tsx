@@ -10,10 +10,12 @@ export interface PageShellProps {
   readonly subtitle?: ReactNode | undefined;
   /** Primary actions for this screen, rendered opposite the title. */
   readonly actions?: ReactNode | undefined;
+  /** Opt-in free canvas for screens whose own sections already have card surfaces. */
+  readonly surface?: 'card' | 'canvas' | undefined;
   readonly children: ReactNode;
 }
 
-export function PageShell({ title, subtitle, actions, children }: PageShellProps) {
+export function PageShell({ title, subtitle, actions, surface = 'card', children }: PageShellProps) {
   return (
     <section className="am-page">
       <header className="am-page__header">
@@ -23,7 +25,7 @@ export function PageShell({ title, subtitle, actions, children }: PageShellProps
         </div>
         {actions !== undefined ? <div className="am-page__actions">{actions}</div> : null}
       </header>
-      <div className="am-page__body">{children}</div>
+      <div className={surface === 'canvas' ? 'am-page__body am-page__body--canvas' : 'am-page__body'}>{children}</div>
     </section>
   );
 }

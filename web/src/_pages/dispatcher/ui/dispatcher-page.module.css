@@ -1,12 +1,18 @@
 .hero {
   flex-direction: column;
   gap: var(--am-gap-sm);
-  padding: var(--am-gap-lg);
+  padding: 18px;
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius-lg);
   background: radial-gradient(circle at 95% 0%, var(--am-accent-light), transparent 44%),
     var(--am-paper);
   box-shadow: var(--am-shadow-1);
+}
+
+.layout {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
 }
 
 .hero > p {
@@ -15,11 +21,12 @@
 
 .panel {
   min-width: 0;
-  margin-top: var(--am-gap-lg);
-  padding: var(--am-gap-lg);
+  margin-top: 0;
+  padding: 18px;
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius-lg);
-  background: var(--am-surface);
+  background: var(--am-paper);
+  box-shadow: var(--am-shadow-1);
 }
 
 .panel:first-child {
@@ -28,6 +35,18 @@
 
 .panel > h2:first-child {
   margin-top: 0;
+}
+
+@media (min-width: 1400px) {
+  .layout {
+    grid-template-columns: minmax(300px, 0.7fr) minmax(0, 1.6fr);
+    align-items: start;
+  }
+
+  .layout > :first-child {
+    position: sticky;
+    top: 76px;
+  }
 }
 
 @media (max-width: 780px) {
