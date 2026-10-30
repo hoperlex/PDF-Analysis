@@ -49,6 +49,7 @@ class FrozenRoute:
     #: `EXEC-PAR-START-01`. Set (to the connection's id) exactly when the freezer was asked for a
     #: named connection; ``None`` when the route chose. The caller journals the choice from it.
     chosen_connection_id: str | None = None
+    billing: str = "metered"
 
 
 @dataclass(frozen=True, slots=True)
