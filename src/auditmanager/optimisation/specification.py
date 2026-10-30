@@ -105,8 +105,8 @@ FORM7_COLUMNS: Final[tuple[str, ...]] = (
     "position", "name", "type_mark", "code", "manufacturer", "unit", "quantity", "mass", "note",
 )
 
-#: The canonical units. ``п.м`` (running metre) is kept apart from ``м``: a price per metre
-#: is not silently a price per running metre.
+#: Source canonical units retain ``п.м`` for fidelity. Pricing unit_key equates it with ``м``
+#: at factor1 under the owner’s2026-10-30 decision; source quantities stay unchanged.
 UNITS: Final[tuple[str, ...]] = ("шт", "м", "м2", "м3", "кг", "т", "компл", "п.м")
 
 #: Bounds. A version with more rows than this is reported too large, never cut.

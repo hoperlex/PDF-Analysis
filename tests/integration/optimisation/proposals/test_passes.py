@@ -104,7 +104,7 @@ def test_a_pass_pins_its_inputs_and_stores_cheaper_analogs(unit, factory, cast, 
     assert record.text_layer_sha256 == LAYER_SHA256
     assert record.vendor_list_source == "global"
     assert (record.extraction_algorithm, record.match_algorithm, record.generator_version) == (
-        "specification-text-v1", "price-match-v1", GENERATOR_VERSION,
+        "specification-text-v1", "price-match-v2", GENERATOR_VERSION,
     )
     # Six rows; the profile is unit-mismatched and the foam ambiguous, so four are matched.
     assert (record.specification_row_count, record.matched_row_count) == (6, 4)

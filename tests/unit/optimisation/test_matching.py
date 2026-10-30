@@ -195,9 +195,9 @@ def test_the_name_followed_by_mark_code_and_vendor_in_form7_order_matches() -> N
 # -- units, ties, quantities -------------------------------------------------------------
 
 
-def test_a_unit_mismatch_is_unmatched_and_adds_nothing() -> None:
+def test_area_and_length_mismatch_is_unmatched_and_adds_nothing() -> None:
     profile = _position(1, "Профиль направляющий ПН 50х40", "м", "95")
-    match, outcome = _one(_row("Профиль направляющий ПН 50х40", unit="п.м", quantity="120"), profile)
+    match, outcome = _one(_row("Профиль направляющий ПН 50х40", unit="м2", quantity="120"), profile)
     assert (match.status, match.reason, match.position, match.amount, match.excluded_reason) == (
         STATUS_UNMATCHED, "unit_mismatch", None, None, "unit_mismatch",
     )
@@ -267,7 +267,7 @@ def test_totals_are_per_currency_and_state_every_excluded_row() -> None:
         _row("Дверь ДПМ-01/60 EI60", quantity="4", line=1),
         _row("Окно ПВХ ОП В2 1460х1460", quantity="12", line=2),
         _row("Анкер химический HIT-HY", quantity="200", line=3),
-        _row("Профиль ПН 50х40", unit="п.м", quantity="120", line=4),
+        _row("Профиль ПН 50х40", unit="м2", quantity="120", line=4),
         _row("Пена монтажная", quantity="3", line=5),
         _row("Кирпич", quantity="1 250", issue="ambiguous", line=6),
         _row("Не из прайса", quantity="1", line=7),
@@ -332,7 +332,7 @@ def test_extracted_rows_are_matched_end_to_end() -> None:
 @pytest.mark.parametrize(
     ("left", "right", "equal"),
     [
-        ("м²", "м2", True), ("кв. м", "м2", True), ("шт.", "шт", True), ("п.м.", "м", False),
+        ("м²", "м2", True), ("кв. м", "м2", True), ("шт.", "шт", True), ("п.м.", "м", True),
         ("упак.", "Упак", True), ("рулон", "м2", False), ("", None, True),
     ],
 )
@@ -352,7 +352,26 @@ def test_the_amount_guard_itself_refuses_another_unit_or_no_quantity() -> None:
 
     per_metre = _position(1, "Профиль", "м", "95")
     assert matching._contributes(_row("Профиль", unit="м", quantity="2"), per_metre) is True
-    assert matching._contributes(_row("Профиль", unit="п.м", quantity="2"), per_metre) is False
+    assert matching._contributes(_row("Профиль", unit="п.м", quantity="2"), per_metre) is True
+    assert matching._contributes(_row("Профиль", unit="м2", quantity="2"), per_metre) is False
     assert matching._contributes(_row("Профиль", unit="м", quantity=None), per_metre) is False
     assert matching._contributes(_row("Профиль", unit=None, quantity="2"), per_metre) is False
     assert matching._contributes(_row("Профиль", unit="м", quantity="2"), None) is False
+
+
+@pytest.mark.parametrize('source_unit,price_unit', [('п.м', 'м'), ('м', 'п.м'), ('пог. м', 'м'), ('м.п.', 'м')])
+def test_running_metres_match_at_exact_factor_one(source_unit, price_unit) -> None:
+    position = _position(1, 'Кабель ВВГ 3х2.5', price_unit, '95.125')
+    row = _row('Кабель ВВГ 3х2.5', unit=source_unit, quantity='120.5')
+    match, outcome = _one(row, position)
+    assert match.status == STATUS_MATCHED
+    assert match.amount == Decimal('11462.5625')
+    assert outcome.totals[0].amount == match.amount
+    assert row.unit == source_unit and position.unit == price_unit
+
+
+def test_equivalent_metres_still_require_one_unambiguous_position() -> None:
+    row = _row('Кабель ВВГ 3х2.5', unit='п.м', quantity='2')
+    result = match_specification([row], [_position(1, 'Кабель ВВГ 3х2.5', 'м', '10'), _position(2, 'Кабель ВВГ 3х2.5', 'п.м', '9')])
+    assert result.matches[0].status == STATUS_AMBIGUOUS
+    assert result.matches[0].amount is None and result.totals == ()

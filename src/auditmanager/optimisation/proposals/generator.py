@@ -1,4 +1,4 @@
-"""The deterministic generator of «более дешёвый аналог» proposals (``cheaper-analog-v1``).
+"""The deterministic generator of «более дешёвый аналог» proposals (``cheaper-analog-v2``).
 
 Pure: rows already matched by :func:`~auditmanager.optimisation.matching.match_specification`,
 the positions of the **same** price-list revision and the vendors of the effective vendor
@@ -11,7 +11,7 @@ when all of the following hold:
 
 1. it is another position than the matched one;
 2. its unit is the matched position's unit under the matcher's :func:`unit_key` (so also the
-   row's unit) -- ``п.м`` and ``м`` stay different units;
+   row's unit) -- ``п.м`` and ``м`` share the owner-approved factor1 pricing identity;
 3. its currency is the matched position's currency -- nothing is converted;
 4. its unit price is strictly lower than the matched position's;
 5. its vendor is on the effective vendor list of the version's section (:func:`vendor_key`:
@@ -100,7 +100,7 @@ __all__ = [
     "vendor_key",
 ]
 
-GENERATOR_VERSION: Final[str] = "cheaper-analog-v1"
+GENERATOR_VERSION: Final[str] = "cheaper-analog-v2"
 
 PROPOSAL_TYPE_CHEAPER_ANALOG: Final[str] = "cheaper_analog"
 #: The legacy vocabulary also names ``faster_install``, ``simpler_design`` and ``lifecycle``;
