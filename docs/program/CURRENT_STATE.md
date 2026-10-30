@@ -1,5 +1,15 @@
 # Current state
 
+**Updated 2026-10-30 by `DESIGN-M10-ACCEPTANCE` (lightweight development
+candidate).** The M01–M09 rollout covers all 31 registered routes in both
+themes; the redirect-only optimisation route is included. Registry/set, theme,
+defined-token, style-layer and avatar checks passed (68 tests); typecheck,
+lint and 89 CSS modules also passed. Browser screenshots at 390/768/1440 px
+and the full contrast census remain unverified in this environment. The exact
+coverage and limits are recorded in `docs/program/reviews/DESIGN-M10-ACCEPTANCE.md`.
+No API, contract, migration or `origin/main` change is included. Publication
+is to `origin/dev` only.
+
 **Updated 2026-10-30 by `DESIGN-M09-ACCOUNT` (development candidate only).**
 Profile, password change, user list, user detail and registration queue now
 use responsive two-theme cards and contained tables. Existing forms, role
