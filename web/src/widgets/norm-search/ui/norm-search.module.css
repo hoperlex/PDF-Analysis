@@ -14,9 +14,10 @@
 .hit {
   min-width: 0;
   max-width: 100%;
-  padding: 1rem;
+  padding: var(--am-gap);
   border: 1px solid var(--am-line-strong);
-  border-radius: 0.5rem;
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
   overflow-wrap: anywhere;
 }
 
@@ -40,6 +41,10 @@
   flex-wrap: wrap;
   gap: 0.75rem;
   align-items: end;
+  padding: var(--am-gap);
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
 }
 
 .search input {

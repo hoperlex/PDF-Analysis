@@ -1,0 +1,23 @@
+.panel {
+  min-width: 0;
+  margin-top: var(--am-gap-lg);
+  padding: var(--am-gap-lg);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-lg);
+  background: var(--am-surface);
+  overflow-wrap: anywhere;
+}
+
+.panel:first-child {
+  margin-top: 0;
+}
+
+.panel > h2:first-child {
+  margin-top: 0;
+}
+
+@media (max-width: 780px) {
+  .panel {
+    padding: var(--am-gap);
+  }
+}

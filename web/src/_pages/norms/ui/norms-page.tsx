@@ -33,6 +33,7 @@ import { NormCatalogueForm, NormCatalogueTable, NormViews } from '@/widgets/norm
 import { NoCurrentSnapshot, NormSearchForm, NormSearchResults } from '@/widgets/norm-search';
 import { NormSnapshotHistory, NormSnapshotList } from '@/widgets/norm-snapshots';
 import { ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
+import styles from './norms-page.module.css';
 
 export interface NormsPageProps {
   /** The signed-in session's roles, as the route guard read them. */
@@ -264,7 +265,7 @@ export function NormsPage({ roles, query = null, catalogue = null }: NormsPagePr
       subtitle="Поиск по тексту нормативных документов текущего снимка: по обозначению, номеру пункта и словам."
       actions={<button className="am-button am-button--quiet" type="button" onClick={() => void snapshots.refetch()}>Обновить</button>}
     >
-      <section aria-label="Текущий снимок норм">
+      <section className={styles.panel} aria-label="Текущий снимок норм">
         {snapshots.isPending ? <LoadingState what="снимки норм" /> : null}
         {readFailure !== null ? (
           <div data-norms-snapshots-failure={readFailure.kind}>
@@ -281,12 +282,12 @@ export function NormsPage({ roles, query = null, catalogue = null }: NormsPagePr
 
       <NormViews active={catalogue === null ? 'search' : 'catalogue'} />
       {catalogue === null ? (
-        <>
+        <section className={styles.panel} aria-label="Поиск по нормам">
           <NormSearchForm query={query} disabled={searchRefused} />
           {query !== null && !searchRefused ? <SearchSection key={query} query={query} /> : null}
-        </>
+        </section>
       ) : (
-        <section aria-label="Каталог документов текущего снимка" data-norms-catalogue>
+        <section className={styles.panel} aria-label="Каталог документов текущего снимка" data-norms-catalogue>
           {searchRefused ? <NoCurrentSnapshot /> : (
             <CatalogueSection key={`${catalogue.q ?? ''}\u0000${catalogue.kind ?? ''}`} filter={catalogue} />
           )}
@@ -294,7 +295,7 @@ export function NormsPage({ roles, query = null, catalogue = null }: NormsPagePr
       )}
 
       {administrator ? (
-        <section aria-label="Снимки нормативной базы" data-norms-administration>
+        <section className={styles.panel} aria-label="Снимки нормативной базы" data-norms-administration>
           <h2>Снимки нормативной базы</h2>
           {snapshots.data !== undefined && reading !== null ? (
             <NormSnapshotList

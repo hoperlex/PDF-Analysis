@@ -1,5 +1,13 @@
 # Current state
 
+**Updated 2026-10-30 by `DESIGN-M06-KNOWLEDGE` (development candidate only).**
+Knowledge base filters/results, block version selection/tabs, norms search and
+catalogue, and the norm document now use consistent responsive panels in both
+themes. Existing search, snapshot designation, PDF and paragraph reads remain
+unchanged. Typecheck, lint and 85 focused tests pass. No API, contract,
+migration or `origin/main` change is included. Publication is to `origin/dev`
+only; M07–M10 remain.
+
 **Updated 2026-10-30 by `DESIGN-M05-COMPARISON` (development candidate only).**
 The global version and stage comparison routes and version-specific comparison
 now have consistent project selectors, tabs, panels and scrollable evidence

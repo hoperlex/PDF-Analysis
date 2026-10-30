@@ -31,6 +31,7 @@ import { PageShell } from '@/shared/ui';
 import { CATEGORY_LABELS, useDecisionJournal } from '@/entities/expert-decision';
 
 import { LazyKnowledgeBase } from './lazy-knowledge-base';
+import styles from './knowledge-base-page.module.css';
 
 /** `Все` is the absence of the parameter, never a value sent to the server. */
 type CategoryChoice = FindingCategory | 'all';
@@ -121,7 +122,7 @@ export function KnowledgeBasePage() {
       title="База знаний"
       subtitle="Все решения проверяющего по находкам, новые сверху. Это проекция над журналом решений: ничего не хранится отдельно и всё пересчитывается из событий."
     >
-      <div className="am-kb__filters" role="group" aria-label="Отбор решений">
+      <div className={`am-kb__filters ${styles.filters}`} role="group" aria-label="Отбор решений">
         <label className="am-kb__filter">
           <span>Категория</span>
           <select
@@ -149,15 +150,17 @@ export function KnowledgeBasePage() {
           </select>
         </label>
       </div>
-      <LazyKnowledgeBase
-        records={journal.data?.items ?? []}
-        isLoading={journal.isPending}
-        error={
-          journal.error === null
-            ? null
-            : journalFailure(journal.error, () => void journal.refetch())
-        }
-      />
+      <div className={styles.results}>
+        <LazyKnowledgeBase
+          records={journal.data?.items ?? []}
+          isLoading={journal.isPending}
+          error={
+            journal.error === null
+              ? null
+              : journalFailure(journal.error, () => void journal.refetch())
+          }
+        />
+      </div>
     </PageShell>
   );
 }
