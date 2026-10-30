@@ -42,8 +42,6 @@ export interface NavigationGroup {
 
 /** What the bar offers one session. Plain data, so the server can hand it to a client island. */
 export interface Navigation {
-  /** `Главная`, when the session may open it. */
-  readonly home: NavigationItem | null;
   readonly groups: readonly NavigationGroup[];
 }
 
@@ -62,8 +60,9 @@ function itemOf(screen: ScreenEntry): NavigationItem {
 
 /**
  * The menu for `subject` (or a guest, `null`): the registry's `inMenu` rows whose
- * {@link screenDecision} is `open`, `Главная` on its own and the rest grouped in
+ * {@link screenDecision} is `open`, grouped in
  * {@link MENU_GROUPS} order, each group's rows in registry order.
+ * The home screen stays reachable through the brand link in `AppFrame`.
  *
  * A guest, a session on its default credential and one with an incomplete profile open no
  * `session` row, so they get an empty menu — the account menu is how the latter two leave
@@ -74,13 +73,12 @@ export function buildNavigation(
   registry: readonly ScreenEntry[] = SCREEN_REGISTRY,
 ): Navigation {
   const open = registry.filter((screen) => screen.inMenu && screenDecision(screen, subject) === 'open');
-  const home = open.find((screen) => screen.group === 'home');
   const groups: NavigationGroup[] = [];
   for (const group of MENU_GROUPS) {
     const [first, ...rest] = open.filter((screen) => screen.group === group).map(itemOf);
     if (first !== undefined) groups.push({ group, label: MENU_GROUP_LABELS[group], items: [first, ...rest] });
   }
-  return { home: home === undefined ? null : itemOf(home), groups };
+  return { groups };
 }
 
 /** The screen being shown, as the menu marks it: its registry address and its group. */

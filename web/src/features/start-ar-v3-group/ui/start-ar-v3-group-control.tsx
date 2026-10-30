@@ -46,6 +46,8 @@ export interface StartArV3GroupViewProps {
   readonly pending: boolean;
   readonly failure: ArV3GroupStartFailure | null;
   readonly onSend: () => void;
+  readonly relaxedLimits?: boolean | undefined;
+  readonly onRelaxedLimitsChange?: ((value: boolean) => void) | undefined;
 }
 
 export function StartArV3GroupView({
@@ -54,9 +56,25 @@ export function StartArV3GroupView({
   pending,
   failure,
   onSend,
+  relaxedLimits = false,
+  onRelaxedLimitsChange,
 }: StartArV3GroupViewProps) {
   return (
     <div className={styles.control} data-ar-v3-group-start>
+      <label className={styles.limitToggle}>
+        <input
+          type="checkbox"
+          checked={relaxedLimits}
+          disabled={pending || onRelaxedLimitsChange === undefined}
+          onChange={(event) => onRelaxedLimitsChange?.(event.currentTarget.checked)}
+        />
+        Повышенные лимиты ИИ-анализа
+      </label>
+      <p className="am-note">
+        {relaxedLimits
+          ? 'Бюджет стоимости отключён; ответ до 64 000 токенов. Провайдер может установить меньший предел.'
+          : 'Стандартный бюджет стоимости; ответ до 16 000 токенов.'}
+      </p>
       <button type="button" className="am-button" onClick={onSend} disabled={pending}>
         Запустить шесть проверок АР v3
       </button>
@@ -131,7 +149,7 @@ export function StartArV3GroupControl({
 
   const send = () => {
     mutation.mutate(
-      { versionUid, idempotencyKey: intent.idempotencyKey },
+      { versionUid, idempotencyKey: intent.idempotencyKey, relaxedLimits: intent.relaxedLimits },
       {
         onSuccess: (group) => {
           if (looksLikeArV3GroupId(group?.group_id)) onStarted?.(group);
@@ -155,6 +173,8 @@ export function StartArV3GroupControl({
       pending={mutation.isPending || intent.inFlight}
       failure={failure}
       onSend={send}
+      relaxedLimits={intent.relaxedLimits}
+      onRelaxedLimitsChange={intent.setRelaxedLimits}
     />
   );
 }

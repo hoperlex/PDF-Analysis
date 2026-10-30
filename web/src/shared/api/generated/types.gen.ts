@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.10.0 (OpenAPI 3.1.0)
- *   sha256 7c4c95a4aef812e1ff8ec8445a46cbc4b83a655a88ca15ff888f0dbde5b98238
+ *   AuditManager PC-01 API 1.11.0 (OpenAPI 3.1.0)
+ *   sha256 0bf208947911dbf639345bf6090716ecd88e19d4c2b87199eb084d77110829a4
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.10.0';
+export const CONTRACT_VERSION = '1.11.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '7c4c95a4aef812e1ff8ec8445a46cbc4b83a655a88ca15ff888f0dbde5b98238';
+export const CONTRACT_DIGEST = '0bf208947911dbf639345bf6090716ecd88e19d4c2b87199eb084d77110829a4';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -2415,7 +2415,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The single externally visible failure shape, mirroring urn:auditmanager:domain:error-envelope:v1. `retryable` is pinned to the catalog value for the reported code; a caller never infers it from the HTTP status or the message. */
 export type ErrorEnvelope = {
-  contract_version: "1.10.0";
+  contract_version: "1.11.0";
   correlation_id: CorrelationId;
   /** Safe scalar classifiers only, restricted to the safe_detail_keys the catalog declares for the reported code. The catalog's forbidden key set is rejected. */
   details?: {
@@ -4700,6 +4700,8 @@ export const STAGE_STATUS_VALUES = [
 export type StageStatus = (typeof STAGE_STATUS_VALUES)[number];
 
 export type StartArV3BetaGroupRequest = {
+  /** Temporary AR v3 option. Absent or false keeps the deployment cost ceiling and a 16,000-token output request. True omits the per-Run cost halt and requests up to 64,000 output tokens; the provider may enforce a lower maximum. The choice is part of the idempotency payload and persists for all six Runs. */
+  relaxed_limits?: boolean;
   version_uid: VersionUid;
 };
 

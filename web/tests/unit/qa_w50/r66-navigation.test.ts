@@ -127,16 +127,15 @@ function readMenu(html: string): { readonly groups: string[]; readonly links: [s
   return { groups, links };
 }
 
-const RULED_LINKS: [string, string][] = [['/', 'Главная'], ...RULING.flatMap((g) => g.items.map(([a, l]) => [a, l] as [string, string]))];
+const RULED_LINKS: [string, string][] = RULING.flatMap((g) => g.items.map(([a, l]) => [a, l] as [string, string]));
 
 // --------------------------------------------------------------------------------- the menu
 
 describe('R-66: the menu’s groups and items equal the ruling’s, in order', () => {
   it('as data: non-admin sessions see exactly the R-66 groups and their order', () => {
-    // `R-80`: an empty role set is not among them — it sees Главная alone (below).
+    // `R-80`: an empty role set has no product navigation; the brand still links home.
     for (const roles of [['expert']] as const) {
       const navigation = buildNavigation({ roles, isDefaultCredential: false, profileComplete: true });
-      expect(navigation.home, `roles [${roles.join(',')}]`).toEqual({ address: '/', label: 'Главная' });
       expect(
         navigation.groups.map((group) => ({
           group: group.label,
@@ -387,10 +386,10 @@ describe('the frame’s menu per kind of visitor', () => {
     }
   });
 
-  it('R-80: a complete profile with an empty role set: Главная alone, and the account menu', () => {
+  it('R-80: a complete profile with an empty role set: brand and account menu, no duplicate home link', () => {
     const markup = renderFrame(frameSession({ roles: [] }));
-    expect(readMenu(region(markup, 'data-nav-state="row"')).links).toEqual([['/', 'Главная']]);
-    expect(readMenu(region(markup, 'data-nav-state="row"')).groups).toEqual([]);
+    expect(markup).not.toContain('aria-label="Разделы"');
+    expect(markup).toMatch(/<a[^>]*href="\/"[^>]*>AuditManager<\/a>/);
     expect(markup).toContain('aria-haspopup="menu"');
     expect(markup).toContain('Роли не назначены.');
   });

@@ -874,7 +874,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.10.0"]
+    contract_version: Literal["1.11.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1215,6 +1215,8 @@ class StartRunRequest(_Object):
 
 class StartArV3BetaGroupRequest(_Object):
     version_uid: VersionUid
+    # Optional temporary per-group override. Absent and false keep the existing limits.
+    relaxed_limits: bool = Field(default=None, strict=True, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class ArV3BetaGroupMember(_Object):

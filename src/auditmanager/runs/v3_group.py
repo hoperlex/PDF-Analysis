@@ -169,12 +169,16 @@ def _validate_pack(pack: TrustedPack) -> object:
     return profile
 
 
-def _fingerprint(version_uid: str, provider_mode: str, pack_sha256: str):
-    return payload_fingerprint({
+def _fingerprint(version_uid: str, provider_mode: str, pack_sha256: str, relaxed_limits: bool = False):
+    payload = {
         "version_uid": version_uid,
         "provider_mode": provider_mode,
         "pack_sha256": pack_sha256,
-    })
+    }
+    # Preserve the fingerprint of groups accepted before this temporary option existed.
+    if relaxed_limits:
+        payload["relaxed_limits"] = True
+    return payload_fingerprint(payload)
 
 
 def get_ar_v3_group(session: Session, group_id: str) -> GroupView:
@@ -213,7 +217,10 @@ def start_ar_v3_group(
     pack: TrustedPack | None,
     input_budget_characters: int | None,
     connection_route: RouteFreezer | None = None,
+    relaxed_limits: bool = False,
 ) -> StartedGroup:
+    if type(relaxed_limits) is not bool:
+        raise ValueError("relaxed_limits must be a boolean")
     version_id = str(VersionUid.parse(version_uid))
     key = IdempotencyKey(idempotency_key)
     commands = CommandRepository()
@@ -226,7 +233,7 @@ def start_ar_v3_group(
         previous = get_ar_v3_group(session, previous_id)
         claimed = commands.begin(
             session, command_type=COMMAND_TYPE, idempotency_key=key,
-            fingerprint=_fingerprint(version_id, provider_mode, previous.pack_sha256),
+            fingerprint=_fingerprint(version_id, provider_mode, previous.pack_sha256, relaxed_limits),
         )
         assert isinstance(claimed, CommandReplay)
         return StartedGroup(previous, True)
@@ -236,7 +243,7 @@ def start_ar_v3_group(
     pack_digest = pack.sha256
     claimed = commands.begin(
         session, command_type=COMMAND_TYPE, idempotency_key=key,
-        fingerprint=_fingerprint(version_id, provider_mode, pack_digest),
+        fingerprint=_fingerprint(version_id, provider_mode, pack_digest, relaxed_limits),
     ) if known is not None else None
     if isinstance(claimed, CommandReplay):
         previous_id = claimed.outcome.get("group_id")
@@ -260,7 +267,11 @@ def start_ar_v3_group(
     budget = _checked_budget(
         input_budget_characters if frozen_route is None else frozen_route.input_budget_characters
     )
-    _refuse_over_budget(version.text_character_count, budget)
+    # This preflight is derived from the dollar ceiling, so the temporary mode
+    # disables it together with the worker's dollar halt. Provider context limits
+    # remain provider refusals; they are never silently truncated here.
+    if not relaxed_limits:
+        _refuse_over_budget(version.text_character_count, budget)
     current = current_snapshot(session)
     if current is None or current.norms_snapshot_id != profile.snapshot_id:
         raise _unavailable("norms_snapshot")
@@ -286,7 +297,7 @@ def start_ar_v3_group(
     # Claim only after every mutable environmental precondition has passed.
     claimed = commands.begin(
         session, command_type=COMMAND_TYPE, idempotency_key=key,
-        fingerprint=_fingerprint(version_id, provider_mode, pack_digest),
+        fingerprint=_fingerprint(version_id, provider_mode, pack_digest, relaxed_limits),
     )
     if isinstance(claimed, CommandReplay):
         previous_id = claimed.outcome.get("group_id")
@@ -342,5 +353,8 @@ def start_ar_v3_group(
             "run_id": run_id, "map_sha256": scope.identity.map_sha256,
             "set_id": ref.set_id, "digest": digest,
         })
-    commands.succeed(session, claimed.command_id, {"group_id": group_id})
+    commands.succeed(session, claimed.command_id, {
+        "group_id": group_id,
+        "relaxed_limits": relaxed_limits,
+    })
     return StartedGroup(get_ar_v3_group(session, group_id), False)

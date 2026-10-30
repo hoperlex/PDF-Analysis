@@ -179,7 +179,7 @@ describe('the tile loader', () => {
 });
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
-  const envelope: ErrorEnvelope = { contract_version: '1.10.0', error_code: code, message: 'Одна фраза.', correlation_id: 'c-1', retryable };
+  const envelope: ErrorEnvelope = { contract_version: '1.11.0', error_code: code, message: 'Одна фраза.', correlation_id: 'c-1', retryable };
   return new ApiError(status, envelope, 'c-1');
 }
 

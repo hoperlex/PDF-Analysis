@@ -64,14 +64,16 @@ blob_store = object()
 
 
 def _arrange(monkeypatch, *, completed=False, citation=False,
-             prior_cost=None, cost_micros=4200, cost_basis="measured"):
+             prior_cost=None, cost_micros=4200, cost_basis="measured", relaxed_limits=False):
     order = []
     jobs = Jobs(completed=completed, cost_micros=cost_micros,
                 cost_basis=cost_basis)
     runs = Runs(citation=citation, prior_cost=prior_cost)
 
     def dispatch(*args, **kwargs):
-        assert kwargs["settings"] == v3_worker.V3_BETA_SETTINGS
+        assert kwargs["settings"] == (
+            v3_worker.V3_RELAXED_SETTINGS if relaxed_limits else v3_worker.V3_BETA_SETTINGS
+        )
         assert kwargs["max_text_bytes"] == v3_worker.MAX_V3_SAVED_TEXT_BYTES
         order.append("dispatch")
         jobs.completed = True
@@ -92,6 +94,7 @@ def _arrange(monkeypatch, *, completed=False, citation=False,
     monkeypatch.setattr(v3_worker, "dispatch_v3_provider_call", dispatch)
     monkeypatch.setattr(v3_worker, "run_v3_cite_stage", cite)
     monkeypatch.setattr(v3_worker, "finish_v3_review_run", finish)
+    monkeypatch.setattr(v3_worker, "_relaxed_limits_for_run", lambda *_: relaxed_limits)
     return jobs, runs, order
 
 
@@ -175,6 +178,26 @@ def test_over_ceiling_completed_call_never_reaches_review_or_terminal(
         _run(jobs, runs)
     assert caught.value.code is ErrorCode.COST_BUDGET_EXCEEDED
     assert order == (["dispatch"] if not completed else [])
+
+
+def test_relaxed_group_keeps_the_spend_but_does_not_halt_at_the_dollar_ceiling(monkeypatch):
+    jobs, runs, order = _arrange(
+        monkeypatch, prior_cost=SimpleNamespace(cost_micros=1_000_000),
+        cost_micros=1_000_001, relaxed_limits=True,
+    )
+    assert _run(jobs, runs).terminal.selection.state == "published"
+    assert order == ["dispatch", "cite", "terminal"]
+
+
+def test_relaxed_group_still_refuses_an_unknown_metered_cost(monkeypatch):
+    jobs, runs, order = _arrange(
+        monkeypatch, completed=True, cost_micros=None, cost_basis="estimated",
+        relaxed_limits=True,
+    )
+    with pytest.raises(DomainError) as caught:
+        _run(jobs, runs)
+    assert caught.value.detail_fields["reason"] == "v3_metered_cost_unknown"
+    assert order == []
 
 
 def test_unknown_metered_cost_cannot_publish(monkeypatch):

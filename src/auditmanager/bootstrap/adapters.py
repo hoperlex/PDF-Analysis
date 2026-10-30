@@ -913,7 +913,9 @@ class RunAdapter(_SessionHolder):
         # does not.
         self._input_budget_characters = input_budget_characters
 
-    def start_ar_v3_group(self, *, version_uid: str, idempotency_key: str) -> models.ArV3BetaGroup:
+    def start_ar_v3_group(
+        self, *, version_uid: str, idempotency_key: str, relaxed_limits: bool = False,
+    ) -> models.ArV3BetaGroup:
         """Create the six pinned Runs, queue them, and hand them to the carrier (`PROD-11D`).
 
         The ordinary ``start_run`` does three things after its command and this method did
@@ -935,6 +937,7 @@ class RunAdapter(_SessionHolder):
                 session,
                 version_uid=version_uid,
                 idempotency_key=idempotency_key,
+                relaxed_limits=relaxed_limits,
                 provider_mode=self._provider_mode,
                 pack=(None if self._ar_v3_pack_registry is None
                       else self._ar_v3_pack_registry.select_beta()),

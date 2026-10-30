@@ -1,5 +1,5 @@
 {
-  "contract_version": "1.10.0",
+  "contract_version": "1.11.0",
   "attempt_authority": {
     "run_id": "run_NC8B8QARV9SZPKVF59QSXCV53K",
     "job_id": "job_HHDBVZETDEPXT3WKNRV16PAW6S",
@@ -8,7 +8,7 @@
   },
   "stage_registry": {
     "contract": "auditmanager.analysis.stage_registry",
-    "contract_version": "1.10.0"
+    "contract_version": "1.11.0"
   },
   "version_uid": "ver_1QE9R2F0TFCVN7GTFW0SA5253P",
   "analysis_profile_id": "ap_T7NMN22MWT5578D478ZESPX2CQ",

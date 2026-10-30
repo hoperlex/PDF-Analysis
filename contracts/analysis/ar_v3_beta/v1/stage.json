@@ -1,7 +1,7 @@
 {
   "contract": "auditmanager.analysis.ar_v3_beta_stage_extension",
   "extension_version": "1.0.0",
-  "analysis_contract_version": "1.10.0",
+  "analysis_contract_version": "1.11.0",
   "analysis_profile_id": "ap_01M5M28ZCDD8VPSP1BTAEW92YE",
   "prompt_bundle_id": "pb_01M5M28ZCDVCR37BX1884JGSPM",
   "stage": {
