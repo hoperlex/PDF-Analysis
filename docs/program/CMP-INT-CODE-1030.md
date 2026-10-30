@@ -28,3 +28,10 @@ Remote refs moved independently: fetched dev99b337fb and main2c162f76 (owner hot
 Owner dev99b337fb was merged in725fbbc5, preserving raised-limit behavior and reconciling every live contract family to1.13.0. Exact combined surface228/254/614;0043. Contract seal21 passed; typecheck/client verification passed; ten lifecycle/repair/positive-port cases passed after atomic child creation. Final AI recoveryceb7b508 is merged, including run-wide uncertain-spend fences and failure persistence. Cancellation now also ends child read models and queued batch drive work. Expanded C4 HTTP+scoped lifecycle run55 passed. Release note0.9.0 revision4 form29 passed; frontend lock/polling24 passed before the final contract repin, which is verified again only for those changed bytes.
 
 D-262 and D-263 are code-closed; D-290 records deferred acceptance. No complete gate/GATE OK, browser execution or live call is claimed. The direct beta owner poll of2026-10-30 asks only unresolved scope/product choices (D-119/D-160/D-184/D-185/D-253 and optional directions); pending answers do not stop the existing CMP work.
+
+
+## Owner poll implementation extension
+
+R-148a…g are direct2026-10-30 answers in OWNER_RULINGS. New beta code tasks are BETA-COST-PREFLIGHT-1030 / BETA-COST-WEB-1030 (pre-start estimate and accepted sufficient cap), BETA-PDF-PRECHECK-1030 / BETA-PDF-PROGRESS-WEB-1030 (background complete page interpretation before the model), and BETA-UNIT-ALIASES-1030 (factor1 running metres). Expanded directions and model optimisation are post-beta; pinned MinIO and bounded graphical consent windows are retained.
+
+Unit alias implementation:86 unit plus23 real saved-pass DB/S3 scenarios passed. The cost API provider7fcbeb37 is merged at230/256/618, including historical/new price-match versions; its runtime is still being completed and must land before publication. PDF progress UI49b4018e has109 focused checks and typecheck; producer is being completed in the worker lane. The code-only C4 journey694afa6c is integrated with135 conformance cases and56-operation static exposure census; browser/worker execution remains explicitly unverified.

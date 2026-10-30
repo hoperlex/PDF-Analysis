@@ -15,6 +15,7 @@ Owner direct poll2026-10-30: «Да, сопоставлять с коэффиц�
 - src/auditmanager/optimisation/specification.py (source-unit explanation only)
 - tests/unit/optimisation/**
 - tests/integration/optimisation/proposals/test_passes.py
+- tests/integration/optimisation/proposals/conftest.py (retain true dimension-mismatch fixture)
 - docs/program/tasks/BETA-UNIT-ALIASES-1030.md
 - docs/program/BETA-UNIT-ALIASES-1030.md
 
