@@ -34,3 +34,9 @@
 .decision {
   background: var(--am-surface, #fff);
 }
+
+.form { display: grid; gap: .8rem; padding-block-start: .7rem; }
+.form label { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.form fieldset { display: grid; gap: .5rem; }
+.assembly { width: 100%; }
+.assembly li { margin-block: .4rem; overflow-wrap: anywhere; }
