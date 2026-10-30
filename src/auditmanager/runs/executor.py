@@ -583,6 +583,9 @@ def _run_text_analysis_stage(
             not_attempted(policy),
         )
 
+    # Comparison-upload PDFs have no ingest-time count; use the prepared layer's normalized count.
+    if text_character_count is None:
+        text_character_count = text_layer_document.get("total_char_count")
     # Decided once, before the first attempt: the predicate is the old refusal's (a count above the
     # per-call budget), so every run the budget used to admit goes through `run_text_analysis` untouched.
     # The recognised blocks are counted too: the version's count does not include them.
@@ -1009,7 +1012,8 @@ def _execute_run_body(
         )
 
     version = document_repo.get_version(session, VersionUid.parse(run.version_uid))
-    source_entry = version.entry(ROLE_SOURCE_DOCUMENT)
+    from .commands import analysis_source_entry
+    source_entry = analysis_source_entry(version)
 
     # `D-20`. Two callers, two starting states, and the row is asked which one this is
     # rather than a flag being passed that could disagree with it.
@@ -1358,11 +1362,13 @@ def _execute_run_body(
                 textless_pages=version.textless_pages,
                 relaxed_limits=relaxed_limits,
                 force_durable_windows=v3_workflow,
-                window_custody=None if version.text_character_count is None else WindowReplyCustody(
+                window_custody=(None if version.text_character_count is None
+                                and getattr(version, "upload_kind", None) != "comparison_pdf"
+                                else WindowReplyCustody(
                     session=session, jobs=job_repo, authority=authority, store=text_store,
                     mode=binding.adapter.provider_mode,
                     provider="anthropic" if binding.call is None else binding.call.provider_label,
-                ),
+                )),
             )
         _persist_and_bind(
             session,

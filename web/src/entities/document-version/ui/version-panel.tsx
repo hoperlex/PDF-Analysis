@@ -15,7 +15,7 @@
  * value.
  *
  * `CMP-VERSION-MARK-01`: a version admitted for comparison only (`upload_kind` `comparison_pdf`)
- * opens with the mark «Загружено без пакета портала — только для сравнения» and the sentence
+ * opens with the mark «PDF без пакета портала» and the sentence
  * that says what it is for. Any other version, and a version without the field, is unchanged.
  */
 

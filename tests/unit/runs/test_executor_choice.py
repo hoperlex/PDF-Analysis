@@ -221,6 +221,25 @@ def test_an_unchosen_start_on_the_environment_source_has_no_freezer_and_no_revis
     assert ledger.fingerprints == [BASE_FINGERPRINT]
 
 
+def test_comparison_pdf_start_creates_a_run_with_its_pdf_as_source() -> None:
+    class ComparisonDocuments(Documents):
+        def get_version(self, session: Any, version_uid: Any) -> Any:
+            return SimpleNamespace(
+                project_uid=PROJECT, text_character_count=None, upload_kind="comparison_pdf",
+                manifest=(SimpleNamespace(role="comparison.source_pdf", blob_id=BLOB),),
+            )
+
+    runs = Runs()
+    started = start_audit_run(
+        Session(), version_uid=VERSION, analysis_profile_id=PROFILE, prompt_bundle_id=BUNDLE,
+        provider_mode="recorded", idempotency_key="comparison-1", commands=Ledger(), runs=runs,
+        documents=ComparisonDocuments(), norms_snapshot=lambda _session: None,
+    )
+    assert started.replayed is False
+    assert runs.created[0]["version_uid"] == VERSION
+    assert runs.created[0]["frozen_input_digest"]
+
+
 # --- startRun, a named executor ------------------------------------------------------------------
 
 

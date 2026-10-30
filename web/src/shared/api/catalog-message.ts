@@ -134,13 +134,12 @@ const CATALOG_MESSAGES: Readonly<Record<ErrorCode, string>> = {
     'Для подтверждённого раздела версии нет зарегистрированного профиля анализа. Профиль ' +
     'другого раздела вместо него не подставляется. Прогон не создан и станет возможен, когда ' +
     'профиль раздела появится.',
-  // `CMP-SEAL-C0` (ADR-0025 decision 25): the reason `comparison_only_version` rides this code —
-  // a plain PDF admitted for comparison has no portal bundle, so no section analysis starts on it.
+  // Portal-dependent operations can still refuse a comparison PDF with `comparison_only_version`.
   analysis_input_invalid:
     'Переданный пакет анализа или объявленный вход этапа неприемлем. Семантика ' +
     'конкретных полей этапа принадлежит контракту анализа; этот код — её внешне видимое ' +
-    'отображение. Версия, загруженная только для сравнения без пакета портала ' +
-    '(причина comparison_only_version), не анализируется по разделам.',
+    'отображение. PDF без пакета портала можно анализировать по разделам; операциям, ' +
+    'требующим структуру портала, она недоступна (причина comparison_only_version).',
   analysis_failed:
     'Выполнение анализа завершилось в терминальном состоянии отказа. Отказ записан на ' +
     'прогоне, и никакой частичный результат не публикуется как полный.',

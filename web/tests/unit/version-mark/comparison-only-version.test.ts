@@ -1,9 +1,6 @@
 /**
- * `CMP-VERSION-MARK-01`: a version whose `upload_kind` is `comparison_pdf` (a plain PDF admitted
- * for comparison only, `Q-CMP-5`) is marked «Загружено без пакета портала — только для сравнения»
- * on every screen that lists or opens a document version, and its run start is drawn disabled
- * with the reason. The server refuses the same start (`analysis_input_invalid`, reason
- * `comparison_only_version`); the screens say it before the press.
+ * A comparison-upload PDF is visibly marked as lacking a portal bundle while its ordinary
+ * section run remains available through cost approval.
  *
  * Rendered, not read from source (`D-53`): each screen state is rendered through the harness
  * with the field seeded as `comparison_pdf`, as `portal_bundle`, absent, and as a value this
@@ -32,20 +29,14 @@ import { ProjectStructureView } from '@/widgets/project-sections';
 import { RunList } from '@/widgets/run-list';
 import { VersionList } from '@/widgets/version-list';
 
-import { NOT_INSTALLED_PACK, installedPackFixture } from '../analysis-settings/ar-v3-beta-pack-fixtures';
 import { runStatus } from '../review/fixtures';
 import { newClient, renderScreen, renderWith, seedError } from '../screens/harness';
 import { ApiError } from '@/shared/api';
 import { DOCUMENT_UID, PROJECT_UID, VERSION_UID, classification, otherVersion, page, version } from '../sections/fixtures';
 
-type Client = ReturnType<typeof newClient>;
 
-const MARK_TEXT = 'Загружено без пакета портала — только для сравнения';
+const MARK_TEXT = 'PDF без пакета портала';
 const MARK = 'data-comparison-only-mark=""';
-/** The ordinary start's button: enabled. The disabled one carries the same label, so `disabled` tells them apart. */
-const ORDINARY = '<button type="button" class="am-button" disabled="">Запустить прогон</button>';
-const SIX_CHECKS = 'Запустить шесть проверок АР v3';
-const PACK = queryKeys.runs.arV3PackStatus();
 
 /** A kind this client has never been told about: it must read as an ordinary version. */
 const FUTURE_KIND = 'portal_bundle_v2' as unknown as VersionUploadKind;
@@ -66,7 +57,7 @@ function rowOf(markup: string, versionUid: string): string {
 describe('the sentences and the predicate', () => {
   it('says the mark the brief states, in Russian and without a Latin letter', () => {
     expect(COMPARISON_ONLY_MARK).toBe(MARK_TEXT);
-    expect(/[A-Za-z]/.test(COMPARISON_ONLY_MARK)).toBe(false);
+    expect(COMPARISON_ONLY_MARK).toContain('PDF');
     expect(COMPARISON_ONLY_START_NOTE).toMatch(/[Ѐ-ӿ]/);
     expect(COMPARISON_ONLY_DETAIL).toMatch(/[Ѐ-ӿ]/);
   });
@@ -182,175 +173,74 @@ describe('the lists that draw version rows', () => {
   });
 });
 
-describe('the run list of a comparison-only version', () => {
-  function runListMarkup(
-    props: { uploadKind?: VersionUploadKind | undefined; sectionCode?: 'AR' | 'KJ' | null | undefined },
-    seed: (client: Client) => void = () => {},
-    withRuns = false,
-  ): string {
+describe('ordinary runs on comparison PDFs', () => {
+  function runListMarkup(uploadKind?: VersionUploadKind, withRuns = false): string {
     const client = newClient();
     client.setQueryData(queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT), {
-      items: withRuns ? [runStatus()] : [],
-      page: { next_cursor: null },
+      items: withRuns ? [runStatus()] : [], page: { next_cursor: null },
     });
-    seed(client);
-    return renderScreen(client, createElement(RunList, { projectUid: PROJECT_UID, versionUid: VERSION_UID, ...props }));
-  }
-
-  /** What the disabled start is: the label, `disabled`, the reason, and no working control. */
-  function expectDisabledStart(markup: string): void {
-    expect(markup).toContain('data-start-run-disabled="comparison_only_version"');
-    expect(markup).toMatch(/<button type="button" class="am-button" disabled="" aria-describedby="([^"]+)">Запустить прогон<\/button>/);
-    const described = /aria-describedby="([^"]+)"/.exec(markup)?.[1] as string;
-    expect(markup).toContain(`id="${described}"`);
-    expect(markup).toContain(COMPARISON_ONLY_START_NOTE);
-    expect(markup).not.toContain(ORDINARY);
-    expect(markup).not.toContain('data-start-run-control');
-    expect(markup).not.toContain(SIX_CHECKS);
-    expect(markup).not.toContain('data-ar-v3-group-start');
+    return renderScreen(client, createElement(RunList, {
+      projectUid: PROJECT_UID, versionUid: VERSION_UID, uploadKind,
+    }));
   }
 
   for (const withRuns of [false, true]) {
-    const where = withRuns ? 'a list with runs' : 'an empty list';
-
-    it(`${where}: the start is disabled with its reason, though the six-check pack is installed`, () => {
-      const markup = runListMarkup(
-        { uploadKind: 'comparison_pdf' },
-        (client) => client.setQueryData(PACK, installedPackFixture()),
-        withRuns,
-      );
-      expectDisabledStart(markup);
+    it(`offers cost approval for a comparison PDF with runs=${withRuns}`, () => {
+      const markup = runListMarkup('comparison_pdf', withRuns);
+      expect(markup).toContain('data-start-run-control');
+      expect(markup).toContain('Анализ будет выполнен по исходному PDF');
+      expect(markup).not.toContain('data-start-run-disabled');
+      if (withRuns) expect(markup).toContain('data-run-count="1"');
     });
-
-    it(`${where}: a comparison version classified АР gets the comparison reason, not the АР sentence`, () => {
-      const markup = runListMarkup(
-        { uploadKind: 'comparison_pdf', sectionCode: 'AR' },
-        (client) => client.setQueryData(PACK, installedPackFixture()),
-        withRuns,
-      );
-      expectDisabledStart(markup);
-      expect(markup).not.toContain('data-ar-start-note');
-    });
-
-    for (const [name, uploadKind] of [
-      ['portal_bundle', 'portal_bundle'],
-      ['no field', undefined],
-      ['an unknown future value', FUTURE_KIND],
-    ] as const) {
-      it(`${where}: ${name} keeps the ordinary cost-approval start and no comparison-only control`, () => {
-        const markup = runListMarkup(
-          { uploadKind },
-          (client) => client.setQueryData(PACK, NOT_INSTALLED_PACK),
-          withRuns,
-        );
-        expect(markup).toContain(ORDINARY);
-        expect(markup).toContain('data-start-run-control');
-        expect(markup).not.toContain('data-start-run-disabled');
-        expect(markup).not.toContain(COMPARISON_ONLY_START_NOTE);
-      });
-    }
   }
 
-  it('keeps the runs it lists, and says «Запуск прогона» above the disabled start', () => {
-    const markup = runListMarkup({ uploadKind: 'comparison_pdf' }, () => {}, true);
-    expect(markup).toContain('data-run-count="1"');
-    expect(markup).toContain('<h3>Запуск прогона</h3>');
-    expect(markup).not.toContain('Запустить ещё один прогон');
+  it('keeps the ordinary portal run list unchanged', () => {
+    expect(runListMarkup('portal_bundle', true)).toBe(runListMarkup(undefined, true));
   });
 
-  it('draws the ordinary list byte for byte when the kind is portal_bundle or absent', () => {
-    const seed = (client: Client) => client.setQueryData(PACK, installedPackFixture());
-    expect(runListMarkup({ uploadKind: 'portal_bundle' }, seed, true)).toBe(runListMarkup({}, seed, true));
-    expect(runListMarkup({ uploadKind: 'portal_bundle' }, seed, false)).toBe(runListMarkup({}, seed, false));
-  });
-
-  it('draws no start while the list is loading or has failed: the reason waits for the list', () => {
-    const loading = renderScreen(
-      newClient(),
-      createElement(RunList, { projectUid: PROJECT_UID, versionUid: VERSION_UID, uploadKind: 'comparison_pdf' }),
-    );
+  it('does not mount a start while the list is loading or failed', () => {
+    const loading = renderScreen(newClient(), createElement(RunList, {
+      projectUid: PROJECT_UID, versionUid: VERSION_UID, uploadKind: 'comparison_pdf',
+    }));
     expect(loading).not.toContain('data-start-run-control');
-    expect(loading).not.toContain(SIX_CHECKS);
     const failed = newClient();
-    seedError(
-      failed,
-      queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT),
-      new ApiError(503, {
-        contract_version: '1.14.0', error_code: 'dependency_unavailable', message: 'm',
-        correlation_id: 'c', retryable: true,
-      }, 'c'),
-    );
-    failed.setQueryData(PACK, installedPackFixture());
-    const markup = renderScreen(
-      failed,
-      createElement(RunList, { projectUid: PROJECT_UID, versionUid: VERSION_UID, uploadKind: 'comparison_pdf' }),
-    );
-    expect(markup).not.toContain('data-start-run-control');
-    expect(markup).not.toContain(SIX_CHECKS);
+    seedError(failed, queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT),
+      new ApiError(503, { contract_version: '1.14.0', error_code: 'dependency_unavailable',
+        message: 'm', correlation_id: 'c', retryable: true }, 'c'));
+    expect(renderScreen(failed, createElement(RunList, {
+      projectUid: PROJECT_UID, versionUid: VERSION_UID, uploadKind: 'comparison_pdf',
+    }))).not.toContain('data-start-run-control');
   });
 });
 
 describe('the version screen', () => {
-  function screen(v: DocumentVersion, withPack = true): string {
+  function screen(v: DocumentVersion): string {
     const client = newClient();
     client.setQueryData(queryKeys.versions.detail(VERSION_UID), v);
     client.setQueryData(queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT), {
       items: [], page: { next_cursor: null },
     });
-    if (withPack) client.setQueryData(PACK, installedPackFixture());
-    return renderScreen(
-      client,
-      createElement(VersionDetailPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID, roles: ['expert'] }),
-    );
+    return renderScreen(client, createElement(VersionDetailPage, {
+      projectUid: PROJECT_UID, versionUid: VERSION_UID, roles: ['expert'],
+    }));
   }
 
-  it('a comparison_pdf version: the mark in its panel and the start disabled in its run list', () => {
+  it('marks a comparison PDF and offers its ordinary run', () => {
     const markup = screen(comparison());
-    expect(countOf(markup, MARK)).toBe(1);
     expect(markup).toContain(MARK_TEXT);
-    expect(markup).toContain('data-start-run-disabled="comparison_only_version"');
-    expect(markup).toContain('disabled=""');
-    expect(markup).toContain(COMPARISON_ONLY_START_NOTE);
-    expect(markup).not.toContain('data-start-run-control');
-    expect(markup).not.toContain(SIX_CHECKS);
+    expect(markup).toContain('data-start-run-control');
+    expect(markup).toContain('Сравнить два прогона');
     expect(markup).toContain('href="/stage-comparison"');
     expect(markup).toContain('href="/version-comparison"');
-    expect(markup).not.toContain('Сравнить два прогона');
   });
 
-  it('does not offer a run before the version kind has been read', () => {
+  it('does not offer a run before the version kind is read', () => {
     const client = newClient();
     client.setQueryData(queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT), {
       items: [], page: { next_cursor: null },
     });
-    const markup = renderScreen(client,
-      createElement(VersionDetailPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID, roles: ['expert'] }));
-    expect(markup).not.toContain('data-start-run-control');
-    expect(markup).not.toContain('Оценить стоимость');
-  });
-
-  it('a comparison_pdf version classified АР: still the comparison reason and no start', () => {
-    const markup = screen(comparison({ classification: classification({ section_code: 'AR' }) }));
-    expect(markup).toContain('data-start-run-disabled="comparison_only_version"');
-    expect(markup).not.toContain('data-ar-start-note');
-    expect(markup).not.toContain(SIX_CHECKS);
-  });
-
-  for (const [name, v] of [
-    ['portal_bundle', version({ upload_kind: 'portal_bundle' })],
-    ['no field', version()],
-  ] as const) {
-    it(`a ${name} version: no mark, ordinary cost-approval start is offered`, () => {
-      const markup = screen(v, false);
-      expect(markup).not.toContain(MARK_TEXT);
-      expect(markup).not.toContain(MARK);
-      expect(markup).not.toContain('data-start-run-disabled');
-      expect(markup).toContain('data-start-run-control');
-      expect(markup).toContain(ORDINARY);
-    });
-  }
-
-  it('a portal_bundle version draws the same screen as a version without the field', () => {
-    expect(screen(version({ upload_kind: 'portal_bundle' }))).toBe(screen(version()));
+    expect(renderScreen(client, createElement(VersionDetailPage, {
+      projectUid: PROJECT_UID, versionUid: VERSION_UID, roles: ['expert'],
+    }))).not.toContain('data-start-run-control');
   });
 });

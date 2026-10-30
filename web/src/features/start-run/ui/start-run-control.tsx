@@ -210,9 +210,9 @@ export function StartRunControl({ projectUid, versionUid, onStarted }: StartRunC
       </button>
       {cost.pending ? <LoadingState what="оценка стоимости" /> : null}
       {costFailure === null ? null : <ErrorState
-        title={comparisonOnlyCost ? 'Этот PDF загружен только для сравнения' : 'Стоимость не оценена'}
+        title={comparisonOnlyCost ? 'Сервер не принимает этот PDF' : 'Стоимость не оценена'}
         detail={comparisonOnlyCost
-          ? 'Обычный прогон требует пакет портала. Для этого PDF запустите сравнение в соответствующем модуле.'
+          ? 'На этом сервере анализ раздела для PDF без пакета портала недоступен. Сообщите администратору: требуется обновление сервера.'
           : costFailure.detail}
         correlationId={costFailure.correlationId} />}
       {comparisonOnlyCost ? <p className="am-note">

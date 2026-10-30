@@ -119,7 +119,7 @@ from auditmanager.analysis.public import (
     MAX_ANALYSIS_WINDOWS, relaxed_profile_pair, relaxed_window_characters,
     windowed_budget_characters,
 )
-from auditmanager.documents.public import UPLOAD_KIND_COMPARISON_PDF, DocumentRepository
+from auditmanager.documents.public import MANIFEST_ROLE_COMPARISON_PDF, UPLOAD_KIND_COMPARISON_PDF, DocumentRepository
 from auditmanager.norms.public import current_snapshot
 from auditmanager.jobs.public import JobRepository, append_execution_event
 from auditmanager.ingest.public import (
@@ -382,31 +382,32 @@ def _pinned_profile(
     return pinned.analysis_profile_id, pinned.prompt_bundle_id
 
 
-#: The ``reason`` of the refusal of a plain PDF admitted for comparison only (`CMP-INGEST-01`, ADR-0025
-#: decision 11, ``Q-CMP-5``), registered under ``analysis_input_invalid`` in the frozen domain contract. The
-#: client renders its Russian sentence from the catalogue.
+#: Legacy refusal for operations that still require portal structure (the AR six-check group).
 COMPARISON_ONLY_VERSION_REASON: Final[str] = "comparison_only_version"
 
 
 def refuse_comparison_only_version(version: Any) -> None:
-    """Refuse to start a section analysis on a version that has no portal bundle.
+    """Refuse a portal-only operation on a version that has no portal bundle.
 
-    A version whose ``upload_kind`` is ``comparison_pdf`` is a plain PDF admitted for comparison only: it has
-    no ``source.document`` entry (its manifest role is the distinct ``comparison.source_pdf``) and no portal
-    block list, so a section analysis has nothing to read. The manifest check in :func:`_resolve_references`
-    already refuses it, but with ``missing_required_input`` -- an answer that tells a reviewer a *fault*, when
-    the truth is a *kind*. This is asked first, by the kind, before the profile is routed and before any key is
-    claimed, so the refusal writes nothing and names the reason the screen renders in Russian.
+    The legacy six-check AR group still needs portal blocks. Ordinary section runs
+    can instead prepare native PDF text and page visuals from ``comparison.source_pdf``.
     """
     if getattr(version, "upload_kind", None) == UPLOAD_KIND_COMPARISON_PDF:
         raise DomainError(
             ErrorCode.ANALYSIS_INPUT_INVALID,
-            message=(
-                "the document version is a plain PDF admitted for comparison only; "
-                "a section analysis needs a portal bundle"
-            ),
+            message="this operation requires the portal bundle's structured inputs",
             reason=COMPARISON_ONLY_VERSION_REASON,
         )
+
+
+def analysis_source_entry(version: Any) -> Any:
+    """Select the PDF manifest entry for an ordinary run without changing the stored manifest."""
+    role = (MANIFEST_ROLE_COMPARISON_PDF if getattr(version, "upload_kind", None) == UPLOAD_KIND_COMPARISON_PDF
+            else ROLE_SOURCE_DOCUMENT)
+    entry = next((item for item in version.manifest if item.role == role), None)
+    if entry is None:
+        raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, reason="missing_required_input")
+    return entry
 
 
 def _resolve_references(
@@ -428,18 +429,8 @@ def _resolve_references(
     """
     if version is None:
         version = documents.get_version(session, version_uid)
-    refuse_comparison_only_version(version)
-
     blob_ids = {entry.role: str(entry.blob_id) for entry in version.manifest}
-    if ROLE_SOURCE_DOCUMENT not in blob_ids:
-        raise DomainError(
-            ErrorCode.ANALYSIS_INPUT_INVALID,
-            message=(
-                "the document version's input manifest carries no source.document "
-                "entry, so there is nothing for source_preparation to read"
-            ),
-            reason="missing_required_input",
-        )
+    blob_ids[ROLE_SOURCE_DOCUMENT] = str(analysis_source_entry(version).blob_id)
 
     # Well-formedness of the two pinned identities. ``parse`` raises at the boundary
     # rather than letting a mis-prefixed value become a row pointing at nothing.
@@ -637,8 +628,6 @@ def start_audit_run(
     budget = _checked_budget(input_budget_characters)
 
     version_record = document_repo.get_version(session, resolved_version)
-    # `CMP-INGEST-01`. By kind, before the profile is routed and before any key is claimed.
-    refuse_comparison_only_version(version_record)
     # Read only when a pre-claim decision needs it (the budget or the route), exactly as the
     # budget alone read it before this seal.
     known = (
@@ -956,10 +945,7 @@ def reaudit_run(
         "SELECT run_id FROM audit_run WHERE run_id = :run_id FOR UPDATE"
     ), {"run_id": source_run_id}).scalar_one_or_none()
     source = repository.get(session, source_run_id)
-    # `CMP-INGEST-01`. A re-audit analyses the source's version again, so a version admitted for comparison
-    # only is refused here by its kind, before the profile is routed and before the key is claimed.
     source_version = document_repo.get_version(session, VersionUid.parse(source.version_uid))
-    refuse_comparison_only_version(source_version)
     frozen: FrozenRoute | None = None
     approved_cost = None
     if (section_profiles is not None or budget is not None or connection_route is not None

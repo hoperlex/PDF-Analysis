@@ -155,6 +155,42 @@ def test_next_full_request_must_fit_accepted_limit_and_model_rate_revision_are_p
         require_approved_model(config, pin, NS(connection_revision_id="rev2"))
 
 
+def test_comparison_zip_pdf_can_be_priced_from_its_native_text(registry):
+    """The manual SP1 pack has no portal count, yet its classified PDF gets a run estimate."""
+    from io import BytesIO
+    from zipfile import ZipFile
+    from pathlib import Path
+
+    pack = Path(__file__).resolve().parents[3] / 'fixtures/manual-comparison-1030/comparison-manual-pack.zip'
+    with ZipFile(pack) as outer, ZipFile(BytesIO(outer.read('SP1-OLD.zip'))) as inner:
+        raw = inner.read(inner.namelist()[0])
+    digest = sha256(raw).hexdigest()
+    blob_id = derive_blob_id(sha256=digest, size=len(raw))
+
+    class Store:
+        def inspect(self, _blob):
+            return NS(sha256=digest, size=len(raw))
+
+        def open_stream(self, _blob, **_kwargs):
+            yield raw
+
+    source = version('AR', None, 6)
+    source.upload_kind = 'comparison_pdf'
+    source.sha256 = digest
+    source.manifest = (NS(role='comparison.source_pdf', blob_id=str(blob_id), sha256=digest,
+                          size_bytes=len(raw), media_type='application/pdf'),)
+    from auditmanager.runs.commands import _resolve_references
+    _, blobs = _resolve_references(None, version_uid=VERSION,
+        analysis_profile_id='ap_01ARZ3NDEKTSV4RRFFQ69G5FAV',
+        prompt_bundle_id='pb_01ARZ3NDEKTSV4RRFFQ69G5FAV',
+        documents=None, version=source)
+    assert blobs['source.document'] == blobs['comparison.source_pdf'] == str(blob_id)
+    priced = service(registry, blob_store=Store())
+    _, chars, facts = priced._source(None, VERSION, source)
+    assert chars > 0 and facts['native_characters'] == chars
+    assert estimate(priced, source).as_dict()['estimated_cost_micros'] > 0
+
+
 def test_six_scope_group_prices_all_calls_and_pins_each_verified_set(monkeypatch, registry):
     from auditmanager.runs import v3_group
     scopes = tuple(NS(scope_id=scope, identity=scope, chunking_profile="chunk-v1",

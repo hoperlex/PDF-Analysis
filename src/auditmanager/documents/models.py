@@ -68,9 +68,8 @@ ROLE_SOURCE_STAMP_AUDIT: Final[str] = "source_stamp_audit"
 UPLOAD_KIND_PORTAL_BUNDLE: Final[str] = "portal_bundle"
 UPLOAD_KIND_COMPARISON_PDF: Final[str] = "comparison_pdf"
 #: The blob role of a plain PDF admitted for comparison, and the manifest-entry role that binds it to its
-#: version. **Deliberately not** ``source.document``: the existing start-run check requires that entry, so a
-#: comparison-only version is refused by the very rule that refuses a version with no source (ADR-0025
-#: decision 11), and no section analysis can read it by accident. The pattern is the manifest role's own
+#: version. The stored role remains distinct from ``source.document``; ordinary run
+#: admission maps this entry to its source input without rewriting the manifest. The pattern is the manifest role's own
 #: (``ck_input_manifest_entry_role``).
 ROLE_COMPARISON_PDF: Final[str] = "comparison_pdf"
 MANIFEST_ROLE_COMPARISON_PDF: Final[str] = "comparison.source_pdf"
@@ -333,7 +332,7 @@ class DocumentVersionRecord:
     classification: VersionClassificationRecord | None = field(default=None, compare=False)
     #: `CMP-SEAL-C0` (migration ``0038``, ADR-0025 decision 11). How the version reached the
     #: product: ``portal_bundle`` (every version before ``0038``) or ``comparison_pdf`` (a plain
-    #: PDF admitted for comparison only: no section analysis starts on it, and it never becomes the
+    #: PDF admitted through comparison without a portal bundle; it never becomes the
     #: current version of a document that has a portal version). `CMP-INGEST-01` reads it from
     #: ``document_version.upload_kind`` in every SELECT of the repository; the default is the value of every
     #: version that existed before ``0038`` and of a record built without a row.
@@ -357,9 +356,8 @@ class DocumentVersionRecord:
         entry. A version holds exactly one of the two, so the answer is never ambiguous; a manifest
         with neither is still a broken manifest (:class:`KeyError`).
 
-        This is the *bytes* accessor (the content stream, the page reads). It is **not** how a run is
-        admitted: :meth:`entry` with ``MANIFEST_ROLE_SOURCE_DOCUMENT`` stays strict, which is what the
-        run start tests, so a comparison-only version is refused there (``comparison_only_version``).
+        This is the bytes accessor for content streams and page reads. Ordinary section
+        runs also accept this PDF through their source-role adapter.
         """
         for role in (MANIFEST_ROLE_SOURCE_DOCUMENT, MANIFEST_ROLE_COMPARISON_PDF):
             for item in self.manifest:

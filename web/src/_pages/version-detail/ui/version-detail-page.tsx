@@ -23,8 +23,8 @@
  * route, which has just checked them; they decide only which of those is drawn.
  *
  * `CMP-VERSION-MARK-01`: a version admitted for comparison only (`upload_kind`
- * `comparison_pdf`) carries the mark «Загружено без пакета портала — только для сравнения» in
- * its panel, and its run list is told the kind so that the start is drawn disabled.
+ * `comparison_pdf`) carries the mark «PDF без пакета портала» in its panel; its run list
+ * offers the ordinary cost-approved section start.
  */
 
 import Link from 'next/link';
@@ -118,10 +118,10 @@ export function VersionDetailPage({ projectUid, versionUid, roles }: VersionDeta
         <section className={styles.panel} aria-labelledby="version-runs-title">
           <h2 id="version-runs-title">Прогоны</h2>
           {version.data === undefined ? null : <>
-            {version.data.upload_kind === 'comparison_pdf' ? null : <p className="am-note">
+            <p className="am-note">
               <Link href={routes.comparison(ownerProjectUid, versionUid)}>Сравнить два прогона</Link> —
               что изменилось в анализе одной и той же версии.
-            </p>}
+            </p>
             <RunList
               projectUid={ownerProjectUid}
               versionUid={versionUid}
