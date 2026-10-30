@@ -10,11 +10,11 @@
  *   renders it closed and open (`web/tests/unit/styles/screens.ts`), and the unit tests read
  *   the attributes the pattern requires off it.
  * - `Disclosure` is the client island the frame uses: it holds `open`, turns browser events
- *   into `disclosureTransition` calls and applies the answer. It renders exactly the view,
- *   and its server render is the view's closed state — a unit test holds the two equal.
+ *   into `disclosureTransition` calls and applies the answer. It renders exactly the view.
+ *   Closed is the default; the desktop sidebar asks its groups to start open.
  *
  * The panel is always in the markup and `hidden` while closed, so `aria-controls` always
- * names an element that exists. Closed is the default.
+ * names an element that exists.
  *
  * It takes labels and links, never a session or a registry row: which groups a role sees,
  * which item is current, and the addresses themselves are `W50-SHELL-FRAME`'s to decide.
@@ -46,6 +46,8 @@ interface DisclosureCommonProps {
   readonly layout?: 'popover' | 'inline' | undefined;
   /** `end` anchors a popover to the button's right edge, for a group at the right of the bar. */
   readonly align?: 'start' | 'end' | undefined;
+  /** The desktop sidebar keeps its groups visible on first render; other uses stay closed. */
+  readonly defaultOpen?: boolean | undefined;
 }
 
 /**
@@ -127,7 +129,7 @@ export function DisclosureView(props: DisclosureViewProps) {
 
 export function Disclosure(props: DisclosureProps) {
   const panelId = `${useId()}panel`;
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(props.defaultOpen === true);
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 

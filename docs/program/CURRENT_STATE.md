@@ -1,5 +1,17 @@
 # Current state
 
+**Updated 2026-10-30 by `HOTFIX-SHELL-NAVIGATION-INT-20261030`
+(development candidate only).** The shared frame now has a persistent left
+sidebar above 1160 px and the existing compact disclosure menu below it. Each
+role-allowed desktop group starts expanded, remains collapsible, and marks the
+current page; the brand still provides the sole home link. The theme and account
+controls use the preceding showcase palette in both appearances. The frame
+keeps its registry-backed links and access decisions, and makes no new API call.
+The 31-screen design plan records the shell slice as complete; content screens
+other than the dashboard still await their own design stages. No contract,
+migration, analysis behavior or `origin/main` changes are included. Publication
+is to `origin/dev` only.
+
 **Updated 2026-10-30 by `HOTFIX-DASHBOARD-SHOWCASE-INT-20261030`
 (development candidate only).** `/dashboard` now uses an isolated presentation
 palette in both light and dark appearances; the existing system choice follows

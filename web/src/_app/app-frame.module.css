@@ -1,46 +1,71 @@
-/*
- * The frame's own layout — `W50-SHELL-FRAME`.
- *
- * The bar, its colours and the primitives' looks are global (`globals.css`, `.am-app__*`,
- * `.am-disclosure*`, `.am-menu*`, `.am-avatar*`); this module only arranges what the frame
- * adds, and declares no colour of its own beyond the existing tokens.
- *
- * ## One row, or «Меню»
- *
- * At or above the breakpoint the groups sit in the bar in one row (`.row`); below it they
- * collapse into one stacked list behind a «Меню» disclosure (`.stacked`). Both are always in
- * the markup and exactly one is displayed. The 780 px floor is below the breakpoint, so the
- * floor shows «Меню»: the brand, navigation groups, the instance label, the theme
- * control and the avatar do not fit one row there. Neither state may widen the page; each is
- * measured in a browser in `docs/program/W50-SHELL-FRAME.md`.
- */
+/* The sidebar and compact bar share one role-filtered navigation source. */
+
+.content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 100vh;
+}
 
 .nav {
-  display: flex;
-  align-items: center;
+  flex: 1;
   min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 8px;
+  display: grid;
+  gap: 18px;
   min-width: 0;
+}
+
+.row :global(.am-disclosure--inline) {
+  width: 100%;
+}
+
+.row :global(.am-disclosure__button) {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  padding: 7px 10px;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  font-weight: 700;
+  letter-spacing: var(--am-tracking-caps);
+  text-transform: uppercase;
+}
+
+.row :global(.am-disclosure__button[aria-current='true']) {
+  color: var(--am-accent-strong);
+  text-decoration: none;
+}
+
+.row :global(.am-disclosure__panel) {
+  padding: 3px 0 0;
+}
+
+.row :global(.am-disclosure__link) {
+  padding: 9px 12px;
+  border-radius: var(--am-radius);
+  color: var(--am-ink);
+  font-size: var(--am-text-md);
+}
+
+.row :global(.am-disclosure__link:hover),
+.row :global(.am-disclosure__link[aria-current='page']) {
+  background: var(--am-accent-light);
+  color: var(--am-accent-strong);
+  text-decoration: none;
+}
+
+.row :global(.am-disclosure__link[aria-current='page']) {
+  box-shadow: inset 3px 0 0 var(--am-accent);
 }
 
 .stacked {
   display: none;
-}
-
-@media (max-width: 959.98px) {
-  .row {
-    display: none;
-  }
-
-  .stacked {
-    display: block;
-  }
 }
 
 .stackedList {
@@ -59,10 +84,40 @@
 /* The right-hand cluster: instance label, theme control, then the account menu or «Вход». */
 .end {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-left: auto;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  margin-top: auto;
   min-width: 0;
+  padding-top: var(--am-gap);
+  border-top: 1px solid var(--am-line-soft);
+}
+
+.end :global(.am-theme),
+.end :global(.am-app__instance + .am-theme) {
+  align-self: flex-start;
+  margin-left: 0;
+}
+
+.end :global(.am-theme) {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+.end :global(.am-app__signin) {
+  margin-left: 0;
+  padding: 9px 12px;
+  border-radius: var(--am-radius);
+  background: var(--am-accent-light);
+  color: var(--am-accent-strong);
+  font-weight: 650;
+}
+
+.end :global(.am-menu__popup) {
+  left: 0;
+  right: auto;
+  top: auto;
+  bottom: calc(100% + 6px);
 }
 
 .accountMenu {
@@ -91,4 +146,54 @@
 
 .accountName {
   font-weight: 650;
+}
+
+@media (max-width: 1159.98px) {
+  .content {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .nav {
+    flex: 0 1 auto;
+    overflow: visible;
+  }
+
+  .row {
+    display: none;
+  }
+
+  .stacked {
+    display: block;
+  }
+
+  .stacked :global(.am-disclosure__panel) {
+    left: auto;
+    right: 0;
+  }
+
+  .end {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    margin-top: 0;
+    margin-left: auto;
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .end :global(.am-menu__popup) {
+    left: auto;
+    right: 0;
+    top: calc(100% + 6px);
+    bottom: auto;
+  }
+}
+
+@media (max-width: 590px) {
+  .end {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    width: 100%;
+  }
 }

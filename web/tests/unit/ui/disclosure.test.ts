@@ -83,6 +83,15 @@ describe('the disclosure is a button that controls a panel of links', () => {
     expect(panel.attrs.has('hidden')).toBe(true);
   });
 
+  it('can start expanded for the desktop sidebar, with its links present in the flow', () => {
+    const elements = tree(island({ ...PROPS, layout: 'inline', defaultOpen: true }));
+    const button = trigger(elements);
+    expect(button.attrs.get('aria-expanded')).toBe('true');
+    const panel = byId(elements, button.attrs.get('aria-controls') as string);
+    expect(panel?.attrs.has('hidden')).toBe(false);
+    expect(elements.filter((el) => el.tag === 'a')).toHaveLength(LINKS.length);
+  });
+
   it('the island renders exactly the closed view, so the census measures what ships', () => {
     const markup = island();
     const panelId = trigger(tree(markup)).attrs.get('aria-controls') as string;
