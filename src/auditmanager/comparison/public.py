@@ -130,6 +130,9 @@ from auditmanager.comparison.spend.model import (
 from auditmanager.comparison.spend.repository import ComparisonSpendRepository
 from auditmanager.comparison.spend.settler import settle_lost_attempt
 from auditmanager.comparison.stage.admission import StageCandidateAdmissionService
+from auditmanager.comparison.stage.assemblies import StageAssemblyService
+from auditmanager.comparison.stage.profile_text import StageProfileTextService
+from auditmanager.comparison.stage.pairs import StagePairCommandService, StagePairReadRepository
 from auditmanager.comparison.stage.candidates import StageCandidateDecisionService
 from auditmanager.comparison.stage.completion import StageRawCompletionService
 from auditmanager.comparison.stage.lifecycle import StageUploadLifecycleService
@@ -377,6 +380,7 @@ from auditmanager.comparison.tiles.reader import PairTileReader
 PAGE_PROFILE_WORK_KIND = "page_profile"
 
 __all__ = [
+    "StageAssemblyService", "StageProfileTextService", "StagePairCommandService", "StagePairReadRepository",
     "LinkInput",
     "StageSheetMapService",
     "StageSheetReadService",

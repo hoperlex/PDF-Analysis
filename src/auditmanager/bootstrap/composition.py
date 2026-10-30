@@ -606,7 +606,9 @@ def build_application(
             sessions, comparison_modules=comparison_modules,
         ),
         comparison_stage_runs=ComparisonStageRunAdapter(comparison_modules=comparison_modules),
-        comparison_stage_c4=ComparisonStageC4Adapter(comparison_modules=comparison_modules),
+        comparison_stage_c4=ComparisonStageC4Adapter(
+            sessions, blob_store=store, comparison_modules=comparison_modules,
+        ),
         execution=ExecutionAdapter(sessions, runs=run_adapter),
         # `W55A-SEAL-01` sealed them; `W55A-SEARCH-01` serves them. The norms reads and the
         # designation over the same session factory, every search under the operator's
