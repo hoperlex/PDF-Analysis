@@ -1,5 +1,16 @@
 # Current state
 
+**Updated 2026-10-30 by `HOTFIX-DASHBOARD-SHOWCASE-INT-20261030`
+(development candidate only).** `/dashboard` now uses an isolated presentation
+palette in both light and dark appearances; the existing system choice follows
+the dark block exactly. Its hero, panel cards and responsive section-card grid
+still show only the existing dashboard summary and retain its loading/error
+states. `docs/program/DESIGN-31-SCREEN-PLAN.md` inventories all 31 routes and
+stages the remaining work; those routes are not yet redesigned. This task
+changes no API, analysis behavior, contract or migration. The baseline still
+contains styling-layer and undefined-token failures in the comparison CSS,
+outside this dashboard pilot. Publication is to `origin/dev` only.
+
 **Updated 2026-10-30 by `HOTFIX-SECTION-PRESENTATION-INT-20261030`
 (development candidate only).** The home and dashboard now lead with an
 original-inspired overview of all fifteen sections: compact code badges, names
