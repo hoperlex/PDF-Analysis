@@ -8094,14 +8094,40 @@
           {
             "do": "click",
             "selector": "ol > li:has(a[href*=\"{queued_run_id}\"]) button",
-            "settle": true
+            "settle": true,
+            "text": "Повторный аудит"
+          },
+          {
+            "do": "approve_run_cost",
+            "scope": "run",
+            "value": "{version_uid}",
+            "source_run_id": "{queued_run_id}",
+            "bound_ms": 30000
           },
           {
             "do": "click",
-            "selector": "[data-execution-intent=\"reaudit\"] button:first-of-type"
+            "selector": "[data-execution-intent=\"reaudit\"] button",
+            "text": "Подтвердить"
           }
         ],
         "expects_api": [
+          {
+            "method": "GET",
+            "path": "/runs/{run_id}",
+            "operationId": "getRunStatus",
+            "expect_status": 200,
+            "count": 1,
+            "bind": {
+              "run_id": "queued_run_id"
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/runs/cost-estimate",
+            "operationId": "estimateRunCost",
+            "expect_status": 200,
+            "count": 1
+          },
           {
             "method": "POST",
             "path": "/runs/{run_id}/reaudit",
@@ -8139,7 +8165,28 @@
           }
         ],
         "screen": "queue",
-        "case": "action"
+        "case": "action",
+        "bind": {
+          "version_uid": "third_version_uid"
+        },
+        "expects_request": [
+          {
+            "of": "estimateRunCost",
+            "content_type_starts_with": "application/json",
+            "body_contains": [
+              "\"version_uid\"",
+              "\"reaudit_of_run_id\""
+            ]
+          },
+          {
+            "of": "reauditRun",
+            "requires_idempotency_key": true,
+            "body_contains": [
+              "\"cost_consent\"",
+              "\"confirmed\":true"
+            ]
+          }
+        ]
       },
       {
         "name": "queue-resume-dispatch",
