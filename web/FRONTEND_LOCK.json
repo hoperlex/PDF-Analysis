@@ -1,7 +1,7 @@
 {
   "lock_version": 1,
   "purpose": "Everything a later regeneration needs to prove the committed API client matches its input: the toolchain pins, the exact generator invocation, and the exact OpenAPI bytes the client was generated from. Verified by web/tests/guards/frontend-lock.guard.test.ts, which recomputes every digest here and fails if one has moved.",
-  "owner": "CMP-INT-CODE-1030 final beta reconciliation",
+  "owner": "HOTFIX-PRESENTATION-INT-1030 sole integrator",
   "toolchain": {
     "node": "22.23.1",
     "npm": "10.9.8",
@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "8fd13c576ec9a1a52baa4ec99e4b5b487231c7aec6b57256df3c5342c32cce3f",
-    "content_commit": "0027ceb73a576e8fb5df6ebd950cb2aa3dc5fab5",
-    "content_commit_subject": "Merge owner AR profile hotfix and final beta compatibility",
-    "dispatch_named_commit": "8a437cbe15c47b1655e3ef7268bd1c60a657fdd2",
-    "commit_note": "Final comparison and cost-consent surface230/256/619, preserving owner ordinary AR profile3821261a; migration0043 unchanged.",
+    "sha256": "05397fad027834c0f037d0890e4a059207b7881445b810cbc0bac2137b7233dd",
+    "content_commit": "9ead7da5550ff73562ad0115e51b8b32afc9d1a0",
+    "content_commit_subject": "Merge remote-tracking branch 'origin/dev' into integration/compare-modules",
+    "dispatch_named_commit": "1bdab5b650d9ddec711c294e7f01719bb5331dfa",
+    "commit_note": "Emergency owner-authorised analysis/ZIP/export/V3 surface233/259/620; migration0043 unchanged; incoming owner UI preserved.",
     "openapi_version": "3.1.0",
-    "info_version": "1.13.0",
-    "paths": 230,
-    "operations": 256,
-    "component_schemas": 619,
+    "info_version": "1.14.0",
+    "paths": 233,
+    "operations": 259,
+    "component_schemas": 620,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "8fd13c576ec9a1a52baa4ec99e4b5b487231c7aec6b57256df3c5342c32cce3f",
+    "snapshot_sha256": "05397fad027834c0f037d0890e4a059207b7881445b810cbc0bac2137b7233dd",
     "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "ce8ff70a9753b69699581dea813242efe5b8b18ff8ae315daeba164ead8e0d35",
-      "index.ts": "948b66561864ae3df3239207dde5ae4a7c45a8382e77c18513c072e425e062be",
-      "operations.gen.ts": "f0d1ce39d8496c1857a99891902e6256172e0064af23363b968e722d228c3d8e",
-      "types.gen.ts": "8896ea0d0aed3e3f78cf3757436169b88e8c31b4a79b3b515292599432dd16af"
+      "client.gen.ts": "88150d81b8cfb5f71a4de5a977f888c325b40def51b01f1940c6999b27a7962e",
+      "index.ts": "2cb6313d3be8c2e17c72a4fb90868cd9112d0928ba8e23afcd1a9fbf65537ae4",
+      "operations.gen.ts": "012c019c0b8e4d0f27f2f8b3b8cda6e9e8e688c8fd4fb5637414ee14e97e8647",
+      "types.gen.ts": "7cbef6dd8e06f783bea5fd9328463b325e1183ad983e93d8fe8d04c2150a8bda"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

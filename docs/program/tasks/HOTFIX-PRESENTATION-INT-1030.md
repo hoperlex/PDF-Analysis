@@ -76,7 +76,7 @@ Root is sole Git writer/integrator/publisher. All contributors edit shared cmp-i
 - Additive experiment with classic fallback; disable new feature for fresh runs while preserving accepted command policy. Forward fix/revert, no forced refs.
 
 ## Handoff
-- Implementation and scoped checks completed; final owner-dev merge, frontend lock pin and dev publication belong to root. Exact receipt is recorded in the ignored integrator handoff.
+- Implementation, owner-design source merge, frontend lock pin, final production build and scoped checks completed; final dev publication belongs to root. Exact receipt is recorded in the ignored integrator handoff.
 
 ## Recorded seams and ownership transfer
 Root exclusively takes StageV3 UI directories listed above from HOTFIX-STAGE-V3-1030, whose agent now owns backend only. Analysis roles analysis.extended_review/extended_reply already map via generic blob_role_for, no newrole registry orDDL needed. Root GET getExtendedRunReview returns run_id/status/result. New ordinary costconsent freezes extended_review(enabled,max_blocks16,plan_versionextended-review-v1), conservatively3extra calls300kinput/36koutput; old accepted commands skip. ZIPimport and technicalexport methods are adapter-only delegates to owned domain services.
@@ -86,3 +86,5 @@ Root seal scope: exact API-version literals in infra/deploy/proxy/nginx.conf and
 FinalUIownership: root delegated all StageV3UI paths to HOTFIX-STAGE-V3-UI-1030 (c4_seal_plan) after itsversionshandback; neitherrootnorbackendV3agenteditsUIinparallel.
 
 SSH helper ownership: HOTFIX-SSH-IMAGES-1030 exclusively owns tools/executor-runner/claude_answer.py and tests/unit/executor_runner/** plus its task/report; root integrates only after lane handback. Installed /opt helper is outside this source change.
+
+Root integration configuration grant: infra/deploy/compose.server.yml and infra/deploy/env/alpha.env.example forward comparison-module exposure and the extended-review rollback switch to both API/worker. Defaults preserve comparison exposure off; no host deployment or secrets change. Existing infra/deploy README/serve/proxy files are owned only for API-version/count reconciliation.
