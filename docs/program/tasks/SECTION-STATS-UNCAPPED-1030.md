@@ -80,6 +80,7 @@
 - `tests/unit/comparison/stage/test_intake.py`
 - `tests/integration/composition/test_proxy_tls_path.py`
 - `tests/unit/runs/**`
+- `tests/integration/runs/test_window_reply_custody.py`
 - `web/tests/unit/cost-approval/**`
 - `docs/program/tasks/SECTION-STATS-UNCAPPED-1030.md`
 
@@ -106,7 +107,7 @@
 - Снять галочку `relaxed_limits` для нового прогона, чтобы вернуть денежное согласие. Для возврата прежних квот PDF и ZIP нужен обратный кодовый коммит; downgrade миграции проверяет отсутствие данных выше старых числовых границ и откажется, если такие данные уже сохранены. Старые принятые команды не меняются.
 
 ## Handoff
-- changed files: исходный коммит `af581631` затронул 62 файла в указанных `allowed_paths`; последующий узкий фикс снимает 2 ГиБ лимит публикации PDF-изображений только для `relaxed_limits` в `src/auditmanager/runs/{crop_budget,executor}.py` и дополняет этот task и unit test.
+- changed files: исходный коммит `af581631` затронул 62 файла в указанных `allowed_paths`; последующие узкие фиксы снимают 2 ГиБ лимит публикации PDF-изображений и 1 МиБ лимит сохранения ответа текстового окна только для `relaxed_limits`, дополняют этот task и целевые тесты.
 - commands/results: cost/preflight/coverage 36 passed; API/contract/proxy 38 passed; PDF/ZIP/stage 208 passed; web targeted 94 passed; `npm run api:verify`, `typecheck`, production `build`, Python compile and `alembic heads` passed. Existing extended-workflow suite has three failures also present in `origin/dev`: fixture lacks `run.version_uid`; 31 tests in that suite passed. No full gate or live provider/browser/DB migration run.
 - contracts: расширены числовые границы API/портального блока, обновлено описание ошибок; версия API остаётся `1.14.0` для dev hotfix.
 - known limits: внешний предел multipart-хранилища 10 000 частей по 16 МиБ (до 160 000 МиБ на файл), контекст и максимум ответа модели на один вызов, ресурсные пределы ОС/диска, 24-часовой сетевой таймаут. Длинный текст одной страницы всё ещё должен помещаться в окно модели; его разбиение требует отдельного правила ссылок на страницу. Слитые в `dev` после начала задачи дополнительные cross-window и project-parameters проходы имеют собственные замороженные лимиты выбора источников и 8 вызов; этот хотфикс их не пересматривает. Интеграционный тест публикации crops требует локальный S3 endpoint и здесь не выполняется.

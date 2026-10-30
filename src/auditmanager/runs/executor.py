@@ -147,7 +147,7 @@ from auditmanager.runs.retry import (
 )
 from auditmanager.runs.section_recognised_input import load_section_recognised_pages
 from auditmanager.runs.v3_group import TrustedPackRegistry
-from auditmanager.runs.window_reply_custody import WindowReplyCustody
+from auditmanager.runs.window_reply_custody import MAX_REPLY_BYTES, WindowReplyCustody
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import (
     CommandId,
@@ -1370,6 +1370,7 @@ def _execute_run_body(
                     session=session, jobs=job_repo, authority=authority, store=text_store,
                     mode=binding.adapter.provider_mode,
                     provider="anthropic" if binding.call is None else binding.call.provider_label,
+                    max_reply_bytes=None if relaxed_limits else MAX_REPLY_BYTES,
                 )),
             )
         _persist_and_bind(
