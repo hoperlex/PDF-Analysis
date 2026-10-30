@@ -68,3 +68,26 @@ export function unlinkRow(input: readonly StageLinkInput[], index: number): Stag
   }
   return [...input.slice(0, index), ...replacement, ...input.slice(index + 1)];
 }
+
+/** A cross-sheet hint edits a draft only; displaced sheets stay explicitly unmatched. */
+export function applyTextHint(
+  input: readonly StageLinkInput[], leftProfileId: string, rightProfileId: string,
+  mode: 'add' | 'replace',
+): StageLinkInput[] {
+  const removed = mode === 'replace' ? input.filter((row) => row.left_profile_id === leftProfileId) : [];
+  const remaining = input.filter((row) => !(
+    (mode === 'replace' && row.left_profile_id === leftProfileId)
+    || (row.relation === 'only_left' && row.left_profile_id === leftProfileId)
+    || (row.relation === 'only_right' && row.right_profile_id === rightProfileId)
+  ));
+  const result: StageLinkInput[] = remaining.some((row) => row.left_profile_id === leftProfileId
+    && row.right_profile_id === rightProfileId) ? [...remaining]
+    : [...remaining, { relation: 'paired', left_profile_id: leftProfileId, right_profile_id: rightProfileId }];
+  for (const row of removed) {
+    if (row.right_profile_id !== undefined && row.right_profile_id !== rightProfileId
+        && !result.some((held) => held.right_profile_id === row.right_profile_id)) {
+      result.push({ relation: 'only_right', right_profile_id: row.right_profile_id });
+    }
+  }
+  return result;
+}
