@@ -13,6 +13,7 @@ An expert can create a REVIEW card over current raw stage evidence, including a 
 
 ## Allowed paths
 - contracts/api/v1/openapi.json
+- tests/support/expected_facts.json
 - src/auditmanager/api/schemas/models.py
 - src/auditmanager/api/routers/comparison_stage_c4.py
 - src/auditmanager/api/routers/ports.py

@@ -246,7 +246,8 @@ class ComparisonAiJobService:
 
     def start_in_session(
         self, session: Session, *, scope: AiScope, consent: AiConsentInput, command: AiJobCommand,
-        queue_items: bool = True,
+        queue_items: bool = True, estimate_mode: AiMode = AiMode.START,
+        estimate_job: AiJobRecord | None = None,
     ) -> AiJobView:
         """Prepare a consented job and its work in the caller's transaction; never commit.
 
@@ -265,6 +266,18 @@ class ComparisonAiJobService:
         })
         if scope.method == "stage_review" and scope.stage_chain_run_id is None:
             raise ValueError("a persisted stage AI job requires its chain run")
+        if estimate_mode is not AiMode.START:
+            if (estimate_mode is not AiMode.LEFT or scope.method != "stage_review" or queue_items
+                    or estimate_job is None):
+                raise ValueError("only caller-owned stage recovery can start from a LEFT estimate")
+            prior = self._job(session, estimate_job.job_id)
+            if (prior.scope.stage_chain_run_id != scope.stage_chain_run_id
+                    or prior.scope.project_uid != scope.project_uid or prior.scope.document_uid != scope.document_uid
+                    or prior.state not in {"completed", "failed", "cancelled"}):
+                raise _conflict(CONFLICT_AI_JOB_ACTIVE)
+            estimate_job = prior
+            fingerprint = payload_fingerprint({"base": str(fingerprint), "estimate_mode": "left",
+                                               "estimate_job_id": prior.job_id})
         claim = self._commands.begin(
             session, command_type=command.command_type, idempotency_key=IdempotencyKey(command.idempotency_key),
             fingerprint=fingerprint,
@@ -273,7 +286,7 @@ class ComparisonAiJobService:
             return self.view_in(session, str(claim.outcome["ai_job_id"]))
         if self._repo.live_on_scope(session, scope) is not None:
             raise _conflict(CONFLICT_AI_JOB_ACTIVE)
-        estimate = self.estimate_in(session, scope, AiMode.START)
+        estimate = self.estimate_in(session, scope, estimate_mode, job=estimate_job)
         self._require_consentable(estimate, consent)
         try:
             job_id = self._repo.insert(
