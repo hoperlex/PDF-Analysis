@@ -1,20 +1,38 @@
 .layout {
   display: grid;
-  gap: var(--am-gap-lg);
+  gap: 16px;
   min-width: 0;
 }
 
 .create,
 .list {
   min-width: 0;
-  padding: var(--am-gap-lg);
+  padding: 18px;
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius-lg);
-  background: var(--am-surface);
+  background: var(--am-paper);
+  box-shadow: var(--am-shadow-1);
 }
 
 .list > h2 {
   margin-top: 0;
+}
+
+.list :global(li.am-state) {
+  margin-bottom: 6px !important;
+  padding: 10px 14px;
+}
+
+@media (min-width: 1280px) {
+  .layout {
+    grid-template-columns: minmax(0, 1.8fr) minmax(300px, 0.8fr);
+    align-items: start;
+  }
+
+  .create {
+    position: sticky;
+    top: 76px;
+  }
 }
 
 @media (max-width: 780px) {
