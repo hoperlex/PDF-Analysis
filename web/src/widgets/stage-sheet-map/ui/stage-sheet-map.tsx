@@ -3,9 +3,9 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 
-import type { ComparisonBox, ProjectUid, StageLinkInput, StageLinkRevision, StageSheetPassport } from '@/shared/api';
+import type { ComparisonBox, ProjectUid, StageLinkInput, StageLinkRevision, StageSheetPassport, VersionPageProfile } from '@/shared/api';
 import {
-  ApiError, applyStageSheetMap, failureMessage, getStageSheetMap,
+  ApiError, applyStageSheetMap, failureMessage, getStageChainRun, getStageSheetMap, getStageSheetMapRevision, getVersionPageProfile,
   listStageSheetMapHistory, listStageSheetPassports, listStageSheetSuggestions,
   newIdempotencyKey,
 } from '@/shared/api';
@@ -17,6 +17,10 @@ import {
 import type { PageTextProvider } from '@/widgets/stage-text-evidence';
 
 import { addUnpaired, applyTextHint, moveSheet, unlinkRow } from '../model/draft';
+import { acceptedSameFragments } from '../model/ai-masks';
+import { readAiReviews } from '../api/read-ai-reviews';
+import { focusedRow } from '../model/navigation';
+import type { StageMapFocus } from '../model/navigation';
 import { StagePairViewer } from './stage-pair-viewer';
 import type { StageViewerFocus } from './stage-pair-viewer';
 import styles from './stage-sheet-map.module.css';
@@ -45,8 +49,9 @@ function label(page: StageSheetPassport): string {
     + `${page.floor === undefined ? '' : ` · ${page.floor}`}`;
 }
 
-function PairMap({ pairId, mayAct, textProvider }: {
+function PairMap({ pairId, mayAct, textProvider, runId, focus: externalFocus, onClearFocus }: {
   readonly pairId: string; readonly mayAct: boolean; readonly textProvider: PageTextProvider | undefined;
+  readonly runId: string | undefined; readonly focus: StageMapFocus | undefined; readonly onClearFocus: (() => void) | undefined;
 }) {
   const cache = useQueryClient();
   const passports = useQuery({
@@ -85,7 +90,54 @@ function PairMap({ pairId, mayAct, textProvider }: {
   const [commandError, setCommandError] = useState<unknown | null>(null);
   const held = useRef<{ signature: string; key: string } | null>(null);
   const [focus, setFocus] = useState<StageViewerFocus | undefined>();
-  const text = useStageTextEvidence(pairId, current.data?.revision_id);
+  const evidenceRevisionId = externalFocus?.revisionId ?? current.data?.revision_id;
+  const historical = externalFocus !== undefined && externalFocus.revisionId !== current.data?.revision_id;
+  const snapshot = useQuery({ queryKey: ['stage-evidence-revision', externalFocus?.revisionId ?? 'none'],
+    queryFn: async () => {
+      const value = (await getStageSheetMapRevision({ path: { stage_link_revision_id: externalFocus!.revisionId } })).data;
+      if (value.pair_id !== pairId) throw new Error('Карта относится к другой паре.');
+      return value;
+    }, enabled: externalFocus !== undefined, retry: false, staleTime: Infinity });
+  const run = useQuery({ queryKey: ['stage-full-run', runId ?? ''],
+    queryFn: async () => (await getStageChainRun({ path: { stage_chain_run_id: runId! } })).data,
+    enabled: runId !== undefined, retry: false });
+  const aiReady = run.data?.pair_id === pairId && run.data.with_ai === true
+    && (run.data.steps.some((step) => step.step_no === 4 && step.state === 'completed') || run.data.state === 'completed');
+  const reviews = useQuery({ queryKey: ['stage-map-ai-reviews', runId ?? ''], queryFn: () => readAiReviews(runId!), enabled: aiReady, retry: false });
+  useEffect(() => { if (aiReady) void reviews.refetch(); }, [aiReady, runId, reviews.refetch]);
+  const text = useStageTextEvidence(pairId, evidenceRevisionId);
+  const aiCurrent = aiReady && !run.data?.stale && (run.data?.effective_link_revision_id ?? run.data?.link_revision_id) === evidenceRevisionId;
+  const aiIds = aiCurrent ? acceptedSameFragments(text.data?.fragments ?? [], reviews.data ?? []) : [];
+  const viewerEvidence = text.data === undefined ? undefined : { ...text.data, aiSameFragmentIds: aiIds };
+  const beforeExternal = useRef<{ left: string; right: string } | null>(null);
+  const rowNodes = useRef(new Map<number, HTMLLIElement>());
+  const displayRows = historical ? snapshot.data?.items ?? [] : draft;
+  const selectedRow = focusedRow(displayRows, externalFocus);
+  useEffect(() => {
+    if (externalFocus !== undefined) {
+      if (beforeExternal.current === null) beforeExternal.current = { left, right };
+      setLeft(externalFocus.leftProfileId ?? ''); setRight(externalFocus.rightProfileId ?? '');
+      setLeftSearch(''); setRightSearch('');
+      setFocus({ token: externalFocus.token,
+        ...(externalFocus.leftBox === undefined ? {} : { left: externalFocus.leftBox }),
+        ...(externalFocus.rightBox === undefined ? {} : { right: externalFocus.rightBox }) });
+    } else if (beforeExternal.current !== null) {
+      setLeft(beforeExternal.current.left || draft[0]?.left_profile_id || '');
+      setRight(beforeExternal.current.right || draft[0]?.right_profile_id || ''); beforeExternal.current = null; setFocus(undefined);
+    }
+    // External navigation is an event; manual page selections do not reapply it.
+  }, [externalFocus]);
+  useEffect(() => { if (selectedRow !== undefined) rowNodes.current.get(selectedRow)?.scrollIntoView?.({ block: 'nearest' }); }, [selectedRow, externalFocus?.token, displayRows.length]);
+  const leftStored = useQuery({ queryKey: ['stage-view-profile', left || 'none'],
+    queryFn: async () => (await getVersionPageProfile({ path: { comparison_page_profile_id: left } })).data,
+    enabled: externalFocus !== undefined && left !== '', retry: false });
+  const rightStored = useQuery({ queryKey: ['stage-view-profile', right || 'none'],
+    queryFn: async () => (await getVersionPageProfile({ path: { comparison_page_profile_id: right } })).data,
+    enabled: externalFocus !== undefined && right !== '', retry: false });
+  const storedPassport = (profile: VersionPageProfile | undefined, side: 'left' | 'right'): StageSheetPassport | undefined => {
+    if (profile === undefined || run.data?.pair_id !== pairId || !run.data.pinned_version_uids.includes(profile.version_uid)) return undefined;
+    return { profile_id: profile.page_profile_id, version_uid: profile.version_uid, page_number: profile.page_number, side };
+  };
 
   useEffect(() => {
     if (current.isSuccess && !dirty) {
@@ -102,14 +154,20 @@ function PairMap({ pairId, mayAct, textProvider }: {
     }
   }, [current.data, current.isSuccess, dirty]);
 
-  const leftPages = passports.data?.filter((page) => page.side === 'left') ?? [];
-  const rightPages = passports.data?.filter((page) => page.side === 'right') ?? [];
+  const snapshotIds = new Set(snapshot.data?.items.flatMap((item) => [item.left_profile_id, item.right_profile_id]).filter((id): id is string => id !== undefined));
+  const visiblePassports = (passports.data ?? []).filter((page) => !historical || snapshotIds.has(page.profile_id));
+  const leftPages = visiblePassports.filter((page) => page.side === 'left');
+  const rightPages = visiblePassports.filter((page) => page.side === 'right');
+  const oldLeft = storedPassport(leftStored.data, 'left');
+  const oldRight = storedPassport(rightStored.data, 'right');
+  if (oldLeft !== undefined && !leftPages.some((page) => page.profile_id === oldLeft.profile_id)) leftPages.push(oldLeft);
+  if (oldRight !== undefined && !rightPages.some((page) => page.profile_id === oldRight.profile_id)) rightPages.push(oldRight);
   const leftPage = leftPages.find((page) => page.profile_id === left);
   const rightPage = rightPages.find((page) => page.profile_id === right);
   const showLeft = leftPages.filter((page) => page.profile_id === left || label(page).toLocaleLowerCase().includes(leftSearch.toLocaleLowerCase()));
   const showRight = rightPages.filter((page) => page.profile_id === right || label(page).toLocaleLowerCase().includes(rightSearch.toLocaleLowerCase()));
   const names = new Map((passports.data ?? []).map((page) => [page.profile_id, label(page)]));
-  const failure = passports.error ?? suggestions.error ?? current.error ?? history.error;
+  const failure = passports.error ?? suggestions.error ?? current.error ?? history.error ?? snapshot.error ?? run.error ?? reviews.error ?? leftStored.error ?? rightStored.error;
   const readFailure = failure === null ? null : failureMessage(failure);
   const actFailure = commandError === null ? null : failureMessage(commandError);
 
@@ -131,7 +189,7 @@ function PairMap({ pairId, mayAct, textProvider }: {
       ...(rightBox === undefined ? {} : { right: rightBox }) }));
   };
   const save = async () => {
-    if (draft.length === 0) return;
+    if (draft.length === 0 || historical) return;
     const signature = JSON.stringify([pairId, current.data?.revision_id ?? null, draft]);
     if (held.current?.signature !== signature) held.current = { signature, key: newIdempotencyKey() };
     setSaving(true);
@@ -155,6 +213,11 @@ function PairMap({ pairId, mayAct, textProvider }: {
   };
 
   return <div className={styles.workbench}>
+    {externalFocus === undefined ? null : <div role="status" className={styles.focusNotice}>
+      <p>{historical ? 'Показана сохранённая карта выбранного запуска. Изменения состава здесь недоступны.' : 'Открыто свидетельство выбранного запуска.'}</p>
+      {dirty ? <p>Черновик текущей карты сохранён в этой вкладке.</p> : null}
+      {onClearFocus === undefined ? null : <button type="button" className="am-button" onClick={onClearFocus}>Вернуться к текущей карте</button>}
+    </div>}
     {passports.isPending || suggestions.isPending || current.isPending
       ? <LoadingState what="листы пары стадий" /> : null}
     {readFailure === null ? null : <ErrorState title="Карта листов не открылась" detail={readFailure.detail} correlationId={readFailure.correlationId} />}
@@ -178,10 +241,10 @@ function PairMap({ pairId, mayAct, textProvider }: {
         </label>
       </div>
     </div>
-    <StagePairViewer leftPage={leftPage} rightPage={rightPage} evidence={text.data} stale={dirty}
+    <StagePairViewer leftPage={leftPage} rightPage={rightPage} evidence={viewerEvidence} stale={dirty || run.data?.stale === true}
       {...(focus === undefined ? {} : { focus })}
       {...(textProvider === undefined ? {} : { textProvider })} />
-    {mayAct && current.isSuccess && passports.isSuccess ? <div className={styles.actions}>
+    {mayAct && !historical && current.isSuccess && passports.isSuccess ? <div className={styles.actions}>
       <button type="button" className="am-button" disabled={left === '' || right === ''} onClick={() => add({ relation: 'paired', left_profile_id: left, right_profile_id: right })}>Добавить связь</button>
       <button type="button" className="am-button" disabled={left === ''} onClick={() => { setDraft((items) => addUnpaired(items, 'left', left)); setDirty(true); }}>Без пары слева</button>
       <button type="button" className="am-button" disabled={right === ''} onClick={() => { setDraft((items) => addUnpaired(items, 'right', right)); setDirty(true); }}>Без пары справа</button>
@@ -197,24 +260,27 @@ function PairMap({ pairId, mayAct, textProvider }: {
     <p>Подсказки не меняют карту. Высокая уверенность: {suggestions.data?.items.filter((item) => item.confidence === 'high').length ?? 0}; проверить: {suggestions.data?.items.filter((item) => item.confidence === 'review').length ?? 0}.</p>
     {draft.length === 0 ? <EmptyState title="Карта листов пока пуста" detail="Выберите листы и подтвердите первую связь." /> : null}
     <ol className={styles.rows}>
-      {draft.map((row, index) => <li key={`${index}:${row.left_profile_id ?? ''}:${row.right_profile_id ?? ''}`} className={styles.row}>
+      {displayRows.map((row, index) => <li key={`${index}:${row.left_profile_id ?? ''}:${row.right_profile_id ?? ''}`} className={styles.row}
+        ref={(node) => { if (node === null) rowNodes.current.delete(index); else rowNodes.current.set(index, node); }}
+        data-stage-map-row={index} data-stage-focused-row={index === selectedRow ? 'true' : undefined}>
         <span>П: {row.left_profile_id === undefined ? 'Пусто' : names.get(row.left_profile_id) ?? row.left_profile_id}</span>
         <span>Р: {row.right_profile_id === undefined ? 'Пусто' : names.get(row.right_profile_id) ?? row.right_profile_id}</span>
-        {mayAct ? <div className={styles.actions}>
+        {mayAct && !historical ? <div className={styles.actions}>
           <button type="button" className="am-button" onClick={() => focusPages(row.left_profile_id, row.right_profile_id)}>Открыть связь ↗</button>
           <button type="button" className="am-button" disabled={left === ''} onClick={() => { setDraft((items) => moveSheet(addUnpaired(items, 'left', left), 'left', left, index)); setDirty(true); }}>Перенести П сюда</button>
           <button type="button" className="am-button" disabled={right === ''} onClick={() => { setDraft((items) => moveSheet(addUnpaired(items, 'right', right), 'right', right, index)); setDirty(true); }}>Перенести Р сюда</button>
           <button type="button" className="am-button" disabled={row.relation !== 'paired'} onClick={() => { setDraft((items) => unlinkRow(items, index)); setDirty(true); }}>Удалить связь</button>
-        </div> : null}
+        </div> : <button type="button" className="am-button" onClick={() => focusPages(row.left_profile_id, row.right_profile_id)}>Открыть связь ↗</button>}
       </li>)}
     </ol>
-    {mayAct ? <button type="button" className="am-button" disabled={!dirty || saving || draft.length === 0} onClick={() => void save()}>Сохранить решение эксперта</button> : null}
+    {mayAct && !historical ? <button type="button" className="am-button" disabled={!dirty || saving || draft.length === 0} onClick={() => void save()}>Сохранить решение эксперта</button> : null}
     {actFailure === null ? null : <ErrorState title="Карта не сохранена" detail={actFailure.detail} correlationId={actFailure.correlationId} />}
     <p>Текущая ревизия: {current.data?.revision_no ?? 'нет'}.</p>
     {history.data?.items.length ? <details><summary>История карты</summary><ol>
       {history.data.items.map((item) => <li key={item.revision_id}>Ревизия {item.revision_no} · {item.items.length} строк</li>)}
     </ol></details> : null}
-    <StageTextEvidence revisionId={current.data?.revision_id} mayAct={mayAct} dirty={dirty}
+    {aiIds.length === 0 ? null : <p>Совпадения после ИИ-ревизии: {aiIds.length} фрагментов. Исходные различия доступны ниже.</p>}
+    <StageTextEvidence revisionId={evidenceRevisionId} mayAct={mayAct && !historical} dirty={dirty || historical}
       evidence={text.data} loading={text.isFetching} needsRecompute={evidenceNeedsRecompute(text.error)}
       error={text.error} names={names}
       onCompleted={() => { void cache.invalidateQueries({ queryKey: STAGE_TEXT_KEYS.evidence(pairId, current.data?.revision_id) }); }}
@@ -231,20 +297,25 @@ export interface StageSheetMapProps {
   readonly projectUid: ProjectUid;
   readonly mayAct: boolean;
   readonly textProvider?: PageTextProvider;
+  readonly pairId?: string;
+  readonly onPairChange?: (pairId: string) => void;
+  readonly runId?: string;
+  readonly focus?: StageMapFocus;
+  readonly onClearFocus?: () => void;
 }
 
-export function StageSheetMap({ projectUid, mayAct, textProvider }: StageSheetMapProps) {
+export function StageSheetMap({ projectUid, mayAct, textProvider, pairId: controlledPairId, onPairChange, runId, focus, onClearFocus }: StageSheetMapProps) {
   const [pages, setPages] = useState<string[]>([]);
   const [selected, setSelected] = useState('');
-  const pairs = useStagePairs(projectUid, pages.at(-1));
-  const pairId = selected || (pairs.data?.items.length === 1 ? pairs.data.items[0]!.pair_id : '');
+  const pairs = useStagePairs(controlledPairId === undefined ? projectUid : null, pages.at(-1));
+  const pairId = controlledPairId ?? (selected || (pairs.data?.items.length === 1 ? pairs.data.items[0]!.pair_id : ''));
   const pairFailure = pairs.error === null ? null : failureMessage(pairs.error);
   return <section className={styles.workbench} aria-labelledby="stage-map-heading">
     <h2 id="stage-map-heading">Сопоставление листов</h2>
-    {pairs.isPending ? <LoadingState what="пары стадий" /> : null}
+    {controlledPairId === undefined && pairs.isPending ? <LoadingState what="пары стадий" /> : null}
     {pairFailure === null ? null : <ErrorState title="Пары не открылись" detail={pairFailure.detail} correlationId={pairFailure.correlationId} />}
-    <label>Пара стадий
-      <select value={pairId} onChange={(event) => setSelected(event.target.value)}>
+    {controlledPairId === undefined ? <><label>Пара стадий
+      <select value={pairId} onChange={(event) => { setSelected(event.target.value); onPairChange?.(event.target.value); }}>
         <option value="">— выберите —</option>
         {pairs.data?.items.map((pair) => <option key={pair.pair_id} value={pair.pair_id}>
           {pair.left_document_uid} → {pair.right_document_uid ?? pair.assembly_id}
@@ -257,8 +328,10 @@ export function StageSheetMap({ projectUid, mayAct, textProvider }: StageSheetMa
         const next = pairs.data?.page.next_cursor;
         if (next !== null && next !== undefined) { setPages((held) => [...held, next]); setSelected(''); }
       }}>Далее</button>
-    </div>}
+    </div>}</> : null}
+    {focus !== undefined && (focus.pairId !== pairId || (runId !== undefined && focus.runId !== runId))
+      ? <ErrorState title="Свидетельство относится к другому сравнению" detail="Выберите запуск и откройте место заново." /> : null}
     {pairId === '' ? <EmptyState title="Выберите пару стадий" detail="Карта листов относится к одной подтверждённой паре." />
-      : <PairMap key={pairId} pairId={pairId} mayAct={mayAct} textProvider={textProvider} />}
+      : <PairMap key={pairId} pairId={pairId} mayAct={mayAct} textProvider={textProvider} runId={runId} focus={focus?.pairId === pairId && (runId === undefined || focus.runId === runId) ? focus : undefined} onClearFocus={onClearFocus} />}
   </section>;
 }

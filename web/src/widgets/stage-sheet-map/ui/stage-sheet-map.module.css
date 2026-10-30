@@ -8,4 +8,6 @@
 .actions { display: flex; flex-wrap: wrap; gap: .5rem; }
 .rows { display: grid; gap: .5rem; padding-left: 1.5rem; }
 .row { display: grid; gap: .5rem; overflow-wrap: anywhere; }
+.focusNotice { padding: .7rem; border: 1px solid var(--am-border); border-radius: .4rem; }
+.row[data-stage-focused-row="true"] { outline: 2px solid var(--am-accent, #2d5fa0); outline-offset: 2px; }
 @media (max-width: 850px) { .panes { grid-template-columns: 1fr; } }
