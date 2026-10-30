@@ -102,10 +102,16 @@ class CallFailed(SpendError):
     """The adapter was called and the journal row is ``failed``. ``retry_safe`` is the transport's
     own word that a new call cannot double-spend (a proven pre-dispatch refusal)."""
 
-    def __init__(self, reason: str, *, call_id: str, retry_safe: bool = False) -> None:
+    def __init__(self, reason: str, *, call_id: str, retry_safe: bool = False,
+                 dispatch_class: str | None = None, provider_failure_kind: str | None = None,
+                 http_status: int | None = None, retry_after_seconds: float = 0.0) -> None:
         super().__init__(reason)
         self.call_id = call_id
         self.retry_safe = retry_safe
+        self.dispatch_class = dispatch_class
+        self.provider_failure_kind = provider_failure_kind
+        self.http_status = http_status
+        self.retry_after_seconds = retry_after_seconds
 
     def as_outcome(self) -> Outcome:
         return Failed(self.reason, retry=self.retry_safe)

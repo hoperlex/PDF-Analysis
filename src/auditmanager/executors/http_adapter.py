@@ -234,16 +234,33 @@ class AnthropicMessagesAdapter:
                     retry_safe=False,
                     message="the model provider refused the connection's credential",
                     details={"dependency": _DEPENDENCY_NAME},
+                    http_status=status, provider_failure_kind="auth",
+                )
+            if status == 402:
+                return ProxyDispatchError(
+                    ErrorCode.DEPENDENCY_UNAVAILABLE, dispatch_class="definite_refusal",
+                    retry_safe=False, message="the model provider refused the available quota",
+                    http_status=status, provider_failure_kind="quota",
                 )
             if status in (400, 413):
                 return ProxyDispatchError(
                     ErrorCode.ANALYSIS_INPUT_INVALID, dispatch_class="definite_refusal",
                     retry_safe=False, message="the model provider refused the request",
+                    http_status=status, provider_failure_kind="request",
                 )
             if status == 429:
+                if getattr(failure, "code", None) in (
+                    "insufficient_quota", "quota_exceeded", "billing_hard_limit_reached",
+                ):
+                    return ProxyDispatchError(
+                        ErrorCode.DEPENDENCY_UNAVAILABLE, dispatch_class="definite_refusal",
+                        retry_safe=False, message="the model provider refused the available quota",
+                        http_status=status, provider_failure_kind="quota",
+                    )
                 return ProxyDispatchError(
                     ErrorCode.DEPENDENCY_UNAVAILABLE, dispatch_class="rate_limited",
                     retry_safe=True, message="the model provider is saturated; the call was not made",
+                    http_status=status, provider_failure_kind="rate_limit",
                 )
             return ProxyDispatchError(
                 ErrorCode.DEPENDENCY_UNAVAILABLE, dispatch_class="outcome_unknown",

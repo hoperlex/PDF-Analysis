@@ -276,11 +276,22 @@ class ComparisonModelCaller:
         repository = self._repository
         code = _code(error.code.value)
         dispatch_class = getattr(error, "dispatch_class", None)
+        provider_kind = getattr(error, "provider_failure_kind", None)
+        status = getattr(error, "http_status", None)
+        retry_after = getattr(error, "retry_after_seconds", 0.0)
+        safe_metadata = {
+            "dispatch_class": dispatch_class if dispatch_class in _NOT_PROCESSED else None,
+            "provider_failure_kind": provider_kind if provider_kind in
+                {"rate_limit", "quota", "auth", "request"} else None,
+            "http_status": status if type(status) is int and 100 <= status <= 599 else None,
+            "retry_after_seconds": float(retry_after) if type(retry_after) in (int, float)
+                and math.isfinite(retry_after) and 0 <= retry_after <= 600 else 0.0,
+        }
         dependency = getattr(error, "detail_fields", {}).get("dependency")
         if mode == PROVIDER_RECORDED:
             # A replay dispatches nothing, so it can never have spent.
             self._settle(call_id, lambda s: repository.fail(s, call_id, error_code=code))
-            raise CallFailed(code, call_id=call_id)
+            raise CallFailed(code, call_id=call_id, **safe_metadata)
         if dependency == _IMAGE_DEPENDENCY:
             # The runner refused the images after it claimed the task. Its tools refuse before any model
             # runs, but the contract also lets a session refuse after it has looked at them, so a metered
@@ -295,7 +306,8 @@ class ComparisonModelCaller:
             raise OutcomeUnknown(call_id=call_id)
         if dispatch_class in _NOT_PROCESSED:
             self._settle(call_id, lambda s: repository.fail(s, call_id, error_code=code))
-            raise CallFailed(code, call_id=call_id, retry_safe=bool(getattr(error, "retry_safe", False)))
+            raise CallFailed(code, call_id=call_id, retry_safe=bool(getattr(error, "retry_safe", False)),
+                             **safe_metadata)
         received = getattr(error, "received", None)
         if received is not None:
             # The provider answered and the answer was unusable: it may have charged for it.
