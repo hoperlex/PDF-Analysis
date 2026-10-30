@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -100,16 +101,42 @@ class StageReviewService:
                                   "difference_id": row["id"], "graphic_id": None}
         # Not-checked/unreliable graphics are status records, never change claims.
         for row in session.execute(text(
-            "SELECT * FROM stage_graphic_evidence WHERE stage_chain_run_id=:run "
-            "AND status='reliable' AND jsonb_array_length(regions)>0 ORDER BY content_key"
-        ), {"run": run_id}).mappings():
-            parts = [{"side": side, "profile_id": row[f"{side}_profile_id"],
-                      "content_key": row["content_key"], "box_anchor": {}}
-                     for side in ("left", "right") if row[f"{side}_profile_id"]]
+            "SELECT g.*,er.content_key AS engine_key,lp.page_number AS left_page,lv.document_uid AS left_document,"
+            "rp.page_number AS right_page,rv.document_uid AS right_document FROM stage_graphic_evidence g "
+            "JOIN stage_link_item gi ON gi.stage_link_item_id=g.stage_link_item_id "
+            "JOIN comparison_sheet_pair_result er ON er.comparison_sheet_pair_result_id=g.comparison_sheet_pair_result_id "
+            "JOIN comparison_page_profile lp ON lp.comparison_page_profile_id=g.left_profile_id "
+            "JOIN document_version lv ON lv.version_uid=lp.version_uid "
+            "JOIN comparison_page_profile rp ON rp.comparison_page_profile_id=g.right_profile_id "
+            "JOIN document_version rv ON rv.version_uid=rp.version_uid "
+            "WHERE g.stage_chain_run_id=:run AND gi.stage_link_revision_id=:revision AND g.status='reliable' "
+            "AND jsonb_array_length(g.regions)>0 ORDER BY g.content_key"
+        ), {"run": run_id, "revision": revision_id}).mappings():
+            parts, region_keys = [], []
+            for region in row["regions"]:
+                proof = region.get("registration", {})
+                region_key = region.get("region_key", "")
+                if (proof.get("source") != "comparison_sheet_pair_result" or proof.get("reliable") is not True
+                        or proof.get("result_id") != row["comparison_sheet_pair_result_id"]
+                        or proof.get("content_key") != row["engine_key"]
+                        or len(region_key) != 64 or region_key in region_keys):
+                    raise invalid("stage_review_graphic_proof_invalid")
+                region_keys.append(region_key)
+                for side in ("left", "right"):
+                    box = region.get(f"{side}_box", [])
+                    if (not isinstance(box, list) or len(box) != 4
+                            or any(type(v) not in {int, float} or not math.isfinite(v) for v in box)
+                            or not (0 <= box[0] < box[2] and 0 <= box[1] < box[3])):
+                        raise invalid("stage_review_graphic_box_invalid")
+                    parts.append({"side": side, "profile_id": row[f"{side}_profile_id"],
+                                  "document_uid": row[f"{side}_document"], "page_number": row[f"{side}_page"],
+                                  "content_key": digest({"engine": row["engine_key"], "region": region_key, "side": side}),
+                                  "box_anchor": dict(zip(("x0", "top", "x1", "bottom"), box, strict=True))})
             sources[row["stage_graphic_evidence_id"]] = {
                 "kind": "GRAPHIC", "parts": parts, "before": "", "after": "",
                 "difference_id": None, "graphic_id": row["stage_graphic_evidence_id"],
-                "graphic_key": row["content_key"],
+                "graphic_key": digest({"engine": row["engine_key"], "regions": sorted(region_keys),
+                                       "profiles": [row["left_profile_id"], row["right_profile_id"]]}),
             }
         return sources
 
