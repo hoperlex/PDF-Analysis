@@ -371,6 +371,12 @@ export async function runWritePhase({
     // runs. On an origin that bills per run, or whose provider mode is not known, that is not a
     // thing to do unasked: the first such step says so ONCE and the rest are not reached.
     if (step.screen !== undefined && step.reads_only !== true) {
+      if (step.requires_provider_mode !== undefined && providerMode !== step.requires_provider_mode) {
+        fail(step.name, `requires provider mode '${step.requires_provider_mode}', got '${providerMode ?? 'unknown'}'; --allow-spend does not override a recorded-only comparison case`);
+        record.verdict = 'RED';
+        stopped = stopped ?? step.name;
+        continue;
+      }
       if (!nightWindowMayRun({ providerMode, allowSpend })) {
         if (!nightRefused) {
           nightRefused = true;
@@ -902,7 +908,7 @@ export async function runWritePhase({
       const exchange =
         expectation.refusal === true
           ? (matching.find((e) => e.status === expectation.expect_status) ?? matching[0] ?? null)
-          : (matching[0] ?? null);
+          : (expectation.last_response === true ? matching.at(-1) ?? null : matching[0] ?? null);
       byOperation.set(expectation.operationId, exchange);
       if (expectation.refusal === true) {
         declaredRefusals.push({ method: expectation.method, path: concrete, status: expectation.expect_status });
@@ -1045,6 +1051,10 @@ export async function runWritePhase({
       const exchange = byOperation.get(check.of);
       if (!exchange) continue;
       const contentType = exchange.requestHeaders?.['content-type'] ?? '';
+      if (check.requires_idempotency_key === true && !(exchange.requestHeaders?.['idempotency-key'] ?? '').trim()) {
+        ok = false;
+        fail(step.name, `${check.of} carried no Idempotency-Key`);
+      }
       if (check.content_type_starts_with && !contentType.startsWith(check.content_type_starts_with)) {
         ok = false;
         fail(
