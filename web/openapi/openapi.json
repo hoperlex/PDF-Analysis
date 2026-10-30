@@ -20652,6 +20652,132 @@
           }
         }
       }
+    },
+    "/runs/cost-estimate": {
+      "post": {
+        "operationId": "estimateRunCost",
+        "tags": [
+          "runs"
+        ],
+        "summary": "Estimate selected section analysis before spend.",
+        "description": "Read-only cost preflight. A changed source, profile, preset, route or model makes an earlier estimate digest stale. Unmetered connections are explicit; estimates are not measured spend.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunCostEstimateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyConflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/RunInputInvalid"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          },
+          "200": {
+            "description": "A source-bound estimate using the selected pinned route and rates; no provider call or job is created.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunCostEstimate"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ar-v3-beta/groups/cost-estimate": {
+      "post": {
+        "operationId": "estimateArV3GroupCost",
+        "tags": [
+          "runs"
+        ],
+        "summary": "Estimate all six AR v3 checks before spend.",
+        "description": "Read-only cost preflight. A changed source, profile, preset, route or model makes an earlier estimate digest stale. Unmetered connections are explicit; estimates are not measured spend.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArV3GroupCostEstimateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyConflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/RunInputInvalid"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          },
+          "200": {
+            "description": "A source-bound estimate using the selected pinned route and rates; no provider call or job is created.",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunCostEstimate"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -23792,6 +23918,10 @@
           "relaxed_limits": {
             "type": "boolean",
             "description": "Temporary section-analysis option. Absent or false keeps the deployment cost ceiling and a 16,000-token output request. True omits the per-Run cost halt and requests up to 64,000 output tokens under a distinct immutable profile and bundle identity. The 12-window operational document-size limit remains. The provider may enforce a lower output maximum. The choice is part of the idempotency payload and persists for the Run."
+          },
+          "cost_consent": {
+            "$ref": "#/components/schemas/RunCostConsent",
+            "description": "The expert confirms a fresh estimate and a sufficient explicit ceiling before this start may spend. The approved cap applies independently of the raised output-limit choice."
           }
         }
       },
@@ -28764,7 +28894,11 @@
           "algorithm": {
             "type": "string",
             "const": "price-match-v1",
-            "title": "Algorithm"
+            "title": "Algorithm",
+            "enum": [
+              "price-match-v1",
+              "price-match-v2"
+            ]
           },
           "counts": {
             "$ref": "#/components/schemas/SpecificationMatchCounts"
@@ -30679,7 +30813,11 @@
           "match_algorithm": {
             "type": "string",
             "const": "price-match-v1",
-            "title": "Match Algorithm"
+            "title": "Match Algorithm",
+            "enum": [
+              "price-match-v1",
+              "price-match-v2"
+            ]
           },
           "projects": {
             "items": {
@@ -32202,6 +32340,10 @@
           "relaxed_limits": {
             "type": "boolean",
             "description": "Temporary AR v3 option. Absent or false keeps the deployment cost ceiling and a 16,000-token output request. True omits the per-Run cost halt and requests up to 64,000 output tokens; the provider may enforce a lower maximum. The choice is part of the idempotency payload and persists for all six Runs."
+          },
+          "cost_consent": {
+            "$ref": "#/components/schemas/RunCostConsent",
+            "description": "The expert confirms a fresh estimate and a sufficient explicit ceiling before this start may spend. The approved cap applies independently of the raised output-limit choice."
           }
         },
         "additionalProperties": false,
@@ -40645,6 +40787,182 @@
           "reason"
         ],
         "title": "CreateStageReviewCardRequest"
+      },
+      "RunCostConsent": {
+        "additionalProperties": false,
+        "properties": {
+          "estimate_digest": {
+            "$ref": "#/components/schemas/Sha256"
+          },
+          "ceiling_micros": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "title": "Ceiling Micros",
+            "type": "integer"
+          },
+          "confirmed": {
+            "title": "Confirmed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "estimate_digest",
+          "ceiling_micros",
+          "confirmed"
+        ],
+        "title": "RunCostConsent",
+        "type": "object"
+      },
+      "RunCostEstimateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "version_uid": {
+            "$ref": "#/components/schemas/VersionUid"
+          },
+          "executor_connection_id": {
+            "$ref": "#/components/schemas/ExecutorConnectionId"
+          },
+          "preset_id": {
+            "$ref": "#/components/schemas/PresetId"
+          },
+          "relaxed_limits": {
+            "title": "Relaxed Limits",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "version_uid"
+        ],
+        "title": "RunCostEstimateRequest",
+        "type": "object"
+      },
+      "ArV3GroupCostEstimateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "version_uid": {
+            "$ref": "#/components/schemas/VersionUid"
+          },
+          "relaxed_limits": {
+            "title": "Relaxed Limits",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "version_uid"
+        ],
+        "title": "ArV3GroupCostEstimateRequest",
+        "type": "object"
+      },
+      "RunCostEstimate": {
+        "additionalProperties": false,
+        "properties": {
+          "estimate_digest": {
+            "$ref": "#/components/schemas/Sha256"
+          },
+          "scope": {
+            "enum": [
+              "run",
+              "ar_v3_group"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "version_uid": {
+            "$ref": "#/components/schemas/VersionUid"
+          },
+          "provider_mode": {
+            "$ref": "#/components/schemas/ProviderMode"
+          },
+          "billing": {
+            "enum": [
+              "metered",
+              "unmetered"
+            ],
+            "title": "Billing",
+            "type": "string"
+          },
+          "model_id": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Model Id",
+            "type": "string"
+          },
+          "connection_revision_id": {
+            "$ref": "#/components/schemas/ExecutorRevisionId"
+          },
+          "preset_revision_id": {
+            "$ref": "#/components/schemas/PresetRevisionId"
+          },
+          "text_characters": {
+            "minimum": 0,
+            "title": "Text Characters",
+            "type": "integer"
+          },
+          "page_count": {
+            "minimum": 1,
+            "title": "Page Count",
+            "type": "integer"
+          },
+          "windows": {
+            "minimum": 1,
+            "title": "Windows",
+            "type": "integer"
+          },
+          "calls": {
+            "minimum": 1,
+            "title": "Calls",
+            "type": "integer"
+          },
+          "input_tokens": {
+            "minimum": 0,
+            "title": "Input Tokens",
+            "type": "integer"
+          },
+          "output_tokens": {
+            "minimum": 0,
+            "title": "Output Tokens",
+            "type": "integer"
+          },
+          "estimated_cost_micros": {
+            "minimum": 0,
+            "title": "Estimated Cost Micros",
+            "type": "integer"
+          },
+          "recommended_ceiling_micros": {
+            "minimum": 0,
+            "title": "Recommended Ceiling Micros",
+            "type": "integer"
+          },
+          "currency": {
+            "const": "USD",
+            "title": "Currency",
+            "type": "string"
+          },
+          "relaxed_limits": {
+            "title": "Relaxed Limits",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "estimate_digest",
+          "scope",
+          "version_uid",
+          "provider_mode",
+          "billing",
+          "model_id",
+          "text_characters",
+          "page_count",
+          "windows",
+          "calls",
+          "input_tokens",
+          "output_tokens",
+          "estimated_cost_micros",
+          "recommended_ceiling_micros",
+          "currency",
+          "relaxed_limits"
+        ],
+        "title": "RunCostEstimate",
+        "type": "object"
       }
     }
   }

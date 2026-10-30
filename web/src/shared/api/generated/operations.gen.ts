@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.13.0 (OpenAPI 3.1.0)
- *   sha256 29df290762867fb53ebefc31394e3358b91333f791c69bdc52e5568d7b80b282
+ *   sha256 383cdba713ea107ceaaf16fe943e946db4ab60ff510bfe17124d9daeafa431e2
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -31,6 +31,7 @@ import type {
   ArV3BetaGroup,
   ArV3BetaGroupReview,
   ArV3BetaPackStatus,
+  ArV3GroupCostEstimateRequest,
   ArV3RunGroupId,
   Assignment,
   AssignmentDetail,
@@ -192,6 +193,8 @@ import type {
   ResumeStageChainRunRequest,
   ReviseExecutorConnectionRequest,
   ReviseStageAssemblyRequest,
+  RunCostEstimate,
+  RunCostEstimateRequest,
   RunId,
   RunNormReferences,
   RunStatus,
@@ -333,10 +336,12 @@ export const OPERATION_IDS = [
   'deleteComparisonReport',
   'dequeueComparisonAiSheetChanges',
   'enqueueComparisonLaunch',
+  'estimateArV3GroupCost',
   'estimateComparisonAiPairCheck',
   'estimateComparisonAiSheetChanges',
   'estimateComparisonSheetDescription',
   'estimateComparisonSpecification',
+  'estimateRunCost',
   'estimateStageChainRun',
   'excludeComparisonUploadSet',
   'exportOptimisationProposalsCsv',
@@ -1806,6 +1811,27 @@ export type EnqueueComparisonLaunchInput = {
 export type EnqueueComparisonLaunchResult = ComparisonLaunchQueue;
 
 // ------------------------------------------------------------------------------------
+// estimateArV3GroupCost - POST /ar-v3-beta/groups/cost-estimate
+// ------------------------------------------------------------------------------------
+
+/**
+ * Estimate all six AR v3 checks before spend.
+ *
+ * Read-only cost preflight. A changed source, profile, preset, route or model makes an earlier estimate digest stale. Unmetered connections are explicit; estimates are not measured spend.
+ */
+export type EstimateArV3GroupCostInput = {
+  /** Request body, sent as `application/json`. */
+  body: ArV3GroupCostEstimateRequest;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `estimateArV3GroupCost` (`application/json`, HTTP 200). */
+export type EstimateArV3GroupCostResult = RunCostEstimate;
+
+// ------------------------------------------------------------------------------------
 // estimateComparisonAiPairCheck - GET /projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-check/estimate
 // ------------------------------------------------------------------------------------
 
@@ -1901,6 +1927,27 @@ export type EstimateComparisonSpecificationInput = {
 
 /** Success body of `estimateComparisonSpecification` (`application/json`, HTTP 200). */
 export type EstimateComparisonSpecificationResult = ComparisonAiEstimate;
+
+// ------------------------------------------------------------------------------------
+// estimateRunCost - POST /runs/cost-estimate
+// ------------------------------------------------------------------------------------
+
+/**
+ * Estimate selected section analysis before spend.
+ *
+ * Read-only cost preflight. A changed source, profile, preset, route or model makes an earlier estimate digest stale. Unmetered connections are explicit; estimates are not measured spend.
+ */
+export type EstimateRunCostInput = {
+  /** Request body, sent as `application/json`. */
+  body: RunCostEstimateRequest;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `estimateRunCost` (`application/json`, HTTP 200). */
+export type EstimateRunCostResult = RunCostEstimate;
 
 // ------------------------------------------------------------------------------------
 // estimateStageChainRun - GET /stage-link-revisions/{stage_link_revision_id}/chain-estimate
@@ -7744,6 +7791,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['comparison'],
   },
+  estimateArV3GroupCost: {
+    operationId: 'estimateArV3GroupCost',
+    method: 'POST',
+    path: '/ar-v3-beta/groups/cost-estimate',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['runs'],
+  },
   estimateComparisonAiPairCheck: {
     operationId: 'estimateComparisonAiPairCheck',
     method: 'GET',
@@ -7799,6 +7860,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 500, 503],
     tags: ['comparison'],
+  },
+  estimateRunCost: {
+    operationId: 'estimateRunCost',
+    method: 'POST',
+    path: '/runs/cost-estimate',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['runs'],
   },
   estimateStageChainRun: {
     operationId: 'estimateStageChainRun',
