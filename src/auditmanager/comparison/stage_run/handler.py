@@ -107,11 +107,11 @@ class StageChainHandler:
                 "SELECT actor_user_uid FROM stage_chain_run WHERE stage_chain_run_id = :run"
             ), {"run": record.run_id}).scalar_one()
             roles = AccountRepository().roles_of(session, str(actor))
-        revision = record.effective_revision_id or record.revision_id
-        child = self.text.start(
-            revision_id=revision, user_uid=str(actor), actor_roles=roles,
-            idempotency_key=f"stage-chain-text:{record.run_id}:{revision}:{item.work_id}",
-        )
+            revision = record.effective_revision_id or record.revision_id
+            child = self.text.start_in_session(
+                session, revision_id=revision, user_uid=str(actor), actor_roles=roles,
+                idempotency_key=f"stage-chain-text:{record.run_id}:{revision}:{item.work_id}",
+            )
         if child.state in {"queued", "running"}:
             return Yielded(2.0)
         if child.state != "completed":

@@ -58,6 +58,7 @@ import { ExecutorSelectView } from './executor-select';
 import type { PresetListReading } from './preset-select';
 import { PresetSelectView } from './preset-select';
 import { StartRunFailureView } from './start-run-failure';
+import styles from './start-run-control.module.css';
 
 export interface StartRunControlProps {
   /** The project the version belongs to, for the link a classification refusal carries. */
@@ -117,7 +118,8 @@ function usePresetListReading(executors: ExecutorListReading, chosen: PresetId |
 export function StartRunControl({ projectUid, versionUid, onStarted }: StartRunControlProps) {
   const [chosen, setChosen] = useState<ExecutorConnectionId | null>(null);
   const [chosenPreset, setChosenPreset] = useState<PresetId | null>(null);
-  const intent = startRunIntent(versionUid, chosen, chosenPreset);
+  const [relaxedLimits, setRelaxedLimits] = useState(false);
+  const intent = startRunIntent(versionUid, chosen, chosenPreset, relaxedLimits);
   const idempotencyKey = useIntentKey(intent.signature);
   const mutation = useStartRun();
   const selectId = useId();
@@ -168,6 +170,23 @@ export function StartRunControl({ projectUid, versionUid, onStarted }: StartRunC
             : presetFillsExecutorSentence(presetName?.name ?? 'выбранным')
         }
       />
+      <label className={styles.limitToggle}>
+        <input
+          type="checkbox"
+          checked={relaxedLimits}
+          disabled={mutation.isPending}
+          onChange={(event) => {
+            setRelaxedLimits(event.currentTarget.checked);
+            mutation.reset();
+          }}
+        />
+        Повышенные лимиты ИИ-анализа
+      </label>
+      <p className="am-note">
+        {relaxedLimits
+          ? 'Бюджет стоимости приложения отключён; запрос на ответ до 64 000 токенов. Провайдер может установить меньший предел. Технический предел объёма входного текста сохраняется.'
+          : 'Бюджет стоимости приложения действует; запрос на ответ до 16 000 токенов.'}
+      </p>
       <button type="button" className="am-button" onClick={send} disabled={mutation.isPending}>
         Запустить прогон
       </button>

@@ -3,7 +3,7 @@
   "contract_version": "1.13.0",
   "supersedes": "1.12.0",
   "candidate_revision": 31,
-  "revision_note": "CMP-SEAL-C4: additive stage AI, repair, full chain, cards, verdict and journal boundary; raw evidence remains immutable.",
+  "revision_note": "CMP C4 combined development seal: stage AI/review/repair/chains, expert escalation and owner raised-limit hotfixes. Historical seals are retained in the API README.",
   "status": "frozen",
   "frozen": true,
   "format": "<prefix>_<ULID>",

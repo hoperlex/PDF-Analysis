@@ -64,6 +64,13 @@ describe('the selector is on the control', () => {
     const markup = control(seeded());
     expect(markup).toMatch(/<button type="button" class="am-button">Запустить прогон<\/button>/);
   });
+
+  it('offers raised AI limits off by default and explains the standard request', () => {
+    const markup = control(seeded());
+    expect(markup).toMatch(/<input type="checkbox"\/>Повышенные лимиты ИИ-анализа/);
+    expect(markup).toContain('Бюджет стоимости приложения действует; запрос на ответ до 16 000 токенов.');
+    expect(markup).not.toContain('relaxed_limits');
+  });
 });
 
 describe('what it offers is decided by the repository’s readiness rule', () => {

@@ -513,7 +513,7 @@ def run_text_analysis(
                 # Which of the two the figure above is -- asked of the meter, because the
                 # figure above is the meter's. `R-14`: see the success path below.
                 "cost_basis": cost_meter.cost_basis,
-                "cost_ceiling_usd": cost_meter.ceiling_usd,
+                "cost_ceiling_usd": (cost_meter.ceiling_usd if cost_meter.enforce_ceiling else None),
                 "observations_emitted": 0,
                 # The reply was paid for and never parsed. Reporting the spend without
                 # what was bought is how a budget overrun becomes unreadable afterwards.
@@ -609,7 +609,7 @@ def run_text_analysis(
         # reading the response, and that is not an inconsistency: the record's figure is
         # this call's cost, and this one is the run's.
         "cost_basis": cost_meter.cost_basis,
-        "cost_ceiling_usd": cost_meter.ceiling_usd,
+        "cost_ceiling_usd": (cost_meter.ceiling_usd if cost_meter.enforce_ceiling else None),
         "latency_ms": response.latency_ms,
         **grounding.omissions.metrics(),
         **_recognised_metrics(recognised_pages),

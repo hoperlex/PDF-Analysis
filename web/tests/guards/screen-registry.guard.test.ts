@@ -125,7 +125,7 @@ function cycleFindings(registry: readonly ScreenEntry[]): string[] {
 
 /** The ruling, as data. Order matters: it is the menu's order. */
 const R66: Partial<Record<ScreenGroup, string[]>> = {
-  home: ['/'],
+  home: [],
   work: ['/projects', '/dashboard', '/section-optimisation', '/dispatcher', '/version-comparison'],
   knowledge: ['/knowledge-base', '/blocks', '/norms'],
   system: ['/logs', '/workers', '/analysis-settings', '/queue'],

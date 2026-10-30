@@ -517,7 +517,9 @@ class SectionPort(Protocol):
 class ArV3GroupPort(Protocol):
     """The explicitly gated AR beta group, independent of legacy Run start."""
 
-    def start_ar_v3_group(self, *, version_uid: str, idempotency_key: str) -> models.ArV3BetaGroup:
+    def start_ar_v3_group(
+        self, *, version_uid: str, idempotency_key: str, relaxed_limits: bool = False,
+    ) -> models.ArV3BetaGroup:
         """Create six pinned runs, or replay the same group."""
 
     def get_ar_v3_group(self, *, group_id: str) -> models.ArV3BetaGroup:
@@ -546,6 +548,7 @@ class RunPort(Protocol):
         idempotency_key: str,
         executor_connection_id: str | None = None,
         preset_id: str | None = None,
+        relaxed_limits: bool = False,
     ) -> RunStatusView:
         """Start a run, or return the existing one for this key and payload.
 

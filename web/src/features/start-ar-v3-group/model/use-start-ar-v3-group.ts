@@ -31,6 +31,7 @@ export interface StartArV3GroupCommand {
   readonly versionUid: VersionUid;
   /** Minted once per intent by the caller and reused on every retry. */
   readonly idempotencyKey: string;
+  readonly relaxedLimits?: boolean | undefined;
 }
 
 export function useStartArV3Group() {
@@ -38,8 +39,11 @@ export function useStartArV3Group() {
 
   return useMutation<ArV3BetaGroup, unknown, StartArV3GroupCommand>({
     mutationKey: START_AR_V3_GROUP_MUTATION_KEY,
-    mutationFn: async ({ versionUid, idempotencyKey }) => {
-      const response = await startArV3BetaGroup({ body: { version_uid: versionUid }, idempotencyKey });
+    mutationFn: async ({ versionUid, idempotencyKey, relaxedLimits }) => {
+      const response = await startArV3BetaGroup({
+        body: { version_uid: versionUid, ...(relaxedLimits ? { relaxed_limits: true } : {}) },
+        idempotencyKey,
+      });
       return response.data;
     },
     onSuccess: () => {

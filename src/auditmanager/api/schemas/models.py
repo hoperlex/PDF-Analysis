@@ -1285,6 +1285,7 @@ class PortalBlockPage(_Object):
 
 class StartRunRequest(_Object):
     version_uid: VersionUid
+    relaxed_limits: bool = Field(default=None, strict=True, json_schema_extra=optional_property)  # type: ignore[assignment]
     provider_mode: ProviderMode = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     #: `EXEC-PAR-START-01`. Optional and **not nullable**, like ``provider_mode``: absent means
     #: the global route, exactly as before; present means that connection or a refusal.
@@ -1300,6 +1301,8 @@ class StartRunRequest(_Object):
 
 class StartArV3BetaGroupRequest(_Object):
     version_uid: VersionUid
+    # Optional temporary per-group override. Absent and false keep the existing limits.
+    relaxed_limits: bool = Field(default=None, strict=True, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class ArV3BetaGroupMember(_Object):
@@ -7176,5 +7179,5 @@ class ResumeStageChainRunRequest(_Object):
 
 
 class CreateStageReviewCardRequest(_Object):
-    source_ids: Annotated[list[StageAtomicEvidenceId], Field(min_length=1, max_length=100)]
+    source_ids: Annotated[list[StageAtomicEvidenceId], Field(min_length=1, max_length=400)]
     reason: Annotated[str, Field(min_length=1, max_length=2000)]

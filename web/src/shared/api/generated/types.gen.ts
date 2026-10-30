@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.13.0 (OpenAPI 3.1.0)
- *   sha256 afe53a80dde669c98c15abb1be3b971893f2fa78d9b91ceafbe4aab90116a207
+ *   sha256 29df290762867fb53ebefc31394e3358b91333f791c69bdc52e5568d7b80b282
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.13.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'afe53a80dde669c98c15abb1be3b971893f2fa78d9b91ceafbe4aab90116a207';
+export const CONTRACT_DIGEST = '29df290762867fb53ebefc31394e3358b91333f791c69bdc52e5568d7b80b282';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -6705,6 +6705,8 @@ export type StageUploadPartReceipt = {
 };
 
 export type StartArV3BetaGroupRequest = {
+  /** Temporary AR v3 option. Absent or false keeps the deployment cost ceiling and a 16,000-token output request. True omits the per-Run cost halt and requests up to 64,000 output tokens; the provider may enforce a lower maximum. The choice is part of the idempotency payload and persists for all six Runs. */
+  relaxed_limits?: boolean;
   version_uid: VersionUid;
 };
 
@@ -6739,8 +6741,10 @@ export type StartRunRequest = {
   executor_connection_id?: ExecutorConnectionId;
   /** ANALYSIS-PRESETS-01: a saved preset (listAnalysisPresets) to start the run with. Absent: the run is what it was. Present: the preset's current revision is read in the start's transaction and its executor connection is applied exactly as if executor_connection_id had named it (same usability test, same refusals, no fallback to the standby or to another connection), and the run records the preset revision. Exclusive with executor_connection_id. Part of the payload the idempotency key is compared by, as the preset and not as the connection it resolved to. */
   preset_id?: PresetId;
-  /** Defaults to the server's configured mode. A client asking for `live` is asking to spend money against the OD-03 ceiling. */
+  /** Defaults to the server's configured mode. A client asking for `live` is asking to spend money; the OD-03 ceiling applies unless relaxed_limits is true. */
   provider_mode?: ProviderMode;
+  /** Temporary section-analysis option. Absent or false keeps the deployment cost ceiling and a 16,000-token output request. True omits the per-Run cost halt and requests up to 64,000 output tokens under a distinct immutable profile and bundle identity. The 12-window operational document-size limit remains. The provider may enforce a lower output maximum. The choice is part of the idempotency payload and persists for the Run. */
+  relaxed_limits?: boolean;
   version_uid: VersionUid;
 };
 

@@ -48,9 +48,10 @@ package without questions and a legacy package with them each refuse the whole l
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Final
@@ -83,7 +84,24 @@ __all__ = [
     "TextProfileSourceFile",
     "TextProfileUnavailable",
     "load_text_profile_registry",
+    "relaxed_profile_pair",
 ]
+
+RELAXED_OUTPUT_TOKENS: Final[int] = 64_000
+_ULID_ALPHABET: Final[str] = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+
+
+def _relaxed_id(value: str) -> str:
+    """A stable, distinct identity for a changed immutable profile or bundle."""
+    prefix = value.split("_", 1)[0]
+    number = int.from_bytes(hashlib.sha256(f"section-relaxed-v1:{value}".encode()).digest()[:16], "big")
+    body = "".join(_ULID_ALPHABET[(number >> shift) & 31] for shift in range(125, -1, -5))
+    return f"{prefix}_{body}"
+
+
+def relaxed_profile_pair(profile_id: str, bundle_id: str) -> tuple[str, str]:
+    """The explicit 64k variant pair pinned by a raised-limit section Run."""
+    return _relaxed_id(profile_id), _relaxed_id(bundle_id)
 
 PACKAGE_FORMAT: Final[str] = "text-profile/1"
 #: The format that adds the profile's own ``categories`` (`SECTION-CATEGORY-OCR-01`).
@@ -219,6 +237,23 @@ class TextProfileRegistry:
             by_section[entry.section_code] = entry
             by_profile[entry.analysis_profile_id] = entry
             bundles.add(entry.prompt_bundle_id)
+            relaxed_profile_id, relaxed_bundle_id = relaxed_profile_pair(
+                entry.analysis_profile_id, entry.prompt_bundle_id
+            )
+            if relaxed_profile_id in by_profile or relaxed_bundle_id in bundles:
+                raise TextProfileLoadError("relaxed_profile_identity_duplicate")
+            relaxed_bundle = replace(
+                entry.profile.prompt_bundle,
+                prompt_bundle_id=PromptBundleId.parse(relaxed_bundle_id),
+                max_output_tokens=RELAXED_OUTPUT_TOKENS,
+            )
+            relaxed_profile = replace(
+                entry.profile,
+                analysis_profile_id=AnalysisProfileId.parse(relaxed_profile_id),
+                prompt_bundle=relaxed_bundle,
+            )
+            by_profile[relaxed_profile_id] = replace(entry, profile=relaxed_profile)
+            bundles.add(relaxed_bundle_id)
         self._by_section: Mapping[str, RegisteredTextProfile] = MappingProxyType(by_section)
         self._by_profile: Mapping[str, RegisteredTextProfile] = MappingProxyType(by_profile)
 

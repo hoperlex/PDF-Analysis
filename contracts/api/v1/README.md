@@ -11,7 +11,15 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Version `1.11.0`
+## Combined current contract `1.13.0`
+
+The serial CMP integrator reconciles C2–C4 with owner hotfixes06b94745/99b337fb.
+The current API has228paths/254operations/614schemas; migration head0043.
+Both StartRunRequest and StartArV3BetaGroupRequest retain optional relaxed_limits.
+Comparison evidence, spend consent, expert review and the stage APIs remain present.
+The records below describe their own historical seals, rather than the combined counts.
+
+## Comparison C2 seal `1.11.0` (historical branch)
 
 `CMP-SEAL-C2` (wave C2 of the comparison modules, `docs/architecture/adr/ADR-0025-comparison-modules.md`)
 adds the version comparison AI, specifications, launch queue and reports as sealed stubs, every operation
@@ -35,6 +43,25 @@ items wave C1 left: `ComparisonMatrixStaleReason` gains `algorithm_changed`, `Co
 (`docs/program/VERSIONING_AND_FREEZE_POLICY.md`) reads this as a **minor**. The surface is 176 paths, 198
 operations and 517 schemas (131, 148 and 432 under `1.10.0`). No error code is added. Migration
 `0040_comparison_ai_reports` adds twelve tables and widens `ck_executor_route_work_kind`.
+
+## Owner hotfix seal `1.12.0` (historical branch)
+
+`HOTFIX-SECTION-LIMITS-BACKEND-20261030` adds optional `relaxed_limits` to
+`startRun` for all 14 non-AR sections. True selects a separate immutable
+profile/bundle pair with a 64,000-token output request and disables the
+application's per-Run cost halt. The 12-window operational size bound remains.
+Absent or false keeps the old behavior. This is an additive minor change:
+131 paths, 148 operations and 432 schemas remain.
+
+## Owner hotfix seal `1.11.0` (historical branch)
+
+`HOTFIX-AI-LIMITS-20261030` adds the optional `relaxed_limits` boolean to
+`startArV3BetaGroup`. Absent or false preserves the current cost ceiling and
+16,000-token output request. True selects no application cost halt for the six
+created Runs and requests up to 64,000 output tokens; provider limits can still
+refuse the request. The flag is part of the command fingerprint and is saved with
+the group command so workers retain it after a restart. This is an additive
+minor change: 131 paths, 148 operations and 432 schemas remain.
 
 ## Version `1.10.0`
 

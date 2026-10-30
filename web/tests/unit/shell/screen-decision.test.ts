@@ -117,8 +117,8 @@ describe('the live registry', () => {
     for (const screen of menu) {
       expect(screenDecision(screen, ADMIN_ONLY), screen.address).toBe('open');
       expect(screenDecision(screen, EXPERT), screen.address).toBe(screen.group === 'admin' ? 'forbidden' : 'open');
-      // `R-80`: a role-less account opens only Главная from the menu.
-      expect(screenDecision(screen, NO_ROLES), screen.address).toBe(screen.address === '/' ? 'open' : 'forbidden');
+      // The home screen is reached through the brand, so every menu row requires a role.
+      expect(screenDecision(screen, NO_ROLES), screen.address).toBe('forbidden');
       expect(screenDecision(screen, null), screen.address).toBe('sign-in');
       expect(screenDecision(screen, DEFAULT_CREDENTIAL), screen.address).toBe('change-password');
     }

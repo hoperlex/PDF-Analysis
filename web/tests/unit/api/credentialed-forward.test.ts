@@ -156,8 +156,9 @@ describe('the browser calls this app, and this app calls the API with the creden
   });
 
   it('returns the upstream status and body bytes verbatim, so a 401 arrives as a 401', async () => {
+    // Deliberately an older upstream envelope: the forwarder preserves its bytes and version.
     const envelope =
-      '{"contract_version":"1.13.0","correlation_id":"cid-abc",' +
+      '{"contract_version":"1.11.0","correlation_id":"cid-abc",' +
       '"error_code":"authentication_required","message":"No valid authenticated subject was presented.",' +
       '"retryable":false}';
     const { fetch } = recordingFetch(

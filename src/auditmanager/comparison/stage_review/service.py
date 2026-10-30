@@ -378,7 +378,7 @@ class StageReviewService:
                 actor_roles: frozenset[str], idempotency_key: str) -> dict[str, Any]:
         """Expert escalation reveals source evidence; it neither rewrites AI nor accepts a card."""
         require_expert(actor_roles)
-        if (not isinstance(source_ids, (tuple, list)) or not 1 <= len(source_ids) <= 100
+        if (not isinstance(source_ids, (tuple, list)) or not 1 <= len(source_ids) <= 400
                 or any(not isinstance(value, str) for value in source_ids) or len(set(source_ids)) != len(source_ids)
                 or not isinstance(reason, str) or len(reason) > 2000 or not reason.strip()):
             raise DomainError(ErrorCode.VALIDATION_FAILED, field="source_ids", constraint="review_card_input")

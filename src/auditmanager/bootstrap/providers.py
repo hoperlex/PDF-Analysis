@@ -174,6 +174,7 @@ class DatabaseProviders(ProviderSource):
             # The budget follows the revision's pinned model, not the model the process
             # started with.
             input_budget_characters=input_budget_characters(frozen.pin_id, self._ceiling),
+            model_id=frozen.pin_id,
             primary_connection_id=frozen.primary_connection_id if frozen.used_standby else None,
             standby_connection_id=frozen.standby_connection_id if frozen.used_standby else None,
             standby_reason=frozen.reason,

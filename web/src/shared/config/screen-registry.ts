@@ -100,15 +100,15 @@ export interface ScreenEntry {
  * (`getSectionSpecification`) and keeps its row, group and place in the menu.
  *
  * `R-80`: every product screen is `any-role`; only home, the account's own screens and the
- * public ones stay `any`, so a role-less account sees its home page saying no role is
- * assigned, its profile and its password, and nothing that reads product data.
+ * public ones stay `any`, so a role-less account reaches its home page through the
+ * brand link, sees that no role is assigned, and may open its profile and password.
  *
  * The screens under a project are in `work` with `inMenu: false`: they belong to the group
  * the navigation marks current while one of them is open, and they are reached from a
  * project, never from the menu.
  */
 export const SCREEN_REGISTRY = [
-  { address: '/', label: 'Главная', group: 'home', access: 'session', roles: 'any', inMenu: true },
+  { address: '/', label: 'Главная', group: 'home', access: 'session', roles: 'any', inMenu: false },
 
   { address: '/projects', label: 'Проекты', group: 'work', access: 'session', roles: 'any-role', inMenu: true },
   { address: '/dashboard', label: 'Дашборд', group: 'work', access: 'session', roles: 'any-role', inMenu: true },

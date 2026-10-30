@@ -10,7 +10,7 @@ from tests.integration.composition.test_router_answers import static_token
 from tests.support.expected_facts import FACTS
 
 C4 = frozenset({
-    'estimateStageChainRun', 'resumeStageChainRun', 'startStageChainBatch', 'getStageChainBatch',
+    'createStageReviewCard', 'estimateStageChainRun', 'resumeStageChainRun', 'startStageChainBatch', 'getStageChainBatch',
     'pauseStageChainBatch', 'resumeStageChainBatch', 'cancelStageChainBatch', 'listStageAiReviews',
     'listStageClassifications', 'getStageSynthesis', 'listStageGraphicEvidence', 'listStageLinkRepairs',
     'undoStageLinkRepair', 'listStageChangeCards', 'getStageChangeCard', 'applyStageCardVerdicts',
@@ -21,6 +21,7 @@ UID = '01ARZ3NDEKTSV4RRFFQ69G5FAV'
 VALUES = PATH_VALUES | {'stage_chain_batch_id': 'scb_'+UID, 'stage_link_repair_id': 'crp_'+UID,
     'stage_change_card_id': 'ccd_'+UID, 'comparison_page_profile_id': CPR, 'page_profile_id': CPR}
 BODIES = {
+    'createStageReviewCard': {'source_ids': ['std_'+UID], 'reason': 'Нужна проверка'},
     'resumeStageChainRun': {}, 'undoStageLinkRepair': {'base_revision_id': SLK},
     'startStageChainBatch': {'with_ai': False, 'selections': [{'pair_id': STP, 'link_revision_id': SLK}]},
     'applyStageCardVerdicts': {'updates': [{'card_id': 'ccd_'+UID, 'expected_revision': 0,
@@ -36,7 +37,7 @@ def client(request):
 
 
 def test_all_c4_operations_are_named():
-    assert len(OPERATIONS) == len(C4) == 23
+    assert len(OPERATIONS) == len(C4) == 24
 
 
 @pytest.mark.parametrize('method,path,name', OPERATIONS, ids=[r[2] for r in OPERATIONS])

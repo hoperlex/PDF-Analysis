@@ -42,7 +42,7 @@ class V3GenerationSettings:
 
     def __post_init__(self) -> None:
         if (type(self.max_output_tokens) is not int
-                or not 1 <= self.max_output_tokens <= 16_000
+                or not 1 <= self.max_output_tokens <= 64_000
                 or not isinstance(self.effort, str)
                 or self.effort not in _EFFORTS
                 or not isinstance(self.thinking, Mapping)

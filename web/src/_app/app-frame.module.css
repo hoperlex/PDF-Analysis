@@ -10,7 +10,7 @@
  * At or above the breakpoint the groups sit in the bar in one row (`.row`); below it they
  * collapse into one stacked list behind a «Меню» disclosure (`.stacked`). Both are always in
  * the markup and exactly one is displayed. The 780 px floor is below the breakpoint, so the
- * floor shows «Меню»: the brand, the five navigation entries, the instance label, the theme
+ * floor shows «Меню»: the brand, navigation groups, the instance label, the theme
  * control and the avatar do not fit one row there. Neither state may widen the page; each is
  * measured in a browser in `docs/program/W50-SHELL-FRAME.md`.
  */
@@ -41,17 +41,6 @@
   .stacked {
     display: block;
   }
-}
-
-.home {
-  padding: 4px 8px;
-}
-
-.home[aria-current='page'] {
-  font-weight: 650;
-  text-decoration: underline;
-  text-decoration-thickness: 2px;
-  text-underline-offset: 5px;
 }
 
 .stackedList {
