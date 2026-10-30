@@ -312,6 +312,7 @@ function SetRow(props: ProjectsAndStagesViewProps & { readonly set: ComparisonOv
         {row.seriesId === null ? null : <div onClick={(event) => event.stopPropagation()} data-technical-downloads="">
           <button type="button" className="am-button am-button--small am-button--quiet" disabled={technical.isPending} onClick={() => technical.mutate({ kind: 'technical', seriesId: row.seriesId as ComparisonSeriesId, format: 'xlsx', fileName: 'comparison-technical.xlsx' })}>Технический XLSX</button>
           <button type="button" className="am-button am-button--small am-button--quiet" disabled={technical.isPending} onClick={() => technical.mutate({ kind: 'technical', seriesId: row.seriesId as ComparisonSeriesId, format: 'html', fileName: 'comparison-technical-html.zip' })}>HTML с изображениями (ZIP)</button>
+          <p className={styles.note}>Выгрузки включают полные сохранённые позиции СО, в том числе неизменённые, и покрытие извлечения. В XLSX полные данные — на листе RawJSON; в ZIP — JSON/CSV и манифест. Неполное или отсутствующее извлечение остаётся явно отмеченным. Новые обращения к модели не выполняются.</p>
           {technical.error === null ? null : <p role="alert">{comparisonFailure(technical.error).detail}</p>}
         </div>}
       </th>

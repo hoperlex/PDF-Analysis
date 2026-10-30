@@ -8,6 +8,8 @@ The XLSX package uses the stdlib XML/ZIP format already used by this project.
 """
 from __future__ import annotations
 
+import csv
+import hashlib
 import html
 import io
 import json
@@ -24,10 +26,12 @@ from auditmanager.shared.db import session_scope
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 MAX_PAIRS = 2000
+MAX_TRANSITIONS = 2000
 MAX_DETAIL_ROWS = 50_000
 MAX_JSON_BYTES = 64 * 1024 * 1024
 MAX_PREVIEWS = 200
 MAX_PREVIEW_BYTES = 32 * 1024 * 1024
+MAX_ARCHIVE_BYTES = 192 * 1024 * 1024
 _XML_BAD = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f]')
 _STATUS = {'same': 'Совпадает', 'same_zones_changed': 'Изменены служебные зоны', 'different': 'Отличается',
            'needs_review': 'Нужна проверка', 'added': 'Добавлено', 'removed': 'Удалено', 'unmatched': 'Не сопоставлено'}
@@ -61,8 +65,10 @@ def _collect(sessions: Any, series_id: str) -> dict[str, Any]:
             raise DomainError(ErrorCode.NOT_FOUND, aggregate_type='ComparisonSeries')
         transitions = [dict(row) for row in session.execute(text(
             'SELECT comparison_transition_id AS transition_id, transition_no, source_version_uid, target_version_uid, '
-            'state, summary, verdict, updated_at FROM comparison_transition WHERE comparison_series_id=:id ORDER BY transition_no'
-        ), {'id': series_id}).mappings()]
+            'state, summary, verdict, updated_at FROM comparison_transition WHERE comparison_series_id=:id ORDER BY transition_no LIMIT :limit'
+        ), {'id': series_id, 'limit': MAX_TRANSITIONS + 1}).mappings()]
+        if len(transitions) > MAX_TRANSITIONS:
+            raise _refuse('comparison_technical_export_max_2000_transitions')
         rows = session.execute(text(
             'SELECT p.comparison_sheet_pair_id AS pair_id, p.comparison_transition_id AS transition_id, p.pair_no, '
             'p.state, p.status, coalesce(r.reasons,p.flags) AS reasons, p.ai_dependent, p.page_a_profile_id, p.page_b_profile_id, p.result_id, '
@@ -86,9 +92,11 @@ def _collect(sessions: Any, series_id: str) -> dict[str, Any]:
                 raise _refuse('comparison_technical_export_max_50000_details')
             pairs.append(item)
         specifications = [dict(row) for row in session.execute(text(
-            'SELECT c.comparison_transition_id AS transition_id,c.state,c.source,c.reason,c.changes,c.coverage_a,c.coverage_b,c.totals '
+            'SELECT c.comparison_spec_comparison_id AS specification_id,c.project_uid,c.document_uid, '
+            'c.comparison_transition_id AS transition_id,c.state,c.source,c.reason,c.changes,c.coverage_a,c.coverage_b,c.totals, '
+            'c.extraction_a_id,c.extraction_b_id,c.phase,c.updated_at '
             'FROM comparison_spec_comparison c JOIN comparison_transition t ON t.comparison_transition_id=c.comparison_transition_id '
-            'WHERE t.comparison_series_id=:id ORDER BY t.transition_no,c.created_at'
+            'WHERE t.comparison_series_id=:id ORDER BY t.transition_no,c.created_at,c.source,c.comparison_spec_comparison_id'
         ), {'id': series_id}).mappings()]
         versions = {}
         for transition in transitions:
@@ -104,16 +112,51 @@ def _collect(sessions: Any, series_id: str) -> dict[str, Any]:
                                 'Непроверенные каналы и незавершённые пары не означают отсутствие изменений.']}
         if len(_json(data).encode()) > MAX_JSON_BYTES:
             raise _refuse('comparison_technical_export_max_64_mib')
+        from .specification_export import collect_saved_specifications
+        remaining = MAX_JSON_BYTES - len(_json(data).encode())
+        data['saved_specifications'] = collect_saved_specifications(session, project_uid=series['project_uid'],
+            document_uid=series['document_uid'], transitions=transitions, comparisons=specifications, max_bytes=remaining)
+        data['limitations'].append('Полные сохранённые позиции СО и проверенные части включены отдельно от сокращённого списка изменений; отсутствие извлечения не означает пустой спецификации.')
+        if len(_json(data).encode()) > MAX_JSON_BYTES:
+            raise _refuse('comparison_technical_export_max_64_mib')
         return data
 
 
-def _tables(data: dict[str, Any]) -> list[tuple[str, list[list[Any]]]]:
+def _position_records(data):
+    for extraction in data.get('saved_specifications', {}).get('extractions', []):
+        for kind, rows in (('positions', extraction.get('positions', [])),
+                ('candidate_positions', extraction.get('coverage', {}).get('candidate_positions', []))):
+            for index, position in enumerate(rows):
+                yield extraction, kind, index, position
+
+
+def _raw_json(data):
+    # JSON escapes retain values that XML 1.0 cannot represent literally.
+    return _json(data).replace('\ufffe', '\\ufffe').replace('\uffff', '\\uffff')
+
+
+def _text_chunks(value, limit=30_000):
+    start = units = 0
+    for index, character in enumerate(value):
+        width = 2 if ord(character) > 0xffff else 1
+        if units + width > limit:
+            yield value[start:index]
+            start, units = index, 0
+        units += width
+    if start < len(value):
+        yield value[start:]
+
+
+def _tables(data: dict[str, Any], *, include_raw=True) -> list[tuple[str, list[list[Any]]]]:
     counts = Counter(pair.get('status') or 'not_completed' for pair in data['pairs'])
     summary = [['Показатель', 'Значение'], ['Комплект', data['series'].get('display_title')],
                ['Серия ID', data['series']['series_id']], ['Состояние серии', data['series']['state']],
                ['Переходов', len(data['transitions'])], ['Пар/непарных листов', len(data['pairs'])]]
     summary += [[f'Статус: {_STATUS.get(key, key)}', value] for key, value in sorted(counts.items())]
     summary += [['Ограничение', value] for value in data['limitations']]
+    spec_counts = data.get('saved_specifications', {}).get('counts', {})
+    summary += [['Сохранённых извлечений СО', spec_counts.get('extractions')],
+        ['Записей позиций СО (агрегаты/части/кандидаты отдельно, не число уникальных физических позиций)', spec_counts.get('position_records')]]
     versions = [['Версия ID', 'SHA-256 исходного PDF', 'Байт', 'Страниц']]
     versions += [[key, value['sha256'], value['size_bytes'], value['page_count']] for key, value in data.get('versions', {}).items()]
     transitions = [['Переход ID', '№', 'Версия A', 'Версия B', 'Состояние', 'Вердикт', 'Сводка']]
@@ -138,11 +181,39 @@ def _tables(data: dict[str, Any]) -> list[tuple[str, list[list[Any]]]]:
     for spec in data.get('specifications', []):
         for number, change in enumerate(spec.get('changes') or [None], 1):
             specs.append([spec['transition_id'], spec.get('source'), spec['state'], spec.get('reason'), number, _json(change)])
-    return [('Сводка', summary), ('Версии', versions), ('Переходы', transitions), ('Листы', sheets),
-            ('Отличия', differences), ('Текст', texts), ('Служебное', notes), ('Спецификации', specs)]
+    fields = ('pos', 'name', 'mark', 'code', 'supplier', 'unit', 'quantity', 'mass', 'note')
+    positions = [['Извлечение ID', 'Версия создания извлечения (не подменяет bound version)', 'Состояние',
+        'Вид сохранённых позиций', 'Индекс исходной записи (с 0)', 'ID позиции', 'Раздел', 'Группа', *fields, 'Полные источники']]
+    for extraction, kind, index, position in _position_records(data):
+        values = position.get('fields') or {}
+        positions.append([extraction['extraction_id'], extraction['origin_version_uid'], extraction['state'], kind,
+            index, position.get('id'), position.get('section'), position.get('parent'),
+            *(values.get(field, '') for field in fields), _json(position.get('sources'))])
+    bindings = [['Сравнение ID', 'Переход ID', 'Сторона', 'Фактическая bound version', 'Извлечение ID', 'Сохранено извлечение', 'Состояние сравнения', 'Полное сохранённое покрытие', 'Проверенные части ID']]
+    for binding in data.get('saved_specifications', {}).get('bindings', []):
+        bindings.append([binding.get('comparison_id'), binding['transition_id'], binding['side'], binding['bound_version_uid'],
+            binding.get('extraction_id'), binding['saved_extraction_present'], binding['comparison_state'],
+            _json(binding.get('coverage')), _json(binding.get('checked_batch_extraction_ids'))])
+    payload = _raw_json(data)
+    chunks = list(_text_chunks(payload)) if include_raw else []
+    raw = [['Часть', 'Всего частей', 'Полный JSON, последовательные части БЕЗ разделителя']]
+    raw += [[index + 1, len(chunks), chunk] for index, chunk in enumerate(chunks)]
+    summary += [['Полные исходные данные', 'Лист RawJSON в XLSX: соединить части без разделителей. В ZIP тот же полный JSON — records.json. Длинные значения иных листов обозначены как отрывки.'],
+        ['Табличное представление', 'Недопустимые для XML символы очищаются только в представлении; RawJSON сохраняет исходные JSON-значения.'],
+        ['SHA256 полного JSON UTF-8', hashlib.sha256(payload.encode()).hexdigest()]]
+    if include_raw:
+        summary.append(['Частей полного JSON', len(chunks)])
+    tables = [('Сводка', summary), ('Версии', versions), ('Переходы', transitions), ('Листы', sheets),
+            ('Отличия', differences), ('Текст', texts), ('Служебное', notes), ('Спецификации', specs),
+            ('ПозицииСО', positions), ('ПокрытиеСО', bindings)]
+    if include_raw:
+        tables.append(('RawJSON', raw))
+    return tables
 
 
 def _archive(parts: dict[str, bytes]) -> bytes:
+    if sum(len(value) for value in parts.values()) > MAX_ARCHIVE_BYTES:
+        raise _refuse('comparison_technical_export_max_192_mib_archive')
     output = io.BytesIO()
     with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
         for name, payload in sorted(parts.items()):
@@ -167,8 +238,8 @@ def render_xlsx(data: dict[str, Any]) -> bytes:
                     cells.append(f'<c><v>{value}</v></c>')
                 else:
                     value = '' if value is None else _XML_BAD.sub('', str(value))
-                    if len(value) > 32767:
-                        raise _refuse('comparison_technical_export_excel_cell_max_32767')
+                    if sum(2 if ord(character) > 0xffff else 1 for character in value) > 32767:
+                        value = next(_text_chunks(value, 30_000)) + ' … [ОТРЫВОК; полное значение и источники в RawJSON]'
                     cells.append(f'<c t="inlineStr"><is><t xml:space="preserve">{escape(value)}</t></is></c>')
             xml_rows.append(f'<row r="{number}">{"".join(cells)}</row>')
         parts[f'xl/worksheets/sheet{index}.xml'] = ('<?xml version="1.0" encoding="UTF-8"?>'
@@ -189,8 +260,9 @@ def render_html(data: dict[str, Any], *, previews: dict[str, bytes] | None = Non
     chunks = ['<!doctype html><html lang="ru"><meta charset="utf-8"><title>Техническое сравнение версий</title>',
               '<style>body{font:14px sans-serif;margin:24px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #bbb;padding:6px;vertical-align:top;white-space:pre-wrap;overflow-wrap:anywhere}img{max-width:48%;vertical-align:top}h2{margin-top:32px}</style>',
               '<h1>Техническое сравнение версий</h1><p>Сохранённые детерминированные свидетельства. AI-позиции не подтверждены инженером.</p>',
-              '<p><a href="records.json">Полные данные и происхождение (JSON)</a></p>']
-    for name, rows in _tables(data):
+              '<p><a href="records.json">Полные данные и происхождение (JSON)</a></p>',
+              '<p>Полные сохранённые спецификации: <a href="specifications/records.json">JSON</a> · <a href="specifications/positions.csv">позиции сохранённых извлечений CSV</a>. Неизменённые позиции включены; частичные кандидаты помечены отдельно.</p>']
+    for name, rows in _tables(data, include_raw=False):
         chunks.append('<h2>' + html.escape(name) + '</h2><table>')
         for index, row in enumerate(rows):
             tag = 'th' if index == 0 else 'td'
@@ -203,7 +275,27 @@ def render_html(data: dict[str, Any], *, previews: dict[str, bytes] | None = Non
         chunks.append('<p>' + html.escape(note) + '</p>')
     chunks.append('</html>')
     parts['index.html'] = ''.join(chunks).encode()
-    parts['records.json'] = _json(data).encode()
+    parts['records.json'] = _raw_json(data).encode()
+    parts['specifications/records.json'] = _raw_json(data.get('saved_specifications', {})).encode()
+    output = io.StringIO(newline='')
+    writer = csv.writer(output, delimiter=';', lineterminator='\r\n')
+    writer.writerow(['Extraction ID', 'Origin version UID', 'Extraction state', 'Record kind', 'Source index', 'Position ID',
+        'Section', 'Parent', 'pos', 'name', 'mark', 'code', 'supplier', 'unit', 'quantity', 'mass', 'note', 'Sources JSON'])
+    def csv_value(value):
+        rendered = '' if value is None else str(value)
+        return "'" + rendered if rendered.lstrip().startswith(('=', '+', '-', '@')) else rendered
+    for extraction, kind, index, position in _position_records(data):
+        fields = position.get('fields') or {}
+        writer.writerow([csv_value(value) for value in [extraction['extraction_id'], extraction['origin_version_uid'],
+            extraction['state'], kind, index, position.get('id'), position.get('section'), position.get('parent'),
+            *(fields.get(field, '') for field in ('pos', 'name', 'mark', 'code', 'supplier', 'unit', 'quantity', 'mass', 'note')),
+            _json(position.get('sources'))]])
+    parts['specifications/positions.csv'] = ('\ufeff' + output.getvalue()).encode()
+    parts['manifest.json'] = _json({'format': 'comparison-technical-manifest/1', 'model_calls': 0,
+        'files': [{'name': name, 'size_bytes': len(payload), 'sha256': hashlib.sha256(payload).hexdigest()}
+            for name, payload in sorted(parts.items())],
+        'notes': ['Manifest excludes its own bytes.', 'CSV prefixes spreadsheet formulas; JSON retains literal values.',
+                  'Cached extraction origin version is retained separately from its bound comparison versions.']}).encode()
     return _archive(parts)
 
 
