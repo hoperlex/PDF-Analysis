@@ -77,7 +77,7 @@ function runPage(items: RunStatus[]): RunStatusPage {
 
 function apiError(status: number, code: ErrorCode, retryable = false): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.12.0',
+    contract_version: '1.13.0',
     error_code: code,
     message: 'A caller-safe sentence.',
     correlation_id: 'cid-cold-1',

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:auditmanager:analysis:portal-blocks-input:v1",
   "title": "PortalBlockList v1 (the bundle's _blocks.json)",
-  "contract_version": "1.12.0",
+  "contract_version": "1.13.0",
   "description": "Validates the `<stem>_blocks.json` member of a portal bundle (W55-PLAN.md sections B3.1 and B3.5). It is the portal's file, so unknown properties are tolerated at every level: the portal may add some, and refusing them would refuse a good bundle. What this product reads is required. Rules a JSON Schema cannot state are code rules of the ingest envelope and are listed in `x-envelope-rules`. `document_id`, `document_name`, `document_path` and every `crop_url` are the portal's: `document_id` collides with this product's `doc_` prefix and is ignored, and a `crop_url` is a capability URL that is never fetched, stored for display or rendered. A rule between two properties of one block that JSON Schema can state is stated in the schema with `if`/`then` (a `polygon` block carries its vertices), not in `x-envelope-rules`.",
   "type": "object",
   "required": [

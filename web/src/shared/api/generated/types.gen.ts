@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.12.0 (OpenAPI 3.1.0)
- *   sha256 4a2c3bf4077838cc97d4922e6282fdd70d61064594e37252cd906dcf2c977e94
+ *   AuditManager PC-01 API 1.13.0 (OpenAPI 3.1.0)
+ *   sha256 494f13a23a4f30a1b58883a1664799a6c73d935b0cffca1199bf436fae22f9ac
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.12.0';
+export const CONTRACT_VERSION = '1.13.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '4a2c3bf4077838cc97d4922e6282fdd70d61064594e37252cd906dcf2c977e94';
+export const CONTRACT_DIGEST = '494f13a23a4f30a1b58883a1664799a6c73d935b0cffca1199bf436fae22f9ac';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -37,6 +37,7 @@ export const SCHEMA_NAMES = [
   'AppendDecisionRequest',
   'AppendDecisionResponse',
   'ApplyComparisonMatrixEditsRequest',
+  'ApplyStageCardVerdictsRequest',
   'ApplyStageSheetMapRequest',
   'ApproveRegistrationRequest',
   'ApproveSheetPairingRequest',
@@ -449,6 +450,7 @@ export const SCHEMA_NAMES = [
   'ReleaseNoteKind',
   'ResetUserPasswordRequest',
   'ResumeComparisonAiJobRequest',
+  'ResumeStageChainRunRequest',
   'ReviseExecutorConnectionRequest',
   'ReviseStageAssemblyRequest',
   'Role',
@@ -506,18 +508,52 @@ export const SCHEMA_NAMES = [
   'SpecificationSkipCounts',
   'SpecificationSkippedLine',
   'SpecificationTable',
+  'StageAiClassification',
+  'StageAiClassificationId',
+  'StageAiClassificationPage',
+  'StageAiReview',
+  'StageAiReviewId',
+  'StageAiReviewPage',
+  'StageAiSynthesis',
+  'StageAiSynthesisId',
+  'StageAiSynthesisPage',
+  'StageAiUnitId',
   'StageAssembly',
   'StageAssemblyId',
   'StageAssemblyMember',
+  'StageAtomicEvidenceId',
+  'StageCardEvidence',
+  'StageCardEvidenceId',
+  'StageCardVerdict',
+  'StageCardVerdictId',
+  'StageCardVerdictInput',
+  'StageCardVerdictPage',
+  'StageChainBatch',
+  'StageChainBatchId',
+  'StageChainBatchItem',
+  'StageChainBatchItemId',
+  'StageChainBatchSelection',
   'StageChainRun',
   'StageChainRunId',
   'StageChainRunPage',
   'StageChainStep',
   'StageChainStepId',
+  'StageChangeCard',
+  'StageChangeCardId',
+  'StageChangeCardPage',
+  'StageChangeCategory',
+  'StageChangeJournal',
+  'StageClassificationCard',
+  'StageGraphicEvidence',
+  'StageGraphicEvidenceId',
+  'StageGraphicEvidencePage',
   'StageId',
   'StageLinkInput',
   'StageLinkItem',
   'StageLinkItemId',
+  'StageLinkRepair',
+  'StageLinkRepairId',
+  'StageLinkRepairPage',
   'StageLinkRevision',
   'StageLinkRevisionId',
   'StageLinkRevisionPage',
@@ -526,12 +562,17 @@ export const SCHEMA_NAMES = [
   'StagePairPage',
   'StagePairSuggestion',
   'StagePairSuggestionPage',
+  'StageProfileText',
+  'StageProfileWord',
+  'StageReviewDecision',
   'StageSheetPassport',
   'StageSheetPassportPage',
   'StageSheetSuggestion',
   'StageSheetSuggestionPage',
   'StageState',
   'StageStatus',
+  'StageSynthesisResult',
+  'StageSystem',
   'StageTextDifference',
   'StageTextDifferenceId',
   'StageTextDifferencePage',
@@ -559,12 +600,14 @@ export const SCHEMA_NAMES = [
   'StartComparisonAiSheetChangesRequest',
   'StartComparisonSeriesRequest',
   'StartRunRequest',
+  'StartStageChainBatchRequest',
   'StartStageChainRunRequest',
   'SubmitExecutorTaskAnswerRequest',
   'SubmitRegistrationRequest',
   'SummaryStatement',
   'TransitionAssignmentRequest',
   'UndoComparisonMatrixEditRequest',
+  'UndoStageLinkRepairRequest',
   'UngroundedReason',
   'UpdateMyProfileRequest',
   'UpdateUserRequest',
@@ -736,6 +779,10 @@ export type AppendDecisionResponse = {
 export type ApplyComparisonMatrixEditsRequest = {
   base_revision: ComparisonMatrixRevision;
   edits: Array<ComparisonMatrixEditInput>;
+};
+
+export type ApplyStageCardVerdictsRequest = {
+  updates: Array<StageCardVerdictInput>;
 };
 
 export type ApplyStageSheetMapRequest = {
@@ -1405,6 +1452,7 @@ export const COMPARISON_AI_METHOD_VALUES = [
   'sheet_changes',
   'spec',
   'report',
+  'stage_review',
 ] as const;
 
 /** ComparisonAiMethod - the closed value set above. */
@@ -3646,7 +3694,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.12.0";
+  contract_version: "1.13.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -4042,6 +4090,7 @@ export const EXECUTOR_WORK_KIND_VALUES = [
   'comparison_sheet_changes',
   'comparison_spec',
   'comparison_report',
+  'comparison_stage_review',
 ] as const;
 
 /** ExecutorWorkKind - the closed value set above. */
@@ -5269,6 +5318,11 @@ export type ResumeComparisonAiJobRequest = {
   consent?: ComparisonAiConsent;
 };
 
+export type ResumeStageChainRunRequest = {
+  consent?: ComparisonAiConsent;
+  retry_failed?: boolean;
+};
+
 /** A new immutable revision of a connection: the full settings, never a patch. */
 export type ReviseExecutorConnectionRequest = {
   allow_client_documents: boolean;
@@ -5925,6 +5979,81 @@ export type SpecificationTable = {
   status: "parsed" | "header_ambiguous";
 };
 
+export type StageAiClassification = {
+  cards: Array<StageClassificationCard>;
+  classification_id: StageAiClassificationId;
+  content_key: Sha256;
+  created_at: string;
+  group_id: string;
+  model_identity: {
+    [key: string]: unknown;
+  };
+  run_id: StageChainRunId;
+  source_sha256: Sha256;
+  unit_id: StageAiUnitId;
+};
+
+export type StageAiClassificationId = string;
+
+/** The contract pattern for `StageAiClassificationId`. Anchored; use with `new RegExp()`. */
+export const STAGE_AI_CLASSIFICATION_ID_PATTERN = "^sacls_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageAiClassificationPage = {
+  items: Array<StageAiClassification>;
+  page: PageInfo;
+};
+
+export type StageAiReview = {
+  content_key: Sha256;
+  created_at: string;
+  decisions: Array<StageReviewDecision>;
+  group_id: string;
+  model_identity: {
+    [key: string]: unknown;
+  };
+  review_id: StageAiReviewId;
+  run_id: StageChainRunId;
+  source_sha256: Sha256;
+  unit_id: StageAiUnitId;
+};
+
+export type StageAiReviewId = string;
+
+/** The contract pattern for `StageAiReviewId`. Anchored; use with `new RegExp()`. */
+export const STAGE_AI_REVIEW_ID_PATTERN = "^sarev_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageAiReviewPage = {
+  items: Array<StageAiReview>;
+  page: PageInfo;
+};
+
+export type StageAiSynthesis = {
+  content_key: Sha256;
+  created_at: string;
+  model_identity: {
+    [key: string]: unknown;
+  };
+  result: StageSynthesisResult;
+  run_id: StageChainRunId;
+  synthesis_id: StageAiSynthesisId;
+  unit_id: StageAiUnitId;
+};
+
+export type StageAiSynthesisId = string;
+
+/** The contract pattern for `StageAiSynthesisId`. Anchored; use with `new RegExp()`. */
+export const STAGE_AI_SYNTHESIS_ID_PATTERN = "^sasyn_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageAiSynthesisPage = {
+  items: Array<StageAiSynthesis>;
+  page: PageInfo;
+};
+
+export type StageAiUnitId = string;
+
+/** The contract pattern for `StageAiUnitId`. Anchored; use with `new RegExp()`. */
+export const STAGE_AI_UNIT_ID_PATTERN = "^saunit_[0-9A-HJKMNP-TV-Z]{26}$";
+
 export type StageAssembly = {
   assembly_id: StageAssemblyId;
   created_at: string;
@@ -5943,17 +6072,110 @@ export type StageAssemblyMember = {
   member_no: number;
 };
 
-export type StageChainRun = {
+export type StageAtomicEvidenceId = string;
+
+/** The contract pattern for `StageAtomicEvidenceId`. Anchored; use with `new RegExp()`. */
+export const STAGE_ATOMIC_EVIDENCE_ID_PATTERN = "^(stf|std|sge)_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageCardEvidence = {
+  absence_proven?: boolean;
+  box_anchor?: {
+    [key: string]: number;
+  };
+  evidence_id: StageCardEvidenceId;
+  kind: "TEXT" | "TABLE" | "GRAPHIC";
+  profile_id?: ComparisonPageProfileId;
+  side: "left" | "right" | "both";
+  source_id: StageAtomicEvidenceId;
+};
+
+export type StageCardEvidenceId = string;
+
+/** The contract pattern for `StageCardEvidenceId`. Anchored; use with `new RegExp()`. */
+export const STAGE_CARD_EVIDENCE_ID_PATTERN = "^sce_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageCardVerdict = {
+  card_id: StageChangeCardId;
   created_at: string;
-  input_sha256: Sha256;
+  decision: "accepted" | "rejected";
+  evidence_digest: Sha256;
+  reason: string;
+  revision_no: number;
+  verdict_id: StageCardVerdictId;
+};
+
+export type StageCardVerdictId = string;
+
+/** The contract pattern for `StageCardVerdictId`. Anchored; use with `new RegExp()`. */
+export const STAGE_CARD_VERDICT_ID_PATTERN = "^cdv_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageCardVerdictInput = {
+  card_id: StageChangeCardId;
+  decision: "accepted" | "rejected";
+  expected_revision: number;
+  reason: string;
+};
+
+export type StageCardVerdictPage = {
+  items: Array<StageCardVerdict>;
+  page: PageInfo;
+};
+
+export type StageChainBatch = {
+  batch_id: StageChainBatchId;
+  counts: {
+    [key: string]: number;
+  };
+  created_at: string;
+  items: Array<StageChainBatchItem>;
+  project_uid: ProjectUid;
+  state: "queued" | "running" | "paused" | "completed" | "failed" | "cancelled";
+  updated_at: string;
+};
+
+export type StageChainBatchId = string;
+
+/** The contract pattern for `StageChainBatchId`. Anchored; use with `new RegExp()`. */
+export const STAGE_CHAIN_BATCH_ID_PATTERN = "^scb_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageChainBatchItem = {
+  item_id: StageChainBatchItemId;
   link_revision_id: StageLinkRevisionId;
   pair_id: StagePairId;
+  position: number;
+  run_id?: StageChainRunId;
+  state: "queued" | "running" | "completed" | "failed" | "cancelled";
+};
+
+export type StageChainBatchItemId = string;
+
+/** The contract pattern for `StageChainBatchItemId`. Anchored; use with `new RegExp()`. */
+export const STAGE_CHAIN_BATCH_ITEM_ID_PATTERN = "^scbi_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageChainBatchSelection = {
+  consent?: ComparisonAiConsent;
+  link_revision_id: StageLinkRevisionId;
+  pair_id: StagePairId;
+};
+
+export type StageChainRun = {
+  ai_job_id?: ComparisonAiJobId;
+  batch_id?: string;
+  created_at: string;
+  effective_link_revision_id?: StageLinkRevisionId;
+  failure_reason?: string;
+  input_sha256: Sha256;
+  kind?: "deterministic" | "full";
+  link_revision_id: StageLinkRevisionId;
+  pair_id: StagePairId;
+  pause_reason?: string;
   pinned_version_uids: Array<VersionUid>;
   run_id: StageChainRunId;
   stale: boolean;
   state: "queued" | "running" | "paused" | "completed" | "failed" | "cancelled";
   steps: Array<StageChainStep>;
   updated_at: string;
+  with_ai?: boolean;
 };
 
 export type StageChainRunId = string;
@@ -5981,6 +6203,112 @@ export type StageChainStepId = string;
 
 /** The contract pattern for `StageChainStepId`. Anchored; use with `new RegExp()`. */
 export const STAGE_CHAIN_STEP_ID_PATTERN = "^cst_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageChangeCard = {
+  after: string;
+  before: string;
+  card_id: StageChangeCardId;
+  card_key: Sha256;
+  carried_verdict_ids?: Array<StageCardVerdictId>;
+  carryover?: "none" | "full" | "partial" | "stale";
+  category: StageChangeCategory;
+  class_name: "PROJECT_CHANGE" | "SERVICE_STRUCTURE" | "REVIEW";
+  evidence?: Array<StageCardEvidence>;
+  evidence_digest: Sha256;
+  evidence_ids: Array<StageAtomicEvidenceId>;
+  run_id: StageChainRunId;
+  stale: boolean;
+  system: StageSystem;
+  title: string;
+  verdict?: StageCardVerdict;
+};
+
+export type StageChangeCardId = string;
+
+/** The contract pattern for `StageChangeCardId`. Anchored; use with `new RegExp()`. */
+export const STAGE_CHANGE_CARD_ID_PATTERN = "^ccd_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageChangeCardPage = {
+  counts: {
+    [key: string]: number;
+  };
+  items: Array<StageChangeCard>;
+  page: PageInfo;
+};
+
+/** StageChangeCategory. */
+export const STAGE_CHANGE_CATEGORY_VALUES = [
+  'areas',
+  'floors',
+  'electrical_load',
+  'calculation_method',
+  'consumer_composition',
+  'room_composition',
+  'dimensions',
+  'materials',
+  'equipment_parameters',
+  'system_configuration',
+  'fire_safety',
+  'designation_rename',
+  'administrative',
+  'documentation_structure',
+  'formatting',
+  'other_project',
+  'other_service',
+  'uncertain',
+] as const;
+
+/** StageChangeCategory - the closed value set above. */
+export type StageChangeCategory = (typeof STAGE_CHANGE_CATEGORY_VALUES)[number];
+
+export type StageChangeJournal = {
+  accepted_count: number;
+  ai_hidden_same_count: number;
+  ai_service_count: number;
+  grouping: "designation" | "section" | "system";
+  groups: Array<({
+    [key: string]: unknown;
+  })>;
+  run_id: StageChainRunId;
+  stale: boolean;
+};
+
+export type StageClassificationCard = {
+  card_key: Sha256;
+  category: StageChangeCategory;
+  class_name: "PROJECT_CHANGE" | "SERVICE_STRUCTURE" | "REVIEW";
+  evidence_digest: Sha256;
+  evidence_ids: Array<StageAtomicEvidenceId>;
+  model_class?: string;
+  policy_reasons?: Array<string>;
+  system: StageSystem;
+  title: string;
+};
+
+export type StageGraphicEvidence = {
+  content_key: Sha256;
+  graphic_id: StageGraphicEvidenceId;
+  left_profile_id?: ComparisonPageProfileId;
+  link_item_id: StageLinkItemId;
+  reason: string;
+  regions?: Array<({
+    [key: string]: unknown;
+  })>;
+  result_id?: ComparisonSheetPairResultId;
+  right_profile_id?: ComparisonPageProfileId;
+  run_id: StageChainRunId;
+  status: "not_checked" | "unreliable" | "reliable";
+};
+
+export type StageGraphicEvidenceId = string;
+
+/** The contract pattern for `StageGraphicEvidenceId`. Anchored; use with `new RegExp()`. */
+export const STAGE_GRAPHIC_EVIDENCE_ID_PATTERN = "^sge_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageGraphicEvidencePage = {
+  items: Array<StageGraphicEvidence>;
+  page: PageInfo;
+};
 
 /** A canonical stage identity from contracts/analysis/v1/stage-registry.json. PC-01 schedules the first four. */
 export const STAGE_ID_VALUES = [
@@ -6017,6 +6345,28 @@ export type StageLinkItemId = string;
 
 /** The contract pattern for `StageLinkItemId`. Anchored; use with `new RegExp()`. */
 export const STAGE_LINK_ITEM_ID_PATTERN = "^sli_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageLinkRepair = {
+  after_revision_id: StageLinkRevisionId;
+  before_revision_id: StageLinkRevisionId;
+  created_at: string;
+  proof: {
+    [key: string]: unknown;
+  };
+  repair_id: StageLinkRepairId;
+  run_id: StageChainRunId;
+  state: "applied" | "undone" | "superseded";
+};
+
+export type StageLinkRepairId = string;
+
+/** The contract pattern for `StageLinkRepairId`. Anchored; use with `new RegExp()`. */
+export const STAGE_LINK_REPAIR_ID_PATTERN = "^crp_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageLinkRepairPage = {
+  items: Array<StageLinkRepair>;
+  page: PageInfo;
+};
 
 export type StageLinkRevision = {
   base_revision_id?: StageLinkRevisionId;
@@ -6073,6 +6423,37 @@ export type StagePairSuggestionPage = {
   page: PageInfo;
 };
 
+export type StageProfileText = {
+  has_text_layer: boolean;
+  height_pt: number;
+  page_number: number;
+  profile_id: ComparisonPageProfileId;
+  scan: boolean;
+  version_uid: VersionUid;
+  width_pt: number;
+  words: Array<StageProfileWord>;
+};
+
+export type StageProfileWord = {
+  bottom: number;
+  text: string;
+  top: number;
+  x0: number;
+  x1: number;
+};
+
+export type StageReviewDecision = {
+  actual_right_profile_ids?: Array<ComparisonPageProfileId>;
+  confidence: "high" | "medium" | "low";
+  left_fragment_ids: Array<StageTextFragmentId>;
+  model_status?: string;
+  policy_reasons?: Array<string>;
+  reason: string;
+  right_fragment_ids: Array<StageTextFragmentId>;
+  status: "SAME" | "MOVED" | "CHANGED" | "REMOVED" | "ADDED" | "UNCERTAIN";
+  summary: string;
+};
+
 export type StageSheetPassport = {
   building?: string;
   floor?: string;
@@ -6123,6 +6504,34 @@ export const STAGE_STATUS_VALUES = [
 
 /** StageStatus - the closed value set above. */
 export type StageStatus = (typeof STAGE_STATUS_VALUES)[number];
+
+export type StageSynthesisResult = {
+  change_type: string;
+  decision: string;
+  evidence_ids: Array<StageAtomicEvidenceId>;
+  group_id: string;
+  reason: string;
+  source_sha256: Sha256;
+  title: string;
+};
+
+/** StageSystem. */
+export const STAGE_SYSTEM_VALUES = [
+  'unknown',
+  'architecture',
+  'structural',
+  'electrical',
+  'heating_ventilation',
+  'water_sewage',
+  'fire_protection',
+  'low_current',
+  'technology',
+  'site',
+  'other',
+] as const;
+
+/** StageSystem - the closed value set above. */
+export type StageSystem = (typeof STAGE_SYSTEM_VALUES)[number];
 
 export type StageTextDifference = {
   difference_id: StageTextDifferenceId;
@@ -6186,6 +6595,7 @@ export type StageTextHint = {
   hint_id: StageTextHintId;
   revision_id: StageLinkRevisionId;
   source_fragment_id: StageTextFragmentId;
+  source_side?: "left" | "right";
   target_fragment_id: StageTextFragmentId;
 };
 
@@ -6321,9 +6731,16 @@ export type StartRunRequest = {
   version_uid: VersionUid;
 };
 
+export type StartStageChainBatchRequest = {
+  selections: Array<StageChainBatchSelection>;
+  with_ai?: boolean;
+};
+
 export type StartStageChainRunRequest = {
+  consent?: ComparisonAiConsent;
   link_revision_id: StageLinkRevisionId;
   restart?: boolean;
+  with_ai?: boolean;
 };
 
 /**
@@ -6374,6 +6791,10 @@ export type TransitionAssignmentRequest = {
  */
 export type UndoComparisonMatrixEditRequest = {
   base_revision: ComparisonMatrixRevision;
+};
+
+export type UndoStageLinkRepairRequest = {
+  base_revision_id: StageLinkRevisionId;
 };
 
 /** Closed deterministic observation-withholding reasons; a withheld item is never a published finding. */

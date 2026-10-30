@@ -553,6 +553,54 @@ class StageChainStepId(OpaqueId, prefix="cst", entity="StageChainStep"):
     """Identity of one step of a stage chain run."""
 
 
+
+class StageAiUnitId(OpaqueId, prefix="saunit", entity="StageAiUnit"):
+    """Opaque C4 StageAiUnit identity."""
+
+
+class StageAiReviewId(OpaqueId, prefix="sarev", entity="StageAiReview"):
+    """Opaque C4 StageAiReview identity."""
+
+
+class StageAiClassificationId(OpaqueId, prefix="sacls", entity="StageAiClassification"):
+    """Opaque C4 StageAiClassification identity."""
+
+
+class StageAiSynthesisId(OpaqueId, prefix="sasyn", entity="StageAiSynthesis"):
+    """Opaque C4 StageAiSynthesis identity."""
+
+
+class StageGraphicEvidenceId(OpaqueId, prefix="sge", entity="StageGraphicEvidence"):
+    """Opaque C4 StageGraphicEvidence identity."""
+
+
+class StageLinkRepairId(OpaqueId, prefix="crp", entity="StageLinkRepair"):
+    """Opaque C4 StageLinkRepair identity."""
+
+
+class StageLinkRepairEventId(OpaqueId, prefix="crpe", entity="StageLinkRepairEvent"):
+    """Opaque C4 StageLinkRepairEvent identity."""
+
+
+class StageChangeCardId(OpaqueId, prefix="ccd", entity="StageChangeCard"):
+    """Opaque C4 StageChangeCard identity."""
+
+
+class StageCardEvidenceId(OpaqueId, prefix="sce", entity="StageCardEvidence"):
+    """Opaque C4 StageCardEvidence identity."""
+
+
+class StageCardVerdictId(OpaqueId, prefix="cdv", entity="StageCardVerdict"):
+    """Opaque C4 StageCardVerdict identity."""
+
+
+class StageChainBatchId(OpaqueId, prefix="scb", entity="StageChainBatch"):
+    """Opaque C4 StageChainBatch identity."""
+
+
+class StageChainBatchItemId(OpaqueId, prefix="scbi", entity="StageChainBatchItem"):
+    """Opaque C4 StageChainBatchItem identity."""
+
 #: Every concrete identity type, keyed by contract entity name.
 IDENTITY_TYPES_BY_ENTITY: Final[dict[str, type[OpaqueId]]] = {
     identity.entity: identity for identity in _REGISTRY.values()

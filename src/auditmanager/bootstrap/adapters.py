@@ -7197,3 +7197,100 @@ class ComparisonStageRunAdapter(_StagesModuleGate):
     ) -> models.StageChainRun:
         self._require_stages_module()
         return _comparison_unavailable(self._DEPENDENCY)
+
+
+class ComparisonStageC4Adapter(_StagesModuleGate):
+    """Typed C4 stubs until their runtime lanes wire them."""
+
+    _DEPENDENCY = "comparison_stage_c4"
+    def estimate_run(self, *, revision_id: str) -> models.ComparisonAiEstimate:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def resume_run(self, *, run_id: str, body: models.ResumeStageChainRunRequest, user_uid: str, idempotency_key: str) -> models.StageChainRun:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def start_batch(self, *, project_uid: str, body: models.StartStageChainBatchRequest, user_uid: str, idempotency_key: str) -> models.StageChainBatch:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def get_batch(self, *, batch_id: str) -> models.StageChainBatch:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def pause_batch(self, *, batch_id: str, user_uid: str, idempotency_key: str) -> models.StageChainBatch:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def resume_batch(self, *, batch_id: str, user_uid: str, idempotency_key: str) -> models.StageChainBatch:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def cancel_batch(self, *, batch_id: str, user_uid: str, idempotency_key: str) -> models.StageChainBatch:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def list_ai_reviews(self, *, run_id: str, cursor: str | None, limit: int) -> models.StageAiReviewPage:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def list_classifications(self, *, run_id: str, cursor: str | None, limit: int) -> models.StageAiClassificationPage:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def get_synthesis(self, *, run_id: str, cursor: str | None, limit: int) -> models.StageAiSynthesisPage:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def list_graphics(self, *, run_id: str, cursor: str | None, limit: int) -> models.StageGraphicEvidencePage:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def list_repairs(self, *, run_id: str, cursor: str | None, limit: int) -> models.StageLinkRepairPage:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def undo_repair(self, *, repair_id: str, body: models.UndoStageLinkRepairRequest, user_uid: str, idempotency_key: str) -> models.StageLinkRepair:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def list_cards(self, *, run_id: str, cursor: str | None, limit: int) -> models.StageChangeCardPage:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def get_card(self, *, card_id: str) -> models.StageChangeCard:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def apply_verdicts(self, *, run_id: str, body: models.ApplyStageCardVerdictsRequest, user_uid: str, idempotency_key: str) -> models.StageCardVerdictPage:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def list_verdicts(self, *, card_id: str, cursor: str | None, limit: int) -> models.StageCardVerdictPage:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def get_journal(self, *, run_id: str, grouping: str) -> models.StageChangeJournal:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def journal_xlsx(self, *, run_id: str) -> bytes:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def journal_pdf(self, *, run_id: str) -> bytes:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def journal_html(self, *, run_id: str) -> bytes:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def get_profile_text(self, *, profile_id: str, query: str | None) -> models.StageProfileText:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)
+
+    def get_assembly(self, *, assembly_id: str) -> models.StageAssembly:
+        self._require_stages_module()
+        return _comparison_unavailable(self._DEPENDENCY)

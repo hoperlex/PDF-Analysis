@@ -36,7 +36,7 @@
       "const": "auditmanager.domain.identifiers"
     },
     "contract_version": {
-      "const": "1.12.0"
+      "const": "1.13.0"
     },
     "supersedes": {
       "const": "1.11.0"
@@ -188,7 +188,19 @@
         "stage_text_difference_id",
         "stage_text_hint_id",
         "stage_chain_run_id",
-        "stage_chain_step_id"
+        "stage_chain_step_id",
+        "stage_ai_unit_id",
+        "stage_ai_review_id",
+        "stage_ai_classification_id",
+        "stage_ai_synthesis_id",
+        "stage_graphic_evidence_id",
+        "stage_link_repair_id",
+        "stage_link_repair_event_id",
+        "stage_change_card_id",
+        "stage_card_evidence_id",
+        "stage_card_verdict_id",
+        "stage_chain_batch_id",
+        "stage_chain_batch_item_id"
       ],
       "propertyNames": {
         "pattern": "^[a-z][a-z0-9_]*(_uid|_id)$"
@@ -342,7 +354,19 @@
         "StageTextDifference",
         "StageTextHint",
         "StageChainRun",
-        "StageChainStep"
+        "StageChainStep",
+        "StageAiUnit",
+        "StageAiReview",
+        "StageAiClassification",
+        "StageAiSynthesis",
+        "StageGraphicEvidence",
+        "StageLinkRepair",
+        "StageLinkRepairEvent",
+        "StageChangeCard",
+        "StageCardEvidence",
+        "StageCardVerdict",
+        "StageChainBatch",
+        "StageChainBatchItem"
       ],
       "propertyNames": {
         "pattern": "^[A-Z][A-Za-z0-9]*$"
@@ -437,7 +461,19 @@
           "erasure_request_id",
           "user_uid",
           "request_id",
-          "ar_v3_run_group_id"
+          "ar_v3_run_group_id",
+          "stage_ai_unit_id",
+          "stage_ai_review_id",
+          "stage_ai_classification_id",
+          "stage_ai_synthesis_id",
+          "stage_graphic_evidence_id",
+          "stage_link_repair_id",
+          "stage_link_repair_event_id",
+          "stage_change_card_id",
+          "stage_card_evidence_id",
+          "stage_card_verdict_id",
+          "stage_chain_batch_id",
+          "stage_chain_batch_item_id"
         ]
       }
     },
@@ -553,7 +589,19 @@
                 "audit_event_id",
                 "erasure_request_id",
                 "user_uid",
-                "request_id"
+                "request_id",
+                "stage_ai_unit_id",
+                "stage_ai_review_id",
+                "stage_ai_classification_id",
+                "stage_ai_synthesis_id",
+                "stage_graphic_evidence_id",
+                "stage_link_repair_id",
+                "stage_link_repair_event_id",
+                "stage_change_card_id",
+                "stage_card_evidence_id",
+                "stage_card_verdict_id",
+                "stage_chain_batch_id",
+                "stage_chain_batch_item_id"
               ]
             }
           },

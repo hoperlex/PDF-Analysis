@@ -77,6 +77,7 @@ export const WORK_KIND_LABELS: Readonly<Record<ExecutorWorkKind, string>> = {
   comparison_sheet_changes: 'Сравнение версий: описание изменений',
   comparison_spec: 'Сравнение версий: спецификации',
   comparison_report: 'Сравнение версий: отчёт',
+  comparison_stage_review: 'Сравнение стадий: ИИ-ревизия',
 };
 
 export const PROBE_STATE_LABELS: Readonly<Record<ExecutorProbeState, string>> = {

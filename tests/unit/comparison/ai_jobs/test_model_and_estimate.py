@@ -61,7 +61,7 @@ def estimate(**over: Any) -> Any:
 def test_each_method_has_its_executor_work_kind(method: str) -> None:
     assert ai_work_kind_of(method) == f"comparison_{method}" == scope(method).work_kind
     with pytest.raises(ValueError):
-        ai_work_kind_of("stage_review")
+        ai_work_kind_of("unknown_method")
 
 
 @pytest.mark.parametrize("make", [

@@ -49,7 +49,6 @@ BODIES: dict[str, dict[str, Any]] = {
     "applyStageSheetMap": {"items": [{"relation": "only_left", "left_profile_id": CPR}]},
     "startStageChainRun": {"link_revision_id": SLK},
 }
-OPERATIONS = FACTS.operations[-32:]
 DEPENDENCIES = {
     "createStageUpload": "comparison_stage_uploads",
     "listStageUploads": "comparison_stage_uploads",
@@ -84,6 +83,8 @@ DEPENDENCIES = {
     "getStageChainRun": "comparison_stage_runs",
     "cancelStageChainRun": "comparison_stage_runs",
 }
+OPERATIONS = tuple(row for row in FACTS.operations if row[2] in DEPENDENCIES)
+
 SERVED_PAIR_OPERATIONS = frozenset({
     "listStagePairs", "getStagePair", "listStagePairSuggestions", "confirmStagePair",
     "createStageAssembly", "reviseStageAssembly", "setStagePairCompleteness",
