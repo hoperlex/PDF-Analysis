@@ -9,7 +9,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.13.0 (OpenAPI 3.1.0)
- *   sha256 9cd30ad5172d89c138a5f33d54581b291359b407030e6e513adfb895ad2b020a
+ *   sha256 8fd13c576ec9a1a52baa4ec99e4b5b487231c7aec6b57256df3c5342c32cce3f
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -24,6 +24,10 @@ import type {
   AppendDecisionResult,
   ApplyComparisonMatrixEditsInput,
   ApplyComparisonMatrixEditsResult,
+  ApplyStageCardVerdictsInput,
+  ApplyStageCardVerdictsResult,
+  ApplyStageSheetMapInput,
+  ApplyStageSheetMapResult,
   ApproveRegistrationInput,
   ApproveRegistrationResult,
   ApproveSheetPairingInput,
@@ -34,12 +38,26 @@ import type {
   ArchiveExecutorConnectionResult,
   ArchiveUserInput,
   ArchiveUserResult,
+  CancelComparisonAiPairCheckInput,
+  CancelComparisonAiPairCheckResult,
+  CancelComparisonAiSheetChangesInput,
+  CancelComparisonAiSheetChangesResult,
+  CancelComparisonReportInput,
+  CancelComparisonReportResult,
   CancelComparisonSeriesInput,
   CancelComparisonSeriesResult,
+  CancelComparisonSpecificationInput,
+  CancelComparisonSpecificationResult,
   CancelComparisonUploadInput,
   CancelComparisonUploadResult,
   CancelRunInput,
   CancelRunResult,
+  CancelStageChainBatchInput,
+  CancelStageChainBatchResult,
+  CancelStageChainRunInput,
+  CancelStageChainRunResult,
+  CancelStageUploadInput,
+  CancelStageUploadResult,
   CarryOverDecisionInput,
   CarryOverDecisionResult,
   ChangePasswordInput,
@@ -48,26 +66,64 @@ import type {
   ClaimExecutorTaskResult,
   ClassifyDocumentVersionInput,
   ClassifyDocumentVersionResult,
+  ClearComparisonLaunchQueueInput,
+  ClearComparisonLaunchQueueResult,
   CompareDocumentVersionsInput,
   CompareDocumentVersionsResult,
   CompleteComparisonUploadFileInput,
   CompleteComparisonUploadFileResult,
+  CompleteStageUploadFileInput,
+  CompleteStageUploadFileResult,
   ConfirmComparisonUploadSetInput,
   ConfirmComparisonUploadSetResult,
+  ConfirmStagePairInput,
+  ConfirmStagePairResult,
+  ConfirmStageUploadCandidateInput,
+  ConfirmStageUploadCandidateResult,
+  ContinueComparisonReportInput,
+  ContinueComparisonReportResult,
   CorrectVersionClassificationInput,
   CorrectVersionClassificationResult,
   CreateAnalysisPresetInput,
   CreateAnalysisPresetResult,
   CreateAssignmentInput,
   CreateAssignmentResult,
+  CreateComparisonReportInput,
+  CreateComparisonReportResult,
   CreateComparisonUploadInput,
   CreateComparisonUploadResult,
   CreateExecutorConnectionInput,
   CreateExecutorConnectionResult,
   CreateProjectInput,
   CreateProjectResult,
+  CreateStageAssemblyInput,
+  CreateStageAssemblyResult,
+  CreateStageReviewCardInput,
+  CreateStageReviewCardResult,
+  CreateStageUploadInput,
+  CreateStageUploadResult,
   DecideOptimisationProposalInput,
   DecideOptimisationProposalResult,
+  DeleteComparisonReportInput,
+  DeleteComparisonReportResult,
+  DequeueComparisonAiSheetChangesInput,
+  DequeueComparisonAiSheetChangesResult,
+  EnqueueComparisonLaunchInput,
+  EnqueueComparisonLaunchResult,
+  EstimateArV3GroupCostInput,
+  EstimateArV3GroupCostResult,
+  EstimateComparisonAiPairCheckInput,
+  EstimateComparisonAiPairCheckResult,
+  EstimateComparisonAiSheetChangesInput,
+  EstimateComparisonAiSheetChangesResult,
+  EstimateComparisonSheetDescriptionInput,
+  EstimateComparisonSheetDescriptionResult,
+  EstimateComparisonSpecificationInput,
+  EstimateComparisonSpecificationResult,
+  EstimateRunCostInput,
+  EstimateRunCostResult,
+  EstimateStageChainRunInput,
+  EstimateStageChainRunResult,
   ExcludeComparisonUploadSetInput,
   ExcludeComparisonUploadSetResult,
   ExportOptimisationProposalsCsvInput,
@@ -80,6 +136,8 @@ import type {
   ExtendExecutorTaskClaimResult,
   FailExecutorTaskInput,
   FailExecutorTaskResult,
+  FinishComparisonAiSheetChangesInput,
+  FinishComparisonAiSheetChangesResult,
   FinishComparisonSeriesInput,
   FinishComparisonSeriesResult,
   GenerateComparisonSummaryInput,
@@ -94,16 +152,32 @@ import type {
   GetArV3BetaPackStatusResult,
   GetAssignmentInput,
   GetAssignmentResult,
+  GetComparisonAiPairCheckInput,
+  GetComparisonAiPairCheckResult,
+  GetComparisonAiQueueInput,
+  GetComparisonAiQueueResult,
+  GetComparisonAiSheetChangesInput,
+  GetComparisonAiSheetChangesResult,
+  GetComparisonLaunchQueueInput,
+  GetComparisonLaunchQueueResult,
   GetComparisonMatrixInput,
   GetComparisonMatrixResult,
   GetComparisonOverviewInput,
   GetComparisonOverviewResult,
   GetComparisonQueueSummaryInput,
   GetComparisonQueueSummaryResult,
+  GetComparisonReportInput,
+  GetComparisonReportResult,
   GetComparisonSeriesInput,
   GetComparisonSeriesResult,
+  GetComparisonSheetDescriptionInput,
+  GetComparisonSheetDescriptionResult,
   GetComparisonSheetPairInput,
   GetComparisonSheetPairResult,
+  GetComparisonSheetPairSpecPositionsInput,
+  GetComparisonSheetPairSpecPositionsResult,
+  GetComparisonSpecificationInput,
+  GetComparisonSpecificationResult,
   GetComparisonUploadInput,
   GetComparisonUploadResult,
   GetComparisonUploadProposalInput,
@@ -136,12 +210,36 @@ import type {
   GetSectionSpecificationResult,
   GetSpecificationPricesInput,
   GetSpecificationPricesResult,
+  GetStageAssemblyInput,
+  GetStageAssemblyResult,
+  GetStageChainBatchInput,
+  GetStageChainBatchResult,
+  GetStageChainRunInput,
+  GetStageChainRunResult,
+  GetStageChangeCardInput,
+  GetStageChangeCardResult,
+  GetStageChangeJournalInput,
+  GetStageChangeJournalResult,
+  GetStagePairInput,
+  GetStagePairResult,
+  GetStageProfileTextInput,
+  GetStageProfileTextResult,
+  GetStageSheetMapInput,
+  GetStageSheetMapResult,
+  GetStageSheetMapRevisionInput,
+  GetStageSheetMapRevisionResult,
+  GetStageSynthesisInput,
+  GetStageSynthesisResult,
+  GetStageUploadInput,
+  GetStageUploadResult,
   GetUserInput,
   GetUserResult,
   GetVersionBlocksInput,
   GetVersionBlocksResult,
   GetVersionPageProfileInput,
   GetVersionPageProfileResult,
+  GetVersionPageSpecPositionsInput,
+  GetVersionPageSpecPositionsResult,
   GetVersionSectionReviewInput,
   GetVersionSectionReviewResult,
   IssueRunnerTokenInput,
@@ -156,12 +254,24 @@ import type {
   ListAssignmentsResult,
   ListComparisonAiLinksInput,
   ListComparisonAiLinksResult,
+  ListComparisonAiPairHintsInput,
+  ListComparisonAiPairHintsResult,
   ListComparisonMatrixEditsInput,
   ListComparisonMatrixEditsResult,
+  ListComparisonReportsInput,
+  ListComparisonReportsResult,
+  ListComparisonReviewSheetsInput,
+  ListComparisonReviewSheetsResult,
   ListComparisonSeriesInput,
   ListComparisonSeriesResult,
+  ListComparisonSheetDescriptionHistoryInput,
+  ListComparisonSheetDescriptionHistoryResult,
   ListComparisonSheetPairsInput,
   ListComparisonSheetPairsResult,
+  ListComparisonSpecificationChangesInput,
+  ListComparisonSpecificationChangesResult,
+  ListComparisonSpecificationsInput,
+  ListComparisonSpecificationsResult,
   ListComparisonUploadsInput,
   ListComparisonUploadsResult,
   ListComparisonVersionOrdersInput,
@@ -208,6 +318,40 @@ import type {
   ListRunFindingsResult,
   ListRunsInput,
   ListRunsResult,
+  ListStageAiReviewsInput,
+  ListStageAiReviewsResult,
+  ListStageCardVerdictsInput,
+  ListStageCardVerdictsResult,
+  ListStageChainRunsInput,
+  ListStageChainRunsResult,
+  ListStageChangeCardsInput,
+  ListStageChangeCardsResult,
+  ListStageClassificationsInput,
+  ListStageClassificationsResult,
+  ListStageGraphicEvidenceInput,
+  ListStageGraphicEvidenceResult,
+  ListStageLinkRepairsInput,
+  ListStageLinkRepairsResult,
+  ListStagePairSuggestionsInput,
+  ListStagePairSuggestionsResult,
+  ListStagePairsInput,
+  ListStagePairsResult,
+  ListStageRawDifferencesInput,
+  ListStageRawDifferencesResult,
+  ListStageSheetMapHistoryInput,
+  ListStageSheetMapHistoryResult,
+  ListStageSheetPassportsInput,
+  ListStageSheetPassportsResult,
+  ListStageSheetSuggestionsInput,
+  ListStageSheetSuggestionsResult,
+  ListStageTextExclusionsInput,
+  ListStageTextExclusionsResult,
+  ListStageTextFragmentsInput,
+  ListStageTextFragmentsResult,
+  ListStageTextHintsInput,
+  ListStageTextHintsResult,
+  ListStageUploadsInput,
+  ListStageUploadsResult,
   ListUsersInput,
   ListUsersResult,
   ListVersionPageProfilesInput,
@@ -220,10 +364,22 @@ import type {
   ListWorkersResult,
   MarkReleaseNotesReadInput,
   MarkReleaseNotesReadResult,
+  PauseComparisonAiPairCheckInput,
+  PauseComparisonAiPairCheckResult,
+  PauseComparisonAiSheetChangesInput,
+  PauseComparisonAiSheetChangesResult,
+  PauseComparisonLaunchQueueInput,
+  PauseComparisonLaunchQueueResult,
   PauseComparisonSeriesInput,
   PauseComparisonSeriesResult,
   PauseComparisonUploadInput,
   PauseComparisonUploadResult,
+  PauseStageChainBatchInput,
+  PauseStageChainBatchResult,
+  PauseStageUploadInput,
+  PauseStageUploadResult,
+  PrepareComparisonClientReportInput,
+  PrepareComparisonClientReportResult,
   PrepareComparisonMatrixInput,
   PrepareComparisonMatrixResult,
   PurgeUserInput,
@@ -232,24 +388,48 @@ import type {
   ReadRegistrationStatusResult,
   ReauditRunInput,
   ReauditRunResult,
+  RebuildComparisonReportPdfInput,
+  RebuildComparisonReportPdfResult,
+  RecomputeStageTextEvidenceInput,
+  RecomputeStageTextEvidenceResult,
   RejectRegistrationInput,
   RejectRegistrationResult,
+  RejectStageUploadCandidateInput,
+  RejectStageUploadCandidateResult,
+  RemoveComparisonLaunchEntryInput,
+  RemoveComparisonLaunchEntryResult,
   RequestExecutorProbeInput,
   RequestExecutorProbeResult,
   ResetUserPasswordInput,
   ResetUserPasswordResult,
   RestoreUserInput,
   RestoreUserResult,
+  ResumeComparisonAiPairCheckInput,
+  ResumeComparisonAiPairCheckResult,
+  ResumeComparisonAiSheetChangesInput,
+  ResumeComparisonAiSheetChangesResult,
+  ResumeComparisonLaunchQueueInput,
+  ResumeComparisonLaunchQueueResult,
   ResumeComparisonSeriesInput,
   ResumeComparisonSeriesResult,
   ResumeComparisonUploadInput,
   ResumeComparisonUploadResult,
+  ResumeStageChainBatchInput,
+  ResumeStageChainBatchResult,
+  ResumeStageChainRunInput,
+  ResumeStageChainRunResult,
+  ResumeStageUploadInput,
+  ResumeStageUploadResult,
+  RetryComparisonAiSheetChangesInput,
+  RetryComparisonAiSheetChangesResult,
   RetryComparisonUploadSetInput,
   RetryComparisonUploadSetResult,
   ReviseAnalysisPresetInput,
   ReviseAnalysisPresetResult,
   ReviseExecutorConnectionInput,
   ReviseExecutorConnectionResult,
+  ReviseStageAssemblyInput,
+  ReviseStageAssemblyResult,
   RevokeRunnerTokenInput,
   RevokeRunnerTokenResult,
   SearchNormsInput,
@@ -268,22 +448,52 @@ import type {
   SetJobPriorityResult,
   SetProjectVendorListInput,
   SetProjectVendorListResult,
+  SetStagePairCompletenessInput,
+  SetStagePairCompletenessResult,
   SetWorkerIntakeInput,
   SetWorkerIntakeResult,
   StartArV3BetaGroupInput,
   StartArV3BetaGroupResult,
+  StartComparisonAiPairCheckInput,
+  StartComparisonAiPairCheckResult,
+  StartComparisonAiSheetChangesInput,
+  StartComparisonAiSheetChangesResult,
+  StartComparisonReportInput,
+  StartComparisonReportResult,
   StartComparisonSeriesInput,
   StartComparisonSeriesResult,
+  StartComparisonSheetDescriptionInput,
+  StartComparisonSheetDescriptionResult,
+  StartComparisonSpecificationInput,
+  StartComparisonSpecificationResult,
   StartOptimisationPassInput,
   StartOptimisationPassResult,
   StartRunInput,
   StartRunResult,
+  StartStageChainBatchInput,
+  StartStageChainBatchResult,
+  StartStageChainRunInput,
+  StartStageChainRunResult,
   StreamComparisonPairTileInput,
   StreamComparisonPairTileResult,
+  StreamComparisonReportPdfInput,
+  StreamComparisonReportPdfResult,
+  StreamComparisonReportSourceMdInput,
+  StreamComparisonReportSourceMdResult,
+  StreamComparisonSeriesSummaryInput,
+  StreamComparisonSeriesSummaryResult,
+  StreamComparisonSheetDescriptionMdInput,
+  StreamComparisonSheetDescriptionMdResult,
   StreamDocumentVersionContentInput,
   StreamDocumentVersionContentResult,
   StreamNormDocumentContentInput,
   StreamNormDocumentContentResult,
+  StreamStageChangeJournalHtmlInput,
+  StreamStageChangeJournalHtmlResult,
+  StreamStageChangeJournalPdfInput,
+  StreamStageChangeJournalPdfResult,
+  StreamStageChangeJournalXlsxInput,
+  StreamStageChangeJournalXlsxResult,
   StreamVersionPagePreviewInput,
   StreamVersionPagePreviewResult,
   StreamVersionPageThumbnailInput,
@@ -300,10 +510,14 @@ import type {
   TransitionAssignmentResult,
   UndoComparisonMatrixEditInput,
   UndoComparisonMatrixEditResult,
+  UndoStageLinkRepairInput,
+  UndoStageLinkRepairResult,
   UpdateMyProfileInput,
   UpdateMyProfileResult,
   UpdateUserInput,
   UpdateUserResult,
+  UploadComparisonReportSourceInput,
+  UploadComparisonReportSourceResult,
   UploadComparisonUploadPartInput,
   UploadComparisonUploadPartResult,
   UploadDocumentInput,
@@ -312,6 +526,8 @@ import type {
   UploadDocumentVersionResult,
   UploadPriceListInput,
   UploadPriceListResult,
+  UploadStageUploadPartInput,
+  UploadStageUploadPartResult,
   WithdrawSheetPairingInput,
   WithdrawSheetPairingResult,
 } from './operations.gen';
@@ -351,6 +567,30 @@ export function applyComparisonMatrixEdits(
   options?: RequestOptions,
 ): Promise<ApiResponse<ApplyComparisonMatrixEditsResult>> {
   return request<ApplyComparisonMatrixEditsResult>(OPERATIONS.applyComparisonMatrixEdits, input, options);
+}
+
+/**
+ * Apply Verdicts
+ *
+ * `POST /stage-chain-runs/{stage_chain_run_id}/card-verdicts` - a write; carries a required Idempotency-Key.
+ */
+export function applyStageCardVerdicts(
+  input: ApplyStageCardVerdictsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ApplyStageCardVerdictsResult>> {
+  return request<ApplyStageCardVerdictsResult>(OPERATIONS.applyStageCardVerdicts, input, options);
+}
+
+/**
+ * Apply Stage Sheet Map
+ *
+ * `POST /stage-pairs/{stage_pair_id}/sheet-map` - a write; carries a required Idempotency-Key.
+ */
+export function applyStageSheetMap(
+  input: ApplyStageSheetMapInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ApplyStageSheetMapResult>> {
+  return request<ApplyStageSheetMapResult>(OPERATIONS.applyStageSheetMap, input, options);
 }
 
 /**
@@ -414,6 +654,42 @@ export function archiveUser(
 }
 
 /**
+ * Cancel an AI check of pairs.
+ *
+ * `POST /comparison-ai-pair-checks/{comparison_ai_job_id}/cancellation` - a write; carries a required Idempotency-Key.
+ */
+export function cancelComparisonAiPairCheck(
+  input: CancelComparisonAiPairCheckInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CancelComparisonAiPairCheckResult>> {
+  return request<CancelComparisonAiPairCheckResult>(OPERATIONS.cancelComparisonAiPairCheck, input, options);
+}
+
+/**
+ * Cancel an AI description of changes.
+ *
+ * `POST /comparison-ai-sheet-jobs/{comparison_ai_job_id}/cancellation` - a write; carries a required Idempotency-Key.
+ */
+export function cancelComparisonAiSheetChanges(
+  input: CancelComparisonAiSheetChangesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CancelComparisonAiSheetChangesResult>> {
+  return request<CancelComparisonAiSheetChangesResult>(OPERATIONS.cancelComparisonAiSheetChanges, input, options);
+}
+
+/**
+ * Cancel a report.
+ *
+ * `POST /comparison-reports/{comparison_report_id}/cancellation` - a write; carries a required Idempotency-Key.
+ */
+export function cancelComparisonReport(
+  input: CancelComparisonReportInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CancelComparisonReportResult>> {
+  return request<CancelComparisonReportResult>(OPERATIONS.cancelComparisonReport, input, options);
+}
+
+/**
  * Cancel a series.
  *
  * `POST /comparison-series/{comparison_series_id}/cancellation` - a write; carries a required Idempotency-Key.
@@ -423,6 +699,18 @@ export function cancelComparisonSeries(
   options?: RequestOptions,
 ): Promise<ApiResponse<CancelComparisonSeriesResult>> {
   return request<CancelComparisonSeriesResult>(OPERATIONS.cancelComparisonSeries, input, options);
+}
+
+/**
+ * Cancel a specification comparison.
+ *
+ * `POST /comparison-ai-spec-jobs/{comparison_ai_job_id}/cancellation` - a write; carries a required Idempotency-Key.
+ */
+export function cancelComparisonSpecification(
+  input: CancelComparisonSpecificationInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CancelComparisonSpecificationResult>> {
+  return request<CancelComparisonSpecificationResult>(OPERATIONS.cancelComparisonSpecification, input, options);
 }
 
 /**
@@ -447,6 +735,42 @@ export function cancelRun(
   options?: RequestOptions,
 ): Promise<ApiResponse<CancelRunResult>> {
   return request<CancelRunResult>(OPERATIONS.cancelRun, input, options);
+}
+
+/**
+ * Cancel Batch
+ *
+ * `POST /stage-chain-batches/{stage_chain_batch_id}/cancellation` - a write; carries a required Idempotency-Key.
+ */
+export function cancelStageChainBatch(
+  input: CancelStageChainBatchInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CancelStageChainBatchResult>> {
+  return request<CancelStageChainBatchResult>(OPERATIONS.cancelStageChainBatch, input, options);
+}
+
+/**
+ * Cancel Stage Chain Run
+ *
+ * `POST /stage-chain-runs/{stage_chain_run_id}/cancellation` - a write; carries a required Idempotency-Key.
+ */
+export function cancelStageChainRun(
+  input: CancelStageChainRunInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CancelStageChainRunResult>> {
+  return request<CancelStageChainRunResult>(OPERATIONS.cancelStageChainRun, input, options);
+}
+
+/**
+ * Cancel Stage Upload
+ *
+ * `POST /stage-uploads/{stage_upload_id}/cancellation` - a write; carries a required Idempotency-Key.
+ */
+export function cancelStageUpload(
+  input: CancelStageUploadInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CancelStageUploadResult>> {
+  return request<CancelStageUploadResult>(OPERATIONS.cancelStageUpload, input, options);
 }
 
 /**
@@ -498,6 +822,18 @@ export function classifyDocumentVersion(
 }
 
 /**
+ * Clear the launch queue.
+ *
+ * `POST /projects/{project_uid}/comparison-launch-queue/clear` - a write; carries a required Idempotency-Key.
+ */
+export function clearComparisonLaunchQueue(
+  input: ClearComparisonLaunchQueueInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ClearComparisonLaunchQueueResult>> {
+  return request<ClearComparisonLaunchQueueResult>(OPERATIONS.clearComparisonLaunchQueue, input, options);
+}
+
+/**
  * Compare Document Versions
  *
  * `GET /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison`.
@@ -522,6 +858,18 @@ export function completeComparisonUploadFile(
 }
 
 /**
+ * Complete Stage Upload File
+ *
+ * `POST /stage-uploads/{stage_upload_id}/files/{stage_upload_file_id}/completion` - a write; carries a required Idempotency-Key.
+ */
+export function completeStageUploadFile(
+  input: CompleteStageUploadFileInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CompleteStageUploadFileResult>> {
+  return request<CompleteStageUploadFileResult>(OPERATIONS.completeStageUploadFile, input, options);
+}
+
+/**
  * Confirm the membership and order of one proposed set.
  *
  * `POST /comparison-uploads/{comparison_upload_id}/sets/{comparison_upload_set_id}/confirmation` - a write; carries a required Idempotency-Key.
@@ -531,6 +879,42 @@ export function confirmComparisonUploadSet(
   options?: RequestOptions,
 ): Promise<ApiResponse<ConfirmComparisonUploadSetResult>> {
   return request<ConfirmComparisonUploadSetResult>(OPERATIONS.confirmComparisonUploadSet, input, options);
+}
+
+/**
+ * Confirm Stage Pair
+ *
+ * `POST /projects/{project_uid}/stage-pairs` - a write; carries a required Idempotency-Key.
+ */
+export function confirmStagePair(
+  input: ConfirmStagePairInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ConfirmStagePairResult>> {
+  return request<ConfirmStagePairResult>(OPERATIONS.confirmStagePair, input, options);
+}
+
+/**
+ * Confirm Stage Upload Candidate
+ *
+ * `POST /stage-upload-candidates/{stage_upload_candidate_id}/confirmation` - a write; carries a required Idempotency-Key.
+ */
+export function confirmStageUploadCandidate(
+  input: ConfirmStageUploadCandidateInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ConfirmStageUploadCandidateResult>> {
+  return request<ConfirmStageUploadCandidateResult>(OPERATIONS.confirmStageUploadCandidate, input, options);
+}
+
+/**
+ * Continue a report.
+ *
+ * `POST /comparison-reports/{comparison_report_id}/continuation` - a write; carries a required Idempotency-Key.
+ */
+export function continueComparisonReport(
+  input: ContinueComparisonReportInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ContinueComparisonReportResult>> {
+  return request<ContinueComparisonReportResult>(OPERATIONS.continueComparisonReport, input, options);
 }
 
 /**
@@ -570,6 +954,18 @@ export function createAssignment(
 }
 
 /**
+ * Make a report draft from the summary of a series.
+ *
+ * `POST /comparison-series/{comparison_series_id}/reports` - a write; carries a required Idempotency-Key.
+ */
+export function createComparisonReport(
+  input: CreateComparisonReportInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CreateComparisonReportResult>> {
+  return request<CreateComparisonReportResult>(OPERATIONS.createComparisonReport, input, options);
+}
+
+/**
  * Declare an upload batch of plain PDFs for comparison.
  *
  * `POST /projects/{project_uid}/comparison-uploads` - a write; carries a required Idempotency-Key.
@@ -606,6 +1002,42 @@ export function createProject(
 }
 
 /**
+ * Create Stage Assembly
+ *
+ * `POST /projects/{project_uid}/stage-assemblies` - a write; carries a required Idempotency-Key.
+ */
+export function createStageAssembly(
+  input: CreateStageAssemblyInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CreateStageAssemblyResult>> {
+  return request<CreateStageAssemblyResult>(OPERATIONS.createStageAssembly, input, options);
+}
+
+/**
+ * Create Review Card
+ *
+ * `POST /stage-chain-runs/{stage_chain_run_id}/review-cards` - a write; carries a required Idempotency-Key.
+ */
+export function createStageReviewCard(
+  input: CreateStageReviewCardInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CreateStageReviewCardResult>> {
+  return request<CreateStageReviewCardResult>(OPERATIONS.createStageReviewCard, input, options);
+}
+
+/**
+ * Create Stage Upload
+ *
+ * `POST /projects/{project_uid}/stage-uploads` - a write; carries a required Idempotency-Key.
+ */
+export function createStageUpload(
+  input: CreateStageUploadInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CreateStageUploadResult>> {
+  return request<CreateStageUploadResult>(OPERATIONS.createStageUpload, input, options);
+}
+
+/**
  * Decide Optimisation Proposal
  *
  * `POST /optimisation-proposals/{optimisation_proposal_id}/decisions` - a write; carries a required Idempotency-Key.
@@ -615,6 +1047,126 @@ export function decideOptimisationProposal(
   options?: RequestOptions,
 ): Promise<ApiResponse<DecideOptimisationProposalResult>> {
   return request<DecideOptimisationProposalResult>(OPERATIONS.decideOptimisationProposal, input, options);
+}
+
+/**
+ * Delete a report.
+ *
+ * `POST /comparison-reports/{comparison_report_id}/deletion` - a write; carries a required Idempotency-Key.
+ */
+export function deleteComparisonReport(
+  input: DeleteComparisonReportInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<DeleteComparisonReportResult>> {
+  return request<DeleteComparisonReportResult>(OPERATIONS.deleteComparisonReport, input, options);
+}
+
+/**
+ * Take an AI description of changes out of the AI queue.
+ *
+ * `POST /comparison-ai-sheet-jobs/{comparison_ai_job_id}/dequeue` - a write; carries a required Idempotency-Key.
+ */
+export function dequeueComparisonAiSheetChanges(
+  input: DequeueComparisonAiSheetChangesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<DequeueComparisonAiSheetChangesResult>> {
+  return request<DequeueComparisonAiSheetChangesResult>(OPERATIONS.dequeueComparisonAiSheetChanges, input, options);
+}
+
+/**
+ * Queue document sets and steps.
+ *
+ * `POST /projects/{project_uid}/comparison-launch-queue/entries` - a write; carries a required Idempotency-Key.
+ */
+export function enqueueComparisonLaunch(
+  input: EnqueueComparisonLaunchInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<EnqueueComparisonLaunchResult>> {
+  return request<EnqueueComparisonLaunchResult>(OPERATIONS.enqueueComparisonLaunch, input, options);
+}
+
+/**
+ * Estimate all six AR v3 checks before spend.
+ *
+ * `POST /ar-v3-beta/groups/cost-estimate`.
+ */
+export function estimateArV3GroupCost(
+  input: EstimateArV3GroupCostInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<EstimateArV3GroupCostResult>> {
+  return request<EstimateArV3GroupCostResult>(OPERATIONS.estimateArV3GroupCost, input, options);
+}
+
+/**
+ * Estimate the AI check of the doubtful pairs of a document set.
+ *
+ * `GET /projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-check/estimate`.
+ */
+export function estimateComparisonAiPairCheck(
+  input: EstimateComparisonAiPairCheckInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<EstimateComparisonAiPairCheckResult>> {
+  return request<EstimateComparisonAiPairCheckResult>(OPERATIONS.estimateComparisonAiPairCheck, input, options);
+}
+
+/**
+ * Estimate the AI description of changes of a series.
+ *
+ * `GET /comparison-series/{comparison_series_id}/ai-sheet-changes/estimate`.
+ */
+export function estimateComparisonAiSheetChanges(
+  input: EstimateComparisonAiSheetChangesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<EstimateComparisonAiSheetChangesResult>> {
+  return request<EstimateComparisonAiSheetChangesResult>(OPERATIONS.estimateComparisonAiSheetChanges, input, options);
+}
+
+/**
+ * Estimate the AI description of one sheet.
+ *
+ * `GET /comparison-sheet-pairs/{comparison_sheet_pair_id}/description/estimate`.
+ */
+export function estimateComparisonSheetDescription(
+  input: EstimateComparisonSheetDescriptionInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<EstimateComparisonSheetDescriptionResult>> {
+  return request<EstimateComparisonSheetDescriptionResult>(OPERATIONS.estimateComparisonSheetDescription, input, options);
+}
+
+/**
+ * Estimate the comparison of the whole specifications of a transition.
+ *
+ * `GET /comparison-transitions/{comparison_transition_id}/specification/estimate`.
+ */
+export function estimateComparisonSpecification(
+  input: EstimateComparisonSpecificationInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<EstimateComparisonSpecificationResult>> {
+  return request<EstimateComparisonSpecificationResult>(OPERATIONS.estimateComparisonSpecification, input, options);
+}
+
+/**
+ * Estimate selected section analysis before spend.
+ *
+ * `POST /runs/cost-estimate`.
+ */
+export function estimateRunCost(
+  input: EstimateRunCostInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<EstimateRunCostResult>> {
+  return request<EstimateRunCostResult>(OPERATIONS.estimateRunCost, input, options);
+}
+
+/**
+ * Estimate Run
+ *
+ * `GET /stage-link-revisions/{stage_link_revision_id}/chain-estimate`.
+ */
+export function estimateStageChainRun(
+  input: EstimateStageChainRunInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<EstimateStageChainRunResult>> {
+  return request<EstimateStageChainRunResult>(OPERATIONS.estimateStageChainRun, input, options);
 }
 
 /**
@@ -687,6 +1239,18 @@ export function failExecutorTask(
   options?: RequestOptions,
 ): Promise<ApiResponse<FailExecutorTaskResult>> {
   return request<FailExecutorTaskResult>(OPERATIONS.failExecutorTask, input, options);
+}
+
+/**
+ * Finish an interrupted AI description of changes.
+ *
+ * `POST /comparison-ai-sheet-jobs/{comparison_ai_job_id}/finish` - a write; carries a required Idempotency-Key.
+ */
+export function finishComparisonAiSheetChanges(
+  input: FinishComparisonAiSheetChangesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<FinishComparisonAiSheetChangesResult>> {
+  return request<FinishComparisonAiSheetChangesResult>(OPERATIONS.finishComparisonAiSheetChanges, input, options);
 }
 
 /**
@@ -774,6 +1338,54 @@ export function getAssignment(
 }
 
 /**
+ * Read the latest AI check of a document set.
+ *
+ * `GET /projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-check`.
+ */
+export function getComparisonAiPairCheck(
+  input: GetComparisonAiPairCheckInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetComparisonAiPairCheckResult>> {
+  return request<GetComparisonAiPairCheckResult>(OPERATIONS.getComparisonAiPairCheck, input, options);
+}
+
+/**
+ * Read the AI queue of the installation.
+ *
+ * `GET /execution/comparison-ai-queue`.
+ */
+export function getComparisonAiQueue(
+  input: GetComparisonAiQueueInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetComparisonAiQueueResult>> {
+  return request<GetComparisonAiQueueResult>(OPERATIONS.getComparisonAiQueue, input, options);
+}
+
+/**
+ * Read the AI description of changes of a series.
+ *
+ * `GET /comparison-series/{comparison_series_id}/ai-sheet-changes`.
+ */
+export function getComparisonAiSheetChanges(
+  input: GetComparisonAiSheetChangesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetComparisonAiSheetChangesResult>> {
+  return request<GetComparisonAiSheetChangesResult>(OPERATIONS.getComparisonAiSheetChanges, input, options);
+}
+
+/**
+ * Read the launch queue of a project.
+ *
+ * `GET /projects/{project_uid}/comparison-launch-queue`.
+ */
+export function getComparisonLaunchQueue(
+  input: GetComparisonLaunchQueueInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetComparisonLaunchQueueResult>> {
+  return request<GetComparisonLaunchQueueResult>(OPERATIONS.getComparisonLaunchQueue, input, options);
+}
+
+/**
  * Read the effective matrix of a document set.
  *
  * `GET /projects/{project_uid}/documents/{document_uid}/comparison-matrix`.
@@ -810,6 +1422,18 @@ export function getComparisonQueueSummary(
 }
 
 /**
+ * Read a report.
+ *
+ * `GET /comparison-reports/{comparison_report_id}`.
+ */
+export function getComparisonReport(
+  input: GetComparisonReportInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetComparisonReportResult>> {
+  return request<GetComparisonReportResult>(OPERATIONS.getComparisonReport, input, options);
+}
+
+/**
  * Read a series with its transitions.
  *
  * `GET /comparison-series/{comparison_series_id}`.
@@ -822,6 +1446,18 @@ export function getComparisonSeries(
 }
 
 /**
+ * Read the AI description of a sheet pair.
+ *
+ * `GET /comparison-sheet-pairs/{comparison_sheet_pair_id}/description`.
+ */
+export function getComparisonSheetDescription(
+  input: GetComparisonSheetDescriptionInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetComparisonSheetDescriptionResult>> {
+  return request<GetComparisonSheetDescriptionResult>(OPERATIONS.getComparisonSheetDescription, input, options);
+}
+
+/**
  * Read one sheet pair with its raw deterministic evidence.
  *
  * `GET /comparison-sheet-pairs/{comparison_sheet_pair_id}`.
@@ -831,6 +1467,30 @@ export function getComparisonSheetPair(
   options?: RequestOptions,
 ): Promise<ApiResponse<GetComparisonSheetPairResult>> {
   return request<GetComparisonSheetPairResult>(OPERATIONS.getComparisonSheetPair, input, options);
+}
+
+/**
+ * Read the positions that changed on a sheet pair.
+ *
+ * `GET /comparison-sheet-pairs/{comparison_sheet_pair_id}/spec-positions`.
+ */
+export function getComparisonSheetPairSpecPositions(
+  input: GetComparisonSheetPairSpecPositionsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetComparisonSheetPairSpecPositionsResult>> {
+  return request<GetComparisonSheetPairSpecPositionsResult>(OPERATIONS.getComparisonSheetPairSpecPositions, input, options);
+}
+
+/**
+ * Read the specification comparison of a transition.
+ *
+ * `GET /comparison-transitions/{comparison_transition_id}/specification`.
+ */
+export function getComparisonSpecification(
+  input: GetComparisonSpecificationInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetComparisonSpecificationResult>> {
+  return request<GetComparisonSpecificationResult>(OPERATIONS.getComparisonSpecification, input, options);
 }
 
 /**
@@ -1026,6 +1686,138 @@ export function getSpecificationPrices(
 }
 
 /**
+ * Get Assembly
+ *
+ * `GET /stage-assemblies/{stage_assembly_id}`.
+ */
+export function getStageAssembly(
+  input: GetStageAssemblyInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetStageAssemblyResult>> {
+  return request<GetStageAssemblyResult>(OPERATIONS.getStageAssembly, input, options);
+}
+
+/**
+ * Get Batch
+ *
+ * `GET /stage-chain-batches/{stage_chain_batch_id}`.
+ */
+export function getStageChainBatch(
+  input: GetStageChainBatchInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetStageChainBatchResult>> {
+  return request<GetStageChainBatchResult>(OPERATIONS.getStageChainBatch, input, options);
+}
+
+/**
+ * Get Stage Chain Run
+ *
+ * `GET /stage-chain-runs/{stage_chain_run_id}`.
+ */
+export function getStageChainRun(
+  input: GetStageChainRunInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetStageChainRunResult>> {
+  return request<GetStageChainRunResult>(OPERATIONS.getStageChainRun, input, options);
+}
+
+/**
+ * Get Card
+ *
+ * `GET /stage-change-cards/{stage_change_card_id}`.
+ */
+export function getStageChangeCard(
+  input: GetStageChangeCardInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetStageChangeCardResult>> {
+  return request<GetStageChangeCardResult>(OPERATIONS.getStageChangeCard, input, options);
+}
+
+/**
+ * Get Journal
+ *
+ * `GET /stage-chain-runs/{stage_chain_run_id}/journal`.
+ */
+export function getStageChangeJournal(
+  input: GetStageChangeJournalInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetStageChangeJournalResult>> {
+  return request<GetStageChangeJournalResult>(OPERATIONS.getStageChangeJournal, input, options);
+}
+
+/**
+ * Get Stage Pair
+ *
+ * `GET /stage-pairs/{stage_pair_id}`.
+ */
+export function getStagePair(
+  input: GetStagePairInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetStagePairResult>> {
+  return request<GetStagePairResult>(OPERATIONS.getStagePair, input, options);
+}
+
+/**
+ * Get Profile Text
+ *
+ * `GET /comparison-page-profiles/{comparison_page_profile_id}/stage-text`.
+ */
+export function getStageProfileText(
+  input: GetStageProfileTextInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetStageProfileTextResult>> {
+  return request<GetStageProfileTextResult>(OPERATIONS.getStageProfileText, input, options);
+}
+
+/**
+ * Get Stage Sheet Map
+ *
+ * `GET /stage-pairs/{stage_pair_id}/sheet-map`.
+ */
+export function getStageSheetMap(
+  input: GetStageSheetMapInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetStageSheetMapResult>> {
+  return request<GetStageSheetMapResult>(OPERATIONS.getStageSheetMap, input, options);
+}
+
+/**
+ * Get Stage Sheet Map Revision
+ *
+ * `GET /stage-link-revisions/{stage_link_revision_id}`.
+ */
+export function getStageSheetMapRevision(
+  input: GetStageSheetMapRevisionInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetStageSheetMapRevisionResult>> {
+  return request<GetStageSheetMapRevisionResult>(OPERATIONS.getStageSheetMapRevision, input, options);
+}
+
+/**
+ * Get Synthesis
+ *
+ * `GET /stage-chain-runs/{stage_chain_run_id}/synthesis`.
+ */
+export function getStageSynthesis(
+  input: GetStageSynthesisInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetStageSynthesisResult>> {
+  return request<GetStageSynthesisResult>(OPERATIONS.getStageSynthesis, input, options);
+}
+
+/**
+ * Get Stage Upload
+ *
+ * `GET /stage-uploads/{stage_upload_id}`.
+ */
+export function getStageUpload(
+  input: GetStageUploadInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetStageUploadResult>> {
+  return request<GetStageUploadResult>(OPERATIONS.getStageUpload, input, options);
+}
+
+/**
  * Read one account.
  *
  * `GET /users/{user_uid}`.
@@ -1059,6 +1851,18 @@ export function getVersionPageProfile(
   options?: RequestOptions,
 ): Promise<ApiResponse<GetVersionPageProfileResult>> {
   return request<GetVersionPageProfileResult>(OPERATIONS.getVersionPageProfile, input, options);
+}
+
+/**
+ * Read the positions of a specification page.
+ *
+ * `GET /page-profiles/{comparison_page_profile_id}/spec-positions`.
+ */
+export function getVersionPageSpecPositions(
+  input: GetVersionPageSpecPositionsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetVersionPageSpecPositionsResult>> {
+  return request<GetVersionPageSpecPositionsResult>(OPERATIONS.getVersionPageSpecPositions, input, options);
 }
 
 /**
@@ -1146,6 +1950,18 @@ export function listComparisonAiLinks(
 }
 
 /**
+ * List the answers and hints of the AI check of pairs.
+ *
+ * `GET /projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-hints`.
+ */
+export function listComparisonAiPairHints(
+  input: ListComparisonAiPairHintsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListComparisonAiPairHintsResult>> {
+  return request<ListComparisonAiPairHintsResult>(OPERATIONS.listComparisonAiPairHints, input, options);
+}
+
+/**
  * List the manual edit history of a document set.
  *
  * `GET /projects/{project_uid}/documents/{document_uid}/comparison-matrix/edits`.
@@ -1155,6 +1971,30 @@ export function listComparisonMatrixEdits(
   options?: RequestOptions,
 ): Promise<ApiResponse<ListComparisonMatrixEditsResult>> {
   return request<ListComparisonMatrixEditsResult>(OPERATIONS.listComparisonMatrixEdits, input, options);
+}
+
+/**
+ * List the reports of a series.
+ *
+ * `GET /comparison-series/{comparison_series_id}/reports`.
+ */
+export function listComparisonReports(
+  input: ListComparisonReportsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListComparisonReportsResult>> {
+  return request<ListComparisonReportsResult>(OPERATIONS.listComparisonReports, input, options);
+}
+
+/**
+ * List the sheets of a transition to review.
+ *
+ * `GET /comparison-transitions/{comparison_transition_id}/review-sheets`.
+ */
+export function listComparisonReviewSheets(
+  input: ListComparisonReviewSheetsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListComparisonReviewSheetsResult>> {
+  return request<ListComparisonReviewSheetsResult>(OPERATIONS.listComparisonReviewSheets, input, options);
 }
 
 /**
@@ -1170,6 +2010,18 @@ export function listComparisonSeries(
 }
 
 /**
+ * List the earlier descriptions of a sheet pair.
+ *
+ * `GET /comparison-sheet-pairs/{comparison_sheet_pair_id}/description-history`.
+ */
+export function listComparisonSheetDescriptionHistory(
+  input: ListComparisonSheetDescriptionHistoryInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListComparisonSheetDescriptionHistoryResult>> {
+  return request<ListComparisonSheetDescriptionHistoryResult>(OPERATIONS.listComparisonSheetDescriptionHistory, input, options);
+}
+
+/**
  * List the sheet pairs of a transition.
  *
  * `GET /comparison-transitions/{comparison_transition_id}/sheet-pairs`.
@@ -1179,6 +2031,30 @@ export function listComparisonSheetPairs(
   options?: RequestOptions,
 ): Promise<ApiResponse<ListComparisonSheetPairsResult>> {
   return request<ListComparisonSheetPairsResult>(OPERATIONS.listComparisonSheetPairs, input, options);
+}
+
+/**
+ * List the changes of a transition's specification.
+ *
+ * `GET /comparison-transitions/{comparison_transition_id}/specification/changes`.
+ */
+export function listComparisonSpecificationChanges(
+  input: ListComparisonSpecificationChangesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListComparisonSpecificationChangesResult>> {
+  return request<ListComparisonSpecificationChangesResult>(OPERATIONS.listComparisonSpecificationChanges, input, options);
+}
+
+/**
+ * List the specification comparisons of a series.
+ *
+ * `GET /comparison-series/{comparison_series_id}/specifications`.
+ */
+export function listComparisonSpecifications(
+  input: ListComparisonSpecificationsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListComparisonSpecificationsResult>> {
+  return request<ListComparisonSpecificationsResult>(OPERATIONS.listComparisonSpecifications, input, options);
 }
 
 /**
@@ -1458,6 +2334,210 @@ export function listRuns(
 }
 
 /**
+ * List Ai Reviews
+ *
+ * `GET /stage-chain-runs/{stage_chain_run_id}/ai-reviews`.
+ */
+export function listStageAiReviews(
+  input: ListStageAiReviewsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListStageAiReviewsResult>> {
+  return request<ListStageAiReviewsResult>(OPERATIONS.listStageAiReviews, input, options);
+}
+
+/**
+ * List Verdicts
+ *
+ * `GET /stage-change-cards/{stage_change_card_id}/verdicts`.
+ */
+export function listStageCardVerdicts(
+  input: ListStageCardVerdictsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListStageCardVerdictsResult>> {
+  return request<ListStageCardVerdictsResult>(OPERATIONS.listStageCardVerdicts, input, options);
+}
+
+/**
+ * List Stage Chain Runs
+ *
+ * `GET /stage-pairs/{stage_pair_id}/chain-runs`.
+ */
+export function listStageChainRuns(
+  input: ListStageChainRunsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListStageChainRunsResult>> {
+  return request<ListStageChainRunsResult>(OPERATIONS.listStageChainRuns, input, options);
+}
+
+/**
+ * List Cards
+ *
+ * `GET /stage-chain-runs/{stage_chain_run_id}/cards`.
+ */
+export function listStageChangeCards(
+  input: ListStageChangeCardsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListStageChangeCardsResult>> {
+  return request<ListStageChangeCardsResult>(OPERATIONS.listStageChangeCards, input, options);
+}
+
+/**
+ * List Classifications
+ *
+ * `GET /stage-chain-runs/{stage_chain_run_id}/classifications`.
+ */
+export function listStageClassifications(
+  input: ListStageClassificationsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListStageClassificationsResult>> {
+  return request<ListStageClassificationsResult>(OPERATIONS.listStageClassifications, input, options);
+}
+
+/**
+ * List Graphics
+ *
+ * `GET /stage-chain-runs/{stage_chain_run_id}/graphic-evidence`.
+ */
+export function listStageGraphicEvidence(
+  input: ListStageGraphicEvidenceInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListStageGraphicEvidenceResult>> {
+  return request<ListStageGraphicEvidenceResult>(OPERATIONS.listStageGraphicEvidence, input, options);
+}
+
+/**
+ * List Repairs
+ *
+ * `GET /stage-chain-runs/{stage_chain_run_id}/sheet-link-repairs`.
+ */
+export function listStageLinkRepairs(
+  input: ListStageLinkRepairsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListStageLinkRepairsResult>> {
+  return request<ListStageLinkRepairsResult>(OPERATIONS.listStageLinkRepairs, input, options);
+}
+
+/**
+ * List Stage Pair Suggestions
+ *
+ * `GET /projects/{project_uid}/stage-pair-suggestions`.
+ */
+export function listStagePairSuggestions(
+  input: ListStagePairSuggestionsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListStagePairSuggestionsResult>> {
+  return request<ListStagePairSuggestionsResult>(OPERATIONS.listStagePairSuggestions, input, options);
+}
+
+/**
+ * List Stage Pairs
+ *
+ * `GET /projects/{project_uid}/stage-pairs`.
+ */
+export function listStagePairs(
+  input: ListStagePairsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListStagePairsResult>> {
+  return request<ListStagePairsResult>(OPERATIONS.listStagePairs, input, options);
+}
+
+/**
+ * List Stage Raw Differences
+ *
+ * `GET /stage-link-revisions/{stage_link_revision_id}/raw-differences`.
+ */
+export function listStageRawDifferences(
+  input: ListStageRawDifferencesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListStageRawDifferencesResult>> {
+  return request<ListStageRawDifferencesResult>(OPERATIONS.listStageRawDifferences, input, options);
+}
+
+/**
+ * List Stage Sheet Map History
+ *
+ * `GET /stage-pairs/{stage_pair_id}/sheet-map/revisions`.
+ */
+export function listStageSheetMapHistory(
+  input: ListStageSheetMapHistoryInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListStageSheetMapHistoryResult>> {
+  return request<ListStageSheetMapHistoryResult>(OPERATIONS.listStageSheetMapHistory, input, options);
+}
+
+/**
+ * List Stage Sheet Passports
+ *
+ * `GET /stage-pairs/{stage_pair_id}/sheet-passports`.
+ */
+export function listStageSheetPassports(
+  input: ListStageSheetPassportsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListStageSheetPassportsResult>> {
+  return request<ListStageSheetPassportsResult>(OPERATIONS.listStageSheetPassports, input, options);
+}
+
+/**
+ * List Stage Sheet Suggestions
+ *
+ * `GET /stage-pairs/{stage_pair_id}/sheet-suggestions`.
+ */
+export function listStageSheetSuggestions(
+  input: ListStageSheetSuggestionsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListStageSheetSuggestionsResult>> {
+  return request<ListStageSheetSuggestionsResult>(OPERATIONS.listStageSheetSuggestions, input, options);
+}
+
+/**
+ * List Stage Text Exclusions
+ *
+ * `GET /stage-link-revisions/{stage_link_revision_id}/text-exclusions`.
+ */
+export function listStageTextExclusions(
+  input: ListStageTextExclusionsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListStageTextExclusionsResult>> {
+  return request<ListStageTextExclusionsResult>(OPERATIONS.listStageTextExclusions, input, options);
+}
+
+/**
+ * List Stage Text Fragments
+ *
+ * `GET /stage-pairs/{stage_pair_id}/text-fragments`.
+ */
+export function listStageTextFragments(
+  input: ListStageTextFragmentsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListStageTextFragmentsResult>> {
+  return request<ListStageTextFragmentsResult>(OPERATIONS.listStageTextFragments, input, options);
+}
+
+/**
+ * List Stage Text Hints
+ *
+ * `GET /stage-link-revisions/{stage_link_revision_id}/text-hints`.
+ */
+export function listStageTextHints(
+  input: ListStageTextHintsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListStageTextHintsResult>> {
+  return request<ListStageTextHintsResult>(OPERATIONS.listStageTextHints, input, options);
+}
+
+/**
+ * List Stage Uploads
+ *
+ * `GET /projects/{project_uid}/stage-uploads`.
+ */
+export function listStageUploads(
+  input: ListStageUploadsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListStageUploadsResult>> {
+  return request<ListStageUploadsResult>(OPERATIONS.listStageUploads, input, options);
+}
+
+/**
  * List accounts, ordered by login.
  *
  * `GET /users`.
@@ -1530,6 +2610,42 @@ export function markReleaseNotesRead(
 }
 
 /**
+ * Pause an AI check of pairs.
+ *
+ * `POST /comparison-ai-pair-checks/{comparison_ai_job_id}/pause` - a write; carries a required Idempotency-Key.
+ */
+export function pauseComparisonAiPairCheck(
+  input: PauseComparisonAiPairCheckInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<PauseComparisonAiPairCheckResult>> {
+  return request<PauseComparisonAiPairCheckResult>(OPERATIONS.pauseComparisonAiPairCheck, input, options);
+}
+
+/**
+ * Pause an AI description of changes.
+ *
+ * `POST /comparison-ai-sheet-jobs/{comparison_ai_job_id}/pause` - a write; carries a required Idempotency-Key.
+ */
+export function pauseComparisonAiSheetChanges(
+  input: PauseComparisonAiSheetChangesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<PauseComparisonAiSheetChangesResult>> {
+  return request<PauseComparisonAiSheetChangesResult>(OPERATIONS.pauseComparisonAiSheetChanges, input, options);
+}
+
+/**
+ * Pause the launch queue.
+ *
+ * `POST /projects/{project_uid}/comparison-launch-queue/pause` - a write; carries a required Idempotency-Key.
+ */
+export function pauseComparisonLaunchQueue(
+  input: PauseComparisonLaunchQueueInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<PauseComparisonLaunchQueueResult>> {
+  return request<PauseComparisonLaunchQueueResult>(OPERATIONS.pauseComparisonLaunchQueue, input, options);
+}
+
+/**
  * Pause a series.
  *
  * `POST /comparison-series/{comparison_series_id}/pause` - a write; carries a required Idempotency-Key.
@@ -1551,6 +2667,42 @@ export function pauseComparisonUpload(
   options?: RequestOptions,
 ): Promise<ApiResponse<PauseComparisonUploadResult>> {
   return request<PauseComparisonUploadResult>(OPERATIONS.pauseComparisonUpload, input, options);
+}
+
+/**
+ * Pause Batch
+ *
+ * `POST /stage-chain-batches/{stage_chain_batch_id}/pause` - a write; carries a required Idempotency-Key.
+ */
+export function pauseStageChainBatch(
+  input: PauseStageChainBatchInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<PauseStageChainBatchResult>> {
+  return request<PauseStageChainBatchResult>(OPERATIONS.pauseStageChainBatch, input, options);
+}
+
+/**
+ * Pause Stage Upload
+ *
+ * `POST /stage-uploads/{stage_upload_id}/pause` - a write; carries a required Idempotency-Key.
+ */
+export function pauseStageUpload(
+  input: PauseStageUploadInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<PauseStageUploadResult>> {
+  return request<PauseStageUploadResult>(OPERATIONS.pauseStageUpload, input, options);
+}
+
+/**
+ * Prepare the client report from an analytic report.
+ *
+ * `POST /comparison-reports/{comparison_report_id}/client-report` - a write; carries a required Idempotency-Key.
+ */
+export function prepareComparisonClientReport(
+  input: PrepareComparisonClientReportInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<PrepareComparisonClientReportResult>> {
+  return request<PrepareComparisonClientReportResult>(OPERATIONS.prepareComparisonClientReport, input, options);
 }
 
 /**
@@ -1602,6 +2754,30 @@ export function reauditRun(
 }
 
 /**
+ * Write the PDF of a report again.
+ *
+ * `POST /comparison-reports/{comparison_report_id}/pdf-rebuild` - a write; carries a required Idempotency-Key.
+ */
+export function rebuildComparisonReportPdf(
+  input: RebuildComparisonReportPdfInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<RebuildComparisonReportPdfResult>> {
+  return request<RebuildComparisonReportPdfResult>(OPERATIONS.rebuildComparisonReportPdf, input, options);
+}
+
+/**
+ * Recompute Stage Text Evidence
+ *
+ * `POST /stage-link-revisions/{stage_link_revision_id}/text-evidence/recomputation` - a write; carries a required Idempotency-Key.
+ */
+export function recomputeStageTextEvidence(
+  input: RecomputeStageTextEvidenceInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<RecomputeStageTextEvidenceResult>> {
+  return request<RecomputeStageTextEvidenceResult>(OPERATIONS.recomputeStageTextEvidence, input, options);
+}
+
+/**
  * Reject a registration request with a reason.
  *
  * `POST /registrations/{request_id}/reject`.
@@ -1611,6 +2787,30 @@ export function rejectRegistration(
   options?: RequestOptions,
 ): Promise<ApiResponse<RejectRegistrationResult>> {
   return request<RejectRegistrationResult>(OPERATIONS.rejectRegistration, input, options);
+}
+
+/**
+ * Reject Stage Upload Candidate
+ *
+ * `POST /stage-upload-candidates/{stage_upload_candidate_id}/rejection` - a write; carries a required Idempotency-Key.
+ */
+export function rejectStageUploadCandidate(
+  input: RejectStageUploadCandidateInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<RejectStageUploadCandidateResult>> {
+  return request<RejectStageUploadCandidateResult>(OPERATIONS.rejectStageUploadCandidate, input, options);
+}
+
+/**
+ * Remove one entry from the launch queue.
+ *
+ * `POST /comparison-launch-entries/{comparison_launch_entry_id}/removal` - a write; carries a required Idempotency-Key.
+ */
+export function removeComparisonLaunchEntry(
+  input: RemoveComparisonLaunchEntryInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<RemoveComparisonLaunchEntryResult>> {
+  return request<RemoveComparisonLaunchEntryResult>(OPERATIONS.removeComparisonLaunchEntry, input, options);
 }
 
 /**
@@ -1650,6 +2850,42 @@ export function restoreUser(
 }
 
 /**
+ * Resume an AI check of pairs.
+ *
+ * `POST /comparison-ai-pair-checks/{comparison_ai_job_id}/resume` - a write; carries a required Idempotency-Key.
+ */
+export function resumeComparisonAiPairCheck(
+  input: ResumeComparisonAiPairCheckInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ResumeComparisonAiPairCheckResult>> {
+  return request<ResumeComparisonAiPairCheckResult>(OPERATIONS.resumeComparisonAiPairCheck, input, options);
+}
+
+/**
+ * Resume an AI description of changes.
+ *
+ * `POST /comparison-ai-sheet-jobs/{comparison_ai_job_id}/resume` - a write; carries a required Idempotency-Key.
+ */
+export function resumeComparisonAiSheetChanges(
+  input: ResumeComparisonAiSheetChangesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ResumeComparisonAiSheetChangesResult>> {
+  return request<ResumeComparisonAiSheetChangesResult>(OPERATIONS.resumeComparisonAiSheetChanges, input, options);
+}
+
+/**
+ * Resume the launch queue.
+ *
+ * `POST /projects/{project_uid}/comparison-launch-queue/resume` - a write; carries a required Idempotency-Key.
+ */
+export function resumeComparisonLaunchQueue(
+  input: ResumeComparisonLaunchQueueInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ResumeComparisonLaunchQueueResult>> {
+  return request<ResumeComparisonLaunchQueueResult>(OPERATIONS.resumeComparisonLaunchQueue, input, options);
+}
+
+/**
  * Resume a paused series.
  *
  * `POST /comparison-series/{comparison_series_id}/resume` - a write; carries a required Idempotency-Key.
@@ -1671,6 +2907,54 @@ export function resumeComparisonUpload(
   options?: RequestOptions,
 ): Promise<ApiResponse<ResumeComparisonUploadResult>> {
   return request<ResumeComparisonUploadResult>(OPERATIONS.resumeComparisonUpload, input, options);
+}
+
+/**
+ * Resume Batch
+ *
+ * `POST /stage-chain-batches/{stage_chain_batch_id}/resume` - a write; carries a required Idempotency-Key.
+ */
+export function resumeStageChainBatch(
+  input: ResumeStageChainBatchInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ResumeStageChainBatchResult>> {
+  return request<ResumeStageChainBatchResult>(OPERATIONS.resumeStageChainBatch, input, options);
+}
+
+/**
+ * Resume Run
+ *
+ * `POST /stage-chain-runs/{stage_chain_run_id}/resume` - a write; carries a required Idempotency-Key.
+ */
+export function resumeStageChainRun(
+  input: ResumeStageChainRunInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ResumeStageChainRunResult>> {
+  return request<ResumeStageChainRunResult>(OPERATIONS.resumeStageChainRun, input, options);
+}
+
+/**
+ * Resume Stage Upload
+ *
+ * `POST /stage-uploads/{stage_upload_id}/resume` - a write; carries a required Idempotency-Key.
+ */
+export function resumeStageUpload(
+  input: ResumeStageUploadInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ResumeStageUploadResult>> {
+  return request<ResumeStageUploadResult>(OPERATIONS.resumeStageUpload, input, options);
+}
+
+/**
+ * Describe the sheets that failed again.
+ *
+ * `POST /comparison-ai-sheet-jobs/{comparison_ai_job_id}/retry` - a write; carries a required Idempotency-Key.
+ */
+export function retryComparisonAiSheetChanges(
+  input: RetryComparisonAiSheetChangesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<RetryComparisonAiSheetChangesResult>> {
+  return request<RetryComparisonAiSheetChangesResult>(OPERATIONS.retryComparisonAiSheetChanges, input, options);
 }
 
 /**
@@ -1707,6 +2991,18 @@ export function reviseExecutorConnection(
   options?: RequestOptions,
 ): Promise<ApiResponse<ReviseExecutorConnectionResult>> {
   return request<ReviseExecutorConnectionResult>(OPERATIONS.reviseExecutorConnection, input, options);
+}
+
+/**
+ * Revise Stage Assembly
+ *
+ * `POST /stage-assemblies/{stage_assembly_id}/members` - a write; carries a required Idempotency-Key.
+ */
+export function reviseStageAssembly(
+  input: ReviseStageAssemblyInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ReviseStageAssemblyResult>> {
+  return request<ReviseStageAssemblyResult>(OPERATIONS.reviseStageAssembly, input, options);
 }
 
 /**
@@ -1818,6 +3114,18 @@ export function setProjectVendorList(
 }
 
 /**
+ * Set Stage Pair Completeness
+ *
+ * `POST /stage-pairs/{stage_pair_id}/completeness` - a write; carries a required Idempotency-Key.
+ */
+export function setStagePairCompleteness(
+  input: SetStagePairCompletenessInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SetStagePairCompletenessResult>> {
+  return request<SetStagePairCompletenessResult>(OPERATIONS.setStagePairCompleteness, input, options);
+}
+
+/**
  * Set Worker Intake
  *
  * `PUT /execution/workers/{worker_id}/intake` - a write; carries a required Idempotency-Key.
@@ -1842,6 +3150,42 @@ export function startArV3BetaGroup(
 }
 
 /**
+ * Start the AI check of the doubtful pairs of a document set.
+ *
+ * `POST /projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-check` - a write; carries a required Idempotency-Key.
+ */
+export function startComparisonAiPairCheck(
+  input: StartComparisonAiPairCheckInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StartComparisonAiPairCheckResult>> {
+  return request<StartComparisonAiPairCheckResult>(OPERATIONS.startComparisonAiPairCheck, input, options);
+}
+
+/**
+ * Start the AI description of changes of a series.
+ *
+ * `POST /comparison-series/{comparison_series_id}/ai-sheet-changes` - a write; carries a required Idempotency-Key.
+ */
+export function startComparisonAiSheetChanges(
+  input: StartComparisonAiSheetChangesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StartComparisonAiSheetChangesResult>> {
+  return request<StartComparisonAiSheetChangesResult>(OPERATIONS.startComparisonAiSheetChanges, input, options);
+}
+
+/**
+ * Start a report draft.
+ *
+ * `POST /comparison-reports/{comparison_report_id}/start` - a write; carries a required Idempotency-Key.
+ */
+export function startComparisonReport(
+  input: StartComparisonReportInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StartComparisonReportResult>> {
+  return request<StartComparisonReportResult>(OPERATIONS.startComparisonReport, input, options);
+}
+
+/**
  * Start the comparison of every adjacent pair of versions.
  *
  * `POST /projects/{project_uid}/documents/{document_uid}/comparison-series` - a write; carries a required Idempotency-Key.
@@ -1851,6 +3195,30 @@ export function startComparisonSeries(
   options?: RequestOptions,
 ): Promise<ApiResponse<StartComparisonSeriesResult>> {
   return request<StartComparisonSeriesResult>(OPERATIONS.startComparisonSeries, input, options);
+}
+
+/**
+ * Describe one sheet with the AI.
+ *
+ * `POST /comparison-sheet-pairs/{comparison_sheet_pair_id}/description` - a write; carries a required Idempotency-Key.
+ */
+export function startComparisonSheetDescription(
+  input: StartComparisonSheetDescriptionInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StartComparisonSheetDescriptionResult>> {
+  return request<StartComparisonSheetDescriptionResult>(OPERATIONS.startComparisonSheetDescription, input, options);
+}
+
+/**
+ * Start the comparison of the whole specifications of a transition.
+ *
+ * `POST /comparison-transitions/{comparison_transition_id}/specification` - a write; carries a required Idempotency-Key.
+ */
+export function startComparisonSpecification(
+  input: StartComparisonSpecificationInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StartComparisonSpecificationResult>> {
+  return request<StartComparisonSpecificationResult>(OPERATIONS.startComparisonSpecification, input, options);
 }
 
 /**
@@ -1878,6 +3246,30 @@ export function startRun(
 }
 
 /**
+ * Start Batch
+ *
+ * `POST /projects/{project_uid}/stage-chain-batches` - a write; carries a required Idempotency-Key.
+ */
+export function startStageChainBatch(
+  input: StartStageChainBatchInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StartStageChainBatchResult>> {
+  return request<StartStageChainBatchResult>(OPERATIONS.startStageChainBatch, input, options);
+}
+
+/**
+ * Start Stage Chain Run
+ *
+ * `POST /stage-pairs/{stage_pair_id}/chain-runs` - a write; carries a required Idempotency-Key.
+ */
+export function startStageChainRun(
+  input: StartStageChainRunInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StartStageChainRunResult>> {
+  return request<StartStageChainRunResult>(OPERATIONS.startStageChainRun, input, options);
+}
+
+/**
  * Stream one tile PNG of a sheet pair.
  *
  * `GET /comparison-sheet-pairs/{comparison_sheet_pair_id}/tile`.
@@ -1887,6 +3279,54 @@ export function streamComparisonPairTile(
   options?: RequestOptions,
 ): Promise<ApiResponse<StreamComparisonPairTileResult>> {
   return request<StreamComparisonPairTileResult>(OPERATIONS.streamComparisonPairTile, input, options);
+}
+
+/**
+ * Download the PDF of a report.
+ *
+ * `GET /comparison-reports/{comparison_report_id}/pdf`.
+ */
+export function streamComparisonReportPdf(
+  input: StreamComparisonReportPdfInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StreamComparisonReportPdfResult>> {
+  return request<StreamComparisonReportPdfResult>(OPERATIONS.streamComparisonReportPdf, input, options);
+}
+
+/**
+ * Download the MD a report was built from.
+ *
+ * `GET /comparison-reports/{comparison_report_id}/source-md`.
+ */
+export function streamComparisonReportSourceMd(
+  input: StreamComparisonReportSourceMdInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StreamComparisonReportSourceMdResult>> {
+  return request<StreamComparisonReportSourceMdResult>(OPERATIONS.streamComparisonReportSourceMd, input, options);
+}
+
+/**
+ * Download the MD summary of a series.
+ *
+ * `GET /comparison-series/{comparison_series_id}/summary-md`.
+ */
+export function streamComparisonSeriesSummary(
+  input: StreamComparisonSeriesSummaryInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StreamComparisonSeriesSummaryResult>> {
+  return request<StreamComparisonSeriesSummaryResult>(OPERATIONS.streamComparisonSeriesSummary, input, options);
+}
+
+/**
+ * Download the AI description of a sheet as Markdown.
+ *
+ * `GET /comparison-sheet-pairs/{comparison_sheet_pair_id}/description/md`.
+ */
+export function streamComparisonSheetDescriptionMd(
+  input: StreamComparisonSheetDescriptionMdInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StreamComparisonSheetDescriptionMdResult>> {
+  return request<StreamComparisonSheetDescriptionMdResult>(OPERATIONS.streamComparisonSheetDescriptionMd, input, options);
 }
 
 /**
@@ -1911,6 +3351,42 @@ export function streamNormDocumentContent(
   options?: RequestOptions,
 ): Promise<ApiResponse<StreamNormDocumentContentResult>> {
   return request<StreamNormDocumentContentResult>(OPERATIONS.streamNormDocumentContent, input, options);
+}
+
+/**
+ * Journal Html
+ *
+ * `GET /stage-chain-runs/{stage_chain_run_id}/journal.html`.
+ */
+export function streamStageChangeJournalHtml(
+  input: StreamStageChangeJournalHtmlInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StreamStageChangeJournalHtmlResult>> {
+  return request<StreamStageChangeJournalHtmlResult>(OPERATIONS.streamStageChangeJournalHtml, input, options);
+}
+
+/**
+ * Journal Pdf
+ *
+ * `GET /stage-chain-runs/{stage_chain_run_id}/journal.pdf`.
+ */
+export function streamStageChangeJournalPdf(
+  input: StreamStageChangeJournalPdfInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StreamStageChangeJournalPdfResult>> {
+  return request<StreamStageChangeJournalPdfResult>(OPERATIONS.streamStageChangeJournalPdf, input, options);
+}
+
+/**
+ * Journal Xlsx
+ *
+ * `GET /stage-chain-runs/{stage_chain_run_id}/journal.xlsx`.
+ */
+export function streamStageChangeJournalXlsx(
+  input: StreamStageChangeJournalXlsxInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<StreamStageChangeJournalXlsxResult>> {
+  return request<StreamStageChangeJournalXlsxResult>(OPERATIONS.streamStageChangeJournalXlsx, input, options);
 }
 
 /**
@@ -2010,6 +3486,18 @@ export function undoComparisonMatrixEdit(
 }
 
 /**
+ * Undo Repair
+ *
+ * `POST /stage-link-repairs/{stage_link_repair_id}/undo` - a write; carries a required Idempotency-Key.
+ */
+export function undoStageLinkRepair(
+  input: UndoStageLinkRepairInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<UndoStageLinkRepairResult>> {
+  return request<UndoStageLinkRepairResult>(OPERATIONS.undoStageLinkRepair, input, options);
+}
+
+/**
  * Set the signed-in account's names, and complete its profile.
  *
  * `PATCH /me`.
@@ -2031,6 +3519,18 @@ export function updateUser(
   options?: RequestOptions,
 ): Promise<ApiResponse<UpdateUserResult>> {
   return request<UpdateUserResult>(OPERATIONS.updateUser, input, options);
+}
+
+/**
+ * Make a report draft from an uploaded MD file.
+ *
+ * `POST /comparison-series/{comparison_series_id}/reports/upload` - a write; carries a required Idempotency-Key.
+ */
+export function uploadComparisonReportSource(
+  input: UploadComparisonReportSourceInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<UploadComparisonReportSourceResult>> {
+  return request<UploadComparisonReportSourceResult>(OPERATIONS.uploadComparisonReportSource, input, options);
 }
 
 /**
@@ -2082,6 +3582,18 @@ export function uploadPriceList(
 }
 
 /**
+ * Upload Stage Upload Part
+ *
+ * `PUT /stage-uploads/{stage_upload_id}/files/{stage_upload_file_id}/parts` - a write; carries a required Idempotency-Key.
+ */
+export function uploadStageUploadPart(
+  input: UploadStageUploadPartInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<UploadStageUploadPartResult>> {
+  return request<UploadStageUploadPartResult>(OPERATIONS.uploadStageUploadPart, input, options);
+}
+
+/**
  * Withdraw Sheet Pairing
  *
  * `POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/sheet-pairings/{sheet_link_id}/withdrawals` - a write; carries a required Idempotency-Key.
@@ -2101,34 +3613,63 @@ export const apiClient = {
   appendComparisonVersionOrder,
   appendDecision,
   applyComparisonMatrixEdits,
+  applyStageCardVerdicts,
+  applyStageSheetMap,
   approveRegistration,
   approveSheetPairing,
   archiveAnalysisPreset,
   archiveExecutorConnection,
   archiveUser,
+  cancelComparisonAiPairCheck,
+  cancelComparisonAiSheetChanges,
+  cancelComparisonReport,
   cancelComparisonSeries,
+  cancelComparisonSpecification,
   cancelComparisonUpload,
   cancelRun,
+  cancelStageChainBatch,
+  cancelStageChainRun,
+  cancelStageUpload,
   carryOverDecision,
   changePassword,
   claimExecutorTask,
   classifyDocumentVersion,
+  clearComparisonLaunchQueue,
   compareDocumentVersions,
   completeComparisonUploadFile,
+  completeStageUploadFile,
   confirmComparisonUploadSet,
+  confirmStagePair,
+  confirmStageUploadCandidate,
+  continueComparisonReport,
   correctVersionClassification,
   createAnalysisPreset,
   createAssignment,
+  createComparisonReport,
   createComparisonUpload,
   createExecutorConnection,
   createProject,
+  createStageAssembly,
+  createStageReviewCard,
+  createStageUpload,
   decideOptimisationProposal,
+  deleteComparisonReport,
+  dequeueComparisonAiSheetChanges,
+  enqueueComparisonLaunch,
+  estimateArV3GroupCost,
+  estimateComparisonAiPairCheck,
+  estimateComparisonAiSheetChanges,
+  estimateComparisonSheetDescription,
+  estimateComparisonSpecification,
+  estimateRunCost,
+  estimateStageChainRun,
   excludeComparisonUploadSet,
   exportOptimisationProposalsCsv,
   exportRunCsv,
   exportRunXlsx,
   extendExecutorTaskClaim,
   failExecutorTask,
+  finishComparisonAiSheetChanges,
   finishComparisonSeries,
   generateComparisonSummary,
   generateExecutorSshKey,
@@ -2136,11 +3677,19 @@ export const apiClient = {
   getArV3BetaGroupReview,
   getArV3BetaPackStatus,
   getAssignment,
+  getComparisonAiPairCheck,
+  getComparisonAiQueue,
+  getComparisonAiSheetChanges,
+  getComparisonLaunchQueue,
   getComparisonMatrix,
   getComparisonOverview,
   getComparisonQueueSummary,
+  getComparisonReport,
   getComparisonSeries,
+  getComparisonSheetDescription,
   getComparisonSheetPair,
+  getComparisonSheetPairSpecPositions,
+  getComparisonSpecification,
   getComparisonUpload,
   getComparisonUploadProposal,
   getDashboardSummary,
@@ -2157,9 +3706,21 @@ export const apiClient = {
   getRunStatus,
   getSectionSpecification,
   getSpecificationPrices,
+  getStageAssembly,
+  getStageChainBatch,
+  getStageChainRun,
+  getStageChangeCard,
+  getStageChangeJournal,
+  getStagePair,
+  getStageProfileText,
+  getStageSheetMap,
+  getStageSheetMapRevision,
+  getStageSynthesis,
+  getStageUpload,
   getUser,
   getVersionBlocks,
   getVersionPageProfile,
+  getVersionPageSpecPositions,
   getVersionSectionReview,
   issueRunnerToken,
   issueToken,
@@ -2167,9 +3728,15 @@ export const apiClient = {
   listAnalysisProfiles,
   listAssignments,
   listComparisonAiLinks,
+  listComparisonAiPairHints,
   listComparisonMatrixEdits,
+  listComparisonReports,
+  listComparisonReviewSheets,
   listComparisonSeries,
+  listComparisonSheetDescriptionHistory,
   listComparisonSheetPairs,
+  listComparisonSpecificationChanges,
+  listComparisonSpecifications,
   listComparisonUploads,
   listComparisonVersionOrders,
   listDecisionHistory,
@@ -2193,27 +3760,62 @@ export const apiClient = {
   listReleases,
   listRunFindings,
   listRuns,
+  listStageAiReviews,
+  listStageCardVerdicts,
+  listStageChainRuns,
+  listStageChangeCards,
+  listStageClassifications,
+  listStageGraphicEvidence,
+  listStageLinkRepairs,
+  listStagePairSuggestions,
+  listStagePairs,
+  listStageRawDifferences,
+  listStageSheetMapHistory,
+  listStageSheetPassports,
+  listStageSheetSuggestions,
+  listStageTextExclusions,
+  listStageTextFragments,
+  listStageTextHints,
+  listStageUploads,
   listUsers,
   listVersionPageProfiles,
   listVersionPortalBlocks,
   listVersions,
   listWorkers,
   markReleaseNotesRead,
+  pauseComparisonAiPairCheck,
+  pauseComparisonAiSheetChanges,
+  pauseComparisonLaunchQueue,
   pauseComparisonSeries,
   pauseComparisonUpload,
+  pauseStageChainBatch,
+  pauseStageUpload,
+  prepareComparisonClientReport,
   prepareComparisonMatrix,
   purgeUser,
   readRegistrationStatus,
   reauditRun,
+  rebuildComparisonReportPdf,
+  recomputeStageTextEvidence,
   rejectRegistration,
+  rejectStageUploadCandidate,
+  removeComparisonLaunchEntry,
   requestExecutorProbe,
   resetUserPassword,
   restoreUser,
+  resumeComparisonAiPairCheck,
+  resumeComparisonAiSheetChanges,
+  resumeComparisonLaunchQueue,
   resumeComparisonSeries,
   resumeComparisonUpload,
+  resumeStageChainBatch,
+  resumeStageChainRun,
+  resumeStageUpload,
+  retryComparisonAiSheetChanges,
   retryComparisonUploadSet,
   reviseAnalysisPreset,
   reviseExecutorConnection,
+  reviseStageAssembly,
   revokeRunnerToken,
   searchNorms,
   setCurrentNormSnapshot,
@@ -2223,14 +3825,29 @@ export const apiClient = {
   setGlobalVendorList,
   setJobPriority,
   setProjectVendorList,
+  setStagePairCompleteness,
   setWorkerIntake,
   startArV3BetaGroup,
+  startComparisonAiPairCheck,
+  startComparisonAiSheetChanges,
+  startComparisonReport,
   startComparisonSeries,
+  startComparisonSheetDescription,
+  startComparisonSpecification,
   startOptimisationPass,
   startRun,
+  startStageChainBatch,
+  startStageChainRun,
   streamComparisonPairTile,
+  streamComparisonReportPdf,
+  streamComparisonReportSourceMd,
+  streamComparisonSeriesSummary,
+  streamComparisonSheetDescriptionMd,
   streamDocumentVersionContent,
   streamNormDocumentContent,
+  streamStageChangeJournalHtml,
+  streamStageChangeJournalPdf,
+  streamStageChangeJournalXlsx,
   streamVersionPagePreview,
   streamVersionPageThumbnail,
   streamVersionPageTile,
@@ -2239,11 +3856,14 @@ export const apiClient = {
   submitRegistration,
   transitionAssignment,
   undoComparisonMatrixEdit,
+  undoStageLinkRepair,
   updateMyProfile,
   updateUser,
+  uploadComparisonReportSource,
   uploadComparisonUploadPart,
   uploadDocument,
   uploadDocumentVersion,
   uploadPriceList,
+  uploadStageUploadPart,
   withdrawSheetPairing,
 } as const;

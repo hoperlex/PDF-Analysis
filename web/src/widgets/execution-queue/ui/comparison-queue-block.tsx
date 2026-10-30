@@ -26,6 +26,7 @@ import {
   useComparisonQueueSummary,
 } from '@/entities/version-series';
 
+import { ComparisonAiQueueBlock } from './comparison-ai-queue-block';
 import styles from './execution-queue.module.css';
 
 export const COMPARISON_BLOCK_TITLE = 'Сравнение';
@@ -107,5 +108,10 @@ export function ComparisonQueueBlock() {
       />
     );
   }
-  return <ComparisonQueueBlockView summary={summary.data} />;
+  return (
+    <>
+      <ComparisonQueueBlockView summary={summary.data} />
+      <ComparisonAiQueueBlock />
+    </>
+  );
 }

@@ -503,8 +503,9 @@ describe('the census is taken over rendered screens, not over a list', () => {
     }
   });
 
-  it('names every selector it declined to evaluate, so a skipped rule is not a passing one', () => {
+  it('names every selector it declined to evaluate, so a skipped rule is not a passing one', async () => {
     everyPair('light');
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
     everyPair('dark');
     // `:has()` and `:not()` are the two constructs this matcher does not implement.
     //
@@ -589,12 +590,13 @@ describe('the census is taken over rendered screens, not over a list', () => {
     }
   });
 
-  it('produces the same pairs, and asks the same threshold of each, in both palettes', () => {
+  it('produces the same pairs, and asks the same threshold of each, in both palettes', async () => {
     // A second palette must not be a second CENSUS. The elements are the same, the rules
     // are the same and the cascade is the same: only the values differ. If this list is
     // ever non-empty, the two themes are being judged against different questions and the
     // per-theme comparison below would be comparing nothing.
     const light = new Map(measured('light').map((m) => [m.key, m.threshold]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
     const dark = new Map(measured('dark').map((m) => [m.key, m.threshold]));
     const disagreement = [...new Set([...light.keys(), ...dark.keys()])]
       .filter((key) => light.get(key) !== dark.get(key) || light.has(key) !== dark.has(key))

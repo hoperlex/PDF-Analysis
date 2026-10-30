@@ -35,6 +35,14 @@ try:  # as part of the product (the worker, the tests) ...
 except ImportError:  # ... and in the child program, which loads the codec beside this package
     from . import _mask_codec as mask_codec  # type: ignore[no-redef]
 
+try:  # as part of the product (the worker, the tests) ...
+    from ...specification import diff as spec_diff, table as spec_table
+except ImportError:  # ... and in the child program, which loads the specification package beside this one (``_amc_spec``)
+    import importlib
+
+    spec_diff = importlib.import_module("_amc_spec.diff")
+    spec_table = importlib.import_module("_amc_spec.table")
+
 from . import annotations as annotations_module
 from . import blocks, regions as regions_module, settings, textdiff, zones as zones_module
 from . import status as st
@@ -57,7 +65,7 @@ from .words import (
     warning_lines,
 )
 
-__all__ = ["run"]
+__all__ = ["run", "spec_positions_channel"]
 
 #: The planes the band loop fills (the others are made later from these).
 _BAND_PLANES = ("dark_a", "dark_b", "any_a", "any_b", "a_only", "b_only", "light_a", "light_b", "color", "style",
@@ -99,6 +107,53 @@ def _lines(page: dict[str, Any]) -> Any:
     if not info:
         return None
     return numpy.fromfile(info["file"], dtype=numpy.float32).reshape(-1, 4)
+
+
+def _spec_flow(page: dict[str, Any]) -> tuple[dict[str, Any] | None, str]:
+    """The positions of the specification table of one page, or ``None`` and the reason there are none (``CMP-VC-SPEC-01``).
+
+    Read from the page's own words, its vector lines (only the long axis-parallel ones can be a rule of the table, which also keeps
+    a page of 187 000 lines from becoming a Python list) and its title-block zone, in the frame of the page: the pure parser of
+    :mod:`auditmanager.comparison.specification.table`. A table with no position is no positions: a parser that read nothing
+    must not claim that everything was removed."""
+    lines = _lines(page)
+    rules: list[list[float]] = []
+    if lines is not None and len(lines):
+        dx = numpy.abs(lines[:, 2] - lines[:, 0])
+        dy = numpy.abs(lines[:, 3] - lines[:, 1])
+        rules = lines[((dx < 0.8) & (dy > 8.0)) | ((dy < 0.8) & (dx > 8.0))].tolist()
+    parsed = spec_table.parse_page(page["words"], rules, float(page["width_pt"]), float(page["height_pt"]), page.get("stamp_zone"))
+    if parsed is None:
+        return None, "таблица спецификации не найдена"
+    if not parsed.get("parsed"):
+        return None, str(parsed.get("reason") or "таблица не разобрана")
+    flow = spec_table.assemble([{"page": 1, "rows": parsed["rows"]}])
+    if not flow["items"]:
+        return None, "в таблице нет позиций"
+    return flow, ""
+
+
+def spec_positions_channel(a: dict[str, Any], b: dict[str, Any], main_diffs: int) -> dict[str, Any]:
+    """The channel ``spec_positions`` of a pair in which one page at least is a specification sheet (``CMP-VC-SPEC-01``).
+
+    * The graphics, the colour and the text have no difference: ``checked(0)``. The positions are read from the same words, so they
+      cannot differ (the original's own rule, ``engine.py:997``).
+    * Otherwise the positions of **both** pages are read and compared order-independently; ``checked`` with the number of
+      positions changed, added or removed (a renumbered position and a position that only changed its section are not counted, as
+      the original does not count them, ``jobs.py:857``). A page is read alone here, so no boundary at a page break can be unclear
+      (``spec.py:312``); the version-wide read of ``getComparisonSheetPairSpecPositions`` is where ``unclear`` appears.
+    * A page with no readable positions leaves the channel ``unchecked`` with the reason, never ``checked``: the pair is then
+      ``needs_review`` or ``different`` by the other channels, never ``same`` (the status rules).
+    """
+    if main_diffs == 0:
+        return st.checked(0)
+    flow_a, why_a = _spec_flow(a)
+    flow_b, why_b = _spec_flow(b)
+    if flow_a is None or flow_b is None:
+        side, why = ("A", why_a) if flow_a is None else ("B", why_b)
+        return st.unchecked(f"позиции спецификации не прочитаны (лист {side}): {why}")
+    totals = spec_diff.compare(flow_a["items"], flow_b["items"])["totals"]
+    return st.checked(totals["changed"] + totals["added"] + totals["removed"])
 
 
 def _part_area(mask36: Any, zones_b: list[list[float]], m: Any) -> list[float] | None:
@@ -432,7 +487,7 @@ def run(job: dict[str, Any]) -> dict[str, Any]:
     is_spec = "spec" in (classify_kind(words_a_all, (a.get("stamp") or {}).get("designation"), a["height_pt"]),
                          classify_kind(words_b_all, (b.get("stamp") or {}).get("designation"), b["height_pt"]))
     if is_spec:
-        channels["spec_positions"] = (st.checked(0) if main_diffs == 0 else st.unchecked("позиции спецификации не сравнивались"))
+        channels["spec_positions"] = spec_positions_channel(a, b, main_diffs)
     else:
         channels["spec_positions"] = st.not_applicable("не спецификация")
     status, kept_reasons = st.decide(channels, reasons)

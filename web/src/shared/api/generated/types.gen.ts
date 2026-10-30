@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.13.0 (OpenAPI 3.1.0)
- *   sha256 9cd30ad5172d89c138a5f33d54581b291359b407030e6e513adfb895ad2b020a
+ *   sha256 8fd13c576ec9a1a52baa4ec99e4b5b487231c7aec6b57256df3c5342c32cce3f
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.13.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '9cd30ad5172d89c138a5f33d54581b291359b407030e6e513adfb895ad2b020a';
+export const CONTRACT_DIGEST = '8fd13c576ec9a1a52baa4ec99e4b5b487231c7aec6b57256df3c5342c32cce3f';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -37,6 +37,8 @@ export const SCHEMA_NAMES = [
   'AppendDecisionRequest',
   'AppendDecisionResponse',
   'ApplyComparisonMatrixEditsRequest',
+  'ApplyStageCardVerdictsRequest',
+  'ApplyStageSheetMapRequest',
   'ApproveRegistrationRequest',
   'ApproveSheetPairingRequest',
   'ApprovedDiffHunk',
@@ -55,6 +57,7 @@ export const SCHEMA_NAMES = [
   'ArV3BetaVisibleProposal',
   'ArV3BetaVisibleReview',
   'ArV3BetaVisibleTopic',
+  'ArV3GroupCostEstimateRequest',
   'ArV3RunGroupId',
   'Assignment',
   'AssignmentDetail',
@@ -74,11 +77,45 @@ export const SCHEMA_NAMES = [
   'ClaimedExecutorTask',
   'ClassifyDocumentVersionRequest',
   'ComparedVersion',
+  'ComparisonAiCeiling',
+  'ComparisonAiCertainty',
+  'ComparisonAiChange',
+  'ComparisonAiConfidence',
+  'ComparisonAiConsent',
+  'ComparisonAiCoverage',
+  'ComparisonAiDeclaredItem',
+  'ComparisonAiDiagnostics',
+  'ComparisonAiEstimate',
+  'ComparisonAiExcludeReason',
+  'ComparisonAiExcluded',
+  'ComparisonAiJob',
+  'ComparisonAiJobCounts',
+  'ComparisonAiJobId',
+  'ComparisonAiJobState',
   'ComparisonAiLink',
   'ComparisonAiLinkAnsweredState',
   'ComparisonAiLinkId',
   'ComparisonAiLinkList',
   'ComparisonAiLinkStatus',
+  'ComparisonAiMethod',
+  'ComparisonAiPairCheck',
+  'ComparisonAiPairCounts',
+  'ComparisonAiPairDecision',
+  'ComparisonAiPairHint',
+  'ComparisonAiPairHintPage',
+  'ComparisonAiPairQuestionId',
+  'ComparisonAiPairQuestionKind',
+  'ComparisonAiPauseReason',
+  'ComparisonAiQueue',
+  'ComparisonAiQueueItem',
+  'ComparisonAiRoute',
+  'ComparisonAiSheetChanges',
+  'ComparisonAiSheetState',
+  'ComparisonAiSide',
+  'ComparisonAiSpend',
+  'ComparisonAiTier',
+  'ComparisonAiTransitionProgress',
+  'ComparisonAiUnresolved',
   'ComparisonBox',
   'ComparisonCanvas',
   'ComparisonCellConfidence',
@@ -91,6 +128,13 @@ export const SCHEMA_NAMES = [
   'ComparisonEditProvenance',
   'ComparisonHowCompared',
   'ComparisonId',
+  'ComparisonLaunchEntry',
+  'ComparisonLaunchEntryId',
+  'ComparisonLaunchEntryState',
+  'ComparisonLaunchItem',
+  'ComparisonLaunchQueue',
+  'ComparisonLaunchQueueCounts',
+  'ComparisonLaunchQueueState',
   'ComparisonLayer',
   'ComparisonMatrix',
   'ComparisonMatrixCandidate',
@@ -106,6 +150,7 @@ export const SCHEMA_NAMES = [
   'ComparisonMatrixEditSource',
   'ComparisonMatrixEditStatus',
   'ComparisonMatrixId',
+  'ComparisonMatrixLabelSource',
   'ComparisonMatrixPreparation',
   'ComparisonMatrixProgress',
   'ComparisonMatrixRevision',
@@ -137,19 +182,56 @@ export const SCHEMA_NAMES = [
   'ComparisonQueueKind',
   'ComparisonQueueModule',
   'ComparisonQueueSummary',
+  'ComparisonRasterSize',
   'ComparisonRefusal',
+  'ComparisonReport',
+  'ComparisonReportArtifact',
+  'ComparisonReportArtifactKind',
+  'ComparisonReportFacts',
+  'ComparisonReportId',
+  'ComparisonReportKind',
+  'ComparisonReportPage',
+  'ComparisonReportPart',
+  'ComparisonReportSource',
+  'ComparisonReportStage',
+  'ComparisonReportState',
+  'ComparisonReportUnitMark',
+  'ComparisonReviewSheet',
+  'ComparisonReviewSheetKind',
+  'ComparisonReviewSheetPage',
   'ComparisonSeries',
   'ComparisonSeriesId',
   'ComparisonSeriesPage',
   'ComparisonSeriesStaleReason',
   'ComparisonSeriesState',
   'ComparisonServiceNote',
+  'ComparisonSheetDescription',
+  'ComparisonSheetDescriptionHistory',
+  'ComparisonSheetDescriptionId',
+  'ComparisonSheetDescriptionRevision',
+  'ComparisonSheetDescriptionSource',
   'ComparisonSheetPair',
   'ComparisonSheetPairId',
   'ComparisonSheetPairPage',
   'ComparisonSheetPairResultId',
+  'ComparisonSheetPairSpecPositions',
   'ComparisonSheetPairState',
   'ComparisonSheetStatus',
+  'ComparisonSpecChange',
+  'ComparisonSpecChangeKind',
+  'ComparisonSpecChangePage',
+  'ComparisonSpecComparisonId',
+  'ComparisonSpecCoverage',
+  'ComparisonSpecExtractionId',
+  'ComparisonSpecFieldChange',
+  'ComparisonSpecMethod',
+  'ComparisonSpecPage',
+  'ComparisonSpecPhase',
+  'ComparisonSpecPosition',
+  'ComparisonSpecState',
+  'ComparisonSpecTotals',
+  'ComparisonSpecification',
+  'ComparisonSpecificationPage',
   'ComparisonStepCounts',
   'ComparisonStepId',
   'ComparisonStepState',
@@ -177,14 +259,20 @@ export const SCHEMA_NAMES = [
   'ComparisonVersionOrderList',
   'ComparisonVersionOrderSource',
   'ConfirmComparisonUploadSetRequest',
+  'ConfirmStagePairRequest',
+  'ConfirmStageUploadCandidateRequest',
   'ConfirmedComparisonFile',
   'CorrectVersionClassificationRequest',
   'CorrelationId',
   'CostBasis',
   'CreateAssignmentRequest',
+  'CreateComparisonReportRequest',
   'CreateComparisonUploadRequest',
   'CreateExecutorConnectionRequest',
   'CreateProjectRequest',
+  'CreateStageAssemblyRequest',
+  'CreateStageReviewCardRequest',
+  'CreateStageUploadRequest',
   'Cursor',
   'DashboardSummary',
   'DecideOptimisationProposalRequest',
@@ -199,6 +287,7 @@ export const SCHEMA_NAMES = [
   'DocumentVersion',
   'DocumentVersionPage',
   'EffectiveVendorLists',
+  'EnqueueComparisonLaunchRequest',
   'ErrorCode',
   'ErrorEnvelope',
   'Evidence',
@@ -313,6 +402,7 @@ export const SCHEMA_NAMES = [
   'PortalCrop',
   'PortalGeometryState',
   'PortalRecognisedText',
+  'PrepareComparisonClientReportRequest',
   'PresetId',
   'PresetRevisionId',
   'PriceListAmbiguousColumn',
@@ -350,6 +440,7 @@ export const SCHEMA_NAMES = [
   'ProposalPosition',
   'ProposalVerdict',
   'ProviderMode',
+  'ReauditRunRequest',
   'RegistrationRequest',
   'RegistrationRequestId',
   'RegistrationRequestPage',
@@ -361,10 +452,16 @@ export const SCHEMA_NAMES = [
   'ReleaseNoteItem',
   'ReleaseNoteKind',
   'ResetUserPasswordRequest',
+  'ResumeComparisonAiJobRequest',
+  'ResumeStageChainRunRequest',
   'ReviseExecutorConnectionRequest',
+  'ReviseStageAssemblyRequest',
   'Role',
   'RunActivity',
   'RunActivitySpend',
+  'RunCostConsent',
+  'RunCostEstimate',
+  'RunCostEstimateRequest',
   'RunExecutor',
   'RunId',
   'RunNormReferences',
@@ -395,6 +492,7 @@ export const SCHEMA_NAMES = [
   'SetGlobalVendorListRequest',
   'SetJobPriorityRequest',
   'SetProjectVendorListRequest',
+  'SetStagePairCompletenessRequest',
   'SetWorkerIntakeRequest',
   'Severity',
   'Sha256',
@@ -416,17 +514,106 @@ export const SCHEMA_NAMES = [
   'SpecificationSkipCounts',
   'SpecificationSkippedLine',
   'SpecificationTable',
+  'StageAiClassification',
+  'StageAiClassificationId',
+  'StageAiClassificationPage',
+  'StageAiReview',
+  'StageAiReviewId',
+  'StageAiReviewPage',
+  'StageAiSynthesis',
+  'StageAiSynthesisId',
+  'StageAiSynthesisPage',
+  'StageAiUnitId',
+  'StageAssembly',
+  'StageAssemblyId',
+  'StageAssemblyMember',
+  'StageAtomicEvidenceId',
+  'StageCardEvidence',
+  'StageCardEvidenceId',
+  'StageCardVerdict',
+  'StageCardVerdictId',
+  'StageCardVerdictInput',
+  'StageCardVerdictPage',
+  'StageChainBatch',
+  'StageChainBatchId',
+  'StageChainBatchItem',
+  'StageChainBatchItemId',
+  'StageChainBatchSelection',
+  'StageChainRun',
+  'StageChainRunId',
+  'StageChainRunPage',
+  'StageChainStep',
+  'StageChainStepId',
+  'StageChangeCard',
+  'StageChangeCardId',
+  'StageChangeCardPage',
+  'StageChangeCategory',
+  'StageChangeJournal',
+  'StageClassificationCard',
+  'StageGraphicEvidence',
+  'StageGraphicEvidenceId',
+  'StageGraphicEvidencePage',
   'StageId',
+  'StageLinkInput',
+  'StageLinkItem',
+  'StageLinkItemId',
+  'StageLinkRepair',
+  'StageLinkRepairId',
+  'StageLinkRepairPage',
+  'StageLinkRevision',
+  'StageLinkRevisionId',
+  'StageLinkRevisionPage',
+  'StagePair',
+  'StagePairId',
+  'StagePairPage',
+  'StagePairSuggestion',
+  'StagePairSuggestionPage',
+  'StageProfileText',
+  'StageProfileWord',
+  'StageReviewDecision',
+  'StageSheetPassport',
+  'StageSheetPassportPage',
+  'StageSheetSuggestion',
+  'StageSheetSuggestionPage',
   'StageState',
   'StageStatus',
+  'StageSynthesisResult',
+  'StageSystem',
+  'StageTextDifference',
+  'StageTextDifferenceId',
+  'StageTextDifferencePage',
+  'StageTextExclusion',
+  'StageTextExclusionId',
+  'StageTextExclusionPage',
+  'StageTextFragment',
+  'StageTextFragmentId',
+  'StageTextFragmentPage',
+  'StageTextHint',
+  'StageTextHintId',
+  'StageTextHintPage',
+  'StageUpload',
+  'StageUploadCandidate',
+  'StageUploadCandidateId',
+  'StageUploadFile',
+  'StageUploadFileDeclaration',
+  'StageUploadFileId',
+  'StageUploadFileKind',
+  'StageUploadId',
+  'StageUploadPage',
+  'StageUploadPartReceipt',
   'StartArV3BetaGroupRequest',
+  'StartComparisonAiJobRequest',
+  'StartComparisonAiSheetChangesRequest',
   'StartComparisonSeriesRequest',
   'StartRunRequest',
+  'StartStageChainBatchRequest',
+  'StartStageChainRunRequest',
   'SubmitExecutorTaskAnswerRequest',
   'SubmitRegistrationRequest',
   'SummaryStatement',
   'TransitionAssignmentRequest',
   'UndoComparisonMatrixEditRequest',
+  'UndoStageLinkRepairRequest',
   'UngroundedReason',
   'UpdateMyProfileRequest',
   'UpdateUserRequest',
@@ -597,6 +784,15 @@ export type AppendDecisionResponse = {
 export type ApplyComparisonMatrixEditsRequest = {
   base_revision: ComparisonMatrixRevision;
   edits: Array<ComparisonMatrixEditInput>;
+};
+
+export type ApplyStageCardVerdictsRequest = {
+  updates: Array<StageCardVerdictInput>;
+};
+
+export type ApplyStageSheetMapRequest = {
+  base_revision_id?: StageLinkRevisionId;
+  items: Array<StageLinkInput>;
 };
 
 export type ApproveRegistrationRequest = {
@@ -781,6 +977,11 @@ export type ArV3BetaVisibleTopic = {
   reason: string;
   review_status: string;
   source_ids: Array<string>;
+};
+
+export type ArV3GroupCostEstimateRequest = {
+  relaxed_limits?: boolean;
+  version_uid: VersionUid;
 };
 
 export type ArV3RunGroupId = string;
@@ -1003,6 +1204,206 @@ export type ComparedVersion = {
 };
 
 /**
+ * The hard ceilings of ``Q-CMP-7``: ``job`` USD 10 for one job, ``day`` USD 50 per day for the
+ * installation. A connection that is not metered has none.
+ */
+export const COMPARISON_AI_CEILING_VALUES = [
+  'job',
+  'day',
+] as const;
+
+/** ComparisonAiCeiling - the closed value set above. */
+export type ComparisonAiCeiling = (typeof COMPARISON_AI_CEILING_VALUES)[number];
+
+/** ComparisonAiCertainty. */
+export const COMPARISON_AI_CERTAINTY_VALUES = [
+  'confirmed',
+  'unclear',
+] as const;
+
+/** ComparisonAiCertainty - the closed value set above. */
+export type ComparisonAiCertainty = (typeof COMPARISON_AI_CERTAINTY_VALUES)[number];
+
+/**
+ * One change of the description: the construction object and its place, «Было» (only from side A)
+ * and «стало» (only from side B), the tier of each value and, for an item the model could not settle,
+ * the limitation («Неясно»). ``box`` and ``side`` serve «Показать на чертеже».
+ */
+export type ComparisonAiChange = {
+  box?: ComparisonBox;
+  certainty: ComparisonAiCertainty;
+  change_id: string;
+  kind?: string;
+  limitation?: string;
+  now?: string;
+  now_tier?: ComparisonAiTier;
+  object_name: string;
+  place?: string;
+  side?: ComparisonAiSide;
+  was?: string;
+  was_tier?: ComparisonAiTier;
+};
+
+/** ComparisonAiConfidence. */
+export const COMPARISON_AI_CONFIDENCE_VALUES = [
+  'high',
+  'medium',
+  'low',
+] as const;
+
+/** ComparisonAiConfidence - the closed value set above. */
+export type ComparisonAiConfidence = (typeof COMPARISON_AI_CONFIDENCE_VALUES)[number];
+
+/**
+ * The user's consent to one estimate: the digest of the estimate that was shown and the explicit
+ * confirmation of the line «Подтверждаю передачу материалов исполнителю». ``confirmed`` false is
+ * ``422 validation_failed`` (``comparison_consent_required``).
+ */
+export type ComparisonAiConsent = {
+  confirmed: boolean;
+  estimate_digest: Sha256;
+};
+
+/**
+ * How many engine candidates the description covers: ``candidates`` offered, ``in_changes`` named in
+ * a change, ``not_reviewed`` left unreviewed.
+ */
+export type ComparisonAiCoverage = {
+  candidates: number;
+  in_changes: number;
+  not_reviewed: number;
+};
+
+/** An item under «Заявлено проектировщиком в разрешении (N)», from the permit's stamp. */
+export type ComparisonAiDeclaredItem = {
+  reference?: string;
+  text: string;
+};
+
+/**
+ * The «Диагностика» panel: kept out of the main report. ``issues`` are the codes of the checks that
+ * failed.
+ */
+export type ComparisonAiDiagnostics = {
+  candidates: number;
+  excluded_by_program: number;
+  issues: Array<string>;
+};
+
+/**
+ * What an AI start would do and cost, computed without a model call. ``estimate_digest`` binds the
+ * route, the pinned model, the ceilings and every figure below: the start carries it, and a start whose
+ * digest is not the one now computed is ``409 conflict`` (``comparison_estimate_stale``). ``units`` is
+ * what the job works on (questions, sheets, transitions, versions or report parts); ``reused`` of the
+ * units already have a stored answer under the same content key and are never sent again. For a
+ * connection that is not metered ``estimate_micros`` is ``0`` and no ceiling applies. ``blocked_by`` is
+ * present when the start would be refused for a ceiling (``comparison_ceiling_job`` or
+ * ``comparison_ceiling_day``).
+ */
+export type ComparisonAiEstimate = {
+  blocked_by?: ComparisonAiCeiling;
+  calls: number;
+  ceiling_micros: number;
+  day_remaining_micros?: number;
+  estimate_digest: Sha256;
+  estimate_micros: number;
+  image_bytes: number;
+  images: number;
+  input_tokens: number;
+  method: ComparisonAiMethod;
+  output_tokens: number;
+  pairs?: number;
+  prompt_chars: number;
+  questions?: number;
+  reused?: number;
+  route: ComparisonAiRoute;
+  sheets?: number;
+  transitions?: number;
+  units: number;
+  versions?: number;
+};
+
+/** Why an engine pointer is «Не включено в сводку». */
+export const COMPARISON_AI_EXCLUDE_REASON_VALUES = [
+  'service',
+  'formatting',
+  'label_move',
+  'revision_mark',
+  'duplicate',
+  'not_construction',
+] as const;
+
+/** ComparisonAiExcludeReason - the closed value set above. */
+export type ComparisonAiExcludeReason = (typeof COMPARISON_AI_EXCLUDE_REASON_VALUES)[number];
+
+/** An engine pointer the program ruled out of the description, with the reason. */
+export type ComparisonAiExcluded = {
+  reason: ComparisonAiExcludeReason;
+  text?: string;
+};
+
+/**
+ * One AI job: the consented estimate (frozen), the state, the units and the spend. A job belongs to
+ * one document set; ``series_id``, ``transition_id`` and ``sheet_pair_id`` name its scope when it has
+ * one. ``queue_position`` is present while the job waits in the installation's AI queue.
+ * Every AI text a job produces is model output not confirmed by an engineer.
+ */
+export type ComparisonAiJob = {
+  consented_at: string;
+  consented_by: UserUid;
+  counts: ComparisonAiJobCounts;
+  created_at: string;
+  document_uid: DocumentUid;
+  estimate: ComparisonAiEstimate;
+  failure_reason?: string;
+  finished_at?: string;
+  job_id: ComparisonAiJobId;
+  method: ComparisonAiMethod;
+  pause_reason?: ComparisonAiPauseReason;
+  project_uid: ProjectUid;
+  queue_position?: number;
+  series_id?: ComparisonSeriesId;
+  sheet_pair_id?: ComparisonSheetPairId;
+  spend: ComparisonAiSpend;
+  state: ComparisonAiJobState;
+  transition_id?: ComparisonTransitionId;
+  updated_at: string;
+};
+
+/**
+ * The units of a job: ``total``, those ``done``, those ``failed`` and those whose call outcome is
+ * ``unknown``.
+ */
+export type ComparisonAiJobCounts = {
+  done: number;
+  failed: number;
+  total: number;
+  unknown: number;
+};
+
+export type ComparisonAiJobId = string;
+
+/** The contract pattern for `ComparisonAiJobId`. Anchored; use with `new RegExp()`. */
+export const COMPARISON_AI_JOB_ID_PATTERN = "^cai_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/**
+ * ``queued``: waiting, in the installation's AI queue or for a free executor. ``paused``: stopped,
+ * see ``pause_reason``. A ``completed`` job whose ``counts.failed`` is not zero is the original's
+ * «частично».
+ */
+export const COMPARISON_AI_JOB_STATE_VALUES = [
+  'queued',
+  'running',
+  'paused',
+  'completed',
+  'failed',
+  'cancelled',
+] as const;
+
+/** ComparisonAiJobState - the closed value set above. */
+export type ComparisonAiJobState = (typeof COMPARISON_AI_JOB_STATE_VALUES)[number];
+
+/**
  * An accepted AI link (ADR-0025 decisions 3 and 14): a model's answer that the validator
  * accepted, shown labelled «ИИ» and never an expert act. It binds the algorithmic build
  * (``matrix_id``) and the cell state it answered. Written in wave C2; this wave reads.
@@ -1049,6 +1450,281 @@ export const COMPARISON_AI_LINK_STATUS_VALUES = [
 
 /** ComparisonAiLinkStatus - the closed value set above. */
 export type ComparisonAiLinkStatus = (typeof COMPARISON_AI_LINK_STATUS_VALUES)[number];
+
+/**
+ * The four kinds of model work of the version comparison. Each is also an executor work kind,
+ * ``comparison_<method>`` (``ExecutorWorkKind``), routed in «Назначения»: ``pair_check`` the AI check
+ * of the doubtful pairs of the matrix, ``sheet_changes`` the AI description of changes, ``spec`` the
+ * comparison of whole specifications, ``report`` the report from the summary.
+ */
+export const COMPARISON_AI_METHOD_VALUES = [
+  'pair_check',
+  'sheet_changes',
+  'spec',
+  'report',
+  'stage_review',
+] as const;
+
+/** ComparisonAiMethod - the closed value set above. */
+export type ComparisonAiMethod = (typeof COMPARISON_AI_METHOD_VALUES)[number];
+
+/**
+ * The AI check of the doubtful pairs of a document set: the latest job and its figures. Both are
+ * absent until a check was started. Accepted answers are written as accepted AI links by the
+ * lane's rule and never by a client call (``AGENTS.md`` section 4).
+ */
+export type ComparisonAiPairCheck = {
+  counts?: ComparisonAiPairCounts;
+  document_uid: DocumentUid;
+  job?: ComparisonAiJob;
+};
+
+/**
+ * «вопросов · пар · подсказок · против»: ``questions`` asked, ``answered`` of them, ``pairs``
+ * accepted as AI links, ``hints`` shown, ``against`` the model said no candidate is the same sheet,
+ * ``failed`` without a usable answer, ``reused`` answered from the store without a call.
+ */
+export type ComparisonAiPairCounts = {
+  against: number;
+  answered: number;
+  failed: number;
+  hints: number;
+  pairs: number;
+  questions: number;
+  reused: number;
+};
+
+/**
+ * What the lane's rule made of the answers. ``link_accepted``: written as an accepted AI link
+ * (high confidence, the candidate number and the page agree, the sheet is not inside a multi-sheet
+ * specification, B is not linked to another A, no other A chose the same B, the reverse question
+ * returned A with high confidence). The ``hint_*`` values are shown as «ИИ ?» or «вероятно стр. N»
+ * and change nothing: ``hint_table`` a multi-sheet table, ``hint_confidence`` not high,
+ * ``hint_taken`` B is already paired by the algorithm, ``hint_shared`` two sheets chose one,
+ * ``hint_reverse`` the reverse question did not confirm. ``none``: no candidate is the same sheet.
+ * ``answer_mismatch``: the number and the page disagree and the answer is dropped. ``failed``: no usable
+ * answer. ``medium_confirm``, ``medium_weak``, ``medium_other`` and ``medium_none``: the answers to a
+ * ``medium`` question (the pair is confirmed, confirmed without confidence, another sheet is
+ * named, none is the same sheet). A manual edit always wins over any of them.
+ */
+export const COMPARISON_AI_PAIR_DECISION_VALUES = [
+  'link_accepted',
+  'hint_table',
+  'hint_confidence',
+  'hint_taken',
+  'hint_shared',
+  'hint_reverse',
+  'none',
+  'answer_mismatch',
+  'failed',
+  'medium_confirm',
+  'medium_weak',
+  'medium_other',
+  'medium_none',
+] as const;
+
+/** ComparisonAiPairDecision - the closed value set above. */
+export type ComparisonAiPairDecision = (typeof COMPARISON_AI_PAIR_DECISION_VALUES)[number];
+
+/**
+ * The answer to one question, for the matrix cell it concerns: sheet ``page`` of the older version
+ * against the cell of ``version_uid``. ``hint_page`` is «вероятно стр. N». ``link_id`` names the
+ * accepted AI link a ``link_accepted`` decision wrote. ``stale`` is true when the question was asked of a
+ * matrix build that is no longer the latest. ``reason`` is the model's own sentence, not confirmed by an
+ * engineer.
+ */
+export type ComparisonAiPairHint = {
+  candidates: Array<ComparisonPageRef>;
+  confidence?: ComparisonAiConfidence;
+  created_at: string;
+  decision: ComparisonAiPairDecision;
+  hint_page?: ComparisonPageRef;
+  job_id: ComparisonAiJobId;
+  kind: ComparisonAiPairQuestionKind;
+  link_id?: ComparisonAiLinkId;
+  matrix_id: ComparisonMatrixId;
+  page: ComparisonPageRef;
+  question_id: ComparisonAiPairQuestionId;
+  reason?: string;
+  stale: boolean;
+  version_uid: VersionUid;
+};
+
+/** Newest first. */
+export type ComparisonAiPairHintPage = {
+  items: Array<ComparisonAiPairHint>;
+  page: PageInfo;
+};
+
+export type ComparisonAiPairQuestionId = string;
+
+/** The contract pattern for `ComparisonAiPairQuestionId`. Anchored; use with `new RegExp()`. */
+export const COMPARISON_AI_PAIR_QUESTION_ID_PATTERN = "^cpq_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/**
+ * ``no_pair``: sheet A has no pair and the cell of B has candidates («⁇»). ``medium_pair``: the algorithm's
+ * pair has medium confidence. Sheets of a multi-sheet table group are not asked.
+ */
+export const COMPARISON_AI_PAIR_QUESTION_KIND_VALUES = [
+  'no_pair',
+  'medium_pair',
+] as const;
+
+/** ComparisonAiPairQuestionKind - the closed value set above. */
+export type ComparisonAiPairQuestionKind = (typeof COMPARISON_AI_PAIR_QUESTION_KIND_VALUES)[number];
+
+/**
+ * Why a job is ``paused``: ``user`` asked; ``quota`` the subscription's quota is spent; ``auth`` the
+ * executor is not authorised; ``overrun`` the actual spend passed 1.2 times the consented estimate;
+ * ``route_changed`` the route or the revision of the connection changed since the consent;
+ * ``module_off`` the versions module was turned off. After ``overrun`` and ``route_changed`` a
+ * resume carries a new consent.
+ */
+export const COMPARISON_AI_PAUSE_REASON_VALUES = [
+  'user',
+  'quota',
+  'auth',
+  'overrun',
+  'route_changed',
+  'module_off',
+] as const;
+
+/** ComparisonAiPauseReason - the closed value set above. */
+export type ComparisonAiPauseReason = (typeof COMPARISON_AI_PAUSE_REASON_VALUES)[number];
+
+/**
+ * The AI jobs that are queued, running or paused anywhere in the installation, running first, then
+ * in the order they will start. A read for any role; it starts nothing.
+ */
+export type ComparisonAiQueue = {
+  items: Array<ComparisonAiQueueItem>;
+  paused: number;
+  queued: number;
+  running: number;
+};
+
+/** One job in the installation's AI queue «Очередь «ИИ-описание изменений»». */
+export type ComparisonAiQueueItem = {
+  counts: ComparisonAiJobCounts;
+  created_at: string;
+  document_uid: DocumentUid;
+  job_id: ComparisonAiJobId;
+  method: ComparisonAiMethod;
+  project_uid: ProjectUid;
+  queue_position?: number;
+  series_id?: ComparisonSeriesId;
+  state: ComparisonAiJobState;
+};
+
+/**
+ * What serves the calls of an estimate or a job: the connection and its revision, the model the
+ * revision pins (a reply from another model is refused, ``R-133``), how it is billed and whether the
+ * process is in recorded mode, in which case every answer is a recorded test answer.
+ */
+export type ComparisonAiRoute = {
+  billing: ExecutorBilling;
+  connection_id: ExecutorConnectionId;
+  pinned_model: string;
+  provider_mode: ProviderMode;
+  revision_id: ExecutorRevisionId;
+};
+
+/**
+ * The AI description of changes of a series: the latest job (absent until one was started) and the
+ * progress of each transition.
+ */
+export type ComparisonAiSheetChanges = {
+  job?: ComparisonAiJob;
+  series_id: ComparisonSeriesId;
+  transitions: Array<ComparisonAiTransitionProgress>;
+};
+
+/**
+ * The eleven states of «Изменения в листе»: ``not_processed`` «Не обработано» (not the same as no
+ * changes), ``queued`` «В очереди», ``running`` «В обработке», ``done`` «Готово», ``needs_clarification``
+ * «Требуется уточнение», ``partial`` «Частично», ``no_construction_changes`` «Строительных изменений не
+ * выявлено», ``stale`` «Описание устарело», ``failed`` «Ошибка», ``cancelled`` «Отменено»,
+ * ``engine_same`` «По данным сравнения изменений нет».
+ */
+export const COMPARISON_AI_SHEET_STATE_VALUES = [
+  'not_processed',
+  'queued',
+  'running',
+  'done',
+  'needs_clarification',
+  'partial',
+  'no_construction_changes',
+  'stale',
+  'failed',
+  'cancelled',
+  'engine_same',
+] as const;
+
+/** ComparisonAiSheetState - the closed value set above. */
+export type ComparisonAiSheetState = (typeof COMPARISON_AI_SHEET_STATE_VALUES)[number];
+
+/** ComparisonAiSide. */
+export const COMPARISON_AI_SIDE_VALUES = [
+  'a',
+  'b',
+] as const;
+
+/** ComparisonAiSide - the closed value set above. */
+export type ComparisonAiSide = (typeof COMPARISON_AI_SIDE_VALUES)[number];
+
+/**
+ * The spend of a job so far, from the comparison journal. ``reserved_micros`` is what the calls in
+ * flight may still cost; ``unknown_calls`` are calls whose outcome is not known and that are never sent
+ * again until a person says «Повторить».
+ */
+export type ComparisonAiSpend = {
+  calls: number;
+  input_tokens: number;
+  output_tokens: number;
+  reserved_micros: number;
+  spent_micros: number;
+  unknown_calls: number;
+};
+
+/**
+ * How a value of a change was checked by the program: ``from_text`` found in the text layer of its own
+ * side, ``from_image`` read from the drawing the model cited («с изображения»), ``unverified`` found in
+ * neither («не подтверждено»).
+ */
+export const COMPARISON_AI_TIER_VALUES = [
+  'from_text',
+  'from_image',
+  'unverified',
+] as const;
+
+/** ComparisonAiTier - the closed value set above. */
+export type ComparisonAiTier = (typeof COMPARISON_AI_TIER_VALUES)[number];
+
+/**
+ * One row of «ИИ-описание изменений»: «Листов» (``sheets`` to describe, ``done`` of them),
+ * «Изм.» (``changed``: sheets with changes), «Вопр.» (``questions``), «Ошибок» (``errors``),
+ * «Проверить» (``to_review``), «Обращ.» (``calls``), tokens and ``seconds``.
+ */
+export type ComparisonAiTransitionProgress = {
+  calls: number;
+  changed: number;
+  done: number;
+  errors: number;
+  input_tokens: number;
+  output_tokens: number;
+  questions: number;
+  seconds: number;
+  sheets: number;
+  to_review: number;
+  transition_id: ComparisonTransitionId;
+};
+
+/** An item under «Требует уточнения (N)». */
+export type ComparisonAiUnresolved = {
+  box?: ComparisonBox;
+  question: string;
+  side?: ComparisonAiSide;
+};
 
 /** A rectangle on the canvas of the older page, in points. */
 export type ComparisonBox = {
@@ -1186,6 +1862,94 @@ export type ComparisonId = string;
 export const COMPARISON_ID_PATTERN = "^cmp_[0-9A-HJKMNP-TV-Z]{26}$";
 
 /**
+ * One selected step of one document set. The queue runs one step at a time across sets, in the order
+ * of ``position`` (``1`` first): the profiles, the matrix, the AI check of pairs, the series, the AI
+ * description, the summary and report. ``job_id`` and ``series_id`` name what the entry started.
+ */
+export type ComparisonLaunchEntry = {
+  created_at: string;
+  document_uid: DocumentUid;
+  entry_id: ComparisonLaunchEntryId;
+  job_id?: ComparisonAiJobId;
+  position: number;
+  reason?: string;
+  restart: boolean;
+  series_id?: ComparisonSeriesId;
+  state: ComparisonLaunchEntryState;
+  step: ComparisonStepId;
+  updated_at: string;
+};
+
+export type ComparisonLaunchEntryId = string;
+
+/** The contract pattern for `ComparisonLaunchEntryId`. Anchored; use with `new RegExp()`. */
+export const COMPARISON_LAUNCH_ENTRY_ID_PATTERN = "^cle_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/**
+ * ``waiting``, ``running``, ``done``, ``skipped`` (the step needed nothing or its set was removed),
+ * ``failed``, and ``needs_consent``: an AI step whose estimate now exists and has not been consented
+ * to. A queue asks for AI consent per set only when its estimate exists.
+ */
+export const COMPARISON_LAUNCH_ENTRY_STATE_VALUES = [
+  'waiting',
+  'running',
+  'needs_consent',
+  'done',
+  'skipped',
+  'failed',
+] as const;
+
+/** ComparisonLaunchEntryState - the closed value set above. */
+export type ComparisonLaunchEntryState = (typeof COMPARISON_LAUNCH_ENTRY_STATE_VALUES)[number];
+
+/**
+ * A set and a step to queue. ``consent`` is given for an AI step (``ai_pairs``, ``ai_changes``,
+ * ``report``) whose estimate exists, one consent per set; for a step with no estimate yet the entry waits
+ * and becomes ``needs_consent``. A consent on a step that is not an AI step is
+ * ``422 validation_failed``.
+ */
+export type ComparisonLaunchItem = {
+  consent?: ComparisonAiConsent;
+  document_uid: DocumentUid;
+  step: ComparisonStepId;
+};
+
+/** «Очередь запуска» of a project. A project has one queue; reading it starts nothing. */
+export type ComparisonLaunchQueue = {
+  counts: ComparisonLaunchQueueCounts;
+  entries: Array<ComparisonLaunchEntry>;
+  project_uid: ProjectUid;
+  state: ComparisonLaunchQueueState;
+  updated_at?: string;
+};
+
+/**
+ * «готово N из M · пропущено K · ошибок E»: ``done`` of ``total``, ``skipped``, ``failed``, and those
+ * ``running``, ``waiting`` and ``needs_consent``.
+ */
+export type ComparisonLaunchQueueCounts = {
+  done: number;
+  failed: number;
+  needs_consent: number;
+  running: number;
+  skipped: number;
+  total: number;
+  waiting: number;
+};
+
+/** «идёт», «на паузе», «ошибка — процесс остановлен», «выполнена», «пусто». */
+export const COMPARISON_LAUNCH_QUEUE_STATE_VALUES = [
+  'running',
+  'paused',
+  'failed',
+  'done',
+  'idle',
+] as const;
+
+/** ComparisonLaunchQueueState - the closed value set above. */
+export type ComparisonLaunchQueueState = (typeof COMPARISON_LAUNCH_QUEUE_STATE_VALUES)[number];
+
+/**
  * The layers of the overlay: ``main`` «Основное», ``light_elements`` «Светлые элементы»,
  * ``color_change`` «места, где изменился цвет», ``line_style`` «Оформление линий», ``moved``
  * «Перемещено (сдвиг — не изменение)», ``within_tolerance`` «В пределах допуска», ``noise``
@@ -1255,9 +2019,15 @@ export type ComparisonMatrixCell = {
   version_uid: VersionUid;
 };
 
-/** One version, in the position of the current comparison order. */
+/**
+ * One version, in the position of the current comparison order. ``label`` is the version's label of
+ * the upload proposal (``label_source`` ``proposal``) or, for a version that carried none, its stored
+ * file name (``file_name``); both are absent for a version that came from a portal bundle, and the
+ * client then writes «Версия №N» for the N-th column (`CMP-SEAL-C2`, from `CMP-MATRIX-01`).
+ */
 export type ComparisonMatrixColumn = {
   label?: string;
+  label_source?: ComparisonMatrixLabelSource;
   page_count: number;
   version_uid: VersionUid;
 };
@@ -1374,6 +2144,19 @@ export type ComparisonMatrixId = string;
 export const COMPARISON_MATRIX_ID_PATTERN = "^cmx_[0-9A-HJKMNP-TV-Z]{26}$";
 
 /**
+ * Where a column label comes from: ``proposal`` the version's label the user confirmed with its
+ * upload set (the suggested label of the proposal when the user left it), ``file_name`` the stored file
+ * name of the version, which is a hint and never an identity.
+ */
+export const COMPARISON_MATRIX_LABEL_SOURCE_VALUES = [
+  'proposal',
+  'file_name',
+] as const;
+
+/** ComparisonMatrixLabelSource - the closed value set above. */
+export type ComparisonMatrixLabelSource = (typeof COMPARISON_MATRIX_LABEL_SOURCE_VALUES)[number];
+
+/**
  * What ``prepareComparisonMatrix`` queued: the matrix state after the call and the
  * progress of the profiles. Profiles that are missing or failed are queued again, then the
  * matrix is built.
@@ -1414,10 +2197,16 @@ export type ComparisonMatrixRow = {
   title?: string;
 };
 
-/** ComparisonMatrixStaleReason. */
+/**
+ * Why the latest build no longer matches: ``order_changed`` the version order moved,
+ * ``profiles_changed`` a page profile was recomputed, ``algorithm_changed`` the matching algorithm or its
+ * rule set (``ALGO_VERSION``, ``RULES_VERSION``) is not the one the build was made with
+ * (`CMP-SEAL-C2`, from `CMP-MATRIX-01`).
+ */
 export const COMPARISON_MATRIX_STALE_REASON_VALUES = [
   'order_changed',
   'profiles_changed',
+  'algorithm_changed',
 ] as const;
 
 /** ComparisonMatrixStaleReason - the closed value set above. */
@@ -1546,10 +2335,11 @@ export type ComparisonPageRef = {
 
 /**
  * One side of a sheet pair: the page, its sheet number and title from the stamp, and
- * whether it is an image-only page.
+ * whether it is an image-only page. ``raster`` is the size of the page's raster pyramid.
  */
 export type ComparisonPairPage = {
   page: ComparisonPageRef;
+  raster?: ComparisonRasterSize;
   scan?: boolean;
   sheet_number?: string;
   title?: string;
@@ -1690,10 +2480,205 @@ export type ComparisonQueueSummary = {
   paused: boolean;
 };
 
+/**
+ * The size in pixels of the full-resolution raster of a page, the base of its tile pyramid
+ * (level 0): the viewer lays tiles on it and need not derive it (`CMP-SEAL-C2`, from
+ * `CMP-VIEWER-01`).
+ */
+export type ComparisonRasterSize = {
+  height_px: number;
+  width_px: number;
+};
+
 /** Why two versions are not compared; ``side`` when the reason is one side's. */
 export type ComparisonRefusal = {
   reason: "same_version" | "version_not_found" | "different_set" | "foreign_project" | "version_not_published" | "version_order_invalid" | "stage_unclassified" | "section_unconfirmed" | "project_stage_mismatch" | "confirmed_section_mismatch" | "stage_pair_invalid" | "analysis_missing" | "run_not_of_version" | "run_not_published" | "text_unavailable" | "text_too_large";
   side: "source" | "target" | null;
+};
+
+/**
+ * A report built from the MD summary of a series. A ``draft`` carries the ``estimate`` the start
+ * consents to; once started, ``job`` holds the consented estimate and the spend. ``prepared_from_id``
+ * names the analytic report a client report was prepared from. ``reuse`` reuses the finished parts of
+ * earlier reports of the same summary. Every page of the PDF carries the unconfirmed-by-an-engineer
+ * label and the recall line («изменённых листов N, описано K, отброшено проверкой D»); the label is the
+ * client's text, the figures are the report's.
+ */
+export type ComparisonReport = {
+  artifacts: Array<ComparisonReportArtifact>;
+  created_at: string;
+  document_uid: DocumentUid;
+  estimate?: ComparisonAiEstimate;
+  failure_reason?: string;
+  finished_at?: string;
+  job?: ComparisonAiJob;
+  kind: ComparisonReportKind;
+  parts: Array<ComparisonReportPart>;
+  prepared_from_id?: ComparisonReportId;
+  project_uid: ProjectUid;
+  report_id: ComparisonReportId;
+  reuse: boolean;
+  series_id: ComparisonSeriesId;
+  source: ComparisonReportSource;
+  source_name?: string;
+  stage?: ComparisonReportStage;
+  state: ComparisonReportState;
+  updated_at: string;
+};
+
+/**
+ * A stored file of a report, downloaded by ``streamComparisonReportPdf`` or
+ * ``streamComparisonReportSourceMd``.
+ */
+export type ComparisonReportArtifact = {
+  created_at: string;
+  kind: ComparisonReportArtifactKind;
+  sha256: Sha256;
+  size_bytes: number;
+};
+
+/** ComparisonReportArtifactKind. */
+export const COMPARISON_REPORT_ARTIFACT_KIND_VALUES = [
+  'report_pdf',
+  'source_md',
+] as const;
+
+/** ComparisonReportArtifactKind - the closed value set above. */
+export type ComparisonReportArtifactKind = (typeof COMPARISON_REPORT_ARTIFACT_KIND_VALUES)[number];
+
+/**
+ * The program's check of the analyst's claims against the source: found, confirmed, contradicted,
+ * unconfirmed.
+ */
+export type ComparisonReportFacts = {
+  confirmed: number;
+  contradicted: number;
+  found: number;
+  unconfirmed: number;
+};
+
+export type ComparisonReportId = string;
+
+/** The contract pattern for `ComparisonReportId`. Anchored; use with `new RegExp()`. */
+export const COMPARISON_REPORT_ID_PATTERN = "^crt_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/**
+ * ``client``: «Отчёт для заказчика · Изменения проектных решений», one model call per transition over
+ * the summary's facts; a program check drops every point whose number, mark or direction the facts do not
+ * confirm. ``analytic``: analyst, verifier and composer.
+ */
+export const COMPARISON_REPORT_KIND_VALUES = [
+  'client',
+  'analytic',
+] as const;
+
+/** ComparisonReportKind - the closed value set above. */
+export type ComparisonReportKind = (typeof COMPARISON_REPORT_KIND_VALUES)[number];
+
+/** The report history of a series, newest first. */
+export type ComparisonReportPage = {
+  items: Array<ComparisonReport>;
+  page: PageInfo;
+};
+
+/**
+ * The progress of one transition of a report. An analytic report fills ``analysis``,
+ * ``verification``, ``facts`` and ``warnings`` («Анализ», «Проверка», «Факты», «Предупреждения»); a
+ * client report ``selection``, ``points`` and ``questions`` («Отбор», «Пунктов», «Вопросов»).
+ */
+export type ComparisonReportPart = {
+  analysis?: ComparisonReportUnitMark;
+  facts?: ComparisonReportFacts;
+  points?: number;
+  questions?: number;
+  selection?: ComparisonReportUnitMark;
+  transition_id: ComparisonTransitionId;
+  verification?: ComparisonReportUnitMark;
+  warnings?: number;
+};
+
+/**
+ * ``series_summary``: the deterministic MD summary of the series. ``uploaded_md``: an MD file the
+ * user uploaded (UTF-8, at most 20 MiB, with the transitions headed «## N. … A → B»).
+ */
+export const COMPARISON_REPORT_SOURCE_VALUES = [
+  'series_summary',
+  'uploaded_md',
+] as const;
+
+/** ComparisonReportSource - the closed value set above. */
+export type ComparisonReportSource = (typeof COMPARISON_REPORT_SOURCE_VALUES)[number];
+
+/**
+ * «файл принят, подготовка», «анализ переходов», «проверка выводов», «составление отчёта»,
+ * «написание текста для заказчика» (the client kind) and «формирование PDF».
+ */
+export const COMPARISON_REPORT_STAGE_VALUES = [
+  'intake',
+  'transition_analysis',
+  'verification',
+  'composition',
+  'client_writing',
+  'pdf_writing',
+] as const;
+
+/** ComparisonReportStage - the closed value set above. */
+export type ComparisonReportStage = (typeof COMPARISON_REPORT_STAGE_VALUES)[number];
+
+/**
+ * ``draft``: created with its estimate, not started and nothing spent. ``partial``: finished with a
+ * transition missing or a unit failed («неполный результат»).
+ */
+export const COMPARISON_REPORT_STATE_VALUES = [
+  'draft',
+  'queued',
+  'running',
+  'paused',
+  'completed',
+  'partial',
+  'failed',
+  'cancelled',
+] as const;
+
+/** ComparisonReportState - the closed value set above. */
+export type ComparisonReportState = (typeof COMPARISON_REPORT_STATE_VALUES)[number];
+
+/** «✓ ⟳ ✗ ·». */
+export const COMPARISON_REPORT_UNIT_MARK_VALUES = [
+  'done',
+  'running',
+  'failed',
+  'pending',
+] as const;
+
+/** ComparisonReportUnitMark - the closed value set above. */
+export type ComparisonReportUnitMark = (typeof COMPARISON_REPORT_UNIT_MARK_VALUES)[number];
+
+export type ComparisonReviewSheet = {
+  kind: ComparisonReviewSheetKind;
+  page_a?: ComparisonPairPage;
+  page_b?: ComparisonPairPage;
+  sheet_pair_id: ComparisonSheetPairId;
+  state: ComparisonAiSheetState;
+};
+
+/**
+ * ``to_check``: the AI found no change but the comparison left marks («Проверить»). ``added`` and
+ * ``removed``: a single sheet of the transition, described on its own.
+ */
+export const COMPARISON_REVIEW_SHEET_KIND_VALUES = [
+  'to_check',
+  'added',
+  'removed',
+] as const;
+
+/** ComparisonReviewSheetKind - the closed value set above. */
+export type ComparisonReviewSheetKind = (typeof COMPARISON_REVIEW_SHEET_KIND_VALUES)[number];
+
+/** In the order of the matrix rows. */
+export type ComparisonReviewSheetPage = {
+  items: Array<ComparisonReviewSheet>;
+  page: PageInfo;
 };
 
 /**
@@ -1771,6 +2756,69 @@ export type ComparisonServiceNote = {
 };
 
 /**
+ * The stored AI description of one sheet pair (or of one added or removed sheet). Reading it never
+ * calls a model. ``description_id`` and the members after ``source`` are absent while the state is
+ * ``not_processed``, ``queued``, ``running`` or ``engine_same``. ``job_id`` names the job that is
+ * queued or running for the sheet. ``recorded`` is true for a recorded (test) answer, which the client
+ * labels as such. The description is model output not confirmed by an engineer and never changes the
+ * raw comparison of the pair.
+ */
+export type ComparisonSheetDescription = {
+  changes?: Array<ComparisonAiChange>;
+  coverage?: ComparisonAiCoverage;
+  created_at?: string;
+  declared?: Array<ComparisonAiDeclaredItem>;
+  description_id?: ComparisonSheetDescriptionId;
+  diagnostics?: ComparisonAiDiagnostics;
+  excluded?: Array<ComparisonAiExcluded>;
+  history_count: number;
+  job_id?: ComparisonAiJobId;
+  model?: string;
+  prompt_version?: string;
+  recorded?: boolean;
+  sheet_pair_id: ComparisonSheetPairId;
+  source?: ComparisonSheetDescriptionSource;
+  state: ComparisonAiSheetState;
+  unresolved?: Array<ComparisonAiUnresolved>;
+};
+
+/** Newest first. */
+export type ComparisonSheetDescriptionHistory = {
+  items: Array<ComparisonSheetDescriptionRevision>;
+  page: PageInfo;
+};
+
+export type ComparisonSheetDescriptionId = string;
+
+/** The contract pattern for `ComparisonSheetDescriptionId`. Anchored; use with `new RegExp()`. */
+export const COMPARISON_SHEET_DESCRIPTION_ID_PATTERN = "^csd_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** One entry of «История (N)». */
+export type ComparisonSheetDescriptionRevision = {
+  changes_count: number;
+  created_at: string;
+  description_id: ComparisonSheetDescriptionId;
+  model?: string;
+  prompt_version?: string;
+  recorded: boolean;
+  state: ComparisonAiSheetState;
+  unresolved_count: number;
+};
+
+/**
+ * ``sheet`` the description of the sheet pair; ``whole_specification`` the changes of this sheet
+ * were taken from the comparison of the whole specifications («По полной спецификации · только
+ * изменения этого листа»).
+ */
+export const COMPARISON_SHEET_DESCRIPTION_SOURCE_VALUES = [
+  'sheet',
+  'whole_specification',
+] as const;
+
+/** ComparisonSheetDescriptionSource - the closed value set above. */
+export type ComparisonSheetDescriptionSource = (typeof COMPARISON_SHEET_DESCRIPTION_SOURCE_VALUES)[number];
+
+/**
  * One sheet pair of a transition: the older page ``page_a``, the newer ``page_b``, either
  * absent for an ``added`` or ``removed`` sheet. ``status`` and the members after it are absent
  * until the pair has a result. ``result_id`` is the content-keyed result the pair uses
@@ -1817,6 +2865,18 @@ export type ComparisonSheetPairResultId = string;
 /** The contract pattern for `ComparisonSheetPairResultId`. Anchored; use with `new RegExp()`. */
 export const COMPARISON_SHEET_PAIR_RESULT_ID_PATTERN = "^csp_[0-9A-HJKMNP-TV-Z]{26}$";
 
+/**
+ * «Спецификация по позициям» of a sheet pair: the position changes that fall on the pair's pages,
+ * deterministic, from the positions of the whole specification of each version (a position may move
+ * between pages without changing).
+ */
+export type ComparisonSheetPairSpecPositions = {
+  changes: Array<ComparisonSpecChange>;
+  is_specification: boolean;
+  sheet_pair_id: ComparisonSheetPairId;
+  totals: ComparisonSpecTotals;
+};
+
 /** ComparisonSheetPairState. */
 export const COMPARISON_SHEET_PAIR_STATE_VALUES = [
   'queued',
@@ -1846,6 +2906,195 @@ export const COMPARISON_SHEET_STATUS_VALUES = [
 
 /** ComparisonSheetStatus - the closed value set above. */
 export type ComparisonSheetStatus = (typeof COMPARISON_SHEET_STATUS_VALUES)[number];
+
+/**
+ * One change between two specifications: the position before (``old``) and after (``new``), the
+ * fields that differ, and the sentence the comparison renders. A position that exists on one side only
+ * is ``added`` or ``removed`` and carries that side.
+ */
+export type ComparisonSpecChange = {
+  change_id: string;
+  fields: Array<ComparisonSpecFieldChange>;
+  kind: ComparisonSpecChangeKind;
+  new?: ComparisonSpecPosition;
+  old?: ComparisonSpecPosition;
+  text?: string;
+};
+
+/**
+ * ``changed``, ``added`` «+добавлено», ``removed`` «−удалено», ``unclear`` «?неясно» (the match is
+ * ambiguous), ``renumbered`` (only the position number differs) and ``moved`` (the same position under
+ * another section, not a change).
+ */
+export const COMPARISON_SPEC_CHANGE_KIND_VALUES = [
+  'changed',
+  'added',
+  'removed',
+  'unclear',
+  'renumbered',
+  'moved',
+] as const;
+
+/** ComparisonSpecChangeKind - the closed value set above. */
+export type ComparisonSpecChangeKind = (typeof COMPARISON_SPEC_CHANGE_KIND_VALUES)[number];
+
+/**
+ * The changes of a transition's specification comparison, in the order the comparison lists them
+ * (changed, removed, added, unclear, renumbered).
+ */
+export type ComparisonSpecChangePage = {
+  items: Array<ComparisonSpecChange>;
+  page: PageInfo;
+};
+
+export type ComparisonSpecComparisonId = string;
+
+/** The contract pattern for `ComparisonSpecComparisonId`. Anchored; use with `new RegExp()`. */
+export const COMPARISON_SPEC_COMPARISON_ID_PATTERN = "^cscp_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/**
+ * «покрыто»: the blocks of the specification text the model's markup covers and the rows it could
+ * not settle. A quote or a value the program cannot find in the source makes that side incomplete.
+ */
+export type ComparisonSpecCoverage = {
+  blocks_covered: number;
+  blocks_total: number;
+  rows_total: number;
+  rows_unresolved: number;
+};
+
+export type ComparisonSpecExtractionId = string;
+
+/** The contract pattern for `ComparisonSpecExtractionId`. Anchored; use with `new RegExp()`. */
+export const COMPARISON_SPEC_EXTRACTION_ID_PATTERN = "^cse_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/**
+ * «было → стало» of one field. ``field`` is one of the nine fields of a position of a specification
+ * (GOST 21.110): ``pos``, ``name``, ``mark``, ``code``, ``supplier``, ``unit``, ``quantity``, ``mass``
+ * and ``note`` (an open word, so that the contract does not freeze the table layout).
+ */
+export type ComparisonSpecFieldChange = {
+  field: string;
+  now?: string;
+  was?: string;
+};
+
+/**
+ * ``whole``: «полное сравнение», the whole specification of each version was read by a model and the
+ * two were compared order-independently. ``sheet_ai``: «листовой ИИ», the specification sheets are
+ * described one by one in the AI description of changes.
+ */
+export const COMPARISON_SPEC_METHOD_VALUES = [
+  'whole',
+  'sheet_ai',
+] as const;
+
+/** ComparisonSpecMethod - the closed value set above. */
+export type ComparisonSpecMethod = (typeof COMPARISON_SPEC_METHOD_VALUES)[number];
+
+/**
+ * Part A for one page of a version: whether the page is a specification sheet and, when it is, the
+ * positions the deterministic parser reads from the page's words and vector lines (``spec_version`` is
+ * the parser's). Deterministic; no model is called.
+ */
+export type ComparisonSpecPage = {
+  ambiguous_rows: number;
+  is_specification: boolean;
+  page_profile_id: ComparisonPageProfileId;
+  positions: Array<ComparisonSpecPosition>;
+  spec_version: string;
+};
+
+/** ComparisonSpecPhase. */
+export const COMPARISON_SPEC_PHASE_VALUES = [
+  'preparing',
+  'comparing',
+  'done',
+] as const;
+
+/** ComparisonSpecPhase - the closed value set above. */
+export type ComparisonSpecPhase = (typeof COMPARISON_SPEC_PHASE_VALUES)[number];
+
+/**
+ * One position of a specification, every value verbatim as the sheet writes it (nothing is summed,
+ * rounded or normalised). ``section`` and ``parent`` place the row; ``ambiguous`` marks a row whose type
+ * the parser could not decide and did not guess.
+ */
+export type ComparisonSpecPosition = {
+  ambiguous?: boolean;
+  code?: string;
+  mark?: string;
+  mass?: string;
+  name: string;
+  note?: string;
+  page?: ComparisonPageRef;
+  parent?: string;
+  pos?: string;
+  quantity?: string;
+  section?: string;
+  supplier?: string;
+  unit?: string;
+};
+
+/**
+ * ``not_applicable``: the transition has no specification sheet. ``incomplete``: a side could not be
+ * read completely and no addition, removal or absence of change is published. ``running`` and
+ * ``paused`` carry the phase.
+ */
+export const COMPARISON_SPEC_STATE_VALUES = [
+  'not_applicable',
+  'not_started',
+  'running',
+  'paused',
+  'completed',
+  'incomplete',
+  'failed',
+  'cancelled',
+] as const;
+
+/** ComparisonSpecState - the closed value set above. */
+export type ComparisonSpecState = (typeof COMPARISON_SPEC_STATE_VALUES)[number];
+
+/** «изменено / +добавлено / −удалено / ?неясно», and the two kinds that are not changes. */
+export type ComparisonSpecTotals = {
+  added: number;
+  changed: number;
+  moved: number;
+  removed: number;
+  renumbered: number;
+  unclear: number;
+};
+
+/**
+ * The comparison of the specifications of one transition: the method, the number of specification
+ * sheets of the older and of the newer version, the coverage and the totals once there are any, and the
+ * reason a side is incomplete or the comparison failed (an engine-style code). The changes themselves
+ * are read page by page. Part B is model output not confirmed by an engineer; the deterministic
+ * positions of part A are read per sheet.
+ */
+export type ComparisonSpecification = {
+  comparison_id?: ComparisonSpecComparisonId;
+  coverage_a?: ComparisonSpecCoverage;
+  coverage_b?: ComparisonSpecCoverage;
+  extraction_a_id?: ComparisonSpecExtractionId;
+  extraction_b_id?: ComparisonSpecExtractionId;
+  job_id?: ComparisonAiJobId;
+  method: ComparisonSpecMethod;
+  phase?: ComparisonSpecPhase;
+  reason?: string;
+  sheets_a: number;
+  sheets_b: number;
+  state: ComparisonSpecState;
+  totals?: ComparisonSpecTotals;
+  transition_id: ComparisonTransitionId;
+  updated_at?: string;
+};
+
+/** The transitions of a series that have a specification, in transition order. */
+export type ComparisonSpecificationPage = {
+  items: Array<ComparisonSpecification>;
+  page: PageInfo;
+};
 
 /** The figures a step's note quotes; each is absent when the step has no such figure. */
 export type ComparisonStepCounts = {
@@ -2183,6 +3432,19 @@ export type ConfirmComparisonUploadSetRequest = {
   section_code?: ProjectSection;
 };
 
+export type ConfirmStagePairRequest = {
+  assembly_id?: StageAssemblyId;
+  left_document_uid: DocumentUid;
+  right_document_uid?: DocumentUid;
+};
+
+export type ConfirmStageUploadCandidateRequest = {
+  designation: string;
+  existing_document_uid?: DocumentUid;
+  section_code: string;
+  stage: "P" | "R";
+};
+
 export type ConfirmedComparisonFile = {
   file_id: ComparisonUploadFileId;
   version_label?: string;
@@ -2227,6 +3489,15 @@ export type CreateAssignmentRequest = {
 };
 
 /**
+ * Creates a ``draft`` report from the series' MD summary and computes its estimate; no model is
+ * called and nothing is spent. ``kind`` defaults to ``client``.
+ */
+export type CreateComparisonReportRequest = {
+  kind?: ComparisonReportKind;
+  reuse?: boolean;
+};
+
+/**
  * The declared files of one upload batch. The limits of ADR-0025 decision 9 (files, sets,
  * declared bytes and pages, the project's stored bytes, active batches) are refused here,
  * before the first part, as typed reasons under existing error codes.
@@ -2244,6 +3515,20 @@ export type CreateExecutorConnectionRequest = {
 export type CreateProjectRequest = {
   /** Display label. Not unique and not an identity. */
   name: string;
+};
+
+export type CreateStageAssemblyRequest = {
+  document_uids: Array<DocumentUid>;
+  label: string;
+};
+
+export type CreateStageReviewCardRequest = {
+  reason: string;
+  source_ids: Array<StageAtomicEvidenceId>;
+};
+
+export type CreateStageUploadRequest = {
+  files: Array<StageUploadFileDeclaration>;
 };
 
 /** Opaque pagination token. It encodes the sort key of the last item on the page and nothing else; it is never a database row number or sequence value. */
@@ -2378,6 +3663,16 @@ export type EffectiveVendorLists = {
   project_uid: ProjectUid;
 };
 
+/**
+ * «Запустить выбранные по очереди» / «Поставить в очередь». The ``upload`` step cannot be queued
+ * (``422 validation_failed``, ``comparison_step_not_queueable``). ``restart`` is «Заново» for the
+ * ``series`` and ``ai_changes`` steps.
+ */
+export type EnqueueComparisonLaunchRequest = {
+  items: Array<ComparisonLaunchItem>;
+  restart?: boolean;
+};
+
 /** Exactly the key set of contracts/domain/v1/error-codes.json. */
 export const ERROR_CODE_VALUES = [
   'validation_failed',
@@ -2412,16 +3707,14 @@ export const ERROR_CODE_VALUES = [
 /** ErrorCode - the closed value set above. */
 export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
-/** The single externally visible failure shape, mirroring urn:auditmanager:domain:error-envelope:v1. `retryable` is pinned to the catalog value for the reported code; a caller never infers it from the HTTP status or the message. */
+/** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
   contract_version: "1.13.0";
   correlation_id: CorrelationId;
-  /** Safe scalar classifiers only, restricted to the safe_detail_keys the catalog declares for the reported code. The catalog's forbidden key set is rejected. */
   details?: {
     [key: string]: string | number | boolean | null;
   };
   error_code: ErrorCode;
-  /** Stable caller-safe sentence. No path, object key, URL, credential, token, prompt, payload, query or stack content. */
   message: string;
   retryable: boolean;
 };
@@ -2801,9 +4094,18 @@ export const EXECUTOR_TRANSPORT_VALUES = [
 /** ExecutorTransport - the closed value set above. */
 export type ExecutorTransport = (typeof EXECUTOR_TRANSPORT_VALUES)[number];
 
-/** The kind of model work a route serves. Today exactly one stage calls a model. */
+/**
+ * The kind of model work a route serves: the one run stage that calls a model, and (`CMP-SEAL-C2`,
+ * ADR-0025 decision 17) the four kinds of model work of the version comparison. Their images ride the
+ * image channel of `CMP-EXEC-IMAGES-01`; ``comparison_stage_review`` joins with `CMP-SEAL-C4`.
+ */
 export const EXECUTOR_WORK_KIND_VALUES = [
   'text_analysis',
+  'comparison_pair_check',
+  'comparison_sheet_changes',
+  'comparison_spec',
+  'comparison_report',
+  'comparison_stage_review',
 ] as const;
 
 /** ExecutorWorkKind - the closed value set above. */
@@ -3544,6 +4846,14 @@ export type PortalRecognisedText = {
   text: string;
 };
 
+/**
+ * «Подготовить отчёт для заказчика» from a finished analytic report: a new ``client`` draft that
+ * reads the analytic report's verified facts.
+ */
+export type PrepareComparisonClientReportRequest = {
+  reuse?: boolean;
+};
+
 export type PresetId = string;
 
 /** The contract pattern for `PresetId`. Anchored; use with `new RegExp()`. */
@@ -3919,6 +5229,10 @@ export const PROVIDER_MODE_VALUES = [
 /** ProviderMode - the closed value set above. */
 export type ProviderMode = (typeof PROVIDER_MODE_VALUES)[number];
 
+export type ReauditRunRequest = {
+  cost_consent?: RunCostConsent;
+};
+
 /** One registration request, as an administrator reads it. No credential material. */
 export type RegistrationRequest = {
   /** The account an approval created. Null while pending, on a rejected request, and after that account was purged. */
@@ -4015,6 +5329,19 @@ export type ResetUserPasswordRequest = {
   temporary_password: string;
 };
 
+/**
+ * Resumes a paused job. ``consent`` is required after ``overrun`` and ``route_changed`` (a new
+ * estimate for what is left) and ignored after the other pause reasons.
+ */
+export type ResumeComparisonAiJobRequest = {
+  consent?: ComparisonAiConsent;
+};
+
+export type ResumeStageChainRunRequest = {
+  consent?: ComparisonAiConsent;
+  retry_failed?: boolean;
+};
+
 /** A new immutable revision of a connection: the full settings, never a patch. */
 export type ReviseExecutorConnectionRequest = {
   allow_client_documents: boolean;
@@ -4034,6 +5361,12 @@ export type ReviseExecutorConnectionRequest = {
   ssh_user?: string;
   timeout_seconds: number;
   transport?: ExecutorTransport;
+};
+
+export type ReviseStageAssemblyRequest = {
+  add_document_uids: Array<DocumentUid>;
+  base_member_no: number;
+  remove_document_uids: Array<DocumentUid>;
 };
 
 /** One role an account may hold; an account holds a set of them (R-55, R-60). `expert` makes product changes -- projects, uploads, runs, verdicts, comments and the export. `admin` manages accounts and registration requests. Reading product data needs one of them (R-80): an active account whose role set is empty is suspended and reads only its own account, the product version and the release notes. */
@@ -4056,6 +5389,41 @@ export type RunActivitySpend = {
   cost_basis: CostBasis;
   cost_micros: number;
   model_call_count: number;
+};
+
+export type RunCostConsent = {
+  ceiling_micros: number;
+  confirmed: boolean;
+  estimate_digest: Sha256;
+};
+
+export type RunCostEstimate = {
+  billing: "metered" | "unmetered";
+  calls: number;
+  connection_revision_id?: ExecutorRevisionId;
+  currency: "USD";
+  estimate_digest: Sha256;
+  estimated_cost_micros: number;
+  input_tokens: number;
+  model_id: string;
+  output_tokens: number;
+  page_count: number;
+  preset_revision_id?: PresetRevisionId;
+  provider_mode: ProviderMode;
+  recommended_ceiling_micros: number;
+  relaxed_limits: boolean;
+  scope: "run" | "ar_v3_group";
+  text_characters: number;
+  version_uid: VersionUid;
+  windows: number;
+};
+
+export type RunCostEstimateRequest = {
+  executor_connection_id?: ExecutorConnectionId;
+  preset_id?: PresetId;
+  reaudit_of_run_id?: RunId;
+  relaxed_limits?: boolean;
+  version_uid: VersionUid;
 };
 
 /** EXEC-PAR-START-01: which executor a run is on. Identity, display name and pinned model only; never a secret, an address or a probe. */
@@ -4239,7 +5607,7 @@ export type SectionSpecification = {
   excluded_count: number;
   extraction_algorithm: "specification-text-v1";
   limit_reason: "projects" | "sources" | "rows" | null;
-  match_algorithm: "price-match-v1";
+  match_algorithm: "price-match-v1" | "price-match-v2";
   project_filter: ProjectUid | null;
   projects: Array<SectionSpecificationProject>;
   query: string | null;
@@ -4419,6 +5787,10 @@ export type SetProjectVendorListRequest = {
   mode: VendorListMode;
 };
 
+export type SetStagePairCompletenessRequest = {
+  completeness: "full" | "partial";
+};
+
 export type SetWorkerIntakeRequest = {
   enabled: boolean;
 };
@@ -4537,7 +5909,7 @@ export type SpecificationMatchCounts = {
 
 /** Every row's match counted, the totals per currency and what they leave out. */
 export type SpecificationMatching = {
-  algorithm: "price-match-v1";
+  algorithm: "price-match-v1" | "price-match-v2";
   counts: SpecificationMatchCounts;
   excluded: SpecificationExclusionCounts;
   totals: Array<SpecificationCurrencyTotal>;
@@ -4661,6 +6033,344 @@ export type SpecificationTable = {
   status: "parsed" | "header_ambiguous";
 };
 
+export type StageAiClassification = {
+  cards: Array<StageClassificationCard>;
+  classification_id: StageAiClassificationId;
+  content_key: Sha256;
+  created_at: string;
+  group_id: string;
+  model_identity: {
+    [key: string]: unknown;
+  };
+  run_id: StageChainRunId;
+  source_sha256: Sha256;
+  unit_id: StageAiUnitId;
+};
+
+export type StageAiClassificationId = string;
+
+/** The contract pattern for `StageAiClassificationId`. Anchored; use with `new RegExp()`. */
+export const STAGE_AI_CLASSIFICATION_ID_PATTERN = "^sacls_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageAiClassificationPage = {
+  items: Array<StageAiClassification>;
+  page: PageInfo;
+};
+
+export type StageAiReview = {
+  content_key: Sha256;
+  created_at: string;
+  decisions: Array<StageReviewDecision>;
+  group_id: string;
+  model_identity: {
+    [key: string]: unknown;
+  };
+  review_id: StageAiReviewId;
+  run_id: StageChainRunId;
+  source_sha256: Sha256;
+  unit_id: StageAiUnitId;
+};
+
+export type StageAiReviewId = string;
+
+/** The contract pattern for `StageAiReviewId`. Anchored; use with `new RegExp()`. */
+export const STAGE_AI_REVIEW_ID_PATTERN = "^sarev_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageAiReviewPage = {
+  items: Array<StageAiReview>;
+  page: PageInfo;
+};
+
+export type StageAiSynthesis = {
+  content_key: Sha256;
+  created_at: string;
+  model_identity: {
+    [key: string]: unknown;
+  };
+  result: StageSynthesisResult;
+  run_id: StageChainRunId;
+  synthesis_id: StageAiSynthesisId;
+  unit_id: StageAiUnitId;
+};
+
+export type StageAiSynthesisId = string;
+
+/** The contract pattern for `StageAiSynthesisId`. Anchored; use with `new RegExp()`. */
+export const STAGE_AI_SYNTHESIS_ID_PATTERN = "^sasyn_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageAiSynthesisPage = {
+  items: Array<StageAiSynthesis>;
+  page: PageInfo;
+};
+
+export type StageAiUnitId = string;
+
+/** The contract pattern for `StageAiUnitId`. Anchored; use with `new RegExp()`. */
+export const STAGE_AI_UNIT_ID_PATTERN = "^saunit_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageAssembly = {
+  assembly_id: StageAssemblyId;
+  created_at: string;
+  label: string;
+  member_revision_no: number;
+  members: Array<StageAssemblyMember>;
+  project_uid: ProjectUid;
+};
+
+export type StageAssemblyId = string;
+
+/** The contract pattern for `StageAssemblyId`. Anchored; use with `new RegExp()`. */
+export const STAGE_ASSEMBLY_ID_PATTERN = "^sas_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageAssemblyMember = {
+  document_uid: DocumentUid;
+  member_no: number;
+};
+
+export type StageAtomicEvidenceId = string;
+
+/** The contract pattern for `StageAtomicEvidenceId`. Anchored; use with `new RegExp()`. */
+export const STAGE_ATOMIC_EVIDENCE_ID_PATTERN = "^(stf|std|sge)_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageCardEvidence = {
+  absence_proven?: boolean;
+  box_anchor?: {
+    [key: string]: number;
+  };
+  evidence_id: StageCardEvidenceId;
+  kind: "TEXT" | "TABLE" | "GRAPHIC";
+  profile_id?: ComparisonPageProfileId;
+  side: "left" | "right" | "both";
+  source_id: StageAtomicEvidenceId;
+};
+
+export type StageCardEvidenceId = string;
+
+/** The contract pattern for `StageCardEvidenceId`. Anchored; use with `new RegExp()`. */
+export const STAGE_CARD_EVIDENCE_ID_PATTERN = "^sce_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageCardVerdict = {
+  card_id: StageChangeCardId;
+  created_at: string;
+  decision: "accepted" | "rejected";
+  evidence_digest: Sha256;
+  reason: string;
+  revision_no: number;
+  verdict_id: StageCardVerdictId;
+};
+
+export type StageCardVerdictId = string;
+
+/** The contract pattern for `StageCardVerdictId`. Anchored; use with `new RegExp()`. */
+export const STAGE_CARD_VERDICT_ID_PATTERN = "^cdv_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageCardVerdictInput = {
+  card_id: StageChangeCardId;
+  decision: "accepted" | "rejected";
+  expected_revision: number;
+  reason: string;
+};
+
+export type StageCardVerdictPage = {
+  items: Array<StageCardVerdict>;
+  page: PageInfo;
+};
+
+export type StageChainBatch = {
+  batch_id: StageChainBatchId;
+  counts: {
+    [key: string]: number;
+  };
+  created_at: string;
+  items: Array<StageChainBatchItem>;
+  project_uid: ProjectUid;
+  state: "queued" | "running" | "paused" | "completed" | "failed" | "cancelled";
+  updated_at: string;
+};
+
+export type StageChainBatchId = string;
+
+/** The contract pattern for `StageChainBatchId`. Anchored; use with `new RegExp()`. */
+export const STAGE_CHAIN_BATCH_ID_PATTERN = "^scb_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageChainBatchItem = {
+  item_id: StageChainBatchItemId;
+  link_revision_id: StageLinkRevisionId;
+  pair_id: StagePairId;
+  position: number;
+  run_id?: StageChainRunId;
+  state: "queued" | "running" | "completed" | "failed" | "cancelled";
+};
+
+export type StageChainBatchItemId = string;
+
+/** The contract pattern for `StageChainBatchItemId`. Anchored; use with `new RegExp()`. */
+export const STAGE_CHAIN_BATCH_ITEM_ID_PATTERN = "^scbi_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageChainBatchSelection = {
+  consent?: ComparisonAiConsent;
+  link_revision_id: StageLinkRevisionId;
+  pair_id: StagePairId;
+};
+
+export type StageChainRun = {
+  ai_job_id?: ComparisonAiJobId;
+  batch_id?: string;
+  created_at: string;
+  effective_link_revision_id?: StageLinkRevisionId;
+  failure_reason?: string;
+  input_sha256: Sha256;
+  kind?: "deterministic" | "full";
+  link_revision_id: StageLinkRevisionId;
+  pair_id: StagePairId;
+  pause_reason?: string;
+  pinned_version_uids: Array<VersionUid>;
+  run_id: StageChainRunId;
+  stale: boolean;
+  state: "queued" | "running" | "paused" | "completed" | "failed" | "cancelled";
+  steps: Array<StageChainStep>;
+  updated_at: string;
+  with_ai?: boolean;
+};
+
+export type StageChainRunId = string;
+
+/** The contract pattern for `StageChainRunId`. Anchored; use with `new RegExp()`. */
+export const STAGE_CHAIN_RUN_ID_PATTERN = "^crn_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageChainRunPage = {
+  items: Array<StageChainRun>;
+  page: PageInfo;
+};
+
+export type StageChainStep = {
+  counts: {
+    [key: string]: number;
+  };
+  finished_at?: string;
+  started_at?: string;
+  state: "queued" | "running" | "paused" | "completed" | "failed" | "cancelled";
+  step_id: StageChainStepId;
+  step_no: number;
+};
+
+export type StageChainStepId = string;
+
+/** The contract pattern for `StageChainStepId`. Anchored; use with `new RegExp()`. */
+export const STAGE_CHAIN_STEP_ID_PATTERN = "^cst_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageChangeCard = {
+  after: string;
+  before: string;
+  card_id: StageChangeCardId;
+  card_key: Sha256;
+  carried_verdict_ids?: Array<StageCardVerdictId>;
+  carryover?: "none" | "full" | "partial" | "stale";
+  category: StageChangeCategory;
+  class_name: "PROJECT_CHANGE" | "SERVICE_STRUCTURE" | "REVIEW";
+  detail_increased?: boolean;
+  evidence?: Array<StageCardEvidence>;
+  evidence_digest: Sha256;
+  evidence_ids: Array<StageAtomicEvidenceId>;
+  importance?: "high" | "normal" | "unknown";
+  materiality?: "material" | "non_material" | "unknown";
+  run_id: StageChainRunId;
+  stale: boolean;
+  system: StageSystem;
+  title: string;
+  verdict?: StageCardVerdict;
+};
+
+export type StageChangeCardId = string;
+
+/** The contract pattern for `StageChangeCardId`. Anchored; use with `new RegExp()`. */
+export const STAGE_CHANGE_CARD_ID_PATTERN = "^ccd_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageChangeCardPage = {
+  counts: {
+    [key: string]: number;
+  };
+  items: Array<StageChangeCard>;
+  page: PageInfo;
+};
+
+/** StageChangeCategory. */
+export const STAGE_CHANGE_CATEGORY_VALUES = [
+  'areas',
+  'floors',
+  'electrical_load',
+  'calculation_method',
+  'consumer_composition',
+  'room_composition',
+  'dimensions',
+  'materials',
+  'equipment_parameters',
+  'system_configuration',
+  'fire_safety',
+  'designation_rename',
+  'administrative',
+  'documentation_structure',
+  'formatting',
+  'other_project',
+  'other_service',
+  'uncertain',
+] as const;
+
+/** StageChangeCategory - the closed value set above. */
+export type StageChangeCategory = (typeof STAGE_CHANGE_CATEGORY_VALUES)[number];
+
+export type StageChangeJournal = {
+  accepted_count: number;
+  ai_hidden_same_count: number;
+  ai_service_count: number;
+  grouping: "designation" | "section" | "system";
+  groups: Array<({
+    [key: string]: unknown;
+  })>;
+  run_id: StageChainRunId;
+  stale: boolean;
+};
+
+export type StageClassificationCard = {
+  card_key: Sha256;
+  category: StageChangeCategory;
+  class_name: "PROJECT_CHANGE" | "SERVICE_STRUCTURE" | "REVIEW";
+  detail_increased?: boolean;
+  evidence_digest: Sha256;
+  evidence_ids: Array<StageAtomicEvidenceId>;
+  importance?: "high" | "normal" | "unknown";
+  materiality?: "material" | "non_material" | "unknown";
+  model_class?: string;
+  policy_reasons?: Array<string>;
+  system: StageSystem;
+  title: string;
+};
+
+export type StageGraphicEvidence = {
+  content_key: Sha256;
+  graphic_id: StageGraphicEvidenceId;
+  left_profile_id?: ComparisonPageProfileId;
+  link_item_id: StageLinkItemId;
+  reason: string;
+  regions?: Array<({
+    [key: string]: unknown;
+  })>;
+  result_id?: ComparisonSheetPairResultId;
+  right_profile_id?: ComparisonPageProfileId;
+  run_id: StageChainRunId;
+  status: "not_checked" | "unreliable" | "reliable";
+};
+
+export type StageGraphicEvidenceId = string;
+
+/** The contract pattern for `StageGraphicEvidenceId`. Anchored; use with `new RegExp()`. */
+export const STAGE_GRAPHIC_EVIDENCE_ID_PATTERN = "^sge_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageGraphicEvidencePage = {
+  items: Array<StageGraphicEvidence>;
+  page: PageInfo;
+};
+
 /** A canonical stage identity from contracts/analysis/v1/stage-registry.json. PC-01 schedules the first four. */
 export const STAGE_ID_VALUES = [
   'source_preparation',
@@ -4676,6 +6386,164 @@ export const STAGE_ID_VALUES = [
 
 /** StageId - the closed value set above. */
 export type StageId = (typeof STAGE_ID_VALUES)[number];
+
+export type StageLinkInput = {
+  left_profile_id?: ComparisonPageProfileId;
+  relation: "paired" | "only_left" | "only_right";
+  right_profile_id?: ComparisonPageProfileId;
+};
+
+export type StageLinkItem = {
+  confidence: "high" | "manual" | "review" | "automatic_repair" | "unpaired";
+  item_id: StageLinkItemId;
+  left_profile_id?: ComparisonPageProfileId;
+  relation: "paired" | "only_left" | "only_right";
+  right_profile_id?: ComparisonPageProfileId;
+  row_no: number;
+};
+
+export type StageLinkItemId = string;
+
+/** The contract pattern for `StageLinkItemId`. Anchored; use with `new RegExp()`. */
+export const STAGE_LINK_ITEM_ID_PATTERN = "^sli_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageLinkRepair = {
+  after_revision_id: StageLinkRevisionId;
+  before_revision_id: StageLinkRevisionId;
+  created_at: string;
+  proof: {
+    [key: string]: unknown;
+  };
+  repair_id: StageLinkRepairId;
+  run_id: StageChainRunId;
+  state: "applied" | "undone" | "superseded";
+};
+
+export type StageLinkRepairId = string;
+
+/** The contract pattern for `StageLinkRepairId`. Anchored; use with `new RegExp()`. */
+export const STAGE_LINK_REPAIR_ID_PATTERN = "^crp_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageLinkRepairPage = {
+  items: Array<StageLinkRepair>;
+  page: PageInfo;
+};
+
+export type StageLinkRevision = {
+  base_revision_id?: StageLinkRevisionId;
+  created_at: string;
+  input_sha256: Sha256;
+  items: Array<StageLinkItem>;
+  pair_id: StagePairId;
+  revision_id: StageLinkRevisionId;
+  revision_no: number;
+  source: "expert" | "automatic";
+};
+
+export type StageLinkRevisionId = string;
+
+/** The contract pattern for `StageLinkRevisionId`. Anchored; use with `new RegExp()`. */
+export const STAGE_LINK_REVISION_ID_PATTERN = "^slk_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageLinkRevisionPage = {
+  items: Array<StageLinkRevision>;
+  page: PageInfo;
+};
+
+export type StagePair = {
+  assembly_id?: StageAssemblyId;
+  completeness: "unknown" | "full" | "partial";
+  confirmed_at?: string;
+  created_at: string;
+  left_document_uid: DocumentUid;
+  pair_id: StagePairId;
+  project_uid: ProjectUid;
+  right_document_uid?: DocumentUid;
+  state: "suggested" | "confirmed" | "archived";
+};
+
+export type StagePairId = string;
+
+/** The contract pattern for `StagePairId`. Anchored; use with `new RegExp()`. */
+export const STAGE_PAIR_ID_PATTERN = "^stp_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StagePairPage = {
+  items: Array<StagePair>;
+  page: PageInfo;
+};
+
+export type StagePairSuggestion = {
+  left_document_uid: DocumentUid;
+  reason: string;
+  right_document_uid: DocumentUid;
+  score: number;
+};
+
+export type StagePairSuggestionPage = {
+  items: Array<StagePairSuggestion>;
+  page: PageInfo;
+};
+
+export type StageProfileText = {
+  has_text_layer: boolean;
+  height_pt: number;
+  page_number: number;
+  profile_id: ComparisonPageProfileId;
+  scan: boolean;
+  version_uid: VersionUid;
+  width_pt: number;
+  words: Array<StageProfileWord>;
+};
+
+export type StageProfileWord = {
+  bottom: number;
+  text: string;
+  top: number;
+  x0: number;
+  x1: number;
+};
+
+export type StageReviewDecision = {
+  actual_right_profile_ids?: Array<ComparisonPageProfileId>;
+  confidence: "high" | "medium" | "low";
+  left_fragment_ids: Array<StageTextFragmentId>;
+  model_status?: string;
+  policy_reasons?: Array<string>;
+  reason: string;
+  right_fragment_ids: Array<StageTextFragmentId>;
+  status: "SAME" | "MOVED" | "CHANGED" | "REMOVED" | "ADDED" | "UNCERTAIN";
+  summary: string;
+};
+
+export type StageSheetPassport = {
+  building?: string;
+  floor?: string;
+  level?: string;
+  page_number: number;
+  profile_id: ComparisonPageProfileId;
+  sheet_number?: string;
+  sheet_type?: string;
+  side: "left" | "right";
+  version_uid: VersionUid;
+};
+
+export type StageSheetPassportPage = {
+  items: Array<StageSheetPassport>;
+  page: PageInfo;
+};
+
+export type StageSheetSuggestion = {
+  confidence: "high" | "review";
+  left_profile_id: ComparisonPageProfileId;
+  reasons: Array<string>;
+  right_profile_id: ComparisonPageProfileId;
+  score: number;
+};
+
+export type StageSheetSuggestionPage = {
+  items: Array<StageSheetSuggestion>;
+  page: PageInfo;
+};
 
 export type StageState = {
   /** The typed reason a non-succeeded stage carries. Null exactly when the status is `succeeded`. */
@@ -4698,10 +6566,213 @@ export const STAGE_STATUS_VALUES = [
 /** StageStatus - the closed value set above. */
 export type StageStatus = (typeof STAGE_STATUS_VALUES)[number];
 
+export type StageSynthesisResult = {
+  change_type: string;
+  decision: string;
+  evidence_ids: Array<StageAtomicEvidenceId>;
+  group_id: string;
+  reason: string;
+  source_sha256: Sha256;
+  title: string;
+};
+
+/** StageSystem. */
+export const STAGE_SYSTEM_VALUES = [
+  'unknown',
+  'architecture',
+  'structural',
+  'electrical',
+  'heating_ventilation',
+  'water_sewage',
+  'fire_protection',
+  'low_current',
+  'technology',
+  'site',
+  'other',
+] as const;
+
+/** StageSystem - the closed value set above. */
+export type StageSystem = (typeof STAGE_SYSTEM_VALUES)[number];
+
+export type StageTextDifference = {
+  difference_id: StageTextDifferenceId;
+  left_fragment_id?: StageTextFragmentId;
+  revision_id: StageLinkRevisionId;
+  right_fragment_id?: StageTextFragmentId;
+  status: "changed" | "removed" | "added";
+};
+
+export type StageTextDifferenceId = string;
+
+/** The contract pattern for `StageTextDifferenceId`. Anchored; use with `new RegExp()`. */
+export const STAGE_TEXT_DIFFERENCE_ID_PATTERN = "^std_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageTextDifferencePage = {
+  items: Array<StageTextDifference>;
+  page: PageInfo;
+};
+
+export type StageTextExclusion = {
+  exclusion_id: StageTextExclusionId;
+  left_fragment_id: StageTextFragmentId;
+  proof_kind: "same" | "moved";
+  revision_id: StageLinkRevisionId;
+  right_fragment_id: StageTextFragmentId;
+};
+
+export type StageTextExclusionId = string;
+
+/** The contract pattern for `StageTextExclusionId`. Anchored; use with `new RegExp()`. */
+export const STAGE_TEXT_EXCLUSION_ID_PATTERN = "^ste_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageTextExclusionPage = {
+  items: Array<StageTextExclusion>;
+  page: PageInfo;
+};
+
+export type StageTextFragment = {
+  box_anchor: {
+    [key: string]: number;
+  };
+  content_key: Sha256;
+  fragment_id: StageTextFragmentId;
+  pair_id: StagePairId;
+  profile_id: ComparisonPageProfileId;
+  side: "left" | "right";
+  text: string;
+};
+
+export type StageTextFragmentId = string;
+
+/** The contract pattern for `StageTextFragmentId`. Anchored; use with `new RegExp()`. */
+export const STAGE_TEXT_FRAGMENT_ID_PATTERN = "^stf_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageTextFragmentPage = {
+  items: Array<StageTextFragment>;
+  page: PageInfo;
+};
+
+export type StageTextHint = {
+  hint_id: StageTextHintId;
+  revision_id: StageLinkRevisionId;
+  source_fragment_id: StageTextFragmentId;
+  source_side?: "left" | "right";
+  target_fragment_id: StageTextFragmentId;
+};
+
+export type StageTextHintId = string;
+
+/** The contract pattern for `StageTextHintId`. Anchored; use with `new RegExp()`. */
+export const STAGE_TEXT_HINT_ID_PATTERN = "^sth_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageTextHintPage = {
+  items: Array<StageTextHint>;
+  page: PageInfo;
+};
+
+export type StageUpload = {
+  candidates: Array<StageUploadCandidate>;
+  created_at: string;
+  files: Array<StageUploadFile>;
+  project_uid: ProjectUid;
+  state: "uploading" | "paused" | "admitting" | "completed" | "failed" | "cancelled";
+  updated_at: string;
+  upload_id: StageUploadId;
+};
+
+export type StageUploadCandidate = {
+  candidate_id: StageUploadCandidateId;
+  confirmed_section?: string;
+  confirmed_stage?: "P" | "R";
+  designation?: string;
+  display_name: string;
+  document_uid?: DocumentUid;
+  failure_reason?: string;
+  file_id: StageUploadFileId;
+  member_number: number;
+  proposed_section?: string;
+  proposed_stage?: "P" | "R";
+  state: "proposed" | "confirmed" | "admitting" | "published" | "rejected" | "failed";
+  version_uid?: VersionUid;
+};
+
+export type StageUploadCandidateId = string;
+
+/** The contract pattern for `StageUploadCandidateId`. Anchored; use with `new RegExp()`. */
+export const STAGE_UPLOAD_CANDIDATE_ID_PATTERN = "^suc_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageUploadFile = {
+  created_at: string;
+  declaration: StageUploadFileDeclaration;
+  failure_reason?: string;
+  file_id: StageUploadFileId;
+  received_bytes: number;
+  received_parts: number;
+  state: "declared" | "receiving" | "received" | "admitting" | "ready" | "failed" | "cancelled";
+  upload_id: StageUploadId;
+};
+
+export type StageUploadFileDeclaration = {
+  display_name: string;
+  media_kind: StageUploadFileKind;
+  sha256: Sha256;
+  size_bytes: number;
+};
+
+export type StageUploadFileId = string;
+
+/** The contract pattern for `StageUploadFileId`. Anchored; use with `new RegExp()`. */
+export const STAGE_UPLOAD_FILE_ID_PATTERN = "^suf_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** StageUploadFileKind. */
+export const STAGE_UPLOAD_FILE_KIND_VALUES = [
+  'pdf',
+  'zip',
+] as const;
+
+/** StageUploadFileKind - the closed value set above. */
+export type StageUploadFileKind = (typeof STAGE_UPLOAD_FILE_KIND_VALUES)[number];
+
+export type StageUploadId = string;
+
+/** The contract pattern for `StageUploadId`. Anchored; use with `new RegExp()`. */
+export const STAGE_UPLOAD_ID_PATTERN = "^stu_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type StageUploadPage = {
+  items: Array<StageUpload>;
+  page: PageInfo;
+};
+
+export type StageUploadPartReceipt = {
+  file_id: StageUploadFileId;
+  part_number: number;
+  received_bytes: number;
+  sha256: Sha256;
+  size_bytes: number;
+  upload_id: StageUploadId;
+};
+
 export type StartArV3BetaGroupRequest = {
-  /** Temporary AR v3 option. Absent or false keeps the deployment cost ceiling and a 16,000-token output request. True omits the per-Run cost halt and requests up to 64,000 output tokens; the provider may enforce a lower maximum. The choice is part of the idempotency payload and persists for all six Runs. */
+  /** The expert confirms a fresh estimate and a sufficient explicit ceiling before this start may spend. The approved cap applies independently of the raised output-limit choice. */
+  cost_consent?: RunCostConsent;
+  /** Default off. False requests up to16,000 output tokens per scope; true requests up to64,000. Fresh approved group cost is allocated among its six Runs and applies in either mode. Historical accepted commands retain their original policy; provider bounds still apply. */
   relaxed_limits?: boolean;
   version_uid: VersionUid;
+};
+
+/** Starts an AI job. Refused before anything is read or written when the versions module is off. */
+export type StartComparisonAiJobRequest = {
+  consent: ComparisonAiConsent;
+};
+
+/**
+ * «Запустить» (``restart`` false or absent) or «Описать заново» (``restart`` true: every sheet is
+ * described again; a sheet whose content, prompt version and model did not change keeps its stored
+ * answer and is not sent).
+ */
+export type StartComparisonAiSheetChangesRequest = {
+  consent: ComparisonAiConsent;
+  restart?: boolean;
 };
 
 /**
@@ -4716,15 +6787,29 @@ export type StartComparisonSeriesRequest = {
 };
 
 export type StartRunRequest = {
+  /** The expert confirms a fresh estimate and a sufficient explicit ceiling before this start may spend. The approved cap applies independently of the raised output-limit choice. */
+  cost_consent?: RunCostConsent;
   /** EXEC-PAR-START-01: the executor connection this run must be on. Absent: the run follows the global route exactly as before. Present: that connection's current revision is frozen when this release serves it, its current key has a passing probe and it is not archived; otherwise the start is refused and no run exists. Never replaced by the route's standby or by another connection. Part of the payload the idempotency key is compared by. */
   executor_connection_id?: ExecutorConnectionId;
   /** ANALYSIS-PRESETS-01: a saved preset (listAnalysisPresets) to start the run with. Absent: the run is what it was. Present: the preset's current revision is read in the start's transaction and its executor connection is applied exactly as if executor_connection_id had named it (same usability test, same refusals, no fallback to the standby or to another connection), and the run records the preset revision. Exclusive with executor_connection_id. Part of the payload the idempotency key is compared by, as the preset and not as the connection it resolved to. */
   preset_id?: PresetId;
-  /** Defaults to the server's configured mode. A client asking for `live` is asking to spend money; the OD-03 ceiling applies unless relaxed_limits is true. */
+  /** Defaults to the configured mode. A new served paid start requires fresh confirmed cost consent; the approved cap applies in both output-limit modes. */
   provider_mode?: ProviderMode;
-  /** Temporary section-analysis option. Absent or false keeps the deployment cost ceiling and a 16,000-token output request. True omits the per-Run cost halt and requests up to 64,000 output tokens under a distinct immutable profile and bundle identity. The 12-window operational document-size limit remains. The provider may enforce a lower output maximum. The choice is part of the idempotency payload and persists for the Run. */
+  /** Default off. False requests up to16,000 output tokens; true requests up to64,000 using a distinct immutable profile/bundle. A fresh approved cost cap applies in either mode. Explicit consent may approve more than12 whole-page windows. Historical accepted commands retain their original policy; provider context/output bounds still apply. */
   relaxed_limits?: boolean;
   version_uid: VersionUid;
+};
+
+export type StartStageChainBatchRequest = {
+  selections: Array<StageChainBatchSelection>;
+  with_ai?: boolean;
+};
+
+export type StartStageChainRunRequest = {
+  consent?: ComparisonAiConsent;
+  link_revision_id: StageLinkRevisionId;
+  restart?: boolean;
+  with_ai?: boolean;
 };
 
 /**
@@ -4775,6 +6860,10 @@ export type TransitionAssignmentRequest = {
  */
 export type UndoComparisonMatrixEditRequest = {
   base_revision: ComparisonMatrixRevision;
+};
+
+export type UndoStageLinkRepairRequest = {
+  base_revision_id: StageLinkRevisionId;
 };
 
 /** Closed deterministic observation-withholding reasons; a withheld item is never a published finding. */

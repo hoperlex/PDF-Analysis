@@ -155,7 +155,8 @@ def probe_database() -> Iterator[str]:
         migrated = subprocess.run(
             [sys.executable, "-m", "alembic", "--config", "db/migrations/alembic.ini",
              "upgrade", "head"],
-            cwd=REPOSITORY_ROOT, env={**os.environ, "DATABASE_URL": url},
+            cwd=REPOSITORY_ROOT,
+            env={**os.environ, "DATABASE_URL": url, "PYTHONPATH": str(REPOSITORY_ROOT / "src")},
             capture_output=True, text=True, timeout=300,
         )
         assert migrated.returncode == 0, migrated.stdout + migrated.stderr

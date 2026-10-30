@@ -72,8 +72,10 @@
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import assert from 'node:assert/strict';
 
 import { withColdBrowser } from './cdp.mjs';
+import { C4_PRODUCES, stageC4Action } from './stage-c4.mjs';
 
 /** The `{name}` placeholders a template mentions, in order of appearance. */
 export function templateNames(template) {
@@ -119,7 +121,7 @@ export function namesNeededBy(step) {
     for (const call of step[key] ?? []) take(call.path, call.bind);
   }
   for (const action of step.actions ?? []) {
-    for (const key of ['selector', 'value', 'text', 'to', 'option_text', 'option_value', 'label', 'text_contains']) {
+    for (const key of ['selector', 'value', 'text', 'to', 'option_text', 'option_value', 'label', 'text_contains', 'source_run_id']) {
       take(action[key]);
     }
     take(action.within?.text_contains);
@@ -137,6 +139,9 @@ export function namesNeededBy(step) {
   // What the step captures itself is not something it needs from an earlier step.
   for (const capture of [step.capture, ...(step.captures ?? [])]) {
     for (const produced of capture?.as ?? []) names.delete(produced);
+  }
+  for (const action of step.actions ?? []) if (action.do === 'stage_c4') {
+    for (const name of C4_PRODUCES[action.phase] ?? []) names.delete(name);
   }
   return [...names];
 }
@@ -186,6 +191,107 @@ function decodeJson(text) {
   } catch {
     return undefined;
   }
+}
+
+const COST_SCOPES = {
+  run: { root: '[data-start-run-control]', label: 'Оценить стоимость', estimatePath: '/runs/cost-estimate', startPath: '/runs' },
+  ar_v3_group: { root: '[data-ar-v3-group-start]', label: 'Оценить стоимость шести проверок', estimatePath: '/ar-v3-beta/groups/cost-estimate', startPath: '/ar-v3-beta/groups' },
+};
+
+/** Pure exchange checks, also exercised by source conformance without a browser. */
+export function costApprovalFromEstimate(estimate, requestBody, scope, ceilingText) {
+  assert.ok(Object.hasOwn(COST_SCOPES, scope), `unknown cost scope ${scope}`);
+  assert.equal(estimate?.scope, scope);
+  assert.equal(estimate.version_uid, requestBody?.version_uid);
+  assert.equal(estimate.relaxed_limits, requestBody.relaxed_limits === true);
+  assert.equal(estimate.currency, 'USD');
+  assert.ok(['recorded', 'live'].includes(estimate.provider_mode));
+  assert.ok(['metered', 'unmetered'].includes(estimate.billing));
+  assert.match(estimate.estimate_digest ?? '', /^[0-9a-f]{64}$/);
+  for (const amount of [estimate.estimated_cost_micros, estimate.recommended_ceiling_micros]) {
+    assert.ok(Number.isSafeInteger(amount) && amount >= 0, 'cost estimate must have a finite integer amount');
+  }
+  assert.ok(estimate.recommended_ceiling_micros >= estimate.estimated_cost_micros);
+  if (requestBody.reaudit_of_run_id !== undefined) {
+    assert.equal(scope, 'run');
+    assert.deepEqual(Object.keys(requestBody).sort(), ['reaudit_of_run_id', 'version_uid'], 're-audit preflight must derive routing on the server');
+  }
+  const decimal = /^(\d+)(?:[.,](\d{1,6}))?$/.exec(ceilingText.trim());
+  assert.ok(decimal, 'prefilled cost ceiling is not exact decimal USD');
+  const ceiling = BigInt(decimal[1]) * 1_000_000n + BigInt((decimal[2] ?? '').padEnd(6, '0'));
+  assert.equal(ceiling, BigInt(estimate.recommended_ceiling_micros), 'UI ceiling differs from the actual recommended estimate');
+  return { scope, estimate_digest: estimate.estimate_digest, ceiling_micros: Number(ceiling),
+    estimated_cost_micros: estimate.estimated_cost_micros, provider_mode: estimate.provider_mode,
+    estimate_request: requestBody,
+    ...(requestBody.reaudit_of_run_id === undefined ? {} : { source_run_id: requestBody.reaudit_of_run_id }) };
+}
+
+export function assertCostApprovedStart(approval, exchange) {
+  const body = decodeJson(exchange.requestBody);
+  assert.ok(body !== undefined, 'cost-approved start has no recorded JSON body');
+  const { cost_consent: consent, ...options } = body;
+  if (approval.source_run_id !== undefined) {
+    assert.deepEqual(options, {}, 're-audit start must carry consent only');
+    assert.ok(new URL(exchange.url).pathname.endsWith(`/runs/${approval.source_run_id}/reaudit`), 're-audit start addresses a different source Run');
+  } else {
+    assert.deepEqual(options, approval.estimate_request, 'start options differ from the approved estimate');
+  }
+  assert.deepEqual(consent, { estimate_digest: approval.estimate_digest,
+    ceiling_micros: approval.ceiling_micros, confirmed: true }, 'start consent differs from actual UI approval');
+  assert.ok(Object.entries(exchange.requestHeaders ?? {}).some(([name, value]) =>
+    name.toLowerCase() === 'idempotency-key' && typeof value === 'string' && value.trim() !== ''), 'start has no command key');
+}
+
+async function approveRunCost(page, action, expectedVersion, allowSpend, sourceRunId = null) {
+  const standard = COST_SCOPES[action.scope];
+  assert.ok(standard, `unknown cost approval scope ${action.scope}`);
+  const contract = sourceRunId === null ? standard : { ...standard, root: '[data-execution-intent="reaudit"]' };
+  let after = 0;
+  if (sourceRunId === null) {
+    const enabled = `Array.from(document.querySelectorAll(${JSON.stringify(contract.root + ' button')})).some(e=>e.textContent.trim()===${JSON.stringify(contract.label)}&&!e.disabled)`;
+    assert.ok((await page.waitFor(enabled, { boundMs: action.bound_ms, what: contract.label })).ok, 'cost estimate control unavailable');
+    after = page.exchanges().length;
+    await page.click(contract.root + ' button', { text: contract.label });
+  }
+  const began = Date.now();
+  let observed;
+  let source;
+  while (Date.now() - began < action.bound_ms) {
+    await page.settle({ settleMs: 100, timeoutMs: 700 });
+    observed = page.exchanges().slice(after).find((e) => e.method === 'POST'
+      && new URL(e.url).pathname.endsWith(contract.estimatePath) && e.status !== null && e.responseBody !== null
+      && (sourceRunId === null || decodeJson(e.requestBody)?.reaudit_of_run_id === sourceRunId));
+    source = sourceRunId === null ? null : page.exchanges().find((e) => e.method === 'GET'
+      && new URL(e.url).pathname.endsWith(`/runs/${sourceRunId}`) && e.status !== null && e.responseBody !== null);
+    if (observed !== undefined && (sourceRunId === null || source !== undefined)) break;
+    await new Promise((done) => setTimeout(done, 100));
+  }
+  assert.ok(observed, 'no observed cost estimate within the declared bound');
+  assert.equal(observed.status, 200, `cost estimate failed: ${observed.responseBody?.slice(0, 200)}`);
+  const estimate = decodeJson(observed.responseBody);
+  const request = decodeJson(observed.requestBody);
+  assert.equal(request?.version_uid, expectedVersion, 'estimated a different version');
+  if (sourceRunId !== null) {
+    assert.ok(source, 'no observed source Run read for the fresh re-audit estimate');
+    assert.equal(source.status, 200);
+    const run = decodeJson(source.responseBody);
+    assert.equal(run?.run_id, sourceRunId);
+    assert.equal(run.version_uid, expectedVersion, 'source Run belongs to another version');
+    assert.ok(['published', 'partial', 'failed', 'cancelled'].includes(run.state), 'source Run is not terminal');
+    assert.equal(request.reaudit_of_run_id, sourceRunId);
+  }
+  const input = contract.root + ' [data-cost-approval] input[type="text"]';
+  const read = await page.waitFor(`(() => { const e=document.querySelector(${JSON.stringify(input)}); return e && !e.disabled && !e.closest('fieldset')?.disabled && e.getClientRects().length ? {value:e.value} : null; })()`,
+    { boundMs: action.bound_ms, what: 'prefilled cost ceiling' });
+  assert.ok(read.ok, 'cost estimate never produced an editable finite cap');
+  const approval = costApprovalFromEstimate(estimate, request, action.scope, read.value.value);
+  assert.ok(approval.provider_mode === 'recorded' || allowSpend === true, 'live cost approval requires explicit --allow-spend');
+  const checkbox = contract.root + ' [data-cost-approval] input[type="checkbox"]';
+  assert.equal(await page.evaluate(`document.querySelector(${JSON.stringify(checkbox)})?.checked`), false, 'cost approval was preselected');
+  await page.click(checkbox);
+  await page.settle({ settleMs: 100, timeoutMs: 700 });
+  assert.equal(await page.evaluate(`document.querySelector(${JSON.stringify(checkbox)})?.checked`), true, 'cost agreement did not persist');
+  return approval;
 }
 
 /**
@@ -371,6 +477,12 @@ export async function runWritePhase({
     // runs. On an origin that bills per run, or whose provider mode is not known, that is not a
     // thing to do unasked: the first such step says so ONCE and the rest are not reached.
     if (step.screen !== undefined && step.reads_only !== true) {
+      if (step.requires_provider_mode !== undefined && providerMode !== step.requires_provider_mode) {
+        fail(step.name, `requires provider mode '${step.requires_provider_mode}', got '${providerMode ?? 'unknown'}'; --allow-spend does not override a recorded-only comparison case`);
+        record.verdict = 'RED';
+        stopped = stopped ?? step.name;
+        continue;
+      }
       if (!nightWindowMayRun({ providerMode, allowSpend })) {
         if (!nightRefused) {
           nightRefused = true;
@@ -575,7 +687,13 @@ export async function runWritePhase({
           record.actions.push(entry);
           const text = action.text === undefined ? null : fill(action.text, scope());
           const selector = action.selector === undefined ? undefined : fill(action.selector, scope());
-          if (action.do === 'fill') {
+          if (action.do === 'stage_c4') {
+            entry.result = await stageC4Action({ page, action, captured: scope(), repositoryRoot });
+            Object.assign(captured, entry.result.captured);
+          } else if (action.do === 'approve_run_cost') {
+            entry.result = await approveRunCost(page, action, fill(action.value, scope()), allowSpend,
+              action.source_run_id === undefined ? null : fill(action.source_run_id, scope()));
+          } else if (action.do === 'fill') {
             // `secret` names a password the journey holds in memory; the value typed is never
             // recorded, and neither is what the control read back.
             const typed =
@@ -885,6 +1003,19 @@ export async function runWritePhase({
     };
     const findExchange = (method, path) => findAll(method, path)[0] ?? null;
 
+    for (const action of record.actions.filter((item) => item.do === 'approve_run_cost')) {
+      if (action.result === null) continue;
+      const starts = findAll('POST', action.result.source_run_id === undefined
+        ? COST_SCOPES[action.scope].startPath : `/runs/${action.result.source_run_id}/reaudit`);
+      try {
+        assert.ok(starts.length > 0, 'cost agreement was not followed by the declared start');
+        for (const start of starts) assertCostApprovedStart(action.result, start);
+      } catch (error) {
+        ok = false;
+        fail(step.name, `cost approval: ${error.message}`);
+      }
+    }
+
     /** Declared refusals: (method, concrete path, status) the step expects the seam to answer. */
     const declaredRefusals = [];
     const byOperation = new Map();
@@ -902,7 +1033,7 @@ export async function runWritePhase({
       const exchange =
         expectation.refusal === true
           ? (matching.find((e) => e.status === expectation.expect_status) ?? matching[0] ?? null)
-          : (matching[0] ?? null);
+          : (expectation.last_response === true ? matching.at(-1) ?? null : matching[0] ?? null);
       byOperation.set(expectation.operationId, exchange);
       if (expectation.refusal === true) {
         declaredRefusals.push({ method: expectation.method, path: concrete, status: expectation.expect_status });
@@ -1045,6 +1176,10 @@ export async function runWritePhase({
       const exchange = byOperation.get(check.of);
       if (!exchange) continue;
       const contentType = exchange.requestHeaders?.['content-type'] ?? '';
+      if (check.requires_idempotency_key === true && !(exchange.requestHeaders?.['idempotency-key'] ?? '').trim()) {
+        ok = false;
+        fail(step.name, `${check.of} carried no Idempotency-Key`);
+      }
       if (check.content_type_starts_with && !contentType.startsWith(check.content_type_starts_with)) {
         ok = false;
         fail(

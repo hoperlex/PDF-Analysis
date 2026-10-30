@@ -23,6 +23,80 @@
   margin: 0 0 var(--am-gap-sm);
 }
 
+.pipeline {
+  display: flex;
+  align-items: stretch;
+  gap: var(--am-gap-xs);
+  overflow-x: auto;
+  margin-bottom: var(--am-gap-lg);
+  padding: var(--am-gap-sm);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-lg);
+  background: var(--am-paper);
+}
+
+.pipelineItem {
+  display: flex;
+  align-items: center;
+  flex: 1 0 128px;
+  min-width: 0;
+}
+
+.pipelineStage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--am-gap-xs);
+  flex: 1;
+  min-width: 112px;
+  min-height: 94px;
+  padding: var(--am-gap-sm);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius);
+  background: var(--am-surface);
+  text-align: center;
+}
+
+.pipelineStage[data-pipeline-status='succeeded'] {
+  border-color: var(--am-ok);
+  background: var(--am-ok-light);
+}
+
+.pipelineStage[data-pipeline-status='partial'] {
+  border-color: var(--am-degraded);
+  background: var(--am-degraded-light);
+}
+
+.pipelineStage[data-pipeline-status='failed'] {
+  border-color: var(--am-failed);
+  background: var(--am-failed-light);
+}
+
+.pipelineOrdinal {
+  color: var(--am-accent-strong);
+  font-size: var(--am-text-lg);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.pipelineName {
+  font-size: var(--am-text-xs);
+  font-weight: 700;
+  line-height: var(--am-leading-tight);
+}
+
+.pipelineStatus {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+}
+
+.pipelineArrow {
+  margin-inline: var(--am-gap-xs);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-lg);
+}
+
 /* The reading the user came for. It was one paragraph among twelve. */
 .outcome {
   padding: var(--am-gap) var(--am-gap-lg);

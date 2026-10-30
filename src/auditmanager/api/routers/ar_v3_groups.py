@@ -11,9 +11,20 @@ from auditmanager.api.routers.idempotency import RequiredIdempotencyKey
 from auditmanager.api.routers.ports import ArV3GroupPort
 from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
 from auditmanager.api.schemas import models
+from auditmanager.api.security import CurrentSubject
 
 
 def build_ar_v3_group_routes(router: APIRouter, groups: ArV3GroupPort) -> None:
+    @router.post(
+        "/ar-v3-beta/groups/cost-estimate", operation_id="estimateArV3GroupCost", tags=["runs"], status_code=200,
+        response_model=models.RunCostEstimate,
+        responses={**success(200, "Pinned model cost estimate for all six AR checks."),
+                   **envelope_responses(401, 403, 404, 409, 422, 500, 503)},
+    )
+    def estimate_ar_v3_group_cost(body: models.ArV3GroupCostEstimateRequest) -> WireResponse:
+        estimate = groups.estimate_ar_v3_group_cost(version_uid=body.version_uid, relaxed_limits=body.relaxed_limits is True)
+        return json_response(200, encode_json(estimate.model_dump(mode="json")))
+
     @router.post(
         "/ar-v3-beta/groups",
         operation_id="startArV3BetaGroup",
@@ -28,10 +39,13 @@ def build_ar_v3_group_routes(router: APIRouter, groups: ArV3GroupPort) -> None:
     def start_ar_v3_beta_group(
         body: models.StartArV3BetaGroupRequest,
         idempotency_key: RequiredIdempotencyKey,
+        subject: CurrentSubject,
     ) -> WireResponse:
         group = groups.start_ar_v3_group(
             version_uid=body.version_uid, idempotency_key=idempotency_key,
             relaxed_limits=body.relaxed_limits is True,
+            **({"cost_consent": body.cost_consent.model_dump(mode="json"), "cost_actor_uid": subject.user_uid}
+               if body.cost_consent is not None else {}),
         )
         return json_response(202, encode_json(group.model_dump(mode="json")))
 

@@ -32,6 +32,7 @@ from auditmanager.shared.identity import DocumentUid, ProjectUid
 
 from .conftest import (
     HOSTILE_VENDOR,
+    FORM7_PAGE,
     LAYER_SHA256,
     NEWER_PRICE_LIST,
     PRICE_LIST,
@@ -104,7 +105,7 @@ def test_a_pass_pins_its_inputs_and_stores_cheaper_analogs(unit, factory, cast, 
     assert record.text_layer_sha256 == LAYER_SHA256
     assert record.vendor_list_source == "global"
     assert (record.extraction_algorithm, record.match_algorithm, record.generator_version) == (
-        "specification-text-v1", "price-match-v1", GENERATOR_VERSION,
+        "specification-text-v1", "price-match-v2", GENERATOR_VERSION,
     )
     # Six rows; the profile is unit-mismatched and the foam ambiguous, so four are matched.
     assert (record.specification_row_count, record.matched_row_count) == (6, 4)
@@ -380,3 +381,16 @@ def test_proposals_are_paged_while_counts_cover_every_proposal(unit, cast, ready
         assert refused.detail_fields["field"] == field
     _refused(ErrorCode.PERMISSION_DENIED, unit, list_optimisation_proposals,
              optimisation_pass_id=pass_id, actor_roles=frozenset())
+
+
+def test_running_metres_are_priced_and_saved_with_exact_factor_one(unit, cast, ready) -> None:
+    page = FORM7_PAGE.replace('50х40 м2 120', '50х40 п. м 120')
+    reader = published_reader(ready, pages={1: page})
+    record = _start(unit, cast, ready, reader=reader).optimisation_pass
+    assert (record.specification_row_count, record.matched_row_count, record.proposal_count) == (6, 5, 5)
+    proposal = next(item for item in _proposals(unit, cast, record.optimisation_pass_id).items
+                    if item.row_text.startswith('Профиль направляющий ПН 50х40'))
+    assert (proposal.current_unit_price, proposal.proposed_unit_price, proposal.quantity, proposal.saving) == (
+        Decimal('95'), Decimal('60'), Decimal('120'), Decimal('4200'))
+    assert proposal.currency == 'RUB' and record.match_algorithm == 'price-match-v2'
+    assert '50х40 п. м 120' in reader.texts[ready.run].pages[1]

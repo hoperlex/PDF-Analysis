@@ -152,8 +152,9 @@ describe('the registry is the route tree: every page has a row and every row a p
   it('reads a tree and a registry of a credible size', () => {
     // `W55A-WEB-NORMS` added the norms document view: 27 -> 28. `W61-DISPATCHER-01` added
     // «Диспетчер»: 28 -> 29. `CMP-VC-UI-01` added «Сравнение версий»: 29 -> 30.
-    expect(routeAddresses().length).toBe(30);
-    expect(REGISTRY.length).toBe(30);
+    // `CMP-STAGE-PAIR-01` added «Сравнение стадий»: 30 -> 31.
+    expect(routeAddresses().length).toBe(31);
+    expect(REGISTRY.length).toBe(31);
   });
 
   it('has no page without a row and no row without a page', () => {

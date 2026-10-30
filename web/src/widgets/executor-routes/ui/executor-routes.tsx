@@ -3,8 +3,9 @@
 /**
  * «Назначения» (`EXEC-HTTP-01`, plan §2): which connection serves which kind of model work.
  *
- * Today exactly one stage calls a model, so there is one route, «Анализ текста». It names a
- * primary connection and, only if an administrator wants one, a standby.
+ * One run stage calls a model, «Анализ текста», and «Сравнение версий» has four kinds of model work of its
+ * own (`CMP-SEAL-C2`): each has a route. A route names a primary connection and, only if an administrator
+ * wants one, a standby.
  *
  * **Only a connection that can serve is offered.** A connection is selectable when its current
  * settings have a finished `ok` probe on the current key; every other connection is shown
@@ -47,8 +48,16 @@ export interface ExecutorRoutesProps {
   readonly roles: readonly Role[];
 }
 
-/** The kinds of model work that have a route editor. */
-const WORK_KINDS: readonly ExecutorWorkKind[] = ['text_analysis'];
+/** The kinds of model work that have a route editor: the one run stage that calls a model and, since
+ * `CMP-SEAL-C2`, the four kinds of model work of «Сравнение версий». */
+const WORK_KINDS: readonly ExecutorWorkKind[] = [
+  'text_analysis',
+  'comparison_pair_check',
+  'comparison_sheet_changes',
+  'comparison_spec',
+  'comparison_report',
+  'comparison_stage_review',
+];
 
 interface Choice {
   readonly connection: ExecutorConnection;
@@ -232,7 +241,11 @@ export function ExecutorRoutes({ roles }: ExecutorRoutesProps) {
         return (
           <section key={workKind} className="am-section" aria-label={WORK_KIND_LABELS[workKind]}>
             <h2>{WORK_KIND_LABELS[workKind]}</h2>
-            <p>Кто отвечает на запросы к модели на этапе «{WORK_KIND_LABELS[workKind]}».</p>
+            <p>
+              {workKind === 'text_analysis'
+                ? `Кто отвечает на запросы к модели на этапе «${WORK_KIND_LABELS[workKind]}».`
+                : `Кто отвечает на запросы к модели в задаче «${WORK_KIND_LABELS[workKind]}».`}
+            </p>
             <RouteSummary route={route} connections={items} />
             {live.length === 0 ? (
               <EmptyState

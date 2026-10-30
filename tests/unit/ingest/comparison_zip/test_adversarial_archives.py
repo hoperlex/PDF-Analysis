@@ -449,6 +449,16 @@ def test_macos_resource_forks_are_refused_not_skipped() -> None:
     assert refusal(build(pdf("a.pdf"), directory("__MACOSX/"))) == "comparison_zip_member_kind"
 
 
+@pytest.mark.parametrize("inside_nested", [False, True], ids=["outer", "nested"])
+def test_macos_resource_fork_hidden_in_unicode_path_is_refused(inside_nested: bool) -> None:
+    """A harmless raw header cannot hide the service prefix in a CRC-valid Unicode Path."""
+    raw_name = b"ordinary.pdf"
+    extra = unicode_path(raw_name, "__MACOSX/._ordinary.pdf")
+    member = entry(raw_name, PDF_HEADER, local_extra=extra, central_extra=extra)
+    archive = build(nested("inner.zip", member)) if inside_nested else build(member)
+    assert refusal(archive) == "comparison_zip_member_kind"
+
+
 def test_a_directory_entry_that_holds_bytes_is_refused() -> None:
     assert refusal(build(pdf("a.pdf"), entry("folder/", b"data"))) == "comparison_zip_member_kind"
 

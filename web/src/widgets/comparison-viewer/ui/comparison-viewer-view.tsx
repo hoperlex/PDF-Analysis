@@ -20,8 +20,10 @@ import type { TileRequest } from '../model/tile-loader';
 import { type ViewerAction, type ViewerContext, type ViewerState, filterOf, paneOf } from '../model/viewer-state';
 
 import { DifferenceList } from './difference-list';
+import { EvidenceBanner } from './evidence-banner';
+import type { EvidenceAction, EvidenceState } from './evidence-banner';
 import { ChannelStrip, HowCompared, ServiceNotes, TextChanges } from './evidence-panels';
-import { type BoxView, type PaneLayer, SheetPane } from './sheet-pane';
+import { type BoxView, type EvidenceBoxView, type PaneLayer, SheetPane } from './sheet-pane';
 import styles from './comparison-viewer.module.css';
 
 export interface ViewerNavigation {
@@ -37,8 +39,11 @@ export interface TileStatus {
   readonly retry: () => void;
 }
 
+export type ComparisonViewerData = Omit<ComparisonSheetPair, 'sheet_pair_id' | 'transition_id'>;
+
 export interface ComparisonViewerViewProps {
-  readonly pair: ComparisonSheetPair;
+  readonly pair: ComparisonViewerData;
+  readonly showEvidencePanels?: boolean;
   /** `null`: the pair has no sheet the viewer can draw (no canvas, no resolution, no size passed). */
   readonly geometry: ViewerGeometry | null;
   readonly context: ViewerContext;
@@ -49,6 +54,10 @@ export interface ComparisonViewerViewProps {
   readonly stageRef?: Ref<HTMLDivElement>;
   readonly paneHandlers?: HTMLAttributes<HTMLDivElement>;
   readonly dragging?: boolean;
+  /** `CMP-VC-UI-02`: the side panel «Изменения в листе» (a node handed in by the island) and the evidence it focused. */
+  readonly sidePanel?: ReactNode;
+  readonly evidence?: EvidenceState | null;
+  readonly onEvidence?: (action: EvidenceAction) => void;
 }
 
 const BADGE_TONE: Readonly<Record<string, string>> = {
@@ -84,7 +93,8 @@ function Choice({ checked, disabled, title, layer, onChange, children }: { check
 }
 
 export function ComparisonViewerView({
-  pair, geometry, context, state, tiles, dispatch, navigation, stageRef, paneHandlers, dragging,
+  pair, geometry, context, state, tiles, dispatch, navigation, stageRef, paneHandlers, dragging, sidePanel, evidence, onEvidence,
+  showEvidencePanels = true,
 }: ComparisonViewerViewProps) {
   const differences = pair.differences ?? [];
   const alignedBlocks = pair.how_compared?.aligned_blocks ?? 0;
@@ -116,6 +126,12 @@ export function ComparisonViewerView({
     const boxes: BoxView[] = differences.flatMap((difference, index) =>
       state.selected === index || (state.showBoxes && indices.includes(index)) ? [{ index, difference, selected: state.selected === index }] : [],
     );
+    const evidenceBoxes: EvidenceBoxView[] =
+      evidence === null || evidence === undefined
+        ? []
+        : evidence.items.flatMap((item, index) =>
+            evidence.all || index === evidence.index ? [{ id: item.id, box: item.box, current: index === evidence.index }] : [],
+          );
     const paneFor = (label: string, layers: PaneLayer[], divider?: number) => (
       <SheetPane
         key={label}
@@ -125,6 +141,7 @@ export function ComparisonViewerView({
         dpi={geometry.dpi}
         urlOf={tiles.urlOf}
         boxes={boxes}
+        evidence={evidenceBoxes}
         {...(divider === undefined ? {} : { divider })}
         {...(dragging === undefined ? {} : { dragging })}
         {...(paneHandlers === undefined ? {} : { handlers: paneHandlers })}
@@ -234,8 +251,11 @@ export function ComparisonViewerView({
       {notes.length === 0 ? null : (
         <ul className={styles.notes}>{notes.map((note) => <li key={note} className={styles.note}>{note}</li>)}</ul>
       )}
+      {evidence === null || evidence === undefined || onEvidence === undefined ? null : <EvidenceBanner evidence={evidence} onAction={onEvidence} />}
+      <div className={sidePanel === undefined ? undefined : `${styles.layout} ${styles.layoutWide}`} {...(sidePanel === undefined ? {} : { 'data-viewer-layout': 'with-panel' })}>
+      <div className={sidePanel === undefined ? undefined : styles.main}>
       {stage}
-      <div className={styles.panels}>
+      {showEvidencePanels ? <div className={styles.panels}>
         <ChannelStrip channels={pair.channels} reasons={pair.reasons ?? []} />
         <DifferenceList
           differences={differences}
@@ -252,6 +272,9 @@ export function ComparisonViewerView({
         />
         <ServiceNotes notes={pair.service_notes ?? []} />
         <HowCompared how={pair.how_compared} />
+      </div> : null}
+      </div>
+      {sidePanel}
       </div>
     </div>
   );

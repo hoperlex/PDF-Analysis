@@ -21,9 +21,13 @@
  *
  * The optional raised-limit choice is also part of the request and the intent. With the switch
  * off, both the signature and body keep their earlier shape for existing idempotency keys.
+ * A cost-approved start additionally pins the estimate digest and exact approved ceiling.
+ * Agreement gates submission; merely unchecking/rechecking an unchanged payload is still its retry.
  */
 
 import type { ExecutorConnectionId, PresetId, StartRunRequest, VersionUid } from '@/shared/api';
+
+export type RunCostConsent = NonNullable<StartRunRequest['cost_consent']>;
 
 export interface StartRunCommand {
   readonly versionUid: VersionUid;
@@ -35,6 +39,7 @@ export interface StartRunCommand {
   readonly presetId?: PresetId | undefined;
   /** The person explicitly chose the temporary raised-limit policy. Absent for the standard policy. */
   readonly relaxedLimits?: true | undefined;
+  readonly costConsent?: RunCostConsent | undefined;
 }
 
 export interface StartRunIntent {
@@ -54,6 +59,7 @@ export function startRunIntent(
   executorConnectionId: ExecutorConnectionId | null,
   presetId: PresetId | null = null,
   relaxedLimits = false,
+  costConsent?: RunCostConsent,
 ): StartRunIntent {
   const baseSignature =
     presetId !== null
@@ -61,12 +67,15 @@ export function startRunIntent(
       : executorConnectionId === null
         ? `start-run:${versionUid}`
         : `start-run:${versionUid}:executor:${executorConnectionId}`;
+  const selectedSignature = relaxedLimits ? `${baseSignature}:relaxed-limits` : baseSignature;
   return {
-    signature: relaxedLimits ? `${baseSignature}:relaxed-limits` : baseSignature,
+    signature: costConsent === undefined ? selectedSignature
+      : `${selectedSignature}:cost:${costConsent.estimate_digest}:${costConsent.ceiling_micros}:${costConsent.confirmed}`,
     command: (idempotencyKey) => ({
       versionUid,
       idempotencyKey,
       ...(relaxedLimits ? { relaxedLimits: true } : {}),
+      ...(costConsent === undefined ? {} : { costConsent }),
       ...(presetId !== null
         ? { presetId }
         : executorConnectionId === null
@@ -77,10 +86,11 @@ export function startRunIntent(
 }
 
 /** The request body of a command: `preset_id` or `executor_connection_id`, only when one was chosen. */
-export function startRunBody({ versionUid, executorConnectionId, presetId, relaxedLimits }: StartRunCommand): StartRunRequest {
+export function startRunBody({ versionUid, executorConnectionId, presetId, relaxedLimits, costConsent }: StartRunCommand): StartRunRequest {
   return {
     version_uid: versionUid,
     ...(relaxedLimits ? { relaxed_limits: true } : {}),
+    ...(costConsent === undefined ? {} : { cost_consent: costConsent }),
     ...(presetId !== undefined
       ? { preset_id: presetId }
       : executorConnectionId === undefined

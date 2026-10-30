@@ -5,7 +5,7 @@
 
 import type { HTMLAttributes, ReactElement, Ref } from 'react';
 
-import type { ComparisonDifference } from '@/shared/api';
+import type { ComparisonBox, ComparisonDifference } from '@/shared/api';
 
 import { boxToSheet } from '../model/pyramid';
 import type { Placed, SheetTiles } from '../model/requests';
@@ -26,6 +26,13 @@ export interface BoxView {
   readonly selected: boolean;
 }
 
+/** A place the AI description cites, in points on the canvas of the older page; the current one is drawn solid. */
+export interface EvidenceBoxView {
+  readonly id: string;
+  readonly box: ComparisonBox;
+  readonly current: boolean;
+}
+
 export interface SheetPaneProps {
   readonly label: string;
   readonly layers: readonly PaneLayer[];
@@ -33,6 +40,7 @@ export interface SheetPaneProps {
   readonly dpi: number;
   readonly urlOf: (request: TileRequest) => string | null;
   readonly boxes: readonly BoxView[];
+  readonly evidence?: readonly EvidenceBoxView[];
   /** A divider at this per cent of the pane's width. */
   readonly divider?: number;
   readonly dragging?: boolean;
@@ -61,7 +69,7 @@ function tileImage(placed: Placed, view: View, urlOf: (request: TileRequest) => 
   );
 }
 
-export function SheetPane({ label, layers, view, dpi, urlOf, boxes, divider, dragging, innerRef, handlers }: SheetPaneProps) {
+export function SheetPane({ label, layers, view, dpi, urlOf, boxes, evidence = [], divider, dragging, innerRef, handlers }: SheetPaneProps) {
   return (
     <div
       ref={innerRef}
@@ -90,6 +98,23 @@ export function SheetPane({ label, layers, view, dpi, urlOf, boxes, divider, dra
             key={index}
             className={selected ? `${styles.box} ${styles.boxSelected}` : styles.box}
             data-difference={index}
+            aria-hidden="true"
+            style={{
+              left: view.offsetX + box.left * view.zoom,
+              top: view.offsetY + box.top * view.zoom,
+              width: Math.max(2, box.width * view.zoom),
+              height: Math.max(2, box.height * view.zoom),
+            }}
+          />
+        );
+      })}
+      {evidence.map((item) => {
+        const box = boxToSheet(item.box, dpi);
+        return (
+          <div
+            key={item.id}
+            className={item.current ? `${styles.evidenceBox} ${styles.evidenceBoxCurrent}` : styles.evidenceBox}
+            data-evidence={item.id}
             aria-hidden="true"
             style={{
               left: view.offsetX + box.left * view.zoom,

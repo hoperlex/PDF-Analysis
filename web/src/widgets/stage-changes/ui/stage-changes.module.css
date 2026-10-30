@@ -1,0 +1,15 @@
+.changes, .cards { display: grid; gap: 1rem; }
+.card { border: 1px solid var(--am-border, #d5dce3); border-radius: .5rem; padding: 1rem; overflow-wrap: anywhere; }
+.card h4, .card h5 { margin: .5rem 0; }
+.cardHeader, .evidence > div, .save { display: flex; gap: .7rem; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+.sides, .counts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.sides section { min-width: 0; border-left: .2rem solid var(--am-border, #d5dce3); padding-left: .7rem; }
+.sides p { white-space: pre-wrap; }
+.counts { grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); }
+.counts dd { font-size: 1.4rem; margin: .4rem 0; }
+.verdict { display: grid; gap: .7rem; margin-top: 1rem; }
+.verdict label { display: flex; gap: .4rem; }
+.verdict label:has(textarea) { display: grid; }
+.verdict textarea { min-height: 5rem; max-width: 100%; }
+.warning, .note { border-left: .2rem solid var(--am-warning, #9a6700); padding-left: .6rem; }
+@media (max-width: 800px) { .sides, .counts { grid-template-columns: 1fr; } }

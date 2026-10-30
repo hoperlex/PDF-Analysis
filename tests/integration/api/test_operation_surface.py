@@ -126,6 +126,18 @@ def test_every_declared_operation_is_reachable(
         "comparison_series_id": "cser_01M2545JSD15ETSNNV904X991W",
         "comparison_transition_id": "ctn_01M2545JSD15ETSNNV904X991W",
         "comparison_sheet_pair_id": "ctp_01M2545JSD15ETSNNV904X991W",
+        # `CMP-SEAL-C2`: an AI job, a report and an entry of the launch queue.
+        "comparison_ai_job_id": "cai_01M2545JSD15ETSNNV904X991W",
+        "comparison_report_id": "crt_01M2545JSD15ETSNNV904X991W",
+        "comparison_launch_entry_id": "cle_01M2545JSD15ETSNNV904X991W",
+        # `CMP-SEAL-C3`: stage upload, pair, assembly, link revision and chain-run resources.
+        "stage_upload_id": "stu_01M2545JSD15ETSNNV904X991W",
+        "stage_upload_file_id": "suf_01M2545JSD15ETSNNV904X991W",
+        "stage_upload_candidate_id": "suc_01M2545JSD15ETSNNV904X991W",
+        "stage_pair_id": "stp_01M2545JSD15ETSNNV904X991W",
+        "stage_assembly_id": "sas_01M2545JSD15ETSNNV904X991W",
+        "stage_link_revision_id": "slk_01M2545JSD15ETSNNV904X991W",
+        "stage_chain_run_id": "crn_01M2545JSD15ETSNNV904X991W",
     }
     for operation_id, method, template in sorted(declared_operations(openapi_document)):
         path = template

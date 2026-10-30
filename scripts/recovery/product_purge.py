@@ -117,12 +117,21 @@ MIXED_TABLES = frozenset(("audit_event", "blob", "command_record"))
 #: every table that references it are named in the same statement.
 PRODUCT_TABLES = frozenset((
     "analysis_artifact_publication", "ar_v3_run_group", "ar_v3_run_group_member", "attempt",
-    "audit_run", "comparison_ai_link", "comparison_matrix", "comparison_matrix_edit", "comparison_model_call",
+    "audit_run", "comparison_ai_job", "comparison_ai_link", "comparison_ai_pair_answer", "comparison_ai_pair_question",
+    "comparison_ai_sheet_item", "comparison_launch_entry", "comparison_launch_queue", "comparison_matrix",
+    "comparison_matrix_edit", "comparison_model_call", "comparison_report", "comparison_report_artifact",
+    "comparison_report_part", "comparison_sheet_description", "comparison_spec_comparison", "comparison_spec_extraction",
     "comparison_page_profile", "comparison_series", "comparison_sheet_link", "comparison_sheet_pair",
     "comparison_sheet_pair_result", "comparison_transition",
     "comparison_summary", "comparison_upload", "comparison_upload_file", "comparison_upload_part",
     "comparison_upload_set", "comparison_version_order", "comparison_work",
     "comparison_work_attempt", "document", "document_version",
+    # `0041_comparison_stage_core`: every stage row belongs to a product project.
+    "stage_upload", "stage_upload_file", "stage_upload_part", "stage_upload_candidate",
+    "stage_assembly", "stage_assembly_member", "stage_pair", "stage_link_revision",
+    "stage_link_item", "stage_text_fragment", "stage_text_exclusion",
+    "stage_text_difference", "stage_text_hint", "stage_chain_run", "stage_chain_step",
+    'stage_ai_unit', 'stage_chain_batch', 'stage_chain_batch_item', 'stage_ai_review', 'stage_ai_classification', 'stage_ai_synthesis', 'stage_graphic_evidence', 'stage_link_repair', 'stage_link_repair_event', 'stage_change_card', 'stage_card_evidence', 'stage_card_verdict',
     "document_version_classification", "document_version_classification_correction",
     "executor_task", "expert_decision_event", "finding", "finding_evidence", "finding_observation",
     "finding_observation_norm_citation", "input_manifest_entry", "job", "lease", "model_call",
@@ -156,6 +165,11 @@ KEEP_COMMAND_TYPES = frozenset((
     "archive_analysis_preset", "create_analysis_preset", "revise_analysis_preset",
 ))
 PRODUCT_COMMAND_TYPES = frozenset((
+    "start_stage_review_ai", "resume_stage_review_ai", "cancel_stage_review_ai", "apply_stage_link_repair",
+    "resume_stage_chain_run", "start_stage_chain_batch", "pause_stage_chain_batch",
+    "resume_stage_chain_batch", "cancel_stage_chain_batch", "undo_stage_link_repair",
+    "apply_stage_card_verdicts",
+    "create_stage_review_card",
     "append_decision", "approve_sheet_pairing", "cancel_audit_run", "carry_over_decision",
     "create_project", "generate_comparison_summary",
     "decide_optimisation_proposal", "reaudit_run", "set_execution_paused", "set_job_priority",
@@ -181,14 +195,41 @@ PRODUCT_COMMAND_TYPES = frozenset((
     "apply_comparison_matrix_edits", "cancel_comparison_series", "finish_comparison_series",
     "pause_comparison_series", "prepare_comparison_matrix", "resume_comparison_series",
     "start_comparison_series", "undo_comparison_matrix_edit",
+    # `0040_comparison_ai_reports` (`CMP-SEAL-C2`): the receipts of the twenty-seven keyed writes of the version comparison
+    # AI, specifications, launch queue and reports, named as the snake case of the operationId.
+    "start_comparison_ai_pair_check", "pause_comparison_ai_pair_check", "resume_comparison_ai_pair_check",
+    "cancel_comparison_ai_pair_check", "start_comparison_ai_sheet_changes", "pause_comparison_ai_sheet_changes",
+    "resume_comparison_ai_sheet_changes", "cancel_comparison_ai_sheet_changes",
+    "finish_comparison_ai_sheet_changes", "dequeue_comparison_ai_sheet_changes",
+    "retry_comparison_ai_sheet_changes", "start_comparison_sheet_description", "start_comparison_specification",
+    "cancel_comparison_specification", "enqueue_comparison_launch", "pause_comparison_launch_queue",
+    "resume_comparison_launch_queue", "clear_comparison_launch_queue", "remove_comparison_launch_entry",
+    "create_comparison_report", "upload_comparison_report_source", "start_comparison_report",
+    "cancel_comparison_report", "continue_comparison_report", "rebuild_comparison_report_pdf",
+    "delete_comparison_report", "prepare_comparison_client_report",
+    # `CMP-SEAL-C3`: the sixteen keyed stage commands use product receipts.
+    "create_stage_upload", "upload_stage_upload_part", "complete_stage_upload_file",
+    "confirm_stage_upload_candidate", "reject_stage_upload_candidate", "pause_stage_upload",
+    "resume_stage_upload", "cancel_stage_upload", "confirm_stage_pair",
+    "create_stage_assembly", "revise_stage_assembly", "set_stage_pair_completeness",
+    "apply_stage_sheet_map", "recompute_stage_text_evidence", "start_stage_chain_run",
+    "cancel_stage_chain_run",
+    # Internal raw-multipart checkpoint of CMP-STAGE-PAIR-01. The public
+    # complete_stage_upload_file receipt follows PDF/ZIP admission later.
+    "stage_raw_completion",
 ))
 
-#: Work that is mid-flight in a worker. Queued work is discarded with the rest; work a worker is
-#: executing right now is not something to pull the rows from under.
+#: Work that may be executing or resumed. The C3 upload and chain rows are kept from a
+#: destructive purge until admission and execution have been stopped or cancelled.
 RUNNING_STATES = {
     "audit_run": ("running", "validating"),
     "job": ("leased", "running"),
     "attempt": ("leased", "running"),
+    "stage_upload": ("uploading", "admitting", "paused"),
+    "stage_upload_file": ("declared", "receiving", "received", "admitting"),
+    "stage_upload_candidate": ("confirmed", "admitting"),
+    "stage_chain_run": ("queued", "running", "paused"),
+    "stage_chain_step": ("queued", "running", "paused"),
 }
 
 TEMPORARY_KEY_PREFIX = "temporary/"

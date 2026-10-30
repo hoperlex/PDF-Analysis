@@ -69,6 +69,7 @@ import {
   LoadingState,
   NotApplicableState,
   RunStateBadge,
+  StageStatusBadge,
   runStageLabel,
   STATE_LABELS,
   COST_BASIS_LABELS,
@@ -76,10 +77,12 @@ import {
   PROVIDER_MODE_UNKNOWN_LABEL,
 } from '@/shared/ui';
 import styles from './run-progress.module.css';
+import { PdfPrecheckProgress } from './pdf-precheck-progress';
 
 import {
   AR_V3_BETA_PROFILE_ID,
   StageTable,
+  type StageRow,
   badgeProviderMode,
   costBasisCaption,
   diagnosticObservationCount,
@@ -116,6 +119,30 @@ function RunHolder({ runId }: { readonly runId: string }) {
 }
 
 const UNKNOWN_RUN_TITLE = 'Прогон содержит неизвестное значение.';
+
+/** The original-style rail displays only stages reported or scheduled for this Run. */
+function PipelineRail({ rows }: { readonly rows: readonly StageRow[] }) {
+  return (
+    <div className={styles.pipeline} role="list" aria-label="Этапы этого прогона" data-run-pipeline="">
+      {rows.map((row, index) => (
+        <div className={styles.pipelineItem} key={row.stageId} role="listitem">
+          <div
+            className={styles.pipelineStage}
+            data-pipeline-stage={row.stageId}
+            data-pipeline-status={row.status ?? 'not-reported'}
+          >
+            <span className={styles.pipelineOrdinal}>{row.ordinal === null ? '—' : String(row.ordinal).padStart(2, '0')}</span>
+            <span className={styles.pipelineName}>{runStageLabel(row.stageId)}</span>
+            <span className={styles.pipelineStatus}>
+              {row.status === null ? 'Не начинался' : <StageStatusBadge status={row.status} errorCode={row.errorCode} />}
+            </span>
+          </div>
+          {index === rows.length - 1 ? null : <span className={styles.pipelineArrow} aria-hidden="true">→</span>}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 /**
  * The second sentence of a published AR v3 beta Run (`R-146as`, `R-146ba`).
@@ -425,6 +452,9 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
         и остальные её прогоны перечислены там же.
       </p>
 
+      <h2>Этапы анализа</h2>
+      <PipelineRail rows={stageRows(status)} />
+
       <Outcome status={status} />
 
       {interrupted !== null && status.state !== 'failed' ? (
@@ -435,7 +465,9 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
 
       <Recorded status={status} />
 
-      <h2>Этапы</h2>
+      <PdfPrecheckProgress status={status} />
+
+      <h2>Подробности этапов</h2>
       <StageTable rows={stageRows(status)} />
 
       <h2>Разбор</h2>

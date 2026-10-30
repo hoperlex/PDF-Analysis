@@ -39,7 +39,7 @@
  * **How a section is analysed ({@link SectionAnalysis}).** Every one of the fifteen sections
  * now has an ordinary text profile. АР's package contains the original application's
  * source material. `analysedBy` records this route, while the API decides whether a
- * particular classified version can start a run. A unit test holds all fifteen codes
+ * particular classified version can start a run. A unit test holds every section code
  * to the packages on disk.
  *
  * **`W59-SECTION-UI-01`: names and order are the owner's, not this module's.** The names are

@@ -14,9 +14,13 @@ import { COMPARISON_KEYS } from '@/entities/version-series';
 
 import { seedError } from '../screens/harness';
 
+import { aiQueue, draftReport, hints, job, launchQueue, report, reviewSheets, sheetChanges, specification } from './ai-fixtures';
+
 import {
   DOCUMENT_UID,
   PROJECT_UID,
+  SERIES_ID,
+  TRANSITION_12,
   TRANSITION_23,
   V1,
   V2,
@@ -64,6 +68,8 @@ export interface Seed {
   readonly modules?: ProductVersion['comparison_modules'] | null;
   readonly projects?: boolean | 'error';
   readonly overview?: 'ok' | 'wired-not' | 'error' | 'none';
+  /** How many of the thirteen sets of the overview are read: a page that is not about the table needs a few (the census pays per element). */
+  readonly sets?: number;
   readonly sheets?: boolean;
 }
 
@@ -80,10 +86,14 @@ export function seedComparison(client: QueryClient, seed: Seed = {}): void {
     });
   }
   const mode = seed.overview ?? 'ok';
-  if (mode === 'ok') client.setQueryData(COMPARISON_KEYS.overview(PROJECT_UID), overview());
+  if (mode === 'ok') {
+    client.setQueryData(COMPARISON_KEYS.overview(PROJECT_UID), seed.sets === undefined ? overview() : overview({ sets: overview().sets.slice(0, seed.sets) }));
+    seedQueues(client);
+  }
   else if (mode === 'wired-not') seedError(client, COMPARISON_KEYS.overview(PROJECT_UID), refusal('dependency_unavailable', { dependency: 'comparison_overview' }));
   else if (mode === 'error') seedError(client, COMPARISON_KEYS.overview(PROJECT_UID), refusal('internal_error'));
   if (seed.sheets === true) {
+    seedAiSheets(client);
     client.setQueryData(COMPARISON_KEYS.matrix(PROJECT_UID, DOCUMENT_UID), matrix());
     client.setQueryData(COMPARISON_KEYS.edits(PROJECT_UID, DOCUMENT_UID), { items: edits(), page: { next_cursor: null } });
     client.setQueryData(COMPARISON_KEYS.seriesList(PROJECT_UID, DOCUMENT_UID), series());
@@ -94,6 +104,21 @@ export function seedComparison(client: QueryClient, seed: Seed = {}): void {
       page: { next_cursor: null },
     });
   }
+}
+
+/** The caches the AI layer of the set's second tab reads: the hints, the description's progress, the specifications, the reports. */
+export function seedAiSheets(client: QueryClient): void {
+  client.setQueryData(COMPARISON_KEYS.aiHints(PROJECT_UID, DOCUMENT_UID), hints());
+  client.setQueryData(COMPARISON_KEYS.aiSheets(SERIES_ID), sheetChanges({ job: job({ state: 'completed', counts: { total: 12, done: 11, failed: 1, unknown: 1 }, spend: { spent_micros: 3_100_000, reserved_micros: 0, calls: 13, unknown_calls: 1, input_tokens: 50_000, output_tokens: 7_000 } }) }));
+  client.setQueryData(COMPARISON_KEYS.specs(SERIES_ID), [specification(), specification({ transition_id: TRANSITION_23, method: 'sheet_ai', state: 'completed' })]);
+  client.setQueryData(COMPARISON_KEYS.reports(SERIES_ID), [report(), draftReport()]);
+  client.setQueryData(COMPARISON_KEYS.reviewSheets(TRANSITION_12), reviewSheets());
+}
+
+/** The two queues the first tab reads. */
+export function seedQueues(client: QueryClient): void {
+  client.setQueryData(COMPARISON_KEYS.launchQueue(PROJECT_UID), launchQueue());
+  client.setQueryData(COMPARISON_KEYS.aiQueue(), aiQueue());
 }
 
 export { queueSummary };

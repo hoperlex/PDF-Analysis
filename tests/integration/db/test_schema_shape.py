@@ -101,6 +101,15 @@ IMMUTABLE_TABLES = {
     "comparison_matrix",
     "comparison_matrix_edit",
     "comparison_ai_link",
+    # `0040_comparison_ai_reports`: the content-keyed pair-check answers, sheet descriptions and specification extractions
+    # and the stored files of a report are appended once and never changed.
+    "comparison_ai_pair_answer",
+    "comparison_sheet_description",
+    "comparison_spec_extraction",
+    "comparison_report_artifact",
+    # `0041_comparison_stage_core`: assembly acts, full maps and raw evidence are append-only.
+    "stage_assembly", "stage_assembly_member", "stage_link_revision", "stage_link_item",
+    "stage_text_fragment", "stage_text_exclusion", "stage_text_difference", "stage_text_hint",
 }
 
 
@@ -418,6 +427,58 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "page_a_profile_id": "cpr",
         "page_b_profile_id": "cpr",
         "mask_blob_id": "blob",
+        # `CMP-SEAL-C2`, migration 0040 (ADR-0025 decisions 2, 15, 19, 20): the identities of the version comparison AI,
+        # specifications, reports and launch queue and the columns that hold them -- a consented AI job (which a queue item, a
+        # specification comparison, a report and a launch entry name), the content-keyed pair-check answers a question and its
+        # reverse question use, a question, a sheet item, a content-keyed sheet description, a specification extraction (the two
+        # a comparison reads), a comparison, a report with its parts and files (and the analytic report a client report is
+        # prepared from), and a launch entry; the page a description names, the page a question hints at and who consented.
+        "comparison_ai_job_id": "cai",
+        "comparison_ai_pair_answer_id": "cpa",
+        "answer_id": "cpa",
+        "reverse_answer_id": "cpa",
+        "comparison_ai_pair_question_id": "cpq",
+        "comparison_ai_sheet_item_id": "csi",
+        "comparison_sheet_description_id": "csd",
+        "comparison_spec_extraction_id": "cse",
+        "extraction_a_id": "cse",
+        "extraction_b_id": "cse",
+        "comparison_spec_comparison_id": "cscp",
+        "comparison_report_id": "crt",
+        "prepared_from_report_id": "crt",
+        "comparison_report_part_id": "crpt",
+        "comparison_report_artifact_id": "cra",
+        "comparison_launch_entry_id": "cle",
+        "page_profile_id": "cpr",
+        "hint_version_uid": "ver",
+        "consented_by_user_uid": "usr",
+        # `CMP-SEAL-C3`, migration 0041: all stage identities and their cross-row references.
+        "stage_upload_id": "stu",
+        "stage_upload_file_id": "suf",
+        "stage_upload_candidate_id": "suc",
+        "source_blob_id": "blob",
+        "pdf_blob_id": "blob",
+        "stage_assembly_id": "sas",
+        "stage_assembly_member_id": "sam",
+        "reverses_member_id": "sam",
+        "stage_pair_id": "stp",
+        "left_document_uid": "doc",
+        "right_document_uid": "doc",
+        "stage_link_revision_id": "slk",
+        "base_revision_id": "slk",
+        "stage_link_item_id": "sli",
+        "left_profile_id": "cpr",
+        "right_profile_id": "cpr",
+        "stage_text_fragment_id": "stf",
+        "stage_text_exclusion_id": "ste",
+        "stage_text_difference_id": "std",
+        "stage_text_hint_id": "sth",
+        "left_fragment_id": "stf",
+        "right_fragment_id": "stf",
+        "source_fragment_id": "stf",
+        "target_fragment_id": "stf",
+        "stage_chain_run_id": "crn",
+        "stage_chain_step_id": "cst",
     }
     assert set(prefix_by_column.values()) <= {
         identity.prefix for identity in IDENTITY_TYPES_BY_ENTITY.values()

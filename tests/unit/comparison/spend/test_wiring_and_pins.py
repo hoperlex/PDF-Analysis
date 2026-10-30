@@ -56,16 +56,38 @@ def test_the_settler_marks_the_attempts_open_calls_and_says_whether_there_were_a
 # --- one door to a model --------------------------------------------------------------------------------------
 
 
+def _pull_adapter_delegations(tree: ast.AST) -> set[ast.Call]:
+    """The one call inside the crop publisher reached through the spend route."""
+    return {
+        call
+        for cls in ast.walk(tree)
+        if isinstance(cls, ast.ClassDef) and cls.name == "PublishedPullAdapter"
+        for method in cls.body
+        if isinstance(method, ast.FunctionDef) and method.name == "complete"
+        for call in ast.walk(method)
+        if isinstance(call, ast.Call)
+        and isinstance(call.func, ast.Attribute) and call.func.attr == "complete"
+        and isinstance(call.func.value, ast.Attribute)
+        and call.func.value.attr == "_adapter"
+        and isinstance(call.func.value.value, ast.Name)
+        and call.func.value.value.id == "self"
+    }
+
+
 def test_only_the_spend_wrapper_calls_an_adapter_in_the_comparison_context() -> None:
-    """No module of ``comparison`` calls ``.complete(...)`` but the wrapper (and the recorded summary seam, which holds
-    no client). A model call that skips the wrapper skips the journal, the consent and the ceilings."""
+    """Only the journalled caller reaches a model; its crop wrapper delegates once."""
     allowed = {COMPARISON / "spend" / "caller.py", COMPARISON / "summary_model.py", COMPARISON / "summaries.py"}
     offenders: list[str] = []
     for path in sorted(COMPARISON.rglob("*.py")):
         if path in allowed:
             continue
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "complete":
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        delegation = _pull_adapter_delegations(tree) if path == COMPARISON / "spend" / "pull_images.py" else set()
+        if path == COMPARISON / "spend" / "pull_images.py":
+            assert len(delegation) == 1
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "complete" and node not in delegation):
                 offenders.append(f"{path.relative_to(ROOT)}:{node.lineno}")
     assert offenders == []
 
@@ -85,8 +107,13 @@ def test_the_summary_seam_that_is_allowed_to_complete_holds_no_client() -> None:
 def test_the_wrapper_is_the_only_caller_of_an_adapter_inside_the_spend_package() -> None:
     callers = []
     for path in sorted((COMPARISON / "spend").glob("*.py")):
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "complete":
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        delegation = _pull_adapter_delegations(tree) if path.name == "pull_images.py" else set()
+        if path.name == "pull_images.py":
+            assert len(delegation) == 1
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "complete" and node not in delegation):
                 callers.append((path.name, node.lineno))
     # ``repository.complete`` is the journal's own statement; the adapter's call is on ``route.adapter``.
     adapter_calls = [c for c in callers if c[0] == "caller.py"]

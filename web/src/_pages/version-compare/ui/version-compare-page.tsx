@@ -9,7 +9,8 @@
  * со всеми версиями» opens the upload dialogs.
  *
  * **Composition only.** The tables and the matrix are `widgets/version-series`, the dialogs `widgets/comparison-upload`, the
- * viewer `widgets/comparison-viewer`; the viewer and the dialogs are sibling widgets, so this page is where they meet. What
+ * viewer `widgets/comparison-viewer` (with its side panel «Изменения в листе»), the window «Сформировать PDF-отчёт…»
+ * `widgets/comparison-report`; the viewer and the dialogs are sibling widgets, so this page is where they meet. What
  * is read and sent is `entities/version-series`.
  *
  * **The module.** `ProductVersion.comparison_modules` says whether «Сравнение версий» is served. A module that is off is
@@ -22,12 +23,13 @@ import { useState } from 'react';
 
 import type { DocumentUid, ProjectUid } from '@/shared/api';
 import { EmptyState, ErrorState, LoadingState, PageShell } from '@/shared/ui';
-import { classifyListingFailure } from '@/shared/lib';
+import { classifyListingFailure, routes } from '@/shared/lib';
 import { useMe } from '@/entities/account';
 import { useProjectList } from '@/entities/project';
 import { useProductVersion } from '@/entities/release';
 import { codeOf, useComparisonOverview, versionsModuleOn } from '@/entities/version-series';
 import { ComparisonViewer } from '@/widgets/comparison-viewer';
+import { ReportWindow } from '@/widgets/comparison-report';
 import { UploadDialog } from '@/widgets/comparison-upload';
 import type { UploadMode } from '@/widgets/comparison-upload';
 import { ModuleOffState, ProjectsAndStages, SheetsTab } from '@/widgets/version-series';
@@ -100,6 +102,8 @@ export function VersionComparePage({ initial }: VersionComparePageProps) {
       title="Сравнение версий"
       subtitle="Версии комплектов проекта: загрузка, разбор, сопоставление листов и сравнение соседних версий."
       actions={
+        <>
+        {product.data?.comparison_modules === 'versions,stages' ? <a className="am-button" href={routes.stageComparison()}>Сравнение стадий</a> : null}
         <button
           type="button"
           className="am-button"
@@ -115,6 +119,7 @@ export function VersionComparePage({ initial }: VersionComparePageProps) {
         >
           {UPLOAD_BUTTON}
         </button>
+        </>
       }
     >
       {projects.isPending ? <LoadingState what="проекты" /> : null}
@@ -172,7 +177,10 @@ export function VersionComparePage({ initial }: VersionComparePageProps) {
                 heading={heading}
                 mayEdit={mayAct}
                 renderViewer={({ pair, rasterSize, navigation }) => (
-                  <ComparisonViewer pair={pair} navigation={navigation} {...(rasterSize === undefined ? {} : { rasterSize })} />
+                  <ComparisonViewer pair={pair} navigation={navigation} changes={{ mayAct }} {...(rasterSize === undefined ? {} : { rasterSize })} />
+                )}
+                renderReport={({ series, names, mayAct: allowed, onClose }) => (
+                  <ReportWindow series={series} names={names} mayAct={allowed} onClose={onClose} />
                 )}
               />
             )}

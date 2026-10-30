@@ -147,6 +147,14 @@ export const SCREEN_REGISTRY = [
     inMenu: true,
   },
   {
+    address: '/stage-comparison',
+    label: 'Сравнение стадий',
+    group: 'work',
+    access: 'session',
+    roles: 'any-role',
+    inMenu: false,
+  },
+  {
     address: '/projects/[project_uid]',
     label: 'Проект',
     group: 'work',

@@ -10,7 +10,8 @@ result, and the parent stores it as ``needs_review`` with reason ``RENDER_FAILED
 **Nothing from the product is imported.** Started with ``-I``, no environment variable, user site or working directory
 reaches the import path. After the ceilings are set the directory of this file is loaded as a package under a private
 name (``_amc_engine``) and the mask codec that lies beside it is loaded beside that package; both import only the
-standard library, ``numpy``, ``cv2`` and ``pypdfium2``.
+standard library, ``numpy``, ``cv2`` and ``pypdfium2``. The positions of a specification are read by two pure modules of the
+sibling package ``specification`` (``table`` and ``diff``, the standard library only), loaded the same way under ``_amc_spec``.
 
 The thread pools are shut before ``numpy`` is imported: with the defaults an import of ``numpy`` and ``cv2`` reserves
 about 1.5 GiB of address space (a thread arena for each core), which is more than the whole ceiling.
@@ -106,6 +107,11 @@ def main(argv: list[str]) -> int:
     try:
         _load("_amc_engine", os.path.join(here, "__init__.py"), package_dir=here)
         _load("_amc_engine._mask_codec", os.path.join(os.path.dirname(here), "mask_codec.py"))
+        # The positions of a specification (``CMP-VC-SPEC-01``): two pure modules (the standard library only) of the sibling package.
+        spec_dir = os.path.join(os.path.dirname(os.path.dirname(here)), "specification")
+        _load("_amc_spec", os.path.join(spec_dir, "__init__.py"), package_dir=spec_dir)
+        importlib.import_module("_amc_spec.table")
+        importlib.import_module("_amc_spec.diff")
         job = importlib.import_module("_amc_engine.job")
         facts = job.run(settings)
     except MemoryError:

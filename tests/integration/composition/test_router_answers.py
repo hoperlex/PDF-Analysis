@@ -76,7 +76,54 @@ _STUB_PAIR = "/comparison-sheet-pairs/ctp_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 #: removes their four paths: an absent project, document, series, transition or pair is `404`.
 #: `CMP-VC-OVERVIEW-01` serves the overview and the queue summary and empties this set: an absent project is `404`, and
 #: the queue summary answers `200`, like every other GET of the sweep.
-SEALED_STUB_GETS: frozenset[str] = frozenset()
+#: `CMP-SEAL-C2` (ADR-0025 decision 25) names the twenty-three reads of the version comparison AI, specifications, launch
+#: queue and reports as sealed stubs, each answering exactly `503 dependency_unavailable` (`comparison_modules` while the
+#: versions module is off, as it is in this sweep, and the lane's class name once it is on) until its lane wires the port
+#: (`CMP-VC-AIPAIR-01`, `CMP-VC-AISHEET-01`, `CMP-VC-SPEC-01`, `CMP-VC-QUEUE-01`, `CMP-VC-REPORT-01`); the lane that wires
+#: one removes its path from this set, and the read then meets the sweep's ordinary rule. Each path is filled the way the
+#: sweep fills it: well-formed identities that name nothing.
+_STUB_SERIES = "/comparison-series/cser_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+_STUB_TRANSITION = "/comparison-transitions/ctn_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+_STUB_REPORT = "/comparison-reports/crt_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+# `CMP-SEAL-C3`: the sixteen stage reads refuse through typed module stubs until
+# their lanes serve them. Probe each with a valid identity so a 422 cannot mask a stub.
+_STUB_STAGE_PAIR = "/stage-pairs/stp_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+_STUB_STAGE_REVISION = "/stage-link-revisions/slk_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+SEALED_STUB_GETS: frozenset[str] = frozenset({
+    f"/projects/{_PRJ}/stage-pair-suggestions",
+    f"/projects/{_PRJ}/stage-pairs",
+    f"/projects/{_PRJ}/stage-uploads",
+    "/stage-chain-runs/crn_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+    _STUB_STAGE_REVISION,
+    f"{_STUB_STAGE_REVISION}/raw-differences",
+    f"{_STUB_STAGE_REVISION}/text-exclusions",
+    f"{_STUB_STAGE_REVISION}/text-hints",
+    _STUB_STAGE_PAIR,
+    f"{_STUB_STAGE_PAIR}/chain-runs",
+    f"{_STUB_STAGE_PAIR}/sheet-map",
+    f"{_STUB_STAGE_PAIR}/sheet-map/revisions",
+    f"{_STUB_STAGE_PAIR}/sheet-passports",
+    f"{_STUB_STAGE_PAIR}/sheet-suggestions",
+    f"{_STUB_STAGE_PAIR}/text-fragments",
+    "/stage-uploads/stu_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+})
+#: The versions module is on in this sweep. The served sheet and report reads answer `404 not_found`
+#: for an absent identity; the companion absent-parent sweep checks their module-off refusal separately.
+MODULE_GATED_GETS: frozenset[str] = frozenset({
+    f"/projects/{_PRJ}/comparison-launch-queue",
+    f"{_STUB_SERIES}/summary-md",
+    f"{_STUB_SERIES}/reports",
+    _STUB_REPORT,
+    f"{_STUB_REPORT}/pdf",
+    f"{_STUB_REPORT}/source-md",
+    f"{_STUB_SERIES}/ai-sheet-changes/estimate",
+    f"{_STUB_SERIES}/ai-sheet-changes",
+    f"{_STUB_PAIR}/description",
+    f"{_STUB_PAIR}/description-history",
+    f"{_STUB_PAIR}/description/estimate",
+    f"{_STUB_PAIR}/description/md",
+    f"{_STUB_TRANSITION}/review-sheets",
+})
 #: `CMP-PROFILE-01` serves the five page reads (`/versions/{ver}/page-profiles`, `/page-profiles/{cpr}` and
 #: its `preview`, `thumbnail` and `tile`) and removes them from the set above: an absent `cpr_` is `404`.
 #: The tile's `level`, `column` and `row` are required, so the sweep gives it a well-formed query that
@@ -87,7 +134,7 @@ SEALED_STUB_QUERY: dict[str, str] = {f"{_STUB_PROFILE}/tile": "?level=0&column=0
 #: leaves `SEALED_STUB_GETS`; the query stays, because the sweep still needs it to read the path and not the query.
 SEALED_STUB_QUERY[f"{_STUB_PAIR}/tile"] = "?mode=overlay&level=0&column=0&row=0"
 NORM_VERIFICATION_OF_AN_ABSENT_RUN = "/runs/run_01ARZ3NDEKTSV4RRFFQ69G5FAV/norm-verification"
-WORKER_GETS = frozenset({"/execution/workers"})
+WORKER_GETS = frozenset({"/execution/workers", "/execution/comparison-ai-queue"})
 
 _STATIC_TOKEN_CACHE: str | None = None
 
@@ -131,7 +178,8 @@ class Composed:
 @pytest.fixture(scope="module")
 def app() -> Composed:
     assert os.environ.get("DATABASE_URL"), "this suite needs the lane's .env loaded"
-    environ = dict(os.environ) | {API_TOKEN_VARIABLE: DEPLOYMENT_SECRET}
+    # The versions module is served (`CMP-SEAL-C2` section 8): a wired comparison read of wave C2 refuses first while it is off.
+    environ = dict(os.environ) | {API_TOKEN_VARIABLE: DEPLOYMENT_SECRET, "AUDITMANAGER_COMPARISON_MODULES": "versions"}
     application = create_app(environ=environ)
     asgi = create_asgi_app(environ=environ, application=application)
     return Composed(application, TestClient(asgi, raise_server_exceptions=False))
@@ -250,6 +298,7 @@ class TestNoOperationAnswersWithAServerFault:
         assert len(probes) >= 5, f"the sweep found too few GET routes: {probes}"
         assert RELEASE_GETS <= {path for _method, path in probes}
         assert SEALED_STUB_GETS <= {path for _method, path in probes}
+        assert MODULE_GATED_GETS <= {path for _method, path in probes}
         assert NORM_VERIFICATION_OF_AN_ABSENT_RUN in {path for _method, path in probes}
         assert WORKER_GETS <= {path for _method, path in probes}
         faults = []
@@ -266,6 +315,11 @@ class TestNoOperationAnswersWithAServerFault:
             elif path in SEALED_STUB_GETS:
                 if status != 503 or not isinstance(body, dict) or (
                     body.get("error_code") != "dependency_unavailable"
+                ):
+                    faults.append((path, status, body))
+            elif path in MODULE_GATED_GETS:
+                if status != 404 or not isinstance(body, dict) or (
+                    body.get("error_code") != "not_found"
                 ):
                     faults.append((path, status, body))
             elif status >= 500:
@@ -295,6 +349,15 @@ def _absent_identity(parameter: str) -> str:
         "comparison_series_id": "cser",
         "comparison_transition_id": "ctn",
         "comparison_sheet_pair_id": "ctp",
+        # `CMP-SEAL-C2`: so a path of the AI, specification, queue and report operations reaches its stub.
+        "comparison_ai_job_id": "cai",
+        "comparison_report_id": "crt",
+        "comparison_launch_entry_id": "cle",
+        # `CMP-SEAL-C3`: stage reads must reach their module stubs.
+        "stage_upload_id": "stu",
+        "stage_pair_id": "stp",
+        "stage_link_revision_id": "slk",
+        "stage_chain_run_id": "crn",
     }
     return f"{prefixes.get(parameter, 'prj')}_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 

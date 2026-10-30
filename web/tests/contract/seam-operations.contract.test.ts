@@ -102,11 +102,16 @@ describe('the seam operations', () => {
     // `approveRegistration` (`W49-SEAL-01`) creates an account, so it is keyed like every
     // other create on this surface.
     expect(writes).toEqual([
+      // `CMP-SEAL-C2`: the twenty-seven keyed writes of the version comparison AI, specifications, launch queue and reports
+      // (ADR-0025 decision 19) sit in this list in sorted order, among the others.
       // `CMP-SEAL-C0`: the ten keyed comparison writes (ADR-0025 decision 19) sit in this list in order.
       'appendComparisonVersionOrder',
       'appendDecision',
       // `CMP-SEAL-C1`: the eight keyed writes of the version comparison core (ADR-0025 decision 19) sit in this list in order.
       'applyComparisonMatrixEdits',
+      // `CMP-SEAL-C3`: all sixteen stage writes are keyed expert commands, including
+      // the resumable part receipt and cancellation controls.
+      'applyStageSheetMap',
       'approveRegistration',
       // `COMPARE-PERSISTED-SUMMARY-01`: approving a sheet pairing appends a row of the
       // comparison's history, keyed like `carryOverDecision`.
@@ -116,22 +121,40 @@ describe('the seam operations', () => {
       // the contract, so this list follows it and does not lead it.
       'archiveAnalysisPreset',
       'archiveExecutorConnection',
+      'cancelComparisonAiPairCheck',
+      'cancelComparisonAiSheetChanges',
+      'cancelComparisonReport',
       'cancelComparisonSeries',
+      'cancelComparisonSpecification',
       'cancelComparisonUpload',
       'cancelRun',
+      'cancelStageChainRun',
+      'cancelStageUpload',
       // `W59-DECISION-CARRYOVER-01`: the carryover appends a decision, keyed like `appendDecision`.
       'carryOverDecision',
+      'clearComparisonLaunchQueue',
       'completeComparisonUploadFile',
+      'completeStageUploadFile',
       'confirmComparisonUploadSet',
+      'confirmStagePair',
+      'confirmStageUploadCandidate',
+      'continueComparisonReport',
       // `ANALYSIS-PRESETS-01`: saving, revising and archiving a preset each append a revision, keyed
       // like the executor writes (a preset is executor configuration).
       'createAnalysisPreset',
+      'createComparisonReport',
       'createComparisonUpload',
       'createExecutorConnection',
       'createProject',
+      'createStageAssembly',
+      'createStageUpload',
       // `W60-OPT-PROPOSALS-01`: a decision on a proposal is appended, keyed like `appendDecision`.
       'decideOptimisationProposal',
+      'deleteComparisonReport',
+      'dequeueComparisonAiSheetChanges',
+      'enqueueComparisonLaunch',
       'excludeComparisonUploadSet',
+      'finishComparisonAiSheetChanges',
       // `COMPARE-PERSISTED-SUMMARY-01` (B2): the summary command is keyed like the other expert writes.
       'finishComparisonSeries',
       'generateComparisonSummary',
@@ -140,35 +163,59 @@ describe('the seam operations', () => {
       // the other executor writes. The runner's own four operations (claim, extend, answer, fail)
       // are not keyed: the answer is idempotent on the task, and a claim repeats by design.
       'issueRunnerToken',
+      'pauseComparisonAiPairCheck',
+      'pauseComparisonAiSheetChanges',
+      'pauseComparisonLaunchQueue',
       'pauseComparisonSeries',
       'pauseComparisonUpload',
+      'pauseStageUpload',
+      'prepareComparisonClientReport',
       'prepareComparisonMatrix',
       'reauditRun',
+      'rebuildComparisonReportPdf',
+      'recomputeStageTextEvidence',
+      'rejectStageUploadCandidate',
+      'removeComparisonLaunchEntry',
       'requestExecutorProbe',
+      'resumeComparisonAiPairCheck',
+      'resumeComparisonAiSheetChanges',
+      'resumeComparisonLaunchQueue',
       'resumeComparisonSeries',
       'resumeComparisonUpload',
+      'resumeStageUpload',
+      'retryComparisonAiSheetChanges',
       'retryComparisonUploadSet',
       'reviseAnalysisPreset',
       'reviseExecutorConnection',
+      'reviseStageAssembly',
       'revokeRunnerToken',
       'setExecutionPaused',
       'setExecutorRoute',
       'setExecutorSecret',
       'setJobPriority',
+      'setStagePairCompleteness',
       // `W54-SEAL-01`: the worker intake switch is keyed like the other execution controls.
       'setWorkerIntake',
       'startArV3BetaGroup',
+      'startComparisonAiPairCheck',
+      'startComparisonAiSheetChanges',
+      'startComparisonReport',
       // `W60-OPT-PROPOSALS-01`: a pass stores a pass and its proposals, keyed like a run start.
       'startComparisonSeries',
+      'startComparisonSheetDescription',
+      'startComparisonSpecification',
       'startOptimisationPass',
       'startRun',
+      'startStageChainRun',
       'undoComparisonMatrixEdit',
+      'uploadComparisonReportSource',
       'uploadComparisonUploadPart',
       'uploadDocument',
       // `W59-VERSION-UPLOAD-01`: the next version of a document is keyed like the first.
       'uploadDocumentVersion',
       // `W60-PRICE-LIST-01`: a price-list upload stores a file and a revision, keyed like an upload.
       'uploadPriceList',
+      'uploadStageUploadPart',
       // `COMPARE-PERSISTED-SUMMARY-01`: ending a sheet link appends a row too, keyed like its approval.
       'withdrawSheetPairing',
     ]);

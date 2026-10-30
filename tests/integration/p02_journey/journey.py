@@ -210,6 +210,28 @@ P02_TABLES = (
     "comparison_transition",
     "comparison_sheet_pair_result",
     "comparison_sheet_pair",
+    # `0040_comparison_ai_reports` (`CMP-SEAL-C2`). The consented AI jobs, the content-keyed pair-check answers and sheet
+    # descriptions, the questions and sheet items, the specification extractions and comparisons, the reports with their
+    # parts and files, and the launch queue with its entries. Their operations are sealed stubs and nothing under this
+    # directory names them, so each count is expected unchanged across a replay -- counted rather than skipped.
+    "comparison_ai_job",
+    "comparison_ai_pair_answer",
+    "comparison_ai_pair_question",
+    "comparison_sheet_description",
+    "comparison_ai_sheet_item",
+    "comparison_spec_extraction",
+    "comparison_spec_comparison",
+    "comparison_report",
+    "comparison_report_part",
+    "comparison_report_artifact",
+    "comparison_launch_queue",
+    "comparison_launch_entry",
+    # `0041_comparison_stage_core` (`CMP-SEAL-C3`): all operations remain module-gated
+    # stubs, so a P02 replay counts these persisted families as unchanged.
+    "stage_upload", "stage_upload_file", "stage_upload_part", "stage_upload_candidate",
+    "stage_assembly", "stage_assembly_member", "stage_pair", "stage_link_revision",
+    "stage_link_item", "stage_text_fragment", "stage_text_exclusion",
+    "stage_text_difference", "stage_text_hint", "stage_chain_run", "stage_chain_step",
     # `0037_analysis_presets` (`ANALYSIS-PRESETS-01`). Named executor selections for a run start,
     # append-only (archive is a new revision). Written only by the preset commands (create,
     # revise, archive; administrator role); the journey starts runs by hand and never creates a

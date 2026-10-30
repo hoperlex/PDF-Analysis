@@ -58,6 +58,7 @@ import {
   uid,
 } from './fixtures';
 import { READER, refusal, seedComparison } from './seed';
+import { projectsProps } from './shapes';
 
 const noop = (): void => undefined;
 const LATIN = /[A-Za-z]/;
@@ -76,13 +77,8 @@ function text(markup: string): string {
 
 // ------------------------------------------------------------------------------ «Проекты и этапы»
 
-function projectsProps(over: Partial<ProjectsAndStagesViewProps> = {}): ProjectsAndStagesViewProps {
-  return {
-    overview: overview(), view: INITIAL_VIEW, onView: noop, mayAct: true, busy: false, confirming: null, failure: null,
-    onRefresh: noop, onOpen: noop, onAct: noop, onConfirmRestart: noop, onCancelRestart: noop, ...over,
-  };
-}
-const projects = (over: Partial<ProjectsAndStagesViewProps> = {}): string => renderToStaticMarkup(createElement(ProjectsAndStagesView, projectsProps(over)));
+const projects = (over: Partial<ProjectsAndStagesViewProps> = {}): string =>
+  renderScreen(newClient(), createElement(ProjectsAndStagesView, projectsProps(over)));
 
 describe('«Проекты и этапы»', () => {
   it('draws the counters, the totals, the search, the filters, «Обновить» with the time, and the legend', () => {
@@ -114,16 +110,15 @@ describe('«Проекты и этапы»', () => {
     expect(searched).toMatch(/data-overview-filter="failed"[^>]*><span[^>]*>1</);
   });
 
-  it('has the table «Проект · следующий шаг», «Версии» and the steps 1, 2, 3 and 5, and says steps 4, 6 and 7 are not there', () => {
+  it('has the table «Проект · следующий шаг», «Версии» and all seven steps in the original\'s order', () => {
     const t = text(projects());
-    for (const header of ['Проект · следующий шаг', 'Версии', '1 Загрузка', '2 Разбор версий', '3 Сопоставление листов', '5 Сравнение соседних']) {
+    for (const header of ['Проект · следующий шаг', 'Версии', '1 Загрузка', '2 Разбор версий', '3 Сопоставление листов', '4 ИИ-проверка сомнительных пар', '5 Сравнение соседних', '6 ИИ-описание изменений', '7 Сводка и отчёт']) {
       expect(t, header).toContain(header);
     }
-    // the headers only: a chip may name a step of wave C2 in words («ИИ-проверка сомнительных пар») without being its column
     const headers = (projects().match(/<th scope="col"[\s\S]*?<\/th>/g) ?? []).map(text).join('|');
-    for (const missing of ['4 ИИ-проверка сомнительных пар', '6 ИИ-описание изменений', '7 Сводка и отчёт']) expect(headers, missing).not.toContain(missing);
-    expect(headers).toContain('5 Сравнение соседних');
-    expect(t).toContain('Шаги 4 «ИИ-проверка сомнительных пар», 6 «ИИ-описание изменений» и 7 «Сводка и отчёт» появятся позже');
+    const order = ['1 Загрузка', '2 Разбор версий', '3 Сопоставление листов', '4 ИИ-проверка сомнительных пар', '5 Сравнение соседних', '6 ИИ-описание изменений', '7 Сводка и отчёт'];
+    expect(order.map((header) => headers.indexOf(header))).toEqual([...order.map((header) => headers.indexOf(header))].sort((x, y) => x - y));
+    expect(t).not.toContain('появятся позже');
   });
 
   it('puts every state word of the original in a cell and a next-step chip on the rows that have one', () => {
@@ -425,7 +420,8 @@ describe('«Сравнение листов»', () => {
 
   it('writes no Latin word a reader would read', () => {
     const readable = text(sheets({ draft: DRAFT, dropped: [{ kind: 'unlink', page: page(V2, 40) }] }));
-    expect(readable).not.toMatch(LATIN);
+    // «MD» is the original's name of the file of the summary (a permitted name of the language guard)
+    expect(readable.replace(/\(MD\)/g, '')).not.toMatch(LATIN);
   });
 });
 

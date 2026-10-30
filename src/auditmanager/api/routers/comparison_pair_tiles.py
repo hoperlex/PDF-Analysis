@@ -1,11 +1,11 @@
-"""One tile of a sheet pair's overlay or of one of its pages, sealed as a stub (`CMP-SEAL-C1`,
+"""One tile of a sheet pair's overlay or of one of its pages (`CMP-SEAL-C1` sealed it, `CMP-VIEWER-01` serves it;
 ADR-0025 decision 9).
 
 ``streamComparisonPairTile`` answers a PNG addressed by ``mode`` (``overlay``, ``a`` or ``b``),
 ``level``, ``column`` and ``row``; ``layers`` (a comma-separated list of layer names) chooses the difference layers of an
 overlay and ``align_blocks`` aligns the recognised blocks of the newer page onto the older one
 without changing the PDF. The API never loads PDFium: it reduces what the worker stored. Any one
-role. Answers ``503 dependency_unavailable`` until `CMP-VIEWER-01` wires the port.
+role.
 """
 
 from __future__ import annotations

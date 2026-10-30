@@ -801,6 +801,27 @@
       "follow": null
     },
     {
+      "name": "stage-compare",
+      "path": "/stage-comparison",
+      "page_module": "web/src/app/stage-comparison/page.tsx",
+      "$comment": [
+        "«Сравнение стадий» (CMP-STAGE-PAIR-01) reads projects, account roles and module state on a cold route.",
+        "A single visible project opens its confirmed pair catalog and nonbinding suggestions. A reader with several",
+        "projects chooses one before those operations are sent. Confirming a pair is an explicit expert action."
+      ],
+      "expects_api": [
+        {"method": "GET", "path": "/projects", "operationId": "listProjects"},
+        {"method": "GET", "path": "/me", "operationId": "getMe"}
+      ],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "the shell reads release notes for an active complete session"},
+        {"method": "GET", "path": "/system/version", "operationId": "getProductVersion", "$why_optional": "the screen checks whether the stages module is on"},
+        {"method": "GET", "path": "/projects/{project_uid}/stage-pairs", "operationId": "listStagePairs", "$why_optional": "read after a project is selected, automatically for exactly one project"},
+        {"method": "GET", "path": "/projects/{project_uid}/stage-pair-suggestions", "operationId": "listStagePairSuggestions", "$why_optional": "read after a project is selected, automatically for exactly one project"}
+      ],
+      "follow": null
+    },
+    {
       "name": "version-comparison",
       "path": "/version-comparison",
       "page_module": "web/src/app/version-comparison/page.tsx",
@@ -973,10 +994,10 @@
         "optimisation passes and proposals -- and the Form-7 of the АР section exist for АР only (a set of another",
         "section is answered `section_not_ar`), and the specification and the passes read the saved page text of",
         "the newest PUBLISHED run of an АР version. That run used to be an АР v1 run started with «Запустить прогон».",
-        "PROD-11-AR-V1-V2-REMOVAL-01 removed it: `startRun` refuses an АР version (`section_profile_unavailable`),",
-        "an АР version can start only the v3 group, and that group needs an installed reviewed pack (`D-204`) and,",
-        "in recorded mode, a provider binding with a verifiable cost (`D-225` piece 2) before it publishes. Until",
-        "a published АР run can exist, every step of `steps` carries `pending_v3_activation: true`: the driver",
+        "PROD-11-AR-V1-V2-REMOVAL-01 originally removed that start; the historical six-check group still needs",
+        "an installed reviewed pack (`D-204`) and recorded provider prerequisites. Owner dev3821261a restores",
+        "an ordinary original-source АР text profile, but does not rebase or activate these historical fixtures.",
+        "Every step of `steps` therefore retains its explicit `pending_v3_activation: true`: the driver",
         "(`write.mjs`) does NOT run it, prints `PENDING <step> ... NOT RUN: <reason>` for each, counts it as",
         "pending and not as checked, and ends `OK WITH PENDING` and never plain `OK`; `verify-acceptance.mjs`",
         "refuses an envelope with pending steps. Nothing is deleted: removing the mark is how a step is",
@@ -985,10 +1006,10 @@
         "that is not listed.",
         "`steps` is every step that may name АР. `needs_published_run` is the subset that cannot pass without a",
         "published АР run, directly or through the pass it produced (read from the steps' own expectations, not",
-        "measured). `registry_pins` name the АР ROW of the profile registry, which has no profile now (the row",
-        "reads `data-profile=\"none\"`, `data-profile-absent=\"ar-v3\"`); that step still runs."
+        "measured). `registry_pins` name the АР ROW of the profile registry; after owner dev3821261a it reads",
+        "`data-profile=\"draft\"` and requires expert review. That read-only step still runs."
       ],
-      "pending_v3_activation_reason": "no published АР run can exist: startRun refuses АР (section_profile_unavailable) and the six-run АР v3 group needs an installed reviewed pack (D-204)",
+      "pending_v3_activation_reason": "historical AR-bound fixtures remain explicitly pending after ordinary original-source АР profile restoration; fixture rebasing and browser activation are not performed here; historical six-check reviewed-pack prerequisites (D-204) remain unchanged",
       "steps": [
         "upload-ar-set-without-a-table",
         "classify-ar-set-without-a-table",
@@ -1282,12 +1303,25 @@
         "control_module": "web/src/features/start-run/ui/start-run-control.tsx",
         "actions": [
           {
+            "do": "approve_run_cost",
+            "scope": "run",
+            "value": "{version_uid}",
+            "bound_ms": 30000
+          },
+          {
             "do": "click",
             "selector": "button",
             "text": "Запустить прогон"
           }
         ],
         "expects_api": [
+          {
+            "method": "POST",
+            "path": "/runs/cost-estimate",
+            "operationId": "estimateRunCost",
+            "expect_status": 200,
+            "count": 1
+          },
           {
             "method": "POST",
             "path": "/runs",
@@ -1350,6 +1384,23 @@
         ],
         "forbids_rendered": [
           "[data-run-failure]"
+        ],
+        "expects_request": [
+          {
+            "of": "estimateRunCost",
+            "content_type_starts_with": "application/json",
+            "body_contains": [
+              "\"version_uid\""
+            ]
+          },
+          {
+            "of": "startRun",
+            "requires_idempotency_key": true,
+            "body_contains": [
+              "\"cost_consent\"",
+              "\"confirmed\":true"
+            ]
+          }
         ]
       },
       {
@@ -1674,12 +1725,25 @@
         ],
         "actions": [
           {
+            "do": "approve_run_cost",
+            "scope": "run",
+            "value": "{version_uid}",
+            "bound_ms": 30000
+          },
+          {
             "do": "click",
             "selector": "button",
             "text": "Запустить прогон"
           }
         ],
         "expects_api": [
+          {
+            "method": "POST",
+            "path": "/runs/cost-estimate",
+            "operationId": "estimateRunCost",
+            "expect_status": 200,
+            "count": 1
+          },
           {
             "method": "POST",
             "path": "/runs",
@@ -1736,7 +1800,24 @@
           "[data-run-failure]"
         ],
         "screen": "version-run",
-        "case": "action"
+        "case": "action",
+        "expects_request": [
+          {
+            "of": "estimateRunCost",
+            "content_type_starts_with": "application/json",
+            "body_contains": [
+              "\"version_uid\""
+            ]
+          },
+          {
+            "of": "startRun",
+            "requires_idempotency_key": true,
+            "body_contains": [
+              "\"cost_consent\"",
+              "\"confirmed\":true"
+            ]
+          }
+        ]
       },
       {
         "name": "compare-versions-read-only",
@@ -2037,12 +2118,25 @@
         ],
         "actions": [
           {
+            "do": "approve_run_cost",
+            "scope": "run",
+            "value": "{version_uid}",
+            "bound_ms": 30000
+          },
+          {
             "do": "click",
             "selector": "button",
             "text": "Запустить прогон"
           }
         ],
         "expects_api": [
+          {
+            "method": "POST",
+            "path": "/runs/cost-estimate",
+            "operationId": "estimateRunCost",
+            "expect_status": 200,
+            "count": 1
+          },
           {
             "method": "POST",
             "path": "/runs",
@@ -2084,7 +2178,24 @@
           "[data-run-failure]"
         ],
         "screen": "version-run",
-        "case": "action"
+        "case": "action",
+        "expects_request": [
+          {
+            "of": "estimateRunCost",
+            "content_type_starts_with": "application/json",
+            "body_contains": [
+              "\"version_uid\""
+            ]
+          },
+          {
+            "of": "startRun",
+            "requires_idempotency_key": true,
+            "body_contains": [
+              "\"cost_consent\"",
+              "\"confirmed\":true"
+            ]
+          }
+        ]
       },
       {
         "name": "compare-stages-refused-without-the-switch",
@@ -2174,6 +2285,1111 @@
         "case": "action"
       },
       {
+        "at": "/version-comparison",
+        "page_module": "web/src/app/version-comparison/page.tsx",
+        "screen": "version-comparison",
+        "case": "action",
+        "requires_provider_mode": "recorded",
+        "name": "cmp-version-upload-synthetic-five",
+        "control_module": "web/src/widgets/comparison-upload/ui/upload-dialog.tsx",
+        "$comment": [
+          "CMP-JOURNEY-CODE-01: actual VS-1 PDFs; one picker event per file, then real part upload and explicit grouping/order confirmation. No stub response is accepted."
+        ],
+        "actions": [
+          {
+            "do": "select",
+            "selector": "select",
+            "option_value": "{project_uid}",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "button",
+            "text": "Загрузить проект со всеми версиями",
+            "settle": true
+          },
+          {
+            "do": "attach_file",
+            "selector": "[data-upload-dialog=\"single\"] input[type=\"file\"][accept=\".pdf,application/pdf\"]",
+            "fixture": "fixtures/comparison/vs1/v1.pdf",
+            "settle": true
+          },
+          {
+            "do": "attach_file",
+            "selector": "[data-upload-dialog=\"single\"] input[type=\"file\"][accept=\".pdf,application/pdf\"]",
+            "fixture": "fixtures/comparison/vs1/v2.pdf",
+            "settle": true
+          },
+          {
+            "do": "attach_file",
+            "selector": "[data-upload-dialog=\"single\"] input[type=\"file\"][accept=\".pdf,application/pdf\"]",
+            "fixture": "fixtures/comparison/vs1/v3.pdf",
+            "settle": true
+          },
+          {
+            "do": "attach_file",
+            "selector": "[data-upload-dialog=\"single\"] input[type=\"file\"][accept=\".pdf,application/pdf\"]",
+            "fixture": "fixtures/comparison/vs1/v4.pdf",
+            "settle": true
+          },
+          {
+            "do": "attach_file",
+            "selector": "[data-upload-dialog=\"single\"] input[type=\"file\"][accept=\".pdf,application/pdf\"]",
+            "fixture": "fixtures/comparison/vs1/v5.pdf",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "[data-upload-dialog=\"single\"] button",
+            "text": "Загрузить и разобрать"
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-proposal-sets=\"1\"]",
+            "bound_ms": 120000
+          },
+          {
+            "do": "click",
+            "selector": "[data-upload-dialog=\"single\"] button",
+            "text": "Подтвердить группировку и порядок"
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-upload-state=\"completed\"]",
+            "bound_ms": 120000
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/comparison-uploads",
+            "operationId": "createComparisonUpload",
+            "expect_status": 201
+          },
+          {
+            "method": "GET",
+            "path": "/comparison-uploads/{comparison_upload_id}/proposal",
+            "operationId": "getComparisonUploadProposal",
+            "expect_status": 200,
+            "last_response": true
+          },
+          {
+            "method": "POST",
+            "path": "/comparison-uploads/{comparison_upload_id}/sets/{comparison_upload_set_id}/confirmation",
+            "operationId": "confirmComparisonUploadSet",
+            "expect_status": 200
+          }
+        ],
+        "captures": [
+          {
+            "kind": "response",
+            "of": "createComparisonUpload",
+            "json_path": "upload_id",
+            "matches": "^(cbt_%ID%)$",
+            "as": [
+              "cmp_version_upload_id"
+            ],
+            "bound_ms": 240000
+          },
+          {
+            "kind": "response",
+            "of": "getComparisonUploadProposal",
+            "json_path": "sets.0.set_id",
+            "matches": "(cus_[0-9A-HJKMNP-TV-Z]{26})",
+            "as": [
+              "cmp_version_set_id"
+            ],
+            "bound_ms": 240000
+          },
+          {
+            "kind": "response",
+            "of": "confirmComparisonUploadSet",
+            "json_path": "document_uid",
+            "matches": "^(doc_%ID%)$",
+            "as": [
+              "cmp_version_document_uid"
+            ],
+            "bound_ms": 240000
+          }
+        ],
+        "bind": {
+          "comparison_upload_id": "cmp_version_upload_id",
+          "comparison_upload_set_id": "cmp_version_set_id"
+        },
+        "expects_request": [
+          {
+            "of": "createComparisonUpload",
+            "requires_idempotency_key": true,
+            "body_contains": [
+              "v1.pdf",
+              "v5.pdf"
+            ]
+          },
+          {
+            "of": "confirmComparisonUploadSet",
+            "requires_idempotency_key": true
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "createComparisonUpload",
+            "json_path": "declared_files",
+            "equals": 5
+          },
+          {
+            "of": "confirmComparisonUploadSet",
+            "json_path": "files",
+            "nonempty_array": true
+          }
+        ],
+        "forbids_rendered": [
+          "[data-upload-dialog] [role=\"alert\"]"
+        ]
+      },
+      {
+        "at": "/version-comparison",
+        "page_module": "web/src/app/version-comparison/page.tsx",
+        "screen": "version-comparison",
+        "case": "action",
+        "requires_provider_mode": "recorded",
+        "name": "cmp-version-prepare-matrix",
+        "control_module": "web/src/widgets/version-series/ui/sheets-tab.tsx",
+        "bind": {
+          "document_uid": "cmp_version_document_uid"
+        },
+        "actions": [
+          {
+            "do": "select",
+            "selector": "select",
+            "option_value": "{project_uid}",
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "tr[data-document-uid=\"{document_uid}\"]",
+            "bound_ms": 120000
+          },
+          {
+            "do": "click",
+            "selector": "tr[data-document-uid=\"{document_uid}\"] th button",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "[data-comparison-sheets] button",
+            "text": "Подготовить"
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-comparison-sheets][data-matrix-state=\"ready\"]",
+            "bound_ms": 300000
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/documents/{document_uid}/comparison-matrix/preparation",
+            "operationId": "prepareComparisonMatrix",
+            "expect_status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/projects/{project_uid}/documents/{document_uid}/comparison-matrix",
+            "operationId": "getComparisonMatrix",
+            "expect_status": 200,
+            "last_response": true
+          }
+        ],
+        "expects_request": [
+          {
+            "of": "prepareComparisonMatrix",
+            "requires_idempotency_key": true
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "getComparisonMatrix",
+            "json_path": "state",
+            "equals": "ready"
+          },
+          {
+            "of": "getComparisonMatrix",
+            "json_path": "columns",
+            "nonempty_array": true
+          },
+          {
+            "of": "getComparisonMatrix",
+            "json_path": "rows",
+            "nonempty_array": true
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-cell-state=\"matched\"]",
+            "min_count": 5
+          }
+        ]
+      },
+      {
+        "at": "/version-comparison",
+        "page_module": "web/src/app/version-comparison/page.tsx",
+        "screen": "version-comparison",
+        "case": "action",
+        "requires_provider_mode": "recorded",
+        "name": "cmp-version-compare-adjacent-series",
+        "control_module": "web/src/widgets/version-series/ui/sheets-tab.tsx",
+        "bind": {
+          "document_uid": "cmp_version_document_uid",
+          "comparison_series_id": "cmp_version_series_id"
+        },
+        "actions": [
+          {
+            "do": "select",
+            "selector": "select",
+            "option_value": "{project_uid}",
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "tr[data-document-uid=\"{document_uid}\"]",
+            "bound_ms": 120000
+          },
+          {
+            "do": "click",
+            "selector": "tr[data-document-uid=\"{document_uid}\"] th button",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "[data-transition-summary] button",
+            "text": "Запустить"
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-series-state=\"completed\"]",
+            "bound_ms": 300000
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/documents/{document_uid}/comparison-series",
+            "operationId": "startComparisonSeries",
+            "expect_status": 201
+          },
+          {
+            "method": "GET",
+            "path": "/comparison-series/{comparison_series_id}",
+            "operationId": "getComparisonSeries",
+            "expect_status": 200,
+            "last_response": true
+          }
+        ],
+        "captures": [
+          {
+            "kind": "response",
+            "of": "startComparisonSeries",
+            "json_path": "series_id",
+            "matches": "^(cser_%ID%)$",
+            "as": [
+              "cmp_version_series_id"
+            ],
+            "bound_ms": 240000
+          },
+          {
+            "kind": "response",
+            "of": "getComparisonSeries",
+            "json_path": "transitions.0.transition_id",
+            "matches": "^(ctn_%ID%)$",
+            "as": [
+              "cmp_version_transition_id"
+            ],
+            "bound_ms": 240000
+          }
+        ],
+        "expects_request": [
+          {
+            "of": "startComparisonSeries",
+            "requires_idempotency_key": true
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "getComparisonSeries",
+            "json_path": "state",
+            "equals": "completed"
+          },
+          {
+            "of": "getComparisonSeries",
+            "json_path": "transitions_total",
+            "equals": 4
+          },
+          {
+            "of": "getComparisonSeries",
+            "json_path": "transitions_done",
+            "equals": 4
+          }
+        ]
+      },
+      {
+        "at": "/version-comparison",
+        "page_module": "web/src/app/version-comparison/page.tsx",
+        "screen": "version-comparison",
+        "case": "action",
+        "requires_provider_mode": "recorded",
+        "name": "cmp-version-viewer-real-tiles",
+        "control_module": "web/src/widgets/version-series/ui/sheets-tab.tsx",
+        "bind": {
+          "document_uid": "cmp_version_document_uid",
+          "comparison_transition_id": "cmp_version_transition_id"
+        },
+        "actions": [
+          {
+            "do": "select",
+            "selector": "select",
+            "option_value": "{project_uid}",
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "tr[data-document-uid=\"{document_uid}\"]",
+            "bound_ms": 120000
+          },
+          {
+            "do": "click",
+            "selector": "tr[data-document-uid=\"{document_uid}\"] th button",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "tr[data-transition-state=\"completed\"] button",
+            "text": "Открыть",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "button[title=\"Открыть сравнение этого листа: наложение, было, стало и рядом.\"]"
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-comparison-viewer] img",
+            "bound_ms": 120000
+          },
+          {
+            "do": "click",
+            "selector": "[data-comparison-viewer] button",
+            "text": "Вписать"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/comparison-transitions/{comparison_transition_id}/sheet-pairs",
+            "operationId": "listComparisonSheetPairs",
+            "expect_status": 200
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "listComparisonSheetPairs",
+            "json_path": "items",
+            "nonempty_array": true
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-comparison-viewer] img",
+            "min_count": 1
+          }
+        ],
+        "forbids_rendered": [
+          "[data-viewer-unavailable]"
+        ]
+      },
+      {
+        "at": "/version-comparison",
+        "page_module": "web/src/app/version-comparison/page.tsx",
+        "screen": "version-comparison",
+        "case": "action",
+        "requires_provider_mode": "recorded",
+        "name": "cmp-version-recorded-ai-consent",
+        "control_module": "web/src/widgets/version-series/ui/projects-and-stages.tsx",
+        "bind": {
+          "document_uid": "cmp_version_document_uid",
+          "comparison_series_id": "cmp_version_series_id"
+        },
+        "actions": [
+          {
+            "do": "select",
+            "selector": "select",
+            "option_value": "{project_uid}",
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "tr[data-document-uid=\"{document_uid}\"] [data-step=\"ai_changes\"] [data-step-action=\"start\"]",
+            "bound_ms": 120000
+          },
+          {
+            "do": "click",
+            "selector": "tr[data-document-uid=\"{document_uid}\"] [data-step=\"ai_changes\"] [data-step-action=\"start\"]",
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-estimate-panel] [data-consent-line] input:not([disabled])",
+            "bound_ms": 120000
+          },
+          {
+            "do": "click",
+            "selector": "[data-estimate-panel] [data-consent-line] input"
+          },
+          {
+            "do": "click",
+            "selector": "[data-estimate-confirm]"
+          },
+          {
+            "do": "wait_for",
+            "selector": "tr[data-document-uid=\"{document_uid}\"] [data-step=\"ai_changes\"][data-step-state=\"done\"]",
+            "bound_ms": 300000
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/comparison-series/{comparison_series_id}/ai-sheet-changes/estimate",
+            "operationId": "estimateComparisonAiSheetChanges",
+            "expect_status": 200
+          },
+          {
+            "method": "POST",
+            "path": "/comparison-series/{comparison_series_id}/ai-sheet-changes",
+            "operationId": "startComparisonAiSheetChanges",
+            "expect_status": 201
+          },
+          {
+            "method": "GET",
+            "path": "/comparison-series/{comparison_series_id}/ai-sheet-changes",
+            "operationId": "getComparisonAiSheetChanges",
+            "expect_status": 200,
+            "last_response": true
+          }
+        ],
+        "expects_request": [
+          {
+            "of": "startComparisonAiSheetChanges",
+            "requires_idempotency_key": true,
+            "body_contains": [
+              "\"confirmed\":true",
+              "estimate_digest"
+            ]
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "estimateComparisonAiSheetChanges",
+            "json_path": "route.provider_mode",
+            "equals": "recorded"
+          },
+          {
+            "of": "getComparisonAiSheetChanges",
+            "json_path": "job.state",
+            "equals": "completed"
+          },
+          {
+            "of": "getComparisonAiSheetChanges",
+            "json_path": "job.estimate.route.provider_mode",
+            "equals": "recorded"
+          },
+          {
+            "of": "getComparisonAiSheetChanges",
+            "json_path": "transitions",
+            "nonempty_array": true
+          }
+        ],
+        "forbids_rendered": [
+          "[data-comparison-failure]"
+        ]
+      },
+      {
+        "at": "/version-comparison",
+        "page_module": "web/src/app/version-comparison/page.tsx",
+        "screen": "version-comparison",
+        "case": "action",
+        "requires_provider_mode": "recorded",
+        "name": "cmp-version-summary-download",
+        "control_module": "web/src/widgets/version-series/ui/projects-and-stages.tsx",
+        "bind": {
+          "document_uid": "cmp_version_document_uid",
+          "comparison_series_id": "cmp_version_series_id"
+        },
+        "actions": [
+          {
+            "do": "select",
+            "selector": "select",
+            "option_value": "{project_uid}",
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "tr[data-document-uid=\"{document_uid}\"] [data-summary-md]",
+            "bound_ms": 120000
+          },
+          {
+            "do": "click",
+            "selector": "tr[data-document-uid=\"{document_uid}\"] [data-summary-md]"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/comparison-series/{comparison_series_id}/summary-md",
+            "operationId": "streamComparisonSeriesSummary",
+            "expect_status": 200
+          }
+        ],
+        "expects_download": [
+          {
+            "of": "streamComparisonSeriesSummary",
+            "content_type_starts_with": "text/markdown",
+            "content_disposition_contains": ".md",
+            "body_starts_with": "#"
+          }
+        ]
+      },
+      {
+        "name": "cmp-stage-upload",
+        "at": "/stage-comparison",
+        "page_module": "web/src/app/stage-comparison/page.tsx",
+        "screen": "stage-comparison",
+        "case": "action",
+        "requires_provider_mode": "recorded",
+        "needs": [
+          "project_uid"
+        ],
+        "control_module": "web/src/_pages/stage-compare/ui/stage-upload-panel.tsx",
+        "bind": {
+          "stage_pair_id": "cmp_stage_pair_id",
+          "stage_chain_run_id": "cmp_stage_run_id",
+          "stage_assembly_id": "cmp_stage_assembly_id",
+          "stage_link_revision_id": "cmp_stage_swapped_revision_id",
+          "stage_upload_id": "cmp_stage_last_upload_id",
+          "stage_upload_candidate_id": "cmp_stage_last_candidate_id",
+          "stage_link_repair_id": "cmp_stage_repair_id"
+        },
+        "actions": [
+          {
+            "do": "stage_c4",
+            "phase": "upload",
+            "documents": [
+              {
+                "fixture": "fixtures/comparison/sp1/old_p.pdf",
+                "stage": "P",
+                "designation": "СИНТ-02-АР",
+                "sha256": "209ef6fe45bfdfde783eabc8e0375a9a06ab06c44ef7af7ff2052f47bcfde07e",
+                "bytes": 53711
+              },
+              {
+                "fixture": "fixtures/comparison/sp1/new_r1.pdf",
+                "stage": "R",
+                "designation": "СИНТ-02-АР.1",
+                "sha256": "40ceee4b709fc732c1fcf8663ff1cd851f35a541a441bd5fbfe53fcae0a6fcac",
+                "bytes": 46107
+              },
+              {
+                "fixture": "tests/e2e/pc01/journey/fixtures/sp1-new-r2-graphic.pdf",
+                "stage": "R",
+                "designation": "СИНТ-02-АР.2",
+                "sha256": "a48dbcb0de8367b984a3356518911b1da02dcac219e3f220fe288cd1dbcbf8ef",
+                "bytes": 40332,
+                "derived_from": "fixtures/comparison/sp1/new_r2.pdf",
+                "source_sha256": "c02e8a49d9a89dd0eb663a1dd058a80d3d21e56f38a4878b65fdad8d469ee8bd"
+              },
+              {
+                "fixture": "fixtures/comparison/sp1/new_r3.pdf",
+                "stage": "R",
+                "designation": "СИНТ-02-АР.3",
+                "sha256": "44bea61280175bfb29c12e01810c1602ee79afe6bbb7b39b8798ea39a95194a4",
+                "bytes": 43306
+              }
+            ]
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/stage-uploads",
+            "operationId": "createStageUpload",
+            "expect_status": 201,
+            "last_response": true
+          },
+          {
+            "method": "GET",
+            "path": "/stage-uploads/{stage_upload_id}",
+            "operationId": "getStageUpload",
+            "expect_status": 200,
+            "last_response": true
+          },
+          {
+            "method": "POST",
+            "path": "/stage-upload-candidates/{stage_upload_candidate_id}/confirmation",
+            "operationId": "confirmStageUploadCandidate",
+            "expect_status": 200,
+            "last_response": true
+          }
+        ],
+        "expects_request": [
+          {
+            "of": "createStageUpload",
+            "requires_idempotency_key": true
+          },
+          {
+            "of": "confirmStageUploadCandidate",
+            "requires_idempotency_key": true
+          }
+        ],
+        "$comment": [
+          "CMP-JOURNEY-C4-01: executable code; browser/worker execution UNVERIFIED. Missing controls, exact source pins, actual PNG receipts or HIGH repair fail, never skip."
+        ]
+      },
+      {
+        "name": "cmp-stage-assembly",
+        "at": "/stage-comparison",
+        "page_module": "web/src/app/stage-comparison/page.tsx",
+        "screen": "stage-comparison",
+        "case": "action",
+        "requires_provider_mode": "recorded",
+        "needs": [
+          "project_uid",
+          "cmp_stage_documents"
+        ],
+        "control_module": "web/src/widgets/stage-pair-catalog/ui/stage-assembly-editor.tsx",
+        "bind": {
+          "stage_pair_id": "cmp_stage_pair_id",
+          "stage_chain_run_id": "cmp_stage_run_id",
+          "stage_assembly_id": "cmp_stage_assembly_id",
+          "stage_link_revision_id": "cmp_stage_swapped_revision_id",
+          "stage_upload_id": "cmp_stage_last_upload_id",
+          "stage_upload_candidate_id": "cmp_stage_last_candidate_id",
+          "stage_link_repair_id": "cmp_stage_repair_id"
+        },
+        "actions": [
+          {
+            "do": "stage_c4",
+            "phase": "assembly"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/stage-assemblies",
+            "operationId": "createStageAssembly",
+            "expect_status": 201,
+            "last_response": true
+          },
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/stage-pairs",
+            "operationId": "confirmStagePair",
+            "expect_status": 201,
+            "last_response": true
+          },
+          {
+            "method": "GET",
+            "path": "/stage-pairs/{stage_pair_id}/sheet-map",
+            "operationId": "getStageSheetMap",
+            "expect_status": 404,
+            "refusal": true,
+            "expect_error_code": "not_found"
+          }
+        ],
+        "expects_request": [
+          {
+            "of": "createStageAssembly",
+            "requires_idempotency_key": true
+          },
+          {
+            "of": "confirmStagePair",
+            "requires_idempotency_key": true
+          }
+        ],
+        "$comment": [
+          "CMP-JOURNEY-C4-01: executable code; browser/worker execution UNVERIFIED. Missing controls, exact source pins, actual PNG receipts or HIGH repair fail, never skip."
+        ]
+      },
+      {
+        "name": "cmp-stage-swapped-map",
+        "at": "/stage-comparison",
+        "page_module": "web/src/app/stage-comparison/page.tsx",
+        "screen": "stage-comparison",
+        "case": "action",
+        "requires_provider_mode": "recorded",
+        "needs": [
+          "cmp_stage_pair_id"
+        ],
+        "control_module": "web/src/widgets/stage-sheet-map/ui/stage-sheet-map.tsx",
+        "bind": {
+          "stage_pair_id": "cmp_stage_pair_id",
+          "stage_chain_run_id": "cmp_stage_run_id",
+          "stage_assembly_id": "cmp_stage_assembly_id",
+          "stage_link_revision_id": "cmp_stage_swapped_revision_id",
+          "stage_upload_id": "cmp_stage_last_upload_id",
+          "stage_upload_candidate_id": "cmp_stage_last_candidate_id",
+          "stage_link_repair_id": "cmp_stage_repair_id"
+        },
+        "actions": [
+          {
+            "do": "stage_c4",
+            "phase": "swapped_map"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/stage-pairs/{stage_pair_id}/sheet-map",
+            "operationId": "applyStageSheetMap",
+            "expect_status": 201,
+            "last_response": true
+          },
+          {
+            "method": "GET",
+            "path": "/stage-pairs/{stage_pair_id}/sheet-map",
+            "operationId": "getStageSheetMap",
+            "expect_status": 404,
+            "refusal": true,
+            "expect_error_code": "not_found"
+          }
+        ],
+        "expects_request": [
+          {
+            "of": "applyStageSheetMap",
+            "requires_idempotency_key": true
+          }
+        ],
+        "$comment": [
+          "CMP-JOURNEY-C4-01: executable code; browser/worker execution UNVERIFIED. Missing controls, exact source pins, actual PNG receipts or HIGH repair fail, never skip."
+        ]
+      },
+      {
+        "name": "cmp-stage-full-run",
+        "at": "/stage-comparison",
+        "page_module": "web/src/app/stage-comparison/page.tsx",
+        "screen": "stage-comparison",
+        "case": "action",
+        "requires_provider_mode": "recorded",
+        "needs": [
+          "cmp_stage_pair_id",
+          "cmp_stage_swapped_revision_id"
+        ],
+        "control_module": "web/src/widgets/stage-run-controls/ui/stage-run-controls.tsx",
+        "bind": {
+          "stage_pair_id": "cmp_stage_pair_id",
+          "stage_chain_run_id": "cmp_stage_run_id",
+          "stage_assembly_id": "cmp_stage_assembly_id",
+          "stage_link_revision_id": "cmp_stage_swapped_revision_id",
+          "stage_upload_id": "cmp_stage_last_upload_id",
+          "stage_upload_candidate_id": "cmp_stage_last_candidate_id",
+          "stage_link_repair_id": "cmp_stage_repair_id"
+        },
+        "actions": [
+          {
+            "do": "stage_c4",
+            "phase": "full_run"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/stage-link-revisions/{stage_link_revision_id}/chain-estimate",
+            "operationId": "estimateStageChainRun",
+            "expect_status": 200,
+            "last_response": true
+          },
+          {
+            "method": "POST",
+            "path": "/stage-pairs/{stage_pair_id}/chain-runs",
+            "operationId": "startStageChainRun",
+            "expect_status": 201,
+            "last_response": true
+          },
+          {
+            "method": "GET",
+            "path": "/stage-chain-runs/{stage_chain_run_id}",
+            "operationId": "getStageChainRun",
+            "expect_status": 200,
+            "last_response": true
+          }
+        ],
+        "expects_request": [
+          {
+            "of": "startStageChainRun",
+            "requires_idempotency_key": true
+          }
+        ],
+        "$comment": [
+          "CMP-JOURNEY-C4-01: executable code; browser/worker execution UNVERIFIED. Missing controls, exact source pins, actual PNG receipts or HIGH repair fail, never skip."
+        ]
+      },
+      {
+        "name": "cmp-stage-repair-undo",
+        "at": "/stage-comparison",
+        "page_module": "web/src/app/stage-comparison/page.tsx",
+        "screen": "stage-comparison",
+        "case": "action",
+        "requires_provider_mode": "recorded",
+        "needs": [
+          "cmp_stage_pair_id",
+          "cmp_stage_initial_run_id"
+        ],
+        "control_module": "web/src/widgets/stage-run-controls/ui/stage-repair-history.tsx",
+        "bind": {
+          "stage_pair_id": "cmp_stage_pair_id",
+          "stage_chain_run_id": "cmp_stage_run_id",
+          "stage_assembly_id": "cmp_stage_assembly_id",
+          "stage_link_revision_id": "cmp_stage_swapped_revision_id",
+          "stage_upload_id": "cmp_stage_last_upload_id",
+          "stage_upload_candidate_id": "cmp_stage_last_candidate_id",
+          "stage_link_repair_id": "cmp_stage_repair_id"
+        },
+        "actions": [
+          {
+            "do": "stage_c4",
+            "phase": "repair_undo"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/stage-chain-runs/{stage_chain_run_id}/sheet-link-repairs",
+            "operationId": "listStageLinkRepairs",
+            "bind": {"stage_chain_run_id": "cmp_stage_initial_run_id"},
+            "expect_status": 200,
+            "last_response": true
+          },
+          {
+            "method": "POST",
+            "path": "/stage-link-repairs/{stage_link_repair_id}/undo",
+            "operationId": "undoStageLinkRepair",
+            "expect_status": 200,
+            "last_response": true
+          },
+          {
+            "method": "POST",
+            "path": "/stage-link-revisions/{stage_link_revision_id}/text-evidence/recomputation",
+            "operationId": "recomputeStageTextEvidence",
+            "bind": {"stage_link_revision_id": "cmp_stage_recompute_revision_id"},
+            "expect_status": 202,
+            "last_response": true
+          },
+          {
+            "method": "POST",
+            "path": "/stage-pairs/{stage_pair_id}/chain-runs",
+            "operationId": "startStageChainRun",
+            "expect_status": 201,
+            "last_response": true
+          }
+        ],
+        "expects_request": [
+          {
+            "of": "undoStageLinkRepair",
+            "requires_idempotency_key": true
+          },
+          {
+            "of": "recomputeStageTextEvidence",
+            "requires_idempotency_key": true
+          },
+          {
+            "of": "startStageChainRun",
+            "requires_idempotency_key": true
+          }
+        ],
+        "$comment": [
+          "CMP-JOURNEY-C4-01: executable code; browser/worker execution UNVERIFIED. Missing controls, exact source pins, actual PNG receipts or HIGH repair fail, never skip."
+        ]
+      },
+      {
+        "name": "cmp-stage-verdict",
+        "at": "/stage-comparison",
+        "page_module": "web/src/app/stage-comparison/page.tsx",
+        "screen": "stage-comparison",
+        "case": "action",
+        "requires_provider_mode": "recorded",
+        "needs": [
+          "cmp_stage_pair_id",
+          "cmp_stage_run_id"
+        ],
+        "control_module": "web/src/widgets/stage-changes/ui/stage-changes.tsx",
+        "bind": {
+          "stage_pair_id": "cmp_stage_pair_id",
+          "stage_chain_run_id": "cmp_stage_run_id",
+          "stage_assembly_id": "cmp_stage_assembly_id",
+          "stage_link_revision_id": "cmp_stage_swapped_revision_id",
+          "stage_upload_id": "cmp_stage_last_upload_id",
+          "stage_upload_candidate_id": "cmp_stage_last_candidate_id",
+          "stage_link_repair_id": "cmp_stage_repair_id"
+        },
+        "actions": [
+          {
+            "do": "stage_c4",
+            "phase": "verdict"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/stage-chain-runs/{stage_chain_run_id}/cards",
+            "operationId": "listStageChangeCards",
+            "expect_status": 200,
+            "last_response": true
+          },
+          {
+            "method": "POST",
+            "path": "/stage-chain-runs/{stage_chain_run_id}/card-verdicts",
+            "operationId": "applyStageCardVerdicts",
+            "expect_status": 200,
+            "last_response": true
+          }
+        ],
+        "expects_request": [
+          {
+            "of": "applyStageCardVerdicts",
+            "requires_idempotency_key": true
+          }
+        ],
+        "$comment": [
+          "CMP-JOURNEY-C4-01: executable code; browser/worker execution UNVERIFIED. Missing controls, exact source pins, actual PNG receipts or HIGH repair fail, never skip."
+        ]
+      },
+      {
+        "name": "cmp-stage-journal",
+        "at": "/stage-comparison",
+        "page_module": "web/src/app/stage-comparison/page.tsx",
+        "screen": "stage-comparison",
+        "case": "action",
+        "requires_provider_mode": "recorded",
+        "needs": [
+          "cmp_stage_pair_id",
+          "cmp_stage_run_id",
+          "cmp_stage_card_id"
+        ],
+        "control_module": "web/src/widgets/stage-changes/ui/stage-journal.tsx",
+        "bind": {
+          "stage_pair_id": "cmp_stage_pair_id",
+          "stage_chain_run_id": "cmp_stage_run_id",
+          "stage_assembly_id": "cmp_stage_assembly_id",
+          "stage_link_revision_id": "cmp_stage_swapped_revision_id",
+          "stage_upload_id": "cmp_stage_last_upload_id",
+          "stage_upload_candidate_id": "cmp_stage_last_candidate_id",
+          "stage_link_repair_id": "cmp_stage_repair_id"
+        },
+        "actions": [
+          {
+            "do": "stage_c4",
+            "phase": "journal"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/stage-chain-runs/{stage_chain_run_id}/journal",
+            "operationId": "getStageChangeJournal",
+            "expect_status": 200,
+            "last_response": true
+          },
+          {
+            "method": "GET",
+            "path": "/stage-chain-runs/{stage_chain_run_id}/journal.xlsx",
+            "operationId": "streamStageChangeJournalXlsx",
+            "expect_status": 200,
+            "last_response": true
+          },
+          {
+            "method": "GET",
+            "path": "/stage-chain-runs/{stage_chain_run_id}/journal.pdf",
+            "operationId": "streamStageChangeJournalPdf",
+            "expect_status": 200,
+            "last_response": true
+          },
+          {
+            "method": "GET",
+            "path": "/stage-chain-runs/{stage_chain_run_id}/journal.html",
+            "operationId": "streamStageChangeJournalHtml",
+            "expect_status": 200,
+            "last_response": true
+          }
+        ],
+        "expects_request": [],
+        "$comment": [
+          "CMP-JOURNEY-C4-01: executable code; browser/worker execution UNVERIFIED. Missing controls, exact source pins, actual PNG receipts or HIGH repair fail, never skip."
+        ],
+        "expects_download": [
+          {
+            "of": "streamStageChangeJournalXlsx",
+            "content_type_starts_with": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "content_disposition_contains": ".xlsx",
+            "body_starts_with": "PK"
+          },
+          {
+            "of": "streamStageChangeJournalPdf",
+            "content_type_starts_with": "application/pdf",
+            "content_disposition_contains": ".pdf",
+            "body_starts_with": "%PDF"
+          },
+          {
+            "of": "streamStageChangeJournalHtml",
+            "content_type_starts_with": "text/html",
+            "content_disposition_contains": ".html",
+            "body_starts_with": "<!doctype html>"
+          }
+        ]
+      },
+      {
+        "name": "cmp-stage-promote",
+        "at": "/stage-comparison",
+        "page_module": "web/src/app/stage-comparison/page.tsx",
+        "screen": "stage-comparison",
+        "case": "action",
+        "requires_provider_mode": "recorded",
+        "needs": [
+          "cmp_stage_pair_id",
+          "cmp_stage_run_id"
+        ],
+        "control_module": "web/src/widgets/stage-changes/ui/stage-changes.tsx",
+        "bind": {
+          "stage_pair_id": "cmp_stage_pair_id",
+          "stage_chain_run_id": "cmp_stage_run_id",
+          "stage_assembly_id": "cmp_stage_assembly_id",
+          "stage_link_revision_id": "cmp_stage_swapped_revision_id",
+          "stage_upload_id": "cmp_stage_last_upload_id",
+          "stage_upload_candidate_id": "cmp_stage_last_candidate_id",
+          "stage_link_repair_id": "cmp_stage_repair_id"
+        },
+        "actions": [
+          {
+            "do": "stage_c4",
+            "phase": "promote"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/stage-chain-runs/{stage_chain_run_id}/review-cards",
+            "operationId": "createStageReviewCard",
+            "expect_status": 201,
+            "last_response": true
+          }
+        ],
+        "expects_request": [
+          {
+            "of": "createStageReviewCard",
+            "requires_idempotency_key": true
+          }
+        ],
+        "$comment": [
+          "CMP-JOURNEY-C4-01: executable code; browser/worker execution UNVERIFIED. Missing controls, exact source pins, actual PNG receipts or HIGH repair fail, never skip."
+        ]
+      },
+      {
         "name": "analysis-settings-lists-the-profiles",
         "at": "/analysis-settings",
         "page_module": "web/src/app/analysis-settings/page.tsx",
@@ -2185,9 +3401,9 @@
           "",
           "PROD-10B-JOURNEY-REBASE-01. The journey's section (ПБ) is listed with the status the expectations file",
           "gives it, `reviewed`, and the label that says no person reviewed it (R-146ag).",
-          "PROD-11-AR-V1-V2-REMOVAL-01. The АР row has no profile any more (`builtin` left the contract with the АР v1",
-          "profile): it reads `data-profile=\"none\"` and says that АР has no text profile and is analysed by the six",
-          "checks. It is a `registry_pins` step and it still runs."
+          "HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030 / owner dev3821261a restores the ordinary АР profile with",
+          "original-source resources and draft status. The АР row reads `data-profile=\"draft\"` and requires",
+          "expert review. This read-only `registry_pins` step stays active; historical pending steps stay pending."
         ],
         "expects_api": [
           {
@@ -2217,8 +3433,8 @@
             "min_count": 1
           },
           {
-            "selector": "tr[data-section=\"AR\"][data-profile=\"none\"]",
-            "text_contains": "текстовый профиль не используется"
+            "selector": "tr[data-section=\"AR\"][data-profile=\"draft\"]",
+            "text_contains": "черновик, требует экспертной проверки"
           },
           {
             "selector": "tr[data-section=\"PB\"][data-profile=\"reviewed\"]",
@@ -3215,12 +4431,25 @@
         ],
         "actions": [
           {
+            "do": "approve_run_cost",
+            "scope": "run",
+            "value": "{version_uid}",
+            "bound_ms": 30000
+          },
+          {
             "do": "click",
             "selector": "button",
             "text": "Запустить прогон"
           }
         ],
         "expects_api": [
+          {
+            "method": "POST",
+            "path": "/runs/cost-estimate",
+            "operationId": "estimateRunCost",
+            "expect_status": 200,
+            "count": 1
+          },
           {
             "method": "POST",
             "path": "/runs",
@@ -3255,7 +4484,24 @@
           "[data-run-failure]"
         ],
         "screen": "version-run",
-        "case": "action"
+        "case": "action",
+        "expects_request": [
+          {
+            "of": "estimateRunCost",
+            "content_type_starts_with": "application/json",
+            "body_contains": [
+              "\"version_uid\""
+            ]
+          },
+          {
+            "of": "startRun",
+            "requires_idempotency_key": true,
+            "body_contains": [
+              "\"cost_consent\"",
+              "\"confirmed\":true"
+            ]
+          }
+        ]
       },
       {
         "name": "upload-specification-set",
@@ -3404,12 +4650,25 @@
         ],
         "actions": [
           {
+            "do": "approve_run_cost",
+            "scope": "run",
+            "value": "{version_uid}",
+            "bound_ms": 30000
+          },
+          {
             "do": "click",
             "selector": "button",
             "text": "Запустить прогон"
           }
         ],
         "expects_api": [
+          {
+            "method": "POST",
+            "path": "/runs/cost-estimate",
+            "operationId": "estimateRunCost",
+            "expect_status": 200,
+            "count": 1
+          },
           {
             "method": "POST",
             "path": "/runs",
@@ -3444,7 +4703,24 @@
           "[data-run-failure]"
         ],
         "screen": "version-run",
-        "case": "action"
+        "case": "action",
+        "expects_request": [
+          {
+            "of": "estimateRunCost",
+            "content_type_starts_with": "application/json",
+            "body_contains": [
+              "\"version_uid\""
+            ]
+          },
+          {
+            "of": "startRun",
+            "requires_idempotency_key": true,
+            "body_contains": [
+              "\"cost_consent\"",
+              "\"confirmed\":true"
+            ]
+          }
+        ]
       },
       {
         "name": "price-list-is-an-experts-act",
@@ -6556,12 +7832,25 @@
         ],
         "actions": [
           {
+            "do": "approve_run_cost",
+            "scope": "run",
+            "value": "{version_uid}",
+            "bound_ms": 30000
+          },
+          {
             "do": "click",
             "selector": "button",
             "text": "Запустить прогон"
           }
         ],
         "expects_api": [
+          {
+            "method": "POST",
+            "path": "/runs/cost-estimate",
+            "operationId": "estimateRunCost",
+            "expect_status": 200,
+            "count": 1
+          },
           {
             "method": "POST",
             "path": "/runs",
@@ -6591,7 +7880,24 @@
           }
         ],
         "screen": "version-run",
-        "case": "action"
+        "case": "action",
+        "expects_request": [
+          {
+            "of": "estimateRunCost",
+            "content_type_starts_with": "application/json",
+            "body_contains": [
+              "\"version_uid\""
+            ]
+          },
+          {
+            "of": "startRun",
+            "requires_idempotency_key": true,
+            "body_contains": [
+              "\"cost_consent\"",
+              "\"confirmed\":true"
+            ]
+          }
+        ]
       },
       {
         "name": "queue-lists-the-waiting-run",
@@ -6788,14 +8094,40 @@
           {
             "do": "click",
             "selector": "ol > li:has(a[href*=\"{queued_run_id}\"]) button",
-            "settle": true
+            "settle": true,
+            "text": "Повторный аудит"
+          },
+          {
+            "do": "approve_run_cost",
+            "scope": "run",
+            "value": "{version_uid}",
+            "source_run_id": "{queued_run_id}",
+            "bound_ms": 30000
           },
           {
             "do": "click",
-            "selector": "[data-execution-intent=\"reaudit\"] button:first-of-type"
+            "selector": "[data-execution-intent=\"reaudit\"] button",
+            "text": "Подтвердить"
           }
         ],
         "expects_api": [
+          {
+            "method": "GET",
+            "path": "/runs/{run_id}",
+            "operationId": "getRunStatus",
+            "expect_status": 200,
+            "count": 1,
+            "bind": {
+              "run_id": "queued_run_id"
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/runs/cost-estimate",
+            "operationId": "estimateRunCost",
+            "expect_status": 200,
+            "count": 1
+          },
           {
             "method": "POST",
             "path": "/runs/{run_id}/reaudit",
@@ -6833,7 +8165,28 @@
           }
         ],
         "screen": "queue",
-        "case": "action"
+        "case": "action",
+        "bind": {
+          "version_uid": "third_version_uid"
+        },
+        "expects_request": [
+          {
+            "of": "estimateRunCost",
+            "content_type_starts_with": "application/json",
+            "body_contains": [
+              "\"version_uid\"",
+              "\"reaudit_of_run_id\""
+            ]
+          },
+          {
+            "of": "reauditRun",
+            "requires_idempotency_key": true,
+            "body_contains": [
+              "\"cost_consent\"",
+              "\"confirmed\":true"
+            ]
+          }
+        ]
       },
       {
         "name": "queue-resume-dispatch",

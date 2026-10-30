@@ -1,0 +1,4 @@
+.workspace { display: grid; gap: 1rem; }
+.selection, .tabs { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; }
+.selection label { display: grid; gap: .35rem; min-width: 0; flex: 1 1 20rem; }
+.selection select { max-width: 100%; }

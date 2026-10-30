@@ -1,8 +1,18 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 131,
+    "path_count": 230,
     "operations": [
+      [
+        "POST",
+        "/auth/token",
+        "issueToken"
+      ],
+      [
+        "POST",
+        "/auth/password",
+        "changePassword"
+      ],
       [
         "POST",
         "/projects",
@@ -19,6 +29,11 @@
         "uploadDocument"
       ],
       [
+        "GET",
+        "/projects/{project_uid}/documents",
+        "listDocuments"
+      ],
+      [
         "POST",
         "/projects/{project_uid}/documents/{document_uid}/versions",
         "uploadDocumentVersion"
@@ -32,6 +47,71 @@
         "GET",
         "/versions/{version_uid}/content",
         "streamDocumentVersionContent"
+      ],
+      [
+        "GET",
+        "/versions/{version_uid}/runs",
+        "listRuns"
+      ],
+      [
+        "GET",
+        "/versions/{version_uid}/blocks",
+        "getVersionBlocks"
+      ],
+      [
+        "GET",
+        "/versions/{version_uid}/portal-blocks",
+        "listVersionPortalBlocks"
+      ],
+      [
+        "GET",
+        "/versions/{version_uid}/portal-blocks/{portal_block_id}/crop",
+        "streamVersionPortalBlockCrop"
+      ],
+      [
+        "GET",
+        "/documents/{document_uid}/versions",
+        "listVersions"
+      ],
+      [
+        "PUT",
+        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification",
+        "classifyDocumentVersion"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification/corrections",
+        "correctVersionClassification"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review",
+        "getVersionSectionReview"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison",
+        "compareDocumentVersions"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/carryovers",
+        "carryOverDecision"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/sheet-pairings",
+        "approveSheetPairing"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/sheet-pairings/{sheet_link_id}/withdrawals",
+        "withdrawSheetPairing"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/summaries",
+        "generateComparisonSummary"
       ],
       [
         "POST",
@@ -65,53 +145,18 @@
       ],
       [
         "GET",
+        "/decisions",
+        "listDecisions"
+      ],
+      [
+        "GET",
         "/runs/{run_id}/export.csv",
         "exportRunCsv"
       ],
       [
         "GET",
-        "/projects/{project_uid}/documents",
-        "listDocuments"
-      ],
-      [
-        "GET",
-        "/documents/{document_uid}/versions",
-        "listVersions"
-      ],
-      [
-        "GET",
-        "/versions/{version_uid}/runs",
-        "listRuns"
-      ],
-      [
-        "POST",
-        "/auth/token",
-        "issueToken"
-      ],
-      [
-        "GET",
-        "/decisions",
-        "listDecisions"
-      ],
-      [
-        "POST",
-        "/auth/password",
-        "changePassword"
-      ],
-      [
-        "GET",
-        "/versions/{version_uid}/blocks",
-        "getVersionBlocks"
-      ],
-      [
-        "GET",
-        "/versions/{version_uid}/portal-blocks",
-        "listVersionPortalBlocks"
-      ],
-      [
-        "GET",
-        "/versions/{version_uid}/portal-blocks/{portal_block_id}/crop",
-        "streamVersionPortalBlockCrop"
+        "/runs/{run_id}/export.xlsx",
+        "exportRunXlsx"
       ],
       [
         "GET",
@@ -134,14 +179,14 @@
         "submitRegistration"
       ],
       [
-        "POST",
-        "/registrations/status",
-        "readRegistrationStatus"
-      ],
-      [
         "GET",
         "/registrations",
         "listRegistrations"
+      ],
+      [
+        "POST",
+        "/registrations/status",
+        "readRegistrationStatus"
       ],
       [
         "POST",
@@ -169,6 +214,11 @@
         "updateUser"
       ],
       [
+        "DELETE",
+        "/users/{user_uid}",
+        "purgeUser"
+      ],
+      [
         "POST",
         "/users/{user_uid}/archive",
         "archiveUser"
@@ -177,11 +227,6 @@
         "POST",
         "/users/{user_uid}/restore",
         "restoreUser"
-      ],
-      [
-        "DELETE",
-        "/users/{user_uid}",
-        "purgeUser"
       ],
       [
         "POST",
@@ -250,6 +295,11 @@
       ],
       [
         "GET",
+        "/norm-documents",
+        "listNormDocuments"
+      ],
+      [
+        "GET",
         "/norm-documents/{norm_document_id}",
         "getNormDocument"
       ],
@@ -284,59 +334,9 @@
         "getRunNormVerification"
       ],
       [
-        "PUT",
-        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification",
-        "classifyDocumentVersion"
-      ],
-      [
-        "POST",
-        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification/corrections",
-        "correctVersionClassification"
-      ],
-      [
-        "GET",
-        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review",
-        "getVersionSectionReview"
-      ],
-      [
-        "GET",
-        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison",
-        "compareDocumentVersions"
-      ],
-      [
         "GET",
         "/analysis/profiles",
         "listAnalysisProfiles"
-      ],
-      [
-        "POST",
-        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/carryovers",
-        "carryOverDecision"
-      ],
-      [
-        "POST",
-        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/sheet-pairings",
-        "approveSheetPairing"
-      ],
-      [
-        "POST",
-        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/sheet-pairings/{sheet_link_id}/withdrawals",
-        "withdrawSheetPairing"
-      ],
-      [
-        "POST",
-        "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/summaries",
-        "generateComparisonSummary"
-      ],
-      [
-        "GET",
-        "/norm-documents",
-        "listNormDocuments"
-      ],
-      [
-        "GET",
-        "/runs/{run_id}/export.xlsx",
-        "exportRunXlsx"
       ],
       [
         "POST",
@@ -409,14 +409,14 @@
         "listOptimisationProposals"
       ],
       [
-        "POST",
-        "/optimisation-proposals/{optimisation_proposal_id}/decisions",
-        "decideOptimisationProposal"
-      ],
-      [
         "GET",
         "/optimisation-proposals/{optimisation_proposal_id}/decisions",
         "listProposalDecisions"
+      ],
+      [
+        "POST",
+        "/optimisation-proposals/{optimisation_proposal_id}/decisions",
+        "decideOptimisationProposal"
       ],
       [
         "GET",
@@ -742,6 +742,546 @@
         "GET",
         "/execution/comparison-queue",
         "getComparisonQueueSummary"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-check/estimate",
+        "estimateComparisonAiPairCheck"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-check",
+        "getComparisonAiPairCheck"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-check",
+        "startComparisonAiPairCheck"
+      ],
+      [
+        "POST",
+        "/comparison-ai-pair-checks/{comparison_ai_job_id}/pause",
+        "pauseComparisonAiPairCheck"
+      ],
+      [
+        "POST",
+        "/comparison-ai-pair-checks/{comparison_ai_job_id}/resume",
+        "resumeComparisonAiPairCheck"
+      ],
+      [
+        "POST",
+        "/comparison-ai-pair-checks/{comparison_ai_job_id}/cancellation",
+        "cancelComparisonAiPairCheck"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-hints",
+        "listComparisonAiPairHints"
+      ],
+      [
+        "GET",
+        "/comparison-series/{comparison_series_id}/ai-sheet-changes/estimate",
+        "estimateComparisonAiSheetChanges"
+      ],
+      [
+        "GET",
+        "/comparison-series/{comparison_series_id}/ai-sheet-changes",
+        "getComparisonAiSheetChanges"
+      ],
+      [
+        "POST",
+        "/comparison-series/{comparison_series_id}/ai-sheet-changes",
+        "startComparisonAiSheetChanges"
+      ],
+      [
+        "POST",
+        "/comparison-ai-sheet-jobs/{comparison_ai_job_id}/pause",
+        "pauseComparisonAiSheetChanges"
+      ],
+      [
+        "POST",
+        "/comparison-ai-sheet-jobs/{comparison_ai_job_id}/resume",
+        "resumeComparisonAiSheetChanges"
+      ],
+      [
+        "POST",
+        "/comparison-ai-sheet-jobs/{comparison_ai_job_id}/cancellation",
+        "cancelComparisonAiSheetChanges"
+      ],
+      [
+        "POST",
+        "/comparison-ai-sheet-jobs/{comparison_ai_job_id}/finish",
+        "finishComparisonAiSheetChanges"
+      ],
+      [
+        "POST",
+        "/comparison-ai-sheet-jobs/{comparison_ai_job_id}/dequeue",
+        "dequeueComparisonAiSheetChanges"
+      ],
+      [
+        "POST",
+        "/comparison-ai-sheet-jobs/{comparison_ai_job_id}/retry",
+        "retryComparisonAiSheetChanges"
+      ],
+      [
+        "GET",
+        "/comparison-sheet-pairs/{comparison_sheet_pair_id}/description",
+        "getComparisonSheetDescription"
+      ],
+      [
+        "POST",
+        "/comparison-sheet-pairs/{comparison_sheet_pair_id}/description",
+        "startComparisonSheetDescription"
+      ],
+      [
+        "GET",
+        "/comparison-sheet-pairs/{comparison_sheet_pair_id}/description-history",
+        "listComparisonSheetDescriptionHistory"
+      ],
+      [
+        "GET",
+        "/comparison-sheet-pairs/{comparison_sheet_pair_id}/description/estimate",
+        "estimateComparisonSheetDescription"
+      ],
+      [
+        "GET",
+        "/comparison-sheet-pairs/{comparison_sheet_pair_id}/description/md",
+        "streamComparisonSheetDescriptionMd"
+      ],
+      [
+        "GET",
+        "/comparison-transitions/{comparison_transition_id}/review-sheets",
+        "listComparisonReviewSheets"
+      ],
+      [
+        "GET",
+        "/page-profiles/{comparison_page_profile_id}/spec-positions",
+        "getVersionPageSpecPositions"
+      ],
+      [
+        "GET",
+        "/comparison-sheet-pairs/{comparison_sheet_pair_id}/spec-positions",
+        "getComparisonSheetPairSpecPositions"
+      ],
+      [
+        "GET",
+        "/comparison-series/{comparison_series_id}/specifications",
+        "listComparisonSpecifications"
+      ],
+      [
+        "GET",
+        "/comparison-transitions/{comparison_transition_id}/specification",
+        "getComparisonSpecification"
+      ],
+      [
+        "POST",
+        "/comparison-transitions/{comparison_transition_id}/specification",
+        "startComparisonSpecification"
+      ],
+      [
+        "GET",
+        "/comparison-transitions/{comparison_transition_id}/specification/changes",
+        "listComparisonSpecificationChanges"
+      ],
+      [
+        "GET",
+        "/comparison-transitions/{comparison_transition_id}/specification/estimate",
+        "estimateComparisonSpecification"
+      ],
+      [
+        "POST",
+        "/comparison-ai-spec-jobs/{comparison_ai_job_id}/cancellation",
+        "cancelComparisonSpecification"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/comparison-launch-queue",
+        "getComparisonLaunchQueue"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/comparison-launch-queue/entries",
+        "enqueueComparisonLaunch"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/comparison-launch-queue/pause",
+        "pauseComparisonLaunchQueue"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/comparison-launch-queue/resume",
+        "resumeComparisonLaunchQueue"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/comparison-launch-queue/clear",
+        "clearComparisonLaunchQueue"
+      ],
+      [
+        "POST",
+        "/comparison-launch-entries/{comparison_launch_entry_id}/removal",
+        "removeComparisonLaunchEntry"
+      ],
+      [
+        "GET",
+        "/execution/comparison-ai-queue",
+        "getComparisonAiQueue"
+      ],
+      [
+        "GET",
+        "/comparison-series/{comparison_series_id}/summary-md",
+        "streamComparisonSeriesSummary"
+      ],
+      [
+        "GET",
+        "/comparison-series/{comparison_series_id}/reports",
+        "listComparisonReports"
+      ],
+      [
+        "POST",
+        "/comparison-series/{comparison_series_id}/reports",
+        "createComparisonReport"
+      ],
+      [
+        "POST",
+        "/comparison-series/{comparison_series_id}/reports/upload",
+        "uploadComparisonReportSource"
+      ],
+      [
+        "GET",
+        "/comparison-reports/{comparison_report_id}",
+        "getComparisonReport"
+      ],
+      [
+        "POST",
+        "/comparison-reports/{comparison_report_id}/start",
+        "startComparisonReport"
+      ],
+      [
+        "POST",
+        "/comparison-reports/{comparison_report_id}/cancellation",
+        "cancelComparisonReport"
+      ],
+      [
+        "POST",
+        "/comparison-reports/{comparison_report_id}/continuation",
+        "continueComparisonReport"
+      ],
+      [
+        "POST",
+        "/comparison-reports/{comparison_report_id}/pdf-rebuild",
+        "rebuildComparisonReportPdf"
+      ],
+      [
+        "POST",
+        "/comparison-reports/{comparison_report_id}/deletion",
+        "deleteComparisonReport"
+      ],
+      [
+        "POST",
+        "/comparison-reports/{comparison_report_id}/client-report",
+        "prepareComparisonClientReport"
+      ],
+      [
+        "GET",
+        "/comparison-reports/{comparison_report_id}/pdf",
+        "streamComparisonReportPdf"
+      ],
+      [
+        "GET",
+        "/comparison-reports/{comparison_report_id}/source-md",
+        "streamComparisonReportSourceMd"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/stage-assemblies",
+        "createStageAssembly"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/stage-pair-suggestions",
+        "listStagePairSuggestions"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/stage-pairs",
+        "listStagePairs"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/stage-pairs",
+        "confirmStagePair"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/stage-uploads",
+        "listStageUploads"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/stage-uploads",
+        "createStageUpload"
+      ],
+      [
+        "POST",
+        "/stage-assemblies/{stage_assembly_id}/members",
+        "reviseStageAssembly"
+      ],
+      [
+        "GET",
+        "/stage-chain-runs/{stage_chain_run_id}",
+        "getStageChainRun"
+      ],
+      [
+        "POST",
+        "/stage-chain-runs/{stage_chain_run_id}/cancellation",
+        "cancelStageChainRun"
+      ],
+      [
+        "GET",
+        "/stage-link-revisions/{stage_link_revision_id}",
+        "getStageSheetMapRevision"
+      ],
+      [
+        "GET",
+        "/stage-link-revisions/{stage_link_revision_id}/raw-differences",
+        "listStageRawDifferences"
+      ],
+      [
+        "POST",
+        "/stage-link-revisions/{stage_link_revision_id}/text-evidence/recomputation",
+        "recomputeStageTextEvidence"
+      ],
+      [
+        "GET",
+        "/stage-link-revisions/{stage_link_revision_id}/text-exclusions",
+        "listStageTextExclusions"
+      ],
+      [
+        "GET",
+        "/stage-link-revisions/{stage_link_revision_id}/text-hints",
+        "listStageTextHints"
+      ],
+      [
+        "GET",
+        "/stage-pairs/{stage_pair_id}",
+        "getStagePair"
+      ],
+      [
+        "GET",
+        "/stage-pairs/{stage_pair_id}/chain-runs",
+        "listStageChainRuns"
+      ],
+      [
+        "POST",
+        "/stage-pairs/{stage_pair_id}/chain-runs",
+        "startStageChainRun"
+      ],
+      [
+        "POST",
+        "/stage-pairs/{stage_pair_id}/completeness",
+        "setStagePairCompleteness"
+      ],
+      [
+        "GET",
+        "/stage-pairs/{stage_pair_id}/sheet-map",
+        "getStageSheetMap"
+      ],
+      [
+        "POST",
+        "/stage-pairs/{stage_pair_id}/sheet-map",
+        "applyStageSheetMap"
+      ],
+      [
+        "GET",
+        "/stage-pairs/{stage_pair_id}/sheet-map/revisions",
+        "listStageSheetMapHistory"
+      ],
+      [
+        "GET",
+        "/stage-pairs/{stage_pair_id}/sheet-passports",
+        "listStageSheetPassports"
+      ],
+      [
+        "GET",
+        "/stage-pairs/{stage_pair_id}/sheet-suggestions",
+        "listStageSheetSuggestions"
+      ],
+      [
+        "GET",
+        "/stage-pairs/{stage_pair_id}/text-fragments",
+        "listStageTextFragments"
+      ],
+      [
+        "POST",
+        "/stage-upload-candidates/{stage_upload_candidate_id}/confirmation",
+        "confirmStageUploadCandidate"
+      ],
+      [
+        "POST",
+        "/stage-upload-candidates/{stage_upload_candidate_id}/rejection",
+        "rejectStageUploadCandidate"
+      ],
+      [
+        "GET",
+        "/stage-uploads/{stage_upload_id}",
+        "getStageUpload"
+      ],
+      [
+        "POST",
+        "/stage-uploads/{stage_upload_id}/cancellation",
+        "cancelStageUpload"
+      ],
+      [
+        "POST",
+        "/stage-uploads/{stage_upload_id}/files/{stage_upload_file_id}/completion",
+        "completeStageUploadFile"
+      ],
+      [
+        "PUT",
+        "/stage-uploads/{stage_upload_id}/files/{stage_upload_file_id}/parts",
+        "uploadStageUploadPart"
+      ],
+      [
+        "POST",
+        "/stage-uploads/{stage_upload_id}/pause",
+        "pauseStageUpload"
+      ],
+      [
+        "POST",
+        "/stage-uploads/{stage_upload_id}/resume",
+        "resumeStageUpload"
+      ],
+      [
+        "GET",
+        "/stage-link-revisions/{stage_link_revision_id}/chain-estimate",
+        "estimateStageChainRun"
+      ],
+      [
+        "POST",
+        "/stage-chain-runs/{stage_chain_run_id}/resume",
+        "resumeStageChainRun"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/stage-chain-batches",
+        "startStageChainBatch"
+      ],
+      [
+        "GET",
+        "/stage-chain-batches/{stage_chain_batch_id}",
+        "getStageChainBatch"
+      ],
+      [
+        "POST",
+        "/stage-chain-batches/{stage_chain_batch_id}/pause",
+        "pauseStageChainBatch"
+      ],
+      [
+        "POST",
+        "/stage-chain-batches/{stage_chain_batch_id}/resume",
+        "resumeStageChainBatch"
+      ],
+      [
+        "POST",
+        "/stage-chain-batches/{stage_chain_batch_id}/cancellation",
+        "cancelStageChainBatch"
+      ],
+      [
+        "GET",
+        "/stage-chain-runs/{stage_chain_run_id}/ai-reviews",
+        "listStageAiReviews"
+      ],
+      [
+        "GET",
+        "/stage-chain-runs/{stage_chain_run_id}/classifications",
+        "listStageClassifications"
+      ],
+      [
+        "GET",
+        "/stage-chain-runs/{stage_chain_run_id}/synthesis",
+        "getStageSynthesis"
+      ],
+      [
+        "GET",
+        "/stage-chain-runs/{stage_chain_run_id}/graphic-evidence",
+        "listStageGraphicEvidence"
+      ],
+      [
+        "GET",
+        "/stage-chain-runs/{stage_chain_run_id}/sheet-link-repairs",
+        "listStageLinkRepairs"
+      ],
+      [
+        "POST",
+        "/stage-link-repairs/{stage_link_repair_id}/undo",
+        "undoStageLinkRepair"
+      ],
+      [
+        "GET",
+        "/stage-chain-runs/{stage_chain_run_id}/cards",
+        "listStageChangeCards"
+      ],
+      [
+        "GET",
+        "/stage-change-cards/{stage_change_card_id}",
+        "getStageChangeCard"
+      ],
+      [
+        "POST",
+        "/stage-chain-runs/{stage_chain_run_id}/card-verdicts",
+        "applyStageCardVerdicts"
+      ],
+      [
+        "GET",
+        "/stage-change-cards/{stage_change_card_id}/verdicts",
+        "listStageCardVerdicts"
+      ],
+      [
+        "GET",
+        "/stage-chain-runs/{stage_chain_run_id}/journal",
+        "getStageChangeJournal"
+      ],
+      [
+        "GET",
+        "/stage-chain-runs/{stage_chain_run_id}/journal.xlsx",
+        "streamStageChangeJournalXlsx"
+      ],
+      [
+        "GET",
+        "/stage-chain-runs/{stage_chain_run_id}/journal.pdf",
+        "streamStageChangeJournalPdf"
+      ],
+      [
+        "GET",
+        "/stage-chain-runs/{stage_chain_run_id}/journal.html",
+        "streamStageChangeJournalHtml"
+      ],
+      [
+        "GET",
+        "/comparison-page-profiles/{comparison_page_profile_id}/stage-text",
+        "getStageProfileText"
+      ],
+      [
+        "GET",
+        "/stage-assemblies/{stage_assembly_id}",
+        "getStageAssembly"
+      ],
+      [
+        "POST",
+        "/stage-chain-runs/{stage_chain_run_id}/review-cards",
+        "createStageReviewCard"
+      ],
+      [
+        "POST",
+        "/runs/cost-estimate",
+        "estimateRunCost"
+      ],
+      [
+        "POST",
+        "/ar-v3-beta/groups/cost-estimate",
+        "estimateArV3GroupCost"
       ]
     ],
     "schema_names": [
@@ -761,6 +1301,8 @@
       "AppendDecisionRequest",
       "AppendDecisionResponse",
       "ApplyComparisonMatrixEditsRequest",
+      "ApplyStageCardVerdictsRequest",
+      "ApplyStageSheetMapRequest",
       "ApproveRegistrationRequest",
       "ApproveSheetPairingRequest",
       "ApprovedDiffHunk",
@@ -779,6 +1321,7 @@
       "ArV3BetaVisibleProposal",
       "ArV3BetaVisibleReview",
       "ArV3BetaVisibleTopic",
+      "ArV3GroupCostEstimateRequest",
       "ArV3RunGroupId",
       "Assignment",
       "AssignmentDetail",
@@ -798,11 +1341,45 @@
       "ClaimedExecutorTask",
       "ClassifyDocumentVersionRequest",
       "ComparedVersion",
+      "ComparisonAiCeiling",
+      "ComparisonAiCertainty",
+      "ComparisonAiChange",
+      "ComparisonAiConfidence",
+      "ComparisonAiConsent",
+      "ComparisonAiCoverage",
+      "ComparisonAiDeclaredItem",
+      "ComparisonAiDiagnostics",
+      "ComparisonAiEstimate",
+      "ComparisonAiExcludeReason",
+      "ComparisonAiExcluded",
+      "ComparisonAiJob",
+      "ComparisonAiJobCounts",
+      "ComparisonAiJobId",
+      "ComparisonAiJobState",
       "ComparisonAiLink",
       "ComparisonAiLinkAnsweredState",
       "ComparisonAiLinkId",
       "ComparisonAiLinkList",
       "ComparisonAiLinkStatus",
+      "ComparisonAiMethod",
+      "ComparisonAiPairCheck",
+      "ComparisonAiPairCounts",
+      "ComparisonAiPairDecision",
+      "ComparisonAiPairHint",
+      "ComparisonAiPairHintPage",
+      "ComparisonAiPairQuestionId",
+      "ComparisonAiPairQuestionKind",
+      "ComparisonAiPauseReason",
+      "ComparisonAiQueue",
+      "ComparisonAiQueueItem",
+      "ComparisonAiRoute",
+      "ComparisonAiSheetChanges",
+      "ComparisonAiSheetState",
+      "ComparisonAiSide",
+      "ComparisonAiSpend",
+      "ComparisonAiTier",
+      "ComparisonAiTransitionProgress",
+      "ComparisonAiUnresolved",
       "ComparisonBox",
       "ComparisonCanvas",
       "ComparisonCellConfidence",
@@ -815,6 +1392,13 @@
       "ComparisonEditProvenance",
       "ComparisonHowCompared",
       "ComparisonId",
+      "ComparisonLaunchEntry",
+      "ComparisonLaunchEntryId",
+      "ComparisonLaunchEntryState",
+      "ComparisonLaunchItem",
+      "ComparisonLaunchQueue",
+      "ComparisonLaunchQueueCounts",
+      "ComparisonLaunchQueueState",
       "ComparisonLayer",
       "ComparisonMatrix",
       "ComparisonMatrixCandidate",
@@ -830,6 +1414,7 @@
       "ComparisonMatrixEditSource",
       "ComparisonMatrixEditStatus",
       "ComparisonMatrixId",
+      "ComparisonMatrixLabelSource",
       "ComparisonMatrixPreparation",
       "ComparisonMatrixProgress",
       "ComparisonMatrixRevision",
@@ -861,19 +1446,56 @@
       "ComparisonQueueKind",
       "ComparisonQueueModule",
       "ComparisonQueueSummary",
+      "ComparisonRasterSize",
       "ComparisonRefusal",
+      "ComparisonReport",
+      "ComparisonReportArtifact",
+      "ComparisonReportArtifactKind",
+      "ComparisonReportFacts",
+      "ComparisonReportId",
+      "ComparisonReportKind",
+      "ComparisonReportPage",
+      "ComparisonReportPart",
+      "ComparisonReportSource",
+      "ComparisonReportStage",
+      "ComparisonReportState",
+      "ComparisonReportUnitMark",
+      "ComparisonReviewSheet",
+      "ComparisonReviewSheetKind",
+      "ComparisonReviewSheetPage",
       "ComparisonSeries",
       "ComparisonSeriesId",
       "ComparisonSeriesPage",
       "ComparisonSeriesStaleReason",
       "ComparisonSeriesState",
       "ComparisonServiceNote",
+      "ComparisonSheetDescription",
+      "ComparisonSheetDescriptionHistory",
+      "ComparisonSheetDescriptionId",
+      "ComparisonSheetDescriptionRevision",
+      "ComparisonSheetDescriptionSource",
       "ComparisonSheetPair",
       "ComparisonSheetPairId",
       "ComparisonSheetPairPage",
       "ComparisonSheetPairResultId",
+      "ComparisonSheetPairSpecPositions",
       "ComparisonSheetPairState",
       "ComparisonSheetStatus",
+      "ComparisonSpecChange",
+      "ComparisonSpecChangeKind",
+      "ComparisonSpecChangePage",
+      "ComparisonSpecComparisonId",
+      "ComparisonSpecCoverage",
+      "ComparisonSpecExtractionId",
+      "ComparisonSpecFieldChange",
+      "ComparisonSpecMethod",
+      "ComparisonSpecPage",
+      "ComparisonSpecPhase",
+      "ComparisonSpecPosition",
+      "ComparisonSpecState",
+      "ComparisonSpecTotals",
+      "ComparisonSpecification",
+      "ComparisonSpecificationPage",
       "ComparisonStepCounts",
       "ComparisonStepId",
       "ComparisonStepState",
@@ -901,14 +1523,20 @@
       "ComparisonVersionOrderList",
       "ComparisonVersionOrderSource",
       "ConfirmComparisonUploadSetRequest",
+      "ConfirmStagePairRequest",
+      "ConfirmStageUploadCandidateRequest",
       "ConfirmedComparisonFile",
       "CorrectVersionClassificationRequest",
       "CorrelationId",
       "CostBasis",
       "CreateAssignmentRequest",
+      "CreateComparisonReportRequest",
       "CreateComparisonUploadRequest",
       "CreateExecutorConnectionRequest",
       "CreateProjectRequest",
+      "CreateStageAssemblyRequest",
+      "CreateStageReviewCardRequest",
+      "CreateStageUploadRequest",
       "Cursor",
       "DashboardSummary",
       "DecideOptimisationProposalRequest",
@@ -923,6 +1551,7 @@
       "DocumentVersion",
       "DocumentVersionPage",
       "EffectiveVendorLists",
+      "EnqueueComparisonLaunchRequest",
       "ErrorCode",
       "ErrorEnvelope",
       "Evidence",
@@ -1037,6 +1666,7 @@
       "PortalCrop",
       "PortalGeometryState",
       "PortalRecognisedText",
+      "PrepareComparisonClientReportRequest",
       "PresetId",
       "PresetRevisionId",
       "PriceListAmbiguousColumn",
@@ -1074,6 +1704,7 @@
       "ProposalPosition",
       "ProposalVerdict",
       "ProviderMode",
+      "ReauditRunRequest",
       "RegistrationRequest",
       "RegistrationRequestId",
       "RegistrationRequestPage",
@@ -1085,10 +1716,16 @@
       "ReleaseNoteItem",
       "ReleaseNoteKind",
       "ResetUserPasswordRequest",
+      "ResumeComparisonAiJobRequest",
+      "ResumeStageChainRunRequest",
       "ReviseExecutorConnectionRequest",
+      "ReviseStageAssemblyRequest",
       "Role",
       "RunActivity",
       "RunActivitySpend",
+      "RunCostConsent",
+      "RunCostEstimate",
+      "RunCostEstimateRequest",
       "RunExecutor",
       "RunId",
       "RunNormReferences",
@@ -1119,6 +1756,7 @@
       "SetGlobalVendorListRequest",
       "SetJobPriorityRequest",
       "SetProjectVendorListRequest",
+      "SetStagePairCompletenessRequest",
       "SetWorkerIntakeRequest",
       "Severity",
       "Sha256",
@@ -1140,17 +1778,106 @@
       "SpecificationSkipCounts",
       "SpecificationSkippedLine",
       "SpecificationTable",
+      "StageAiClassification",
+      "StageAiClassificationId",
+      "StageAiClassificationPage",
+      "StageAiReview",
+      "StageAiReviewId",
+      "StageAiReviewPage",
+      "StageAiSynthesis",
+      "StageAiSynthesisId",
+      "StageAiSynthesisPage",
+      "StageAiUnitId",
+      "StageAssembly",
+      "StageAssemblyId",
+      "StageAssemblyMember",
+      "StageAtomicEvidenceId",
+      "StageCardEvidence",
+      "StageCardEvidenceId",
+      "StageCardVerdict",
+      "StageCardVerdictId",
+      "StageCardVerdictInput",
+      "StageCardVerdictPage",
+      "StageChainBatch",
+      "StageChainBatchId",
+      "StageChainBatchItem",
+      "StageChainBatchItemId",
+      "StageChainBatchSelection",
+      "StageChainRun",
+      "StageChainRunId",
+      "StageChainRunPage",
+      "StageChainStep",
+      "StageChainStepId",
+      "StageChangeCard",
+      "StageChangeCardId",
+      "StageChangeCardPage",
+      "StageChangeCategory",
+      "StageChangeJournal",
+      "StageClassificationCard",
+      "StageGraphicEvidence",
+      "StageGraphicEvidenceId",
+      "StageGraphicEvidencePage",
       "StageId",
+      "StageLinkInput",
+      "StageLinkItem",
+      "StageLinkItemId",
+      "StageLinkRepair",
+      "StageLinkRepairId",
+      "StageLinkRepairPage",
+      "StageLinkRevision",
+      "StageLinkRevisionId",
+      "StageLinkRevisionPage",
+      "StagePair",
+      "StagePairId",
+      "StagePairPage",
+      "StagePairSuggestion",
+      "StagePairSuggestionPage",
+      "StageProfileText",
+      "StageProfileWord",
+      "StageReviewDecision",
+      "StageSheetPassport",
+      "StageSheetPassportPage",
+      "StageSheetSuggestion",
+      "StageSheetSuggestionPage",
       "StageState",
       "StageStatus",
+      "StageSynthesisResult",
+      "StageSystem",
+      "StageTextDifference",
+      "StageTextDifferenceId",
+      "StageTextDifferencePage",
+      "StageTextExclusion",
+      "StageTextExclusionId",
+      "StageTextExclusionPage",
+      "StageTextFragment",
+      "StageTextFragmentId",
+      "StageTextFragmentPage",
+      "StageTextHint",
+      "StageTextHintId",
+      "StageTextHintPage",
+      "StageUpload",
+      "StageUploadCandidate",
+      "StageUploadCandidateId",
+      "StageUploadFile",
+      "StageUploadFileDeclaration",
+      "StageUploadFileId",
+      "StageUploadFileKind",
+      "StageUploadId",
+      "StageUploadPage",
+      "StageUploadPartReceipt",
       "StartArV3BetaGroupRequest",
+      "StartComparisonAiJobRequest",
+      "StartComparisonAiSheetChangesRequest",
       "StartComparisonSeriesRequest",
       "StartRunRequest",
+      "StartStageChainBatchRequest",
+      "StartStageChainRunRequest",
       "SubmitExecutorTaskAnswerRequest",
       "SubmitRegistrationRequest",
       "SummaryStatement",
       "TransitionAssignmentRequest",
       "UndoComparisonMatrixEditRequest",
+      "UndoStageLinkRepairRequest",
       "UngroundedReason",
       "UpdateMyProfileRequest",
       "UpdateUserRequest",
@@ -1183,6 +1910,6 @@
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0039_comparison_core",
+  "migration_head": "0043_stage_ai_generations",
   "contract_version": "1.13.0"
 }

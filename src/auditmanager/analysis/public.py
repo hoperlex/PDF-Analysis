@@ -89,7 +89,10 @@ from auditmanager.analysis.stages.extraction import (
     NORMALIZATION_DESCRIPTION,
     NORMALIZATION_ID,
 )
-from auditmanager.analysis.stages.source_preparation import document_text
+from auditmanager.analysis.stages.source_preparation import (
+    document_text, run_source_preparation_with_progress,
+)
+from auditmanager.analysis.stages.pdf_precheck import PdfPrecheckProgress
 from auditmanager.analysis.text import (
     ARTIFACT_ROLE,
     CostMeter,
@@ -165,6 +168,7 @@ from auditmanager.analysis.text.source_bytes import (
 from auditmanager.analysis.text.chunk_preflight import ChunkPreflightError
 from auditmanager.analysis.text.proxy import ProxyDispatchError
 from auditmanager.analysis.text.lock import ModelPin, pinned_models
+from auditmanager.analysis.text.cost import model_rate_sha256, require_approved_model, request_cost_upper_usd
 from auditmanager.analysis.text.recorded import RecordedAdapter
 from auditmanager.analysis.text.wire_schema import to_wire_schema, with_wire_schema  # AR-V3-WIRE-SCHEMA-01
 from auditmanager.analysis.text.stage import STAGE_VERSION as TEXT_STAGE_VERSION
@@ -226,6 +230,9 @@ __all__ = [
     "ModelRequest",
     "ModelResponse",
     "pinned_models",
+    "model_rate_sha256",
+    "request_cost_upper_usd",
+    "require_approved_model",
     "PreparedCropItem",
     "ProviderConfig",
     "ProviderMode",
@@ -295,6 +302,8 @@ __all__ = [
     "canonical_bytes",
     "read_artifact",
     "run_stage",
+    "run_source_preparation_with_progress",
+    "PdfPrecheckProgress",
     "recognised_total_characters",
     "run_text_analysis",
     "run_text_analysis_windows",

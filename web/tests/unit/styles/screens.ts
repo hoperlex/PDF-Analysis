@@ -59,7 +59,9 @@ import { NormCatalogueTable } from '@/widgets/norm-catalogue';
 import { NormDocumentFacts, NormParagraphList } from '@/widgets/norm-document';
 import { NormSnapshotHistory, NormSnapshotList } from '@/widgets/norm-snapshots';
 import { ExportPanel } from '@/widgets/export-panel';
-import { ComparisonViewerView, canShowOverlay, initialState, reduce, viewerGeometry } from '@/widgets/comparison-viewer';
+import { ChangesPanelView, ComparisonViewerView, canShowOverlay, initialState, reduce, viewerGeometry } from '@/widgets/comparison-viewer';
+import type { EvidenceState } from '@/widgets/comparison-viewer';
+import { evidenceOf } from '@/entities/version-series';
 import type { TileStatus, ViewerAction, ViewerContext } from '@/widgets/comparison-viewer';
 import { FindingList } from '@/widgets/finding-list';
 import { ProjectList } from '@/widgets/project-list';
@@ -118,7 +120,8 @@ import {
   runStatus,
 } from '../review/fixtures';
 import { addedPair, comparedPair } from '../comparison/viewer/viewer-fixtures';
-import { COMPARISON_SHAPES } from '../version-compare/shapes';
+import { description as aiDescription } from '../version-compare/ai-fixtures';
+import { COMPARISON_SHAPES, panelProps } from '../version-compare/shapes';
 import { newClient, renderScreen, renderWith, seedError } from '../screens/harness';
 import { derivedScreens, malformedVariants, wellFormed } from '../screens/route-screens';
 import {
@@ -413,7 +416,7 @@ const REGISTRATION_REQUEST: RegistrationRequest = {
 function comparisonViewerMarkup(
   pair: ReturnType<typeof comparedPair>,
   steps: ViewerAction[] = [],
-  options: { tiles?: Partial<TileStatus>; dragging?: boolean; navigation?: boolean } = {},
+  options: { tiles?: Partial<TileStatus>; dragging?: boolean; navigation?: boolean; evidence?: EvidenceState; sidePanel?: ReactElement } = {},
 ): string {
   const geometry = viewerGeometry(pair);
   const context: ViewerContext = {
@@ -429,6 +432,8 @@ function comparisonViewerMarkup(
   return render(createElement(ComparisonViewerView, {
     pair, geometry, context, state, tiles, dispatch: noop, ...(options.dragging === true ? { dragging: true } : {}),
     ...(options.navigation === true ? { navigation: { onPrevious: noop, onNext: noop, onClose: noop } } : {}),
+    ...(options.evidence === undefined ? {} : { evidence: options.evidence, onEvidence: noop }),
+    ...(options.sidePanel === undefined ? {} : { sidePanel: options.sidePanel }),
   }));
 }
 
@@ -1755,6 +1760,11 @@ export function screens(): Screen[] {
     add('Comparison viewer, a pair with no evidence yet, a scan, a part of a sheet and an AI link',
       comparisonViewerMarkup(bare, [], { tiles: { urlOf: () => null } }));
     add('Comparison viewer, a pair the viewer cannot draw', comparisonViewerMarkup(addedPair()));
+    // `CMP-VC-UI-02`: the side panel «Изменения в листе» beside the sheet, and the places an AI description cites drawn on it, one at
+    // a time (the current one solid) and all together («Обзор всех»).
+    const cited = evidenceOf(aiDescription());
+    add('Comparison viewer, every cited place at once',
+      comparisonViewerMarkup(comparedPair(), [{ type: 'mode', mode: 'side' }], { evidence: { items: cited, index: 0, all: true }, sidePanel: createElement(ChangesPanelView, panelProps({ description: aiDescription({ recorded: true }), copied: true })) }));
   }
 
   /*

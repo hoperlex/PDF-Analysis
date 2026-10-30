@@ -7,6 +7,90 @@ E2E_PC01_LOGIN=<login> E2E_PC01_PASSWORD=<password> \
 
 A sign-in, two phases, one instrument, one envelope, one exit code.
 
+`BETA-COST-JOURNEY-1030` keeps the existing ordinary starts compatible with required cost approval.
+Each declared start first presses its cost-estimate control, reads the actual successful source-bound response,
+checks that the prefilled finite USD cap equals the server's recommendation and covers its estimate, then presses
+the unchecked approval checkbox. The later start must carry identical version/executor-or-preset/raised-limit
+options, the exact estimate digest/cap and a real command key. Failed/missing/stale endpoints or changed payloads
+fail the step. Recorded mode is required unless `--allow-spend` explicitly permits live approval, including the
+first core Run. No provider mode is selected or replaced by the harness.
+
+The closed `approve_run_cost` action supports `run` and `ar_v3_group`; the latter uses «Оценить стоимость шести
+проверок». The current manifest has six ordinary starts, including two historical pending AR v1 steps. Their
+pending status is preserved; this compatibility update does not invent an executed six-check AR v3 journey or
+activate those older steps. Browser execution of these new approval actions remains **UNVERIFIED**.
+
+Owner dev `3821261a` restores the ordinary original-source АР profile and its default `StartRunControl`.
+The read-only profile-registry step now expects АР status `draft` («черновик, требует экспертной проверки»).
+Historical AR-bound fixtures remain explicitly pending until separately rebased and activated; the removed
+six-check default button is not a prerequisite for this walk. Its API, historical readers and the closed
+`ar_v3_group` cost-approval driver remain available independently of that default UI.
+
+The existing queue re-audit step uses that same `run` cost scope with an explicit captured source Run. Selecting
+«Повторный аудит» automatically reads the selected Run and estimates its version with `reaudit_of_run_id`; the
+driver observes both responses, checks the source/version and the absence of client routing overrides, then
+presses the previously unchecked cost agreement. The subsequent «Подтвердить» must send fresh digest/cap consent
+to that same source's re-audit endpoint with a new command key. A parent's old approval is never substituted.
+
+`CMP-JOURNEY-CODE-01` adds six concrete version-module steps over `fixtures/comparison/vs1`: upload five PDFs,
+confirm grouping/order, prepare the matrix, compare all four adjacent transitions, open real viewer tiles,
+consent to the recorded AI route, and download the resulting Markdown. The steps are part of the existing write half,
+retain every older route/step, and require recorded mode even when `--allow-spend` is present. Missing recordings,
+module wiring, browser controls or terminal results fail the step; they are not skipped.
+
+`CMP-JOURNEY-C4-01` adds eight `cmp-stage-*` steps: four SP-1 PDF documents, assembly and pair confirmation,
+an intentionally swapped map, a full recorded-AI/image chain, HIGH repair undo plus text recomputation and a fresh
+full run, expert verdict, all three real journal groupings/exports, and a REVIEW card over a masked fragment.
+The old SP-1 corpus is unchanged. R2 uses an explicitly declared synthetic derivative with one added circle so an
+actual graphic crop is required, rather than assuming a text edit creates one. Manifest SHA/size fields pin both
+the derivative and original source. The derivative generator is `fixtures/make-sp1-graphic.py`.
+
+**Browser/worker execution is UNVERIFIED.** Syntax/census/conformance checks are code evidence only.
+
+```sh
+node tests/e2e/pc01/journey/comparison-conformance.mjs
+```
+
+This short command checks declarations and exact synthetic corpus bytes only. It starts no browser and gives no
+journey acceptance. Run the full recorded journey tomorrow against the exact integrated candidate, keeping its
+normal response/download envelope. The new `last_response` expectation checks the last recorded poll after the
+bounded UI wait; `requires_idempotency_key` checks the browser's actual command header.
+
+For the C4 recorded window, use an isolated local stand with the exact candidate's migration head and
+`versions,stages` enabled on the API. The normal worker may continue ordinary Run work with comparison modules
+disabled; it must not compete for these recorded comparison items, because production composition deliberately
+refuses recorded C4 routes. In the same local database/S3 environment, explicitly launch the test-owned worker:
+
+```sh
+AUDITMANAGER_PROVIDER_MODE=recorded PYTHONPATH=src .venv/bin/python \
+  tests/e2e/pc01/journey/c4_recorded_worker.py --local-synthetic-only --seed-route \
+  --receipts /tmp/c4-synthetic-receipts.jsonl
+```
+
+This helper requires loopback DB/S3 endpoints, uses real profile/engine/queue/spend code and an explicit
+source-bound **synthetic** reply fixture. It does not replay a real model's answer and does not claim an engineering
+conclusion. It never imports a live model adapter. Unknown request schemas fail. Actual PNG byte digests and the
+request/source/run identity are written to the receipt file; GRAPHIC replies without source images fail.
+It claims stage AI and shared deterministic intake/profile work only. The six preceding version-module steps
+retain their existing recorded-provider prerequisite; this helper does not supply version-AI recordings.
+
+Set `E2E_C4_RECORDED_RECEIPTS=/tmp/c4-synthetic-receipts.jsonl` in the journey process. The eight C4 phases use
+the existing signed-in browser and project captured by the core steps. A focused `--steps` run must include the
+project/core Run prerequisites (or their explicit seed) and remains PARTIAL, exactly as the maintained harness
+already reports. `--allow-spend` never bypasses recorded-only C4 mode. Missing mount, SP-1 proof, HIGH repair,
+route/recording, consent, PNG receipt, terminal result or download is a failed step, never a skip or synthetic PASS.
+
+Static exposure can be regenerated without launching the application:
+
+```sh
+node tests/e2e/pc01/journey/comparison-exposure.mjs
+# For a new dated source snapshot, add --write --source-sha=<exact-reviewed-40-hex-SHA>.
+```
+
+The current table is 32 C3 +24 C4 operations; its prior 55-row snapshot is retained verbatim in
+`fixtures/exposure-cmp-prior.md`. Auth/role/scope/cost/stream declarations remain execution UNVERIFIED until the
+deferred request matrix and browser/download window run.
+
 **The write half** creates a project, uploads the synthetic portal bundle (a ZIP), confirms the uploaded
 version's stage and section (П, ПБ) and starts a run — through the app's own controls, on the public
 origin — then waits for the run's terminal by reading what the run screen's own poller renders. The

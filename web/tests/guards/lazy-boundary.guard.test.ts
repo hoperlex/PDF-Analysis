@@ -62,12 +62,15 @@ import { RunProgress } from '@/widgets/run-progress';
 import { StageComparison } from '@/widgets/stage-comparison';
 
 import { WEB_ROOT, readText, repoRelative, walkFiles } from './lib/repo';
+import { yieldToRunnerAfterEachTest } from './lib/yield-to-runner';
 import { newClient, renderScreen } from '../unit/screens/harness';
 import { routeAddresses } from '../unit/screens/route-screens';
 import { census, palette, parseRules } from '../unit/styles/contrast';
-import type { Rule } from '../unit/styles/contrast';
+import type { Rule, Theme } from '../unit/styles/contrast';
 import { screens } from '../unit/styles/screens';
 import { PROJECT_UID, RUN_ID, VERSION_UID } from '../unit/review/fixtures';
+
+yieldToRunnerAfterEachTest();
 
 // ================================================================= next/dynamic, recorded
 
@@ -438,7 +441,8 @@ function censusRules(): Rule[] {
  *   → `CENSUS screens=80 pairs.light=150 pairs.dark=150`
  *
  * over a disposable clone of `96a1653`, where the probe (quoted whole in
- * `docs/program/W50-LAZY-01.md` §2) computes exactly what `censusCounts()` below computes:
+ * `docs/program/W50-LAZY-01.md` §2) computes the same screen count and per-palette
+ * `censusPairCount()` values checked below:
  * `screens()` from `tests/unit/styles/screens.ts`, and `census()` over them with
  * `globals.css` plus every scoped CSS module, per palette. A PAIR is the census' own key —
  * kind, foreground, background, state, pseudo — not a site.
@@ -447,33 +451,25 @@ function censusRules(): Rule[] {
  */
 const BASELINE = { screens: 90, pairsLight: 171, pairsDark: 171 } as const;
 
-function censusCounts(rendered: ReturnType<typeof screens>): {
-  screens: number;
-  pairsLight: number;
-  pairsDark: number;
-} {
-  const rules = censusRules();
-  return {
-    screens: rendered.length,
-    pairsLight: census(rendered, rules, palette(GLOBALS, 'light')).size,
-    pairsDark: census(rendered, rules, palette(GLOBALS, 'dark')).size,
-  };
+function censusPairCount(rendered: ReturnType<typeof screens>, theme: Theme): number {
+  return census(rendered, censusRules(), palette(GLOBALS, theme)).size;
 }
 
 describe('the contrast census still sees the five widgets', () => {
   const rendered = screens();
 
-  it('(b) holds its screen count and its measured pair count at or above the baseline', () => {
-    const counts = censusCounts(rendered);
-    expect(counts.screens, 'the census renders fewer screens than before the wrappers').toBeGreaterThanOrEqual(
+  it('(b) holds its screen count at or above the baseline', () => {
+    expect(rendered.length, 'the census renders fewer screens than before the wrappers').toBeGreaterThanOrEqual(
       BASELINE.screens,
     );
-    expect(counts.pairsLight, 'the census measures fewer pairs in the light palette').toBeGreaterThanOrEqual(
-      BASELINE.pairsLight,
-    );
-    expect(counts.pairsDark, 'the census measures fewer pairs in the dark palette').toBeGreaterThanOrEqual(
-      BASELINE.pairsDark,
-    );
+  });
+
+  it.each(['light', 'dark'] as const)('(b) holds the %s pair count at or above the baseline', (theme) => {
+    const baseline = theme === 'light' ? BASELINE.pairsLight : BASELINE.pairsDark;
+    expect(
+      censusPairCount(rendered, theme),
+      `the census measures fewer pairs in the ${theme} palette`,
+    ).toBeGreaterThanOrEqual(baseline);
   });
 
   it.each(WIDGETS.map((entry) => [entry.slice, entry] as const))(

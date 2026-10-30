@@ -110,7 +110,15 @@ _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 # `CMP-SEAL-C1` adds nine: the matrix, its edit history and the accepted AI links, the series of a document set and
 # one series, the sheet pairs of a transition and one sheet pair with its tile, and the overview of a project (the
 # queue read names no parent). Fifty-three.
-EXPECTED_ADDRESSED = 53
+# `CMP-SEAL-C2` adds twenty-two: the AI check of a document set (its estimate, the latest check, the hints), the AI
+# description of a series (the estimate and the progress), of a sheet pair (the description, its history, its estimate and
+# its MD) and the sheets to review of a transition, the positions of a specification page and of a sheet pair, the
+# specifications of a series and the specification of a transition (with its changes and estimate), the launch queue of a
+# project, and the MD summary, the reports and one report of a series with its PDF and source. The installation's AI queue
+# names no parent. Seventy-five.
+# `CMP-SEAL-C3`: all sixteen stage GETs address a project, pair, upload, link revision
+# or chain run; none is an unaddressed deployment collection.
+EXPECTED_ADDRESSED = 91
 
 #: Addressed ``GET`` operations with a required query parameter, and a well-formed value for
 #: it naming nothing. Without it the bare path would be ``422`` for the missing parameter --
@@ -134,8 +142,9 @@ REQUIRED_QUERY: dict[str, str] = {
 # With all three, the unaddressed half is twenty.
 # `ANALYSIS-PRESETS-01`'s ``listAnalysisPresets`` is a collection like ``listExecutorConnections``
 # (every preset, no parent), so the unaddressed half is twenty-one. `CMP-SEAL-C1` adds the comparison queue read
-# (``getComparisonQueueSummary``, the installation's queue, no parent): twenty-two.
-EXPECTED_UNADDRESSED = 22
+# (``getComparisonQueueSummary``, the installation's queue, no parent): twenty-two. `CMP-SEAL-C2` adds the installation's
+# AI queue (``getComparisonAiQueue``, no parent): twenty-three.
+EXPECTED_UNADDRESSED = 23
 
 #: Unaddressed `GET` operations that are not collections and are exempt from
 #: ``test_a_collection_that_names_no_parent_answers_a_page``'s page-shape assertion.
@@ -195,6 +204,8 @@ EXECUTION_COLLECTIONS = frozenset({"listExecutionQueue", "listExecutionJournal"}
 #: state and kind); it answers `503 dependency_unavailable` until `CMP-VC-OVERVIEW-01` serves it, and then joins
 #: the aggregate operations above, which are objects and not pages.
 #: `CMP-VC-OVERVIEW-01` serves it and empties this set: it joins :data:`COMPARISON_QUEUE_OPERATIONS`.
+#: `CMP-SEAL-C2`: ``getComparisonAiQueue`` names no parent and is not a page (the AI jobs of the installation with their
+#: counts); it answers `503 dependency_unavailable` until `CMP-VC-QUEUE-01` serves it, and then it leaves this set.
 SEALED_STUB_COLLECTIONS: frozenset[str] = frozenset()
 
 #: `CMP-VC-OVERVIEW-01`. ``getComparisonQueueSummary`` is an aggregate of the whole installation, not a page and not a
@@ -231,7 +242,38 @@ COMPARISON_QUEUE_OPERATIONS = frozenset({"getComparisonQueueSummary"})
 #: (:data:`EXPECTED_ADDRESSED`) does not change: they are addressed whether stubbed or served.
 #: `CMP-VC-OVERVIEW-01` serves ``getComparisonOverview`` and empties this set: an absent project is `404 not_found`,
 #: never an empty overview.
-SEALED_STUB_ADDRESSED: frozenset[str] = frozenset()
+#: `CMP-SEAL-C2` fills it with the twenty-two reads of the version comparison AI, specifications, launch queue and reports
+#: that name a parent; `CMP-VC-AIPAIR-01`, `CMP-VC-AISHEET-01`, `CMP-VC-SPEC-01`, `CMP-VC-QUEUE-01` and `CMP-VC-REPORT-01`
+#: remove the ones they wire, and each then joins the `404` sweep (an absent project, document, series, transition,
+#: sheet pair, page profile or report is `404 not_found`).
+#: `CMP-VC-AIPAIR-01` serves ``estimateComparisonAiPairCheck``, ``getComparisonAiPairCheck`` and
+#: ``listComparisonAiPairHints`` and removes them: each joins the `404` sweep.
+#: `CMP-VC-AISHEET-01` and `CMP-VC-REPORT-01` serve these reads. The dedicated test below checks
+#: both the module gate and an absent parent.
+MODULE_GATED_ADDRESSED: frozenset[str] = frozenset({
+    "getComparisonLaunchQueue",
+    "estimateComparisonAiSheetChanges",
+    "getComparisonAiSheetChanges",
+    "getComparisonSheetDescription",
+    "listComparisonSheetDescriptionHistory",
+    "estimateComparisonSheetDescription",
+    "streamComparisonSheetDescriptionMd",
+    "listComparisonReviewSheets",
+    "streamComparisonSeriesSummary",
+    "listComparisonReports",
+    "getComparisonReport",
+    "streamComparisonReportPdf",
+    "streamComparisonReportSourceMd",
+})
+SEALED_STUB_ADDRESSED: frozenset[str] = frozenset({
+    # `CMP-SEAL-C3`: before the stage lanes wire their reads, an absent parent cannot
+    # be distinguished from an existing one. The module gate/stub must answer 503.
+    "getStageChainRun", "getStagePair", "getStageSheetMap", "getStageSheetMapRevision",
+    "getStageUpload", "listStageChainRuns", "listStagePairSuggestions", "listStagePairs",
+    "listStageRawDifferences", "listStageSheetMapHistory", "listStageSheetPassports",
+    "listStageSheetSuggestions", "listStageTextExclusions", "listStageTextFragments",
+    "listStageTextHints", "listStageUploads",
+})
 
 #: `W55A-SEAL-01`. ``searchNorms`` addresses no parent but is not a listing of everything:
 #: its ``q`` is required, so the bare path is ``422 validation_failed`` on ``q`` and never a
@@ -305,8 +347,12 @@ def app() -> Composed:
     assert os.environ.get("DATABASE_URL"), "this suite needs the lane's .env loaded"
     # No reviewed pack is installed in this suite, whatever the process environment names:
     # `test_the_server_pack_status_answers_its_own_shape` asserts that state.
+    # `CMP-VC-AIPAIR-01`: the versions module is on (see `test_router_answers.py`): a wired C2 read is judged on its own `404`.
     environ = {k: v for k, v in os.environ.items() if k != PACK_MANIFEST_ENV} | {
-        API_TOKEN_VARIABLE: DEPLOYMENT_SECRET
+        API_TOKEN_VARIABLE: DEPLOYMENT_SECRET,
+        # A wired comparison read of wave C2 refuses first while the versions module is off (`CMP-SEAL-C2` section 8), so the sweep
+        # serves the module: its rule is the answer to an identity that names nothing, which a gate that came first would hide.
+        "AUDITMANAGER_COMPARISON_MODULES": "versions",
     }
     application = create_app(environ=environ)
     asgi = create_asgi_app(environ=environ, application=application)
@@ -411,17 +457,40 @@ def test_every_get_that_names_a_parent_refuses_an_identity_that_names_nothing(
     """
     disagreements = []
     for operation_id, template in _addressed(_get_routes(app)):
-        if operation_id in SEALED_STUB_ADDRESSED or operation_id in RUNNER_ADDRESSED:
+        if operation_id in SEALED_STUB_ADDRESSED or operation_id in RUNNER_ADDRESSED or operation_id in MODULE_GATED_ADDRESSED:
             continue
         path = re.sub(r"\{(\w+)\}", lambda m: _absent_identity(m.group(1)), template)
         status, body = _get(app, path + REQUIRED_QUERY.get(operation_id, ""))
         code = body.get("error_code") if isinstance(body, dict) else None
+        if operation_id in MODULE_GATED_ADDRESSED:
+            named = (body.get("details") or {}).get("dependency") if isinstance(body, dict) else None
+            if (status, code, named) != (503, "dependency_unavailable", "comparison_modules"):
+                disagreements.append((operation_id, path, status, code))
+            continue
         if (status, code) != (404, "not_found"):
             disagreements.append((operation_id, path, status, code))
     assert disagreements == [], (
         "these operations answered something other than 404 not_found for an identity "
         f"that names nothing: {disagreements}"
     )
+
+
+def test_the_wired_c2_reads_are_404_for_an_absent_parent_once_the_module_is_on(app: Composed) -> None:
+    """The sheet and report reads answer `404 not_found` for an absent identity with versions on;
+    with the module off, they refuse first."""
+    off_environ = {k: v for k, v in os.environ.items() if k != PACK_MANIFEST_ENV} | {
+        API_TOKEN_VARIABLE: DEPLOYMENT_SECRET, "AUDITMANAGER_COMPARISON_MODULES": "none",
+    }
+    application = create_app(environ=off_environ)
+    off = Composed(application, TestClient(create_asgi_app(environ=off_environ, application=application), raise_server_exceptions=False))
+    swept = [(op, path) for op, path in _addressed(_get_routes(app)) if op in MODULE_GATED_ADDRESSED]
+    assert {op for op, _ in swept} == MODULE_GATED_ADDRESSED
+    for operation_id, template in swept:
+        path = re.sub(r"\{(\w+)\}", lambda m: _absent_identity(m.group(1)), template) + REQUIRED_QUERY.get(operation_id, "")
+        status, body = _get(app, path)
+        assert (status, body.get("error_code")) == (404, "not_found"), (operation_id, status, body)
+        status, body = _get(off, path)
+        assert (status, body.get("error_code"), body["details"]["dependency"]) == (503, "dependency_unavailable", "comparison_modules"), operation_id
 
 
 def test_a_section_filter_answers_the_section_and_refuses_what_names_nothing(app: Composed) -> None:

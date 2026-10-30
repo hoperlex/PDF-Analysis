@@ -129,6 +129,29 @@ from auditmanager.comparison.spend.model import (
 )
 from auditmanager.comparison.spend.repository import ComparisonSpendRepository
 from auditmanager.comparison.spend.settler import settle_lost_attempt
+from auditmanager.comparison.stage.admission import StageCandidateAdmissionService
+from auditmanager.comparison.stage.assemblies import StageAssemblyService
+from auditmanager.comparison.stage.profile_text import StageProfileTextService
+from auditmanager.comparison.stage.pairs import StagePairCommandService, StagePairReadRepository
+from auditmanager.comparison.stage.candidates import StageCandidateDecisionService
+from auditmanager.comparison.stage.completion import StageRawCompletionService
+from auditmanager.comparison.stage.lifecycle import StageUploadLifecycleService
+from auditmanager.comparison.stage.publication import StageCandidatePublicationService
+from auditmanager.comparison.stage.uploads import (
+    StageDeclaredFile, StageUploadPartService, StageUploadService,
+)
+from auditmanager.comparison.stage_links.map import LinkInput, StageSheetMapService
+from auditmanager.comparison.stage_links.read import StageSheetReadService
+from auditmanager.comparison.stage_graphic.service import StageGraphicService
+from auditmanager.comparison.stage_ai.runtime import StageAiRuntime
+from auditmanager.comparison.stage_run.service import StageChainService
+from auditmanager.comparison.stage_run.batch import StageBatchService
+from auditmanager.comparison.stage_run.factories import stage_chain_handler, stage_chain_batch_handler
+from auditmanager.comparison.stage_repair.service import StageRepairService
+from auditmanager.comparison.stage_review.service import StageReviewService
+from auditmanager.comparison.stage_text.read import StageTextReadService
+from auditmanager.comparison.stage_text.recompute import StageTextRecomputeService
+from auditmanager.comparison.stage_text.handler import stage_text_recompute_handler
 from auditmanager.comparison.work.errors import (
     HandlerRegistryError,
     UnhandledKindError,
@@ -222,6 +245,81 @@ from auditmanager.comparison.series import (
 # `CMP-VC-OVERVIEW-01`: the overview of «Проекты и этапы» and the comparison queue summary (two reads, no work kind).
 from auditmanager.comparison.overview import ComparisonOverviewService
 
+# `CMP-VC-SPEC-01`: specifications of a version comparison (positions by GOST 21.110, the whole-specification comparison).
+from auditmanager.comparison.specification.reader import SpecificationReader
+from auditmanager.comparison.specification.service import SpecificationService
+from auditmanager.comparison.specification.method import SpecMethod, spec_handler
+from auditmanager.comparison.specification.transition import TransitionRun
+
+# `CMP-AI-JOBS-01`: the shared core of consented AI jobs (estimate, keyed start with consent, the state edges, the spend pause,
+# the reads, recorded mode). The four method lanes build on `ComparisonAiJobService`; none writes `comparison_ai_job` itself.
+from auditmanager.comparison.ai_jobs.estimate import build_estimate as build_ai_estimate
+from auditmanager.comparison.ai_jobs.estimate import read_route as read_ai_route
+from auditmanager.comparison.ai_jobs.estimate import route_missing as ai_route_missing
+from auditmanager.comparison.ai_jobs.model import (
+    METHODS as AI_METHODS,
+    AiCallGroup,
+    AiConsentInput,
+    AiCounts,
+    AiEstimate,
+    AiEstimateRequest,
+    AiJobRecord,
+    AiJobSpend,
+    AiJobView,
+    AiMethod,
+    AiMode,
+    AiProgress,
+    AiRoute,
+    AiScope,
+    AiTotals,
+    AiWaitingJobs,
+    AiWorkItemSpec,
+)
+from auditmanager.comparison.ai_jobs.model import digest_of as ai_digest_of
+from auditmanager.comparison.ai_jobs.model import work_kind_of as ai_work_kind_of
+from auditmanager.comparison.ai_jobs.recorded import RecordedAnswers
+from auditmanager.comparison.ai_jobs.service import AiJobCommand, ComparisonAiJobService
+from auditmanager.comparison.ai_jobs.service import pause_reason_of as ai_pause_reason_of
+
+# `CMP-VC-AIPAIR-01`: the AI check of the doubtful sheet pairs (its service, its work kind and its handler).
+from auditmanager.comparison.ai_pairs.decide import decide as decide_pair_check
+from auditmanager.comparison.ai_pairs.handler import (
+    ModelBinder as AiPairModelBinder,
+    PairCheckHandler,
+    pair_check_handler,
+)
+from auditmanager.comparison.ai_pairs.model import PAIR_CHECK_KIND, PROMPT_VERSION as PAIR_CHECK_PROMPT_VERSION
+from auditmanager.comparison.ai_pairs.service import ComparisonAiPairService
+
+# `CMP-VC-AISHEET-01`: the AI description of sheet changes (method ``sheet_changes``, work kind ``comparison_sheet_changes``).
+from auditmanager.comparison.ai_sheets.describe import build_request as sheet_changes_request
+from auditmanager.comparison.ai_sheets.description import sheet_markdown as sheet_description_markdown
+from auditmanager.comparison.ai_sheets.handler import (
+    ModelRoutes as SheetModelRoutes,
+    SheetChangesHandler,
+    sheet_changes_handler,
+)
+from auditmanager.comparison.ai_sheets.material import ProfileMaterial, SheetMaterial
+from auditmanager.comparison.ai_sheets.method import SheetChangesMethod
+from auditmanager.comparison.ai_sheets.model import WORK_KIND as SHEET_CHANGES_KIND
+from auditmanager.comparison.ai_sheets.schema import PROMPT_VERSION as SHEET_CHANGES_PROMPT_VERSION
+from auditmanager.comparison.ai_sheets.service import ComparisonAiSheetService
+
+# `CMP-VC-REPORT-01` (ADR-0025 decisions 3, 8, 10, 19, 24): the MD summary of a series and the PDF reports built from it, over the shared AI-job core.
+from auditmanager.comparison.report.handler import (
+    ModelSource as ReportModelSource,
+    ReportHandler,
+    StaticModelSource as ReportStaticModelSource,
+    UnavailableModelSource as ReportUnavailableModelSource,
+    report_handler,
+)
+from auditmanager.comparison.report.service import ComparisonReportService, ReportPage
+from auditmanager.comparison.report.summary import build_summary as build_series_summary
+
+# `CMP-VC-QUEUE-01`: durable, per-project launch queue of selected comparison steps.
+from auditmanager.comparison.queue.handler import ComparisonLaunchHandler, comparison_launch_handler
+from auditmanager.comparison.queue.service import ComparisonLaunchQueueService
+
 #: `CMP-WORK-01` (ADR-0025 decision 4). One tuple of handler factories, each
 #: ``Callable[[WorkDependencies], WorkHandler]``: ``build_worker_runtime`` builds one dependency
 #: bundle and applies every factory to it, and refuses to start on a duplicate ``kind``. A slice
@@ -233,6 +331,14 @@ HANDLER_FACTORIES: tuple[HandlerFactory, ...] = (
     series_pair_handler,  # `CMP-SERIES-01`: kind ``series_pair``
     series_drive_handler,  # `CMP-SERIES-01`: kind ``series_drive``
     series_after_preparation_handler,  # `CMP-SERIES-01`: kind ``series_after_preparation``
+    pair_check_handler,  # `CMP-VC-AIPAIR-01`: kind ``comparison_pair_check``
+    report_handler,  # `CMP-VC-REPORT-01`: kind ``comparison_report``
+    sheet_changes_handler,  # `CMP-VC-AISHEET-01`: kind ``comparison_sheet_changes``
+    spec_handler,  # `CMP-VC-SPEC-01`: kind ``comparison_spec``
+    comparison_launch_handler,  # `CMP-VC-QUEUE-01`: kind ``comparison_launch``
+    stage_chain_handler,
+    stage_chain_batch_handler,
+    stage_text_recompute_handler,  # `CMP-STAGE-TEXT-RECOMPUTE-01`: deterministic C3 evidence
 )
 
 #: `CMP-WORK-01`. Called inside the reclaim transaction for each attempt whose lease was lost:
@@ -283,6 +389,31 @@ from auditmanager.comparison.tiles.reader import PairTileReader
 PAGE_PROFILE_WORK_KIND = "page_profile"
 
 __all__ = [
+    "StageAssemblyService", "StageProfileTextService", "StagePairCommandService", "StagePairReadRepository",
+    "LinkInput",
+    "StageSheetMapService",
+    "StageSheetReadService",
+    "StageTextReadService",
+    "StageTextRecomputeService",
+    "StageGraphicService", "StageAiRuntime", "StageChainService", "StageBatchService",
+    "StageRepairService", "StageReviewService",
+    "stage_chain_handler", "stage_chain_batch_handler",
+    "stage_text_recompute_handler",
+    "StageCandidateAdmissionService",
+    "StageCandidateDecisionService",
+    "StageCandidatePublicationService",
+    "StageDeclaredFile",
+    "StageRawCompletionService",
+    "StageUploadLifecycleService",
+    "StageUploadPartService",
+    "StageUploadService",
+    "PAIR_CHECK_KIND",
+    "PAIR_CHECK_PROMPT_VERSION",
+    "AiPairModelBinder",
+    "ComparisonAiPairService",
+    "PairCheckHandler",
+    "decide_pair_check",
+    "pair_check_handler",
     "ENGINE_ALGO_VERSION",
     "MASK_FORMAT",
     "MASK_LAYERS",
@@ -325,6 +456,9 @@ __all__ = [
     "Completed",
     "ComparisonWorkRepository",
     "ComparisonWorkRunner",
+    "ComparisonLaunchQueueService",
+    "ComparisonLaunchHandler",
+    "comparison_launch_handler",
     "Enqueued",
     "Failed",
     "HANDLER_FACTORIES",
@@ -485,4 +619,54 @@ __all__ = [
     "series_drive_handler",
     "series_pair_handler",
     "ComparisonOverviewService",
+    "AI_METHODS",
+    "AiCallGroup",
+    "AiConsentInput",
+    "AiCounts",
+    "AiEstimate",
+    "AiEstimateRequest",
+    "AiJobCommand",
+    "AiJobRecord",
+    "AiJobSpend",
+    "AiJobView",
+    "AiMethod",
+    "AiMode",
+    "AiProgress",
+    "AiRoute",
+    "AiScope",
+    "AiTotals",
+    "AiWaitingJobs",
+    "AiWorkItemSpec",
+    "ComparisonAiJobService",
+    "ComparisonReportService",
+    "RecordedAnswers",
+    "ReportHandler",
+    "ReportModelSource",
+    "ReportPage",
+    "ReportStaticModelSource",
+    "ReportUnavailableModelSource",
+    "ai_digest_of",
+    "ai_pause_reason_of",
+    "ai_route_missing",
+    "ai_work_kind_of",
+    "build_ai_estimate",
+    "build_series_summary",
+    "read_ai_route",
+    "SpecificationReader",
+    "SpecMethod",
+    "SpecificationService",
+    "TransitionRun",
+    "spec_handler",
+    "ComparisonAiSheetService",
+    "ProfileMaterial",
+    "SHEET_CHANGES_KIND",
+    "SHEET_CHANGES_PROMPT_VERSION",
+    "SheetChangesHandler",
+    "SheetChangesMethod",
+    "SheetMaterial",
+    "SheetModelRoutes",
+    "sheet_changes_handler",
+    "sheet_changes_request",
+    "sheet_description_markdown",
+    "report_handler",
 ]

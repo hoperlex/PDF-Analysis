@@ -64,10 +64,20 @@ __all__ = [
 ]
 
 KINDS: Final[tuple[str, ...]] = ("http_api", "ssh_command", "pull")
-#: Today exactly one run stage calls a model (plan section 2.2).
-WORK_KINDS: Final[tuple[str, ...]] = ("text_analysis",)
+#: One run stage calls a model (plan section 2.2), and the version comparison has four kinds of model
+#: work of its own (`CMP-SEAL-C2`, ADR-0025 decision 17): the AI check of doubtful pairs, the AI
+#: description of changes, the comparison of whole specifications and the report. `comparison_stage_review`
+#: joins with `CMP-SEAL-C4`.
+WORK_KINDS: Final[tuple[str, ...]] = (
+    "text_analysis",
+    "comparison_pair_check",
+    "comparison_sheet_changes",
+    "comparison_spec",
+    "comparison_report",
+    "comparison_stage_review",
+)
 #: Which connection kinds can serve which kind of model work.
-SERVES: Final[Mapping[str, frozenset[str]]] = {"text_analysis": frozenset(KINDS)}
+SERVES: Final[Mapping[str, frozenset[str]]] = {kind: frozenset(KINDS) for kind in WORK_KINDS}
 API_FLAVOURS: Final[tuple[str, ...]] = ("openai_chat", "anthropic_messages")
 TRANSPORTS: Final[tuple[str, ...]] = ("direct", "vpn", "ssh_tunnel")
 SSH_PROFILES: Final[tuple[str, ...]] = ("claude_code_headless", "custom_command")

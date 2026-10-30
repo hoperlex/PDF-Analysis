@@ -1,0 +1,22 @@
+# CMP-STAGE-LINK-01 — working record
+
+Task: [`CMP-STAGE-LINK-01`](tasks/CMP-STAGE-LINK-01.md). Base `bd4de371310209c2c253030bf37f31cfa0056fdb` is the completed stage-pair lane; API `1.12.0` and migration `0041` stay frozen. This branch has no remote publication authority.
+
+## Implemented so far
+
+- Deterministic passports parse only explicit stored stamp title and sheet-number text. Missing type, корпус, этаж/кровля and уровень remain unknown; no display name becomes identity.
+- Suggestions use the specified weights: корпус 4, этаж 4, уровень 3, тип 2, Sheet 1 and matching page ordinal 1. Conflicting known корпус, этаж or тип suppresses the suggestion, even if the weak fields match. A high label requires a unique exact semantic key on both sides; every suggestion remains nonbinding. The preview retains the five best candidates per left page, with stable ties, so an ambiguous large assembly cannot produce an unbounded response.
+- An expert can write a complete keyed map revision into the sealed `stage_link_revision` and `stage_link_item` tables. A PostgreSQL transaction lock and the migration trigger enforce the base revision. Inputs may repeat a profile across different rows for many-to-many links and can state `only_left`/`only_right`; an identical row is refused. The service validates current ready profiles against the pair and returns `not_found` for wrong-side and foreign-project IDs. The command, revision, items and audit event commit together; reads return current, history and immutable revision by ID.
+- The six sealed link operations now reach the read and map services when `versions,stages` is enabled. The read service uses only the latest version and complete ready page-profile summaries; a missing page refuses explicitly. It reads current assembly membership and returns stable passports from the stored stamp, then derives suggestions. The module-off surface still refuses before a service call.
+- The stage screen now has a second tab. An expert can inspect two page previews, filter the page selectors by stamp, accept visible high suggestions, add a link or explicit unmatched page, move a sheet to the nearest free place below a target row, remove a link into explicit unmatched rows, and save the full draft as a new revision. Unchanged rows retain their prior confidence; changed paired rows become manual. An administrator sees the map without save controls. Page images come from the existing generated `streamVersionPagePreview` client and are revoked when the preview closes.
+
+## Evidence
+
+- Pure passport/suggestion tests: **5 passed** (`/tmp/cmp-stage-link-hints3.log`). Browser draft rules: **3 passed**.
+- Final scoped unit, isolated PostgreSQL map/profile, real HTTP and composition tests: **78 passed** (`/tmp/cmp-stage-link-full.log`). DB tests cover many-to-many, explicit unmatched, keyed replay, same-key conflict, stale base, wrong-side and cross-project refusal, revision history, preserved high-confidence rows, ordered Р assembly members and audit event. The HTTP test covers module-off 503, passports, a high hint, keyed save/replay, current map and history. The C3 composition sweep proves six served link operations and the remaining typed stubs.
+- Focused stage screen and draft Vitest: **8 passed** (`/tmp/cmp-stage-link-web-final.log`); web typecheck and lint passed. Generated client verification reported **230 operations, OK**. No generated client, contract or migration bytes were edited.
+- Screen-registry guard: **14 passed** (`/tmp/cmp-stage-link-web-guards.log`); `git diff --check` is clean and `CURRENT_STATE.md` remains 120 lines.
+
+## Remaining
+
+The stage page's two-panel preview is functional, but the existing `comparison-viewer` public component requires a `ComparisonSheetPairId` and calls the version-pair tile endpoint. A stage link has only page-profile IDs and no such comparison result or tile route, so mounting that component would invent an identity. The frozen API also exposes no stored page words for the requested per-panel **text** search; the implemented filter searches stamp metadata. These two plan details need a later contract/component seam before this task can claim full parity. The browser loads up to 1,000 passports per pair and only the first 100 suggested links; larger pairs are explicitly refused in the browser, while the backend reads remain paged. No integrated gate or full task handoff is claimed yet.

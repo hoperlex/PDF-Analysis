@@ -27,11 +27,12 @@ vi.mock('@/shared/api', async (importOriginal) => {
     listAnalysisPresets: vi.fn(),
     reviseAnalysisPreset: vi.fn(),
     startRun: vi.fn(),
+    estimateRunCost: vi.fn(),
   };
 });
 
 import {
-  ApiError, archiveAnalysisPreset, createAnalysisPreset, listAnalysisPresets, queryKeys, reviseAnalysisPreset, startRun,
+  ApiError, archiveAnalysisPreset, createAnalysisPreset, listAnalysisPresets, queryKeys, reviseAnalysisPreset, startRun, estimateRunCost,
 } from '@/shared/api';
 import type { AnalysisPreset, ErrorEnvelope, RunStatus } from '@/shared/api';
 import { ANALYSIS_PRESETS_KEY, presetBlocker, presetChoices, presetFailure, presetOptionLabel } from '@/entities/analysis-preset';
@@ -45,6 +46,7 @@ import { PROJECT_UID, VERSION_UID, render, runStatus } from '../review/fixtures'
 import { newClient, renderWith } from '../screens/harness';
 import { READY, SPARE, ALL_CASES, executorCase, seedExecutors } from '../workers/executor-fixtures';
 import { mountLive } from './live-render';
+import { COST_CONSENT, approveCost, costEstimate } from './cost-estimate-fixtures';
 import type { LiveRender } from './live-render';
 
 type Client = ReturnType<typeof newClient>;
@@ -366,7 +368,7 @@ describe('the start control', () => {
     expect(text).toContain('— недоступно: исполнитель недоступен');
   });
 
-  it('says the presets are unread and still lets a run start without one', () => {
+  it('says the presets are unread and still permits estimation without one', () => {
     const client = newClient();
     seedExecutors(client, [READY, SPARE]);
     client.getQueryCache().build(client, {
@@ -378,7 +380,8 @@ describe('the start control', () => {
     const markup = control(client);
     expect(markup).toContain('data-preset-list-failure');
     expect(markup).toContain('Прогон можно запустить и без пресета.');
-    expect(markup).toMatch(/<button type="button" class="am-button">Запустить прогон<\/button>/);
+    expect(markup).toMatch(/<button type="button" class="am-button">Оценить стоимость<\/button>/);
+    expect(markup).toMatch(/<button type="button" class="am-button" disabled="">Запустить прогон<\/button>/);
   });
 });
 
@@ -388,6 +391,7 @@ describe('the start control, live', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.mocked(startRun).mockResolvedValue({ data: { run_id: 'run_01M2545JSD15ETSNNV904X993K' } } as never);
+    vi.mocked(estimateRunCost).mockImplementation(async ({ body }) => ({ data: costEstimate(body) }) as never);
   });
 
   afterEach(async () => {
@@ -410,9 +414,10 @@ describe('the start control, live', () => {
     expect(await view.change('Пресет', presetId(1))).toBe(true);
     expect(view.markup()).toContain('Исполнитель задан пресетом «Быстрый черновик». Чтобы выбрать другого, снимите пресет.');
     expect(await view.change('Исполнитель', SPARE.connection.connection_id)).toBe(false); // locked
+    await approveCost(view);
     await view.press('Запустить прогон');
     expect(startRun).toHaveBeenCalledTimes(1);
-    expect(body()).toEqual({ version_uid: VERSION_UID, preset_id: presetId(1) });
+    expect(body()).toEqual({ version_uid: VERSION_UID, preset_id: presetId(1), cost_consent: COST_CONSENT });
   });
 
   it('forgets the hand-chosen executor when a preset is chosen, and returns to the route when it is taken off', async () => {
@@ -420,23 +425,27 @@ describe('the start control, live', () => {
     await view.change('Исполнитель', READY.connection.connection_id);
     await view.change('Пресет', presetId(1));
     await view.change('Пресет', '');
+    await approveCost(view);
     await view.press('Запустить прогон');
-    expect(body()).toEqual({ version_uid: VERSION_UID });
+    expect(body()).toEqual({ version_uid: VERSION_UID, cost_consent: COST_CONSENT });
   });
 
   it('keeps the executor choice by hand when no preset is chosen', async () => {
     const view = await mountControl([preset(1)]);
     await view.change('Исполнитель', READY.connection.connection_id);
+    await approveCost(view);
     await view.press('Запустить прогон');
-    expect(body()).toEqual({ version_uid: VERSION_UID, executor_connection_id: READY.connection.connection_id });
+    expect(body()).toEqual({ version_uid: VERSION_UID, executor_connection_id: READY.connection.connection_id, cost_consent: COST_CONSENT });
   });
 
   it('uses one key for the same intent and another for another preset', async () => {
     const view = await mountControl([preset(1), preset(2)]);
     await view.change('Пресет', presetId(1));
+    await approveCost(view);
     await view.press('Запустить прогон');
     await view.press('Запустить прогон');
     await view.change('Пресет', presetId(2));
+    await approveCost(view);
     await view.press('Запустить прогон');
     const keys = vi.mocked(startRun).mock.calls.map((call) => (call[0] as { idempotencyKey: string }).idempotencyKey);
     expect(keys).toHaveLength(3);
@@ -444,13 +453,14 @@ describe('the start control, live', () => {
     expect(keys[2]).not.toBe(keys[0]);
   });
 
-  it('sends the version alone when no preset and no executor was chosen, as it always did', async () => {
+  it('sends no executor or preset when neither was chosen, plus explicit cost consent', async () => {
     live = await mountLive(createElement(QueryClientProvider, { client: seeded([preset(1)]) },
       createElement(StartRunControl, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
+    await approveCost(live);
     await live.press('Запустить прогон');
     expect(startRun).toHaveBeenCalledTimes(1);
     const call = vi.mocked(startRun).mock.calls[0]![0] as { body: Record<string, unknown> };
-    expect(call.body).toEqual({ version_uid: VERSION_UID });
+    expect(call.body).toEqual({ version_uid: VERSION_UID, cost_consent: COST_CONSENT });
   });
 });
 

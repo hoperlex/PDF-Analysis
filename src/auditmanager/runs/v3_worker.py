@@ -14,6 +14,7 @@ from auditmanager.ingest.public import CommandRepository
 from auditmanager.jobs.public import AttemptAuthority, JobRepository
 from auditmanager.runs.provider import ProviderBinding
 from auditmanager.runs.repository import RunRepository
+from auditmanager.runs.cost_policy import read_run_cost_policy
 from auditmanager.runs.v3_cite_stage import run_v3_cite_stage
 from auditmanager.runs.v3_group import TrustedPackRegistry
 from auditmanager.runs.v3_provider_call import dispatch_v3_provider_call
@@ -115,6 +116,10 @@ def run_v3_worker_chain(
     run_repo = runs or RunRepository()
     _check_ceiling(cost_ceiling_usd)
     relaxed_limits = _relaxed_limits_for_run(session, authority.run_id, run_repo)
+    policy = read_run_cost_policy(session, run_id=authority.run_id,
+        default_ceiling_usd=cost_ceiling_usd, runs=run_repo)
+    cost_ceiling_usd = policy.ceiling_usd
+    ignore_cost_halt = not policy.enforce_ceiling
     before = run_repo.stage_results(session, authority.run_id)
     citation_rows = tuple(row for row in before if row.stage_id == "ar_v3_citation_review")
     if len(citation_rows) > 1:
@@ -133,7 +138,7 @@ def run_v3_worker_chain(
             if not _no_completed_call(error):
                 raise
             prior = run_repo.cost(session, authority.run_id)
-            if not relaxed_limits and prior is not None and prior.cost_micros >= cost_ceiling_usd * 1_000_000:
+            if not ignore_cost_halt and prior is not None and prior.cost_micros >= cost_ceiling_usd * 1_000_000:
                 raise _budget_exceeded()
             dispatch_v3_provider_call(
                 session, authority=authority, registry=registry,
@@ -141,12 +146,13 @@ def run_v3_worker_chain(
                 provider=provider_for_dispatch(),
                 settings=V3_RELAXED_SETTINGS if relaxed_limits else V3_BETA_SETTINGS,
                 jobs=job_repo, runs=run_repo, documents=documents, blobs=blobs,
+                cost_policy=policy,
             )
             dispatched = True
             call = job_repo.completed_v3_call(
                 session, authority, lock_authority=False,
             )
-        _check_completed_cost(call, cost_ceiling_usd, relaxed_limits=relaxed_limits)
+        _check_completed_cost(call, cost_ceiling_usd, relaxed_limits=ignore_cost_halt)
         run_v3_cite_stage(
             session, authority=authority, registry=registry, blob_store=blob_store,
             max_text_bytes=MAX_V3_SAVED_TEXT_BYTES,
@@ -156,7 +162,7 @@ def run_v3_worker_chain(
         call = job_repo.completed_v3_call(
             session, authority, lock_authority=False,
         )
-        _check_completed_cost(call, cost_ceiling_usd, relaxed_limits=relaxed_limits)
+        _check_completed_cost(call, cost_ceiling_usd, relaxed_limits=ignore_cost_halt)
     return V3WorkerOutcome(
         finish_v3_review_run(
             session, authority=authority, registry=registry,

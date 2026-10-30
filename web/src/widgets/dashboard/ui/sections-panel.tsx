@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Panel 4 — per-section breakdown.
  *
@@ -20,8 +22,8 @@
  * same defect from the other side: it denied that a section is stored at all.
  *
  * **Every row carries the route that analyses its section.** `data-analysed-by` is
- * `PROJECT_SECTIONS`' `analysedBy` — the section's own text profile for fourteen sections,
- * the group of six AR v3 checks for АР — so an instrument can tell them apart. It is data, not
+ * `PROJECT_SECTIONS`' `analysedBy` — the section's own text profile for all fifteen sections.
+ * It is data, not
  * a new line of text on the screen.
  *
  * **Always shows the unclassified row, and never folds it into a section.** Fifteen true
@@ -36,18 +38,25 @@
  * (`docs/program/reviews/W46-JUDGE-Y.md` §5, `Y5-a`).
  */
 
+import { useState } from 'react';
+import Link from 'next/link';
+
 import { ErrorState } from '@/shared/ui';
-import { PROJECT_SECTIONS, projectSectionTitle } from '@/entities/project';
+import { routes } from '@/shared/lib';
+import { PROJECT_SECTIONS } from '@/entities/project';
+import type { ProjectSectionCode } from '@/entities/project';
 import type { SectionDocumentCount } from '@/shared/api';
 
 import { incompleteBreakdownFailure } from '../model/dashboard-failure';
 import { summarizeSectionBreakdown } from '../model/section-breakdown';
+import styles from './sections-panel.module.css';
 
 export interface SectionsPanelProps {
   readonly rows: readonly SectionDocumentCount[];
 }
 
 export function SectionsPanel({ rows }: SectionsPanelProps) {
+  const [selected, setSelected] = useState<ProjectSectionCode | null>(null);
   const result = summarizeSectionBreakdown(rows);
 
   if (!result.ok) {
@@ -62,23 +71,45 @@ export function SectionsPanel({ rows }: SectionsPanelProps) {
   const { summary } = result;
 
   return (
-    <div data-panel="per-section-breakdown">
+    <div className={styles.overview} data-panel="per-section-breakdown">
       <p className="am-state__correlation">
         Документ учитывается в том разделе, который эксперт подтвердил для его текущей версии.
         Пока раздел не подтверждён, документ попадает в строку «Без раздела». Раздел
         подтверждает эксперт на экране версии.
       </p>
-      <ul data-section-count={PROJECT_SECTIONS.length}>
+      <div className={styles.header} aria-hidden="true">
+        <span>Раздел</span>
+        <span>Документы</span>
+      </div>
+      <ul className={styles.rows} data-section-count={PROJECT_SECTIONS.length}>
         {PROJECT_SECTIONS.map((section) => (
-          <li key={section.code} data-section={section.code} data-analysed-by={section.analysedBy}>
-            {projectSectionTitle(section)}
-            : <strong>{summary.byCode[section.code]}</strong>
+          <li key={section.code} className={styles.row} data-section={section.code} data-analysed-by={section.analysedBy}>
+            <button
+              type="button"
+              className={styles.rowButton}
+              aria-expanded={selected === section.code}
+              onClick={() => setSelected(selected === section.code ? null : section.code)}
+            >
+              <span className={styles.badge}>{section.code}</span>
+              <span className={styles.name}>{section.name}</span>
+              <span className={styles.metric}><strong>{summary.byCode[section.code]}</strong></span>
+              <span className={styles.arrow} aria-hidden="true">›</span>
+            </button>
           </li>
         ))}
-        <li data-section="unclassified">
-          Без раздела: <strong>{summary.unclassifiedCount}</strong>
+        <li className={`${styles.row} ${styles.unclassified}`} data-section="unclassified">
+          <span className={styles.badge}>—</span>
+          <span className={styles.name}>Без раздела:</span>
+          <strong>{summary.unclassifiedCount}</strong>
         </li>
       </ul>
+      {selected === null ? null : (
+        <div className={styles.selection} data-selected-section={selected}>
+          <strong>{PROJECT_SECTIONS.find((section) => section.code === selected)?.name}</strong>
+          <span>Документов в разделе: {summary.byCode[selected]}.</span>
+          <Link href={routes.projects()}>Открыть проекты</Link>
+        </div>
+      )}
     </div>
   );
 }

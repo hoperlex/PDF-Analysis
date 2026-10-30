@@ -39,7 +39,9 @@ describe('the default АР start', () => {
         if (pack === 'not installed') client.setQueryData(PACK, NOT_INSTALLED_PACK);
         const markup = markupOf(client, 'AR');
         expect(markup).toContain('data-start-run-control="true"');
-        expect(markup).toContain('>Запустить прогон</button>');
+        expect(markup).toMatch(/<button[^>]*>Оценить стоимость<\/button>/);
+        expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Запустить прогон<\/button>/);
+        expect(markup).not.toContain('data-cost-approval'); // no estimate, so no agreement yet
         expect(markup).toContain('Повышенные лимиты ИИ-анализа');
         expect(markup).not.toContain('data-ar-v3-group-start');
         expect(markup).not.toContain('data-ar-start-note');
@@ -57,6 +59,8 @@ it('other sections also retain the ordinary start', () => {
   for (const section of ['KJ', 'PB', 'AI', null, undefined] as const) {
     const markup = markupOf(listClient(false), section);
     expect(markup).toContain('data-start-run-control="true"');
+    expect(markup).toContain('>Оценить стоимость</button>');
+    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Запустить прогон<\/button>/);
     expect(markup).not.toContain('data-ar-v3-group-start');
   }
 });

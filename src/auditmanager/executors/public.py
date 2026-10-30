@@ -39,6 +39,8 @@ from auditmanager.executors.image_input import (
     CropImage,
     ImageLoad,
     attach_images,
+    checked_descriptors,
+    checked_pngs,
     image_load,
 )
 from auditmanager.executors.model import (
@@ -123,6 +125,8 @@ __all__ = [
     "CropImage",
     "ImageLoad",
     "attach_images",
+    "checked_descriptors",
+    "checked_pngs",
     "claimed_image",
     "image_load",
     "ConnectionDetail",

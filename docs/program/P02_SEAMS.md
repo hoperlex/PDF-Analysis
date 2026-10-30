@@ -841,7 +841,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-148 operations, sealed. `A5` generates the typed client from this document; `B6`
+256 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -906,6 +906,8 @@ revision and an archive are new rows, and each write has one audit event in its 
 connection is applied as if the caller had named it) and `RunStatus` the read-only `preset`.
 `CMP-SEAL-C0` (contract `1.9.0`) sealed these comparison-module endpoints as stubs on 2026-10-27 -- `createComparisonUpload`, `listComparisonUploads`, `getComparisonUpload`, `getComparisonUploadProposal`, `uploadComparisonUploadPart`, `completeComparisonUploadFile`, `confirmComparisonUploadSet`, `excludeComparisonUploadSet`, `retryComparisonUploadSet`, `pauseComparisonUpload`, `resumeComparisonUpload`, `cancelComparisonUpload`, `listComparisonVersionOrders`, `appendComparisonVersionOrder`, `listVersionPageProfiles`, `getVersionPageProfile`, `streamVersionPagePreview`, `streamVersionPageThumbnail` and `streamVersionPageTile`. Reads are any one role; every write is an expert's act and keyed. Each answers `503 dependency_unavailable` until its lane (`CMP-INGEST-01`, `CMP-INGEST-02`, `CMP-PROFILE-01`) wires it (`ADR-0025` decision 25). A page is addressed by the identity of its profile (`cpr_`) and never by its number. `DocumentVersion` gains `upload_kind`, `ProductVersion` gains `comparison_modules` (the module set, default `none`), `RunnerImage` no longer requires `portal_block_id` and may carry a `crop_id`, `ClaimedExecutorTask.images` may hold eight images and the claim request may declare `max_images`. Migration `0038_comparison_foundation` adds nine tables.
 `CMP-SEAL-C1` (contract `1.10.0`) sealed the version comparison core as stubs on 2026-10-28 -- the effective matrix of a document set (`getComparisonMatrix`, `prepareComparisonMatrix`, `listComparisonMatrixEdits`, `applyComparisonMatrixEdits`, `undoComparisonMatrixEdit`, `listComparisonAiLinks`), the series of adjacent transitions and their sheet pairs (`startComparisonSeries`, `listComparisonSeries`, `getComparisonSeries`, `pauseComparisonSeries`, `resumeComparisonSeries`, `cancelComparisonSeries`, `finishComparisonSeries`, `listComparisonSheetPairs`, `getComparisonSheetPair`, `streamComparisonPairTile`) and the read models `getComparisonOverview` and `getComparisonQueueSummary`. Reads are any one role; every write is an expert's act and keyed. Each answers `503 dependency_unavailable` until its lane (`CMP-MATRIX-01`, `CMP-SERIES-01`, `CMP-VIEWER-01`, `CMP-VC-OVERVIEW-01`) wires it. While the module «Сравнение версий» is on, `approveSheetPairing`, `withdrawSheetPairing` and `generateComparisonSummary` answer `503 dependency_unavailable`; migration `0039_comparison_core` adds seven tables and turns the active `0035` approvals into manual matrix edits (`ADR-0025` decision 13).
+`CMP-SEAL-C2` (contract `1.11.0`) sealed the version comparison AI, specifications, launch queue and reports as stubs on 2026-10-29 -- the AI check of the doubtful pairs of a document set (`estimateComparisonAiPairCheck`, `startComparisonAiPairCheck`, `getComparisonAiPairCheck`, `pauseComparisonAiPairCheck`, `resumeComparisonAiPairCheck`, `cancelComparisonAiPairCheck`, `listComparisonAiPairHints`), the AI description of changes (per series and per sheet pair, with the «Проверить» list and the MD of one sheet), specifications (the deterministic positions of a page and of a sheet pair, and the AI comparison of whole specifications per transition), the launch queue and the installation's AI queue, and the MD summary and the PDF reports -- fifty endpoints of the API in all. Reads are any one role; every write is an expert's act and keyed. Each answers `503 dependency_unavailable` until its lane (`CMP-VC-AIPAIR-01`, `CMP-VC-AISHEET-01`, `CMP-VC-SPEC-01`, `CMP-VC-QUEUE-01`, `CMP-VC-REPORT-01`) wires it, and `comparison_modules` first while the module «Сравнение версий» is off. Every AI start carries the estimate it consents to; migration `0040_comparison_ai_reports` adds twelve tables (`ADR-0025` decisions 17, 19 and 20).
+`CMP-SEAL-C3` (contract `1.12.0`) seals thirty-two stage comparison operations as typed stubs: separate resumable PDF/ZIP intake and candidate confirmation, expert-confirmed П/Р pairs and assemblies, sheet passports and append-only full map revisions, immutable raw text evidence and pinned seven-step chain runs. Reads are any one role; writes are expert acts with required idempotency keys. While `comparison_modules` excludes stages, each refuses with `comparison_modules`; otherwise it refuses its lane dependency until the C3 lanes wire it. Migration `0041_comparison_stage_core` adds fifteen project-reachable tables. D-262 still blocks first ZIP-set use until the caller enforces raw-upload, admission, disk and per-PDF validation bounds.
 `W57B-NORMS-CATALOGUE-XLSX-01` added `listNormDocuments` and `exportRunXlsx` on 2026-10-20:
 the current norms snapshot's documents as a catalogue with display names derived from the
 stored file names (any one role), and the run's W57b Excel workbook with `exportRunCsv`'s
@@ -1147,6 +1149,88 @@ could.
 | `streamComparisonPairTile` | `GET /comparison-sheet-pairs/{comparison_sheet_pair_id}/tile` |
 | `getComparisonOverview` | `GET /projects/{project_uid}/comparison-overview` |
 | `getComparisonQueueSummary` | `GET /execution/comparison-queue` |
+| `estimateComparisonAiPairCheck` | `GET /projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-check/estimate` |
+| `getComparisonAiPairCheck` | `GET /projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-check` |
+| `startComparisonAiPairCheck` | `POST /projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-check` |
+| `pauseComparisonAiPairCheck` | `POST /comparison-ai-pair-checks/{comparison_ai_job_id}/pause` |
+| `resumeComparisonAiPairCheck` | `POST /comparison-ai-pair-checks/{comparison_ai_job_id}/resume` |
+| `cancelComparisonAiPairCheck` | `POST /comparison-ai-pair-checks/{comparison_ai_job_id}/cancellation` |
+| `listComparisonAiPairHints` | `GET /projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-hints` |
+| `estimateComparisonAiSheetChanges` | `GET /comparison-series/{comparison_series_id}/ai-sheet-changes/estimate` |
+| `getComparisonAiSheetChanges` | `GET /comparison-series/{comparison_series_id}/ai-sheet-changes` |
+| `startComparisonAiSheetChanges` | `POST /comparison-series/{comparison_series_id}/ai-sheet-changes` |
+| `pauseComparisonAiSheetChanges` | `POST /comparison-ai-sheet-jobs/{comparison_ai_job_id}/pause` |
+| `resumeComparisonAiSheetChanges` | `POST /comparison-ai-sheet-jobs/{comparison_ai_job_id}/resume` |
+| `cancelComparisonAiSheetChanges` | `POST /comparison-ai-sheet-jobs/{comparison_ai_job_id}/cancellation` |
+| `finishComparisonAiSheetChanges` | `POST /comparison-ai-sheet-jobs/{comparison_ai_job_id}/finish` |
+| `dequeueComparisonAiSheetChanges` | `POST /comparison-ai-sheet-jobs/{comparison_ai_job_id}/dequeue` |
+| `retryComparisonAiSheetChanges` | `POST /comparison-ai-sheet-jobs/{comparison_ai_job_id}/retry` |
+| `getComparisonSheetDescription` | `GET /comparison-sheet-pairs/{comparison_sheet_pair_id}/description` |
+| `startComparisonSheetDescription` | `POST /comparison-sheet-pairs/{comparison_sheet_pair_id}/description` |
+| `listComparisonSheetDescriptionHistory` | `GET /comparison-sheet-pairs/{comparison_sheet_pair_id}/description-history` |
+| `estimateComparisonSheetDescription` | `GET /comparison-sheet-pairs/{comparison_sheet_pair_id}/description/estimate` |
+| `streamComparisonSheetDescriptionMd` | `GET /comparison-sheet-pairs/{comparison_sheet_pair_id}/description/md` |
+| `listComparisonReviewSheets` | `GET /comparison-transitions/{comparison_transition_id}/review-sheets` |
+| `getVersionPageSpecPositions` | `GET /page-profiles/{comparison_page_profile_id}/spec-positions` |
+| `getComparisonSheetPairSpecPositions` | `GET /comparison-sheet-pairs/{comparison_sheet_pair_id}/spec-positions` |
+| `listComparisonSpecifications` | `GET /comparison-series/{comparison_series_id}/specifications` |
+| `getComparisonSpecification` | `GET /comparison-transitions/{comparison_transition_id}/specification` |
+| `startComparisonSpecification` | `POST /comparison-transitions/{comparison_transition_id}/specification` |
+| `listComparisonSpecificationChanges` | `GET /comparison-transitions/{comparison_transition_id}/specification/changes` |
+| `estimateComparisonSpecification` | `GET /comparison-transitions/{comparison_transition_id}/specification/estimate` |
+| `cancelComparisonSpecification` | `POST /comparison-ai-spec-jobs/{comparison_ai_job_id}/cancellation` |
+| `getComparisonLaunchQueue` | `GET /projects/{project_uid}/comparison-launch-queue` |
+| `enqueueComparisonLaunch` | `POST /projects/{project_uid}/comparison-launch-queue/entries` |
+| `pauseComparisonLaunchQueue` | `POST /projects/{project_uid}/comparison-launch-queue/pause` |
+| `resumeComparisonLaunchQueue` | `POST /projects/{project_uid}/comparison-launch-queue/resume` |
+| `clearComparisonLaunchQueue` | `POST /projects/{project_uid}/comparison-launch-queue/clear` |
+| `removeComparisonLaunchEntry` | `POST /comparison-launch-entries/{comparison_launch_entry_id}/removal` |
+| `getComparisonAiQueue` | `GET /execution/comparison-ai-queue` |
+| `streamComparisonSeriesSummary` | `GET /comparison-series/{comparison_series_id}/summary-md` |
+| `listComparisonReports` | `GET /comparison-series/{comparison_series_id}/reports` |
+| `createComparisonReport` | `POST /comparison-series/{comparison_series_id}/reports` |
+| `uploadComparisonReportSource` | `POST /comparison-series/{comparison_series_id}/reports/upload` |
+| `getComparisonReport` | `GET /comparison-reports/{comparison_report_id}` |
+| `startComparisonReport` | `POST /comparison-reports/{comparison_report_id}/start` |
+| `cancelComparisonReport` | `POST /comparison-reports/{comparison_report_id}/cancellation` |
+| `continueComparisonReport` | `POST /comparison-reports/{comparison_report_id}/continuation` |
+| `rebuildComparisonReportPdf` | `POST /comparison-reports/{comparison_report_id}/pdf-rebuild` |
+| `deleteComparisonReport` | `POST /comparison-reports/{comparison_report_id}/deletion` |
+| `prepareComparisonClientReport` | `POST /comparison-reports/{comparison_report_id}/client-report` |
+| `streamComparisonReportPdf` | `GET /comparison-reports/{comparison_report_id}/pdf` |
+| `streamComparisonReportSourceMd` | `GET /comparison-reports/{comparison_report_id}/source-md` |
+| `listStagePairs` | `GET /projects/{project_uid}/stage-pairs` |
+| `confirmStagePair` | `POST /projects/{project_uid}/stage-pairs` |
+| `getStagePair` | `GET /stage-pairs/{stage_pair_id}` |
+| `listStagePairSuggestions` | `GET /projects/{project_uid}/stage-pair-suggestions` |
+| `createStageAssembly` | `POST /projects/{project_uid}/stage-assemblies` |
+| `reviseStageAssembly` | `POST /stage-assemblies/{stage_assembly_id}/members` |
+| `setStagePairCompleteness` | `POST /stage-pairs/{stage_pair_id}/completeness` |
+| `createStageUpload` | `POST /projects/{project_uid}/stage-uploads` |
+| `listStageUploads` | `GET /projects/{project_uid}/stage-uploads` |
+| `getStageUpload` | `GET /stage-uploads/{stage_upload_id}` |
+| `uploadStageUploadPart` | `PUT /stage-uploads/{stage_upload_id}/files/{stage_upload_file_id}/parts` |
+| `completeStageUploadFile` | `POST /stage-uploads/{stage_upload_id}/files/{stage_upload_file_id}/completion` |
+| `confirmStageUploadCandidate` | `POST /stage-upload-candidates/{stage_upload_candidate_id}/confirmation` |
+| `rejectStageUploadCandidate` | `POST /stage-upload-candidates/{stage_upload_candidate_id}/rejection` |
+| `pauseStageUpload` | `POST /stage-uploads/{stage_upload_id}/pause` |
+| `resumeStageUpload` | `POST /stage-uploads/{stage_upload_id}/resume` |
+| `cancelStageUpload` | `POST /stage-uploads/{stage_upload_id}/cancellation` |
+| `listStageSheetPassports` | `GET /stage-pairs/{stage_pair_id}/sheet-passports` |
+| `listStageSheetSuggestions` | `GET /stage-pairs/{stage_pair_id}/sheet-suggestions` |
+| `getStageSheetMap` | `GET /stage-pairs/{stage_pair_id}/sheet-map` |
+| `applyStageSheetMap` | `POST /stage-pairs/{stage_pair_id}/sheet-map` |
+| `listStageSheetMapHistory` | `GET /stage-pairs/{stage_pair_id}/sheet-map/revisions` |
+| `getStageSheetMapRevision` | `GET /stage-link-revisions/{stage_link_revision_id}` |
+| `listStageTextFragments` | `GET /stage-pairs/{stage_pair_id}/text-fragments` |
+| `listStageTextExclusions` | `GET /stage-link-revisions/{stage_link_revision_id}/text-exclusions` |
+| `listStageRawDifferences` | `GET /stage-link-revisions/{stage_link_revision_id}/raw-differences` |
+| `listStageTextHints` | `GET /stage-link-revisions/{stage_link_revision_id}/text-hints` |
+| `recomputeStageTextEvidence` | `POST /stage-link-revisions/{stage_link_revision_id}/text-evidence/recomputation` |
+| `startStageChainRun` | `POST /stage-pairs/{stage_pair_id}/chain-runs` |
+| `listStageChainRuns` | `GET /stage-pairs/{stage_pair_id}/chain-runs` |
+| `getStageChainRun` | `GET /stage-chain-runs/{stage_chain_run_id}` |
+| `cancelStageChainRun` | `POST /stage-chain-runs/{stage_chain_run_id}/cancellation` |
 
 Rules that hold across the whole surface:
 
@@ -1159,7 +1243,7 @@ Rules that hold across the whole surface:
   `setExecutorSecret`, `generateExecutorSshKey`, `requestExecutorProbe`,
   `setExecutorRoute`, `createAnalysisPreset`, `reviseAnalysisPreset`, `archiveAnalysisPreset`,
   `issueRunnerToken`, `revokeRunnerToken`,
-  `createComparisonUpload`, `uploadComparisonUploadPart`, `completeComparisonUploadFile`, `confirmComparisonUploadSet`, `excludeComparisonUploadSet`, `retryComparisonUploadSet`, `pauseComparisonUpload`, `resumeComparisonUpload`, `cancelComparisonUpload`, `appendComparisonVersionOrder`, `prepareComparisonMatrix`, `applyComparisonMatrixEdits`, `undoComparisonMatrixEdit`, `startComparisonSeries`, `pauseComparisonSeries`, `resumeComparisonSeries`, `cancelComparisonSeries` and `finishComparisonSeries`, and no others. A repeat of the decision carryover under another key
+  `createComparisonUpload`, `uploadComparisonUploadPart`, `completeComparisonUploadFile`, `confirmComparisonUploadSet`, `excludeComparisonUploadSet`, `retryComparisonUploadSet`, `pauseComparisonUpload`, `resumeComparisonUpload`, `cancelComparisonUpload`, `appendComparisonVersionOrder`, `prepareComparisonMatrix`, `applyComparisonMatrixEdits`, `undoComparisonMatrixEdit`, `startComparisonSeries`, `pauseComparisonSeries`, `resumeComparisonSeries`, `cancelComparisonSeries`, `finishComparisonSeries`, `startComparisonAiPairCheck`, `pauseComparisonAiPairCheck`, `resumeComparisonAiPairCheck`, `cancelComparisonAiPairCheck`, `startComparisonAiSheetChanges`, `pauseComparisonAiSheetChanges`, `resumeComparisonAiSheetChanges`, `cancelComparisonAiSheetChanges`, `finishComparisonAiSheetChanges`, `dequeueComparisonAiSheetChanges`, `retryComparisonAiSheetChanges`, `startComparisonSheetDescription`, `startComparisonSpecification`, `cancelComparisonSpecification`, `enqueueComparisonLaunch`, `pauseComparisonLaunchQueue`, `resumeComparisonLaunchQueue`, `clearComparisonLaunchQueue`, `removeComparisonLaunchEntry`, `createComparisonReport`, `uploadComparisonReportSource`, `startComparisonReport`, `cancelComparisonReport`, `continueComparisonReport`, `rebuildComparisonReportPdf`, `deleteComparisonReport` and `prepareComparisonClientReport`, `confirmStagePair`, `createStageAssembly`, `reviseStageAssembly`, `setStagePairCompleteness`, `createStageUpload`, `uploadStageUploadPart`, `completeStageUploadFile`, `confirmStageUploadCandidate`, `rejectStageUploadCandidate`, `pauseStageUpload`, `resumeStageUpload`, `cancelStageUpload`, `applyStageSheetMap`, `recomputeStageTextEvidence`, `startStageChainRun`, `cancelStageChainRun`, and no others. A repeat of the decision carryover under another key
   that names the same pair and decision answers the event already carried (`replayed: true`)
   and appends nothing.
   `setGlobalVendorList` and `setProjectVendorList` take no key: a repeat of the latest

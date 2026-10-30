@@ -225,7 +225,8 @@ class ExecutionAdapter(_SessionHolder):
             return _run_status_view(session, run_id)
         return self._write(write)
 
-    def reaudit_run(self, *, run_id: str, user_uid: str, idempotency_key: str) -> RunStatusView:
+    def reaudit_run(self, *, run_id: str, user_uid: str, idempotency_key: str,
+                    cost_consent: dict[str, Any] | None = None) -> RunStatusView:
         from auditmanager.runs.commands import reaudit_run
 
         profile, bundle, mode = self._runs.current_configuration()
@@ -251,6 +252,8 @@ class ExecutionAdapter(_SessionHolder):
                                  idempotency_key=idempotency_key,
                                  provider_mode=mode, input_budget_characters=budget,
                                  connection_route=self._runs.route_freezer,
+                                 cost_preflight=self._runs.cost_preflight if self._runs.require_cost_consent or cost_consent is not None else None,
+                                 cost_consent=cost_consent, cost_actor_uid=user_uid,
                                  **explicit)
             return result.run_id, result.replayed, _run_status_view(session, result.run_id)
         new_id, replayed, view = self._write(write)
@@ -866,6 +869,8 @@ class RunAdapter(_SessionHolder):
         ar_v3_pack_registry: Any = None,
         ar_v3_installed_pack: Any = None,
         preset_resolver: Any = None,
+        cost_preflight: Any = None,
+        require_cost_consent: bool = False,
     ) -> None:
         super().__init__(session_factory)
         # `ANALYSIS-PRESETS-01`. Reads a named preset's current revision in the start's own
@@ -873,6 +878,7 @@ class RunAdapter(_SessionHolder):
         # bare adapter as they are, and a start that names a preset then answers
         # ``dependency_unavailable`` rather than ignoring the choice.
         self._preset_resolver = preset_resolver
+        self._cost_preflight = cost_preflight
         # `EXEC-HTTP-01`. The provider resolver the executor binds each Attempt with, and, for
         # the ``database`` source only, the freezer that picks a run's connection revision at
         # start. Both ``None`` keeps the many tests that build a bare adapter as they are.
@@ -912,9 +918,44 @@ class RunAdapter(_SessionHolder):
         # ``test_the_served_application_always_passes_a_budget`` is red for any path that
         # does not.
         self._input_budget_characters = input_budget_characters
+        self._require_cost_consent = require_cost_consent
+        if self._cost_preflight is None and section_profiles is not None and text_profiles is not None:
+            from auditmanager.runs.preflight import RunCostPreflight
+            self._cost_preflight = RunCostPreflight(section_profiles=section_profiles, text_profiles=text_profiles,
+                provider_config=provider_config, provider_mode=provider_mode, connection_route=route_freezer,
+                preset_resolver=preset_resolver, pack_registry=ar_v3_pack_registry)
+        if require_cost_consent and self._cost_preflight is None:
+            raise ValueError("served analysis starts require a cost preflight policy")
+
+    def estimate_run_cost(self, *, version_uid: str, executor_connection_id: str | None = None,
+                          reaudit_of_run_id: str | None = None,
+                          preset_id: str | None = None, relaxed_limits: bool = False) -> models.RunCostEstimate:
+        if self._cost_preflight is None:
+            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
+        def estimate(session):
+            if reaudit_of_run_id is not None:
+                if executor_connection_id is not None or preset_id is not None or relaxed_limits:
+                    raise DomainError(ErrorCode.VALIDATION_FAILED, field="reaudit_of_run_id", constraint="server_selected_route")
+                value = self._cost_preflight.estimate_reaudit(session, run_id=reaudit_of_run_id)
+                if value.as_dict()["version_uid"] != version_uid:
+                    raise DomainError(ErrorCode.VALIDATION_FAILED, field="version_uid", constraint="reaudit_source_version")
+                return value
+            return self._cost_preflight.estimate_run(session, version_uid=version_uid,
+                executor_connection_id=executor_connection_id, preset_id=preset_id, relaxed_limits=relaxed_limits)
+        value = self._read(estimate)
+        return models.RunCostEstimate.model_validate(value.as_dict())
+
+    def estimate_ar_v3_group_cost(self, *, version_uid: str, relaxed_limits: bool = False) -> models.RunCostEstimate:
+        if self._cost_preflight is None:
+            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
+        value = self._read(lambda session: self._cost_preflight.estimate_group(session,
+            version_uid=version_uid, relaxed_limits=relaxed_limits))
+        return models.RunCostEstimate.model_validate(value.as_dict())
 
     def start_ar_v3_group(
         self, *, version_uid: str, idempotency_key: str, relaxed_limits: bool = False,
+        cost_consent: Mapping[str, Any] | None = None,
+        cost_actor_uid: str | None = None,
     ) -> models.ArV3BetaGroup:
         """Create the six pinned Runs, queue them, and hand them to the carrier (`PROD-11D`).
 
@@ -943,6 +984,9 @@ class RunAdapter(_SessionHolder):
                       else self._ar_v3_pack_registry.select_beta()),
                 input_budget_characters=self._input_budget_characters,
                 connection_route=self._route_freezer,
+                cost_preflight=self._cost_preflight if self._require_cost_consent or cost_consent is not None else None,
+                cost_consent=cost_consent,
+                cost_actor_uid=cost_actor_uid,
             )
             if started.replayed:
                 return started
@@ -1006,6 +1050,8 @@ class RunAdapter(_SessionHolder):
         executor_connection_id: str | None = None,
         preset_id: str | None = None,
         relaxed_limits: bool = False,
+        cost_consent: Mapping[str, Any] | None = None,
+        cost_actor_uid: str | None = None,
     ) -> Any:
         """A caller-supplied provider mode is refused, never silently overridden.
 
@@ -1065,6 +1111,9 @@ class RunAdapter(_SessionHolder):
                 relaxed_limits=relaxed_limits,
                 text_profiles=self._text_profiles,
                 operational_model_id=self._provider_config.model_id,
+                cost_preflight=self._cost_preflight if self._require_cost_consent or cost_consent is not None else None,
+                cost_consent=cost_consent,
+                cost_actor_uid=cost_actor_uid,
             )
             if not started.replayed:
                 # `D-20`. `created -> queued` happens here, in the transaction that
@@ -1160,6 +1209,14 @@ class RunAdapter(_SessionHolder):
         """`EXEC-HTTP-01`: the run-start freezer of the ``database`` source, or ``None``.
         ``ExecutionAdapter.reaudit_run`` passes it so a re-audit freezes today's route."""
         return self._route_freezer
+
+    @property
+    def cost_preflight(self) -> Any:
+        return self._cost_preflight
+
+    @property
+    def require_cost_consent(self) -> bool:
+        return self._require_cost_consent
 
     @property
     def section_profiles(self) -> Mapping[str, tuple[str, str]] | None:
@@ -5982,3 +6039,1451 @@ class ComparisonOverviewAdapter:
 
     def get_queue_summary(self) -> models.ComparisonQueueSummary:
         return models.ComparisonQueueSummary.model_validate(self._service.get_queue_summary(modules=self._modules))
+
+
+# --- version comparison AI, specifications, launch queue and reports (`CMP-SEAL-C2`, ADR-0025) -------
+#
+# The shipped adapters of the five ports below are stubs: each operation refuses with ``503
+# dependency_unavailable`` until the lane that owns it replaces the body (plan section 4.0 rule 1). A stub
+# refuses first when the versions module is off, naming ``comparison_modules`` (ADR-0025 decision 23 and
+# ``A-12``: drawings reach a model only when the owner has enabled the module), and then names its lane's
+# class. Nothing is read or written, and no model is called.
+
+#: The stable class name of an operation of a module the deployment does not serve.
+_COMPARISON_MODULES_DEPENDENCY = "comparison_modules"
+
+
+class _VersionsModuleGate:
+    """The module-flag refusal every C2 operation makes before anything else. ``comparison_modules`` is the
+    module set the deployment serves, parsed once by the composition root; a lane keeps the call when it
+    replaces the bodies."""
+
+    def __init__(self, *, comparison_modules: str = "none") -> None:
+        from auditmanager.comparison.public import MODULE_VERSIONS, enabled_modules
+
+        self._versions_module_on = MODULE_VERSIONS in enabled_modules(comparison_modules)
+
+    def _require_versions_module(self) -> None:
+        if not self._versions_module_on:
+            raise DomainError(
+                ErrorCode.DEPENDENCY_UNAVAILABLE, dependency=_COMPARISON_MODULES_DEPENDENCY
+            )
+
+
+class ComparisonAiPairAdapter(_SessionHolder, _VersionsModuleGate):
+    """`CMP-VC-AIPAIR-01` serves the operations of the AI pair check over
+    :class:`~auditmanager.comparison.ai_pairs.service.ComparisonAiPairService` and the shared AI-job core
+    (ADR-0025 decisions 3, 14, 16, 19, 23).
+
+    The adapter owns the mapping to the contract's models, the cursor of the hint list and the actor's roles (a start and every
+    steering command is an expert's act, checked again in the transaction that acts). Every method begins with the module
+    flag: while the versions module is off nothing is read, written or sent to a model."""
+
+    _DEPENDENCY = "comparison_ai_pairs"
+
+    def __init__(
+        self, session_factory: sessionmaker[Session], *, blob_store: Any = None, comparison_modules: str = "none",
+        provider_mode: str = "live", service: Any = None,
+    ) -> None:
+        _SessionHolder.__init__(self, session_factory)
+        _VersionsModuleGate.__init__(self, comparison_modules=comparison_modules)
+        if service is None:
+            from auditmanager.comparison.public import ComparisonAiPairService
+
+            service = ComparisonAiPairService(
+                session_factory, blob_store=blob_store, comparison_modules=comparison_modules, provider_mode=provider_mode,
+            )
+        self._service = service
+
+    @staticmethod
+    def _consent(consent: models.ComparisonAiConsent | None) -> Any:
+        from auditmanager.comparison.public import AiConsentInput
+
+        return None if consent is None else AiConsentInput(estimate_digest=str(consent.estimate_digest), confirmed=bool(consent.confirmed))
+
+    def _roles(self, user_uid: str) -> frozenset[str]:
+        return self._read(lambda session: _comparison_actor(session, user_uid))[1]
+
+    def cancel_pair_check(self, *, job_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        return models.ComparisonAiJob.model_validate(self._service.cancel(
+            job_id=job_id, user_uid=user_uid, actor_roles=self._roles(user_uid), idempotency_key=idempotency_key,
+        ))
+
+    def estimate_pair_check(self, *, project_uid: str, document_uid: str) -> models.ComparisonAiEstimate:
+        self._require_versions_module()
+        return models.ComparisonAiEstimate.model_validate(
+            self._service.estimate(project_uid=project_uid, document_uid=document_uid)
+        )
+
+    def get_pair_check(self, *, project_uid: str, document_uid: str) -> models.ComparisonAiPairCheck:
+        self._require_versions_module()
+        return models.ComparisonAiPairCheck.model_validate(
+            self._service.get(project_uid=project_uid, document_uid=document_uid)
+        )
+
+    def list_pair_hints(
+        self, *, project_uid: str, document_uid: str, cursor: str | None, limit: int
+    ) -> models.ComparisonAiPairHintPage:
+        self._require_versions_module()
+        after: tuple[datetime, str] | None = None
+        if cursor is not None:
+            parts = decode_cursor(cursor)
+            try:
+                if len(parts) != 2:
+                    raise ValueError
+                after = (datetime.fromisoformat(parts[0]), parts[1])
+            except ValueError:
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format") from None
+        page = self._service.hints(project_uid=project_uid, document_uid=document_uid, after=after, limit=limit)
+        return models.ComparisonAiPairHintPage.model_validate(
+            {
+                "items": page.items,
+                "page": {
+                    "next_cursor": None if page.next_after is None
+                    else encode_cursor((page.next_after[0].isoformat(), page.next_after[1]))
+                },
+            }
+        )
+
+    def pause_pair_check(self, *, job_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        return models.ComparisonAiJob.model_validate(self._service.pause(
+            job_id=job_id, user_uid=user_uid, actor_roles=self._roles(user_uid), idempotency_key=idempotency_key,
+        ))
+
+    def resume_pair_check(
+        self, *, job_id: str, consent: models.ComparisonAiConsent | None, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        return models.ComparisonAiJob.model_validate(self._service.resume(
+            job_id=job_id, consent=self._consent(consent), user_uid=user_uid, actor_roles=self._roles(user_uid),
+            idempotency_key=idempotency_key,
+        ))
+
+    def start_pair_check(
+        self, *, project_uid: str, document_uid: str, consent: models.ComparisonAiConsent, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        return models.ComparisonAiJob.model_validate(self._service.start(
+            project_uid=project_uid, document_uid=document_uid, consent=self._consent(consent), user_uid=user_uid,
+            actor_roles=self._roles(user_uid), idempotency_key=idempotency_key,
+        ))
+
+
+class ComparisonAiSheetAdapter(_SessionHolder, _VersionsModuleGate):
+    """`CMP-VC-AISHEET-01` serves the sheet-change operations over
+    :class:`~auditmanager.comparison.ai_sheets.service.ComparisonAiSheetService` and the AI-job core (ADR-0025 decisions 3, 10, 11, 17-23).
+
+    The adapter owns the mapping to the contract's models, the cursors and the one read the service does not make itself: the actor's
+    roles (a write is an expert's act, checked again in the transaction that acts). **Every method keeps the module-flag refusal as its
+    first statement**, so a deployment that does not serve the versions module reads nothing and writes nothing."""
+
+    def __init__(
+        self, session_factory: sessionmaker[Session], *, blob_store: Any = None, tiles: Any = None, comparison_modules: str = "none",
+        provider_mode: str = "live", service: Any = None,
+    ) -> None:
+        _SessionHolder.__init__(self, session_factory)
+        _VersionsModuleGate.__init__(self, comparison_modules=comparison_modules)
+        if service is None:
+            from auditmanager.comparison.public import (
+                ComparisonAiJobService,
+                ComparisonAiSheetService,
+                PageProfileReader,
+                ProfileMaterial,
+                SheetChangesMethod,
+            )
+
+            method = SheetChangesMethod(lambda: ProfileMaterial(PageProfileReader(session_factory, blob_store, tiles=tiles)))
+            service = ComparisonAiSheetService(
+                session_factory,
+                jobs=ComparisonAiJobService(
+                    session_factory, methods=[method], comparison_modules=comparison_modules, provider_mode=provider_mode,
+                ),
+                method=method,
+            )
+        self._service = service
+
+    # -- the pieces of a call ---------------------------------------------------------------------------------------------
+    def _command(self, command_type: str, *, user_uid: str, idempotency_key: str) -> Any:
+        from auditmanager.comparison.public import AiJobCommand
+
+        _label, roles = self._read(lambda session: _comparison_actor(session, user_uid))
+        return AiJobCommand(command_type=command_type, idempotency_key=idempotency_key, user_uid=user_uid, actor_roles=roles)
+
+    @staticmethod
+    def _consent(consent: models.ComparisonAiConsent | None) -> Any:
+        from auditmanager.comparison.public import AiConsentInput
+
+        return None if consent is None else AiConsentInput(estimate_digest=str(consent.estimate_digest), confirmed=bool(consent.confirmed))
+
+    @staticmethod
+    def _job(document: Any) -> models.ComparisonAiJob:
+        return models.ComparisonAiJob.model_validate(document)
+
+    # -- the series -------------------------------------------------------------------------------------------------------
+    def estimate_series_changes(self, *, series_id: str, only_failed: bool) -> models.ComparisonAiEstimate:
+        self._require_versions_module()
+        return models.ComparisonAiEstimate.model_validate(
+            self._service.estimate_series(series_id=series_id, only_failed=only_failed)
+        )
+
+    def get_series_changes(self, *, series_id: str) -> models.ComparisonAiSheetChanges:
+        self._require_versions_module()
+        return models.ComparisonAiSheetChanges.model_validate(self._service.get_series(series_id=series_id))
+
+    def start_series_changes(
+        self, *, series_id: str, consent: models.ComparisonAiConsent, restart: bool, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        command = self._command("start_comparison_ai_sheet_changes", user_uid=user_uid, idempotency_key=idempotency_key)
+        return self._job(self._service.start_series(
+            series_id=series_id, consent=self._consent(consent), restart=restart, command=command,
+        ))
+
+    # -- the controls of a job --------------------------------------------------------------------------------------------
+    def pause_changes_job(self, *, job_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        command = self._command("pause_comparison_ai_sheet_changes", user_uid=user_uid, idempotency_key=idempotency_key)
+        return self._job(self._service.pause(job_id=job_id, command=command))
+
+    def resume_changes_job(
+        self, *, job_id: str, consent: models.ComparisonAiConsent | None, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        command = self._command("resume_comparison_ai_sheet_changes", user_uid=user_uid, idempotency_key=idempotency_key)
+        return self._job(self._service.resume(job_id=job_id, consent=self._consent(consent), command=command))
+
+    def cancel_changes_job(self, *, job_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        command = self._command("cancel_comparison_ai_sheet_changes", user_uid=user_uid, idempotency_key=idempotency_key)
+        return self._job(self._service.cancel(job_id=job_id, command=command))
+
+    def finish_changes_job(self, *, job_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        command = self._command("finish_comparison_ai_sheet_changes", user_uid=user_uid, idempotency_key=idempotency_key)
+        return self._job(self._service.finish(job_id=job_id, command=command))
+
+    def dequeue_changes_job(self, *, job_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        command = self._command("dequeue_comparison_ai_sheet_changes", user_uid=user_uid, idempotency_key=idempotency_key)
+        return self._job(self._service.dequeue(job_id=job_id, command=command))
+
+    def retry_changes_job(
+        self, *, job_id: str, consent: models.ComparisonAiConsent, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        command = self._command("retry_comparison_ai_sheet_changes", user_uid=user_uid, idempotency_key=idempotency_key)
+        return self._job(self._service.retry(job_id=job_id, consent=self._consent(consent), command=command))
+
+    # -- a sheet pair -----------------------------------------------------------------------------------------------------
+    def get_sheet_description(self, *, sheet_pair_id: str) -> models.ComparisonSheetDescription:
+        self._require_versions_module()
+        return models.ComparisonSheetDescription.model_validate(self._service.get_description(sheet_pair_id=sheet_pair_id))
+
+    def estimate_sheet_description(self, *, sheet_pair_id: str) -> models.ComparisonAiEstimate:
+        self._require_versions_module()
+        return models.ComparisonAiEstimate.model_validate(self._service.estimate_description(sheet_pair_id=sheet_pair_id))
+
+    def start_sheet_description(
+        self, *, sheet_pair_id: str, consent: models.ComparisonAiConsent, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        command = self._command("start_comparison_sheet_description", user_uid=user_uid, idempotency_key=idempotency_key)
+        return self._job(self._service.start_description(
+            sheet_pair_id=sheet_pair_id, consent=self._consent(consent), command=command,
+        ))
+
+    def list_sheet_description_history(
+        self, *, sheet_pair_id: str, cursor: str | None, limit: int
+    ) -> models.ComparisonSheetDescriptionHistory:
+        self._require_versions_module()
+        after: tuple[datetime, str] | None = None
+        if cursor is not None:
+            parts = decode_cursor(cursor)
+            try:
+                if len(parts) != 2:
+                    raise ValueError("two members")
+                after = (datetime.fromisoformat(parts[0]), parts[1])
+            except ValueError:
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format") from None
+        page = self._service.list_history(sheet_pair_id=sheet_pair_id, after=after, limit=limit)
+        return models.ComparisonSheetDescriptionHistory.model_validate({
+            "items": page.items,
+            "page": {
+                "next_cursor": None if page.next_after is None
+                else encode_cursor((page.next_after[0].isoformat(), page.next_after[1]))
+            },
+        })
+
+    def read_sheet_description_md(self, *, sheet_pair_id: str) -> bytes:
+        self._require_versions_module()
+        return self._service.read_md(sheet_pair_id=sheet_pair_id)
+
+    def list_review_sheets(
+        self, *, transition_id: str, cursor: str | None, limit: int
+    ) -> models.ComparisonReviewSheetPage:
+        self._require_versions_module()
+        after = 0
+        if cursor is not None:
+            parts = decode_cursor(cursor)
+            if len(parts) != 1 or not parts[0].isdigit():
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+            after = int(parts[0])
+        page = self._service.list_review_sheets(transition_id=transition_id, after=after, limit=limit)
+        return models.ComparisonReviewSheetPage.model_validate({
+            "items": page.items,
+            "page": {"next_cursor": None if page.next_after is None else encode_cursor((str(page.next_after),))},
+        })
+
+
+class ComparisonSpecificationAdapter(_VersionsModuleGate):
+    """`CMP-VC-SPEC-01`. Part A -- the positions of a page and of a sheet pair -- is served over
+    :class:`~auditmanager.comparison.specification.reader.SpecificationReader` (deterministic, read-only, no model); the operations of
+    part B stay sealed until the AI-job core is wired to them. Every method keeps the module-flag refusal as its first statement."""
+
+    _DEPENDENCY = "comparison_specification"
+
+    def __init__(
+        self, session_factory: sessionmaker[Session] | None = None, *, blob_store: Any = None,
+        comparison_modules: str = "none", reader: Any = None, provider_mode: str = "live",
+    ) -> None:
+        super().__init__(comparison_modules=comparison_modules)
+        service = jobs = None
+        if session_factory is not None:
+            from auditmanager.comparison.public import (
+                ComparisonAiJobService,
+                SpecificationReader,
+                SpecificationService,
+                SpecMethod,
+            )
+
+            reader = reader or SpecificationReader(session_factory, blob_store)
+            service = SpecificationService(session_factory, blob_store, reader=reader)
+            jobs = ComparisonAiJobService(
+                session_factory, methods=[SpecMethod(session_factory, blob_store, reader=reader)],
+                comparison_modules=comparison_modules, provider_mode=provider_mode)
+        self._reader = reader
+        self._service = service
+        self._jobs = jobs
+        self._sessions = session_factory
+
+    def _command(self, command_type: str, user_uid: str, idempotency_key: str) -> Any:
+        from auditmanager.comparison.public import AiJobCommand
+
+        with self._sessions() as session:
+            _label, roles = _comparison_actor(session, user_uid)
+        return AiJobCommand(command_type=command_type, idempotency_key=idempotency_key, user_uid=user_uid, actor_roles=roles)
+
+    def cancel_specification(self, *, job_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        if self._jobs is None:
+            return _comparison_unavailable(self._DEPENDENCY)
+        view = self._jobs.cancel(
+            job_id=job_id, method="spec", command=self._command("cancel_comparison_specification", user_uid, idempotency_key))
+        self._service.close_cancelled(job_id)
+        return models.ComparisonAiJob.model_validate(view.as_dict())
+
+    def estimate_specification(self, *, transition_id: str) -> models.ComparisonAiEstimate:
+        self._require_versions_module()
+        if self._jobs is None:
+            return _comparison_unavailable(self._DEPENDENCY)
+        from auditmanager.comparison.specification.method import spec_scope
+
+        scope = self._service.scope_of(transition_id)
+        return models.ComparisonAiEstimate.model_validate(
+            self._jobs.estimate(spec_scope(scope.project_uid, scope.document_uid, transition_id)).as_dict())
+
+    def get_page_positions(self, *, page_profile_id: str) -> models.ComparisonSpecPage:
+        self._require_versions_module()
+        if self._reader is None:
+            return _comparison_unavailable(self._DEPENDENCY)
+        return models.ComparisonSpecPage.model_validate(self._reader.page_view(page_profile_id))
+
+    def get_pair_positions(self, *, sheet_pair_id: str) -> models.ComparisonSheetPairSpecPositions:
+        self._require_versions_module()
+        if self._reader is None:
+            return _comparison_unavailable(self._DEPENDENCY)
+        return models.ComparisonSheetPairSpecPositions.model_validate(self._reader.pair_view(sheet_pair_id))
+
+    def get_specification(self, *, transition_id: str) -> models.ComparisonSpecification:
+        self._require_versions_module()
+        if self._service is None:
+            return _comparison_unavailable(self._DEPENDENCY)
+        return models.ComparisonSpecification.model_validate(self._service.get_specification(transition_id=transition_id))
+
+    @staticmethod
+    def _after(cursor: str | None) -> int:
+        if cursor is None:
+            return 0
+        parts = decode_cursor(cursor)
+        if len(parts) != 1 or not parts[0].isdigit():
+            raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+        return int(parts[0])
+
+    def list_changes(
+        self, *, transition_id: str, kind: models.ComparisonSpecChangeKind | None, cursor: str | None, limit: int
+    ) -> models.ComparisonSpecChangePage:
+        self._require_versions_module()
+        if self._service is None:
+            return _comparison_unavailable(self._DEPENDENCY)
+        items, next_offset = self._service.list_changes(
+            transition_id=transition_id, kind=None if kind is None else str(_enum_text(kind)), offset=self._after(cursor), limit=limit,
+        )
+        return models.ComparisonSpecChangePage.model_validate(
+            {"items": items, "page": {"next_cursor": None if next_offset is None else encode_cursor((str(next_offset),))}}
+        )
+
+    def list_specifications(
+        self, *, series_id: str, cursor: str | None, limit: int
+    ) -> models.ComparisonSpecificationPage:
+        self._require_versions_module()
+        if self._service is None:
+            return _comparison_unavailable(self._DEPENDENCY)
+        page = self._service.list_specifications(series_id=series_id, after_no=self._after(cursor), limit=limit)
+        return models.ComparisonSpecificationPage.model_validate(
+            {"items": page.items, "page": {"next_cursor": None if page.next_after is None else encode_cursor((str(page.next_after),))}}
+        )
+
+    def start_specification(
+        self, *, transition_id: str, consent: models.ComparisonAiConsent, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonAiJob:
+        self._require_versions_module()
+        if self._jobs is None:
+            return _comparison_unavailable(self._DEPENDENCY)
+        from auditmanager.comparison.public import AiConsentInput
+        from auditmanager.comparison.specification.method import spec_scope
+
+        scope = self._service.scope_of(transition_id)
+        view = self._jobs.start(
+            scope=spec_scope(scope.project_uid, scope.document_uid, transition_id),
+            consent=AiConsentInput(estimate_digest=consent.estimate_digest, confirmed=consent.confirmed),
+            command=self._command("start_comparison_specification", user_uid, idempotency_key))
+        return models.ComparisonAiJob.model_validate(view.as_dict())
+
+
+class ComparisonLaunchQueueAdapter(_SessionHolder, _VersionsModuleGate):
+    """Maps the seven sealed queue operations to durable comparison commands."""
+
+    def __init__(self, session_factory: sessionmaker[Session], *, comparison_modules: str = "none",
+                 provider_mode: str = "live") -> None:
+        from auditmanager.comparison.queue.service import ComparisonLaunchQueueService
+
+        _SessionHolder.__init__(self, session_factory)
+        _VersionsModuleGate.__init__(self, comparison_modules=comparison_modules)
+        self._service = ComparisonLaunchQueueService(
+            session_factory, comparison_modules=comparison_modules, provider_mode=provider_mode,
+        )
+
+    def _actor(self, user_uid: str) -> tuple[str, frozenset[str]]:
+        from auditmanager.shared.db import session_scope
+
+        with session_scope(self._sessions) as session:
+            return _comparison_actor(session, user_uid)
+
+    def clear_queue(self, *, project_uid: str, user_uid: str, idempotency_key: str) -> models.ComparisonLaunchQueue:
+        self._require_versions_module()
+        _label, roles = self._actor(user_uid)
+        return models.ComparisonLaunchQueue.model_validate(self._service.clear_queue(
+            project_uid=project_uid, user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key,
+        ))
+
+    def enqueue(
+        self, *, project_uid: str, items: Sequence[models.ComparisonLaunchItem], restart: bool, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonLaunchQueue:
+        self._require_versions_module()
+        label, roles = self._actor(user_uid)
+        return models.ComparisonLaunchQueue.model_validate(self._service.enqueue(
+            project_uid=project_uid, items=[item.model_dump(mode="json", exclude_unset=True) for item in items],
+            restart=restart, user_uid=user_uid, actor_label=label, actor_roles=roles, idempotency_key=idempotency_key,
+        ))
+
+    def get_ai_queue(self) -> models.ComparisonAiQueue:
+        self._require_versions_module()
+        return models.ComparisonAiQueue.model_validate(self._service.get_ai_queue())
+
+    def get_queue(self, *, project_uid: str) -> models.ComparisonLaunchQueue:
+        self._require_versions_module()
+        return models.ComparisonLaunchQueue.model_validate(self._service.get_queue(project_uid=project_uid))
+
+    def pause_queue(self, *, project_uid: str, user_uid: str, idempotency_key: str) -> models.ComparisonLaunchQueue:
+        self._require_versions_module()
+        _label, roles = self._actor(user_uid)
+        return models.ComparisonLaunchQueue.model_validate(self._service.pause_queue(
+            project_uid=project_uid, user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key,
+        ))
+
+    def remove_entry(self, *, entry_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonLaunchQueue:
+        self._require_versions_module()
+        _label, roles = self._actor(user_uid)
+        return models.ComparisonLaunchQueue.model_validate(self._service.remove_entry(
+            entry_id=entry_id, user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key,
+        ))
+
+    def resume_queue(self, *, project_uid: str, user_uid: str, idempotency_key: str) -> models.ComparisonLaunchQueue:
+        self._require_versions_module()
+        _label, roles = self._actor(user_uid)
+        return models.ComparisonLaunchQueue.model_validate(self._service.resume_queue(
+            project_uid=project_uid, user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key,
+        ))
+
+
+class ComparisonReportAdapter(_SessionHolder, _VersionsModuleGate):
+    """`CMP-VC-REPORT-01` serves the thirteen report operations over
+    :class:`~auditmanager.comparison.report.service.ComparisonReportService` (ADR-0025 decisions 3, 8, 10, 11, 16, 19, 24).
+
+    The adapter owns the mapping to the contract's models, the cursors and the actor's label and roles (a report is made, started and steered by an
+    expert, checked again in the transaction that acts). The module flag stays the first statement of every method, so it precedes any read, write
+    or model call; a model is never called here (the worker's handler calls it, through the spend wrapper)."""
+
+    def __init__(
+        self, session_factory: sessionmaker[Session], *, blob_store: Any = None, comparison_modules: str = "none",
+        provider_mode: str = "live", service: Any = None,
+    ) -> None:
+        _SessionHolder.__init__(self, session_factory)
+        _VersionsModuleGate.__init__(self, comparison_modules=comparison_modules)
+        if service is None:
+            from auditmanager.comparison.public import ComparisonReportService
+
+            service = ComparisonReportService(
+                session_factory, blob_store=blob_store, comparison_modules=comparison_modules, provider_mode=provider_mode
+            )
+        self._service = service
+
+    def _actor(self, user_uid: str) -> tuple[str, frozenset[str]]:
+        return self._read(lambda session: _comparison_actor(session, user_uid))
+
+    @staticmethod
+    def _consent(consent: models.ComparisonAiConsent | None) -> Any:
+        from auditmanager.comparison.public import AiConsentInput
+
+        return None if consent is None else AiConsentInput(estimate_digest=str(consent.estimate_digest), confirmed=consent.confirmed)
+
+    def read_series_summary(self, *, series_id: str) -> bytes:
+        self._require_versions_module()
+        return self._service.read_series_summary(series_id=series_id)
+
+    def create_report(
+        self, *, series_id: str, kind: models.ComparisonReportKind, reuse: bool, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonReport:
+        self._require_versions_module()
+        label, roles = self._actor(user_uid)
+        return models.ComparisonReport.model_validate(self._service.create_report(
+            series_id=series_id, kind=kind.value, reuse=reuse, user_uid=user_uid, actor_label=label, actor_roles=roles,
+            idempotency_key=idempotency_key,
+        ))
+
+    def upload_report_source(
+        self, *, series_id: str, kind: models.ComparisonReportKind, reuse: bool, content: bytes, source_name: str | None,
+        user_uid: str, idempotency_key: str,
+    ) -> models.ComparisonReport:
+        self._require_versions_module()
+        label, roles = self._actor(user_uid)
+        return models.ComparisonReport.model_validate(self._service.upload_report_source(
+            series_id=series_id, kind=kind.value, reuse=reuse, content=content, source_name=source_name, user_uid=user_uid,
+            actor_label=label, actor_roles=roles, idempotency_key=idempotency_key,
+        ))
+
+    def list_reports(self, *, series_id: str, cursor: str | None, limit: int) -> models.ComparisonReportPage:
+        self._require_versions_module()
+        after: tuple[datetime, str] | None = None
+        if cursor is not None:
+            parts = decode_cursor(cursor)
+            try:
+                if len(parts) != 2:
+                    raise ValueError("two members")
+                after = (datetime.fromisoformat(parts[0]), parts[1])
+            except ValueError:
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format") from None
+        page = self._service.list_reports(series_id=series_id, after=after, limit=limit)
+        return models.ComparisonReportPage.model_validate({
+            "items": page.items,
+            "page": {
+                "next_cursor": None if page.next_after is None
+                else encode_cursor((page.next_after[0].isoformat(), page.next_after[1]))
+            },
+        })
+
+    def get_report(self, *, report_id: str) -> models.ComparisonReport:
+        self._require_versions_module()
+        return models.ComparisonReport.model_validate(self._service.get_report(report_id=report_id))
+
+    def start_report(
+        self, *, report_id: str, consent: models.ComparisonAiConsent, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonReport:
+        self._require_versions_module()
+        _label, roles = self._actor(user_uid)
+        return models.ComparisonReport.model_validate(self._service.start_report(
+            report_id=report_id, consent=self._consent(consent), user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key,
+        ))
+
+    def cancel_report(self, *, report_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonReport:
+        self._require_versions_module()
+        _label, roles = self._actor(user_uid)
+        return models.ComparisonReport.model_validate(self._service.cancel_report(
+            report_id=report_id, user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key,
+        ))
+
+    def continue_report(
+        self, *, report_id: str, consent: models.ComparisonAiConsent | None, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonReport:
+        self._require_versions_module()
+        _label, roles = self._actor(user_uid)
+        return models.ComparisonReport.model_validate(self._service.continue_report(
+            report_id=report_id, consent=self._consent(consent), user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key,
+        ))
+
+    def rebuild_report_pdf(self, *, report_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonReport:
+        self._require_versions_module()
+        _label, roles = self._actor(user_uid)
+        return models.ComparisonReport.model_validate(self._service.rebuild_report_pdf(
+            report_id=report_id, user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key,
+        ))
+
+    def delete_report(self, *, report_id: str, user_uid: str, idempotency_key: str) -> models.ComparisonReport:
+        self._require_versions_module()
+        _label, roles = self._actor(user_uid)
+        return models.ComparisonReport.model_validate(self._service.delete_report(
+            report_id=report_id, user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key,
+        ))
+
+    def prepare_client_report(
+        self, *, report_id: str, reuse: bool, user_uid: str, idempotency_key: str
+    ) -> models.ComparisonReport:
+        self._require_versions_module()
+        label, roles = self._actor(user_uid)
+        return models.ComparisonReport.model_validate(self._service.prepare_client_report(
+            report_id=report_id, reuse=reuse, user_uid=user_uid, actor_label=label, actor_roles=roles, idempotency_key=idempotency_key,
+        ))
+
+    def read_report_pdf(self, *, report_id: str) -> bytes:
+        self._require_versions_module()
+        return self._service.read_report_pdf(report_id=report_id)
+
+    def read_report_source_md(self, *, report_id: str) -> bytes:
+        self._require_versions_module()
+        return self._service.read_report_source_md(report_id=report_id)
+
+
+class _StagesModuleGate:
+    """The C3 seal's first refusal, before any stage operation reads or writes."""
+
+    def __init__(self, *, comparison_modules: str = "none") -> None:
+        from auditmanager.comparison.public import MODULE_STAGES, enabled_modules
+
+        self._stages_module_on = MODULE_STAGES in enabled_modules(comparison_modules)
+
+    def _require_stages_module(self) -> None:
+        if not self._stages_module_on:
+            raise DomainError(
+                ErrorCode.DEPENDENCY_UNAVAILABLE, dependency=_COMPARISON_MODULES_DEPENDENCY
+            )
+
+
+class ComparisonStagePairAdapter(_StagesModuleGate):
+    """The C3 pair catalog and expert acts, behind the stages module flag."""
+
+    _DEPENDENCY = "comparison_stage_pairs"
+
+    def __init__(
+        self, sessions: sessionmaker[Session], *, comparison_modules: str = "none",
+    ) -> None:
+        super().__init__(comparison_modules=comparison_modules)
+        from auditmanager.comparison.public import StageAssemblyService
+        from auditmanager.comparison.public import (
+            StagePairCommandService, StagePairReadRepository,
+        )
+
+        self._sessions = sessions
+        self._reads = StagePairReadRepository()
+        self._pairs = StagePairCommandService(sessions)
+        self._assemblies = StageAssemblyService(sessions)
+
+    @staticmethod
+    def _pair_view(row: Any) -> models.StagePair:
+        body: dict[str, Any] = {
+            "pair_id": row.pair_id, "project_uid": row.project_uid,
+            "left_document_uid": row.left_document_uid,
+            "state": row.state, "completeness": row.completeness,
+            "created_at": row.created_at,
+        }
+        if row.right_document_uid is not None:
+            body["right_document_uid"] = row.right_document_uid
+        if row.assembly_id is not None:
+            body["assembly_id"] = row.assembly_id
+        if row.confirmed_at is not None:
+            body["confirmed_at"] = row.confirmed_at
+        return models.StagePair(**body)
+
+    @staticmethod
+    def _assembly_view(row: Any) -> models.StageAssembly:
+        return models.StageAssembly(
+            assembly_id=row.assembly_id, project_uid=row.project_uid,
+            label=row.label, created_at=row.created_at,
+            member_revision_no=row.member_revision_no,
+            members=[
+                models.StageAssemblyMember(document_uid=m.document_uid, member_no=m.member_no)
+                for m in row.members
+            ],
+        )
+
+    def list_pairs(
+        self, *, project_uid: str, cursor: str | None, limit: int
+    ) -> models.StagePairPage:
+        self._require_stages_module()
+        from auditmanager.shared.identity import IdentityError, StagePairId
+
+        after: str | None = None
+        if cursor is not None:
+            parts = decode_cursor(cursor)
+            if len(parts) != 1:
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+            try:
+                after = str(StagePairId.parse(parts[0]))
+            except IdentityError:
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format") from None
+        with self._sessions() as session:
+            rows, next_pair = self._reads.page(
+                session, project_uid=project_uid, after_pair_id=after, limit=limit,
+            )
+        return models.StagePairPage(
+            items=[self._pair_view(row) for row in rows],
+            page=models.PageInfo(
+                next_cursor=None if next_pair is None else encode_cursor((next_pair,))
+            ),
+        )
+
+    def get_pair(self, *, pair_id: str) -> models.StagePair:
+        self._require_stages_module()
+        with self._sessions() as session:
+            return self._pair_view(self._reads.get(session, pair_id))
+
+    def list_suggestions(
+        self, *, project_uid: str, cursor: str | None, limit: int
+    ) -> models.StagePairSuggestionPage:
+        self._require_stages_module()
+        with self._sessions() as session:
+            suggestions = self._reads.suggestions(session, project_uid=project_uid)
+        page = paginate(
+            suggestions, limit=limit, cursor=cursor,
+            sort_key=lambda row: (row.left_document_uid, row.right_document_uid),
+        )
+        return models.StagePairSuggestionPage(
+            items=[models.StagePairSuggestion(
+                left_document_uid=row.left_document_uid,
+                right_document_uid=row.right_document_uid,
+                reason=row.reason, score=row.score,
+            ) for row in page.items],
+            page=models.PageInfo(next_cursor=page.next_cursor),
+        )
+
+    def confirm_pair(
+        self, *, project_uid: str, body: models.ConfirmStagePairRequest,
+        user_uid: str, idempotency_key: str,
+    ) -> models.StagePair:
+        self._require_stages_module()
+        return self._pair_view(self._pairs.confirm_pair(
+            project_uid=project_uid, left_document_uid=body.left_document_uid,
+            right_document_uid=body.right_document_uid, assembly_id=body.assembly_id,
+            user_uid=user_uid, idempotency_key=idempotency_key,
+        ))
+
+    def create_assembly(
+        self, *, project_uid: str, body: models.CreateStageAssemblyRequest,
+        user_uid: str, idempotency_key: str,
+    ) -> models.StageAssembly:
+        self._require_stages_module()
+        return self._assembly_view(self._assemblies.create(
+            project_uid=project_uid, label=body.label,
+            document_uids=tuple(body.document_uids), user_uid=user_uid,
+            idempotency_key=idempotency_key,
+        ))
+
+    def revise_assembly(
+        self, *, assembly_id: str, body: models.ReviseStageAssemblyRequest,
+        user_uid: str, idempotency_key: str,
+    ) -> models.StageAssembly:
+        self._require_stages_module()
+        return self._assembly_view(self._assemblies.revise(
+            assembly_id=assembly_id, base_member_no=body.base_member_no,
+            add_document_uids=tuple(body.add_document_uids),
+            remove_document_uids=tuple(body.remove_document_uids),
+            user_uid=user_uid, idempotency_key=idempotency_key,
+        ))
+
+    def set_completeness(
+        self, *, pair_id: str, body: models.SetStagePairCompletenessRequest,
+        user_uid: str, idempotency_key: str,
+    ) -> models.StagePair:
+        self._require_stages_module()
+        return self._pair_view(self._pairs.set_completeness(
+            pair_id=pair_id, completeness=body.completeness,
+            user_uid=user_uid, idempotency_key=idempotency_key,
+        ))
+
+
+class ComparisonStageUploadAdapter(_StagesModuleGate):
+    """Bounded PDF/ZIP intake; the module flag precedes every service call."""
+
+    _DEPENDENCY = "comparison_stage_uploads"
+
+    def __init__(
+        self, sessions: sessionmaker[Session], *, blob_store: Any,
+        comparison_modules: str = "none",
+    ) -> None:
+        super().__init__(comparison_modules=comparison_modules)
+        from auditmanager.comparison.public import (
+            StageCandidateAdmissionService, StageCandidateDecisionService,
+            StageCandidatePublicationService, StageRawCompletionService,
+            StageUploadLifecycleService, StageUploadPartService, StageUploadService,
+        )
+        from auditmanager.storage.public import BlobMetadataRepository
+
+        self._sessions = sessions
+        self._uploads = StageUploadService(sessions)
+        self._parts = StageUploadPartService(sessions, blob_store, BlobMetadataRepository())
+        self._completion = StageRawCompletionService(sessions, blob_store, BlobMetadataRepository())
+        self._admission = StageCandidateAdmissionService(sessions, blob_store)
+        self._decisions = StageCandidateDecisionService(sessions)
+        self._publication = StageCandidatePublicationService(sessions, blob_store)
+        self._lifecycle = StageUploadLifecycleService(sessions, blob_store)
+
+    @staticmethod
+    def _file_view(row: Any) -> models.StageUploadFile:
+        declaration = row.declaration
+        return models.StageUploadFile(
+            file_id=row.file_id, upload_id=row.upload_id,
+            declaration=models.StageUploadFileDeclaration(
+                display_name=declaration.display_name, media_kind=declaration.media_kind,
+                size_bytes=declaration.size_bytes, sha256=declaration.sha256,
+            ),
+            state=row.state, received_parts=row.received_parts,
+            received_bytes=row.received_bytes, created_at=row.created_at,
+            **_unset_none(failure_reason=row.failure_reason),
+        )
+
+    @staticmethod
+    def _candidate_view(row: Any) -> models.StageUploadCandidate:
+        return models.StageUploadCandidate(
+            candidate_id=row.candidate_id, file_id=row.file_id,
+            member_number=row.member_number, display_name=row.display_name,
+            state=row.state,
+            **_unset_none(
+                proposed_stage=row.proposed_stage,
+                proposed_section=row.proposed_section,
+                designation=row.designation,
+                confirmed_stage=row.confirmed_stage,
+                confirmed_section=row.confirmed_section,
+                document_uid=row.document_uid,
+                version_uid=row.version_uid,
+                failure_reason=row.failure_reason,
+            ),
+        )
+
+    @classmethod
+    def _upload_view(cls, row: Any) -> models.StageUpload:
+        return models.StageUpload(
+            upload_id=row.upload_id, project_uid=row.project_uid, state=row.state,
+            files=[cls._file_view(item) for item in row.files],
+            candidates=[cls._candidate_view(item) for item in row.candidates],
+            created_at=row.created_at, updated_at=row.updated_at,
+        )
+
+    def create_upload(
+        self, *, project_uid: str, body: models.CreateStageUploadRequest,
+        user_uid: str, idempotency_key: str,
+    ) -> models.StageUpload:
+        self._require_stages_module()
+        from auditmanager.comparison.public import StageDeclaredFile
+
+        return self._upload_view(self._uploads.create(
+            project_uid=project_uid,
+            files=tuple(StageDeclaredFile(
+                item.display_name, item.media_kind.value, item.size_bytes, item.sha256,
+            ) for item in body.files),
+            user_uid=user_uid, idempotency_key=idempotency_key,
+        ))
+
+    def list_uploads(
+        self, *, project_uid: str, cursor: str | None, limit: int,
+    ) -> models.StageUploadPage:
+        self._require_stages_module()
+        from auditmanager.shared.identity import IdentityError, StageUploadId
+
+        after: str | None = None
+        if cursor is not None:
+            parts = decode_cursor(cursor)
+            if len(parts) != 1:
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+            try:
+                after = str(StageUploadId.parse(parts[0]))
+            except IdentityError:
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format") from None
+        rows, next_id = self._uploads.page(
+            project_uid=project_uid, after_upload_id=after, limit=limit,
+        )
+        return models.StageUploadPage(
+            items=[self._upload_view(row) for row in rows],
+            page=models.PageInfo(
+                next_cursor=None if next_id is None else encode_cursor((next_id,))
+            ),
+        )
+
+    def get_upload(self, *, upload_id: str) -> models.StageUpload:
+        self._require_stages_module()
+        return self._upload_view(self._uploads.get(upload_id))
+
+    def put_part(
+        self, *, upload_id: str, file_id: str, part_number: int, content: bytes,
+        user_uid: str, idempotency_key: str,
+    ) -> models.StageUploadPartReceipt:
+        self._require_stages_module()
+        row = self._parts.put_part(
+            upload_id=upload_id, file_id=file_id, part_number=part_number,
+            content=content, user_uid=user_uid, idempotency_key=idempotency_key,
+        )
+        return models.StageUploadPartReceipt(
+            upload_id=row.upload_id, file_id=row.file_id,
+            part_number=row.part_number, size_bytes=row.size_bytes,
+            sha256=row.sha256, received_bytes=row.received_bytes,
+        )
+
+    def complete_file(
+        self, *, upload_id: str, file_id: str, user_uid: str, idempotency_key: str,
+    ) -> models.StageUploadFile:
+        self._require_stages_module()
+        self._completion.complete_raw(
+            upload_id=upload_id, file_id=file_id,
+            user_uid=user_uid, idempotency_key=idempotency_key,
+        )
+        self._admission.admit(upload_id=upload_id, file_id=file_id)
+        row = self._uploads.get(upload_id)
+        return self._file_view(next(item for item in row.files if item.file_id == file_id))
+
+    def confirm_candidate(
+        self, *, candidate_id: str, body: models.ConfirmStageUploadCandidateRequest,
+        user_uid: str, idempotency_key: str,
+    ) -> models.StageUploadCandidate:
+        self._require_stages_module()
+        with self._sessions() as session:
+            _label, roles = _comparison_actor(session, user_uid)
+        self._decisions.confirm(
+            candidate_id=candidate_id, stage=body.stage, section_code=body.section_code,
+            designation=body.designation,
+            existing_document_uid=body.existing_document_uid,
+            user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key,
+        )
+        return self._candidate_view(self._publication.publish(candidate_id=candidate_id))
+
+    def reject_candidate(
+        self, *, candidate_id: str, user_uid: str, idempotency_key: str,
+    ) -> models.StageUploadCandidate:
+        self._require_stages_module()
+        with self._sessions() as session:
+            _label, roles = _comparison_actor(session, user_uid)
+        return self._candidate_view(self._decisions.reject(
+            candidate_id=candidate_id, user_uid=user_uid,
+            actor_roles=roles, idempotency_key=idempotency_key,
+        ))
+
+    def pause_upload(
+        self, *, upload_id: str, user_uid: str, idempotency_key: str,
+    ) -> models.StageUpload:
+        self._require_stages_module()
+        return self._upload_view(self._lifecycle.pause(
+            upload_id=upload_id, user_uid=user_uid, idempotency_key=idempotency_key,
+        ))
+
+    def resume_upload(
+        self, *, upload_id: str, user_uid: str, idempotency_key: str,
+    ) -> models.StageUpload:
+        self._require_stages_module()
+        return self._upload_view(self._lifecycle.resume(
+            upload_id=upload_id, user_uid=user_uid, idempotency_key=idempotency_key,
+        ))
+
+    def cancel_upload(
+        self, *, upload_id: str, user_uid: str, idempotency_key: str,
+    ) -> models.StageUpload:
+        self._require_stages_module()
+        return self._upload_view(self._lifecycle.cancel(
+            upload_id=upload_id, user_uid=user_uid, idempotency_key=idempotency_key,
+        ))
+
+
+class ComparisonStageLinkAdapter(_StagesModuleGate):
+    """Stored passports, nonbinding hints and expert-owned sheet-map revisions."""
+
+    _DEPENDENCY = "comparison_stage_links"
+
+    def __init__(
+        self, sessions: sessionmaker[Session], *, comparison_modules: str = "none",
+    ) -> None:
+        super().__init__(comparison_modules=comparison_modules)
+        from auditmanager.comparison.public import StageSheetMapService, StageSheetReadService
+
+        self._sessions = sessions
+        self._reads = StageSheetReadService(sessions)
+        self._maps = StageSheetMapService(sessions)
+
+    @staticmethod
+    def _after(items: Sequence[Any], cursor: str | None, key: Any) -> int:
+        if cursor is None:
+            return 0
+        parts = decode_cursor(cursor)
+        if len(parts) != 1:
+            raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+        for index, item in enumerate(items):
+            if key(item) == parts[0]:
+                return index + 1
+        raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+
+    @staticmethod
+    def _passport_view(row: Any) -> models.StageSheetPassport:
+        return models.StageSheetPassport(
+            profile_id=row.profile_id, version_uid=row.version_uid,
+            page_number=row.page_number, side=row.side,
+            **_unset_none(
+                sheet_type=row.sheet_type, building=row.building, floor=row.floor,
+                level=row.level, sheet_number=row.sheet_number,
+            ),
+        )
+
+    @staticmethod
+    def _revision_view(row: Any) -> models.StageLinkRevision:
+        return models.StageLinkRevision(
+            revision_id=row.revision_id, pair_id=row.pair_id,
+            revision_no=row.revision_no, source=row.source,
+            input_sha256=row.input_sha256, created_at=row.created_at,
+            items=[models.StageLinkItem(
+                item_id=item.item_id, row_no=item.row_no,
+                relation=item.relation, confidence=item.confidence,
+                **_unset_none(
+                    left_profile_id=item.left_profile_id,
+                    right_profile_id=item.right_profile_id,
+                ),
+            ) for item in row.items],
+            **_unset_none(base_revision_id=row.base_revision_id),
+        )
+
+    def list_passports(self, *, pair_id: str, cursor: str | None, limit: int) -> models.StageSheetPassportPage:
+        self._require_stages_module()
+        rows = self._reads.passports(pair_id=pair_id)
+        start = self._after(rows, cursor, lambda row: row.profile_id)
+        visible = rows[start:start + limit]
+        next_cursor = (
+            encode_cursor((visible[-1].profile_id,))
+            if visible and start + limit < len(rows) else None
+        )
+        return models.StageSheetPassportPage(
+            items=[self._passport_view(row) for row in visible],
+            page=models.PageInfo(next_cursor=next_cursor),
+        )
+
+    def list_suggestions(self, *, pair_id: str, cursor: str | None, limit: int) -> models.StageSheetSuggestionPage:
+        self._require_stages_module()
+        rows = self._reads.suggestions(pair_id=pair_id)
+        start = self._after(
+            rows, cursor, lambda row: f"{row.left_profile_id}:{row.right_profile_id}",
+        )
+        visible = rows[start:start + limit]
+        next_cursor = (
+            encode_cursor((f"{visible[-1].left_profile_id}:{visible[-1].right_profile_id}",))
+            if visible and start + limit < len(rows) else None
+        )
+        return models.StageSheetSuggestionPage(
+            items=[models.StageSheetSuggestion(
+                left_profile_id=row.left_profile_id, right_profile_id=row.right_profile_id,
+                score=row.score, confidence=row.confidence, reasons=list(row.reasons),
+            ) for row in visible], page=models.PageInfo(next_cursor=next_cursor),
+        )
+
+    def get_current_map(self, *, pair_id: str) -> models.StageLinkRevision:
+        self._require_stages_module()
+        return self._revision_view(self._maps.current(pair_id=pair_id))
+
+    def apply_map(
+        self, *, pair_id: str, body: models.ApplyStageSheetMapRequest,
+        user_uid: str, idempotency_key: str,
+    ) -> models.StageLinkRevision:
+        self._require_stages_module()
+        from auditmanager.comparison.public import LinkInput
+
+        with self._sessions() as session:
+            _label, roles = _comparison_actor(session, user_uid)
+        row = self._maps.apply(
+            pair_id=pair_id, base_revision_id=body.base_revision_id,
+            items=tuple(LinkInput(
+                item.relation, item.left_profile_id, item.right_profile_id,
+            ) for item in body.items),
+            user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key,
+        )
+        return self._revision_view(row)
+
+    def list_history(self, *, pair_id: str, cursor: str | None, limit: int) -> models.StageLinkRevisionPage:
+        self._require_stages_module()
+        after_no: int | None = None
+        if cursor is not None:
+            parts = decode_cursor(cursor)
+            if len(parts) != 1:
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+            prior = self._maps.get(revision_id=parts[0])
+            if prior.pair_id != pair_id:
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+            after_no = prior.revision_no
+        rows, _next_no = self._maps.page(
+            pair_id=pair_id, after_revision_no=after_no, limit=limit,
+        )
+        next_cursor = (
+            encode_cursor((rows[-1].revision_id,)) if _next_no is not None else None
+        )
+        return models.StageLinkRevisionPage(
+            items=[self._revision_view(row) for row in rows],
+            page=models.PageInfo(next_cursor=next_cursor),
+        )
+
+    def get_revision(self, *, revision_id: str) -> models.StageLinkRevision:
+        self._require_stages_module()
+        return self._revision_view(self._maps.get(revision_id=revision_id))
+
+
+class ComparisonStageTextAdapter(_StagesModuleGate):
+    """Stored immutable raw text evidence; recomputation remains sealed."""
+
+    _DEPENDENCY = "comparison_stage_text"
+
+    def __init__(
+        self, sessions: sessionmaker[Session], *, comparison_modules: str = "none",
+    ) -> None:
+        super().__init__(comparison_modules=comparison_modules)
+        from auditmanager.comparison.public import StageTextReadService, StageTextRecomputeService
+
+        self._reads = StageTextReadService(sessions)
+        self._runs = StageTextRecomputeService(sessions)
+        self._sessions = sessions
+
+    @staticmethod
+    def _cursor(raw: str | None) -> str | None:
+        if raw is None:
+            return None
+        parts = decode_cursor(raw)
+        if len(parts) != 1 or not re.fullmatch(r"[0-9a-f]{64}", parts[0]):
+            raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+        return parts[0]
+
+    def list_fragments(self, *, pair_id: str, cursor: str | None, limit: int) -> models.StageTextFragmentPage:
+        self._require_stages_module()
+        rows, next_key = self._reads.fragments(
+            pair_id=pair_id, after=self._cursor(cursor), limit=limit,
+        )
+        return models.StageTextFragmentPage(
+            items=[models.StageTextFragment(
+                fragment_id=row["stage_text_fragment_id"], pair_id=pair_id,
+                profile_id=row["page_profile_id"], side=row["side"],
+                text=row["normalised_text"], box_anchor=row["box_anchor"],
+                content_key=row["content_key"],
+            ) for row in rows],
+            page=models.PageInfo(next_cursor=encode_cursor((next_key,)) if next_key else None),
+        )
+
+    def list_exclusions(self, *, revision_id: str, cursor: str | None, limit: int) -> models.StageTextExclusionPage:
+        self._require_stages_module()
+        rows, next_key = self._reads.revision_rows(
+            kind="exclusions", revision_id=revision_id,
+            after=self._cursor(cursor), limit=limit,
+        )
+        return models.StageTextExclusionPage(
+            items=[models.StageTextExclusion(
+                exclusion_id=row["stage_text_exclusion_id"], revision_id=revision_id,
+                left_fragment_id=row["left_fragment_id"],
+                right_fragment_id=row["right_fragment_id"], proof_kind=row["proof_kind"],
+            ) for row in rows],
+            page=models.PageInfo(next_cursor=encode_cursor((next_key,)) if next_key else None),
+        )
+
+    def list_differences(self, *, revision_id: str, cursor: str | None, limit: int) -> models.StageTextDifferencePage:
+        self._require_stages_module()
+        rows, next_key = self._reads.revision_rows(
+            kind="differences", revision_id=revision_id,
+            after=self._cursor(cursor), limit=limit,
+        )
+        return models.StageTextDifferencePage(
+            items=[models.StageTextDifference(
+                difference_id=row["stage_text_difference_id"], revision_id=revision_id,
+                status=row["status"],
+                **_unset_none(left_fragment_id=row["left_fragment_id"],
+                              right_fragment_id=row["right_fragment_id"]),
+            ) for row in rows],
+            page=models.PageInfo(next_cursor=encode_cursor((next_key,)) if next_key else None),
+        )
+
+    def list_hints(self, *, revision_id: str, cursor: str | None, limit: int) -> models.StageTextHintPage:
+        self._require_stages_module()
+        rows, next_key = self._reads.revision_rows(
+            kind="hints", revision_id=revision_id,
+            after=self._cursor(cursor), limit=limit,
+        )
+        return models.StageTextHintPage(
+            items=[models.StageTextHint(
+                hint_id=row["stage_text_hint_id"], revision_id=revision_id,
+                source_fragment_id=row["source_fragment_id"],
+                target_fragment_id=row["target_fragment_id"],
+            ) for row in rows],
+            page=models.PageInfo(next_cursor=encode_cursor((next_key,)) if next_key else None),
+        )
+
+    def recompute(
+        self, *, revision_id: str, user_uid: str, idempotency_key: str,
+    ) -> models.StageChainRun:
+        self._require_stages_module()
+        with self._sessions() as session:
+            _label, roles = _comparison_actor(session, user_uid)
+        row = self._runs.start(
+            revision_id=revision_id, user_uid=user_uid,
+            actor_roles=roles, idempotency_key=idempotency_key,
+        )
+        return models.StageChainRun(
+            run_id=row.run_id, pair_id=row.pair_id,
+            link_revision_id=row.revision_id, input_sha256=row.input_sha256,
+            pinned_version_uids=list(row.pinned_version_uids), state=row.state,
+            steps=[models.StageChainStep(
+                step_id=step.step_id, step_no=step.step_no,
+                state=step.state, counts=step.counts,
+                **_unset_none(started_at=step.started_at, finished_at=step.finished_at),
+            ) for step in row.steps],
+            created_at=row.created_at, updated_at=row.updated_at, stale=row.stale,
+        )
+
+
+def _stage_run_view(row: Any) -> models.StageChainRun:
+    return models.StageChainRun(
+        run_id=row.run_id, pair_id=row.pair_id, link_revision_id=row.revision_id,
+        input_sha256=row.input_sha256, pinned_version_uids=list(row.pinned_version_uids),
+        state=row.state, stale=row.stale, kind=row.kind, with_ai=row.with_ai,
+        steps=[models.StageChainStep(step_id=step.step_id, step_no=step.step_no,
+               state=step.state, counts=step.counts,
+               **_unset_none(started_at=step.started_at, finished_at=step.finished_at)) for step in row.steps],
+        created_at=row.created_at, updated_at=row.updated_at,
+        **_unset_none(effective_link_revision_id=row.effective_revision_id,
+                      ai_job_id=row.ai_job_id, batch_id=row.batch_id,
+                      pause_reason=row.pause_reason, failure_reason=row.failure_reason),
+    )
+
+
+def _stage_after(cursor: str | None, scope: str) -> str | None:
+    if cursor is None:
+        return None
+    parts = decode_cursor(cursor)
+    if len(parts) != 2 or parts[0] != scope or not parts[1]:
+        raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="scope")
+    return parts[1]
+
+
+def _stage_page(scope: str, next_key: str | int | None) -> models.PageInfo:
+    return models.PageInfo(next_cursor=encode_cursor((scope, str(next_key))) if next_key is not None else None)
+
+
+class ComparisonStageRunAdapter(_StagesModuleGate):
+    """Keyed expert commands and persisted deterministic/full-chain reads."""
+
+    def __init__(self, sessions: sessionmaker[Session], *, blob_store: Any = None,
+                 comparison_modules: str = "none", provider_mode: str = "recorded") -> None:
+        super().__init__(comparison_modules=comparison_modules)
+        from auditmanager.comparison.public import StageAiRuntime, StageChainService, StageGraphicService
+        self._sessions = sessions
+        self._ai = StageAiRuntime(sessions, blob_store=blob_store, provider_mode=provider_mode,
+            graphic_source=StageGraphicService(sessions, blob_store=blob_store))
+        self._runs = StageChainService(sessions, comparison_modules=comparison_modules, ai=self._ai)
+
+    def _roles(self, user_uid: str) -> frozenset[str]:
+        with self._sessions() as session:
+            return _comparison_actor(session, user_uid)[1]
+
+    def start_run(self, *, pair_id: str, body: models.StartStageChainRunRequest,
+                  user_uid: str, idempotency_key: str) -> models.StageChainRun:
+        self._require_stages_module()
+        values = body.model_dump(mode="json", exclude_unset=True)
+        return _stage_run_view(self._runs.start(
+            pair_id=pair_id, revision_id=body.link_revision_id, user_uid=user_uid,
+            actor_roles=self._roles(user_uid), idempotency_key=idempotency_key,
+            with_ai=values.get("with_ai", True), consent=values.get("consent"),
+            restart=values.get("restart", False)))
+
+    def list_runs(self, *, pair_id: str, cursor: str | None, limit: int) -> models.StageChainRunPage:
+        self._require_stages_module()
+        rows, next_key = self._runs.page(pair_id=pair_id, after=_stage_after(cursor, pair_id), limit=limit)
+        return models.StageChainRunPage(items=[_stage_run_view(row) for row in rows], page=_stage_page(pair_id, next_key))
+
+    def get_run(self, *, run_id: str) -> models.StageChainRun:
+        self._require_stages_module()
+        return _stage_run_view(self._runs.get(run_id))
+
+    def cancel_run(self, *, run_id: str, user_uid: str, idempotency_key: str) -> models.StageChainRun:
+        self._require_stages_module()
+        return _stage_run_view(self._runs.cancel(run_id=run_id, user_uid=user_uid,
+            actor_roles=self._roles(user_uid), idempotency_key=idempotency_key))
+
+
+class ComparisonStageC4Adapter(_StagesModuleGate):
+    """Stage AI, repairs, expert decisions and journal over public domain services."""
+
+    _DEPENDENCY = "comparison_stage_c4"
+    def __init__(self, sessions: sessionmaker[Session], *, blob_store: Any = None,
+                 comparison_modules: str = "none", provider_mode: str = "recorded") -> None:
+        super().__init__(comparison_modules=comparison_modules)
+        from auditmanager.comparison.public import (PageProfileReader, StageAssemblyService, StageProfileTextService,
+            StageAiRuntime, StageChainService, StageBatchService, StageRepairService, StageReviewService, StageGraphicService)
+
+        self._sessions = sessions
+        self._ai = StageAiRuntime(sessions, blob_store=blob_store, provider_mode=provider_mode,
+            graphic_source=StageGraphicService(sessions, blob_store=blob_store))
+        self._runs = StageChainService(sessions, comparison_modules=comparison_modules, ai=self._ai)
+        self._batches = StageBatchService(self._runs)
+        self._repairs = StageRepairService(sessions)
+        self._review = StageReviewService(sessions)
+        self._graphics = StageGraphicService(sessions, blob_store=blob_store)
+        self._assemblies = StageAssemblyService(sessions)
+        self._profile_text = StageProfileTextService(PageProfileReader(sessions, blob_store))
+    def estimate_run(self, *, revision_id: str, user_uid: str, run_id: str | None = None) -> models.ComparisonAiEstimate:
+        self._require_stages_module()
+        if run_id is not None:
+            run = self._runs.get(run_id)
+            if revision_id not in {run.revision_id, run.effective_revision_id}:
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="stage_chain_run_id", constraint="scope")
+            estimate = self._ai.estimate_resume(run_id=run_id, user_uid=user_uid)
+        else:
+            estimate = self._ai.estimate(revision_id=revision_id, user_uid=user_uid)
+        return models.ComparisonAiEstimate.model_validate(estimate.as_dict())
+
+    def resume_run(self, *, run_id: str, body: models.ResumeStageChainRunRequest, user_uid: str, idempotency_key: str) -> models.StageChainRun:
+        self._require_stages_module()
+        with self._sessions() as session:
+            roles = _comparison_actor(session, user_uid)[1]
+        values = body.model_dump(mode="json", exclude_unset=True)
+        return _stage_run_view(self._runs.resume(run_id=run_id, user_uid=user_uid, actor_roles=roles,
+            idempotency_key=idempotency_key, consent=values.get("consent"), retry_failed=body.retry_failed))
+
+    def start_batch(self, *, project_uid: str, body: models.StartStageChainBatchRequest, user_uid: str, idempotency_key: str) -> models.StageChainBatch:
+        self._require_stages_module()
+        with self._sessions() as session:
+            roles = _comparison_actor(session, user_uid)[1]
+        return models.StageChainBatch.model_validate(self._batches.start(project_uid=project_uid,
+            selections=[s.model_dump(mode="json", exclude_unset=True) for s in body.selections],
+            user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key, with_ai=body.with_ai))
+
+    def get_batch(self, *, batch_id: str) -> models.StageChainBatch:
+        self._require_stages_module()
+        return models.StageChainBatch.model_validate(self._batches.get(batch_id))
+
+    def pause_batch(self, *, batch_id: str, user_uid: str, idempotency_key: str) -> models.StageChainBatch:
+        self._require_stages_module()
+        with self._sessions() as session:
+            roles = _comparison_actor(session, user_uid)[1]
+        return models.StageChainBatch.model_validate(self._batches.control(batch_id=batch_id, action="pause",
+            user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key))
+
+    def resume_batch(self, *, batch_id: str, user_uid: str, idempotency_key: str) -> models.StageChainBatch:
+        self._require_stages_module()
+        with self._sessions() as session:
+            roles = _comparison_actor(session, user_uid)[1]
+        return models.StageChainBatch.model_validate(self._batches.control(batch_id=batch_id, action="resume",
+            user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key))
+
+    def cancel_batch(self, *, batch_id: str, user_uid: str, idempotency_key: str) -> models.StageChainBatch:
+        self._require_stages_module()
+        with self._sessions() as session:
+            roles = _comparison_actor(session, user_uid)[1]
+        return models.StageChainBatch.model_validate(self._batches.control(batch_id=batch_id, action="cancel",
+            user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key))
+
+    def list_ai_reviews(self, *, run_id: str, cursor: str | None, limit: int) -> models.StageAiReviewPage:
+        self._require_stages_module()
+        scope = run_id + ":review"
+        rows, next_key = self._ai.page(run_id=run_id, kind="review", after=_stage_after(cursor, scope), limit=limit)
+        return models.StageAiReviewPage(items=[models.StageAiReview.model_validate(row) for row in rows], page=_stage_page(scope, next_key))
+
+    def list_classifications(self, *, run_id: str, cursor: str | None, limit: int) -> models.StageAiClassificationPage:
+        self._require_stages_module()
+        scope = run_id + ":classify"
+        rows, next_key = self._ai.page(run_id=run_id, kind="classify", after=_stage_after(cursor, scope), limit=limit)
+        return models.StageAiClassificationPage(items=[models.StageAiClassification.model_validate(row) for row in rows], page=_stage_page(scope, next_key))
+
+    def get_synthesis(self, *, run_id: str, cursor: str | None, limit: int) -> models.StageAiSynthesisPage:
+        self._require_stages_module()
+        scope = run_id + ":synthesize"
+        rows, next_key = self._ai.page(run_id=run_id, kind="synthesize", after=_stage_after(cursor, scope), limit=limit)
+        return models.StageAiSynthesisPage(items=[models.StageAiSynthesis.model_validate(row) for row in rows], page=_stage_page(scope, next_key))
+
+    def list_graphics(self, *, run_id: str, cursor: str | None, limit: int) -> models.StageGraphicEvidencePage:
+        self._require_stages_module()
+        rows, next_key = self._graphics.page(run_id=run_id, after=_stage_after(cursor, run_id), limit=limit)
+        return models.StageGraphicEvidencePage(items=[models.StageGraphicEvidence.model_validate(row) for row in rows], page=_stage_page(run_id, next_key))
+
+    def list_repairs(self, *, run_id: str, cursor: str | None, limit: int) -> models.StageLinkRepairPage:
+        self._require_stages_module()
+        rows, next_key = self._repairs.page(run_id=run_id, after=_stage_after(cursor, run_id), limit=limit)
+        return models.StageLinkRepairPage(items=[models.StageLinkRepair.model_validate(row) for row in rows], page=_stage_page(run_id, next_key))
+
+    def undo_repair(self, *, repair_id: str, body: models.UndoStageLinkRepairRequest, user_uid: str, idempotency_key: str) -> models.StageLinkRepair:
+        self._require_stages_module()
+        with self._sessions() as session:
+            roles = _comparison_actor(session, user_uid)[1]
+        return models.StageLinkRepair.model_validate(self._repairs.undo(repair_id=repair_id,
+            base_revision_id=body.base_revision_id, user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key))
+
+    def list_cards(self, *, run_id: str, cursor: str | None, limit: int) -> models.StageChangeCardPage:
+        self._require_stages_module()
+        rows, next_key, counts = self._review.page(run_id, after=_stage_after(cursor, run_id), limit=limit)
+        return models.StageChangeCardPage(items=[models.StageChangeCard.model_validate(row) for row in rows], page=_stage_page(run_id, next_key), counts=counts)
+
+    def get_card(self, *, card_id: str) -> models.StageChangeCard:
+        self._require_stages_module()
+        return models.StageChangeCard.model_validate(self._review.get(card_id))
+
+    def create_review_card(self, *, run_id: str, body: models.CreateStageReviewCardRequest,
+                           user_uid: str, idempotency_key: str) -> models.StageChangeCard:
+        self._require_stages_module()
+        with self._sessions() as session:
+            roles = _comparison_actor(session, user_uid)[1]
+        return models.StageChangeCard.model_validate(self._review.promote(run_id, body.source_ids, body.reason,
+            user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key))
+
+    def apply_verdicts(self, *, run_id: str, body: models.ApplyStageCardVerdictsRequest, user_uid: str, idempotency_key: str) -> models.StageCardVerdictPage:
+        self._require_stages_module()
+        with self._sessions() as session:
+            roles = _comparison_actor(session, user_uid)[1]
+        rows = self._review.apply_verdicts(run_id, [u.model_dump(mode="json") for u in body.updates],
+            user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key)
+        return models.StageCardVerdictPage(items=[models.StageCardVerdict.model_validate(row) for row in rows], page=_stage_page(run_id, None))
+
+    def list_verdicts(self, *, card_id: str, cursor: str | None, limit: int) -> models.StageCardVerdictPage:
+        self._require_stages_module()
+        after = _stage_after(cursor, card_id)
+        if after is not None and (not after.isdecimal() or int(after) < 1):
+            raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+        rows, next_key = self._review.verdicts(card_id, after_revision=int(after) if after else None, limit=limit)
+        return models.StageCardVerdictPage(items=[models.StageCardVerdict.model_validate(row) for row in rows], page=_stage_page(card_id, next_key))
+
+    def get_journal(self, *, run_id: str, grouping: str) -> models.StageChangeJournal:
+        self._require_stages_module()
+        return models.StageChangeJournal.model_validate(self._review.journal(run_id, grouping))
+
+    def journal_xlsx(self, *, run_id: str) -> bytes:
+        self._require_stages_module()
+        return self._review.export(run_id, "xlsx")
+
+    def journal_pdf(self, *, run_id: str) -> bytes:
+        self._require_stages_module()
+        return self._review.export(run_id, "pdf")
+
+    def journal_html(self, *, run_id: str) -> bytes:
+        self._require_stages_module()
+        return self._review.export(run_id, "html")
+
+    def get_profile_text(self, *, profile_id: str, query: str | None) -> models.StageProfileText:
+        self._require_stages_module()
+        return models.StageProfileText(**self._profile_text.get(profile_id=profile_id, query=query))
+
+    def get_assembly(self, *, assembly_id: str) -> models.StageAssembly:
+        self._require_stages_module()
+        return ComparisonStagePairAdapter._assembly_view(self._assemblies.get(assembly_id))

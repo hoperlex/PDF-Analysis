@@ -125,6 +125,24 @@ NON_TERMINAL_STATES = {
     "comparison_series": ("queued", "running", "paused"),
     "comparison_transition": ("queued", "running"),
     "comparison_sheet_pair": ("queued", "computing"),
+    # `0040_comparison_ai_reports` (ADR-0025 decisions 7 and 19): an AI job, a question or a sheet that has not finished, a
+    # specification comparison and a report that is still going, and a launch-queue entry that has not run. An erase waits
+    # for an operator to cancel them, as it does for the queue items they run on.
+    "comparison_ai_job": ("queued", "running", "paused"),
+    "comparison_ai_pair_question": ("queued",),
+    "comparison_ai_sheet_item": ("queued", "running"),
+    "comparison_spec_comparison": ("queued", "running"),
+    "comparison_report": ("queued", "running", "paused"),
+    "comparison_launch_entry": ("waiting", "running", "needs_consent"),
+    # `0041_comparison_stage_core`: admission and chain execution must be stopped first.
+    "stage_upload": ("uploading", "paused", "admitting"),
+    "stage_upload_file": ("declared", "receiving", "received", "admitting"),
+    "stage_upload_candidate": ("confirmed", "admitting"),
+    "stage_chain_run": ("queued", "running", "paused"),
+    "stage_chain_step": ("queued", "running", "paused"),
+    "stage_ai_unit": ("queued", "running"),
+    "stage_chain_batch": ("queued", "running", "paused"),
+    "stage_chain_batch_item": ("queued", "running"),
 }
 #: The lock name of "another erase is running".
 ADVISORY_LOCK_NAME = "auditmanager.project_erase"

@@ -1,0 +1,17 @@
+# CMP-STAGE-UI-01 — stage sheet viewer and text evidence
+
+Base `74aa1928446a9fe5eb222adfb7ff69c014422690`; task [`CMP-STAGE-UI-01`](tasks/CMP-STAGE-UI-01.md). API `1.12.0` and migration `0041` stay frozen. All changes belong to the two owned widgets, their focused tests and this task/report.
+
+The sheet map now opens two profile-tile panes through the existing public `ComparisonViewerView`. Each pane uses its own stored raster size and point geometry, so different paper formats keep correct anchors. It supports fit, 1:1, pan/zoom and optional synchronisation of page-relative centre and fit-relative zoom. Generated profile/tile clients fetch bytes; requests abort when no longer wanted and object URLs are revoked on profile change/unmount. No version-comparison identity is invented.
+
+Each pane searches its stored fragment text independently, focuses the selected match and distinguishes a textless sheet from a comparison that needs recomputation. `PageTextProvider(profileId, signal)` is an exported seam for the forthcoming stored-word endpoint. Until that provider is supplied, completed fragment evidence supplies search. Exact exclusion IDs alone produce grey masks; a dirty map draft hides those old proof masks. Opening a raw row focuses and outlines its original box on each side.
+
+`stage-text-evidence` loads every page of the four C3 evidence GETs, shows raw changed/removed/added text, and keeps cross-sheet hints explicitly nonbinding. «Добавить связь» and «Заменить связь» only change the unsaved draft. Replacing a left sheet's link preserves displaced right sheets as explicit unmatched rows, while all existing nearest-free-place move rules remain intact.
+
+The panel sends a keyed durable recompute request, preserves its intent key on retry, polls `getStageChainRun` while queued/running and refreshes evidence on completion. It shows staleness after map edits and permits a new revision's request while an older revision's run is still active. Missing evidence prompts recomputation instead of claiming no text differences.
+
+Focused verification: **16 Vitest passed** across six files; web typecheck and `git diff --check` passed. The tests cover prior move rules, hint add/replace and displaced-page retention, geometry/visible tiles, normalised synchronisation, Cyrillic search, exact mask projection, stale-mask hiding, recompute prompt and raw before/after text. No full gate, build or browser journey was run, following today's owner instruction.
+
+Root integration requires two already-approved public viewer seams: `ComparisonViewerData = Omit<ComparisonSheetPair, 'sheet_pair_id' | 'transition_id'>` for the pure view prop and `showEvidencePanels?: boolean` defaulting true. The stage wrapper supplies false and contains one temporary `@ts-expect-error` at that handoff line; remove it when those shared props land. The root also owns registration of the new run polling path in any closed polling census and supplies `PageTextProvider` after `getStageProfileText` is sealed. Existing page mounts continue to call `StageSheetMap` unchanged; its optional provider prop and `StagePairViewer` are exported from the owned public index.
+
+Known limits: no live browser journey yet; the inherited passport load still refuses more than 1,000 pages, and the hint display initially shows up to 100 recommendations. C4 review cards/reports and page mount wiring belong to later lanes. Contracts, generated client, migration head, dependencies/locks, global styles, shared viewer source and remote refs were untouched.

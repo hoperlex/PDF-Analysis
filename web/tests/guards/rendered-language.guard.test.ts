@@ -381,6 +381,7 @@ const NOT_DERIVABLE: readonly { readonly word: string; readonly why: string }[] 
   { word: 'Claude Code', why: 'The product name of the command-line tool a remote machine runs, in «Claude Code без интерфейса» and «Сеанс Claude Code». A product name, not translated; listed before `Claude` so the pair is consumed whole.' },
   { word: 'Claude', why: 'The model family name in «Формат сообщений Claude». A product name, not translated for the reason AuditManager is not; no contract here defines it.' },
   { word: 'authorized_keys', why: 'The file OpenSSH reads on the remote machine, named where the generated public key is shown so the person knows where to add it. The spelling is fixed by OpenSSH; no contract here defines it, and it is not a filename the extension pattern matches.' },
+  { word: 'MD', why: 'The abbreviation of Markdown in «Сводка изменений (MD)», «Скачать MD», «Исходный MD» and «MD листа», the names of the original\'s buttons (`CMP-VC-UI-02`). A format name that Russian technical writing does not translate; no contract here defines the word, and a bare `MD` is not a filename the extension pattern matches.' },
   {
     word: 'MiB',
     why:
@@ -2542,6 +2543,18 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     }]),
   },
   {
+    // `CMP-SEAL-C2` (ADR-0025 decision 17): a route for each of the four kinds of model work of «Сравнение версий», beside
+    // «Анализ текста», so that every member of `ExecutorWorkKind` stands on a screen.
+    name: 'workers-routes-comparison-kinds',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'routes' }),
+    seedClient: (client) => seedExecutors(client, EXECUTOR_CASES, (
+      ['text_analysis', 'comparison_pair_check', 'comparison_sheet_changes', 'comparison_spec', 'comparison_report'] as const
+    ).map((kind) => ({
+      work_kind: kind, primary_connection_id: EXECUTOR_READY.connection.connection_id,
+      set_at: '2026-10-21T10:00:00Z', set_by: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+    }))),
+  },
+  {
     // No route at all: a run would be refused, and the screen says so.
     name: 'workers-routes-unassigned',
     make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'routes' }),
@@ -3539,6 +3552,32 @@ const TRANSLATED_SCHEMAS = [
   'ComparisonPartRole',
   'ComparisonLayer',
   'ComparisonChannelState',
+  // `CMP-VC-UI-02`: the AI layer of «Сравнение версий» says every state, reason, tier, decision and kind in Russian, with the
+  // contract value in a `data-` attribute. Several are plain English words (`queued`, `running`, `high`, `none`, `failed`,
+  // `client`, `whole`, `added`, `moved`, `done`), which must not be permitted bare.
+  'ComparisonAiJobState',
+  'ComparisonAiPauseReason',
+  'ComparisonAiMethod',
+  'ComparisonAiSheetState',
+  'ComparisonAiTier',
+  'ComparisonAiCertainty',
+  'ComparisonAiConfidence',
+  'ComparisonAiPairDecision',
+  'ComparisonAiPairQuestionKind',
+  'ComparisonAiExcludeReason',
+  'ComparisonAiCeiling',
+  'ComparisonReviewSheetKind',
+  'ComparisonSpecMethod',
+  'ComparisonSpecState',
+  'ComparisonSpecPhase',
+  'ComparisonSpecChangeKind',
+  'ComparisonReportState',
+  'ComparisonReportStage',
+  'ComparisonReportKind',
+  'ComparisonReportSource',
+  'ComparisonReportUnitMark',
+  'ComparisonLaunchQueueState',
+  'ComparisonLaunchEntryState',
 ] as const;
 
 function translatedVocabulary(): ReadonlySet<string> {
@@ -3608,7 +3647,7 @@ describe('the guard reads a contract rather than a list of words', () => {
   });
 
   it('keeps the hand-written residue small, and every entry reasoned', () => {
-    expect(NOT_DERIVABLE.length).toBeLessThanOrEqual(20);
+    expect(NOT_DERIVABLE.length).toBeLessThanOrEqual(21);
     for (const { word, why } of NOT_DERIVABLE) {
       expect(why.length, `${word} has no reason`).toBeGreaterThan(60);
     }
@@ -4148,6 +4187,143 @@ const SCHEMA_MARKERS: readonly {
     schema: 'ComparisonChannelState',
     attribute: 'data-channel-state',
     why: '`widgets/comparison-viewer/ui/evidence-panels.tsx`, the chip of each channel of the comparison: проверено, не проверено or не применимо, with the count or the reason.',
+  },  {
+    schema: 'ComparisonAiJobState',
+    attribute: 'data-ai-job-state',
+    why:
+      '`widgets/version-series/ui/ai-blocks.tsx` and `queue-strips.tsx`, `widgets/execution-queue/ui/comparison-ai-queue-block.tsx`: the state of an AI job in the block «ИИ-описание изменений» and in the installation\'s AI queue, said in Russian (в очереди, идёт, пауза, готово, ошибка, отменено).',
+  },
+  {
+    schema: 'ComparisonAiPauseReason',
+    attribute: 'data-ai-pause-reason',
+    why:
+      '`widgets/version-series/ui/ai-blocks.tsx` and `ai-step-cell.tsx`: why an AI job is paused (the quota, the sign-in, the 1,2 overrun, a changed route, the module off), with what to do about it.',
+  },
+  {
+    schema: 'ComparisonAiMethod',
+    attribute: 'data-ai-method',
+    why:
+      '`widgets/version-series/ui/queue-strips.tsx` and `widgets/execution-queue/ui/comparison-ai-queue-block.tsx`: the four kinds of model work in a line of the installation\'s AI queue.',
+  },
+  {
+    schema: 'ComparisonAiSheetState',
+    attribute: 'data-ai-sheet-state',
+    why:
+      '`widgets/comparison-viewer/ui/changes-panel.tsx`, the eleven states of the side panel «Изменения в листе» (Не обработано … По данным сравнения изменений нет), and the history of descriptions.',
+  },
+  {
+    schema: 'ComparisonAiTier',
+    attribute: 'data-ai-tier',
+    why:
+      '`widgets/comparison-viewer/ui/changes-panel.tsx`, the mark on every value of a change: по тексту листа, с изображения, не подтверждено.',
+  },
+  {
+    schema: 'ComparisonAiCertainty',
+    attribute: 'data-ai-certainty',
+    why:
+      '`widgets/comparison-viewer/ui/changes-panel.tsx`, one change of the description: whether the model settled it or left it «Неясно».',
+  },
+  {
+    schema: 'ComparisonAiConfidence',
+    attribute: 'data-ai-confidence',
+    why:
+      '`widgets/version-series/ui/matrix-cell.tsx`, the hint of the AI check of doubtful pairs on a cell: how sure the model was.',
+  },
+  {
+    schema: 'ComparisonAiPairDecision',
+    attribute: 'data-ai-pair-decision',
+    why:
+      '`widgets/version-series/ui/matrix-cell.tsx`, what the check made of one answer, in the hint on the cell (ИИ, ИИ ?, «🌙 ИИ: вероятно стр. N») and its explanation on hover.',
+  },
+  {
+    schema: 'ComparisonAiPairQuestionKind',
+    attribute: 'data-ai-pair-question',
+    why:
+      '`widgets/version-series/ui/matrix-cell.tsx`, which question the hint answers: a sheet with no pair, or a pair of medium confidence.',
+  },
+  {
+    schema: 'ComparisonAiExcludeReason',
+    attribute: 'data-exclude-reason',
+    why:
+      '`widgets/comparison-viewer/ui/changes-panel.tsx`, «Не включено в сводку»: why the program left a pointer of the comparison out of the description.',
+  },
+  {
+    schema: 'ComparisonAiCeiling',
+    attribute: 'data-estimate-blocked',
+    why:
+      '`entities/version-series/ui/estimate-panel.tsx`, the estimate that the start would be refused for: the ceiling of one job or of the installation\'s day.',
+  },
+  {
+    schema: 'ComparisonReviewSheetKind',
+    attribute: 'data-review-kind',
+    why:
+      '`widgets/version-series/ui/ai-blocks.tsx`, the fold of a transition: Проверить, Лист добавлен, Лист удалён.',
+  },
+  {
+    schema: 'ComparisonSpecMethod',
+    attribute: 'data-spec-method',
+    why:
+      '`widgets/version-series/ui/ai-blocks.tsx`, the block «Полные спецификации (СО)»: полное сравнение or листовой ИИ, per transition.',
+  },
+  {
+    schema: 'ComparisonSpecState',
+    attribute: 'data-spec-state',
+    why:
+      '`widgets/version-series/ui/ai-blocks.tsx`, the state of the comparison of the specifications of a transition and of the block as a whole.',
+  },
+  {
+    schema: 'ComparisonSpecPhase',
+    attribute: 'data-spec-phase',
+    why:
+      '`widgets/version-series/ui/ai-blocks.tsx`, the phase of a running comparison of specifications: подготовка, сравнение, готово.',
+  },
+  {
+    schema: 'ComparisonSpecChangeKind',
+    attribute: 'data-spec-change-kind',
+    why:
+      '`widgets/version-series/ui/ai-blocks.tsx`, a position change of a specification: изменено, +добавлено, −удалено, ?неясно, переномеровано, перенесено.',
+  },
+  {
+    schema: 'ComparisonReportState',
+    attribute: 'data-report-state',
+    why:
+      '`widgets/comparison-report/ui/report-window.tsx` and `widgets/version-series/ui/ai-blocks.tsx`, the state of a PDF report in its history and in the block «Сводка MD и отчёт для заказчика».',
+  },
+  {
+    schema: 'ComparisonReportStage',
+    attribute: 'data-report-stage',
+    why:
+      '`widgets/comparison-report/ui/report-window.tsx` and `widgets/version-series/ui/ai-blocks.tsx`, the step a live report is at: файл принят … формирование PDF.',
+  },
+  {
+    schema: 'ComparisonReportKind',
+    attribute: 'data-report-kind',
+    why:
+      '`widgets/comparison-report/ui/report-window.tsx`, the kind of a report: Отчёт для заказчика · Изменения проектных решений, or the analytic one.',
+  },
+  {
+    schema: 'ComparisonReportSource',
+    attribute: 'data-report-source',
+    why:
+      '`widgets/comparison-report/ui/report-window.tsx`, where a report was made from: сводка проекта or a loaded MD file.',
+  },
+  {
+    schema: 'ComparisonReportUnitMark',
+    attribute: 'data-unit-mark',
+    why:
+      '`widgets/comparison-report/ui/report-window.tsx` and `widgets/version-series/ui/ai-blocks.tsx`, the mark of one unit of a transition in a report: ✓ ⟳ ✗ ·.',
+  },
+  {
+    schema: 'ComparisonLaunchQueueState',
+    attribute: 'data-launch-queue-state',
+    why:
+      '`widgets/version-series/ui/queue-strips.tsx`, the state of «Очередь запуска»: идёт, на паузе, ошибка — процесс остановлен, выполнена, пусто.',
+  },
+  {
+    schema: 'ComparisonLaunchEntryState',
+    attribute: 'data-launch-entry-state',
+    why:
+      '`widgets/version-series/ui/queue-strips.tsx`, the state of one step in the list of «Очередь запуска»: ждёт, идёт, ждёт подтверждения, готово, пропуск, ошибка.',
   },
 ];
 
@@ -4404,7 +4580,7 @@ describe('R-18: no Latin word reaches a reviewer that a contract did not put the
   });
 
   it('finds none at all', () => {
-    expect([...offencesOnScreens().keys()]).toEqual([]);
+    expect([...found.keys()]).toEqual([]);
   });
 });
 

@@ -1,0 +1,121 @@
+/*
+ * The window «Сформировать PDF-отчёт…» (`CMP-VC-UI-02`, `frontend/static/js/version-comparison-md-report.js`). Layout only: the tones
+ * come from the global `am-badge`, `am-button` and `am-note` classes, so both palettes reach every rule unchanged. No `:not()` and
+ * no custom property (the contrast census cannot read either). A file name or a reason is somebody's text of any length: it wraps.
+ */
+
+.window {
+  display: grid;
+  gap: var(--am-gap-sm);
+  min-width: 0;
+  max-width: 100%;
+  padding: var(--am-gap);
+  border: 1px solid var(--am-accent);
+  border-radius: var(--am-radius);
+  background: var(--am-surface);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--am-gap-xs) var(--am-gap);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--am-text-lg);
+  overflow-wrap: anywhere;
+}
+
+.subtitle {
+  margin: 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.start {
+  display: grid;
+  gap: var(--am-gap-xs);
+  padding: var(--am-gap-sm);
+  border: 1px solid var(--am-line-strong);
+  border-radius: var(--am-radius);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap);
+}
+
+.choice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--am-gap-xs);
+}
+
+.heading {
+  margin: 0;
+  font-size: var(--am-text-md);
+}
+
+.scroller {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--am-text-sm);
+}
+
+.table th,
+.table td {
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border-bottom: 1px solid var(--am-line-soft);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.numeric {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-xs);
+}
+
+.muted {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.warning {
+  margin: 0;
+  color: var(--am-failed);
+  overflow-wrap: anywhere;
+}
+
+.unit {
+  display: inline-block;
+  min-width: 1.2rem;
+  text-align: center;
+  font-weight: 600;
+}
+
+.unitFailed {
+  color: var(--am-failed);
+}
+
+.selected {
+  background: var(--am-accent-light);
+}

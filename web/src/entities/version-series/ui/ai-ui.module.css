@@ -1,0 +1,92 @@
+/*
+ * The two pieces of the AI layer that every screen of wave C2 shares (`CMP-VC-UI-02`): the label on an AI text and the estimate
+ * with its consent line. Layout only; the tones come from the global `am-badge`, `am-button` and `am-note` classes, so both
+ * palettes reach them unchanged. No `:not()` and no custom property (the contrast census cannot read either).
+ */
+
+.aiText {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.aiLabel {
+  display: inline-block;
+  margin-left: var(--am-gap-xs);
+  padding: 0 var(--am-gap-xs);
+  border: 1px solid var(--am-line-strong);
+  border-radius: var(--am-radius);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+  white-space: nowrap;
+}
+
+.recordedLabel {
+  display: inline-block;
+  margin-left: var(--am-gap-xs);
+  padding: 0 var(--am-gap-xs);
+  border: 1px solid var(--am-failed);
+  border-radius: var(--am-radius);
+  color: var(--am-failed);
+  font-size: var(--am-text-sm);
+  font-weight: 600;
+}
+
+.estimate {
+  display: grid;
+  gap: var(--am-gap-sm);
+  min-width: 0;
+  max-width: 100%;
+  padding: var(--am-gap);
+  border: 1px solid var(--am-accent);
+  border-radius: var(--am-radius);
+  background: var(--am-surface);
+}
+
+.estimateTitle {
+  margin: 0;
+  font-size: var(--am-text-lg);
+}
+
+.lines {
+  display: grid;
+  gap: var(--am-gap-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.line {
+  overflow-wrap: anywhere;
+}
+
+.lineMuted {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.warning {
+  margin: 0;
+  color: var(--am-failed);
+  overflow-wrap: anywhere;
+}
+
+.consent {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--am-gap-xs);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-sm);
+}
+
+.refusal {
+  margin: 0;
+  color: var(--am-failed);
+  font-size: var(--am-text-sm);
+  overflow-wrap: anywhere;
+}

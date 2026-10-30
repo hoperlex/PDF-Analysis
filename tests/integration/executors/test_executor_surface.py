@@ -135,7 +135,9 @@ def test_the_journey_has_the_ruled_statuses_and_no_null_and_no_secret(surface, s
         listed.json()["pinned_models"][0])
     assert any(item["connection_id"] == cid for item in listed.json()["items"])
     routes = call(surface, "GET", "/executor-routes", keyed=False)
-    assert routes.status == 200 and routes.json()["items"][0]["work_kind"] == "text_analysis"
+    assert routes.status == 200
+    assert [item["primary_connection_id"] for item in routes.json()["items"]
+            if item["work_kind"] == "text_analysis"] == [cid]
     bodies.extend([listed.json(), routes.json()])
 
     for body in bodies:

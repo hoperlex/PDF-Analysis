@@ -34,6 +34,29 @@ export const COMPARISON_CONFLICT_SENTENCES: Readonly<Record<string, string>> = {
     'Сравнение соседних версий этого комплекта уже идёт, стоит в очереди или на паузе. Дождитесь его конца или остановите его.',
   comparison_series_state:
     'Сравнение соседних версий сейчас в другом состоянии, и это действие ему не подходит. Состояние прочитано заново.',
+  // `CMP-SEAL-C2`: the AI jobs, the estimate, the summary, the reports and the launch queue.
+  comparison_estimate_stale:
+    'Оценка изменилась после того, как вы её открыли (другая модель, потолок или объём). Исполнителю ничего не передано; оценка прочитана заново — прочитайте её и подтвердите ещё раз.',
+  comparison_ceiling_job:
+    'Оценка выше потолка одного задания — 10 долл. Исполнителю ничего не передано. Сократите объём (меньше листов или переходов) или обратитесь к администратору.',
+  comparison_ceiling_day:
+    'Вместе с тем, что установка уже потратила сегодня, оценка выше потолка дня — 50 долл. Исполнителю ничего не передано; повторите завтра или сократите объём.',
+  comparison_ai_job_active:
+    'Задание ИИ для этого объекта уже стоит в очереди, идёт или на паузе. Дождитесь его конца или остановите его.',
+  comparison_ai_job_state:
+    'Задание ИИ сейчас в другом состоянии, и это действие ему не подходит. Состояние прочитано заново.',
+  comparison_ai_nothing_to_do:
+    'Отправлять, описывать или досчитывать нечего: на все единицы уже есть готовый ответ, либо в этом нет необходимости.',
+  comparison_description_missing: 'У этого листа нет сохранённого описания ИИ: сначала опишите лист.',
+  comparison_summary_unavailable:
+    'Сводки изменений ещё нет: она появляется после описания листов или сравнения спецификаций.',
+  comparison_report_state:
+    'Отчёт сейчас в другом состоянии, и это действие ему не подходит. Состояние прочитано заново.',
+  comparison_launch_entry_active: 'Этот шаг этого комплекта уже стоит в очереди запуска или выполняется.',
+  comparison_launch_entry_state:
+    'Запись очереди сейчас в другом состоянии (идёт, выполнена или уже снята), и снять её нельзя.',
+  comparison_launch_queue_state:
+    'Очередь запуска сейчас в другом состоянии, и это действие ей не подходит (например, пауза уже стоит).',
 };
 
 /** `constraint`s of the comparison modules (`error-codes.json`, `validation_failed` notes). */
@@ -70,6 +93,12 @@ export const COMPARISON_CONSTRAINT_SENTENCES: Readonly<Record<string, string>> =
   comparison_zip_total_size: 'Содержимое архива вместе больше 2 ГиБ.',
   comparison_zip_compression_ratio: 'Файл или архив сжат больше чем в 100 раз.',
   comparison_zip_empty: 'В архиве нет ни одного PDF-документа.',
+  comparison_consent_required:
+    'Нужно подтверждение передачи: отметьте строку согласия и повторите. Исполнителю ничего не передано.',
+  comparison_step_not_queueable:
+    'Этот шаг в очередь поставить нельзя: загрузка в очередь не ставится, а согласие даётся только на шаги с ИИ.',
+  comparison_report_source_invalid:
+    'Файл сводки не подошёл: он пустой, больше 20 МиБ, не в кодировке UTF-8 или в нём нет переходов с заголовком вида «## 1. первая версия → вторая версия». Ничего не создано.',
 };
 
 const MODULE_UNAVAILABLE = 'Модуль «Сравнение версий» ещё недоступен';
@@ -88,11 +117,25 @@ export const COMPARISON_DEPENDENCY_SENTENCES: Readonly<Record<string, string>> =
   comparison_series: notWired('сравнение соседних версий'),
   comparison_pair_tiles: notWired('показ листов пары'),
   comparison_overview: notWired('сводка по комплектам'),
+  comparison_ai_pairs: notWired('ИИ-проверка сомнительных пар'),
+  comparison_ai_sheets: notWired('ИИ-описание изменений'),
+  comparison_specification: notWired('полные спецификации'),
+  comparison_launch_queue: notWired('очередь запуска'),
+  comparison_reports: notWired('сводка, отчёты и PDF'),
   comparison_modules:
     'Модуль «Сравнение версий» выключен на этом стенде, поэтому его операции ничего не делают. Включает его администратор стенда.',
   comparison_versions_module:
     'Подтверждение пар листов и сводка по подтверждённым парам больше здесь не ведутся: сопоставление листов версий — в разделе «Сравнение версий». Ничего не создано.',
 };
+
+/**
+ * An AI start whose work kind has no route in «Назначения» answers `503 dependency_unavailable` with `executor_route_missing`
+ * (`error-codes.json`). It is not the module's state: the module is there and the reader can fix it, so it is a refusal with its
+ * own sentence and the screen does not say «Модуль ещё недоступен».
+ */
+export const EXECUTOR_ROUTE_MISSING = 'executor_route_missing';
+export const EXECUTOR_ROUTE_MISSING_SENTENCE =
+  'Для этой работы в «Назначениях» не выбрано подключение исполнителя. Исполнителю ничего не передано. Назначьте подключение и повторите.';
 
 /** `storage_integrity_error` of a comparison file: the received bytes are not the declared ones. */
 export const COMPARISON_INTEGRITY_SENTENCE =
@@ -142,6 +185,7 @@ export function comparisonReasonSentence(error: ApiError): string | null {
     }
     case 'dependency_unavailable': {
       const reason = detail(error, 'dependency');
+      if (reason === EXECUTOR_ROUTE_MISSING) return EXECUTOR_ROUTE_MISSING_SENTENCE;
       return reason === null ? null : (COMPARISON_DEPENDENCY_SENTENCES[reason] ?? null);
     }
     case 'storage_integrity_error':
@@ -153,7 +197,7 @@ export function comparisonReasonSentence(error: ApiError): string | null {
   }
 }
 
-export type ComparisonFailureKind = FailureKind | 'matrix_stale' | 'module_unavailable';
+export type ComparisonFailureKind = FailureKind | 'matrix_stale' | 'estimate_stale' | 'module_unavailable';
 
 export interface ComparisonFailure {
   readonly kind: ComparisonFailureKind;
@@ -167,6 +211,8 @@ export interface ComparisonFailure {
   readonly matrixStale: boolean;
   /** `409 comparison_version_order_stale`. */
   readonly orderStale: boolean;
+  /** `409 comparison_estimate_stale`: the digest the reader consented to is not the one now computed; the estimate is read again and asked again. */
+  readonly estimateStale: boolean;
 }
 
 /** Any dependency refusal of the comparison surface is the module state, whichever reason it names. */
@@ -183,13 +229,20 @@ export function comparisonFailure(error: unknown): ComparisonFailure {
     const sentence = comparisonReasonSentence(error);
     const reason = detail(error, 'conflict_reason');
     return {
-      kind: moduleUnavailable ? 'module_unavailable' : reason === 'comparison_matrix_stale' ? 'matrix_stale' : base.kind,
+      kind: moduleUnavailable
+        ? 'module_unavailable'
+        : reason === 'comparison_matrix_stale'
+          ? 'matrix_stale'
+          : reason === 'comparison_estimate_stale'
+            ? 'estimate_stale'
+            : base.kind,
       detail: sentence ?? base.detail,
       correlationId: base.correlationId,
       retryable: base.retryable,
       moduleUnavailable,
       matrixStale: error.errorCode === 'conflict' && reason === 'comparison_matrix_stale',
       orderStale: error.errorCode === 'conflict' && reason === 'comparison_version_order_stale',
+      estimateStale: error.errorCode === 'conflict' && reason === 'comparison_estimate_stale',
     };
   }
   return {
@@ -200,5 +253,6 @@ export function comparisonFailure(error: unknown): ComparisonFailure {
     moduleUnavailable: false,
     matrixStale: false,
     orderStale: false,
+    estimateStale: false,
   };
 }

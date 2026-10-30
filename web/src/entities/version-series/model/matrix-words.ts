@@ -106,6 +106,8 @@ export const MATRIX_STATE_LABELS: Readonly<Record<ComparisonMatrixState, string>
 export const MATRIX_STALE_LABELS: Readonly<Record<ComparisonMatrixStaleReason, string>> = {
   order_changed: 'порядок версий изменился',
   profiles_changed: 'версии или правила разбора изменились',
+  // `CMP-SEAL-C2`: the matching algorithm or its rule set is not the one the build was made with.
+  algorithm_changed: 'алгоритм или правила сопоставления изменились',
 };
 
 export const EDIT_KIND_LABELS: Readonly<Record<ComparisonMatrixEditKind, string>> = {

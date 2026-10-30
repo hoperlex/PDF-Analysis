@@ -7,3 +7,4 @@ export {
   ComparisonQueueBlockView,
   NO_COMPARISON_WORK,
 } from './ui/comparison-queue-block';
+export { ComparisonAiQueueBlock, ComparisonAiQueueBlockView, NO_AI_QUEUE } from './ui/comparison-ai-queue-block';

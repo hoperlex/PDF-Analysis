@@ -55,6 +55,7 @@ const EVENT_LABELS: Readonly<Record<string, string>> = {
   'attempt.created': 'Попытка создана',
   'attempt.transition': 'Состояние попытки',
   'stage.started': 'Этап начат',
+  'stage.pdf_precheck': 'Проверка PDF перед анализом',
   'stage.finished': 'Этап завершён',
   'provider.prepared': 'Вызов подготовлен',
   'provider.response_received': 'Ответ получен',

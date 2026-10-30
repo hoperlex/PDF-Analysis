@@ -72,7 +72,7 @@ __all__ = [
     "unit_key",
 ]
 
-MATCH_ALGORITHM: Final[str] = "price-match-v1"
+MATCH_ALGORITHM: Final[str] = "price-match-v2"
 
 STATUS_MATCHED: Final[str] = "matched"
 STATUS_AMBIGUOUS: Final[str] = "ambiguous"
@@ -171,12 +171,12 @@ def name_key(text: str) -> str:
 
 
 def unit_key(text: str | None) -> str | None:
-    """The canonical unit when the spelling is known, else the compact text, else ``None``."""
+    """Pricing identity; owner2026-10-30 equates running metres and metres at factor1."""
     if text is None or not text.strip():
         return None
     canonical = canonical_unit(text)
     if canonical is not None:
-        return canonical
+        return "м" if canonical == "п.м" else canonical
     compact = re.sub(r"[\s.]", "", text.lower().replace("ё", "е"))
     return compact or None
 

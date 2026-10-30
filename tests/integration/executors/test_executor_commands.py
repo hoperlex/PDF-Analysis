@@ -23,7 +23,6 @@ from auditmanager.executors.public import (
     current_revision,
     destination_for,
     generate_ssh_key,
-    list_connection_summaries,
     open_secret,
     pinned_models,
     record_probe_result,
@@ -500,6 +499,5 @@ def test_archiving_a_routed_connection_is_a_conflict_and_archiving_is_one_way(
     ).detail_fields == {"conflict_reason": "connection_archived"}
     assert refusal(lambda: revise(session, primary)).detail_fields == {
         "conflict_reason": "connection_archived"}
-    listed = {item.connection.connection_id: item for item in list_connection_summaries(session)}
-    assert listed[spare].routed_work_kinds == ("text_analysis",)
-    assert listed[primary].routed_work_kinds == ()
+    assert connection_detail(session, spare).summary.routed_work_kinds == ("text_analysis",)
+    assert connection_detail(session, primary).summary.routed_work_kinds == ()

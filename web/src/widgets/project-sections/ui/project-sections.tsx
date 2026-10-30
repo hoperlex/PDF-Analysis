@@ -103,17 +103,25 @@ export function ProjectStructureView({ projectUid, items, hasNextPage }: Project
             data-section-group={section.code}
             data-section-documents={documents.length}
           >
-            <h3 className={styles.heading}>
-              <span className={styles.abbr}>{section.abbr}</span> {section.name}
-              {documents.length === 0 ? (
-                <span className={styles.count}> — документов нет</span>
-              ) : (
-                <span className={styles.count}> — документов: {documents.length}</span>
+            <details className={styles.card} open={documents.length > 0}>
+              <summary className={styles.cardHeader}>
+                <span className={styles.code}>{section.code}</span>
+                <h3 className={styles.heading}>
+                  <span className={styles.abbr}>{section.abbr}</span> {section.name}
+                  {documents.length === 0 ? (
+                    <span className={styles.count}> — документов нет</span>
+                  ) : (
+                    <span className={styles.count}> — документов: {documents.length}</span>
+                  )}
+                </h3>
+                <span className={styles.chevron} aria-hidden="true">›</span>
+              </summary>
+              {documents.length === 0 ? null : (
+                <div className={styles.cardBody}>
+                  <DocumentRows projectUid={projectUid} documents={documents} />
+                </div>
               )}
-            </h3>
-            {documents.length === 0 ? null : (
-              <DocumentRows projectUid={projectUid} documents={documents} />
-            )}
+            </details>
           </li>
         ))}
         <li
@@ -121,21 +129,25 @@ export function ProjectStructureView({ projectUid, items, hasNextPage }: Project
           data-section-group="unclassified"
           data-section-documents={structure.unclassified.length}
         >
-          <h3 className={styles.heading}>
-            Не классифицировано
-            {structure.unclassified.length === 0 ? (
-              <span className={styles.count}> — документов нет</span>
-            ) : (
-              <span className={styles.count}> — документов: {structure.unclassified.length}</span>
+          <details className={styles.card} open={structure.unclassified.length > 0}>
+            <summary className={styles.cardHeader}>
+              <span className={styles.code}>—</span>
+              <h3 className={styles.heading}>
+                Не классифицировано
+                {structure.unclassified.length === 0 ? (
+                  <span className={styles.count}> — документов нет</span>
+                ) : (
+                  <span className={styles.count}> — документов: {structure.unclassified.length}</span>
+                )}
+              </h3>
+              <span className={styles.chevron} aria-hidden="true">›</span>
+            </summary>
+            {structure.unclassified.length === 0 ? null : (
+              <div className={styles.cardBody}>
+                <DocumentRows projectUid={projectUid} documents={structure.unclassified} toClassification />
+              </div>
             )}
-          </h3>
-          {structure.unclassified.length === 0 ? null : (
-            <DocumentRows
-              projectUid={projectUid}
-              documents={structure.unclassified}
-              toClassification
-            />
-          )}
+          </details>
         </li>
       </ol>
     </div>

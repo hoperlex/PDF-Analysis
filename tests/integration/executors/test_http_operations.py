@@ -237,9 +237,9 @@ def test_worker_bootstrap_lists_openrouter_and_preserves_codex_route_with_image_
 ) -> None:
     rings = support.make_rings()
     store = ExecutorRepository()
-    # The suite rolls each test back, but a committed connection of another suite (the dump
-    # tests commit theirs) stays in the shared database: count what this test adds, not the table.
-    before = len(store.list_connections(session))
+    # Other suites commit connections to this database. Count all rows so the assertion
+    # still measures this test's additions after the repository's 500-row list is full.
+    before = session.execute(text("SELECT count(*) FROM executor_connection")).scalar_one()
     codex = support.seed_connection(session, rings, fake.vpn_url(), name="Codex")
     first = import_env(
         _factory(session), _environ(fake), ring=rings.private, policy=_loopback_policy(fake),
@@ -262,7 +262,7 @@ def test_worker_bootstrap_lists_openrouter_and_preserves_codex_route_with_image_
         queue_only=True,
     )
     assert not second.created and second.connection_id == first.connection_id
-    assert len(store.list_connections(session)) == before + 2
+    assert session.execute(text("SELECT count(*) FROM executor_connection")).scalar_one() == before + 2
 
     png = base64.b64decode(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL7WQAAAABJRU5ErkJggg=="

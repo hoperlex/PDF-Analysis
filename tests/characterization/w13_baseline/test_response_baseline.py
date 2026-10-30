@@ -23,6 +23,11 @@ finding_uid` and its CSV twin.
 W56a added two CSV severity columns after the historical seventeen. Record 12
 remains unchanged; a digest-checked in-memory projection adds two empty v1
 cells per data row before applying the original O1 byte comparison.
+
+`CMP-C2-GATE-W13-01` keeps the historical JSON records unchanged too. A
+digest-pinned in-memory projection accounts only for the current contract
+version in sixteen error envelopes and the portal upload kind in four version
+responses; it does not suppress any other byte, status or header difference.
 """
 
 from __future__ import annotations
@@ -34,6 +39,7 @@ import importlib.util
 import io
 import json
 import sys
+from functools import cache
 from pathlib import Path
 from typing import Any
 
@@ -117,6 +123,85 @@ def _csv_compat_expected(expected: dict[str, Any]) -> dict[str, Any]:
     out["response"]["body"]["base64"] = base64.b64encode(projected).decode("ascii")
     # The record's length describes the original body before token substitution.
     out["response"]["body"]["length"] += len(projected) - len(raw)
+    return out
+
+
+# The W13 records are historical evidence, so these exact files stay untouched. The
+# current error-envelope version and portal version kind are additive surface changes.
+# Pin the complete bytes of all twenty affected records before projecting either field.
+_ERROR_VERSION_CASES = frozenset({
+    "05b-createProject.idempotency_key_reuse",
+    "17-uploadDocument.refusal.pdf_magic_bytes",
+    "18-uploadDocument.refusal.byte_size",
+    "19-uploadDocument.refusal.not_encrypted",
+    "20-uploadDocument.refusal.page_count",
+    "21-uploadDocument.refusal.every_page_has_extractable_text",
+    "22-uploadDocument.refusal.max_bytes",
+    "23-createProject.refusal.additionalProperties",
+    "24-startRun.refusal.additionalProperties",
+    "25-appendDecision.refusal.additionalProperties",
+    "26-uploadDocument.refusal.additionalProperties",
+    "27-createProject.refusal.idempotency_key_required",
+    "28-dispatch.no_route",
+    "29-dispatch.method_not_allowed",
+    "30-getRunStatus.not_found",
+    "31-streamDocumentVersionContent.storage_credential_refused",
+})
+_PORTAL_KIND_CASES = frozenset({
+    "02-uploadDocument.success",
+    "13-getDocumentVersion.success",
+    "32-listDocuments.success",
+    "33-listVersions.success",
+})
+_COMPAT_CASES = _ERROR_VERSION_CASES | _PORTAL_KIND_CASES
+_COMPAT_RECORDS_SHA256 = "6518c1253e1d269585b71c7f68c398bc0f33812abad0ef974653336fe3b436fd"
+
+
+@cache
+def _compat_source_bodies() -> dict[str, str]:
+    digest = hashlib.sha256()
+    bodies: dict[str, str] = {}
+    for case in sorted(_COMPAT_CASES):
+        raw = (journey.RECORDS / f"{case}.json").read_bytes()
+        digest.update(case.encode("utf-8") + b"\0" + raw + b"\0")
+        record = json.loads(raw)
+        assert record["case"] == case and record["response"]["body"]["kind"] == "text"
+        bodies[case] = record["response"]["body"]["text"]
+    assert digest.hexdigest() == _COMPAT_RECORDS_SHA256, (
+        "the twenty historical W13 compatibility records changed; review them before projecting"
+    )
+    return bodies
+
+
+@cache
+def _current_contract_version() -> str:
+    path = Path(__file__).resolve().parents[3] / "contracts/api/v1/openapi.json"
+    version = json.loads(path.read_text(encoding="utf-8"))["info"]["version"]
+    assert isinstance(version, str) and version != "1.0.0"
+    return version
+
+
+def _schema_compat_expected(expected: dict[str, Any]) -> dict[str, Any]:
+    case = expected["case"]
+    if case not in _COMPAT_CASES:
+        return expected
+    body = expected["response"]["body"]
+    original = _compat_source_bodies()[case]
+    assert body["kind"] == "text" and body["text"] == original, (
+        f"{case}: compatibility received a changed historical body"
+    )
+    if case in _ERROR_VERSION_CASES:
+        before = '"contract_version": "1.0.0"'
+        after = f'"contract_version": "{_current_contract_version()}"'
+        assert original.count(before) == 1 and json.loads(original)["contract_version"] == "1.0.0"
+    else:
+        before = ', "display_title":'
+        after = ', "upload_kind": "portal_bundle", "display_title":'
+        assert original.count(before) == 1 and '"upload_kind"' not in original
+    projected = original.replace(before, after, 1)
+    out = json.loads(json.dumps(expected))
+    out["response"]["body"]["text"] = projected
+    out["response"]["body"]["length"] += len(projected.encode("utf-8")) - len(original.encode("utf-8"))
     return out
 
 #: The operationIds this corpus covers, written out rather than read from the contract:
@@ -792,6 +877,7 @@ def test_the_response_reproduces_the_record(path: Path, exchanges: dict[str, Any
     expected = json.loads(path.read_text(encoding="utf-8"))
     if expected["case"] == "12-exportRunCsv.success":
         expected = _csv_compat_expected(expected)
+    expected = _schema_compat_expected(expected)
     exchange = exchanges[expected["case"]]
     found = journey.differences(exchange, expected)
     assert not found, (
@@ -805,6 +891,38 @@ def test_the_response_reproduces_the_record(path: Path, exchanges: dict[str, Any
             "change in wave 13 and it is not this one."
         )
     )
+
+
+@pytest.mark.parametrize("case", [
+    "05b-createProject.idempotency_key_reuse",
+    "02-uploadDocument.success",
+])
+def test_schema_compat_still_reddens_on_a_wrong_live_field(
+    case: str, exchanges: dict[str, Any]
+) -> None:
+    record = json.loads((journey.RECORDS / f"{case}.json").read_text(encoding="utf-8"))
+    expected = _schema_compat_expected(record)
+    assert journey.differences(exchanges[case], expected) == []
+    wrong = json.loads(json.dumps(expected))
+    if case in _ERROR_VERSION_CASES:
+        before = f'"contract_version": "{_current_contract_version()}"'
+        after = '"contract_version": "0.0.0"'
+    else:
+        before = '"upload_kind": "portal_bundle"'
+        after = '"upload_kind": "comparison_only"'
+    assert wrong["response"]["body"]["text"].count(before) == 1
+    wrong["response"]["body"]["text"] = wrong["response"]["body"]["text"].replace(
+        before, after, 1
+    )
+    assert any("body:" in difference for difference in journey.differences(exchanges[case], wrong))
+
+
+def test_schema_compat_refuses_a_changed_historical_record() -> None:
+    case = "02-uploadDocument.success"
+    changed = json.loads((journey.RECORDS / f"{case}.json").read_text(encoding="utf-8"))
+    changed["response"]["body"]["text"] += " "
+    with pytest.raises(AssertionError, match="changed historical body"):
+        _schema_compat_expected(changed)
 
 
 def test_the_comparison_reddens_on_a_planted_difference(exchanges: dict[str, Any]) -> None:

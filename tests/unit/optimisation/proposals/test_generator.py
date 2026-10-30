@@ -158,7 +158,7 @@ def test_a_dearer_or_equal_position_is_never_proposed() -> None:
 def test_another_unit_or_currency_is_never_an_analog() -> None:
     per_metre = _position(8, "Дверь противопожарная", "м", "100")
     in_euro = _position(9, "Дверь противопожарная", "шт", "200", currency="EUR")
-    running = _position(10, "Профиль направляющий ПН 50х40", "п.м", "50")
+    running = _position(10, "Профиль направляющий ПН 50х40", "м2", "50")
     metre = _position(11, "Профиль направляющий ПН 50х40", "м", "95")
     positions = (DOOR, per_metre, in_euro, running, metre)
     result = _generate(
@@ -322,3 +322,14 @@ def test_code_family_needs_two_letters_followed_by_a_digit() -> None:
     assert code_family(replace(SLAB, code="С21-1000")) is None  # one letter
     assert code_family(replace(SLAB, code="ГОСТ")) is None  # no digit
     assert code_family(replace(SLAB, code=None, mark=None)) is None
+
+
+def test_running_metre_analog_uses_factor_one_and_price_list_money() -> None:
+    current = _position(20, 'Кабель силовой ВВГ', 'м', '95', code='ВВГ-001')
+    cheaper = _position(21, 'Кабель силовой ВВГ', 'п.м', '50', code='ВВГ-002')
+    result = _generate([_row('Кабель силовой ВВГ ВВГ-001', 'м', quantity='12')], (current, cheaper))
+    assert len(result.proposals) == 1
+    proposal = result.proposals[0]
+    assert proposal.proposed is cheaper
+    assert proposal.saving == Decimal('540')
+    assert result.generator_version == 'cheaper-analog-v2'

@@ -1836,3 +1836,18 @@ Not asked and still open after `R-146`: the legal-hold authority and data classi
 (`ADR-0014`); the licensing review before any external corpus-backed release (`NORM-Q04`); whether
 beta users are internal or external (`D-4.1`); the host's measured size; off-host custody of anything;
 a second person to run the stand. They are listed in `PRODUCTION-READINESS-PLAN-01.md`.
+
+
+## 3.48 — R-148a…R-148g, direct beta code-completion poll of 2026-10-30
+
+Direct answers received in this integrator session through the seven-question poll. This supplements the existing authorisation to finish functional code and deliver dev today; full gates/heavy windows remain deferred to2026-10-31. It authorises no main deployment.
+
+| Ruling | Question / direct choice | Code consequence |
+| --- | --- | --- |
+| R-148a | Extra norms for every section, cross-volume coordination and standalone AI drawing analysis: «После beta; сейчас завершаем согласованный функционал». | These additional directions are post-beta. Existing ARv3 and comparison GRAPHIC/crops remain in the agreed beta scope. |
+| R-148b | Large-document budget: «Считать стоимость до старта; запрашивать согласие на достаточный лимит». | Implement deterministic preflight estimates, source/model-bound consent and a sufficient explicitly accepted cap before provider spending. Preserve the owner’s existing raised-output controls and historic runs. |
+| R-148c | `п.м` against `м`: «Да, сопоставлять с коэффициентом1». | Exact factor1 pricing alias, including known running-metre spellings; preserve source unit text, quantity, currency and ambiguity rules. |
+| R-148d | Model-assisted optimisation: «Для beta достаточно текущих предложений по прайсам». | Deterministic cheaper-analog proposals stay beta scope; model proposal generation is post-beta. No invented prices. |
+| R-148e | Full PDF interpreter validation: «Проверять в фоне до анализа; показывать прогресс и явную ошибку». | Durable source-preparation worker stage, bounded child reader, page progress and explicit failure before model processing. No full-page synchronous upload wait. |
+| R-148f | Object storage: «Оставить закреплённый MinIO на beta». | The pinned source build stays for beta; replacing S3 is outside today’s code scope. Existing host inventory/restore actions remain separate. |
+| R-148g | Large graphic comparisons: «Да, оставить окна с новым согласием». | Retain durable windows of at most4 regions/8 images and fresh cost consent for the next window; preserve progress and never silently drop remaining regions. |

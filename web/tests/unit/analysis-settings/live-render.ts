@@ -177,7 +177,7 @@ function descendants(node: FakeNode): FakeNode[] {
  */
 const tick = (): Promise<void> => new Promise((done) => setTimeout(done, 0));
 
-type Clickable = { onClick?: (event: unknown) => void; onChange?: (event: unknown) => void };
+type Clickable = { onClick?: (event: unknown) => void; onChange?: (event: unknown) => void; checked?: boolean; type?: string };
 
 /** The props React stored on a node, which is where its `onClick` lives. */
 function propsOf(node: FakeNode): Clickable {
@@ -208,6 +208,8 @@ export interface LiveRender {
    * (`ANALYSIS-PRESETS-01`: the preset and executor selects, the name field.)
    */
   change(label: string, value: string): Promise<boolean>;
+  /** Toggle a labelled checkbox through its real handler; honour disabled fieldsets. */
+  check(label: string, checked: boolean): Promise<boolean>;
   unmount(): Promise<void>;
 }
 
@@ -267,16 +269,37 @@ export async function mountLive(element: ReactElement): Promise<LiveRender> {
     },
     count: (label) => buttons(label).length,
     change: async (label, value) => {
-      const labels = descendants(container).filter((node) => node.nodeName === 'label' && node.textContent === label);
+      const labels = descendants(container).filter((node) => node.nodeName === 'label' && node.textContent.trim() === label);
       if (labels.length !== 1) throw new Error(`expected one label «${label}», found ${labels.length}`);
       const target = labels[0]?.getAttribute('for') ?? null;
-      const field = descendants(container).find((node) => target !== null && node.getAttribute('id') === target);
+      const field = target === null ? descendants(labels[0]!).find((node) => ['input', 'select'].includes(node.nodeName))
+        : descendants(container).find((node) => node.getAttribute('id') === target);
       if (field === undefined) throw new Error(`label «${label}» points at no field`);
-      if (field.getAttribute('disabled') !== null) return false;
+      for (let ancestor: FakeNode | null = field; ancestor !== null; ancestor = ancestor.parentNode) {
+        if ((ancestor === field || ancestor.nodeName === 'fieldset') && ancestor.getAttribute('disabled') !== null) return false;
+      }
       const onChange = propsOf(field).onChange;
       if (onChange === undefined) throw new Error(`field «${label}» has no onChange`);
       await act(async () => {
         onChange({ type: 'change', target: { value }, currentTarget: { value }, preventDefault() {} });
+        await tick();
+        await tick();
+      });
+      return true;
+    },
+    check: async (label, checked) => {
+      const labels = descendants(container).filter((node) => node.nodeName === 'label' && node.textContent.trim() === label);
+      if (labels.length !== 1) throw new Error(`expected one checkbox label «${label}», found ${labels.length}`);
+      const field = descendants(labels[0]!).find((node) => node.nodeName === 'input' && propsOf(node).type === 'checkbox');
+      if (field === undefined) throw new Error(`label «${label}» contains no checkbox`);
+      for (let ancestor: FakeNode | null = field; ancestor !== null; ancestor = ancestor.parentNode) {
+        if ((ancestor === field || ancestor.nodeName === 'fieldset') && ancestor.getAttribute('disabled') !== null) return false;
+      }
+      const props = propsOf(field);
+      if (props.checked === checked) return true;
+      if (props.onChange === undefined) throw new Error(`checkbox «${label}» has no onChange`);
+      await act(async () => {
+        props.onChange!({ type: 'change', target: { checked }, currentTarget: { checked }, preventDefault() {} });
         await tick();
         await tick();
       });

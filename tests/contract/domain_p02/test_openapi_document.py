@@ -243,6 +243,57 @@ REQUIRED_OPERATIONS = {
     "streamComparisonPairTile",
     "getComparisonOverview",
     "getComparisonQueueSummary",
+    # `CMP-SEAL-C2`: the version comparison AI, specifications, launch queue and reports.
+    "estimateComparisonAiPairCheck",
+    "getComparisonAiPairCheck",
+    "startComparisonAiPairCheck",
+    "pauseComparisonAiPairCheck",
+    "resumeComparisonAiPairCheck",
+    "cancelComparisonAiPairCheck",
+    "listComparisonAiPairHints",
+    "estimateComparisonAiSheetChanges",
+    "getComparisonAiSheetChanges",
+    "startComparisonAiSheetChanges",
+    "pauseComparisonAiSheetChanges",
+    "resumeComparisonAiSheetChanges",
+    "cancelComparisonAiSheetChanges",
+    "finishComparisonAiSheetChanges",
+    "dequeueComparisonAiSheetChanges",
+    "retryComparisonAiSheetChanges",
+    "getComparisonSheetDescription",
+    "startComparisonSheetDescription",
+    "listComparisonSheetDescriptionHistory",
+    "estimateComparisonSheetDescription",
+    "streamComparisonSheetDescriptionMd",
+    "listComparisonReviewSheets",
+    "getVersionPageSpecPositions",
+    "getComparisonSheetPairSpecPositions",
+    "listComparisonSpecifications",
+    "getComparisonSpecification",
+    "startComparisonSpecification",
+    "listComparisonSpecificationChanges",
+    "estimateComparisonSpecification",
+    "cancelComparisonSpecification",
+    "getComparisonLaunchQueue",
+    "enqueueComparisonLaunch",
+    "pauseComparisonLaunchQueue",
+    "resumeComparisonLaunchQueue",
+    "clearComparisonLaunchQueue",
+    "removeComparisonLaunchEntry",
+    "getComparisonAiQueue",
+    "streamComparisonSeriesSummary",
+    "listComparisonReports",
+    "createComparisonReport",
+    "uploadComparisonReportSource",
+    "getComparisonReport",
+    "startComparisonReport",
+    "cancelComparisonReport",
+    "continueComparisonReport",
+    "rebuildComparisonReportPdf",
+    "deleteComparisonReport",
+    "prepareComparisonClientReport",
+    "streamComparisonReportPdf",
+    "streamComparisonReportSourceMd",
     # `EXEC-PULL-01` (R-143). The pull channel: an administrator issues and revokes a runner
     # token (shown once), and a runner calls four operations with one.
     "issueRunnerToken",
@@ -253,6 +304,17 @@ REQUIRED_OPERATIONS = {
     "extendExecutorTaskClaim",
     "submitExecutorTaskAnswer",
     "failExecutorTask",
+    # `CMP-SEAL-C3`: stage intake, pairs, sheet map, raw text and chain runs.
+    "listStagePairs", "confirmStagePair", "getStagePair", "listStagePairSuggestions",
+    "createStageAssembly", "reviseStageAssembly", "setStagePairCompleteness",
+    "createStageUpload", "listStageUploads", "getStageUpload", "uploadStageUploadPart",
+    "completeStageUploadFile", "confirmStageUploadCandidate", "rejectStageUploadCandidate",
+    "pauseStageUpload", "resumeStageUpload", "cancelStageUpload",
+    "listStageSheetPassports", "listStageSheetSuggestions", "getStageSheetMap",
+    "applyStageSheetMap", "listStageSheetMapHistory", "getStageSheetMapRevision",
+    "listStageTextFragments", "listStageTextExclusions", "listStageRawDifferences",
+    "listStageTextHints", "recomputeStageTextEvidence", "startStageChainRun",
+    "listStageChainRuns", "getStageChainRun", "cancelStageChainRun",
 }
 
 #: The operations a caller reaches while holding no credential. `UNAUTHENTICATED_OPERATIONS`
@@ -340,11 +402,45 @@ WRITE_OPERATIONS = {
     "resumeComparisonSeries",
     "cancelComparisonSeries",
     "finishComparisonSeries",
+    # `CMP-SEAL-C2`: the twenty-seven keyed writes of the version comparison AI, specifications, launch queue and reports.
+    "startComparisonAiPairCheck",
+    "pauseComparisonAiPairCheck",
+    "resumeComparisonAiPairCheck",
+    "cancelComparisonAiPairCheck",
+    "startComparisonAiSheetChanges",
+    "pauseComparisonAiSheetChanges",
+    "resumeComparisonAiSheetChanges",
+    "cancelComparisonAiSheetChanges",
+    "finishComparisonAiSheetChanges",
+    "dequeueComparisonAiSheetChanges",
+    "retryComparisonAiSheetChanges",
+    "startComparisonSheetDescription",
+    "startComparisonSpecification",
+    "cancelComparisonSpecification",
+    "enqueueComparisonLaunch",
+    "pauseComparisonLaunchQueue",
+    "resumeComparisonLaunchQueue",
+    "clearComparisonLaunchQueue",
+    "removeComparisonLaunchEntry",
+    "createComparisonReport",
+    "uploadComparisonReportSource",
+    "startComparisonReport",
+    "cancelComparisonReport",
+    "continueComparisonReport",
+    "rebuildComparisonReportPdf",
+    "deleteComparisonReport",
+    "prepareComparisonClientReport",
     # `EXEC-PULL-01`. The two administrator operations on runner tokens are keyed. The four a
     # runner calls are not: each is idempotent on the task's identity (a repeat of an accepted
     # answer is accepted, a different one is a conflict).
     "issueRunnerToken",
     "revokeRunnerToken",
+    # `CMP-SEAL-C3`: every new stage command is keyed and expert-only.
+    "createStageUpload", "uploadStageUploadPart", "completeStageUploadFile",
+    "confirmStageUploadCandidate", "rejectStageUploadCandidate", "pauseStageUpload",
+    "resumeStageUpload", "cancelStageUpload", "confirmStagePair", "createStageAssembly",
+    "reviseStageAssembly", "setStagePairCompleteness", "applyStageSheetMap",
+    "recomputeStageTextEvidence", "startStageChainRun", "cancelStageChainRun",
 }
 
 PAGINATED_OPERATIONS = {
@@ -368,6 +464,14 @@ PAGINATED_OPERATIONS = {
     "listNormSnapshotEvents",
     # `W55B-SEAL-01`. Portal blocks page over an opaque cursor (page, ordinal, id).
     "listVersionPortalBlocks",
+    # `CMP-SEAL-C2`. The AI hints, the history of a description, the sheets to review, the specifications of a
+    # series and their changes, and the reports of a series page over an opaque cursor.
+    "listComparisonAiPairHints",
+    "listComparisonSheetDescriptionHistory",
+    "listComparisonReviewSheets",
+    "listComparisonSpecifications",
+    "listComparisonSpecificationChanges",
+    "listComparisonReports",
 }
 
 #: Page-level properties a paginated response may carry beside `items` and `page`, by
@@ -690,9 +794,10 @@ INPUT_LESS_OPERATIONS: frozenset[str] = frozenset(
     # installed pack and addresses no identity.
     # `ANALYSIS-PRESETS-01` adds ``listAnalysisPresets``: the list takes no input.
     # `CMP-SEAL-C1` adds ``getComparisonQueueSummary``: the installation's comparison queue addresses no identity.
+    # `CMP-SEAL-C2` adds ``getComparisonAiQueue``: the installation's AI queue addresses no identity either.
     {"getDashboardSummary", "getMe", "getProductVersion", "listReleases", "listAnalysisProfiles",
      "listExecutorConnections", "listExecutorRoutes", "getArV3BetaPackStatus",
-     "listAnalysisPresets", "getComparisonQueueSummary"}
+     "listAnalysisPresets", "getComparisonQueueSummary", "getComparisonAiQueue"}
 )
 
 

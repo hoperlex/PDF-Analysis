@@ -14,7 +14,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { DragEvent } from 'react';
 
-import type { ComparisonMatrixCandidate, ComparisonMatrixCell, ComparisonMatrixRow, ComparisonPageRef } from '@/shared/api';
+import type { ComparisonAiPairHint, ComparisonMatrixCandidate, ComparisonMatrixCell, ComparisonMatrixRow, ComparisonPageRef } from '@/shared/api';
 import {
   CELL_STATE_LABELS,
   CONFIDENCE_MARKS,
@@ -24,11 +24,17 @@ import {
   SPLIT_WHOLE_MARK,
   cellReasonWords,
   dragPayload,
+  hintMark,
+  hintText,
+  hintTitle,
   isSoleSheet,
+  newestHint,
   pageKey,
   splitDirection,
   useThumbnail,
 } from '@/entities/version-series';
+
+import { AiText } from '@/entities/version-series';
 
 import styles from './version-series.module.css';
 
@@ -73,6 +79,33 @@ export interface MatrixCellViewProps {
   readonly onLink: (row: ComparisonMatrixRow, cell: ComparisonMatrixCell, candidate: ComparisonMatrixCandidate) => void;
   readonly onAbsent: (row: ComparisonMatrixRow, cell: ComparisonMatrixCell) => void;
   readonly onDropped: (row: ComparisonMatrixRow, cell: ComparisonMatrixCell, text: string) => void;
+  /** The answers of the AI check of doubtful pairs that concern this cell (`hintsFor`); none by default. */
+  readonly hints?: readonly ComparisonAiPairHint[];
+}
+
+/**
+ * What the AI check of doubtful pairs said about this cell: «🌙 ИИ: вероятно стр. N» on an unmatched cell, «ИИ ?» where the AI is
+ * against the algorithm's pair or unsure of it, and the decision in words on hover. It changes nothing in the matrix; the model's
+ * own sentence is shown with the label «не подтверждено инженером».
+ */
+function HintLine({ hints }: { readonly hints: readonly ComparisonAiPairHint[] }) {
+  const hint = newestHint(hints);
+  if (hint === undefined) return null;
+  const mark = hintMark(hint);
+  return (
+    <span
+      className={hint.stale ? `${styles.flag} ${styles.hintStale}` : styles.flag}
+      title={hintTitle(hint)}
+      data-ai-hint={mark}
+      data-ai-pair-decision={hint.decision}
+      {...(hint.confidence === undefined ? {} : { 'data-ai-confidence': hint.confidence })}
+      data-ai-pair-question={hint.kind}
+      {...(hint.stale ? { 'data-hint-stale': '' } : {})}
+    >
+      {hintText(hint)}
+      {hint.reason === undefined || hint.reason === '' ? null : <AiText as="span">{hint.reason}</AiText>}
+    </span>
+  );
 }
 
 function MatchedCell(props: MatrixCellViewProps & { readonly page: ComparisonPageRef }) {
@@ -114,6 +147,7 @@ function MatchedCell(props: MatrixCellViewProps & { readonly page: ComparisonPag
             </span>
           );
         })}
+        <HintLine hints={props.hints ?? []} />
       </div>
       {mayEdit && !isSoleSheet(row) ? (
         <button
@@ -138,6 +172,7 @@ function UnmatchedCell(props: MatrixCellViewProps) {
     <div className={styles.unmatched} data-cell-state="unmatched" {...(cell.reason === undefined ? {} : { 'data-cell-reason': cell.reason })}>
       <div>⁇ {CELL_STATE_LABELS.unmatched}</div>
       {reason === '' ? null : <div className={styles.reason}>{reason}</div>}
+      <HintLine hints={props.hints ?? []} />
       {candidates.length === 0 ? null : (
         <div className={styles.candidates}>
           <span>кандидаты:</span>

@@ -1,6 +1,6 @@
-"""The 148 operations of ``contracts/api/v1/openapi.json``, and nothing else.
+"""The 256 operations of ``contracts/api/v1/openapi.json``, and nothing else.
 
-:func:`build_router` assembles one ``APIRouter`` from the twenty-two router modules. It takes
+:func:`build_router` assembles one ``APIRouter`` from the forty-three router modules. It takes
 its dependencies as arguments and constructs none of them: choosing what sits behind each
 port is the composition root's job (``api/composition.py``), and a factory that reached for
 a concrete implementation would have taken that decision away from it.
@@ -72,10 +72,21 @@ from auditmanager.api.routers.optimisation import build_optimisation_routes
 from auditmanager.api.routers.optimisation_proposals import build_optimisation_proposal_routes
 from auditmanager.api.routers.releases import build_release_routes
 from auditmanager.api.routers.version_pages import build_version_page_routes
+from auditmanager.api.routers.comparison_ai_pairs import build_comparison_ai_pair_routes
+from auditmanager.api.routers.comparison_ai_sheets import build_comparison_ai_sheet_routes
+from auditmanager.api.routers.comparison_launch_queue import build_comparison_launch_queue_routes
 from auditmanager.api.routers.comparison_matrix import build_comparison_matrix_routes
 from auditmanager.api.routers.comparison_overview import build_comparison_overview_routes
 from auditmanager.api.routers.comparison_pair_tiles import build_comparison_pair_tile_routes
+from auditmanager.api.routers.comparison_reports import build_comparison_report_routes
 from auditmanager.api.routers.comparison_series import build_comparison_series_routes
+from auditmanager.api.routers.comparison_specification import build_comparison_specification_routes
+from auditmanager.api.routers.comparison_stage_pairs import build_comparison_stage_pair_routes
+from auditmanager.api.routers.comparison_stage_uploads import build_comparison_stage_upload_routes
+from auditmanager.api.routers.comparison_stage_links import build_comparison_stage_link_routes
+from auditmanager.api.routers.comparison_stage_text import build_comparison_stage_text_routes
+from auditmanager.api.routers.comparison_stage_runs import build_comparison_stage_run_routes
+from auditmanager.api.routers.comparison_stage_c4 import build_comparison_stage_c4_routes
 from auditmanager.api.routers.multipart import (
     MAX_BODY,
     MAX_CONCURRENT_UPLOADS,
@@ -96,6 +107,17 @@ from auditmanager.api.routers.ports import (
     ComparisonOverviewPort,
     ComparisonPairTilePort,
     ComparisonSeriesPort,
+    ComparisonAiPairPort,
+    ComparisonAiSheetPort,
+    ComparisonLaunchQueuePort,
+    ComparisonReportPort,
+    ComparisonSpecificationPort,
+    ComparisonStagePairPort,
+    ComparisonStageUploadPort,
+    ComparisonStageLinkPort,
+    ComparisonStageTextPort,
+    ComparisonStageRunPort,
+    ComparisonStageC4Port,
     DispatchPort,
     CredentialPort,
     CsvExportPort,
@@ -196,6 +218,11 @@ __all__ = [
     "ComparisonOverviewPort",
     "ComparisonPairTilePort",
     "ComparisonSeriesPort",
+    "ComparisonAiPairPort",
+    "ComparisonAiSheetPort",
+    "ComparisonLaunchQueuePort",
+    "ComparisonReportPort",
+    "ComparisonSpecificationPort",
     "AnalysisProfilePort",
     "DispatchPort",
     "OptimisationPort",
@@ -267,8 +294,19 @@ def build_router(
     comparison_series: ComparisonSeriesPort | None = None,
     comparison_pair_tiles: ComparisonPairTilePort | None = None,
     comparison_overview: ComparisonOverviewPort | None = None,
+    comparison_ai_pairs: ComparisonAiPairPort | None = None,
+    comparison_ai_sheets: ComparisonAiSheetPort | None = None,
+    comparison_specifications: ComparisonSpecificationPort | None = None,
+    comparison_launch_queue: ComparisonLaunchQueuePort | None = None,
+    comparison_reports: ComparisonReportPort | None = None,
+    comparison_stage_pairs: ComparisonStagePairPort | None = None,
+    comparison_stage_uploads: ComparisonStageUploadPort | None = None,
+    comparison_stage_links: ComparisonStageLinkPort | None = None,
+    comparison_stage_text: ComparisonStageTextPort | None = None,
+    comparison_stage_runs: ComparisonStageRunPort | None = None,
+    comparison_stage_c4: ComparisonStageC4Port | None = None,
 ) -> Router:
-    """Assemble the 148 operations, from the twenty-three router modules -- ``me``,
+    """Assemble the 256 operations, from the router modules -- ``me``,
     ``registrations`` and ``users`` are `W49-SEAL-01`'s three, ``sections``
     `W59-SECTION-SEAL-01`'s, ``comparison`` `W59-VERSION-COMPARE-01`'s,
     ``analysis_profiles`` `W59-ANALYSIS-SETTINGS-01`'s, ``dispatch`` `W61-DISPATCHER-01`'s and
@@ -384,6 +422,20 @@ def build_router(
     build_comparison_series_routes(router, comparison_series)  # type: ignore[arg-type]
     build_comparison_pair_tile_routes(router, comparison_pair_tiles)  # type: ignore[arg-type]
     build_comparison_overview_routes(router, comparison_overview)  # type: ignore[arg-type]
+    # `CMP-SEAL-C2` (ADR-0025). The version comparison AI, specifications, launch queue and reports,
+    # sealed as stubs answering `503 dependency_unavailable` until `CMP-VC-AIPAIR-01`,
+    # `CMP-VC-AISHEET-01`, `CMP-VC-SPEC-01`, `CMP-VC-QUEUE-01` and `CMP-VC-REPORT-01` wire their ports.
+    build_comparison_ai_pair_routes(router, comparison_ai_pairs)  # type: ignore[arg-type]
+    build_comparison_ai_sheet_routes(router, comparison_ai_sheets)  # type: ignore[arg-type]
+    build_comparison_specification_routes(router, comparison_specifications)  # type: ignore[arg-type]
+    build_comparison_launch_queue_routes(router, comparison_launch_queue)  # type: ignore[arg-type]
+    build_comparison_report_routes(router, comparison_reports)  # type: ignore[arg-type]
+    build_comparison_stage_pair_routes(router, comparison_stage_pairs)  # type: ignore[arg-type]
+    build_comparison_stage_upload_routes(router, comparison_stage_uploads)  # type: ignore[arg-type]
+    build_comparison_stage_link_routes(router, comparison_stage_links)  # type: ignore[arg-type]
+    build_comparison_stage_text_routes(router, comparison_stage_text)  # type: ignore[arg-type]
+    build_comparison_stage_run_routes(router, comparison_stage_runs)  # type: ignore[arg-type]
+    build_comparison_stage_c4_routes(router, comparison_stage_c4)  # type: ignore[arg-type]
     _refuse_a_duplicate_operation_id(router)
     return router
 
