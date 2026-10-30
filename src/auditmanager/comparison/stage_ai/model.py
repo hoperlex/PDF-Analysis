@@ -192,10 +192,17 @@ class ClassifiedCard:
     evidence_ids: tuple[str, ...]
     model_class: str
     policy_reasons: tuple[str, ...] = ()
+    materiality: str = "unknown"
+    importance: str = "unknown"
+    detail_increased: bool = False
 
     def __post_init__(self) -> None:
         require_digest(self.card_key)
         require_digest(self.evidence_digest)
+        if (not isinstance(self.materiality, str) or self.materiality not in {"material", "non_material", "unknown"}
+                or not isinstance(self.importance, str) or self.importance not in {"high", "normal", "unknown"}
+                or type(self.detail_increased) is not bool):
+            raise ValueError("classified_card_hint_invalid")
         if (self.class_name not in CLASSES or self.model_class not in CLASSES
                 or self.category not in CATEGORIES or self.system not in SYSTEMS):
             raise ValueError("classified_card_enum_invalid")

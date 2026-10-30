@@ -119,5 +119,11 @@ def aggregate(plans, responses):
         first = replace(first, class_name="REVIEW", category="uncertain", system="unknown",
                         title="Графические различия требуют проверки", model_class="REVIEW",
                         card_key=digest({"class": "REVIEW", "evidence_ids": first.evidence_ids}),
-                        policy_reasons=("graphic_page_interpretations_differ",))
+                        policy_reasons=("graphic_page_interpretations_differ",),
+                        materiality="unknown", importance="unknown", detail_increased=False)
+    else:
+        first = replace(first,
+            materiality=first.materiality if all(card.materiality == first.materiality for card in cards) else "unknown",
+            importance=first.importance if all(card.importance == first.importance for card in cards) else "unknown",
+            detail_increased=all(card.detail_increased for card in cards))
     return [asdict(first)]
