@@ -14,7 +14,7 @@ const operations = new Map(Object.entries(api.paths).flatMap(([path, item]) =>
   Object.entries(item).filter(([, value]) => value?.operationId).map(([method, value]) =>
     [value.operationId, { method: method.toUpperCase(), path, responses: value.responses }])));
 const steps = manifest.write.steps.filter((step) => step.name.startsWith('cmp-'));
-assert.ok(steps.length >= 6, 'comparison actions disappeared');
+assert.ok(steps.length >= 14, 'version/C4 comparison actions disappeared');
 assert.equal(new Set(manifest.write.steps.map((step) => step.name)).size, manifest.write.steps.length, 'duplicate step name');
 for (const step of steps) {
   assert.equal(step.requires_provider_mode, 'recorded', step.name);
@@ -44,9 +44,21 @@ for (const action of attached) {
 }
 const review = readFileSync(resolve(root, 'docs/program/compare/EXPOSURE-REVIEW-CMP.md'), 'utf8');
 const rows = [...review.matchAll(/^\| (C[34]) `([^`]+)`/gm)];
-assert.equal(rows.length, 55, 'exposure census');
+assert.equal(rows.length, 56, 'exposure census');
 assert.equal(rows.filter((row) => row[1] === 'C3').length, 32);
-assert.equal(rows.filter((row) => row[1] === 'C4').length, 23);
-assert.equal(new Set(rows.map((row) => row[2])).size, 55);
+assert.equal(rows.filter((row) => row[1] === 'C4').length, 24);
+assert.equal(new Set(rows.map((row) => row[2])).size, 56);
 for (const row of rows) assert.ok(operations.has(row[2]), `unknown exposure operation ${row[2]}`);
-console.log(`STATIC CONFORMANCE: ${steps.length} comparison steps, exact VS-1 bytes, 55 exposure rows. Browser actions NOT EXECUTED.`);
+const c4 = steps.filter((step) => step.name.startsWith('cmp-stage-'));
+assert.deepEqual(c4.map((step) => step.actions[0].phase), ['upload','assembly','swapped_map','full_run','repair_undo','verdict','journal','promote']);
+const docs = c4[0].actions[0].documents;
+assert.equal(docs.length, 4); assert.equal(docs.filter((doc) => doc.stage === 'P').length, 1);
+for (const doc of docs) {
+  const bytes = readFileSync(resolve(root, doc.fixture));
+  assert.equal(bytes.length, doc.bytes);
+  assert.equal(createHash('sha256').update(bytes).digest('hex'), doc.sha256);
+  if (doc.derived_from) assert.equal(createHash('sha256').update(readFileSync(resolve(root, doc.derived_from))).digest('hex'), doc.source_sha256);
+}
+assert.equal(c4.find((step) => step.actions[0].phase === 'journal').expects_download.length, 3);
+assert.ok(review.includes('Execution UNVERIFIED'));
+console.log(`STATIC CONFORMANCE: ${steps.length} comparison steps, exact VS-1/SP-1/declared graphic derivative bytes, 56 exposure rows. Browser/worker actions NOT EXECUTED.`);

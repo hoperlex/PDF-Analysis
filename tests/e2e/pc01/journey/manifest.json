@@ -2768,6 +2768,538 @@
         ]
       },
       {
+        "name": "cmp-stage-upload",
+        "at": "/stage-comparison",
+        "page_module": "web/src/app/stage-comparison/page.tsx",
+        "screen": "stage-comparison",
+        "case": "action",
+        "requires_provider_mode": "recorded",
+        "needs": [
+          "project_uid"
+        ],
+        "control_module": "web/src/_pages/stage-compare/ui/stage-upload-panel.tsx",
+        "bind": {
+          "stage_pair_id": "cmp_stage_pair_id",
+          "stage_chain_run_id": "cmp_stage_run_id",
+          "stage_assembly_id": "cmp_stage_assembly_id",
+          "stage_link_revision_id": "cmp_stage_swapped_revision_id",
+          "stage_upload_id": "cmp_stage_last_upload_id",
+          "stage_upload_candidate_id": "cmp_stage_last_candidate_id",
+          "stage_link_repair_id": "cmp_stage_repair_id"
+        },
+        "actions": [
+          {
+            "do": "stage_c4",
+            "phase": "upload",
+            "documents": [
+              {
+                "fixture": "fixtures/comparison/sp1/old_p.pdf",
+                "stage": "P",
+                "designation": "СИНТ-02-АР",
+                "sha256": "209ef6fe45bfdfde783eabc8e0375a9a06ab06c44ef7af7ff2052f47bcfde07e",
+                "bytes": 53711
+              },
+              {
+                "fixture": "fixtures/comparison/sp1/new_r1.pdf",
+                "stage": "R",
+                "designation": "СИНТ-02-АР.1",
+                "sha256": "40ceee4b709fc732c1fcf8663ff1cd851f35a541a441bd5fbfe53fcae0a6fcac",
+                "bytes": 46107
+              },
+              {
+                "fixture": "tests/e2e/pc01/journey/fixtures/sp1-new-r2-graphic.pdf",
+                "stage": "R",
+                "designation": "СИНТ-02-АР.2",
+                "sha256": "a48dbcb0de8367b984a3356518911b1da02dcac219e3f220fe288cd1dbcbf8ef",
+                "bytes": 40332,
+                "derived_from": "fixtures/comparison/sp1/new_r2.pdf",
+                "source_sha256": "c02e8a49d9a89dd0eb663a1dd058a80d3d21e56f38a4878b65fdad8d469ee8bd"
+              },
+              {
+                "fixture": "fixtures/comparison/sp1/new_r3.pdf",
+                "stage": "R",
+                "designation": "СИНТ-02-АР.3",
+                "sha256": "44bea61280175bfb29c12e01810c1602ee79afe6bbb7b39b8798ea39a95194a4",
+                "bytes": 43306
+              }
+            ]
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/stage-uploads",
+            "operationId": "createStageUpload",
+            "expect_status": 201,
+            "last_response": true
+          },
+          {
+            "method": "GET",
+            "path": "/stage-uploads/{stage_upload_id}",
+            "operationId": "getStageUpload",
+            "expect_status": 200,
+            "last_response": true
+          },
+          {
+            "method": "POST",
+            "path": "/stage-upload-candidates/{stage_upload_candidate_id}/confirmation",
+            "operationId": "confirmStageUploadCandidate",
+            "expect_status": 200,
+            "last_response": true
+          }
+        ],
+        "expects_request": [
+          {
+            "of": "createStageUpload",
+            "requires_idempotency_key": true
+          },
+          {
+            "of": "confirmStageUploadCandidate",
+            "requires_idempotency_key": true
+          }
+        ],
+        "$comment": [
+          "CMP-JOURNEY-C4-01: executable code; browser/worker execution UNVERIFIED. Missing controls, exact source pins, actual PNG receipts or HIGH repair fail, never skip."
+        ]
+      },
+      {
+        "name": "cmp-stage-assembly",
+        "at": "/stage-comparison",
+        "page_module": "web/src/app/stage-comparison/page.tsx",
+        "screen": "stage-comparison",
+        "case": "action",
+        "requires_provider_mode": "recorded",
+        "needs": [
+          "project_uid",
+          "cmp_stage_documents"
+        ],
+        "control_module": "web/src/widgets/stage-pair-catalog/ui/stage-assembly-editor.tsx",
+        "bind": {
+          "stage_pair_id": "cmp_stage_pair_id",
+          "stage_chain_run_id": "cmp_stage_run_id",
+          "stage_assembly_id": "cmp_stage_assembly_id",
+          "stage_link_revision_id": "cmp_stage_swapped_revision_id",
+          "stage_upload_id": "cmp_stage_last_upload_id",
+          "stage_upload_candidate_id": "cmp_stage_last_candidate_id",
+          "stage_link_repair_id": "cmp_stage_repair_id"
+        },
+        "actions": [
+          {
+            "do": "stage_c4",
+            "phase": "assembly"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/stage-assemblies",
+            "operationId": "createStageAssembly",
+            "expect_status": 201,
+            "last_response": true
+          },
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/stage-pairs",
+            "operationId": "confirmStagePair",
+            "expect_status": 201,
+            "last_response": true
+          },
+          {
+            "method": "GET",
+            "path": "/stage-pairs/{stage_pair_id}/sheet-map",
+            "operationId": "getStageSheetMap",
+            "expect_status": 404,
+            "refusal": true,
+            "expect_error_code": "not_found"
+          }
+        ],
+        "expects_request": [
+          {
+            "of": "createStageAssembly",
+            "requires_idempotency_key": true
+          },
+          {
+            "of": "confirmStagePair",
+            "requires_idempotency_key": true
+          }
+        ],
+        "$comment": [
+          "CMP-JOURNEY-C4-01: executable code; browser/worker execution UNVERIFIED. Missing controls, exact source pins, actual PNG receipts or HIGH repair fail, never skip."
+        ]
+      },
+      {
+        "name": "cmp-stage-swapped-map",
+        "at": "/stage-comparison",
+        "page_module": "web/src/app/stage-comparison/page.tsx",
+        "screen": "stage-comparison",
+        "case": "action",
+        "requires_provider_mode": "recorded",
+        "needs": [
+          "cmp_stage_pair_id"
+        ],
+        "control_module": "web/src/widgets/stage-sheet-map/ui/stage-sheet-map.tsx",
+        "bind": {
+          "stage_pair_id": "cmp_stage_pair_id",
+          "stage_chain_run_id": "cmp_stage_run_id",
+          "stage_assembly_id": "cmp_stage_assembly_id",
+          "stage_link_revision_id": "cmp_stage_swapped_revision_id",
+          "stage_upload_id": "cmp_stage_last_upload_id",
+          "stage_upload_candidate_id": "cmp_stage_last_candidate_id",
+          "stage_link_repair_id": "cmp_stage_repair_id"
+        },
+        "actions": [
+          {
+            "do": "stage_c4",
+            "phase": "swapped_map"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/stage-pairs/{stage_pair_id}/sheet-map",
+            "operationId": "applyStageSheetMap",
+            "expect_status": 201,
+            "last_response": true
+          },
+          {
+            "method": "GET",
+            "path": "/stage-pairs/{stage_pair_id}/sheet-map",
+            "operationId": "getStageSheetMap",
+            "expect_status": 404,
+            "refusal": true,
+            "expect_error_code": "not_found"
+          }
+        ],
+        "expects_request": [
+          {
+            "of": "applyStageSheetMap",
+            "requires_idempotency_key": true
+          }
+        ],
+        "$comment": [
+          "CMP-JOURNEY-C4-01: executable code; browser/worker execution UNVERIFIED. Missing controls, exact source pins, actual PNG receipts or HIGH repair fail, never skip."
+        ]
+      },
+      {
+        "name": "cmp-stage-full-run",
+        "at": "/stage-comparison",
+        "page_module": "web/src/app/stage-comparison/page.tsx",
+        "screen": "stage-comparison",
+        "case": "action",
+        "requires_provider_mode": "recorded",
+        "needs": [
+          "cmp_stage_pair_id",
+          "cmp_stage_swapped_revision_id"
+        ],
+        "control_module": "web/src/widgets/stage-run-controls/ui/stage-run-controls.tsx",
+        "bind": {
+          "stage_pair_id": "cmp_stage_pair_id",
+          "stage_chain_run_id": "cmp_stage_run_id",
+          "stage_assembly_id": "cmp_stage_assembly_id",
+          "stage_link_revision_id": "cmp_stage_swapped_revision_id",
+          "stage_upload_id": "cmp_stage_last_upload_id",
+          "stage_upload_candidate_id": "cmp_stage_last_candidate_id",
+          "stage_link_repair_id": "cmp_stage_repair_id"
+        },
+        "actions": [
+          {
+            "do": "stage_c4",
+            "phase": "full_run"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/stage-link-revisions/{stage_link_revision_id}/chain-estimate",
+            "operationId": "estimateStageChainRun",
+            "expect_status": 200,
+            "last_response": true
+          },
+          {
+            "method": "POST",
+            "path": "/stage-pairs/{stage_pair_id}/chain-runs",
+            "operationId": "startStageChainRun",
+            "expect_status": 201,
+            "last_response": true
+          },
+          {
+            "method": "GET",
+            "path": "/stage-chain-runs/{stage_chain_run_id}",
+            "operationId": "getStageChainRun",
+            "expect_status": 200,
+            "last_response": true
+          }
+        ],
+        "expects_request": [
+          {
+            "of": "startStageChainRun",
+            "requires_idempotency_key": true
+          }
+        ],
+        "$comment": [
+          "CMP-JOURNEY-C4-01: executable code; browser/worker execution UNVERIFIED. Missing controls, exact source pins, actual PNG receipts or HIGH repair fail, never skip."
+        ]
+      },
+      {
+        "name": "cmp-stage-repair-undo",
+        "at": "/stage-comparison",
+        "page_module": "web/src/app/stage-comparison/page.tsx",
+        "screen": "stage-comparison",
+        "case": "action",
+        "requires_provider_mode": "recorded",
+        "needs": [
+          "cmp_stage_pair_id",
+          "cmp_stage_initial_run_id"
+        ],
+        "control_module": "web/src/widgets/stage-run-controls/ui/stage-repair-history.tsx",
+        "bind": {
+          "stage_pair_id": "cmp_stage_pair_id",
+          "stage_chain_run_id": "cmp_stage_run_id",
+          "stage_assembly_id": "cmp_stage_assembly_id",
+          "stage_link_revision_id": "cmp_stage_swapped_revision_id",
+          "stage_upload_id": "cmp_stage_last_upload_id",
+          "stage_upload_candidate_id": "cmp_stage_last_candidate_id",
+          "stage_link_repair_id": "cmp_stage_repair_id"
+        },
+        "actions": [
+          {
+            "do": "stage_c4",
+            "phase": "repair_undo"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/stage-chain-runs/{stage_chain_run_id}/sheet-link-repairs",
+            "operationId": "listStageLinkRepairs",
+            "bind": {"stage_chain_run_id": "cmp_stage_initial_run_id"},
+            "expect_status": 200,
+            "last_response": true
+          },
+          {
+            "method": "POST",
+            "path": "/stage-link-repairs/{stage_link_repair_id}/undo",
+            "operationId": "undoStageLinkRepair",
+            "expect_status": 200,
+            "last_response": true
+          },
+          {
+            "method": "POST",
+            "path": "/stage-link-revisions/{stage_link_revision_id}/text-evidence/recomputation",
+            "operationId": "recomputeStageTextEvidence",
+            "bind": {"stage_link_revision_id": "cmp_stage_recompute_revision_id"},
+            "expect_status": 202,
+            "last_response": true
+          },
+          {
+            "method": "POST",
+            "path": "/stage-pairs/{stage_pair_id}/chain-runs",
+            "operationId": "startStageChainRun",
+            "expect_status": 201,
+            "last_response": true
+          }
+        ],
+        "expects_request": [
+          {
+            "of": "undoStageLinkRepair",
+            "requires_idempotency_key": true
+          },
+          {
+            "of": "recomputeStageTextEvidence",
+            "requires_idempotency_key": true
+          },
+          {
+            "of": "startStageChainRun",
+            "requires_idempotency_key": true
+          }
+        ],
+        "$comment": [
+          "CMP-JOURNEY-C4-01: executable code; browser/worker execution UNVERIFIED. Missing controls, exact source pins, actual PNG receipts or HIGH repair fail, never skip."
+        ]
+      },
+      {
+        "name": "cmp-stage-verdict",
+        "at": "/stage-comparison",
+        "page_module": "web/src/app/stage-comparison/page.tsx",
+        "screen": "stage-comparison",
+        "case": "action",
+        "requires_provider_mode": "recorded",
+        "needs": [
+          "cmp_stage_pair_id",
+          "cmp_stage_run_id"
+        ],
+        "control_module": "web/src/widgets/stage-changes/ui/stage-changes.tsx",
+        "bind": {
+          "stage_pair_id": "cmp_stage_pair_id",
+          "stage_chain_run_id": "cmp_stage_run_id",
+          "stage_assembly_id": "cmp_stage_assembly_id",
+          "stage_link_revision_id": "cmp_stage_swapped_revision_id",
+          "stage_upload_id": "cmp_stage_last_upload_id",
+          "stage_upload_candidate_id": "cmp_stage_last_candidate_id",
+          "stage_link_repair_id": "cmp_stage_repair_id"
+        },
+        "actions": [
+          {
+            "do": "stage_c4",
+            "phase": "verdict"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/stage-chain-runs/{stage_chain_run_id}/cards",
+            "operationId": "listStageChangeCards",
+            "expect_status": 200,
+            "last_response": true
+          },
+          {
+            "method": "POST",
+            "path": "/stage-chain-runs/{stage_chain_run_id}/card-verdicts",
+            "operationId": "applyStageCardVerdicts",
+            "expect_status": 200,
+            "last_response": true
+          }
+        ],
+        "expects_request": [
+          {
+            "of": "applyStageCardVerdicts",
+            "requires_idempotency_key": true
+          }
+        ],
+        "$comment": [
+          "CMP-JOURNEY-C4-01: executable code; browser/worker execution UNVERIFIED. Missing controls, exact source pins, actual PNG receipts or HIGH repair fail, never skip."
+        ]
+      },
+      {
+        "name": "cmp-stage-journal",
+        "at": "/stage-comparison",
+        "page_module": "web/src/app/stage-comparison/page.tsx",
+        "screen": "stage-comparison",
+        "case": "action",
+        "requires_provider_mode": "recorded",
+        "needs": [
+          "cmp_stage_pair_id",
+          "cmp_stage_run_id",
+          "cmp_stage_card_id"
+        ],
+        "control_module": "web/src/widgets/stage-changes/ui/stage-journal.tsx",
+        "bind": {
+          "stage_pair_id": "cmp_stage_pair_id",
+          "stage_chain_run_id": "cmp_stage_run_id",
+          "stage_assembly_id": "cmp_stage_assembly_id",
+          "stage_link_revision_id": "cmp_stage_swapped_revision_id",
+          "stage_upload_id": "cmp_stage_last_upload_id",
+          "stage_upload_candidate_id": "cmp_stage_last_candidate_id",
+          "stage_link_repair_id": "cmp_stage_repair_id"
+        },
+        "actions": [
+          {
+            "do": "stage_c4",
+            "phase": "journal"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/stage-chain-runs/{stage_chain_run_id}/journal",
+            "operationId": "getStageChangeJournal",
+            "expect_status": 200,
+            "last_response": true
+          },
+          {
+            "method": "GET",
+            "path": "/stage-chain-runs/{stage_chain_run_id}/journal.xlsx",
+            "operationId": "streamStageChangeJournalXlsx",
+            "expect_status": 200,
+            "last_response": true
+          },
+          {
+            "method": "GET",
+            "path": "/stage-chain-runs/{stage_chain_run_id}/journal.pdf",
+            "operationId": "streamStageChangeJournalPdf",
+            "expect_status": 200,
+            "last_response": true
+          },
+          {
+            "method": "GET",
+            "path": "/stage-chain-runs/{stage_chain_run_id}/journal.html",
+            "operationId": "streamStageChangeJournalHtml",
+            "expect_status": 200,
+            "last_response": true
+          }
+        ],
+        "expects_request": [],
+        "$comment": [
+          "CMP-JOURNEY-C4-01: executable code; browser/worker execution UNVERIFIED. Missing controls, exact source pins, actual PNG receipts or HIGH repair fail, never skip."
+        ],
+        "expects_download": [
+          {
+            "of": "streamStageChangeJournalXlsx",
+            "content_type_starts_with": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "content_disposition_contains": ".xlsx",
+            "body_starts_with": "PK"
+          },
+          {
+            "of": "streamStageChangeJournalPdf",
+            "content_type_starts_with": "application/pdf",
+            "content_disposition_contains": ".pdf",
+            "body_starts_with": "%PDF"
+          },
+          {
+            "of": "streamStageChangeJournalHtml",
+            "content_type_starts_with": "text/html",
+            "content_disposition_contains": ".html",
+            "body_starts_with": "<!doctype html>"
+          }
+        ]
+      },
+      {
+        "name": "cmp-stage-promote",
+        "at": "/stage-comparison",
+        "page_module": "web/src/app/stage-comparison/page.tsx",
+        "screen": "stage-comparison",
+        "case": "action",
+        "requires_provider_mode": "recorded",
+        "needs": [
+          "cmp_stage_pair_id",
+          "cmp_stage_run_id"
+        ],
+        "control_module": "web/src/widgets/stage-changes/ui/stage-changes.tsx",
+        "bind": {
+          "stage_pair_id": "cmp_stage_pair_id",
+          "stage_chain_run_id": "cmp_stage_run_id",
+          "stage_assembly_id": "cmp_stage_assembly_id",
+          "stage_link_revision_id": "cmp_stage_swapped_revision_id",
+          "stage_upload_id": "cmp_stage_last_upload_id",
+          "stage_upload_candidate_id": "cmp_stage_last_candidate_id",
+          "stage_link_repair_id": "cmp_stage_repair_id"
+        },
+        "actions": [
+          {
+            "do": "stage_c4",
+            "phase": "promote"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/stage-chain-runs/{stage_chain_run_id}/review-cards",
+            "operationId": "createStageReviewCard",
+            "expect_status": 201,
+            "last_response": true
+          }
+        ],
+        "expects_request": [
+          {
+            "of": "createStageReviewCard",
+            "requires_idempotency_key": true
+          }
+        ],
+        "$comment": [
+          "CMP-JOURNEY-C4-01: executable code; browser/worker execution UNVERIFIED. Missing controls, exact source pins, actual PNG receipts or HIGH repair fail, never skip."
+        ]
+      },
+      {
         "name": "analysis-settings-lists-the-profiles",
         "at": "/analysis-settings",
         "page_module": "web/src/app/analysis-settings/page.tsx",
