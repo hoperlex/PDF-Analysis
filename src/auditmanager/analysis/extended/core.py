@@ -4,6 +4,7 @@ Source method: PDF-proverka3c994817 block_analysis/context/merge workflow;
 implemented against local immutable artifacts, without importing its runner.
 """
 from __future__ import annotations
+from copy import deepcopy
 import hashlib
 import json
 from typing import Any, Mapping
@@ -12,6 +13,7 @@ from auditmanager.analysis.geometry.crop_cohort import prepare_image_crop_cohort
 from auditmanager.analysis.text.adapter import ModelRequest
 
 PLAN_VERSION = "extended-review-v1"
+PLAN_VERSION_V2 = "extended-review-v2"
 RESULT_ROLE = "analysis.extended_review"
 REPLY_ROLE = "analysis.extended_reply"
 MAX_BLOCKS = 16
@@ -29,17 +31,27 @@ def digest(value: object) -> str:
 
 def enabled(policy: object) -> bool:
     return (isinstance(policy, dict) and policy.get("enabled") is True
-            and policy.get("plan_version") == PLAN_VERSION and type(policy.get("max_blocks")) is int
+            and policy.get("plan_version") in (PLAN_VERSION, PLAN_VERSION_V2) and type(policy.get("max_blocks")) is int
             and policy["max_blocks"] == MAX_BLOCKS)
 
 
 def plan_inputs(*, version_uid: str, section: str, portal: Mapping[str, Any], manifest: Mapping[str, Any],
                 text_layer: Mapping[str, Any], graph: Mapping[str, Any], observations: Mapping[str, Any] | None,
-                recognised: Mapping[str, Any] | None = None) -> dict:
-    cohort = prepare_image_crop_cohort(version_uid=version_uid,
-        portal_blocks_document=portal, crop_manifest_document=manifest)
-    ordered = sorted(cohort.crops, key=lambda c: (c.page_number, c.portal_block_id))
-    selected = ordered[:MAX_BLOCKS]
+                recognised: Mapping[str, Any] | None = None,
+                native_sources: Mapping[str, Any] | None = None, plan_version: str = PLAN_VERSION) -> dict:
+    if plan_version not in {PLAN_VERSION, PLAN_VERSION_V2}:
+        raise ValueError("extended_plan_version_invalid")
+    if native_sources is not None and plan_version != PLAN_VERSION_V2:
+        raise ValueError("native_sources_require_v2")
+    if native_sources is None:
+        cohort = prepare_image_crop_cohort(version_uid=version_uid,
+            portal_blocks_document=portal, crop_manifest_document=manifest)
+        ordered = sorted(cohort.crops, key=lambda c: (c.page_number, c.portal_block_id))
+        selected = ordered[:MAX_BLOCKS]
+    else:
+        selected = list(native_sources["sources"])
+        if len(selected) > MAX_BLOCKS or any(source.get("kind") != "image" for source in selected):
+            raise ValueError("native_sources_window_invalid")
     pages = {p["page_number"]: p.get("text", "") for p in text_layer.get("pages", [])}
     ocr: dict[int, list[str]] = {}
     for item in (recognised or {}).get("entries", []):
@@ -47,11 +59,15 @@ def plan_inputs(*, version_uid: str, section: str, portal: Mapping[str, Any], ma
             ocr.setdefault(item["page_number"], []).append(str(item.get("text", "")))
     sources = []
     for crop in selected:
+        number = crop.page_number if native_sources is None else crop["page_number"]
         neighbors = [{"page_number": n, "text": str(pages[n])[:6000],
                       "recognised_context": "\n".join(ocr.get(n, []))[:4000],
                       "context_truncated": len(str(pages[n])) > 6000 or len("\n".join(ocr.get(n, []))) > 4000}
-                     for n in (crop.page_number-1, crop.page_number, crop.page_number+1) if n in pages]
-        sources.append({"source_id": crop.portal_block_id, "kind": "image", "page_number": crop.page_number,
+                     for n in (number-1, number, number+1) if n in pages]
+        if native_sources is not None:
+            sources.append(dict(deepcopy(crop), context=neighbors))
+            continue
+        sources.append({"source_id": crop.portal_block_id, "kind": "image", "page_number": number,
             "bbox_norm": list(crop.bbox_norm), "crop_sha256": crop.blob.sha256,
             "blob_id": crop.blob.blob_id, "size_bytes": crop.blob.size_bytes,
             "context": neighbors})
@@ -65,22 +81,39 @@ def plan_inputs(*, version_uid: str, section: str, portal: Mapping[str, Any], ma
             "page_number": evidence[0]["page_number"], "quote": str(evidence[0].get("quote", ""))[:2000]})
         text_items.append({"title": str(item.get("category", "Текстовое наблюдение"))[:200],
             "description": str(item.get("finding_text", ""))[:3000], "source_ids": [source_id], "norm_queries": []})
-    skipped = [{"block_id": c.portal_block_id, "page_number": c.page_number, "reason": c.reason} for c in cohort.skipped]
-    skipped.extend({"block_id": c.portal_block_id, "page_number": c.page_number, "reason": "outside_approved_window"}
-                   for c in ordered[MAX_BLOCKS:])
-    result = {"format": PLAN_VERSION, "preliminary": True, "version_uid": version_uid, "section": section,
+    if native_sources is None:
+        skipped = [{"block_id": c.portal_block_id, "page_number": c.page_number, "reason": c.reason} for c in cohort.skipped]
+        skipped.extend({"block_id": c.portal_block_id, "page_number": c.page_number, "reason": "outside_approved_window"}
+                       for c in ordered[MAX_BLOCKS:])
+        total = len(ordered) + len(cohort.skipped)
+    else:
+        skipped = deepcopy(native_sources.get("coverage", {}).get("skipped", []))
+        total = native_sources.get("coverage", {}).get("blocks_total", len(selected))
+        if type(total) is not int or total < len(selected):
+            raise ValueError("native_sources_coverage_invalid")
+    result = {"format": plan_version, "preliminary": True, "version_uid": version_uid, "section": section,
         "sources": sources, "observations": [], "warnings": [],
-        "coverage": {"blocks_total": len(ordered)+len(cohort.skipped), "blocks_selected": len(selected),
-            "blocks_processed": 0, "blocks_remaining": len(ordered)+len(cohort.skipped), "skipped": skipped},
+        "coverage": {"blocks_total": total, "blocks_selected": len(selected),
+            "blocks_processed": 0, "blocks_remaining": total, "skipped": skipped},
         "context_sections": [{"title": str(s.get("title", ""))[:160]} for s in graph.get("sections", [])[:30]],
         "text_items": text_items}
     result["source_sha256"] = digest({"version_uid": version_uid, "section": section,
         "portal": portal, "manifest": manifest, "text_layer": text_layer, "graph": graph, "text_observations": observations,
         "recognised": recognised})
-    if len(ordered) > MAX_BLOCKS:
+    if plan_version == PLAN_VERSION_V2:
+        from .workflow import workflow_procedures
+        result.update(workflow_version=PLAN_VERSION_V2, procedures=workflow_procedures())
+        result["source_sha256"] = digest({"base": result["source_sha256"], "workflow_version": plan_version,
+            "native_sources_sha256": None if native_sources is None else native_sources["source_sha256"],
+            "native_source_facts": None if native_sources is None else
+                {"sources": native_sources["sources"], "coverage": native_sources.get("coverage", {})}})
+    if (native_sources is None and len(ordered) > MAX_BLOCKS
+            or native_sources is not None and total > len(selected)):
         result["warnings"].append("remaining_blocks_not_reviewed")
-    if cohort.skipped:
+    if native_sources is None and cohort.skipped:
         result["warnings"].append("geometry_blocks_not_available")
+    if native_sources is not None:
+        result["warnings"].extend(native_sources.get("warnings", []))
     if len((observations or {}).get("observations", [])) > MAX_ITEMS:
         result["warnings"].append("text_observations_outside_merge_window")
     if any(n["context_truncated"] for s in sources for n in s.get("context", [])):

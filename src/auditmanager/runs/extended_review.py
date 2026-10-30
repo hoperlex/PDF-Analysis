@@ -174,8 +174,14 @@ def _norms(session, observations: list[dict], snapshot_id: str | None) -> list[s
 
 
 def run_extended_review(session, *, run, authority, jobs, journal, binding, outputs, store, meter,
-                        publish, progress, checkpoint, observations_document, snapshot_id=None, profile_sha256=None) -> dict:
+                        publish, progress, checkpoint, observations_document, snapshot_id=None, profile_sha256=None,
+                        policy=None, bind_native=None) -> dict:
     """At most two eight-image calls and one semantic merge; progress is caller-custodied."""
+    if isinstance(policy, dict) and policy.get("plan_version") == "extended-review-v2":
+        return _run_workflow_v2(session,run=run,authority=authority,jobs=jobs,journal=journal,binding=binding,
+            outputs=outputs,store=store,meter=meter,publish=publish,progress=progress,checkpoint=checkpoint,
+            observations_document=observations_document,snapshot_id=snapshot_id,profile_sha256=profile_sha256,
+            bind_native=bind_native)
     from auditmanager.analysis.public import read_artifact
     state: dict[str, Any] = {"format": FORMAT, "preliminary": True, "section": "unknown",
         "observations": [], "sources": [], "warnings": [], "coverage": {
@@ -310,7 +316,19 @@ def read_extended_review(sessions, blob_store, run_id: str) -> dict:
         refs = [] if stage is None else stage.artifacts
         ref = next((r for r in refs if r.get("role") == EXTENDED_REVIEW_ROLE), None)
         if ref is None:
-            return {"run_id": run_id, "status": "not_started", "result": None}
+            from auditmanager.runs.cost_policy import read_run_cost_policy
+            policy = read_run_cost_policy(session,run_id=run_id,default_ceiling_usd=1.).extended_review
+            if isinstance(policy,dict) and policy.get("plan_version")=="extended-review-v2":
+                terminal = run.state in {"published","partial","failed","cancelled"}
+                reason = "workflow_not_executed" if terminal else None
+                if terminal and any(row.stage_id != "text_analysis" and row.status in {"failed","partial"} for row in rows):
+                    reason = "source_preparation_failed"
+                return {"run_id":run_id,"status":"unavailable" if terminal else "not_started",
+                    "result":planned_workflow_result(reason=reason,terminal=terminal)}
+            return {"run_id":run_id,"status":"unavailable","result":{
+                "workflow_version":"extended-review-v1" if policy else None,"procedures":[],
+                "reason":"legacy_policy_no_v2_workflow" if policy else "not_in_accepted_policy"}}
+
         version_uid = run.version_uid
     raw = blob_store.read(parse_blob_id(ref["blob_id"]), verify=True)
     if len(raw) != ref["size_bytes"] or hashlib.sha256(raw).hexdigest() != ref["sha256"]:
@@ -324,3 +342,170 @@ def read_extended_review(sessions, blob_store, run_id: str) -> dict:
         return {"run_id": run_id, "status": status, "result": doc["result"]}
     except (ValueError, KeyError, TypeError):
         raise DomainError(ErrorCode.STORAGE_INTEGRITY_ERROR, role=EXTENDED_REVIEW_ROLE) from None
+
+
+def planned_workflow_result(*, reason=None, terminal=False):
+    from auditmanager.analysis.public import extended_workflow_procedures
+    procedures = extended_workflow_procedures()
+    if reason:
+        for procedure in procedures:
+            procedure.update(status="skipped" if terminal else "queued", reason=reason)
+    return {"format":"extended-review-v2","workflow_version":"extended-review-v2","preliminary":True,
+        "observations":[],"sources":[],"warnings":[],"procedures":procedures,"ocr_status":"not_performed",
+        "reason":reason,"coverage":{"blocks_total":0,"blocks_selected":0,"blocks_processed":0,
+            "blocks_remaining":0,"skipped":[]}}
+
+
+def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs, store, meter,
+        publish, progress, checkpoint, observations_document, snapshot_id, profile_sha256, bind_native=None):
+    from auditmanager.analysis.public import (read_artifact, prepare_native_page_sources,
+        build_comprehensive_request, deterministic_extended_merge,
+        build_norm_review_request, parse_norm_review)
+    state = planned_workflow_result()
+    current = None
+    def save(status):
+        public = {k:v for k,v in state.items() if k not in {"text_items","context_sections"}}
+        public["sources"] = [{k:v for k,v in s.items() if k != "context"} for s in state["sources"]]
+        progress(status, public)
+    def phase(identity, status, reason=None):
+        nonlocal current
+        current = identity
+        procedure = next(p for p in state["procedures"] if p["id"] == identity)
+        procedure.update(status=status)
+        if reason: procedure["reason"] = reason
+        save("running")
+    def call(request, identity):
+        response, _ = _call(session,run_id=run.run_id,authority=authority,jobs=jobs,journal=journal,
+            binding=binding,request=request,phase="v2:"+identity,source_sha256=state["source_sha256"],
+            meter=meter,store=store,publish=publish,checkpoint=checkpoint)
+        if response.truncated: raise _refuse("extended_response_truncated")
+        return response
+    save("running")
+    try:
+        version = DocumentRepository().get_version(session,run.version_uid)
+        section = version.classification.section_code if version.classification else "unknown"
+        state["section"] = section
+        checkpoint("extended_v2_inputs")
+        data = {}
+        for role in ("prepared.text_layer","context.document_graph","geometry.portal_blocks","geometry.page_crops","prepared.recognised_text"):
+            ref = outputs.refs.get(role)
+            if ref is not None:
+                data[role], _ = read_artifact(store,parse_blob_id(ref.blob_id),expected_role=role)
+        if "prepared.text_layer" not in data or "context.document_graph" not in data:
+            raise _refuse("extended_prepared_inputs_unavailable")
+        native = None
+        if "geometry.portal_blocks" not in data:
+            source = outputs.refs.get("source.document")
+            if source is None: raise _refuse("extended_native_source_unavailable")
+            native = prepare_native_page_sources(version_uid=run.version_uid,source_ref=source,
+                blob_store=store,max_pages=16,checkpoint=checkpoint)
+            if bind_native is not None: bind_native(native["artifacts"])
+        planned = plan_extended_inputs(version_uid=run.version_uid,section=section,
+            portal=data.get("geometry.portal_blocks",{}),manifest=data.get("geometry.page_crops",{}),
+            text_layer=data["prepared.text_layer"],graph=data["context.document_graph"],
+            observations=observations_document,recognised=data.get("prepared.recognised_text"),
+            native_sources=native,plan_version="extended-review-v2")
+        procedures = state["procedures"]
+        state.update(planned,workflow_version="extended-review-v2",procedures=procedures,
+            ocr_status="not_performed",model_id=binding.config.model_id,provider_mode=binding.adapter.provider_mode.value)
+        state["source_sha256"] = extended_digest({"source":state["source_sha256"],"workflow_version":"extended-review-v2",
+            "profile_sha256":profile_sha256,"norms_snapshot_id":snapshot_id,"run_input_digest":getattr(run,"frozen_input_digest",None)})
+        pages = data["prepared.text_layer"].get("pages",[])
+        by_page = {p["page_number"]:str(p.get("text","")) for p in pages}
+        # Native visual crops use the same genuine page context as portal crops.
+        for source in state["sources"]:
+            if source.get("source_type") == "native_page":
+                source["context"] = [{"page_number":n,"text":by_page[n][:6000],"recognised_context":"",
+                    "context_truncated":len(by_page[n])>6000} for n in (source["page_number"]-1,source["page_number"],source["page_number"]+1) if n in by_page]
+        images = [s for s in state["sources"] if s["kind"] == "image"]
+        block_items = []
+        if images:
+            phase("block_analysis","running")
+            for start in range(0,len(images),8):
+                batch=images[start:start+8];crops=[]
+                for source in batch:
+                    raw=store.read(parse_blob_id(source["blob_id"]),verify=True)
+                    if len(raw)!=source["size_bytes"] or hashlib.sha256(raw).hexdigest()!=source["crop_sha256"]:
+                        raise _refuse("extended_crop_digest_invalid")
+                    crops.append(CropImage(source["source_id"],raw))
+                payload,cut=extended_block_payload(section=section,batch=batch,sections=state["context_sections"],coverage=state["coverage"])
+                if cut: state["warnings"].append("page_context_truncated")
+                request=attach_images(build_extended_request(model_id=binding.config.model_id,run_id=run.run_id,
+                    phase="blocks",section=section,payload=payload),crops)
+                response=call(request,"blocks:"+str(start//8))
+                block_items.extend(parse_extended_reply(response.output_text,allowed_sources={s["source_id"] for s in batch}))
+                state["coverage"]["blocks_processed"]+=len(batch)
+                state["coverage"]["blocks_remaining"]=state["coverage"]["blocks_total"]-state["coverage"]["blocks_processed"]
+                state["observations"]=finalize_extended_items([*state["text_items"],*block_items],state["sources"])
+                save("running")
+            phase("block_analysis","partial" if state["coverage"]["blocks_remaining"] else "completed")
+        else:
+            phase("block_analysis","unavailable","no_image_blocks_available")
+        # Every page context has a real page/version source anchor, independent of text findings.
+        contexts=[]
+        for page in pages[:16]:
+            number=page["page_number"];value=str(page.get("text",""))
+            source_id="native_text_"+extended_digest({"version_uid":run.version_uid,"page":number,"text":value})[:24]
+            state["sources"].append({"source_id":source_id,"kind":"text","source_type":"native_text",
+                "page_number":number,"version_uid":run.version_uid,"quote":value[:2000],"text_sha256":hashlib.sha256(value.encode()).hexdigest()})
+            contexts.append({"source_id":source_id,"page_number":number,"text":value})
+        phase("comprehensive_analysis","running")
+        request=build_comprehensive_request(model_id=binding.config.model_id,run_id=run.run_id,section=section,
+            payload={"native_context":contexts,"visual_observations":block_items,"text_observations":state["text_items"],
+                "sources":[{k:v for k,v in s.items() if k!="context"} for s in state["sources"]],
+                "source_sha256":state["source_sha256"],"coverage":state["coverage"]})
+        context_cut = json.loads(request.body["messages"][0]["content"])["context_coverage"]["truncated"]
+        if context_cut: state["warnings"].append("page_context_truncated")
+        comprehensive=parse_extended_reply(call(request,"comprehensive").output_text,
+            allowed_sources={s["source_id"] for s in state["sources"]})
+        phase("comprehensive_analysis","partial" if len(pages)>16 or context_cut else "completed")
+        phase("finding_merge","running")
+        items=deterministic_extended_merge([*state["text_items"],*block_items,*comprehensive])
+        state["observations"]=finalize_extended_items(items,state["sources"])
+        phase("finding_merge","completed")
+        phase("norm_verification","running")
+        window=state["observations"][:40]
+        for item in state["observations"][40:]:
+            item.update(norm_status="unavailable",norm_reason="outside_norm_review_window")
+        state["warnings"].extend(_norms(session,window,snapshot_id))
+        registry={}
+        for item in window:
+            item["norm_candidates"]=[registry.setdefault(c["paragraph_id"],c) for c in item.get("norm_candidates",[])]
+        bounded=[];remaining_chars=16_000
+        for item in window:
+            size=len(item["title"])+len(item["description"])+sum(len(c["quote"]) for c in item.get("norm_candidates",[]))
+            if size>remaining_chars:
+                item.update(norm_status="unavailable",norm_reason="outside_norm_review_window")
+                continue
+            bounded.append(item);remaining_chars-=size
+        window=bounded
+        registry={c["paragraph_id"]:c for item in window for c in item.get("norm_candidates",[])}
+        if not registry:
+            reason="corpus_unavailable" if snapshot_id is None else "candidate_context_unavailable"
+            phase("norm_verification","unavailable",reason)
+        else:
+            indexed={"xni_"+extended_digest({"ordinal":i,"item":item})[:24]:item for i,item in enumerate(window)}
+            request=build_norm_review_request(model_id=binding.config.model_id,run_id=run.run_id,section=section,
+                payload={"observations":[{"title":item["title"],"description":item["description"],
+                    "source_ids":item["source_ids"],"input_id":key,
+                    "norm_candidate_ids":[c["paragraph_id"] for c in item.get("norm_candidates",[])]} for key,item in indexed.items()],
+                    "norm_context":list(registry.values()),"source_sha256":state["source_sha256"]})
+            reviewed=parse_norm_review(call(request,"norm_verification").output_text,observations=indexed,
+                allowed_sources={s["source_id"] for s in state["sources"]})
+            # Parser requires exactly one assessment per original input; only annotations transfer.
+            for reviewed_item in reviewed:
+                target=indexed[reviewed_item["input_ids"][0]]
+                target["norm_assessment"]=reviewed_item["norm_assessment"]
+            phase("norm_verification","partial" if len(window)<len(state["observations"]) or any(not item.get("norm_candidates") for item in window) else "completed")
+        degraded=any(p["status"] in {"failed","partial","unavailable","skipped"} for p in state["procedures"])
+        save("partial" if degraded else "completed")
+        return state
+    except (DomainError,ValueError,TypeError,KeyError) as error:
+        reason=error.detail_fields.get("reason") if isinstance(error,DomainError) else "extended_reply_or_source_invalid"
+        reason=str(reason or "extended_workflow_failed")
+        for procedure in state["procedures"]:
+            if procedure["status"]=="running": procedure.update(status="failed",reason=reason)
+            elif procedure["status"]=="queued": procedure.update(status="skipped",reason="dependency_failed")
+        state["warnings"].append(reason)
+        save("failed")
+        return state

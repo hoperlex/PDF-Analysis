@@ -49,9 +49,9 @@ def read_run_cost_policy(session, *, run_id: str, default_ceiling_usd: float,
         extended = consent.get("extended_review")
         if extended is not None and (
             not isinstance(extended, dict) or extended.get("enabled") is not True
-            or extended.get("plan_version") != "extended-review-v1"
+            or extended.get("plan_version") not in {"extended-review-v1", "extended-review-v2"}
             or type(extended.get("max_blocks")) is not int
-            or not 1 <= extended["max_blocks"] <= 16
+            or extended["max_blocks"] != 16
         ):
             raise ValueError()
         if (not isinstance(digest, str) or len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest)

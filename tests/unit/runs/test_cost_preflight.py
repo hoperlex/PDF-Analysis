@@ -48,11 +48,12 @@ def test_all_fourteen_sections_price_before_start_and_large_normal_inputs_get_ex
     for section in registry.entries:
         small = estimate(policy, version(section, 500, 1))
         large = estimate(policy, version(section, 20_000_000, 500))
-        assert small.as_dict()["calls"] == 4
+        assert small.as_dict()["calls"] == 5
         assert json.loads(small.authority_json)["extended_review"]["max_blocks"] == 16
         assert large.as_dict()["calls"] > 12
         assert large.as_dict()["estimated_cost_micros"] > small.as_dict()["estimated_cost_micros"] > 0
         accepted = large.approve(consent(large), actor_user_uid="expert")
+        assert accepted["extended_review"]["plan_version"] == "extended-review-v2"
         assert accepted["max_windows"] >= large.as_dict()["windows"]
         assert accepted["approved_by_user_uid"] == "expert"
 
@@ -84,7 +85,7 @@ def test_raised_output_price_and_route_rate_preset_changes_are_bound(registry):
     source = version()
     old = estimate(policy, source, preset_id="preset1")
     raised = estimate(policy, source, preset_id="preset1", relaxed_limits=True)
-    assert raised.as_dict()["output_tokens"] - 36_000 == (old.as_dict()["output_tokens"] - 36_000) * 4
+    assert raised.as_dict()["output_tokens"] - 48_000 == (old.as_dict()["output_tokens"] - 48_000) * 4
     assert raised.estimate_digest != old.estimate_digest
     revision.revision_id = "erev2"
     assert estimate(policy, source, preset_id="preset1").estimate_digest != old.estimate_digest

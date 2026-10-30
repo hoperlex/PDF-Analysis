@@ -340,3 +340,41 @@ __all__.extend([
     "extended_digest", "extended_review_enabled", "finalize_extended_items",
     "parse_extended_reply", "plan_extended_inputs", "extended_artifact_envelope",
 ])
+
+
+# Full ordinary workflow seams; imports stay lazy until the procedure is selected.
+def prepare_native_page_sources(**kwargs):
+    from auditmanager.analysis.extended.native_pages import prepare_native_page_sources as prepare
+    return prepare(**kwargs)
+
+
+def extended_workflow_procedures(**kwargs):
+    from auditmanager.analysis.extended.workflow import workflow_procedures
+    return workflow_procedures(**kwargs)
+
+
+def build_comprehensive_request(**kwargs):
+    from auditmanager.analysis.extended.workflow import build_comprehensive_request as build
+    return build(**kwargs)
+
+
+def deterministic_extended_merge(*args, **kwargs):
+    from auditmanager.analysis.extended.workflow import deterministic_lossless_merge
+    return deterministic_lossless_merge(*args, **kwargs)
+
+
+__all__.extend(["prepare_native_page_sources", "extended_workflow_procedures",
+                "build_comprehensive_request", "deterministic_extended_merge"])
+
+
+def build_norm_review_request(**kwargs):
+    from auditmanager.analysis.extended.workflow import build_norm_review_request as build
+    return build(**kwargs)
+
+
+def parse_norm_review(*args, **kwargs):
+    from auditmanager.analysis.extended.workflow import parse_norm_review as parse
+    return parse(*args, **kwargs)
+
+
+__all__.extend(["build_norm_review_request", "parse_norm_review"])

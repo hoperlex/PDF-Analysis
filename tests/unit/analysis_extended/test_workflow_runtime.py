@@ -1,0 +1,126 @@
+from hashlib import sha256
+from types import SimpleNamespace as NS
+import io,json,zipfile
+from pathlib import Path
+import pytest
+from auditmanager.analysis.public import ProviderConfig,ProviderMode,ModelResponse,CostMeter,ArtifactRef
+from auditmanager.analysis.extended.native_pages import prepare_native_page_sources
+from auditmanager.runs import extended_review as runtime
+from auditmanager.storage.public import derive_blob_id
+from tests.unit.analysis_extended.test_core import documents,VERSION,item
+from tests.unit.analysis_extended.test_runtime import Session,Store,Jobs,Journal
+
+
+class NativeStore:
+    def __init__(self,data): self.data=data;self.saved={}
+    def inspect(self,bid):return NS(sha256=sha256(self.data).hexdigest(),size=len(self.data))
+    def open_stream(self,*_,**__):yield self.data
+    def put_blob(self,data,**kwargs):
+        bid=str(derive_blob_id(sha256=kwargs['declared_sha256'],size=len(data)));self.saved[bid]=data
+        return NS(blob_id=bid,sha256=kwargs['declared_sha256'],size=len(data),media_type='image/png')
+
+
+def test_native_helper_renders_actual_pdf_and_keeps_real_page_provenance_and_remainder():
+    with zipfile.ZipFile('fixtures/presentation-hotfix/AR-native-image-portal.zip') as bundle:
+        data=bundle.read(next(n for n in bundle.namelist() if n.endswith('.pdf')))
+    store=NativeStore(data);sha=sha256(data).hexdigest()
+    source=ArtifactRef('source.document',str(derive_blob_id(sha256=sha,size=len(data))),sha,len(data),'application/pdf')
+    result=prepare_native_page_sources(version_uid=VERSION,source_ref=source,blob_store=store,max_pages=2)
+    assert len(result['sources'])==2 and result['coverage']['blocks_total']==8
+    assert result['coverage']['blocks_remaining']==8 and len(result['coverage']['skipped'])==6
+    assert all(s['source_type']=='native_page' and s['source_id'].startswith('native_') and s['source_sha256']==sha for s in result['sources'])
+    assert all(raw.startswith(b'\x89PNG') for raw in store.saved.values())
+    assert len(result['artifacts'])==2 and all(r.role=='analysis.extended_crop' for r in result['artifacts'])
+
+
+class WorkflowAdapter:
+    provider_mode=ProviderMode.RECORDED
+    def __init__(self,bad_norm=False):self.requests=[];self.bad_norm=bad_norm
+    def complete(self,request):
+        self.requests.append(request);payload=json.loads(request.body['messages'][0]['content'])
+        if request.images_bytes:
+            values=[item(payload['sources'][0]['source_id'])]
+        elif payload.get('procedure')=='comprehensive_analysis':
+            assert payload['native_context'][0]['text']=='Настоящий текст страницы'
+            values=[item(payload['native_context'][0]['source_id'])|{'title':'Комплексная сверка'}]
+        else:
+            quotes={c['paragraph_id']:c['quote'] for c in payload['norm_context']};values=[]
+            for original in payload['observations']:
+                refs=original['norm_candidate_ids']
+                assessment=None if not refs else {'relation':'insufficient','explanation':'Требует экспертной сверки',
+                    'citations':[{'paragraph_id':refs[0],'quote':'forged' if self.bad_norm else quotes[refs[0]]}]}
+                values.append({k:original[k] for k in ('title','description','source_ids')}|
+                    {'norm_queries':[],'input_ids':[original['input_id']],'norm_assessment':assessment})
+        return ModelResponse(json.dumps({'observations':values}), 'end_turn',100,100,1)
+
+
+@pytest.mark.parametrize('corpus,bad_norm,native_mode',[(False,False,False),(True,False,False),(True,True,False),(True,False,True)])
+def test_v2_runtime_true_phases_four_call_cap_and_originals_survive_bad_norm(monkeypatch,corpus,bad_norm,native_mode):
+    portal,manifest,blobs=documents(10)
+    docs={'geometry.portal_blocks':portal,'geometry.page_crops':manifest,
+        'prepared.text_layer':{'pages':[{'page_number':i,'text':'Настоящий текст страницы'} for i in range(1,11)]},
+        'context.document_graph':{'sections':[]}}
+    for role,doc in docs.items():blobs[role]=json.dumps(doc).encode()
+    monkeypatch.setattr(runtime,'DocumentRepository',lambda:NS(get_version=lambda *_:NS(classification=NS(section_code='AR'))))
+    import auditmanager.analysis.public as public
+    monkeypatch.setattr(public,'read_artifact',lambda _store,bid,**_: (docs[str(bid)],'a'*64))
+    if native_mode:
+        native_sources=[]
+        for crop in manifest['crops']:
+            native_sources.append({'source_id':'native_'+sha256(crop['portal_block_id'].encode()).hexdigest()[:32],
+                'kind':'image','source_type':'native_page','version_uid':VERSION,'page_number':crop['page_number'],
+                'bbox_norm':[0.,0.,1.,1.],'crop_sha256':crop['sha256'],'blob_id':crop['blob_id'],
+                'size_bytes':crop['size_bytes'],'context':[]})
+        docs.pop('geometry.portal_blocks');docs.pop('geometry.page_crops')
+        monkeypatch.setattr(public,'prepare_native_page_sources',lambda **kwargs:{'sources':native_sources,'artifacts':(),
+            'coverage':{'blocks_total':10,'blocks_selected':10,'blocks_processed':0,'blocks_remaining':10,'skipped':[]},
+            'warnings':['native_pdf_page_render_no_ocr'],'source_sha256':'f'*64})
+
+    monkeypatch.setattr(runtime,'parse_blob_id',lambda x:x)
+    monkeypatch.setattr(runtime,'extended_unit',lambda *_args,**_kw:None)
+    monkeypatch.setattr(runtime,'search_norms',lambda _session,**kwargs:NS(items=(NS(norms_snapshot_id='snapshot',norm_document_id='doc',
+        norm_paragraph_id='paragraph',designation='СП',clause_number='1',fragment=NS(text='Реальная цитата'),page_label=1),)))
+    adapter=WorkflowAdapter(bad_norm);saved=[];journal=Journal()
+    def publish(role,doc):
+        raw=json.dumps(doc).encode();key='reply'+str(len(blobs));blobs[key]=raw
+        return NS(blob_id=key,sha256=sha256(raw).hexdigest(),size_bytes=len(raw))
+    result=runtime.run_extended_review(Session(),run=NS(run_id='run',version_uid=VERSION),authority=NS(),jobs=Jobs(),journal=journal,
+        binding=NS(adapter=adapter,config=ProviderConfig(ProviderMode.RECORDED,'claude-opus-5',20.,None,False),call=None),
+        outputs=NS(refs={**{k:NS(blob_id=k) for k in docs},'source.document':NS(blob_id='source')}),store=Store(blobs),meter=CostMeter(20.),publish=publish,
+        progress=lambda status,value:saved.append((status,json.loads(json.dumps(value)))),checkpoint=lambda _:None,
+        observations_document=None,snapshot_id='snapshot' if corpus else None,
+        policy={'enabled':True,'max_blocks':16,'plan_version':'extended-review-v2'})
+    assert len(adapter.requests)==(4 if corpus else 3)
+    assert [len(r.images_bytes) for r in adapter.requests[:3]]==[8,2,0]
+    assert result['workflow_version']=='extended-review-v2'
+    procedures={p['id']:p['status'] for p in result['procedures']}
+    assert procedures['block_analysis']=='completed' and procedures['comprehensive_analysis']=='completed' and procedures['finding_merge']=='completed'
+    assert procedures['norm_verification']==('unavailable' if not corpus else 'failed' if bad_norm else 'completed')
+    assert len(result['observations'])==2
+    assert sum(len(o.get('merged_observations',[o])) for o in result['observations'])==3
+    assert saved[-1][0]==('partial' if not corpus else 'failed' if bad_norm else 'completed')
+    assert all(p['status']=='queued' for p in saved[0][1]['procedures'])
+
+
+def test_planned_v2_receipt_has_queued_phases_and_terminal_skip_reason():
+    queued=runtime.planned_workflow_result()
+    assert len(queued['procedures'])==4 and all(p['status']=='queued' for p in queued['procedures'])
+    stopped=runtime.planned_workflow_result(reason='provider_outcome_unknown',terminal=True)
+    assert all(p['status']=='skipped' and p['reason']=='provider_outcome_unknown' for p in stopped['procedures'])
+
+
+@pytest.mark.parametrize('state,policy,expected_status,expected_procedures',[
+    ('queued',{'enabled':True,'max_blocks':16,'plan_version':'extended-review-v2'},'not_started',4),
+    ('failed',{'enabled':True,'max_blocks':16,'plan_version':'extended-review-v2'},'unavailable',4),
+    ('published',None,'unavailable',0),
+])
+def test_read_helper_exposes_planned_or_terminal_skip_receipt_without_blob_reads(monkeypatch,state,policy,expected_status,expected_procedures):
+    class Context:
+        def __enter__(self):return Session()
+        def __exit__(self,*_):pass
+    monkeypatch.setattr(runtime,'RunRepository',lambda:NS(get=lambda *_:NS(state=state),stage_results=lambda *_:[]))
+    import auditmanager.runs.cost_policy as cost
+    monkeypatch.setattr(cost,'read_run_cost_policy',lambda *_,**__:NS(extended_review=policy))
+    value=runtime.read_extended_review(Context,None,'run')
+    assert value['status']==expected_status and len(value['result']['procedures'])==expected_procedures
+    if state=='failed':assert all(p['status']=='skipped' for p in value['result']['procedures'])

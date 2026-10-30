@@ -453,12 +453,12 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
         и остальные её прогоны перечислены там же.
       </p>
 
-      <h2>Этапы анализа</h2>
+      <h2>Базовые этапы анализа</h2>
       <PipelineRail rows={stageRows(status)} />
 
       <Outcome status={status} />
 
-      <ExtendedReview runId={runId} active={animating} />
+      <ExtendedReview key={runId} runId={runId} active={animating} projectUid={projectUid} />
 
       {interrupted !== null && status.state !== 'failed' ? (
         <p data-interrupted-reason={interrupted}>

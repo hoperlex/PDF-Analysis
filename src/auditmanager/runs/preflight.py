@@ -175,16 +175,16 @@ class RunCostPreflight:
         fixed = len(bundle.system_prompt) + len(_json(bundle.response_schema)) + 12_000
         input_tokens = math.ceil(Fraction((2 * chars + fixed * windows) * 5, 7))
         output_tokens = windows * (64_000 if relaxed_limits else bundle.max_output_tokens)
-        # HOTFIX-PRESENTATION: fresh consent covers two bounded image batches and
-        # one semantic merge. Historical accepted commands lack this authority and
+        # HOTFIX-PRESENTATION: fresh consent covers two bounded image batches, a comprehensive cross-check and
+        # one independent normative quote review. Historical accepted commands lack this authority and
         # cannot acquire extra paid calls merely because the worker was upgraded.
         extended = None
         extra_calls = 0
         if os.environ.get("AUDITMANAGER_EXTENDED_ANALYSIS", "1").strip().lower() not in {"0", "false", "off"}:
-            extended = {"enabled": True, "max_blocks": 16, "plan_version": "extended-review-v1"}
-            extra_calls = 3
-            input_tokens += 300_000
-            output_tokens += 36_000
+            extended = {"enabled": True, "max_blocks": 16, "plan_version": "extended-review-v2"}
+            extra_calls = 4
+            input_tokens += 400_000
+            output_tokens += 48_000
         source.update(profile_sha256=profile.content_sha256, preset_id=preset_id,
             executor_connection_id=executor_connection_id, relaxed_limits=relaxed_limits,
             extended_review=extended)
