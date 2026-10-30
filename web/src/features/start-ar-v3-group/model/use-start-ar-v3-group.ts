@@ -4,9 +4,9 @@
  * The start-six-checks command (`startArV3BetaGroup`).
  *
  * **`provider_mode` is not sent**, as `useStartRun` does not send it: the request carries the
- * version and nothing else, the server picks the mode it is configured for and the pack it has
- * installed, and a screen that offered either would offer to spend money or to pick evidence
- * the reviewer cannot judge from here. The 202 body is the group (`ArV3BetaGroup`); the six
+ * version, the raised-limit choice and source-bound cost consent. The server picks its configured
+ * mode and installed pack; the cost estimate displays that choice before approval. The 202 body
+ * is the group (`ArV3BetaGroup`); the six
  * Runs in it are read back through the group review, not seeded into the single-run caches.
  *
  * Six queued Runs are a change to everything a single accepted run changes, so the same reads
@@ -20,6 +20,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import type { ArV3BetaGroup, VersionUid } from '@/shared/api';
 import { queryKeys, startArV3BetaGroup } from '@/shared/api';
+import type { ArV3CostConsent } from './use-ar-v3-cost-approval';
 
 /**
  * The mutation's key, so a caller can ask the cache whether a start is pending
@@ -32,6 +33,7 @@ export interface StartArV3GroupCommand {
   /** Minted once per intent by the caller and reused on every retry. */
   readonly idempotencyKey: string;
   readonly relaxedLimits?: boolean | undefined;
+  readonly costConsent?: ArV3CostConsent | undefined;
 }
 
 export function useStartArV3Group() {
@@ -39,9 +41,10 @@ export function useStartArV3Group() {
 
   return useMutation<ArV3BetaGroup, unknown, StartArV3GroupCommand>({
     mutationKey: START_AR_V3_GROUP_MUTATION_KEY,
-    mutationFn: async ({ versionUid, idempotencyKey, relaxedLimits }) => {
+    mutationFn: async ({ versionUid, idempotencyKey, relaxedLimits, costConsent }) => {
       const response = await startArV3BetaGroup({
-        body: { version_uid: versionUid, ...(relaxedLimits ? { relaxed_limits: true } : {}) },
+        body: { version_uid: versionUid, ...(relaxedLimits ? { relaxed_limits: true } : {}),
+          ...(costConsent === undefined ? {} : { cost_consent: costConsent }) },
         idempotencyKey,
       });
       return response.data;

@@ -46,6 +46,7 @@ import type { ArV3BetaGroup } from '@/shared/api';
 import { StartArV3GroupControl, useStartArV3Group } from '@/features/start-ar-v3-group';
 
 import { GROUP_ID } from './ar-v3-beta-review-fixtures';
+import { COST_CONSENT, costEstimate } from './cost-estimate-fixtures';
 
 const PROJECT_UID = 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 const VERSION_UID = 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
@@ -58,6 +59,11 @@ const intent = () => ({
   inFlight: false,
   relaxedLimits: false,
   setRelaxedLimits: () => undefined,
+  cost: {
+    estimate: costEstimate({ version_uid: VERSION_UID }, 'ar_v3_group'), ceiling: '1.5', approved: true,
+    consent: COST_CONSENT, draftConsent: COST_CONSENT, pending: false, error: null,
+    reset: () => undefined, request: () => undefined, setCeiling: () => undefined, setApproved: () => undefined,
+  },
   mutation: {
     ...settled.mutation,
     mutate: (...args: unknown[]) => settled.mutate.push(args),
@@ -148,11 +154,12 @@ describe('the control hands over only a group the settings screen can open', () 
     expect(onSend, 'the control did not hand its view a send handler').toBeDefined();
     onSend!();
     const [variables, options] = settled.mutate[0] as [
-      { versionUid: string; idempotencyKey: string },
+      { versionUid: string; idempotencyKey: string; costConsent: typeof COST_CONSENT },
       { onSuccess: (group: ArV3BetaGroup) => void },
     ];
     expect(variables.versionUid).toBe(VERSION_UID);
     expect(variables.idempotencyKey, 'the control must send the key it was handed, not one of its own').toBe(KEY);
+    expect(variables.costConsent).toEqual(COST_CONSENT);
 
     options.onSuccess(GROUP);
     expect(started).toEqual([GROUP]);

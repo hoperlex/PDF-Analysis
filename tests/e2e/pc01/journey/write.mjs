@@ -72,6 +72,7 @@
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import assert from 'node:assert/strict';
 
 import { withColdBrowser } from './cdp.mjs';
 import { C4_PRODUCES, stageC4Action } from './stage-c4.mjs';
@@ -190,6 +191,80 @@ function decodeJson(text) {
   } catch {
     return undefined;
   }
+}
+
+const COST_SCOPES = {
+  run: { root: '[data-start-run-control]', label: 'Оценить стоимость', estimatePath: '/runs/cost-estimate', startPath: '/runs' },
+  ar_v3_group: { root: '[data-ar-v3-group-start]', label: 'Оценить стоимость шести проверок', estimatePath: '/ar-v3-beta/groups/cost-estimate', startPath: '/ar-v3-beta/groups' },
+};
+
+/** Pure exchange checks, also exercised by source conformance without a browser. */
+export function costApprovalFromEstimate(estimate, requestBody, scope, ceilingText) {
+  assert.ok(Object.hasOwn(COST_SCOPES, scope), `unknown cost scope ${scope}`);
+  assert.equal(estimate?.scope, scope);
+  assert.equal(estimate.version_uid, requestBody?.version_uid);
+  assert.equal(estimate.relaxed_limits, requestBody.relaxed_limits === true);
+  assert.equal(estimate.currency, 'USD');
+  assert.ok(['recorded', 'live'].includes(estimate.provider_mode));
+  assert.ok(['metered', 'unmetered'].includes(estimate.billing));
+  assert.match(estimate.estimate_digest ?? '', /^[0-9a-f]{64}$/);
+  for (const amount of [estimate.estimated_cost_micros, estimate.recommended_ceiling_micros]) {
+    assert.ok(Number.isSafeInteger(amount) && amount >= 0, 'cost estimate must have a finite integer amount');
+  }
+  assert.ok(estimate.recommended_ceiling_micros >= estimate.estimated_cost_micros);
+  const decimal = /^(\d+)(?:[.,](\d{1,6}))?$/.exec(ceilingText.trim());
+  assert.ok(decimal, 'prefilled cost ceiling is not exact decimal USD');
+  const ceiling = BigInt(decimal[1]) * 1_000_000n + BigInt((decimal[2] ?? '').padEnd(6, '0'));
+  assert.equal(ceiling, BigInt(estimate.recommended_ceiling_micros), 'UI ceiling differs from the actual recommended estimate');
+  return { scope, estimate_digest: estimate.estimate_digest, ceiling_micros: Number(ceiling),
+    estimated_cost_micros: estimate.estimated_cost_micros, provider_mode: estimate.provider_mode,
+    estimate_request: requestBody };
+}
+
+export function assertCostApprovedStart(approval, exchange) {
+  const body = decodeJson(exchange.requestBody);
+  assert.ok(body !== undefined, 'cost-approved start has no recorded JSON body');
+  const { cost_consent: consent, ...options } = body;
+  assert.deepEqual(options, approval.estimate_request, 'start options differ from the approved estimate');
+  assert.deepEqual(consent, { estimate_digest: approval.estimate_digest,
+    ceiling_micros: approval.ceiling_micros, confirmed: true }, 'start consent differs from actual UI approval');
+  assert.ok(Object.entries(exchange.requestHeaders ?? {}).some(([name, value]) =>
+    name.toLowerCase() === 'idempotency-key' && typeof value === 'string' && value.trim() !== ''), 'start has no command key');
+}
+
+async function approveRunCost(page, action, expectedVersion, allowSpend) {
+  const contract = COST_SCOPES[action.scope];
+  assert.ok(contract, `unknown cost approval scope ${action.scope}`);
+  const enabled = `Array.from(document.querySelectorAll(${JSON.stringify(contract.root + ' button')})).some(e=>e.textContent.trim()===${JSON.stringify(contract.label)}&&!e.disabled)`;
+  assert.ok((await page.waitFor(enabled, { boundMs: action.bound_ms, what: contract.label })).ok, 'cost estimate control unavailable');
+  const after = page.exchanges().length;
+  await page.click(contract.root + ' button', { text: contract.label });
+  const began = Date.now();
+  let observed;
+  while (Date.now() - began < action.bound_ms) {
+    await page.settle({ settleMs: 100, timeoutMs: 700 });
+    observed = page.exchanges().slice(after).find((e) => e.method === 'POST'
+      && new URL(e.url).pathname.endsWith(contract.estimatePath) && e.status !== null && e.responseBody !== null);
+    if (observed !== undefined) break;
+    await new Promise((done) => setTimeout(done, 100));
+  }
+  assert.ok(observed, 'no observed cost estimate within the declared bound');
+  assert.equal(observed.status, 200, `cost estimate failed: ${observed.responseBody?.slice(0, 200)}`);
+  const estimate = decodeJson(observed.responseBody);
+  const request = decodeJson(observed.requestBody);
+  assert.equal(request?.version_uid, expectedVersion, 'estimated a different version');
+  const input = contract.root + ' [data-cost-approval] input[type="text"]';
+  const read = await page.waitFor(`(() => { const e=document.querySelector(${JSON.stringify(input)}); return e && !e.disabled && !e.closest('fieldset')?.disabled && e.getClientRects().length ? {value:e.value} : null; })()`,
+    { boundMs: action.bound_ms, what: 'prefilled cost ceiling' });
+  assert.ok(read.ok, 'cost estimate never produced an editable finite cap');
+  const approval = costApprovalFromEstimate(estimate, request, action.scope, read.value.value);
+  assert.ok(approval.provider_mode === 'recorded' || allowSpend === true, 'live cost approval requires explicit --allow-spend');
+  const checkbox = contract.root + ' [data-cost-approval] input[type="checkbox"]';
+  assert.equal(await page.evaluate(`document.querySelector(${JSON.stringify(checkbox)})?.checked`), false, 'cost approval was preselected');
+  await page.click(checkbox);
+  await page.settle({ settleMs: 100, timeoutMs: 700 });
+  assert.equal(await page.evaluate(`document.querySelector(${JSON.stringify(checkbox)})?.checked`), true, 'cost agreement did not persist');
+  return approval;
 }
 
 /**
@@ -588,6 +663,8 @@ export async function runWritePhase({
           if (action.do === 'stage_c4') {
             entry.result = await stageC4Action({ page, action, captured: scope(), repositoryRoot });
             Object.assign(captured, entry.result.captured);
+          } else if (action.do === 'approve_run_cost') {
+            entry.result = await approveRunCost(page, action, fill(action.value, scope()), allowSpend);
           } else if (action.do === 'fill') {
             // `secret` names a password the journey holds in memory; the value typed is never
             // recorded, and neither is what the control read back.
@@ -897,6 +974,18 @@ export async function runWritePhase({
       return api.filter((e) => `${e.method} ${new URL(e.url).pathname}` === want);
     };
     const findExchange = (method, path) => findAll(method, path)[0] ?? null;
+
+    for (const action of record.actions.filter((item) => item.do === 'approve_run_cost')) {
+      if (action.result === null) continue;
+      const starts = findAll('POST', COST_SCOPES[action.scope].startPath);
+      try {
+        assert.ok(starts.length > 0, 'cost agreement was not followed by the declared start');
+        for (const start of starts) assertCostApprovedStart(action.result, start);
+      } catch (error) {
+        ok = false;
+        fail(step.name, `cost approval: ${error.message}`);
+      }
+    }
 
     /** Declared refusals: (method, concrete path, status) the step expects the seam to answer. */
     const declaredRefusals = [];

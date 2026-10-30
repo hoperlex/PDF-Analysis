@@ -25,10 +25,12 @@
 import Link from 'next/link';
 
 import type { ArV3BetaGroup, ProjectUid, VersionUid } from '@/shared/api';
+import { ApiError } from '@/shared/api';
 import { SHOW_REVIEW_INDICATION } from '@/shared/config';
-import { ErrorState, LoadingState, UnsupportedState } from '@/shared/ui';
+import { CostApproval, ErrorState, LoadingState, UnsupportedState } from '@/shared/ui';
 import { routes } from '@/shared/lib';
 import { looksLikeArV3GroupId } from '@/entities/audit-run';
+import { executionFailure } from '@/entities/execution';
 
 import type { ArV3GroupStartFailure } from '../model/start-failure';
 import {
@@ -37,6 +39,7 @@ import {
   classifyArV3GroupStartFailure,
 } from '../model/start-failure';
 import type { ArV3GroupStartIntent } from '../model/use-ar-v3-group-start-intent';
+import type { ArV3CostApproval } from '../model/use-ar-v3-cost-approval';
 
 import styles from './start-ar-v3-group-control.module.css';
 
@@ -48,6 +51,8 @@ export interface StartArV3GroupViewProps {
   readonly onSend: () => void;
   readonly relaxedLimits?: boolean | undefined;
   readonly onRelaxedLimitsChange?: ((value: boolean) => void) | undefined;
+  readonly cost?: ArV3CostApproval | undefined;
+  readonly staleEstimate?: boolean | undefined;
 }
 
 export function StartArV3GroupView({
@@ -58,24 +63,35 @@ export function StartArV3GroupView({
   onSend,
   relaxedLimits = false,
   onRelaxedLimitsChange,
+  cost,
+  staleEstimate = false,
 }: StartArV3GroupViewProps) {
+  const locked = pending || cost?.pending === true;
+  const costFailure = cost?.error === null || cost?.error === undefined ? null : executionFailure(cost.error, false);
   return (
     <div className={styles.control} data-ar-v3-group-start>
       <label className={styles.limitToggle}>
         <input
           type="checkbox"
           checked={relaxedLimits}
-          disabled={pending || onRelaxedLimitsChange === undefined}
+          disabled={locked || onRelaxedLimitsChange === undefined}
           onChange={(event) => onRelaxedLimitsChange?.(event.currentTarget.checked)}
         />
         Повышенные лимиты ИИ-анализа
       </label>
       <p className="am-note">
         {relaxedLimits
-          ? 'Бюджет стоимости отключён; ответ до 64 000 токенов. Провайдер может установить меньший предел.'
-          : 'Стандартный бюджет стоимости; ответ до 16 000 токенов.'}
+          ? 'Ответ до 64 000 токенов. Провайдер может установить меньший предел. Лимит стоимости подтверждается отдельно.'
+          : 'Ответ до 16 000 токенов. Лимит стоимости подтверждается отдельно.'}
       </p>
-      <button type="button" className="am-button" onClick={onSend} disabled={pending}>
+      <button type="button" className="am-button" disabled={locked || cost === undefined} onClick={cost?.request}>Оценить стоимость шести проверок</button>
+      {cost?.pending ? <LoadingState what="оценка стоимости шести проверок" /> : null}
+      {costFailure === null ? null : <ErrorState title="Стоимость не оценена" detail={costFailure.detail} correlationId={costFailure.correlationId} />}
+      {staleEstimate ? <p role="alert">Оценка стоимости устарела. Получите новую оценку и подтвердите лимит снова.</p> : null}
+      {cost?.estimate === null || cost?.estimate === undefined ? null : <CostApproval estimate={cost.estimate}
+        ceiling={cost.ceiling} approved={cost.approved} disabled={locked}
+        onCeilingChange={cost.setCeiling} onApprovedChange={cost.setApproved} />}
+      <button type="button" className="am-button" onClick={onSend} disabled={locked || cost?.consent === undefined}>
         Запустить шесть проверок АР v3
       </button>
       <p className="am-note">
@@ -148,11 +164,15 @@ export function StartArV3GroupControl({
   const { mutation } = intent;
 
   const send = () => {
+    if (intent.cost?.consent === undefined || intent.cost.pending || mutation.isPending || intent.inFlight) return;
     mutation.mutate(
-      { versionUid, idempotencyKey: intent.idempotencyKey, relaxedLimits: intent.relaxedLimits },
+      { versionUid, idempotencyKey: intent.idempotencyKey, relaxedLimits: intent.relaxedLimits, costConsent: intent.cost.consent },
       {
         onSuccess: (group) => {
           if (looksLikeArV3GroupId(group?.group_id)) onStarted?.(group);
+        },
+        onError: (error) => {
+          if (error instanceof ApiError && error.details?.conflict_reason === 'run_cost_estimate_stale') intent.cost.reset();
         },
       },
     );
@@ -175,6 +195,8 @@ export function StartArV3GroupControl({
       onSend={send}
       relaxedLimits={intent.relaxedLimits}
       onRelaxedLimitsChange={intent.setRelaxedLimits}
+      cost={{ ...intent.cost, request: () => { mutation.reset(); intent.cost.request(); } }}
+      staleEstimate={mutation.error instanceof ApiError && mutation.error.details?.conflict_reason === 'run_cost_estimate_stale'}
     />
   );
 }

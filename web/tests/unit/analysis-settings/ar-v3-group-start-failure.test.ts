@@ -178,17 +178,17 @@ function view(failure: ArV3GroupStartFailure | null, pending = false): string {
 }
 
 describe('the control shows each refusal with only the actions that can help', () => {
-  it('idle: one button, the limit switch and no failure', () => {
+  it('idle: estimate/start actions, a limit switch and no failure', () => {
     const markup = view(null);
     expect(markup).toContain('>Запустить шесть проверок АР v3</button>');
     expect(markup).toContain('Шесть отдельных прогонов; результат — предварительные цитаты для проверки экспертом, без числовых выводов.');
     expect(markup).not.toContain('<select');
     expect(markup).not.toContain('type="radio"');
     expect(markup).toContain('type="checkbox"');
-    expect(markup).toContain('Стандартный бюджет стоимости; ответ до 16 000 токенов.');
+    expect(markup).toContain('Ответ до 16 000 токенов. Лимит стоимости подтверждается отдельно.');
     expect(markup).not.toContain('data-ar-v3-group-failure');
-    expect(markup.match(/<button\b/g)).toHaveLength(1);
-    expect(markup).not.toContain('disabled');
+    expect(markup.match(/<button\b/g)).toHaveLength(2);
+    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Запустить шесть проверок АР v3<\/button>/);
   });
 
   it('pending: the button is disabled and the request is named', () => {
@@ -197,13 +197,13 @@ describe('the control shows each refusal with only the actions that can help', (
     expect(markup).toContain('Загрузка: запрос на шесть проверок…');
   });
 
-  it('a pack refusal is a warning with the correlation id, one button and no retry', () => {
+  it('a pack refusal is a warning with correlation, estimate/start actions and no retry', () => {
     const markup = view(classifyArV3GroupStartFailure(SPECIFIC[0]![1]));
     expect(markup).toContain('am-state--warning');
     expect(markup).toContain('data-ar-v3-group-failure="pack_unavailable"');
     expect(markup).toContain('cid-group');
     expect(markup).toContain('Шесть проверок не запущены.');
-    expect(markup.match(/<button\b/g)).toHaveLength(1);
+    expect(markup.match(/<button\b/g)).toHaveLength(2);
     expect(markup).not.toContain('Повторить');
   });
 

@@ -56,3 +56,6 @@ export { MENU_CLOSED, menuTransition } from './menu-state';
 export type { AvatarProps } from './avatar';
 export { Avatar, AvatarInitialsError } from './avatar';
 export { AVATAR_PALETTE_SIZE, avatarColourIndex, normaliseColourKey } from './avatar-colour';
+
+export type { CostApprovalEstimate, CostApprovalProps } from './cost-approval';
+export { CostApproval, ceilingMicros, microsAsUsd, usableCostEstimate } from './cost-approval';
