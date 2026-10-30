@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { StageCardView, StageChanges, StageJournal } from '@/widgets/stage-changes';
 import { STAGE_REVIEW_KEYS } from '@/widgets/stage-changes/api/reads';
 import { journalGroups } from '@/widgets/stage-changes/model/journal';
+import { StageHighLevelChanges } from '@/widgets/stage-changes/ui/stage-high-level-changes';
 
 import { newClient, renderScreen } from '../screens/harness';
 import { NOW, uid } from '../version-compare/fixtures';
@@ -54,5 +55,27 @@ describe('stage review UI', () => {
     cache.setQueryData([...STAGE_REVIEW_KEYS.journal(run().run_id), 'designation'], { result, groups: journalGroups(result) });
     const html = renderScreen(cache, createElement(StageJournal, { runId: run().run_id, mayAct: false, onOpenEvidence: () => {} }));
     for (const text of ['Итоговый журнал изменений', 'АР', '900 мм', '1000 мм', 'Excel', 'PDF', 'HTML', 'Сравнение устарело']) expect(html).toContain(text);
+  });
+
+  it('offers immutable service promotion independently of verdict editing and uses actual importance', () => {
+    const value = card({ class_name: 'SERVICE_STRUCTURE', importance: 'high', materiality: 'non_material' });
+    const html = renderScreen(newClient(), createElement(StageCardView, { card: value, mayAct: false, mayRequestReview: true,
+      draft: undefined, onDraft: () => {}, onOpenEvidence: () => {} }));
+    expect(html).toContain('Отправить на проверку');
+    expect(html).toContain('data-stage-card-importance="high"');
+    expect(html).toContain('Несущественное изменение');
+    expect(html).not.toContain('type="radio"');
+  });
+
+  it('opens synthesis sources by raw source identity rather than UI anchor identity', () => {
+    const cache = newClient();
+    const rawId = uid('std', 1);
+    const value = card({ evidence_ids: [rawId], evidence: [{ evidence_id: uid('sce', 1), source_id: rawId,
+      kind: 'TEXT', side: 'left', profile_id: uid('cpr', 1) }] });
+    cache.setQueryData(['stage-high-level', value.run_id], [{ synthesis_id: uid('sasyn', 1), run_id: value.run_id,
+      result: { decision: 'REAL_CHANGE', change_type: 'PARAMETER_SET_CHANGED', title: 'Изменён размер', reason: 'Размер изменён', evidence_ids: [rawId] } }]);
+    const html = renderScreen(cache, createElement(StageHighLevelChanges, { runId: value.run_id, cards: [value],
+      running: false, completed: true, onOpenEvidence: () => {} }));
+    expect(html).toContain('Открыть в PDF');
   });
 });

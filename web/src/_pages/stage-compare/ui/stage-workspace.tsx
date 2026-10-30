@@ -36,6 +36,7 @@ export function StageWorkspace({ projectUid, mayAct }: { readonly projectUid: st
   const [chosenPair, setChosenPair] = useState('');
   const [chosenRun, setChosenRun] = useState<string | null>(null);
   const [focus, setFocus] = useState<StageMapFocus | undefined>();
+  const [focusedCardId, setFocusedCardId] = useState<string | undefined>();
   const [navigating, setNavigating] = useState(false);
   const [navigationError, setNavigationError] = useState<unknown>(null);
   const requestToken = useRef(0);
@@ -62,16 +63,16 @@ export function StageWorkspace({ projectUid, mayAct }: { readonly projectUid: st
   const selection = useRef({ pairId, runId });
   selection.current = { pairId, runId };
   const choosePair = (next: string) => {
-    requestToken.current += 1; setChosenPair(next); setChosenRun(null); setFocus(undefined); setNavigationError(null); setNavigating(false);
+    requestToken.current += 1; setChosenPair(next); setChosenRun(null); setFocus(undefined); setFocusedCardId(undefined); setNavigationError(null); setNavigating(false);
   };
   const chooseRun = (next: string) => {
-    requestToken.current += 1; setChosenRun(next); setFocus(undefined); setNavigationError(null); setNavigating(false);
+    requestToken.current += 1; setChosenRun(next); setFocus(undefined); setFocusedCardId(undefined); setNavigationError(null); setNavigating(false);
   };
   const selectKnownRun = (value: StageChainRun, showChanges: boolean) => {
     if (value.kind !== 'full') { setNavigationError(new Error('Выберите полный запуск этой пары.')); return; }
     cache.setQueryData(['stage-full-run', value.run_id], value);
     if (selection.current.pairId !== value.pair_id || selection.current.runId !== value.run_id) {
-      requestToken.current += 1; setFocus(undefined); setNavigating(false);
+      requestToken.current += 1; setFocus(undefined); setFocusedCardId(undefined); setNavigating(false);
     }
     setChosenPair(value.pair_id); setChosenRun(value.run_id);
     void cache.invalidateQueries({ queryKey: ['stage-full-runs', value.pair_id] });
@@ -158,10 +159,12 @@ export function StageWorkspace({ projectUid, mayAct }: { readonly projectUid: st
     {visitedSheets ? <section hidden={tab !== 'sheets'} role="tabpanel" id="stage-panel-sheets" aria-labelledby="stage-tab-sheets">
       <StageSheetMap projectUid={projectUid} mayAct={mayAct && pair?.state === 'confirmed'} pairId={pairId}
         onPairChange={choosePair} textProvider={storedPageText} {...(coherentRun === undefined ? {} : { runId: coherentRun.run_id })}
-        {...(focus === undefined ? {} : { focus })} onClearFocus={() => setFocus(undefined)} />
+        {...(focus === undefined ? {} : { focus })} onClearFocus={() => setFocus(undefined)}
+        onReviewCreated={(card) => { if (card.run_id === selection.current.runId) { setFocusedCardId(card.card_id); setTab('changes'); } }} />
     </section> : null}
     {tab === 'changes' ? <section role="tabpanel" id="stage-panel-changes" aria-labelledby="stage-tab-changes" data-stage-selected-run={coherentRun?.run_id}>
-      <StageChanges runId={coherentRun?.run_id} mayAct={mayAct && pair?.state === 'confirmed'} onOpenEvidence={onOpenEvidence} onOpenRawDifference={onOpenRawDifference} />
+      <StageChanges runId={coherentRun?.run_id} mayAct={mayAct && pair?.state === 'confirmed'} onOpenEvidence={onOpenEvidence} onOpenRawDifference={onOpenRawDifference}
+        {...(focusedCardId === undefined ? {} : { focusCardId: focusedCardId })} />
     </section> : null}
     {tab === 'journal' ? <section role="tabpanel" id="stage-panel-journal" aria-labelledby="stage-tab-journal" data-stage-selected-run={coherentRun?.run_id}>
       <StageJournal runId={coherentRun?.run_id} mayAct={mayAct} onOpenEvidence={onOpenEvidence} />

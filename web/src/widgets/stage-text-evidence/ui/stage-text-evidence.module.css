@@ -5,3 +5,8 @@
 .table th, .table td { padding: .6rem; border-bottom: 1px solid var(--am-border, #d5dce3); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
 .hints { display: grid; gap: .75rem; }
 .hints button { margin-right: .5rem; }
+.reviewRequest { display: grid; gap: .5rem; margin-block: .5rem; }
+.reviewRequest section, .reviewRequest label { display: grid; gap: .5rem; }
+.reviewRequest textarea { min-height: 5rem; width: 100%; }
+.actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.masked { display: grid; gap: .7rem; padding-left: 1.5rem; }

@@ -31,16 +31,33 @@ export const CLASS_WORDS: Readonly<Record<StageChangeCard['class_name'], string>
 
 export const CARRYOVER_WORDS: Readonly<Record<NonNullable<StageChangeCard['carryover']>, string>> = {
   none: 'Решение не переносилось', full: 'Решение перенесено по тем же свидетельствам',
-  partial: 'Решение перенесено частично — проверьте свидетельства', stale: 'Прежнее решение устарело',
+  partial: 'Прежнее решение относится к части свидетельств — требуется новая оценка', stale: 'Прежнее решение устарело',
 };
 
+export const MATERIALITY_WORDS = { material: 'Существенное изменение', non_material: 'Несущественное изменение', unknown: 'Существенность не определена' } as const;
+export const IMPORTANCE_WORDS = { high: 'Высокая', normal: 'Обычная', unknown: 'Не определена' } as const;
+
 export function groupedCards(cards: readonly StageChangeCard[]) {
-  return (['PROJECT_CHANGE', 'REVIEW', 'SERVICE_STRUCTURE'] as const).flatMap((className) => {
-    const selected = cards.filter((card) => card.class_name === className);
+  const sections: ReadonlyArray<{ kind: string; title: string; collapsed: boolean; includes: (card: StageChangeCard) => boolean }> = [
+    { kind: 'project', title: CLASS_WORDS.PROJECT_CHANGE, collapsed: false,
+      includes: (card) => card.class_name === 'PROJECT_CHANGE' && card.detail_increased !== true },
+    { kind: 'detail', title: 'Детализация увеличена', collapsed: false,
+      includes: (card) => card.class_name !== 'SERVICE_STRUCTURE' && card.detail_increased === true },
+    { kind: 'material', title: 'Существенные изменения, требующие проверки', collapsed: false,
+      includes: (card) => card.class_name === 'REVIEW' && card.detail_increased !== true && card.materiality === 'material' },
+    { kind: 'non_material', title: 'Несущественные изменения, требующие проверки', collapsed: true,
+      includes: (card) => card.class_name === 'REVIEW' && card.detail_increased !== true && card.materiality === 'non_material' },
+    { kind: 'unknown', title: 'Требуют проверки · существенность не определена', collapsed: false,
+      includes: (card) => card.class_name === 'REVIEW' && card.detail_increased !== true && (card.materiality === undefined || card.materiality === 'unknown') },
+    { kind: 'service', title: CLASS_WORDS.SERVICE_STRUCTURE, collapsed: true,
+      includes: (card) => card.class_name === 'SERVICE_STRUCTURE' },
+  ];
+  return sections.flatMap((section) => {
+    const selected = cards.filter(section.includes);
     const categories = [...new Set(selected.map((card) => card.category))];
-    return categories.map((category) => ({ key: `${className}:${category}`, className,
-      title: `${CLASS_WORDS[className]} · ${CATEGORY_WORDS[category]}`,
-      collapsed: className === 'SERVICE_STRUCTURE', cards: selected.filter((card) => card.category === category) }));
+    return categories.map((category) => ({ key: `${section.kind}:${category}`, kind: section.kind,
+      title: `${section.title} · ${CATEGORY_WORDS[category]}`, collapsed: section.collapsed,
+      cards: selected.filter((card) => card.category === category) }));
   });
 }
 

@@ -35,4 +35,17 @@ describe('stage text evidence panel', () => {
     expect(html).toContain('Нагрузка 10 кВт → Нагрузка 20 кВт');
     expect(html).toContain('Исходные текстовые различия');
   });
+
+  it('lets an expert promote a masked fragment while preserving other raw differences', () => {
+    const fragment = (id: string, text: string) => ({ fragment_id: id, profile_id: 'p1', pair_id: 'pair',
+      side: 'left' as const, text, content_key: 'a'.repeat(64), box_anchor: { x: 1, y: 2, width: 3, height: 4 } });
+    const props: Partial<StageTextEvidenceProps> = { runId: 'crn_saved', needsRecompute: false,
+      maskedFragmentIds: ['stf_same'], evidence: { fragments: [fragment('stf_same', 'Одинаковый текст'), fragment('stf_other', 'Другие изменения')],
+        exclusions: [], hints: [], differences: [{ difference_id: 'std_other', revision_id: 'r1', status: 'removed', left_fragment_id: 'stf_other' }] } };
+    const html = screen(props);
+    expect(html).toContain('data-stage-masked-fragment="stf_same"');
+    expect(html).toContain('На экспертную проверку');
+    expect(html).toContain('Другие изменения');
+    expect(screen({ ...props, dirty: true })).not.toContain('На экспертную проверку');
+  });
 });

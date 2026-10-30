@@ -44,7 +44,7 @@ export function StageHighLevelChanges({ runId, cards, running, completed, onOpen
             <h4>{item.result.title}</h4><p>{item.result.reason}</p><p><AiLabel /></p>
             <ul>{sources.map((card) => <li key={card.card_id}>
               <a href={`#stage-card-${card.card_id}`}>{card.title}</a>
-              {(card.evidence ?? []).filter((evidence) => evidenceIds.has(evidence.evidence_id)).map((evidence) =>
+              {(card.evidence ?? []).filter((evidence) => evidenceIds.has(evidence.source_id)).map((evidence) =>
                 <button key={evidence.evidence_id} type="button" className="am-button" disabled={evidence.profile_id === undefined}
                   onClick={() => onOpenEvidence(evidence, card)}>Открыть в PDF ↗</button>)}
             </li>)}</ul>

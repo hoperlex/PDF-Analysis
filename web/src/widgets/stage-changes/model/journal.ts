@@ -1,5 +1,5 @@
 import type { StageChangeCard, StageChangeJournal } from '@/shared/api';
-import { CATEGORY_WORDS, CLASS_WORDS, SYSTEM_WORDS } from './cards';
+import { CATEGORY_WORDS, CLASS_WORDS, SYSTEM_WORDS, IMPORTANCE_WORDS, MATERIALITY_WORDS } from './cards';
 
 export interface JournalGroup {
   readonly key: string;
@@ -30,6 +30,9 @@ function card(value: unknown): value is StageChangeCard {
     && typeof value.class_name === 'string' && Object.hasOwn(CLASS_WORDS, value.class_name)
     && typeof value.category === 'string' && Object.hasOwn(CATEGORY_WORDS, value.category)
     && typeof value.system === 'string' && Object.hasOwn(SYSTEM_WORDS, value.system)
+    && (value.materiality === undefined || (typeof value.materiality === 'string' && Object.hasOwn(MATERIALITY_WORDS, value.materiality)))
+    && (value.importance === undefined || (typeof value.importance === 'string' && Object.hasOwn(IMPORTANCE_WORDS, value.importance)))
+    && (value.detail_increased === undefined || typeof value.detail_increased === 'boolean')
     && (value.evidence === undefined || (Array.isArray(value.evidence) && value.evidence.every(evidence)))
     && (value.verdict === undefined || verdict(value.verdict));
 }
