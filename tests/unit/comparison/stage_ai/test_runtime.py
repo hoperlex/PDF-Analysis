@@ -62,6 +62,12 @@ class Repo:
         return {row["group_id"]: dict(row, progress=row["payload"]) for row in self.units.values()
                 if row["kind"] == "classify" and row["group_id"].startswith("graphic:")}
 
+    def fail_run(self, session, *, run_id, phase, reason):
+        self.run_failure = (phase, reason)
+
+    def call_identities(self, session, call_ids):
+        return [{"call_id": call_id} for call_id in call_ids]
+
     def unit(self, session, *, run_id, kind, group_id, source_sha256, payload, job_id=None):
         key = (run_id, kind, group_id, source_sha256)
         if key not in self.units:
@@ -235,6 +241,7 @@ def test_missing_prerequisite_fails_shared_job_before_unit_creation() -> None:
     outcome = runtime.advance(item, run_id=uid("crn", 1), phase="classify")
     assert isinstance(outcome, Failed) and outcome.reason == "stage_ai_source_invalid"
     assert jobs.failures == ["stage_ai_source_invalid"]
+    assert repo.run_failure == ("classify", "stage_ai_source_invalid")
     assert caller.calls == 0 and not repo.units
 
 
