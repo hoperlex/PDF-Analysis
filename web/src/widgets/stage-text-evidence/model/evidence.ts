@@ -7,6 +7,8 @@ export interface StageTextEvidenceData {
   readonly exclusions: readonly StageTextExclusion[];
   readonly differences: readonly StageTextDifference[];
   readonly hints: readonly StageTextHint[];
+  /** Derived UI overlays; raw differences/exclusions are unchanged. */
+  readonly aiSameFragmentIds?: readonly string[];
 }
 
 export interface PageTextItem {
@@ -51,7 +53,8 @@ export function provenFragments(
 ): PageTextItem[] {
   if (data === undefined) return [];
   const ids = new Set(data.exclusions.map((row) => side === 'left' ? row.left_fragment_id : row.right_fragment_id));
-  return pageText(data.fragments.filter((fragment) => ids.has(fragment.fragment_id)), profileId);
+  for (const id of data.aiSameFragmentIds ?? []) ids.add(id);
+  return pageText(data.fragments.filter((fragment) => fragment.side === side && ids.has(fragment.fragment_id)), profileId);
 }
 
 export function fragmentLookup(data: StageTextEvidenceData | undefined): ReadonlyMap<string, StageTextFragment> {

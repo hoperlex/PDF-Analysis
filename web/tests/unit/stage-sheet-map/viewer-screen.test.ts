@@ -5,7 +5,7 @@ import type { StageSheetPassport, StageTextFragment, VersionPageProfile } from '
 import { StagePairViewer } from '@/widgets/stage-sheet-map';
 import { newClient, renderScreen } from '../screens/harness';
 
-function screen(stale: boolean): string {
+function screen(stale: boolean, ai = false): string {
   const cache = newClient();
   const left: StageSheetPassport = { profile_id: 'left', version_uid: 'ver_left', page_number: 1, side: 'left' };
   const right: StageSheetPassport = { profile_id: 'right', version_uid: 'ver_right', page_number: 2, side: 'right' };
@@ -23,8 +23,8 @@ function screen(stale: boolean): string {
   });
   return renderScreen(cache, createElement(StagePairViewer, { leftPage: left, rightPage: right, stale,
     evidence: { fragments: [fragment('f1', left), fragment('f2', right)], differences: [], hints: [],
-      exclusions: [{ exclusion_id: 'e1', revision_id: 'r1', left_fragment_id: 'f1',
-        right_fragment_id: 'f2', proof_kind: 'same' }] },
+      exclusions: ai ? [] : [{ exclusion_id: 'e1', revision_id: 'r1', left_fragment_id: 'f1',
+        right_fragment_id: 'f2', proof_kind: 'same' }], ...(ai ? { aiSameFragmentIds: ['f1', 'f2'] } : {}) },
   }));
 }
 
@@ -42,5 +42,11 @@ describe('stage profile viewer markup', () => {
   it('hides proof masks when the sheet map has an unsaved edit', () => {
     const html = screen(true);
     expect(html).not.toContain('data-evidence="mask:');
+  });
+  it('renders accepted AI fragment overlays through the same grey mask layer', () => {
+    const html = screen(false, true);
+    expect(html).toContain('data-evidence="mask:f1"');
+    expect(html).toContain('data-evidence="mask:f2"');
+    expect(screen(true, true)).not.toContain('data-evidence="mask:');
   });
 });

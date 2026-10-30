@@ -162,6 +162,13 @@ export function StageUploadPanel({ projectUid, mayAct }: {
   const refresh = async () => {
     await cache.invalidateQueries({ queryKey: ['comparison', 'stage-uploads', projectUid] });
     await cache.invalidateQueries({ queryKey: STAGE_PAIR_KEYS.projectSuggestions(projectUid) });
+    await Promise.all([
+      cache.invalidateQueries({ queryKey: STAGE_PAIR_KEYS.projectPairs(projectUid) }),
+      cache.invalidateQueries({ queryKey: ['stage-full-runs'] }),
+      cache.invalidateQueries({ queryKey: ['stage-full-run'] }),
+      cache.invalidateQueries({ queryKey: ['stage-sheet-map'] }),
+      cache.invalidateQueries({ queryKey: ['stage-text-evidence'] }),
+    ]);
   };
   const transfer = async (upload: StageUpload, chosen: File, digest: string) => {
     const declared = upload.files[0];

@@ -55,6 +55,10 @@ describe('stage comparison catalog', () => {
     expect(html).toContain('Совпадают раздел и подтверждённый шифр');
     expect(html).toContain('Проверить связь');
     expect(html).toContain('Полный');
+    expect(html).toContain('3. Изменения проекта');
+    expect(html).toContain('4. Отчёт');
+    expect(html).toContain('data-stage-pair-select');
+    expect(html).toContain('data-stage-run-select');
     expect(html).toContain(`href="/projects/${PROJECT_UID}/documents/${DOCUMENT_UID}"`);
   });
 
