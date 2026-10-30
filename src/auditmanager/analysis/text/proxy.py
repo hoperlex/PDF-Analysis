@@ -442,10 +442,38 @@ def _to_openai_body(request: ModelRequest, model: str) -> dict[str, Any]:
         body["response_format"] = {
             "type": "json_schema",
             "json_schema": {
-                "name": "text_observations", "schema": to_wire_schema(schema), "strict": True,
+                "name": "text_observations", "schema": _strict_nullable_optionals(to_wire_schema(schema)),
+                "strict": True,
             },
         }
     return {k: v for k, v in body.items() if v is not None}
+
+
+def _strict_nullable_optionals(schema: Any) -> Any:
+    """OpenAI strict mode requires every object property; preserve optionality with null.
+
+    The sealed request and its checksum remain untouched. In the current section schemas
+    this only changes the six profiles with an optional ``omission`` claim.
+    """
+    if not isinstance(schema, Mapping):
+        return schema
+    result = dict(schema)
+    for key in ("items", "additionalProperties"):
+        if isinstance(result.get(key), Mapping):
+            result[key] = _strict_nullable_optionals(result[key])
+    for key in ("anyOf", "allOf"):
+        if isinstance(result.get(key), list):
+            result[key] = [_strict_nullable_optionals(member) for member in result[key]]
+    properties = result.get("properties")
+    if isinstance(properties, Mapping):
+        required = list(result.get("required", []))
+        result["properties"] = {
+            name: (_strict_nullable_optionals(value) if name in required else
+                   {"anyOf": [_strict_nullable_optionals(value), {"type": "null"}]})
+            for name, value in properties.items()
+        }
+        result["required"] = [*required, *(name for name in properties if name not in required)]
+    return result
 
 
 def _unusable_answer(

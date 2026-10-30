@@ -15,7 +15,7 @@ stage does not improve the model's answer, it records it.
 
 The one extra shape is the omission claim of the category ``documentation``: an ``omission`` object
 (``term``, ``first_page``, ``last_page``, ``heading``) that must be present for that category and
-absent for every other. It is a claim the stage checks (:mod:`~auditmanager.analysis.text.omission`),
+absent or null for every other. Null is the OpenAI strict-schema wire form of absence. It is a claim the stage checks (:mod:`~auditmanager.analysis.text.omission`),
 not something this module believes.
 """
 
@@ -143,7 +143,7 @@ def _coerce(raw: Any, categories: tuple[str, ...]) -> ProposedObservation | None
         omission = _coerce_omission(raw.get("omission"))
         if omission is None:
             return None
-    elif "omission" in raw:
+    elif raw.get("omission") is not None:
         return None
     if not isinstance(finding, str) or not finding.strip():
         return None

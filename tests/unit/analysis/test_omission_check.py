@@ -33,6 +33,7 @@ from auditmanager.analysis.text.profile_registry import (
     load_text_profile_registry,
 )
 from auditmanager.analysis.text.prompt import (
+    AR_TEXT_CATEGORIES,
     CATEGORIES,
     OMISSION_CATEGORY,
     RESPONSE_SCHEMA,
@@ -269,6 +270,15 @@ def test_documentation_needs_a_well_formed_claim_and_nothing_else_may_carry_one(
     assert carried.observations == () and carried.malformed_count == 1
 
 
+def test_null_omission_is_absent_for_non_documentation_but_invalid_for_documentation() -> None:
+    body = json.loads(reply())
+    body["observations"][0]["omission"] = None
+    assert parse_response(json.dumps(body), truncated=False, categories=CATEGORIES3).malformed_count == 1
+    body["observations"][0]["category"] = "internal_contradiction"
+    parsed = parse_response(json.dumps(body), truncated=False, categories=CATEGORIES3)
+    assert parsed.malformed_count == 0 and parsed.observations[0].omission is None
+
+
 def test_a_two_category_profile_refuses_documentation_and_the_default_is_the_v1_pair() -> None:
     assert parse_response(reply(), truncated=False, categories=CATEGORIES).malformed_count == 1
     assert parse_response(reply(), truncated=False).malformed_count == 1  # no `categories`: the v1 pair
@@ -292,7 +302,7 @@ def test_the_v1_pair_gets_the_v1_schema_object_and_the_three_get_the_claim() -> 
             response_schema_for(other)
 
 
-def test_the_registry_serves_three_categories_to_exactly_the_five_and_two_to_the_rest() -> None:
+def test_the_registry_serves_all_fifteen_section_category_schemas() -> None:
     registry = load_text_profile_registry()
     five = {"AI", "TX", "EOM", "SS", "ITP"}
     for code, entry in registry.entries.items():
@@ -301,10 +311,13 @@ def test_the_registry_serves_three_categories_to_exactly_the_five_and_two_to_the
             assert profile.categories == CATEGORIES3, code
             assert profile.prompt_bundle.response_schema == response_schema_for(CATEGORIES3), code
             assert profile.profile_version == "1.3.1", code
+        elif code == "AR":
+            assert profile.categories == AR_TEXT_CATEGORIES
+            assert profile.prompt_bundle.response_schema == response_schema_for(AR_TEXT_CATEGORIES)
         else:
             assert profile.categories == CATEGORIES, code
             assert profile.prompt_bundle.response_schema is RESPONSE_SCHEMA, code
-    assert len(registry.entries) == 14
+    assert len(registry.entries) == 15
 
 
 def test_the_category_set_is_part_of_the_profile_and_the_bundle_identity() -> None:

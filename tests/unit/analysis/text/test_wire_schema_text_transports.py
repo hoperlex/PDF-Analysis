@@ -18,6 +18,7 @@ from auditmanager.analysis.profiles.ar_v3.response_schema import response_schema
 from auditmanager.analysis.text.adapter import ModelRequest
 from auditmanager.analysis.text.live import LiveAdapter
 from auditmanager.analysis.text.prompt import RESPONSE_SCHEMA
+from auditmanager.analysis.text.profile_registry import load_text_profile_registry
 from auditmanager.analysis.text.proxy import ProxyAdapter, ProxySettings
 from auditmanager.analysis.text.wire_schema import to_wire_schema
 
@@ -111,6 +112,37 @@ def test_the_v1_provider_body_is_byte_identical_to_what_it_was() -> None:
             "name": "text_observations", "schema": RESPONSE_SCHEMA, "strict": True}},
     }
     assert opener.sent.data == json.dumps(expected, ensure_ascii=False, sort_keys=True).encode("utf-8")
+
+
+def test_all_section_schemas_have_required_properties_on_the_strict_proxy_wire() -> None:
+    registry = load_text_profile_registry()
+    assert len(registry.entries) == 15
+    for code, entry in registry.entries.items():
+        adapter, opener = _proxy()
+        request = _request(entry.profile.prompt_bundle.response_schema)
+        original, checksum = copy.deepcopy(dict(request.body)), request.request_sha256
+        adapter.complete(request)
+        assert request.body == original and request.request_sha256 == checksum, code
+        schema = json.loads(opener.sent.data)["response_format"]["json_schema"]["schema"]
+
+        def check(node: Any) -> None:
+            if not isinstance(node, dict):
+                return
+            properties = node.get("properties")
+            if isinstance(properties, dict):
+                assert set(properties) == set(node["required"]), code
+                for child in properties.values():
+                    check(child)
+            if isinstance(node.get("items"), dict):
+                check(node["items"])
+            for key in ("anyOf", "allOf"):
+                for branch in node.get(key, []):
+                    check(branch)
+
+        check(schema)
+        item = schema["properties"]["observations"]["items"]
+        if "omission" in item.get("properties", {}):
+            assert item["properties"]["omission"]["anyOf"][1] == {"type": "null"}, code
 
 
 def test_the_proxy_sends_no_response_format_when_the_body_has_no_schema() -> None:
