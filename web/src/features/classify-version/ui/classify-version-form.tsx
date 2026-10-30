@@ -204,19 +204,11 @@ export function ClassifyVersionFormView({
       </fieldset>
 
       {chosen !== null && !chosen.executable ? (
-        chosen.section_code === 'AR' ? (
-          <p className="am-form__hint" data-chosen-profile="unavailable" data-chosen-section="AR">
-            У раздела АР нет текстового профиля: обычный прогон по такой версии будет отклонён.
-            Версия АР анализируется группой из шести проверок АР v3, когда на сервере установлен
-            набор норм АР v3.
-          </p>
-        ) : (
-          <p className="am-form__hint" data-chosen-profile="unavailable">
-            Для этого раздела профиль анализа ещё не зарегистрирован. Подтвердить раздел можно, но
-            прогон по версии будет отклонён, пока профиль не появится; анализ по другому разделу
-            вместо него не запускается.
-          </p>
-        )
+        <p className="am-form__hint" data-chosen-profile="unavailable">
+          Для этого раздела профиль анализа ещё не зарегистрирован. Подтвердить раздел можно, но
+          прогон по версии будет отклонён, пока профиль не появится; анализ по другому разделу
+          вместо него не запускается.
+        </p>
       ) : null}
 
       <div className="am-form__row">

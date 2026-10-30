@@ -1,13 +1,15 @@
 {
   "contract": "auditmanager.analysis.ar_v3_beta_stage_extension",
   "extension_version": "1.0.0",
-  "analysis_contract_version": "1.12.0",
+  "analysis_contract_version": "1.13.0",
   "analysis_profile_id": "ap_01M5M28ZCDD8VPSP1BTAEW92YE",
   "prompt_bundle_id": "pb_01M5M28ZCDVCR37BX1884JGSPM",
   "stage": {
     "stage_id": "ar_v3_citation_review",
     "stage_version": "1.0.0",
-    "requires_prior_stages": ["source_preparation"],
+    "requires_prior_stages": [
+      "source_preparation"
+    ],
     "input_roles": [
       "prepared.text_layer",
       "norms.retrieval_set",

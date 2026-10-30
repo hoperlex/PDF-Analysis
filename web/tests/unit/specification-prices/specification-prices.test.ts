@@ -258,7 +258,7 @@ describe('the set chooser offers the sets an expert confirmed in any section', (
       client,
       queryKeys.optimisation.specificationPrices(PROJECT, DOCUMENT, 0, SPECIFICATION_ROW_LIMIT),
       new ApiError(404, {
-        contract_version: '1.12.0', error_code: 'not_found', message: 'Нет такого комплекта.',
+        contract_version: '1.13.0', error_code: 'not_found', message: 'Нет такого комплекта.',
         correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100', retryable: false,
       }, '0f0e9d8c-7b6a-4948-b726-150413021100'),
     );

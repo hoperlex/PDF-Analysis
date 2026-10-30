@@ -122,6 +122,8 @@ def _sections() -> dict[str, dict[str, Any]]:
     found: dict[str, dict[str, Any]] = {}
     for directory in sorted(path for path in PROFILES.iterdir() if path.is_dir()):
         manifest = json.loads((directory / "profile.json").read_text("utf-8"))
+        if manifest["section_code"] == "AR":
+            continue  # The original-source AR prompt is checked by its fixed source and bundle hashes.
         found[manifest["section_code"]] = {
             "manifest": manifest,
             "prompt": (directory / "system_prompt.md").read_text("utf-8"),

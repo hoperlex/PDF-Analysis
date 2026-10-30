@@ -5,24 +5,23 @@ registered here; the executor resolves the run's pinned profile through the same
 every v1-style text run executes with its own prompt bundle. A section with no entry is
 refused at run start -- there is no AR fallback.
 
-**АР is not registered** (`PROD-11-AR-V1-V2-REMOVAL-01`, `ADR-0024` section 2, `AD-12`): the АР
-analysis path of production is the six-Run v3 group, not a text profile. The AR v1 constants were
-this registry's first entry until that task; they are gone, so ``startRun`` and ``reauditRun`` on
-a version classified АР answer ``section_profile_unavailable`` and ``listAnalysisProfiles`` answers
-``profile: null`` for АР. There is no ``profiles/ar/`` package and one is refused (a package may
-not make АР a text profile again).
+**АР is registered again** by `HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030` as a new
+text profile sourced from the original application's AR files. The previous six-Run
+v3 group retains its distinct identity for already accepted Runs. A new ordinary
+start for a version classified АР resolves this package.
 
 One source: the **data packages** ``profiles/<code_lower>/{profile.json, system_prompt.md}`` in the format
-  ``text-profile/1`` (integration contract of the task). ``profile.json`` holds exactly the
+  ``text-profile/1`` or ``text-profile/2``. ``profile.json`` holds exactly the
   keys ``format``, ``section_code``, ``analysis_profile_id`` (``ap_`` ULID),
   ``prompt_bundle_id`` (``pb_`` ULID), ``profile_version``, ``status`` (``draft`` or
   ``reviewed``), ``title_ru`` and ``source`` (``repository``, ``commit``, ``files`` of
-  ``{path, sha256}``). ``system_prompt.md`` replaces v1's ``SYSTEM_PROMPT``; categories,
-  response schema, user preamble, page banner and token limits stay v1's.
+  ``{path, sha256}``). ``system_prompt.md`` replaces v1's ``SYSTEM_PROMPT``; the
+  request envelope, page banner and token limits stay in the common text pipeline.
 
 **Format ``text-profile/2``** (`SECTION-CATEGORY-OCR-01`, `R-146ao`) is the same key set plus ``categories``:
 the profile's own closed list, ``internal_contradiction``, ``explicit_placeholder`` and, for the sections
-that may report a same-document omission, ``documentation`` (the existing contract value). The response
+that may report a same-document omission, ``documentation`` (the existing contract value).
+The original-source AR package declares its own document-grounded categories as well. The response
 schema follows the list (:func:`~auditmanager.analysis.text.prompt.response_schema_for`): the two-category
 list gives v1's schema object itself, so a ``text-profile/1`` package, which declares no list and gets the
 v1 pair, builds exactly the profile it always built. A ``/2`` package may not declare the v1 pair alone (it
@@ -30,7 +29,7 @@ would be a ``/1`` package under another name) and may not declare a category thi
   trailing ``"\\n"`` is stripped from the prompt file (an editor's final newline), so the
   bundle text has v1's convention of no trailing newline and its hash is deterministic.
 
-A package whose ``section_code`` is outside the fifteen, is ``AR``, duplicates another entry,
+A package whose ``section_code`` is outside the fifteen, duplicates another entry,
 does not match its directory name, or reuses another entry's profile or bundle
 identity refuses the **whole** load with :class:`TextProfileLoadError`; the composition root
 turns that into a start-up failure rather than serving a partial registry. ``draft`` and
@@ -60,6 +59,7 @@ from auditmanager.analysis.text.lock import STAGE_ID
 from auditmanager.analysis.text.profile import AnalysisProfile
 from auditmanager.analysis.text.prompt import (
     CATEGORIES,
+    AR_TEXT_CATEGORIES,
     EFFORT,
     MAX_OUTPUT_TOKENS,
     OMISSION_CATEGORY,
@@ -71,7 +71,6 @@ from auditmanager.shared.identity import AnalysisProfileId, IdentityError, Promp
 
 __all__ = [
     "AUTHORED_SECTIONS",
-    "NOT_A_TEXT_PROFILE",
     "PACKAGE_FORMAT",
     "PACKAGE_FORMAT_CATEGORIES",
     "PACKAGES_ROOT",
@@ -134,8 +133,17 @@ if len(PROJECT_STRUCTURE_ORDER) != len(SECTION_CODES) or set(PROJECT_STRUCTURE_O
 #: set by a code change that a reviewer sees, never by a package declaring itself authored.
 AUTHORED_SECTIONS: Final[frozenset[str]] = frozenset({"PB"})
 
-#: The one section code that no package may claim (see the module note).
-NOT_A_TEXT_PROFILE: Final[str] = "AR"
+
+# The original source is copied intact into this package, outside ``profiles/`` so
+# it is not mistaken for another executable section. Refuse a missing or changed
+# source file, a missing verbatim block, or an edited prompt under the same IDs.
+_AR_SOURCE_ROOT: Final[Path] = Path(__file__).with_name("ar_original_source")
+_AR_SOURCE_COMMIT: Final[str] = "3c99481719218b9cfa7560886529916646c61939"
+_AR_SOURCE_NAMES: Final[tuple[str, ...]] = (
+    "config.json", "role.md", "checklist.md", "triage_table.md", "project_params.md",
+    "drawing_types.md", "finding_categories.md", "norms_reference.md", "compact_strategy.md",
+)
+_AR_PROMPT_SHA256: Final[str] = "4f5b9ffacf41fadd4490f02a02c2068ef63c8a521ac075ab9a168f873172d489"
 
 _PROFILE_KEYS: Final[frozenset[str]] = frozenset(
     {
@@ -327,10 +335,6 @@ def _load_package(directory: Path, root: Path) -> RegisteredTextProfile:
     code = data["section_code"]
     if not isinstance(code, str) or code not in SECTION_CODES:
         raise TextProfileLoadError(f"section_code_unknown: {name}")
-    if code == NOT_A_TEXT_PROFILE:
-        # `PROD-11-AR-V1-V2-REMOVAL-01`: АР is the v3 group's, never a text profile. Without this a
-        # package named ``ar`` would register АР again and ``startRun`` would route to it.
-        raise TextProfileLoadError(f"section_code_not_a_text_profile: {name}")
     if name != code.lower():
         raise TextProfileLoadError(f"package_directory_mismatch: {name} holds {code}")
     authored = code in AUTHORED_SECTIONS
@@ -369,6 +373,9 @@ def _load_package(directory: Path, root: Path) -> RegisteredTextProfile:
     text = prompt[:-1] if prompt.endswith("\n") else prompt
     if not text.strip():
         raise TextProfileLoadError(f"system_prompt_empty: {name}")
+    if code == "AR":
+        assert source is not None
+        _verify_original_ar(source, text)
     bundle = PromptBundle(
         prompt_bundle_id=bundle_id,
         system_prompt=text,
@@ -401,9 +408,29 @@ def _declared_categories(data: dict[str, Any], name: str) -> tuple[str, ...]:
         return CATEGORIES
     declared = data["categories"]
     # `/2` exists to add a category; the v1 pair alone belongs in a `/1` package, and no other list has a shape.
-    if not isinstance(declared, list) or tuple(declared) != _DECLARABLE_CATEGORIES:
+    allowed = (_DECLARABLE_CATEGORIES, AR_TEXT_CATEGORIES) if name == "ar" else (_DECLARABLE_CATEGORIES,)
+    if not isinstance(declared, list) or tuple(declared) not in allowed:
         raise TextProfileLoadError(f"categories_invalid: {name}")
     return tuple(declared)
+
+
+def _verify_original_ar(source: TextProfileSource, prompt: str) -> None:
+    expected_paths = tuple(f"prompts/disciplines/AR/{name}" for name in _AR_SOURCE_NAMES)
+    if (source.repository != "PDF-proverka" or source.commit != _AR_SOURCE_COMMIT
+            or tuple(item.path for item in source.files) != expected_paths):
+        raise TextProfileLoadError("ar_original_source_identity_invalid")
+    for item, name in zip(source.files, _AR_SOURCE_NAMES, strict=True):
+        try:
+            raw = (_AR_SOURCE_ROOT / name).read_bytes()
+            original_text = raw.decode("utf-8")
+        except (OSError, UnicodeError) as exc:
+            raise TextProfileLoadError(f"ar_original_source_unavailable: {name}") from exc
+        if hashlib.sha256(raw).hexdigest() != item.sha256:
+            raise TextProfileLoadError(f"ar_original_source_digest_mismatch: {name}")
+        if name.endswith(".md") and prompt.count(original_text) != 1:
+            raise TextProfileLoadError(f"ar_original_prompt_block_mismatch: {name}")
+    if hashlib.sha256(prompt.encode("utf-8")).hexdigest() != _AR_PROMPT_SHA256:
+        raise TextProfileLoadError("ar_original_prompt_digest_mismatch")
 
 
 def _check_source(source: Any, name: str) -> TextProfileSource:

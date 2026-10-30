@@ -1,4 +1,4 @@
-"""W59-SECTION-PROFILES-01: every non-AR section text-profile package is well formed.
+"""W59-SECTION-PROFILES-01: section text-profile packages are well formed.
 
 The packages under ``src/auditmanager/analysis/text/profiles/<code>/`` are data
 (``profile.json`` + ``system_prompt.md``, format ``text-profile/1``). The section-keyed
@@ -9,7 +9,7 @@ before and after that registry lands.
 What it pins:
 
 * exactly the thirteen sections with legacy source material have a legacy package, PB
-  (`PB-PROFILE-01`) has the one authored package, AR has none, and no section code is
+  (`PB-PROFILE-01`) has the one authored package, and original-source AR has its own package; no code is
   duplicated or outside the 15-code catalogue;
 * identities are fresh, parse as their contract types and are unique;
 * every profile's ``status`` and ``profile_version`` are the ones its line of
@@ -51,7 +51,7 @@ EXPECTED_SECTIONS = frozenset(
     {"AI", "PS", "POS", "TX", "KJ", "KM", "OV", "VK", "PT", "EOM", "SS", "ITP", "GP"}
 )
 AUTHORED_SECTIONS = frozenset({"PB"})
-NO_PACKAGE = frozenset({"AR"})
+ORIGINAL_AR = frozenset({"AR"})
 PROFILE_KEYS = frozenset(
     {
         "format",
@@ -76,7 +76,7 @@ SNAKE_TOKEN = re.compile(r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b")
 
 
 def _expected_sections() -> dict[str, tuple[str, str]]:
-    """``code -> (status, profile_version)`` for every non-AR package of this tree."""
+    """``code -> (status, profile_version)`` for every package of this tree."""
     rows = json.loads(EXPECTATIONS.read_text("utf-8"))["sections"]
     return {row["code"]: (row["status"], row["profile_version"]) for row in rows}
 
@@ -101,7 +101,7 @@ def _legacy_packages() -> list[tuple[Path, dict[str, Any]]]:
     return [
         (directory, manifest)
         for directory, manifest in _packages()
-        if manifest.get("section_code") not in AUTHORED_SECTIONS
+        if manifest.get("section_code") not in AUTHORED_SECTIONS | ORIGINAL_AR
     ]
 
 
@@ -178,8 +178,7 @@ def test_the_v1_contract_anchors_this_suite_reads_exist() -> None:
 def test_exactly_the_thirteen_legacy_sections_and_pb_have_a_package() -> None:
     codes = [manifest.get("section_code") for _, manifest in _packages()]
     assert len(codes) == len(set(codes)), f"duplicate section_code across packages: {sorted(codes)}"
-    assert set(codes) == EXPECTED_SECTIONS | AUTHORED_SECTIONS
-    assert not NO_PACKAGE & set(codes)
+    assert set(codes) == EXPECTED_SECTIONS | AUTHORED_SECTIONS | ORIGINAL_AR
     expected = _expected_sections()
     assert set(codes) - set(expected) == set(), "a package has no line in the expectations file"
     assert set(expected) - set(codes) == set(), "a line of the expectations file has no package"
@@ -187,7 +186,7 @@ def test_exactly_the_thirteen_legacy_sections_and_pb_have_a_package() -> None:
     assert {manifest["section_code"] for _, manifest in _authored_packages()} == AUTHORED_SECTIONS
     catalogue = _catalogue()
     assert len(catalogue) == 15
-    assert EXPECTED_SECTIONS | AUTHORED_SECTIONS | NO_PACKAGE == set(catalogue)
+    assert EXPECTED_SECTIONS | AUTHORED_SECTIONS | ORIGINAL_AR == set(catalogue)
     for code in EXPECTED_SECTIONS:
         assert (PROFILES / code.lower() / "profile.json").is_file(), code
         assert (PROFILES / code.lower() / "system_prompt.md").is_file(), code
@@ -195,9 +194,9 @@ def test_exactly_the_thirteen_legacy_sections_and_pb_have_a_package() -> None:
     for code in AUTHORED_SECTIONS:
         for name in ("profile.json", "system_prompt.md", "open_questions.md"):
             assert (PROFILES / code.lower() / name).is_file(), (code, name)
-    for code in NO_PACKAGE:
-        assert not (PROFILES / code.lower() / "profile.json").exists(), code
-        assert not (PROFILES / code.lower() / "system_prompt.md").exists(), code
+    for code in ORIGINAL_AR:
+        assert (PROFILES / code.lower() / "profile.json").is_file(), code
+        assert (PROFILES / code.lower() / "system_prompt.md").is_file(), code
 
 
 def test_every_profile_manifest_has_the_text_profile_1_shape() -> None:
@@ -265,7 +264,7 @@ def test_identities_parse_are_fresh_and_unique() -> None:
         profile_ids.append(str(AnalysisProfileId.parse(manifest["analysis_profile_id"])))
         bundle_ids.append(str(PromptBundleId.parse(manifest["prompt_bundle_id"])))
     ours = profile_ids + bundle_ids
-    assert len(ours) == len(set(ours)) == 2 * len(EXPECTED_SECTIONS | AUTHORED_SECTIONS)
+    assert len(ours) == len(set(ours)) == 2 * len(EXPECTED_SECTIONS | AUTHORED_SECTIONS | ORIGINAL_AR)
     assert str(PROMPT_BUNDLE_ID) not in ours
     # No identity literal anywhere else in the source tree (AR v1, AR v2/v3, fixtures in
     # code) may be reused by a package.
@@ -309,6 +308,8 @@ def test_every_system_prompt_keeps_the_v1_question_categories_and_output_contrac
     catalogue = _catalogue()
     for directory, manifest in _packages():
         code = manifest["section_code"]
+        if code in ORIGINAL_AR:
+            continue  # Original source is pinned verbatim; it does not follow the legacy v1 template.
         text = (directory / "system_prompt.md").read_text("utf-8")
         assert text.strip(), code
         assert "\r" not in text and text.endswith("\n") and not text.endswith("\n\n"), code

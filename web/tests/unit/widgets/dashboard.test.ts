@@ -395,7 +395,7 @@ describe('the sections panel says what the count is, not where the unclassified 
     const markup = panel();
     const route = (code: string): string | undefined =>
       markup.match(new RegExp(`<li[^>]*data-section="${code}"[^>]*data-analysed-by="([a-z_]+)"`, 'u'))?.[1];
-    expect(route('AR')).toBe('six_run_group');
+    expect(route('AR')).toBe('text_profile');
     for (const section of PROJECT_SECTIONS) {
       if (section.code === 'AR') continue;
       expect({ code: section.code, route: route(section.code) })
