@@ -44,6 +44,7 @@ class StageAssemblyRow:
     project_uid: str
     label: str
     members: tuple[StageAssemblyMemberRow, ...]
+    member_revision_no: int
     created_at: datetime
 
 
@@ -76,8 +77,16 @@ class StageAssemblyService:
         return StageAssemblyRow(
             assembly_id=str(row[0]), project_uid=str(row[1]), label=str(row[2]),
             members=tuple(StageAssemblyMemberRow(str(doc), int(no)) for doc, no in members),
+            member_revision_no=int(session.execute(text(
+                "SELECT coalesce(max(member_no),0) FROM stage_assembly_member "
+                "WHERE stage_assembly_id = :assembly"
+            ), {"assembly": assembly_id}).scalar_one()),
             created_at=row[3],
         )
+
+    def get(self, assembly_id: str) -> StageAssemblyRow:
+        with session_scope(self._sessions) as session:
+            return self.read(session, assembly_id)
 
     def create(
         self, *, project_uid: str, label: str, document_uids: tuple[str, ...],

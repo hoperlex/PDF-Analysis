@@ -6656,6 +6656,7 @@ class StageAssembly(_Object):
     project_uid: ProjectUid
     label: Annotated[str, Field(min_length=1, max_length=200)]
     members: list[StageAssemblyMember]
+    member_revision_no: Annotated[int, Field(ge=0)]
     created_at: datetime
 
 
