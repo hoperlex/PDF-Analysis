@@ -155,8 +155,6 @@ function PagePane({ side, page, profile, geometry, context, state, dispatch,
     {textProvider !== undefined && text.isPending ? <p role="status">Открываем текст листа…</p> : null}
     {textFailure === null ? null : <p role="alert">Текст листа не открылся. {textFailure.detail}</p>}
     {geometry === null ? <p role="status">{profile === undefined ? 'Открываем изображение листа…' : 'Изображение листа пока недоступно.'}</p> : <>
-      {/* Root narrows the pure view's data prop at integration; no canonical ID is invented. */}
-      {/* @ts-expect-error root-owned ComparisonViewerData/showEvidencePanels public seam */}
       <ComparisonViewerView {...renderProps} />
     </>}
   </section>;

@@ -260,6 +260,7 @@ describe('this slice adds no second polling loop', () => {
     join('entities', 'version-series', 'api', 'use-series.ts'),
     join('entities', 'version-series', 'api', 'use-ai.ts'),
     join('widgets', 'comparison-upload', 'api', 'use-upload.ts'),
+    join('widgets', 'stage-text-evidence', 'ui', 'stage-text-evidence.tsx'),
   ];
   const isAllowedComparisonPoll = ({ path }: { path: string }) =>
     ALLOWED_COMPARISON_POLLS.some((allowed) => path.endsWith(allowed));

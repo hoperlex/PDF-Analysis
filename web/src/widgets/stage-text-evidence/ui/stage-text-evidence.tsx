@@ -11,6 +11,8 @@ import { fragmentBox, fragmentLookup } from '../model/evidence';
 import type { StageTextEvidenceData } from '../model/evidence';
 import styles from './stage-text-evidence.module.css';
 
+export const STAGE_TEXT_POLL_MS = 1500;
+
 export interface StageTextEvidenceProps {
   readonly revisionId: string | undefined;
   readonly mayAct: boolean;
@@ -44,7 +46,7 @@ export function StageTextEvidence({ revisionId, mayAct, dirty, evidence, loading
     queryKey: ['stage-text-run', requested?.run_id ?? 'none'],
     queryFn: async () => (await getStageChainRun({ path: { stage_chain_run_id: requested!.run_id } })).data,
     enabled: requested !== null, initialData: requested ?? undefined, retry: false,
-    refetchInterval: (query) => ['queued', 'running'].includes(query.state.data?.state ?? '') ? 1500 : false,
+    refetchInterval: (query) => ['queued', 'running'].includes(query.state.data?.state ?? '') ? STAGE_TEXT_POLL_MS : false,
   });
   useEffect(() => {
     if (run.data?.state === 'completed') completed.current();
