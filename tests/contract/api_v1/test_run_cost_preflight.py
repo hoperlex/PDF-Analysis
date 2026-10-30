@@ -31,6 +31,12 @@ def test_both_estimates_have_the_same_expert_guard_as_their_starts():
 
 
 def test_new_unit_algorithm_keeps_historical_v1_records_readable():
+    import json
+    from pathlib import Path
     from typing import get_args
     assert get_args(models.SpecificationMatching.model_fields["algorithm"].annotation) == ("price-match-v1", "price-match-v2")
     assert get_args(models.SectionSpecification.model_fields["match_algorithm"].annotation) == ("price-match-v1", "price-match-v2")
+    schemas = json.loads(Path("contracts/api/v1/openapi.json").read_text())["components"]["schemas"]
+    for schema, field in [("SpecificationMatching", "algorithm"), ("SectionSpecification", "match_algorithm")]:
+        authority = schemas[schema]["properties"][field]
+        assert authority["enum"] == ["price-match-v1", "price-match-v2"] and "const" not in authority
