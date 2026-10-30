@@ -335,12 +335,22 @@ class ComparisonAiJobService:
         """«Отменить»: a live job is cancelled. Items at rest end, the item in flight is asked to stop; what is done stays done
         (a «Досчитать» takes it up)."""
 
-        def apply(session: Session, job: AiJobRecord) -> None:
-            self._require_edge(job, "cancel")
-            self._cancel_items(session, job.job_id)
-            self._move(session, job, "cancel", to_state="cancelled")
+        with session_scope(self._factory) as session:
+            return self.cancel_in_session(session, job_id=job_id, method=method, command=command)
 
-        return self._steer(job_id=job_id, method=method, command=command, extra={}, apply=apply)
+    def cancel_in_session(
+        self, session: Session, *, job_id: str, method: str, command: AiJobCommand,
+        queue_items: bool = True,
+    ) -> AiJobView:
+        """Cancel through the shared policy in the caller's transaction."""
+        def apply(current: Session, job: AiJobRecord) -> None:
+            self._require_edge(job, "cancel")
+            if queue_items:
+                self._cancel_items(current, job.job_id)
+            self._move(current, job, "cancel", to_state="cancelled")
+
+        return self._steer_in_session(session, job_id=job_id, method=method,
+                                      command=command, extra={}, apply=apply)
 
     def dequeue(self, *, job_id: str, method: str, command: AiJobCommand) -> AiJobView:
         """«Убрать из очереди»: a job that has not started leaves the queue and is cancelled. A job that has started -- it is not
