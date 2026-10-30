@@ -105,6 +105,18 @@
   --am-surface: #f5f6f8;
   --am-surface-sunken: #eef0f4;
 
+  /* Dashboard showcase. Only [data-dashboard-showcase] consumes this palette. */
+  --am-showcase-bg: #edf4f2;
+  --am-showcase-card: #fdfefe;
+  --am-showcase-card-alt: #e6f0ef;
+  --am-showcase-ink: #122529;
+  --am-showcase-muted: #3f5b60;
+  --am-showcase-soft: #526d72;
+  --am-showcase-line: #698487;
+  --am-showcase-accent: #006a6c;
+  --am-showcase-accent-strong: #005458;
+  --am-showcase-accent-soft: #c7ebe4;
+
   /*
    * ---- lines -------------------------------------------------------------------
    *
@@ -330,6 +342,17 @@
     --am-surface: #0d1219;
     --am-surface-sunken: #0a0f16;
 
+    --am-showcase-bg: #0d1118;
+    --am-showcase-card: #1a2029;
+    --am-showcase-card-alt: #23303a;
+    --am-showcase-ink: #eaf7f5;
+    --am-showcase-muted: #b7caca;
+    --am-showcase-soft: #a2bbbb;
+    --am-showcase-line: #6d8588;
+    --am-showcase-accent: #69e4d1;
+    --am-showcase-accent-strong: #a3fff1;
+    --am-showcase-accent-soft: #103e42;
+
     /* ---- lines -------------------------------------------------------------------- */
     --am-line-soft: #616f80;
     --am-line: #748295;
@@ -401,6 +424,17 @@
   --am-surface: #0d1219;
   --am-surface-sunken: #0a0f16;
 
+  --am-showcase-bg: #0d1118;
+  --am-showcase-card: #1a2029;
+  --am-showcase-card-alt: #23303a;
+  --am-showcase-ink: #eaf7f5;
+  --am-showcase-muted: #b7caca;
+  --am-showcase-soft: #a2bbbb;
+  --am-showcase-line: #6d8588;
+  --am-showcase-accent: #69e4d1;
+  --am-showcase-accent-strong: #a3fff1;
+  --am-showcase-accent-soft: #103e42;
+
   /* ---- lines -------------------------------------------------------------------- */
   --am-line-soft: #616f80;
   --am-line: #748295;
@@ -456,6 +490,49 @@
   --am-shadow-3: 0 10px 28px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.45);
   --am-shadow-inset: inset 0 1px 3px rgba(0, 0, 0, 0.45);
   --am-ring: 0 0 0 3px rgba(122, 169, 224, 0.35);
+}
+
+/* A bounded presentation surface: descendant primitives inherit this dashboard palette. */
+[data-dashboard-showcase] {
+  --am-paper: var(--am-showcase-card);
+  --am-surface: var(--am-showcase-bg);
+  --am-surface-sunken: var(--am-showcase-card-alt);
+  --am-ink: var(--am-showcase-ink);
+  --am-ink-muted: var(--am-showcase-muted);
+  --am-ink-soft: var(--am-showcase-soft);
+  --am-line: var(--am-showcase-line);
+  --am-line-soft: var(--am-showcase-line);
+  --am-line-strong: var(--am-showcase-line);
+  --am-grid-line: var(--am-showcase-line);
+  --am-accent: var(--am-showcase-accent);
+  --am-accent-strong: var(--am-showcase-accent-strong);
+  --am-accent-light: var(--am-showcase-accent-soft);
+}
+
+/* The dashboard's own page frame shares the showcase palette with its widget. */
+[data-dashboard-screen] {
+  min-width: 0;
+  padding: clamp(16px, 2vw, 28px);
+  border: 1px solid var(--am-line);
+  border-radius: 24px;
+  background: var(--am-surface);
+}
+
+[data-dashboard-screen] .am-page__title {
+  color: var(--am-ink);
+  font-size: clamp(26px, 2.4vw, 34px);
+  letter-spacing: -0.03em;
+}
+
+[data-dashboard-screen] .am-page__subtitle {
+  color: var(--am-ink-muted);
+}
+
+[data-dashboard-screen] .am-page__body {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 /*

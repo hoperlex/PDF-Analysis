@@ -34,45 +34,66 @@ import styles from './dashboard.module.css';
 export function Dashboard() {
   const summary = useDashboardSummary();
 
-  if (summary.isPending) return <LoadingState what="сводку по системе" />;
+  if (summary.isPending) {
+    return <div className={styles.showcase} data-dashboard-showcase="true"><LoadingState what="сводку по системе" /></div>;
+  }
 
   if (summary.isError) {
     const failure = classifyDashboardFailure(summary.error);
     return (
-      <ErrorState
-        title={failure.title}
-        detail={<span data-list-failure={failure.kind}>{failure.detail}</span>}
-        correlationId={failure.correlationId}
-        {...(failure.retryable
-          ? { onRetry: () => void summary.refetch(), retryLabel: 'Повторить' }
-          : {})}
-      />
+      <div className={styles.showcase} data-dashboard-showcase="true">
+        <ErrorState
+          title={failure.title}
+          detail={<span data-list-failure={failure.kind}>{failure.detail}</span>}
+          correlationId={failure.correlationId}
+          {...(failure.retryable
+            ? { onRetry: () => void summary.refetch(), retryLabel: 'Повторить' }
+            : {})}
+        />
+      </div>
     );
   }
 
   const data = summary.data;
 
   return (
-    <div className={styles.grid} data-widget="dashboard">
-      <section className={`${styles.panel} ${styles.sections}`} aria-labelledby="dashboard-sections-heading">
-        <h2 id="dashboard-sections-heading">Разделы проекта</h2>
-        <SectionsPanel rows={data.section_breakdown} />
-      </section>
-      <section className={styles.panel} aria-labelledby="dashboard-documents-heading">
-        <h2 id="dashboard-documents-heading">Документы по проектам</h2>
-        <DocumentsPanel rows={data.documents_by_project} />
-      </section>
-      <section className={styles.panel} aria-labelledby="dashboard-verdicts-heading">
-        <h2 id="dashboard-verdicts-heading">Находки по вердикту</h2>
-        <VerdictsPanel rows={data.findings_by_verdict} />
-      </section>
-      <section className={styles.panel} aria-labelledby="dashboard-runs-heading">
-        <h2 id="dashboard-runs-heading">Прогоны и расход</h2>
-        <RunActivityPanel
-          activity={data.run_activity}
-          hasProjects={data.documents_by_project.length > 0}
-        />
-      </section>
+    <div className={styles.showcase} data-dashboard-showcase="true">
+      <header className={styles.hero}>
+        <div className={styles.heroCopy}>
+          <p className={styles.eyebrow}>AuditManager / Аналитика</p>
+          <h2 className={styles.heroTitle}>Сводка по проектам</h2>
+          <p className={styles.heroDescription}>
+            Разделы, документы, находки и прогоны в едином обзоре.
+          </p>
+        </div>
+        <div className={styles.heroArt} aria-hidden="true">
+          <span className={styles.orbitOuter} />
+          <span className={styles.orbitMiddle} />
+          <span className={styles.orbitInner} />
+          <span className={styles.orbitCore} />
+        </div>
+      </header>
+      <div className={styles.grid} data-widget="dashboard">
+        <section className={`${styles.panel} ${styles.sections}`} aria-labelledby="dashboard-sections-heading">
+          <h2 id="dashboard-sections-heading">Разделы проекта</h2>
+          <SectionsPanel rows={data.section_breakdown} />
+        </section>
+        <section className={styles.panel} aria-labelledby="dashboard-documents-heading">
+          <h2 id="dashboard-documents-heading">Документы по проектам</h2>
+          <DocumentsPanel rows={data.documents_by_project} />
+        </section>
+        <section className={styles.panel} aria-labelledby="dashboard-verdicts-heading">
+          <h2 id="dashboard-verdicts-heading">Находки по вердикту</h2>
+          <VerdictsPanel rows={data.findings_by_verdict} />
+        </section>
+        <section className={`${styles.panel} ${styles.runs}`} aria-labelledby="dashboard-runs-heading">
+          <h2 id="dashboard-runs-heading">Прогоны и расход</h2>
+          <RunActivityPanel
+            activity={data.run_activity}
+            hasProjects={data.documents_by_project.length > 0}
+          />
+        </section>
+      </div>
     </div>
   );
 }

@@ -21,11 +21,13 @@ import { LazyDashboard } from './lazy-dashboard';
 
 export function DashboardPage() {
   return (
-    <PageShell
-      title="Анализ по разделам"
-      subtitle="Разделы, документы, находки и прогоны по текущим данным системы."
-    >
-      <LazyDashboard />
-    </PageShell>
+    <div data-dashboard-screen="true" data-dashboard-showcase="true">
+      <PageShell
+        title="Анализ по разделам"
+        subtitle="Разделы, документы, находки и прогоны по текущим данным системы."
+      >
+        <LazyDashboard />
+      </PageShell>
+    </div>
   );
 }
