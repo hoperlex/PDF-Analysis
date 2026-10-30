@@ -7,6 +7,23 @@ E2E_PC01_LOGIN=<login> E2E_PC01_PASSWORD=<password> \
 
 A sign-in, two phases, one instrument, one envelope, one exit code.
 
+`CMP-JOURNEY-CODE-01` adds six concrete version-module steps over `fixtures/comparison/vs1`: upload five PDFs,
+confirm grouping/order, prepare the matrix, compare all four adjacent transitions, open real viewer tiles,
+consent to the recorded AI route, and download the resulting Markdown. The steps are part of the existing write half,
+retain every older route/step, and require recorded mode even when `--allow-spend` is present. Missing recordings,
+module wiring, browser controls or terminal results fail the step; they are not skipped. The stage-module extension
+(assembly/map/batch/repair undo/verdict/journal) is still pending the root's C4 page mounts and remains an explicit
+outstanding part of that task. No browser execution of these new steps has been claimed.
+
+```sh
+node tests/e2e/pc01/journey/comparison-conformance.mjs
+```
+
+This short command checks declarations and exact synthetic corpus bytes only. It starts no browser and gives no
+journey acceptance. Run the full recorded journey tomorrow against the exact integrated candidate, keeping its
+normal response/download envelope. The new `last_response` expectation checks the last recorded poll after the
+bounded UI wait; `requires_idempotency_key` checks the browser's actual command header.
+
 **The write half** creates a project, uploads the synthetic portal bundle (a ZIP), confirms the uploaded
 version's stage and section (П, ПБ) and starts a run — through the app's own controls, on the public
 origin — then waits for the run's terminal by reading what the run screen's own poller renders. The

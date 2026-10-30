@@ -7191,127 +7191,230 @@ class ComparisonStageTextAdapter(_StagesModuleGate):
         )
 
 
+def _stage_run_view(row: Any) -> models.StageChainRun:
+    return models.StageChainRun(
+        run_id=row.run_id, pair_id=row.pair_id, link_revision_id=row.revision_id,
+        input_sha256=row.input_sha256, pinned_version_uids=list(row.pinned_version_uids),
+        state=row.state, stale=row.stale, kind=row.kind, with_ai=row.with_ai,
+        steps=[models.StageChainStep(step_id=step.step_id, step_no=step.step_no,
+               state=step.state, counts=step.counts,
+               **_unset_none(started_at=step.started_at, finished_at=step.finished_at)) for step in row.steps],
+        created_at=row.created_at, updated_at=row.updated_at,
+        **_unset_none(effective_link_revision_id=row.effective_revision_id,
+                      ai_job_id=row.ai_job_id, batch_id=row.batch_id,
+                      pause_reason=row.pause_reason, failure_reason=row.failure_reason),
+    )
+
+
+def _stage_after(cursor: str | None, scope: str) -> str | None:
+    if cursor is None:
+        return None
+    parts = decode_cursor(cursor)
+    if len(parts) != 2 or parts[0] != scope or not parts[1]:
+        raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="scope")
+    return parts[1]
+
+
+def _stage_page(scope: str, next_key: str | int | None) -> models.PageInfo:
+    return models.PageInfo(next_cursor=encode_cursor((scope, str(next_key))) if next_key is not None else None)
+
+
 class ComparisonStageRunAdapter(_StagesModuleGate):
-    """Sealed durable chain port; no in-memory run state."""
+    """Keyed expert commands and persisted deterministic/full-chain reads."""
 
-    _DEPENDENCY = "comparison_stage_runs"
+    def __init__(self, sessions: sessionmaker[Session], *, blob_store: Any = None,
+                 comparison_modules: str = "none", provider_mode: str = "recorded") -> None:
+        super().__init__(comparison_modules=comparison_modules)
+        from auditmanager.comparison.public import StageAiRuntime, StageChainService, StageGraphicService
+        self._sessions = sessions
+        self._ai = StageAiRuntime(sessions, blob_store=blob_store, provider_mode=provider_mode,
+            graphic_source=StageGraphicService(sessions, blob_store=blob_store))
+        self._runs = StageChainService(sessions, comparison_modules=comparison_modules, ai=self._ai)
 
-    def start_run(
-        self, *, pair_id: str, body: models.StartStageChainRunRequest,
-        user_uid: str, idempotency_key: str,
-    ) -> models.StageChainRun:
+    def _roles(self, user_uid: str) -> frozenset[str]:
+        with self._sessions() as session:
+            return _comparison_actor(session, user_uid)[1]
+
+    def start_run(self, *, pair_id: str, body: models.StartStageChainRunRequest,
+                  user_uid: str, idempotency_key: str) -> models.StageChainRun:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        values = body.model_dump(mode="json", exclude_unset=True)
+        return _stage_run_view(self._runs.start(
+            pair_id=pair_id, revision_id=body.link_revision_id, user_uid=user_uid,
+            actor_roles=self._roles(user_uid), idempotency_key=idempotency_key,
+            with_ai=values.get("with_ai", True), consent=values.get("consent"),
+            restart=values.get("restart", False)))
 
     def list_runs(self, *, pair_id: str, cursor: str | None, limit: int) -> models.StageChainRunPage:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        rows, next_key = self._runs.page(pair_id=pair_id, after=_stage_after(cursor, pair_id), limit=limit)
+        return models.StageChainRunPage(items=[_stage_run_view(row) for row in rows], page=_stage_page(pair_id, next_key))
 
     def get_run(self, *, run_id: str) -> models.StageChainRun:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        return _stage_run_view(self._runs.get(run_id))
 
-    def cancel_run(
-        self, *, run_id: str, user_uid: str, idempotency_key: str,
-    ) -> models.StageChainRun:
+    def cancel_run(self, *, run_id: str, user_uid: str, idempotency_key: str) -> models.StageChainRun:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        return _stage_run_view(self._runs.cancel(run_id=run_id, user_uid=user_uid,
+            actor_roles=self._roles(user_uid), idempotency_key=idempotency_key))
 
 
 class ComparisonStageC4Adapter(_StagesModuleGate):
-    """Typed C4 stubs until their runtime lanes wire them."""
+    """Stage AI, repairs, expert decisions and journal over public domain services."""
 
     _DEPENDENCY = "comparison_stage_c4"
     def __init__(self, sessions: sessionmaker[Session], *, blob_store: Any = None,
-                 comparison_modules: str = "none") -> None:
+                 comparison_modules: str = "none", provider_mode: str = "recorded") -> None:
         super().__init__(comparison_modules=comparison_modules)
-        from auditmanager.comparison.public import PageProfileReader, StageAssemblyService, StageProfileTextService
+        from auditmanager.comparison.public import (PageProfileReader, StageAssemblyService, StageProfileTextService,
+            StageAiRuntime, StageChainService, StageBatchService, StageRepairService, StageReviewService, StageGraphicService)
 
+        self._sessions = sessions
+        self._ai = StageAiRuntime(sessions, blob_store=blob_store, provider_mode=provider_mode,
+            graphic_source=StageGraphicService(sessions, blob_store=blob_store))
+        self._runs = StageChainService(sessions, comparison_modules=comparison_modules, ai=self._ai)
+        self._batches = StageBatchService(self._runs)
+        self._repairs = StageRepairService(sessions)
+        self._review = StageReviewService(sessions)
+        self._graphics = StageGraphicService(sessions, blob_store=blob_store)
         self._assemblies = StageAssemblyService(sessions)
         self._profile_text = StageProfileTextService(PageProfileReader(sessions, blob_store))
     def estimate_run(self, *, revision_id: str, user_uid: str, run_id: str | None = None) -> models.ComparisonAiEstimate:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        if run_id is not None:
+            run = self._runs.get(run_id)
+            if revision_id not in {run.revision_id, run.effective_revision_id}:
+                raise DomainError(ErrorCode.VALIDATION_FAILED, field="stage_chain_run_id", constraint="scope")
+            estimate = self._ai.estimate_resume(run_id=run_id, user_uid=user_uid)
+        else:
+            estimate = self._ai.estimate(revision_id=revision_id, user_uid=user_uid)
+        return models.ComparisonAiEstimate.model_validate(estimate.as_dict())
 
     def resume_run(self, *, run_id: str, body: models.ResumeStageChainRunRequest, user_uid: str, idempotency_key: str) -> models.StageChainRun:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        with self._sessions() as session:
+            roles = _comparison_actor(session, user_uid)[1]
+        values = body.model_dump(mode="json", exclude_unset=True)
+        return _stage_run_view(self._runs.resume(run_id=run_id, user_uid=user_uid, actor_roles=roles,
+            idempotency_key=idempotency_key, consent=values.get("consent"), retry_failed=body.retry_failed))
 
     def start_batch(self, *, project_uid: str, body: models.StartStageChainBatchRequest, user_uid: str, idempotency_key: str) -> models.StageChainBatch:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        with self._sessions() as session:
+            roles = _comparison_actor(session, user_uid)[1]
+        return models.StageChainBatch.model_validate(self._batches.start(project_uid=project_uid,
+            selections=[s.model_dump(mode="json", exclude_unset=True) for s in body.selections],
+            user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key, with_ai=body.with_ai))
 
     def get_batch(self, *, batch_id: str) -> models.StageChainBatch:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        return models.StageChainBatch.model_validate(self._batches.get(batch_id))
 
     def pause_batch(self, *, batch_id: str, user_uid: str, idempotency_key: str) -> models.StageChainBatch:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        with self._sessions() as session:
+            roles = _comparison_actor(session, user_uid)[1]
+        return models.StageChainBatch.model_validate(self._batches.control(batch_id=batch_id, action="pause",
+            user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key))
 
     def resume_batch(self, *, batch_id: str, user_uid: str, idempotency_key: str) -> models.StageChainBatch:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        with self._sessions() as session:
+            roles = _comparison_actor(session, user_uid)[1]
+        return models.StageChainBatch.model_validate(self._batches.control(batch_id=batch_id, action="resume",
+            user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key))
 
     def cancel_batch(self, *, batch_id: str, user_uid: str, idempotency_key: str) -> models.StageChainBatch:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        with self._sessions() as session:
+            roles = _comparison_actor(session, user_uid)[1]
+        return models.StageChainBatch.model_validate(self._batches.control(batch_id=batch_id, action="cancel",
+            user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key))
 
     def list_ai_reviews(self, *, run_id: str, cursor: str | None, limit: int) -> models.StageAiReviewPage:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        scope = run_id + ":review"
+        rows, next_key = self._ai.page(run_id=run_id, kind="review", after=_stage_after(cursor, scope), limit=limit)
+        return models.StageAiReviewPage(items=[models.StageAiReview.model_validate(row) for row in rows], page=_stage_page(scope, next_key))
 
     def list_classifications(self, *, run_id: str, cursor: str | None, limit: int) -> models.StageAiClassificationPage:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        scope = run_id + ":classify"
+        rows, next_key = self._ai.page(run_id=run_id, kind="classify", after=_stage_after(cursor, scope), limit=limit)
+        return models.StageAiClassificationPage(items=[models.StageAiClassification.model_validate(row) for row in rows], page=_stage_page(scope, next_key))
 
     def get_synthesis(self, *, run_id: str, cursor: str | None, limit: int) -> models.StageAiSynthesisPage:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        scope = run_id + ":synthesize"
+        rows, next_key = self._ai.page(run_id=run_id, kind="synthesize", after=_stage_after(cursor, scope), limit=limit)
+        return models.StageAiSynthesisPage(items=[models.StageAiSynthesis.model_validate(row) for row in rows], page=_stage_page(scope, next_key))
 
     def list_graphics(self, *, run_id: str, cursor: str | None, limit: int) -> models.StageGraphicEvidencePage:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        rows, next_key = self._graphics.page(run_id=run_id, after=_stage_after(cursor, run_id), limit=limit)
+        return models.StageGraphicEvidencePage(items=[models.StageGraphicEvidence.model_validate(row) for row in rows], page=_stage_page(run_id, next_key))
 
     def list_repairs(self, *, run_id: str, cursor: str | None, limit: int) -> models.StageLinkRepairPage:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        rows, next_key = self._repairs.page(run_id=run_id, after=_stage_after(cursor, run_id), limit=limit)
+        return models.StageLinkRepairPage(items=[models.StageLinkRepair.model_validate(row) for row in rows], page=_stage_page(run_id, next_key))
 
     def undo_repair(self, *, repair_id: str, body: models.UndoStageLinkRepairRequest, user_uid: str, idempotency_key: str) -> models.StageLinkRepair:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        with self._sessions() as session:
+            roles = _comparison_actor(session, user_uid)[1]
+        return models.StageLinkRepair.model_validate(self._repairs.undo(repair_id=repair_id,
+            base_revision_id=body.base_revision_id, user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key))
 
     def list_cards(self, *, run_id: str, cursor: str | None, limit: int) -> models.StageChangeCardPage:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        rows, next_key, counts = self._review.page(run_id, after=_stage_after(cursor, run_id), limit=limit)
+        return models.StageChangeCardPage(items=[models.StageChangeCard.model_validate(row) for row in rows], page=_stage_page(run_id, next_key), counts=counts)
 
     def get_card(self, *, card_id: str) -> models.StageChangeCard:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        return models.StageChangeCard.model_validate(self._review.get(card_id))
+
+    def create_review_card(self, *, run_id: str, body: models.CreateStageReviewCardRequest,
+                           user_uid: str, idempotency_key: str) -> models.StageChangeCard:
+        self._require_stages_module()
+        with self._sessions() as session:
+            roles = _comparison_actor(session, user_uid)[1]
+        return models.StageChangeCard.model_validate(self._review.promote(run_id, body.source_ids, body.reason,
+            user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key))
 
     def apply_verdicts(self, *, run_id: str, body: models.ApplyStageCardVerdictsRequest, user_uid: str, idempotency_key: str) -> models.StageCardVerdictPage:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        with self._sessions() as session:
+            roles = _comparison_actor(session, user_uid)[1]
+        rows = self._review.apply_verdicts(run_id, [u.model_dump(mode="json") for u in body.updates],
+            user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key)
+        return models.StageCardVerdictPage(items=[models.StageCardVerdict.model_validate(row) for row in rows], page=_stage_page(run_id, None))
 
     def list_verdicts(self, *, card_id: str, cursor: str | None, limit: int) -> models.StageCardVerdictPage:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        after = _stage_after(cursor, card_id)
+        if after is not None and (not after.isdecimal() or int(after) < 1):
+            raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
+        rows, next_key = self._review.verdicts(card_id, after_revision=int(after) if after else None, limit=limit)
+        return models.StageCardVerdictPage(items=[models.StageCardVerdict.model_validate(row) for row in rows], page=_stage_page(card_id, next_key))
 
     def get_journal(self, *, run_id: str, grouping: str) -> models.StageChangeJournal:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        return models.StageChangeJournal.model_validate(self._review.journal(run_id, grouping))
 
     def journal_xlsx(self, *, run_id: str) -> bytes:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        return self._review.export(run_id, "xlsx")
 
     def journal_pdf(self, *, run_id: str) -> bytes:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        return self._review.export(run_id, "pdf")
 
     def journal_html(self, *, run_id: str) -> bytes:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        return self._review.export(run_id, "html")
 
     def get_profile_text(self, *, profile_id: str, query: str | None) -> models.StageProfileText:
         self._require_stages_module()

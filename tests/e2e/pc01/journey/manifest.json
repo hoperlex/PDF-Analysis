@@ -2195,6 +2195,579 @@
         "case": "action"
       },
       {
+        "at": "/version-comparison",
+        "page_module": "web/src/app/version-comparison/page.tsx",
+        "screen": "version-comparison",
+        "case": "action",
+        "requires_provider_mode": "recorded",
+        "name": "cmp-version-upload-synthetic-five",
+        "control_module": "web/src/widgets/comparison-upload/ui/upload-dialog.tsx",
+        "$comment": [
+          "CMP-JOURNEY-CODE-01: actual VS-1 PDFs; one picker event per file, then real part upload and explicit grouping/order confirmation. No stub response is accepted."
+        ],
+        "actions": [
+          {
+            "do": "select",
+            "selector": "select",
+            "option_value": "{project_uid}",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "button",
+            "text": "Загрузить проект со всеми версиями",
+            "settle": true
+          },
+          {
+            "do": "attach_file",
+            "selector": "[data-upload-dialog=\"single\"] input[type=\"file\"][accept=\".pdf,application/pdf\"]",
+            "fixture": "fixtures/comparison/vs1/v1.pdf",
+            "settle": true
+          },
+          {
+            "do": "attach_file",
+            "selector": "[data-upload-dialog=\"single\"] input[type=\"file\"][accept=\".pdf,application/pdf\"]",
+            "fixture": "fixtures/comparison/vs1/v2.pdf",
+            "settle": true
+          },
+          {
+            "do": "attach_file",
+            "selector": "[data-upload-dialog=\"single\"] input[type=\"file\"][accept=\".pdf,application/pdf\"]",
+            "fixture": "fixtures/comparison/vs1/v3.pdf",
+            "settle": true
+          },
+          {
+            "do": "attach_file",
+            "selector": "[data-upload-dialog=\"single\"] input[type=\"file\"][accept=\".pdf,application/pdf\"]",
+            "fixture": "fixtures/comparison/vs1/v4.pdf",
+            "settle": true
+          },
+          {
+            "do": "attach_file",
+            "selector": "[data-upload-dialog=\"single\"] input[type=\"file\"][accept=\".pdf,application/pdf\"]",
+            "fixture": "fixtures/comparison/vs1/v5.pdf",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "[data-upload-dialog=\"single\"] button",
+            "text": "Загрузить и разобрать"
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-proposal-sets=\"1\"]",
+            "bound_ms": 120000
+          },
+          {
+            "do": "click",
+            "selector": "[data-upload-dialog=\"single\"] button",
+            "text": "Подтвердить группировку и порядок"
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-upload-state=\"completed\"]",
+            "bound_ms": 120000
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/comparison-uploads",
+            "operationId": "createComparisonUpload",
+            "expect_status": 201
+          },
+          {
+            "method": "GET",
+            "path": "/comparison-uploads/{comparison_upload_id}/proposal",
+            "operationId": "getComparisonUploadProposal",
+            "expect_status": 200,
+            "last_response": true
+          },
+          {
+            "method": "POST",
+            "path": "/comparison-uploads/{comparison_upload_id}/sets/{comparison_upload_set_id}/confirmation",
+            "operationId": "confirmComparisonUploadSet",
+            "expect_status": 200
+          }
+        ],
+        "captures": [
+          {
+            "kind": "response",
+            "of": "createComparisonUpload",
+            "json_path": "upload_id",
+            "matches": "^(cbt_%ID%)$",
+            "as": [
+              "cmp_version_upload_id"
+            ],
+            "bound_ms": 240000
+          },
+          {
+            "kind": "response",
+            "of": "getComparisonUploadProposal",
+            "json_path": "sets.0.set_id",
+            "matches": "(cus_[0-9A-HJKMNP-TV-Z]{26})",
+            "as": [
+              "cmp_version_set_id"
+            ],
+            "bound_ms": 240000
+          },
+          {
+            "kind": "response",
+            "of": "confirmComparisonUploadSet",
+            "json_path": "document_uid",
+            "matches": "^(doc_%ID%)$",
+            "as": [
+              "cmp_version_document_uid"
+            ],
+            "bound_ms": 240000
+          }
+        ],
+        "bind": {
+          "comparison_upload_id": "cmp_version_upload_id",
+          "comparison_upload_set_id": "cmp_version_set_id"
+        },
+        "expects_request": [
+          {
+            "of": "createComparisonUpload",
+            "requires_idempotency_key": true,
+            "body_contains": [
+              "v1.pdf",
+              "v5.pdf"
+            ]
+          },
+          {
+            "of": "confirmComparisonUploadSet",
+            "requires_idempotency_key": true
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "createComparisonUpload",
+            "json_path": "declared_files",
+            "equals": 5
+          },
+          {
+            "of": "confirmComparisonUploadSet",
+            "json_path": "files",
+            "nonempty_array": true
+          }
+        ],
+        "forbids_rendered": [
+          "[data-upload-dialog] [role=\"alert\"]"
+        ]
+      },
+      {
+        "at": "/version-comparison",
+        "page_module": "web/src/app/version-comparison/page.tsx",
+        "screen": "version-comparison",
+        "case": "action",
+        "requires_provider_mode": "recorded",
+        "name": "cmp-version-prepare-matrix",
+        "control_module": "web/src/widgets/version-series/ui/sheets-tab.tsx",
+        "bind": {
+          "document_uid": "cmp_version_document_uid"
+        },
+        "actions": [
+          {
+            "do": "select",
+            "selector": "select",
+            "option_value": "{project_uid}",
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "tr[data-document-uid=\"{document_uid}\"]",
+            "bound_ms": 120000
+          },
+          {
+            "do": "click",
+            "selector": "tr[data-document-uid=\"{document_uid}\"] th button",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "[data-comparison-sheets] button",
+            "text": "Подготовить"
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-comparison-sheets][data-matrix-state=\"ready\"]",
+            "bound_ms": 300000
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/documents/{document_uid}/comparison-matrix/preparation",
+            "operationId": "prepareComparisonMatrix",
+            "expect_status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/projects/{project_uid}/documents/{document_uid}/comparison-matrix",
+            "operationId": "getComparisonMatrix",
+            "expect_status": 200,
+            "last_response": true
+          }
+        ],
+        "expects_request": [
+          {
+            "of": "prepareComparisonMatrix",
+            "requires_idempotency_key": true
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "getComparisonMatrix",
+            "json_path": "state",
+            "equals": "ready"
+          },
+          {
+            "of": "getComparisonMatrix",
+            "json_path": "columns",
+            "nonempty_array": true
+          },
+          {
+            "of": "getComparisonMatrix",
+            "json_path": "rows",
+            "nonempty_array": true
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-cell-state=\"matched\"]",
+            "min_count": 5
+          }
+        ]
+      },
+      {
+        "at": "/version-comparison",
+        "page_module": "web/src/app/version-comparison/page.tsx",
+        "screen": "version-comparison",
+        "case": "action",
+        "requires_provider_mode": "recorded",
+        "name": "cmp-version-compare-adjacent-series",
+        "control_module": "web/src/widgets/version-series/ui/sheets-tab.tsx",
+        "bind": {
+          "document_uid": "cmp_version_document_uid",
+          "comparison_series_id": "cmp_version_series_id"
+        },
+        "actions": [
+          {
+            "do": "select",
+            "selector": "select",
+            "option_value": "{project_uid}",
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "tr[data-document-uid=\"{document_uid}\"]",
+            "bound_ms": 120000
+          },
+          {
+            "do": "click",
+            "selector": "tr[data-document-uid=\"{document_uid}\"] th button",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "[data-transition-summary] button",
+            "text": "Запустить"
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-series-state=\"completed\"]",
+            "bound_ms": 300000
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "POST",
+            "path": "/projects/{project_uid}/documents/{document_uid}/comparison-series",
+            "operationId": "startComparisonSeries",
+            "expect_status": 201
+          },
+          {
+            "method": "GET",
+            "path": "/comparison-series/{comparison_series_id}",
+            "operationId": "getComparisonSeries",
+            "expect_status": 200,
+            "last_response": true
+          }
+        ],
+        "captures": [
+          {
+            "kind": "response",
+            "of": "startComparisonSeries",
+            "json_path": "series_id",
+            "matches": "^(cser_%ID%)$",
+            "as": [
+              "cmp_version_series_id"
+            ],
+            "bound_ms": 240000
+          },
+          {
+            "kind": "response",
+            "of": "getComparisonSeries",
+            "json_path": "transitions.0.transition_id",
+            "matches": "^(ctn_%ID%)$",
+            "as": [
+              "cmp_version_transition_id"
+            ],
+            "bound_ms": 240000
+          }
+        ],
+        "expects_request": [
+          {
+            "of": "startComparisonSeries",
+            "requires_idempotency_key": true
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "getComparisonSeries",
+            "json_path": "state",
+            "equals": "completed"
+          },
+          {
+            "of": "getComparisonSeries",
+            "json_path": "transitions_total",
+            "equals": 4
+          },
+          {
+            "of": "getComparisonSeries",
+            "json_path": "transitions_done",
+            "equals": 4
+          }
+        ]
+      },
+      {
+        "at": "/version-comparison",
+        "page_module": "web/src/app/version-comparison/page.tsx",
+        "screen": "version-comparison",
+        "case": "action",
+        "requires_provider_mode": "recorded",
+        "name": "cmp-version-viewer-real-tiles",
+        "control_module": "web/src/widgets/version-series/ui/sheets-tab.tsx",
+        "bind": {
+          "document_uid": "cmp_version_document_uid",
+          "comparison_transition_id": "cmp_version_transition_id"
+        },
+        "actions": [
+          {
+            "do": "select",
+            "selector": "select",
+            "option_value": "{project_uid}",
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "tr[data-document-uid=\"{document_uid}\"]",
+            "bound_ms": 120000
+          },
+          {
+            "do": "click",
+            "selector": "tr[data-document-uid=\"{document_uid}\"] th button",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "tr[data-transition-state=\"completed\"] button",
+            "text": "Открыть",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "button[title=\"Открыть сравнение этого листа: наложение, было, стало и рядом.\"]"
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-comparison-viewer] img",
+            "bound_ms": 120000
+          },
+          {
+            "do": "click",
+            "selector": "[data-comparison-viewer] button",
+            "text": "Вписать"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/comparison-transitions/{comparison_transition_id}/sheet-pairs",
+            "operationId": "listComparisonSheetPairs",
+            "expect_status": 200
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "listComparisonSheetPairs",
+            "json_path": "items",
+            "nonempty_array": true
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-comparison-viewer] img",
+            "min_count": 1
+          }
+        ],
+        "forbids_rendered": [
+          "[data-viewer-unavailable]"
+        ]
+      },
+      {
+        "at": "/version-comparison",
+        "page_module": "web/src/app/version-comparison/page.tsx",
+        "screen": "version-comparison",
+        "case": "action",
+        "requires_provider_mode": "recorded",
+        "name": "cmp-version-recorded-ai-consent",
+        "control_module": "web/src/widgets/version-series/ui/projects-and-stages.tsx",
+        "bind": {
+          "document_uid": "cmp_version_document_uid",
+          "comparison_series_id": "cmp_version_series_id"
+        },
+        "actions": [
+          {
+            "do": "select",
+            "selector": "select",
+            "option_value": "{project_uid}",
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "tr[data-document-uid=\"{document_uid}\"] [data-step=\"ai_changes\"] [data-step-action=\"start\"]",
+            "bound_ms": 120000
+          },
+          {
+            "do": "click",
+            "selector": "tr[data-document-uid=\"{document_uid}\"] [data-step=\"ai_changes\"] [data-step-action=\"start\"]",
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-estimate-panel] [data-consent-line] input:not([disabled])",
+            "bound_ms": 120000
+          },
+          {
+            "do": "click",
+            "selector": "[data-estimate-panel] [data-consent-line] input"
+          },
+          {
+            "do": "click",
+            "selector": "[data-estimate-confirm]"
+          },
+          {
+            "do": "wait_for",
+            "selector": "tr[data-document-uid=\"{document_uid}\"] [data-step=\"ai_changes\"][data-step-state=\"done\"]",
+            "bound_ms": 300000
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/comparison-series/{comparison_series_id}/ai-sheet-changes/estimate",
+            "operationId": "estimateComparisonAiSheetChanges",
+            "expect_status": 200
+          },
+          {
+            "method": "POST",
+            "path": "/comparison-series/{comparison_series_id}/ai-sheet-changes",
+            "operationId": "startComparisonAiSheetChanges",
+            "expect_status": 201
+          },
+          {
+            "method": "GET",
+            "path": "/comparison-series/{comparison_series_id}/ai-sheet-changes",
+            "operationId": "getComparisonAiSheetChanges",
+            "expect_status": 200,
+            "last_response": true
+          }
+        ],
+        "expects_request": [
+          {
+            "of": "startComparisonAiSheetChanges",
+            "requires_idempotency_key": true,
+            "body_contains": [
+              "\"confirmed\":true",
+              "estimate_digest"
+            ]
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "estimateComparisonAiSheetChanges",
+            "json_path": "route.provider_mode",
+            "equals": "recorded"
+          },
+          {
+            "of": "getComparisonAiSheetChanges",
+            "json_path": "job.state",
+            "equals": "completed"
+          },
+          {
+            "of": "getComparisonAiSheetChanges",
+            "json_path": "job.estimate.route.provider_mode",
+            "equals": "recorded"
+          },
+          {
+            "of": "getComparisonAiSheetChanges",
+            "json_path": "transitions",
+            "nonempty_array": true
+          }
+        ],
+        "forbids_rendered": [
+          "[data-comparison-failure]"
+        ]
+      },
+      {
+        "at": "/version-comparison",
+        "page_module": "web/src/app/version-comparison/page.tsx",
+        "screen": "version-comparison",
+        "case": "action",
+        "requires_provider_mode": "recorded",
+        "name": "cmp-version-summary-download",
+        "control_module": "web/src/widgets/version-series/ui/projects-and-stages.tsx",
+        "bind": {
+          "document_uid": "cmp_version_document_uid",
+          "comparison_series_id": "cmp_version_series_id"
+        },
+        "actions": [
+          {
+            "do": "select",
+            "selector": "select",
+            "option_value": "{project_uid}",
+            "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "tr[data-document-uid=\"{document_uid}\"] [data-summary-md]",
+            "bound_ms": 120000
+          },
+          {
+            "do": "click",
+            "selector": "tr[data-document-uid=\"{document_uid}\"] [data-summary-md]"
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/comparison-series/{comparison_series_id}/summary-md",
+            "operationId": "streamComparisonSeriesSummary",
+            "expect_status": 200
+          }
+        ],
+        "expects_download": [
+          {
+            "of": "streamComparisonSeriesSummary",
+            "content_type_starts_with": "text/markdown",
+            "content_disposition_contains": ".md",
+            "body_starts_with": "#"
+          }
+        ]
+      },
+      {
         "name": "analysis-settings-lists-the-profiles",
         "at": "/analysis-settings",
         "page_module": "web/src/app/analysis-settings/page.tsx",

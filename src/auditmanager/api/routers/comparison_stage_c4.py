@@ -109,6 +109,12 @@ def build_comparison_stage_c4_routes(router: APIRouter, stage: ComparisonStageC4
         result = stage.get_card(card_id=stage_change_card_id)
         return json_response(200, encode_json(result.model_dump(mode="json", exclude_unset=True)))
 
+    @router.post("/stage-chain-runs/{stage_chain_run_id}/review-cards", operation_id="createStageReviewCard", tags=["comparison"], status_code=201, response_model=models.StageChangeCard,
+        responses={**success(201, "An expert-requested REVIEW card or keyed replay; raw evidence is unchanged."), **envelope_responses(401,403,404,409,422,500,503)})
+    def create_review_card(stage_chain_run_id: Annotated[models.StageChainRunId, Path()], body: models.CreateStageReviewCardRequest, subject: CurrentSubject, idempotency_key: RequiredIdempotencyKey) -> WireResponse:
+        result = stage.create_review_card(run_id=stage_chain_run_id, body=body, user_uid=subject.user_uid, idempotency_key=idempotency_key)
+        return json_response(201, encode_json(result.model_dump(mode="json", exclude_unset=True)))
+
     @router.post("/stage-chain-runs/{stage_chain_run_id}/card-verdicts", operation_id="applyStageCardVerdicts", tags=["comparison"], status_code=200, response_model=models.StageCardVerdictPage,
         responses={**success(200, "The frozen stage result or keyed replay."), **envelope_responses(401,403,404,409,422,500,503)})
     def apply_verdicts(stage_chain_run_id: Annotated[models.StageChainRunId, Path()], body: models.ApplyStageCardVerdictsRequest, subject: CurrentSubject, idempotency_key: RequiredIdempotencyKey) -> WireResponse:

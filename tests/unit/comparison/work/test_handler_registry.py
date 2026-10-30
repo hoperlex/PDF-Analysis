@@ -7,12 +7,11 @@ makes a registry in which each factory contributes exactly one kind.
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
-from auditmanager.comparison.public import HANDLER_FACTORIES, HandlerRegistry, HandlerRegistryError
+from auditmanager.comparison.public import HANDLER_FACTORIES, HandlerRegistry, HandlerRegistryError, WorkDependencies
 
 
 class Handler:
@@ -27,7 +26,7 @@ def factory(kind: object):  # type: ignore[no-untyped-def]
     return lambda dependencies: Handler(kind)
 
 
-DEPENDENCIES: Any = SimpleNamespace()
+DEPENDENCIES = WorkDependencies(None, None, None, None)  # type: ignore[arg-type]
 
 
 def test_each_kind_has_exactly_one_handler_and_the_registry_answers_it() -> None:

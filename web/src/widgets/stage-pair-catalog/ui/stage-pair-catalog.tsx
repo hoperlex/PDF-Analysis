@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-import type { DocumentUid, ProjectUid, StagePair, StagePairSuggestion } from '@/shared/api';
+import type { DocumentUid, ProjectUid, StageChainRun, StagePair, StagePairSuggestion } from '@/shared/api';
 import { failureMessage } from '@/shared/api';
 import { routes } from '@/shared/lib';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
@@ -10,7 +10,9 @@ import {
   completenessLabel, suggestionReason, useConfirmStagePair, useSetStagePairCompleteness,
   useStagePairSuggestions, useStagePairs,
 } from '@/entities/stage-pair';
+import { StageBatchControls, StageRunControls } from '@/widgets/stage-run-controls';
 
+import { StageAssemblyCreator, StageAssemblyEditor } from './stage-assembly-editor';
 import styles from './stage-pair-catalog.module.css';
 
 function DocumentLink({ projectUid, uid }: { readonly projectUid: ProjectUid; readonly uid: DocumentUid }) {
@@ -20,10 +22,12 @@ function DocumentLink({ projectUid, uid }: { readonly projectUid: ProjectUid; re
 export interface StagePairCatalogProps {
   readonly projectUid: ProjectUid;
   readonly mayAct: boolean;
+  readonly onRunChange?: (run: StageChainRun) => void;
+  readonly onOpenRun?: (runId: string, pairId: string) => void;
 }
 
 /** A suggestion is displayed as a proposal; only the expert's button creates a pair. */
-export function StagePairCatalog({ projectUid, mayAct }: StagePairCatalogProps) {
+export function StagePairCatalog({ projectUid, mayAct, onRunChange, onOpenRun }: StagePairCatalogProps) {
   const [pairPages, setPairPages] = useState<string[]>([]);
   const [suggestionPages, setSuggestionPages] = useState<string[]>([]);
   const pairs = useStagePairs(projectUid, pairPages.at(-1));
@@ -31,6 +35,8 @@ export function StagePairCatalog({ projectUid, mayAct }: StagePairCatalogProps) 
   const confirm = useConfirmStagePair();
   const completeness = useSetStagePairCompleteness();
   const [selected, setSelected] = useState<StagePairSuggestion | null>(null);
+  const [batchSelection, setBatchSelection] = useState<Record<string, StagePair>>({});
+  const [batchId, setBatchId] = useState<string | undefined>();
 
   const pairFailure = pairs.error === null ? null : failureMessage(pairs.error);
   const suggestionFailure = suggestions.error === null ? null : failureMessage(suggestions.error);
@@ -50,6 +56,12 @@ export function StagePairCatalog({ projectUid, mayAct }: StagePairCatalogProps) 
         {pairs.data?.items.length === 0 ? <EmptyState title="Подтверждённых пар пока нет" detail="Пары появятся после решения эксперта по документам П и Р." /> : null}
         {pairs.data?.items.map((pair: StagePair) => (
           <article className={styles.row} key={pair.pair_id}>
+            {mayAct && pair.state === 'confirmed' ? <label><input type="checkbox" checked={batchSelection[pair.pair_id] !== undefined}
+              onChange={(event) => setBatchSelection((prior) => {
+                const next = { ...prior };
+                if (event.target.checked) next[pair.pair_id] = pair; else delete next[pair.pair_id];
+                return next;
+              })} />Выбрать для очереди</label> : null}
             <div className={styles.documents}>
               <span>П: <DocumentLink projectUid={projectUid} uid={pair.left_document_uid} /></span>
               <span>Р: {pair.right_document_uid === undefined ? <code>{pair.assembly_id}</code> : <DocumentLink projectUid={projectUid} uid={pair.right_document_uid} />}</span>
@@ -61,6 +73,8 @@ export function StagePairCatalog({ projectUid, mayAct }: StagePairCatalogProps) 
                 <button type="button" className="am-button" disabled={busy || pair.completeness === 'partial'} onClick={() => completeness.mutate({ pair, completeness: 'partial' })}>Неполный</button>
               </div>
             ) : null}
+            <StageAssemblyEditor key={pair.assembly_id} pair={pair} mayAct={mayAct && pair.state === 'confirmed'} />
+            <StageRunControls pairId={pair.pair_id} mayAct={mayAct && pair.state === 'confirmed'} compact onOpenBatch={setBatchId} {...(onRunChange === undefined ? {} : { onRunChange })} />
           </article>
         ))}
         {pairs.data === undefined ? null : (
@@ -73,6 +87,10 @@ export function StagePairCatalog({ projectUid, mayAct }: StagePairCatalogProps) 
           </nav>
         )}
       </section>
+
+      <StageBatchControls projectUid={projectUid} selectedPairs={Object.values(batchSelection)} mayAct={mayAct} onBatchChange={setBatchId}
+        {...(batchId === undefined ? {} : { batchId })} {...(onOpenRun === undefined ? {} : { onOpenRun })} />
+      <StageAssemblyCreator projectUid={projectUid} mayAct={mayAct} />
 
       <section aria-labelledby="stage-suggestions-heading">
         <h2 id="stage-suggestions-heading">Возможные пары</h2>

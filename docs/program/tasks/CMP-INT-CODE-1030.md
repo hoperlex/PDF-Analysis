@@ -53,12 +53,18 @@ The remaining C3/C4 functional roadmap is implemented, integrated by one owner a
 - `docs/program/dispatch/**`
 - `src/auditmanager/bootstrap/**`
 - `src/auditmanager/comparison/public.py`
+- `src/auditmanager/comparison/stage_run/**`
+- `tests/unit/comparison/engine/test_handler_unit.py`
+- `tests/unit/comparison/work/test_handler_registry.py`
 - `web/src/_pages/stage-compare/**`
 - `web/src/widgets/comparison-viewer/**`
 - `web/src/widgets/stage-sheet-map/**`
 - `web/src/widgets/stage-text-evidence/**`
+- `web/src/widgets/stage-changes/**` (bounded polling integration only)
+- `web/src/widgets/stage-run-controls/**` (bounded polling integration only)
 - `web/tests/unit/run/polling.test.ts`
 - `tests/integration/composition/**`
+- `tests/integration/comparison/stage_run/**` (runtime integration regression)
 
 ## Forbidden hotspots
 - `origin/main`, force-push, deployment, unrelated worktree changes and owner files
