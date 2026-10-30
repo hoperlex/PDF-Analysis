@@ -107,13 +107,15 @@ class ReceivedResponse:
 class ProxyDispatchError(DomainError):
     """A catalog error with transport evidence kept outside envelope details."""
 
-    __slots__ = ("dispatch_class", "retry_safe", "retry_after_seconds", "received")
+    __slots__ = ("dispatch_class", "retry_safe", "retry_after_seconds", "received",
+                 "http_status", "provider_failure_kind")
 
     def __init__(
         self, code: ErrorCode, *, dispatch_class: str, retry_safe: bool,
         retry_after_seconds: float = 0.0, message: str | None = None,
         details: Mapping[str, Any] | None = None,
         received: ReceivedResponse | None = None,
+        http_status: int | None = None, provider_failure_kind: str | None = None,
     ) -> None:
         super().__init__(code, message=message, **dict(details or {}))
         self.dispatch_class = dispatch_class
@@ -121,6 +123,8 @@ class ProxyDispatchError(DomainError):
         self.retry_after_seconds = retry_after_seconds
         #: Set only for an unusable answer that arrived with a readable usage block.
         self.received = received
+        self.http_status = http_status
+        self.provider_failure_kind = provider_failure_kind
 
 
 class _UnusableAnswer(ValueError):
@@ -367,16 +371,34 @@ def _retry_after(headers: Any) -> float:
 
 def _classified_http_failure(status: int, raw: bytes, *, headers: Any) -> DomainError:
     mapped = _map_http_failure(status, raw)
+    quota = status == 402
+    if status == 429:
+        try:
+            body = json.loads(raw)
+            detail = body.get("error", {}) if isinstance(body, dict) else {}
+            quota = isinstance(detail, dict) and any(detail.get(key) in (
+                "insufficient_quota", "quota_exceeded", "billing_hard_limit_reached",
+            ) for key in ("code", "type"))
+        except (ValueError, UnicodeError):
+            pass
+    if quota:
+        return ProxyDispatchError(
+            mapped.code, dispatch_class="definite_refusal", retry_safe=False,
+            message=mapped.custom_message, details=mapped.detail_fields,
+            http_status=status, provider_failure_kind="quota",
+        )
     if status == 429:
         return ProxyDispatchError(
             mapped.code, dispatch_class="rate_limited", retry_safe=True,
             retry_after_seconds=_retry_after(headers), message=mapped.custom_message,
             details=mapped.detail_fields,
+            http_status=status, provider_failure_kind="rate_limit",
         )
     if status in (400, 401, 403, 413):
         return ProxyDispatchError(
             mapped.code, dispatch_class="definite_refusal", retry_safe=False,
             message=mapped.custom_message, details=mapped.detail_fields,
+            http_status=status, provider_failure_kind=("auth" if status in (401, 403) else "request"),
         )
     # A 503 is retryable only for the proxy's own measured envelope. No such
     # discriminator is frozen yet; foreign 503 and 504 remain ambiguous.
