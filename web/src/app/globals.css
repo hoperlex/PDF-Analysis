@@ -243,9 +243,9 @@
   --am-ease: cubic-bezier(0.2, 0, 0.2, 1);
 
   /* ---- radius ------------------------------------------------------------------ */
-  --am-radius-sm: 6px;
-  --am-radius: 10px;
-  --am-radius-lg: 14px;
+  --am-radius-sm: 8px;
+  --am-radius: 12px;
+  --am-radius-lg: 20px;
   --am-radius-pill: 999px;
 
   /* ---- spacing ----------------------------------------------------------------- */
@@ -492,9 +492,10 @@
   --am-ring: 0 0 0 3px rgba(122, 169, 224, 0.35);
 }
 
-/* The shared shell and dashboard reuse the presentation palette without changing other widgets. */
+/* The completed shell and future screen slices inherit one two-theme presentation palette. */
 [data-dashboard-showcase],
-.am-app__bar {
+.am-app__bar,
+.am-app__main {
   --am-paper: var(--am-showcase-card);
   --am-surface: var(--am-showcase-bg);
   --am-surface-sunken: var(--am-showcase-card-alt);
@@ -791,6 +792,7 @@ input[type='number'],
 textarea,
 select {
   font: inherit;
+  min-height: 42px;
   padding: 8px 11px;
   color: var(--am-ink);
   background: var(--am-paper);
@@ -1403,9 +1405,9 @@ input[type='file']::file-selector-button:hover {
 
 .am-page__title {
   margin: 0;
-  font-size: var(--am-text-2xl);
-  font-weight: 650;
-  letter-spacing: -0.015em;
+  font-size: clamp(26px, 2.3vw, 32px);
+  font-weight: 700;
+  letter-spacing: -0.035em;
 }
 
 .am-page__subtitle {
@@ -1417,11 +1419,12 @@ input[type='file']::file-selector-button:hover {
 }
 
 .am-page__body {
+  min-width: 0;
   background: var(--am-paper);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius-lg);
   padding: var(--am-gap-lg);
-  box-shadow: var(--am-shadow-1);
+  box-shadow: var(--am-shadow-2);
 }
 
 /* ---- the five mandatory states --------------------------------------------------- */
@@ -1607,8 +1610,9 @@ li.am-state .am-state__detail {
   font: inherit;
   font-size: var(--am-text-md);
   font-weight: 550;
-  padding: 8px 16px;
-  border-radius: var(--am-radius-sm);
+  min-height: 40px;
+  padding: 9px 16px;
+  border-radius: var(--am-radius);
   border: 1px solid var(--am-accent);
   background: var(--am-accent);
   color: var(--am-ink-inverse);

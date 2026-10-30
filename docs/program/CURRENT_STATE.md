@@ -1,5 +1,16 @@
 # Current state
 
+**Updated 2026-10-30 by `DESIGN-M01-FOUNDATION` (development candidate only).**
+The common main area now consumes the same two-theme surfaces as the shell and
+dashboard. Page titles, cards, fields and primary controls have consistent
+geometry. The comparison CSS now reads defined semantic colour tokens instead
+of raw literals or undefined fallbacks; its mask/search/focus evidence overlays
+remain visually distinct. `styling-layer` and `tokens-defined` guards pass on
+this candidate. This is the first of the sequential 31-screen mini-tasks; local
+content screens still need M02–M09 and browser acceptance M10. No API,
+contract, migration, analysis or `origin/main` change is included. Publication
+is to `origin/dev` only.
+
 **Updated 2026-10-30 by `HOTFIX-SHELL-NAVIGATION-INT-20261030`
 (development candidate only).** The shared frame now has a persistent left
 sidebar above 1160 px and the existing compact disclosure menu below it. Each

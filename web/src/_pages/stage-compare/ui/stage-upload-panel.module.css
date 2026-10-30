@@ -9,7 +9,7 @@
 .card {
   display: grid;
   gap: 0.75rem;
-  border: 1px solid var(--am-border, #d5dce3);
+  border: 1px solid var(--am-line);
   border-radius: 0.5rem;
   padding: 0.9rem 1rem;
 }
@@ -37,7 +37,7 @@
 }
 
 .card {
-  background: var(--am-surface, #fff);
+  background: var(--am-paper);
 }
 
 .card code,
