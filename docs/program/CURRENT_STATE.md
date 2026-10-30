@@ -1,5 +1,14 @@
 # Current state
 
+**Updated 2026-10-30 by `DESIGN-M02-ENTRY` (development candidate only).**
+The home route now presents its greeting, section overview and existing
+role-filtered tiles as a responsive hierarchy. The projects route groups the
+existing create form and list, and section optimisation groups its filters,
+project summaries and wide table in contained panels. Both themes use the
+semantic tokens established by M01. Data, controls, permissions, API, contracts,
+migrations and `origin/main` are unchanged. Publication is to `origin/dev` only;
+M03–M10 remain.
+
 **Updated 2026-10-30 by `DESIGN-M01-FOUNDATION` (development candidate only).**
 The common main area now consumes the same two-theme surfaces as the shell and
 dashboard. Page titles, cards, fields and primary controls have consistent

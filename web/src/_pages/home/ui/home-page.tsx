@@ -100,7 +100,7 @@ export function HomePage({ displayLabel, roles }: HomePageProps) {
 
   return (
     <section className="am-page" data-screen="home">
-      <header className="am-page__header">
+      <header className={`am-page__header ${styles.hero}`}>
         <div className={styles.heading}>
           {/*
             One text node, and an exclamation rather than a period: the name form ends in one

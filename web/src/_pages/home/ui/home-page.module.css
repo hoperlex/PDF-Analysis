@@ -1,14 +1,11 @@
-/*
- * Layout for the home page. Colour is deliberately absent: the page is built from the global
- * `am-page` frame and the mandatory states, which carry every colour the contrast census
- * measures; this file only places them.
- *
- * `.greeting` is the width rule `W50-HOME-01` exists for. The heading carries the account's
- * name, whose last name may be sixty letters in one word — wider than the 780 px floor at the
- * title's size — and `overflow-wrap: anywhere` lets it break inside that word. Unlike
- * `break-word`, `anywhere` also lowers the element's min-content width, so the flex row of
- * `am-page__header` can shrink it; `min-width: 0` on the heading's box lets that row do so.
- */
+.hero {
+  padding: clamp(20px, 3vw, 36px);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-lg);
+  background: radial-gradient(circle at 95% 5%, var(--am-accent-light), transparent 44%),
+    var(--am-paper);
+  box-shadow: var(--am-shadow-2);
+}
 
 .heading {
   flex: 1 1 auto;
@@ -18,6 +15,8 @@
 .greeting {
   min-width: 0;
   overflow-wrap: anywhere;
+  font-size: clamp(28px, 3vw, 40px);
+  line-height: 1.12;
 }
 
 .tiles {
@@ -29,10 +28,20 @@
 
 .sections {
   margin-bottom: var(--am-gap-lg);
+  padding: var(--am-gap-lg);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-lg);
+  background: var(--am-paper);
+  box-shadow: var(--am-shadow-1);
 }
 
 @media (max-width: 780px) {
   .tiles {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hero,
+  .sections {
+    padding: var(--am-gap);
   }
 }

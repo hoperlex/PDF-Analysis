@@ -1,43 +1,74 @@
-/*
- * Layout for the home page's tiles. Colour is deliberately absent, the discipline of
- * `widgets/dashboard/ui/dashboard.module.css`: every tile's content renders through the
- * mandatory states (`am-state`), the page body and the global `dl`, `h2` and link rules, so
- * a colour declared here would be a second declaration of a colour the contrast census
- * already measures where it is actually carried. This file places things; it does not paint.
- *
- * A project name is a user's string (up to the contract's length, unbroken if the user wrote
- * it so), and it wraps rather than widening its tile — `R-33`/`D-93`'s width case.
- */
+/* Presentation for the three registry-gated home tiles. */
 
 .tile {
   min-width: 0;
+  height: 100%;
+  padding: var(--am-gap-lg);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-lg);
+  background: var(--am-paper);
+  box-shadow: var(--am-shadow-1);
 }
 
 .tile > h2 {
-  margin-top: 0;
+  margin: 0 0 var(--am-gap);
+  padding: 0 0 var(--am-gap-sm);
+  font-size: var(--am-text-lg);
 }
 
 .projects {
   display: grid;
   gap: var(--am-gap-sm);
   margin: 0;
-  padding-left: var(--am-gap-lg);
+  padding-left: 0;
+  list-style: none;
 }
 
 .project {
   min-width: 0;
   overflow-wrap: anywhere;
+  padding: var(--am-gap-sm) var(--am-gap);
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius);
+  background: var(--am-surface);
 }
 
 .created {
   display: block;
   font-size: var(--am-text-sm);
+  color: var(--am-ink-muted);
 }
 
 .figures {
-  margin-top: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--am-gap-sm);
+  margin: 0;
+}
+
+.figures dt {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.figures dd {
+  grid-column: 1 / -1;
+  margin: 0 0 var(--am-gap-sm);
+  font-size: clamp(24px, 2.2vw, 32px);
+  font-weight: 700;
+  line-height: 1.1;
 }
 
 .more {
-  margin: var(--am-gap) 0 0;
+  margin: var(--am-gap-lg) 0 0;
+  padding-top: var(--am-gap-sm);
+  border-top: 1px solid var(--am-line-soft);
+}
+
+@media (max-width: 780px) {
+  .tile {
+    padding: var(--am-gap);
+  }
 }
