@@ -86,27 +86,86 @@ function exactFindingKey(row: RecordValue, side: SavedResultSide): string | null
 function expertState(row: RecordValue): string {
   return stable({ current_verdict: row.current_verdict, decided_severity: row.decided_severity ?? null });
 }
+function actualRange(row: RecordValue, start: string, end: string, quote?: string): boolean {
+  if (row[start] === undefined && row[end] === undefined) return true;
+  const first = row[start], last = row[end];
+  return typeof first === 'number' && Number.isSafeInteger(first) && first >= 0
+    && typeof last === 'number' && Number.isSafeInteger(last) && last > first
+    && (quote === undefined || last - first === Array.from(quote).length);
+}
+function preliminaryEvidenceKey(row: RecordValue, ids: readonly unknown[], sources: ReadonlyMap<string, string>, originals: ReadonlyMap<string, RecordValue>): string | null {
+  if (row.source_evidence === undefined) return 'not_saved';
+  if (!Array.isArray(row.source_evidence)) return null;
+  const entries: string[] = [];
+  for (const raw of row.source_evidence) {
+    const evidence = savedObject(raw);
+    if (evidence === null || typeof evidence.source_id !== 'string' || !ids.includes(evidence.source_id)
+      || !sources.has(evidence.source_id) || typeof evidence.quote !== 'string' || !evidence.quote.trim()
+      || !actualRange(evidence, 'character_start', 'character_end', evidence.quote)
+      || (evidence.page_number !== undefined && (typeof evidence.page_number !== 'number'
+        || !Number.isSafeInteger(evidence.page_number) || evidence.page_number <= 0))
+      || (evidence.character_field !== undefined && !['text', 'recognised_context'].includes(String(evidence.character_field)))
+      || (evidence.entry_ordinal !== undefined && (typeof evidence.entry_ordinal !== 'number'
+        || !Number.isSafeInteger(evidence.entry_ordinal) || evidence.entry_ordinal < 0))) return null;
+    const source = originals.get(evidence.source_id)!;
+    for (const field of ['page_number', 'character_field', 'entry_ordinal']) {
+      if (evidence[field] !== undefined && source[field] !== undefined && evidence[field] !== source[field]) return null;
+    }
+    if (typeof source.character_start === 'number' && typeof source.character_end === 'number'
+      && typeof evidence.character_start === 'number' && typeof evidence.character_end === 'number') {
+      if (evidence.character_start < source.character_start || evidence.character_end > source.character_end) return null;
+      if (typeof source.quote === 'string' && Array.from(source.quote).length === source.character_end - source.character_start
+        && Array.from(source.quote).slice(evidence.character_start - source.character_start,
+          evidence.character_end - source.character_start).join('') !== evidence.quote) return null;
+    }
+    entries.push(stable({ source: sources.get(evidence.source_id), ...Object.fromEntries(
+      ['quote', 'page_number', 'character_field', 'character_start', 'character_end', 'entry_ordinal']
+        .filter((field) => evidence[field] !== undefined).map((field) => [field, evidence[field]])) }));
+  }
+  return stable(entries.sort());
+}
+function primaryEvidenceKey(row: RecordValue | null): string | null {
+  if (row === null) return 'not_saved';
+  if (!Array.isArray(row.evidence) || row.evidence.length === 0) return null;
+  for (const raw of row.evidence) {
+    const evidence = savedObject(raw);
+    if (evidence === null || typeof evidence.quote !== 'string' || !evidence.quote.trim()
+      || typeof evidence.page_number !== 'number' || !Number.isSafeInteger(evidence.page_number) || evidence.page_number <= 0
+      || evidence.char_start === undefined || !actualRange(evidence, 'char_start', 'char_end', evidence.quote)) return null;
+  }
+  return stable(row.evidence.map(anchorContent).sort());
+}
 function preliminaryIndex(side: SavedResultSide) {
   const result = savedObject(side.extended?.result);
   const sources = new Map<string, string>();
+  const originals = new Map<string, RecordValue>();
   const conflicts = new Set<string>();
   for (const source of objects(result?.sources)) {
     if (typeof source.source_id !== 'string') continue;
     const identity = stable(Object.fromEntries(['version_uid', 'kind', 'source_type', 'page_number', 'bbox_norm',
-      'crop_sha256', 'text_sha256', 'artifact_sha256', 'quote', 'quote_source'].filter((field) => source[field] !== undefined).map((field) => [field, source[field]])));
+      'crop_sha256', 'text_sha256', 'artifact_sha256', 'quote', 'quote_source', 'character_field',
+      'character_start', 'character_end', 'entry_ordinal', 'page_text_sha256', 'origin_artifact_role']
+      .filter((field) => source[field] !== undefined).map((field) => [field, source[field]])));
     if (sources.has(source.source_id) && sources.get(source.source_id) !== identity) conflicts.add(source.source_id);
     if (source.version_uid !== undefined && source.version_uid !== side.run.version_uid) conflicts.add(source.source_id);
-    if (typeof source.page_number !== 'number' || ![source.crop_sha256, source.text_sha256, source.artifact_sha256, source.quote].some((value) => typeof value === 'string' && value.length > 0)) conflicts.add(source.source_id);
+    if (typeof source.page_number !== 'number' || !Number.isSafeInteger(source.page_number) || source.page_number <= 0
+      || !actualRange(source, 'character_start', 'character_end')
+      || (source.entry_ordinal !== undefined && (typeof source.entry_ordinal !== 'number' || !Number.isSafeInteger(source.entry_ordinal) || source.entry_ordinal < 0))
+      || ![source.crop_sha256, source.text_sha256, source.artifact_sha256, source.quote].some((value) => typeof value === 'string' && value.length > 0)) conflicts.add(source.source_id);
     sources.set(source.source_id, identity);
+    originals.set(source.source_id, source);
   }
   return objects(result?.observations).map((row, index) => {
     const ids = Array.isArray(row.source_ids) ? row.source_ids : [];
     const bound = ids.length > 0 && ids.every((id) => typeof id === 'string' && sources.has(id) && !conflicts.has(id));
-    const match = bound && typeof row.title === 'string' && typeof row.description === 'string'
+    const evidence = bound ? preliminaryEvidenceKey(row, ids, sources, originals) : null;
+    const primary = savedObject(row.original_primary_observation);
+    const primaryEvidence = primaryEvidenceKey(primary);
+    const match = bound && evidence !== null && primaryEvidence !== null && typeof row.title === 'string' && typeof row.description === 'string'
       ? stable({ title: row.title, description: row.description, category: row.category,
         sources: [...new Set(ids.map((id) => sources.get(String(id))))].sort(),
-        primary_text: savedObject(row.original_primary_observation)?.finding_text,
-        primary_recommendation: savedObject(row.original_primary_observation)?.recommendation_text }) : null;
+        source_evidence: evidence, primary_evidence: primaryEvidence,
+        primary_text: primary?.finding_text, primary_recommendation: primary?.recommendation_text }) : null;
     return { row, index, match };
   });
 }

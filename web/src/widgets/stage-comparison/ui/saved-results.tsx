@@ -84,6 +84,7 @@ export function SavedResultsComparison({ versionUid, left, right }: {
     {query.isError ? <p role="alert">{query.error instanceof SavedResultReadError ? query.error.message : 'Не удалось прочитать оба результата. Сравнение по неполным данным не построено; повторите чтение.'}</p> : null}
     {query.data === undefined ? null : <>
       <SourceStatus side={query.data[0]!} label="Слева" /><SourceStatus side={query.data[1]!} label="Справа" />
+      <p>Предварительные наблюдения сопоставляются с учётом исходного поля текста, диапазона фрагмента и сохранённых цитат. Разные места одной страницы остаются отдельными; неподтверждённая привязка не используется для точного соответствия.</p>
       <p>Каждый прогон получает новые ID находок. При разных ID соответствие требует точных текстов, рекомендаций, значений и полного набора исходных привязок, включая объединённые наблюдения. Предварительные наблюдения также сопоставляются по точному тексту и источникам. Повторы сохранены один к одному, похожие формулировки могут остаться отдельными. Экспертные состояния отражают момент чтения, а не историческое решение на дату запуска.</p>
       <label>Показать <select value={filter} onChange={(event) => { setFilter(event.target.value); setPage(0); }}><option value="all">Все записи</option><option value="differences">Различия</option><option value="finding">Канонические находки</option><option value="preliminary">Предварительные наблюдения</option></select></label>
       <p>По фильтру {filtered.length} из {rows.length} записей. Выгрузка включает весь полученный набор.</p>
