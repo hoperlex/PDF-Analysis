@@ -1,0 +1,15 @@
+# CMP-STAGE-REPAIR-CORE-01 — deterministic repair plan core
+
+Base `9fa035029a3422b1c3e63d108fbe8c5fdde5dd8e`; task [`CMP-STAGE-REPAIR-CORE-01`](tasks/CMP-STAGE-REPAIR-CORE-01.md). API `1.12.0` and migration `0041` are frozen. This lane has no remote authority or database side effect.
+
+The callable `plan_repairs` takes the complete current `MapLink` snapshot, complete `SheetTitle` inventories, caller-identified purpose-problem link IDs, the run/base revision identities, and optionally a complete deterministic `ContentScore` matrix. It returns `RepairPlan` with HIGH changes and full immutable before/after snapshots, or `None` when no complete safe component exists. A repeated run in `already_repaired_run_ids`, malformed map or incomplete score matrix refuses explicitly.
+
+Title proof requires a specific title unique on both sides, or mutual-best compatible-purpose fuzzy similarity at least `0.94` and forward/reverse margins at least `0.02`. Content proof requires score `0.44`, forward margin `0.14`, reverse margin `0.10`, improvement over the current link `0.18`, at least two independent overlap components, and sufficient strong/content anchors. Scores are caller-supplied deterministic fingerprint evidence; this core does not invent a fingerprint or consume model decisions.
+
+Only problem one-to-one links can change. A displaced link must itself be eligible and have HIGH proof; a complete chain ending in a free left page or a closed swap/cycle is planned atomically. A non-problem/many-to-many owner blocks that component. The after snapshot consumes an explicit unmatched target and records any released left page as `only_left`; its new row has `item_id=None` so the runtime assigns a fresh canonical ID. Changed links receive `automatic_repair`; an expert's old link remains in the before snapshot.
+
+`revert_eligibility(plan, current_snapshot, later_manual_edit=..., already_reverted=...)` checks the recorded after shape, ignores runtime-assigned row IDs, and refuses a later manual edit even if that edit restored the same shape. The runtime must still validate its current revision and apply/revert the entire snapshot in one transaction, then recompute steps 02–07.
+
+Verification: focused unit suite **10 passed**; package compile and `git diff --check` passed. Cases cover purpose uncertainty/conflict, exact expert-link swap, complete chain to an unmatched page, broken displacement, many-to-many exclusion, mutual fuzzy ambiguity, content thresholds/anchors, incomplete matrix, one-pass guard and manual supersession. Full gates and heavy checks are deferred under the owner's 2026-10-30 instruction.
+
+Changed files are confined to this task/report and `comparison/stage_repair/**` plus its unit tests. Contracts, migration head, root dependencies/locks, shared adapters/composition/public wiring, global styles and remote refs are untouched. Limits: title comparisons are bounded to 4,096 candidate cells and titles to 512 characters; score extraction, persistence, API/UI and durable run authority belong to the C4 runtime.
