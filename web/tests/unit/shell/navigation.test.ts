@@ -13,6 +13,7 @@ import type { Navigation } from '@/_app/navigation';
 import { FrameNavigationView } from '@/_app/frame-navigation';
 import type { ScreenEntry } from '@/shared/config';
 import { SCREEN_REGISTRY } from '@/shared/config';
+import type { DisclosureProps } from '@/shared/ui';
 
 import {
   ADMIN_AND_EXPERT,
@@ -86,6 +87,27 @@ describe('the live registry gives exactly R-66', () => {
       expect(MENU_GROUPS, screen.address).toContain(screen.group);
       expect(screen.address, 'a menu row is an address a link can carry').not.toContain('[');
     }
+  });
+});
+
+describe('navigation disclosure behavior', () => {
+  it('keeps a selected child group open and reserves outside closing for the narrow menu', () => {
+    const groups: DisclosureProps[] = [];
+    const capture = (props: DisclosureProps) => {
+      groups.push(props);
+      return createElement('div', null, props.children);
+    };
+    renderToStaticMarkup(createElement(FrameNavigationView, {
+      navigation: buildNavigation(EXPERT),
+      pathname: '/blocks',
+      disclosure: capture,
+    }));
+    expect(groups.length).toBe(7);
+    expect(groups.every((group) => group.closeOnNavigate === false)).toBe(true);
+    const desktop = groups.filter((group) => group.defaultOpen === true);
+    expect(desktop).toHaveLength(3);
+    expect(desktop.every((group) => group.closeOnOutside === false)).toBe(true);
+    expect(groups.filter((group) => group.defaultOpen !== true).every((group) => group.closeOnOutside !== false)).toBe(true);
   });
 });
 
@@ -189,18 +211,19 @@ describe('the current group and item', () => {
       .filter((attributes) => /\baria-current="page"/.test(attributes))
       .map((attributes) => /\bhref="([^"]*)"/.exec(attributes)?.[1] ?? '');
 
-  it('marks the group button aria-current="true" and the item aria-current="page", in both states', () => {
-    // Each twice: once in the one-row state and once in the stacked one, whose «Меню» says a
-    // page inside it is current.
+  it('marks the group button aria-current="true" and the item aria-current="page" in all states', () => {
+    // The same destination is present in the full sidebar, compact rail and stacked menu.
     const markup = draw('/blocks');
     expect(currentButtons(markup)).toEqual(['Знания', 'Меню', 'Знания']);
-    expect(currentLinks(markup)).toEqual(['/blocks', '/blocks']);
+    expect(currentLinks(markup)).toEqual(['/blocks', '/blocks', '/blocks']);
+    expect(markup).toContain('aria-label="Блоки" title="Блоки" aria-current="page"');
   });
 
   it('marks the group but no item on a page the menu does not list', () => {
     const markup = draw('/projects/prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B');
     expect(currentButtons(markup)).toEqual(['Работа', 'Меню', 'Работа']);
     expect(currentLinks(markup)).toEqual([]);
+    expect(markup).toContain('aria-label="Работа" data-current-group="true"');
   });
 
   it('offers no duplicate home link, and marks nothing current on home or an unknown address', () => {

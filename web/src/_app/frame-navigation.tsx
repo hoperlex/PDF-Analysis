@@ -8,13 +8,14 @@
  * items. The group holding the page being shown carries `aria-current="true"`, and the item
  * that is that page `aria-current="page"`.
  *
- * ## Two states, one at a time
+ * ## Three states, one at a time
  *
- * Wide, the groups stay open in the sidebar, and a reader may collapse any of them. Below
- * the frame's breakpoint they collapse into one stacked list behind a «Меню» disclosure.
- * Both are in the markup and the frame's CSS module shows exactly one
- * (`app-frame.module.css`), so neither depends on script to exist and an instrument that
- * renders the frame once sees both. A hidden state is `display: none`, which also takes it
+ * Wide, the groups stay open in the sidebar, and a reader may collapse any of them. The
+ * compact desktop rail keeps each destination as a labelled link. Below the frame's
+ * breakpoint they collapse into one stacked list behind a «Меню» disclosure.
+ * All three are in the markup and the frame's CSS module shows exactly one
+ * (`app-frame.module.css`), so none depends on script to exist and an instrument that
+ * renders the frame once sees all three. A hidden state is `display: none`, which also takes it
  * out of the accessibility tree and the tab order.
  *
  * ## The current page
@@ -27,6 +28,7 @@
  */
 
 import { usePathname } from 'next/navigation';
+import Link from 'next/link';
 import type { ComponentType } from 'react';
 
 import type { DisclosureProps } from '@/shared/ui';
@@ -59,6 +61,13 @@ function links(group: NavigationGroup, current: CurrentScreen | null) {
   }));
 }
 
+function railAbbreviation(label: string): string {
+  const words = label.trim().split(/\s+/u);
+  return words.length > 1
+    ? words.slice(0, 2).map((word) => Array.from(word)[0]).join('').toUpperCase()
+    : Array.from(label).slice(0, 2).join('').toUpperCase();
+}
+
 export function FrameNavigationView({ navigation, pathname, disclosure = Disclosure }: FrameNavigationViewProps) {
   const Group = disclosure;
   const { groups } = navigation;
@@ -69,15 +78,33 @@ export function FrameNavigationView({ navigation, pathname, disclosure = Disclos
     <nav className={styles.nav} aria-label="Разделы">
       <div className={styles.row} data-nav-state="row">
         {groups.map((group) => (
-          <Group key={group.group} label={group.label} current={inGroup(group)} links={links(group, current)} layout="inline" defaultOpen />
+          <Group key={group.group} label={group.label} current={inGroup(group)} links={links(group, current)} layout="inline" defaultOpen closeOnNavigate={false} closeOnOutside={false} />
+        ))}
+      </div>
+      <div className={styles.rail} data-nav-state="rail">
+        {groups.map((group) => (
+          <div className={styles.railGroup} key={group.group} role="group" aria-label={group.label} data-current-group={inGroup(group) ? 'true' : undefined}>
+            {group.items.map((item) => (
+              <Link
+                className={styles.railLink}
+                key={item.address}
+                href={item.address}
+                aria-label={item.label}
+                title={item.label}
+                aria-current={current?.address === item.address ? 'page' : undefined}
+              >
+                <span aria-hidden="true">{railAbbreviation(item.label)}</span>
+              </Link>
+            ))}
+          </div>
         ))}
       </div>
       <div className={styles.stacked} data-nav-state="stacked">
-        <Group label="Меню" current={current !== null && groups.some(inGroup)}>
+        <Group label="Меню" current={current !== null && groups.some(inGroup)} closeOnNavigate={false}>
           <ul className={styles.stackedList}>
             {groups.map((group) => (
               <li className={styles.stackedItem} key={group.group}>
-                <Group label={group.label} layout="inline" current={inGroup(group)} links={links(group, current)} />
+                <Group label={group.label} layout="inline" current={inGroup(group)} links={links(group, current)} closeOnNavigate={false} />
               </li>
             ))}
           </ul>
