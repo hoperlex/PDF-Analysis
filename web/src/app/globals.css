@@ -1166,6 +1166,14 @@ input[type='file']::file-selector-button:hover {
   overflow-wrap: anywhere;
 }
 
+.am-disclosure__icon {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+}
+
 .am-disclosure__link:hover {
   background: var(--am-accent-light);
   text-decoration: underline;

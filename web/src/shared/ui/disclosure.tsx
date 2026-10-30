@@ -30,6 +30,8 @@ import { disclosureTransition } from './disclosure-state';
 export interface DisclosureLink {
   readonly href: string;
   readonly label: string;
+  /** Optional decorative icon beside the label; link semantics remain unchanged. */
+  readonly icon?: ReactNode | undefined;
   /** The link to the page being shown: it carries `aria-current="page"`. */
   readonly current?: boolean | undefined;
 }
@@ -118,6 +120,7 @@ export function DisclosureView(props: DisclosureViewProps) {
                   href={link.href}
                   aria-current={link.current === true ? 'page' : undefined}
                 >
+                  {link.icon === undefined ? null : <span className="am-disclosure__icon" aria-hidden="true">{link.icon}</span>}
                   {link.label}
                 </Link>
               </li>
