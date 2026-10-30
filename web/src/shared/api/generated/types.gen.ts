@@ -7133,8 +7133,8 @@ export type VersionUid = string;
 export const VERSION_UID_PATTERN = "^ver_[0-9A-HJKMNP-TV-Z]{26}$";
 
 /**
- * How a version reached the product. ``comparison_pdf`` is a plain PDF admitted for
- * comparison only (`Q-CMP-5`): no section analysis can start on it.
+ * How a version reached the product. ``comparison_pdf`` is a plain PDF admitted through
+ * comparison without a portal bundle. Ordinary section analysis uses its native text and pages.
  */
 export const VERSION_UPLOAD_KIND_VALUES = [
   'portal_bundle',

@@ -14,7 +14,7 @@
  * version list and the project structure say the same thing the version screen does.
  *
  * `CMP-VERSION-MARK-01`: a version admitted for comparison only (`upload_kind` `comparison_pdf`)
- * carries the mark «Загружено без пакета портала — только для сравнения» under its badges. Any
+ * carries the mark «PDF без пакета портала» under its badges. Any
  * other version, and a version without the field, draws exactly what it drew before.
  */
 

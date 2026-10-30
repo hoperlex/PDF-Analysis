@@ -117,7 +117,7 @@ describe('ordinary section start preflight', () => {
     live = await mountLive(createElement(QueryClientProvider, { client: client() },
       createElement(StartRunControl, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
     await live.press('Оценить стоимость');
-    expect(live.markup()).toContain('Этот PDF загружен только для сравнения');
+    expect(live.markup()).toContain('Сервер не принимает этот PDF');
     expect(live.markup()).toContain('href="/stage-comparison"');
     expect(live.markup()).toContain('cid-comparison-only');
     expect(await live.press('Оценить стоимость')).toBe(false);

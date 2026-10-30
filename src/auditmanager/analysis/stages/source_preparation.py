@@ -246,6 +246,17 @@ def _source_file(
         Path(name).unlink(missing_ok=True)
 
 
+def count_native_text_characters(
+    store: BlobStore, blob_id: BlobId, *, expected_sha256: str, expected_page_count: int,
+) -> int:
+    """Count the same normalized PDF text the worker will prepare, for a native-only cost estimate."""
+    with _source_file(store, blob_id) as (path, source_sha256):
+        if source_sha256 != expected_sha256:
+            raise DomainError(ErrorCode.STORAGE_INTEGRITY_ERROR, role=ROLE_SOURCE_DOCUMENT)
+        document = extract_document(path, expected_page_count=expected_page_count)
+    return sum(page.char_count for page in document.pages)
+
+
 def _portal_members(context: StageContext) -> tuple[bytes, bytes] | None:
     """``(markdown, block list)`` of a portal bundle, or ``None`` for a version without one."""
     markdown_blob = context.inputs.get(ROLE_SOURCE_MARKDOWN)

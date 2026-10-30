@@ -36,14 +36,16 @@ __all__ = [
     "SINGLE_PROMPT_DIGEST",
     "SINGLE_PROMPT_VERSION",
     "SINGLE_SCHEMA",
+    "SYSTEM_PROMPT",
     "SOURCES",
     "schema_digest",
     "validate_answer",
 ]
 
 #: The version names (at most 64 characters: ``ck_comparison_sheet_description_prompt_version``).
-PROMPT_VERSION: Final[str] = "sheet-changes/1"
-SINGLE_PROMPT_VERSION: Final[str] = "sheet-single/1"
+PROMPT_VERSION: Final[str] = "sheet-changes/2"
+SINGLE_PROMPT_VERSION: Final[str] = "sheet-single/2"
+SYSTEM_PROMPT: Final[str] = "Ты анализируешь листы проектной документации. Отвечай только JSON по заданной схеме."
 
 KINDS: Final[tuple[str, ...]] = (
     "replacement", "added", "removed", "quantity", "parameter", "requirement", "route", "relocation", "text_correction", "document",
@@ -239,8 +241,8 @@ def schema_digest() -> str:
     return _digest(SHEET_CHANGES_SCHEMA)
 
 
-PROMPT_DIGEST: Final[str] = _digest(PROMPT_VERSION, PROMPT_TEMPLATE, SHEET_CHANGES_SCHEMA)
-SINGLE_PROMPT_DIGEST: Final[str] = _digest(SINGLE_PROMPT_VERSION, SINGLE_PROMPT, SINGLE_SCHEMA)
+PROMPT_DIGEST: Final[str] = _digest(PROMPT_VERSION, SYSTEM_PROMPT, PROMPT_TEMPLATE, SHEET_CHANGES_SCHEMA)
+SINGLE_PROMPT_DIGEST: Final[str] = _digest(SINGLE_PROMPT_VERSION, SYSTEM_PROMPT, SINGLE_PROMPT, SINGLE_SCHEMA)
 
 
 def validate_answer(answer: Any, schema: Mapping[str, Any], path: str = "$") -> list[str]:

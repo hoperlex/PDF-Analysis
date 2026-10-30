@@ -34175,7 +34175,7 @@
           "comparison_pdf"
         ],
         "title": "VersionUploadKind",
-        "description": "How a version reached the product. ``comparison_pdf`` is a plain PDF admitted for\ncomparison only (`Q-CMP-5`): no section analysis can start on it."
+        "description": "How a version reached the product. ``comparison_pdf`` is a plain PDF admitted through\ncomparison without a portal bundle. Ordinary section analysis can use its native PDF text and pages;\nportal-dependent operations still require a bundle."
       },
       "ApplyComparisonMatrixEditsRequest": {
         "properties": {
