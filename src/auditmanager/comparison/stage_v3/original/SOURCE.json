@@ -1,0 +1,18 @@
+{
+  "repository": "https://github.com/SU10KAZ/PDF-proverka",
+  "commit": "3c99481719218b9cfa7560886529916646c61939",
+  "files": {
+    "validate.py": "07d8ac8f490a919e745239f72164faa09be2e8467ddcc9c8341f129f0e7ffaa7",
+    "coverage.py": "7d8b43141579430920efe3e602f3f6a5db674f725a30b90cb638d2094605936e",
+    "supplemental.py": "eb7af728928a189c747ece5a530b1bf240778d0cda608bf78be7e531886447e9",
+    "dedupe.py": "f31812588aa7f5c3a2c70cc060a9584ee422b570568f0110199d6b82b591e7c3",
+    "quality.py": "81d89388cf8da1b49f84db224ba361093e1ba37dca420f58b25eaa854842023a",
+    "verification.py": "bde05f787aa800ab3dada1ec08d965b47641b52f01dcd3c5df6ea55617697798",
+    "prompts/MAPPER_PROMPT.txt": "8a97e262468bf443da947a905e83e09dd1ee4427a59887115c92f56e8168189f",
+    "prompts/MINER_PROMPT.txt": "750d6bc5699e3171618a6d1d82762f53146fac0d9acf933697b80643003f75f2",
+    "prompts/UNMATCHED_PROMPT.txt": "fb7655645b99e1c7c1cd617e7c5aa5c3926bc0fb24ee410037f819546e2510f7",
+    "prompts/DEDUPE_PROMPT.txt": "b31304ff4a5bd656a2505daa5fe9588ad794c3f5c2a7e86e10a31beb31fa0acc",
+    "prompts/VERIFY_PROMPT.txt": "0bac78722cdbf7f4ee316fa94291e49e458f2420854638c79d1909e444ea2dd5"
+  },
+  "schema_source": "contracts.py: pure selected AST source segments; provider/env/FS imports excluded"
+}

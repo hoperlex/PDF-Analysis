@@ -176,7 +176,7 @@ class StageChainHandler:
                 result = self._ai_phase(item, record, step_no, "review")
             elif step_no == 5:
                 result = self._ai_phase(item, record, step_no, "classify")
-                if isinstance(result, Mapping) and self.repair is not None:
+                if isinstance(result, Mapping) and self.repair is not None and record.engine == "classic":
                     repaired = self.repair.advance(item, run_id=run_id)
                     if isinstance(repaired, (Completed, Failed, Yielded)):
                         return repaired

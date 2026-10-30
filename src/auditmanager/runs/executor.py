@@ -1278,6 +1278,55 @@ def _execute_run_body(
         # the text stage durable exactly as they are.
         session.commit()
 
+        # HOTFIX-ANALYSIS-1030. A fresh accepted cost authority alone enables
+        # this additive preliminary review. Old accepted commands never buy
+        # additional calls merely because a worker was upgraded.
+        from auditmanager.analysis.public import extended_review_enabled
+        if (extended_review_enabled(getattr(cost_policy, "extended_review", None))
+                and text_result.status in {StageStatus.SUCCEEDED, StageStatus.PARTIAL}):
+            from auditmanager.analysis.public import extended_artifact_envelope
+            from auditmanager.runs.extended_review import run_extended_review
+
+            def extended_checkpoint(boundary: str) -> None:
+                job_repo.require_current(session, authority)
+                current_run = run_repo.get(session, run_id)
+                if current_run.state != "running":
+                    raise DomainError(ErrorCode.STALE_ATTEMPT, aggregate_type="Attempt")
+                session.commit()
+                if effect_checkpoint is not None:
+                    effect_checkpoint(boundary)
+
+            def publish_extended(role: str, body: dict[str, Any]) -> ArtifactRef:
+                ref, _ = publish_artifact(text_store, role,
+                    extended_artifact_envelope(role, run.version_uid, **body))
+                for blob_id in job_repo.bind_artifacts(session, authority,
+                        stage_id="text_analysis", artifacts=(ref,)):
+                    blob_repo.mark_available(session, blob_id)
+                session.commit()
+                return ref
+
+            def extended_progress(status: str, result: dict[str, Any]) -> None:
+                nonlocal text_result
+                ref = publish_extended("analysis.extended_review",
+                    {"run_id": run_id, "status": status, "result": result})
+                artifacts = tuple(a for a in text_result.artifacts if a.role != "analysis.extended_review")
+                text_result = replace(text_result, artifacts=(*artifacts, ref), metrics={
+                    **text_result.metrics, "extended_review_status": status,
+                    "extended_blocks_processed": result["coverage"]["blocks_processed"],
+                    "extended_blocks_total": result["coverage"]["blocks_total"],
+                })
+                _persist(session, run_repo, run_id, text_result)
+                outputs.absorb(text_result)
+                session.commit()
+
+            run_extended_review(session, run=run, authority=authority, jobs=job_repo,
+                journal=_DurableCallJournal(session, job_repo, authority, effect_checkpoint,
+                    call=binding.call, context=attempt_context),
+                binding=binding, outputs=outputs, store=text_store, meter=meter,
+                publish=publish_extended, progress=extended_progress,
+                checkpoint=extended_checkpoint, observations_document=observations_document,
+                snapshot_id=run.norms_snapshot_id, profile_sha256=text_profile.content_sha256)
+
     # `W54-JUDGE-Y` F5: the gate's artifacts are read from the store here, before the
     # advance below locks the run row, so no S3 read happens under that lock.
     gate_inputs = _read_gate_inputs(

@@ -21,6 +21,13 @@ describe('stage launch intent', () => {
     intent.clear();
     expect(intent.for(['start', { link_revision_id: 'b' }])).toBe('key-3');
   });
+  it('does not reuse the consented launch identity for another comparison engine', () => {
+    let sequence = 0;
+    const intent = new IntentKey(() => `key-${++sequence}`);
+    expect(intent.for(['start', { engine: 'classic', link_revision_id: 'a' }])).toBe('key-1');
+    expect(intent.for(['start', { engine: 'v3_native_text_experimental', link_revision_id: 'a' }])).toBe('key-2');
+    expect(intent.for(['start', { engine: 'v3_native_text_experimental', link_revision_id: 'a' }])).toBe('key-2');
+  });
   it('selects the latest full run and excludes a newer deterministic recomputation', () => {
     expect(latestFullRun([run({ run_id: uid('crn', 2), kind: 'deterministic', created_at: '2026-10-30T12:00:00Z' }),
       run({ run_id: uid('crn', 3), created_at: '2026-10-30T10:00:00Z' }), run()])?.run_id).toBe(uid('crn', 3));
@@ -37,6 +44,44 @@ describe('stage launch intent', () => {
 });
 
 describe('stage run controls', () => {
+  it('keeps classic as default and names the native-text V3 bounds before a new launch', () => {
+    const cache = newClient();
+    const value = run();
+    cache.setQueryData(STAGE_RUN_KEYS.list(value.pair_id), [value]);
+    cache.setQueryData(STAGE_RUN_KEYS.run(value.run_id), value);
+    const html = renderScreen(cache, createElement(StageRunControls, { pairId: value.pair_id, linkRevisionId: value.link_revision_id, mayAct: true }));
+    expect(html).toMatch(/value="classic" selected=""/);
+    expect(html).toContain('V3 · эксперимент, только текст PDF');
+    expect(html).toContain('07 Карточки');
+  });
+  it('shows the actual six procedure states and no classic seven-step strip for experimental runs', () => {
+    const cache = newClient();
+    const value = run({ state: 'paused', engine: 'v3_native_text_experimental', experimental_progress: {
+      engine: 'v3_native_text_experimental', source_version: '3c994817', procedure: 'Miner', status: 'running',
+      procedures: [{ name: 'Mapper', state: 'completed' }, { name: 'Miner', state: 'running' },
+        { name: 'Разбор непарных страниц', state: 'queued' }, { name: 'Dedupe', state: 'queued' },
+        { name: 'Проверка параметров', state: 'queued' }, { name: 'Карточки V3', state: 'queued' }],
+      limitations: ['Только текст PDF'],
+    } });
+    cache.setQueryData(STAGE_RUN_KEYS.list(value.pair_id), [value]);
+    cache.setQueryData(STAGE_RUN_KEYS.run(value.run_id), value);
+    const html = renderScreen(cache, createElement(StageRunControls, { pairId: value.pair_id, linkRevisionId: value.link_revision_id, mayAct: false }));
+    expect(html).toContain('data-stage-v3-progress');
+    expect(html).toContain('Подтверждено завершение процедур: 1 из 6');
+    expect(html).toContain('data-v3-procedure="Miner" data-v3-procedure-state="running"');
+    expect(html).toContain('Для следующего обращения откройте');
+    expect(html).not.toContain('07 Карточки');
+    expect(html).not.toContain('<p>Шаги:');
+  });
+  it('never fabricates procedure completion when the backend progress is absent', () => {
+    const cache = newClient();
+    const value = run({ engine: 'v3_native_text_experimental' });
+    cache.setQueryData(STAGE_RUN_KEYS.list(value.pair_id), [value]);
+    cache.setQueryData(STAGE_RUN_KEYS.run(value.run_id), value);
+    const html = renderScreen(cache, createElement(StageRunControls, { pairId: value.pair_id, linkRevisionId: value.link_revision_id, mayAct: false }));
+    expect(html).toContain('Состояние процедур ещё не передано. Завершение не подтверждено.');
+    expect(html).not.toContain('07 Карточки');
+  });
   it('shows the saved run and step strip without expert launch controls', () => {
     const cache = newClient();
     const value = run({ stale: true });

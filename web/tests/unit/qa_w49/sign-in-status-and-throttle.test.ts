@@ -35,7 +35,7 @@ let seen: Seen[] = [];
 let status: () => Response;
 
 const GENERIC_401 = JSON.stringify({
-  contract_version: '1.13.0',
+  contract_version: '1.14.0',
   correlation_id: 'qa49-generic-401',
   error_code: 'authentication_required',
   message: 'The credential is not accepted.',

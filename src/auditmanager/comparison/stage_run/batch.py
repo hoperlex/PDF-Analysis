@@ -66,15 +66,21 @@ class StageBatchService:
 
     def start(self, *, project_uid: str, selections: Sequence[Mapping[str, Any]],
               user_uid: str, actor_roles: frozenset[str], idempotency_key: str,
-              with_ai: bool = True) -> dict[str, Any]:
+              with_ai: bool = True, engine: str = "classic") -> dict[str, Any]:
         from auditmanager.shared.identity import StageChainBatchId, StageChainBatchItemId
 
+        from auditmanager.comparison.stage_v3.mode import validate_engine
+        validate_engine(engine)
+        if engine != "classic" and not with_ai:
+            raise DomainError(ErrorCode.VALIDATION_FAILED, field="with_ai", constraint="v3_requires_ai")
         self.chains._enabled()
         require_expert(actor_roles)
         if not 1 <= len(selections) <= 100 or len({s["pair_id"] for s in selections}) != len(selections):
             raise DomainError(ErrorCode.VALIDATION_FAILED, field="selections", constraint="unique_pairs")
         payload = {"project_uid": project_uid, "selections": [dict(s) for s in selections],
                    "user_uid": user_uid, "with_ai": with_ai}
+        if engine != "classic":
+            payload["engine"] = engine
         with session_scope(self.chains.sessions) as session:
             claim = self.chains.commands.begin(session, command_type="start_stage_chain_batch",
                                                idempotency_key=IdempotencyKey(idempotency_key),
@@ -108,7 +114,7 @@ class StageBatchService:
             self.chains.work.enqueue(session, project_uid=project_uid, module="stages",
                                      kind=BATCH_WORK_KIND, payload={"batch_id": batch_id},
                                      dedupe_key=f"stage_batch:{batch_id}", created_by_user_uid=user_uid)
-            self.chains.commands.succeed(session, claim.command_id, {"batch_id": batch_id})
+            self.chains.commands.succeed(session, claim.command_id, {"batch_id": batch_id, "engine": engine})
             self._event(session, batch_id, "started", user_uid)
             return self.record(session, batch_id)
 
@@ -248,11 +254,12 @@ class StageBatchHandler:
                     if state == "cancelled":
                         return Completed()
                     try:
+                        from auditmanager.comparison.stage_v3.mode import engine_for_batch
                         run = self.chains.start(pair_id=str(row[1]), revision_id=str(row[2]),
                                                 user_uid=str(batch[2]), actor_roles=roles,
                                                 idempotency_key=f"stage-batch:{batch_id}:{row[0]}",
                                                 with_ai=bool(batch[3]), consent=dict(row[5]) or None,
-                                                batch_id=batch_id)
+                                                batch_id=batch_id, engine=engine_for_batch(session, batch_id))
                     except DomainError:
                         session.execute(text(
                             "UPDATE stage_chain_batch_item SET state = 'failed', updated_at = clock_timestamp() "

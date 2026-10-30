@@ -11,6 +11,31 @@ import { NOW, uid } from '../version-compare/fixtures';
 import { card, journal, run } from './fixtures';
 
 describe('stage review UI', () => {
+  it('renders native V3 typed parameters and distinguishes machine confirmation from PENDING or unknown states', () => {
+    const value = card({ experimental: { engine: 'v3_native_text_experimental', engineering_subject: 'Проём',
+      parameters: [{ name: 'Ширина', old_value: 900, new_value: 1000, unit: 'мм', location: 'Лист 1', verification: { verdict: 'CONFIRMED', explanation: 'Цитаты совпали' } },
+        { name: 'Высота', old_value: 2000, new_value: 2100, unit: 'мм', verification: { verdict: 'PENDING' } },
+        { name: '<script>', old_value: {}, new_value: null, verification: { verdict: 'FUTURE_STATE' } }] } });
+    const html = renderScreen(newClient(), createElement(StageCardView, { card: value, mayAct: false,
+      draft: undefined, onDraft: () => {}, onOpenEvidence: () => {} }));
+    expect(html).toContain('Параметры V3');
+    expect(html).toContain('Подтверждено машинной сверкой');
+    expect(html).toContain('Инженер не подтверждал результат');
+    expect(html).toContain('Соответствие нормам не проверялось');
+    expect(html.match(/Не проверено/g)).toHaveLength(2);
+    expect(html).toContain('Лист 1');
+    expect(html).not.toContain('<script>');
+    expect(html).toContain('&lt;script&gt;');
+  });
+  it('shows corrected machine values separately from the original extracted parameter', () => {
+    const value = card({ experimental: { engine: 'v3_native_text_experimental', parameters: [{ name: 'Размер', old_value: 90, new_value: 100,
+      verification: { verdict: 'CORRECTED', old_value: 900, new_value: 1000, unit: 'мм' } }] } });
+    const html = renderScreen(newClient(), createElement(StageCardView, { card: value, mayAct: false,
+      draft: undefined, onDraft: () => {}, onOpenEvidence: () => {} }));
+    expect(html).toContain('<td>90</td><td>100</td>');
+    expect(html).toContain('После сверки: 900 → 1000 мм.');
+    expect(html).toContain('Уточнено машинной сверкой');
+  });
   it('renders evidence and absence uncertainty, while stale cards have no expert radio', () => {
     const cache = newClient();
     const html = renderScreen(cache, createElement(StageCardView, { card: card({ before: '', stale: true }),

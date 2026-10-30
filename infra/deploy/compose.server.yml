@@ -250,6 +250,9 @@ services:
       # `PROXY_LLM_*` / `ANTHROPIC_API_KEY`, the default) or `database` (the connections an
       # administrator manages in the UI). The switch back is the rollback.
       AUDITMANAGER_PROVIDER_SOURCE: ${AUDITMANAGER_PROVIDER_SOURCE:-environment}
+      # Presentation comparison exposure is explicit in both API and worker.
+      AUDITMANAGER_COMPARISON_MODULES: ${AUDITMANAGER_COMPARISON_MODULES:-versions,stages}
+      AUDITMANAGER_EXTENDED_ANALYSIS: ${AUDITMANAGER_EXTENDED_ANALYSIS:-1}
       # The PUBLIC half of the key ring that seals a connection's key, and the key id new keys
       # are sealed to. Public, so they live in alpha.env and reach both services; the private
       # ring (`AUDITMANAGER_SECRETS_KEYS`) is in provider.env and only the worker reads it.
@@ -329,6 +332,9 @@ services:
       # `PROXY_LLM_*` / `ANTHROPIC_API_KEY`, the default) or `database` (the connections an
       # administrator manages in the UI). The switch back is the rollback.
       AUDITMANAGER_PROVIDER_SOURCE: ${AUDITMANAGER_PROVIDER_SOURCE:-environment}
+      # Presentation comparison exposure is explicit in both API and worker.
+      AUDITMANAGER_COMPARISON_MODULES: ${AUDITMANAGER_COMPARISON_MODULES:-versions,stages}
+      AUDITMANAGER_EXTENDED_ANALYSIS: ${AUDITMANAGER_EXTENDED_ANALYSIS:-1}
       # The PUBLIC half of the key ring that seals a connection's key, and the key id new keys
       # are sealed to. Public, so they live in alpha.env and reach both services; the private
       # ring (`AUDITMANAGER_SECRETS_KEYS`) is in provider.env and only the worker reads it.

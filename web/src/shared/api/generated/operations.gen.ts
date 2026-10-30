@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.13.0 (OpenAPI 3.1.0)
- *   sha256 8fd13c576ec9a1a52baa4ec99e4b5b487231c7aec6b57256df3c5342c32cce3f
+ *   AuditManager PC-01 API 1.14.0 (OpenAPI 3.1.0)
+ *   sha256 05397fad027834c0f037d0890e4a059207b7881445b810cbc0bac2137b7233dd
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -136,6 +136,7 @@ import type {
   ExecutorTaskAck,
   ExecutorTaskId,
   ExtendedExecutorTaskClaim,
+  ExtendedRunReview,
   FailExecutorTaskRequest,
   FindingCategory,
   FindingDetail,
@@ -378,6 +379,7 @@ export const OPERATION_IDS = [
   'getEffectiveVendorLists',
   'getExecutorConnection',
   'getExecutorTaskImage',
+  'getExtendedRunReview',
   'getFinding',
   'getMe',
   'getNormDocument',
@@ -403,6 +405,7 @@ export const OPERATION_IDS = [
   'getVersionPageProfile',
   'getVersionPageSpecPositions',
   'getVersionSectionReview',
+  'importComparisonZip',
   'issueRunnerToken',
   'issueToken',
   'listAnalysisPresets',
@@ -524,6 +527,7 @@ export const OPERATION_IDS = [
   'streamComparisonReportSourceMd',
   'streamComparisonSeriesSummary',
   'streamComparisonSheetDescriptionMd',
+  'streamComparisonTechnicalReport',
   'streamDocumentVersionContent',
   'streamNormDocumentContent',
   'streamStageChangeJournalHtml',
@@ -1962,6 +1966,7 @@ export type EstimateStageChainRunInput = {
   };
   /** Query string parameters. */
   query?: {
+    engine?: "classic" | "v3_native_text_experimental";
     stage_chain_run_id?: string;
   };
   /**
@@ -2747,6 +2752,25 @@ export type GetExecutorTaskImageInput = {
 export type GetExecutorTaskImageResult = Blob;
 
 // ------------------------------------------------------------------------------------
+// getExtendedRunReview - GET /runs/{run_id}/extended-review
+// ------------------------------------------------------------------------------------
+
+/** Get Extended Run Review */
+export type GetExtendedRunReviewInput = {
+  /** Path parameters, substituted into `/runs/{run_id}/extended-review`. */
+  path: {
+    run_id: RunId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getExtendedRunReview` (`application/json`, HTTP 200). */
+export type GetExtendedRunReviewResult = ExtendedRunReview;
+
+// ------------------------------------------------------------------------------------
 // getFinding - GET /findings/{finding_uid}
 // ------------------------------------------------------------------------------------
 
@@ -3301,6 +3325,36 @@ export type GetVersionSectionReviewInput = {
 
 /** Success body of `getVersionSectionReview` (`application/json`, HTTP 200). */
 export type GetVersionSectionReviewResult = SectionReview;
+
+// ------------------------------------------------------------------------------------
+// importComparisonZip - POST /projects/{project_uid}/comparison-zip-uploads
+// ------------------------------------------------------------------------------------
+
+/** Import Comparison Zip */
+export type ImportComparisonZipInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/comparison-zip-uploads`. */
+  path: {
+    project_uid: ProjectUid;
+  };
+  /** Request body, sent as `application/zip`. */
+  body: Blob;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+  /** Additional declared request headers. */
+  headers?: {
+    'X-Archive-Name'?: string;
+  };
+};
+
+/** Success body of `importComparisonZip` (`application/json`, HTTP 201). */
+export type ImportComparisonZipResult = ComparisonUpload;
 
 // ------------------------------------------------------------------------------------
 // issueRunnerToken - POST /executor-connections/{connection_id}/runner-tokens
@@ -6522,6 +6576,29 @@ export type StreamComparisonSheetDescriptionMdInput = {
 export type StreamComparisonSheetDescriptionMdResult = string;
 
 // ------------------------------------------------------------------------------------
+// streamComparisonTechnicalReport - GET /comparison-series/{comparison_series_id}/technical-report
+// ------------------------------------------------------------------------------------
+
+/** Stream Technical Report */
+export type StreamComparisonTechnicalReportInput = {
+  /** Path parameters, substituted into `/comparison-series/{comparison_series_id}/technical-report`. */
+  path: {
+    comparison_series_id: ComparisonSeriesId;
+  };
+  /** Query string parameters. */
+  query?: {
+    format?: "xlsx" | "html";
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `streamComparisonTechnicalReport` (`application/octet-stream`, HTTP 200). */
+export type StreamComparisonTechnicalReportResult = Blob;
+
+// ------------------------------------------------------------------------------------
 // streamDocumentVersionContent - GET /versions/{version_uid}/content
 // ------------------------------------------------------------------------------------
 
@@ -7883,7 +7960,7 @@ export const OPERATIONS = {
     method: 'GET',
     path: '/stage-link-revisions/{stage_link_revision_id}/chain-estimate',
     pathParams: ['stage_link_revision_id'],
-    queryParams: ['stage_chain_run_id'],
+    queryParams: ['engine', 'stage_chain_run_id'],
     headerParams: [],
     requiresIdempotencyKey: false,
     requestMediaType: null,
@@ -8368,6 +8445,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 404, 409, 422, 500, 503],
     tags: ['execution'],
   },
+  getExtendedRunReview: {
+    operationId: 'getExtendedRunReview',
+    method: 'GET',
+    path: '/runs/{run_id}/extended-review',
+    pathParams: ['run_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['runs'],
+  },
   getFinding: {
     operationId: 'getFinding',
     method: 'GET',
@@ -8717,6 +8808,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 500, 503],
     tags: ['documents'],
+  },
+  importComparisonZip: {
+    operationId: 'importComparisonZip',
+    method: 'POST',
+    path: '/projects/{project_uid}/comparison-zip-uploads',
+    pathParams: ['project_uid'],
+    queryParams: [],
+    headerParams: ['X-Archive-Name'],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/zip',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['comparison'],
   },
   issueRunnerToken: {
     operationId: 'issueRunnerToken',
@@ -10410,6 +10515,20 @@ export const OPERATIONS = {
     responseMediaType: 'text/markdown',
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
+  },
+  streamComparisonTechnicalReport: {
+    operationId: 'streamComparisonTechnicalReport',
+    method: 'GET',
+    path: '/comparison-series/{comparison_series_id}/technical-report',
+    pathParams: ['comparison_series_id'],
+    queryParams: ['format'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/octet-stream',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['comparison'],
   },
   streamDocumentVersionContent: {

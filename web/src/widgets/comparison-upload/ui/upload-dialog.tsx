@@ -18,7 +18,7 @@
  */
 
 import { useState } from 'react';
-import type { ChangeEvent } from 'react';
+import type { ChangeEvent, ReactNode } from 'react';
 
 import type { ComparisonProposalSet, ComparisonUpload, ProjectUid } from '@/shared/api';
 import { EmptyState, LoadingState } from '@/shared/ui';
@@ -49,6 +49,7 @@ import { SetEditor } from './set-editor';
 import styles from './comparison-upload.module.css';
 import type { FlowPhase, Progress, UploadFlow } from './use-upload-flow';
 import { useUploadFlow } from './use-upload-flow';
+import { ZipImport } from './zip-import';
 
 export type UploadMode = 'single' | 'batch';
 
@@ -58,10 +59,11 @@ export const BATCH_SWITCH = 'Пакетная загрузка: каждая п�
 export const PICK_HINT =
   'Выберите папку с PDF (вложенные папки тоже читаются) или отдельные файлы. Исходные файлы не изменяются.';
 export const PROPOSAL_NOTE = 'Номер в имени файла, «Изм.» и дата выпуска — подсказки; порядок версий задаёте вы.';
-export const ZIP_NOTE = 'ZIP-комплекты пока не принимаются: загрузите PDF.';
+export const ZIP_NOTE = 'ZIP с PDF можно импортировать отдельно: после проверки подтвердите состав и порядок версий.';
 export const REPICK_NOTE = 'Чтобы продолжить, выберите те же файлы ещё раз: по ним система узнает, какие части уже приняты.';
 
 export interface UploadDialogViewProps {
+  readonly zipImport?: ReactNode;
   readonly mode: UploadMode;
   readonly phase: FlowPhase;
   readonly groups: readonly Group[];
@@ -230,7 +232,8 @@ export function UploadDialogView(props: UploadDialogViewProps) {
               {formatMebibytes(props.groups.reduce((sum, group) => sum + group.bytes, 0))}
             </p>
           ) : null}
-          {props.skipped > 0 ? <p className="am-note">Пропущено файлов не в формате PDF: {props.skipped}.</p> : null}
+          {props.skipped > 0 ? <p className="am-note">Пропущено файлов не в формате PDF: {props.skipped}. Для архива используйте отдельный импорт ZIP.</p> : null}
+          {props.zipImport}
           {props.problem === null ? null : (
             <p className="am-decision__refusal" role="alert" data-precheck={props.problem}>
               {PRECHECK_SENTENCES[props.problem]}
@@ -456,6 +459,7 @@ export function UploadDialog({ projectUid, mode, mayAct, onSwitch, onClose }: Up
 
   return (
     <UploadDialogView
+      zipImport={<ZipImport projectUid={projectUid} disabled={!mayAct || busy || flow.picked.length > 0} onImported={(imported) => { setNotice('ZIP проверен. Подтвердите группировку и порядок версий.'); flow.attach(imported.upload_id); }} />}
       mode={mode}
       phase={phase}
       groups={groupsOf(flow.picked)}

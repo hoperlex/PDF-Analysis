@@ -78,6 +78,7 @@ import {
 } from '@/shared/ui';
 import styles from './run-progress.module.css';
 import { PdfPrecheckProgress } from './pdf-precheck-progress';
+import { ExtendedReview } from '@/widgets/extended-review';
 
 import {
   AR_V3_BETA_PROFILE_ID,
@@ -456,6 +457,8 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
       <PipelineRail rows={stageRows(status)} />
 
       <Outcome status={status} />
+
+      <ExtendedReview runId={runId} active={animating} />
 
       {interrupted !== null && status.state !== 'failed' ? (
         <p data-interrupted-reason={interrupted}>

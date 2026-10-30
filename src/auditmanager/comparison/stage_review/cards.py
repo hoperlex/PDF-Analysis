@@ -40,7 +40,7 @@ def anchor_key(part: Mapping[str, Any]) -> str:
 
 
 def prepare_cards(sources: Mapping[str, dict[str, Any]],
-                  classifications: Sequence[dict[str, Any]]) -> tuple[dict[str, Any], ...]:
+                  classifications: Sequence[dict[str, Any]], *, include_uncovered: bool = True) -> tuple[dict[str, Any], ...]:
     """Validated AI labels decorate evidence; every uncovered raw row remains REVIEW.
 
     SAME/MOVED judgments never remove the underlying deterministic difference.
@@ -60,7 +60,7 @@ def prepare_cards(sources: Mapping[str, dict[str, Any]],
                 raise invalid("stage_card_classification_invalid")
             used.update(ids)
             proposed.append(dict(card) | {"classification_id": answer["classification_id"]})
-    for evidence_id in sorted(set(sources) - used):
+    for evidence_id in sorted(set(sources) - used) if include_uncovered else ():
         source = sources[evidence_id]
         title = ("Графическое различие требует проверки" if source["kind"] == "GRAPHIC"
                  else "Текстовое различие требует проверки")

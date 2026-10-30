@@ -42,28 +42,32 @@
  * `[data-theme='dark'] .am-badge` is still an offence, because it is a rule and not a
  * palette.
  *
- * The typeface line is NOT closed here and is not silently half-done: a self-hosted face
- * needs a font file, every path that could hold one is outside this task's `allowed_paths`,
- * and a webfont would be the first UI dependency in thirteen. The scale, the weights and
- * the tracking are here; the face is still the system stack. `docs/program/W31-STYLE.md`
- * says so and names whose it is.
+ * `DESIGN-DESKTOP-SHELL-1030` owns the self-hosted Cyrillic face and the denser scale.
  * ================================================================================== */
+
+@font-face {
+  font-family: 'Ubuntu Sans';
+  src: url('/fonts/UbuntuSans-variable.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 300 800;
+  font-display: swap;
+}
 
 :root {
   /* ---- typeface ---------------------------------------------------------------- */
-  --am-font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --am-font: 'Ubuntu Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --am-font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
 
   /* ---- type scale -------------------------------------------------------------- */
   --am-text-xs: 11.5px;
-  --am-text-sm: 13px;
-  --am-text-md: 14px;
-  --am-text-base: 15px;
-  --am-text-lg: 17px;
-  --am-text-xl: 20px;
-  --am-text-2xl: 25px;
+  --am-text-sm: 12.5px;
+  --am-text-md: 13.5px;
+  --am-text-base: 14px;
+  --am-text-lg: 16px;
+  --am-text-xl: 19px;
+  --am-text-2xl: 24px;
   --am-leading-tight: 1.3;
-  --am-leading-base: 1.55;
+  --am-leading-base: 1.48;
   --am-leading-relaxed: 1.65;
   --am-tracking-caps: 0.07em;
 
@@ -865,9 +869,14 @@ input[type='file']::file-selector-button:hover {
 
 .am-app {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
+  grid-template-columns: 224px minmax(0, 1fr);
   min-height: 100vh;
   background: var(--am-showcase-bg);
+  transition: grid-template-columns var(--am-motion-base) var(--am-ease);
+}
+
+.am-app[data-sidebar='compact'] {
+  grid-template-columns: 68px minmax(0, 1fr);
 }
 
 .am-app__bar {
@@ -877,14 +886,20 @@ input[type='file']::file-selector-button:hover {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: var(--am-gap-lg);
-  width: 260px;
+  gap: 16px;
+  width: 224px;
   height: 100vh;
   min-height: 0;
-  padding: 28px 18px 18px;
+  padding: 18px 14px 14px;
   border-right: 1px solid var(--am-line);
   background: var(--am-paper);
   box-shadow: var(--am-shadow-1);
+  transition: width var(--am-motion-base) var(--am-ease), padding var(--am-motion-base) var(--am-ease);
+}
+
+.am-app[data-sidebar='compact'] .am-app__bar {
+  width: 68px;
+  padding: 18px 8px 12px;
 }
 
 .am-app__brand {
@@ -892,7 +907,7 @@ input[type='file']::file-selector-button:hover {
   align-items: center;
   min-width: 0;
   font-weight: 750;
-  font-size: var(--am-text-xl);
+  font-size: 18px;
   letter-spacing: -0.04em;
   color: var(--am-accent);
   text-decoration: none;
@@ -900,12 +915,12 @@ input[type='file']::file-selector-button:hover {
 
 .am-app__brand::before {
   content: '';
-  flex: 0 0 24px;
-  width: 24px;
-  height: 24px;
-  margin-right: 10px;
-  border: 3px solid currentColor;
-  border-radius: 8px;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  margin-right: 7px;
+  border: 2.5px solid currentColor;
+  border-radius: 6px;
   transform: rotate(-14deg);
 }
 
@@ -961,7 +976,7 @@ input[type='file']::file-selector-button:hover {
 .am-app__main {
   flex: 1;
   min-width: 0;
-  padding: clamp(20px, 3vw, 44px);
+  padding: clamp(18px, 2vw, 32px);
 }
 
 /*
@@ -1360,7 +1375,16 @@ input[type='file']::file-selector-button:hover {
   font-size: var(--am-text-xs);
 }
 
-@media (max-width: 1159.98px) {
+@media (min-width: 1024px) {
+  .am-app[data-sidebar='compact'] .am-app__brand::before {
+    width: 24px;
+    height: 24px;
+    flex-basis: 24px;
+    margin-right: 0;
+  }
+}
+
+@media (max-width: 1023.98px) {
   .am-app {
     display: flex;
     flex-direction: column;
@@ -1379,6 +1403,11 @@ input[type='file']::file-selector-button:hover {
     border-bottom: 1px solid var(--am-line);
   }
 
+  .am-app[data-sidebar='compact'] .am-app__bar {
+    width: auto;
+    padding: 12px 16px;
+  }
+
   .am-app__main {
     padding: 20px 16px;
   }
@@ -1391,21 +1420,32 @@ input[type='file']::file-selector-button:hover {
 /* ---- page shell ------------------------------------------------------------------ */
 
 .am-page {
-  max-width: 1180px;
+  max-width: 1500px;
   margin: 0 auto;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .am-app__main > * {
+    animation: am-screen-appear var(--am-motion-base) var(--am-ease) both;
+  }
+
+  @keyframes am-screen-appear {
+    from { opacity: 0.75; }
+    to { opacity: 1; }
+  }
 }
 
 .am-page__header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--am-gap-lg);
-  margin-bottom: var(--am-gap-lg);
+  gap: 18px;
+  margin-bottom: 18px;
 }
 
 .am-page__title {
   margin: 0;
-  font-size: clamp(26px, 2.3vw, 32px);
+  font-size: clamp(24px, 2.1vw, 30px);
   font-weight: 700;
   letter-spacing: -0.035em;
 }
@@ -1423,7 +1463,7 @@ input[type='file']::file-selector-button:hover {
   background: var(--am-paper);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius-lg);
-  padding: var(--am-gap-lg);
+  padding: 20px;
   box-shadow: var(--am-shadow-2);
 }
 

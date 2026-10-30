@@ -31,6 +31,7 @@ import { HOME_SCREEN, SIGN_IN_SCREEN, getInstanceLabel } from '@/shared/config';
 import { AccountMenu } from './account-menu';
 import { FrameNavigation } from './frame-navigation';
 import { ReleaseNoticesGate } from './release-notices';
+import { SidebarToggle } from './sidebar-toggle';
 import { buildNavigation } from './navigation';
 import { ThemeToggle } from './theme-toggle';
 import styles from './app-frame.module.css';
@@ -78,11 +79,14 @@ export const FRAME_FOOTER = 'Альфа-версия. Изменять данн�
 export function AppFrame({ children, session }: AppFrameProps) {
   const instance = getInstanceLabel();
   return (
-    <div className="am-app">
+    <div className="am-app" data-sidebar="full">
       <header className="am-app__bar">
-        <Link className="am-app__brand" href={HOME_SCREEN}>
-          AuditManager
-        </Link>
+        <div className={styles.brandRow}>
+          <Link className="am-app__brand" href={HOME_SCREEN} aria-label="AuditManager — главная">
+            <span className={styles.brandLabel}>AuditManager</span>
+          </Link>
+          <SidebarToggle />
+        </div>
         {/*
          * The menu holds exactly the rows `screenDecision` opens for this session — the
          * function the guard asks — so a guest, a default credential and an incomplete

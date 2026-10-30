@@ -77,6 +77,7 @@ export const FORWARDED_REQUEST_HEADERS = [
   'idempotency-key',
   'range',
   'x-correlation-id',
+  'x-archive-name',
 ] as const;
 
 /**
@@ -209,7 +210,7 @@ export function synthesizedEnvelope(
   correlationId: string,
 ): ErrorEnvelope {
   return {
-    contract_version: '1.13.0',
+    contract_version: '1.14.0',
     correlation_id: correlationId,
     error_code: errorCode,
     message,

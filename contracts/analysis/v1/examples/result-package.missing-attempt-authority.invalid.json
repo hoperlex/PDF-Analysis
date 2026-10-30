@@ -1,5 +1,5 @@
 {
-  "contract_version": "1.13.0",
+  "contract_version": "1.14.0",
   "attempt_authority": {
     "run_id": "run_NC8B8QARV9SZPKVF59QSXCV53K",
     "job_id": "job_HHDBVZETDEPXT3WKNRV16PAW6S",
@@ -7,11 +7,11 @@
   },
   "stage_registry": {
     "contract": "auditmanager.analysis.stage_registry",
-    "contract_version": "1.13.0"
+    "contract_version": "1.14.0"
   },
   "stage_results": [
     {
-      "contract_version": "1.13.0",
+      "contract_version": "1.14.0",
       "stage_id": "source_preparation",
       "stage_version": "1.0.0",
       "status": "succeeded",

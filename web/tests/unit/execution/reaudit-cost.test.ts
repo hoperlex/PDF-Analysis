@@ -92,7 +92,7 @@ describe('fresh cost consent for repeated paid Runs', () => {
   });
 
   it('a stale digest requires a fresh reading and new agreement', async () => {
-    vi.mocked(reauditRun).mockRejectedValueOnce(new ApiError(409, { contract_version: '1.13.0',
+    vi.mocked(reauditRun).mockRejectedValueOnce(new ApiError(409, { contract_version: '1.14.0',
       error_code: 'conflict', message: 'stale', correlation_id: 'reaudit-stale', retryable: false,
       details: { conflict_reason: 'run_cost_estimate_stale' } }, 'reaudit-stale'));
     const { view } = await mount();

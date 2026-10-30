@@ -964,7 +964,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.13.0"]
+    contract_version: Literal["1.14.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -6894,6 +6894,8 @@ class StageChainStep(_Object):
 
 
 class StageChainRun(_Object):
+    engine: Literal["classic", "v3_native_text_experimental"] = "classic"
+    experimental_progress: dict[str, Any] | None = None
     run_id: StageChainRunId
     pair_id: StagePairId
     link_revision_id: StageLinkRevisionId
@@ -6919,6 +6921,7 @@ class StageChainRunPage(_Object):
 
 
 class StartStageChainRunRequest(_Object):
+    engine: Literal["classic", "v3_native_text_experimental"] = "classic"
     link_revision_id: StageLinkRevisionId
     restart: bool = Field(**_NOT_GIVEN)  # type: ignore[assignment]
     consent: ComparisonAiConsent = Field(**_NOT_GIVEN)  # type: ignore[assignment]
@@ -7121,6 +7124,7 @@ class StageCardVerdictPage(_Object):
 
 
 class StageChangeCard(_Object):
+    experimental: dict[str, Any] | None = None
     card_id: StageChangeCardId
     run_id: StageChainRunId
     card_key: Sha256
@@ -7177,6 +7181,7 @@ class StageChainBatchSelection(_Object):
 
 
 class StartStageChainBatchRequest(_Object):
+    engine: Literal["classic", "v3_native_text_experimental"] = "classic"
     selections: Annotated[list[StageChainBatchSelection], Field(min_length=1, max_length=100)]
     with_ai: bool = True
 
@@ -7232,3 +7237,9 @@ class ResumeStageChainRunRequest(_Object):
 class CreateStageReviewCardRequest(_Object):
     source_ids: Annotated[list[StageAtomicEvidenceId], Field(min_length=1, max_length=400)]
     reason: Annotated[str, Field(min_length=1, max_length=2000)]
+
+
+class ExtendedRunReview(_Object):
+    run_id: RunId
+    status: Literal["not_started", "running", "completed", "partial", "failed", "unavailable"]
+    result: dict[str, Any] | None = None

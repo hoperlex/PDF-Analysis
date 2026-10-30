@@ -92,6 +92,7 @@ import { AiStepCellView, SelectBox, useAiRow } from './ai-step-cell';
 import type { AiStartDialogProps } from './ai-dialogs';
 import { AiStartDialog, ReportDraftDialog, SelectionDialog } from './ai-dialogs';
 import { AiQueueStrip, LaunchQueueStrip } from './queue-strips';
+import { SpecificationPanel } from './specification-panel';
 import type { LaunchAct } from './queue-strips';
 import { CommandRefusal, FailureState } from './module-state';
 import aiStyles from './ai-steps.module.css';
@@ -264,6 +265,7 @@ function SortHeader({
 function SetRow(props: ProjectsAndStagesViewProps & { readonly set: ComparisonOverviewSet }) {
   const { set, projectUid, mayAct, busy, selected, onSelect, onSelectable, launchQueue, onOpen, onAct, onAiAct, onSummary } = props;
   const row: AiRow = useAiRow(projectUid, set);
+  const technical = useDownload();
   const entries = launchQueue?.entries ?? [];
   const badgeOf = (step: ComparisonStepId) => queueBadge(entries, set.document_uid, step);
   const seriesChanged = set.steps.find((entry) => entry.step === 'series')?.counts?.with_changes;
@@ -307,6 +309,11 @@ function SetRow(props: ProjectsAndStagesViewProps & { readonly set: ComparisonOv
             Сводка изменений (MD)
           </button>
         ) : null}
+        {row.seriesId === null ? null : <div onClick={(event) => event.stopPropagation()} data-technical-downloads="">
+          <button type="button" className="am-button am-button--small am-button--quiet" disabled={technical.isPending} onClick={() => technical.mutate({ kind: 'technical', seriesId: row.seriesId as ComparisonSeriesId, format: 'xlsx', fileName: 'comparison-technical.xlsx' })}>Технический XLSX</button>
+          <button type="button" className="am-button am-button--small am-button--quiet" disabled={technical.isPending} onClick={() => technical.mutate({ kind: 'technical', seriesId: row.seriesId as ComparisonSeriesId, format: 'html', fileName: 'comparison-technical-html.zip' })}>HTML с изображениями (ZIP)</button>
+          {technical.error === null ? null : <p role="alert">{comparisonFailure(technical.error).detail}</p>}
+        </div>}
       </th>
       <td>
         <span>{set.version_count}</span>
@@ -338,6 +345,7 @@ function SetRow(props: ProjectsAndStagesViewProps & { readonly set: ComparisonOv
               badge={badgeOf(step)}
             />
           )}
+          {step === 'ai_changes' && row.seriesId !== null ? <SpecificationPanel seriesId={row.seriesId} mayAct={mayAct} /> : null}
         </td>
       ))}
     </tr>

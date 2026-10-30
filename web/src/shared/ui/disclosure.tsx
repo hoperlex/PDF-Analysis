@@ -48,6 +48,10 @@ interface DisclosureCommonProps {
   readonly align?: 'start' | 'end' | undefined;
   /** The desktop sidebar keeps its groups visible on first render; other uses stay closed. */
   readonly defaultOpen?: boolean | undefined;
+  /** Keep the panel open when following one of its links. */
+  readonly closeOnNavigate?: boolean | undefined;
+  /** Keep inline desktop groups open while focus or a pointer moves into the page. */
+  readonly closeOnOutside?: boolean | undefined;
 }
 
 /**
@@ -132,6 +136,7 @@ export function Disclosure(props: DisclosureProps) {
   const [open, setOpen] = useState(props.defaultOpen === true);
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const navigationFocus = useRef(false);
 
   const apply = (
     transition: DisclosureTransition,
@@ -145,12 +150,16 @@ export function Disclosure(props: DisclosureProps) {
     if (transition.focus === 'button') buttonRef.current?.focus();
   };
 
-  // While open, a pointer pressed or focus arriving anywhere outside closes it.
+  // Transient disclosures close on outside activity; persistent desktop groups opt out.
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open || props.closeOnOutside === false) return undefined;
     const onOutside = (event: Event): void => {
       const root = rootRef.current;
       if (root !== null && event.target instanceof Node && !root.contains(event.target)) {
+        // Client-side routing may move focus into the next page. A chosen child link must
+        // leave the navigation visible; a later outside pointer press still closes it.
+        if (event.type === 'focusin' && navigationFocus.current) return;
+        navigationFocus.current = false;
         setOpen(disclosureTransition(true, { type: 'outside' }).open);
       }
     };
@@ -160,7 +169,7 @@ export function Disclosure(props: DisclosureProps) {
       document.removeEventListener('pointerdown', onOutside);
       document.removeEventListener('focusin', onOutside);
     };
-  }, [open]);
+  }, [open, props.closeOnOutside]);
 
   return (
     <DisclosureView
@@ -174,6 +183,10 @@ export function Disclosure(props: DisclosureProps) {
         onKeyDown: (event) => apply(disclosureTransition(open, { type: 'key', key: event.key }), event),
         onPanelClick: (event) => {
           if (event.target instanceof Element && event.target.closest('a') !== null) {
+            if (props.closeOnNavigate === false) {
+              navigationFocus.current = true;
+              return;
+            }
             apply(disclosureTransition(open, { type: 'navigate' }));
           }
         },

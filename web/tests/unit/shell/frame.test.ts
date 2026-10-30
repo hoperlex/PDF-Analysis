@@ -190,32 +190,37 @@ describe('the footer', () => {
   });
 });
 
-describe('the two layout states, and the width at the 780 px floor', () => {
-  it('puts both states in the markup, each in its own container', () => {
+describe('the three layout states, and the width at the 780 px floor', () => {
+  it('puts all states in the markup, each in its own container', () => {
     const markup = frame(EXPERT);
     expect(markup).toContain(`<div class="${styles.row}" data-nav-state="row">`);
+    expect(markup).toContain(`<div class="${styles.rail}" data-nav-state="rail">`);
     expect(markup).toContain(`<div class="${styles.stacked}" data-nav-state="stacked">`);
     expect(markup.slice(markup.indexOf('data-nav-state="row"'), markup.indexOf('data-nav-state="stacked"'))).toContain('aria-expanded="true"');
     expect(markup).toMatch(/aria-expanded="false"[^>]*>Меню<\/button>/);
   });
 
-  it('shows exactly one of them: the row above the breakpoint, the stacked list at or below 780 px', () => {
+  it('shows one navigation state at a time across desktop and narrow widths', () => {
     const css = readFileSync(fileURLToPath(new URL(FRAME_CSS, import.meta.url)), 'utf8');
     expect(declarations(FRAME_CSS, '.stacked')).toMatch(/display\s*:\s*none/);
+    expect(declarations(FRAME_CSS, '.rail')).toMatch(/display\s*:\s*none/);
     const media = /@media\s*\(max-width:\s*([\d.]+)px\)\s*\{([\s\S]*?)\n\}/.exec(css);
     expect(media, 'no breakpoint').not.toBeNull();
     expect(Number(media?.[1])).toBeGreaterThanOrEqual(780);
     expect(media?.[2]).toMatch(/\.row\s*\{\s*display\s*:\s*none;?\s*\}/);
     expect(media?.[2]).toMatch(/\.stacked\s*\{\s*display\s*:\s*block;?\s*\}/);
+    expect(css).toMatch(/\.am-app\[data-sidebar='compact'\].*\.row\s*\{\s*display:\s*none/);
+    expect(css).toMatch(/\.am-app\[data-sidebar='compact'\].*\.rail\s*\{\s*display:\s*grid/);
   });
 
   it('gives desktop content a bounded sidebar and lets the compact bar wrap', () => {
-    expect(declarations(GLOBALS, '.am-app')).toMatch(/grid-template-columns\s*:\s*260px minmax\(0, 1fr\)/);
+    expect(declarations(GLOBALS, '.am-app')).toMatch(/grid-template-columns\s*:\s*224px minmax\(0, 1fr\)/);
+    expect(declarations(GLOBALS, ".am-app[data-sidebar='compact']")).toMatch(/grid-template-columns\s*:\s*68px minmax\(0, 1fr\)/);
     expect(declarations(FRAME_CSS, '.row')).toMatch(/display\s*:\s*grid/);
     expect(declarations(FRAME_CSS, '.nav')).toMatch(/min-width\s*:\s*0/);
     const globalCss = readFileSync(fileURLToPath(new URL(GLOBALS, import.meta.url)), 'utf8');
     expect(globalCss).toMatch(/\.am-app__bar\s*\{\s*position:\s*sticky;[^}]*flex-direction:\s*column/);
-    expect(globalCss).toMatch(/@media\s*\(max-width:\s*1159\.98px\)[\s\S]*?\.am-app__bar\s*\{[^}]*flex-wrap:\s*wrap/);
+    expect(globalCss).toMatch(/@media\s*\(max-width:\s*1023\.98px\)[\s\S]*?\.am-app__bar\s*\{[^}]*flex-wrap:\s*wrap/);
   });
 
   it('holds a 66-character name and a 254-character address whole, in a header that breaks them anywhere', () => {

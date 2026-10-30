@@ -362,6 +362,7 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         # versions of a document set, and the page reads. Reads are any one role; every write is
         # an expert's act (`R-60`), like ``uploadDocument``.
         "createComparisonUpload": _EXPERT,
+        "importComparisonZip": _EXPERT,
         "listComparisonUploads": _ANY_ROLE,
         "getComparisonUpload": _ANY_ROLE,
         "getComparisonUploadProposal": _ANY_ROLE,
@@ -424,6 +425,7 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "listComparisonReports": _ANY_ROLE,
         "getComparisonReport": _ANY_ROLE,
         "streamComparisonReportPdf": _ANY_ROLE,
+        "streamComparisonTechnicalReport": _ANY_ROLE,
         "streamComparisonReportSourceMd": _ANY_ROLE,
         "startComparisonAiPairCheck": _EXPERT,
         "pauseComparisonAiPairCheck": _EXPERT,
@@ -511,6 +513,7 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "startStageChainRun": _EXPERT,
         "cancelStageChainRun": _EXPERT,
         "getRunStatus": _ANY_ROLE,
+        "getExtendedRunReview": _ANY_ROLE,
         "getArV3BetaGroup": _ANY_ROLE,
         "getArV3BetaGroupReview": _ANY_ROLE,
         "getArV3BetaPackStatus": _ANY_ROLE,

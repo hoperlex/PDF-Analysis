@@ -67,6 +67,23 @@ class StageReviewService:
 
     @staticmethod
     def _sources(session: Session, revision_id: str, run_id: str) -> dict[str, dict[str, Any]]:
+        from auditmanager.comparison.stage_v3.mode import ENGINE, engine_for_run
+        if engine_for_run(session, run_id) == ENGINE:
+            from auditmanager.comparison.stage_ai.repository import StageAiRepository
+            snapshot = StageAiRepository().revision(session, revision_id)
+            rows = session.execute(text(
+                "SELECT f.*,dv.document_uid,pp.page_number FROM stage_text_fragment f "
+                "JOIN comparison_page_profile pp ON pp.comparison_page_profile_id=f.page_profile_id "
+                "JOIN document_version dv ON dv.version_uid=pp.version_uid "
+                "WHERE f.stage_pair_id=:pair AND f.page_profile_id=ANY(CAST(:profiles AS text[]))"
+            ), {"pair": snapshot["stage_pair_id"], "profiles": [r["profile_id"] for r in snapshot["all_profiles"]]}).mappings()
+            return {r["stage_text_fragment_id"]: {
+                "kind": "TEXT", "fragment_id": r["stage_text_fragment_id"], "difference_id": None, "graphic_id": None,
+                "before": r["normalised_text"] if r["side"] == "left" else "",
+                "after": r["normalised_text"] if r["side"] == "right" else "",
+                "parts": [{"side": r["side"], "profile_id": r["page_profile_id"], "document_uid": r["document_uid"],
+                           "page_number": r["page_number"], "content_key": r["content_key"], "box_anchor": r["box_anchor"]}],
+            } for r in rows}
         rows = session.execute(text(
             "SELECT d.stage_text_difference_id AS id,d.content_key,d.status,"
             "l.stage_text_fragment_id AS left_id,l.page_profile_id AS left_profile,"
@@ -210,7 +227,9 @@ class StageReviewService:
                     "FROM stage_ai_classification a JOIN stage_ai_unit u ON u.stage_ai_unit_id=a.stage_ai_unit_id "
                     "WHERE a.stage_chain_run_id=:run AND u.state='completed' ORDER BY a.content_key"
                 ), {"run": run_id}).mappings()]
-            plans = prepare_cards(sources, answers)
+            from auditmanager.comparison.stage_v3.mode import ENGINE, engine_for_run
+            experimental = engine_for_run(session, run_id) == ENGINE
+            plans = prepare_cards(sources, answers, include_uncovered=not experimental)
             source_digest = digest(plans)
             publication = session.execute(text(
                 "SELECT payload->>'source_digest' FROM audit_event WHERE aggregate_type='StageChainRun' "
@@ -225,7 +244,7 @@ class StageReviewService:
                 if set(existing) != {(p["card_key"], p["evidence_digest"]) for p in plans}:
                     raise invalid("stage_review_materialization_changed")
                 return self._counts(session, run)
-            previous = self._previous(session, run)
+            previous = [] if experimental else self._previous(session, run)
             for plan in plans:
                 card_id = str(StageChangeCardId.new())
                 session.execute(text(
@@ -244,11 +263,11 @@ class StageReviewService:
                         session.execute(text(
                             "INSERT INTO stage_card_evidence(stage_card_evidence_id,stage_chain_run_id,"
                             "stage_change_card_id,kind,source_difference_id,source_graphic_evidence_id,"
-                            "side,page_profile_id,box_anchor,absence_proven) VALUES(:id,:run,:card,"
-                            ":kind,:difference,:graphic,:side,:profile,CAST(:box AS jsonb),false)"
+                            "source_fragment_id,side,page_profile_id,box_anchor,absence_proven) VALUES(:id,:run,:card,"
+                            ":kind,:difference,:graphic,:fragment,:side,:profile,CAST(:box AS jsonb),false)"
                         ), {"id": str(StageCardEvidenceId.new()), "run": run_id, "card": card_id,
                             "kind": source["kind"], "difference": source["difference_id"],
-                            "graphic": source["graphic_id"], "side": part["side"],
+                            "graphic": source["graphic_id"], "fragment": source.get("fragment_id"), "side": part["side"],
                             "profile": part["profile_id"], "box": json.dumps(part["box_anchor"])})
                 label, matches = carryover_match(plan, previous)
                 if plan["class_name"] != "SERVICE_STRUCTURE" and label == "full":
@@ -284,6 +303,7 @@ class StageReviewService:
             if len(matches) == 1:
                 metadata = matches[0]
         metadata = metadata or {}
+        card["experimental"] = metadata.get("experimental")
         card["materiality"] = metadata.get("materiality") if metadata.get("materiality") in ("material", "non_material") else "unknown"
         card["importance"] = metadata.get("importance") if metadata.get("importance") in ("high", "normal") else "unknown"
         card["detail_increased"] = metadata.get("detail_increased") is True

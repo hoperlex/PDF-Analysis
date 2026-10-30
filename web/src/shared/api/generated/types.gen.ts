@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.13.0 (OpenAPI 3.1.0)
- *   sha256 8fd13c576ec9a1a52baa4ec99e4b5b487231c7aec6b57256df3c5342c32cce3f
+ *   AuditManager PC-01 API 1.14.0 (OpenAPI 3.1.0)
+ *   sha256 05397fad027834c0f037d0890e4a059207b7881445b810cbc0bac2137b7233dd
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.13.0';
+export const CONTRACT_VERSION = '1.14.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '8fd13c576ec9a1a52baa4ec99e4b5b487231c7aec6b57256df3c5342c32cce3f';
+export const CONTRACT_DIGEST = '05397fad027834c0f037d0890e4a059207b7881445b810cbc0bac2137b7233dd';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -329,6 +329,7 @@ export const SCHEMA_NAMES = [
   'ExecutorTransport',
   'ExecutorWorkKind',
   'ExtendedExecutorTaskClaim',
+  'ExtendedRunReview',
   'FailExecutorTaskRequest',
   'Finding',
   'FindingCategory',
@@ -3709,7 +3710,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.13.0";
+  contract_version: "1.14.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -4113,6 +4114,14 @@ export type ExecutorWorkKind = (typeof EXECUTOR_WORK_KIND_VALUES)[number];
 
 export type ExtendedExecutorTaskClaim = {
   claim_expires_at: string;
+};
+
+export type ExtendedRunReview = {
+  result?: {
+    [key: string]: unknown;
+  } | null;
+  run_id: RunId;
+  status: "not_started" | "running" | "completed" | "partial" | "failed" | "unavailable";
 };
 
 /** A lower-case code, optionally followed by ``: `` and a short, payload-free detail. */
@@ -6218,6 +6227,10 @@ export type StageChainRun = {
   batch_id?: string;
   created_at: string;
   effective_link_revision_id?: StageLinkRevisionId;
+  engine?: "classic" | "v3_native_text_experimental";
+  experimental_progress?: {
+    [key: string]: unknown;
+  } | null;
   failure_reason?: string;
   input_sha256: Sha256;
   kind?: "deterministic" | "full";
@@ -6272,6 +6285,9 @@ export type StageChangeCard = {
   evidence?: Array<StageCardEvidence>;
   evidence_digest: Sha256;
   evidence_ids: Array<StageAtomicEvidenceId>;
+  experimental?: {
+    [key: string]: unknown;
+  } | null;
   importance?: "high" | "normal" | "unknown";
   materiality?: "material" | "non_material" | "unknown";
   run_id: StageChainRunId;
@@ -6801,12 +6817,14 @@ export type StartRunRequest = {
 };
 
 export type StartStageChainBatchRequest = {
+  engine?: "classic" | "v3_native_text_experimental";
   selections: Array<StageChainBatchSelection>;
   with_ai?: boolean;
 };
 
 export type StartStageChainRunRequest = {
   consent?: ComparisonAiConsent;
+  engine?: "classic" | "v3_native_text_experimental";
   link_revision_id: StageLinkRevisionId;
   restart?: boolean;
   with_ai?: boolean;

@@ -592,7 +592,7 @@ describe('the reasons of wave C2 are said in Russian', () => {
       expect(failure.detail, reason).not.toContain('caller-safe');
     }
     for (const constraint of ['comparison_consent_required', 'comparison_step_not_queueable', 'comparison_report_source_invalid']) {
-      const failure = comparisonFailure(new ApiError(422, { contract_version: '1.13.0', error_code: 'validation_failed', message: 'English', correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100', retryable: false, details: { constraint } }, '0f0e9d8c-7b6a-4948-b726-150413021100'));
+      const failure = comparisonFailure(new ApiError(422, { contract_version: '1.14.0', error_code: 'validation_failed', message: 'English', correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100', retryable: false, details: { constraint } }, '0f0e9d8c-7b6a-4948-b726-150413021100'));
       expect(failure.detail, constraint).toMatch(/[А-Яа-я]/);
       expect(failure.detail, constraint).not.toContain('English');
     }

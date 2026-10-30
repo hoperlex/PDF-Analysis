@@ -1,5 +1,19 @@
 # Current state
 
+**Updated 2026-10-30 by `DESIGN-DESKTOP-SHELL-1030` (development candidate).** The shared desktop frame now uses a narrower 224 px sidebar with a persistent 68 px compact rail, an explicit collapse control, labelled role-filtered links, and navigation groups that stay open after a child link is chosen. The 31-screen shell uses self-hosted Ubuntu Sans with Cyrillic coverage, a slightly smaller type scale, broader content width, tighter spacing and reduced-motion-aware transitions. Both existing theme palettes remain in place. Focused tests (102), typecheck, repository-wide lint and CSS parse passed. No API, contract, migration or `origin/main` change is included. Publication is to `origin/dev` only.
+
+**Updated 2026-10-30 by `HOTFIX-PRESENTATION-INT-1030` (emergency development candidate).** All fifteen ordinary section profiles now share a bounded preliminary block/image/context review, lossless observation merge and local-corpus citation assessment. Fresh cost consent includes at most three additional calls for sixteen blocks; existing accepted commands retain their old policy. Missing source/corpus coverage stays explicit. Version comparison exposes whole-specification runs with separate consent, PDF-only ZIP import and technical XLSX/HTML ZIP downloads. Stage comparison adds a separate native-text experimental V3 procedure, copied with provenance from PDF-proverka `3c994817`; classic stays default. V3 requires fresh consent before every next model call and retains independent parameter-verification status. API `1.14.0` has 233 paths / 259 operations / 620 schemas; migration remains `0043_stage_ai_generations`. Synthetic ZIP inputs and the operator sequence are in `fixtures/presentation-hotfix/README.md`. Production build and scoped recorded/unit checks passed; full gates, browser execution and deep acceptance remain deferred. See `HOTFIX-PRESENTATION-INT-1030.md` for limits, provider prerequisites and publication evidence. No main publication is authorised.
+
+**Updated 2026-10-30 by `DESIGN-M10-ACCEPTANCE` (lightweight development
+candidate).** The M01–M09 rollout covers all 31 registered routes in both
+themes; the redirect-only optimisation route is included. Registry/set, theme,
+defined-token, style-layer and avatar checks passed (68 tests); typecheck,
+lint and 89 CSS modules also passed. Browser screenshots at 390/768/1440 px
+and the full contrast census remain unverified in this environment. The exact
+coverage and limits are recorded in `docs/program/reviews/DESIGN-M10-ACCEPTANCE.md`.
+No API, contract, migration or `origin/main` change is included. Publication
+is to `origin/dev` only.
+
 **Updated 2026-10-30 by `DESIGN-M09-ACCOUNT` (development candidate only).**
 Profile, password change, user list, user detail and registration queue now
 use responsive two-theme cards and contained tables. Existing forms, role

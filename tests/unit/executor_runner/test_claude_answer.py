@@ -253,9 +253,9 @@ def test_ssh_envelope_fails_closed(tmp_path: Path, case: str, reason: str) -> No
         claude_answer.ssh_reply(task, claude=fake_claude(tmp_path, case))
 
 
-def test_ssh_mode_refuses_the_stands_image_envelope_and_the_pull_mode_still_needs_a_schema() -> None:
+def test_ssh_mode_refuses_an_incomplete_png_and_the_pull_mode_still_needs_a_schema() -> None:
     image = {"media_type": "image/png", "data": "iVBORw0KGgo="}
-    with pytest.raises(claude_answer.TaskError, match="^image_input_unsupported$"):
+    with pytest.raises(claude_answer.TaskError, match="^invalid_png$"):
         claude_answer.read_task(json.dumps({**SSH_TASK, "image": image}).encode(), ssh=True)
     with pytest.raises(claude_answer.TaskError, match="^missing_object_schema$"):
         claude_answer.read_task(json.dumps(SSH_TASK).encode())

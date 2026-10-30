@@ -23,7 +23,7 @@ down`. This is the deployed stack.
 
 | Path | What it is |
 |---|---|
-| `Dockerfile.api` | the 256 operations under uvicorn, plus `T-3`'s health plane |
+| `Dockerfile.api` | the 259 operations under uvicorn, plus `T-3`'s health plane |
 | `Dockerfile.web` | `npm run build`, then `next start` |
 | `serve.py` | the entry point: **one built application, two ports** |
 | `compose.server.yml` | the stack: PostgreSQL, MinIO, migrate, release-notes, api, worker, web, one proxy. Two database urls (`PROD-04`): `DATABASE_URL`, the application role's, reaches `api` and `worker`; `MIGRATOR_DATABASE_URL`, the owner's, reaches `migrate` and `release-notes` only |
@@ -226,12 +226,30 @@ rather than configure anything. `bootstrap/settings.py` records the same reasoni
 `AUDITMANAGER_PROVIDER_MODE`. `env/alpha.env.example` is its channel, and
 `tests/integration/composition/test_api_token_channel.py` pins all of it.
 
+### Comparison modules
+
+The deployment-wide `AUDITMANAGER_COMPARISON_MODULES` value belongs in
+`infra/deploy/env/alpha.env` (start from `alpha.env.example`), not in the
+developer `.env`. The supported values are `none`, `versions`, and
+`versions,stages`. `compose.server.yml` passes the same value to `api` and
+`worker`; this deploy candidate defaults to `versions,stages` when the value is
+empty or unset. The API reports it as
+`ProductVersion.comparison_modules`, and both comparison pages state when their
+module is off. There is no account-administration switch for this deployment
+setting.
+
+After updating the stand's `alpha.env`, recreate both services with the normal
+`infra/deploy/deploy.sh` path and check the authenticated product-version read
+and the worker's configured environment. `versions,stages` makes both screens
+available; setting `none` and recreating both services pauses new comparison
+work without deleting its stored evidence. An unknown value stops startup.
+
 ## The health plane
 
 Two ports on the API container, from **one built application**:
 
 ```
-:8000   the 256 operations, mounted by the proxy at /api/v1
+:8000   the 259 operations, mounted by the proxy at /api/v1
 :8001   /healthz and /readyz — no credential, no product meaning, no contract
 ```
 

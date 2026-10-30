@@ -26,6 +26,8 @@ thinking or turns.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import os
 import shutil
@@ -35,6 +37,8 @@ import sys
 import tempfile
 import threading
 import time
+import struct
+import zlib
 from pathlib import Path
 
 ALLOWED_MODELS = ("claude-opus-5", "claude-sonnet-5")
@@ -42,7 +46,14 @@ ALLOWED_MODELS = ("claude-opus-5", "claude-sonnet-5")
 #: ``authorized_keys`` line or an agent configuration written then keeps working.
 DEFAULT_MODEL = ALLOWED_MODELS[0]
 MAX_TASK_BYTES = 1024 * 1024
-MAX_SSH_TASK_BYTES = 24 << 20  # the stand's SSH adapter sends at most this much
+MAX_SSH_SINGLE_TASK_BYTES = 24 << 20
+MAX_SSH_TASK_BYTES = 48 << 20  # up to32MiB raw PNGs in the stand's multi-image envelope
+MAX_IMAGES = 8
+MAX_IMAGE_BYTES = 16 << 20
+MAX_TOTAL_IMAGE_BYTES = 32 << 20
+MAX_IMAGE_PIXELS = 40_000_000
+MAX_IMAGE_DIMENSION = 16_384
+MAX_DECODED_IMAGE_BYTES = 160 << 20
 MAX_OUTPUT_BYTES = 8 * 1024 * 1024
 MAX_SCHEMA_BYTES = 96 * 1024  # one argv string is limited to 128 KiB on Linux
 MAX_STREAM_BYTES = 64 << 20  # the whole stream (partial thinking deltas are many); the result stays 8 MiB
@@ -92,11 +103,120 @@ def read_task(payload: bytes, *, ssh: bool = False, model: str = DEFAULT_MODEL) 
         raise TaskError("missing_object_schema")
     elif len(json.dumps(schema, ensure_ascii=False).encode("utf-8")) > MAX_SCHEMA_BYTES:
         raise TaskError("schema_too_large")
-    if task.get("images") or task.get("local_images") or task.get("image"):
-        # The CLI is started with no tool, so it cannot open an image file; an image channel
-        # needs its own reviewed slice.  The agent's accept_images stays false as well.
+    if task.get("images") or task.get("local_images") or ("image" in task and not ssh):
         raise TaskError("image_input_unsupported")
+    images = _image_blocks(task)
+    if ssh and len(images) <= 1 and len(payload) > MAX_SSH_SINGLE_TASK_BYTES:
+        raise TaskError("task_too_large")
     return task
+
+
+def _verified_png(raw: bytes) -> None:
+    """Verify bounded PNG structure, CRC and inflated scanline size without a decoder/tool."""
+    if not raw.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise TaskError("invalid_png")
+    offset, header, palette, ended, idat_ended = 8, None, False, False, False
+    compressed = []
+    while offset < len(raw):
+        if offset + 12 > len(raw):
+            raise TaskError("invalid_png")
+        size = int.from_bytes(raw[offset:offset + 4], "big")
+        kind = raw[offset + 4:offset + 8]
+        end = offset + 12 + size
+        if end > len(raw) or size > MAX_IMAGE_BYTES:
+            raise TaskError("invalid_png")
+        data = raw[offset + 8:offset + 8 + size]
+        checksum = int.from_bytes(raw[offset + 8 + size:end], "big")
+        if (not all(65 <= letter <= 90 or 97 <= letter <= 122 for letter in kind)
+                or kind[2] & 32 or zlib.crc32(kind + data) & 0xffffffff != checksum):
+            raise TaskError("invalid_png")
+        if header is None and kind != b"IHDR":
+            raise TaskError("invalid_png")
+        if kind == b"IHDR":
+            if header is not None or size != 13:
+                raise TaskError("invalid_png")
+            width, height, depth, colour, compression, filtering, interlace = struct.unpack(">IIBBBBB", data)
+            depths = {0: (1, 2, 4, 8, 16), 2: (8, 16), 3: (1, 2, 4, 8), 4: (8, 16), 6: (8, 16)}
+            if (width < 1 or height < 1 or depth not in depths.get(colour, ())
+                    or compression or filtering or interlace not in (0, 1)):
+                raise TaskError("invalid_png")
+            if max(width, height) > MAX_IMAGE_DIMENSION or width * height > MAX_IMAGE_PIXELS:
+                raise TaskError("image_dimensions_too_large")
+            header = width, height, depth, colour, interlace
+        elif kind == b"PLTE":
+            if (palette or compressed or not 3 <= size <= 768 or size % 3
+                    or header[3] in (0, 4) or header[3] == 3 and size // 3 > 1 << header[2]):
+                raise TaskError("invalid_png")
+            palette = True
+        elif kind == b"IDAT":
+            if idat_ended:
+                raise TaskError("invalid_png")
+            compressed.append(data)
+        elif kind == b"IEND":
+            if size or not compressed or end != len(raw):
+                raise TaskError("invalid_png")
+            ended = True
+        elif not kind[0] & 32:
+            raise TaskError("invalid_png")  # unknown critical chunk
+        if compressed and kind not in (b"IDAT", b"IEND"):
+            idat_ended = True
+        offset = end
+    if not ended or header is None or header[3] == 3 and not palette:
+        raise TaskError("invalid_png")
+    width, height, depth, colour, interlace = header
+    channels = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}[colour]
+    passes = ((0, 0, 1, 1),) if not interlace else (
+        (0, 0, 8, 8), (4, 0, 8, 8), (0, 4, 4, 8), (2, 0, 4, 4),
+        (0, 2, 2, 4), (1, 0, 2, 2), (0, 1, 1, 2))
+    rows = []
+    for x, y, dx, dy in passes:
+        pw, ph = max(0, (width - x + dx - 1) // dx), max(0, (height - y + dy - 1) // dy)
+        if pw and ph:
+            rows.append((ph, (pw * depth * channels + 7) // 8 + 1))
+    expected = sum(count * size for count, size in rows)
+    if expected > MAX_DECODED_IMAGE_BYTES:
+        raise TaskError("image_dimensions_too_large")
+    try:
+        decoder = zlib.decompressobj()
+        decoded = decoder.decompress(b"".join(compressed), expected + 1)
+        if len(decoded) != expected or not decoder.eof or decoder.unused_data or decoder.unconsumed_tail:
+            raise TaskError("invalid_png")
+    except zlib.error:
+        raise TaskError("invalid_png") from None
+    offset = 0
+    for count, size in rows:
+        for row in range(count):
+            if decoded[offset + row * size] > 4:
+                raise TaskError("invalid_png")
+        offset += count * size
+
+
+def _image_blocks(task: dict) -> list[dict]:
+    if "image" not in task:
+        return []
+    value = task["image"]
+    images = [value] if isinstance(value, dict) else value
+    if not isinstance(images, list) or not 1 <= len(images) <= MAX_IMAGES:
+        raise TaskError("invalid_image_envelope")
+    blocks, total = [], 0
+    for image in images:
+        if (not isinstance(image, dict) or set(image) != {"media_type", "data"}
+                or image["media_type"] != "image/png" or not isinstance(image["data"], str)):
+            raise TaskError("invalid_image_envelope")
+        if len(image["data"]) > ((MAX_IMAGE_BYTES + 2) // 3) * 4:
+            raise TaskError("image_too_large")
+        try:
+            raw = base64.b64decode(image["data"], validate=True)
+        except (ValueError, binascii.Error):
+            raise TaskError("invalid_image_base64") from None
+        if not 1 <= len(raw) <= MAX_IMAGE_BYTES:
+            raise TaskError("image_too_large")
+        total += len(raw)
+        if total > MAX_TOTAL_IMAGE_BYTES:
+            raise TaskError("images_too_large")
+        _verified_png(raw)
+        blocks.append({"type": "image", "source": {"type": "base64", **image}})
+    return blocks
 
 
 def _effort(task: dict) -> str | None:
@@ -293,6 +413,12 @@ def _run(task: dict, *, claude: str | None, timeout: float, model: str,
     effort = _effort(task)
     prompt = json.dumps({"system": task["system"], "user_text": task["user_text"]},
                         ensure_ascii=False).encode("utf-8")
+    images = _image_blocks(task)
+    if images:
+        message = {"type": "user", "message": {"role": "user",
+            "content": images + [{"type": "text", "text": prompt.decode("utf-8")}]},
+            "parent_tool_use_id": None}
+        prompt = (json.dumps(message, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
     with tempfile.TemporaryDirectory(prefix="pdfa-claude-") as area:
         command = [
             executable, "-p", "--output-format", "stream-json", "--verbose",
@@ -304,6 +430,8 @@ def _run(task: dict, *, claude: str | None, timeout: float, model: str,
         ]
         if task.get("output_schema") is not None:
             command += ["--json-schema", json.dumps(task["output_schema"], ensure_ascii=False)]
+        if images:
+            command += ["--input-format", "stream-json"]
         if effort is not None:
             command += ["--effort", effort]
         process = subprocess.Popen(

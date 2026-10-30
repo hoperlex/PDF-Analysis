@@ -62,3 +62,8 @@ __all__ = [
     "stop_attempt_lease_heartbeat",
     "sweep_stale_temporaries",
 ]
+
+# HOTFIX-ANALYSIS-1030: durable unit reply/effect inspection.
+from auditmanager.jobs.extended_review import extended_unit
+
+__all__.append("extended_unit")

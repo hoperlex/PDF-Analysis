@@ -1,6 +1,6 @@
 {
   "contract": "auditmanager.analysis.legacy_stage_map",
-  "contract_version": "1.13.0",
+  "contract_version": "1.14.0",
   "status": "candidate",
   "source_inventory_commit": "667fb00fe3e45d1ce0bce7860725c1654b4cdeba",
   "source_inventory_section": "2.2 Pipeline stage/order declarations",

@@ -9,6 +9,7 @@ import { UNCONFIRMED_LABEL } from '@/entities/version-series';
 import { formatInstant } from '@/shared/lib';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import { StageReviewRequest } from '@/widgets/stage-text-evidence';
+import { StageExperimentalParameters } from '@/widgets/stage-v3-experimental';
 
 import { readCards, readVerdicts, STAGE_REVIEW_KEYS } from '../api/reads';
 import { CARRYOVER_WORDS, CLASS_WORDS, CATEGORY_WORDS, SYSTEM_WORDS, IMPORTANCE_WORDS, MATERIALITY_WORDS,
@@ -84,6 +85,7 @@ export function StageCardView({ card, draft, mayAct, mayRequestReview = mayAct, 
     {card.verdict?.decision === 'accepted' ? <p>Принято экспертом.</p> : <p><span className="am-badge am-badge--inert" data-stage-unconfirmed="">{UNCONFIRMED_LABEL}</span></p>}
     <p>Система: {SYSTEM_WORDS[card.system]}</p>
     <p>{MATERIALITY_WORDS[card.materiality ?? 'unknown']} · Важность: {IMPORTANCE_WORDS[card.importance ?? 'unknown']}</p>
+    <StageExperimentalParameters experimental={card.experimental} />
     <div className={styles.sides}>
       <CardSide side="left" card={card} onOpenEvidence={onOpenEvidence} />
       <CardSide side="right" card={card} onOpenEvidence={onOpenEvidence} />
