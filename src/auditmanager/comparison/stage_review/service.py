@@ -16,7 +16,8 @@ from auditmanager.ingest.public import CommandReplay, CommandRepository, payload
 from auditmanager.shared.db import session_scope
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import (
-    AuditEventId, IdempotencyKey, StageCardEvidenceId, StageCardVerdictId, StageChangeCardId,
+    AuditEventId, IdempotencyKey, IdentityError, StageCardEvidenceId, StageCardVerdictId, StageChangeCardId,
+    StageGraphicEvidenceId, StageTextDifferenceId, StageTextFragmentId,
 )
 
 from .cards import anchor_key, carryover_match, digest, invalid, prepare_cards
@@ -344,6 +345,94 @@ class StageReviewService:
             if row is None:
                 raise _missing("StageChangeCard")
             run = self._run(session, row["run_id"])
+            return self._project_card(session, dict(row), run, self._previous(session, run))
+
+    def promote(self, run_id: str, source_ids: Sequence[str], reason: str, *, user_uid: str,
+                actor_roles: frozenset[str], idempotency_key: str) -> dict[str, Any]:
+        """Expert escalation reveals source evidence; it neither rewrites AI nor accepts a card."""
+        require_expert(actor_roles)
+        if (not isinstance(source_ids, (tuple, list)) or not 1 <= len(source_ids) <= 100
+                or any(not isinstance(value, str) for value in source_ids) or len(set(source_ids)) != len(source_ids)
+                or not isinstance(reason, str) or len(reason) > 2000 or not reason.strip()):
+            raise DomainError(ErrorCode.VALIDATION_FAILED, field="source_ids", constraint="review_card_input")
+        try:
+            types = {"std": StageTextDifferenceId, "sge": StageGraphicEvidenceId, "stf": StageTextFragmentId}
+            ids = sorted(str(types[value.split("_", 1)[0]].parse(value)) for value in source_ids)
+        except (IdentityError, KeyError, AttributeError, TypeError):
+            raise DomainError(ErrorCode.VALIDATION_FAILED, field="source_ids", constraint="format") from None
+        reason = reason.strip()
+        fingerprint = payload_fingerprint({"command": "create_stage_review_card.v1", "run_id": run_id,
+                                           "source_ids": ids, "reason": reason, "actor_uid": user_uid})
+        with session_scope(self._sessions) as session:
+            claim = self._commands.begin(session, command_type="create_stage_review_card",
+                idempotency_key=IdempotencyKey(idempotency_key), fingerprint=fingerprint)
+            if isinstance(claim, CommandReplay):
+                row = session.execute(text(f"SELECT {_CARD} FROM stage_change_card c WHERE c.stage_change_card_id=:card"),
+                                      {"card": claim.outcome["card_id"]}).mappings().first()
+                if row is None:
+                    raise _missing("StageChangeCard")
+                run = self._run(session, run_id)
+                return self._project_card(session, dict(row), run, self._previous(session, run))
+            run = self._run(session, run_id)
+            session.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key,0))"),
+                            {"key": "stage_link:" + run["stage_pair_id"]})
+            run = self._run(session, run_id)
+            if run["stale"] or run["state"] != "completed":
+                raise invalid("stage_review_run_not_current_completed")
+            session.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key,0))"),
+                            {"key": "stage_review:" + run_id})
+            raw = self._sources(session, run["revision_id"], run_id)
+            sources = {identity: raw[identity] for identity in ids if identity in raw}
+            fragment_ids = [identity for identity in ids if identity.startswith("stf_")]
+            for row in session.execute(text(
+                "SELECT f.*,p.page_number,v.document_uid FROM stage_text_fragment f "
+                "JOIN comparison_page_profile p ON p.comparison_page_profile_id=f.page_profile_id "
+                "JOIN document_version v ON v.version_uid=p.version_uid WHERE f.stage_pair_id=:pair "
+                "AND f.stage_text_fragment_id=ANY(CAST(:ids AS text[])) AND p.version_uid=ANY(CAST(:pins AS text[])) "
+                "AND EXISTS(SELECT 1 FROM stage_link_item i WHERE i.stage_link_revision_id=:revision AND "
+                "((f.side='left' AND i.left_profile_id=f.page_profile_id) OR (f.side='right' AND i.right_profile_id=f.page_profile_id)))"
+            ), {"pair": run["stage_pair_id"], "ids": fragment_ids, "pins": list(run["pinned_version_uids"]),
+                "revision": run["revision_id"]}).mappings():
+                identity, side = row["stage_text_fragment_id"], row["side"]
+                sources[identity] = {"kind": "TEXT", "fragment_id": identity, "difference_id": None,
+                    "graphic_id": None, "before": row["normalised_text"] if side == "left" else "",
+                    "after": row["normalised_text"] if side == "right" else "", "parts": [{
+                        "side": side, "profile_id": row["page_profile_id"], "content_key": row["content_key"],
+                        "document_uid": row["document_uid"], "page_number": row["page_number"], "box_anchor": row["box_anchor"]}]}
+            if set(sources) != set(ids):
+                raise _missing("StageAtomicEvidence")
+            plan = prepare_cards(sources, [{"classification_id": None, "cards": [{
+                "class_name": "REVIEW", "category": "uncertain", "title": "Экспертная проверка свидетельств",
+                "system": "unknown", "evidence_ids": ids}]}])[0]
+            row = session.execute(text(f"SELECT {_CARD} FROM stage_change_card c "
+                "WHERE c.stage_chain_run_id=:run AND c.card_key=:key"), {"run": run_id, "key": plan["card_key"]}).mappings().first()
+            if row is None:
+                card_id = str(StageChangeCardId.new())
+                session.execute(text(
+                    "INSERT INTO stage_change_card(stage_change_card_id,stage_chain_run_id,card_key,evidence_digest,"
+                    "class_name,category,title,system,evidence_ids,before_text,after_text) VALUES(:card,:run,:key,:digest,"
+                    "'REVIEW','uncertain',:title,'unknown',CAST(:ids AS jsonb),:before,:after)"
+                ), {"card": card_id, "run": run_id, "key": plan["card_key"], "digest": plan["evidence_digest"],
+                    "title": plan["title"], "ids": json.dumps(ids), "before": plan["before"], "after": plan["after"]})
+                for identity in ids:
+                    source = sources[identity]
+                    for part in source["parts"]:
+                        session.execute(text(
+                            "INSERT INTO stage_card_evidence(stage_card_evidence_id,stage_chain_run_id,stage_change_card_id,"
+                            "kind,source_fragment_id,source_difference_id,source_graphic_evidence_id,side,page_profile_id,box_anchor) "
+                            "VALUES(:id,:run,:card,:kind,:fragment,:difference,:graphic,:side,:profile,CAST(:box AS jsonb))"
+                        ), {"id": str(StageCardEvidenceId.new()), "run": run_id, "card": card_id, "kind": source["kind"],
+                            "fragment": source.get("fragment_id"), "difference": source["difference_id"],
+                            "graphic": source["graphic_id"], "side": part["side"], "profile": part["profile_id"],
+                            "box": json.dumps(part["box_anchor"])})
+                row = session.execute(text(f"SELECT {_CARD} FROM stage_change_card c WHERE c.stage_change_card_id=:card"),
+                                      {"card": card_id}).mappings().one()
+            elif row["evidence_digest"] != plan["evidence_digest"]:
+                raise invalid("stage_review_materialization_changed")
+            card_id = row["card_id"]
+            self._audit(session, run_id, "stage.review_card_created", {"card_id": card_id, "source_ids": ids,
+                "actor_uid": user_uid, "command_id": str(claim.command_id), "reason": reason})
+            self._commands.succeed(session, claim.command_id, {"card_id": card_id})
             return self._project_card(session, dict(row), run, self._previous(session, run))
 
     def apply_verdicts(self, run_id: str, updates: Sequence[Mapping[str, Any]], *, user_uid: str,
