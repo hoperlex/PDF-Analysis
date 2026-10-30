@@ -15,13 +15,17 @@ def stage_chain_handler(dependencies: WorkDependencies) -> StageChainHandler:
     sessions = getattr(dependencies, "session_factory", None)
     return StageChainHandler(
         dependencies,
-        ai=StageAiRuntime(sessions, blob_store=getattr(dependencies, "blob_store", None), routes=getattr(dependencies, "routes", None)),
+        ai=StageAiRuntime(sessions, blob_store=getattr(dependencies, "blob_store", None), routes=getattr(dependencies, "routes", None),
+            graphic_source=StageGraphicService(sessions, blob_store=getattr(dependencies, "blob_store", None))),
         repair=StageRepairService(sessions), review=StageReviewService(sessions),
         graphics=StageGraphicService(sessions, blob_store=getattr(dependencies, "blob_store", None)),
     )
 
 
 def stage_chain_batch_handler(dependencies: WorkDependencies) -> StageBatchHandler:
+    from auditmanager.comparison.stage_graphic.service import StageGraphicService
+
     return StageBatchHandler(dependencies, ai=StageAiRuntime(
         getattr(dependencies, "session_factory", None), blob_store=getattr(dependencies, "blob_store", None), routes=getattr(dependencies, "routes", None),
+        graphic_source=StageGraphicService(getattr(dependencies, "session_factory", None), blob_store=getattr(dependencies, "blob_store", None)),
     ))

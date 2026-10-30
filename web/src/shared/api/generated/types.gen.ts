@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.13.0 (OpenAPI 3.1.0)
- *   sha256 d52a9b8f9f5f6760c1ba0d8c72703aac3a70bd6d85e1b829cf8307ea5b314904
+ *   sha256 afe53a80dde669c98c15abb1be3b971893f2fa78d9b91ceafbe4aab90116a207
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.13.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'd52a9b8f9f5f6760c1ba0d8c72703aac3a70bd6d85e1b829cf8307ea5b314904';
+export const CONTRACT_DIGEST = 'afe53a80dde669c98c15abb1be3b971893f2fa78d9b91ceafbe4aab90116a207';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -270,6 +270,7 @@ export const SCHEMA_NAMES = [
   'CreateExecutorConnectionRequest',
   'CreateProjectRequest',
   'CreateStageAssemblyRequest',
+  'CreateStageReviewCardRequest',
   'CreateStageUploadRequest',
   'Cursor',
   'DashboardSummary',
@@ -3512,6 +3513,11 @@ export type CreateStageAssemblyRequest = {
   label: string;
 };
 
+export type CreateStageReviewCardRequest = {
+  reason: string;
+  source_ids: Array<StageAtomicEvidenceId>;
+};
+
 export type CreateStageUploadRequest = {
   files: Array<StageUploadFileDeclaration>;
 };
@@ -6214,9 +6220,12 @@ export type StageChangeCard = {
   carryover?: "none" | "full" | "partial" | "stale";
   category: StageChangeCategory;
   class_name: "PROJECT_CHANGE" | "SERVICE_STRUCTURE" | "REVIEW";
+  detail_increased?: boolean;
   evidence?: Array<StageCardEvidence>;
   evidence_digest: Sha256;
   evidence_ids: Array<StageAtomicEvidenceId>;
+  importance?: "high" | "normal" | "unknown";
+  materiality?: "material" | "non_material" | "unknown";
   run_id: StageChainRunId;
   stale: boolean;
   system: StageSystem;
@@ -6278,8 +6287,11 @@ export type StageClassificationCard = {
   card_key: Sha256;
   category: StageChangeCategory;
   class_name: "PROJECT_CHANGE" | "SERVICE_STRUCTURE" | "REVIEW";
+  detail_increased?: boolean;
   evidence_digest: Sha256;
   evidence_ids: Array<StageAtomicEvidenceId>;
+  importance?: "high" | "normal" | "unknown";
+  materiality?: "material" | "non_material" | "unknown";
   model_class?: string;
   policy_reasons?: Array<string>;
   system: StageSystem;

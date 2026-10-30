@@ -7225,9 +7225,10 @@ class ComparisonStageRunAdapter(_StagesModuleGate):
     def __init__(self, sessions: sessionmaker[Session], *, blob_store: Any = None,
                  comparison_modules: str = "none", provider_mode: str = "recorded") -> None:
         super().__init__(comparison_modules=comparison_modules)
-        from auditmanager.comparison.public import StageAiRuntime, StageChainService
+        from auditmanager.comparison.public import StageAiRuntime, StageChainService, StageGraphicService
         self._sessions = sessions
-        self._ai = StageAiRuntime(sessions, blob_store=blob_store, provider_mode=provider_mode)
+        self._ai = StageAiRuntime(sessions, blob_store=blob_store, provider_mode=provider_mode,
+            graphic_source=StageGraphicService(sessions, blob_store=blob_store))
         self._runs = StageChainService(sessions, comparison_modules=comparison_modules, ai=self._ai)
 
     def _roles(self, user_uid: str) -> frozenset[str]:
@@ -7270,7 +7271,8 @@ class ComparisonStageC4Adapter(_StagesModuleGate):
             StageAiRuntime, StageChainService, StageBatchService, StageRepairService, StageReviewService, StageGraphicService)
 
         self._sessions = sessions
-        self._ai = StageAiRuntime(sessions, blob_store=blob_store, provider_mode=provider_mode)
+        self._ai = StageAiRuntime(sessions, blob_store=blob_store, provider_mode=provider_mode,
+            graphic_source=StageGraphicService(sessions, blob_store=blob_store))
         self._runs = StageChainService(sessions, comparison_modules=comparison_modules, ai=self._ai)
         self._batches = StageBatchService(self._runs)
         self._repairs = StageRepairService(sessions)
@@ -7373,6 +7375,14 @@ class ComparisonStageC4Adapter(_StagesModuleGate):
     def get_card(self, *, card_id: str) -> models.StageChangeCard:
         self._require_stages_module()
         return models.StageChangeCard.model_validate(self._review.get(card_id))
+
+    def create_review_card(self, *, run_id: str, body: models.CreateStageReviewCardRequest,
+                           user_uid: str, idempotency_key: str) -> models.StageChangeCard:
+        self._require_stages_module()
+        with self._sessions() as session:
+            roles = _comparison_actor(session, user_uid)[1]
+        return models.StageChangeCard.model_validate(self._review.promote(run_id, body.source_ids, body.reason,
+            user_uid=user_uid, actor_roles=roles, idempotency_key=idempotency_key))
 
     def apply_verdicts(self, *, run_id: str, body: models.ApplyStageCardVerdictsRequest, user_uid: str, idempotency_key: str) -> models.StageCardVerdictPage:
         self._require_stages_module()

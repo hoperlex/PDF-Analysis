@@ -9,7 +9,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.13.0 (OpenAPI 3.1.0)
- *   sha256 d52a9b8f9f5f6760c1ba0d8c72703aac3a70bd6d85e1b829cf8307ea5b314904
+ *   sha256 afe53a80dde669c98c15abb1be3b971893f2fa78d9b91ceafbe4aab90116a207
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -98,6 +98,8 @@ import type {
   CreateProjectResult,
   CreateStageAssemblyInput,
   CreateStageAssemblyResult,
+  CreateStageReviewCardInput,
+  CreateStageReviewCardResult,
   CreateStageUploadInput,
   CreateStageUploadResult,
   DecideOptimisationProposalInput,
@@ -1005,6 +1007,18 @@ export function createStageAssembly(
   options?: RequestOptions,
 ): Promise<ApiResponse<CreateStageAssemblyResult>> {
   return request<CreateStageAssemblyResult>(OPERATIONS.createStageAssembly, input, options);
+}
+
+/**
+ * Create Review Card
+ *
+ * `POST /stage-chain-runs/{stage_chain_run_id}/review-cards` - a write; carries a required Idempotency-Key.
+ */
+export function createStageReviewCard(
+  input: CreateStageReviewCardInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CreateStageReviewCardResult>> {
+  return request<CreateStageReviewCardResult>(OPERATIONS.createStageReviewCard, input, options);
 }
 
 /**
@@ -3608,6 +3622,7 @@ export const apiClient = {
   createExecutorConnection,
   createProject,
   createStageAssembly,
+  createStageReviewCard,
   createStageUpload,
   decideOptimisationProposal,
   deleteComparisonReport,

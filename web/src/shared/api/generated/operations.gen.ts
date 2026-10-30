@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.13.0 (OpenAPI 3.1.0)
- *   sha256 d52a9b8f9f5f6760c1ba0d8c72703aac3a70bd6d85e1b829cf8307ea5b314904
+ *   sha256 afe53a80dde669c98c15abb1be3b971893f2fa78d9b91ceafbe4aab90116a207
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -103,6 +103,7 @@ import type {
   CreateExecutorConnectionRequest,
   CreateProjectRequest,
   CreateStageAssemblyRequest,
+  CreateStageReviewCardRequest,
   CreateStageUploadRequest,
   Cursor,
   DashboardSummary,
@@ -326,6 +327,7 @@ export const OPERATION_IDS = [
   'createExecutorConnection',
   'createProject',
   'createStageAssembly',
+  'createStageReviewCard',
   'createStageUpload',
   'decideOptimisationProposal',
   'deleteComparisonReport',
@@ -1634,6 +1636,32 @@ export type CreateStageAssemblyInput = {
 
 /** Success body of `createStageAssembly` (`application/json`, HTTP 201). */
 export type CreateStageAssemblyResult = StageAssembly;
+
+// ------------------------------------------------------------------------------------
+// createStageReviewCard - POST /stage-chain-runs/{stage_chain_run_id}/review-cards
+// ------------------------------------------------------------------------------------
+
+/** Create Review Card */
+export type CreateStageReviewCardInput = {
+  /** Path parameters, substituted into `/stage-chain-runs/{stage_chain_run_id}/review-cards`. */
+  path: {
+    stage_chain_run_id: StageChainRunId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: CreateStageReviewCardRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `createStageReviewCard` (`application/json`, HTTP 201). */
+export type CreateStageReviewCardResult = StageChangeCard;
 
 // ------------------------------------------------------------------------------------
 // createStageUpload - POST /projects/{project_uid}/stage-uploads
@@ -7623,6 +7651,20 @@ export const OPERATIONS = {
     method: 'POST',
     path: '/projects/{project_uid}/stage-assemblies',
     pathParams: ['project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['comparison'],
+  },
+  createStageReviewCard: {
+    operationId: 'createStageReviewCard',
+    method: 'POST',
+    path: '/stage-chain-runs/{stage_chain_run_id}/review-cards',
+    pathParams: ['stage_chain_run_id'],
     queryParams: [],
     headerParams: [],
     requiresIdempotencyKey: true,
