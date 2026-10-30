@@ -24,6 +24,7 @@ from .cards import anchor_key, carryover_match, digest, invalid, prepare_cards
 from .writers import render_html, render_pdf, render_xlsx
 
 _CARD = ("c.stage_change_card_id AS card_id,c.stage_chain_run_id AS run_id,c.card_key,"
+         "c.stage_ai_classification_id AS classification_id,"
          "c.evidence_digest,c.class_name,c.category,c.title,c.system,c.evidence_ids,"
          "c.before_text AS before,c.after_text AS after")
 _VERDICT = ("stage_card_verdict_id AS verdict_id,stage_change_card_id AS card_id,"
@@ -270,6 +271,22 @@ class StageReviewService:
 
     def _project_card(self, session: Session, card: dict[str, Any], run: Mapping[str, Any],
                       previous: Sequence[dict[str, Any]]) -> dict[str, Any]:
+        classification_id = card.pop("classification_id", None)
+        metadata = None
+        if classification_id is not None:
+            matches = session.execute(text(
+                "SELECT entry.value FROM stage_ai_classification a CROSS JOIN LATERAL jsonb_array_elements(a.cards) entry(value) "
+                "WHERE a.stage_ai_classification_id=:classification AND entry.value->>'class_name'=:class "
+                "AND ((entry.value->>'card_key')=:key OR (entry.value->>'card_key') IS NULL) "
+                "AND (entry.value->'evidence_ids') @> CAST(:ids AS jsonb) AND CAST(:ids AS jsonb) @> (entry.value->'evidence_ids') LIMIT 2"
+            ), {"classification": classification_id, "key": card["card_key"], "class": card["class_name"],
+                "ids": json.dumps(card["evidence_ids"])}).scalars().all()
+            if len(matches) == 1:
+                metadata = matches[0]
+        metadata = metadata or {}
+        card["materiality"] = metadata.get("materiality") if metadata.get("materiality") in ("material", "non_material") else "unknown"
+        card["importance"] = metadata.get("importance") if metadata.get("importance") in ("high", "normal") else "unknown"
+        card["detail_increased"] = metadata.get("detail_increased") is True
         evidence = []
         anchors = []
         for row in session.execute(text(
@@ -318,8 +335,18 @@ class StageReviewService:
             "HAVING count(DISTINCT v.decision)>1)"
         ), {"run": run["stage_chain_run_id"], "pair": run["stage_pair_id"],
             "created": run["created_at"]}).scalar_one()
+        labels = session.execute(text(
+            "SELECT count(*) FILTER(WHERE m.importance='high'),count(*) FILTER(WHERE m.importance IS NULL OR "
+            "m.importance NOT IN ('high','normal')) FROM stage_change_card c "
+            "LEFT JOIN stage_ai_classification a ON a.stage_ai_classification_id=c.stage_ai_classification_id "
+            "LEFT JOIN LATERAL(SELECT CASE WHEN count(*)=1 THEN max(entry.value->>'importance') ELSE NULL END AS importance "
+            "FROM jsonb_array_elements(a.cards) entry(value) WHERE entry.value->>'class_name'=c.class_name "
+            "AND (entry.value->>'card_key'=c.card_key OR (entry.value->>'card_key') IS NULL) "
+            "AND (entry.value->'evidence_ids') @> c.evidence_ids AND c.evidence_ids @> (entry.value->'evidence_ids')) m ON true "
+            "WHERE c.stage_chain_run_id=:run"
+        ), {"run": run["stage_chain_run_id"]}).one()
         return {"total": int(row[0]), "review": int(row[1]), "project_changes": int(row[2]),
-                "conflicts": int(conflicts), "high_importance": 0}
+                "conflicts": int(conflicts), "high_importance": int(labels[0]), "importance_unknown": int(labels[1])}
 
     def page(self, run_id: str, after: str | None = None, limit: int = 100
              ) -> tuple[tuple[dict[str, Any], ...], str | None, dict[str, int]]:
