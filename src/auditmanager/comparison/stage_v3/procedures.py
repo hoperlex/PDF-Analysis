@@ -117,6 +117,9 @@ def plan(procedure, *, phase, group_id, pair_id, payload, model, metadata=None):
 
 
 def parse(plan, row, snapshot):
+    if plan.prompt_version != BUNDLE:
+        from .windowed import parse as parse_windowed
+        return parse_windowed(plan, row, snapshot)
     if row["stop_reason"] != "end_turn":
         raise StageAiValidationError("v3_response_not_complete")
     try:
@@ -262,8 +265,8 @@ def plans_for(phase, snapshot, results, model):
                  payload=batch["data"], model=model, metadata={"batch": batch}) for batch in batches]
 
 
-def canonical_cards(snapshot, results):
-    changes, hints, ledger, cov, records = reviewed(snapshot, results)
+def canonical_cards(snapshot, results, *, reviewed_data=None):
+    changes, hints, ledger, cov, records = reviewed(snapshot, results) if reviewed_data is None else reviewed_data
     if ledger["summary"].get("source_verification_pending"):
         raise StageAiValidationError("v3_verification_incomplete")
     cards = []

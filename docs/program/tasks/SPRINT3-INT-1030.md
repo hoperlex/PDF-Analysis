@@ -49,7 +49,19 @@ Changed files, no-check status, contracts, limitations, integrator instructions,
 - `src/auditmanager/analysis/extended/consolidation.py`
 - `src/auditmanager/analysis/extended/workflow.py`
 - `src/auditmanager/analysis/public.py`
+- `src/auditmanager/comparison/ai_jobs/service.py`
+- `web/src/entities/version-series/ui/estimate-panel.tsx`
 
 ## Deliverables
 
 Exact-text/source-provenance consolidation metadata, raw observations/windows unchanged; root integration and reports.
+
+Stage policy frozen seam: fresh accepted stage_v3_policy windowed-v1 binds source limits64pages/240kchars/1600fragments, bounded catalogue/real native packs and new bundle. Old missingpolicy selectslegacy; per-callconsentunchanged. Stage owner exactextra stage_run/batch.py granted. Report lane keeps closedAPIunchanged; exact chunkcoverage goesgeneratedPDF/internalfacts, source_md remainsoriginal.
+
+Stage owner additionally owns stage_review/cards.py/service.py for fresh-windowed-only marked display excerpts under existing20ktransport bound. Preserve all original native evidence and fullsource pointers. Oldclassic/legacybehavior unchanged. UIlabelsactualexcerptmetadata.
+
+Root exclusive shared slot: ai_jobs/service.py may opt in report-only can_run_without_model=True to genuine0-call deterministic final work. All digest/confirmed consent/route/ceilings/workqueue/idempotency checks remain; other methods retain nothing_to_do. Report owner sets capability from actual complete cached plan and deterministic assembly, never invents a model call. No protocol/API/schema change.
+
+Root shared UI slot: EstimatePanel has report-only allowLocalAssembly opt-in for0-model deterministic assembly while retaining exact consentdigest/route/ceilings. Report UI consumer passes only foranalytic0call estimates; all other starts retainNothingToSend. C4 owns only report-window consumer, root owns sharedcomponent.
+
+Incoming dev ownership: preserve owner10099a4e CMP-PDF-SECTION-RUN-1030 including its description-only contracts correction (APIshape/counts/versionunchanged), andc066cd6b systempromptfix. Root authorednewcode doesnoteditcontracts. Resolve analysis/public.py additively ifneeded; sourceadapterbelongsincomingowner. No incomingtestresultsclaimedforcombinedcandidate.

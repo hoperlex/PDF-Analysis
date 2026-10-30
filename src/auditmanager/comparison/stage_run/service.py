@@ -24,11 +24,14 @@ BATCH_WORK_KIND = "stage_chain_batch"
 
 from auditmanager.comparison.stage_v3.mode import CLASSIC, ENGINE, ORIGINAL_SHA, validate_engine, engine_for_run, experimental_progress
 
+_FRESH_V3_POLICY = object()
+
 
 class StagePipeline(Protocol):
-    def estimate(self, *, revision_id: str, user_uid: str) -> Any: ...
+    def estimate(self, *, revision_id: str, user_uid: str, engine: str = CLASSIC) -> Any: ...
     def prepare(self, session: Session, *, run_id: str, user_uid: str,
-                consent: Mapping[str, Any]) -> str | None: ...
+                consent: Mapping[str, Any], engine: str | None = None,
+                v3_policy: Mapping[str, Any] | None = None) -> str | None: ...
     def resume(self, session: Session, *, run_id: str, user_uid: str,
                consent: Mapping[str, Any] | None) -> None: ...
     def cancel(self, session: Session, *, run_id: str, user_uid: str) -> None: ...
@@ -171,10 +174,12 @@ class StageChainService:
     def start(self, *, pair_id: str, revision_id: str, user_uid: str,
               actor_roles: frozenset[str], idempotency_key: str,
               with_ai: bool = True, consent: Mapping[str, Any] | None = None,
-              restart: bool = False, batch_id: str | None = None, engine: str = CLASSIC) -> ChainRun:
+              restart: bool = False, batch_id: str | None = None, engine: str = CLASSIC,
+              stage_v3_policy: Any = _FRESH_V3_POLICY) -> ChainRun:
         self._enabled()
         require_expert(actor_roles)
         validate_engine(engine)
+        from auditmanager.comparison.stage_v3.policy import fresh_policy, validate_policy, policy_for_run
         if engine == ENGINE and not with_ai:
             raise DomainError(ErrorCode.VALIDATION_FAILED, field="with_ai", constraint="v3_requires_ai")
         payload = {"pair_id": pair_id, "revision_id": revision_id,
@@ -188,6 +193,9 @@ class StageChainService:
                                         fingerprint=payload_fingerprint(payload))
             if isinstance(claim, CommandReplay):
                 return self.record(session, str(claim.outcome["run_id"]))
+            # Internal defaults are selected only for a genuinely new command.
+            # Identical client retries retain the historical fingerprint/replay.
+            selected_policy = (fresh_policy() if stage_v3_policy is _FRESH_V3_POLICY else validate_policy(stage_v3_policy)) if engine == ENGINE else None
             session.execute(text(
                 "SELECT pg_advisory_xact_lock(hashtextextended('stage_link:' || :pair, 0))"
             ), {"pair": pair_id})
@@ -201,9 +209,12 @@ class StageChainService:
             ), {"pair": pair_id}).scalar_one_or_none()
             if live is not None:
                 existing = self.record(session, str(live))
-                if restart or existing.stale or existing.with_ai != with_ai or existing.engine != engine:
+                existing_policy = policy_for_run(session, existing.run_id) if engine == ENGINE else None
+                if (restart or existing.stale or existing.with_ai != with_ai or existing.engine != engine
+                        or existing_policy != selected_policy):
                     raise conflict("stage_chain_run_active")
-                self.commands.succeed(session, claim.command_id, {"run_id": existing.run_id, "engine": engine})
+                self.commands.succeed(session, claim.command_id, {"run_id": existing.run_id, "engine": engine,
+                    **({"stage_v3_policy": existing_policy} if existing_policy is not None else {})})
                 return existing
             passports = self.sheets.passports(pair_id=pair_id)
             pins = tuple(dict.fromkeys(page.version_uid for page in passports))
@@ -217,7 +228,8 @@ class StageChainService:
                                              "versions": list(pins), "with_ai": with_ai})
             if engine != CLASSIC:
                 from auditmanager.comparison.stage_v3.procedures import BUNDLE
-                input_sha = payload_fingerprint({"base": str(input_sha), "engine": engine, "original": ORIGINAL_SHA, "bundle": BUNDLE})
+                input_sha = payload_fingerprint({"base": str(input_sha), "engine": engine, "original": ORIGINAL_SHA,
+                    "bundle": BUNDLE if selected_policy is None else selected_policy["bundle"], "stage_v3_policy": selected_policy})
             session.execute(text(
                 "INSERT INTO stage_chain_run "
                 "(stage_chain_run_id, stage_pair_id, stage_link_revision_id, input_sha256, "
@@ -236,7 +248,7 @@ class StageChainService:
             if with_ai:
                 assert self.ai is not None and consent is not None
                 job_id = self.ai.prepare(session, run_id=run_id, user_uid=user_uid, consent=consent,
-                                         **({"engine": engine} if engine != CLASSIC else {}))
+                                         **({"engine": engine, "v3_policy": selected_policy} if engine != CLASSIC else {}))
                 session.execute(text(
                     "UPDATE stage_chain_run SET comparison_ai_job_id = :job WHERE stage_chain_run_id = :run"
                 ), {"run": run_id, "job": job_id})
@@ -249,7 +261,8 @@ class StageChainService:
                         {"actor_uid": user_uid, "command_id": str(claim.command_id),
                          "revision_id": revision_id, "with_ai": with_ai})
             self.commands.succeed(session, claim.command_id, {"run_id": run_id, "engine": engine,
-                **({"original_source": ORIGINAL_SHA} if engine != CLASSIC else {})})
+                **({"original_source": ORIGINAL_SHA} if engine != CLASSIC else {}),
+                **({"stage_v3_policy": selected_policy} if selected_policy is not None else {})})
             return self.record(session, run_id)
 
     def get(self, run_id: str) -> ChainRun:

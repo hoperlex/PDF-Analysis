@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from typing import Any, Final
 
 from auditmanager.analysis.public import ModelRequest
-from auditmanager.comparison.report import analytic, client, facts, parse
+from auditmanager.comparison.report import analytic, client, facts, parse, chunks as chunk_module
 from auditmanager.comparison.report.model import KIND_CLIENT
 
 __all__ = [
@@ -62,7 +62,7 @@ USABLE_KINDS: Final[frozenset[str]] = frozenset({"ai_change", "ai_single", "ai_q
 
 
 def prompt_version_of(kind: str) -> str:
-    return client.PROMPT_VERSION if kind == KIND_CLIENT else analytic.PROMPT_VERSION
+    return client.PROMPT_VERSION if kind == KIND_CLIENT else chunk_module.PROMPT_VERSION
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,6 +113,7 @@ class Unit:
     #: why the program finishes a transition without a model: ``unchanged`` (the summary marks the absence of changes) or ``undescribed`` (the
     #: client kind has no description, question or specification position of the transition to write about: nothing to select, so no call)
     reason: str | None = None
+    chunks: tuple[dict[str, Any], ...] = field(default=())
 
     @property
     def transition_id(self) -> str:
@@ -144,13 +145,18 @@ def build_units(
     ``only`` is the number of one transition: the others are not planned (the handler of one item needs one unit, not a hundred prompts)."""
     out: list[Unit] = []
     manifest = doc.manifest
-    plan = analytic.make_plan(manifest)
+    analytic_source_key=hashlib.sha256(json.dumps({"source_sha256":doc.sha256,"registry":doc.registry,
+        "planning_revision":chunk_module.REVISION,"target_chars":chunk_module.TARGET_CHARS,
+        "hard_line_chars":chunk_module.HARD_LINE_CHARS,"max_chunks":chunk_module.MAX_CHUNKS},
+        sort_keys=True,ensure_ascii=False,separators=(",", ":"),default=str).encode("utf-8")).hexdigest() if kind!=KIND_CLIENT else ""
     template = client.prompt_text() if kind == KIND_CLIENT else ""
-    for index, transition in enumerate(manifest["transitions"]):
+    for transition in manifest["transitions"]:
         if only is not None and int(transition["number"]) != only:
             continue
         key = content_key(
-            kind=kind, project_uid=project_uid, model=model, profile_key=profile["key"], transition_sha=transition["sha256"],
+            kind=kind, project_uid=project_uid, model=model, profile_key=profile["key"],
+            transition_sha=transition["sha256"] if kind==KIND_CLIENT else
+                hashlib.sha256((transition["sha256"]+":"+analytic_source_key).encode()).hexdigest(),
             with_records=bool(doc.registry.get("with_records")),
         )
         editable = not client.is_unchanged(transition) and transition["transition_id"] not in unchanged
@@ -162,26 +168,48 @@ def build_units(
         ):
             out.append(Unit(transition, False, key, reason="undescribed"))
             continue
-        too_large = transition["chars"] > MAX_UNIT_CHARS
+        chunks=()
+        reason=None
+        if kind != KIND_CLIENT:
+            try:
+                chunks=chunk_module.transition_chunks(transition,doc.lines)
+            except ValueError as error:
+                reason=str(error)
+        too_large = transition["chars"] > MAX_UNIT_CHARS if kind == KIND_CLIENT else reason is not None
         if too_large:
-            out.append(Unit(transition, True, key, (), True))
+            out.append(Unit(transition, True, key, (), True, reason=reason))
             continue
         if kind == KIND_CLIENT:
             text, _, _ = client.packet(doc.registry["facts"], transition["label"], profile)
             prompt = client.prompt_for(transition, text, template, f"{key}:{transition['label']}", dict(profile))
             calls = (("client", len(prompt) + len(SYSTEM_TEXT), MAX_TOKENS["client"]),)
         else:
-            analyst = analytic.analyst_prompt(
-                _PLACEHOLDER_RUN, doc.source, manifest, plan, plan["groups"][index], doc.lines,
-            )
-            calls = (
-                ("analyst", len(analyst) + len(SYSTEM_TEXT), MAX_TOKENS["analyst"]),
-                ("verifier", len(analyst) + ANALYST_OUTPUT_CHARS + len(SYSTEM_TEXT), MAX_TOKENS["verifier"]),
-            )
-        out.append(Unit(transition, True, key, calls))
+            chunk_calls=[]
+            for chunk in chunks:
+                view,chunk_plan,group,_=chunk_module.context(manifest,transition,chunk)
+                analyst=analytic.analyst_prompt(_PLACEHOLDER_RUN,doc.source,view,chunk_plan,group,doc.lines)+chunk_module.note(chunk,len(chunks))
+                for stage in ("analyst","verifier"):
+                    for attempt in range(ANALYTIC_RETRIES+1):
+                        # Verifier repeats the checked analyst and claims. Reserve its
+                        # real request ceiling, rather than guessing a small prefix.
+                        chars=(len(analyst)+len(SYSTEM_TEXT)+8_000*attempt if stage=="analyst"
+                            else chunk_module.MAX_PROMPT_CHARS+len(SYSTEM_TEXT))
+                        chunk_calls.append((f'{chunk["chunk_id"]}:{stage}:{attempt}',chars,MAX_TOKENS[stage]))
+            calls=tuple(chunk_calls)
+        out.append(Unit(transition, True, key, calls,chunks=chunks))
     return out
 
 
 def composer_chars(units: Sequence[Unit]) -> int:
     """The estimated size of the composer's prompt (the analytic kind), from what is known before any answer."""
-    return min(COMPOSER_MAX_CHARS, COMPOSER_BASE_CHARS + COMPOSER_PER_TRANSITION_CHARS * len(units))
+    if composition_mode(units)=="deterministic_chunk_sections":
+        return 0
+    return COMPOSER_MAX_CHARS
+
+
+def composition_mode(units: Sequence[Unit]) -> str:
+    """Choose assembly before consent, never after paying for an oversized aggregate."""
+    count=sum(len(unit.chunks) for unit in units if unit.editable)
+    return ("deterministic_chunk_sections" if count!=1 or len(units)>8
+        or any(chunk["chars"]>chunk_module.TARGET_CHARS for unit in units for chunk in unit.chunks)
+        else "model_composer")

@@ -58,7 +58,7 @@ import styles from './comparison-report.module.css';
 
 export const WINDOW_TITLE = 'Отчёт для заказчика по «Сводке изменений (MD)»';
 export const WINDOW_SUBTITLE =
-  '«Изменения проектных решений»: по каждой выдаче масштаб и главные изменения для закупки, монтажа и эксплуатации. Одно обращение к ИИ на переход, по фактам сводки; исходные PDF не открываются.';
+  '«Изменения проектных решений»: по каждой выдаче масштаб и главные изменения для закупки, монтажа и эксплуатации. Отчёт строится по фактам сводки; исходные PDF не открываются.';
 export const NO_SUMMARY_HINT = 'Сводки проекта ещё нет — сначала «ИИ-описание изменений».';
 export const NO_REPORTS = 'Отчётов ещё нет.';
 export const MAX_SOURCE_NOTE = 'Файл — UTF-8, не больше 20 МиБ, с переходами под заголовками вида «## 1. первая версия → вторая версия».';
@@ -105,6 +105,7 @@ function PartsTable({ report, transitions, names }: { readonly report: Compariso
   if (report.parts.length === 0) return null;
   return (
     <div className={styles.scroller}>
+      {report.kind === 'analytic' ? <p className={styles.muted}>Показатели относятся к переходу в целом. Большая сводка нового аналитического отчёта обрабатывается частями с анализом и проверкой каждой части. Отметка завершения относится ко всем предусмотренным частям; отдельные счётчики частей этим интерфейсом API не передаются. Подробный охват сохранён в готовом PDF, исходный MD остаётся полным.</p> : null}
       <table className={styles.table} data-report-parts={report.kind}>
         <thead>
           {report.kind === 'client' ? (
@@ -181,6 +182,9 @@ export function ReportWindowView({
               </label>
             ))}
           </div>
+          <p className={styles.muted}>{kind === 'client'
+            ? 'Для отчёта заказчику отбор изменений выполняется одним обращением на переход по фактам сводки. Предел этого режима — 400 000 символов на переход; для большей сводки выберите аналитический отчёт и подготовьте его отдельную оценку.'
+            : 'Новый аналитический отчёт разбирает большую MD-сводку по частям: отдельный анализ и проверка фактов. Число обращений берётся из подготовленной оценки; одна часть не означает весь переход. Прежние сохранённые планы не расширяются.'}</p>
           <label className={styles.choice} title="Готовые части прошлых отчётов по тому же содержанию берутся без нового обращения к ИИ.">
             <input type="checkbox" checked={reuse} onChange={(event) => onReuse(event.target.checked)} />
             <span>использовать готовые части прошлых отчётов</span>
@@ -308,6 +312,7 @@ function ReportDialog({ open, onClose }: { readonly open: NonNullable<Open>; rea
       consentKind="report"
       confirmLabel={open.kind === 'continue' ? 'Продолжить' : open.report.state === 'draft' ? CONFIRM_LABELS.report : RESTART_CONFIRM_LABELS.report}
       estimate={flow.estimate}
+      allowLocalAssembly={open.report.kind === 'analytic' && flow.estimate?.calls === 0 && (flow.estimate.transitions ?? 0) > 0}
       loading={flow.loading}
       failure={flow.failure}
       agreedDigest={flow.agreedDigest}

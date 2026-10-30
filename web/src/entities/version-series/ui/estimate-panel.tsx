@@ -48,13 +48,17 @@ export interface EstimatePanelProps {
   readonly onCancel: () => void;
   /** Lines of the caller's own, above the estimate (what the start does, the queue it joins). */
   readonly intro?: ReactNode;
+  /** Report-only, zero-model deterministic PDF assembly under this same estimate digest. */
+  readonly allowLocalAssembly?: boolean;
 }
 
 export function EstimatePanel({
   title, consentKind, confirmLabel, estimate, loading, failure, agreedDigest, busy, onAgree, onConfirm, onCancel, intro,
+  allowLocalAssembly = false,
 }: EstimatePanelProps) {
   const blocked = estimate !== undefined && isBlocked(estimate);
-  const nothing = estimate !== undefined && !blocked && isNothingToSend(estimate);
+  const localAssembly = allowLocalAssembly && estimate?.method === 'report' && estimate.calls === 0;
+  const nothing = estimate !== undefined && !blocked && !localAssembly && isNothingToSend(estimate);
   const agreed = agreementStands(agreedDigest, estimate);
   // The reader had ticked the line for an estimate that is no longer the one shown: the tick is void and the line is asked again.
   const reasked = agreedDigest !== null && estimate !== undefined && !agreed;
@@ -72,10 +76,11 @@ export function EstimatePanel({
       )}
       {estimate === undefined ? null : (
         <>
+          {localAssembly ? <p role="status" data-report-local-assembly="">Будет выполнена программная сборка PDF по сохранённым материалам этой оценки. Новых обращений к модели: 0.</p> : null}
           <ul className={styles.lines} data-estimate-digest={estimate.estimate_digest}>
             {estimateLines(estimate).map((line) => (
               <li key={line.key} className={line.muted === true ? styles.lineMuted : styles.line} data-estimate-line={line.key}>
-                {line.text}
+                {localAssembly && line.key === 'units' ? 'Материалы оценки используются для программной сборки отчёта.' : line.text}
               </li>
             ))}
           </ul>
@@ -99,7 +104,7 @@ export function EstimatePanel({
               disabled={blocked || nothing || busy}
               onChange={(event) => onAgree(event.target.checked)}
             />
-            <span>{CONSENT_LINES[consentKind]}</span>
+            <span>{localAssembly ? 'Подтверждаю сборку PDF по сохранённым материалам этой оценки.' : CONSENT_LINES[consentKind]}</span>
           </label>
           <p className={styles.lineMuted}>
             Ответ ИИ — <AiLabel />. Он не заменяет решение эксперта.

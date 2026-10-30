@@ -220,16 +220,29 @@ class StageReviewService:
             session.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key,0))"),
                             {"key": "stage_review:" + run_id})
             sources = self._sources(session, run["revision_id"], run_id)
+            from auditmanager.comparison.stage_v3.mode import ENGINE, engine_for_run
+            from auditmanager.comparison.stage_v3.policy import policy_for_run
+            experimental = engine_for_run(session, run_id) == ENGINE
+            policy = policy_for_run(session, run_id) if experimental else None
             answers = []
             if run["with_ai"]:
-                answers = [dict(row) for row in session.execute(text(
-                    "SELECT a.stage_ai_classification_id AS classification_id,a.cards "
-                    "FROM stage_ai_classification a JOIN stage_ai_unit u ON u.stage_ai_unit_id=a.stage_ai_unit_id "
-                    "WHERE a.stage_chain_run_id=:run AND u.state='completed' ORDER BY a.content_key"
-                ), {"run": run_id}).mappings()]
-            from auditmanager.comparison.stage_v3.mode import ENGINE, engine_for_run
-            experimental = engine_for_run(session, run_id) == ENGINE
-            plans = prepare_cards(sources, answers, include_uncovered=not experimental)
+                if experimental:
+                    from auditmanager.comparison.stage_v3.procedures import BUNDLE
+                    bundle = BUNDLE if policy is None else policy["bundle"]
+                    answers = [dict(row) for row in session.execute(text(
+                        "SELECT a.stage_ai_classification_id AS classification_id,a.cards "
+                        "FROM stage_ai_classification a JOIN stage_ai_unit u ON u.stage_ai_unit_id=a.stage_ai_unit_id "
+                        "WHERE a.stage_chain_run_id=:run AND u.state='completed' AND u.group_id='v3:final:cards' "
+                        "AND u.progress->>'prompt_bundle_version'=:bundle "
+                        "ORDER BY u.generation DESC,u.created_at DESC,u.stage_ai_unit_id DESC LIMIT 1"
+                    ), {"run": run_id, "bundle": bundle}).mappings()]
+                else:
+                    answers = [dict(row) for row in session.execute(text(
+                        "SELECT a.stage_ai_classification_id AS classification_id,a.cards "
+                        "FROM stage_ai_classification a JOIN stage_ai_unit u ON u.stage_ai_unit_id=a.stage_ai_unit_id "
+                        "WHERE a.stage_chain_run_id=:run AND u.state='completed' ORDER BY a.content_key"
+                    ), {"run": run_id}).mappings()]
+            plans = prepare_cards(sources, answers, include_uncovered=not experimental, display_excerpts=policy is not None)
             source_digest = digest(plans)
             publication = session.execute(text(
                 "SELECT payload->>'source_digest' FROM audit_event WHERE aggregate_type='StageChainRun' "

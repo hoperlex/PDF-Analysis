@@ -9,7 +9,7 @@ import { UNCONFIRMED_LABEL } from '@/entities/version-series';
 import { formatInstant } from '@/shared/lib';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import { StageReviewRequest } from '@/widgets/stage-text-evidence';
-import { StageExperimentalParameters, StageV3Report } from '@/widgets/stage-v3-experimental';
+import { StageExperimentalParameters, StageV3Report, stageV3DisplayText } from '@/widgets/stage-v3-experimental';
 
 import { readCards, readVerdicts, STAGE_REVIEW_KEYS } from '../api/reads';
 import { CARRYOVER_WORDS, CLASS_WORDS, CATEGORY_WORDS, SYSTEM_WORDS, IMPORTANCE_WORDS, MATERIALITY_WORDS,
@@ -38,8 +38,11 @@ function CardSide({ side, card, onOpenEvidence }: { readonly side: 'left' | 'rig
   readonly onOpenEvidence: OpenStageEvidence }) {
   const text = side === 'left' ? card.before : card.after;
   const evidence = (card.evidence ?? []).filter((item) => item.side === side || item.side === 'both');
+  const display = stageV3DisplayText(card);
+  const textMetadata = side === 'left' ? display?.before : display?.after;
   return <section aria-label={side === 'left' ? 'Было' : 'Стало'}>
     <h5>{side === 'left' ? 'Было · П' : 'Стало · Р'}</h5><p>{text || 'Не указано'}</p>
+    {textMetadata?.excerpt === true ? <aside data-stage-display-excerpt={side}><p>Показан экранный фрагмент: {textMetadata.displayedCharacters ?? '—'} из {textMetadata.fullCharacters ?? '—'} символов исходного текста. Полные цитаты сохранены в источниках V3 и JSON отчёта.</p><p>SHA256 полного текста: <code>{textMetadata.fullSha256 || 'Не передан'}</code>.</p></aside> : null}
     {text === '' && !evidence.some((item) => item.absence_proven) ? <p className={styles.note}>Отсутствие объекта не доказано.</p> : null}
     <div className={styles.evidence}>{evidence.map((item) => <div key={item.evidence_id}>
       <span>{item.kind}</span><button type="button" className="am-button" disabled={item.profile_id === undefined}
@@ -132,16 +135,30 @@ function StageChangesBody({ runId, mayAct, onOpenEvidence, onOpenRawDifference, 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [promotedCardId, setPromotedCardId] = useState<string | undefined>();
+  const [cardSearch, setCardSearch] = useState('');
+  const [cardPage, setCardPage] = useState(0);
+  const [cardPageSize, setCardPageSize] = useState(25);
   const [commandError, setCommandError] = useState<unknown>(null);
   const held = useRef(new Map<string, string>());
+  const followedFocus = useRef<string | null>(null);
   useEffect(() => { setDrafts({}); setSaved(false); setCommandError(null); held.current.clear(); }, [runId]);
   const updates = verdictUpdates(cards.data?.cards ?? [], drafts);
   const focusedCard = promotedCardId ?? focusCardId;
+  const search = cardSearch.trim().toLocaleLowerCase('ru');
+  const matchingCards = (cards.data?.cards ?? []).filter((card) => !search || [card.card_id, card.title, card.before, card.after].join('\n').toLocaleLowerCase('ru').includes(search));
+  const cardPages = Math.max(1, Math.ceil(matchingCards.length / cardPageSize));
+  const currentCardPage = Math.min(cardPage, cardPages - 1);
+  const visibleCards = new Set(matchingCards.slice(currentCardPage * cardPageSize, (currentCardPage + 1) * cardPageSize).map((card) => card.card_id));
+  useEffect(() => {
+    if (focusedCard === undefined || followedFocus.current === focusedCard) return;
+    const index = cards.data?.cards.findIndex((card) => card.card_id === focusedCard) ?? -1;
+    if (index >= 0) { followedFocus.current = focusedCard; setCardSearch(''); setCardPage(Math.floor(index / cardPageSize)); }
+  }, [focusedCard, cards.data, cardPageSize]);
   useEffect(() => {
     if (focusedCard !== undefined && cards.data?.cards.some((card) => card.card_id === focusedCard)) {
       document.getElementById(`stage-card-${focusedCard}`)?.scrollIntoView?.({ block: 'center' });
     }
-  }, [focusedCard, cards.data]);
+  }, [focusedCard, cards.data, currentCardPage, cardSearch, cardPageSize]);
   const missingReasons = rejectionReasonsMissing(updates);
   const save = async () => {
     if (!runId || !mayAct || run.data?.stale || updates.length === 0 || missingReasons) return;
@@ -194,9 +211,11 @@ function StageChangesBody({ runId, mayAct, onOpenEvidence, onOpenRawDifference, 
     {cards.data === undefined ? null : <StageV3Report runId={runId} cards={cards.data.cards} run={run.data} onOpenEvidence={onOpenEvidence} />}
     <StageHighLevelChanges runId={runId} cards={cards.data?.cards ?? []}
       running={run.data !== undefined && ['queued', 'running'].includes(run.data.state)} completed={run.data?.state === 'completed'} onOpenEvidence={onOpenEvidence} />
-    {groupedCards(cards.data?.cards ?? []).map((section) => <details key={section.key} open={!section.collapsed}>
-      <summary>{section.title} · {section.cards.length}</summary>
-      <div className={styles.cards}>{section.cards.map((card) => <StageCardView key={card.card_id} card={card}
+    <div className={styles.viewControls}><label>Поиск карточки или исходного текста<input type="search" value={cardSearch} onChange={(event) => { setCardSearch(event.target.value); setCardPage(0); }} /></label><label>Карточек на странице<select value={cardPageSize} onChange={(event) => { setCardPageSize(Number(event.target.value)); setCardPage(0); }}><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select></label></div>
+    <p>По поиску: {matchingCards.length} из {cards.data?.cards.length ?? 0}. На экране до {cardPageSize} карточек. Поиск и страницы не меняют полные выгрузки; несохранённые экспертные оценки остаются до сохранения.</p>
+    {groupedCards(matchingCards).filter((section) => section.cards.some((card) => visibleCards.has(card.card_id))).map((section) => <details key={section.key} open={!section.collapsed || section.cards.some((card) => card.card_id === focusedCard)}>
+      <summary>{section.title} · {section.cards.filter((card) => visibleCards.has(card.card_id)).length} на этой странице из {section.cards.length} по поиску</summary>
+      <div className={styles.cards}>{section.cards.filter((card) => visibleCards.has(card.card_id)).map((card) => <StageCardView key={card.card_id} card={card}
         draft={drafts[card.card_id]} mayAct={mayAct && expertMode && !saving && !run.data?.stale}
         mayRequestReview={mayAct && !saving && !run.data?.stale} onOpenEvidence={onOpenEvidence}
         onReviewCreated={(created) => { if (created.run_id === runId) setPromotedCardId(created.card_id); }}
@@ -206,6 +225,7 @@ function StageChangesBody({ runId, mayAct, onOpenEvidence, onOpenRawDifference, 
           setSaved(false);
         }} />)}</div>
     </details>)}
+    {matchingCards.length > cardPageSize ? <nav className={styles.viewControls} aria-label="Страницы карточек стадий"><button type="button" className="am-button" disabled={currentCardPage === 0} onClick={() => setCardPage(currentCardPage - 1)}>Предыдущие карточки</button><span>Страница {currentCardPage + 1} из {cardPages}</span><button type="button" className="am-button" disabled={currentCardPage + 1 >= cardPages} onClick={() => setCardPage(currentCardPage + 1)}>Следующие карточки</button></nav> : null}
     {mayAct ? <div className={styles.save}><span>Не сохранено: {updates.length}</span>
       {missingReasons ? <p role="alert">Укажите причину каждого отказа.</p> : null}
       <button type="button" className="am-button" disabled={saving || run.data?.stale || updates.length === 0 || missingReasons}

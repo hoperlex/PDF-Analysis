@@ -145,7 +145,7 @@ function StageRunBody({ pairId, linkRevisionId, runId, mayAct, compact = false, 
     {mayAct && intent !== null ? <div className={styles.estimate}>
       <h3>{intent === 'start' ? 'Запуск сравнения' : 'Продолжение сравнения'}</h3>
       {needsAi && estimate.isFetching ? <p role="status">Оцениваем объём…</p> : null}
-      {needsAi && estimate.data !== undefined ? <StageEstimateConsent estimate={estimate.data} agreedDigest={agreedDigest} disabled={busy} onAgree={setAgreedDigest} /> : null}
+      {needsAi && estimate.data !== undefined ? <StageEstimateConsent estimate={estimate.data} engine={estimateEngine} agreedDigest={agreedDigest} disabled={busy} onAgree={setAgreedDigest} /> : null}
       {!needsAi ? <p>Выполнятся детерминированные шаги без обращений к ИИ.</p> : null}
       {intent === 'resume' ? <label><input type="checkbox" checked={retryFailed} onChange={(event) => setRetryFailed(event.target.checked)} />Повторить шаги с ошибкой</label> : null}
       <div className={styles.actions}><button type="button" className="am-button" disabled={busy || !allowed} onClick={() => void command(intent)}>Подтвердить</button>

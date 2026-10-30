@@ -130,6 +130,8 @@ class StageAiRepository:
         result = dict(row)
         from auditmanager.comparison.stage_v3.mode import engine_for_run
         result["engine"] = engine_for_run(session, run_id)
+        from auditmanager.comparison.stage_v3.policy import policy_for_run
+        result["stage_v3_policy"] = policy_for_run(session, run_id) if result["engine"] == "v3_native_text_experimental" else None
         result["revision_id"] = result.get("effective_link_revision_id") or result["stage_link_revision_id"]
         return result
 

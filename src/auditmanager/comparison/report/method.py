@@ -28,7 +28,7 @@ from auditmanager.comparison.ai_jobs.model import (
     AiMode,
     AiWorkItemSpec,
 )
-from auditmanager.comparison.report import disciplines, plan as plan_module
+from auditmanager.comparison.report import disciplines, plan as plan_module, chunks as chunk_module
 from auditmanager.comparison.report.model import (
     CONFLICT_REPORT_STATE,
     KIND_ANALYTIC,
@@ -128,6 +128,13 @@ class ReportAiMethod:
     def prompt_version(self) -> str:
         return plan_module.prompt_version_of(self._spec.kind)
 
+    @property
+    def can_run_without_model(self) -> bool:
+        """Opt in only after the estimate built a genuine nonempty zero-call assembly plan."""
+        return (self._spec.kind==KIND_ANALYTIC and self._cache is not None
+            and bool(self._cache[2]) and not any(unit.too_large for unit in self._cache[2])
+            and plan_module.composition_mode(self._cache[2])=="deterministic_chunk_sections")
+
     # -- the plan ------------------------------------------------------------------------------------
     def _plan(self, session: Session) -> tuple[SourceDoc, list[Unit]]:
         model = self._model(session)
@@ -176,9 +183,20 @@ class ReportAiMethod:
                 reused += 1
                 continue
             needing += 1
-            groups += [AiCallGroup(calls=1, prompt_chars=chars, output_tokens=tokens) for _, chars, tokens in unit.calls]
-        if self._spec.kind == KIND_ANALYTIC and (needing or request.mode is AiMode.START):
-            groups.append(AiCallGroup(calls=1, prompt_chars=plan_module.composer_chars(units), output_tokens=plan_module.MAX_TOKENS["composer"]))
+            for label,chars,tokens in unit.calls:
+                if unit.chunks and part is not None:
+                    stored=part.facts or {}
+                    if label in stored.get("paid_replies",{}):
+                        continue
+                    chunk_id,stage,_=label.rsplit(":",2)
+                    row=next((row for row in stored.get("chunks",[]) if row["chunk_id"]==chunk_id),None)
+                    if row and row.get("analysis" if stage=="analyst" else "verification")=="done":
+                        continue
+                groups.append(AiCallGroup(calls=1,prompt_chars=chars,output_tokens=tokens))
+        if (self._spec.kind == KIND_ANALYTIC and (needing or request.mode is AiMode.START)
+                and plan_module.composition_mode(units)=="model_composer"):
+            for _ in range(plan_module.ANALYTIC_RETRIES+1):
+                groups.append(AiCallGroup(calls=1, prompt_chars=plan_module.composer_chars(units), output_tokens=plan_module.MAX_TOKENS["composer"]))
         return AiCounts(groups=tuple(groups), units=working, reused=reused, transitions=len(doc.manifest["transitions"]))
 
     # -- the work items of a job ----------------------------------------------------------------------
@@ -204,7 +222,7 @@ class ReportAiMethod:
                 continue
             if unit.too_large:
                 if part is None:  # never sent: a transition over the size of a request is a failed unit of its own, named by its reason
-                    self._repo.add_part(session, spec.report_id, transition_id, **self._failed(unit, "transition_too_large"))
+                    self._repo.add_part(session, spec.report_id, transition_id, **self._failed(unit, unit.reason or "transition_too_large"))
                 continue
             if mode is AiMode.START and part is None:
                 finished = self._reusable(session, unit)
@@ -241,12 +259,23 @@ class ReportAiMethod:
     def _pending(self, unit: Unit, part: PartRow | None = None) -> dict[str, Any]:
         """A part that waits for its model: every mark of the kind ``pending``, the content key stored beside. A part of the analytic kind whose
         analyst has answered keeps that answer (a continue goes on with the verifier and never asks the analyst again)."""
+        if part is not None and self._spec.kind == KIND_ANALYTIC:
+            if (part.facts or {}).get("content_key")!=unit.key:
+                raise conflict(CONFLICT_REPORT_STATE)
+            if unit.chunks and (part.facts or {}).get("planning_revision")==chunk_module.REVISION:
+                return {"analysis":"done" if part.analysis=="done" else "pending","verification":"pending",
+                    "selection":None,"warnings":part.warnings,"points":None,"questions":None,
+                    "facts":{key:value for key,value in (part.facts or {}).items() if key!="error"}}
         if part is not None and self._spec.kind == KIND_ANALYTIC and part.analysis == "done" and (part.facts or {}).get("analysis"):
             return {
                 "analysis": "done", "verification": "pending", "selection": None, "warnings": None, "points": None, "questions": None,
                 "facts": {k: v for k, v in (part.facts or {}).items() if k != "error"},
             }
         facts = {"content_key": unit.key}
+        if unit.chunks:
+            facts.update(planning_revision=chunk_module.REVISION,
+                chunks=[dict(chunk,analysis="pending",verification="pending") for chunk in unit.chunks],paid_replies={})
+            facts["chunk_coverage"]=chunk_module.coverage(facts)
         if self._spec.kind == KIND_CLIENT:
             return {"selection": "pending", "facts": facts, "analysis": None, "verification": None, "warnings": None, "points": None, "questions": None}
         return {

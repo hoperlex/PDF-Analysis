@@ -31,7 +31,7 @@ import hashlib
 import json
 import logging
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from typing import Any, Final, Protocol
 
 from sqlalchemy.orm import Session
@@ -39,7 +39,8 @@ from sqlalchemy.orm import Session
 from auditmanager.comparison.ai_jobs.model import CHARS_PER_TOKEN_DENOMINATOR, CHARS_PER_TOKEN_NUMERATOR, AiJobRecord
 from auditmanager.comparison.ai_jobs.repository import AiJobRepository
 from auditmanager.comparison.ai_jobs.service import ComparisonAiJobService
-from auditmanager.comparison.report import analytic, client, disciplines, document as document_module
+from auditmanager.comparison.report import analytic, client, disciplines, document as document_module, chunks as chunk_module
+from auditmanager.analysis.public import ModelResponse
 from auditmanager.comparison.report import plan as plan_module
 from auditmanager.comparison.report.method import part_done
 from auditmanager.comparison.report.model import (
@@ -53,6 +54,7 @@ from auditmanager.comparison.report.model import (
     STAGE_COMPOSITION,
     STAGE_PDF_WRITING,
     STAGE_VERIFICATION,
+    STAGE_TRANSITION_ANALYSIS,
     WORK_KIND,
 )
 from auditmanager.comparison.report.pdf.runner import ChildStartError, PdfFailed, write_pdf
@@ -306,11 +308,13 @@ class ReportHandler:
         if not units or not units[0].editable:
             return Completed()  # finished by the program (no change, or nothing described): no call
         unit = units[0]
+        if run.report.kind != KIND_CLIENT and (part.facts or {}).get("content_key")!=unit.key:
+            raise _Ended(Failed(FAIL_SOURCE))
         if part_done(part, run.report.kind):
             return Completed()  # a finished part is never requested again
         if run.report.kind == KIND_CLIENT:
             return self._client_unit(item, run, doc, unit, profile, transition_id)
-        return self._analytic_unit(item, run, doc, unit, part, transition_id)
+        return self._analytic_chunks(item, run, doc, unit, part, transition_id)
 
     def _store(
         self, item: WorkItem, run: _Run, transition_id: str, *, result: CallResult | None, analysis: str | None, verification: str | None,
@@ -367,6 +371,141 @@ class ReportHandler:
             facts={"content_key": unit.key, "error": reason},
         )
         raise _Ended(Failed(reason))
+
+    def _durable_ask(self, item, run, transition_id, facts, slot, user_text, schema, max_tokens):
+        """Read a saved paid response before routes/spend, and never blindly repeat its request."""
+        if len(user_text)>chunk_module.MAX_PROMPT_CHARS:
+            raise _Ended(Failed(FAIL_CHECK))
+        request=plan_module.request_for(run.job.pinned_model,user_text,schema,max_tokens)
+        saved=facts.setdefault('paid_replies',{}).get(slot)
+        if saved is not None:
+            if saved.get('request_sha256')!=request.request_sha256:
+                raise _Ended(Failed(FAIL_SOURCE))
+            response=ModelResponse(**saved['response'])
+            if response.response_sha256!=saved.get('response_sha256'):
+                raise _Ended(Failed(FAIL_SOURCE))
+            return response
+        self._guard(item,run)
+        with self._sessions() as session:
+            fence=self._repo.paid_dispatch_fence(session,job_id=run.job.job_id,request_sha256=request.request_sha256)
+            if fence in {'prepared','sent'}:
+                raise _Ended(Yielded(FINAL_POLL_SECONDS))
+            if fence is not None:
+                raise _Ended(Failed('spend_unknown'))
+            try:
+                route=self._source.route(session,run.job)
+            except DomainError:
+                raise _Ended(Failed(REASON_MODEL_SOURCE)) from None
+            if route.model_identity!=run.job.pinned_model:
+                raise _Ended(Failed(REASON_MODEL_SOURCE))
+        estimate=CallEstimate(input_tokens=_tokens(len(SYSTEM_TEXT)+len(user_text)),output_tokens=max_tokens)
+        try:
+            result=self._caller.call(item,route,request,estimate=estimate,consent=run.consent)
+        except CallRefused as refused:
+            if refused.pauses_job:
+                with self._sessions() as session:
+                    self._jobs.pause_for_spend(session,run.job.job_id,refused.reason)
+                    sync_report(session,self._repo,run.report.report_id,self._jobs.job(session,run.job.job_id))
+                    session.commit()
+            raise _Ended(refused.as_outcome()) from None
+        except (CallFailed,OutcomeUnknown,CallLost) as error:
+            raise _Ended(error.as_outcome()) from None
+        # Persist raw reply before parsing/checking or honouring an overrun pause.
+        # A crash in the caller->custody gap is fenced by the completed journal row.
+        facts['paid_replies'][slot]={'request_sha256':request.request_sha256,'call_id':result.call_id,
+            'response_sha256':result.response.response_sha256,'response':asdict(result.response)}
+        if slot.startswith('composer:'):
+            with self._sessions() as session:
+                current=self._repo.part(session,run.report.report_id,transition_id)
+            if current is None:raise _Ended(Failed(FAIL_SOURCE))
+            self._store(item,run,transition_id,result=result,analysis=current.analysis,
+                verification=current.verification,selection=current.selection,facts=facts,
+                warnings=current.warnings,points=current.points,questions=current.questions)
+        else:
+            self._save_chunk_facts(item,run,transition_id,facts,result=result)
+        return result.response
+
+    def _save_chunk_facts(self,item,run,transition_id,facts,*,result=None):
+        coverage=chunk_module.coverage(facts)
+        facts['chunk_coverage']=coverage
+        rows=facts.get('chunks',[])
+        complete=bool(rows) and coverage['verified']==len(rows)
+        all_analysed=bool(rows) and coverage['analysed']==len(rows)
+        warnings=sum(len(row.get('analysis_result',{}).get('soft',[]))+
+            len(row.get('verification_result',{}).get('soft',[])) for row in rows)
+        self._store(item,run,transition_id,result=result,
+            analysis='done' if all_analysed else 'running',verification='done' if complete else
+                'running' if any(row.get('verification') in {'running','done'} for row in rows) else 'pending',
+            selection=None,facts=facts,warnings=warnings,
+            stage=STAGE_VERIFICATION if any(row.get('verification')=='running' for row in rows)
+                else STAGE_TRANSITION_ANALYSIS)
+
+    def _chunk_attempts(self,item,run,transition_id,facts,chunk,stage,prompt,schema,check):
+        feedback=''
+        for attempt in range(ANALYTIC_RETRIES+1):
+            self._guard(item,run)
+            slot=f'{chunk["chunk_id"]}:{stage}:{attempt}'
+            response=self._durable_ask(item,run,transition_id,facts,slot,prompt+feedback,schema,MAX_TOKENS[stage])
+            answer=None if response.truncated else chunk_module.parse_reply(response.output_text)
+            checked={'hard':['answer is truncated, too large, or not a JSON object'],'soft':[]}
+            if answer is not None:
+                try:
+                    chunk_module.validate_shape(answer,schema)
+                    checked=check(answer)
+                except (KeyError,TypeError,ValueError):
+                    checked={'hard':['answer schema or source references are invalid'],'soft':[]}
+                if not checked['hard']:
+                    return answer,checked
+            feedback=_FEEDBACK.format(problems='\n- '.join(checked['hard']))
+            if len(feedback)>8_000:
+                feedback=_FEEDBACK.format(problems='the answer failed the exact input/source partition; return only the assigned records')
+        raise _Ended(Failed(REASON_ANSWER_UNFIT))
+
+    def _analytic_chunks(self,item,run,doc,unit,part,transition_id):
+        facts=dict(part.facts or {})
+        if (facts.get('content_key')!=unit.key or facts.get('planning_revision')!=chunk_module.REVISION
+                or len(facts.get('chunks',[]))!=len(unit.chunks)):
+            raise _Ended(Failed(FAIL_SOURCE))
+        for chunk,row in zip(unit.chunks,facts['chunks']):
+            if any(row.get(key)!=chunk[key] for key in ('chunk_id','line_start','line_end','source_sha256')):
+                raise _Ended(Failed(FAIL_SOURCE))
+            if row.get('verification')=='done':
+                continue
+            self._guard(item,run)
+            manifest,plan,group,verify_unit=chunk_module.context(doc.manifest,unit.transition,chunk)
+            if row.get('analysis')!='done':
+                row['analysis']='running'
+                self._save_chunk_facts(item,run,transition_id,facts)
+                prompt=analytic.analyst_prompt(run.report.report_id,doc.source,manifest,plan,group,doc.lines)
+                prompt+=chunk_module.note(chunk,len(unit.chunks))
+                answer,checked=self._chunk_attempts(item,run,transition_id,facts,chunk,'analyst',prompt,
+                    analytic.ANALYST_SCHEMA,
+                    lambda value:chunk_module.check_analyst(value,run.report.report_id,group,plan,manifest))
+                row.update(analysis='done',analysis_result={'answer':answer,'soft':checked['soft']})
+                row.pop('error',None)
+                self._save_chunk_facts(item,run,transition_id,facts)
+            answer=row['analysis_result']['answer']
+            results={group['group_id']:answer}
+            claims=analytic.claims_for_unit(results)
+            prompt,shown=analytic.verifier_prompt(run.report.report_id,doc.source,manifest,plan,
+                verify_unit,results,claims,doc.lines)
+            prompt+=chunk_module.note(chunk,len(unit.chunks))
+            row['verification']='running'
+            self._save_chunk_facts(item,run,transition_id,facts)
+            verified,checked=self._chunk_attempts(item,run,transition_id,facts,chunk,'verifier',prompt,
+                analytic.VERIFIER_SCHEMA,
+                lambda value:chunk_module.check_verifier(value,run.report.report_id,verify_unit,claims,shown))
+            cleaned=analytic.clean_verifier(verified,claims,shown)
+            row.update(verification='done',verification_result={'unit_id':verify_unit['unit_id'],
+                'result':cleaned,'soft':checked['soft']})
+            row.pop('error',None)
+            verdicts=[claim['verdict'] for record in facts['chunks'] for claim in
+                record.get('verification_result',{}).get('result',{}).get('claims',[])]
+            facts.update(found=len(verdicts),confirmed=sum(v in ('supported','qualified') for v in verdicts),
+                contradicted=sum(v=='contradictory' for v in verdicts),
+                unconfirmed=sum(v in ('insufficient','rejected') for v in verdicts))
+            self._save_chunk_facts(item,run,transition_id,facts)
+        return Completed()
 
     def _analytic_unit(self, item: WorkItem, run: _Run, doc: SourceDoc, unit: Unit, part: PartRow, transition_id: str) -> Outcome:
         """The analyst, then the verifier (md_report/runner.py ``_analyse_and_verify``); each answer is checked, each stage stored when done."""
@@ -456,6 +595,13 @@ class ReportHandler:
                     return
                 facts = dict(part.facts or {})
                 facts.setdefault("error", outcome.reason)
+                if facts.get("planning_revision")==chunk_module.REVISION:
+                    for chunk in facts.get("chunks",[]):
+                        for stage in ("analysis","verification"):
+                            if chunk.get(stage)=="running":
+                                chunk[stage]="failed"
+                                chunk["error"]=outcome.reason
+                    facts["chunk_coverage"]=chunk_module.coverage(facts)
                 client_kind = row.kind == KIND_CLIENT
                 self._repo.set_part(
                     session, row.report_id, part.transition_id,
@@ -498,6 +644,9 @@ class ReportHandler:
             )
             object_name = self._repo.project_name(session, report.project_uid)
         by_unit = {u.transition_id: parts.get(transitions.get(u.number, "")) for u in units}
+        if report.kind!=KIND_CLIENT and any(part is not None and (part.facts or {}).get("content_key")!=unit.key
+                for unit in units for part in [by_unit[unit.transition_id]]):
+            return self._fail(item,run,FAIL_SOURCE)
         unfinished = [u for u in units if u.editable and not part_done(by_unit[u.transition_id], report.kind)]
         if unfinished:
             return self._finish_partial(item, run)  # the original's «неполный результат»: no PDF is written
@@ -594,18 +743,42 @@ class ReportHandler:
         plan = analytic.make_plan(manifest)
         for index, unit in enumerate(units):
             part = by_unit[unit.transition_id]
+            chunk_rows=(part.facts or {}).get("chunks",[]) if part is not None else []
+            if unit.chunks and chunk_rows:
+                for chunk in chunk_rows:
+                    record=chunk.get("verification_result",{})
+                    if chunk.get("verification")!="done" or not record.get("result"):
+                        raise _Ended(self._fail(item,run,FAIL_CHECK))
+                    verified[record["unit_id"]]=record["result"]
+                continue
             result = ((part.facts or {}).get("verification") or {}).get("result") if unit.editable and part is not None else None
             verified[plan["units"][index]["unit_id"]] = result or program_unit_result(transitions[unit.transition_id])
+        mode=plan_module.composition_mode(units)
+        if mode=="deterministic_chunk_sections":
+            report=chunk_module.assemble_sections(run_id=report_id,doc=doc,units=units,by_unit=by_unit,verified=verified)
+            if analytic.validate_report(report,manifest["lines_total"])+analytic.consistency(report,manifest):
+                raise _Ended(self._fail(item,run,FAIL_CHECK))
+            return report,0
+        host=next((part for part in by_unit.values() if part is not None),None)
+        host_facts={} if host is None else dict(host.facts or {})
         feedback, reason, accepted, last = "", FAIL_CHECK, None, None
-        for _ in range(ANALYTIC_RETRIES + 1):
+        for attempt in range(ANALYTIC_RETRIES + 1):
             self._guard(item, run)
             prompt = analytic.composer_prompt(report_id, doc.source, manifest, verified, retry_note=feedback, registry=doc.registry)
-            result_call = self._ask(item, run, prompt, analytic.COMPOSER_SCHEMA, MAX_TOKENS["composer"])
-            answer = _json(result_call.response.output_text)
+            if host is None:
+                raise _Ended(self._fail(item,run,FAIL_CHECK))
+            response=self._durable_ask(item,run,host.transition_id,host_facts,
+                f'composer:{report_id}:{attempt}',prompt,analytic.COMPOSER_SCHEMA,MAX_TOKENS["composer"])
+            answer = None if response.truncated else chunk_module.parse_reply(response.output_text)
             if answer is None:
                 feedback = _FEEDBACK.format(problems="the answer is not a JSON object")
                 continue
-            checked = analytic.check_composer(answer, report_id, manifest, verified, doc.lines, doc.registry)
+            try:
+                chunk_module.validate_shape(answer,analytic.COMPOSER_SCHEMA)
+                checked = analytic.check_composer(answer, report_id, manifest, verified, doc.lines, doc.registry)
+            except (ValueError,KeyError,TypeError):
+                feedback=_FEEDBACK.format(problems="the answer failed its exact schema/source partition")
+                continue
             last = (answer, checked)
             if checked["ok"]:
                 accepted = last
@@ -619,6 +792,7 @@ class ReportHandler:
             raise _Ended(self._fail(item, run, reason))
         answer, checked = accepted
         report = analytic.assemble(answer, manifest, verified, doc.source, doc.lines, doc.registry)
+        report=chunk_module.decorate(report,doc=doc,units=units,by_unit=by_unit,verified=verified,mode=mode)
         problems = analytic.validate_report(report, manifest["lines_total"]) + analytic.consistency(report, manifest)
         if problems:
             _LOG.warning("comparison work %s: the report did not pass its checks: %s", item.work_id, "; ".join(problems[:5]))

@@ -46,8 +46,10 @@ Changed files, no-check status, contracts, limitations, integrator instructions,
 
 - `src/auditmanager/comparison/stage_v3/**`
 - `src/auditmanager/comparison/stage_run/service.py`
+- `src/auditmanager/comparison/stage_review/cards.py`
+- `src/auditmanager/comparison/stage_review/service.py`
 - `src/auditmanager/comparison/stage_run/repository.py`
-- `src/auditmanager/comparison/stage_batch/**`
+- `src/auditmanager/comparison/stage_run/batch.py`
 - `src/auditmanager/comparison/stage_ai/runtime.py`
 - `src/auditmanager/comparison/stage_ai/repository.py`
 - `docs/program/SPRINT3-STAGE-1030.md`
@@ -55,3 +57,7 @@ Changed files, no-check status, contracts, limitations, integrator instructions,
 ## Deliverables
 
 Fresh windowed-v1 plan with deterministic catalogue/Mapper and per-region/page bounded Miner/unmatched/verification batches under240k encoded limit, saved unit identities and per-call consent. Preserve legacy native plan for existing runs. Freeze fresh plan in accepted command, coordinate policy estimator before changing calls. If prerequisite needs another exact slot, request root early.
+
+Additional exact integration grant: stage_run/batch.py owns frozen parent batch plan and passes it to child starts. Stage lane owns existing service/repository seams for fresh windowed-v1 selection and legacy dispatch; no other lane touches them. The nonexistent stage_run/repository.py path is not an instruction to create a generic repository.
+
+Fresh-only display excerpt grant: stage_review/cards.py and service.py may keep existing20000-character transport bound by producing explicitly annotated windowed-v1 display excerpts, preserving complete native fragments and actual event/source text in experimental metadata/source_report. Classic/legacy strict behavior and raw stage_text_fragment evidence remain unchanged. Full source digests bind retained originals. UI consumer receives explicit display_excerpts coverage; no silent clipping or API length change.

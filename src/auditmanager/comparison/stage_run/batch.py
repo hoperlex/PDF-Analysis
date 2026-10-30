@@ -87,6 +87,8 @@ class StageBatchService:
                                                fingerprint=payload_fingerprint(payload))
             if isinstance(claim, CommandReplay):
                 return self.record(session, str(claim.outcome["batch_id"]))
+            from auditmanager.comparison.stage_v3.policy import fresh_policy
+            selected_policy = fresh_policy() if engine != "classic" else None
             for selection in selections:
                 pair = self.chains._pair(session, str(selection["pair_id"]))
                 if pair["project_uid"] != project_uid:
@@ -114,7 +116,8 @@ class StageBatchService:
             self.chains.work.enqueue(session, project_uid=project_uid, module="stages",
                                      kind=BATCH_WORK_KIND, payload={"batch_id": batch_id},
                                      dedupe_key=f"stage_batch:{batch_id}", created_by_user_uid=user_uid)
-            self.chains.commands.succeed(session, claim.command_id, {"batch_id": batch_id, "engine": engine})
+            self.chains.commands.succeed(session, claim.command_id, {"batch_id": batch_id, "engine": engine,
+                **({"stage_v3_policy": selected_policy} if selected_policy is not None else {})})
             self._event(session, batch_id, "started", user_uid)
             return self.record(session, batch_id)
 
@@ -255,11 +258,13 @@ class StageBatchHandler:
                         return Completed()
                     try:
                         from auditmanager.comparison.stage_v3.mode import engine_for_batch
+                        from auditmanager.comparison.stage_v3.policy import policy_for_batch
                         run = self.chains.start(pair_id=str(row[1]), revision_id=str(row[2]),
                                                 user_uid=str(batch[2]), actor_roles=roles,
                                                 idempotency_key=f"stage-batch:{batch_id}:{row[0]}",
                                                 with_ai=bool(batch[3]), consent=dict(row[5]) or None,
-                                                batch_id=batch_id, engine=engine_for_batch(session, batch_id))
+                                                batch_id=batch_id, engine=engine_for_batch(session, batch_id),
+                                                stage_v3_policy=policy_for_batch(session, batch_id))
                     except DomainError:
                         session.execute(text(
                             "UPDATE stage_chain_batch_item SET state = 'failed', updated_at = clock_timestamp() "

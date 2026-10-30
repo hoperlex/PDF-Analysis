@@ -13,7 +13,12 @@ function object(value: unknown): RecordValue | null { return typeof value === 'o
 function objects(value: unknown): RecordValue[] { return Array.isArray(value) ? value.flatMap((item) => { const row = object(item); return row === null ? [] : [row]; }) : []; }
 function plain(value: unknown): string { return typeof value === 'string' ? value : value === null || value === undefined ? 'Не передано' : JSON.stringify(value, null, 2) ?? 'Не передано'; }
 function html(value: unknown): string { return plain(value).replace(/[&<>"']/g, (char) => HTML_ENTITIES[char] ?? char); }
-function md(value: unknown): string { return plain(value).replace(/([\\`*_{}\[\]()#+.!|>])/g, '\\$1').replace(/</g, '&lt;').replace(/&(?!(?:lt|gt);)/g, '&amp;').replace(/>/g, '&gt;'); }
+const MD_SYNTAX = new Set('\\`*_{}[]()#+.!|>');
+function md(value: unknown): string {
+  let escaped = '';
+  for (const character of plain(value)) escaped += MD_SYNTAX.has(character) ? `\\${character}` : character;
+  return escaped.replace(/</g, '&lt;').replace(/&(?!(?:lt|gt);)/g, '&amp;').replace(/>/g, '&gt;');
+}
 function code(value: unknown): string {
   const body = JSON.stringify(value, null, 2) ?? 'null';
   const lengths = [...body.matchAll(/`+/g)].map((match) => match[0].length);
@@ -64,7 +69,7 @@ export function formatExtendedRunReport(reading: ExtendedRunReview, format: Exte
   const disclaimer = 'Предварительный машинный анализ. Рекомендации критика и исправленные кандидаты не являются решениями эксперта. Нормативные значения из исторических рубрик не подтверждены; редакция и применимость цитат требуют отдельной проверки. Все переданные записи сохранены, без фильтра по модельному принятию или отклонению.';
   const metadata = { run_id: reading.run_id, status: reading.status, workflow_version: result?.workflow_version,
     section: result?.section, version_uid: result?.version_uid, rules_sha256: result?.rules_sha256, source_provenance: result?.source_provenance,
-    coverage: result?.coverage, text_coverage: result?.text_coverage, coverage_version: result?.coverage_version, phase_coverage: result?.phase_coverage, phase_call_limits: result?.phase_call_limits,
+    coverage: result?.coverage, text_coverage: result?.text_coverage, consolidation: result?.consolidation, coverage_version: result?.coverage_version, phase_coverage: result?.phase_coverage, phase_call_limits: result?.phase_call_limits,
     window_progress: result?.window_progress, primary_text_status: result?.primary_text_status,
     visual_phase_complete: result?.visual_phase_complete, report: result?.report };
   const pendingPrimary = result?.primary_text_status === 'pending'

@@ -46,21 +46,21 @@ function tables(runId: string, cards: readonly StageChangeCard[], run: StageChai
   const sourceReport = object(progress?.source_report);
   const summary: Row[] = [['Показатель', 'Значение'], ['Тип', 'Технический предварительный отчёт V3; не экспертное заключение'],
     ['Запуск', runId], ['Состояние', run?.state], ['Устарело', snapshot.stale], ['Метод', snapshot.engine],
-    ['Версия отчёта', snapshot.report_version], ['Исходная версия PDF-proverka', progress?.source_version],
-    ['SHA256 источников', sourceReport?.source_sha256], ['Сохранённых карточек', snapshot.saved_cards], ['Параметров', snapshot.parameters],
+    ['Версия отчёта', snapshot.report_version], ['Закреплённый план', snapshot.plan_version], ['Границы плана', snapshot.limits], ['Известные единицы работы', snapshot.known_units], ['Исходная версия PDF-proverka', progress?.source_version],
+    ['SHA256 источников', sourceReport?.source_sha256], ['Сохранённых карточек', snapshot.saved_cards], ['Параметров', snapshot.parameters], ['Карточек с экранными фрагментами', snapshot.display_excerpt_cards],
     ['Покрытие', progress?.coverage], ['Процедуры', progress?.procedures], ['Ограничения', snapshot.limitations],
     ['Значения', 'Исходные значения Miner и значения независимой машинной сверки находятся в разных столбцах.'],
     ['Решения', 'Сохранённые экспертные решения показаны отдельно; несохранённые оценки не включены.'],
     ['Страницы', 'Физическая страница PDF (с 1) получена из сохранённого профиля; имя файла и ID не используются как номер листа.'],
     ['Длинные цитаты', 'Sources: соединить части одного source_id по порядку без разделителей. Cards: отдельно соединить части before/after.'],
     ['Полные данные', 'RawJSONchunks: соединить второй столбец по порядку без разделителей; сохраняет весь исходный снимок.']];
-  const cardRows: Row[] = [['Карточка', 'Тип записи', 'Часть', 'Заголовок', 'Класс', 'Категория', 'Система', 'Исходные свидетельства', 'Текст', 'Сохранённое решение эксперта', 'Причина решения', 'ID решения', 'Устарело']];
+  const cardRows: Row[] = [['Карточка', 'Тип записи', 'Часть', 'Заголовок', 'Класс', 'Категория', 'Система', 'Исходные свидетельства', 'Текст', 'Сохранённое решение эксперта', 'Причина решения', 'ID решения', 'Устарело', 'Метаданные экранных фрагментов; полные тексты в Sources/RawJSONchunks']];
   const parameters: Row[] = [['Карточка', 'Событие', 'Параметр ID', 'Объект', 'Название', 'Было (Miner)', 'Стало (Miner)', 'Единица (Miner)', 'Место',
     'Вердикт машинной сверки (не экспертный)', 'Было после сверки', 'Стало после сверки', 'Единица после сверки', 'Объяснение сверки',
     'Источники события', 'Источники сверки', 'ID задания сверки', 'Сохранённое решение эксперта']];
   for (const card of v3Cards(cards)) {
     cardRows.push([card.card_id, 'Карточка', '', card.title, card.class_name, card.category, card.system, card.evidence_ids,
-      '', card.verdict?.decision, card.verdict?.reason, card.verdict?.verdict_id, card.stale]);
+      '', card.verdict?.decision, card.verdict?.reason, card.verdict?.verdict_id, card.stale, object(card.experimental)?.display_text]);
     for (const [kind, value] of [['before', card.before], ['after', card.after]]) {
       rawChunks(value ?? '').forEach((chunk, ordinal) => cardRows.push([card.card_id, kind, ordinal + 1, '', '', '', '', '', chunk]));
     }
