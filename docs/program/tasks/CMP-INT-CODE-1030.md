@@ -64,6 +64,7 @@ The remaining C3/C4 functional roadmap is implemented, integrated by one owner a
 - `web/src/widgets/stage-run-controls/**` (bounded polling integration only)
 - `web/tests/unit/run/polling.test.ts`
 - `tests/integration/composition/**`
+- `tests/integration/comparison/stage_run/**` (runtime integration regression)
 
 ## Forbidden hotspots
 - `origin/main`, force-push, deployment, unrelated worktree changes and owner files
