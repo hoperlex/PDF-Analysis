@@ -76,6 +76,7 @@ import {
   PROVIDER_MODE_UNKNOWN_LABEL,
 } from '@/shared/ui';
 import styles from './run-progress.module.css';
+import { PdfPrecheckProgress } from './pdf-precheck-progress';
 
 import {
   AR_V3_BETA_PROFILE_ID,
@@ -434,6 +435,8 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
       ) : null}
 
       <Recorded status={status} />
+
+      <PdfPrecheckProgress status={status} />
 
       <h2>Этапы</h2>
       <StageTable rows={stageRows(status)} />

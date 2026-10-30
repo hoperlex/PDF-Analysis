@@ -91,6 +91,8 @@ export function useRunStatus(runId: RunId): RunStatusPolling {
           if (!live) return;
           setStatus(reading);
           queryClient.setQueryData(queryKeys.runs.detail(runId), reading);
+          // Page validation uses the same cadence as this Run; its journal has no timer.
+          void queryClient.invalidateQueries({ queryKey: queryKeys.execution.journal(runId) });
           if (isTerminalRunState(reading.state)) {
             void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary() });
           }

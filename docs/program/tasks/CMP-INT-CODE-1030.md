@@ -49,6 +49,7 @@ The remaining C3/C4 functional roadmap is implemented, integrated by one owner a
 - `docs/program/CMP-INT-CODE-1030.md`
 - `docs/program/CURRENT_STATE.md`
 - `docs/program/RELEASES.md`
+- `docs/program/OWNER_RULINGS_2026-09-17.md` (direct owner poll2026-10-30)
 - `release-notes/0.9.0.json`
 - `tests/contract/release_notes/test_release_notes_form.py`
 - `docs/program/DEBT_REGISTER.md`
