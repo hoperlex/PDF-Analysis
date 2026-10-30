@@ -29,7 +29,7 @@ one would have taken that decision away from it.
 
 from __future__ import annotations
 
-from typing import BinaryIO, Protocol, Sequence, runtime_checkable
+from typing import Any, BinaryIO, Mapping, Protocol, Sequence, runtime_checkable
 
 from auditmanager.api.schemas.accounts import AccountView, PersonNamesView
 from auditmanager.api.schemas.blocks import (
@@ -517,8 +517,11 @@ class SectionPort(Protocol):
 class ArV3GroupPort(Protocol):
     """The explicitly gated AR beta group, independent of legacy Run start."""
 
+    def estimate_ar_v3_group_cost(self, *, version_uid: str, relaxed_limits: bool = False) -> models.RunCostEstimate: ...
+
     def start_ar_v3_group(
         self, *, version_uid: str, idempotency_key: str, relaxed_limits: bool = False,
+        cost_consent: Mapping[str, Any] | None = None,
     ) -> models.ArV3BetaGroup:
         """Create six pinned runs, or replay the same group."""
 
@@ -540,6 +543,9 @@ class RunPort(Protocol):
     ``succeeded`` would be reporting a ``StageResult`` status on the wrong aggregate.
     """
 
+    def estimate_run_cost(self, *, version_uid: str, executor_connection_id: str | None = None,
+                          preset_id: str | None = None, relaxed_limits: bool = False) -> models.RunCostEstimate: ...
+
     def start_run(
         self,
         *,
@@ -549,6 +555,7 @@ class RunPort(Protocol):
         executor_connection_id: str | None = None,
         preset_id: str | None = None,
         relaxed_limits: bool = False,
+        cost_consent: Mapping[str, Any] | None = None,
     ) -> RunStatusView:
         """Start a run, or return the existing one for this key and payload.
 

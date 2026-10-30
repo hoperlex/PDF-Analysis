@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.13.0 (OpenAPI 3.1.0)
- *   sha256 29df290762867fb53ebefc31394e3358b91333f791c69bdc52e5568d7b80b282
+ *   sha256 383cdba713ea107ceaaf16fe943e946db4ab60ff510bfe17124d9daeafa431e2
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.13.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '29df290762867fb53ebefc31394e3358b91333f791c69bdc52e5568d7b80b282';
+export const CONTRACT_DIGEST = '383cdba713ea107ceaaf16fe943e946db4ab60ff510bfe17124d9daeafa431e2';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -57,6 +57,7 @@ export const SCHEMA_NAMES = [
   'ArV3BetaVisibleProposal',
   'ArV3BetaVisibleReview',
   'ArV3BetaVisibleTopic',
+  'ArV3GroupCostEstimateRequest',
   'ArV3RunGroupId',
   'Assignment',
   'AssignmentDetail',
@@ -457,6 +458,9 @@ export const SCHEMA_NAMES = [
   'Role',
   'RunActivity',
   'RunActivitySpend',
+  'RunCostConsent',
+  'RunCostEstimate',
+  'RunCostEstimateRequest',
   'RunExecutor',
   'RunId',
   'RunNormReferences',
@@ -973,6 +977,11 @@ export type ArV3BetaVisibleTopic = {
   reason: string;
   review_status: string;
   source_ids: Array<string>;
+};
+
+export type ArV3GroupCostEstimateRequest = {
+  relaxed_limits?: boolean;
+  version_uid: VersionUid;
 };
 
 export type ArV3RunGroupId = string;
@@ -5378,6 +5387,40 @@ export type RunActivitySpend = {
   model_call_count: number;
 };
 
+export type RunCostConsent = {
+  ceiling_micros: number;
+  confirmed: boolean;
+  estimate_digest: Sha256;
+};
+
+export type RunCostEstimate = {
+  billing: "metered" | "unmetered";
+  calls: number;
+  connection_revision_id?: ExecutorRevisionId;
+  currency: "USD";
+  estimate_digest: Sha256;
+  estimated_cost_micros: number;
+  input_tokens: number;
+  model_id: string;
+  output_tokens: number;
+  page_count: number;
+  preset_revision_id?: PresetRevisionId;
+  provider_mode: ProviderMode;
+  recommended_ceiling_micros: number;
+  relaxed_limits: boolean;
+  scope: "run" | "ar_v3_group";
+  text_characters: number;
+  version_uid: VersionUid;
+  windows: number;
+};
+
+export type RunCostEstimateRequest = {
+  executor_connection_id?: ExecutorConnectionId;
+  preset_id?: PresetId;
+  relaxed_limits?: boolean;
+  version_uid: VersionUid;
+};
+
 /** EXEC-PAR-START-01: which executor a run is on. Identity, display name and pinned model only; never a secret, an address or a probe. */
 export type RunExecutor = {
   connection_id: ExecutorConnectionId;
@@ -6705,6 +6748,8 @@ export type StageUploadPartReceipt = {
 };
 
 export type StartArV3BetaGroupRequest = {
+  /** The expert confirms a fresh estimate and a sufficient explicit ceiling before this start may spend. The approved cap applies independently of the raised output-limit choice. */
+  cost_consent?: RunCostConsent;
   /** Temporary AR v3 option. Absent or false keeps the deployment cost ceiling and a 16,000-token output request. True omits the per-Run cost halt and requests up to 64,000 output tokens; the provider may enforce a lower maximum. The choice is part of the idempotency payload and persists for all six Runs. */
   relaxed_limits?: boolean;
   version_uid: VersionUid;
@@ -6737,6 +6782,8 @@ export type StartComparisonSeriesRequest = {
 };
 
 export type StartRunRequest = {
+  /** The expert confirms a fresh estimate and a sufficient explicit ceiling before this start may spend. The approved cap applies independently of the raised output-limit choice. */
+  cost_consent?: RunCostConsent;
   /** EXEC-PAR-START-01: the executor connection this run must be on. Absent: the run follows the global route exactly as before. Present: that connection's current revision is frozen when this release serves it, its current key has a passing probe and it is not archived; otherwise the start is refused and no run exists. Never replaced by the route's standby or by another connection. Part of the payload the idempotency key is compared by. */
   executor_connection_id?: ExecutorConnectionId;
   /** ANALYSIS-PRESETS-01: a saved preset (listAnalysisPresets) to start the run with. Absent: the run is what it was. Present: the preset's current revision is read in the start's transaction and its executor connection is applied exactly as if executor_connection_id had named it (same usability test, same refusals, no fallback to the standby or to another connection), and the run records the preset revision. Exclusive with executor_connection_id. Part of the payload the idempotency key is compared by, as the preset and not as the connection it resolved to. */

@@ -205,6 +205,10 @@ __all__ = [
     "StageState",
     "StageStatus",
     "StartRunRequest",
+    "RunCostConsent",
+    "RunCostEstimateRequest",
+    "ArV3GroupCostEstimateRequest",
+    "RunCostEstimate",
     "SubmitRegistrationRequest",
     "UpdateMyProfileRequest",
     "UpdateUserRequest",
@@ -1283,8 +1287,48 @@ class PortalBlockPage(_Object):
 # --- runs --------------------------------------------------------------------------
 
 
+class RunCostConsent(_Object):
+    estimate_digest: Sha256
+    ceiling_micros: Annotated[int, Field(ge=0, le=9007199254740991, strict=True)]
+    confirmed: Annotated[bool, Field(strict=True)]
+
+
+class RunCostEstimateRequest(_Object):
+    version_uid: VersionUid
+    executor_connection_id: ExecutorConnectionId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    preset_id: PresetId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    relaxed_limits: bool = Field(default=None, strict=True, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class ArV3GroupCostEstimateRequest(_Object):
+    version_uid: VersionUid
+    relaxed_limits: bool = Field(default=None, strict=True, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class RunCostEstimate(_Object):
+    estimate_digest: Sha256
+    scope: Literal["run", "ar_v3_group"]
+    version_uid: VersionUid
+    provider_mode: ProviderMode
+    billing: Literal["metered", "unmetered"]
+    model_id: Annotated[str, Field(min_length=1, max_length=200)]
+    connection_revision_id: ExecutorRevisionId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    preset_revision_id: PresetRevisionId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    text_characters: Annotated[int, Field(ge=0)]
+    page_count: Annotated[int, Field(ge=1)]
+    windows: Annotated[int, Field(ge=1)]
+    calls: Annotated[int, Field(ge=1)]
+    input_tokens: Annotated[int, Field(ge=0)]
+    output_tokens: Annotated[int, Field(ge=0)]
+    estimated_cost_micros: Annotated[int, Field(ge=0)]
+    recommended_ceiling_micros: Annotated[int, Field(ge=0)]
+    currency: Literal["USD"]
+    relaxed_limits: bool
+
+
 class StartRunRequest(_Object):
     version_uid: VersionUid
+    cost_consent: RunCostConsent = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     relaxed_limits: bool = Field(default=None, strict=True, json_schema_extra=optional_property)  # type: ignore[assignment]
     provider_mode: ProviderMode = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     #: `EXEC-PAR-START-01`. Optional and **not nullable**, like ``provider_mode``: absent means
@@ -1301,6 +1345,7 @@ class StartRunRequest(_Object):
 
 class StartArV3BetaGroupRequest(_Object):
     version_uid: VersionUid
+    cost_consent: RunCostConsent = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     # Optional temporary per-group override. Absent and false keep the existing limits.
     relaxed_limits: bool = Field(default=None, strict=True, json_schema_extra=optional_property)  # type: ignore[assignment]
 
@@ -3384,7 +3429,7 @@ class SpecificationCurrencyTotal(_Object):
 class SpecificationMatching(_Object):
     """Every row's match counted, the totals per currency and what they leave out."""
 
-    algorithm: Literal["price-match-v1"]
+    algorithm: Literal["price-match-v1", "price-match-v2"]
     counts: SpecificationMatchCounts
     totals: Annotated[list[SpecificationCurrencyTotal], Field(max_length=200)]
     excluded: SpecificationExclusionCounts
@@ -3841,7 +3886,7 @@ class SectionSpecification(_Object):
     project_filter: ProjectUid | None
     query: Annotated[str, Field(min_length=1, max_length=200)] | None
     extraction_algorithm: Literal["specification-text-v1"]
-    match_algorithm: Literal["price-match-v1"]
+    match_algorithm: Literal["price-match-v1", "price-match-v2"]
     projects: Annotated[list[SectionSpecificationProject], Field(max_length=1000)]
     excluded: Annotated[list[SectionSpecificationExcludedVersion], Field(max_length=200)]
     excluded_count: _SpecificationCount
