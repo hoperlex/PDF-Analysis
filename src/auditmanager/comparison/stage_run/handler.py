@@ -110,7 +110,7 @@ class StageChainHandler:
         revision = record.effective_revision_id or record.revision_id
         child = self.text.start(
             revision_id=revision, user_uid=str(actor), actor_roles=roles,
-            idempotency_key=f"stage-chain-text:{record.run_id}:{revision}",
+            idempotency_key=f"stage-chain-text:{record.run_id}:{revision}:{item.work_id}",
         )
         if child.state in {"queued", "running"}:
             return Yielded(2.0)

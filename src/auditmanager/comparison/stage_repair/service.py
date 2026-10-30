@@ -286,6 +286,13 @@ class StageRepairService:
                                             "base_revision_id": base_revision_id, "user_uid": user_uid}))
             if isinstance(claim, CommandReplay):
                 return self._view(session, repair_id)
+            from auditmanager.comparison.stage_run.service import StageChainService
+            source_run = session.execute(text(
+                "SELECT stage_chain_run_id FROM stage_link_repair WHERE stage_link_repair_id = :repair"
+            ), {"repair": repair_id}).scalar_one_or_none()
+            if source_run is None:
+                raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="StageLinkRepair")
+            StageChainService(self.sessions).lock_command(session, str(source_run))
             row = session.execute(text(
                 "SELECT x.stage_chain_run_id, x.before_snapshot, x.after_revision_id, "
                 "r.stage_pair_id, r.with_ai, r.pinned_version_uids, p.project_uid "

@@ -14,3 +14,10 @@ This addendum supersedes the earlier `CMP-WAVE-C2-INT` requirement for a green f
 ## Deferred acceptance
 
 Full gate, complete integration/web batteries, browser journey execution, exposure acceptance and live model measurements remain deferred. Focused checks provide implementation evidence only. Final SHA, publication proof and remaining limitations will be appended before closeout.
+
+
+## 2026-10-30 integrated runtime follow-up
+
+Single/batch seven-step chains, graphic engine evidence/crops, AI bounded windows, repair/undo, cards/verdicts/journal and four page tabs are integrated. Root fixed work-before-run command locking, cancellation of child read models and fresh child receipts on resume. Focused lifecycle/repair/positive-port scenarios:10 passed; registry29; C4 HTTP47 plus the served C3 missing-scope cases; polling16; frontend lock8; release note29. The new expert action and AI label fields are sealed at228/254/614. Migration0043 preserves frozen AI units over explicit recovery generations; its private apply/downgrade/reapply passed. Full gates remain deferred.
+
+Remote refs moved independently: fetched dev99b337fb and main2c162f76 (owner hotfix publication). Root must preserve and merge completed dev hotfixes before its own fast-forward publication; no main operation is authorised. The new limit switches are existing owner work, not a new default grant by this integrator.

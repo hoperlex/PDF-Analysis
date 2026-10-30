@@ -103,3 +103,8 @@ are byte-identical.
   proposal tables with a logged row count. Restoring data means the host's pre-deploy database
   dump (`infra/deploy/reset.sh`; no off-host backup exists). The loader leaves a `0.7.0` row
   above a running `VERSION` untouched, so a `0.6.0` image hides it.
+
+
+## 2026-10-30 CMP development code addendum
+
+`CMP-INT-CODE-1030` prepares the two comparison modules for development publication. Release note0.9.0 revision4 replaces the former legacy pairing/recorded-summary descriptions with the module screens. Product VERSION remains0.9.0. C4 final additive contract is1.13.0,228 paths /254 operations /614 schemas, head0042. Full gates, browser acceptance, exposure acceptance and heavy measurements are deferred by the owner to2026-10-31. This is no deployed-release row, tag or main authorisation. See the integration record for exact publication proof and limitations.

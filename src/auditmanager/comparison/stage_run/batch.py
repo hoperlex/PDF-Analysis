@@ -125,6 +125,18 @@ class StageBatchService:
                                                                                 "user_uid": user_uid}))
             if isinstance(claim, CommandReplay):
                 return self.record(session, batch_id)
+            session.execute(text("SELECT pg_advisory_xact_lock(hashtextextended('stage_batch_command:' || :batch, 0))"),
+                            {"batch": batch_id})
+            session.execute(text(
+                "SELECT comparison_work_id FROM comparison_work WHERE kind = 'stage_chain_batch' "
+                "AND payload->>'batch_id' = :batch AND terminal_at IS NULL ORDER BY comparison_work_id FOR UPDATE"
+            ), {"batch": batch_id}).all()
+            if action == "cancel":
+                for run_id in session.execute(text(
+                    "SELECT stage_chain_run_id FROM stage_chain_batch_item WHERE stage_chain_batch_id = :batch "
+                    "AND stage_chain_run_id IS NOT NULL ORDER BY stage_chain_run_id"
+                ), {"batch": batch_id}).scalars():
+                    self.chains.lock_command(session, str(run_id))
             row = session.execute(text(
                 "SELECT state, project_uid FROM stage_chain_batch WHERE stage_chain_batch_id = :batch FOR UPDATE"
             ), {"batch": batch_id}).first()

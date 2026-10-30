@@ -155,3 +155,38 @@ def test_graphic_failure_finishes_run_in_failed_state(comparison_session: Sessio
     assert isinstance(outcome, Failed)
     final = service.get(run.run_id)
     assert final.state == 'failed' and final.steps[2].state == 'failed'
+
+
+def test_resume_after_child_cancellation_uses_new_child_receipt(comparison_session: Session) -> None:
+    store, service, work, worker, pair, revision, actor, left, right = _scene(comparison_session)
+    run = service.start(pair_id=pair, revision_id=revision, user_uid=actor,
+        actor_roles=frozenset({'expert'}), with_ai=False, idempotency_key='child-resume-'+new_ulid())
+    item = _claim(store._sessions, work, worker, WORK_KIND)
+    deps = WorkDependencies(None, store._sessions, None, work)
+    handler = StageChainHandler(deps, repair=_Action(), review=_Action())
+    handler.run(item)
+    handler.run(item)
+    children = [r for r in service.page(pair_id=pair, after=None, limit=100)[0] if r.kind == 'deterministic']
+    assert len(children) == 1
+    old_child = children[0].run_id
+    service.cancel(run_id=run.run_id, user_uid=actor, actor_roles=frozenset({'expert'}),
+                   idempotency_key='child-stop-'+new_ulid())
+    assert service.get(old_child).state == 'cancelled'
+    with session_scope(store._sessions) as session:
+        work.finish(session, item.authority, Yielded())
+    service.resume(run_id=run.run_id, user_uid=actor, actor_roles=frozenset({'expert'}),
+                   idempotency_key='child-resume-again-'+new_ulid())
+    resumed_item = _claim(store._sessions, work, worker, WORK_KIND)
+    assert resumed_item.work_id != item.work_id
+    assert isinstance(handler.run(resumed_item), Yielded)
+    child = _claim(store._sessions, work, worker, TEXT_KIND)
+    assert child.payload['run_id'] != old_child
+    assert isinstance(StageTextRecomputeHandler(deps, profile_reader=_profiles(
+        comparison_session, left, right, empty=False)).run(child), Completed)
+    with session_scope(store._sessions) as session:
+        work.finish(session, child.authority, Completed())
+    for _ in range(8):
+        outcome = handler.run(resumed_item)
+        if isinstance(outcome, Completed):
+            break
+    assert service.get(run.run_id).state == 'completed'

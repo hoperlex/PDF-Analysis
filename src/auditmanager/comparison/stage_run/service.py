@@ -269,6 +269,23 @@ class StageChainService:
         ), {"runs": [run_id, *(str(uid) for uid in children if uid)]}).scalars().all()
         return tuple(str(uid) for uid in ids)
 
+    def lock_command(self, session: Session, run_id: str) -> None:
+        """Commands and workers acquire work before run rows; serialize command generations."""
+        session.execute(text("SELECT pg_advisory_xact_lock(hashtextextended('stage_chain_command:' || :run, 0))"),
+                        {"run": run_id})
+        # Stop the full worker from creating another child before enumerating its children.
+        session.execute(text(
+            "SELECT comparison_work_id FROM comparison_work WHERE kind = 'stage_chain' "
+            "AND payload->>'run_id' = :run AND terminal_at IS NULL "
+            "ORDER BY comparison_work_id FOR UPDATE"
+        ), {"run": run_id}).all()
+        ids = self._work_ids(session, run_id)
+        if ids:
+            session.execute(text(
+                "SELECT comparison_work_id FROM comparison_work WHERE comparison_work_id = ANY(CAST(:ids AS text[])) "
+                "ORDER BY comparison_work_id FOR UPDATE"
+            ), {"ids": list(ids)}).all()
+
     def cancel(self, *, run_id: str, user_uid: str, actor_roles: frozenset[str],
                idempotency_key: str) -> ChainRun:
         self._enabled()
@@ -279,6 +296,7 @@ class StageChainService:
                                         fingerprint=payload_fingerprint({"run_id": run_id, "user_uid": user_uid}))
             if isinstance(claim, CommandReplay):
                 return self.record(session, run_id)
+            self.lock_command(session, run_id)
             session.execute(text("SELECT stage_chain_run_id FROM stage_chain_run "
                                  "WHERE stage_chain_run_id = :run FOR UPDATE"), {"run": run_id})
             record = self.record(session, run_id)
@@ -296,6 +314,12 @@ class StageChainService:
                     "updated_at = clock_timestamp() WHERE stage_chain_run_id = :run "
                     "AND state <> 'completed'"
                 ), {"run": run_id})
+                session.execute(text(
+                    "UPDATE stage_chain_run SET state = 'cancelled', updated_at = clock_timestamp() "
+                    "WHERE stage_chain_run_id IN (SELECT outcome->>'run_id' FROM command_record "
+                    "WHERE command_type = 'recompute_stage_text_evidence' AND idempotency_key LIKE :prefix) "
+                    "AND state IN ('queued','running')"
+                ), {"prefix": f"stage-chain-text:{run_id}:%"})
                 self._event(session, run_id, "stage.chain_cancelled", {"actor_uid": user_uid})
             self.commands.succeed(session, claim.command_id, {"run_id": run_id})
             return self.record(session, run_id)
@@ -313,6 +337,7 @@ class StageChainService:
                                         fingerprint=payload_fingerprint(payload))
             if isinstance(claim, CommandReplay):
                 return self.record(session, run_id)
+            self.lock_command(session, run_id)
             session.execute(text("SELECT stage_chain_run_id FROM stage_chain_run "
                                  "WHERE stage_chain_run_id = :run FOR UPDATE"), {"run": run_id})
             record = self.record(session, run_id)
@@ -323,10 +348,28 @@ class StageChainService:
                 return record
             if record.state == "failed" and not retry_failed:
                 raise conflict("stage_chain_retry_required")
+            if any(session.execute(text(
+                "SELECT cancel_requested_at IS NOT NULL FROM comparison_work WHERE comparison_work_id = :work"
+            ), {"work": work_id}).scalar_one() for work_id in self._work_ids(session, run_id)):
+                raise conflict("stage_chain_cancellation_pending")
+            previous_job_id = record.ai_job_id
+            if record.ai_job_id is not None:
+                terminal_job = session.execute(text(
+                    "SELECT state IN ('completed','failed','cancelled') FROM comparison_ai_job "
+                    "WHERE comparison_ai_job_id = :job"
+                ), {"job": record.ai_job_id}).scalar_one()
+                if terminal_job and any(session.execute(text(
+                    "SELECT state IN ('leased','running') FROM comparison_work WHERE comparison_work_id = :work"
+                ), {"work": work_id}).scalar_one() for work_id in self._work_ids(session, run_id)):
+                    raise conflict("stage_chain_transition_pending")
             if record.with_ai:
                 if self.ai is None:
                     raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="comparison_stage_ai")
                 self.ai.resume(session, run_id=run_id, user_uid=user_uid, consent=consent)
+                record = self.record(session, run_id)
+                if record.ai_job_id != previous_job_id:
+                    for work_id in self._work_ids(session, run_id):
+                        self.work.cancel(session, work_id)
             session.execute(text(
                 "UPDATE stage_chain_step SET state = 'queued', failure_reason = NULL, "
                 "finished_at = NULL, updated_at = clock_timestamp() "

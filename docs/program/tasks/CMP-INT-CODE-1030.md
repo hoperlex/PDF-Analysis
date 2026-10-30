@@ -48,12 +48,17 @@ The remaining C3/C4 functional roadmap is implemented, integrated by one owner a
 - `docs/program/tasks/CMP-INT-CODE-1030.md`
 - `docs/program/CMP-INT-CODE-1030.md`
 - `docs/program/CURRENT_STATE.md`
+- `docs/program/RELEASES.md`
+- `release-notes/0.9.0.json`
+- `tests/contract/release_notes/test_release_notes_form.py`
 - `docs/program/DEBT_REGISTER.md`
 - `docs/program/compare/**`
 - `docs/program/dispatch/**`
+- Incoming completed hotfix trees `06b94745` and `99b337fb` from origin/dev: preserve their owned changes and resolve their overlaps in the serial root contract/composition slot; regenerate the combined API client and exact frontend lock. This grants no new unrelated feature work.
 - `src/auditmanager/bootstrap/**`
 - `src/auditmanager/comparison/public.py`
 - `src/auditmanager/comparison/stage_run/**`
+- `src/auditmanager/comparison/stage_repair/service.py` (consistent command lock order)
 - `tests/unit/comparison/engine/test_handler_unit.py`
 - `tests/unit/comparison/work/test_handler_registry.py`
 - `web/src/_pages/stage-compare/**`
