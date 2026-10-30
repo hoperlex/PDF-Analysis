@@ -1,5 +1,13 @@
 # Current state
 
+**Updated 2026-10-30 by `DESIGN-M07-SYSTEM` (development candidate only).**
+Logs, worker tabs, analysis settings and execution queue now use responsive
+two-theme panels and contained lists. The `/optimisation` redirect to projects
+was verified unchanged. Typecheck, lint and 94 focused tests pass. Commands,
+permissions, consent, reads and failure handling remain as before. No API,
+contract, migration or `origin/main` change is included. Publication is to
+`origin/dev` only; M08–M10 remain.
+
 **Updated 2026-10-30 by `DESIGN-M06-KNOWLEDGE` (development candidate only).**
 Knowledge base filters/results, block version selection/tabs, norms search and
 catalogue, and the norm document now use consistent responsive panels in both

@@ -6,6 +6,7 @@ import { RUN_ID_PATTERN } from '@/shared/api';
 import { executionFailure, useExecutionJournal } from '@/entities/execution';
 import { ExecutionJournal } from '@/widgets/execution-journal';
 import { ErrorState, LoadingState, PageShell } from '@/shared/ui';
+import styles from './logs-page.module.css';
 
 export interface LogsPageProps {
   readonly initialRunId?: string | undefined;
@@ -29,7 +30,7 @@ export function LogsPage({ initialRunId }: LogsPageProps) {
       subtitle="События выполнения на сервере, новые сверху. Показаны только безопасные поля договора."
       actions={<button type="button" className="am-button am-button--quiet" disabled={invalid} onClick={() => void journal.refetch()}>Обновить</button>}
     >
-      <form className="am-form" onSubmit={(event) => {
+      <form className={`am-form ${styles.filters}`} onSubmit={(event) => {
         event.preventDefault();
         setFilter(draft.trim());
         setCursors([]);
@@ -61,11 +62,13 @@ export function LogsPage({ initialRunId }: LogsPageProps) {
         </div>
       ) : null}
       {!invalid && journal.data !== undefined && readFailure === null ? (
-        <ExecutionJournal
-          entries={journal.data.items}
-          onPrevious={cursors.length === 0 ? null : () => setCursors((current) => current.slice(0, -1))}
-          onNext={next === null ? null : () => setCursors((current) => [...current, next])}
-        />
+        <div className={styles.journal}>
+          <ExecutionJournal
+            entries={journal.data.items}
+            onPrevious={cursors.length === 0 ? null : () => setCursors((current) => current.slice(0, -1))}
+            onNext={next === null ? null : () => setCursors((current) => [...current, next])}
+          />
+        </div>
       ) : null}
     </PageShell>
   );
