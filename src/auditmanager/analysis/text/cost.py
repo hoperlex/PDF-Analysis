@@ -19,6 +19,8 @@ model identifier is written down in this module.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import hashlib
+import json
 
 from auditmanager.analysis.text.lock import ModelPin
 from auditmanager.shared.errors import DomainError, ErrorCode
@@ -48,6 +50,23 @@ BASIS_ESTIMATED: str = "estimated"
 #: `EXEC-HTTP-01` (`R-143`, plan section 5): the call went through a connection that has no
 #: per-call cost. It is recorded as such and is never a zero.
 BASIS_UNMETERED: str = "unmetered"
+
+
+def model_rate_sha256(pin: ModelPin) -> str:
+    """Identity and exact published decimal rates of the selected price pin."""
+    return hashlib.sha256(json.dumps({"model_id": pin.model_id,
+        "input_per_mtok_usd": repr(float(pin.input_per_mtok_usd)),
+        "output_per_mtok_usd": repr(float(pin.output_per_mtok_usd))}, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def require_approved_model(config, pin: ModelPin, call=None) -> None:
+    if not getattr(config, "approved_cost_ceiling", False):
+        return
+    expected_revision = getattr(config, "approved_connection_revision_id", None)
+    if (getattr(config, "approved_model_id", None) != pin.model_id
+            or getattr(config, "approved_rate_sha256", None) != model_rate_sha256(pin)
+            or expected_revision is not None and getattr(call, "connection_revision_id", None) != expected_revision):
+        raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis", reason="cost_estimate_binding_changed")
 
 
 @dataclass(slots=True)

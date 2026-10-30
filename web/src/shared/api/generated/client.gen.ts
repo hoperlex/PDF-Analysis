@@ -9,7 +9,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.13.0 (OpenAPI 3.1.0)
- *   sha256 29df290762867fb53ebefc31394e3358b91333f791c69bdc52e5568d7b80b282
+ *   sha256 383cdba713ea107ceaaf16fe943e946db4ab60ff510bfe17124d9daeafa431e2
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -110,6 +110,8 @@ import type {
   DequeueComparisonAiSheetChangesResult,
   EnqueueComparisonLaunchInput,
   EnqueueComparisonLaunchResult,
+  EstimateArV3GroupCostInput,
+  EstimateArV3GroupCostResult,
   EstimateComparisonAiPairCheckInput,
   EstimateComparisonAiPairCheckResult,
   EstimateComparisonAiSheetChangesInput,
@@ -118,6 +120,8 @@ import type {
   EstimateComparisonSheetDescriptionResult,
   EstimateComparisonSpecificationInput,
   EstimateComparisonSpecificationResult,
+  EstimateRunCostInput,
+  EstimateRunCostResult,
   EstimateStageChainRunInput,
   EstimateStageChainRunResult,
   ExcludeComparisonUploadSetInput,
@@ -1082,6 +1086,18 @@ export function enqueueComparisonLaunch(
 }
 
 /**
+ * Estimate all six AR v3 checks before spend.
+ *
+ * `POST /ar-v3-beta/groups/cost-estimate`.
+ */
+export function estimateArV3GroupCost(
+  input: EstimateArV3GroupCostInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<EstimateArV3GroupCostResult>> {
+  return request<EstimateArV3GroupCostResult>(OPERATIONS.estimateArV3GroupCost, input, options);
+}
+
+/**
  * Estimate the AI check of the doubtful pairs of a document set.
  *
  * `GET /projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-check/estimate`.
@@ -1127,6 +1143,18 @@ export function estimateComparisonSpecification(
   options?: RequestOptions,
 ): Promise<ApiResponse<EstimateComparisonSpecificationResult>> {
   return request<EstimateComparisonSpecificationResult>(OPERATIONS.estimateComparisonSpecification, input, options);
+}
+
+/**
+ * Estimate selected section analysis before spend.
+ *
+ * `POST /runs/cost-estimate`.
+ */
+export function estimateRunCost(
+  input: EstimateRunCostInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<EstimateRunCostResult>> {
+  return request<EstimateRunCostResult>(OPERATIONS.estimateRunCost, input, options);
 }
 
 /**
@@ -3628,10 +3656,12 @@ export const apiClient = {
   deleteComparisonReport,
   dequeueComparisonAiSheetChanges,
   enqueueComparisonLaunch,
+  estimateArV3GroupCost,
   estimateComparisonAiPairCheck,
   estimateComparisonAiSheetChanges,
   estimateComparisonSheetDescription,
   estimateComparisonSpecification,
+  estimateRunCost,
   estimateStageChainRun,
   excludeComparisonUploadSet,
   exportOptimisationProposalsCsv,

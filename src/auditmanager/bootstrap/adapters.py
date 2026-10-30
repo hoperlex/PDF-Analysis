@@ -866,6 +866,7 @@ class RunAdapter(_SessionHolder):
         ar_v3_pack_registry: Any = None,
         ar_v3_installed_pack: Any = None,
         preset_resolver: Any = None,
+        cost_preflight: Any = None,
     ) -> None:
         super().__init__(session_factory)
         # `ANALYSIS-PRESETS-01`. Reads a named preset's current revision in the start's own
@@ -873,6 +874,7 @@ class RunAdapter(_SessionHolder):
         # bare adapter as they are, and a start that names a preset then answers
         # ``dependency_unavailable`` rather than ignoring the choice.
         self._preset_resolver = preset_resolver
+        self._cost_preflight = cost_preflight
         # `EXEC-HTTP-01`. The provider resolver the executor binds each Attempt with, and, for
         # the ``database`` source only, the freezer that picks a run's connection revision at
         # start. Both ``None`` keeps the many tests that build a bare adapter as they are.
@@ -913,8 +915,24 @@ class RunAdapter(_SessionHolder):
         # does not.
         self._input_budget_characters = input_budget_characters
 
+    def estimate_run_cost(self, *, version_uid: str, executor_connection_id: str | None = None,
+                          preset_id: str | None = None, relaxed_limits: bool = False) -> models.RunCostEstimate:
+        if self._cost_preflight is None:
+            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
+        value = self._read(lambda session: self._cost_preflight.estimate_run(session, version_uid=version_uid,
+            executor_connection_id=executor_connection_id, preset_id=preset_id, relaxed_limits=relaxed_limits))
+        return models.RunCostEstimate.model_validate(value.as_dict())
+
+    def estimate_ar_v3_group_cost(self, *, version_uid: str, relaxed_limits: bool = False) -> models.RunCostEstimate:
+        if self._cost_preflight is None:
+            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
+        value = self._read(lambda session: self._cost_preflight.estimate_group(session,
+            version_uid=version_uid, relaxed_limits=relaxed_limits))
+        return models.RunCostEstimate.model_validate(value.as_dict())
+
     def start_ar_v3_group(
         self, *, version_uid: str, idempotency_key: str, relaxed_limits: bool = False,
+        cost_consent: Mapping[str, Any] | None = None,
     ) -> models.ArV3BetaGroup:
         """Create the six pinned Runs, queue them, and hand them to the carrier (`PROD-11D`).
 
@@ -931,6 +949,9 @@ class RunAdapter(_SessionHolder):
         from auditmanager.jobs.public import JobRepository
         from auditmanager.runs import RunRepository
         from auditmanager.runs.public import get_ar_v3_group, start_ar_v3_group
+
+        if cost_consent is not None:
+            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
 
         def work(session: Session) -> Any:
             started = start_ar_v3_group(
@@ -1006,6 +1027,7 @@ class RunAdapter(_SessionHolder):
         executor_connection_id: str | None = None,
         preset_id: str | None = None,
         relaxed_limits: bool = False,
+        cost_consent: Mapping[str, Any] | None = None,
     ) -> Any:
         """A caller-supplied provider mode is refused, never silently overridden.
 
@@ -1023,6 +1045,9 @@ class RunAdapter(_SessionHolder):
         the run records the preset revision. Together with ``executor_connection_id`` it is refused.
         """
         from auditmanager.runs import start_audit_run
+
+        if cost_consent is not None:
+            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
 
         if provider_mode is not None and provider_mode != self._provider_mode:
             raise DomainError(

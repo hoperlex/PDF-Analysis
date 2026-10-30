@@ -125,6 +125,7 @@ def text_window_policy(
     recognised_characters: int = 0,
     bundle: PromptBundle | None = None,
     relaxed_limits: bool = False,
+    approved_window_characters: int | None = None,
 ) -> WindowPolicy | None:
     """The policy for a run, or ``None`` when the run is analysed in one call exactly as before.
 
@@ -154,7 +155,11 @@ def text_window_policy(
         raise ValueError("max_windows must be a positive whole number")
     if type(recognised_characters) is not int or recognised_characters < 0:
         raise ValueError("recognised_characters must be a non-negative whole number")
-    if relaxed_limits:
+    if approved_window_characters is not None:
+        if type(approved_window_characters) is not int or approved_window_characters <= 0:
+            raise ValueError("approved window characters must be positive")
+        call_budget = approved_window_characters
+    elif relaxed_limits:
         if bundle is None:
             raise ValueError("a relaxed window policy requires the pinned bundle")
         call_budget = relaxed_window_characters(model_id, bundle, lock=lock)
