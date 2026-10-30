@@ -21,6 +21,7 @@ export const CONSENT_LINES = {
   sheet: 'Подтверждаю передачу этого листа исполнителю',
   spec: 'Подтверждаю передачу текста спецификаций исполнителю',
   report: 'Подтверждаю передачу текста сводки исполнителю',
+  stage_review: 'Подтверждаю передачу материалов сравнения стадий исполнителю',
 } as const;
 
 export type ConsentKind = keyof typeof CONSENT_LINES;
@@ -36,6 +37,7 @@ export const CONFIRM_LABELS = {
   sheet: 'Передать и описать',
   spec: 'Запустить сравнение',
   report: 'Сформировать',
+  stage_review: 'Запустить сравнение стадий',
 } as const;
 
 /** «Описать заново» and «Сформировать заново» are the same starts with `restart`. */
