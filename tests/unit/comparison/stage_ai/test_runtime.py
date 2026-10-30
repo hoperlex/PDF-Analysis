@@ -68,6 +68,11 @@ class Repo:
     def call_identities(self, session, call_ids):
         return [{"call_id": call_id} for call_id in call_ids]
 
+    def cancel_pending_units(self, session, run_id, *, excluding_job_id=None, excluding_unit_id=None):
+        for row in self.units.values():
+            if row["state"] in {"queued", "running"} and row["stage_ai_unit_id"] != excluding_unit_id:
+                row["state"] = "cancelled"
+
     def unit(self, session, *, run_id, kind, group_id, source_sha256, payload, job_id=None):
         key = (run_id, kind, group_id, source_sha256)
         if key not in self.units:

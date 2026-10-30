@@ -143,6 +143,7 @@ class StageAiRuntime:
     def cancel(self, session, *, run_id: str, user_uid: str) -> str | None:
         roles = self._roles(session, user_uid)
         run = self._repo.run(session, run_id)
+        self._repo.cancel_pending_units(session, run_id)
         job_id = run.get("comparison_ai_job_id")
         if not job_id:
             return None
@@ -154,7 +155,7 @@ class StageAiRuntime:
         if cancel is None:
             raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="comparison_stage_ai_cancel")
         cancel(session, job_id=str(job_id), method="stage_review",
-               command=AiJobCommand("cancel_stage_review_ai", f"stage-ai-cancel-{run_id}", user_uid, roles))
+               command=AiJobCommand("cancel_stage_review_ai", f"stage-ai-cancel-{run_id}-{job_id}", user_uid, roles))
         return str(job_id)
 
     def prepare(self, session, *, run_id: str, user_uid: str, consent) -> str | None:
@@ -210,6 +211,7 @@ class StageAiRuntime:
             scope = self._scope(run, run_id=run_id)
             estimate = jobs.estimate_in(session, scope, AiMode.LEFT, job=record)
             if estimate.totals.calls == 0:
+                self._repo.cancel_pending_units(session, run_id)
                 return str(job_id)  # only deterministic/cached work remains
             if chosen is None or not chosen.confirmed:
                 raise DomainError(ErrorCode.VALIDATION_FAILED, field="consent", constraint="comparison_consent_required")
@@ -223,6 +225,7 @@ class StageAiRuntime:
             new_id = str(view.record.job_id)
             session.execute(text("UPDATE stage_chain_run SET comparison_ai_job_id=:job WHERE stage_chain_run_id=:run"),
                             {"job": new_id, "run": run_id})
+            self._repo.cancel_pending_units(session, run_id, excluding_job_id=new_id)
             self._repo.source_consent(session, run_id=run_id, job_id=new_id, revision_id=run["revision_id"],
                 profiles=method.source_profiles, consent_no=view.record.consent_no, approved=True)
             return new_id
@@ -354,6 +357,8 @@ class StageAiRuntime:
                     self._repo.update_unit(session, unit["stage_ai_unit_id"], payload=unit["payload"],
                                            state="failed", reason=reason, job_id=actual_job)
                 self._repo.fail_run(session, run_id=run_id, phase=phase or (None if unit is None else unit["kind"]), reason=reason)
+                self._repo.cancel_pending_units(session, run_id,
+                    excluding_unit_id=None if unit is None else unit["stage_ai_unit_id"])
                 if actual_job:
                     jobs.fail(session, actual_job, reason)
         except DomainError as error:
@@ -603,5 +608,6 @@ class StageAiRuntime:
         self._repo.update_unit(session, unit["stage_ai_unit_id"], payload=unit["payload"],
                                state="failed", reason=reason, job_id=job_id)
         self._repo.fail_run(session, run_id=unit["stage_chain_run_id"], phase=unit["kind"], reason=reason)
+        self._repo.cancel_pending_units(session, unit["stage_chain_run_id"], excluding_unit_id=unit["stage_ai_unit_id"])
         jobs.fail(session, job_id, reason)
         return Failed(reason)

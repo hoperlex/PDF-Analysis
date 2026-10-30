@@ -93,17 +93,42 @@ def renew(scene):
     return job
 
 
+def legacy_pending(scene, session):
+    return scene.runtime._repo.unit(session, run_id=scene.run, job_id=scene.job, kind="classify",
+        group_id="legacy-pending", source_sha256="e" * 64,
+        payload={"content_key": "d" * 64, "responses": {"preserved": "saved response"},
+                 "immutable_source": {"legacy": True}})
+
+
+def pending_count(session, run, job=None):
+    return session.execute(text("SELECT count(*) FROM stage_ai_unit WHERE stage_chain_run_id=:run "
+        "AND state IN ('queued','running') AND (CAST(:job AS text) IS NULL OR comparison_ai_job_id=:job)"),
+        {"run": run, "job": job}).scalar_one()
+
+
 def test_cancel_resume_reuses_saved_paid_reply_in_new_generation(comparison_session):
     scene = started(comparison_session)
     prepare_answer(scene, "review")
     assert isinstance(scene.runtime.advance(scene.item, run_id=scene.run, phase="review"), Yielded)
     assert scene.adapter.calls == 1
     with session_scope(scene.store._sessions) as session:
+        before = session.execute(text("SELECT payload,progress FROM stage_ai_unit WHERE stage_chain_run_id=:run "
+            "AND kind='review' AND group_id<>'source-consent'"), {"run": scene.run}).mappings().one()
         scene.runtime.cancel(session, run_id=scene.run, user_uid=scene.actor)
+        assert pending_count(session, scene.run) == 0
+        after = session.execute(text("SELECT payload,progress,state FROM stage_ai_unit WHERE stage_chain_run_id=:run "
+            "AND kind='review' AND group_id<>'source-consent'"), {"run": scene.run}).mappings().one()
+        assert after["payload"] == before["payload"] and after["progress"] == before["progress"] and after["state"] == "cancelled"
         session.execute(text("UPDATE stage_chain_run SET state='cancelled' WHERE stage_chain_run_id=:run"), {"run": scene.run})
         assert ComparisonWorkRepository().finish(session, scene.item.authority, Yielded()) == "cancelled"
+        stale = legacy_pending(scene, session)
     new_job = renew(scene)
     assert new_job != scene.job
+    with session_scope(scene.store._sessions) as session:
+        assert pending_count(session, scene.run, scene.job) == 0
+        preserved = session.execute(text("SELECT progress,state FROM stage_ai_unit WHERE stage_ai_unit_id=:unit"),
+                                    {"unit": stale["stage_ai_unit_id"]}).mappings().one()
+        assert preserved["state"] == "cancelled" and preserved["progress"]["responses"] == {"preserved": "saved response"}
     scene.item = enqueue(scene)
     drive(scene)
     assert scene.adapter.calls == 3
@@ -146,7 +171,9 @@ def test_completed_ai_can_resume_remaining_deterministic_step_without_new_consen
     with session_scope(scene.store._sessions) as session:
         ComparisonWorkRepository().finish(session, scene.item.authority, Completed())
         session.execute(text("UPDATE stage_chain_run SET state='failed',failure_reason='review_materialization_failed' WHERE stage_chain_run_id=:run"), {"run": scene.run})
+        legacy_pending(scene, session)
         assert scene.runtime.resume(session, run_id=scene.run, user_uid=scene.actor, consent=None) == scene.job
+        assert pending_count(session, scene.run) == 0
         session.execute(text("UPDATE stage_chain_run SET state='running',failure_reason=NULL WHERE stage_chain_run_id=:run"), {"run": scene.run})
     scene.item = enqueue(scene)
     for phase in ("review", "classify", "synthesize"):
@@ -154,6 +181,32 @@ def test_completed_ai_can_resume_remaining_deterministic_step_without_new_consen
     assert scene.adapter.calls == 3
     with session_scope(scene.store._sessions) as session:
         ComparisonWorkRepository().finish(session, scene.item.authority, Completed())
+
+
+def test_expert_cancel_retires_pending_units_even_when_job_already_completed(comparison_session):
+    scene = started(comparison_session)
+    drive(scene)
+    with session_scope(scene.store._sessions) as session:
+        completed = session.execute(text("SELECT count(*) FROM stage_ai_unit WHERE stage_chain_run_id=:run AND state='completed'"), {"run": scene.run}).scalar_one()
+        legacy_pending(scene, session)
+        assert pending_count(session, scene.run) == 1
+        assert scene.runtime.cancel(session, run_id=scene.run, user_uid=scene.actor) == scene.job
+        assert pending_count(session, scene.run) == 0
+        assert session.execute(text("SELECT count(*) FROM stage_ai_unit WHERE stage_chain_run_id=:run AND state='completed'"), {"run": scene.run}).scalar_one() == completed
+        ComparisonWorkRepository().finish(session, scene.item.authority, Completed())
+
+
+def test_cancel_after_generation_recovery_has_distinct_command_identity(comparison_session):
+    scene = started(comparison_session)
+    with session_scope(scene.store._sessions) as session:
+        scene.runtime.cancel(session, run_id=scene.run, user_uid=scene.actor)
+        session.execute(text("UPDATE stage_chain_run SET state='cancelled' WHERE stage_chain_run_id=:run"), {"run": scene.run})
+        ComparisonWorkRepository().finish(session, scene.item.authority, Yielded())
+    new_job = renew(scene)
+    with session_scope(scene.store._sessions) as session:
+        assert scene.runtime.cancel(session, run_id=scene.run, user_uid=scene.actor) == new_job
+        assert scene.runtime._jobs().job(session, new_job).state == "cancelled"
+        assert pending_count(session, scene.run) == 0
 
 
 class Refusal(DomainError):
@@ -175,6 +228,8 @@ def test_failed_recovery_only_allows_proven_unprocessed_request(comparison_sessi
             return super().complete(request)
 
     scene = started(comparison_session, Answers())
+    with session_scope(scene.store._sessions) as session:
+        stale = legacy_pending(scene, session)
     prepare_answer(scene, "review")
     result = scene.runtime.advance(scene.item, run_id=scene.run, phase="review")
     with session_scope(scene.store._sessions) as session:
@@ -187,6 +242,8 @@ def test_failed_recovery_only_allows_proven_unprocessed_request(comparison_sessi
             assert isinstance(result, Failed)
             assert scene.runtime._repo.run(session, scene.run)["state"] == "failed"
             assert session.execute(text("SELECT state FROM stage_chain_step WHERE stage_chain_run_id=:run AND step_no=4"), {"run": scene.run}).scalar_one() == "failed"
+            assert session.execute(text("SELECT state FROM stage_ai_unit WHERE stage_ai_unit_id=:unit"), {"unit": stale["stage_ai_unit_id"]}).scalar_one() == "cancelled"
+        assert pending_count(session, scene.run) == 0
         ComparisonWorkRepository().finish(session, scene.item.authority, Yielded())
     if kind == "safe":
         assert renew(scene) != scene.job
