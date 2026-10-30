@@ -3,16 +3,22 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 
-import type { ProjectUid, StageLinkInput, StageLinkRevision, StageSheetPassport } from '@/shared/api';
+import type { ComparisonBox, ProjectUid, StageLinkInput, StageLinkRevision, StageSheetPassport } from '@/shared/api';
 import {
   ApiError, applyStageSheetMap, failureMessage, getStageSheetMap,
   listStageSheetMapHistory, listStageSheetPassports, listStageSheetSuggestions,
-  newIdempotencyKey, streamVersionPagePreview,
+  newIdempotencyKey,
 } from '@/shared/api';
 import { useStagePairs } from '@/entities/stage-pair';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
+import {
+  evidenceNeedsRecompute, StageTextEvidence, STAGE_TEXT_KEYS, useStageTextEvidence,
+} from '@/widgets/stage-text-evidence';
+import type { PageTextProvider } from '@/widgets/stage-text-evidence';
 
-import { addUnpaired, moveSheet, unlinkRow } from '../model/draft';
+import { addUnpaired, applyTextHint, moveSheet, unlinkRow } from '../model/draft';
+import { StagePairViewer } from './stage-pair-viewer';
+import type { StageViewerFocus } from './stage-pair-viewer';
 import styles from './stage-sheet-map.module.css';
 
 const PAGE_LIMIT = 100;
@@ -39,33 +45,9 @@ function label(page: StageSheetPassport): string {
     + `${page.floor === undefined ? '' : ` · ${page.floor}`}`;
 }
 
-function Preview({ title, page }: { readonly title: string; readonly page: StageSheetPassport | undefined }) {
-  const [image, setImage] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
-  useEffect(() => {
-    setImage(null);
-    setFailed(false);
-    if (page === undefined) return;
-    const controller = new AbortController();
-    let url: string | null = null;
-    void streamVersionPagePreview(
-      { path: { comparison_page_profile_id: page.profile_id } }, { signal: controller.signal },
-    ).then((answer) => {
-      if (controller.signal.aborted) return;
-      url = URL.createObjectURL(answer.data);
-      setImage(url);
-    }).catch(() => { if (!controller.signal.aborted) setFailed(true); });
-    return () => { controller.abort(); if (url !== null) URL.revokeObjectURL(url); };
-  }, [page?.profile_id]);
-  return <div className={styles.preview}>
-    <strong>{title}</strong>
-    {page === undefined ? <p>Лист не выбран.</p> : <p>{label(page)}</p>}
-    {failed ? <p role="alert">Изображение листа не открылось.</p> : null}
-    {image === null ? null : <img src={image} alt={`${title}: ${page === undefined ? '' : label(page)}`} />}
-  </div>;
-}
-
-function PairMap({ pairId, mayAct }: { readonly pairId: string; readonly mayAct: boolean }) {
+function PairMap({ pairId, mayAct, textProvider }: {
+  readonly pairId: string; readonly mayAct: boolean; readonly textProvider: PageTextProvider | undefined;
+}) {
   const cache = useQueryClient();
   const passports = useQuery({
     queryKey: ['stage-sheet-map', pairId, 'passports'],
@@ -102,6 +84,8 @@ function PairMap({ pairId, mayAct }: { readonly pairId: string; readonly mayAct:
   const [saving, setSaving] = useState(false);
   const [commandError, setCommandError] = useState<unknown | null>(null);
   const held = useRef<{ signature: string; key: string } | null>(null);
+  const [focus, setFocus] = useState<StageViewerFocus | undefined>();
+  const text = useStageTextEvidence(pairId, current.data?.revision_id);
 
   useEffect(() => {
     if (current.isSuccess && !dirty) {
@@ -110,6 +94,11 @@ function PairMap({ pairId, mayAct }: { readonly pairId: string; readonly mayAct:
         ...(item.left_profile_id === undefined ? {} : { left_profile_id: item.left_profile_id }),
         ...(item.right_profile_id === undefined ? {} : { right_profile_id: item.right_profile_id }),
       })) ?? []);
+      const first = current.data?.items[0];
+      if (first !== undefined) {
+        setLeft((selected) => selected || first.left_profile_id || '');
+        setRight((selected) => selected || first.right_profile_id || '');
+      }
     }
   }, [current.data, current.isSuccess, dirty]);
 
@@ -132,6 +121,14 @@ function PairMap({ pairId, mayAct }: { readonly pairId: string; readonly mayAct:
       || (item.relation === 'only_right' && item.right_profile_id === row.right_profile_id)
     )), row]);
     setDirty(true);
+  };
+  const focusPages = (leftProfileId?: string, rightProfileId?: string,
+    leftBox?: ComparisonBox, rightBox?: ComparisonBox) => {
+    setLeft(leftProfileId ?? '');
+    setRight(rightProfileId ?? '');
+    setFocus((prior) => ({ token: (prior?.token ?? 0) + 1,
+      ...(leftBox === undefined ? {} : { left: leftBox }),
+      ...(rightBox === undefined ? {} : { right: rightBox }) }));
   };
   const save = async () => {
     if (draft.length === 0) return;
@@ -165,24 +162,25 @@ function PairMap({ pairId, mayAct }: { readonly pairId: string; readonly mayAct:
       <div className={styles.pane}>
         <label>Лист П
           <input value={leftSearch} onChange={(event) => setLeftSearch(event.target.value)} placeholder="Найти лист по штампу" />
-          <select value={left} onChange={(event) => setLeft(event.target.value)}>
+          <select value={left} onChange={(event) => { setLeft(event.target.value); setFocus(undefined); }}>
             <option value="">Пусто</option>
             {showLeft.map((page) => <option key={page.profile_id} value={page.profile_id}>{label(page)}</option>)}
           </select>
         </label>
-        <Preview title="П" page={leftPage} />
       </div>
       <div className={styles.pane}>
         <label>Лист Р
           <input value={rightSearch} onChange={(event) => setRightSearch(event.target.value)} placeholder="Найти лист по штампу" />
-          <select value={right} onChange={(event) => setRight(event.target.value)}>
+          <select value={right} onChange={(event) => { setRight(event.target.value); setFocus(undefined); }}>
             <option value="">Пусто</option>
             {showRight.map((page) => <option key={page.profile_id} value={page.profile_id}>{label(page)}</option>)}
           </select>
         </label>
-        <Preview title="Р" page={rightPage} />
       </div>
     </div>
+    <StagePairViewer leftPage={leftPage} rightPage={rightPage} evidence={text.data} stale={dirty}
+      {...(focus === undefined ? {} : { focus })}
+      {...(textProvider === undefined ? {} : { textProvider })} />
     {mayAct && current.isSuccess && passports.isSuccess ? <div className={styles.actions}>
       <button type="button" className="am-button" disabled={left === '' || right === ''} onClick={() => add({ relation: 'paired', left_profile_id: left, right_profile_id: right })}>Добавить связь</button>
       <button type="button" className="am-button" disabled={left === ''} onClick={() => { setDraft((items) => addUnpaired(items, 'left', left)); setDirty(true); }}>Без пары слева</button>
@@ -203,6 +201,7 @@ function PairMap({ pairId, mayAct }: { readonly pairId: string; readonly mayAct:
         <span>П: {row.left_profile_id === undefined ? 'Пусто' : names.get(row.left_profile_id) ?? row.left_profile_id}</span>
         <span>Р: {row.right_profile_id === undefined ? 'Пусто' : names.get(row.right_profile_id) ?? row.right_profile_id}</span>
         {mayAct ? <div className={styles.actions}>
+          <button type="button" className="am-button" onClick={() => focusPages(row.left_profile_id, row.right_profile_id)}>Открыть связь ↗</button>
           <button type="button" className="am-button" disabled={left === ''} onClick={() => { setDraft((items) => moveSheet(addUnpaired(items, 'left', left), 'left', left, index)); setDirty(true); }}>Перенести П сюда</button>
           <button type="button" className="am-button" disabled={right === ''} onClick={() => { setDraft((items) => moveSheet(addUnpaired(items, 'right', right), 'right', right, index)); setDirty(true); }}>Перенести Р сюда</button>
           <button type="button" className="am-button" disabled={row.relation !== 'paired'} onClick={() => { setDraft((items) => unlinkRow(items, index)); setDirty(true); }}>Удалить связь</button>
@@ -215,13 +214,26 @@ function PairMap({ pairId, mayAct }: { readonly pairId: string; readonly mayAct:
     {history.data?.items.length ? <details><summary>История карты</summary><ol>
       {history.data.items.map((item) => <li key={item.revision_id}>Ревизия {item.revision_no} · {item.items.length} строк</li>)}
     </ol></details> : null}
+    <StageTextEvidence revisionId={current.data?.revision_id} mayAct={mayAct} dirty={dirty}
+      evidence={text.data} loading={text.isFetching} needsRecompute={evidenceNeedsRecompute(text.error)}
+      error={text.error} names={names}
+      onCompleted={() => { void cache.invalidateQueries({ queryKey: STAGE_TEXT_KEYS.evidence(pairId, current.data?.revision_id) }); }}
+      onFocus={focusPages}
+      onHint={(leftId, rightId, mode) => {
+        setDraft((items) => applyTextHint(items, leftId, rightId, mode));
+        setDirty(true);
+        focusPages(leftId, rightId);
+      }} />
   </div>;
 }
 
-export function StageSheetMap({ projectUid, mayAct }: {
+export interface StageSheetMapProps {
   readonly projectUid: ProjectUid;
   readonly mayAct: boolean;
-}) {
+  readonly textProvider?: PageTextProvider;
+}
+
+export function StageSheetMap({ projectUid, mayAct, textProvider }: StageSheetMapProps) {
   const [pages, setPages] = useState<string[]>([]);
   const [selected, setSelected] = useState('');
   const pairs = useStagePairs(projectUid, pages.at(-1));
@@ -247,6 +259,6 @@ export function StageSheetMap({ projectUid, mayAct }: {
       }}>Далее</button>
     </div>}
     {pairId === '' ? <EmptyState title="Выберите пару стадий" detail="Карта листов относится к одной подтверждённой паре." />
-      : <PairMap key={pairId} pairId={pairId} mayAct={mayAct} />}
+      : <PairMap key={pairId} pairId={pairId} mayAct={mayAct} textProvider={textProvider} />}
   </section>;
 }

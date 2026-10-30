@@ -1,0 +1,7 @@
+.panel { display: grid; gap: .75rem; border-top: 1px solid var(--am-border, #d5dce3); padding-top: 1rem; }
+.stale { border-left: .25rem solid var(--am-warning, #9a6700); padding: .75rem; background: var(--am-surface-muted, #f5f6f8); }
+.tableWrap { overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; }
+.table th, .table td { padding: .6rem; border-bottom: 1px solid var(--am-border, #d5dce3); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.hints { display: grid; gap: .75rem; }
+.hints button { margin-right: .5rem; }
