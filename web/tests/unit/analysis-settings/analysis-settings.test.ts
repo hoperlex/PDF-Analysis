@@ -3,8 +3,8 @@
  * profiles, read-only.
  *
  * Rendered, not read from source (`D-53`): every assertion is on markup a reviewer would see.
- * The fixture is the shape `listAnalysisProfiles` answers for this tree — АР with no profile
- * (`PROD-11-AR-V1-V2-REMOVAL-01`), and every other section with the status and version its line of
+ * The fixture is the shape `listAnalysisProfiles` answers for this tree — АР and every
+ * other section with the status and version its line of
  * `section_profile_expectations.json` names (`PROD-14-0-EXPECTATIONS-01`), ПБ with no source.
  * That file is the one a section lane edits when its profile leaves `draft`; the fixture
  * mirrors the packages, and a case below fails when the file and a `profile.json` disagree.
@@ -30,7 +30,6 @@ import type { AnalysisProfileListItem, AnalysisProfileStatus } from '@/shared/ap
 import { ApiError, queryKeys } from '@/shared/api';
 import {
   ANALYSIS_PROFILE_STATUS_LABELS,
-  AR_NO_TEXT_PROFILE_LABEL,
   NO_PROFILE_LABEL,
   UNKNOWN_STATUS_LABEL,
   analysisProfileStatusLabel,
@@ -49,7 +48,7 @@ import { REPO_ROOT, readJson } from '../../guards/lib/repo';
 const LEGACY_COMMIT = '16ba8e5d23e4782550e79355002fde1365f682b7';
 const ROLE_FILE_SHA = '9999c2e3398db818d1b85941473db785b8b132558c95661c016ad845a437b7fa';
 
-/** One line per non-AR package: the status and version its `profile.json` must declare. */
+/** One line per package: the status and version its `profile.json` must declare. */
 const EXPECTATIONS_PATH = join(
   REPO_ROOT, 'tests', 'unit', 'analysis', 'text_profiles', 'section_profile_expectations.json',
 );
@@ -121,8 +120,6 @@ function expectedOf(code: string): PackageProfile {
 function item(code: (typeof PROJECT_STRUCTURE_ORDER)[number], index: number): AnalysisProfileListItem {
   const section = projectSectionOf(code);
   const digit = (index % 10).toString();
-  // `PROD-11-AR-V1-V2-REMOVAL-01`: АР has no text profile, so its row carries none.
-  if (code === 'AR') return { section_code: code, section_name: section.name, profile: null };
   const line = expectedOf(code);
   return {
     section_code: code,
@@ -265,23 +262,19 @@ describe('what each row says', () => {
     expect(gp).not.toContain('<details');
   });
 
-  it('shows АР without a profile: no text profile, analysed by the six-check group', () => {
+  it('shows the original-source АР draft profile', () => {
     const ar = row(table(), 'AR');
-    expect(ar).toContain('data-profile="none"');
-    expect(ar).toContain('data-profile-absent="ar-v3"');
-    expect(ar).toContain(AR_NO_TEXT_PROFILE_LABEL);
-    expect(ar).toContain('группой из шести проверок АР v3');
+    expect(ar).toContain('data-profile="draft"');
+    expect(ar).toContain('data-profile-source="ported"');
     expect(ar).not.toContain(NO_PROFILE_LABEL);
-    expect(ar).not.toContain('встроенный');
-    expect(ar).not.toContain('<details');
-    expect(ar).not.toContain('PDF-proverka');
+    expect(ar).toContain('PDF-proverka');
   });
 
   it('keeps the generic wording for any other section the server leaves without a profile', () => {
     const items = ITEMS.map((entry) => entry.section_code === 'GP' ? { ...entry, profile: null } : entry);
     const gp = row(table(items), 'GP');
     expect(gp).toContain('data-profile-absent="unregistered"');
-    expect(gp).not.toContain(AR_NO_TEXT_PROFILE_LABEL);
+    expect(gp).toContain(NO_PROFILE_LABEL);
   });
 
   it('labels a reviewed profile and shows its own version', () => {

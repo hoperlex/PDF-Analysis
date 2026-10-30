@@ -55,7 +55,7 @@ The remaining C3/C4 functional roadmap is implemented, integrated by one owner a
 - `docs/program/DEBT_REGISTER.md`
 - `docs/program/compare/**`
 - `docs/program/dispatch/**`
-- Incoming completed hotfix trees `06b94745` and `99b337fb` from origin/dev: preserve their owned changes and resolve their overlaps in the serial root contract/composition slot; regenerate the combined API client and exact frontend lock. This grants no new unrelated feature work.
+- Incoming completed hotfix trees `06b94745`, `99b337fb` and the later `3821261a` from origin/dev: preserve their owned changes and resolve their overlaps in the serial root contract/composition slot; regenerate the combined API client and exact frontend lock. The last restores the ordinary АР original-source profile and its default UI start. Its complete incoming tree is owned by the completed hotfix task; root reconciles the shared seal and permits the cost lane's scoped ordinary-АР compatibility check, `web/tests/unit/screens/run-list-ar-start.test.ts` resolution and `web/tests/unit/screens/run-list-ar-v3-started.test.ts` default-control assertion. The existing journey conformance/manifest/README may correct only obsolete default-АР control expectations, retaining comparison and fresh-cost checks. This grants no new unrelated feature work.
 - `src/auditmanager/bootstrap/**`
 - `src/auditmanager/comparison/public.py`
 - `src/auditmanager/comparison/stage_run/**`
@@ -104,6 +104,6 @@ Comparison modules can be disabled with `AUDITMANAGER_COMPARISON_MODULES=none`; 
 ## Handoff
 - changed files: integrated lane manifests/reports linked in `docs/program/CMP-INT-CODE-1030.md`, plus the final metadata and focused guard corrections within the paths above
 - checks/results: focused implementation and final combined smoke results in the integration report; full acceptance deferred by owner
-- contracts: `1.13.0`, 230 paths / 256 operations / 619 schemas; migration `0043_stage_ai_generations`; final API SHA256 `71380d022cfd144f55611f92d43ec3ddb8948bb05a7f6a411605848040168de8`
+- contracts: `1.13.0`, 230 paths / 256 operations / 619 schemas; migration `0043_stage_ai_generations`; final API SHA256 `8fd13c576ec9a1a52baa4ec99e4b5b487231c7aec6b57256df3c5342c32cce3f`
 - known limits: tomorrow's full gate, exposure and browser journey remain required
 - integration notes: origin/dev only

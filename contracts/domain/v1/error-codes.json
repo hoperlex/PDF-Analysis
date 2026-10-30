@@ -3,7 +3,7 @@
   "contract_version": "1.13.0",
   "supersedes": "1.12.0",
   "candidate_revision": 31,
-  "revision_note": "CMP C4 combined development seal: stage AI/review/repair/chains, expert escalation and owner raised-limit hotfixes. Historical seals are retained in the API README.",
+  "revision_note": "CMP C4 combined development seal: stage AI/review/repair/chains, expert escalation and owner raised-limit hotfixes. Historical seals are retained in the API README. Candidate revision 31 by HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030: the shared 1.13.0 seal enables ordinary text-profile starts for АР; no domain identity, error code or state machine changes.",
   "status": "frozen",
   "frozen": true,
   "envelope": {

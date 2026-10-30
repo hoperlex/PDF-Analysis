@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.13.0 (OpenAPI 3.1.0)
- *   sha256 71380d022cfd144f55611f92d43ec3ddb8948bb05a7f6a411605848040168de8
+ *   sha256 8fd13c576ec9a1a52baa4ec99e4b5b487231c7aec6b57256df3c5342c32cce3f
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -3379,7 +3379,7 @@ export type ListAnalysisPresetsResult = AnalysisPresetList;
 /**
  * List the analysis profile of every section.
  *
- * The analysis profiles the server routes runs through: all fifteen sections in the project-structure order, each with its registered text profile -- identities, version, status (`draft` or `reviewed`), prompt-bundle and profile hashes and the legacy source of a ported package -- or `null` when no profile is registered, which run start refuses (АР is such a section: it is analysed by the six-Run group, not by a text profile). Read-only: no operation edits a profile or its status. Any one role, `role:admin|expert`.
+ * The analysis profiles the server routes runs through: all fifteen sections in the project-structure order, each with its registered text profile -- identities, version, status (`draft` or `reviewed`), prompt-bundle and profile hashes and the legacy source of a ported package -- or `null` when no profile is registered, which run start refuses (АР now has a draft original-source text profile). Read-only: no operation edits a profile or its status. Any one role, `role:admin|expert`.
  */
 export type ListAnalysisProfilesInput = {
   /**
@@ -6322,7 +6322,7 @@ export type StartOptimisationPassResult = OptimisationPass;
  *
  * A version whose recorded text is larger than the most a run takes (the analysis input budget of one model call times the number of windows a run may use) is refused up front with `422 analysis_input_budget_exceeded` and no run exists (R-118). A version published before the portal-bundle upload has no recorded count and is not refused by this rule.
  *
- * `W59-SECTION-SEAL-01`: the run's analysis profile is routed from the version's persisted classification through the section-keyed profile registry -- never from a file name, a suggestion or the document's legacy `section`, and never by an AR fallback. A version with no classification is refused with `422 version_classification_required`; a confirmed section with no registered text profile is refused with `422 section_profile_unavailable` (`BETA-CONTRACT-SEAL-01`, `D-179`: both used to be `required_norm_unavailable` told apart by `details.reference_kind`). Neither carries details, and both refusals precede the key's claim, so nothing is written. An existing run keeps the profile it pinned.
+ * `W59-SECTION-SEAL-01`: the run's analysis profile is routed from the version's persisted classification through the section-keyed profile registry -- never from a file name, a suggestion or the document's legacy `section`, and never by a file-name fallback. A confirmed АР version resolves the new original-source АР text profile. A version with no classification is refused with `422 version_classification_required`; a confirmed section with no registered text profile is refused with `422 section_profile_unavailable` (`BETA-CONTRACT-SEAL-01`, `D-179`: both used to be `required_norm_unavailable` told apart by `details.reference_kind`). Neither carries details, and both refusals precede the key's claim, so nothing is written. An existing run keeps the profile it pinned.
  *
  * `EXEC-PAR-START-01`: the optional `executor_connection_id` names the connection the run must be on. Absent, the run follows the global route (and its standby rule) exactly as before. Present, the run freezes that connection's current revision if this release serves it, its current key has a passing probe and it is not archived; otherwise the start is refused before the key is claimed, so no run, command record or event exists: `422 validation_failed` with `details.field` `executor_connection_id` for an unknown or malformed id, `503 dependency_unavailable` with `details.dependency` `executor_connection` for a connection that cannot serve now. A named connection never falls back to the route's standby or to another connection. The choice is part of the payload the idempotency key is compared by: the same key with another connection is `idempotency_key_reuse`.
  *

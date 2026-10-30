@@ -37,14 +37,10 @@
  * `classification` (stage and section) that run start routes on.
  *
  * **How a section is analysed ({@link SectionAnalysis}).** Every one of the fifteen sections
- * has an analysis, by one of two routes. Fourteen are analysed by the text profile the server
- * registers for the section (`W59-SECTION-SEAL-01`: one package per code under
- * `src/auditmanager/analysis/text/profiles/`, every code but АР). АР has no text profile and is
- * analysed by the group of six AR v3 checks (`PROD-11-AR-V1-V2-REMOVAL-01`, `ADR-0024`); the
- * server refuses an ordinary run for it. `analysedBy` records the route and nothing more:
- * whether a particular version can start a run now is the API's answer
- * (`SectionReviewOption.executable`, and for АР the status of the checked pack), not this
- * registry's. A unit test holds the fourteen to the packages on disk.
+ * now has an ordinary text profile. АР's package contains the original application's
+ * source material. `analysedBy` records this route, while the API decides whether a
+ * particular classified version can start a run. A unit test holds every section code
+ * to the packages on disk.
  *
  * **`W59-SECTION-UI-01`: names and order are the owner's, not this module's.** The names are
  * the legacy ones the owner chose in poll answer `S-3` and that the backend's suggestion
@@ -77,10 +73,10 @@ export type ProjectSectionCode =
   | 'PS';
 
 /**
- * The route that analyses a section: the section's own text profile (fourteen sections), or the
- * group of six AR v3 checks (АР only). See this module's header. A machine value, never shown.
+ * The route that analyses a section. Old six-Run AR records remain readable, but new
+ * starts on the section screen use its text profile.
  */
-export type SectionAnalysis = 'text_profile' | 'six_run_group';
+export type SectionAnalysis = 'text_profile';
 
 export interface ProjectSection {
   /**
@@ -94,8 +90,7 @@ export interface ProjectSection {
   /** The section's name in the words a reviewer uses. */
   readonly name: string;
   /**
-   * The route that analyses this section (see this module's header): its own text profile, or,
-   * for АР only, the group of six AR v3 checks. A statement about the analysis, not about any
+   * The route that analyses this section (see this module's header). A statement about the analysis, not about any
    * file or any version. It is never shown as a code; the dashboard carries it in
    * `data-analysed-by` so an instrument can address it.
    */
@@ -111,7 +106,7 @@ export interface ProjectSection {
 export const ANALYSED_SECTION_CODE: ProjectSectionCode = 'AR';
 
 export const PROJECT_SECTIONS: readonly ProjectSection[] = [
-  { code: 'AR', abbr: 'АР', name: 'Архитектурные решения', analysedBy: 'six_run_group' },
+  { code: 'AR', abbr: 'АР', name: 'Архитектурные решения', analysedBy: 'text_profile' },
   { code: 'AI', abbr: 'АИ', name: 'Архитектурные решения (интерьер)', analysedBy: 'text_profile' },
   { code: 'KM', abbr: 'КМ', name: 'Конструкции металлические', analysedBy: 'text_profile' },
   { code: 'KJ', abbr: 'КЖ', name: 'Конструкции железобетонные', analysedBy: 'text_profile' },

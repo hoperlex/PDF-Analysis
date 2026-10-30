@@ -68,6 +68,8 @@ def _raw_prompts() -> dict[str, str]:
     found: dict[str, str] = {}
     for directory in sorted(path for path in PROFILES.iterdir() if path.is_dir()):
         manifest = json.loads((directory / "profile.json").read_text("utf-8"))
+        if manifest["section_code"] == "AR":
+            continue  # This original-source package has a separate hash-pinned prompt contract.
         found[manifest["section_code"]] = (directory / "system_prompt.md").read_text("utf-8")
     return found
 

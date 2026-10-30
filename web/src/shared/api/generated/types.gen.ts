@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.13.0 (OpenAPI 3.1.0)
- *   sha256 71380d022cfd144f55611f92d43ec3ddb8948bb05a7f6a411605848040168de8
+ *   sha256 8fd13c576ec9a1a52baa4ec99e4b5b487231c7aec6b57256df3c5342c32cce3f
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.13.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '71380d022cfd144f55611f92d43ec3ddb8948bb05a7f6a411605848040168de8';
+export const CONTRACT_DIGEST = '8fd13c576ec9a1a52baa4ec99e4b5b487231c7aec6b57256df3c5342c32cce3f';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -733,8 +733,7 @@ export type AnalysisProfileSourceFile = {
  * ``draft``: a package ported from the legacy prompts, or authored in this repository, whose
  * open questions no lane has answered in writing. ``reviewed``: a package whose open questions a
  * lane answered in writing; no human review (`R-146ag`). Every status is executable; the status is
- * recorded, never hidden. АР has no status because it has no text profile
- * (`PROD-11-AR-V1-V2-REMOVAL-01`): its row carries ``profile: null``.
+ * recorded, never hidden. The new original-source АР profile has ``draft`` status until expert review.
  */
 export const ANALYSIS_PROFILE_STATUS_VALUES = [
   'draft',

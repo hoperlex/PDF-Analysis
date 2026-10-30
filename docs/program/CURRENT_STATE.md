@@ -2,6 +2,22 @@
 
 **Updated 2026-10-30 by `CMP-INT-CODE-1030` (integrated development candidate; publication record in its report).** CMP C2–C4 runtime includes version comparison and stage intake/pairs/assemblies, sheet maps and stored text, registered graphic evidence, bounded consented AI review/classification/synthesis, one-cycle recorded repair/undo, durable single/batch seven-step chains, expert cards/verdicts/escalation and grouped XLSX/PDF/HTML journals. Four stage tabs and immutable evidence navigation are integrated. R-148 beta choices are implemented: fresh cost preflight/finite-cap approval for ordinary, AR v3 and repeated Runs; background complete PDF interpretation with durable progress/error; and `п.м`↔`м` at factor1. Accepted metered consent enforces its cap even with raised limits; old accepted commands retain historical policy. Contract `1.13.0` has 230 paths / 256 operations / 619 schemas, migration head `0043_stage_ai_generations`. Owner dev hotfixes `99b337fb`/`06b94745`, their default-off controls and navigation are preserved. Root fixed command/worker locking, atomic child creation, cancellation and fresh receipts; AI generations retain paid replies and refuse uncertain resends. The presentation script is `CMP-PRESENTATION-1030.md`; its browser run is unverified. Full gates, heavy batteries, browser execution, exposure acceptance and live spend remain deferred to 2026-10-31 (D-290). No main publication is authorised. The paragraphs below retain historical measurements and earlier candidates.
 
+**Updated 2026-10-30 by `HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030` (development
+candidate only).** The complete pre-change АР v3 solution is preserved on remote
+branch `ready/ar-v3-20261030` at `99b337fb6e632ebd585f53134eb4425131cfe0b7`.
+The default start for a confirmed АР version now uses an ordinary text Run with a new
+draft АР profile. Its nine source resources are copied byte for byte from
+`SU10KAZ/PDF-proverka` at `3c99481719218b9cfa7560886529916646c61939`;
+the executable prompt embeds all eight Markdown resources verbatim and adds the current
+Run's text evidence and JSON output rules. The original app's block, norm, review and
+Excel pipeline is outside this profile-only change; numeric norms in the copied text
+are historical context, not verified requirements. The ordinary start and raised-limit
+switch now cover all 15 sections. Old six-check group Runs remain readable, while its
+start is removed from the default version screen. Shared contract `1.13.0` has the
+same 131 paths / 148 operations / 432 schemas and migration head `0039_comparison_core`.
+The owner requested focused checks and one publication to `origin/dev`, without a
+complete gate or live provider call. `origin/main` is unchanged by this task.
+
 **Updated 2026-10-30 by `HOTFIX-SECTION-LIMITS-INT-20261030` (development
 candidate only; no deployment claim).** The default-off «Повышенные лимиты
 ИИ-анализа» switch now covers ordinary `startRun` for all 14 text-profile

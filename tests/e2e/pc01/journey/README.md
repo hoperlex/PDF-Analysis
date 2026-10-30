@@ -20,6 +20,12 @@ The closed `approve_run_cost` action supports `run` and `ar_v3_group`; the latte
 pending status is preserved; this compatibility update does not invent an executed six-check AR v3 journey or
 activate those older steps. Browser execution of these new approval actions remains **UNVERIFIED**.
 
+Owner dev `3821261a` restores the ordinary original-source АР profile and its default `StartRunControl`.
+The read-only profile-registry step now expects АР status `draft` («черновик, требует экспертной проверки»).
+Historical AR-bound fixtures remain explicitly pending until separately rebased and activated; the removed
+six-check default button is not a prerequisite for this walk. Its API, historical readers and the closed
+`ar_v3_group` cost-approval driver remain available independently of that default UI.
+
 The existing queue re-audit step uses that same `run` cost scope with an explicit captured source Run. Selecting
 «Повторный аудит» automatically reads the selected Run and estimates its version with `reaudit_of_run_id`; the
 driver observes both responses, checks the source/version and the absence of client routing overrides, then

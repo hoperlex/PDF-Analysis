@@ -3,15 +3,14 @@ recorded adapter finds them.
 
 Container-free. What is held here:
 
-* every section with a registered profile -- АИ, ПЗ, ПОС, ТХ, КЖ, КМ, ОВ, ВК, ПТ, ЭОМ, СС,
-  ИТП, ГП and ПБ, fourteen -- has exactly one recording, filed under the key of the request its own
-  profile sends over the committed AR corpus text layer, labelled synthetic in its ``origin`` and
-  carrying no provider mode; the builder reports no drift; a profile added to the registry without
-  a recording fails here;
+* the fourteen earlier profiles -- АИ, ПЗ, ПОС, ТХ, КЖ, КМ, ОВ, ВК, ПТ, ЭОМ, СС,
+  ИТП, ГП and ПБ -- have exactly one recording each, filed under the request key of their
+  own profile. The new original-source АР profile is not backed by a synthetic recording;
+  its sources and prompt are hash-pinned separately. The builder reports no drift;
 * the fourteen keys differ from each other and from AR's, so no recording can answer another
   profile's request;
-* ``RecordedAdapter()`` (what the composition root serves) answers AR exactly as the
-  canonical directory does and answers each recorded section; an adapter given one directory
+* ``RecordedAdapter()`` answers the historical v1 AR reference request exactly as the
+  canonical directory does and answers each earlier recorded section; an adapter given one directory
   reads only that directory;
 * each section's request is refused by every other section's directory, by the canonical AR
   directory and by an empty one (``recording_missing``), and by its own reply filed under another
@@ -20,8 +19,7 @@ Container-free. What is held here:
 * every section's recording replays through the real stage with that section's own profile and
   publishes exactly the observations it holds, grounded in the corpus text;
 * one key in two searched directories is refused, never answered by directory order;
-* the registry keeps each package's ``source`` block (an authored package such as ПБ's has none;
-  АР is not registered since `PROD-11-AR-V1-V2-REMOVAL-01`).
+* the registry keeps each package's ``source`` block (an authored package such as ПБ's has none).
 """
 
 from __future__ import annotations
@@ -188,10 +186,9 @@ def test_the_served_adapter_answers_each_recorded_section_and_the_canonical_alon
 
 
 def test_every_registered_section_has_a_recording_and_nothing_else_does() -> None:
-    """A profile added to the registry without a recording (or the reverse) fails here."""
-    # `PROD-11-AR-V1-V2-REMOVAL-01`: АР is no longer registered; it was the fifteenth entry.
-    assert set(REGISTRY.entries) == set(RECORDED_SECTIONS)
-    assert "AR" not in REGISTRY.entries
+    """The 14 legacy section recordings remain complete; original-source AR is a new bundle."""
+    assert set(REGISTRY.entries) == set(RECORDED_SECTIONS) | {"AR"}
+    assert REGISTRY.entries["AR"].profile.prompt_bundle.content_sha256 != V1_REFERENCE_PROFILE.prompt_bundle.content_sha256
     assert len(RECORDED_SECTIONS) == 14 == len(set(RECORDED_SECTIONS))
     directories = {
         item.name for item in SECTIONS.iterdir()
@@ -359,7 +356,7 @@ def test_a_recording_origin_cannot_carry_a_provider_mode() -> None:
 
 
 def test_the_registry_keeps_each_packages_source_block() -> None:
-    assert "AR" not in REGISTRY.entries
+    assert "AR" in REGISTRY.entries
     authored = set()
     for code, entry in REGISTRY.entries.items():
         declared = json.loads((PACKAGES_ROOT / code.lower() / "profile.json").read_text(encoding="utf-8"))

@@ -47,6 +47,13 @@ CATEGORIES: Final[tuple[str, ...]] = ("internal_contradiction", "explicit_placeh
 #: (:func:`~auditmanager.analysis.text.response.parse_response`).
 OMISSION_CATEGORY: Final[str] = "documentation"
 
+# The original AR source names more topics than the text-only Run can certify. These
+# seven categories cover its document-grounded text observations; normative claims
+# still require the separate citation path and never become findings from a checklist.
+AR_TEXT_CATEGORIES: Final[tuple[str, ...]] = (
+    *CATEGORIES, "dimensions", "layout", "facade", "roof", OMISSION_CATEGORY,
+)
+
 #: Pinned identity of this bundle. An immutable bundle has a fixed identity resolved
 #: at run time, not a fresh ULID per run - a new ULID each run would make the artifact
 #: unreproducible and would make "resolved by identity" meaningless.
@@ -204,7 +211,7 @@ def response_schema_for(categories: Sequence[str]) -> Mapping[str, Any]:
     declared = tuple(categories)
     if declared == CATEGORIES:
         return RESPONSE_SCHEMA
-    if declared == (*CATEGORIES, OMISSION_CATEGORY):
+    if declared in ((*CATEGORIES, OMISSION_CATEGORY), AR_TEXT_CATEGORIES):
         item = dict(RESPONSE_SCHEMA["properties"]["observations"]["items"])
         properties = dict(item["properties"])
         properties["category"] = {"type": "string", "enum": list(declared)}

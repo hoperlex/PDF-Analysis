@@ -33,9 +33,9 @@ def test_api_accepts_only_explicit_boolean_and_defaults_off() -> None:
         StartRunRequest.model_validate({"version_uid": VERSION, "relaxed_limits": "true"})
 
 
-def test_all_fourteen_relaxed_pairs_resolve_to_distinct_immutable_64k_bundles() -> None:
+def test_all_fifteen_relaxed_pairs_resolve_to_distinct_immutable_64k_bundles() -> None:
     registry = load_text_profile_registry()
-    assert len(registry.entries) == 14
+    assert len(registry.entries) == 15
     for entry in registry.entries.values():
         pair = relaxed_profile_pair(entry.analysis_profile_id, entry.prompt_bundle_id)
         normal = registry.resolve(entry.analysis_profile_id, entry.prompt_bundle_id)

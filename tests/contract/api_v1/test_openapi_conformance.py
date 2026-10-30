@@ -575,7 +575,9 @@ class TestN1ComponentReferenceResolution:
         # a document, a series, a transition, a sheet pair, a page profile, a job, a report or a queue entry by identity.
         # `CMP-SEAL-C3` adds thirty-two: each stage operation addresses a project, upload,
         # candidate, pair, assembly, link revision or run by opaque identity.
-        assert len(report) == 196, report
+        # The two source-bound cost estimates also declare an unknown-version
+        # refusal, extending the sealed identity-addressed total by two.
+        assert len(report) == 198, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]
