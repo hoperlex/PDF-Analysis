@@ -96,9 +96,9 @@ def build_comprehensive_request(*, model_id, run_id, section, payload):
         idempotency_scope=f"{run_id}:comprehensive:{digest(body)}")
 
 
-def deterministic_lossless_merge(items):
+def deterministic_lossless_merge(items, *, full_document=False):
     """Collapse exact duplicate content only; keep every original and source binding."""
-    if not isinstance(items, list) or len(items) > MAX_MERGED_INPUTS:
+    if not isinstance(items, list) or not full_document and len(items) > MAX_MERGED_INPUTS:
         raise ValueError("extended_merge_window_exceeded")
     ignored = {"source_ids", "norm_queries", "norm_candidates", "observation_id", "source_kind",
                "input_ids", "provenance", "merged_observations"}
@@ -113,6 +113,12 @@ def deterministic_lossless_merge(items):
             by_key[key] = item
             continue
         target = by_key[key]
+        if full_document and (len(set(target.get("source_ids", [])) | set(original.get("source_ids", []))) > 16
+                or len(set(target.get("norm_queries", [])) | set(original.get("norm_queries", []))) > 2):
+            item = deepcopy(original)
+            output.append(item)
+            by_key[key] = item
+            continue
         target.setdefault("merged_observations", [deepcopy(target)]).append(deepcopy(original))
         for field in ("source_ids", "norm_queries", "norm_candidates", "input_ids"):
             if field not in original and field not in target:
@@ -171,7 +177,10 @@ def parse_norm_review(text, *, observations, allowed_sources=None):
 # instructions, bounds, schemas and idempotency behavior.
 WORKFLOW_V3 = "extended-review-v3"
 REVIEW_BUNDLE_VERSION = "section-review-source-bound/1"
-MAX_WORKFLOW_WINDOWS = 8
+# Full-document v3 authority is frozen by the preflight/runtime owners. The
+# admitted 1,000-image ceiling requires ceil(1,000 / 16) durable windows;
+# individual comprehensive/review requests retain their existing window bounds.
+MAX_WORKFLOW_WINDOWS = 63
 MAX_GLOBAL_OBSERVATIONS = MAX_WORKFLOW_WINDOWS * MAX_MERGED_INPUTS
 MAX_V3_REQUEST_BYTES = 900_000
 

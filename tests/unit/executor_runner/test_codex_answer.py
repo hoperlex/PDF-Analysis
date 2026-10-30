@@ -12,6 +12,9 @@ from pathlib import Path
 
 import pytest
 
+from auditmanager.analysis.text.prompt import CATEGORIES, OMISSION_CATEGORY, response_schema_for
+from auditmanager.executors.answers import validate
+
 
 SCRIPT = Path(__file__).resolve().parents[3] / "tools/executor-runner/codex_answer.py"
 SPEC = importlib.util.spec_from_file_location("pdfa_codex_answer", SCRIPT)
@@ -96,6 +99,42 @@ def test_wrong_model_and_missing_schema_never_start_codex() -> None:
         codex_answer.read_task(json.dumps({**TASK, "output_schema": None}).encode())
     with pytest.raises(codex_answer.TaskError, match="task_too_large"):
         codex_answer.read_task(b"x" * (codex_answer.MAX_TASK_BYTES + 1))
+
+
+def test_section_optional_omission_has_two_codex_strict_shapes_without_changing_answers() -> None:
+    original = response_schema_for((*CATEGORIES, OMISSION_CATEGORY))
+    before = json.dumps(original, ensure_ascii=False)
+    item = original["properties"]["observations"]["items"]
+    assert "omission" in item["properties"] and "omission" not in item["required"]
+
+    generated = codex_answer._codex_output_schema(original)
+    alternatives = generated["properties"]["observations"]["items"]["anyOf"]
+    assert len(alternatives) == 2
+    for alternative in alternatives:
+        assert set(alternative["required"]) == set(alternative["properties"])
+        assert alternative["additionalProperties"] is False
+    assert "omission" not in alternatives[0]["properties"]
+    assert "omission" in alternatives[1]["properties"]
+
+    base = {"category": "explicit_placeholder", "finding_text": "текст",
+            "recommendation_text": "уточнить", "evidence": [{"page_number": 1, "quote": "TBD"}]}
+    with_omission = {**base, "category": "documentation", "omission": {
+        "term": "М1", "first_page": 1, "last_page": 2,
+        "heading": {"page_number": 1, "quote": "Ведомость"},
+    }}
+    for observation in (base, with_omission):
+        answer = {"observations": [observation]}
+        assert validate(original, answer) is None
+        assert validate(generated, answer) is None
+    assert json.dumps(original, ensure_ascii=False) == before
+
+
+def test_section_schema_with_another_optional_field_is_refused_before_codex() -> None:
+    schema = response_schema_for((*CATEGORIES, OMISSION_CATEGORY))
+    changed = json.loads(json.dumps(schema))
+    changed["properties"]["observations"]["items"]["properties"]["other"] = {"type": "string"}
+    with pytest.raises(codex_answer.TaskError, match="^codex_schema_unsupported$"):
+        codex_answer._codex_output_schema(changed)
 
 
 def test_verified_png_reaches_codex_as_an_image_and_a_changed_file_is_refused(tmp_path: Path) -> None:

@@ -38,6 +38,8 @@ const reasonLabels: Record<string, string> = {
   provider_binding_unavailable: 'Исполнитель для принятого задания недоступен.',
   provider_outcome_unknown: 'Результат обращения к исполнителю неизвестен. Повторная оплата автоматически не выполняется.',
   missing_artifact: 'Финальная запись результата ещё не получена.',
+  corpus_unavailable: 'В этом прогоне нет доступного нормативного корпуса. Проверка ссылок не выполнена.',
+  candidate_context_unavailable: 'Для наблюдений не найдены цитаты нормативного корпуса, пригодные для модельной сверки.',
 };
 const FINAL_STATES = new Set(['completed', 'partial', 'failed', 'unavailable', 'skipped']);
 export const MAX_TERMINAL_REVIEW_READS = 8;
@@ -70,6 +72,7 @@ const warningLabels: Record<string, string> = {
   merge_omitted_sources_retained: 'Не включённые в модельный свод исходные наблюдения сохранены отдельно.',
   text_observations_outside_merge_window: 'Часть текстовых наблюдений находится за пределами окна свода.',
   page_context_truncated: 'Текстовый контекст страниц ограничен по размеру; обзор не охватывает весь текст страницы.',
+  visual_context_bounded_full_text_reviewed: 'Контекст отдельных изображений сокращён; полный текст страниц передан в комплексную сверку по частям.',
   norm_lookup_window_exhausted: 'Исчерпано окно поиска по корпусу; часть нормативных оснований не проверялась.',
   merge_context_truncated: 'Для свода использованы сокращённые описания; подробные источники требуют экспертной сверки.',
 };
@@ -146,16 +149,18 @@ export function ExtendedReviewView({ reading, projectUid }: { reading: ExtendedR
   const report = object(result?.report);
   const reportStatus = text(report?.status) || text(procedures.find((procedure) => procedure.id === 'report_generation')?.status);
   const coverage = object(result?.coverage);
+  const textCoverage = object(result?.text_coverage);
+  const fullWindow = result?.review_scope === 'full_document';
   const sources = objects(result?.sources);
   const observations = objects(result?.observations);
   const counts = extendedCandidateCounts(result);
   return <section id="extended-analysis" className={styles.panel} aria-label={full ? 'Полная цепочка анализа' : 'Предварительный обзор блоков'} data-extended-review={reading.status} data-workflow-version={text(result?.workflow_version)}>
-    <h2>{v3 ? 'Анализ раздела · полный расширенный план' : v2 ? 'Расширенный анализ · предыдущий план' : 'Предварительный обзор блоков'}</h2>
-    <p><strong>{labels[reading.status] ?? 'Состояние неизвестно'}</strong>. Изображения и текст проверяются в ограниченном одобренном окне. Это наблюдения для экспертной сверки, а не подтверждённые нарушения или решения эксперта.</p>
+    <h2>{v3 ? 'Анализ раздела · полный расширенный план' : v2 && fullWindow ? 'Полная цепочка анализа · расширенные процедуры' : v2 ? 'Расширенный анализ · предыдущий план' : 'Предварительный обзор блоков'}</h2>
+    <p><strong>{labels[reading.status] ?? 'Состояние неизвестно'}</strong>. {fullWindow ? 'План включает все доступные блоки; текст страниц обрабатывается по частям.' : 'Изображения и текст проверяются в ограниченном одобренном окне.'} Это наблюдения для экспертной сверки, а не подтверждённые нарушения или решения эксперта.</p>
     {Array.isArray(result?.observations) ? <p data-extended-analysis-counts="">Сохранено предварительных кандидатов: <strong>{counts.candidates}</strong> · рекомендаций критика: <strong>{counts.criticRecommendations}</strong> · предложений исправления: <strong>{counts.correctionProposals}</strong>.</p> : <p>Записи кандидатов и рекомендаций ещё не переданы. Их отсутствие в ответе не подтверждает пустой результат анализа.</p>}
     <p>Эти счётчики относятся к расширенному машинному анализу. Канонические находки и сохранённые решения эксперта рассматриваются отдельно в «Разборе».</p>
     {text(result?.section) ? <p>Раздел: <strong>{text(result?.section)}</strong>.</p> : null}
-    {v2 ? <p>Этот прогон принят по прежнему плану расширенного анализа. Новые критика, исправление и подготовка отчёта ему не приписываются; для нового плана нужна свежая оценка и согласие в новом прогоне.</p> : null}
+    {v2 ? <p>{fullWindow ? 'Этот прогон принят по плану V2 с обработкой полного документа по частям.' : 'Этот прогон принят по прежнему плану расширенного анализа.'} Новые критика, исправление и подготовка отчёта V3 ему не приписываются; для нового плана нужна свежая оценка и согласие в новом прогоне.</p> : null}
     {v3 ? <p>Рубрики учитывают специфику раздела. Числовые пороги и ссылки из исторических материалов — контекст, а не подтверждённые действующие нормы. Критика и исправление — рекомендации модели, решение остаётся за экспертом.</p> : null}
     {text(result?.rules_sha256) ? <details><summary>Происхождение рубрик раздела</summary><p>Отпечаток набора: <code>{text(result?.rules_sha256)}</code>.</p>{object(result?.source_provenance) ? <pre>{JSON.stringify(result?.source_provenance, null, 2)}</pre> : null}</details> : null}
     {typeof result?.reason === 'string' ? <p role="status">{reasonLabels[result.reason] ?? 'Сервер сообщил ограничение выполнения; полное завершение не подтверждено.'}</p> : null}
@@ -170,7 +175,8 @@ export function ExtendedReviewView({ reading, projectUid }: { reading: ExtendedR
     </> : procedures.length === 0 && result?.reason === undefined ? <p>Полная цепочка для этого прогона не подтверждена сервером. Историческим прогонам новые процедуры не приписываются.</p> : null}
     {v3 ? <WindowProgress windows={result?.windows} progress={result?.window_progress} /> : null}
     {v3 && result?.primary_text_status === 'pending' ? <p>Базовый текстовый анализ ещё выполняется. {result.visual_phase_complete === true ? 'Визуальный проход сохранён; свод и последующие проверки ожидают текстовый результат.' : 'Сохранённые визуальные результаты ещё не означают завершения анализа раздела.'}</p> : null}
-    {coverage && <p>Исследовано блоков: <strong>{count(coverage.blocks_processed)}</strong> из {count(coverage.blocks_total)}. В одобренном окне: {count(coverage.blocks_selected)}. Ещё не исследовано или недоступно: <strong>{count(coverage.blocks_remaining)}</strong>.</p>}
+    {coverage && <p>Исследовано блоков: <strong>{count(coverage.blocks_processed)}</strong> из {count(coverage.blocks_total)}. {fullWindow ? 'В плане' : 'В одобренном окне'}: {count(coverage.blocks_selected)}. Ещё не исследовано или недоступно: <strong>{count(coverage.blocks_remaining)}</strong>.</p>}
+    {textCoverage === null ? null : <p data-extended-text-coverage="">Комплексная сверка текста: успешно обработано страниц <strong>{count(textCoverage.pages_processed)}</strong> из {count(textCoverage.pages_total)}. В плане: {count(textCoverage.pages_selected)}. Ещё не обработано или недоступно: <strong>{count(textCoverage.pages_remaining)}</strong>. Эти счётчики не подтверждают отсутствие ошибок или экспертную проверку.</p>}
     {Array.isArray(result?.warnings) && result.warnings.length > 0 && <ul>{result.warnings.map((warning, i) => <li key={i}>{warningLabels[text(warning)] ?? 'Обзор имеет ограничение или ошибку; проверьте источники и состояние прогона.'}</li>)}</ul>}
     <h3>Все наблюдения текущего свода</h3>
     {observations.length === 0 ? <p>Предварительные наблюдения не получены. Это не подтверждение отсутствия проблем в документе.</p> : <ol className={styles.observations}>{observations.map((item, index) => <li key={text(item.observation_id) || index}>

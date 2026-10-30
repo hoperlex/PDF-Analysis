@@ -34,7 +34,7 @@ workflow_procedures_v3()
 review_bundle_digest(section)
 build_comprehensive_request_v3(*, model_id, run_id, section, payload, window_id=None)
 build_norm_review_request_v3(*, model_id, run_id, section, payload, window_id=None)
-deterministic_lossless_merge_v3(items, *, max_windows=8)
+deterministic_lossless_merge_v3(items, *, max_windows=63)
 
 build_critic_request(*, model_id, run_id, section, observations, sources,
                      window_id, context=None)
@@ -53,7 +53,7 @@ parse_corrector_reply(text, *, observations, critiques, sources,
 
 The v3 procedure descriptors are `block_analysis`, `comprehensive_analysis`, `finding_merge`, `norm_verification`, `finding_review`, `finding_correction`, `report_generation`. Canonical base stages remain separate. Runtime owns the approved two-pass order and durable per-window receipts.
 
-The runtime policy permits up to eight windows of sixteen actual image sources, with at most six extra calls per window: two visual, comprehensive, normative review, critic and targeted corrector. Unneeded calls are not made. The runtime selects at most forty/16,000 characters of observations for each critic/norm window and retains other observations with explicit unreviewed reasons. The global collection helper accepts at most `8 * 160` observations, merges exact duplicate content only, unions metadata and retains every duplicate original; overflow is an explicit refusal rather than a hidden prefix.
+The runtime policy permits up to sixty-three windows of sixteen actual image sources, with at most six extra calls per window: two visual, comprehensive, normative review, critic and targeted corrector. Unneeded calls are not made. The runtime selects at most forty/16,000 characters of observations for each critic/norm window and retains other observations with explicit unreviewed reasons. The global collection helper accepts at most `63 * 160` observations, merges exact duplicate content only, unions metadata and retains every duplicate original; overflow is an explicit refusal rather than a hidden prefix.
 
 The comprehensive request copy bounds descriptions to 800 characters, titles to 200 and source quotes to 800; each cut has explicit metadata and sets `context_coverage.truncated`. The caller's full observations and sources are unchanged. Native/recognised text has the existing explicit 48,000-character context bound. Critic/corrector text context and deduplicated normative context each have a 48,000-character bound, with omitted paragraphs/cuts recorded in coverage. Complete request bytes are bounded at 900,000; oversized input is refused. Critic/corrector output is bounded to 12,000 tokens each.
 
@@ -68,3 +68,5 @@ Static reads of runtime `_review_window_v3`, v3 window dispatch and `analysis.pu
 ## Integration and rollback
 
 The integrator is the sole Git writer and publishes only to `origin/dev` under the integration task. No contract, migration, root lockfile, composition root or global style was changed by this lane. Fresh v3 policy is the behavior boundary: existing accepted v1/v2 runs keep their historical path. Disable fresh v3 starts or forward-revert its code to roll back; do not reinterpret historical receipts or rewrite expert decisions.
+
+Integration addendum: incoming v2 full_document merge/batching semantics preserved during source merge. V3 max-window helper is63 to match complete accepted image/page selection. Runtime retains each window; the global helper is not claimed as an executed cross-window deduplication stage. No execution/checks of this combined code.

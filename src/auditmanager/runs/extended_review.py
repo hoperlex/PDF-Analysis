@@ -141,7 +141,8 @@ def _call(session, *, run_id, authority, jobs, journal, binding, request, phase,
     return response, False
 
 
-def _norms(session, observations: list[dict], snapshot_id: str | None) -> list[str]:
+def _norms(session, observations: list[dict], snapshot_id: str | None,
+           *, full_document: bool = False, checkpoint=None) -> list[str]:
     # Candidate retrieval is deterministic corpus lookup, never edition validation.
     available = snapshot_id is not None
     cache: dict[str, list[dict]] = {}
@@ -155,13 +156,15 @@ def _norms(session, observations: list[dict], snapshot_id: str | None) -> list[s
             continue
         candidates = []
         try:
-            for query in queries[:2]:
+            for query in (queries if full_document else queries[:2]):
                 key = " ".join(query.casefold().split())
                 if key not in cache:
-                    if calls >= 12:
+                    if not full_document and calls >= 12:
                         item["norm_reason"] = "lookup_window_exhausted"
                         warnings.append("norm_lookup_window_exhausted")
                         break
+                    if checkpoint is not None:
+                        checkpoint("extended_norm_lookup")
                     calls += 1
                     page = search_norms(session, q=query, norms_snapshot_id=snapshot_id,
                         cursor=None, limit=3, timeout_ms=1200)
@@ -174,7 +177,7 @@ def _norms(session, observations: list[dict], snapshot_id: str | None) -> list[s
                         continue
                     candidates.append(candidate)
             item["norm_status"] = "candidates" if candidates else "unavailable" if item.get("norm_reason") == "lookup_window_exhausted" else "not_found"
-            item["norm_candidates"] = candidates[:6]
+            item["norm_candidates"] = candidates if full_document else candidates[:6]
         except DomainError:
             session.rollback()
             item["norm_status"] = "unavailable"
@@ -195,7 +198,7 @@ def run_extended_review(session, *, run, authority, jobs, journal, binding, outp
         return _run_workflow_v2(session,run=run,authority=authority,jobs=jobs,journal=journal,binding=binding,
             outputs=outputs,store=store,meter=meter,publish=publish,progress=progress,checkpoint=checkpoint,
             observations_document=observations_document,snapshot_id=snapshot_id,profile_sha256=profile_sha256,
-            bind_native=bind_native)
+            bind_native=bind_native,full_document=policy.get("max_blocks") == "all")
     from auditmanager.analysis.public import read_artifact
     state: dict[str, Any] = {"format": FORMAT, "preliminary": True, "section": "unknown",
         "observations": [], "sources": [], "warnings": [], "coverage": {
@@ -372,15 +375,126 @@ def planned_workflow_result(*, reason=None, terminal=False, policy=None):
     version="extended-review-v3" if v3 else "extended-review-v2"
     return {"format":version,"workflow_version":version,"preliminary":True,
         **({"windows":[],"window_progress":{"completed":0,"total":policy["max_windows"],"current":None,"window_size":16},
-            "rules_sha256":policy["rules_sha256"],"section":policy.get("section_code"),"primary_text_status":"pending"} if v3 else {}),
+            "rules_sha256":policy["rules_sha256"],"section":policy.get("section_code"),"primary_text_status":"pending",
+            "review_scope":"full_document"} if v3 else {}),
         "observations":[],"sources":[],"warnings":[],"procedures":procedures,"ocr_status":"not_performed",
         "reason":reason,"coverage":{"blocks_total":0,"blocks_selected":0,"blocks_processed":0,
             "blocks_remaining":0,"skipped":[]}}
 
 
+def _full_comprehensive_review(*, run, model_id, section, state, pages, block_items, call):
+    """Cover every page character and source in repeatable provider-sized batches."""
+    from auditmanager.analysis.public import build_comprehensive_request
+    units = []
+    sources_by_page = {}
+    for source in state["sources"]:
+        sources_by_page.setdefault(source.get("page_number"), []).append(source)
+    for page in pages:
+        number = page["page_number"]
+        value = str(page.get("text", ""))
+        source_id = "native_text_" + extended_digest({"version_uid": run.version_uid,
+            "page": number, "text": value})[:24]
+        source = {"source_id": source_id, "kind": "text", "source_type": "native_text",
+            "page_number": number, "version_uid": run.version_uid, "quote": value[:2000],
+            "text_sha256": hashlib.sha256(value.encode()).hexdigest()}
+        state["sources"].append(source)
+        sources_by_page.setdefault(number, []).append(source)
+        page_ids = {source["source_id"] for source in sources_by_page[number]}
+        visual = [item for item in block_items if page_ids.intersection(item["source_ids"])]
+        textual = [item for item in state["text_items"] if page_ids.intersection(item["source_ids"])]
+        visual_batches = [visual[i:i+40] for i in range(0, len(visual), 40)] or [[]]
+        text_batches = [textual[i:i+40] for i in range(0, len(textual), 40)] or [[]]
+        pieces = [value[i:i+40_000] for i in range(0, len(value), 40_000)] or [""]
+        tasks = [(index, 0) for index in range(len(pieces))]
+        tasks.extend((0, index) for index in range(1, max(len(visual_batches), len(text_batches))))
+        for piece_index, batch_index in tasks:
+            chosen_visual = visual_batches[batch_index] if batch_index < len(visual_batches) else []
+            chosen_text = text_batches[batch_index] if batch_index < len(text_batches) else []
+            allowed = {source_id}
+            for item in (*chosen_visual, *chosen_text):
+                allowed.update(item["source_ids"])
+            units.append(({"source_id": source_id, "page_number": number,
+                "text": pieces[piece_index], "character_start": piece_index * 40_000},
+                chosen_visual, chosen_text, allowed))
+
+    observations = []
+    batch_contexts, batch_visual, batch_text, batch_allowed = [], [], [], set()
+    def flush(batch_number):
+        if not batch_contexts:
+            return
+        sources = [{k: v for k, v in source.items() if k != "context"}
+            for source in state["sources"] if source["source_id"] in batch_allowed]
+        request = build_comprehensive_request(model_id=model_id, run_id=run.run_id, section=section,
+            payload={"native_context": batch_contexts, "visual_observations": batch_visual,
+                "text_observations": batch_text, "sources": sources,
+                "source_sha256": state["source_sha256"], "coverage": state["coverage"]})
+        response = call(request, f"comprehensive:{batch_number}")
+        observations.extend(parse_extended_reply(response.output_text, allowed_sources=batch_allowed))
+
+    batch_number = 0
+    for context, visual, textual, allowed in units:
+        if batch_contexts and (len(batch_contexts) == 8
+                or sum(len(item["text"]) for item in batch_contexts) + len(context["text"]) > 40_000
+                or len(batch_visual) + len(visual) > 40 or len(batch_text) + len(textual) > 40):
+            flush(batch_number)
+            batch_number += 1
+            batch_contexts, batch_visual, batch_text, batch_allowed = [], [], [], set()
+        batch_contexts.append(context)
+        batch_visual.extend(visual)
+        batch_text.extend(textual)
+        batch_allowed.update(allowed)
+    flush(batch_number)
+    return observations
+
+
+def _full_norm_verification(*, session, run, model_id, section, state, snapshot_id, call, phase, checkpoint):
+    """Search and review every candidate-bearing observation in bounded model calls."""
+    from auditmanager.analysis.public import build_norm_review_request, parse_norm_review
+    items = state["observations"]
+    state["warnings"].extend(_norms(session, items, snapshot_id,
+        full_document=True, checkpoint=checkpoint))
+    registry = {}
+    for item in items:
+        item["norm_candidates"] = [registry.setdefault(candidate["paragraph_id"], candidate)
+            for candidate in item.get("norm_candidates", [])]
+    candidates = [item for item in items if item.get("norm_candidates")]
+    if not candidates:
+        phase("norm_verification", "unavailable",
+            "corpus_unavailable" if snapshot_id is None else "candidate_context_unavailable")
+        return
+    batches = []
+    batch, characters = [], 0
+    for item in candidates:
+        size = len(item["title"]) + len(item["description"]) + sum(
+            len(candidate["quote"]) for candidate in item["norm_candidates"])
+        if batch and (len(batch) == 40 or characters + size > 80_000):
+            batches.append(batch)
+            batch, characters = [], 0
+        batch.append(item)
+        characters += size
+    if batch:
+        batches.append(batch)
+    for batch_number, batch in enumerate(batches):
+        indexed = {"xni_" + extended_digest({"ordinal": i, "item": item})[:24]: item
+            for i, item in enumerate(batch, start=batch_number * 40)}
+        norm_context = {candidate["paragraph_id"]: candidate
+            for item in batch for candidate in item["norm_candidates"]}
+        request = build_norm_review_request(model_id=model_id, run_id=run.run_id, section=section,
+            payload={"observations": [{"title": item["title"], "description": item["description"],
+                "source_ids": item["source_ids"], "input_id": key,
+                "norm_candidate_ids": [candidate["paragraph_id"] for candidate in item["norm_candidates"]]}
+                for key, item in indexed.items()], "norm_context": list(norm_context.values()),
+                "source_sha256": state["source_sha256"]})
+        reviewed = parse_norm_review(call(request, f"norm_verification:{batch_number}").output_text,
+            observations=indexed, allowed_sources={source["source_id"] for source in state["sources"]})
+        for result in reviewed:
+            indexed[result["input_ids"][0]]["norm_assessment"] = result["norm_assessment"]
+    phase("norm_verification", "partial" if len(candidates) < len(items) else "completed")
+
+
 def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs, store, meter,
         publish, progress, checkpoint, observations_document, snapshot_id, profile_sha256, bind_native=None,
-        window_context=None):
+        window_context=None, full_document=False):
     from auditmanager.analysis.public import (read_artifact, prepare_native_page_sources,
         build_comprehensive_request, deterministic_extended_merge,
         build_norm_review_request, parse_norm_review)
@@ -460,7 +574,7 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
                     "source_window":{"slots":saved_visual["coverage"]["blocks_total"]}}
             else:
                 native = prepare_native_page_sources(version_uid=run.version_uid,source_ref=source,
-                    blob_store=store,max_pages=16,checkpoint=checkpoint,
+                    blob_store=store,max_pages=16 if v3 else version.page_count if full_document else 16,checkpoint=checkpoint,
                     **({"window_offset":window_context["offset"],"max_sources":window_context["policy"]["max_blocks"]} if v3 else {}))
             if text_only_portal:
                 native["warnings"].append("portal_text_only_native_page_visuals")
@@ -469,7 +583,7 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
             portal=data.get("geometry.portal_blocks",{}),manifest=data.get("geometry.page_crops",{}),
             text_layer=data["prepared.text_layer"],graph=data["context.document_graph"],
             observations=observations_document,recognised=data.get("prepared.recognised_text"),
-            native_sources=native,plan_version="extended-review-v3" if v3 else "extended-review-v2",
+            native_sources=native,plan_version="extended-review-v3" if v3 else "extended-review-v2",full_document=full_document,
             **({"source_offset":window_context["offset"],"max_sources":window_context["policy"]["max_blocks"]} if v3 else {}))
         if v3:
             window_total=(native["source_window"]["slots"] if native is not None else len([s for s in planned["sources"] if s["kind"]=="image"]))
@@ -535,105 +649,121 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
             state["primary_text_status"]="pending"
             save("running")
             return state
-        # Every page context has a real page/version source anchor, independent of text findings.
         contexts=[]
-        context_pages=pages[:16]
-        if v3:
-            numbers={source["page_number"]+delta for source in images for delta in (-1,0,1)}
-            numbers.update(range(window_context["offset"]+1,min(window_context["offset"]+16,
-                window_context["policy"]["text_page_limit"])+1))
-            context_pages=[page for page in pages if page["page_number"] in numbers]
-            if not context_pages:
-                context_pages=pages[window_context["offset"]:window_context["offset"]+16]
-        for page in context_pages:
-            number=page["page_number"];value=str(page.get("text",""))
-            source_id="native_text_"+extended_digest({"version_uid":run.version_uid,"page":number,"text":value})[:24]
-            state["sources"].append({"source_id":source_id,"kind":"text","source_type":"native_text",
-                "page_number":number,"version_uid":run.version_uid,"quote":value[:2000],"text_sha256":hashlib.sha256(value.encode()).hexdigest()})
-            contexts.append({"source_id":source_id,"page_number":number,"text":value})
-            if v3 and recognised_by_page.get(number):
-                recognised="\n".join(recognised_by_page[number])
-                recognised_id="recognised_"+extended_digest({"version_uid":run.version_uid,"page":number,
-                    "artifact_sha256":recognised_artifact_sha,"text":recognised})[:24]
-                state["sources"].append({"source_id":recognised_id,"kind":"text","source_type":"recognised_text",
-                    "quote_source":"recognised","page_number":number,"version_uid":run.version_uid,
-                    "quote":recognised[:2000],"artifact_sha256":recognised_artifact_sha,
-                    "text_sha256":hashlib.sha256(recognised.encode()).hexdigest()})
-                contexts.append({"source_id":recognised_id,"page_number":number,"text":"",
-                    "recognised_context":recognised,"source_type":"recognised_text","quote_source":"recognised"})
-        phase("comprehensive_analysis","running")
-        builder=build_comprehensive_request
-        extra={}
-        if v3:
-            from auditmanager.analysis.public import build_comprehensive_request_v3
-            builder=build_comprehensive_request_v3;extra={"window_id":window_context["window_id"]}
-        request=builder(model_id=binding.config.model_id,run_id=run.run_id,section=section,
-            **extra,payload={"native_context":contexts,"visual_observations":block_items,
-                "text_observations":([{k:item[k] for k in ("title","description","source_ids","norm_queries")}
-                    for item in state["text_items"]] if v3 else state["text_items"]),
-                "sources":[{k:v for k,v in s.items() if k!="context"} for s in state["sources"]],
-                "source_sha256":state["source_sha256"],"coverage":state["coverage"]})
-        context_payload=json.loads(request.body["messages"][0]["content"])
-        context_cut = context_payload["context_coverage"]["truncated"]
-        if v3:
-            state["context_page_numbers"]=[page["page_number"] for page in context_pages]
-            state["comprehensive_context_coverage"]=context_payload["context_coverage"]
-        if context_cut: state["warnings"].append("page_context_truncated")
-        if v3 and not images and not any(row.get("text","").strip() or row.get("recognised_context","").strip() for row in contexts):
-            comprehensive=[]
-            phase("comprehensive_analysis","unavailable","no_reliable_window_sources")
+        if full_document:
+            phase("comprehensive_analysis","running")
+            comprehensive = _full_comprehensive_review(run=run, model_id=binding.config.model_id,
+                section=section, state=state, pages=pages, block_items=block_items, call=call)
+            if "page_context_truncated" in state["warnings"]:
+                state["warnings"] = [warning for warning in state["warnings"] if warning != "page_context_truncated"]
+                state["warnings"].append("visual_context_bounded_full_text_reviewed")
+            phase("comprehensive_analysis", "completed")
         else:
-            comprehensive=parse_extended_reply(call(request,"comprehensive").output_text,
-                allowed_sources={s["source_id"] for s in state["sources"]})
-            phase("comprehensive_analysis","partial" if (not v3 and len(pages)>16) or context_cut else "completed")
+            # Legacy v2 keeps its original request; v3 uses the current source/page window.
+            contexts=[]
+            context_pages=pages[:16]
+            if v3:
+                numbers={source["page_number"]+delta for source in images for delta in (-1,0,1)}
+                numbers.update(range(window_context["offset"]+1,min(window_context["offset"]+16,
+                    window_context["policy"]["text_page_limit"])+1))
+                context_pages=[page for page in pages if page["page_number"] in numbers]
+                if not context_pages:
+                    context_pages=pages[window_context["offset"]:window_context["offset"]+16]
+            for page in context_pages:
+                number=page["page_number"];value=str(page.get("text",""))
+                source_id="native_text_"+extended_digest({"version_uid":run.version_uid,"page":number,"text":value})[:24]
+                state["sources"].append({"source_id":source_id,"kind":"text","source_type":"native_text",
+                    "page_number":number,"version_uid":run.version_uid,"quote":value[:2000],"text_sha256":hashlib.sha256(value.encode()).hexdigest()})
+                contexts.append({"source_id":source_id,"page_number":number,"text":value})
+                if v3 and recognised_by_page.get(number):
+                    recognised="\n".join(recognised_by_page[number])
+                    recognised_id="recognised_"+extended_digest({"version_uid":run.version_uid,"page":number,
+                        "artifact_sha256":recognised_artifact_sha,"text":recognised})[:24]
+                    state["sources"].append({"source_id":recognised_id,"kind":"text","source_type":"recognised_text",
+                        "quote_source":"recognised","page_number":number,"version_uid":run.version_uid,
+                        "quote":recognised[:2000],"artifact_sha256":recognised_artifact_sha,
+                        "text_sha256":hashlib.sha256(recognised.encode()).hexdigest()})
+                    contexts.append({"source_id":recognised_id,"page_number":number,"text":"",
+                        "recognised_context":recognised,"source_type":"recognised_text","quote_source":"recognised"})
+            phase("comprehensive_analysis","running")
+            builder=build_comprehensive_request
+            extra={}
+            if v3:
+                from auditmanager.analysis.public import build_comprehensive_request_v3
+                builder=build_comprehensive_request_v3;extra={"window_id":window_context["window_id"]}
+            request=builder(model_id=binding.config.model_id,run_id=run.run_id,section=section,
+                **extra,payload={"native_context":contexts,"visual_observations":block_items,
+                    "text_observations":([{k:item[k] for k in ("title","description","source_ids","norm_queries")}
+                        for item in state["text_items"]] if v3 else state["text_items"]),
+                    "sources":[{k:v for k,v in s.items() if k!="context"} for s in state["sources"]],
+                    "source_sha256":state["source_sha256"],"coverage":state["coverage"]})
+            context_payload=json.loads(request.body["messages"][0]["content"])
+            context_cut = context_payload["context_coverage"]["truncated"]
+            if v3:
+                state["context_page_numbers"]=[page["page_number"] for page in context_pages]
+                state["comprehensive_context_coverage"]=context_payload["context_coverage"]
+            if context_cut: state["warnings"].append("page_context_truncated")
+            if v3 and not images and not any(row.get("text","").strip() or row.get("recognised_context","").strip() for row in contexts):
+                comprehensive=[]
+                phase("comprehensive_analysis","unavailable","no_reliable_window_sources")
+            else:
+                comprehensive=parse_extended_reply(call(request,"comprehensive").output_text,
+                    allowed_sources={s["source_id"] for s in state["sources"]})
+                phase("comprehensive_analysis","partial" if (not v3 and len(pages)>16) or context_cut else "completed")
         phase("finding_merge","running")
-        items=deterministic_extended_merge([*state["text_items"],*block_items,*comprehensive])
+        items=deterministic_extended_merge([*state["text_items"],*block_items,*comprehensive],
+            full_document=full_document)
         state["observations"]=finalize_extended_items(items,state["sources"])
         phase("finding_merge","completed")
         phase("norm_verification","running")
-        window=state["observations"][:40]
-        if v3:
-            for item in window:
-                if len(item["source_ids"])>16:
-                    item.update(norm_status="unavailable",norm_reason="norm_source_reference_window_exceeded")
-            window=[item for item in window if len(item["source_ids"])<=16]
-        for item in state["observations"][40:]:
-            item.update(norm_status="unavailable",norm_reason="outside_norm_review_window")
-        state["warnings"].extend(_norms(session,window,snapshot_id))
-        registry={}
-        for item in window:
-            item["norm_candidates"]=[registry.setdefault(c["paragraph_id"],c) for c in item.get("norm_candidates",[])]
-        bounded=[];remaining_chars=16_000
-        for item in window:
-            size=len(item["title"])+len(item["description"])+sum(len(c["quote"]) for c in item.get("norm_candidates",[]))
-            if size>remaining_chars:
-                item.update(norm_status="unavailable",norm_reason="outside_norm_review_window")
-                continue
-            bounded.append(item);remaining_chars-=size
-        window=bounded
-        registry={c["paragraph_id"]:c for item in window for c in item.get("norm_candidates",[])}
-        if not registry:
-            reason="corpus_unavailable" if snapshot_id is None else "candidate_context_unavailable"
-            phase("norm_verification","unavailable",reason)
+        if full_document:
+            _full_norm_verification(session=session, run=run, model_id=binding.config.model_id,
+                section=section, state=state, snapshot_id=snapshot_id, call=call,
+                phase=phase, checkpoint=checkpoint)
         else:
-            indexed={"xni_"+extended_digest({"ordinal":i,"item":item})[:24]:item for i,item in enumerate(window)}
-            builder=build_norm_review_request
-            extra={}
+            window=state["observations"][:40]
             if v3:
-                from auditmanager.analysis.public import build_norm_review_request_v3
-                builder=build_norm_review_request_v3;extra={"window_id":window_context["window_id"]}
-            request=builder(model_id=binding.config.model_id,run_id=run.run_id,section=section,
-                **extra,payload={"observations":[{"title":item["title"],"description":item["description"],
-                    "source_ids":item["source_ids"],"input_id":key,
-                    "norm_candidate_ids":[c["paragraph_id"] for c in item.get("norm_candidates",[])]} for key,item in indexed.items()],
-                    "norm_context":list(registry.values()),"source_sha256":state["source_sha256"]})
-            reviewed=parse_norm_review(call(request,"norm_verification").output_text,observations=indexed,
-                allowed_sources={s["source_id"] for s in state["sources"]})
-            # Parser requires exactly one assessment per original input; only annotations transfer.
-            for reviewed_item in reviewed:
-                target=indexed[reviewed_item["input_ids"][0]]
-                target["norm_assessment"]=reviewed_item["norm_assessment"]
-            phase("norm_verification","partial" if len(window)<len(state["observations"]) or any(not item.get("norm_candidates") for item in window) else "completed")
+                for item in window:
+                    if len(item["source_ids"])>16:
+                        item.update(norm_status="unavailable",norm_reason="norm_source_reference_window_exceeded")
+                window=[item for item in window if len(item["source_ids"])<=16]
+            for item in state["observations"][40:]:
+                item.update(norm_status="unavailable",norm_reason="outside_norm_review_window")
+            state["warnings"].extend(_norms(session,window,snapshot_id))
+            registry={}
+            for item in window:
+                item["norm_candidates"]=[registry.setdefault(c["paragraph_id"],c) for c in item.get("norm_candidates",[])]
+            bounded=[];remaining_chars=16_000
+            for item in window:
+                size=len(item["title"])+len(item["description"])+sum(len(c["quote"]) for c in item.get("norm_candidates",[]))
+                if size>remaining_chars:
+                    item.update(norm_status="unavailable",norm_reason="outside_norm_review_window")
+                    continue
+                bounded.append(item);remaining_chars-=size
+            window=bounded
+            registry={c["paragraph_id"]:c for item in window for c in item.get("norm_candidates",[])}
+            if not registry:
+                reason="corpus_unavailable" if snapshot_id is None else "candidate_context_unavailable"
+                phase("norm_verification","unavailable",reason)
+            else:
+                indexed={"xni_"+extended_digest({"ordinal":i,"item":item})[:24]:item for i,item in enumerate(window)}
+                builder=build_norm_review_request
+                extra={}
+                if v3:
+                    from auditmanager.analysis.public import build_norm_review_request_v3
+                    builder=build_norm_review_request_v3;extra={"window_id":window_context["window_id"]}
+                request=builder(model_id=binding.config.model_id,run_id=run.run_id,section=section,
+                    **extra,payload={"observations":[{"title":item["title"],"description":item["description"],
+                        "source_ids":item["source_ids"],"input_id":key,
+                        "norm_candidate_ids":[c["paragraph_id"] for c in item.get("norm_candidates",[])]} for key,item in indexed.items()],
+                        "norm_context":list(registry.values()),"source_sha256":state["source_sha256"]})
+                reviewed=parse_norm_review(call(request,"norm_verification").output_text,observations=indexed,
+                    allowed_sources={s["source_id"] for s in state["sources"]})
+                # Parser requires exactly one assessment per original input; only annotations transfer.
+                for reviewed_item in reviewed:
+                    target=indexed[reviewed_item["input_ids"][0]]
+                    target["norm_assessment"]=reviewed_item["norm_assessment"]
+                phase("norm_verification","partial" if len(window)<len(state["observations"]) or any(not item.get("norm_candidates") for item in window) else "completed")
         if v3:
             _review_window_v3(session=session,run=run,binding=binding,state=state,phase=phase,call=call,
                 window_id=window_context["window_id"],section=section,contexts=contexts)
@@ -824,7 +954,7 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
         global_sha=extended_digest({"workflow_version":"extended-review-v3","version_uid":run.version_uid,
             "refs":refs,"policy":policy,"profile_sha256":profile_sha256,"norms_snapshot_id":snapshot_id,
             "run_input_digest":getattr(run,"frozen_input_digest",None)})
-        state.update(section=section,rules_sha256=actual_rules,source_sha256=global_sha,
+        state.update(section=section,rules_sha256=actual_rules,source_sha256=global_sha,review_scope="full_document",
             source_provenance={"workflow":"extended-review-v3","rules_bundle_sha256":actual_rules,
                 "source_sha256":global_sha,"original_repository":"SU10KAZ/PDF-proverka",
                 "original_commit":"3c99481719218b9cfa7560886529916646c61939"})

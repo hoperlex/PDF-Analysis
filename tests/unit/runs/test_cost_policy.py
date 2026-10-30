@@ -66,6 +66,13 @@ def test_accepted_workflow_version_survives_worker_upgrade(monkeypatch, version)
     assert policy.extended_review == frozen
 
 
+def test_fresh_full_document_authority_is_explicit_and_legacy_v1_cannot_gain_it(monkeypatch):
+    frozen = {"enabled": True, "max_blocks": "all", "plan_version": "extended-review-v2"}
+    assert read(monkeypatch, {"cost_consent": consent() | {"extended_review": frozen}}).extended_review == frozen
+    with pytest.raises(DomainError):
+        read(monkeypatch, {"cost_consent": consent() | {"extended_review": frozen | {"plan_version": "extended-review-v1"}}})
+
+
 @pytest.mark.parametrize("maximum", [1, 15, 17])
 def test_unsupported_frozen_visual_window_refuses_instead_of_silently_disabling(monkeypatch, maximum):
     frozen = {"enabled": True, "max_blocks": maximum, "plan_version": "extended-review-v2"}

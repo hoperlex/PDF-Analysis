@@ -13,12 +13,12 @@ import hashlib
 
 def prepare_native_page_sources(*, version_uid, source_ref, blob_store, max_pages=16, checkpoint=None,
                                 window_offset=None, max_sources=None):
-    """Publish at most16 genuine whole-page PNGs; never mint portal block identities."""
-    if type(max_pages) is not int or not 1 <= max_pages <= 16:
+    """Publish genuine page PNGs, rendering at most16 pages in a v3 window."""
+    if type(max_pages) is not int or not 1 <= max_pages <= 500:
         raise ValueError("native_page_limit_invalid")
     windowed=window_offset is not None
-    if windowed and (type(window_offset) is not int or not 0 <= window_offset < 128
-            or type(max_sources) is not int or not 1 <= max_sources <= 128 or window_offset >= max_sources):
+    if windowed and (max_pages > 16 or type(window_offset) is not int or not 0 <= window_offset < 1000
+            or type(max_sources) is not int or not 1 <= max_sources <= 1000 or window_offset >= max_sources):
         raise ValueError("native_page_window_invalid")
     bid = parse_blob_id(source_ref.blob_id)
     recorded = blob_store.inspect(bid)

@@ -84,6 +84,11 @@ export function AppFrame({ children, session }: AppFrameProps) {
       <header className="am-app__bar">
         <div className={styles.brandRow}>
           <Link className="am-app__brand" href={HOME_SCREEN} aria-label="AuditManager — главная">
+            <svg className={styles.brandMark} viewBox="0 0 36 36" fill="none" aria-hidden="true" focusable="false">
+              <path d="M4.5 24.5 12 10.8a4.1 4.1 0 0 1 7.2 0l7.4 13.7" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M11.6 24.5 19 10.8a4.1 4.1 0 0 1 7.2 0l5.3 9.8" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M8.8 18.3h18.4" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+            </svg>
             <span className={styles.brandLabel}>AuditManager</span>
           </Link>
           <SidebarToggle />
@@ -100,7 +105,7 @@ export function AppFrame({ children, session }: AppFrameProps) {
           <ScreenContext />
           <div className={styles.end}>
             {/* The stand label distinguishes otherwise identical deployments. */}
-            {instance !== null ? <span className="am-app__instance">{instance}</span> : null}
+            {instance !== null ? <span className="am-app__instance" title={instance}>{instance}</span> : null}
             <ThemeToggle />
             {/* The existing account menu keeps its POST sign-out and role-aware actions. */}
             {session === null ? (

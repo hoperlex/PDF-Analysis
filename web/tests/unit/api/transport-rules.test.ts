@@ -13,6 +13,8 @@
  * what a caller gets, not what an internal helper does.
  */
 
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
 import type { FetchLike } from '@/shared/api';
@@ -23,7 +25,10 @@ import {
   UnrecognizedApiError,
   appendDecision,
   getRunStatus,
+  importComparisonZip,
   listProjects,
+  uploadComparisonUploadPart,
+  uploadStageUploadPart,
 } from '@/shared/api';
 
 const BASE_URL = 'https://api.test/v1';
@@ -67,6 +72,63 @@ function runStatusBody(): unknown {
     stages: [],
   };
 }
+
+describe('binary request bodies through the generated client', () => {
+  it('sends the synthetic version ZIP as raw application/zip', async () => {
+    const bytes = readFileSync(new URL('../../../../fixtures/presentation-hotfix/VS1-five-versions.zip', import.meta.url));
+    const body = new Blob([new Uint8Array(bytes)], { type: 'application/zip' });
+    const fetch: FetchLike = async (url, init) => {
+      expect(url).toBe(`${BASE_URL}/projects/prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/comparison-zip-uploads`);
+      expect(new Headers(init.headers).get('Content-Type')).toBe('application/zip');
+      expect(new Headers(init.headers).get('Idempotency-Key')).toBe('ik_zip-retry');
+      expect(init.body).toBe(body);
+      expect(new Uint8Array(await (init.body as Blob).arrayBuffer())).toEqual(new Uint8Array(bytes));
+      return new Response(JSON.stringify({ upload_id: 'cup_test' }), { status: 201 });
+    };
+    const response = await importComparisonZip({
+      path: { project_uid: 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B' },
+      body,
+      idempotencyKey: 'ik_zip-retry',
+    }, { baseUrl: BASE_URL, fetch });
+    expect(response.status).toBe(201);
+    expect(response.data.upload_id).toBe('cup_test');
+  });
+
+  it('sends comparison PDF parts as raw application/octet-stream', async () => {
+    const body = new Blob([new Uint8Array([0x25, 0x50, 0x44, 0x46])]);
+    const fetch: FetchLike = (url, init) => {
+      expect(url).toContain('part_number=1');
+      expect(new Headers(init.headers).get('Content-Type')).toBe('application/octet-stream');
+      expect(init.body).toBe(body);
+      return Promise.resolve(new Response('{}', { status: 200 }));
+    };
+    await uploadComparisonUploadPart({
+      path: { comparison_upload_id: 'cup_test', comparison_upload_file_id: 'cuf_test' },
+      query: { part_number: 1 },
+      body,
+      idempotencyKey: 'ik_part-retry',
+    }, { baseUrl: BASE_URL, fetch });
+  });
+
+  it('sends the synthetic stage ZIP part as raw application/octet-stream', async () => {
+    const bytes = readFileSync(new URL('../../../../fixtures/presentation-hotfix/SP1-OLD.zip', import.meta.url));
+    const body = new Blob([new Uint8Array(bytes)]);
+    const fetch: FetchLike = async (url, init) => {
+      expect(url).toBe(`${BASE_URL}/stage-uploads/stu_test/files/suf_test/parts?part_number=1`);
+      expect(new Headers(init.headers).get('Content-Type')).toBe('application/octet-stream');
+      expect(new Headers(init.headers).get('Idempotency-Key')).toBe('ik_stage-retry');
+      expect(init.body).toBe(body);
+      expect(new Uint8Array(await (init.body as Blob).arrayBuffer())).toEqual(new Uint8Array(bytes));
+      return new Response('{}', { status: 200 });
+    };
+    await uploadStageUploadPart({
+      path: { stage_upload_id: 'stu_test', stage_upload_file_id: 'suf_test' },
+      query: { part_number: 1 },
+      body,
+      idempotencyKey: 'ik_stage-retry',
+    }, { baseUrl: BASE_URL, fetch });
+  });
+});
 
 // ---------------------------------------------------------------------------------------
 // A write without a key never leaves

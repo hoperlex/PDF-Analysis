@@ -73,7 +73,11 @@ describe('release history presentation', () => {
     expect(html).toContain('История улучшений');
     expect(html).not.toContain('Прототип и альфа');
     expect(html).toContain('aria-modal="false"');
-    expect(renderToStaticMarkup(createElement(UpdateBannerView, { onUpdate: noop, onLater: noop })))
-      .toContain('Доступна новая версия');
+    const banner = renderToStaticMarkup(createElement(UpdateBannerView, { onUpdate: noop, onLater: noop }));
+    expect(banner).toContain('role="status"');
+    expect(banner).toContain('Доступна новая версия');
+    expect(banner).toContain('Обновить');
+    expect(banner).toContain('Позже');
+    expect(banner.match(/type="button"/g)).toHaveLength(2);
   });
 });

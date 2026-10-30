@@ -13,7 +13,7 @@ export function WindowProgress({ windows: value, progress: reading }: { readonly
   const progress = object(reading);
   return <section aria-label="Окна анализа раздела" className={styles.windows} data-extended-windows="">
     <h3>Окна анализа</h3>
-    <p>Границы режима: до 128 источников, не более восьми окон по 16. Выполняется только объём принятой оценки; непроверенные источники не считаются исследованными.</p>
+    <p>Объём и число окон определяются принятым серверным планом. Размер окна: до {count(progress?.window_size)} источников. Выполняется только объём принятой оценки; непроверенные источники не считаются исследованными.</p>
     <p>Окон с итоговым состоянием: {count(progress?.completed)} из {count(progress?.total)}.</p>
     {typeof progress?.visual_completed === 'number' ? <p>Визуальный проход сохранён для окон: {count(progress.visual_completed)}. Это ещё не завершение всей проверки окна.</p> : null}
     {typeof progress?.current === 'string' ? <p>Текущее окно: <code>{progress.current}</code>.</p> : null}

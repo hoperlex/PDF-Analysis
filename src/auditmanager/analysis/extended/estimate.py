@@ -7,7 +7,8 @@ from auditmanager.analysis.recognised.portal import IMAGE, read_block_list
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.storage.public import parse_blob_id
 
-MAX_VISUAL_SOURCES = 128
+MAX_VISUAL_SOURCES = 1000
+MAX_TEXT_PAGES = 500
 VISUAL_WINDOW_SIZE = 16
 
 
@@ -18,7 +19,7 @@ def estimate_visual_scope(*, version, blob_store=None):
     geometry admission. The worker reports those later refusals explicitly.
     """
     pages = version.page_count
-    if type(pages) is not int or pages < 1:
+    if type(pages) is not int or not 1 <= pages <= MAX_TEXT_PAGES:
         raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="source_preparation",
                           reason="cost_page_count_unavailable")
     companion = next((entry for entry in version.manifest
@@ -34,11 +35,14 @@ def estimate_visual_scope(*, version, blob_store=None):
         images = sum(block.block_type == IMAGE for block in blocks)
         kind, count = ("portal_image_blocks", images) if images else ("portal_page_visuals", pages)
         companion_sha = companion.sha256
-    maximum = min(count, MAX_VISUAL_SOURCES)
+    if count > MAX_VISUAL_SOURCES:
+        raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="source_preparation",
+                          reason="cost_visual_source_limit_exceeded")
+    maximum = count
     return {"source_kind": kind, "total_sources": count, "max_blocks": maximum,
             "window_size": VISUAL_WINDOW_SIZE,
             "max_windows": max((maximum + VISUAL_WINDOW_SIZE - 1) // VISUAL_WINDOW_SIZE,
-                               (min(pages, MAX_VISUAL_SOURCES) + VISUAL_WINDOW_SIZE - 1) // VISUAL_WINDOW_SIZE),
-            "text_page_limit": min(pages, MAX_VISUAL_SOURCES),
+                               (pages + VISUAL_WINDOW_SIZE - 1) // VISUAL_WINDOW_SIZE),
+            "text_page_limit": pages,
             "uncovered_sources": max(0, count - maximum),
             "page_count": pages, "companion_sha256": companion_sha}

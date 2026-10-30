@@ -63,7 +63,7 @@ function tables(reading: ExtendedRunReview): Table[] {
     ['Показатель', 'Значение'], ['Тип', 'ТЕХНИЧЕСКИЙ ПРЕДВАРИТЕЛЬНЫЙ ОТЧЁТ; не экспертное заключение'],
     ['Прогон', reading.run_id], ['Состояние ответа', reading.status], ['План', result?.workflow_version],
     ['Раздел', result?.section], ['Отпечаток рубрик SHA256', result?.rules_sha256], ['Происхождение', result?.source_provenance],
-    ['Покрытие', result?.coverage], ['Прогресс окон', result?.window_progress], ['Базовый текстовый анализ', result?.primary_text_status],
+    ['Покрытие', result?.coverage], ['Покрытие комплексной сверки текста (страницы)', result?.text_coverage], ['Прогресс окон', result?.window_progress], ['Базовый текстовый анализ', result?.primary_text_status],
     ['Визуальный проход сохранён', result?.visual_phase_complete], ['Процедуры', result?.procedures],
     ['Глобальных кандидатов', objects(result?.observations).length], ['Записей с учётом окон', entries.length],
     ['Критика и уточнение', 'Только рекомендации модели. Исходные наблюдения сохранены, решение эксперта не подменяется.'],

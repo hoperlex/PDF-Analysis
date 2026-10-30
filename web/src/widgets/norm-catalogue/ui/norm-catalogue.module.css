@@ -43,7 +43,56 @@
 
 .views {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin: 0 0 1rem;
+  align-items: stretch;
+  gap: 3px;
+  width: max-content;
+  max-width: 100%;
+  margin: 18px 0 0;
+  padding: 4px;
+  border: 1px solid var(--am-line-soft);
+  border-radius: 14px;
+  background: var(--am-paper);
+  box-shadow: var(--am-shadow-1);
+}
+
+.views :global(.am-button) {
+  min-width: 96px;
+  min-height: 40px;
+  padding: 7px 14px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--am-ink-muted);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.views :global(.am-button:hover) {
+  background: var(--am-surface-sunken);
+  color: var(--am-ink);
+}
+
+.views :global(.am-button[aria-current='page']),
+.views :global(.am-button[aria-current='page']:hover) {
+  border-color: var(--am-accent);
+  background: var(--am-accent-light);
+  color: var(--am-accent-strong);
+  box-shadow: inset 0 0 0 1px var(--am-accent-light);
+}
+
+.views :global(.am-button:focus-visible) {
+  outline: 2px solid var(--am-accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 480px) {
+  .views {
+    width: 100%;
+  }
+
+  .views :global(.am-button) {
+    flex: 1 1 0;
+    min-width: 0;
+  }
 }

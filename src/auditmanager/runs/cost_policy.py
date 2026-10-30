@@ -53,7 +53,7 @@ def read_run_cost_policy(session, *, run_id: str, default_ceiling_usd: float,
             plan = extended.get("plan_version")
             blocks = extended.get("max_blocks")
             if plan in {"extended-review-v1", "extended-review-v2"}:
-                if type(blocks) is not int or blocks != 16:
+                if not (type(blocks) is int and blocks == 16 or plan == "extended-review-v2" and blocks == "all"):
                     raise ValueError()
             elif plan == "extended-review-v3":
                 rules = extended.get("rules_sha256")
@@ -61,10 +61,10 @@ def read_run_cost_policy(session, *, run_id: str, default_ceiling_usd: float,
                 section = extended.get("section_code")
                 if (not isinstance(section, str) or not 1 <= len(section) <= 8
                         or any(character not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_" for character in section)
-                        or type(blocks) is not int or not 1 <= blocks <= 128
+                        or type(blocks) is not int or not 1 <= blocks <= 1000
                         or type(extended.get("window_size")) is not int or extended["window_size"] != 16
                         or type(extended.get("max_windows")) is not int
-                        or type(text_limit) is not int or not 1 <= text_limit <= 128
+                        or type(text_limit) is not int or not 1 <= text_limit <= 500
                         or extended["max_windows"] != max((blocks + 15) // 16, (text_limit + 15) // 16)
                         or extended.get("review") is not True
                         or not isinstance(rules, str) or len(rules) != 64

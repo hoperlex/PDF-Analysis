@@ -57,6 +57,27 @@ def test_complete_geometry_projects_only_sixteen_and_explicitly_keeps_remainder(
     assert value['warnings']==['remaining_blocks_not_reviewed']
 
 
+def test_fresh_full_document_plan_selects_every_available_image_without_skips():
+    value, _ = plan(47, plan_version='extended-review-v2', full_document=True)
+    assert value['coverage']['blocks_total'] == value['coverage']['blocks_selected'] == 47
+    assert value['coverage']['skipped'] == []
+    assert value['review_scope'] == 'full_document'
+    assert len(value['sources']) == 47
+    old, _ = plan(47, plan_version='extended-review-v2')
+    assert old['source_sha256'] != value['source_sha256']
+
+
+def test_full_document_plan_keeps_text_observations_beyond_legacy_forty():
+    observations = {'observations': [{'category': 'internal_contradiction',
+        'finding_text': f'Сверка {index}', 'evidence': [{'page_number': 1, 'quote': 'Источник'}]}
+        for index in range(41)]}
+    full, _ = plan(1, observations=observations, plan_version='extended-review-v2', full_document=True)
+    legacy, _ = plan(1, observations=observations, plan_version='extended-review-v2')
+    assert len(full['text_items']) == 41
+    assert len(legacy['text_items']) == 40
+    assert 'text_observations_outside_merge_window' not in full['warnings']
+
+
 def test_context_and_source_digest_bind_saved_ocr_without_native_quote_fabrication():
     original,_=plan(1)
     with_ocr,_=plan(1,recognised={'entries':[{'kind':'recognised_text','page_number':1,'text':'OCR marker'}]})

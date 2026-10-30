@@ -28,4 +28,14 @@ src/auditmanager/analysis/extended/original_review/**
 docs/program/SPRINT-SECTION-REVIEW-1030.md
 
 ## Integration contract
-RootsoleGitwriter/publisherorigin/devonly. v3authority: enabledtrue,plan_versionextended-review-v3,max_blocks1..128,window_size16,max_windows1..8,reviewtrue,rules_sha256frozen. Per16-sourcewindowMAX6modelcalls=2blocks+1comprehensive+1norm+1critic+1corrector;unusedcallsnotspent. V3proceduresblock_analysis/comprehensive_analysis/finding_merge/norm_verification/finding_review/finding_correction/report_generation; savedwindowreceipts/coverage, unrevieweditemsretained. v1/v2unchanged. NoAPI/migrationchange; existingextendedreadresultcarriesnewfields. Coordinateexacthelperseamsdirectlybeforecoding.
+RootsoleGitwriter/publisherorigin/devonly. v3authority: enabledtrue,plan_versionextended-review-v3,max_blocks1..1000,window_size16,max_windows1..63,reviewtrue,rules_sha256frozen. Per16-sourcewindowMAX6modelcalls=2blocks+1comprehensive+1norm+1critic+1corrector;unusedcallsnotspent. V3proceduresblock_analysis/comprehensive_analysis/finding_merge/norm_verification/finding_review/finding_correction/report_generation; savedwindowreceipts/coverage, unrevieweditemsretained. v1/v2unchanged. NoAPI/migrationchange; existingextendedreadresultcarriesnewfields. Coordinateexacthelperseamsdirectlybeforecoding.
+
+Authoritative integration addendum after remote dev refresh: preserve incoming HOTFIX-FULL-ANALYSIS-1030 accepted v2 max_blocks="all" and legacy16 behavior. Fresh v3 selects the complete admitted source set: actual max_blocks≤1000, text_page_limit=PDFpages≤500, max_windows=MAXceil≤63, window_size16 and maximum6 additional calls/window. These are source-ingest ceilings, not a first128 selection. Review/context/output bounds still produce explicit partial coverage. Root owns merge/Git; source owners reconcile their files without tests. Incoming owner tests/UI/transport are preserved, not authored or run by this sprint.
+
+## Required task fields
+
+task_id: SPRINT-SECTION-REVIEW-1030
+
+## Non-goals
+
+No production deployment, main publication, acceptance claim, synthetic input generation, canonical promotion of visual candidates, expert decisions by a model, new OCR service, API/migration changes or verification in this window.

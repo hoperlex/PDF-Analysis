@@ -44,7 +44,7 @@ export function formatExtendedRunReport(reading: ExtendedRunReview, format: Exte
   const disclaimer = 'Предварительный машинный анализ. Рекомендации критика и исправленные кандидаты не являются решениями эксперта. Нормативные значения из исторических рубрик не подтверждены; редакция и применимость цитат требуют отдельной проверки. Все переданные записи сохранены, без фильтра по модельному принятию или отклонению.';
   const metadata = { run_id: reading.run_id, status: reading.status, workflow_version: result?.workflow_version,
     section: result?.section, rules_sha256: result?.rules_sha256, source_provenance: result?.source_provenance,
-    coverage: result?.coverage, window_progress: result?.window_progress, primary_text_status: result?.primary_text_status,
+    coverage: result?.coverage, text_coverage: result?.text_coverage, window_progress: result?.window_progress, primary_text_status: result?.primary_text_status,
     visual_phase_complete: result?.visual_phase_complete, report: result?.report };
   const pendingPrimary = result?.primary_text_status === 'pending'
     ? 'Базовый текстовый анализ ещё выполняется. Сохранённый визуальный проход не является завершением всей проверки окна.' : '';
